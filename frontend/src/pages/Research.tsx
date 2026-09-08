@@ -9,35 +9,16 @@ import {
   text,
   records,
   catalogCount,
-  researchPath,
-  parseResearchEnvelope,
+  researchSelectionMessage,
   researchReadState,
   type RecordData,
 } from "@/features/research/model";
 import "@/features/research/workspace.css";
+import { readResearch as createResearchReader } from "@/features/research/read";
 import { ResearchGraph } from "@/features/research/ResearchGraph";
 import { ResearchResults } from "@/features/research/ResearchResults";
 
-async function readResearch(
-  endpoint: string,
-  server: string,
-  params: Record<string, string>,
-  signal: AbortSignal,
-) {
-  const response = await authFetch(researchPath(endpoint, server, params), {
-    signal,
-    cache: "no-store",
-  });
-  if (!response.ok) {
-    const body = await response.json().catch(() => ({}));
-    throw new Error(
-      typeof body.detail === "string"
-        ? body.detail
-        : `Research request failed (${response.status})`,
-    );
-  }
-  return parseResearchEnvelope(await response.json(), server);
-}
+const readResearch = createResearchReader(authFetch);
 function timestamp(value: unknown) {
   const t = typeof value === "string" ? Date.parse(value) : NaN;
   return Number.isFinite(t) ? new Date(t).toLocaleString() : "Not recorded";
@@ -174,6 +155,7 @@ export function Research() {
     graph.dataUpdatedAt,
   );
   const graphAvailable = graphState === "available";
+  const selectionMessage = researchSelectionMessage(selected, listState);
   const comparisonState = researchReadState(
     comparisons.data,
     now,
@@ -266,9 +248,9 @@ export function Research() {
                     : `Research graph ${graphState}`}
               </span>
             </header>
-            {!selected ? (
+            {selectionMessage ? (
               <div className="quant-notice" role="status">
-                Select a record to explore its research connections.
+                {selectionMessage}
               </div>
             ) : graphAvailable ? (
               <ResearchGraph

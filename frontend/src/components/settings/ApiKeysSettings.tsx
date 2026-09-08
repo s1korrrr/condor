@@ -12,7 +12,9 @@ import {
 import { useEffect, useMemo, useState } from "react";
 
 import { useServer } from "@/hooks/useServer";
+import { useServerCapabilities } from "@/hooks/useServerCapabilities";
 import { type ConnectorInfo, type CredentialInfo, api } from "@/lib/api";
+import { credentialFields, credentialPayload, missingCredentialFields } from "@/lib/credential-fields";
 import { ConnectHyperliquid } from "./ConnectHyperliquid";
 
 type Step = "list" | "select-type" | "select-exchange" | "fill-fields" | "connect-hyperliquid";
@@ -35,46 +37,31 @@ const INITIAL_FLOW: AddFlowState = {
   values: {},
 };
 
-// Substrings that mark a connector config field as a sensitive credential.
-// Connector keys vary (api_key, secret_key, passphrase, private_key, api_token,
-// mnemonic, seed, ...), so we match by substring on both the field name and type
-// rather than the few exact names ("secret"/"password") covered before.
-const CREDENTIAL_FIELD_PATTERNS = [
-  "secret",
-  "password",
-  "passphrase",
-  "key",
-  "token",
-  "private",
-  "mnemonic",
-  "seed",
-];
-
-function isCredentialField(key: string, type?: string): boolean {
-  const haystack = `${key} ${type ?? ""}`.toLowerCase();
-  return CREDENTIAL_FIELD_PATTERNS.some((p) => haystack.includes(p));
-}
-
 export function ApiKeysSettings() {
   const { server } = useServer();
+  return <ApiKeysForm key={server ?? 'no-server'} server={server} />;
+}
+
+function ApiKeysForm({ server }: { server: string | null }) {
+  const { access } = useServerCapabilities();
   const qc = useQueryClient();
   const [flow, setFlow] = useState<AddFlowState>(INITIAL_FLOW);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  const { data: credsData, isLoading: loadingCreds } = useQuery({
+  const { data: credsData, isLoading: loadingCreds, error: credentialsError, refetch: retryCredentials } = useQuery({
     queryKey: ["settings-credentials", server],
     queryFn: () => api.getCredentials(server!),
     enabled: !!server,
   });
 
-  const { data: connectorsData, isLoading: loadingConnectors } = useQuery({
+  const { data: connectorsData, isLoading: loadingConnectors, error: connectorsError, refetch: retryConnectors } = useQuery({
     queryKey: ["settings-connectors", server, flow.connectorType],
     queryFn: () => api.getAvailableConnectors(server!, flow.connectorType || undefined),
     enabled: !!server && !!flow.connectorType && flow.step === "select-exchange",
     staleTime: 5 * 60 * 1000,
   });
 
-  const { data: configMapData, isLoading: loadingConfigMap } = useQuery({
+  const { data: configMapData, isLoading: loadingConfigMap, error: configMapError, refetch: retryConfigMap } = useQuery({
     queryKey: ["settings-config-map", server, flow.connectorName],
     queryFn: () => api.getConnectorConfigMap(server!, flow.connectorName),
     enabled: !!server && !!flow.connectorName && flow.step === "fill-fields",
@@ -94,13 +81,18 @@ export function ApiKeysSettings() {
     }
   }, [connectorsData, server, qc]);
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ["settings-credentials", server] });
+  const invalidate = () => Promise.all([
+    qc.invalidateQueries({ queryKey: ["settings-credentials", server] }),
+    qc.invalidateQueries({ queryKey: ["account-balances", server] }),
+    qc.invalidateQueries({ queryKey: ["portfolio", server] }),
+    qc.invalidateQueries({ queryKey: ["connected-exchanges", server] }),
+  ]);
 
   const addMut = useMutation({
     mutationFn: () =>
       api.addCredential(server!, {
         connector_name: flow.connectorName,
-        credentials: flow.values,
+        credentials: credentialPayload(configFields, flow.values),
       }),
     onSuccess: () => { invalidate(); setFlow(INITIAL_FLOW); },
   });
@@ -144,20 +136,12 @@ export function ApiKeysSettings() {
   }, [credentials]);
 
   // Parse config map fields
-  const configFields = useMemo(() => {
-    if (!configMapData?.config_map) return [];
-    const cm = configMapData.config_map;
-    return Object.entries(cm).map(([key, val]) => {
-      const v = val as Record<string, unknown>;
-      return {
-        key,
-        type: (v.type as string) || "string",
-        required: v.required !== false,
-        description: (v.description as string) || "",
-        isSecret: isCredentialField(key, v.type as string | undefined),
-      };
-    });
-  }, [configMapData]);
+  const configFields = credentialFields(configMapData?.config_map);
+  const ready = configFields.length > 0 && !configMapError && missingCredentialFields(configFields, flow.values).length === 0;
+  const beginAdd = () => {
+    addMut.reset();
+    setFlow({ ...INITIAL_FLOW, step: access.native ? 'select-exchange' : 'select-type', connectorType: access.native ? 'spot' : '' });
+  };
 
   if (!server) {
     return (
@@ -240,7 +224,7 @@ export function ApiKeysSettings() {
     return (
       <div className="space-y-4">
         <button
-          onClick={() => setFlow({ ...flow, step: "select-type", connectorType: "" })}
+          onClick={() => setFlow(access.native ? INITIAL_FLOW : { ...flow, step: "select-type", connectorType: "" })}
           className="flex items-center gap-1.5 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
         >
           <ArrowLeft className="h-3.5 w-3.5" /> Back
@@ -251,6 +235,10 @@ export function ApiKeysSettings() {
         {loadingConnectors ? (
           <div className="flex items-center gap-2 py-4 text-xs text-[var(--color-text-muted)]">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading connectors...
+          </div>
+        ) : connectorsError ? (
+          <div role="alert" className="space-y-2 text-sm text-[var(--color-red)]">
+            <p>{connectorsError.message}</p><button onClick={() => retryConnectors()} className="underline">Retry connectors</button>
           </div>
         ) : (
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -316,27 +304,43 @@ export function ApiKeysSettings() {
           <div className="flex items-center gap-2 py-4 text-xs text-[var(--color-text-muted)]">
             <Loader2 className="h-4 w-4 animate-spin" /> Loading fields...
           </div>
+        ) : configMapError ? (
+          <div role="alert" className="space-y-2 text-sm text-[var(--color-red)]">
+            <p>{configMapError.message}</p><button onClick={() => retryConfigMap()} className="underline">Retry fields</button>
+          </div>
         ) : (
-          <div className="space-y-3">
+          <form className="space-y-3" onSubmit={event => { event.preventDefault(); if (ready && !addMut.isPending) addMut.mutate(); }}>
             {configFields.map((f) => (
               <div key={f.key}>
-                <label className="mb-1 flex items-center gap-1 text-xs text-[var(--color-text-muted)]">
-                  {f.key}
+                <label htmlFor={`credential-${f.key}`} className="mb-1 flex items-center gap-1 text-xs text-[var(--color-text-muted)]">
+                  {f.label}
                   {f.required && <span className="text-[var(--color-red)]">*</span>}
                 </label>
                 {f.description && (
                   <p className="mb-1 text-[10px] text-[var(--color-text-muted)]/60">{f.description}</p>
                 )}
-                <input
+                {f.options.length > 0 && !f.isSecret ? <select
+                  id={`credential-${f.key}`}
+                  value={flow.values[f.key] ?? f.defaultValue}
+                  onChange={event => setFlow({ ...flow, values: { ...flow.values, [f.key]: event.target.value } })}
+                  className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-2 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none"
+                >
+                  {!f.defaultValue && <option value="">Select {f.label}</option>}
+                  {f.options.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
+                </select> : <input
+                  id={`credential-${f.key}`}
                   type={f.isSecret ? "password" : "text"}
                   autoComplete={f.isSecret ? "new-password" : "off"}
-                  value={flow.values[f.key] || ""}
+                  required={f.required}
+                  spellCheck={false}
+                  autoCapitalize="none"
+                  value={flow.values[f.key] ?? f.defaultValue}
                   onChange={(e) =>
                     setFlow({ ...flow, values: { ...flow.values, [f.key]: e.target.value } })
                   }
                   className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none"
-                  placeholder={f.isSecret ? "********" : f.key}
-                />
+                  placeholder={f.isSecret ? "" : f.label}
+                />}
               </div>
             ))}
 
@@ -348,14 +352,15 @@ export function ApiKeysSettings() {
 
             <div className="flex items-center gap-2 pt-2">
               <button
-                onClick={() => addMut.mutate()}
-                disabled={addMut.isPending}
+                type="submit"
+                disabled={!ready || addMut.isPending}
                 className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--color-primary)]/80 disabled:opacity-50"
               >
                 {addMut.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
-                Add Credential
+                {addMut.isPending ? 'Verifying connection…' : 'Connect account'}
               </button>
               <button
+                type="button"
                 onClick={() => setFlow(INITIAL_FLOW)}
                 className="rounded-md px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
               >
@@ -364,9 +369,9 @@ export function ApiKeysSettings() {
             </div>
 
             {addMut.error && (
-              <p className="text-xs text-[var(--color-red)]">{addMut.error.message}</p>
+              <p role="alert" className="text-sm text-[var(--color-red)]">{addMut.error.message}</p>
             )}
-          </div>
+          </form>
         )}
       </div>
     );
@@ -378,10 +383,10 @@ export function ApiKeysSettings() {
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <p className="text-sm text-[var(--color-text-muted)]">
-          {credentials.length} credential{credentials.length !== 1 ? "s" : ""} configured
+          {credentialsError ? 'Account connections unavailable' : `${credentials.length} account connection${credentials.length !== 1 ? 's' : ''}`}
         </p>
         <button
-          onClick={() => setFlow({ ...INITIAL_FLOW, step: "select-type" })}
+          onClick={beginAdd}
           className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--color-primary)]/80"
         >
           <Plus className="h-3.5 w-3.5" /> Add API Key
@@ -392,9 +397,13 @@ export function ApiKeysSettings() {
         <div className="flex items-center justify-center py-12 text-[var(--color-text-muted)]">
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
+      ) : credentialsError ? (
+        <div role="alert" className="space-y-2 text-sm text-[var(--color-red)]">
+          <p>{credentialsError.message}</p><button onClick={() => retryCredentials()} className="underline">Retry connections</button>
+        </div>
       ) : credentials.length === 0 ? (
         <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">
-          No API keys configured. Add one to start trading.
+          {access.native ? 'Connect an OKX Spot account to view its balances in Portfolio.' : 'No API keys configured. Add an exchange connection to get started.'}
         </p>
       ) : (
         <div className="space-y-4">
@@ -455,6 +464,7 @@ export function ApiKeysSettings() {
           ))}
         </div>
       )}
+      {deleteMut.error && <p role="alert" className="text-sm text-[var(--color-red)]">{deleteMut.error.message}</p>}
     </div>
   );
 }

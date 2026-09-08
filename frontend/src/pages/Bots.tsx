@@ -3,6 +3,8 @@ import { lazy, Suspense, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 
 import { FallbackSpinner } from "@/components/ui/FallbackSpinner";
+import { CapabilityUnavailable } from "@/components/CapabilityUnavailable";
+import { useServerCapabilities } from "@/hooks/useServerCapabilities";
 
 const ActiveBotsTab = lazy(() =>
   import("@/pages/tabs/ActiveBotsTab").then((m) => ({ default: m.ActiveBotsTab })),
@@ -31,6 +33,7 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 export function Bots() {
+  const { access } = useServerCapabilities();
   const [searchParams, setSearchParams] = useSearchParams();
   const currentTab = (searchParams.get("tab") as TabKey) || "active";
   const visitedRef = useRef<Set<TabKey>>(new Set([currentTab]));
@@ -51,8 +54,10 @@ export function Bots() {
         {TABS.map(({ key, label, icon: Icon }) => (
           <button
             key={key}
+            disabled={access.native && key !== "active"}
+            title={access.native && key !== "active" ? "Unavailable on the native server" : undefined}
             onClick={() => setTab(key)}
-            className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`flex items-center gap-2 rounded-md px-3 py-1.5 text-sm font-medium transition-colors disabled:opacity-40 ${
               currentTab === key
                 ? "bg-[var(--color-bg)] text-[var(--color-text)] shadow-sm"
                 : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
@@ -64,6 +69,9 @@ export function Bots() {
         ))}
       </div>
 
+      {access.native && <p role="status" className="text-sm text-[var(--color-text-muted)]">Native bot status. Deployment, controller editing, and archived bot tools are unavailable on this server.{!access.botStop ? " Bot controls are disabled." : ""}</p>}
+      {access.native && currentTab !== "active" && <CapabilityUnavailable reason="Only the Active bot status view is supported on this native server." />}
+
       {/* Tab content — keep visited tabs mounted but hidden */}
       <Suspense fallback={<FallbackSpinner />}>
         {visitedRef.current.has("active") && (
@@ -71,22 +79,22 @@ export function Bots() {
             <ActiveBotsTab />
           </div>
         )}
-        {visitedRef.current.has("runs") && (
+        {!access.native && visitedRef.current.has("runs") && (
           <div style={{ display: currentTab === "runs" ? undefined : "none" }}>
             <BotRunsTab />
           </div>
         )}
-        {visitedRef.current.has("archived") && (
+        {!access.native && visitedRef.current.has("archived") && (
           <div style={{ display: currentTab === "archived" ? undefined : "none" }}>
             <ArchivedBotsTab />
           </div>
         )}
-        {visitedRef.current.has("backtest") && (
+        {!access.native && visitedRef.current.has("backtest") && (
           <div style={{ display: currentTab === "backtest" ? undefined : "none" }}>
             <BacktestingTab />
           </div>
         )}
-        {visitedRef.current.has("editor") && (
+        {!access.native && visitedRef.current.has("editor") && (
           <div style={{ display: currentTab === "editor" ? undefined : "none" }}>
             <EditorTab />
           </div>

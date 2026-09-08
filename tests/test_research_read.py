@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 from fastapi import FastAPI
@@ -493,3 +495,57 @@ def test_projection_rejects_anonymized_key_collision_without_losing_evidence(rev
     ]
     with pytest.raises(ValueError, match="key collision"):
         _project(dict(reversed(values) if reverse else values))
+
+
+def test_serialized_native_preview_redacts_fields_and_preserves_safe_values():
+    from condor.research_read import _project
+
+    source = {
+        "inputs": json.dumps(
+            {
+                "env": {"api_key": "SENTINEL"},
+                "path": "/private/source",
+                "metrics": {"net_pnl_quote": 0},
+                "label": "Observed result",
+            }
+        )
+    }
+    result = _project(source)
+    assert json.loads(result["inputs"]) == {
+        "metrics": {"net_pnl_quote": 0},
+        "label": "Observed result",
+    }
+    assert source["inputs"].find("SENTINEL") >= 0
+
+
+@pytest.mark.parametrize(
+    "preview",
+    [
+        '{"path":"/private/source","metrics": … [preview; full source retained]',
+        '[{"env":{"api_key":"SENTINEL"}}',
+        '{"password":"SENTINEL"',
+    ],
+)
+def test_truncated_or_malformed_serialized_preview_is_withheld(preview):
+    from condor.research_read import _project
+
+    result = _project(
+        {"artifacts": preview, "title": "A useful title", "net_pnl_quote": 0}
+    )
+    assert (
+        result["artifacts"]
+        == "Preview withheld; full native fields remain in the owner source."
+    )
+    assert result["title"] == "A useful title"
+    assert result["net_pnl_quote"] == 0
+
+
+def test_plain_bracketed_prose_remains_visible_and_nested_previews_are_redacted():
+    from condor.research_read import _project
+
+    nested = json.dumps(
+        {"result": json.dumps({"password": "SENTINEL", "fees_quote": 0})}
+    )
+    result = _project({"title": "[P2] Historical result", "inputs": nested})
+    assert result["title"] == "[P2] Historical result"
+    assert json.loads(json.loads(result["inputs"])["result"]) == {"fees_quote": 0}

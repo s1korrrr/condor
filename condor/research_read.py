@@ -163,6 +163,20 @@ def _project(value, depth=0):
         return projected
     if isinstance(value, list):
         return [_project(item, depth + 1) for item in value]
+    if isinstance(value, str) and value.endswith("… [preview; full source retained]"):
+        return "Preview withheld; full native fields remain in the owner source."
+    if isinstance(value, str) and (
+        value.lstrip().startswith("{")
+        or re.match(r'^\s*\[\s*(?:[\[{"\]\d-]|true|false|null|$)', value)
+    ):
+        # Native graph compaction serializes nested records into string previews.
+        # Apply the same boundary to complete previews; an incomplete container
+        # cannot be safely redacted. Preserve string type for existing consumers.
+        try:
+            decoded = json.loads(value)
+        except (ValueError, RecursionError):
+            return "Preview withheld; full native fields remain in the owner source."
+        return json.dumps(_project(decoded, depth + 1), ensure_ascii=False)
     if isinstance(value, str) and (
         value.startswith(("/", "~/", "file://", "\\\\"))
         or re.match(r"^[A-Za-z]:[\\/]", value)

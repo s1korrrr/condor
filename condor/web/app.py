@@ -5,11 +5,14 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, HTTPException, Request
+from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from condor.web.routes import (
+    account_balances,
     agents,
     archived,
     auth,
@@ -29,6 +32,7 @@ from condor.web.routes import (
     servers,
     sessions,
     settings,
+    trading_visuals,
     transcribe,
     ws,
 )
@@ -54,6 +58,16 @@ def _build_cors_origins() -> list[str]:
 def create_app() -> FastAPI:
     app = FastAPI(title="Condor Dashboard API", version="0.1.0")
 
+    @app.exception_handler(RequestValidationError)
+    async def validation_error(request: Request, error: RequestValidationError):
+        if request.url.path == "/api/v1/settings/credentials":
+            return JSONResponse(
+                {"detail": "A connector name and credential fields are required."},
+                status_code=422,
+                headers={"Cache-Control": "no-store"},
+            )
+        return await request_validation_exception_handler(request, error)
+
     # CORS – allow Vite dev server, local origins, and WEB_URL origin (e.g. Tailscale hostname)
     app.add_middleware(
         CORSMiddleware,
@@ -66,8 +80,9 @@ def create_app() -> FastAPI:
     # ── API routes ──
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(servers.router, prefix="/api/v1")
-    app.include_router(research.router, prefix="/api/v1")
     app.include_router(portfolio.router, prefix="/api/v1")
+    app.include_router(account_balances.router, prefix="/api/v1")
+    app.include_router(research.router, prefix="/api/v1")
     app.include_router(bots.router, prefix="/api/v1")
     app.include_router(controller_performance.router, prefix="/api/v1")
     app.include_router(archived.router, prefix="/api/v1")
@@ -85,6 +100,7 @@ def create_app() -> FastAPI:
     app.include_router(confirmations.router, prefix="/api/v1")
     app.include_router(conversations.router, prefix="/api/v1")
     app.include_router(transcribe.router, prefix="/api/v1")
+    app.include_router(trading_visuals.router, prefix="/api/v1")
 
     # Report bodies are NOT mounted here. They used to be served by an
     # unauthenticated ``/reports/{filename:path}`` route, which made every

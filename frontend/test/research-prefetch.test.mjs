@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import ts from "typescript";
 
-function prefetch(enabled) {
+function prefetch(enabled, access = { online: true, native: false, botRead: true }) {
   const calls = [];
   const queryClient = {
     prefetchQuery: (q) => {
@@ -29,6 +29,7 @@ function prefetch(enabled) {
     "@tanstack/react-query": { useQueryClient: () => queryClient },
     react: { useEffect: (fn) => fn() },
     "@/hooks/useServer": { useServer: () => ({ server: "fixture" }) },
+    "@/hooks/useServerCapabilities": { useServerCapabilities: () => ({ access }) },
     "@/lib/api": { api: {} },
     "@/lib/queryClient": {
       candlesQuery: () => ({ queryKey: ["candles"], startTime: 1 }),
@@ -72,7 +73,7 @@ function shellPrefetch(pathname) {
   }).outputText;
   const router = require("react-router-dom");
   const imports = {
-    react: { useEffect: () => {} },
+    react: { useEffect: () => {}, useRef: () => ({ current: null }) },
     "react/jsx-runtime": require("react/jsx-runtime"),
     "react-router-dom": {
       ...router,
@@ -80,6 +81,8 @@ function shellPrefetch(pathname) {
       useNavigate: () => () => {},
     },
     "@/hooks/useServer": { useServer: () => ({ server: "fixture" }) },
+    "@/hooks/useServerCapabilities": { useServerCapabilities: () => ({ access: { online: true, native: false, accounts: true }, isLoading: false }) },
+    "@/lib/server-capabilities": { unavailableServerRoute: () => null },
     "@/hooks/useTheme": {
       useTheme: () => ({ theme: "dark", toggleTheme: () => {} }),
     },
@@ -103,4 +106,13 @@ test("Research route and trailing slash suppress trading prefetch while Bots ret
   assert.deepEqual(shellPrefetch("/research"), [false]);
   assert.deepEqual(shellPrefetch("/research/"), [false]);
   assert.deepEqual(shellPrefetch("/bots"), [true]);
+});
+
+
+test("native operational prefetch stays bot-only and Research suppresses it", () => {
+  const access = { online: true, native: true, botRead: true };
+  assert.deepEqual(prefetch(true, access), [["bots", "fixture"]]);
+  assert.deepEqual(prefetch(false, access), []);
+  assert.deepEqual(prefetch(true, { ...access, botRead: false }), []);
+  assert.deepEqual(prefetch(true, { ...access, online: false }), []);
 });

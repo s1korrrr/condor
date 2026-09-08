@@ -399,6 +399,7 @@ async def add_credential(
     cm = get_config_manager()
     if not cm.has_server_access(user.id, server):
         raise HTTPException(status_code=403, detail="No access")
+    _require_owner(cm, user.id, server)
     client = await _get_client(cm, server)
     try:
         result = await client.accounts.add_credential(
@@ -406,12 +407,22 @@ async def add_credential(
             connector_name=req.connector_name,
             credentials=req.credentials,
         )
-        # Invalidate configured connectors cache
+        if isinstance(result, dict) and result.get("success") is False:
+            raise ValueError("Credential API did not confirm success")
+        # Refresh both the connection list and balances after a verified save.
         from condor.server_data_service import ServerDataType, get_server_data_service
-        get_server_data_service().invalidate(server, ServerDataType.CONNECTORS)
-        return {"added": True, "result": result}
+        sds = get_server_data_service()
+        sds.invalidate(server, ServerDataType.CONNECTORS)
+        sds.invalidate(server, ServerDataType.PORTFOLIO)
+        return {"added": True}
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        # Upstream validation errors may embed credential values. Never return
+        # the raw exception, request, or arbitrary success payload to a browser.
+        status = 400 if getattr(e, "status", None) in {400, 401, 403, 422} else 502
+        raise HTTPException(status_code=status, detail=(
+            "The server did not confirm that the connection was saved. Check the API key, secret, "
+            "passphrase, account region and read permissions. Refresh connections before retrying."
+        )) from None
 
 
 @router.delete("/credentials/{connector}")
@@ -423,20 +434,23 @@ async def delete_credential(
     cm = get_config_manager()
     if not cm.has_server_access(user.id, server):
         raise HTTPException(status_code=403, detail="No access")
+    _require_owner(cm, user.id, server)
     client = await _get_client(cm, server)
     try:
         result = await client.accounts.delete_credential(
             account_name="master_account",
             connector_name=connector,
         )
+        if isinstance(result, dict) and result.get("success") is False:
+            raise ValueError("Credential API did not confirm removal")
         # Invalidate configured connectors + portfolio caches so the removed key disappears immediately
         from condor.server_data_service import ServerDataType, get_server_data_service
         sds = get_server_data_service()
         sds.invalidate(server, ServerDataType.CONNECTORS)
         sds.invalidate(server, ServerDataType.PORTFOLIO)
-        return {"deleted": True, "result": result}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"deleted": True}
+    except Exception:
+        raise HTTPException(status_code=502, detail="The server did not confirm removal. Refresh connections before retrying.") from None
 
 
 # ── Custom OpenAI-compatible LLM endpoints ──

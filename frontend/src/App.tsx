@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { lazy, Suspense, useCallback, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { ServerContext } from "@/hooks/useServer";
@@ -17,14 +17,22 @@ import { Portfolio } from "@/pages/Portfolio";
 import { Routines } from "@/pages/Routines";
 import { Settings } from "@/pages/Settings";
 import { StrategyDetail } from "@/pages/StrategyDetail";
+import { useServerCapabilities } from "@/hooks/useServerCapabilities";
+import { WorkspaceTools } from "@/pages/WorkspaceTools";
+const Overview = lazy(() => import("@/pages/Overview").then(module => ({default:module.Overview})));
+const Research = lazy(() => import("@/pages/Research").then(module => ({default:module.Research})));
+const TradingVisuals = lazy(() => import("@/pages/TradingVisuals").then(module => ({ default: module.TradingVisuals })));
 
-const Research = lazy(() =>
-  import("@/pages/Research").then((module) => ({ default: module.Research })),
-);
+function Home() {
+  const {access,isLoading}=useServerCapabilities();
+  if(isLoading) return <p role="status">Loading workspace…</p>;
+  return access.native ? <Navigate to="/overview" replace/> : <Agents/>;
+}
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
-  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  const location = useLocation();
+  if (!isAuthenticated) return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
   return <>{children}</>;
 }
 
@@ -70,12 +78,15 @@ export default function App() {
                   </ProtectedRoute>
                 }
               >
-                <Route path="/" element={<Agents />} />
-                <Route path="/research" element={<Suspense fallback={<p role="status">Loading research…</p>}><Research /></Suspense>} />
+                <Route path="/" element={<Home />} />
+                <Route path="/overview" element={<Suspense fallback={<p role="status">Loading overview…</p>}><Overview/></Suspense>} />
+                <Route path="/research" element={<Suspense fallback={<p role="status">Loading research…</p>}><Research/></Suspense>} />
+                <Route path="/tools" element={<WorkspaceTools/>} />
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/bots" element={<Bots />} />
                 <Route path="/bots/:id" element={<BotDetail />} />
                 <Route path="/trade" element={<CreateExecutor />} />
+                <Route path="/trading-visuals" element={<Suspense fallback={<p role="status">Loading Trading Visuals…</p>}><TradingVisuals /></Suspense>} />
                 <Route path="/executors" element={<Executors />} />
                 <Route path="/executors/new" element={<Navigate to="/trade" replace />} />
                 <Route path="/executors/new-grid" element={<Navigate to="/trade?type=grid" replace />} />
@@ -83,7 +94,7 @@ export default function App() {
                 <Route path="/archived" element={<Navigate to="/bots?tab=archived" replace />} />
                 <Route path="/routines" element={<Routines />} />
                 <Route path="/reports" element={<Navigate to="/routines?tab=reports" replace />} />
-                <Route path="/agents" element={<Navigate to="/" replace />} />
+                <Route path="/agents" element={<Agents />} />
                 <Route path="/agents/:slug" element={<AgentDetail />} />
                 <Route path="/agents/:slug/strategies/:sslug" element={<StrategyDetail />} />
                 <Route path="/settings" element={<Settings />} />

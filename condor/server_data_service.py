@@ -71,14 +71,14 @@ _DEFAULTS: Dict[ServerDataType, DataTypeDefaults] = {
     ServerDataType.CONNECTORS: DataTypeDefaults(
         interval=300, ttl=600, stale_threshold=30
     ),
-    ServerDataType.BOTS_STATUS: DataTypeDefaults(interval=5, ttl=30, stale_threshold=3),
+    ServerDataType.BOTS_STATUS: DataTypeDefaults(interval=5, ttl=5, stale_threshold=3),
     ServerDataType.EXECUTORS: DataTypeDefaults(interval=2, ttl=30, stale_threshold=1),
     ServerDataType.BOT_RUNS: DataTypeDefaults(interval=30, ttl=120, stale_threshold=10),
     ServerDataType.CANDLE_CONNECTORS: DataTypeDefaults(
         interval=300, ttl=600, stale_threshold=30
     ),
     ServerDataType.SERVER_STATUS: DataTypeDefaults(
-        interval=60, ttl=120, stale_threshold=15
+        interval=60, ttl=10, stale_threshold=5
     ),
     ServerDataType.ALL_CONNECTORS: DataTypeDefaults(
         interval=300, ttl=600, stale_threshold=30

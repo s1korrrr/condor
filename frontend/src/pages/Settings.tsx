@@ -7,6 +7,8 @@ import { GatewaySettings } from "@/components/settings/GatewaySettings";
 import { ServersSettings } from "@/components/settings/ServersSettings";
 import { VoiceSettings } from "@/components/settings/VoiceSettings";
 import { useAuth } from "@/lib/auth";
+import { useServerCapabilities } from "@/hooks/useServerCapabilities";
+import { CapabilityUnavailable } from "@/components/CapabilityUnavailable";
 
 const TABS = [
   { key: "servers", label: "Servers" },
@@ -19,6 +21,7 @@ const TABS = [
 type TabKey = (typeof TABS)[number]["key"];
 
 export function Settings() {
+  const { access } = useServerCapabilities();
   const [params, setParams] = useSearchParams();
   const tab = (params.get("tab") as TabKey) || "servers";
   const { logout } = useAuth();
@@ -56,7 +59,7 @@ export function Settings() {
       {/* Tab content */}
       {tab === "servers" && <ServersSettings />}
       {tab === "gateway" && <GatewaySettings />}
-      {tab === "keys" && <ApiKeysSettings />}
+      {tab === "keys" && (access.accountManagement ? <ApiKeysSettings /> : <CapabilityUnavailable reason="Account credential management is unavailable on this server." />)}
       {tab === "llm" && <CustomProvidersSettings />}
       {tab === "voice" && <VoiceSettings />}
     </div>

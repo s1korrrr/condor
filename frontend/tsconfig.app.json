@@ -26,7 +26,8 @@
     "noUncheckedSideEffectImports": true,
     "baseUrl": ".",
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@workspace-monitoring": ["./src/features/workspace-monitoring/unavailable.tsx"]
     }
   },
   "include": ["src"]

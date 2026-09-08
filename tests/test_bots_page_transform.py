@@ -140,6 +140,8 @@ GOLDEN_REST = {
     "total_volume": 1284.5,
     "server_online": True,
     "error_hint": None,
+    "metrics_available": True,
+    "metrics_unavailable_reason": None,
 }
 
 # Captured from the pre-refactor ws_manager._transform_bots (no enrichment).
@@ -214,7 +216,15 @@ def test_rest_response_matches_pre_refactor_golden():
         bot_runs=BOT_RUNS,
         latest_perf=LATEST_PERF,
     )
-    assert BotsPageResponse(**page).model_dump() == GOLDEN_REST
+    expected = {
+        **GOLDEN_REST,
+        "bots": [
+            {**bot, "controller_count_current": None, "performance_received_at": None,
+             "performance_stale_after_seconds": None, "status_received_at": None,
+             "status_stale_after_seconds": None} for bot in GOLDEN_REST["bots"]
+        ],
+    }
+    assert BotsPageResponse(**page).model_dump() == expected
 
 
 def test_ws_transform_matches_pre_refactor_golden():
@@ -405,3 +415,50 @@ def test_extract_bots_list_handles_malformed_inputs():
         {"bot_name": "a"}
     ]
     assert extract_bots_list([{"bot_name": "b"}, 42]) == [{"bot_name": "b"}]
+
+
+def test_native_observed_identity_survives_missing_volume_and_partial_fleet():
+    page = build_bots_page(
+        {
+            "data": {
+                "main": {
+                    "source": "native_mqtt",
+                    "status": "running",
+                    "performance_current": True,
+                    "performance": {
+                        f"ctrl-{i}": {
+                            "status": "running",
+                            "custom_info": {"pair": pair},
+                            "performance": {
+                                "realized_pnl_quote": 0,
+                                "unrealized_pnl_quote": 0,
+                                "global_pnl_pct": 0,
+                            },
+                        }
+                        for i, pair in enumerate(
+                            ["BNB-USDC", "BTC-USDC", "ETH-USDC", "SOL-USDC", "XRP-USDC"]
+                        )
+                    },
+                },
+                "sui": {
+                    "source": "native_mqtt",
+                    "status": "unknown",
+                    "performance_current": False,
+                    "performance": {},
+                },
+            }
+        },
+        ctrl_configs={"main::__unavailable__": True},
+    )
+    serialized = BotsPageResponse(**page).model_dump()
+    assert len(serialized["controllers"]) == 5
+    assert serialized["bots"][0]["controller_count_current"] is True
+    assert serialized["bots"][1]["controller_count_current"] is False
+    first = serialized["controllers"][0]
+    assert first["trading_pair"] == "BNB-USDC"
+    assert first["connector"] == ""
+    assert first["status"] == "running"
+    assert first["global_pnl_quote"] == 0
+    assert first["volume_traded"] is None
+    assert serialized["total_volume"] is None
+    assert serialized["total_pnl"] is None  # Unknown SUI prevents a fleet total.

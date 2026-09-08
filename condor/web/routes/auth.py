@@ -1,6 +1,8 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, Response, status
+import os
+
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel
 
 from condor.web.auth import create_jwt, get_current_user, redeem_login_token
@@ -8,6 +10,32 @@ from condor.web.models import LoginResponse, WebUser
 from config_manager import UserRole, get_config_manager
 
 router = APIRouter(tags=["auth"])
+
+
+@router.post('/auth/tailscale', response_model=LoginResponse)
+async def tailscale_login(request: Request, response: Response):
+    """Opt-in owner login behind localhost-bound Tailscale Serve only.
+
+    Serve strips caller-supplied identity headers. The web-only launcher binds
+    loopback and disables proxy-header rewriting of the socket peer address.
+    Other local processes are inside this machine's existing trust boundary.
+    """
+    login = os.environ.get('CONDOR_TAILSCALE_LOGIN', '')
+    user_id = os.environ.get('CONDOR_TAILSCALE_USER_ID', '')
+    if not login or not user_id.isdigit():
+        raise HTTPException(404, 'Tailscale sign-in is not configured')
+    if (request.client is None or request.client.host not in {'127.0.0.1', '::1'}
+            or request.headers.get('Tailscale-User-Login') != login):
+        raise HTTPException(403, 'Open Condor through your private Tailscale link')
+    role = get_config_manager().get_user_role(int(user_id))
+    if role not in (UserRole.USER, UserRole.ADMIN):
+        raise HTTPException(403, 'Access denied')
+    response.headers['Cache-Control'] = 'no-store'
+    response.headers['Referrer-Policy'] = 'no-referrer'
+    return LoginResponse(
+        token=create_jwt(int(user_id), first_name='Operator', role=role.value),
+        user=WebUser(id=int(user_id), first_name='Operator', role=role.value),
+    )
 
 
 class TokenLoginRequest(BaseModel):

@@ -77,3 +77,11 @@ export function researchReadState(
     ? "available"
     : "stale";
 }
+
+
+export function researchSelectionMessage(selected: string, listState: ReturnType<typeof researchReadState>): string | null {
+  if (selected) return null;
+  return listState === 'available'
+    ? 'No records match these filters. Choose another filter to explore research connections.'
+    : 'Choose a record after the knowledge library loads to explore its connections.';
+}

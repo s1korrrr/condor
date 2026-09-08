@@ -1,12 +1,16 @@
 from __future__ import annotations
 
 import logging
+import re
 import threading
 import time
 from typing import Any
 
 import yaml
+from aiohttp import ClientError, ClientTimeout
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import JSONResponse
+from pydantic import BaseModel, ConfigDict
 
 from condor.fetchers.bots import build_bots_page, extract_bots_list
 from condor.web.auth import get_current_user
@@ -809,6 +813,145 @@ async def deploy_bot_endpoint(
         raise HTTPException(status_code=502, detail=str(e))
 
     return result
+
+
+class NativeLifecycleBody(BaseModel):
+    """Native process configuration is owned by the API registration, never this request."""
+
+    model_config = ConfigDict(extra="forbid")
+
+
+async def _native_lifecycle_router(
+    name: str, bot_name: str, user: WebUser, action: str | None = None
+):
+    cm = get_config_manager()
+    if not cm.has_server_access(user.id, name):
+        raise HTTPException(404, "Native source not found")
+    if not all(
+        re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}", value)
+        for value in (name, bot_name)
+    ):
+        raise HTTPException(422, "Invalid native source identifier")
+    try:
+        client = await cm.get_client(name)
+        transport = client.bot_orchestration
+        async with transport.session.get(
+            f"{transport.base_url}/health",
+            allow_redirects=False,
+            timeout=ClientTimeout(total=5),
+        ) as response:
+            if response.status != 200:
+                raise HTTPException(
+                    503, "Native capability check unavailable; no command forwarded"
+                )
+            health = await response.json()
+    except (ClientError, TimeoutError, ValueError, AttributeError):
+        raise HTTPException(
+            503, "Native capability check unavailable; no command forwarded"
+        ) from None
+    capabilities = health.get("capabilities") if isinstance(health, dict) else None
+    if (
+        not isinstance(health, dict)
+        or health.get("status") != "ok"
+        or health.get("profile") != "native"
+        or (
+            action is not None
+            and (
+                not isinstance(capabilities, dict)
+                or capabilities.get("native_controls_enabled") is not True
+                or capabilities.get(f"native_{action}") is not True
+            )
+        )
+    ):
+        raise HTTPException(
+            409,
+            "The selected source does not currently allow this native lifecycle operation",
+        )
+    return transport
+
+
+@router.get("/servers/{name}/bots/{bot_name}/native/status")
+async def native_bot_status_endpoint(
+    name: str, bot_name: str, user: WebUser = Depends(get_current_user)
+):
+    transport = await _native_lifecycle_router(name, bot_name, user)
+    try:
+        async with transport.session.get(
+            f"{transport.base_url}/bot-orchestration/{bot_name}/status",
+            allow_redirects=False,
+            timeout=ClientTimeout(total=5),
+        ) as response:
+            if 300 <= response.status < 400:
+                raise HTTPException(502, "Native status redirect refused")
+            payload = await response.json()
+            return JSONResponse(
+                payload,
+                status_code=response.status,
+                headers={"Cache-Control": "no-store"},
+            )
+    except (ClientError, TimeoutError, ValueError):
+        raise HTTPException(502, "Native lifecycle observation unavailable") from None
+
+
+async def _native_lifecycle_command(
+    name: str, bot_name: str, user: WebUser, action: str
+):
+    transport = await _native_lifecycle_router(name, bot_name, user, action)
+    try:
+        # SDK start/stop helpers add configuration flags and discard HTTP 202.
+        # Reuse its authenticated session while keeping the native request exact.
+        async with transport.session.post(
+            f"{transport.base_url}/bot-orchestration/{action}-bot",
+            json={"bot_name": bot_name},
+            allow_redirects=False,
+            timeout=ClientTimeout(total=55),
+        ) as response:
+            if 300 <= response.status < 400:
+                raise ValueError("Native command redirect refused")
+            payload = await response.json()
+            if not isinstance(payload, dict):
+                raise ValueError("Native command response is invalid")
+            return JSONResponse(
+                payload,
+                status_code=response.status,
+                headers={"Cache-Control": "no-store"},
+            )
+    except (ClientError, TimeoutError, ValueError):
+        return JSONResponse(
+            {
+                "status": "unknown",
+                "response": {
+                    "bot_name": bot_name,
+                    "action": action,
+                    "execution_verified": False,
+                    "outcome_unknown": True,
+                    "acknowledgement": None,
+                    "message": "Native command response unavailable. Verify owner telemetry before retrying.",
+                },
+            },
+            status_code=202,
+            headers={"Cache-Control": "no-store"},
+        )
+
+
+@router.post("/servers/{name}/bots/{bot_name}/native/start")
+async def native_start_bot_endpoint(
+    name: str,
+    bot_name: str,
+    body: NativeLifecycleBody | None = None,
+    user: WebUser = Depends(get_current_user),
+):
+    return await _native_lifecycle_command(name, bot_name, user, "start")
+
+
+@router.post("/servers/{name}/bots/{bot_name}/native/stop")
+async def native_stop_bot_endpoint(
+    name: str,
+    bot_name: str,
+    body: NativeLifecycleBody | None = None,
+    user: WebUser = Depends(get_current_user),
+):
+    return await _native_lifecycle_command(name, bot_name, user, "stop")
 
 
 @router.post("/servers/{name}/bots/{bot_name}/stop")

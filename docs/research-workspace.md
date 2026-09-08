@@ -48,6 +48,8 @@ existing authentication dependency.
   SHA-256 locator labels; projected-key collisions are rejected instead of losing
   source hashes. This is a structured projection, not a general-purpose secret
   detector for arbitrary free text. Do not put secrets in research records.
+- Browser requests retain a 15-second deadline as well as query cancellation. Serialized
+  native record previews receive the same field projection; incomplete previews are withheld.
 - Fetch timestamps describe transport observation, separately from owner index
   freshness. Each panel expires independently 60 seconds after its client-side query receipt
   (`dataUpdatedAt`), so a fixed browser/host clock offset does not hide valid reads. It shows failed or

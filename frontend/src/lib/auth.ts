@@ -8,6 +8,7 @@ import {
 
 import { TOKEN_KEY, authHeaders } from "./auth-token";
 import { queryClient } from "./queryClient";
+import { fetchTailscaleLogin } from "./auth-login";
 
 export interface User {
   id: number;
@@ -21,6 +22,7 @@ export interface AuthState {
   token: string | null;
   isAuthenticated: boolean;
   loginWithToken: (loginToken: string) => Promise<void>;
+  loginWithTailscale: () => Promise<boolean>;
   logout: () => void;
 }
 
@@ -34,6 +36,7 @@ export const AuthContext = createContext<AuthState>({
   token: null,
   isAuthenticated: false,
   loginWithToken: async () => {},
+  loginWithTailscale: async () => false,
   logout: () => {},
 });
 
@@ -50,6 +53,20 @@ export function useAuthState(): AuthState {
     return raw ? JSON.parse(raw) : null;
   });
 
+  const acceptSession = useCallback((data: { token: string; user: User }) => {
+    localStorage.setItem(TOKEN_KEY, data.token);
+    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
+    setToken(data.token);
+    setUser(data.user);
+  }, []);
+
+  const loginWithTailscale = useCallback(async () => {
+    const session = await fetchTailscaleLogin();
+    if (!session) return false;
+    acceptSession(session);
+    return true;
+  }, [acceptSession]);
+
   const loginWithToken = useCallback(async (loginToken: string) => {
     const res = await fetch("/api/v1/auth/token-login", {
       method: "POST",
@@ -61,11 +78,8 @@ export function useAuthState(): AuthState {
       throw new Error(err.detail || "Login failed");
     }
     const data = await res.json();
-    localStorage.setItem(TOKEN_KEY, data.token);
-    localStorage.setItem(USER_KEY, JSON.stringify(data.user));
-    setToken(data.token);
-    setUser(data.user);
-  }, []);
+    acceptSession(data);
+  }, [acceptSession]);
 
   const logout = useCallback(() => {
     localStorage.removeItem(TOKEN_KEY);
@@ -99,6 +113,7 @@ export function useAuthState(): AuthState {
     token,
     isAuthenticated: !!token && !!user,
     loginWithToken,
+    loginWithTailscale,
     logout,
   };
 }

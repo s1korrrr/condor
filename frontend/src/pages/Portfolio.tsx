@@ -15,6 +15,8 @@ import { useState, useEffect, useMemo, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
 
 import { NoServerCard } from "@/components/NoServerCard";
+import { AccountPortfolio } from "@/components/AccountPortfolio";
+import { useServerCapabilities } from "@/hooks/useServerCapabilities";
 import { useRates } from "@/hooks/useRates";
 import { useServer } from "@/hooks/useServer";
 import { useCondorWebSocket } from "@/hooks/useWebSocket";
@@ -745,6 +747,11 @@ function PortfolioEvolution({ server, range, convertFromUsd, currencySymbol }: {
 // ── Main Portfolio Page ──
 
 export function Portfolio() {
+  const { access } = useServerCapabilities();
+  return access.native ? <AccountPortfolio /> : <FullPortfolio />;
+}
+
+function FullPortfolio() {
   const { server } = useServer();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -912,8 +919,8 @@ export function Portfolio() {
   let botVolume = 0;
   for (const ctrl of controllers) {
     const quote = ctrl.trading_pair?.split("-")[1] || "USDT";
-    botPnl += convert(ctrl.global_pnl_quote, quote).value;
-    botVolume += convert(ctrl.volume_traded, quote).value;
+    botPnl += ctrl.global_pnl_quote === null ? Number.NaN : convert(ctrl.global_pnl_quote, quote).value;
+    botVolume += ctrl.volume_traded === null ? Number.NaN : convert(ctrl.volume_traded, quote).value;
   }
 
   // Flatten all tokens for top holdings

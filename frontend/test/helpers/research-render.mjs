@@ -98,6 +98,7 @@ export function renderResearch(
               isError: false,
               isFetching: false,
               isPending: false,
+              dataUpdatedAt: Date.now(),
               refetch: () => {
                 refetches.push(key);
                 return Promise.resolve();

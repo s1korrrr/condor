@@ -67,11 +67,13 @@ export function researchReadState(
   envelope: ResearchEnvelope | undefined,
   now: number,
   failed: boolean,
+  receivedAt: number,
 ) {
   if (failed) return "error";
   if (!envelope) return "loading";
-  const age = now - Date.parse(envelope.source.fetched_at);
-  return Number.isFinite(age) && age >= -5000 && age <= 60000
+  // Both values use the client clock; the owner timestamp is provenance only.
+  const age = now - receivedAt;
+  return receivedAt > 0 && Number.isFinite(age) && age >= -5000 && age <= 60000
     ? "available"
     : "stale";
 }

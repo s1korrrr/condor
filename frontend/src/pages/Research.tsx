@@ -121,8 +121,18 @@ export function Research() {
       if (node.kind === "idea") void comparisons.refetch();
     }
   };
-  const overviewState = researchReadState(overview.data, now, overview.isError);
-  const listState = researchReadState(list.data, now, list.isError);
+  const overviewState = researchReadState(
+    overview.data,
+    now,
+    overview.isError,
+    overview.dataUpdatedAt,
+  );
+  const listState = researchReadState(
+    list.data,
+    now,
+    list.isError,
+    list.dataUpdatedAt,
+  );
   const data = overviewState === "available" ? object(overview.data?.data) : {};
   const freshness = object(data.freshness),
     counts = object(data.counts),
@@ -138,7 +148,12 @@ export function Research() {
     else next.delete("id");
     setParams(next);
   };
-  const detailState = researchReadState(detail.data, now, detail.isError);
+  const detailState = researchReadState(
+    detail.data,
+    now,
+    detail.isError,
+    detail.dataUpdatedAt,
+  );
   const detailAvailable = detailState === "available";
   const node = detailAvailable ? object(detail.data?.data.node) : {};
   const nodeData = object(node.data),
@@ -152,12 +167,18 @@ export function Research() {
     refetchInterval: 30000,
     retry: 1,
   });
-  const graphState = researchReadState(graph.data, now, graph.isError);
+  const graphState = researchReadState(
+    graph.data,
+    now,
+    graph.isError,
+    graph.dataUpdatedAt,
+  );
   const graphAvailable = graphState === "available";
   const comparisonState = researchReadState(
     comparisons.data,
     now,
     comparisons.isError,
+    comparisons.dataUpdatedAt,
   );
   const related = graphAvailable
     ? records(graph.data?.data.nodes).filter((n) => n.id !== selected)

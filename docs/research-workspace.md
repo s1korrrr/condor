@@ -49,7 +49,8 @@ existing authentication dependency.
   source hashes. This is a structured projection, not a general-purpose secret
   detector for arbitrary free text. Do not put secrets in research records.
 - Fetch timestamps describe transport observation, separately from owner index
-  freshness. Each panel expires independently after 60 seconds and shows failed or
+  freshness. Each panel expires independently 60 seconds after its client-side query receipt
+  (`dataUpdatedAt`), so a fixed browser/host clock offset does not hide valid reads. It shows failed or
   stale reads without retaining old results as current. Polling is every 30 seconds;
   Refresh and panel retries include baseline comparisons.
 - A completed process and a held research outcome are different recorded states.
@@ -87,3 +88,5 @@ rollback reverts only this integration and restores the previous web build.
 - [HTTPX streaming](https://www.python-httpx.org/async/) and [timeouts](https://www.python-httpx.org/advanced/timeouts/): response lifetime and inactivity versus whole-request limits.
 - [FastAPI security](https://fastapi.tiangolo.com/reference/security/): authenticated route dependencies.
 - [SQLite JSON projection](https://sqlite.org/json1.html#the_json_remove_function) and [URI semantics](https://sqlite.org/uri.html): compact reads and immutable-reader assumptions.
+
+The client receipt clock follows [TanStack Query result state](https://tanstack.com/query/latest/docs/framework/react/reference/interfaces/QueryObserverBaseResult). Server `fetched_at` remains source metadata and does not set client expiry.

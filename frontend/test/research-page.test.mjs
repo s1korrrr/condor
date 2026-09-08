@@ -62,6 +62,7 @@ test("Refresh includes comparisons for the selected idea", () => {
 test("stale graph is disclosed and retry targets the graph query", () => {
   const queries = selectedIdeaQueries();
   queries["research-graph"] = {
+    dataUpdatedAt: Date.now() - 120000,
     data: envelope({ nodes: [], edges: [] }, 120_000),
   };
   const result = renderResearch(queries);
@@ -77,6 +78,7 @@ test("stale graph is disclosed and retry targets the graph query", () => {
 test("stale comparisons are disclosed without displaying old values", () => {
   const queries = selectedIdeaQueries();
   queries["research-comparisons"] = {
+    dataUpdatedAt: Date.now() - 120000,
     data: envelope(
       {
         items: [
@@ -112,6 +114,7 @@ test("stale comparisons are disclosed without displaying old values", () => {
 test("stale detail is disclosed and can be retried without showing the old record", () => {
   const queries = selectedIdeaQueries();
   queries["research-node"] = {
+    dataUpdatedAt: Date.now() - 120000,
     data: envelope(
       {
         node: {
@@ -130,4 +133,27 @@ test("stale detail is disclosed and can be retried without showing the old recor
   assert.match(result.html, /stale|has not refreshed|expired/i);
   click(result, /Retry detail/i);
   assert.deepEqual(result.refetches, ["research-node"]);
+});
+
+test("all research panels remain visible with a skewed host clock", () => {
+  for (const skew of [-86400000, 86400000]) {
+    const queries = selectedIdeaQueries();
+    for (const query of Object.values(queries)) {
+      query.data.source.fetched_at = new Date(Date.now() + skew).toISOString();
+      query.dataUpdatedAt = Date.now() - 1000;
+    }
+    const result = renderResearch(queries);
+    assert.match(result.html, /Fixture idea/);
+    assert.match(result.html, /Index current/);
+    assert.doesNotMatch(
+      result.html,
+      /has not refreshed|expired|connection stale/i,
+    );
+    assert.ok(
+      result.requests.find((q) => q.queryKey[0] === "research-comparisons")
+        .enabled,
+    );
+    click(result, /^Refresh$/);
+    assert.equal(result.refetches.length, 5);
+  }
 });

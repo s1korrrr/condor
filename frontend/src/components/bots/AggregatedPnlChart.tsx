@@ -37,7 +37,8 @@ function aggregate(
     if (ctrl.trading_pair) pairByCtrl[cid] = ctrl.trading_pair;
   }
 
-  const cv = (val: number, pair: string) => {
+  const cv = (val: number | null, pair: string) => {
+    if (val === null) return Number.NaN;
     if (!convertFn) return val;
     const quote = pair?.split("-")[1] || "USDT";
     return convertFn(val, quote).value;
@@ -101,7 +102,7 @@ function aggregate(
       livePosition += cv(positionQuoteValue(ctrl.positions_summary as Record<string, unknown>[]), pair);
     }
   }
-  if (hasLive) {
+  if (hasLive && [liveRealized, liveUnrealized, liveVolume, livePosition].every(Number.isFinite)) {
     points.push({
       time: now,
       realized: liveRealized,

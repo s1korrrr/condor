@@ -79,7 +79,7 @@ export function ControllerPnlChart({ server, controllerId, botName, deployedAt, 
     });
 
     // Append live "now" point from controller so graph ends at real-time values
-    if (controller) {
+    if (controller && controller.realized_pnl_quote !== null && controller.unrealized_pnl_quote !== null && controller.volume_traded !== null) {
       let livePos = 0;
       if (Array.isArray(controller.positions_summary)) {
         livePos = positionQuoteValue(controller.positions_summary as Record<string, unknown>[]);

@@ -13,7 +13,7 @@ import {
   TrendingUp,
   Volume2,
 } from "lucide-react";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import { NoServerCard } from "@/components/NoServerCard";
 import { AggregatedPnlChart } from "@/components/bots/AggregatedPnlChart";
@@ -24,9 +24,12 @@ import { FallbackSpinner } from "@/components/ui/FallbackSpinner";
 
 import { useRates } from "@/hooks/useRates";
 import { useServer } from "@/hooks/useServer";
+import { useServerCapabilities } from "@/hooks/useServerCapabilities";
 import { useCondorWebSocket } from "@/hooks/useWebSocket";
 import { api, type BotLogEntry, type BotSummary, type ControllerInfo, type ControllerPerformanceSnapshot } from "@/lib/api";
-import { formatCurrencyVolume, pnlColor } from "@/lib/formatters";
+import { formatCurrencyPnl, formatCurrencyVolume, pnlColor } from "@/lib/formatters";
+import { botPollingPolicy, botCountLabel, expireNativeBotPage, nativeBotQuote, observedFleetCounts, observedPnlColor } from "@/lib/bot-monitoring";
+import { nativeCommandOutcome, nativeControlEligibility, awaitingNativeOwnerTransition, type NativeAction } from "@/lib/native-bot-controls";
 
 function formatUptime(deployedAt: string | null): string {
   if (!deployedAt) return "—";
@@ -75,6 +78,8 @@ function compareControllers(a: ControllerInfo, b: ControllerInfo, key: SortKey, 
     case "unrealized_pnl_quote":
     case "global_pnl_quote":
     case "volume_traded":
+      if (a[key] === null) return b[key] === null ? 0 : 1;
+      if (b[key] === null) return -1;
       cmp = a[key] - b[key];
       break;
     case "deployed_at": {
@@ -263,20 +268,23 @@ function ControllerRow({
   server: string;
   isSelected: boolean;
   onSelect: () => void;
-  formatPnlValue: (val: number, quote: string) => string;
-  formatValue: (val: number, quote: string) => string;
+  formatPnlValue: (val: number | null, quote: string) => string;
+  formatValue: (val: number | null, quote: string) => string;
   sparklineValues?: number[];
   isBotStopping?: boolean;
 }) {
   const queryClient = useQueryClient();
+  const { access } = useServerCapabilities();
   const isKilled = ctrl.config?.manual_kill_switch === true;
   const isStopping = ctrl.status === "stopping" || (isBotStopping && !isKilled);
 
   const toggleMutation = useMutation({
-    mutationFn: () =>
-      isKilled
+    mutationFn: () => {
+      if (!access.controllerMutation) throw new Error("Controller controls are unavailable on this server");
+      return isKilled
         ? api.startControllers(server, ctrl.bot_name, [ctrl.controller_id])
-        : api.stopControllers(server, ctrl.bot_name, [ctrl.controller_id]),
+        : api.stopControllers(server, ctrl.bot_name, [ctrl.controller_id]);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bots", server] });
     },
@@ -309,19 +317,19 @@ function ControllerRow({
           <>
             <td
               className="px-4 py-2.5 text-sm text-right tabular-nums font-medium"
-              style={{ color: pnlColor(ctrl.realized_pnl_quote) }}
+              style={{ color: observedPnlColor(ctrl.realized_pnl_quote) }}
             >
               {formatPnlValue(ctrl.realized_pnl_quote, quote)}
             </td>
             <td
               className="px-4 py-2.5 text-sm text-right tabular-nums font-medium"
-              style={{ color: pnlColor(ctrl.unrealized_pnl_quote) }}
+              style={{ color: observedPnlColor(ctrl.unrealized_pnl_quote) }}
             >
               {formatPnlValue(ctrl.unrealized_pnl_quote, quote)}
             </td>
             <td
               className="px-4 py-2.5 text-sm text-right tabular-nums font-medium"
-              style={{ color: pnlColor(ctrl.global_pnl_quote) }}
+              style={{ color: observedPnlColor(ctrl.global_pnl_quote) }}
             >
               {formatPnlValue(ctrl.global_pnl_quote, quote)}
             </td>
@@ -352,7 +360,7 @@ function ControllerRow({
         <div className="flex flex-col items-center justify-center" onClick={(e) => e.stopPropagation()}>
           <button
             onClick={() => toggleMutation.mutate()}
-            disabled={toggleMutation.isPending || isStopping}
+            disabled={!access.controllerMutation || toggleMutation.isPending || isStopping}
             className={`flex items-center gap-1 rounded px-2 py-1 text-xs font-medium transition-colors disabled:opacity-50 ${
               isStopping
                 ? "text-[var(--color-yellow)]"
@@ -361,7 +369,7 @@ function ControllerRow({
                   : "text-[var(--color-yellow)] hover:bg-[var(--color-yellow)]/10"
             }`}
             title={
-              toggleMutation.isError
+              !access.controllerMutation ? "Controller controls are unavailable on this server" : toggleMutation.isError
                 ? `Failed to ${isKilled ? "start" : "pause"}: ${toggleMutation.error instanceof Error ? toggleMutation.error.message : "Unknown error"}`
                 : isStopping
                   ? "Stopping..."
@@ -394,7 +402,62 @@ function ControllerRow({
 
 // ── Bots Collapsible Section ──
 
+function NativeBotControls({server,botName}: {server:string;botName:string}) {
+  const {access,data:capabilities}=useServerCapabilities();
+  const queryClient=useQueryClient();
+  const [now,setNow]=useState(Date.now);
+  const [confirmation,setConfirmation]=useState<NativeAction|null>(null);
+  const [submitted,setSubmitted]=useState<{bootId:string;sequence:number;action:NativeAction}|null>(null);
+  const [receipt,setReceipt]=useState<{state:'verified'|'rejected'|'unknown';message:string}|null>(null);
+  useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),1000);return ()=>window.clearInterval(timer);},[]);
+  const status=useQuery({queryKey:['native-bot-status',server,botName],queryFn:()=>api.getNativeBotStatus(server,botName),refetchInterval:5000,staleTime:0,retry:false});
+  const allowedStart=capabilities?.capabilities?.native_start===true;
+  const eligibility=nativeControlEligibility(status.isError?undefined:status.data,botName,access.botStop,allowedStart,now);
+  const waitingForOwner=awaitingNativeOwnerTransition(submitted,eligibility);
+  const mutation=useMutation({
+    mutationFn:async(action:NativeAction)=>{
+      const current=nativeControlEligibility(status.isError?undefined:status.data,botName,access.botStop,allowedStart,Date.now());
+      const expected={botName,action,bootId:current.bootId,instanceId:current.instanceId};
+      if (!current.allowed || current.action!==action || waitingForOwner) return {result:{httpStatus:409,body:{detail:current.reason || 'Await fresh owner telemetry before requesting another transition.'}},expected};
+      setSubmitted({bootId:current.bootId,sequence:current.sequence,action});
+      setReceipt(null);
+      const result=await api.nativeBotCommand(server,botName,action);
+      return {result,expected};
+    },
+    onSuccess:({result,expected})=>{
+      const outcome=nativeCommandOutcome(result,expected);
+      setReceipt(outcome);
+      if(outcome.state==='rejected')setSubmitted(null);
+      setConfirmation(null);
+    },
+    onError:()=>{
+      setReceipt({state:'unknown',message:'No verified command outcome was received. Await a fresh owner state transition before retrying.'});
+      setConfirmation(null);
+    },
+    onSettled:()=>{
+      queryClient.invalidateQueries({queryKey:['native-bot-status',server,botName]});
+      queryClient.invalidateQueries({queryKey:['bots',server]});
+    },
+  });
+  const disabled=!eligibility.allowed || mutation.isPending || waitingForOwner;
+  const reason=status.isError?'Native status is unavailable. Controls require fresh owner evidence.':waitingForOwner?'Awaiting a fresh owner state transition.':eligibility.reason;
+  const action=eligibility.action;
+  return <div className="flex max-w-sm flex-col items-end gap-1" onClick={event=>event.stopPropagation()}>
+    {confirmation ? <div className="flex flex-wrap items-center justify-end gap-2">
+      <span className="text-xs text-[var(--color-text-muted)]">{confirmation==='start'?'Start the registered configuration?':'Stop and reconcile this native strategy?'}</span>
+      <button type="button" disabled={disabled||confirmation!==action} onClick={()=>mutation.mutate(confirmation)} className="rounded bg-[var(--color-primary)] px-3 py-2 text-xs font-medium text-[var(--color-bg)] disabled:opacity-40">{mutation.isPending?'Awaiting owner…':`Confirm ${confirmation}`}</button>
+      <button type="button" disabled={mutation.isPending} onClick={()=>setConfirmation(null)} className="px-2 py-2 text-xs text-[var(--color-text-muted)] disabled:opacity-40">Cancel</button>
+    </div> : <button type="button" disabled={disabled||!action} onClick={()=>action&&setConfirmation(action)} title={reason || `${action==='start'?'Start':'Stop'} native strategy using its registered configuration`} className="flex items-center gap-1 rounded px-3 py-2 text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 disabled:opacity-40">
+      {action==='start'?<Play className="h-3.5 w-3.5"/>:<Square className="h-3.5 w-3.5"/>}
+      {mutation.isPending?'Awaiting owner…':action==='start'?'Start native':action==='stop'?'Stop native':'Lifecycle unavailable'}
+    </button>}
+    {reason&&<span role="status" className="max-w-xs text-right text-xs text-[var(--color-text-muted)]">{reason}</span>}
+    {receipt&&<span role="status" className={`max-w-xs text-right text-xs ${receipt.state==='verified'?'text-[var(--color-green)]':receipt.state==='rejected'?'text-[var(--color-red)]':'text-[var(--color-yellow)]'}`}>{receipt.state==='unknown'&&submitted&&!waitingForOwner?`The command acknowledgement was unavailable. Fresh owner telemetry now reports ${eligibility.state}.`:receipt.message}</span>}
+  </div>;
+}
+
 function BotRow({ bot, server, onStopInitiated, onStopSettled }: { bot: BotSummary; server: string; onStopInitiated?: (botName: string) => void; onStopSettled?: (botName: string) => void }) {
+  const { access } = useServerCapabilities();
   const [showLogs, setShowLogs] = useState(false);
   const [confirmStop, setConfirmStop] = useState(false);
   const queryClient = useQueryClient();
@@ -402,6 +465,8 @@ function BotRow({ bot, server, onStopInitiated, onStopSettled }: { bot: BotSumma
 
   const stopMutation = useMutation({
     mutationFn: () => {
+      if (access.native) throw new Error("Native bots require the dedicated lifecycle control endpoint");
+      if (!access.botStop) throw new Error("Bot controls are unavailable on this server");
       onStopInitiated?.(bot.bot_name);
       return api.stopBot(server, bot.bot_name);
     },
@@ -442,7 +507,7 @@ function BotRow({ bot, server, onStopInitiated, onStopSettled }: { bot: BotSumma
           {bot.bot_name}
         </span>
         <span className="text-[var(--color-text-muted)]">
-          {bot.num_controllers} controller{bot.num_controllers !== 1 ? "s" : ""}
+          {access.native && bot.controller_count_current !== true ? "Controllers UNAVAILABLE" : `${botCountLabel(bot.num_controllers, access.native, bot.controller_count_current === true)} controller${bot.num_controllers !== 1 ? "s" : ""}`}
         </span>
         {bot.error_count > 0 && (
           <span className="text-[var(--color-yellow)] text-xs">
@@ -452,7 +517,7 @@ function BotRow({ bot, server, onStopInitiated, onStopSettled }: { bot: BotSumma
         <span className="ml-auto text-[var(--color-text-muted)] tabular-nums">
           {formatUptime(bot.deployed_at)}
         </span>
-        {isStopping ? (
+        {access.native ? <NativeBotControls key={`${server}:${bot.bot_name}`} server={server} botName={bot.bot_name}/> : isStopping ? (
             <div className="flex items-center gap-1.5 text-[var(--color-yellow)]" onClick={(e) => e.stopPropagation()}>
               <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
               <span className="text-xs font-medium">Stopping</span>
@@ -461,7 +526,7 @@ function BotRow({ bot, server, onStopInitiated, onStopSettled }: { bot: BotSumma
             <div className="flex items-center gap-1.5" onClick={(e) => e.stopPropagation()}>
               <button
                 onClick={() => stopMutation.mutate()}
-                disabled={stopMutation.isPending}
+                disabled={!access.botStop || stopMutation.isPending}
                 className="rounded px-2 py-1 text-xs font-medium bg-[var(--color-red)] text-white hover:opacity-90 transition-opacity disabled:opacity-50"
               >
                 {stopMutation.isPending ? "Stopping..." : "Confirm"}
@@ -475,9 +540,10 @@ function BotRow({ bot, server, onStopInitiated, onStopSettled }: { bot: BotSumma
             </div>
           ) : (
             <button
+              disabled={!access.botStop}
               onClick={(e) => { e.stopPropagation(); setConfirmStop(true); }}
-              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--color-red)] hover:bg-[var(--color-red)]/10 transition-colors"
-              title="Stop bot"
+              className="flex items-center gap-1 rounded px-2 py-1 text-xs text-[var(--color-red)] hover:bg-[var(--color-red)]/10 transition-colors disabled:opacity-40"
+              title={access.botStop ? "Stop bot" : "Bot controls are unavailable on this server"}
             >
               <Square className="h-3 w-3" />
               Stop
@@ -525,10 +591,12 @@ function BotsSection({ bots, server, onStopInitiated, onStopSettled }: { bots: B
 
 // ── Main Page ──
 
-const BOTS_WS_CHANNELS = ["bots", "controller_perf"];
-
 export function ActiveBotsTab() {
   const { server } = useServer();
+  const { access } = useServerCapabilities();
+  const polling = botPollingPolicy(access.native);
+  const [observationClock,setObservationClock]=useState(Date.now);
+  useEffect(()=>{if(!access.native)return;const timer=window.setInterval(()=>setObservationClock(Date.now()),1000);return()=>window.clearInterval(timer);},[access.native]);
   const [sortKey, setSortKey] = useState<SortKey>("global_pnl_quote");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const [selectedKey, setSelectedKey] = useState<string | null>(null);
@@ -547,14 +615,15 @@ export function ActiveBotsTab() {
   }, []);
 
   // Subscribe to real-time bots updates via WS
-  useCondorWebSocket(BOTS_WS_CHANNELS, server);
+  useCondorWebSocket(polling.channels, server);
 
-  const { data, isLoading, error } = useQuery({
+  const { data: rawData, isLoading, error } = useQuery({
     queryKey: ["bots", server],
     queryFn: () => api.getBots(server!),
     enabled: !!server,
-    refetchInterval: 30000, // Slower polling since WS handles real-time updates
+    refetchInterval: polling.interval,
   });
+  const data=useMemo(()=>expireNativeBotPage(rawData,access.native,observationClock),[rawData,access.native,observationClock]);
 
   // Compute earliest deploy time from active bots for filtering perf history
   const earliestDeploy = useMemo(() => {
@@ -578,7 +647,7 @@ export function ActiveBotsTab() {
         limit: 1000,
         start_time: earliestDeploy,
       }),
-    enabled: !!server && (data?.controllers?.length ?? 0) > 0,
+    enabled: !!server && polling.controllerHistory && (data?.controllers?.length ?? 0) > 0,
     refetchInterval: 120_000,
     staleTime: 60_000,
   });
@@ -592,7 +661,7 @@ export function ActiveBotsTab() {
     }
   };
 
-  const bots = data?.bots ?? [];
+  const bots = useMemo(() => data?.bots ?? [], [data?.bots]);
 
   // Track which bots are stopping (server-side status + optimistic pending mutations)
   const stoppingBotNames = useMemo(() => {
@@ -668,7 +737,17 @@ export function ActiveBotsTab() {
     () => controllers.map((c) => c.trading_pair?.split("-")[1] || "USDT"),
     [controllers],
   );
-  const { convert, formatPnlValue, formatValue, resolvedSymbol: currencySymbol } = useRates(quoteCurrencies);
+  const rates = useRates(access.native ? [] : quoteCurrencies);
+  const currencySymbol = access.native ? "USDC " : rates.resolvedSymbol;
+  const convert = access.native ? nativeBotQuote : rates.convert;
+  const formatPnlValue = (value: number | null, quote: string) => {
+    if (value === null || !Number.isFinite(value)) return "UNAVAILABLE";
+    return access.native ? (nativeBotQuote(value, quote).converted ? formatCurrencyPnl(value, "USDC ") : "UNAVAILABLE") : rates.formatPnlValue(value, quote);
+  };
+  const formatValue = (value: number | null, quote: string) => {
+    if (value === null || !Number.isFinite(value)) return "UNAVAILABLE";
+    return access.native ? (nativeBotQuote(value, quote).converted ? formatCurrencyVolume(value, "USDC ") : "UNAVAILABLE") : rates.formatValue(value, quote);
+  };
 
   if (!server) {
     return <NoServerCard message="Select a server from the sidebar to view active bots." />;
@@ -682,6 +761,8 @@ export function ActiveBotsTab() {
     );
 
   const serverOnline = data?.server_online !== false;
+  const metricsAvailable = data?.metrics_available !== false && (!access.native || quoteCurrencies.every(quote => quote === "USDC"));
+  const observedCounts = observedFleetCounts(bots);
   const errorHint = data?.error_hint;
   const activeBots = bots.filter((b) => b.status === "running" || b.status === "stopping").length;
 
@@ -690,8 +771,8 @@ export function ActiveBotsTab() {
   let totalVolume = 0;
   for (const ctrl of controllers) {
     const quote = ctrl.trading_pair?.split("-")[1] || "USDT";
-    totalPnl += convert(ctrl.global_pnl_quote, quote).value;
-    totalVolume += convert(ctrl.volume_traded, quote).value;
+    totalPnl += ctrl.global_pnl_quote === null ? Number.NaN : convert(ctrl.global_pnl_quote, quote).value;
+    totalVolume += ctrl.volume_traded === null ? Number.NaN : convert(ctrl.volume_traded, quote).value;
   }
 
   const isEmpty = controllers.length === 0 && bots.length === 0;
@@ -713,20 +794,23 @@ export function ActiveBotsTab() {
 
   return (
     <div className="space-y-6">
+      {!metricsAvailable && <p role="status" className="rounded-lg border border-[var(--color-yellow)]/40 bg-[var(--color-yellow)]/10 px-4 py-3 text-sm text-[var(--color-text)]">{data?.metrics_unavailable_reason || "Current bot performance is unavailable."}</p>}
       {/* Summary stat cards + deploy button */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-[1fr_1fr_1fr_1fr_auto]">
         <StatCard
-          label="Total PnL"
-          value={(totalPnl >= 0 ? "+" : "") + formatCurrencyVolume(totalPnl, currencySymbol)}
+          label={access.native ? "Tracked executor PnL" : "Total PnL"}
+          value={metricsAvailable ? (totalPnl >= 0 ? "+" : "") + formatCurrencyVolume(totalPnl, currencySymbol) : "UNAVAILABLE"}
           icon={TrendingUp}
-          valueColor={pnlColor(totalPnl)}
+          valueColor={metricsAvailable ? pnlColor(totalPnl) : undefined}
         />
-        <StatCard label="Volume" value={formatCurrencyVolume(totalVolume, currencySymbol)} icon={Volume2} />
-        <StatCard label="Active Bots" value={String(activeBots)} icon={Bot} />
-        <StatCard label="Controllers" value={String(controllers.length)} icon={Layers} />
+        <StatCard label="Volume" value={metricsAvailable ? formatCurrencyVolume(totalVolume, currencySymbol) : "UNAVAILABLE"} icon={Volume2} />
+        <StatCard label="Active Bots" value={access.native ? observedCounts.active : String(activeBots)} icon={Bot} />
+        <StatCard label="Controllers" value={access.native ? observedCounts.controllers : String(controllers.length)} icon={Layers} />
         <button
+          disabled={!access.deployment}
+          title={access.deployment ? "Deploy bot" : "Deployment is unavailable on this server"}
           onClick={() => setShowDeploy(true)}
-          className="flex items-center gap-2 justify-center rounded-lg bg-[var(--color-primary)] px-5 py-2 text-sm font-medium text-white transition-all hover:shadow-lg hover:shadow-[var(--color-primary)]/20 h-full col-span-2 lg:col-span-1"
+          className="flex items-center gap-2 justify-center rounded-lg bg-[var(--color-primary)] px-5 py-2 text-sm font-medium text-white transition-all hover:shadow-lg hover:shadow-[var(--color-primary)]/20 h-full col-span-2 lg:col-span-1 disabled:opacity-40"
         >
           <Rocket className="h-4 w-4" />
           Deploy Bot
@@ -734,7 +818,7 @@ export function ActiveBotsTab() {
       </div>
 
       {/* Aggregated PnL chart */}
-      {activeSnapshots.length > 0 && (
+      {activeSnapshots.length > 0 && (!access.native || metricsAvailable) && (
         <AggregatedPnlChart
           snapshots={activeSnapshots}
           controllers={controllers}
@@ -803,7 +887,7 @@ export function ActiveBotsTab() {
       )}
 
       {/* Fullscreen controller overlay */}
-      {selectedKey && controllers.length > 0 && (
+      {selectedKey && controllers.length > 0 && (!access.native || quoteCurrencies.every(quote => quote === "USDC")) && (
         <ControllerBrowser
           controllers={sortedControllers}
           server={server}
@@ -815,11 +899,11 @@ export function ActiveBotsTab() {
       )}
 
       {/* Deploy dialog */}
-      <DeployBotDialog
+      {access.deployment && <DeployBotDialog
         open={showDeploy}
         onClose={() => setShowDeploy(false)}
         server={server}
-      />
+      />}
     </div>
   );
 }

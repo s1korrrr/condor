@@ -452,7 +452,8 @@ class ConfigManager:
             elif time.time() - last_verified < self._client_ttl:
                 # Needs liveness check
                 try:
-                    await asyncio.wait_for(client.accounts.list_accounts(), timeout=5)
+                    from condor.api_health import verify_api_connection
+                    await asyncio.wait_for(verify_api_connection(client), timeout=5)
                     self._clients[name] = (client, time.time())
                     return client
                 except Exception:
@@ -483,7 +484,8 @@ class ConfigManager:
 
         try:
             await client.init()
-            await client.accounts.list_accounts()
+            from condor.api_health import verify_api_connection
+            await verify_api_connection(client)
             self._clients[name] = (client, time.time())
             logger.info(f"Connected to server '{name}' at {base_url}")
             return client

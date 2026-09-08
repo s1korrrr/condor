@@ -2,21 +2,19 @@ import { useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { useAuth } from "@/lib/auth";
+import { safeLoginRedirect } from "@/lib/auth-login";
 
 export function Login() {
-  const { isAuthenticated, loginWithToken } = useAuth();
+  const { isAuthenticated, loginWithToken, loginWithTailscale } = useAuth();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const [error, setError] = useState("");
-  const [loggingIn, setLoggingIn] = useState(false);
+  const [loggingIn, setLoggingIn] = useState(true);
   const attempted = useRef(false);
 
   // Where to land after login. Only allow internal paths to avoid open redirects.
-  const rawRedirect = searchParams.get("redirect");
-  const redirectTo =
-    rawRedirect && rawRedirect.startsWith("/") && !rawRedirect.startsWith("//")
-      ? rawRedirect
-      : "/";
+  const loginToken = searchParams.get("token");
+  const redirectTo = safeLoginRedirect(searchParams.get("redirect") ?? searchParams.get("next"), loginToken ? "/" : "/trading-visuals");
 
   useEffect(() => {
     if (isAuthenticated) {
@@ -24,25 +22,25 @@ export function Login() {
     }
   }, [isAuthenticated, navigate, redirectTo]);
 
-  // Auto-login when ?token= is present in URL
+  // Keep the existing one-time token flow; private deployments can authenticate
+  // the trusted Tailscale identity without putting another credential in a URL.
   useEffect(() => {
-    const token = searchParams.get("token");
-    if (!token || attempted.current) return;
+    if (isAuthenticated || attempted.current) return;
     attempted.current = true;
-    setLoggingIn(true);
 
     // Strip the one-time token from the URL so it does not linger in browser
     // history or get leaked via the Referer header. The token is consumed via
     // a POST below; the address bar should not keep it.
-    window.history.replaceState(null, "", window.location.pathname);
+    if (loginToken) window.history.replaceState(null, "", window.location.pathname);
 
-    loginWithToken(token)
-      .then(() => navigate(redirectTo, { replace: true }))
+    const signIn = loginToken ? loginWithToken(loginToken).then(() => true) : loginWithTailscale();
+    signIn
+      .then(authenticated => { if (authenticated) navigate(redirectTo, { replace: true }); })
       .catch((err) => {
         setError(err instanceof Error ? err.message : "Login failed");
-        setLoggingIn(false);
-      });
-  }, [searchParams, loginWithToken, navigate, redirectTo]);
+      })
+      .finally(() => setLoggingIn(false));
+  }, [isAuthenticated, loginToken, loginWithToken, loginWithTailscale, navigate, redirectTo]);
 
   return (
     <div className="flex h-screen items-center justify-center">

@@ -103,11 +103,11 @@ class ControllerInfo(BaseModel):
     status: str = "unknown"
     connector: str = ""
     trading_pair: str = ""
-    realized_pnl_quote: float = 0.0
-    unrealized_pnl_quote: float = 0.0
-    global_pnl_quote: float = 0.0
-    global_pnl_pct: float = 0.0
-    volume_traded: float = 0.0
+    realized_pnl_quote: Optional[float] = 0.0
+    unrealized_pnl_quote: Optional[float] = 0.0
+    global_pnl_quote: Optional[float] = 0.0
+    global_pnl_pct: Optional[float] = 0.0
+    volume_traded: Optional[float] = 0.0
     close_type_counts: dict[str, int] = {}
     positions_summary: list[dict[str, Any]] = []
     deployed_at: Optional[str] = None
@@ -118,6 +118,11 @@ class BotSummary(BaseModel):
     bot_name: str
     status: str = "unknown"
     num_controllers: int = 0
+    controller_count_current: Optional[bool] = None
+    performance_received_at: Optional[float] = None
+    performance_stale_after_seconds: Optional[float] = None
+    status_received_at: Optional[float] = None
+    status_stale_after_seconds: Optional[float] = None
     error_count: int = 0
     deployed_at: Optional[str] = None
     error_logs: list[dict[str, Any]] = []
@@ -127,8 +132,10 @@ class BotSummary(BaseModel):
 class BotsPageResponse(BaseModel):
     controllers: list[ControllerInfo] = []
     bots: list[BotSummary] = []
-    total_pnl: float = 0.0
-    total_volume: float = 0.0
+    total_pnl: Optional[float] = 0.0
+    total_volume: Optional[float] = 0.0
+    metrics_available: bool = True
+    metrics_unavailable_reason: Optional[str] = None
     server_online: bool = True
     error_hint: Optional[str] = None
 

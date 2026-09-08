@@ -2,6 +2,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
 
 import { useServer } from "@/hooks/useServer";
+import { useServerCapabilities } from "@/hooks/useServerCapabilities";
 import { api } from "@/lib/api";
 import { candlesQuery } from "@/lib/queryClient";
 
@@ -36,10 +37,16 @@ function getTradeDefaults() {
  */
 export function usePrefetchData() {
   const { server } = useServer();
+  const { access } = useServerCapabilities();
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!server) return;
+    if (!server || !access.online) return;
+
+    if (access.native) {
+      if (access.botRead) void queryClient.prefetchQuery({ queryKey: ["bots", server], queryFn: () => api.getBots(server) });
+      return;
+    }
 
     const defaults = getTradeDefaults();
 
@@ -124,5 +131,5 @@ export function usePrefetchData() {
       queryFn: () => api.getAvailableConnectors(server, "perpetual"),
       staleTime: 5 * 60 * 1000,
     });
-  }, [server, queryClient]);
+  }, [server, queryClient, access.online, access.native, access.botRead]);
 }

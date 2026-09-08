@@ -1,4 +1,8 @@
 import { authFetch, authHeaders } from "./auth-token";
+import type { ServerStatus } from "./server-capabilities";
+import type { AccountBalancesResponse } from "./account-balances";
+import type { NativeAction, NativeCommandResult } from "./native-bot-controls";
+import { nativeBotPath } from "./native-bot-controls";
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
@@ -81,11 +85,11 @@ export interface ControllerInfo {
   status: string;
   connector: string;
   trading_pair: string;
-  realized_pnl_quote: number;
-  unrealized_pnl_quote: number;
-  global_pnl_quote: number;
-  global_pnl_pct: number;
-  volume_traded: number;
+  realized_pnl_quote: number | null;
+  unrealized_pnl_quote: number | null;
+  global_pnl_quote: number | null;
+  global_pnl_pct: number | null;
+  volume_traded: number | null;
   close_type_counts: Record<string, number>;
   positions_summary: Record<string, unknown>[];
   deployed_at: string | null;
@@ -103,6 +107,11 @@ export interface BotSummary {
   bot_name: string;
   status: string;
   num_controllers: number;
+  controller_count_current?: boolean | null;
+  performance_received_at?: number | null;
+  performance_stale_after_seconds?: number | null;
+  status_received_at?: number | null;
+  status_stale_after_seconds?: number | null;
   error_count: number;
   deployed_at: string | null;
   error_logs: BotLogEntry[];
@@ -112,8 +121,10 @@ export interface BotSummary {
 export interface BotsPageResponse {
   controllers: ControllerInfo[];
   bots: BotSummary[];
-  total_pnl: number;
-  total_volume: number;
+  total_pnl: number | null;
+  total_volume: number | null;
+  metrics_available?: boolean;
+  metrics_unavailable_reason?: string | null;
   server_online?: boolean;
   error_hint?: string;
 }
@@ -942,7 +953,7 @@ export const api = {
   getServers: () => apiFetch<ServerInfo[]>("/api/v1/servers"),
 
   getServerStatus: (name: string) =>
-    apiFetch<{ online: boolean; error?: string }>(
+    apiFetch<ServerStatus>(
       `/api/v1/servers/${encodeURIComponent(name)}/status`,
     ),
 
@@ -1034,6 +1045,17 @@ export const api = {
       `/api/v1/servers/${encodeURIComponent(server)}/bots/${encodeURIComponent(botName)}/stop`,
       { method: "POST" },
     ),
+
+  getNativeBotStatus: (server: string, botName: string) =>
+    apiFetch<Record<string, unknown>>(nativeBotPath(server, botName, "status")),
+
+  nativeBotCommand: async (server: string, botName: string, action: NativeAction): Promise<NativeCommandResult> => {
+    if (action !== "start" && action !== "stop") throw new Error("Unknown native lifecycle action");
+    const response = await authFetch(nativeBotPath(server, botName, action), {method: "POST"});
+    const body: unknown = await response.json();
+    if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Native command returned no usable acknowledgement");
+    return {httpStatus: response.status, body: body as Record<string, unknown>};
+  },
 
   stopControllers: (server: string, botName: string, controllerNames: string[]) =>
     apiFetch<Record<string, unknown>>(
@@ -1692,6 +1714,9 @@ export const api = {
 
   getCredentials: (server: string) =>
     apiFetch<{ credentials: (CredentialInfo | string)[] }>(`/api/v1/settings/credentials?server=${encodeURIComponent(server)}`),
+
+  getAccountBalances: (server: string, refresh = false) =>
+    apiFetch<AccountBalancesResponse>(`/api/v1/servers/${encodeURIComponent(server)}/account-balances?refresh=${refresh}`, {cache:'no-store'}),
 
   getAvailableConnectors: (server: string, type?: string) => {
     let url = `/api/v1/settings/connectors?server=${encodeURIComponent(server)}`;

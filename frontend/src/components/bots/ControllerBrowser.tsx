@@ -1,4 +1,6 @@
+import { observedPnlColor } from "@/lib/bot-monitoring";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useServerCapabilities } from "@/hooks/useServerCapabilities";
 import {
   ChevronDown,
   ChevronLeft,
@@ -70,6 +72,7 @@ function YamlConfigEditor({
   botName: string;
   onSaved: () => void;
 }) {
+  const { access } = useServerCapabilities();
   // Memoize the dump so typing / local-state renders don't re-run yaml.dump, and
   // so WS-tick churn of the `config` object identity that yields the SAME content
   // produces an identical string (compared by value) below.
@@ -107,6 +110,7 @@ function YamlConfigEditor({
 
   const saveMutation = useMutation({
     mutationFn: () => {
+      if (!access.controllerMutation) throw new Error("Controller editing is unavailable on this server");
       const parsed = yamlLib.load(yamlContent) as Record<string, unknown>;
       if (!parsed || typeof parsed !== "object") {
         throw new Error("YAML must be a mapping");
@@ -137,7 +141,8 @@ function YamlConfigEditor({
           )}
           <button
             onClick={() => saveMutation.mutate()}
-            disabled={!isDirty || !!parseError || saveMutation.isPending}
+            disabled={!access.controllerMutation || !isDirty || !!parseError || saveMutation.isPending}
+            title={access.controllerMutation ? "Save configuration" : "Read only on this server"}
             className="flex items-center gap-1 rounded px-2.5 py-1 text-[10px] font-semibold transition-colors disabled:opacity-30 bg-[var(--color-primary)] text-white hover:bg-[var(--color-primary)]/80 disabled:hover:bg-[var(--color-primary)]"
           >
             {saveMutation.isPending ? (
@@ -167,8 +172,10 @@ function YamlConfigEditor({
       )}
 
       {/* YAML editor */}
+      {!access.controllerMutation && <p className="px-4 py-2 text-xs text-[var(--color-text-muted)]">Captured configuration · Read only on this server</p>}
       <div className="flex-1 min-h-0">
         <CodeEditor
+          readOnly={!access.controllerMutation}
           value={yamlContent}
           onChange={handleChange}
           language="yaml"
@@ -190,12 +197,13 @@ export function ControllerBrowser({
   convert,
   currencySymbol,
 }: ControllerBrowserProps) {
-  const cv = (val: number, pair: string) => {
+  const cv = (val: number | null, pair: string) => {
+    if (val === null || !Number.isFinite(val)) return Number.NaN;
     const quote = pair?.split("-")[1] || "USDT";
     return convert(val, quote).value;
   };
-  const fmtPnl = (val: number, pair: string) => formatCurrencyPnl(cv(val, pair), currencySymbol);
-  const fmtVol = (val: number, pair: string) => formatCurrencyVolume(cv(val, pair), currencySymbol);
+  const fmtPnl = (val: number | null, pair: string) => Number.isFinite(cv(val, pair)) ? formatCurrencyPnl(cv(val, pair), currencySymbol) : "UNAVAILABLE";
+  const fmtVol = (val: number | null, pair: string) => Number.isFinite(cv(val, pair)) ? formatCurrencyVolume(cv(val, pair), currencySymbol) : "UNAVAILABLE";
   const queryClient = useQueryClient();
   const [isCompact, setIsCompact] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
@@ -344,7 +352,7 @@ export function ControllerBrowser({
                   {c.trading_pair && (
                     <span className="text-[var(--color-text-muted)]">{c.trading_pair}</span>
                   )}
-                  <span className="ml-auto tabular-nums font-medium" style={{ color: pnlColor(c.global_pnl_quote) }}>
+                  <span className="ml-auto tabular-nums font-medium" style={{ color: observedPnlColor(c.global_pnl_quote) }}>
                     {fmtPnl(c.global_pnl_quote, c.trading_pair)}
                   </span>
                 </div>
@@ -486,28 +494,28 @@ export function ControllerBrowser({
               <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 text-sm">
                 <div>
                   <div className="text-[var(--color-text-muted)] text-[10px] uppercase tracking-wider mb-0.5">Realized</div>
-                  <div className="font-semibold tabular-nums" style={{ color: pnlColor(activeCtrl.realized_pnl_quote) }}>
+                  <div className="font-semibold tabular-nums" style={{ color: observedPnlColor(activeCtrl.realized_pnl_quote) }}>
                     {fmtPnl(activeCtrl.realized_pnl_quote, activeCtrl.trading_pair)}
                   </div>
                 </div>
                 <div>
                   <div className="text-[var(--color-text-muted)] text-[10px] uppercase tracking-wider mb-0.5">Unrealized</div>
-                  <div className="font-semibold tabular-nums" style={{ color: pnlColor(activeCtrl.unrealized_pnl_quote) }}>
+                  <div className="font-semibold tabular-nums" style={{ color: observedPnlColor(activeCtrl.unrealized_pnl_quote) }}>
                     {fmtPnl(activeCtrl.unrealized_pnl_quote, activeCtrl.trading_pair)}
                   </div>
                 </div>
                 <div>
                   <div className="text-[var(--color-text-muted)] text-[10px] uppercase tracking-wider mb-0.5">Total PnL</div>
-                  <div className="font-semibold tabular-nums" style={{ color: pnlColor(activeCtrl.global_pnl_quote) }}>
+                  <div className="font-semibold tabular-nums" style={{ color: observedPnlColor(activeCtrl.global_pnl_quote) }}>
                     {fmtPnl(activeCtrl.global_pnl_quote, activeCtrl.trading_pair)}
                   </div>
                 </div>
                 {activeCtrl.global_pnl_pct !== 0 && (
                   <div>
                     <div className="text-[var(--color-text-muted)] text-[10px] uppercase tracking-wider mb-0.5">PnL %</div>
-                    <div className="font-semibold tabular-nums" style={{ color: pnlColor(activeCtrl.global_pnl_pct) }}>
-                      {activeCtrl.global_pnl_pct >= 0 ? "+" : ""}
-                      {activeCtrl.global_pnl_pct.toFixed(2)}%
+                    <div className="font-semibold tabular-nums" style={{ color: observedPnlColor(activeCtrl.global_pnl_pct) }}>
+                      {activeCtrl.global_pnl_pct !== null && activeCtrl.global_pnl_pct >= 0 ? "+" : ""}
+                      {activeCtrl.global_pnl_pct === null ? "UNAVAILABLE" : `${activeCtrl.global_pnl_pct.toFixed(2)}%`}
                     </div>
                   </div>
                 )}

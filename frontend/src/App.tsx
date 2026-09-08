@@ -1,5 +1,5 @@
 import { QueryClientProvider } from "@tanstack/react-query";
-import { useCallback, useState } from "react";
+import { lazy, Suspense, useCallback, useState } from "react";
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
 
 import { AppShell } from "@/components/layout/AppShell";
@@ -17,6 +17,10 @@ import { Portfolio } from "@/pages/Portfolio";
 import { Routines } from "@/pages/Routines";
 import { Settings } from "@/pages/Settings";
 import { StrategyDetail } from "@/pages/StrategyDetail";
+
+const Research = lazy(() =>
+  import("@/pages/Research").then((module) => ({ default: module.Research })),
+);
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
@@ -67,6 +71,7 @@ export default function App() {
                 }
               >
                 <Route path="/" element={<Agents />} />
+                <Route path="/research" element={<Suspense fallback={<p role="status">Loading research…</p>}><Research /></Suspense>} />
                 <Route path="/portfolio" element={<Portfolio />} />
                 <Route path="/bots" element={<Bots />} />
                 <Route path="/bots/:id" element={<BotDetail />} />

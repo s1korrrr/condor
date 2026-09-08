@@ -24,6 +24,7 @@ from condor.web.routes import (
     portfolio,
     positions,
     reports,
+    research,
     routines,
     servers,
     sessions,
@@ -65,6 +66,7 @@ def create_app() -> FastAPI:
     # ── API routes ──
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(servers.router, prefix="/api/v1")
+    app.include_router(research.router, prefix="/api/v1")
     app.include_router(portfolio.router, prefix="/api/v1")
     app.include_router(bots.router, prefix="/api/v1")
     app.include_router(controller_performance.router, prefix="/api/v1")

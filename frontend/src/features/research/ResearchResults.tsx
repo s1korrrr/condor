@@ -1,0 +1,189 @@
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  ReferenceLine,
+  Cell,
+} from "recharts";
+import { sourceResultBars, comparisonGroups } from "./results";
+import { records, text, type RecordData } from "./model";
+
+const tooltip = {
+  backgroundColor: "var(--color-surface)",
+  border: "1px solid var(--color-border)",
+  color: "var(--color-text)",
+  borderRadius: 5,
+};
+export function ResearchResults({
+  data,
+  comparisons,
+}: {
+  data: RecordData;
+  comparisons?: RecordData;
+}) {
+  const bars = sourceResultBars(data),
+    groups = comparisonGroups(records(comparisons?.items));
+  return (
+    <section className="quant-panel" style={{ marginBottom: 20 }}>
+      <header className="quant-panel-heading">
+        <div>
+          <h2>Research performance</h2>
+          <p className="quant-muted">
+            Selected record · historical source results, separate from live
+            account PnL.
+          </p>
+        </div>
+        {typeof data.verdict === "string" ? (
+          <span>{text(data.verdict)}</span>
+        ) : null}
+      </header>
+      <div className="quant-detail-body">
+        {bars.length ? (
+          <>
+            <p>
+              Source-reported totals in quote units. These are final recorded
+              values, not an equity curve or proof of a valid baseline
+              comparison.
+            </p>
+            <div style={{ height: 230, width: "100%" }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={bars}
+                  margin={{ top: 15, right: 20, left: 10, bottom: 0 }}
+                  accessibilityLayer
+                >
+                  <CartesianGrid stroke="var(--chart-grid)" vertical={false} />
+                  <XAxis
+                    dataKey="label"
+                    stroke="var(--color-text-muted)"
+                    tickLine={false}
+                  />
+                  <YAxis
+                    stroke="var(--color-text-muted)"
+                    tickLine={false}
+                    width={70}
+                  />
+                  <Tooltip
+                    contentStyle={tooltip}
+                    cursor={{ fill: "var(--color-surface-hover)" }}
+                  />
+                  <ReferenceLine y={0} stroke="var(--color-text-muted)" />
+                  <Bar dataKey="value" name="Quote units" maxBarSize={75}>
+                    {bars.map((b) => (
+                      <Cell
+                        key={b.key}
+                        fill={
+                          b.value < 0
+                            ? "var(--color-red)"
+                            : b.key === "fees_quote"
+                              ? "var(--color-text-muted)"
+                              : "var(--color-primary)"
+                        }
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+            <details>
+              <summary>Recorded values</summary>
+              <dl>
+                {bars.map((b) => (
+                  <div key={b.key}>
+                    <dt>{b.label}</dt>
+                    <dd>
+                      {b.value.toLocaleString(undefined, {
+                        maximumFractionDigits: 8,
+                      })}{" "}
+                      quote units
+                    </dd>
+                  </div>
+                ))}
+              </dl>
+            </details>
+          </>
+        ) : (
+          <p>
+            This record has no numeric PnL totals. Select a result-bearing idea
+            or report in the library to inspect its recorded performance.
+          </p>
+        )}
+        {groups.map((group) => (
+          <section key={group.key}>
+            <h3>Delta against {group.baseline}</h3>
+            <p>
+              {group.metric} · {group.unit} · Contract {group.contract}
+            </p>
+            <p>
+              Capital model · {text(group.conditions.capital_model)} · Venue ·{" "}
+              {text(group.conditions.venue)} · Instrument ·{" "}
+              {text(group.conditions.instrument)}
+            </p>
+            <details>
+              <summary>Comparison conditions and evidence</summary>
+              <pre>
+                {JSON.stringify(
+                  {
+                    conditions: group.conditions,
+                    assessments: group.items.map((item) => ({
+                      id: item.id,
+                      label: item.label,
+                      source_refs: item.sourceRefs,
+                    })),
+                  },
+                  null,
+                  2,
+                )}
+              </pre>
+            </details>
+            <div
+              style={{
+                height: Math.max(200, group.items.length * 40),
+                maxHeight: 500,
+              }}
+            >
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart
+                  data={group.items}
+                  layout="vertical"
+                  margin={{ left: 12, right: 25 }}
+                  accessibilityLayer
+                >
+                  <CartesianGrid
+                    stroke="var(--chart-grid)"
+                    horizontal={false}
+                  />
+                  <XAxis type="number" stroke="var(--color-text-muted)" />
+                  <YAxis
+                    type="category"
+                    dataKey="label"
+                    width={130}
+                    stroke="var(--color-text-muted)"
+                  />
+                  <Tooltip contentStyle={tooltip} />
+                  <ReferenceLine x={0} stroke="var(--color-text-muted)" />
+                  <Bar
+                    dataKey="value"
+                    name={group.unit}
+                    fill="var(--color-primary)"
+                    maxBarSize={25}
+                  />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          </section>
+        ))}
+        {comparisons && groups.length === 0 ? (
+          <p className="quant-muted">
+            No admissible isolated baseline comparison is recorded for this
+            selection.
+          </p>
+        ) : null}
+      </div>
+    </section>
+  );
+}

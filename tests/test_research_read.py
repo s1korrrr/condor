@@ -1,5 +1,6 @@
-import httpx
 import json
+
+import httpx
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -8,63 +9,9 @@ from condor.web.auth import get_current_user
 from condor.web.models import WebUser
 
 
-def test_serialized_native_preview_redacts_fields_and_preserves_safe_values():
-    from condor.research_read import _project
-
-    source = {
-        "inputs": json.dumps(
-            {
-                "env": {"api_key": "SENTINEL"},
-                "path": "/private/source",
-                "metrics": {"net_pnl_quote": 0},
-                "label": "Observed result",
-            }
-        )
-    }
-    result = _project(source)
-    assert json.loads(result["inputs"]) == {
-        "metrics": {"net_pnl_quote": 0},
-        "label": "Observed result",
-    }
-    assert source["inputs"].find("SENTINEL") >= 0
-
-
-@pytest.mark.parametrize(
-    "preview",
-    [
-        '{"path":"/private/source","metrics": … [preview; full source retained]',
-        '[{"env":{"api_key":"SENTINEL"}}',
-        '{"password":"SENTINEL"',
-    ],
-)
-def test_truncated_or_malformed_serialized_preview_is_withheld(preview):
-    from condor.research_read import _project
-
-    result = _project(
-        {"artifacts": preview, "title": "A useful title", "net_pnl_quote": 0}
-    )
-    assert (
-        result["artifacts"]
-        == "Preview withheld; full native fields remain in the owner source."
-    )
-    assert result["title"] == "A useful title"
-    assert result["net_pnl_quote"] == 0
-
-
-def test_plain_bracketed_prose_remains_visible_and_nested_previews_are_redacted():
-    from condor.research_read import _project
-
-    nested = json.dumps(
-        {"result": json.dumps({"password": "SENTINEL", "fees_quote": 0})}
-    )
-    result = _project({"title": "[P2] Historical result", "inputs": nested})
-    assert result["title"] == "[P2] Historical result"
-    assert json.loads(json.loads(result["inputs"])["result"]) == {"fees_quote": 0}
-
-
 def client(monkeypatch, *, access=True, authenticated=True, handler=None):
-    from condor.web.routes import research
     from condor import research_read
+    from condor.web.routes import research
 
     monkeypatch.setenv("CONDOR_RESEARCH_SERVER", "native-ok-rsi")
 
@@ -452,3 +399,153 @@ def test_research_new_read_shapes_fail_closed(monkeypatch, endpoint, payload):
         ).status_code
         == 502
     )
+
+
+def test_projection_redacts_nested_local_locators_and_credentials():
+    from condor.research_read import _project
+
+    data = {
+        "execution": {
+            "python": "/Users/operator/env/bin/python",
+            "entrypoints": ["/tmp/run.py"],
+            "snapshot_dir": "/private/tmp/evidence",
+            "workspace": "/Users/operator/work",
+        },
+        "sources": [{"git": {"repository": "/Users/operator/repo", "sha": "abc"}}],
+        "input_files": ["/Users/operator/input.csv"],
+        "access_token": "private-token",
+        "nested": {"secret": "private", "authorization": "Bearer private"},
+        "hypothesis": "Drawdown / exposure ratio",
+        "source_refs": ["evidence:abc"],
+    }
+    projected = _project(data)
+    import json
+
+    encoded = json.dumps(projected)
+    assert (
+        "/Users/" not in encoded
+        and "/private/" not in encoded
+        and "/tmp/" not in encoded
+    )
+    assert "private-token" not in encoded and "Bearer private" not in encoded
+    assert projected["hypothesis"] == data["hypothesis"]
+    assert projected["source_refs"] == ["evidence:abc"]
+
+
+def test_catalog_and_graph_request_owner_summary_projection(monkeypatch):
+    def handler(req):
+        assert req.url.params["projection"] == "summary"
+        return httpx.Response(
+            200, json={"items": [], "total": 0, "limit": 30, "offset": 0}
+        )
+
+    assert (
+        client(monkeypatch, handler=handler)
+        .get("/api/v1/research/nodes?server=native-ok-rsi")
+        .status_code
+        == 200
+    )
+
+
+def test_projection_redacts_locators_embedded_in_rationale_without_hiding_evidence():
+    from condor.research_read import _project
+
+    data = {
+        "rationale": 'Qualification HELD. Proofs [{"path":"/Users/operator/evidence/check.json","sha256":"abc"}]',
+        "link": "https://example.org/papers/one",
+        "ratio": "gross / net",
+    }
+    result = _project(data)
+    assert "/Users/operator" not in result["rationale"]
+    assert (
+        "Qualification HELD" in result["rationale"]
+        and '"sha256":"abc"' in result["rationale"]
+    )
+    assert result["link"] == data["link"] and result["ratio"] == data["ratio"]
+
+
+def test_projection_anonymizes_local_locator_dictionary_keys_without_losing_hashes():
+    from condor.research_read import _project
+
+    data = {
+        "code_sha256": {
+            "/Users/operator/one.py": "hash-one",
+            "/Users/operator/two.py": "hash-two",
+        }
+    }
+    projected = _project(data)
+    assert all("/Users/" not in key for key in projected["code_sha256"])
+    assert sorted(projected["code_sha256"].values()) == ["hash-one", "hash-two"]
+    assert _project(data) == projected
+
+
+@pytest.mark.parametrize("reverse", [False, True])
+def test_projection_rejects_anonymized_key_collision_without_losing_evidence(reverse):
+    import hashlib
+
+    from condor.research_read import _project
+
+    key = "/Users/operator/one.py"
+    values = [
+        (key, "source-hash"),
+        (
+            "local-locator:" + hashlib.sha256(key.encode()).hexdigest(),
+            "literal-key-hash",
+        ),
+    ]
+    with pytest.raises(ValueError, match="key collision"):
+        _project(dict(reversed(values) if reverse else values))
+
+
+def test_serialized_native_preview_redacts_fields_and_preserves_safe_values():
+    from condor.research_read import _project
+
+    source = {
+        "inputs": json.dumps(
+            {
+                "env": {"api_key": "SENTINEL"},
+                "path": "/private/source",
+                "metrics": {"net_pnl_quote": 0},
+                "label": "Observed result",
+            }
+        )
+    }
+    result = _project(source)
+    assert json.loads(result["inputs"]) == {
+        "metrics": {"net_pnl_quote": 0},
+        "label": "Observed result",
+    }
+    assert source["inputs"].find("SENTINEL") >= 0
+
+
+@pytest.mark.parametrize(
+    "preview",
+    [
+        '{"path":"/private/source","metrics": … [preview; full source retained]',
+        '[{"env":{"api_key":"SENTINEL"}}',
+        '{"password":"SENTINEL"',
+    ],
+)
+def test_truncated_or_malformed_serialized_preview_is_withheld(preview):
+    from condor.research_read import _project
+
+    result = _project(
+        {"artifacts": preview, "title": "A useful title", "net_pnl_quote": 0}
+    )
+    assert (
+        result["artifacts"]
+        == "Preview withheld; full native fields remain in the owner source."
+    )
+    assert result["title"] == "A useful title"
+    assert result["net_pnl_quote"] == 0
+
+
+def test_plain_bracketed_prose_remains_visible_and_nested_previews_are_redacted():
+    from condor.research_read import _project
+
+    nested = json.dumps(
+        {"result": json.dumps({"password": "SENTINEL", "fees_quote": 0})}
+    )
+    result = _project({"title": "[P2] Historical result", "inputs": nested})
+    assert result["title"] == "[P2] Historical result"
+    assert json.loads(json.loads(result["inputs"])["result"]) == {"fees_quote": 0}

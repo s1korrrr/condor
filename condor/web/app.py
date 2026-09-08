@@ -13,7 +13,6 @@ from fastapi.staticfiles import StaticFiles
 
 from condor.web.routes import (
     account_balances,
-    research,
     agents,
     archived,
     auth,
@@ -28,12 +27,13 @@ from condor.web.routes import (
     portfolio,
     positions,
     reports,
+    research,
     routines,
     servers,
     sessions,
     settings,
-    transcribe,
     trading_visuals,
+    transcribe,
     ws,
 )
 
@@ -60,10 +60,11 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, error: RequestValidationError):
-        if request.url.path == '/api/v1/settings/credentials':
+        if request.url.path == "/api/v1/settings/credentials":
             return JSONResponse(
-                {'detail': 'A connector name and credential fields are required.'},
-                status_code=422, headers={'Cache-Control': 'no-store'},
+                {"detail": "A connector name and credential fields are required."},
+                status_code=422,
+                headers={"Cache-Control": "no-store"},
             )
         return await request_validation_exception_handler(request, error)
 

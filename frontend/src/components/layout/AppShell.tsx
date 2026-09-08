@@ -14,7 +14,7 @@ import {
   Network,
   Wrench,
 } from "lucide-react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { matchPath, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { ConnectKeysOverlay } from "@/components/ConnectKeysOverlay";
 import { CapabilityUnavailable } from "@/components/CapabilityUnavailable";
@@ -116,14 +116,14 @@ function AppShellBody() {
   }, [navigate, access.native]);
 
   // Prefetch core data (executors, bots) and subscribe to WS channels early
-  usePrefetchData();
+  usePrefetchData(!matchPath("/research", pathname));
 
   return (
     <div className="flex h-screen flex-col">
       {/* Top bar */}
-      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-y-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 lg:flex-nowrap lg:px-4 lg:py-0">
+      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-y-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 xl:flex-nowrap lg:px-4 xl:py-0">
         {/* Left: logo + nav */}
-        <div className="flex min-w-0 w-full items-center gap-3 lg:w-auto lg:gap-6">
+        <div className="flex min-w-0 w-full items-center gap-3 xl:w-auto xl:gap-6">
           <NavLink to="/" className="flex shrink-0 items-center gap-2 font-bold tracking-tight">
             <img src="/condor_old.jpeg" alt="Condor" className="h-6 w-6 rounded-full" />
             <span className="text-sm">Condor</span>

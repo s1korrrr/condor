@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import math
 import re
@@ -14,6 +15,12 @@ from fastapi import HTTPException
 ORIGIN = "http://127.0.0.1:8873/api/knowledge"
 MAX_BYTES = 1024 * 1024
 DETAIL_MAX_BYTES = 4 * MAX_BYTES
+# Match local path tokens inside prose/serialized receipts without treating
+# HTTPS URLs or ordinary slash-separated prose as filesystem paths.
+LOCAL_LOCATOR = re.compile(
+    r"(?<![\w:/])(?:file://)?(?:/[A-Za-z0-9._-]+){2,}[^\s\"'<>]*"
+    r"|(?<![\w:/])(?:[A-Za-z]:[\\/]|~/)[^\s\"'<>]+"
+)
 PARAMETERS = {
     "overview": set(),
     "nodes": {"kind", "q", "family", "lane", "limit", "offset"},
@@ -56,6 +63,17 @@ PRIVATE_FIELDS = {
     "secret_key",
     "private_key",
     "credentials",
+    "secret",
+    "token",
+    "access_token",
+    "refresh_token",
+    "authorization",
+    "cookie",
+    "cookies",
+    "entrypoints",
+    "input_files",
+    "snapshot_dir",
+    "workspace",
     "html",
     "raw",
     "content",
@@ -116,11 +134,9 @@ def _project(value, depth=0):
     if isinstance(value, float) and not math.isfinite(value):
         raise ValueError("Research payload contains a nonfinite number")
     if isinstance(value, dict):
-        return {
-            key: _project(item, depth + 1)
-            for key, item in value.items()
-            if key.lower() not in PRIVATE_FIELDS
-            and not key.lower().endswith(
+        projected = {}
+        for key, item in value.items():
+            if key.lower() in PRIVATE_FIELDS or key.lower().endswith(
                 (
                     "_password",
                     "_secret_key",
@@ -129,9 +145,22 @@ def _project(value, depth=0):
                     "_path",
                     "_argv",
                     "_command",
+                    "_token",
+                    "_secret",
+                    "_dir",
                 )
+            ):
+                continue
+            public_key = (
+                "local-locator:" + hashlib.sha256(key.encode()).hexdigest()
+                if key.startswith(("/", "~/", "file://", "\\\\"))
+                or LOCAL_LOCATOR.search(key)
+                else key
             )
-        }
+            if public_key in projected:
+                raise ValueError("Research projection key collision")
+            projected[public_key] = _project(item, depth + 1)
+        return projected
     if isinstance(value, list):
         return [_project(item, depth + 1) for item in value]
     if isinstance(value, str) and value.endswith("… [preview; full source retained]"):
@@ -148,6 +177,13 @@ def _project(value, depth=0):
         except (ValueError, RecursionError):
             return "Preview withheld; full native fields remain in the owner source."
         return json.dumps(_project(decoded, depth + 1), ensure_ascii=False)
+    if isinstance(value, str) and (
+        value.startswith(("/", "~/", "file://", "\\\\"))
+        or re.match(r"^[A-Za-z]:[\\/]", value)
+    ):
+        return "[local locator withheld]"
+    if isinstance(value, str):
+        return LOCAL_LOCATOR.sub("[local locator withheld]", value)
     return value
 
 
@@ -240,11 +276,14 @@ def _valid_shape(endpoint, data, parameters):
 
 
 async def read_research(endpoint, parameters, server):
+    upstream_parameters = dict(parameters)
+    if endpoint in {"nodes", "node", "graph"}:
+        upstream_parameters["projection"] = "summary"
     try:
         async with asyncio.timeout(15):
             async with _client() as client:
                 async with client.stream(
-                    "GET", ORIGIN + "/" + endpoint, params=parameters
+                    "GET", ORIGIN + "/" + endpoint, params=upstream_parameters
                 ) as response:
                     if response.status_code == 404 and endpoint in {
                         "node",
@@ -262,7 +301,7 @@ async def read_research(endpoint, parameters, server):
                     ):
                         raise ValueError("Expected JSON")
                     payload = bytearray()
-                    async for chunk in response.aiter_bytes():
+                    async for chunk in response.aiter_bytes(chunk_size=65536):
                         payload.extend(chunk)
                         if len(payload) > (
                             DETAIL_MAX_BYTES

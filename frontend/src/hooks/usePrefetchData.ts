@@ -35,13 +35,13 @@ function getTradeDefaults() {
  * Executors, bots, connectors, trading rules, and default candles
  * are all fetched eagerly as soon as a server is selected.
  */
-export function usePrefetchData() {
+export function usePrefetchData(enabled = true) {
   const { server } = useServer();
   const { access } = useServerCapabilities();
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!server || !access.online) return;
+    if (!server || !enabled || !access.online) return;
 
     if (access.native) {
       if (access.botRead) void queryClient.prefetchQuery({ queryKey: ["bots", server], queryFn: () => api.getBots(server) });
@@ -131,5 +131,5 @@ export function usePrefetchData() {
       queryFn: () => api.getAvailableConnectors(server, "perpetual"),
       staleTime: 5 * 60 * 1000,
     });
-  }, [server, queryClient, access.online, access.native, access.botRead]);
+  }, [server, queryClient, enabled, access.online, access.native, access.botRead]);
 }

@@ -5,13 +5,14 @@ import {
   Brain,
   Eye,
   Moon,
+  Network,
   Settings,
   Sun,
   Swords,
   Wallet,
   Zap,
 } from "lucide-react";
-import { NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
+import { matchPath, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
 import { ConnectKeysOverlay } from "@/components/ConnectKeysOverlay";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
@@ -25,6 +26,7 @@ import { ServerSelector } from "./ServerSelector";
 
 const NAV_ITEMS = [
   { to: "/", icon: Brain, label: "Agents" },
+  { to: "/research", icon: Network, label: "Research" },
   { to: "/portfolio", icon: Wallet, label: "Portfolio" },
   { to: "/trade", icon: Swords, label: "Trade" },
   { to: "/bots", icon: Bot, label: "Bots" },
@@ -64,7 +66,7 @@ function AppShellBody() {
   // The chat is the landing page and needs no exchange keys, so the blocking
   // overlay would otherwise be the first thing every unconfigured user hits —
   // on the one surface that can talk them through connecting.
-  const exemptRoutes = ["/routines", "/settings"];
+  const exemptRoutes = ["/routines", "/settings", "/research"];
   const showKeysOverlay =
     server && !keysLoading && !hasKeys && !isChatWorkspace &&
     !exemptRoutes.some((r) => pathname.startsWith(r));
@@ -83,27 +85,27 @@ function AppShellBody() {
   }, [navigate]);
 
   // Prefetch core data (executors, bots) and subscribe to WS channels early
-  usePrefetchData();
+  usePrefetchData(!matchPath("/research", pathname));
 
   return (
     <div className="flex h-screen flex-col">
       {/* Top bar */}
-      <header className="flex h-12 shrink-0 items-center border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4">
+      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-y-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2 xl:h-12 xl:flex-nowrap xl:py-0">
         {/* Left: logo + nav */}
-        <div className="flex items-center gap-6">
-          <NavLink to="/" className="flex items-center gap-2 font-bold tracking-tight">
+        <div className="flex w-full min-w-0 items-center gap-3 xl:w-auto xl:gap-6">
+          <NavLink to="/" className="flex shrink-0 items-center gap-2 font-bold tracking-tight">
             <img src="/condor_old.jpeg" alt="Condor" className="h-6 w-6 rounded-full" />
             <span className="text-sm">Condor</span>
           </NavLink>
 
-          <nav className="flex items-center">
+          <nav aria-label="Main navigation" className="flex min-w-0 flex-1 items-center overflow-x-auto">
             {NAV_ITEMS.map(({ to, icon: Icon, label }) => (
               <NavLink
                 key={to}
                 to={to}
                 end={to === "/"}
                 className={({ isActive }) =>
-                  `flex items-center gap-1.5 px-3 py-1.5 text-sm rounded-md transition-colors ${
+                  `flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-sm rounded-md transition-colors ${
                     isActive
                       ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)]"
                       : "text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"

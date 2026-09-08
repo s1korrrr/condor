@@ -34,12 +34,12 @@ function getTradeDefaults() {
  * Executors, bots, connectors, trading rules, and default candles
  * are all fetched eagerly as soon as a server is selected.
  */
-export function usePrefetchData() {
+export function usePrefetchData(enabled = true) {
   const { server } = useServer();
   const queryClient = useQueryClient();
 
   useEffect(() => {
-    if (!server) return;
+    if (!server || !enabled) return;
 
     const defaults = getTradeDefaults();
 
@@ -124,5 +124,5 @@ export function usePrefetchData() {
       queryFn: () => api.getAvailableConnectors(server, "perpetual"),
       staleTime: 5 * 60 * 1000,
     });
-  }, [server, queryClient]);
+  }, [server, queryClient, enabled]);
 }

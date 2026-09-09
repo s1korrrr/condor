@@ -96,7 +96,7 @@ def test_research_rejects_bad_queries(monkeypatch, query):
 
 
 @pytest.mark.parametrize(
-    "path", ["sync", "run", "source", "../source", "network", "node/anything"]
+    "path", ["sync", "run", "source", "../source", "node/anything"]
 )
 def test_research_rejects_unlisted_paths(monkeypatch, path):
     assert (

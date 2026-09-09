@@ -1,0 +1,1171 @@
+/* ResearchNetwork: dependency-free complete graph renderer. Camera is world center
+ * {x,y,scale}; scale is CSS pixels/world unit. All endpoints are source-indexed.
+ * Layout encodes topology only, never similarity or evaluation quality. */
+function layout(data) {
+  if (!data || !Array.isArray(data.nodes) || !Array.isArray(data.edges))
+    throw Error("Network nodes and edges must be arrays");
+  if (
+    (data.total_nodes != null && data.total_nodes !== data.nodes.length) ||
+    (data.total_edges != null &&
+      data.total_edges !== data.edges.length + (data.unresolved_edges || 0))
+  )
+    throw Error(
+      "Incomplete network payload: totals do not match returned records",
+    );
+  const n = data.nodes.length,
+    ids = new Set(),
+    parent = new Int32Array(n),
+    degree = new Int32Array(n),
+    adjacency = Array.from({ length: n }, () => []);
+  data.nodes.forEach((node, i) => {
+    if (!Array.isArray(node) || typeof node[0] !== "string" || ids.has(node[0]))
+      throw Error("Invalid or duplicate node identity");
+    ids.add(node[0]);
+    parent[i] = i;
+  });
+  function find(i) {
+    while (parent[i] !== i) {
+      parent[i] = parent[parent[i]];
+      i = parent[i];
+    }
+    return i;
+  }
+  data.edges.forEach((e) => {
+    if (
+      !Array.isArray(e) ||
+      !Number.isInteger(e[0]) ||
+      !Number.isInteger(e[1]) ||
+      e[0] < 0 ||
+      e[1] < 0 ||
+      e[0] >= n ||
+      e[1] >= n
+    )
+      throw Error("Invalid edge endpoint");
+    parent[find(e[1])] = find(e[0]);
+    degree[e[0]]++;
+    degree[e[1]]++;
+    adjacency[e[0]].push(e[1]);
+    adjacency[e[1]].push(e[0]);
+  });
+  const groups = new Map(),
+    isolated = [];
+  for (let i = 0; i < n; i++) {
+    if (!degree[i]) isolated.push(i);
+    else {
+      const r = find(i);
+      if (!groups.has(r)) groups.set(r, []);
+      groups.get(r).push(i);
+    }
+  }
+  const components = Array.from(groups.values()).sort(
+    (a, b) => b.length - a.length || a[0] - b[0],
+  );
+  const positions = new Float32Array(n * 2),
+    seen = new Uint8Array(n),
+    families = new Map(),
+    golden = 2.399963229728653;
+  function family(name) {
+    name = name || "UNAVAILABLE";
+    if (!families.has(name))
+      families.set(name, {
+        family: name,
+        big: [],
+        small: [],
+        isolated: [],
+        area: 0,
+      });
+    return families.get(name);
+  }
+  components.forEach((group) => {
+    let seed = group[0];
+    for (const i of group) if (degree[i] > degree[seed]) seed = i;
+    const f = family(data.nodes[seed][3]);
+    const item = {
+      group,
+      seed,
+      radius: Math.max(9, Math.sqrt(group.length) * 5),
+    };
+    if (group.length >= 4) {
+      f.big.push(item);
+      f.area += (item.radius + 12) ** 2;
+    } else f.small.push(item);
+  });
+  isolated.forEach((i) => family(data.nodes[i][3]).isolated.push(i));
+  const regions = Array.from(families.values());
+  regions.forEach((f) => {
+    f.radius = Math.max(
+      55,
+      Math.sqrt(f.area) * 1.55,
+      Math.sqrt(f.small.length) * 2.2,
+      Math.sqrt(f.isolated.length) * 0.55,
+    );
+  });
+  regions.sort(
+    (a, b) =>
+      b.area - a.area ||
+      b.radius - a.radius ||
+      a.family.localeCompare(b.family),
+  );
+  const placed = [];
+  regions.forEach((f, j) => {
+    let step = 0;
+    while (true) {
+      const angle = step * golden,
+        r = step ? Math.sqrt(step) * 35 : 0;
+      f.x = Math.cos(angle) * r;
+      f.y = Math.sin(angle) * r;
+      if (
+        placed.every(
+          (other) =>
+            Math.hypot(f.x - other.x, f.y - other.y) >
+            (f.radius + other.radius) * 1.42 + 24,
+        )
+      )
+        break;
+      step++;
+    }
+    placed.push(f);
+  });
+  regions.forEach((f) => {
+    f.big.forEach((item, j) => {
+      const radius =
+          f.big.length === 1
+            ? 0
+            : Math.sqrt((j + 0.3) / f.big.length) * f.radius * 0.58,
+        angle = j * golden;
+      item.x = f.x + Math.cos(angle) * radius;
+      item.y = f.y + Math.sin(angle) * radius;
+    });
+    f.small.forEach((item, j) => {
+      const angle = j * golden,
+        u = (j + 0.5) / Math.max(1, f.small.length),
+        r = f.radius * Math.sqrt(u) * 0.78,
+        shape =
+          1 + 0.19 * Math.sin(angle * 3 + 0.7) + 0.12 * Math.cos(angle * 5);
+      const offset = f.big.length ? 0.48 : 0;
+      item.x = f.x + f.radius * offset + Math.cos(angle) * r * shape;
+      item.y =
+        f.y -
+        f.radius * offset * 0.35 +
+        Math.sin(angle) * r * 0.78 * (1 + 0.16 * Math.cos(angle * 4));
+      item.radius = 1.6;
+    });
+    for (const item of [...f.big, ...f.small]) {
+      const { group, seed } = item,
+        levels = [],
+        queue = [seed],
+        depths = new Map([[seed, 0]]);
+      seen[seed] = 1;
+      let head = 0;
+      while (head < queue.length) {
+        const i = queue[head++],
+          d = depths.get(i);
+        if (!levels[d]) levels[d] = [];
+        levels[d].push(i);
+        for (const j of adjacency[i])
+          if (!seen[j]) {
+            seen[j] = 1;
+            depths.set(j, d + 1);
+            queue.push(j);
+          }
+      }
+      levels.forEach((level, d) =>
+        level.forEach((i, j) => {
+          const angle = golden * j + d * 0.51,
+            r =
+              d === 0
+                ? 0
+                : item.radius *
+                  Math.sqrt(
+                    (d - 0.35 + (0.7 * (j + 0.5)) / level.length) /
+                      Math.max(1, levels.length - 1),
+                  );
+          positions[i * 2] = item.x + Math.cos(angle) * r;
+          positions[i * 2 + 1] = item.y + Math.sin(angle) * r;
+        }),
+      );
+    }
+    // Isolates remain separate from actual components; no edges are inferred.
+    f.isolated
+      .sort(
+        (a, b) =>
+          String(data.nodes[a][1]).localeCompare(String(data.nodes[b][1])) ||
+          a - b,
+      )
+      .forEach((i, j) => {
+        const angle = j * golden + 0.3,
+          u = (j + 0.5) / Math.max(1, f.isolated.length),
+          r = f.radius * Math.sqrt(u),
+          shape =
+            1 + 0.22 * Math.sin(angle * 3 + 1.3) + 0.13 * Math.cos(angle * 7);
+        positions[i * 2] =
+          f.x - f.radius * 0.72 + Math.cos(angle) * r * 0.82 * shape;
+        positions[i * 2 + 1] =
+          f.y +
+          f.radius * 0.68 +
+          Math.sin(angle) * r * 0.61 * (1 + 0.2 * Math.sin(angle * 5));
+      });
+  });
+  const bounds = { minX: 0, minY: 0, maxX: 1, maxY: 1 };
+  for (let i = 0; i < n; i++) {
+    bounds.minX = Math.min(bounds.minX, positions[i * 2]);
+    bounds.maxX = Math.max(bounds.maxX, positions[i * 2]);
+    bounds.minY = Math.min(bounds.minY, positions[i * 2 + 1]);
+    bounds.maxY = Math.max(bounds.maxY, positions[i * 2 + 1]);
+  }
+  return {
+    positions,
+    degree,
+    adjacency,
+    components: components.length,
+    isolates: isolated.length,
+    familyRegions: regions.map((f) => ({
+      family: f.family,
+      x: f.x,
+      y: f.y,
+      radius: f.radius,
+    })),
+    bounds,
+  };
+}
+// Input x is the intended horizontal center; y is the text baseline.
+// Greedy omission affects labels only. Nodes and edges are never removed.
+function placeLabels(candidates, width, height, options = {}) {
+  const accepted = [],
+    margin = options.margin ?? 8,
+    top = options.top ?? margin,
+    bottom = options.bottom ?? margin;
+  for (const label of candidates) {
+    const h = label.height || 14,
+      left = label.x - label.width / 2,
+      right = left + label.width,
+      upper = label.y - h,
+      lower = label.y + 3;
+    if (
+      left < margin ||
+      right > width - margin ||
+      upper < top ||
+      lower > height - bottom
+    )
+      continue;
+    if (
+      accepted.some(
+        (other) =>
+          left < other.right + 5 &&
+          right > other.left - 5 &&
+          upper < other.lower + 4 &&
+          lower > other.upper - 4,
+      )
+    )
+      continue;
+    accepted.push({ ...label, left, right, upper, lower });
+  }
+  return accepted;
+}
+function nodeWeight(degree) {
+  return degree === 0
+    ? 0.65
+    : degree === 1
+      ? 1.1
+      : Math.min(8, 1.7 + Math.log2(degree) * 0.8);
+}
+
+function worldPoint(p, c, s) {
+  return {
+    x: (p.x - s.width / 2) / c.scale + c.x,
+    y: (p.y - s.height / 2) / c.scale + c.y,
+  };
+}
+function zoomAt(c, f, p, s) {
+  const a = worldPoint(p, c, s),
+    scale = Math.max(0.015, Math.min(100, c.scale * f));
+  return {
+    x: a.x - (p.x - s.width / 2) / scale,
+    y: a.y - (p.y - s.height / 2) / scale,
+    scale,
+  };
+}
+function hit(positions, x, y, r, accept) {
+  let best = -1,
+    d = r * r;
+  for (let i = 0; i < positions.length / 2; i++) {
+    if (accept && !accept(i)) continue;
+    const q = (positions[2 * i] - x) ** 2 + (positions[2 * i + 1] - y) ** 2;
+    if (q <= d) {
+      d = q;
+      best = i;
+    }
+  }
+  return best;
+}
+const kindColors = {
+  idea: "#27c9ef",
+  idea_revision: "#76ddf5",
+  paper: "#ad7bff",
+  paper_version: "#c4a0ff",
+  experiment: "#19d2b0",
+  run: "#ffa156",
+  evidence: "#fb769e",
+  assessment: "#91a9cc",
+  source: "#829ac0",
+  report: "#efc769",
+  claim: "#f295cf",
+  decision: "#a7da82",
+  artifact_bundle: "#789bea",
+};
+function colorFor(kind) {
+  return kindColors[kind] || "#91a9cc";
+}
+function relax(p, anchors, adjacency) {
+  let movement = 0;
+  for (let i = 0; i < adjacency.length; i++) {
+    const neighbors = adjacency[i];
+    if (!neighbors.length) continue;
+    let x = 0,
+      y = 0;
+    for (const j of neighbors) {
+      x += p[j * 2];
+      y += p[j * 2 + 1];
+    }
+    const dx =
+        (x / neighbors.length - p[i * 2]) * 0.003 +
+        (anchors[i * 2] - p[i * 2]) * 0.015,
+      dy =
+        (y / neighbors.length - p[i * 2 + 1]) * 0.003 +
+        (anchors[i * 2 + 1] - p[i * 2 + 1]) * 0.015;
+    p[i * 2] += Math.max(-0.3, Math.min(0.3, dx));
+    p[i * 2 + 1] += Math.max(-0.3, Math.min(0.3, dy));
+    movement = Math.max(movement, Math.abs(dx), Math.abs(dy));
+  }
+  return movement;
+}
+function mount(target, data, options = {}) {
+  const graph = layout(data),
+    positions = graph.positions,
+    ids = new Map(data.nodes.map((n, i) => [n[0], i])),
+    kinds = Array.from(
+      new Set(data.nodes.map((n) => n[1] || "unknown")),
+    ).sort();
+  const doc = target.ownerDocument,
+    win = doc.defaultView,
+    listeners = [];
+  let disposed = false,
+    raf = 0,
+    selected = -1,
+    hover = -1,
+    kind = "",
+    query = "",
+    paused = win.matchMedia("(prefers-reduced-motion: reduce)").matches,
+    elapsed = paused ? 1 : 0,
+    lastTime = 0;
+  function el(tag, cls, text) {
+    const e = doc.createElement(tag);
+    if (cls) e.className = cls;
+    if (text !== undefined) e.textContent = text;
+    return e;
+  }
+  const shell = el("section", "research-network"),
+    toolbar = el("div", "network-toolbar"),
+    stage = el("div", "network-stage"),
+    canvas = el("canvas", "network-canvas"),
+    overlay = el("canvas", "network-overlay"),
+    tooltip = el("div", "network-tooltip"),
+    status = el("p", "network-status"),
+    legend = el("div", "network-legend"),
+    results = el("div", "network-results"),
+    selection = el("section", "network-selection");
+  stage.style.position = "relative";
+  canvas.style.cssText = overlay.style.cssText =
+    "position:absolute;inset:0;width:100%;height:100%";
+  overlay.style.pointerEvents = "none";
+  canvas.style.touchAction = "none";
+  status.setAttribute("aria-live", "polite");
+  results.setAttribute("aria-live", "polite");
+  tooltip.hidden = true;
+  tooltip.style.pointerEvents = "none";
+  canvas.tabIndex = 0;
+  canvas.setAttribute(
+    "aria-label",
+    "Research network. Drag to pan, wheel to zoom. Search below provides keyboard node selection.",
+  );
+  const search = el("input");
+  search.type = "search";
+  search.placeholder = "Find a node by title or ID";
+  search.setAttribute("aria-label", "Search network nodes");
+  const filter = el("select");
+  filter.setAttribute("aria-label", "Network node kind");
+  filter.append(el("option", "", "All node kinds"));
+  filter.firstChild.value = "";
+  kinds.forEach((k) => {
+    const o = el("option", "", k);
+    o.value = k;
+    filter.append(o);
+  });
+  const searchLabel = el("label", "", "Find node");
+  searchLabel.append(search);
+  const kindLabel = el("label", "", "Kind");
+  kindLabel.append(filter);
+  toolbar.append(searchLabel, kindLabel);
+  function on(e, type, fn, opts) {
+    e.addEventListener(type, fn, opts);
+    listeners.push(() => e.removeEventListener(type, fn, opts));
+  }
+  function button(label, fn) {
+    const b = el("button", "", label);
+    b.type = "button";
+    b.addEventListener("click", fn);
+    return b;
+  }
+  toolbar.append(
+    button("Zoom in", () => zoom(1.5)),
+    button("Zoom out", () => zoom(1 / 1.5)),
+    button("Fit all", fit),
+  );
+  const pauseButton = button(paused ? "Resume layout" : "Pause layout", () =>
+    pause(!paused),
+  );
+  toolbar.append(pauseButton);
+  kinds.forEach((k, i) => {
+    const item = el("span", "", k),
+      dot = el("span", "network-key-dot", "●");
+    dot.style.color = colorFor(k);
+    item.prepend(dot);
+    legend.append(item);
+  });
+  stage.append(canvas, overlay, tooltip);
+  shell.append(toolbar, results, stage, status, legend, selection);
+  target.append(shell);
+  const anchors = positions.slice();
+  let ticks = 0,
+    lastRelax = 0,
+    filteredPositions = null,
+    filteredEdges = null;
+  let incident = [];
+  function reheat() {
+    ticks = 0;
+    lastRelax = 0;
+    request();
+  }
+  let size = { width: 1, height: 1 },
+    camera = { x: 0, y: 0, scale: 1 },
+    dpr = 1,
+    gl = null,
+    program = null,
+    buffers = [],
+    gpu = null,
+    fallback = "";
+  const overlayCtx = overlay.getContext("2d");
+  let background = "#07101a",
+    foreground = "#d1dce7",
+    backgroundRGB = [0.025, 0.055, 0.09];
+  function readTheme() {
+    const styles = win.getComputedStyle(target);
+    background = styles.getPropertyValue("--color-bg").trim() || background;
+    foreground = styles.getPropertyValue("--color-text").trim() || foreground;
+    overlayCtx.fillStyle = background;
+    const normalized = overlayCtx.fillStyle;
+    if (/^#[0-9a-f]{6}$/i.test(normalized))
+      backgroundRGB = [1, 3, 5].map(
+        (i) => parseInt(normalized.slice(i, i + 2), 16) / 255,
+      );
+    request();
+  }
+  const themeObserver = new win.MutationObserver(readTheme);
+  themeObserver.observe(doc.documentElement, {
+    attributes: true,
+    attributeFilter: ["class", "style", "data-theme"],
+  });
+  readTheme();
+  const weights = Float32Array.from(graph.degree, nodeWeight);
+  const colors = new Float32Array(data.nodes.length * 3);
+  data.nodes.forEach((n, i) => {
+    const hex = colorFor(n[1]);
+    for (let j = 0; j < 3; j++)
+      colors[i * 3 + j] = parseInt(hex.slice(1 + j * 2, 3 + j * 2), 16) / 255;
+  });
+  function initGPU() {
+    const shaders = [];
+    try {
+      gl = canvas.getContext("webgl", { alpha: false, antialias: true });
+      if (!gl) throw Error("WebGL unavailable");
+      function shader(type, source) {
+        const s = gl.createShader(type);
+        shaders.push(s);
+        gl.shaderSource(s, source);
+        gl.compileShader(s);
+        if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+          throw Error(gl.getShaderInfoLog(s));
+        return s;
+      }
+      program = gl.createProgram();
+      gl.attachShader(
+        program,
+        shader(
+          gl.VERTEX_SHADER,
+          "attribute vec2 p; attribute vec3 color; attribute float weight; uniform vec2 center; uniform vec2 viewport; uniform float scale; uniform float pointSize; uniform float ease; varying vec3 c; varying float opacity; void main(){vec2 q=(p-center)*scale;gl_Position=vec4(q.x*2.0/viewport.x,-q.y*2.0/viewport.y,0.,1.);gl_PointSize=(weight+min(4.0,scale*.6))*pointSize;c=color;opacity=weight<.8?.24:weight<1.2?.65:1.0;}",
+        ),
+      );
+      gl.attachShader(
+        program,
+        shader(
+          gl.FRAGMENT_SHADER,
+          "precision mediump float; varying vec3 c; varying float opacity; uniform float points; uniform float alpha; void main(){if(points>0.5&&distance(gl_PointCoord,vec2(.5))>.5)discard;gl_FragColor=vec4(c,alpha*opacity);}",
+        ),
+      );
+      gl.linkProgram(program);
+      shaders.forEach((s) => gl.deleteShader(s));
+      shaders.length = 0;
+      if (!gl.getProgramParameter(program, gl.LINK_STATUS))
+        throw Error(gl.getProgramInfoLog(program));
+      function buffer(a) {
+        const b = gl.createBuffer();
+        buffers.push(b);
+        gl.bindBuffer(gl.ARRAY_BUFFER, b);
+        gl.bufferData(gl.ARRAY_BUFFER, a, gl.STATIC_DRAW);
+        return b;
+      }
+      const linePos = new Float32Array(data.edges.length * 4),
+        lineColor = new Float32Array(data.edges.length * 6);
+      data.edges.forEach((e, j) => {
+        for (let k = 0; k < 2; k++) {
+          linePos[j * 4 + k * 2] = positions[e[k] * 2];
+          linePos[j * 4 + k * 2 + 1] = positions[e[k] * 2 + 1];
+          lineColor.set([0.35, 0.49, 0.6], j * 6 + k * 3);
+        }
+      });
+      gpu = {
+        weights: buffer(weights),
+        weight: gl.getAttribLocation(program, "weight"),
+        nodes: buffer(positions),
+        colors: buffer(colors),
+        lines: buffer(linePos),
+        lineColors: buffer(lineColor),
+        linePos,
+        p: gl.getAttribLocation(program, "p"),
+        color: gl.getAttribLocation(program, "color"),
+      };
+      gl.enable(gl.BLEND);
+      gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    } catch (error) {
+      fallback = "Canvas fallback: " + error.message;
+      if (gl) {
+        shaders.forEach((s) => gl.deleteShader(s));
+        buffers.forEach((b) => gl.deleteBuffer(b));
+        if (program) gl.deleteProgram(program);
+      } /* Fallback uses the separate overlay canvas. */
+    }
+  }
+  initGPU();
+  // Fallback draws onto the overlay; the original canvas continues to own input.
+  if (fallback) gl = null;
+  function accepts(i) {
+    return !kind || (data.nodes[i][1] || "unknown") === kind;
+  }
+  function announce() {
+    let visible = 0;
+    for (let i = 0; i < data.nodes.length; i++) if (accepts(i)) visible++;
+    status.textContent = `${visible.toLocaleString()} / ${data.nodes.length.toLocaleString()} nodes · ${data.edges.length.toLocaleString()} recorded edges · ${graph.components.toLocaleString()} connected islands · ${graph.isolates.toLocaleString()} nodes without resolved edges. ${data.unresolved_edges || 0} unresolved edges excluded. Regions group recorded family; local placement follows topology, not similarity. Faint outer nodes have no resolved edges. ${fallback}`;
+  }
+  function fit() {
+    const b = graph.bounds;
+    camera = {
+      x: (b.minX + b.maxX) / 2,
+      y: (b.minY + b.maxY) / 2,
+      scale: Math.max(
+        0.015,
+        Math.min(
+          (size.width - 48) / (b.maxX - b.minX),
+          (size.height - 80) / (b.maxY - b.minY),
+        ),
+      ),
+    };
+    changed();
+  }
+  function changed() {
+    options.onCamera?.({ ...camera });
+    request();
+  }
+  function zoom(f) {
+    camera = zoomAt(camera, f, { x: size.width / 2, y: size.height / 2 }, size);
+    changed();
+  }
+  function pause(value = true) {
+    paused = value;
+    if (paused) elapsed = 1;
+    else reheat();
+    pauseButton.textContent = paused ? "Resume layout" : "Pause layout";
+    lastTime = 0;
+    request();
+  }
+  function screen(i) {
+    return {
+      x: (positions[2 * i] - camera.x) * camera.scale + size.width / 2,
+      y: (positions[2 * i + 1] - camera.y) * camera.scale + size.height / 2,
+    };
+  }
+  function draw(time) {
+    raf = 0;
+    if (disposed) return;
+    if (!paused && elapsed < 1) {
+      if (lastTime) elapsed = Math.min(1, elapsed + (time - lastTime) / 1100);
+      lastTime = time;
+    }
+    if (!paused && ticks < 900 && time - lastRelax > 40) {
+      lastRelax = time;
+      ticks++;
+      const movement = relax(positions, anchors, graph.adjacency);
+      if (movement < 0.0005) ticks = 900;
+      uploadGeometry();
+    }
+    const c = overlayCtx;
+    c.setTransform(dpr, 0, 0, dpr, 0, 0);
+    c.clearRect(0, 0, size.width, size.height);
+    if (gl && gpu) {
+      gl.viewport(0, 0, canvas.width, canvas.height);
+      gl.clearColor(...backgroundRGB, 1);
+      gl.clear(gl.COLOR_BUFFER_BIT);
+      gl.useProgram(program);
+      const uniform = (name) => gl.getUniformLocation(program, name);
+      gl.uniform2f(uniform("center"), camera.x, camera.y);
+      gl.uniform2f(uniform("viewport"), size.width, size.height);
+      gl.uniform1f(uniform("scale"), camera.scale);
+      gl.uniform1f(uniform("ease"), 1 - (1 - elapsed) ** 3);
+      function bind(b, attr, n) {
+        gl.bindBuffer(gl.ARRAY_BUFFER, b);
+        gl.vertexAttribPointer(attr, n, gl.FLOAT, false, 0, 0);
+        gl.enableVertexAttribArray(attr);
+      }
+      gl.disableVertexAttribArray(gpu.weight);
+      gl.vertexAttrib1f(gpu.weight, 2);
+      bind(gpu.lines, gpu.p, 2);
+      bind(gpu.lineColors, gpu.color, 3);
+      gl.uniform1f(uniform("points"), 0);
+      gl.uniform1f(uniform("alpha"), kind ? 0.13 : 0.32);
+      gl.uniform1f(uniform("pointSize"), 1);
+      gl.drawArrays(
+        gl.LINES,
+        0,
+        filteredEdges ? filteredEdges.length / 2 : data.edges.length * 2,
+      );
+      bind(gpu.weights, gpu.weight, 1);
+      bind(gpu.nodes, gpu.p, 2);
+      bind(gpu.colors, gpu.color, 3);
+      gl.uniform1f(uniform("points"), 1);
+      gl.uniform1f(uniform("alpha"), 0.88);
+      gl.uniform1f(uniform("pointSize"), dpr);
+      gl.drawArrays(
+        gl.POINTS,
+        0,
+        filteredPositions ? filteredPositions.length / 2 : data.nodes.length,
+      );
+    } else {
+      c.fillStyle = background;
+      c.fillRect(0, 0, size.width, size.height);
+      c.strokeStyle = "#314957";
+      c.beginPath();
+      data.edges.forEach((e) => {
+        if (!accepts(e[0]) || !accepts(e[1])) return;
+        const a = screen(e[0]),
+          b = screen(e[1]);
+        c.moveTo(a.x, a.y);
+        c.lineTo(b.x, b.y);
+      });
+      c.stroke();
+      for (let i = 0; i < data.nodes.length; i++) {
+        if (!accepts(i)) continue;
+        const p = screen(i);
+        if (p.x < 0 || p.y < 0 || p.x > size.width || p.y > size.height)
+          continue;
+        c.fillStyle = colorFor(data.nodes[i][1]);
+        const diameter =
+          nodeWeight(graph.degree[i]) + Math.min(4, camera.scale * 0.6);
+        c.globalAlpha =
+          graph.degree[i] === 0 ? 0.24 : graph.degree[i] === 1 ? 0.65 : 1;
+        c.fillRect(p.x - diameter / 2, p.y - diameter / 2, diameter, diameter);
+        c.globalAlpha = 1;
+      }
+    }
+    const labelCandidates = [];
+    function candidate(text, x, y, color, priority) {
+      const font = priority === 2 ? "12px system-ui" : "11px system-ui";
+      c.font = font;
+      labelCandidates.push({
+        text,
+        x,
+        y,
+        color,
+        font,
+        priority,
+        width: c.measureText(text).width,
+        height: 14,
+      });
+    }
+    c.font = "12px system-ui";
+    c.fillStyle = foreground;
+    c.fillText("Recorded family regions · real relationship islands", 12, 20);
+    for (const region of graph.familyRegions) {
+      const x = (region.x - camera.x) * camera.scale + size.width / 2,
+        y =
+          (region.y - region.radius * 1.45 - camera.y) * camera.scale +
+          size.height / 2;
+      candidate(region.family, x, y, foreground, 2);
+    }
+    if (graph.isolates)
+      c.fillText("Faint nodes: no resolved edges", 12, size.height - 12);
+    if (selected >= 0) {
+      const a = screen(selected);
+      c.lineWidth = 1.4;
+      c.font = "11px system-ui";
+      let labels = 0;
+      for (const e of incident) {
+        const other = e[0] === selected ? e[1] : e[0];
+        if (!accepts(other) || !accepts(selected)) continue;
+        const b = screen(other);
+        c.strokeStyle = e[3] === "PROPOSED" ? "#d9a9ff" : "#8de6ff";
+        c.setLineDash(e[3] === "PROPOSED" ? [4, 4] : []);
+        c.beginPath();
+        c.moveTo(a.x, a.y);
+        c.lineTo(b.x, b.y);
+        c.stroke();
+        const from = e[0] === selected ? a : b,
+          to = e[0] === selected ? b : a,
+          angle = Math.atan2(to.y - from.y, to.x - from.x),
+          ax = to.x - 7 * Math.cos(angle),
+          ay = to.y - 7 * Math.sin(angle);
+        c.beginPath();
+        c.moveTo(
+          ax - 5 * Math.cos(angle - 0.5),
+          ay - 5 * Math.sin(angle - 0.5),
+        );
+        c.lineTo(ax, ay);
+        c.lineTo(
+          ax - 5 * Math.cos(angle + 0.5),
+          ay - 5 * Math.sin(angle + 0.5),
+        );
+        c.stroke();
+        if (labels++ < 16) {
+          candidate(
+            (data.nodes[other][2] || data.nodes[other][0]).slice(0, 42),
+            b.x,
+            b.y - 8,
+            foreground,
+            1,
+          );
+        }
+      }
+      c.setLineDash([]);
+      candidate(
+        (data.nodes[selected][2] || data.nodes[selected][0]).slice(0, 55),
+        a.x,
+        a.y - 12,
+        foreground,
+        0,
+      );
+    }
+    for (const label of placeLabels(
+      labelCandidates.sort((a, b) => a.priority - b.priority),
+      size.width,
+      size.height,
+      { top: 28, bottom: 28 },
+    )) {
+      c.font = label.font;
+      c.fillStyle = label.color;
+      c.fillText(label.text, label.left, label.y);
+    }
+    [selected, hover].forEach((i) => {
+      if (i < 0) return;
+      const p = screen(i);
+      c.strokeStyle = i === selected ? foreground : "#fbd476";
+      c.lineWidth = 2;
+      c.beginPath();
+      c.arc(p.x, p.y, 8, 0, Math.PI * 2);
+      c.stroke();
+    });
+    if (!paused && (elapsed < 1 || ticks < 900)) request();
+  }
+  function request() {
+    if (!raf && !disposed) raf = win.requestAnimationFrame(draw);
+  }
+  function select(id, notify = false) {
+    selected = ids.has(id) ? ids.get(id) : -1;
+    incident =
+      selected < 0
+        ? []
+        : data.edges.filter((e) => e[0] === selected || e[1] === selected);
+    selection.replaceChildren();
+    if (selected >= 0) {
+      const n = data.nodes[selected];
+      selection.append(
+        el("h3", "", n[2] || n[0]),
+        el(
+          "p",
+          "",
+          `${n[1]} · ${n[3] || "family unavailable"} · ${n[4] || "lane unavailable"}`,
+        ),
+      );
+      const edges = el("ul", "network-edge-list");
+      let count = 0;
+      data.edges.forEach((e) => {
+        if (e[0] !== selected && e[1] !== selected) return;
+        count++;
+        if (count > 100) return;
+        const other = e[0] === selected ? e[1] : e[0],
+          li = el("li");
+        li.append(
+          button(
+            `${e[0] === selected ? "→" : "←"} ${e[2] || "relationship"} · ${e[3] || "basis unavailable"} · ${data.nodes[other][2] || data.nodes[other][0]}`,
+            () => select(data.nodes[other][0], true),
+          ),
+        );
+        edges.append(li);
+      });
+      selection.append(
+        el(
+          "p",
+          "",
+          `${count} incident relationships${count > 100 ? " · first 100 listed" : ""}. Arrows show recorded direction; basis is recorded, not inferred.`,
+        ),
+        edges,
+        button("Clear selection", () => {
+          select(null);
+          options.onClear?.();
+        }),
+      );
+      if (notify) options.onSelect?.(id);
+    }
+    request();
+  }
+  function uploadGeometry() {
+    if (!gl || !gpu) return;
+    const lines = [];
+    data.edges.forEach((e) => {
+      if (!accepts(e[0]) || !accepts(e[1])) return;
+      lines.push(
+        positions[e[0] * 2],
+        positions[e[0] * 2 + 1],
+        positions[e[1] * 2],
+        positions[e[1] * 2 + 1],
+      );
+    });
+    filteredEdges = new Float32Array(lines);
+    gl.bindBuffer(gl.ARRAY_BUFFER, gpu.lines);
+    gl.bufferData(gl.ARRAY_BUFFER, filteredEdges, gl.DYNAMIC_DRAW);
+    uploadVisible();
+  }
+  function uploadVisible() {
+    if (!gl) return;
+    const visible = [];
+    const rgb = [];
+    const sizes = [];
+    if (kind) {
+      for (let i = 0; i < data.nodes.length; i++)
+        if (accepts(i)) {
+          visible.push(positions[i * 2], positions[i * 2 + 1]);
+          sizes.push(weights[i]);
+          rgb.push(colors[i * 3], colors[i * 3 + 1], colors[i * 3 + 2]);
+        }
+    }
+    filteredPositions = kind ? new Float32Array(visible) : null;
+    gl.bindBuffer(gl.ARRAY_BUFFER, gpu.nodes);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      filteredPositions || positions,
+      gl.STATIC_DRAW,
+    );
+    gl.bindBuffer(gl.ARRAY_BUFFER, gpu.colors);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      kind ? new Float32Array(rgb) : colors,
+      gl.STATIC_DRAW,
+    );
+    gl.bindBuffer(gl.ARRAY_BUFFER, gpu.weights);
+    gl.bufferData(
+      gl.ARRAY_BUFFER,
+      kind ? new Float32Array(sizes) : weights,
+      gl.STATIC_DRAW,
+    );
+  }
+  function searchResults() {
+    query = search.value.trim().toLowerCase();
+    const oldKind = kind;
+    kind = filter.value;
+    if (oldKind !== kind) uploadGeometry();
+    results.replaceChildren();
+    results.hidden = !query && !kind;
+    if (results.hidden) {
+      announce();
+      request();
+      return;
+    }
+    let count = 0;
+    for (let i = 0; i < data.nodes.length; i++) {
+      const n = data.nodes[i];
+      if (
+        !accepts(i) ||
+        (query && !`${n[0]} ${n[2] || ""}`.toLowerCase().includes(query))
+      )
+        continue;
+      count++;
+      if (count <= 30) {
+        results.append(
+          button(n[2] || n[0], () => {
+            camera.x = positions[i * 2];
+            camera.y = positions[i * 2 + 1];
+            camera.scale = Math.max(camera.scale, 1.5);
+            changed();
+            select(n[0], true);
+          }),
+        );
+      }
+    }
+    results.prepend(
+      el(
+        "p",
+        "",
+        `${count.toLocaleString()} matches · first 30 keyboard-accessible results. Search locates nodes; kind filters their visibility.`,
+      ),
+    );
+    announce();
+    request();
+  }
+  on(win.matchMedia("(prefers-reduced-motion: reduce)"), "change", (event) => {
+    if (event.matches) pause(true);
+  });
+  function updateFilters() {
+    searchResults();
+    options.onFilterChange?.({ query: search.value, kind: filter.value });
+  }
+  on(search, "input", updateFilters);
+  on(filter, "change", updateFilters);
+  const pointers = new Map();
+  let gesture = null;
+  function point(e) {
+    const r = canvas.getBoundingClientRect();
+    return { x: e.clientX - r.left, y: e.clientY - r.top };
+  }
+  function pick(p) {
+    const w = worldPoint(p, camera, size);
+    return hit(positions, w.x, w.y, 12 / camera.scale, accepts);
+  }
+  on(
+    canvas,
+    "wheel",
+    (e) => {
+      e.preventDefault();
+      camera = zoomAt(camera, Math.exp(-e.deltaY * 0.0015), point(e), size);
+      changed();
+    },
+    { passive: false },
+  );
+  on(canvas, "pointerdown", (e) => {
+    canvas.setPointerCapture(e.pointerId);
+    const p = point(e);
+    pointers.set(e.pointerId, p);
+    gesture = {
+      p,
+      last: p,
+      index: pointers.size === 1 ? pick(p) : -1,
+      moved: false,
+    };
+    if (pointers.size === 2) {
+      const a = Array.from(pointers.values());
+      gesture.distance = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+    }
+  });
+  on(canvas, "pointermove", (e) => {
+    const p = point(e);
+    if (pointers.has(e.pointerId)) {
+      pointers.set(e.pointerId, p);
+      if (pointers.size === 2) {
+        const a = Array.from(pointers.values()),
+          distance = Math.hypot(a[0].x - a[1].x, a[0].y - a[1].y);
+        if (gesture.distance)
+          camera = zoomAt(
+            camera,
+            distance / gesture.distance,
+            { x: (a[0].x + a[1].x) / 2, y: (a[0].y + a[1].y) / 2 },
+            size,
+          );
+        gesture.distance = distance;
+        gesture.moved = true;
+        changed();
+        return;
+      }
+      if (!gesture) return;
+      const dx = p.x - gesture.last.x,
+        dy = p.y - gesture.last.y;
+      gesture.moved ||= Math.hypot(p.x - gesture.p.x, p.y - gesture.p.y) > 4;
+      if (gesture.index >= 0 && gesture.moved) {
+        positions[gesture.index * 2] += dx / camera.scale;
+        positions[gesture.index * 2 + 1] += dy / camera.scale;
+        anchors[gesture.index * 2] = positions[gesture.index * 2];
+        anchors[gesture.index * 2 + 1] = positions[gesture.index * 2 + 1];
+        reheat();
+        if (gl) {
+          gl.bindBuffer(gl.ARRAY_BUFFER, gpu.nodes);
+          if (kind) uploadVisible();
+          else
+            gl.bufferSubData(
+              gl.ARRAY_BUFFER,
+              gesture.index * 8,
+              positions.subarray(gesture.index * 2, gesture.index * 2 + 2),
+            );
+          data.edges.forEach((edge, j) => {
+            for (let k = 0; k < 2; k++)
+              if (edge[k] === gesture.index) {
+                gpu.linePos[j * 4 + k * 2] = positions[gesture.index * 2];
+                gpu.linePos[j * 4 + k * 2 + 1] =
+                  positions[gesture.index * 2 + 1];
+              }
+          });
+          uploadGeometry();
+        }
+      } else if (gesture.index < 0) {
+        camera.x -= dx / camera.scale;
+        camera.y -= dy / camera.scale;
+      }
+      gesture.last = p;
+      changed();
+      return;
+    }
+    hover = pick(p);
+    tooltip.hidden = hover < 0;
+    if (hover >= 0) {
+      tooltip.textContent = `${data.nodes[hover][2] || data.nodes[hover][0]} · ${data.nodes[hover][1]}`;
+      tooltip.style.position = "absolute";
+      tooltip.style.maxWidth = Math.max(1, size.width - 16) + "px";
+      tooltip.style.maxHeight = Math.max(1, size.height - 16) + "px";
+      tooltip.style.boxSizing = "border-box";
+      tooltip.style.overflowWrap = "anywhere";
+      tooltip.style.overflow = "hidden";
+      const box = tooltip.getBoundingClientRect();
+      tooltip.style.left =
+        Math.max(8, Math.min(p.x + 12, size.width - box.width - 8)) + "px";
+      tooltip.style.top =
+        Math.max(8, Math.min(p.y - 30, size.height - box.height - 8)) + "px";
+    }
+    request();
+  });
+  function release(e) {
+    if (gesture && !gesture.moved && gesture.index >= 0)
+      select(data.nodes[gesture.index][0], true);
+    pointers.delete(e.pointerId);
+    gesture = null;
+  }
+  on(canvas, "pointerup", release);
+  on(canvas, "pointercancel", () => {
+    pointers.clear();
+    gesture = null;
+  });
+  on(canvas, "pointerleave", () => {
+    hover = -1;
+    tooltip.hidden = true;
+    request();
+  });
+  on(canvas, "keydown", (e) => {
+    if (e.key === "Escape") {
+      select(null);
+      options.onClear?.();
+    } else if (e.key === "+" || e.key === "=") zoom(1.5);
+    else if (e.key === "-") zoom(1 / 1.5);
+    else if (e.key === "0" || e.key === "f") fit();
+    else if (
+      ["ArrowLeft", "ArrowRight", "ArrowUp", "ArrowDown"].includes(e.key)
+    ) {
+      e.preventDefault();
+      camera.x +=
+        (e.key === "ArrowRight" ? 40 : e.key === "ArrowLeft" ? -40 : 0) /
+        camera.scale;
+      camera.y +=
+        (e.key === "ArrowDown" ? 40 : e.key === "ArrowUp" ? -40 : 0) /
+        camera.scale;
+      changed();
+    }
+  });
+  on(canvas, "webglcontextlost", (e) => {
+    e.preventDefault();
+    gl = null;
+    fallback = "WebGL context lost; Canvas fallback active.";
+    elapsed = 1;
+    announce();
+    request();
+  });
+  function resize() {
+    const r = stage.getBoundingClientRect();
+    size = { width: Math.max(1, r.width), height: Math.max(1, r.height) };
+    dpr = Math.min(win.devicePixelRatio || 1, 2);
+    for (const c of [canvas, overlay]) {
+      c.width = Math.round(size.width * dpr);
+      c.height = Math.round(size.height * dpr);
+    }
+    request();
+  }
+  const observer = new win.ResizeObserver(resize);
+  observer.observe(stage);
+  resize();
+  if (
+    options.initialCamera &&
+    ["x", "y", "scale"].every((k) =>
+      Number.isFinite(options.initialCamera[k]),
+    ) &&
+    options.initialCamera.scale > 0
+  )
+    camera = { ...options.initialCamera };
+  else fit();
+  search.value = options.initialQuery || "";
+  filter.value = options.initialKind || "";
+  searchResults();
+  if (options.initialSelected) select(options.initialSelected);
+  announce();
+  request();
+  return {
+    select,
+    fit,
+    zoom,
+    pause,
+    setFilters(value) {
+      search.value = value.query || "";
+      filter.value = value.kind || "";
+      searchResults();
+    },
+    focus(id) {
+      if (!ids.has(id)) return false;
+      const i = ids.get(id);
+      if (!accepts(i)) {
+        filter.value = "";
+        updateFilters();
+      }
+      camera.x = positions[i * 2];
+      camera.y = positions[i * 2 + 1];
+      camera.scale = Math.max(camera.scale, 1.5);
+      changed();
+      select(id);
+      canvas.focus();
+      return true;
+    },
+    destroy() {
+      if (disposed) return;
+      disposed = true;
+      win.cancelAnimationFrame(raf);
+      observer.disconnect();
+      themeObserver.disconnect();
+      listeners.forEach((fn) => fn());
+      if (gl) {
+        buffers.forEach((b) => gl.deleteBuffer(b));
+        if (program) gl.deleteProgram(program);
+      }
+      shell.remove();
+    },
+  };
+}
+export {
+  colorFor,
+  mount,
+  layout,
+  worldPoint,
+  zoomAt,
+  hit,
+  relax,
+  nodeWeight,
+  placeLabels,
+};

@@ -1,200 +1,212 @@
-import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
-import { RefreshCw, Search, ArrowUpRight } from "lucide-react";
+import { RefreshCw } from "lucide-react";
 import { useServer } from "@/hooks/useServer";
 import { authFetch } from "@/lib/auth-token";
 import {
   object,
   text,
-  records,
   catalogCount,
-  researchSelectionMessage,
   researchReadState,
-  type RecordData,
 } from "@/features/research/model";
-import "@/features/research/workspace.css";
-import { readResearch as createResearchReader } from "@/features/research/read";
-import { ResearchGraph } from "@/features/research/ResearchGraph";
-import { ResearchResults } from "@/features/research/ResearchResults";
-
+import { readResearch } from "@/features/research/read";
 import {
-  researchPage,
-  clearResearchSelection,
-  researchPreview,
-  RESEARCH_PAGE_SIZE,
-} from "@/features/research/library";
+  LAB_VIEWS,
+  labTimestamp,
+  readLabState,
+  updateLabParams,
+  clearLabServerSelection,
+} from "@/features/research/lab-state";
+import {
+  loadConsistentLabNetwork,
+  type LabNetwork,
+} from "@/features/research/lab-network-data";
+import { ResearchNetwork } from "@/features/research/ResearchNetwork";
+import type { Camera } from "@/features/research/lab-network-engine";
+import {
+  LabCharts,
+  LabCounts,
+  LabLimitations,
+} from "@/features/research/ResearchOverview";
+import {
+  LabQueue,
+  LabRecords,
+  LabReadNotice,
+} from "@/features/research/ResearchViews";
+import { ResearchInspector } from "@/features/research/ResearchInspector";
+import { ResearchArchive } from "@/features/research/ResearchArchive";
+import "@/features/research/workspace.css";
+import "@/features/research/lab.css";
 
-const readResearch = createResearchReader(authFetch);
-function timestamp(value: unknown) {
-  const t = typeof value === "string" ? Date.parse(value) : NaN;
-  return Number.isFinite(t) ? new Date(t).toLocaleString() : "Not recorded";
-}
-function nodeTitle(node: RecordData) {
-  return text(node.title, text(node.id));
-}
-
+const read = readResearch(authFetch);
 export function Research() {
   const { server } = useServer();
   const [params, setParams] = useSearchParams();
-  const search = params.get("q") ?? "";
-  const setSearch = (value: string) => {
-    const next = new URLSearchParams(params);
-    if (value) next.set("q", value);
-    else next.delete("q");
-    next.delete("id");
-    setParams(next, { replace: true });
-  };
-  const [query, setQuery] = useState(search);
-  const [kind, setKind] = useState("idea");
-  const [lane, setLane] = useState("");
-  const [family, setFamily] = useState("");
-  const [offset, setOffset] = useState(0);
-  const [now, setNow] = useState(() => Date.now());
+  const [previousServer, setPreviousServer] = useState(server);
+  const serverChanged = previousServer !== server;
+  useEffect(() => {
+    if (!serverChanged) return;
+    setParams(clearLabServerSelection(params), { replace: true });
+    // Complete the boundary after the URL no longer carries the previous server's identities.
+    queueMicrotask(() => setPreviousServer(server));
+  }, [server, serverChanged, params, setParams]);
+  return (
+    <div className="quant-workspace research-lab">
+      {server && !serverChanged ? (
+        <ResearchLab key={server} server={server} />
+      ) : (
+        <>
+          <header className="quant-heading">
+            <div>
+              <h1>Research</h1>
+              <p>Ideas, experiments and evidence from Research OS.</p>
+            </div>
+          </header>
+          <section className="quant-notice" role="status">
+            {serverChanged ? (
+              "Loading the selected research server…"
+            ) : (
+              <>
+                Select a server to open its research workspace.{" "}
+                <Link to="/settings">Open Settings</Link>
+              </>
+            )}
+          </section>
+        </>
+      )}
+    </div>
+  );
+}
+function ResearchLab({ server }: { server: string }) {
+  const [params, setParams] = useSearchParams(),
+    state = readLabState(params);
+  const [now, setNow] = useState(Date.now),
+    [queryText, setQueryText] = useState(state.q);
+  const [cameraStore] = useState(() => new Map<string, Camera>());
+  const lastTrigger = useRef<HTMLElement | null>(null),
+    focusSequence = useRef(0);
+  const client = useQueryClient();
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
   useEffect(() => {
-    const timer = setTimeout(() => {
-      setQuery(search);
-      setOffset(0);
-    }, 300);
+    const timer = setTimeout(() => setQueryText(state.q), 300);
     return () => clearTimeout(timer);
-  }, [search]);
+  }, [state.q]);
   const overview = useQuery({
     queryKey: ["research-overview", server],
-    enabled: !!server,
-    queryFn: ({ signal }) => readResearch("overview", server!, {}, signal),
+    queryFn: ({ signal }) => read("overview", server, {}, signal),
     refetchInterval: 30000,
     retry: 1,
   });
-  const list = useQuery({
-    queryKey: ["research-nodes", server, query, kind, lane, family, offset],
-    enabled: !!server,
-    queryFn: ({ signal }) =>
-      readResearch(
-        "nodes",
-        server!,
-        {
-          q: query, kind, lane, family,
-          offset: String(offset), limit: String(RESEARCH_PAGE_SIZE),
-        },
-        signal,
-      ),
-    refetchInterval: 30000,
-    retry: 1,
-  });
-  const selected =
-    params.get("id") ?? text(records(list.data?.data.items)[0]?.id, "");
-  const detail = useQuery({
-    queryKey: ["research-node", server, selected],
-    enabled: !!server && !!selected,
-    queryFn: ({ signal }) =>
-      readResearch("node", server!, { id: selected }, signal),
-    refetchInterval: 30000,
-    retry: 1,
-  });
-  const graph = useQuery({
-    queryKey: ["research-graph", server, selected],
-    enabled: !!server && !!selected,
-    queryFn: ({ signal }) =>
-      readResearch("graph", server!, { id: selected, limit: "30" }, signal),
-    refetchInterval: 30000,
-    retry: 1,
-  });
-  const refresh = () => {
-    void overview.refetch();
-    void list.refetch();
-    if (selected) {
-      void detail.refetch();
-      void graph.refetch();
-      if (node.kind === "idea") void comparisons.refetch();
-    }
-  };
   const overviewState = researchReadState(
     overview.data,
     now,
     overview.isError,
     overview.dataUpdatedAt,
   );
-  const listState = researchReadState(
-    list.data,
-    now,
-    list.isError,
-    list.dataUpdatedAt,
-  );
-  const data = overviewState === "available" ? object(overview.data?.data) : {};
-  const freshness = object(data.freshness),
-    counts = object(data.counts),
-    facets = object(data.facets);
-  const nodes = listState === "available" ? records(list.data?.data.items) : [];
-  const total =
-    listState === "available"
-      ? catalogCount(object(list.data?.data), "total")
-      : null;
-  const page = researchPage(offset, total);
-  const clearSelection = () =>
-    setParams(clearResearchSelection(params), { replace: true });
-  const select = (id: string) => {
-    const next = new URLSearchParams(params);
-    if (id) next.set("id", id);
-    else next.delete("id");
-    setParams(next);
-  };
-  const detailState = researchReadState(
-    detail.data,
-    now,
-    detail.isError,
-    detail.dataUpdatedAt,
-  );
-  const detailAvailable = detailState === "available";
-  const node = detailAvailable ? object(detail.data?.data.node) : {};
-  const nodeData = object(node.data),
-    usage = object(detail.data?.data.usage),
-    source = object(node.source);
-  const preview = researchPreview(nodeData);
-  const comparisons = useQuery({
-    queryKey: ["research-comparisons", server, selected],
-    enabled: !!server && node.kind === "idea",
+  const available = overviewState === "available",
+    data = available ? object(overview.data?.data) : {},
+    freshness = object(data.freshness);
+  const revision = text(overview.data?.data.revision, "");
+  const networkVisible = state.view === "overview" || state.view === "graph";
+  const networkQuery = useQuery({
+    queryKey: ["research-network", server, revision],
+    enabled: available && networkVisible && !!revision,
     queryFn: ({ signal }) =>
-      readResearch("comparisons", server!, { idea_id: selected }, signal),
-    refetchInterval: 30000,
+      loadConsistentLabNetwork(read, server, revision, signal),
+    staleTime: Infinity,
+    gcTime: 5 * 60 * 1000,
     retry: 1,
   });
-  const graphState = researchReadState(
-    graph.data,
-    now,
-    graph.isError,
-    graph.dataUpdatedAt,
-  );
-  const graphAvailable = graphState === "available";
-  const selectionMessage = researchSelectionMessage(selected, listState);
-  const comparisonState = researchReadState(
-    comparisons.data,
-    now,
-    comparisons.isError,
-    comparisons.dataUpdatedAt,
-  );
-  const related = graphAvailable
-    ? records(graph.data?.data.nodes).filter((n) => n.id !== selected)
-    : [];
-  const edges = graphAvailable ? records(graph.data?.data.edges) : [];
-  const options = (key: string) =>
-    (Array.isArray(facets[key]) ? facets[key] : []).filter(
-      (v): v is string => typeof v === "string",
+  useEffect(() => {
+    const result = networkQuery.data;
+    if (!result?.overview || result.network.data.revision === revision) return;
+    client.setQueryData(
+      ["research-network", server, result.network.data.revision],
+      { network: result.network },
     );
+    client.setQueryData(["research-overview", server], result.overview);
+  }, [networkQuery.data, revision, server, client]);
+  const network =
+    available &&
+    !networkQuery.isError &&
+    networkQuery.data?.network.data.revision === revision
+      ? (networkQuery.data.network.data as unknown as LabNetwork)
+      : null;
+  const change = (
+    values: Record<string, string>,
+    options: { resetPage?: boolean; clearSelection?: boolean } = {},
+    replace = false,
+  ) => setParams(updateLabParams(params, values, options), { replace });
+  const navigate = (view: string) => change({ view }, { resetPage: true });
+  const select = (id: string) => {
+    if (id && !state.selected && document.activeElement instanceof HTMLElement)
+      lastTrigger.current = document.activeElement;
+    change({ id, network_focus: "" });
+    if (!id)
+      requestAnimationFrame(
+        () => lastTrigger.current?.isConnected && lastTrigger.current.focus(),
+      );
+  };
+  const find = (id: string) => {
+    focusSequence.current += 1;
+    change({
+      view: "graph",
+      id,
+      network_focus: `${id}:${Date.now()}:${focusSequence.current}`,
+    });
+  };
+  const refresh = () => {
+    if (networkVisible && networkQuery.isError) void networkQuery.refetch();
+    void client.invalidateQueries({
+      predicate: (query) =>
+        query.queryKey[0] !== "research-network" &&
+        typeof query.queryKey[0] === "string" &&
+        query.queryKey[0].startsWith("research-") &&
+        query.queryKey[1] === server,
+    });
+  };
+  const filter = (values: Record<string, string>) =>
+    change(values, { resetPage: true, clearSelection: true }, true);
+  const graph = network ? (
+    <ResearchNetwork
+      data={network}
+      selected={state.selected}
+      query={state.network_q}
+      kind={state.network_kind}
+      focus={state.network_focus}
+      onSelect={select}
+      onFilters={(query, kind) =>
+        change({ network_q: query, network_kind: kind }, {}, true)
+      }
+      cameraStore={cameraStore}
+      cameraKey={`${revision}:${state.view}`}
+    />
+  ) : (
+    <LabReadNotice
+      state={
+        available ? (networkQuery.isError ? "error" : "loading") : overviewState
+      }
+      error={overview.error ?? networkQuery.error}
+      onRetry={() => {
+        void overview.refetch();
+        void networkQuery.refetch();
+      }}
+    />
+  );
+  const viewLabel =
+    LAB_VIEWS.find((view) => view.id === state.view)?.label ?? "Overview";
   return (
-    <div className="quant-workspace">
+    <>
       <header className="quant-heading">
         <div>
           <h1>Research</h1>
           <p>Ideas, experiments and evidence from Research OS.</p>
         </div>
-        <button
-          onClick={refresh}
-          disabled={!server || overview.isFetching || list.isFetching}
-        >
+        <button onClick={refresh} disabled={overview.isFetching}>
           <RefreshCw
             size={15}
             className={overview.isFetching ? "animate-spin" : ""}
@@ -202,462 +214,162 @@ export function Research() {
           Refresh
         </button>
       </header>
-      {!server ? (
-        <section className="quant-notice" role="status">
-          Select a server to open its research workspace.{" "}
-          <Link to="/settings">Open Settings</Link>
-        </section>
-      ) : (
-        <>
-          <div className="quant-source-strip">
-            <span
-              className={
-                overviewState === "available" && freshness.state === "CURRENT"
-                  ? "quant-positive"
-                  : ""
-              }
-            >
-              {overviewState === "available"
-                ? `Index ${text(freshness.state, "unknown").toLowerCase()}`
-                : `Research connection ${overviewState}`}
-            </span>
-            <span>Last index sync · {timestamp(freshness.last_sync)}</span>
-            <span>Read-only source</span>
-          </div>
-          {overview.isError ? (
-            <div className="quant-notice" role="alert">
-              {overview.error.message}{" "}
-              <button onClick={refresh}>Retry connection</button>
-            </div>
-          ) : null}
-          <div className="quant-metrics" aria-label="Research catalog counts">
-            {[
-              ["ideas", "Ideas"],
-              ["papers", "Papers"],
-              ["experiments", "Experiments"],
-              ["runs", "Attempts"],
-            ].map(([key, label]) => (
-              <div key={key}>
-                <span>{label}</span>
-                <strong>
-                  {catalogCount(counts, key)?.toLocaleString() ?? "—"}
-                </strong>
-                <small>Catalog records</small>
-              </div>
-            ))}
-          </div>
-          <section className="quant-panel quant-graph-panel">
-            <header className="quant-panel-heading">
-              <div>
-                <h2>Research network</h2>
-                <p className="quant-muted">
-                  Explore the selected idea and its recorded connections.
-                </p>
-              </div>
-              <span>
-                {!selected
-                  ? "No record selected"
-                  : graphAvailable
-                    ? `${records(graph.data?.data.nodes).length} nodes in this view`
-                    : `Research graph ${graphState}`}
-              </span>
-            </header>
-            {selectionMessage ? (
-              <div className="quant-notice" role="status">
-                {selectionMessage}
-              </div>
-            ) : graphAvailable ? (
-              <ResearchGraph
-                data={object(graph.data?.data)}
-                selectedId={selected}
-                onSelect={select}
-              />
-            ) : (
-              <div
-                className="quant-notice"
-                role={graph.isError ? "alert" : "status"}
-              >
-                {graph.isError
-                  ? graph.error.message
-                  : graphState === "stale"
-                    ? "The research graph has not refreshed."
-                    : "Loading research connections…"}
-                {graph.isError || graphState === "stale" ? (
-                  <button onClick={() => void graph.refetch()}>
-                    Retry graph
-                  </button>
-                ) : null}
-              </div>
-            )}
-          </section>
-          {detailAvailable &&
-          node.kind === "idea" &&
-          comparisonState !== "available" ? (
-            <div
-              className="quant-notice"
-              role={comparisons.isError ? "alert" : "status"}
-            >
-              {comparisons.isError
-                ? comparisons.error.message
-                : comparisonState === "stale"
-                  ? "Comparison data has not refreshed; previous values are unavailable."
-                  : "Loading baseline comparisons…"}
-              {comparisons.isError || comparisonState === "stale" ? (
-                <button onClick={() => void comparisons.refetch()}>
-                  Retry comparisons
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-          {detailAvailable ? (
-            <ResearchResults
-              data={nodeData}
-              comparisons={
-                node.kind === "idea" && comparisonState === "available"
-                  ? comparisons.data?.data
-                  : undefined
-              }
-            />
-          ) : null}
-          <div className="quant-research-layout">
-            <section className="quant-panel">
-              <header className="quant-panel-heading">
-                <h2>Knowledge library</h2>
-                <span>
-                  {total === null
-                    ? "Waiting for source"
-                    : `${total.toLocaleString()} matching records`}
-                </span>
-              </header>
-              <div className="quant-filters">
-                <label className="quant-search">
-                  <Search size={16} />
-                  <input
-                    aria-label="Search research"
-                    placeholder="Search ideas, hypotheses, evidence…"
-                    value={search}
-                    maxLength={200}
-                    onChange={(e) => setSearch(e.target.value)}
-                  />
-                </label>
-                <label>
-                  Type
-                  <select
-                    value={kind}
-                    onChange={(e) => {
-                      setKind(e.target.value);
-                      clearSelection();
-                      setOffset(0);
-                    }}
-                  >
-                    <option value="">All records</option>
-                    {(options("kinds").length
-                      ? options("kinds")
-                      : [
-                          "idea",
-                          "paper",
-                          "experiment",
-                          "run",
-                          "assessment",
-                          "decision",
-                        ]
-                    ).map((v) => (
-                      <option key={v} value={v}>
-                        {v.replaceAll("_", " ")}
-                      </option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Lane
-                  <select
-                    value={lane}
-                    onChange={(e) => {
-                      setLane(e.target.value);
-                      clearSelection();
-                      setOffset(0);
-                    }}
-                  >
-                    <option value="">All lanes</option>
-                    {options("lanes").map((v) => (
-                      <option key={v}>{v}</option>
-                    ))}
-                  </select>
-                </label>
-                <label>
-                  Family
-                  <select
-                    value={family}
-                    onChange={(e) => {
-                      setFamily(e.target.value);
-                      clearSelection();
-                      setOffset(0);
-                    }}
-                  >
-                    <option value="">All families</option>
-                    {options("families").map((v) => (
-                      <option key={v}>{v}</option>
-                    ))}
-                  </select>
-                </label>
-              </div>
-              {listState !== "available" ? (
-                <div
-                  className="quant-notice"
-                  role={list.isError ? "alert" : "status"}
-                >
-                  {list.isError
-                    ? list.error.message
-                    : listState === "stale"
-                      ? "The research connection has not refreshed. Retry to load current catalog records."
-                      : "Loading knowledge records…"}
-                  {list.isError || listState === "stale" ? (
-                    <button onClick={() => void list.refetch()}>
-                      Retry records
-                    </button>
-                  ) : null}
-                </div>
-              ) : nodes.length === 0 ? (
-                <div className="quant-notice" role="status">
-                  No records match these filters.
-                </div>
-              ) : (
-                <div className="quant-table-scroll">
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>Record</th>
-                        <th>Lane</th>
-                        <th>Recorded status</th>
-                        <th>Recorded date</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {nodes.map((n) => (
-                        <tr key={text(n.id)} aria-selected={n.id === selected}>
-                          <td>
-                            <button
-                              className="quant-record-link"
-                              onClick={() => select(text(n.id, ""))}
-                            >
-                              {nodeTitle(n)}
-                            </button>
-                            <small>
-                              {text(n.kind)} · {text(n.family, "No family")}
-                            </small>
-                          </td>
-                          <td>{text(n.lane)}</td>
-                          <td>{text(n.status)}</td>
-                          <td>
-                            {timestamp(n.recorded_at)}
-                            {Date.parse(text(n.recorded_at, "")) >
-                            now + 300000 ? (
-                              <small>Future-dated source</small>
-                            ) : null}
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+      <div className="quant-source-strip">
+        <span
+          className={
+            available && freshness.state === "CURRENT" ? "quant-positive" : ""
+          }
+        >
+          {available
+            ? `Index ${text(freshness.state, "unknown").toLowerCase()}`
+            : `Research connection ${overviewState}`}
+        </span>
+        <span>Last index sync · {labTimestamp(freshness.last_sync)}</span>
+        <span>Read-only source</span>
+        <span title={revision}>
+          Revision {revision ? revision.slice(0, 12) : "unavailable"}
+        </span>
+      </div>
+      {overview.isError && (
+        <div className="quant-notice" role="alert">
+          {overview.error.message}
+          <button onClick={() => void overview.refetch()}>
+            Retry connection
+          </button>
+        </div>
+      )}
+      <LabCounts data={data} onView={navigate} />
+      <nav className="lab-nav" aria-label="Research Lab views">
+        {LAB_VIEWS.map((view) => (
+          <button
+            key={view.id}
+            aria-current={state.view === view.id ? "page" : undefined}
+            onClick={() => navigate(view.id)}
+          >
+            {view.label}
+          </button>
+        ))}
+      </nav>
+      <div
+        className={`lab-workspace-body ${state.selected && state.view !== "archive" ? "lab-with-inspector" : ""}`}
+      >
+        <main className="lab-main" aria-label={`${viewLabel} research view`}>
+          {state.view === "archive" ? (
+            <ResearchArchive key={server} server={server} />
+          ) : networkVisible ? (
+            <>
+              {state.view === "overview" && network && (
+                <LabCharts
+                  data={network}
+                  expanded
+                  onFilter={(key, value) =>
+                    change(
+                      {
+                        view: "ideas",
+                        q: "",
+                        family: "",
+                        lane: "",
+                        [key]: value,
+                      },
+                      { resetPage: true, clearSelection: true },
+                    )
+                  }
+                />
               )}
-              <footer className="quant-pagination">
-                <span>
-                  {total === null
-                    ? ""
-                    : `${page.first}–${page.last} of ${total.toLocaleString()}`}
-                </span>
-                <button
-                  onClick={() => setOffset(Math.max(0, offset - RESEARCH_PAGE_SIZE))}
-                  disabled={offset === 0 || list.isFetching}
-                >
-                  Previous
-                </button>
-                <button
-                  onClick={() => {
-                    if (page.nextOffset !== null) setOffset(page.nextOffset);
-                  }}
-                  disabled={page.nextOffset === null || list.isFetching}
-                >
-                  Next
-                </button>
-              </footer>
-              {page.boundaryReached && (
-                <p role="status" className="quant-notice">
-                  The source pagination limit has been reached. Narrow the search
-                  or filters to browse the remaining records.
-                </p>
-              )}
-            </section>
-            {selected ? (
-              <aside
-                className="quant-panel quant-inspector"
-                aria-label="Research record detail"
+              <section
+                className={`quant-panel lab-network-panel ${state.view === "overview" ? "lab-network-preview" : ""}`}
               >
                 <header className="quant-panel-heading">
-                  <h2>Evidence detail</h2>
-                </header>
-                {!detailAvailable ? (
-                  <div
-                    className="quant-notice"
-                    role={detail.isError ? "alert" : "status"}
-                  >
-                    {detail.isError
-                      ? detail.error.message
-                      : detailState === "stale"
-                        ? "The record has not refreshed; previous details are unavailable."
-                        : "Loading record…"}
-                    {detail.isError || detailState === "stale" ? (
-                      <button onClick={() => void detail.refetch()}>
-                        Retry detail
-                      </button>
-                    ) : null}
-                  </div>
-                ) : (
-                  <div className="quant-detail-body">
-                    <p className="quant-record-kind">
-                      {text(node.kind)} · {text(node.lane)}
-                    </p>
-                    <h3>{nodeTitle(node)}</h3>
-                    <p>
-                      Recorded status · <strong>{text(node.status)}</strong>
-                    </p>
+                  <div>
+                    <h2>
+                      {state.view === "overview"
+                        ? "The research landscape"
+                        : "Research network"}
+                    </h2>
                     <p className="quant-muted">
-                      Source date · {timestamp(node.recorded_at)}
+                      {network
+                        ? `${network.total_nodes.toLocaleString()} nodes · ${network.total_edges.toLocaleString()} recorded connections`
+                        : "Complete source topology, including isolated records."}
                     </p>
-                    {[
-                      "hypothesis",
-                      "mechanism",
-                      "baseline",
-                      "falsification",
-                      "rationale",
-                      "verdict",
-                      "identity_state",
-                    ]
-                      .filter((key) => typeof nodeData[key] === "string")
-                      .map((key) => (
-                        <section key={key}>
-                          <h4>{key.replaceAll("_", " ")}</h4>
-                          <p>{text(nodeData[key])}</p>
-                        </section>
-                      ))}
-                    {Object.keys(usage).length ? (
-                      <section>
-                        <h4>Recorded evaluations</h4>
-                        <p>
-                          {catalogCount(usage, "experiments") ?? "—"} linked
-                          experiments · {catalogCount(usage, "attempts") ?? "—"}{" "}
-                          attempts
-                        </p>
-                        <p>
-                          {text(
-                            usage.independent_evaluation_note,
-                            "Linked activity alone does not establish economic support.",
-                          )}
-                        </p>
-                      </section>
-                    ) : null}
-                    <section>
-                      <h4>Evidence connections</h4>
-                      {!graphAvailable ? (
-                        <p>
-                          {graph.isError
-                            ? graph.error.message
-                            : graphState === "stale"
-                              ? "The research graph has not refreshed."
-                              : "Loading connections…"}
-                        </p>
-                      ) : related.length === 0 ? (
-                        <p>No connected records in this source graph view.</p>
-                      ) : (
-                        <ul className="quant-related">
-                          {related.map((n) => (
-                            <li key={text(n.id)}>
-                              <button onClick={() => select(text(n.id, ""))}>
-                                {nodeTitle(n)}
-                                <ArrowUpRight size={13} />
-                              </button>
-                              <small>
-                                {text(n.kind)} · {text(n.status)}
-                              </small>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                      <small>
-                        {graphAvailable
-                          ? `${edges.length} recorded edges in this bounded view${graph.data?.data.truncated ? " · More connections exist" : ""}`
-                          : ""}
-                      </small>
-                    </section>
-                    <details>
-                      <summary>Source identity and native fields</summary>
-                      <dl>
-                        <dt>Record</dt>
-                        <dd>{text(node.id)}</dd>
-                        <dt>Origin</dt>
-                        <dd>{text(source.origin)}</dd>
-                        <dt>Source hash</dt>
-                        <dd>
-                          {text(source.sha256, text(source.event_sha256))}
-                        </dd>
-                      </dl>
-                      <pre>{preview.text}</pre>
-                      {preview.truncated && (
-                        <p role="status">
-                          Preview truncated to 20,000 of {preview.totalCharacters.toLocaleString()}
-                          {" "}characters. Full native fields remain in the owner source.
-                        </p>
-                      )}
-                    </details>
                   </div>
-                )}
-              </aside>
-            ) : (
-              <aside className="quant-panel quant-inspector">
-                <div className="quant-detail-body">
-                  <h2>Read the evidence</h2>
-                  <p>
-                    Select a record to inspect its hypothesis, source identity
-                    and linked research.
-                  </p>
-                  <hr />
-                  <h3>Keep the comparison valid</h3>
-                  <p>
-                    Spot, futures and proxy lanes retain their own accounting.
-                    Catalog counts include imported history; they are not
-                    validated strategies or independent tests.
-                  </p>
-                  <p>
-                    Recorded status and paper claims are separate from
-                    reproduced results and trading permission.
-                  </p>
-                  <Link to="/">
-                    Return to operations <ArrowUpRight size={14} />
-                  </Link>
+                  {state.view === "overview" && (
+                    <button onClick={() => navigate("graph")}>
+                      Explore full network
+                    </button>
+                  )}
+                </header>
+                {graph}
+              </section>
+              {state.view === "graph" && network && (
+                <LabCharts data={network} onFilter={() => {}} />
+              )}
+              {state.view === "overview" && (
+                <div className="lab-overview-columns">
+                  <LabQueue
+                    server={server}
+                    now={now}
+                    preview
+                    onSelect={select}
+                  />
+                  <LabLimitations data={data} />
                 </div>
-              </aside>
-            )}
-          </div>
-          <details className="quant-panel quant-source-detail">
-            <summary>Index provenance and limitations</summary>
-            <p>Projection generated · {timestamp(data.generated_at)}</p>
-            <p>
-              Pending events ·{" "}
-              {catalogCount(freshness, "pending_events") ?? "—"}
-            </p>
-            <p>Snapshot · {text(data.source_snapshot)}</p>
-            <p>Revision · {text(data.revision)}</p>
-            <ul>
-              {(Array.isArray(data.limitations) ? data.limitations : [])
-                .filter((v): v is string => typeof v === "string")
-                .map((v) => (
-                  <li key={v}>{v}</li>
-                ))}
-            </ul>
-          </details>
-        </>
-      )}
-    </div>
+              )}
+            </>
+          ) : (
+            <LabRecords
+              key={`${server}:${state.view}`}
+              server={server}
+              state={state}
+              queryText={queryText}
+              facets={object(data.facets)}
+              now={now}
+              onChange={filter}
+              onSelect={select}
+              onPage={(offset) =>
+                change({ offset: String(offset) }, { clearSelection: true })
+              }
+            />
+          )}
+        </main>
+        {state.selected && state.view !== "archive" && (
+          <ResearchInspector
+            key={`${server}:${state.selected}`}
+            server={server}
+            id={state.selected}
+            onSelect={select}
+            onFindInNetwork={find}
+            onArchiveRecord={(id) =>
+              change(
+                {
+                  view: "archive",
+                  archive_view: "explore",
+                  archive_offset: "",
+                  archive_record: id,
+                  id: "",
+                  network_focus: "",
+                },
+                { resetPage: true },
+              )
+            }
+          />
+        )}
+      </div>
+      <details className="quant-panel quant-source-detail">
+        <summary>Index provenance and limitations</summary>
+        <p>Projection generated · {labTimestamp(data.generated_at)}</p>
+        <p>
+          Pending events · {catalogCount(freshness, "pending_events") ?? "—"}
+        </p>
+        <p>Snapshot · {text(data.source_snapshot)}</p>
+        <p>Revision · {text(data.revision)}</p>
+        <ul>
+          {(Array.isArray(data.limitations) ? data.limitations : [])
+            .filter((value): value is string => typeof value === "string")
+            .map((value) => (
+              <li key={value}>{value}</li>
+            ))}
+        </ul>
+      </details>
+    </>
   );
 }

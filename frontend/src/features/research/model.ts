@@ -29,7 +29,7 @@ export function researchPath(
   params: Record<string, string> = {},
 ): string {
   if (
-    !["overview", "nodes", "node", "graph", "comparisons", "clusters"].includes(
+    !["overview", "nodes", "node", "graph", "comparisons", "clusters", "network", "queue", "learning", "unresolved", "archive", "archive-record", "archive-overview", "document"].includes(
       endpoint,
     ) ||
     !server

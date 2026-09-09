@@ -1,3 +1,5 @@
+import json
+
 import httpx
 import pytest
 
@@ -163,3 +165,55 @@ def test_complete_network_limit_is_explicit_not_sampling(monkeypatch):
     ).get("/api/v1/research/network?server=native-ok-rsi")
     assert response.status_code == 413
     assert "silently sampled" in response.json()["detail"]
+
+
+def test_learning_preserves_native_page_larger_than_legacy_one_mib_cap(monkeypatch):
+    item = {
+        "id": "learning:trial",
+        "kind": "decision",
+        "title": "Trial",
+        "status": "HOLD",
+        "data": {"native_trace": "evidence" * 180000},
+    }
+    data = {"items": [item], "total": 1, "limit": 30, "offset": 0, "revision": "rev"}
+    response = client(
+        monkeypatch, handler=lambda req: httpx.Response(200, json=data)
+    ).get("/api/v1/research/learning?server=native-ok-rsi")
+    assert response.status_code == 200
+    assert response.json()["data"]["items"][0]["data"] == item["data"]
+
+
+@pytest.mark.parametrize(
+    "endpoint", ["learning", "queue", "unresolved", "archive", "archive-overview"]
+)
+def test_native_page_size_boundary_is_exact_and_explicit(monkeypatch, endpoint):
+    from condor import research_read
+
+    data = {"items": [], "total": 0, "limit": 30, "offset": 0, "revision": "rev"}
+    if endpoint == "archive-overview":
+        data = {
+            "revision": "rev",
+            "counts": {},
+            "coverage": {},
+            "preservation": {},
+            "provenance": {},
+            "facets": {},
+            "documents": [],
+        }
+    raw = json.dumps(data, separators=(",", ":")).encode()
+    test_client = client(
+        monkeypatch,
+        handler=lambda req: httpx.Response(
+            200, content=raw, headers={"Content-Type": "application/json"}
+        ),
+    )
+    monkeypatch.setitem(research_read.PAGED_MAX_BYTES, endpoint, len(raw))
+    assert (
+        test_client.get(f"/api/v1/research/{endpoint}?server=native-ok-rsi").status_code
+        == 200
+    )
+    monkeypatch.setitem(research_read.PAGED_MAX_BYTES, endpoint, len(raw) - 1)
+    response = test_client.get(f"/api/v1/research/{endpoint}?server=native-ok-rsi")
+    assert response.status_code == 413
+    assert endpoint in response.json()["detail"]
+    assert "no records were silently sampled" in response.json()["detail"]

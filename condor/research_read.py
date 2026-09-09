@@ -20,6 +20,16 @@ NETWORK_MAX_BYTES = (
     64 * MAX_BYTES
 )  # Current complete native topology: 32,566,250 bytes.
 ARCHIVE_RECORD_MAX_BYTES = 64 * MAX_BYTES
+# Native learning pages retain supervisor trials and source evidence. The
+# current complete 28-record page is 5,062,459 bytes at both limit=30 and 50.
+# Other native pages/receipts measured below 66 KiB at their maximum page size.
+PAGED_MAX_BYTES = {
+    "learning": 16 * MAX_BYTES,
+    "queue": 4 * MAX_BYTES,
+    "unresolved": 4 * MAX_BYTES,
+    "archive": 4 * MAX_BYTES,
+    "archive-overview": 4 * MAX_BYTES,
+}
 # Match local path tokens inside prose/serialized receipts without treating
 # HTTPS URLs or ordinary slash-separated prose as filesystem paths.
 LOCAL_LOCATOR = re.compile(
@@ -442,11 +452,20 @@ async def read_research(endpoint, parameters, server):
                             if endpoint == "network"
                             else ARCHIVE_RECORD_MAX_BYTES
                             if endpoint == "archive-record"
-                            else DETAIL_MAX_BYTES
-                            if endpoint in {"graph", "node", "archive-overview"}
-                            else MAX_BYTES
+                            else PAGED_MAX_BYTES.get(
+                                endpoint,
+                                DETAIL_MAX_BYTES
+                                if endpoint in {"graph", "node"}
+                                else MAX_BYTES,
+                            )
                         )
                         if len(payload) > maximum:
+                            if endpoint in PAGED_MAX_BYTES:
+                                raise HTTPException(
+                                    413,
+                                    f"Complete research {endpoint} response exceeds the explicit "
+                                    f"{maximum}-byte read limit; no records were silently sampled",
+                                )
                             if endpoint in {"network", "archive-record"}:
                                 raise HTTPException(
                                     413,

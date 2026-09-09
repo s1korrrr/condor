@@ -33,7 +33,7 @@ export function LabRecords({ server, state, queryText, facets, now, onChange, on
     queryFn: ({ signal }) => read(endpoint, server, { q: queryText, ...(gaps ? { kind: state.gap_kind } : { lane: state.lane, family: state.family, ...(endpoint === 'nodes' ? { kind } : {}) }), limit: String(RESEARCH_PAGE_SIZE), offset: String(state.offset) }, signal),
     enabled: !!server, refetchInterval: 30000, retry: 1,
   });
-  const status = researchReadState(list.data, now, list.isError, list.dataUpdatedAt), data = status === 'available' ? object(list.data?.data) : {};
+  const status = queryText === state.q ? researchReadState(list.data, now, list.isError, list.dataUpdatedAt) : 'loading', data = status === 'available' ? object(list.data?.data) : {};
   const total = catalogCount(data, 'total'), items = records(data.items), page = researchPage(state.offset, total);
   const title = gaps ? 'Evidence gaps' : queue ? 'Research queue' : state.view === 'learning' ? 'Research loop' : state.view === 'papers' ? 'Paper library' : state.view === 'experiments' ? 'Experiments' : 'Ideas';
   return <section className="quant-panel lab-records"><header className="quant-panel-heading"><h2>{title}</h2><span>{total === null ? 'Waiting for source' : `${total.toLocaleString()} ${data.bounded === true ? 'bounded candidates' : 'matching records'}`}</span></header><LabFilters state={state} facets={facets} gaps={gaps} onChange={onChange} />

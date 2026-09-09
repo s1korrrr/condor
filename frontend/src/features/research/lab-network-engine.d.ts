@@ -5,3 +5,5 @@ export function mount(target: HTMLElement, data: LabNetwork, options?: { initial
 export function layout(data: LabNetwork): { positions: Float32Array; degree: Int32Array; adjacency: number[][]; components: number; isolates: number; familyRegions: {family: string; x: number; y: number; radius: number}[]; bounds: {minX: number; minY: number; maxX: number; maxY: number} };
 export function worldPoint(point: {x: number; y: number}, camera: Camera, size: {width: number; height: number}): {x: number; y: number};
 export function zoomAt(camera: Camera, factor: number, point: {x: number; y: number}, size: {width: number; height: number}): Camera;
+
+export function colorFor(kind: string): string;

@@ -58,11 +58,11 @@ function ResearchLab({ server }: { server: string }) {
   const navigate = (view: string) => change({ view }, { resetPage: true });
   const select = (id: string) => {
     if (id && !state.selected && document.activeElement instanceof HTMLElement) lastTrigger.current = document.activeElement;
-    change({ id, ...(!id ? { network_focus: '' } : {}) });
+    change({ id, network_focus: '' });
     if (!id) requestAnimationFrame(() => lastTrigger.current?.isConnected && lastTrigger.current.focus());
   };
   const find = (id: string) => { focusSequence.current += 1; change({ view: 'graph', id, network_focus: `${id}:${Date.now()}:${focusSequence.current}` }); };
-  const refresh = () => { void client.invalidateQueries({ predicate: query => query.queryKey[0] !== 'research-network' && typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('research-') && query.queryKey[1] === server }); };
+  const refresh = () => { if (networkVisible && networkQuery.isError) void networkQuery.refetch(); void client.invalidateQueries({ predicate: query => query.queryKey[0] !== 'research-network' && typeof query.queryKey[0] === 'string' && query.queryKey[0].startsWith('research-') && query.queryKey[1] === server }); };
   const filter = (values: Record<string, string>) => change(values, { resetPage: true, clearSelection: true }, true);
   const graph = network ? <ResearchNetwork data={network} selected={state.selected} query={state.network_q} kind={state.network_kind} focus={state.network_focus} onSelect={select} onFilters={(query, kind) => change({ network_q: query, network_kind: kind }, {}, true)} cameraStore={cameraStore} cameraKey={`${revision}:${state.view}`} /> : <LabReadNotice state={available ? networkQuery.isError ? 'error' : 'loading' : overviewState} error={overview.error ?? networkQuery.error} onRetry={() => { void overview.refetch(); void networkQuery.refetch(); }} />;
   const viewLabel = LAB_VIEWS.find(view => view.id === state.view)?.label ?? 'Overview';

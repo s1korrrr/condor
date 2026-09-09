@@ -1,5 +1,9 @@
+import asyncio
 import json
+from typing import ClassVar
 
+import anyio
+import anyio.lowlevel
 import httpx
 import pytest
 
@@ -217,3 +221,105 @@ def test_native_page_size_boundary_is_exact_and_explicit(monkeypatch, endpoint):
     assert response.status_code == 413
     assert endpoint in response.json()["detail"]
     assert "no records were silently sampled" in response.json()["detail"]
+
+
+def test_document_cancel_before_headers_closes_client(monkeypatch):
+    from condor import research_read
+
+    async def scenario():
+        entered = asyncio.Event()
+
+        class WaitingClient:
+            closed = False
+
+            def build_request(self, *args, **kwargs):
+                return object()
+
+            async def send(self, *args, **kwargs):
+                entered.set()
+                await asyncio.Event().wait()
+
+            async def aclose(self):
+                await asyncio.sleep(0)
+                self.closed = True
+
+        upstream = WaitingClient()
+        monkeypatch.setattr(research_read, "_client", lambda: upstream)
+        task = asyncio.create_task(research_read.read_research_document({}))
+        await entered.wait()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        assert upstream.closed
+
+    asyncio.run(scenario())
+
+
+@pytest.mark.parametrize("phase", ["headers", "response_headers", "body"])
+def test_document_scope_cancellation_shields_resource_teardown(monkeypatch, phase):
+    from condor import research_read
+
+    async def scenario():
+        entered = anyio.Event()
+
+        class WaitingResponse:
+            status_code = 200
+            headers: ClassVar = {"content-length": "1", "content-type": "text/plain"}
+            closed = False
+
+            async def aiter_bytes(self, **kwargs):
+                entered.set()
+                await anyio.sleep_forever()
+                yield b"x"
+
+            async def aclose(self):
+                await anyio.lowlevel.checkpoint()
+                self.closed = True
+
+        response = WaitingResponse()
+
+        class WaitingClient:
+            closed = False
+
+            def build_request(self, *args, **kwargs):
+                return object()
+
+            async def send(self, *args, **kwargs):
+                if phase == "headers":
+                    entered.set()
+                    await anyio.sleep_forever()
+                return response
+
+            async def aclose(self):
+                await anyio.lowlevel.checkpoint()
+                self.closed = True
+
+        upstream = WaitingClient()
+        monkeypatch.setattr(research_read, "_client", lambda: upstream)
+
+        async def consume():
+            result = await research_read.read_research_document({})
+            if phase == "response_headers":
+
+                async def send(message):
+                    entered.set()
+                    await anyio.sleep_forever()
+
+                async def receive():
+                    await anyio.sleep_forever()
+
+                await result(
+                    {"type": "http", "asgi": {"spec_version": "2.4"}}, receive, send
+                )
+                return
+            async for _ in result.body_iterator:
+                pass
+
+        async with anyio.create_task_group() as tasks:
+            tasks.start_soon(consume)
+            await entered.wait()
+            tasks.cancel_scope.cancel()
+        assert upstream.closed
+        assert response.closed is (phase != "headers")
+
+    anyio.run(scenario)

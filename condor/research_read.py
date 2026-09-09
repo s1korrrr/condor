@@ -9,6 +9,7 @@ import math
 import re
 from datetime import datetime, timezone
 
+import anyio
 import httpx
 from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
@@ -523,6 +524,32 @@ async def read_research_document(parameters):
     """
     client = _client()
     response = None
+    handed_off = False
+    closed = False
+
+    async def close_resources():
+        nonlocal closed
+        if closed:
+            return
+        # ASGI disconnects cancel an AnyIO scope. Teardown must still reach its
+        # checkpoints, and a response close failure must not skip client close.
+        with anyio.CancelScope(shield=True):
+            try:
+                if response is not None:
+                    await response.aclose()
+            finally:
+                await client.aclose()
+                closed = True
+
+    class DocumentResponse(StreamingResponse):
+        async def __call__(self, scope, receive, send):
+            try:
+                await super().__call__(scope, receive, send)
+            finally:
+                # Also covers a disconnect while response headers are sent,
+                # before the body generator has started and acquired its finally.
+                await close_resources()
+
     try:
         request = client.build_request(
             "GET",
@@ -565,10 +592,9 @@ async def read_research_document(parameters):
                         "Research source ended before its declared length"
                     )
             finally:
-                await response.aclose()
-                await client.aclose()
+                await close_resources()
 
-        return StreamingResponse(
+        result = DocumentResponse(
             content(),
             headers={
                 "Content-Type": media,
@@ -580,12 +606,15 @@ async def read_research_document(parameters):
                 "Content-Security-Policy": "sandbox; default-src 'none'; base-uri 'none'; form-action 'none'",
             },
         )
+        handed_off = True
+        return result
     except (HTTPException, httpx.HTTPError, ValueError, TimeoutError) as error:
-        if response is not None:
-            await response.aclose()
-        await client.aclose()
         if isinstance(error, HTTPException):
             raise
         raise HTTPException(
             502, "Research OS returned no usable document stream"
         ) from None
+    finally:
+        if not handed_off:
+            # Includes CancelledError and unexpected failures awaiting headers.
+            await close_resources()

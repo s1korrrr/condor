@@ -68,7 +68,7 @@ export default function App() {
     <QueryClientProvider client={queryClient}>
       <AuthContext value={auth}>
         <ServerProvider key={auth.user?.id ?? "anon"}>
-          <BrowserRouter>
+          <BrowserRouter useTransitions={false}>
             <Routes>
               <Route path="/login" element={<Login />} />
               <Route

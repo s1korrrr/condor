@@ -148,7 +148,11 @@ def create_app() -> FastAPI:
                     and candidate.is_relative_to(dist_root)
                     and candidate.is_file()
                 ):
+                    if candidate == index_html.resolve():
+                        return FileResponse(
+                            candidate, headers={"Cache-Control": "no-cache"}
+                        )
                     return FileResponse(candidate)
-            return FileResponse(index_html)
+            return FileResponse(index_html, headers={"Cache-Control": "no-cache"})
 
     return app

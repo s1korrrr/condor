@@ -8,14 +8,14 @@ const native={native:true,online:true,controllerMutation:false,controllerHistory
 function detail(access=native){return render('components/bots/ControllerBrowser.tsx','ControllerBrowser',props,{access});}
 function history(botName='main',options={}){return render('components/bots/ControllerPnlChart.tsx','ControllerPnlChart',{server:'source',controllerId:'shared',botName},{access:native,...options});}
 test('native detail disables controller mutation and guards direct handler invocation',async()=>{
- const r=detail(); const action=r.buttons.find(b=>b.text.trim()==='Pause');
+ const r=detail(); const action=r.buttons.find(b=>b.text.trim()==='Set switch');
  assert.equal(action.disabled,true);
  action.onClick(); await assert.rejects(r.mutations[0],/unavailable/i); assert.deepEqual(r.apiCalls,[]);
  assert.match(r.html,/Read only/);
 });
 test('known full server still dispatches the intended controller and bot',async()=>{
  const r=detail({native:false,online:true,controllerMutation:true,controllerHistory:true});
- r.buttons.find(b=>b.text.trim()==='Pause').onClick(); await Promise.all(r.mutations);
+ r.buttons.find(b=>b.text.trim()==='Set switch').onClick(); await Promise.all(r.mutations);
  assert.deepEqual(r.apiCalls,[{name:'stopControllers',args:['native','main',['shared']]}]);
 });
 test('unsupported history disables the query and states the unavailable capability',()=>{

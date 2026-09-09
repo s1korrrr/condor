@@ -354,7 +354,7 @@ function ControllerRow({
       </td>
       <td className="px-4 py-2.5">
         <div className="flex items-center gap-1.5 justify-center">
-          <StatusDot status={isKilled ? "stopped" : isStopping ? "stopping" : ctrl.status} />
+          <StatusDot status={isKilled ? "control_requested" : isStopping ? "stopping" : ctrl.status} />
         </div>
       </td>
       <td className="px-4 py-2.5">
@@ -371,12 +371,12 @@ function ControllerRow({
             }`}
             title={
               !access.controllerMutation ? "Controller controls are unavailable on this server" : toggleMutation.isError
-                ? `Failed to ${isKilled ? "start" : "pause"}: ${toggleMutation.error instanceof Error ? toggleMutation.error.message : "Unknown error"}`
+                ? `Failed to ${isKilled ? "clear" : "set"} controller kill switch: ${toggleMutation.error instanceof Error ? toggleMutation.error.message : "Unknown error"}`
                 : isStopping
                   ? "Stopping..."
                   : isKilled
-                    ? "Start controller"
-                    : "Pause controller"
+                    ? "Clear controller kill switch"
+                    : "Set controller kill switch"
             }
           >
             {toggleMutation.isPending || isStopping ? (
@@ -392,7 +392,7 @@ function ControllerRow({
               className="text-[10px] text-[var(--color-red)] whitespace-nowrap"
               title={toggleMutation.error instanceof Error ? toggleMutation.error.message : "Unknown error"}
             >
-              Failed to {isKilled ? "start" : "pause"}
+              Failed to {isKilled ? "clear" : "set"} switch
             </span>
           )}
         </div>

@@ -344,7 +344,7 @@ export function ControllerBrowser({
                   }`}
                   title={c.controller_name}
                 >
-                  <StatusDot status={ctrlStopping ? "stopping" : killed ? "stopped" : c.status} />
+                  <StatusDot status={ctrlStopping ? "stopping" : killed ? "control_requested" : c.status} />
                 </button>
               );
             }
@@ -361,7 +361,7 @@ export function ControllerBrowser({
                 }`}
               >
                 <div className="flex items-center gap-2">
-                  <StatusDot status={ctrlStopping ? "stopping" : killed ? "stopped" : c.status} />
+                  <StatusDot status={ctrlStopping ? "stopping" : killed ? "control_requested" : c.status} />
                   <span className={`truncate text-xs font-medium ${isActive ? "text-[var(--color-text)]" : "text-[var(--color-text-muted)]"}`}>
                     {c.controller_id || c.controller_name}
                   </span>
@@ -424,8 +424,8 @@ export function ControllerBrowser({
               </span>
             )}
             <div className="flex items-center gap-1.5 shrink-0">
-              <StatusDot status={isStopping ? "stopping" : isKilled ? "stopped" : activeCtrl.status} />
-              <span className="text-xs capitalize">{isStopping ? "stopping" : isKilled ? "stopped" : activeCtrl.status}</span>
+              <StatusDot status={isStopping ? "stopping" : isKilled ? "control_requested" : activeCtrl.status} />
+              <span className="text-xs capitalize">{isStopping ? "stopping" : isKilled ? "control requested" : activeCtrl.status}</span>
             </div>
           </div>
           <div className="flex items-center gap-1.5">
@@ -462,19 +462,19 @@ export function ControllerBrowser({
                     ? "text-[var(--color-green)] hover:bg-[var(--color-green)]/10"
                     : "text-[var(--color-yellow)] hover:bg-[var(--color-yellow)]/10"
               }`}
-              title={!access.controllerMutation ? "Controller controls are unavailable on this server" : isStopping ? "Stopping..." : isKilled ? "Start controller" : "Pause controller"}
+              title={!access.controllerMutation ? "Controller controls are unavailable on this server" : isStopping ? "Applying..." : isKilled ? "Clear controller kill switch" : "Set controller kill switch"}
             >
               {toggleMutation.isPending || isStopping ? (
                 <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
               ) : isKilled ? (
                 <>
                   <Play className="h-3.5 w-3.5" />
-                  Start
+                  Clear switch
                 </>
               ) : (
                 <>
                   <Pause className="h-3.5 w-3.5" />
-                  Pause
+                  Set switch
                 </>
               )}
             </button>

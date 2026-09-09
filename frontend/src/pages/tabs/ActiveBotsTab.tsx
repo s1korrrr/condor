@@ -20,6 +20,7 @@ import { AggregatedPnlChart } from "@/components/bots/AggregatedPnlChart";
 import { ControllerBrowser } from "@/components/bots/ControllerBrowser";
 import { DeployBotDialog } from "@/components/bots/DeployBotDialog";
 import { PnlSparkline } from "@/components/bots/PnlSparkline";
+import { NativeBotStatistics } from "@/components/bots/NativeBotStatistics";
 import { FallbackSpinner } from "@/components/ui/FallbackSpinner";
 
 import { useRates } from "@/hooks/useRates";
@@ -308,7 +309,7 @@ function ControllerRow({
         </div>
       </td>
       <td className="px-4 py-2.5 text-sm text-[var(--color-text-muted)]">
-        {ctrl.connector || "—"}
+        {ctrl.connector || (access.native ? "Not reported" : "—")}
       </td>
       <td className="px-4 py-2.5 text-sm">{ctrl.trading_pair || "—"}</td>
       {(() => {
@@ -338,7 +339,7 @@ function ControllerRow({
                 {sparklineValues && sparklineValues.length >= 2 ? (
                   <PnlSparkline values={sparklineValues} />
                 ) : (
-                  <span className="text-[10px] text-[var(--color-text-muted)]">—</span>
+                  <span className="text-[10px] text-[var(--color-text-muted)]" title={access.native ? "The native source does not provide controller performance history" : undefined}>{access.native ? "No history" : "—"}</span>
                 )}
               </div>
             </td>
@@ -349,7 +350,7 @@ function ControllerRow({
         );
       })()}
       <td className="px-4 py-2.5 text-sm text-right tabular-nums text-[var(--color-text-muted)]">
-        {formatUptime(ctrl.deployed_at)}
+        {access.native && !ctrl.deployed_at ? <span title="The native source does not provide a deployment timestamp">Not reported</span> : formatUptime(ctrl.deployed_at)}
       </td>
       <td className="px-4 py-2.5">
         <div className="flex items-center gap-1.5 justify-center">
@@ -885,6 +886,8 @@ export function ActiveBotsTab() {
           {bots.length > 0 && <BotsSection bots={bots} server={server} onStopInitiated={onStopInitiated} onStopSettled={onStopSettled} />}
         </>
       )}
+
+      {access.native && <NativeBotStatistics key={server} server={server} />}
 
       {/* Fullscreen controller overlay */}
       {selectedKey && controllers.length > 0 && (!access.native || quoteCurrencies.every(quote => quote === "USDC")) && (

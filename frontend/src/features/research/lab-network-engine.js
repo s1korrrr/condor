@@ -107,7 +107,7 @@ function layout(data) {
       a.family.localeCompare(b.family),
   );
   const placed = [];
-  regions.forEach((f, j) => {
+  regions.forEach((f) => {
     let step = 0;
     while (true) {
       const angle = step * golden,
@@ -151,7 +151,7 @@ function layout(data) {
       item.radius = 1.6;
     });
     for (const item of [...f.big, ...f.small]) {
-      const { group, seed } = item,
+      const { seed } = item,
         levels = [],
         queue = [seed],
         depths = new Map([[seed, 0]]);
@@ -374,6 +374,9 @@ function mount(target, data, options = {}) {
     legend = el("div", "network-legend"),
     results = el("div", "network-results"),
     selection = el("section", "network-selection");
+  // Acquire the required renderer before attaching DOM or browser resources.
+  const overlayCtx = overlay.getContext("2d");
+  if (!overlayCtx) throw Error("Canvas 2D renderer unavailable");
   stage.style.position = "relative";
   canvas.style.cssText = overlay.style.cssText =
     "position:absolute;inset:0;width:100%;height:100%";
@@ -425,7 +428,7 @@ function mount(target, data, options = {}) {
     pause(!paused),
   );
   toolbar.append(pauseButton);
-  kinds.forEach((k, i) => {
+  kinds.forEach((k) => {
     const item = el("span", "", k),
       dot = el("span", "network-key-dot", "●");
     dot.style.color = colorFor(k);
@@ -454,7 +457,6 @@ function mount(target, data, options = {}) {
     buffers = [],
     gpu = null,
     fallback = "";
-  const overlayCtx = overlay.getContext("2d");
   let background = "#07101a",
     foreground = "#d1dce7",
     backgroundRGB = [0.025, 0.055, 0.09];

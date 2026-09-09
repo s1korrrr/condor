@@ -32,6 +32,7 @@ export function ResearchNetwork({
   }, [onSelect, onFilters]);
   useEffect(() => {
     if (!target.current) return;
+    let disposed = false;
     try {
       const view = mount(target.current, data, {
         initialCamera: cameraStore.get(cameraKey),
@@ -42,29 +43,37 @@ export function ResearchNetwork({
         onCamera: (camera) => cameraStore.set(cameraKey, camera),
       });
       engine.current = view;
+      queueMicrotask(() => {
+        if (!disposed) setError("");
+      });
       return () => {
+        disposed = true;
         view.destroy();
         engine.current = null;
       };
     } catch (failure) {
-      queueMicrotask(() =>
-        setError(
-          failure instanceof Error
-            ? failure.message
-            : "Network renderer unavailable",
-        ),
-      );
+      queueMicrotask(() => {
+        if (!disposed)
+          setError(
+            failure instanceof Error
+              ? failure.message
+              : "Network renderer unavailable",
+          );
+      });
+      return () => {
+        disposed = true;
+      };
     }
   }, [data, cameraKey, cameraStore]);
   useEffect(() => {
     engine.current?.select(selected || null);
-  }, [selected, data]);
+  }, [selected, data, cameraKey, cameraStore]);
   useEffect(() => {
     engine.current?.setFilters({ query, kind });
-  }, [query, kind, data]);
+  }, [query, kind, data, cameraKey, cameraStore]);
   useEffect(() => {
     if (focus && selected) engine.current?.focus(selected);
-  }, [focus, selected, data]);
+  }, [focus, selected, data, cameraKey, cameraStore]);
   return (
     <div className="lab-network-host">
       {error && (

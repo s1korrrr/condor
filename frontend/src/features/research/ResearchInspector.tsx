@@ -422,13 +422,21 @@ export function ResearchInspector({
 }: ResearchInspectorProps) {
   const panel = useRef<HTMLElement>(null);
   const [now, setNow] = useState(Date.now);
+  const [historyPage, setHistoryPage] = useState({ revision: "", offset: 0 });
+  const relationLimit = 25;
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
   const detail = useQuery({
-    queryKey: ["research-node", server, id],
-    queryFn: ({ signal }) => readResearch("node", server, { id }, signal),
+    queryKey: ["research-node", server, id, relationLimit, 0],
+    queryFn: ({ signal }) =>
+      readResearch(
+        "node",
+        server,
+        { id, relation_limit: String(relationLimit), relation_offset: "0" },
+        signal,
+      ),
     enabled: !!server && !!id,
     refetchInterval: 30000,
     retry: 1,
@@ -444,6 +452,54 @@ export function ResearchInspector({
     node = object(response.node),
     data = object(node.data),
     source = object(node.source);
+  const relationOffset =
+    historyPage.revision === response.revision ? historyPage.offset : 0;
+  const setRelationOffset = (offset: number) =>
+    setHistoryPage({ revision: text(response.revision, ""), offset });
+  const history = useQuery({
+    queryKey: [
+      "research-node",
+      server,
+      id,
+      relationLimit,
+      relationOffset,
+      response.revision,
+    ],
+    queryFn: ({ signal }) =>
+      readResearch(
+        "node",
+        server,
+        {
+          id,
+          relation_limit: String(relationLimit),
+          relation_offset: String(relationOffset),
+        },
+        signal,
+      ),
+    enabled: available && relationOffset > 0,
+    refetchInterval: 30000,
+    retry: 1,
+  });
+  const historyQuery = relationOffset > 0 ? history : detail;
+  const historyState = researchReadState(
+    historyQuery.data,
+    now,
+    historyQuery.isError,
+    historyQuery.dataUpdatedAt,
+  );
+  const historyResponse = object(historyQuery.data?.data);
+  const historyMismatch =
+    historyState === "available" &&
+    historyResponse.revision !== response.revision;
+  const historyAvailable = historyState === "available" && !historyMismatch;
+  const relationPage = object(historyResponse.relations_page);
+  const relationTotal =
+    typeof relationPage.total === "number" ? relationPage.total : null;
+  const historyOutOfRange =
+    historyAvailable &&
+    relationTotal !== null &&
+    relationOffset > 0 &&
+    relationOffset >= relationTotal;
   const isIdea = node.kind === "idea" || node.kind === "idea_revision";
   const comparisons = useQuery({
     queryKey: ["research-comparisons", server, id, response.revision],
@@ -474,8 +530,8 @@ export function ResearchInspector({
     data.summary ||
     data.description ||
     data.mechanism;
-  const related = records(response.related),
-    edges = records(response.edges);
+  const related = historyAvailable ? records(historyResponse.related) : [],
+    edges = historyAvailable ? records(historyResponse.edges) : [];
   const external = safeSourceUrl(source.url);
   return (
     <aside
@@ -562,7 +618,38 @@ export function ResearchInspector({
           )}
           <section>
             <h4>Recorded history</h4>
-            {related.length ? (
+            {!historyAvailable ? (
+              <div role={historyQuery.isError ? "alert" : "status"}>
+                <p>
+                  {historyMismatch
+                    ? "Relationship history belongs to a different graph revision. Refresh the record to continue."
+                    : historyQuery.isError
+                      ? historyQuery.error?.message ||
+                        "Relationship history could not be loaded."
+                      : historyState === "stale"
+                        ? "Relationship history has not refreshed. Previous links are unavailable."
+                        : "Loading relationship history…"}
+                </p>
+                {(historyQuery.isError ||
+                  historyState === "stale" ||
+                  historyMismatch) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      void historyQuery.refetch();
+                      if (historyMismatch) void detail.refetch();
+                    }}
+                  >
+                    Retry history
+                  </button>
+                )}
+              </div>
+            ) : historyOutOfRange ? (
+              <p>
+                This relationship page is no longer available. Return to an
+                earlier page.
+              </p>
+            ) : related.length ? (
               <ul className="research-history">
                 {related.map((item) => (
                   <li key={text(item.id)}>
@@ -588,8 +675,52 @@ export function ResearchInspector({
                   </li>
                 ))}
               </ul>
+            ) : edges.length > 0 ? (
+              <p>
+                Recorded relationships exist, but their linked records are
+                unavailable. Inspect the current relationship page below for
+                target identities and provenance.
+              </p>
             ) : (
               <p>No linked history is recorded for this node.</p>
+            )}
+            {historyAvailable && relationTotal !== null && (
+              <p role="status">
+                {relationTotal === 0
+                  ? "Relationships 0 of 0"
+                  : historyOutOfRange
+                    ? `Relationship page outside ${relationTotal.toLocaleString()} recorded relationships`
+                    : `Relationships ${(relationOffset + 1).toLocaleString()}–${Math.min(relationOffset + edges.length, relationTotal).toLocaleString()} of ${relationTotal.toLocaleString()}`}
+              </p>
+            )}
+            {(relationOffset > 0 ||
+              (relationTotal !== null && relationTotal > relationLimit)) && (
+              <nav aria-label="Relationship history pages">
+                <button
+                  type="button"
+                  disabled={relationOffset === 0}
+                  onClick={() =>
+                    setRelationOffset(
+                      Math.max(0, relationOffset - relationLimit),
+                    )
+                  }
+                >
+                  Previous relationships
+                </button>
+                <button
+                  type="button"
+                  disabled={
+                    !historyAvailable ||
+                    relationTotal === null ||
+                    relationOffset + relationLimit >= relationTotal
+                  }
+                  onClick={() =>
+                    setRelationOffset(relationOffset + relationLimit)
+                  }
+                >
+                  Next relationships
+                </button>
+              </nav>
             )}
           </section>
           {isIdea && (comparisonState !== "available" || comparisonMismatch) ? (
@@ -669,10 +800,12 @@ export function ResearchInspector({
               }}
             />
             <RawResearchData title="Full graph node" value={node} />
-            <RawResearchData
-              title="Recorded relations and provenance"
-              value={edges}
-            />
+            {historyAvailable && (
+              <RawResearchData
+                title="Recorded relations and provenance (current relationship page)"
+                value={edges}
+              />
+            )}
           </section>
           <button type="button" onClick={() => onFindInNetwork(id)}>
             <Network size={15} />

@@ -100,7 +100,7 @@ def validated_parameters(endpoint, pairs):
                 400, "Research query is too long or contains control characters"
             )
         parameters[key] = value
-    for key, maximum, default in [("limit", 50, 30), ("offset", 10000, 0)]:
+    for key, maximum, default in [("limit", 50, 30), ("offset", 1_000_000, 0)]:
         if key in PARAMETERS[endpoint]:
             value = parameters.get(key, str(default))
             minimum = 1 if key == "limit" else 0

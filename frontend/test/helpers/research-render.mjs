@@ -61,6 +61,8 @@ export function renderResearch(
   const requests = [],
     refetches = [],
     buttons = [],
+    selects = [],
+    searchUpdates = [],
     modules = new Map();
   const captureJsx =
     (name) =>
@@ -68,6 +70,7 @@ export function renderResearch(
       const element = jsxRuntime[name](type, props, ...rest);
       if (type === "button")
         buttons.push({ text: childText(props.children), ...props });
+      if (type === "select") selects.push(props);
       return element;
     };
   function load(filename) {
@@ -110,7 +113,7 @@ export function renderResearch(
       if (id === "react-router-dom")
         return {
           Link: ({ children }) => React.createElement("a", null, children),
-          useSearchParams: () => [new URLSearchParams(search), () => {}],
+          useSearchParams: () => [new URLSearchParams(search), (next) => searchUpdates.push(next.toString())],
         };
       if (id === "@/hooks/useServer") return { useServer: () => ({ server }) };
       if (id === "@/lib/auth-token")
@@ -142,5 +145,5 @@ export function renderResearch(
   }
   const { Research } = load(path.join(sourceRoot, "pages/Research.tsx"));
   const html = renderToStaticMarkup(React.createElement(Research));
-  return { html, requests, refetches, buttons };
+  return { html, requests, refetches, buttons, selects, searchUpdates };
 }

@@ -63,7 +63,7 @@ function ArchiveCoverage({ data, server }: { data: RecordData; server: string })
   return <section className="quant-panel"><header className="quant-panel-heading"><h2>Coverage and preservation</h2></header><div className="quant-detail-body">
     <p>Coverage describes the source inventory in this snapshot. Records, files and experiments are distinct counts.</p>
     {complete ? <ResearchMetadata values={Object.fromEntries(keys.map(key => [key.replace('_paths', ''), array(preservation[key]).length]))} /> : <p role="status">Preservation receipt incomplete. Missing receipt fields do not establish that sources were preserved.</p>}
-    <ResearchDocuments server={server} scope="receipt" id={text(data.revision, 'current')} documents={data.documents} title="Catalog and evidence files" />
+    <ResearchDocuments server={server} scope="receipt" id="archive" documents={data.documents} title="Catalog and evidence files" />
     {['coverage', 'preservation', 'provenance'].map(key => <section key={key}><h3>{key[0].toUpperCase() + key.slice(1)}</h3><ResearchMetadata values={Object.fromEntries(Object.entries(object(data[key])).filter(([, value]) => value === null || typeof value !== 'object'))} /><RawResearchData title={`Complete ${key} receipt`} value={data[key] ?? null} /></section>)}
   </div></section>;
 }

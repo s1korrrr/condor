@@ -7,6 +7,7 @@ export interface ResearchDocumentReference {
   available: boolean;
   reason?: string;
   filename?: string;
+  fragment?: string;
 }
 
 export function safeSourceUrl(value: unknown): string | null {
@@ -38,10 +39,14 @@ export function documentPath(server: string, scope: string, id: string, ref: str
   return `/api/v1/research/document?${new URLSearchParams({ server, scope, id, ref })}`;
 }
 
-/** The iframe must also use sandbox="allow-scripts" without allow-same-origin. */
+/** Both frames are opaque. The trusted parent CSP also blocks child navigation. */
 export function isolatedDocument(source: string): string {
-  const policy = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; object-src 'none'; base-uri 'none'";
-  return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="referrer" content="no-referrer"></head><body>${source}</body></html>`;
+  const policy = "default-src 'none'; frame-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; object-src 'none'; base-uri 'none'";
+  const encoded = source.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  // A single sandbox permits its own navigation even with connect-src none.
+  // Keep untrusted markup out of this trusted parent; its frame-src policy
+  // blocks network navigation by the child while srcdoc inherits the CSP.
+  return `<!doctype html><html><head><meta http-equiv="Content-Security-Policy" content="${policy}"><meta name="referrer" content="no-referrer"><style>html,body{margin:0;width:100%;height:100%;overflow:hidden}iframe{border:0;width:100%;height:100%}</style></head><body><iframe title="Source document" sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="${encoded}"></iframe></body></html>`;
 }
 
 export function researchLabel(key: string) { return key.replaceAll('_', ' ').replace(/^./, c => c.toUpperCase()); }

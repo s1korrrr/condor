@@ -29,3 +29,11 @@ test('history labels recorded relationship basis and unsafe source URL never bec
  assert.match(r.html,/explicit manifest/);assert.match(r.html,/tested by/);assert.doesNotMatch(r.html,/href="javascript:/);assert.match(r.html,/&lt;script&gt;/);
  const b=r.buttons.find(b=>b.text==='Open archival record');assert.ok(b);b.onClick();assert.deepEqual(r.selections,['archive:archive:1']);
 });
+test('paper and experiment summaries remain visible without opening raw node disclosure',()=>{
+ const r=render({id:'paper:p',title:'Paper P',kind:'paper',status:'INDEXED',data:{summary:{claim:'Mean reversion hypothesis',caveat:'Source claim only'}}});
+ assert.match(r.html.split('Full graph node')[0],/Mean reversion hypothesis/);
+});
+test('a comparison from another graph revision is withheld while refresh is offered',()=>{
+ const r=renderResearchComponent('ResearchInspector',{server:'fixture',id:'idea:1',onSelect(){},onFindInNetwork(){},onArchiveRecord(){}},{'research-node':{data:envelope({revision:'r2',node:{id:'idea:1',title:'New revision',kind:'idea',data:{}}})},'research-comparisons':{data:envelope({revision:'r1',items:[],limitations:['OLD_COMPARISON_MUST_NOT_RENDER']})}});
+ assert.match(r.html,/different graph revision/);assert.doesNotMatch(r.html,/OLD_COMPARISON_MUST_NOT_RENDER/);
+});

@@ -26,7 +26,16 @@ test('document request is bound to authenticated endpoint and encodes opaque rec
 });
 test('active source preview installs restrictive CSP before source markup',()=>{
  const html=isolatedDocument('<script>fetch("https://evil.example")</script>');
- assert.ok(html.indexOf('Content-Security-Policy') < html.indexOf('<script>'));
+ assert.ok(html.indexOf('Content-Security-Policy') < html.indexOf('&lt;script&gt;'));
  assert.match(html,/default-src 'none'/);assert.match(html,/connect-src 'none'/);assert.match(html,/form-action 'none'/);assert.match(html,/base-uri 'none'/);
  assert.ok(!html.includes('allow-same-origin'));
+});
+
+test('source markup stays inside a nested opaque frame whose trusted parent blocks self-navigation',()=>{
+ const html=isolatedDocument('</iframe><script>location.href="https://evil.example"</script>');
+ assert.match(html,/frame-src 'none'/);
+ assert.match(html,/<iframe title="Source document" sandbox="allow-scripts" referrerpolicy="no-referrer" srcdoc="/);
+ assert.ok(!html.includes('<script>'));
+ assert.equal((html.match(/<iframe/g)||[]).length,1);
+ assert.ok(html.includes('&lt;/iframe&gt;&lt;script&gt;'));
 });

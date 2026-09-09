@@ -209,10 +209,12 @@ export function ControllerBrowser({
   const queryClient = useQueryClient();
   const { access } = useServerCapabilities();
   const dialogRef = useRef<HTMLDialogElement>(null);
+  const closeRef = useRef<HTMLButtonElement>(null);
   useEffect(() => {
     const previousFocus = document.activeElement;
     const dialog = dialogRef.current;
     dialog?.showModal();
+    closeRef.current?.focus();
     return () => {
       dialog?.close();
       if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
@@ -298,7 +300,7 @@ export function ControllerBrowser({
   const configId = activeCtrl.controller_id || activeCtrl.controller_name;
 
   return (
-    <dialog ref={dialogRef} aria-label="Controller details" aria-modal="true" role="dialog" onCancel={(event) => { event.preventDefault(); onClose(); }} className="fixed inset-0 z-50 m-0 flex h-dvh w-screen max-h-none max-w-none border-0 p-0 text-[var(--color-text)] bg-[var(--color-bg)]">
+    <dialog ref={dialogRef} aria-label="Controller details" aria-modal="true" role="dialog" onCancel={(event) => { event.preventDefault(); onClose(); }} className="fixed inset-0 z-50 m-0 hidden open:flex h-dvh w-screen max-h-none max-w-none border-0 p-0 text-[var(--color-text)] bg-[var(--color-bg)]">
       {/* Left sidebar */}
       <div
         className={`flex flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] transition-all ${
@@ -480,7 +482,7 @@ export function ControllerBrowser({
             <button
               onClick={onClose}
               className="ml-1 rounded p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
-              autoFocus
+              ref={closeRef}
               title="Close (Esc)"
             >
               <X className="h-4 w-4" />

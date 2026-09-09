@@ -30,7 +30,7 @@
 .lab-limitations li + li { margin-top:12px; }
 .lab-list-body { padding:18px; }
 .lab-view-note { padding:14px 18px; font-size:12px; color:var(--color-text-muted); border-bottom:1px solid var(--color-border); line-height:1.6; }
-.lab-record-context { margin-top:8px; line-height:1.6; max-width:65ch; color:var(--color-text-muted); }
+.lab-record-context { margin-top:8px; line-height:1.6; max-width:65ch; color:var(--color-text-muted); display:-webkit-box; -webkit-box-orient:vertical; -webkit-line-clamp:3; overflow:hidden; }
 .lab-records td { overflow-wrap:anywhere; }
 .lab-records td details { margin-top:12px; }
 .lab-records td strong { font-weight:500; line-height:1.6; }

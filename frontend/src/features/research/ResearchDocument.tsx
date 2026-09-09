@@ -14,10 +14,12 @@ import { readResearchDocument } from "./research-document-read";
 const PREVIEW_BYTES = 16 * 1024 * 1024;
 const DOWNLOAD_BYTES = 1024 * 1024 * 1024;
 function sizeLabel(value: unknown) {
-  return typeof value === "number" && value >= 0
-    ? `${(value / 1024 / 1024).toLocaleString(undefined, { maximumFractionDigits: 1 })} MB`
-    : "Size not recorded";
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return "Size not recorded";
+  const unit = value < 1024 ? "B" : value < 1024 * 1024 ? "KB" : "MB";
+  const divisor = unit === "B" ? 1 : unit === "KB" ? 1024 : 1024 * 1024;
+  return `${(value / divisor).toLocaleString(undefined, { maximumFractionDigits: 1 })} ${unit}`;
 }
+
 function descriptors(input: unknown): ResearchDocumentReference[] {
   return Array.isArray(input)
     ? input.filter(

@@ -1,16 +1,16 @@
-import { authFetch, authHeaders } from "./auth-token";
+import { authFetch } from "./auth-token";
 import type { ServerStatus } from "./server-capabilities";
 import type { AccountBalancesResponse } from "./account-balances";
 import type { NativeAction, NativeCommandResult } from "./native-bot-controls";
 import { nativeBotPath } from "./native-bot-controls";
+import { parseServerDiscovery } from "./server-discovery";
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
-    ...authHeaders(),
     ...(init?.headers as Record<string, string>),
   };
-  const res = await fetch(path, { ...init, headers });
+  const res = await authFetch(path, { ...init, headers });
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
     throw new Error(err.detail || `Request failed: ${res.status}`);
@@ -950,7 +950,7 @@ export interface BacktestTask {
 // ── API functions ──
 
 export const api = {
-  getServers: () => apiFetch<ServerInfo[]>("/api/v1/servers"),
+  getServers: async () => parseServerDiscovery(await apiFetch<unknown>("/api/v1/servers")),
 
   getServerStatus: (name: string) =>
     apiFetch<ServerStatus>(

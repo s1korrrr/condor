@@ -1,20 +1,17 @@
-import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, Circle, Server } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { useServer } from "@/hooks/useServer";
-import { api, type ServerInfo } from "@/lib/api";
+import { type ServerInfo } from "@/lib/api";
+import { useServers } from '@/hooks/useServers';
 
 export function ServerSelector() {
   const { server, setServer } = useServer();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
-  const { data: servers } = useQuery({
-    queryKey: ["servers"],
-    queryFn: api.getServers,
-    refetchInterval: 10000,
-  });
+  const discovery = useServers();
+  const servers = discovery.isError ? undefined : discovery.data;
 
   const onlineServers = servers?.filter((s) => s.online) ?? [];
   const offlineServers = servers?.filter((s) => !s.online) ?? [];
@@ -63,15 +60,19 @@ export function ServerSelector() {
         className="flex items-center gap-2 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 text-sm hover:bg-[var(--color-surface-hover)] transition-colors"
       >
         <Server className="h-3.5 w-3.5 shrink-0 text-[var(--color-text-muted)]" />
-        <span className="truncate max-w-[120px]">{current?.name || "No server"}</span>
+        <span className="truncate max-w-[160px]">{server || (discovery.isError ? 'Servers unavailable' : discovery.isPending ? 'Loading servers…' : 'Select server')}</span>
         {current?.online && (
           <Circle className="h-1.5 w-1.5 shrink-0 fill-current text-[var(--color-green)]" />
         )}
         <ChevronDown className={`h-3 w-3 shrink-0 text-[var(--color-text-muted)] transition-transform ${open ? "rotate-180" : ""}`} />
       </button>
 
-      {open && servers && (
+      {open && (
         <div className="absolute right-0 top-full z-50 mt-1.5 min-w-[220px] rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] py-1 shadow-xl">
+          {discovery.isError ? <div role="alert" className="space-y-2 px-3 py-2 text-sm text-[var(--color-text-muted)]">
+            <p>Server discovery failed. Your selection is retained.</p>
+            <button type="button" disabled={discovery.isFetching} onClick={() => void discovery.refetch()} className="underline disabled:opacity-50">Retry server discovery</button>
+          </div> : discovery.isPending ? <p role="status" className="px-3 py-2 text-sm">Loading servers…</p> : <>
           <div className="px-3 py-1.5 text-[10px] font-medium uppercase tracking-wider text-[var(--color-text-muted)]">
             API Servers ({onlineServers.length}/{totalCount} online)
           </div>
@@ -112,6 +113,8 @@ export function ServerSelector() {
               <span className="truncate">{s.name}</span>
             </div>
           ))}
+          {servers?.length === 0 && <p role="status" className="px-3 py-2 text-sm">No servers are configured for this account.</p>}
+          </>}
         </div>
       )}
     </div>

@@ -60,22 +60,24 @@ export function AppShell() {
 }
 
 function AppShellBody() {
-  const { server } = useServer();
+  const { server, setServer, persistenceError } = useServer();
   const { pathname } = useLocation();
   const navigationRef = useRef<HTMLElement>(null);
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const { hasKeys, isLoading: keysLoading } = useCredentials();
-  const { data: serverStatus, access, isLoading: capabilitiesLoading } = useServerCapabilities();
-  const capabilityReason = server ? unavailableServerRoute(pathname, serverStatus) : null;
+  const { data: serverStatus, access, isLoading: capabilitiesLoading, isFetching, unavailableReason, refetch } = useServerCapabilities();
+  const capabilityReason = unavailableServerRoute(pathname, serverStatus);
   const nativeRoutes=['/overview','/portfolio','/trading-visuals','/bots','/research','/tools'];
-  const navigationItems=access.native ? nativeRoutes.map(to=>NAV_ITEMS.find(item=>item.to===to)!) : NAV_ITEMS;
+  const independentRoutes=['/overview','/trading-visuals','/research','/tools'];
+  const navigationItems=!access.online ? NAV_ITEMS.filter(item=>independentRoutes.includes(item.to))
+    : access.native ? nativeRoutes.map(to=>NAV_ITEMS.find(item=>item.to===to)!) : NAV_ITEMS;
 
   // The chat workspace takes the full height and owns its own scrolling, so
   // the shell drops `main`'s padding for it. It lives at `/` — the entry point
   // — while `/agents/:slug` is an ordinary padded page, deliberately not
   // matched here.
-  const isChatWorkspace = (pathname === "/" && !access.native) || pathname === "/agents";
+  const isChatWorkspace = access.online && access.full && (pathname === "/" || pathname === "/agents");
 
   useEffect(() => {
     const navigation = navigationRef.current;
@@ -108,12 +110,12 @@ function AppShellBody() {
     const onKeyDown = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
-        navigate(access.native ? "/research" : "/agents");
+        navigate(access.online && access.full ? "/agents" : "/research");
       }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [navigate, access.native]);
+  }, [navigate, access.online, access.full]);
 
   // Prefetch core data (executors, bots) and subscribe to WS channels early
   usePrefetchData(!matchPath("/research", pathname));
@@ -153,8 +155,8 @@ function AppShellBody() {
         {/* Right: server selector + controls */}
         <div className="ml-auto flex items-center gap-3">
           <ServerSelector />
-          {pathname === "/trading-visuals" || access.native ? (
-            <span className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm text-[var(--color-text-muted)]" title="Values retain their source units; this deployment does not convert currencies">{['/trading-visuals','/overview','/bots'].includes(pathname)?'USDC':'Source units'}</span>
+          {pathname === "/trading-visuals" || !access.full || !access.online ? (
+            <span className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm text-[var(--color-text-muted)]" title="Values retain their source units; currencies are shown only for a verified server">{!access.online?'Units unavailable':['/trading-visuals','/overview','/bots'].includes(pathname)?'USDC':'Source units'}</span>
           ) : <CurrencySelector />}
 
           <div className="flex items-center gap-1">
@@ -189,6 +191,16 @@ function AppShellBody() {
           </div>
         </div>
       </header>
+
+      {persistenceError && <div role="alert" className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)]">
+        <span>{persistenceError}</span>
+        {server && <button type="button" onClick={() => setServer(server)} className="underline">Retry saving selection</button>}
+      </div>}
+
+      {unavailableReason && <div role={capabilitiesLoading ? 'status' : 'alert'} className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)]">
+        <span>{unavailableReason}</span>
+        <button type="button" disabled={isFetching} onClick={() => void refetch()} className="underline disabled:opacity-50">Retry connection</button>
+      </div>}
 
       {/* Main content */}
       <main

@@ -19,6 +19,7 @@ import { Settings } from "@/pages/Settings";
 import { StrategyDetail } from "@/pages/StrategyDetail";
 import { useServerCapabilities } from "@/hooks/useServerCapabilities";
 import { WorkspaceTools } from "@/pages/WorkspaceTools";
+import { CapabilityUnavailable } from '@/components/CapabilityUnavailable';
 const Overview = lazy(() => import("@/pages/Overview").then(module => ({default:module.Overview})));
 const Research = lazy(() => import("@/pages/Research").then(module => ({default:module.Research})));
 const TradingVisuals = lazy(() => import("@/pages/TradingVisuals").then(module => ({ default: module.TradingVisuals })));
@@ -26,13 +27,14 @@ const TradingVisuals = lazy(() => import("@/pages/TradingVisuals").then(module =
 function Home() {
   const {access,isLoading}=useServerCapabilities();
   if(isLoading) return <p role="status">Loading workspace…</p>;
+  if(!access.online) return <CapabilityUnavailable reason="Server capabilities are unavailable. Select or reconnect a server to open its workspace."/>;
   return access.native ? <Navigate to="/overview" replace/> : <Agents/>;
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const { isAuthenticated } = useAuth();
   const location = useLocation();
-  if (!isAuthenticated) return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search)}`} replace />;
+  if (!isAuthenticated) return <Navigate to={`/login?redirect=${encodeURIComponent(location.pathname + location.search + location.hash)}`} replace />;
   return <>{children}</>;
 }
 
@@ -45,17 +47,20 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
  * back in never reloads the page) and the next user would inherit it.
  */
 function ServerProvider({ children }: { children: React.ReactNode }) {
-  const [server, setServer] = useState<string | null>(
-    () => localStorage.getItem(SERVER_KEY),
-  );
+  const [selection, setSelection] = useState<{server: string | null; persistenceError: string | null}>(() => {
+    try { return {server: localStorage.getItem(SERVER_KEY), persistenceError: null}; }
+    catch { return {server: null, persistenceError: 'Browser storage is unavailable. Select a server for this tab.'}; }
+  });
   const handleSetServer = useCallback((s: string) => {
-    localStorage.setItem(SERVER_KEY, s);
-    setServer(s);
+    let persistenceError: string | null = null;
+    try { localStorage.setItem(SERVER_KEY, s); }
+    catch { persistenceError = 'The server selection could not be saved. It remains selected for this tab.'; }
+    setSelection({server: s, persistenceError});
     queryClient.invalidateQueries();
   }, []);
 
   return (
-    <ServerContext value={{ server, setServer: handleSetServer }}>
+    <ServerContext value={{ ...selection, setServer: handleSetServer }}>
       {children}
     </ServerContext>
   );

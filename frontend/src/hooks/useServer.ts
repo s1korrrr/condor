@@ -3,6 +3,7 @@ import { createContext, useContext } from "react";
 export interface ServerContextValue {
   server: string | null;
   setServer: (s: string) => void;
+  persistenceError?: string | null;
 }
 
 export const ServerContext = createContext<ServerContextValue>({

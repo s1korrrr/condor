@@ -24,16 +24,31 @@ test('native controls require both flags and do not enable unsupported Docker or
   assert.equal(serverCapabilities({status:'online', profile:'native'}).botRead, false);
 });
 
-test('full and legacy profiles retain existing routes while unknown or offline status grants no mutation', () => {
-  for (const full of [{status:'online', profile:'full'}, {status:'online'}]) {
+test('only a verified full profile retains management routes; unknown or offline status grants no mutation', () => {
+  for (const full of [{status:'online', profile:'full'}]) {
     const access = serverCapabilities(full);
     for (const key of ['accounts', 'executors', 'deployment', 'botRead', 'botStop', 'controllerMutation']) assert.equal(access[key], true);
     for (const route of ['/portfolio', '/trade', '/executors', '/bots']) assert.equal(unavailableServerRoute(route, full), null);
   }
-  for (const offline of [undefined, {...native,status:'error'}]) {
+  for (const offline of [undefined, {status:'online'}, {status:'online', profile:'unexpected'}, {...native,status:'error'}]) {
     const access = serverCapabilities(offline);
     for (const key of ['accounts', 'executors', 'deployment', 'botRead', 'botStop', 'controllerMutation']) assert.equal(access[key], false);
     assert.equal(typeof unavailableServerRoute('/bots', offline), 'string');
     assert.equal(unavailableServerRoute('/trading-visuals', offline), null);
   }
+});
+
+test('unknown capabilities and native profiles cannot mount automation routes', () => {
+  for (const status of [undefined, {status:'online'}, native]) {
+    for (const route of ['/agents', '/agents/example', '/routines', '/backtest', '/archived']) {
+      assert.equal(typeof unavailableServerRoute(route, status), 'string');
+    }
+  }
+});
+
+test('controller history requires the native flag or a verified full profile', () => {
+  assert.equal(serverCapabilities(native).controllerHistory, false);
+  assert.equal(serverCapabilities({...native,capabilities:{...native.capabilities,performance_history:true}}).controllerHistory, true);
+  assert.equal(serverCapabilities({status:'online',profile:'full'}).controllerHistory, true);
+  assert.equal(serverCapabilities({status:'online'}).controllerHistory, false);
 });

@@ -1,6 +1,7 @@
 import httpx
 import pytest
-from test_research_read import client
+
+from tests.test_research_read import client
 
 
 def network():

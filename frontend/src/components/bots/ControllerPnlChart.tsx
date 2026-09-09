@@ -1,3 +1,4 @@
+import { useServerCapabilities } from "@/hooks/useServerCapabilities";
 import { useQuery } from "@tanstack/react-query";
 import { useMemo } from "react";
 import {
@@ -35,9 +36,10 @@ interface Props {
   controller?: ControllerInfo;
 }
 
-export function ControllerPnlChart({ server, controllerId, botName, deployedAt, height = 400, currencySymbol = "$", tradingPair, convert, controller }: Props) {
-  const { data: raw, isLoading } = useQuery({
-    queryKey: ["controller-perf-history", server, controllerId, deployedAt],
+export function ControllerPnlChart({ server, controllerId, botName, deployedAt, height = 400, currencySymbol = "$", tradingPair, convert }: Props) {
+  const { access } = useServerCapabilities();
+  const { data: raw, isLoading, isError, refetch } = useQuery({
+    queryKey: ["controller-perf-history", server, botName, controllerId, deployedAt],
     queryFn: () =>
       api.getControllerPerformanceHistory(server, {
         controller_id: controllerId,
@@ -46,11 +48,12 @@ export function ControllerPnlChart({ server, controllerId, botName, deployedAt, 
         limit: 1000,
         start_time: deployedAt ?? undefined,
       }),
+    enabled: access.controllerHistory && !!server && !!botName && !!controllerId,
     refetchInterval: 60_000,
     staleTime: 30_000,
   });
 
-  const snapshots = raw?.snapshots ?? [];
+  const snapshots = useMemo(() => raw?.snapshots ?? [], [raw]);
 
   const { data, hasPosition, latest } = useMemo(() => {
     if (snapshots.length === 0) return { data: [], hasPosition: false, latest: null };
@@ -59,14 +62,12 @@ export function ControllerPnlChart({ server, controllerId, botName, deployedAt, 
     const cv = (val: number) => convert ? convert(val, quote).value : val;
 
     const sorted = [...snapshots].sort((a, b) => toMs(a.timestamp) - toMs(b.timestamp));
-    let hasPos = false;
 
     const pts: PnlChartPoint[] = sorted.map((s) => {
       let posValue = 0;
       if (s.positions_summary) {
         posValue = positionQuoteValue(s.positions_summary as Record<string, unknown>[]);
       }
-      if (posValue !== 0) hasPos = true;
 
       return {
         time: toMs(s.timestamp),
@@ -78,25 +79,16 @@ export function ControllerPnlChart({ server, controllerId, botName, deployedAt, 
       };
     });
 
-    // Append live "now" point from controller so graph ends at real-time values
-    if (controller && controller.realized_pnl_quote !== null && controller.unrealized_pnl_quote !== null && controller.volume_traded !== null) {
-      let livePos = 0;
-      if (Array.isArray(controller.positions_summary)) {
-        livePos = positionQuoteValue(controller.positions_summary as Record<string, unknown>[]);
-      }
-      if (livePos !== 0) hasPos = true;
-      pts.push({
-        time: Date.now(),
-        realized: cv(controller.realized_pnl_quote),
-        unrealized: cv(controller.unrealized_pnl_quote),
-        total: cv(controller.realized_pnl_quote + controller.unrealized_pnl_quote),
-        volume: cv(controller.volume_traded),
-        position: cv(livePos),
-      });
-    }
+    // History contains timestamped source snapshots only; current observations are shown separately.
+    return { data: pts, hasPosition: pts.some((point) => point.position !== 0), latest: pts[pts.length - 1] || null };
+  }, [snapshots, convert, tradingPair]);
 
-    return { data: pts, hasPosition: hasPos, latest: pts[pts.length - 1] || null };
-  }, [snapshots, convert, tradingPair, controller]);
+  if (!access.controllerHistory || isError) {
+    return <div role={isError ? "alert" : "status"} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] flex flex-col gap-3 items-center justify-center p-4 text-center" style={{ height }}>
+      <p className="text-xs text-[var(--color-text-muted)]">{!access.controllerHistory ? "Performance history is unavailable on this server. Current controller observations are shown below." : "Unable to load performance history. Previously loaded values are hidden until the source recovers."}</p>
+      {access.controllerHistory && <button type="button" onClick={() => void refetch()} className="text-xs text-[var(--color-primary)]">Retry</button>}
+    </div>;
+  }
 
   if (isLoading) {
     return (
@@ -112,7 +104,7 @@ export function ControllerPnlChart({ server, controllerId, botName, deployedAt, 
   if (data.length === 0) {
     return (
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] flex items-center justify-center" style={{ height }}>
-        <p className="text-xs text-[var(--color-text-muted)]">No performance history available</p>
+        <p className="text-xs text-[var(--color-text-muted)]">No recorded performance snapshots for this controller</p>
       </div>
     );
   }

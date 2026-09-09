@@ -165,9 +165,9 @@ function SortHeader({
   return (
     <th
       className={`px-4 py-3 text-xs font-medium uppercase tracking-wider text-[var(--color-text-muted)] cursor-pointer select-none hover:text-[var(--color-text)] transition-colors ${alignCls}`}
-      onClick={() => onSort(sortKey)}
+      aria-sort={active ? currentDir === "asc" ? "ascending" : "descending" : "none"}
     >
-      <div className={`flex items-center gap-1 ${align === "right" ? "justify-end" : align === "center" ? "justify-center" : ""}`}>
+      <button type="button" onClick={() => onSort(sortKey)} className={`flex w-full items-center gap-1 ${align === "right" ? "justify-end" : align === "center" ? "justify-center" : ""}`}>
         {label}
         {active ? (
           currentDir === "asc" ? (
@@ -178,7 +178,7 @@ function SortHeader({
         ) : (
           <span className="w-3" />
         )}
-      </div>
+      </button>
     </th>
   );
 }
@@ -298,9 +298,9 @@ function ControllerRow({
     >
       <td className="px-4 py-2.5">
         <div className="flex flex-col">
-          <span className="text-sm font-medium" title={ctrl.controller_name}>
+          <button type="button" className="text-left text-sm font-medium" title={ctrl.controller_name} aria-label={`Open ${ctrl.trading_pair || ctrl.controller_name} controller details`} onClick={(event) => { event.stopPropagation(); onSelect(); }}>
             {ctrl.controller_name}
-          </span>
+          </button>
           {ctrl.controller_id && ctrl.controller_id !== ctrl.controller_name && (
             <span className="text-xs text-[var(--color-text-muted)] font-mono truncate" title={ctrl.controller_id}>
               {ctrl.controller_id}
@@ -493,13 +493,13 @@ function BotRow({ bot, server, onStopInitiated, onStopSettled }: { bot: BotSumma
         className="flex items-center gap-4 px-4 py-2.5 text-sm cursor-pointer hover:bg-[var(--color-surface-hover)]/50 transition-colors"
         onClick={() => setShowLogs(!showLogs)}
       >
-        <div className="p-0.5">
+        <button type="button" className="p-0.5" aria-label={`Logs for ${bot.bot_name}`} aria-expanded={showLogs} onClick={(event) => { event.stopPropagation(); setShowLogs(!showLogs); }}>
           {showLogs ? (
             <ChevronDown className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
           ) : (
             <ChevronRight className="h-3.5 w-3.5 text-[var(--color-text-muted)]" />
           )}
-        </div>
+        </button>
         <StatusDot status={bot.status} />
         <span
           className="font-medium truncate max-w-[250px]"

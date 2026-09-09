@@ -91,10 +91,12 @@ function YamlConfigEditor({
   // Sync when config content actually changes (save / controller switch). Keyed
   // on the string value, not the `config` object: a tick that re-creates `config`
   // with unchanged content leaves `originalYaml` equal, so unsaved edits survive.
-  useEffect(() => {
+  const [previousOriginal, setPreviousOriginal] = useState(originalYaml);
+  if (previousOriginal !== originalYaml) {
+    setPreviousOriginal(originalYaml);
     setYamlContent(originalYaml);
     setParseError(null);
-  }, [originalYaml]);
+  }
 
   const isDirty = yamlContent !== originalYaml;
 
@@ -205,6 +207,17 @@ export function ControllerBrowser({
   const fmtPnl = (val: number | null, pair: string) => Number.isFinite(cv(val, pair)) ? formatCurrencyPnl(cv(val, pair), currencySymbol) : "UNAVAILABLE";
   const fmtVol = (val: number | null, pair: string) => Number.isFinite(cv(val, pair)) ? formatCurrencyVolume(cv(val, pair), currencySymbol) : "UNAVAILABLE";
   const queryClient = useQueryClient();
+  const { access } = useServerCapabilities();
+  const dialogRef = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const previousFocus = document.activeElement;
+    const dialog = dialogRef.current;
+    dialog?.showModal();
+    return () => {
+      dialog?.close();
+      if (previousFocus instanceof HTMLElement && previousFocus.isConnected) previousFocus.focus();
+    };
+  }, []);
   const [isCompact, setIsCompact] = useState(false);
   const sidebarRef = useRef<HTMLDivElement>(null);
 
@@ -226,10 +239,12 @@ export function ControllerBrowser({
   const isStopping = activeCtrl?.status === "stopping";
 
   const toggleMutation = useMutation({
-    mutationFn: () =>
-      isKilled
+    mutationFn: () => {
+      if (!access.controllerMutation || !activeCtrl) throw new Error("Controller controls are unavailable on this server");
+      return isKilled
         ? api.startControllers(server, activeCtrl.bot_name, [activeCtrl.controller_id])
-        : api.stopControllers(server, activeCtrl.bot_name, [activeCtrl.controller_id]),
+        : api.stopControllers(server, activeCtrl.bot_name, [activeCtrl.controller_id]);
+    },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["bots", server] });
     },
@@ -283,7 +298,7 @@ export function ControllerBrowser({
   const configId = activeCtrl.controller_id || activeCtrl.controller_name;
 
   return (
-    <div className="fixed inset-0 z-50 flex bg-[var(--color-bg)]">
+    <dialog ref={dialogRef} aria-label="Controller details" aria-modal="true" role="dialog" onCancel={(event) => { event.preventDefault(); onClose(); }} className="fixed inset-0 z-50 m-0 flex h-dvh w-screen max-h-none max-w-none border-0 p-0 text-[var(--color-text)] bg-[var(--color-bg)]">
       {/* Left sidebar */}
       <div
         className={`flex flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] transition-all ${
@@ -298,6 +313,7 @@ export function ControllerBrowser({
             </span>
           )}
           <button
+            aria-label={isCompact ? "Expand controller list" : "Collapse controller list"}
             onClick={() => setIsCompact(!isCompact)}
             className="rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
           >
@@ -436,7 +452,7 @@ export function ControllerBrowser({
             )}
             <button
               onClick={() => toggleMutation.mutate()}
-              disabled={toggleMutation.isPending || isStopping}
+              disabled={!access.controllerMutation || toggleMutation.isPending || isStopping}
               className={`flex items-center gap-1.5 rounded px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 ${
                 isStopping
                   ? "text-[var(--color-yellow)]"
@@ -444,7 +460,7 @@ export function ControllerBrowser({
                     ? "text-[var(--color-green)] hover:bg-[var(--color-green)]/10"
                     : "text-[var(--color-yellow)] hover:bg-[var(--color-yellow)]/10"
               }`}
-              title={isStopping ? "Stopping..." : isKilled ? "Start controller" : "Pause controller"}
+              title={!access.controllerMutation ? "Controller controls are unavailable on this server" : isStopping ? "Stopping..." : isKilled ? "Start controller" : "Pause controller"}
             >
               {toggleMutation.isPending || isStopping ? (
                 <span className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-current border-t-transparent" />
@@ -464,6 +480,7 @@ export function ControllerBrowser({
             <button
               onClick={onClose}
               className="ml-1 rounded p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"
+              autoFocus
               title="Close (Esc)"
             >
               <X className="h-4 w-4" />
@@ -471,13 +488,15 @@ export function ControllerBrowser({
           </div>
         </div>
 
+        {!access.controllerMutation && <p className="px-5 py-2 text-xs text-[var(--color-text-muted)]">Controller controls are read only on this server.</p>}
+        {toggleMutation.isError && <p role="alert" className="px-5 py-2 text-xs text-[var(--color-red)]">{toggleMutation.error instanceof Error ? toggleMutation.error.message : "Controller request failed"}</p>}
         {/* Two-column body */}
         <div className="flex flex-1 min-h-0">
           {/* Left column: Performance data */}
           <div className="flex-1 overflow-y-auto p-5 space-y-4 min-w-0">
             {/* PnL Evolution Chart */}
             <ControllerPnlChart
-              key={configId}
+              key={`${server}:${activeCtrl.bot_name}:${configId}`}
               server={server}
               controllerId={configId}
               botName={activeCtrl.bot_name}
@@ -630,7 +649,7 @@ export function ControllerBrowser({
           {/* Right column: Config + Logs */}
           <div className="w-[380px] xl:w-[440px] shrink-0 border-l border-[var(--color-border)] flex flex-col bg-[var(--color-surface)]">
             <YamlConfigEditor
-              key={configId}
+              key={`${server}:${activeCtrl.bot_name}:${configId}`}
               config={activeCtrl.config || {}}
               server={server}
               configId={configId}
@@ -640,7 +659,7 @@ export function ControllerBrowser({
           </div>
         </div>
       </div>
-    </div>
+    </dialog>
   );
 }
 

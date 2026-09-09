@@ -12,6 +12,9 @@ import {
 import { useEffect, useState } from "react";
 
 import { useServer } from "@/hooks/useServer";
+import { useDeploymentPolicy } from "@/hooks/useDeploymentPolicy";
+import { requireSettingsMutation } from "@/lib/deployment-policy";
+import { SettingsReadError } from "./SettingsReadError";
 import { api } from "@/lib/api";
 
 const IMAGE_OPTIONS = [
@@ -41,6 +44,7 @@ function formatDuration(sec: number): string {
 }
 
 export function GatewaySettings() {
+  const policy = useDeploymentPolicy();
   const { server } = useServer();
   const qc = useQueryClient();
   const [showLogs, setShowLogs] = useState(false);
@@ -56,7 +60,7 @@ export function GatewaySettings() {
   const [pullDone, setPullDone] = useState(false);
 
   // Poll pull status while pulling
-  const { data: pullStatus } = useQuery({
+  const { data: pullStatus, isError: pullStatusError, refetch: retryPullStatus } = useQuery({
     queryKey: ["gateway-pull-status", server],
     queryFn: () => api.getGatewayPullStatus(server!),
     enabled: !!server && isPulling,
@@ -67,57 +71,64 @@ export function GatewaySettings() {
   const resolvedPullImage = pullImage === "custom" ? pullCustomImage : pullImage;
   const pullImageName = resolvedPullImage.split(":")[0];
   const activePull = pullStatus?.pull_operations?.[pullImageName];
+  const activePullStatus = activePull?.status;
 
   // Detect when pull completes
   useEffect(() => {
-    if (!isPulling || !activePull) return;
-    if (activePull.status === "completed" || activePull.status === "failed") {
+    if (!isPulling || !activePullStatus) return;
+    if (activePullStatus === "completed" || activePullStatus === "failed") {
+      // Stop the polling subscription when the external operation completes.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setIsPulling(false);
-      if (activePull.status === "completed") {
+      if (activePullStatus === "completed") {
         setPullDone(true);
         qc.invalidateQueries({ queryKey: ["gateway-status", server] });
         setTimeout(() => setPullDone(false), 4000);
       }
     }
-  }, [activePull?.status, isPulling, server, qc]);
+  }, [activePullStatus, isPulling, server, qc]);
 
-  const { data: status, isLoading } = useQuery({
+  const { data: status, isLoading, isError: statusError, refetch: retryStatus } = useQuery({
     queryKey: ["gateway-status", server],
     queryFn: () => api.getGatewayStatus(server!),
     enabled: !!server,
     refetchInterval: 10000,
   });
 
-  const { data: logsData, isFetching: fetchingLogs } = useQuery({
+  const { data: logsData, isFetching: fetchingLogs, isError: logsError, refetch: retryLogs } = useQuery({
     queryKey: ["gateway-logs", server],
     queryFn: () => api.getGatewayLogs(server!),
     enabled: !!server && showLogs,
   });
 
+  const knownStatus = !!status && typeof status.running === "boolean" && !statusError;
+  const canMutate = policy.settingsMutation && knownStatus;
+
   const invalidate = () => qc.invalidateQueries({ queryKey: ["gateway-status", server] });
 
   const startMut = useMutation({
-    mutationFn: () =>
-      api.startGateway(server!, {
+    mutationFn: () => {
+      requireSettingsMutation(canMutate);
+      return api.startGateway(server!, {
         image: image === "custom" ? customImage : image,
         port,
-      }),
+      });
+    },
     onSuccess: () => { invalidate(); setShowDeploy(false); },
   });
 
   const stopMut = useMutation({
-    mutationFn: () => api.stopGateway(server!),
+    mutationFn: () => { requireSettingsMutation(canMutate); return api.stopGateway(server!); },
     onSuccess: () => { invalidate(); setConfirmStop(false); },
   });
 
   const restartMut = useMutation({
-    mutationFn: () => api.restartGateway(server!),
+    mutationFn: () => { requireSettingsMutation(canMutate); return api.restartGateway(server!); },
     onSuccess: invalidate,
   });
 
   const pullMut = useMutation({
-    mutationFn: () =>
-      api.pullGatewayImage(server!, { image: resolvedPullImage }),
+    mutationFn: () => { requireSettingsMutation(canMutate); return api.pullGatewayImage(server!, { image: resolvedPullImage }); },
     onSuccess: () => {
       setIsPulling(true);
     },
@@ -131,7 +142,7 @@ export function GatewaySettings() {
     );
   }
 
-  const running = status?.running ?? false;
+  const running = knownStatus && status!.running;
   const pulling = pullMut.isPending || isPulling;
 
   return (
@@ -142,8 +153,8 @@ export function GatewaySettings() {
           <div className="flex items-center gap-3">
             <span
               className={`h-3 w-3 rounded-full ${
-                isLoading
-                  ? "bg-[var(--color-text-muted)]/30 animate-pulse"
+                isLoading || !knownStatus
+                  ? "bg-[var(--color-text-muted)]/30"
                   : running
                     ? "bg-emerald-400 shadow-[0_0_6px_theme(colors.emerald.400)]"
                     : "bg-red-400/60"
@@ -151,7 +162,7 @@ export function GatewaySettings() {
             />
             <div>
               <span className="text-sm font-medium text-[var(--color-text)]">
-                Gateway {isLoading ? "..." : running ? "Running" : "Stopped"}
+                Gateway {isLoading ? "…" : !knownStatus ? "Unknown" : running ? "Running" : "Stopped"}
               </span>
               <p className="text-xs text-[var(--color-text-muted)]">
                 Server: {server}
@@ -164,7 +175,7 @@ export function GatewaySettings() {
               <>
                 <button
                   onClick={() => restartMut.mutate()}
-                  disabled={restartMut.isPending}
+                  disabled={!canMutate || restartMut.isPending}
                   className="flex items-center gap-1.5 rounded-md border border-[var(--color-border)] px-3 py-1.5 text-xs font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-50"
                 >
                   {restartMut.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <RefreshCw className="h-3 w-3" />}
@@ -174,22 +185,23 @@ export function GatewaySettings() {
                   <div className="flex items-center gap-1">
                     <button
                       onClick={() => stopMut.mutate()}
-                      disabled={stopMut.isPending}
-                      className="rounded-md bg-[var(--color-red)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--color-red)]/80"
+                      disabled={!canMutate || stopMut.isPending}
+                      className="rounded-md bg-[var(--color-red)] px-3 py-1.5 text-xs font-medium text-white hover:bg-[var(--color-red)]/80 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       {stopMut.isPending ? "Stopping..." : "Confirm Stop"}
                     </button>
                     <button
                       onClick={() => setConfirmStop(false)}
-                      className="rounded-md px-2 py-1.5 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+                      className="rounded-md px-2 py-1.5 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       Cancel
                     </button>
                   </div>
                 ) : (
                   <button
-                    onClick={() => setConfirmStop(true)}
-                    className="flex items-center gap-1.5 rounded-md border border-red-500/30 px-3 py-1.5 text-xs font-medium text-[var(--color-red)] transition-colors hover:bg-red-500/10"
+                    disabled={!canMutate}
+                    onClick={() => { if (canMutate) setConfirmStop(true); }}
+                    className="flex items-center gap-1.5 rounded-md border border-red-500/30 px-3 py-1.5 text-xs font-medium text-[var(--color-red)] transition-colors hover:bg-red-500/10 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <Square className="h-3 w-3" /> Stop
                   </button>
@@ -197,14 +209,17 @@ export function GatewaySettings() {
               </>
             ) : (
               <button
-                onClick={() => setShowDeploy(!showDeploy)}
-                className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--color-primary)]/80"
+                disabled={!canMutate}
+                onClick={() => { if (canMutate) setShowDeploy(!showDeploy); }}
+                className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--color-primary)]/80 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Play className="h-3 w-3" /> Deploy
               </button>
             )}
           </div>
         </div>
+
+        {!isLoading && !knownStatus && <SettingsReadError label="Gateway status" retry={retryStatus} />}
 
         {/* Container details */}
         {running && (status?.image || status?.created_at) && (
@@ -231,7 +246,7 @@ export function GatewaySettings() {
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
         <button
           onClick={() => setShowPull(!showPull)}
-          className="flex w-full items-center justify-between p-3 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
+          className="flex w-full items-center justify-between p-3 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <div className="flex items-center gap-2">
             <Download className="h-4 w-4" />
@@ -251,7 +266,7 @@ export function GatewaySettings() {
                 <button
                   key={opt.value}
                   onClick={() => setPullImage(opt.value)}
-                  disabled={pulling}
+                  disabled={!canMutate || pulling}
                   className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
                     pullImage === opt.value
                       ? "border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]"
@@ -263,7 +278,7 @@ export function GatewaySettings() {
               ))}
               <button
                 onClick={() => setPullImage("custom")}
-                disabled={pulling}
+                disabled={!canMutate || pulling}
                 className={`rounded-md border px-3 py-1.5 text-xs transition-colors ${
                   pullImage === "custom"
                     ? "border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]"
@@ -275,7 +290,7 @@ export function GatewaySettings() {
               {pullImage !== "custom" && (
                 <button
                   onClick={() => pullMut.mutate()}
-                  disabled={pulling}
+                  disabled={!canMutate || pulling}
                   className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--color-primary)]/80 disabled:opacity-50"
                 >
                   {pulling ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
@@ -288,13 +303,13 @@ export function GatewaySettings() {
                 <input
                   value={pullCustomImage}
                   onChange={(e) => setPullCustomImage(e.target.value)}
-                  disabled={pulling}
+                  disabled={!canMutate || pulling}
                   className="flex-1 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none disabled:opacity-50"
                   placeholder="org/image:tag"
                 />
                 <button
                   onClick={() => pullMut.mutate()}
-                  disabled={pulling || !pullCustomImage}
+                  disabled={!canMutate || pulling || !pullCustomImage}
                   className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--color-primary)]/80 disabled:opacity-50"
                 >
                   {pulling ? <Loader2 className="h-3 w-3 animate-spin" /> : <Download className="h-3 w-3" />}
@@ -303,6 +318,7 @@ export function GatewaySettings() {
               </div>
             )}
 
+            {pullStatusError && <SettingsReadError label="Image pull status" retry={retryPullStatus} />}
             {/* Pull progress */}
             {isPulling && activePull && (
               <div className="rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] p-3 space-y-2">
@@ -320,7 +336,7 @@ export function GatewaySettings() {
                 </p>
               </div>
             )}
-            {isPulling && !activePull && (
+            {isPulling && !activePull && !pullStatusError && (
               <div className="flex items-center gap-1.5 text-xs text-[var(--color-primary)]">
                 <Loader2 className="h-3 w-3 animate-spin" />
                 Starting pull...
@@ -401,7 +417,7 @@ export function GatewaySettings() {
 
             <button
               onClick={() => startMut.mutate()}
-              disabled={startMut.isPending || (image === "custom" && !customImage)}
+              disabled={!canMutate || startMut.isPending || (image === "custom" && !customImage)}
               className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-4 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--color-primary)]/80 disabled:opacity-50"
             >
               {startMut.isPending && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -419,7 +435,7 @@ export function GatewaySettings() {
       <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)]">
         <button
           onClick={() => setShowLogs(!showLogs)}
-          className="flex w-full items-center justify-between p-3 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)]"
+          className="flex w-full items-center justify-between p-3 text-sm text-[var(--color-text)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <span className="font-medium">Logs</span>
           {showLogs ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
@@ -430,6 +446,8 @@ export function GatewaySettings() {
               <div className="flex items-center gap-2 text-xs text-[var(--color-text-muted)]">
                 <Loader2 className="h-3 w-3 animate-spin" /> Loading logs...
               </div>
+            ) : logsError || !logsData ? (
+              <SettingsReadError label="Gateway logs" retry={retryLogs} />
             ) : (
               <pre className="max-h-64 overflow-auto rounded bg-[var(--color-bg)] p-3 text-xs text-[var(--color-text-muted)] font-mono leading-relaxed whitespace-pre-wrap break-all">
                 {typeof logsData?.logs === "string"

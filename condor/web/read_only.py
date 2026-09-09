@@ -23,6 +23,12 @@ class ReadOnlyWeb:
             await send({"type": "websocket.close", "code": 1008})
             return
         if scope["type"] == "http":
+            scope.setdefault("state", {})["deployment_policy"] = {
+                "read_only": True,
+                "settings_mutation": False,
+                "account_management": self.allow_account_management,
+                "native_lifecycle": self.allow_native_lifecycle,
+            }
             auth = scope["method"] == "POST" and scope["path"] in {
                 "/api/v1/auth/tailscale",
                 "/api/v1/auth/token-login",

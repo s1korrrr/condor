@@ -3,7 +3,7 @@ from __future__ import annotations
 import asyncio
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, Response
 
 from config_manager import ServerPermission, get_config_manager
 from condor.web.auth import get_current_user
@@ -21,6 +21,22 @@ from condor.web.models import (
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/settings", tags=["settings"])
+
+
+@router.get("/policy")
+async def deployment_policy(
+    request: Request,
+    response: Response,
+    user: WebUser = Depends(get_current_user),
+):
+    """Expose the active web boundary, independently of selected-server capability."""
+    response.headers["Cache-Control"] = "no-store"
+    return getattr(request.state, "deployment_policy", {
+        "read_only": False,
+        "settings_mutation": True,
+        "account_management": True,
+        "native_lifecycle": True,
+    })
 
 
 # ── Helpers ──
@@ -146,7 +162,9 @@ async def gateway_status(
     try:
         info = await client.gateway.get_status()
         # The inner "running" field from the API is the actual status
-        is_running = info.get("running", False) if isinstance(info, dict) else False
+        if not isinstance(info, dict) or not isinstance(info.get("running"), bool):
+            raise ValueError("Missing boolean Gateway state")
+        is_running = info["running"]
         result = {"running": is_running, "info": info}
         # Extract container details if available
         if isinstance(info, dict):
@@ -155,7 +173,10 @@ async def gateway_status(
             result["container_status"] = info.get("status", None)
         return result
     except Exception:
-        return {"running": False, "info": None}
+        raise HTTPException(
+            status_code=502,
+            detail="Gateway status is unavailable. Retry to observe its current state.",
+        ) from None
 
 
 @router.post("/gateway/pull")

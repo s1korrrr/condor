@@ -10,6 +10,9 @@ import {
 } from "lucide-react";
 import { useState } from "react";
 
+import { useDeploymentPolicy } from "@/hooks/useDeploymentPolicy";
+import { requireSettingsMutation } from "@/lib/deployment-policy";
+import { SettingsReadError } from "./SettingsReadError";
 import { type ServerInfo, api } from "@/lib/api";
 
 interface ServerForm {
@@ -23,16 +26,19 @@ interface ServerForm {
 const EMPTY_FORM: ServerForm = { name: "", host: "", port: 8000, username: "", password: "" };
 
 export function ServersSettings() {
+  const policy = useDeploymentPolicy();
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [form, setForm] = useState<ServerForm>(EMPTY_FORM);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  const { data: servers = [], isLoading } = useQuery({
+  const { data: servers, isLoading, isError, refetch } = useQuery({
     queryKey: ["settings-servers"],
     queryFn: api.getSettingsServers,
   });
+
+  const canMutate = policy.settingsMutation && !!servers && !isError;
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["settings-servers"] });
@@ -40,31 +46,33 @@ export function ServersSettings() {
   };
 
   const addMut = useMutation({
-    mutationFn: (data: ServerForm) => api.addServer(data),
+    mutationFn: (data: ServerForm) => { requireSettingsMutation(canMutate); return api.addServer(data); },
     onSuccess: () => { invalidate(); setAdding(false); setForm(EMPTY_FORM); },
   });
 
   const updateMut = useMutation({
-    mutationFn: ({ name, ...data }: ServerForm) => api.updateServer(name, data),
+    mutationFn: ({ name, ...data }: ServerForm) => { requireSettingsMutation(canMutate); return api.updateServer(name, data); },
     onSuccess: () => { invalidate(); setEditing(null); setForm(EMPTY_FORM); },
   });
 
   const deleteMut = useMutation({
-    mutationFn: (name: string) => api.deleteServer(name),
+    mutationFn: (name: string) => { requireSettingsMutation(canMutate); return api.deleteServer(name); },
     onSuccess: () => { invalidate(); setConfirmDelete(null); },
   });
 
   const defaultMut = useMutation({
-    mutationFn: (name: string) => api.setDefaultServer(name),
+    mutationFn: (name: string) => { requireSettingsMutation(canMutate); return api.setDefaultServer(name); },
     onSuccess: invalidate,
   });
 
   const startEdit = (s: ServerInfo) => {
+    if (!canMutate) return;
     setEditing(s.name);
     setForm({ name: s.name, host: s.host, port: s.port, username: "", password: "" });
   };
 
   const submitForm = () => {
+    if (!canMutate) return;
     if (editing) {
       updateMut.mutate(form);
     } else {
@@ -82,6 +90,8 @@ export function ServersSettings() {
     );
   }
 
+  if (isError || !servers) return <SettingsReadError label="Servers" retry={refetch} />;
+
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
@@ -90,8 +100,9 @@ export function ServersSettings() {
         </p>
         {!adding && (
           <button
-            onClick={() => { setAdding(true); setEditing(null); setForm(EMPTY_FORM); }}
-            className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--color-primary)]/80"
+            disabled={!canMutate}
+            onClick={() => { if (!canMutate) return; setAdding(true); setEditing(null); setForm(EMPTY_FORM); }}
+            className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--color-primary)]/80 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Plus className="h-3.5 w-3.5" /> Add Server
           </button>
@@ -160,7 +171,7 @@ export function ServersSettings() {
           <div className="mt-3 flex items-center gap-2">
             <button
               type="submit"
-              disabled={addMut.isPending || updateMut.isPending || (!editing && !form.name)}
+              disabled={!canMutate || addMut.isPending || updateMut.isPending || (!editing && !form.name)}
               className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-3 py-1.5 text-xs font-medium text-white transition-colors hover:bg-[var(--color-primary)]/80 disabled:opacity-50"
             >
               {(addMut.isPending || updateMut.isPending) && <Loader2 className="h-3 w-3 animate-spin" />}
@@ -169,7 +180,7 @@ export function ServersSettings() {
             <button
               type="button"
               onClick={() => { setAdding(false); setEditing(null); setForm(EMPTY_FORM); }}
-              className="rounded-md px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+              className="rounded-md px-3 py-1.5 text-xs text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
             >
               Cancel
             </button>
@@ -213,8 +224,9 @@ export function ServersSettings() {
 
             <div className="flex items-center gap-1">
               <button
+                disabled={!canMutate || defaultMut.isPending}
                 onClick={() => defaultMut.mutate(s.name)}
-                className="rounded p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-amber-400"
+                className="rounded p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-amber-400 disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Set as default"
               >
                 <Star className="h-3.5 w-3.5" />
@@ -222,8 +234,9 @@ export function ServersSettings() {
               {isOwner(s) && (
                 <>
                   <button
+                    disabled={!canMutate}
                     onClick={() => startEdit(s)}
-                    className="rounded p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-primary)]"
+                    className="rounded p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-primary)] disabled:opacity-50 disabled:cursor-not-allowed"
                     title="Edit"
                   >
                     <Edit2 className="h-3.5 w-3.5" />
@@ -232,7 +245,7 @@ export function ServersSettings() {
                     <div className="flex items-center gap-1">
                       <button
                         onClick={() => deleteMut.mutate(s.name)}
-                        disabled={deleteMut.isPending}
+                        disabled={!canMutate || deleteMut.isPending}
                         className="rounded p-1.5 text-[var(--color-red)] hover:bg-red-500/10 disabled:opacity-50"
                         title="Confirm delete"
                       >
@@ -244,7 +257,7 @@ export function ServersSettings() {
                       </button>
                       <button
                         onClick={() => setConfirmDelete(null)}
-                        className="rounded p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+                        className="rounded p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Cancel delete"
                         aria-label="Cancel delete"
                       >
@@ -253,8 +266,9 @@ export function ServersSettings() {
                     </div>
                   ) : (
                     <button
-                      onClick={() => setConfirmDelete(s.name)}
-                      className="rounded p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-red)]"
+                      disabled={!canMutate}
+                      onClick={() => { if (canMutate) setConfirmDelete(s.name); }}
+                      className="rounded p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-red)] disabled:opacity-50 disabled:cursor-not-allowed"
                       title="Delete"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -268,7 +282,7 @@ export function ServersSettings() {
 
         {servers.length === 0 && (
           <p className="py-8 text-center text-sm text-[var(--color-text-muted)]">
-            No servers configured. Add one to get started.
+            No servers configured.
           </p>
         )}
 

@@ -2,6 +2,9 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, Plus, Server, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
+import { useDeploymentPolicy } from "@/hooks/useDeploymentPolicy";
+import { requireSettingsMutation } from "@/lib/deployment-policy";
+import { SettingsReadError } from "./SettingsReadError";
 import { api } from "@/lib/api";
 import type { CustomProvider } from "@/lib/api";
 
@@ -15,14 +18,17 @@ import type { CustomProvider } from "@/lib/api";
  * sent back to the browser — the server only reports whether one is set.
  */
 export function CustomProvidersSettings() {
+  const policy = useDeploymentPolicy();
   const qc = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["custom-providers"],
     queryFn: () => api.getCustomProviders(),
   });
+
+  const canMutate = policy.settingsMutation && !!data && !isError;
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ["custom-providers"] });
@@ -33,7 +39,7 @@ export function CustomProvidersSettings() {
   };
 
   const remove = useMutation({
-    mutationFn: (name: string) => api.deleteCustomProvider(name),
+    mutationFn: (name: string) => { requireSettingsMutation(canMutate); return api.deleteCustomProvider(name); },
     onSuccess: () => {
       setConfirmDelete(null);
       invalidate();
@@ -47,6 +53,8 @@ export function CustomProvidersSettings() {
       </div>
     );
   }
+
+  if (isError || !data) return <SettingsReadError label="LLM endpoints" retry={refetch} />;
 
   const providers = data?.providers ?? [];
 
@@ -74,9 +82,10 @@ export function CustomProvidersSettings() {
             <ProviderRow
               key={p.name}
               provider={p}
+              canMutate={canMutate}
               confirming={confirmDelete === p.name}
               deleting={remove.isPending && confirmDelete === p.name}
-              onRequestDelete={() => setConfirmDelete(p.name)}
+              onRequestDelete={() => { if (canMutate) setConfirmDelete(p.name); }}
               onCancelDelete={() => setConfirmDelete(null)}
               onConfirmDelete={() => remove.mutate(p.name)}
             />
@@ -92,6 +101,7 @@ export function CustomProvidersSettings() {
 
       {adding ? (
         <AddProviderForm
+          canMutate={canMutate}
           onDone={() => {
             setAdding(false);
             invalidate();
@@ -100,8 +110,9 @@ export function CustomProvidersSettings() {
         />
       ) : (
         <button
-          onClick={() => setAdding(true)}
-          className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-hover)]"
+          disabled={!canMutate}
+          onClick={() => { if (canMutate) setAdding(true); }}
+          className="flex w-full items-center justify-center gap-2 rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm font-medium text-[var(--color-text)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Plus className="h-4 w-4" />
           Add endpoint
@@ -112,6 +123,7 @@ export function CustomProvidersSettings() {
 }
 
 function ProviderRow({
+  canMutate,
   provider,
   confirming,
   deleting,
@@ -119,6 +131,7 @@ function ProviderRow({
   onCancelDelete,
   onConfirmDelete,
 }: {
+  canMutate: boolean;
   provider: CustomProvider;
   confirming: boolean;
   deleting: boolean;
@@ -143,14 +156,14 @@ function ProviderRow({
         <div className="flex shrink-0 items-center gap-1">
           <button
             onClick={onConfirmDelete}
-            disabled={deleting}
+            disabled={!canMutate || deleting}
             className="rounded px-2 py-1 text-xs font-medium text-[var(--color-red)] hover:bg-[var(--color-red)]/10 disabled:opacity-50"
           >
             {deleting ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : "Forget"}
           </button>
           <button
             onClick={onCancelDelete}
-            className="rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"
+            className="rounded p-1 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
             aria-label="Cancel"
           >
             <X className="h-3.5 w-3.5" />
@@ -158,8 +171,9 @@ function ProviderRow({
         </div>
       ) : (
         <button
+          disabled={!canMutate}
           onClick={onRequestDelete}
-          className="shrink-0 rounded p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-red)]/10 hover:text-[var(--color-red)]"
+          className="shrink-0 rounded p-1.5 text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-red)]/10 hover:text-[var(--color-red)] disabled:opacity-50 disabled:cursor-not-allowed"
           aria-label={`Forget ${provider.name}`}
         >
           <Trash2 className="h-3.5 w-3.5" />
@@ -170,9 +184,11 @@ function ProviderRow({
 }
 
 function AddProviderForm({
+  canMutate,
   onDone,
   onCancel,
 }: {
+  canMutate: boolean;
   onDone: () => void;
   onCancel: () => void;
 }) {
@@ -184,12 +200,14 @@ function AddProviderForm({
   // The server validates by fetching {base_url}/models, so a success here
   // means the URL, the key and the response shape are all good.
   const add = useMutation({
-    mutationFn: () =>
-      api.addCustomProvider({
+    mutationFn: () => {
+      requireSettingsMutation(canMutate);
+      return api.addCustomProvider({
         base_url: baseUrl,
         api_key: apiKey || undefined,
         name: name || undefined,
-      }),
+      });
+    },
     onSuccess: (res) => setResult({ name: res.provider.name, count: res.models.length }),
   });
 
@@ -206,7 +224,7 @@ function AddProviderForm({
         </p>
         <button
           onClick={onDone}
-          className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90"
+          className="rounded-lg bg-[var(--color-primary)] px-3 py-1.5 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Done
         </button>
@@ -264,7 +282,7 @@ function AddProviderForm({
       <div className="flex gap-2">
         <button
           onClick={() => add.mutate()}
-          disabled={!baseUrl.trim() || add.isPending}
+          disabled={!canMutate || !baseUrl.trim() || add.isPending}
           className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
         >
           {add.isPending ? (
@@ -278,7 +296,7 @@ function AddProviderForm({
         </button>
         <button
           onClick={onCancel}
-          className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-hover)]"
+          className="rounded-lg border border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-hover)] disabled:opacity-50 disabled:cursor-not-allowed"
         >
           Cancel
         </button>

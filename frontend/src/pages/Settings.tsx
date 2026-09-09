@@ -1,3 +1,5 @@
+import { useDeploymentPolicy } from "@/hooks/useDeploymentPolicy";
+import { SettingsReadError } from "@/components/settings/SettingsReadError";
 import { LogOut } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 
@@ -18,12 +20,12 @@ const TABS = [
   { key: "voice", label: "Voice & AI" },
 ] as const;
 
-type TabKey = (typeof TABS)[number]["key"];
-
 export function Settings() {
+  const policy = useDeploymentPolicy();
   const { access } = useServerCapabilities();
   const [params, setParams] = useSearchParams();
-  const tab = (params.get("tab") as TabKey) || "servers";
+  const requestedTab = params.get("tab");
+  const tab = TABS.find((item) => item.key === requestedTab)?.key ?? "servers";
   const { logout } = useAuth();
 
   return (
@@ -56,10 +58,15 @@ export function Settings() {
         ))}
       </div>
 
+      {policy.isError ? <SettingsReadError label="Deployment policy" retry={policy.refetch} /> : !policy.settingsMutation && (
+        <p className="mb-4 text-sm text-[var(--color-text-muted)]">
+          {policy.isLoading ? "Checking deployment policy…" : "Server, Gateway, LLM and Voice changes are unavailable in this deployment."}
+        </p>
+      )}
       {/* Tab content */}
       {tab === "servers" && <ServersSettings />}
       {tab === "gateway" && <GatewaySettings />}
-      {tab === "keys" && (access.accountManagement ? <ApiKeysSettings /> : <CapabilityUnavailable reason="Account credential management is unavailable on this server." />)}
+      {tab === "keys" && (access.accountManagement && policy.accountManagement ? <ApiKeysSettings /> : <CapabilityUnavailable reason="Account credential management is unavailable on this server." />)}
       {tab === "llm" && <CustomProvidersSettings />}
       {tab === "voice" && <VoiceSettings />}
     </div>

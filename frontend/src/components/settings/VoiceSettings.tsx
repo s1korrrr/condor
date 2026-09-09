@@ -1,33 +1,31 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Loader2, Mic, Volume2 } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState } from "react";
 
+import { useDeploymentPolicy } from "@/hooks/useDeploymentPolicy";
+import { requireSettingsMutation } from "@/lib/deployment-policy";
+import { SettingsReadError } from "./SettingsReadError";
 import { api } from "@/lib/api";
 import type { VoicePrefs } from "@/lib/api";
 
 export function VoiceSettings() {
+  const policy = useDeploymentPolicy();
   const qc = useQueryClient();
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError, refetch } = useQuery({
     queryKey: ["voice-settings"],
     queryFn: () => api.getVoiceSettings(),
   });
 
-  const [form, setForm] = useState<VoicePrefs>({
-    whisper_model: "base",
-    language: null,
-    auto_send: true,
-  });
+  const [draft, setForm] = useState<VoicePrefs | null>(null);
+  const form = draft ?? data?.voice;
   const [saved, setSaved] = useState(false);
 
-  useEffect(() => {
-    if (data?.voice) {
-      setForm(data.voice);
-    }
-  }, [data]);
+  const canMutate = policy.settingsMutation && !!data && !isError;
 
   const mutation = useMutation({
-    mutationFn: (prefs: Partial<VoicePrefs>) => api.updateVoiceSettings(prefs),
+    mutationFn: (prefs: Partial<VoicePrefs>) => { requireSettingsMutation(canMutate); return api.updateVoiceSettings(prefs); },
     onSuccess: (res) => {
+      setForm(null);
       qc.setQueryData(["voice-settings"], (old: typeof data) =>
         old ? { ...old, voice: res.voice } : old,
       );
@@ -37,7 +35,7 @@ export function VoiceSettings() {
   });
 
   const handleSave = () => {
-    mutation.mutate(form);
+    if (form) mutation.mutate(form);
   };
 
   if (isLoading) {
@@ -47,6 +45,8 @@ export function VoiceSettings() {
       </div>
     );
   }
+
+  if (isError || !data || !form) return <SettingsReadError label="Voice settings" retry={refetch} />;
 
   const models = data?.available_models ?? {};
   const languages = data?.available_languages ?? {};
@@ -73,6 +73,7 @@ export function VoiceSettings() {
               }`}
             >
               <input
+                disabled={!canMutate}
                 type="radio"
                 name="whisper_model"
                 value={key}
@@ -96,6 +97,7 @@ export function VoiceSettings() {
           Auto-detect works well for most cases. Fix the language for better accuracy if you always speak the same language.
         </p>
         <select
+          disabled={!canMutate}
           value={form.language ?? ""}
           onChange={(e) =>
             setForm({ ...form, language: e.target.value || null })
@@ -114,6 +116,7 @@ export function VoiceSettings() {
       <section>
         <label className="flex cursor-pointer items-center gap-3 rounded-lg border border-[var(--color-border)] px-3 py-3 transition-colors hover:bg-[var(--color-surface-hover)]">
           <input
+            disabled={!canMutate}
             type="checkbox"
             checked={form.auto_send}
             onChange={(e) => setForm({ ...form, auto_send: e.target.checked })}
@@ -141,7 +144,7 @@ export function VoiceSettings() {
       {/* Save button */}
       <button
         onClick={handleSave}
-        disabled={mutation.isPending}
+        disabled={!canMutate || mutation.isPending}
         className="flex w-full items-center justify-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:opacity-50"
       >
         {mutation.isPending ? (

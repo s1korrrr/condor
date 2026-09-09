@@ -46,3 +46,11 @@ test('gap rows keep file-only source references visible without guessing an arch
   assert.match(result.html, /Missing extraction|Source receipt/); assert.match(result.html, /Frozen source JSON/);
   assert.ok(!result.buttons.some(button => button.text === 'Source receipt' || button.text === 'source:unresolved'));
 });
+
+test('an archive record jump opens the selected evidence even after visiting archive coverage',()=>{
+ const values=queries();values['research-node'].data.data.node.source={record_id:'archive:proof'};
+ const result=renderResearch(values,{search:'view=ideas&id=idea%3Aone&archive_view=coverage&archive_offset=60'});
+ const button=result.buttons.find(button=>button.text==='Open archival record');assert.ok(button);button.onClick();
+ const params=new URLSearchParams(result.searchUpdates.at(-1));
+ assert.equal(params.get('view'),'archive');assert.equal(params.get('archive_view'),'explore');assert.equal(params.get('archive_record'),'archive:proof');assert.ok(!params.get('archive_offset'));
+});

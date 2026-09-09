@@ -31,8 +31,14 @@ export function ResearchResults({
   const bars = sourceResultBars(data),
     sourceComparisons = records(comparisons?.items),
     groups = comparisonGroups(sourceComparisons);
-  const excludedComparisons = sourceComparisons.length - groups.reduce((total, group) => total + group.items.length, 0);
-  const limitations = (Array.isArray(comparisons?.limitations) ? comparisons.limitations : []).filter((value): value is string => typeof value === "string" && value.length > 0);
+  const excludedComparisons =
+    sourceComparisons.length -
+    groups.reduce((total, group) => total + group.items.length, 0);
+  const limitations = (
+    Array.isArray(comparisons?.limitations) ? comparisons.limitations : []
+  ).filter(
+    (value): value is string => typeof value === "string" && value.length > 0,
+  );
   return (
     <section className="quant-panel" style={{ marginBottom: 20 }}>
       <header className="quant-panel-heading">
@@ -147,21 +153,44 @@ export function ResearchResults({
               </pre>
             </details>
             <details>
-              <summary>Source values and references ({group.items.length})</summary>
+              <summary>
+                Source values and references ({group.items.length})
+              </summary>
               <div className="quant-table-scroll">
                 <table>
-                  <thead><tr><th>Assessment</th><th>Recorded delta</th><th>Supporting references</th></tr></thead>
+                  <thead>
+                    <tr>
+                      <th>Assessment</th>
+                      <th>Recorded delta</th>
+                      <th>Supporting references</th>
+                    </tr>
+                  </thead>
                   <tbody>
                     {group.items.map((item, index) => (
                       <tr key={`${item.id}:${index}`}>
                         <td>
                           {onSelect && item.id !== "Not recorded" ? (
-                            <button type="button" className="quant-record-link" onClick={() => onSelect(item.id)}>{item.label}</button>
-                          ) : <span>{item.label}</span>}
+                            <button
+                              type="button"
+                              className="quant-record-link"
+                              onClick={() => onSelect(item.id)}
+                            >
+                              {item.label}
+                            </button>
+                          ) : (
+                            <span>{item.label}</span>
+                          )}
                           <small>{item.id}</small>
                         </td>
-                        <td>{String(item.value)} {group.unit}</td>
-                        <td><ComparisonReferences references={item.sourceRefs} onSelect={onSelect} /></td>
+                        <td>
+                          {String(item.value)} {group.unit}
+                        </td>
+                        <td>
+                          <ComparisonReferences
+                            references={item.sourceRefs}
+                            onSelect={onSelect}
+                          />
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -205,8 +234,24 @@ export function ResearchResults({
             </div>
           </section>
         ))}
-        {excludedComparisons > 0 && <p className="quant-muted">{excludedComparisons} {excludedComparisons === 1 ? "comparison is" : "comparisons are"} not plotted because admissibility fields are incomplete or incompatible.</p>}
-        {limitations.length > 0 && <section aria-label="Source comparison limitations"><h3>Source comparison limitations</h3><ul>{limitations.map((limitation, index) => <li key={index}>{limitation}</li>)}</ul></section>}
+        {excludedComparisons > 0 && (
+          <p className="quant-muted">
+            {excludedComparisons}{" "}
+            {excludedComparisons === 1 ? "comparison is" : "comparisons are"}{" "}
+            not plotted because admissibility fields are incomplete or
+            incompatible.
+          </p>
+        )}
+        {limitations.length > 0 && (
+          <section aria-label="Source comparison limitations">
+            <h3>Source comparison limitations</h3>
+            <ul>
+              {limitations.map((limitation, index) => (
+                <li key={index}>{limitation}</li>
+              ))}
+            </ul>
+          </section>
+        )}
         {comparisons && groups.length === 0 ? (
           <p className="quant-muted">
             No admissible isolated baseline comparison is recorded for this
@@ -218,20 +263,48 @@ export function ResearchResults({
   );
 }
 
-function ComparisonReferences({ references, onSelect }: {
+function ComparisonReferences({
+  references,
+  onSelect,
+}: {
   references: unknown[];
   onSelect?: (id: string) => void;
 }) {
-  return <ul className="research-reference-list">{references.map((reference, index) => {
-    const record = object(reference);
-    const id = typeof reference === "string" ? reference : text(record.node_id, text(record.id, ""));
-    const label = text(record.title, text(record.label, id || "Source reference"));
-    const url = safeSourceUrl(record.url);
-    return <li key={`${id}:${index}`}>
-      {id && onSelect ? <button type="button" onClick={() => onSelect(id)}>{label}</button>
-        : url ? <a href={url} target="_blank" rel="noopener noreferrer">{label}</a>
-        : <span>{label}</span>}
-      {!id && !url && <details><summary>Recorded reference identity</summary><pre>{JSON.stringify(reference, null, 2)}</pre></details>}
-    </li>;
-  })}</ul>;
+  return (
+    <ul className="research-reference-list">
+      {references.map((reference, index) => {
+        const record = object(reference);
+        const id =
+          typeof reference === "string"
+            ? reference
+            : text(record.node_id, text(record.id, ""));
+        const label = text(
+          record.title,
+          text(record.label, id || "Source reference"),
+        );
+        const url = safeSourceUrl(record.url);
+        return (
+          <li key={`${id}:${index}`}>
+            {id && onSelect ? (
+              <button type="button" onClick={() => onSelect(id)}>
+                {label}
+              </button>
+            ) : url ? (
+              <a href={url} target="_blank" rel="noopener noreferrer">
+                {label}
+              </a>
+            ) : (
+              <span>{label}</span>
+            )}
+            {!id && !url && (
+              <details>
+                <summary>Recorded reference identity</summary>
+                <pre>{JSON.stringify(reference, null, 2)}</pre>
+              </details>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
 }

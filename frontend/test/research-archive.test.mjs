@@ -17,8 +17,8 @@ test('archive filter changes reset page and selection without overwriting graph 
  const next=updateArchiveParams(original,{q:'new search',family:'rsi_v5'});
  assert.equal(next.get('q'),'graph');assert.equal(next.get('id'),'idea:one');assert.equal(next.get('archive_q'),'new search');assert.equal(next.get('archive_family'),'rsi_v5');assert.equal(next.has('archive_offset'),false);assert.equal(next.has('archive_record'),false);assert.equal(original.get('archive_record'),'record:one');
 });
-function render({record={},prepared={},query='',overview={}}={}) {
- return renderResearchComponent('ResearchArchive',{server:'fixture'},{'research-archive-overview':{data:envelope({revision:'r1',generated_at:'2026-09-08',counts:{records:1},coverage:{records:1,files_discovered:2,unresolved_count:1},...overview})},'research-archive':{data:envelope({revision:'r1',items:[{id:'record:one',display_title:'Frozen experiment',kind:'experiment',status_group:'HELD'}],total:1,limit:30,offset:0,facets:{}})},'research-archive-record':{data:envelope({revision:'r1',record:{id:'record:one',kind:'experiment',fields:{long_source:'retained'},...record},prepared:{id:'record:one',display_title:'Frozen experiment',projection_note:'Summary index only',aliases:['prior:one'],...prepared},documents:[]})}},{search:'view=archive&archive_record=record%3Aone'+query});
+function render({record={},prepared={},query='',overview={},relatedRecords=[]}={}) {
+ return renderResearchComponent('ResearchArchive',{server:'fixture'},{'research-archive-overview':{data:envelope({revision:'r1',generated_at:'2026-09-08',counts:{records:1},coverage:{records:1,files_discovered:2,unresolved_count:1},...overview})},'research-archive':{data:envelope({revision:'r1',items:[{id:'record:one',display_title:'Frozen experiment',kind:'experiment',status_group:'HELD'}],total:1,limit:30,offset:0,facets:{}})},'research-archive-record':{data:envelope({revision:'r1',record:{id:'record:one',kind:'experiment',fields:{long_source:'retained'},...record},prepared:{id:'record:one',display_title:'Frozen experiment',projection_note:'Summary index only',aliases:['prior:one'],...prepared},documents:[],related_records:relatedRecords})}},{search:'view=archive&archive_record=record%3Aone'+query});
 }
 test('archive distinguishes prepared preview, full native record and aliases and retains source-hash metric gate',()=>{
  const r=render({prepared:{evidence_readout:{metrics_state:'HASH_MISMATCH',recorded_metrics:{economics:{net_pnl_quote:999}},baseline_comparison:'UNAVAILABLE'}}});
@@ -33,4 +33,11 @@ test('missing preservation receipts remain unavailable and coverage subview stay
  const r=render({query:'&archive_view=coverage',overview:{preservation:{missing_paths:[]}}});
  assert.match(r.html,/Preservation receipt incomplete/);assert.match(r.html,/Coverage/);assert.match(r.html,/Provenance/);
  const button=r.buttons.find(b=>b.text==='Next experiment');assert.ok(button);button.onClick();assert.match(r.searchUpdates.at(-1),/archive_view=next/);
+});
+
+test('archive relation buttons require owner-confirmed target resolution and retain unresolved references',()=>{
+ const r=render({record:{relations:[{target:'known:one'},{target:'missing:one'},{target:'unknown:one'}]},relatedRecords:[{target:'known:one',resolved:true,title:'Recorded evidence'},{target:'missing:one',resolved:false}]});
+ const known=r.buttons.find(b=>b.text==='Recorded evidence');assert.ok(known);known.onClick();assert.match(r.searchUpdates.at(-1),/archive_record=known%3Aone/);
+ assert.ok(!r.buttons.some(b=>b.text.includes('missing:one')||b.text.includes('unknown:one')));
+ assert.match(r.html,/Unresolved target.*missing:one/);assert.match(r.html,/Target resolution unavailable.*unknown:one/);
 });

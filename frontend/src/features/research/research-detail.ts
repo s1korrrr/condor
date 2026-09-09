@@ -40,9 +40,13 @@ export function documentPath(server: string, scope: string, id: string, ref: str
 }
 
 /** Both frames are opaque. The trusted parent CSP also blocks child navigation. */
-export function isolatedDocument(source: string): string {
+export function isolatedDocument(source: string, fragment = ''): string {
   const policy = "default-src 'none'; frame-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data: blob:; font-src data:; connect-src 'none'; form-action 'none'; object-src 'none'; base-uri 'none'";
-  const encoded = source.replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
+  let anchor = fragment.replace(/^#/, '');
+  try { anchor = decodeURIComponent(anchor); } catch { /* Preserve literal legacy IDs. */ }
+  const target = JSON.stringify(anchor).replaceAll('<', '\\u003c');
+  const navigation = anchor ? `<script>addEventListener('load',()=>{const id=${target};(document.getElementById(id)||document.getElementsByName(id)[0])?.scrollIntoView();},{once:true})</script>` : '';
+  const encoded = (source + navigation).replaceAll('&', '&amp;').replaceAll('"', '&quot;').replaceAll('<', '&lt;').replaceAll('>', '&gt;');
   // A single sandbox permits its own navigation even with connect-src none.
   // Keep untrusted markup out of this trusted parent; its frame-src policy
   // blocks network navigation by the child while srcdoc inherits the CSP.

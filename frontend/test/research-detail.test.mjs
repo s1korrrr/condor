@@ -39,3 +39,12 @@ test('source markup stays inside a nested opaque frame whose trusted parent bloc
  assert.equal((html.match(/<iframe/g)||[]).length,1);
  assert.ok(html.includes('&lt;/iframe&gt;&lt;script&gt;'));
 });
+
+test('source fragment navigation is retained inside preview without executable attribute injection',()=>{
+ const html=isolatedDocument('<h2 id="evidence">Evidence</h2>', '#evidence');
+ assert.match(html,/scrollIntoView/);
+ assert.match(html,/getElementById/);
+ const hostile=isolatedDocument('<p>Source</p>','</script><script>bad()</script>');
+ assert.ok(!hostile.includes('<script>'));
+ assert.ok(hostile.includes('\\u003c/script'));
+});

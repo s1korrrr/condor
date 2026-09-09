@@ -75,7 +75,7 @@ function ResearchDocumentReader({ server, scope, id, documents, title }: {
         anchor.click();
       } else if (mime === 'text/html' || mime === 'application/xhtml+xml') {
         const source = await blob.text();
-        if (live.current && request.current === controller && !controller.signal.aborted) setOpened({ label: document.label, mime: 'text/html', text: isolatedDocument(source) });
+        if (live.current && request.current === controller && !controller.signal.aborted) setOpened({ label: document.label, mime: 'text/html', text: isolatedDocument(source, document.fragment) });
       } else if (mime.startsWith('text/') || ['application/json', 'application/x-ndjson', 'application/jsonl'].includes(mime)) {
         const source = await blob.text();
         if (live.current && request.current === controller && !controller.signal.aborted) setOpened({ label: document.label, mime: 'text/plain', text: source });

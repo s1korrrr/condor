@@ -40,7 +40,7 @@ LOCAL_LOCATOR = re.compile(
 PARAMETERS = {
     "overview": set(),
     "nodes": {"kind", "q", "family", "lane", "limit", "offset"},
-    "node": {"id"},
+    "node": {"id", "relation_limit", "relation_offset"},
     "graph": {"id", "limit"},
     "comparisons": {"idea_id"},
     "clusters": set(),
@@ -135,6 +135,24 @@ def validated_parameters(endpoint, pairs):
             ):
                 raise HTTPException(
                     400, "Research pagination is outside its allowed bounds"
+                )
+            parameters[key] = str(int(value))
+    if endpoint == "node" and any(
+        key in parameters for key in ("relation_limit", "relation_offset")
+    ):
+        for key, minimum, maximum, default in [
+            ("relation_limit", 1, 150, 150),
+            ("relation_offset", 0, 1_000_000, 0),
+        ]:
+            value = parameters.get(key, str(default))
+            if (
+                not value.isascii()
+                or not value.isdecimal()
+                or not minimum <= int(value) <= maximum
+            ):
+                raise HTTPException(
+                    400,
+                    "Research relationship pagination is outside its allowed bounds",
                 )
             parameters[key] = str(int(value))
     if (
@@ -347,6 +365,7 @@ def _valid_shape(endpoint, data, parameters):
             and isinstance(data.get("edges"), list)
             and isinstance(data.get("related"), list)
             and all(_node(item) for item in data["related"])
+            and _valid_relations_page(data, parameters)
         )
     return (
         isinstance(data.get("nodes"), list)
@@ -355,6 +374,46 @@ def _valid_shape(endpoint, data, parameters):
         and isinstance(data.get("edges"), list)
         and any(item["id"] == parameters["id"] for item in data["nodes"])
         and type(data.get("truncated")) is bool
+    )
+
+
+def _valid_relations_page(data, parameters):
+    page = data.get("relations_page")
+    if page is None:
+        return "relation_limit" not in parameters
+    edges = data["edges"]
+    if not all(
+        isinstance(edge, dict)
+        and all(
+            isinstance(edge.get(key), str) and edge[key]
+            for key in ("id", "source", "target", "relation")
+        )
+        and parameters["id"] in (edge["source"], edge["target"])
+        for edge in edges
+    ):
+        return False
+    endpoints = {
+        edge["target"] if edge["source"] == parameters["id"] else edge["source"]
+        for edge in edges
+    }
+    if (
+        len({edge["id"] for edge in edges}) != len(edges)
+        or len({item["id"] for item in data["related"]}) != len(data["related"])
+        or any(item["id"] not in endpoints for item in data["related"])
+    ):
+        return False
+    return (
+        isinstance(page, dict)
+        and isinstance(data.get("revision"), str)
+        and bool(data["revision"])
+        and all(type(page.get(key)) is int for key in ("total", "limit", "offset"))
+        and page["total"] >= len(data["edges"])
+        and 1 <= page["limit"] <= 150
+        and 0 <= page["offset"] <= 1_000_000
+        and len(data["edges"])
+        == min(page["limit"], max(page["total"] - page["offset"], 0))
+        and page["limit"] == int(parameters.get("relation_limit", "150"))
+        and page["offset"] == int(parameters.get("relation_offset", "0"))
     )
 
 
@@ -451,13 +510,17 @@ async def read_research(endpoint, parameters, server):
                         maximum = (
                             NETWORK_MAX_BYTES
                             if endpoint == "network"
-                            else ARCHIVE_RECORD_MAX_BYTES
-                            if endpoint == "archive-record"
-                            else PAGED_MAX_BYTES.get(
-                                endpoint,
-                                DETAIL_MAX_BYTES
-                                if endpoint in {"graph", "node"}
-                                else MAX_BYTES,
+                            else (
+                                ARCHIVE_RECORD_MAX_BYTES
+                                if endpoint == "archive-record"
+                                else PAGED_MAX_BYTES.get(
+                                    endpoint,
+                                    (
+                                        DETAIL_MAX_BYTES
+                                        if endpoint in {"graph", "node"}
+                                        else MAX_BYTES
+                                    ),
+                                )
                             )
                         )
                         if len(payload) > maximum:

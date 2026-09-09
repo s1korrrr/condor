@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { FileText, Download, X } from "lucide-react";
 import { authFetch } from "@/lib/auth-token";
 import {
@@ -15,7 +15,8 @@ import { researchDocumentPage } from "./research-document-pagination";
 const PREVIEW_BYTES = 16 * 1024 * 1024;
 const DOWNLOAD_BYTES = 1024 * 1024 * 1024;
 function sizeLabel(value: unknown) {
-  if (typeof value !== "number" || !Number.isFinite(value) || value < 0) return "Size not recorded";
+  if (typeof value !== "number" || !Number.isFinite(value) || value < 0)
+    return "Size not recorded";
   const unit = value < 1024 ? "B" : value < 1024 * 1024 ? "KB" : "MB";
   const divisor = unit === "B" ? 1 : unit === "KB" ? 1024 : 1024 * 1024;
   return `${(value / divisor).toLocaleString(undefined, { maximumFractionDigits: 1 })} ${unit}`;
@@ -53,11 +54,22 @@ export function ResearchDocuments({
   documents: unknown;
   title?: string;
 }) {
-  // Selection-keyed child cancels a pending read and removes its Blob URL when
-  // the owner record changes, including a server change with the same node ID.
+  // Opaque refs include the owner revision. A changed reference set retires
+  // previews and pending reads even when the receipt/node ID stays unchanged.
+  // Equivalent refreshes and reordering preserve active document work.
+  const identity = useMemo(
+    () =>
+      JSON.stringify([
+        server,
+        scope,
+        id,
+        [...new Set(descriptors(documents).map((item) => item.ref))].sort(),
+      ]),
+    [server, scope, id, documents],
+  );
   return (
     <ResearchDocumentReader
-      key={`${server}:${scope}:${id}`}
+      key={identity}
       {...{ server, scope, id, documents, title }}
     />
   );

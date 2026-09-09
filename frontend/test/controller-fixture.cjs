@@ -33,7 +33,7 @@ function render(file, symbol, props={}, {queries={}, search='', access=nativeAcc
    if(id==='react-router-dom')return {Link:({children,to})=>React.createElement('a',{href:to},children),useSearchParams:()=>[new URLSearchParams(search),()=>{}],useNavigate:()=>()=>{}};
    if(id==='recharts')return new Proxy({}, {get:()=>()=>null});
    if(id.includes('CodeEditor'))return {CodeEditor:()=>null};
-   
+
    if(id.includes('ConnectHyperliquid'))return {ConnectHyperliquid:()=>null};
    if(id.endsWith('.css'))return {};
    if(id.startsWith('@/')||id.startsWith('.')){

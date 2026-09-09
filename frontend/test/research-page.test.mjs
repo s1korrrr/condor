@@ -157,3 +157,19 @@ test("all research panels remain visible with a skewed host clock", () => {
     assert.equal(result.refetches.length, 5);
   }
 });
+
+
+test("each library filter clears the previously selected record", () => {
+  const result = renderResearch(selectedIdeaQueries(), { search: "q=RSI&id=spot-record" });
+  assert.equal(result.selects.length, 3);
+  for (const select of result.selects) select.onChange({target:{value:"FUTURES"}});
+  assert.deepEqual(result.searchUpdates, ["q=RSI", "q=RSI", "q=RSI"]);
+});
+
+test("long native fields display a visible truncation notice", () => {
+  const queries = selectedIdeaQueries();
+  queries["research-node"].data.data.node.data = { native_receipt: "x".repeat(25000) };
+  const result = renderResearch(queries);
+  assert.match(result.html, /Preview truncated to 20,000 of/);
+  assert.match(result.html, /Full native fields remain in the owner source/);
+});

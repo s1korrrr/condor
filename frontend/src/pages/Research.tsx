@@ -18,6 +18,13 @@ import { readResearch as createResearchReader } from "@/features/research/read";
 import { ResearchGraph } from "@/features/research/ResearchGraph";
 import { ResearchResults } from "@/features/research/ResearchResults";
 
+import {
+  researchPage,
+  clearResearchSelection,
+  researchPreview,
+  RESEARCH_PAGE_SIZE,
+} from "@/features/research/library";
+
 const readResearch = createResearchReader(authFetch);
 function timestamp(value: unknown) {
   const t = typeof value === "string" ? Date.parse(value) : NaN;
@@ -69,7 +76,10 @@ export function Research() {
       readResearch(
         "nodes",
         server!,
-        { q: query, kind, lane, family, offset: String(offset), limit: "20" },
+        {
+          q: query, kind, lane, family,
+          offset: String(offset), limit: String(RESEARCH_PAGE_SIZE),
+        },
         signal,
       ),
     refetchInterval: 30000,
@@ -123,6 +133,9 @@ export function Research() {
     listState === "available"
       ? catalogCount(object(list.data?.data), "total")
       : null;
+  const page = researchPage(offset, total);
+  const clearSelection = () =>
+    setParams(clearResearchSelection(params), { replace: true });
   const select = (id: string) => {
     const next = new URLSearchParams(params);
     if (id) next.set("id", id);
@@ -140,6 +153,7 @@ export function Research() {
   const nodeData = object(node.data),
     usage = object(detail.data?.data.usage),
     source = object(node.source);
+  const preview = researchPreview(nodeData);
   const comparisons = useQuery({
     queryKey: ["research-comparisons", server, selected],
     enabled: !!server && node.kind === "idea",
@@ -332,6 +346,7 @@ export function Research() {
                     value={kind}
                     onChange={(e) => {
                       setKind(e.target.value);
+                      clearSelection();
                       setOffset(0);
                     }}
                   >
@@ -359,6 +374,7 @@ export function Research() {
                     value={lane}
                     onChange={(e) => {
                       setLane(e.target.value);
+                      clearSelection();
                       setOffset(0);
                     }}
                   >
@@ -374,6 +390,7 @@ export function Research() {
                     value={family}
                     onChange={(e) => {
                       setFamily(e.target.value);
+                      clearSelection();
                       setOffset(0);
                     }}
                   >
@@ -448,26 +465,29 @@ export function Research() {
                 <span>
                   {total === null
                     ? ""
-                    : `${total === 0 ? 0 : offset + 1}–${Math.min(offset + 20, total)} of ${total.toLocaleString()}`}
+                    : `${page.first}–${page.last} of ${total.toLocaleString()}`}
                 </span>
                 <button
-                  onClick={() => setOffset(Math.max(0, offset - 20))}
+                  onClick={() => setOffset(Math.max(0, offset - RESEARCH_PAGE_SIZE))}
                   disabled={offset === 0 || list.isFetching}
                 >
                   Previous
                 </button>
                 <button
-                  onClick={() => setOffset(offset + 20)}
-                  disabled={
-                    total === null ||
-                    offset + 20 >= total ||
-                    offset >= 9980 ||
-                    list.isFetching
-                  }
+                  onClick={() => {
+                    if (page.nextOffset !== null) setOffset(page.nextOffset);
+                  }}
+                  disabled={page.nextOffset === null || list.isFetching}
                 >
                   Next
                 </button>
               </footer>
+              {page.boundaryReached && (
+                <p role="status" className="quant-notice">
+                  The source pagination limit has been reached. Narrow the search
+                  or filters to browse the remaining records.
+                </p>
+              )}
             </section>
             {selected ? (
               <aside
@@ -582,9 +602,13 @@ export function Research() {
                           {text(source.sha256, text(source.event_sha256))}
                         </dd>
                       </dl>
-                      <pre>
-                        {JSON.stringify(nodeData, null, 2).slice(0, 20000)}
-                      </pre>
+                      <pre>{preview.text}</pre>
+                      {preview.truncated && (
+                        <p role="status">
+                          Preview truncated to 20,000 of {preview.totalCharacters.toLocaleString()}
+                          {" "}characters. Full native fields remain in the owner source.
+                        </p>
+                      )}
                     </details>
                   </div>
                 )}

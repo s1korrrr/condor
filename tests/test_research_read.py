@@ -80,7 +80,7 @@ def test_research_nodes_fixed_origin_bounded_envelope_and_no_forwarded_auth(
     [
         "limit=51",
         "limit=-1",
-        "offset=10001",
+        "offset=1000001",
         "q=a&q=b",
         "url=http://example.com",
         "path=/etc/passwd",
@@ -549,3 +549,26 @@ def test_plain_bracketed_prose_remains_visible_and_nested_previews_are_redacted(
     result = _project({"title": "[P2] Historical result", "inputs": nested})
     assert result["title"] == "[P2] Historical result"
     assert json.loads(json.loads(result["inputs"])["result"]) == {"fees_quote": 0}
+
+
+@pytest.mark.parametrize("offset", [10020, 1000000])
+def test_full_owner_pagination_range_is_forwarded(monkeypatch, offset):
+    def handler(request):
+        assert request.url.params["offset"] == str(offset)
+        assert request.url.params["limit"] == "20"
+        assert request.url.params["projection"] == "summary"
+        return httpx.Response(
+            200, json={"items": [], "total": 180935, "limit": 20, "offset": offset}
+        )
+
+    response = client(monkeypatch, handler=handler).get(
+        f"/api/v1/research/nodes?server=native-ok-rsi&limit=20&offset={offset}"
+    )
+    assert response.status_code == 200
+
+
+def test_pagination_still_rejects_offsets_past_owner_bound(monkeypatch):
+    response = client(monkeypatch).get(
+        "/api/v1/research/nodes?server=native-ok-rsi&offset=1000001"
+    )
+    assert response.status_code == 400

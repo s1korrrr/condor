@@ -16,14 +16,14 @@ function click(result, pattern) {
 
 test("successful empty search does not leave a disabled graph request showing loading", () => {
   const queries = selectedIdeaQueries();
-  queries["research-nodes"] = { data: envelope({ items: [], total: 0 }) };
+  queries["research-lab-records"] = { data: envelope({ items: [], total: 0 }) };
   delete queries["research-node"];
   delete queries["research-graph"];
   delete queries["research-comparisons"];
-  const result = renderResearch(queries, { search: "q=no-matching-record" });
+  const result = renderResearch(queries, { search: "view=ideas&q=no-matching-record" });
   assert.match(result.html, /No records match these filters/);
   assert.equal(
-    result.requests.find((q) => q.queryKey[0] === "research-graph").enabled,
+    result.requests.some((q) => q.queryKey[0] === "research-node"),
     false,
   );
   assert.doesNotMatch(
@@ -51,28 +51,21 @@ test("Refresh includes comparisons for the selected idea", () => {
     [...result.refetches].sort(),
     [
       "research-overview",
-      "research-nodes",
+      "research-lab-records",
       "research-node",
-      "research-graph",
       "research-comparisons",
     ].sort(),
   );
 });
 
-test("stale graph is disclosed and retry targets the graph query", () => {
+test("stale overview prevents a cached full network being presented as current", () => {
   const queries = selectedIdeaQueries();
-  queries["research-graph"] = {
-    dataUpdatedAt: Date.now() - 120000,
-    data: envelope({ nodes: [], edges: [] }, 120_000),
-  };
-  const result = renderResearch(queries);
-  assert.doesNotMatch(
-    result.html,
-    /Loading research connections|Connecting to knowledge graph/,
-  );
-  assert.match(result.html, /stale|has not refreshed|expired/i);
-  click(result, /Retry (?:graph|connections)/i);
-  assert.deepEqual(result.refetches, ["research-graph"]);
+  queries["research-overview"].dataUpdatedAt = Date.now() - 120000;
+  const result = renderResearch(queries, { search: 'view=graph' });
+  assert.match(result.html, /stale|has not refreshed/i);
+  assert.equal(result.requests.find(q => q.queryKey[0] === 'research-network').enabled, false);
+  click(result, /Retry records/i);
+  assert.deepEqual(result.refetches, ['research-overview', 'research-network']);
 });
 
 test("stale comparisons are disclosed without displaying old values", () => {
@@ -154,22 +147,22 @@ test("all research panels remain visible with a skewed host clock", () => {
         .enabled,
     );
     click(result, /^Refresh$/);
-    assert.equal(result.refetches.length, 5);
+    assert.equal(result.refetches.length, 4);
   }
 });
 
 
 test("each library filter clears the previously selected record", () => {
-  const result = renderResearch(selectedIdeaQueries(), { search: "q=RSI&id=spot-record" });
-  assert.equal(result.selects.length, 3);
+  const result = renderResearch(selectedIdeaQueries(), { search: "view=ideas&q=RSI&id=spot-record" });
+  assert.equal(result.selects.length, 2);
   for (const select of result.selects) select.onChange({target:{value:"FUTURES"}});
-  assert.deepEqual(result.searchUpdates, ["q=RSI", "q=RSI", "q=RSI"]);
+  assert.deepEqual(result.searchUpdates, ["view=ideas&q=RSI&lane=FUTURES", "view=ideas&q=RSI&family=FUTURES"]);
 });
 
-test("long native fields display a visible truncation notice", () => {
+test("full native fields remain readable beyond the former preview limit", () => {
   const queries = selectedIdeaQueries();
   queries["research-node"].data.data.node.data = { native_receipt: "x".repeat(25000) };
   const result = renderResearch(queries);
-  assert.match(result.html, /Preview truncated to 20,000 of/);
-  assert.match(result.html, /Full native fields remain in the owner source/);
+  assert.ok(result.html.includes("x".repeat(25000)));
+  assert.doesNotMatch(result.html, /Preview truncated/);
 });

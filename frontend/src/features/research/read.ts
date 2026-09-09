@@ -4,7 +4,7 @@ type Fetcher = (path: string, init: RequestInit) => Promise<Response>;
 
 export function readResearch(fetcher: Fetcher, timeoutMs = 15_000) {
   return async (endpoint: string, server: string, params: Record<string, string>, signal: AbortSignal) => {
-    const deadline = AbortSignal.timeout(timeoutMs);
+    const deadline = AbortSignal.timeout(endpoint === 'network' ? Math.max(timeoutMs, 60_000) : timeoutMs);
     try {
       const response = await fetcher(researchPath(endpoint, server, params), {
         signal: AbortSignal.any([signal, deadline]),

@@ -33,12 +33,12 @@ export function selectedIdeaQueries() {
   return {
     "research-overview": {
       data: envelope({
-        counts: { ideas: 1 },
+        revision: "fixture-revision", counts: { ideas: 1 },
         facets: {},
         freshness: { state: "CURRENT" },
       }),
     },
-    "research-nodes": { data: envelope({ items: [node], total: 1 }) },
+    "research-lab-records": { data: envelope({ items: [node], total: 1 }) },
     "research-node": { data: envelope({ node }) },
     "research-graph": { data: envelope({ nodes: [node], edges: [] }) },
     "research-comparisons": { data: envelope({ items: [], limitations: [] }) },
@@ -56,7 +56,7 @@ function childText(value) {
 // are replaced; button handlers are captured from the actual JSX being rendered.
 export function renderResearch(
   queries,
-  { search = "", server = "fixture" } = {},
+  { search = "view=ideas&id=idea:one", server = "fixture" } = {},
 ) {
   const requests = [],
     refetches = [],
@@ -94,10 +94,15 @@ export function renderResearch(
         };
       if (id === "@tanstack/react-query")
         return {
+          useQueryClient: () => ({
+            setQueryData() {},
+            invalidateQueries({ predicate }) { for (const request of requests) if (predicate(request)) refetches.push(request.queryKey[0]); return Promise.resolve(); },
+          }),
           useQuery(options) {
             requests.push(options);
             const key = options.queryKey[0];
             return {
+              error: null,
               isError: false,
               isFetching: false,
               isPending: false,
@@ -128,7 +133,7 @@ export function renderResearch(
         const base = id.startsWith("@/")
           ? path.join(sourceRoot, id.slice(2))
           : path.resolve(path.dirname(filename), id);
-        const target = [base, `${base}.ts`, `${base}.tsx`].find((candidate) =>
+        const target = [base, `${base}.ts`, `${base}.tsx`, `${base}.js`].find((candidate) =>
           fs.existsSync(candidate),
         );
         if (!target) throw new Error(`Cannot resolve ${id} from ${filename}`);

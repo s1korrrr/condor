@@ -7,7 +7,11 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import JSONResponse
 
-from condor.research_read import read_research, validated_parameters
+from condor.research_read import (
+    read_research,
+    read_research_document,
+    validated_parameters,
+)
 from condor.web.auth import get_current_user
 from condor.web.models import WebUser
 from config_manager import get_config_manager
@@ -38,6 +42,8 @@ async def research_read(
             if key != "server"
         ],
     )
+    if endpoint == "document":
+        return await read_research_document(parameters)
     value = await read_research(endpoint, parameters, server)
     return JSONResponse(
         value,

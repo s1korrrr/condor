@@ -23,6 +23,7 @@ import { api, type ControllerInfo } from "@/lib/api";
 import { configToYaml, CONTROLLER_HIDDEN_KEYS } from "@/lib/configYaml";
 import { formatCurrencyVolume, formatCurrencyPnl, pnlColor } from "@/lib/formatters";
 import { setViewContext } from "@/lib/viewContext";
+import { containDialogTab } from "@/lib/dialog-focus";
 
 type ConvertFn = (value: number, quoteCurrency: string) => { value: number; converted: boolean };
 
@@ -300,10 +301,10 @@ export function ControllerBrowser({
   const configId = activeCtrl.controller_id || activeCtrl.controller_name;
 
   return (
-    <dialog ref={dialogRef} aria-label="Controller details" aria-modal="true" role="dialog" onCancel={(event) => { event.preventDefault(); onClose(); }} className="fixed inset-0 z-50 m-0 hidden open:flex h-dvh w-screen max-h-none max-w-none border-0 p-0 text-[var(--color-text)] bg-[var(--color-bg)]">
+    <dialog ref={dialogRef} aria-label="Controller details" aria-modal="true" role="dialog" onKeyDown={containDialogTab} onCancel={(event) => { event.preventDefault(); onClose(); }} className="fixed inset-0 z-50 m-0 hidden open:flex h-dvh w-screen max-h-none max-w-none border-0 p-0 text-[var(--color-text)] bg-[var(--color-bg)]">
       {/* Left sidebar */}
       <div
-        className={`flex flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] transition-all ${
+        className={`hidden md:flex shrink-0 flex-col border-r border-[var(--color-border)] bg-[var(--color-surface)] transition-all ${
           isCompact ? "w-12" : "w-64"
         }`}
       >
@@ -401,10 +402,10 @@ export function ControllerBrowser({
       </div>
 
       {/* Main content */}
-      <div className="flex flex-1 flex-col min-w-0">
+      <div className="flex flex-1 flex-col min-w-0 min-h-0">
         {/* Top bar */}
-        <div className="flex items-center justify-between border-b border-[var(--color-border)] px-5 py-2.5">
-          <div className="flex items-center gap-3 min-w-0">
+        <div className="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-[var(--color-border)] px-3 md:px-5 py-2.5">
+          <div className="flex flex-wrap items-center gap-3 min-w-0">
             <div className="truncate">
               <h2 className="text-sm font-semibold truncate">{activeCtrl.controller_name}</h2>
               {activeCtrl.controller_id && activeCtrl.controller_id !== activeCtrl.controller_name && (
@@ -493,9 +494,9 @@ export function ControllerBrowser({
         {!access.controllerMutation && <p className="px-5 py-2 text-xs text-[var(--color-text-muted)]">Controller controls are read only on this server.</p>}
         {toggleMutation.isError && <p role="alert" className="px-5 py-2 text-xs text-[var(--color-red)]">{toggleMutation.error instanceof Error ? toggleMutation.error.message : "Controller request failed"}</p>}
         {/* Two-column body */}
-        <div className="flex flex-1 min-h-0">
+        <div className="flex flex-col lg:flex-row flex-1 min-h-0 overflow-y-auto lg:overflow-hidden">
           {/* Left column: Performance data */}
-          <div className="flex-1 overflow-y-auto p-5 space-y-4 min-w-0">
+          <div className="lg:flex-1 shrink-0 lg:shrink lg:overflow-y-auto p-3 md:p-5 space-y-4 min-w-0">
             {/* PnL Evolution Chart */}
             <ControllerPnlChart
               key={`${server}:${activeCtrl.bot_name}:${configId}`}
@@ -649,7 +650,7 @@ export function ControllerBrowser({
           </div>
 
           {/* Right column: Config + Logs */}
-          <div className="w-[380px] xl:w-[440px] shrink-0 border-l border-[var(--color-border)] flex flex-col bg-[var(--color-surface)]">
+          <div className="w-full lg:w-[320px] xl:w-[440px] min-h-64 shrink-0 border-t lg:border-t-0 lg:border-l border-[var(--color-border)] flex flex-col bg-[var(--color-surface)]">
             <YamlConfigEditor
               key={`${server}:${activeCtrl.bot_name}:${configId}`}
               config={activeCtrl.config || {}}
@@ -664,4 +665,3 @@ export function ControllerBrowser({
     </dialog>
   );
 }
-

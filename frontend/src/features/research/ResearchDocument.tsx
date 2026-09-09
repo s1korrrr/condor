@@ -95,7 +95,7 @@ function ResearchDocumentReader({ server, scope, id, documents, title }: {
   return <section className="research-documents">
     <h4>{title}</h4>
     {items.length ? <ul className="research-document-list">{items.map(item => <li key={item.ref}>
-      <div><strong>{item.label}</strong><small>{sizeLabel(item.size_bytes)}{item.media_type ? ` · ${item.media_type}` : ''}</small></div>
+      <div><strong>{item.label}</strong>{item.filename && item.filename !== item.label && <small>{item.filename}</small>}<small>{sizeLabel(item.size_bytes)}{item.media_type ? ` · ${item.media_type}` : ''}</small></div>
       <div className="research-document-actions">
         <button type="button" onClick={() => void read(item, false)} disabled={!item.available || pending === item.ref} aria-label={`Open ${item.label}`}><FileText size={14} />Open</button>
         <button type="button" onClick={() => void read(item, true)} disabled={!item.available || pending === item.ref} aria-label={`Download ${item.label}`}><Download size={14} />Download</button>

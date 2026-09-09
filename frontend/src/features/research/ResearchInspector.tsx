@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Network, X } from "lucide-react";
 import { authFetch } from "@/lib/auth-token";
@@ -34,10 +34,18 @@ export function RawResearchData({
   title: string;
   value: unknown;
 }) {
+  const [expanded, setExpanded] = useState(false);
+  const serialized = useMemo(
+    () => (expanded ? JSON.stringify(value ?? null, null, 2) : null),
+    [expanded, value],
+  );
   return (
-    <details className="research-raw">
+    <details
+      className="research-raw"
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
+    >
       <summary>{title}</summary>
-      <pre>{JSON.stringify(value ?? null, null, 2)}</pre>
+      {expanded && <pre>{serialized}</pre>}
     </details>
   );
 }

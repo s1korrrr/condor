@@ -10,6 +10,7 @@ import {
 } from "./research-detail";
 import "./research-detail.css";
 import { readResearchDocument } from "./research-document-read";
+import { researchDocumentPage } from "./research-document-pagination";
 
 const PREVIEW_BYTES = 16 * 1024 * 1024;
 const DOWNLOAD_BYTES = 1024 * 1024 * 1024;
@@ -75,6 +76,7 @@ function ResearchDocumentReader({
   documents: unknown;
   title: string;
 }) {
+  const [sourcePage, setSourcePage] = useState(0);
   const [opened, setOpened] = useState<OpenDocument | null>(null);
   const [pending, setPending] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -249,12 +251,13 @@ function ResearchDocumentReader({
     }
   }
   const items = descriptors(documents);
+  const page = researchDocumentPage(items, sourcePage);
   return (
     <section className="research-documents">
       <h4>{title}</h4>
       {items.length ? (
         <ul className="research-document-list">
-          {items.map((item) => (
+          {page.items.map((item) => (
             <li key={item.ref}>
               <div>
                 <strong>{item.label}</strong>
@@ -298,6 +301,29 @@ function ResearchDocumentReader({
         <p className="quant-muted">
           No admitted source documents were returned for this record.
         </p>
+      )}
+      {page.paginated && (
+        <nav className="quant-pagination" aria-label={`${title} pages`}>
+          <span aria-live="polite">
+            {page.first}–{page.last} of {items.length.toLocaleString()} sources
+          </span>
+          <button
+            type="button"
+            disabled={page.previous === null}
+            onClick={() =>
+              page.previous !== null && setSourcePage(page.previous)
+            }
+          >
+            Previous sources
+          </button>
+          <button
+            type="button"
+            disabled={page.next === null}
+            onClick={() => page.next !== null && setSourcePage(page.next)}
+          >
+            Next sources
+          </button>
+        </nav>
       )}
       {pending && (
         <div className="quant-notice" role="status">

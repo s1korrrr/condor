@@ -8,7 +8,7 @@ function render(node,data={}) {
 }
 test('idea detail exposes distinct usage, attributed evaluations and recorded attempt outcomes without treating process completion as support',()=>{
  const r=render({id:'idea:1',title:'A real hypothesis',kind:'idea',status:'HELD',data:{hypothesis:'Range recovery'},source:{sha256:'abc'}},{usage:{experiments:2,attempts:5,valid_evaluations:3,valid_isolated:{SUPPORTED:1,CONTRADICTED:1,INCONCLUSIVE:1},combined:4,unavailable:6,independent_evaluation_note:'Evaluations share a dataset',attempt_states:{FAILED:2,COMPLETED:3}}});
- for(const content of ['Distinct experiments','Recorded attempts','Valid evaluations','Supported','Contradicted','Inconclusive','Combined attribution','Unavailable attribution','Evaluations share a dataset','Attempt outcomes','FAILED']) assert.ok(r.html.includes(content),content);
+ for(const content of ['Distinct experiments','Recorded attempts','Valid evaluations','Supported','Contradicted','Inconclusive','Combined attribution','Unavailable attribution','Evaluations share a dataset','Attempt outcomes']) assert.ok(r.html.includes(content),content);
  const b=r.buttons.find(b=>b.text==='Find in research network'); assert.ok(b);b.onClick();assert.deepEqual(r.selections,['network:idea:1']);
 });
 test('supervisor detail preserves budgets, blocked reason and actionable revision/outcome/lesson references',()=>{

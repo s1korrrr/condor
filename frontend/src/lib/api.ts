@@ -94,6 +94,7 @@ export interface ControllerInfo {
   positions_summary: Record<string, unknown>[];
   deployed_at: string | null;
   config: Record<string, unknown>;
+  custom_info: Record<string, unknown>;
 }
 
 export interface BotLogEntry {

@@ -28,6 +28,25 @@ from ._shared import SIDE_LONG, clear_bots_state, get_bots_client, set_controlle
 logger = logging.getLogger(__name__)
 
 
+async def _controller_config_target(
+    client: Any, bot_name: str, controller_id: str
+) -> str:
+    """Resolve runtime controller identity to the API-addressable config filename."""
+    configs = await client.controllers.get_bot_controller_configs(bot_name)
+    for config in configs or []:
+        if not isinstance(config, dict):
+            continue
+        if controller_id in (
+            config.get("id"),
+            config.get("controller_id"),
+            config.get("_config_name"),
+        ):
+            return str(config.get("_config_name") or config.get("id") or controller_id)
+    raise ValueError(
+        f"Controller config '{controller_id}' was not found for bot '{bot_name}'"
+    )
+
+
 # ============================================
 # MENU KEYBOARD BUILDERS
 # ============================================
@@ -734,6 +753,7 @@ async def show_controller_detail(
             if (
                 cfg.get("id") == controller_name
                 or cfg.get("controller_id") == controller_name
+                or cfg.get("_config_name") == controller_name
             ):
                 ctrl_config = cfg
                 break
@@ -882,9 +902,7 @@ async def handle_stop_controller(
 
     keyboard = [
         [
-            InlineKeyboardButton(
-                "✅ Yes, Stop", callback_data="bots:confirm_stop_ctrl"
-            ),
+            InlineKeyboardButton("✅ Yes, Stop", callback_data="bots:confirm_stop_ctrl"),
             InlineKeyboardButton(
                 "❌ Cancel", callback_data=f"bots:ctrl_idx:{controller_idx}"
             ),
@@ -935,22 +953,28 @@ async def handle_confirm_stop_controller(
     short_name = _shorten_controller_name(controller_name, 30)
 
     await query.message.edit_text(
-        f"Stopping `{escape_markdown_v2(short_name)}`\\.\\.\\.", parse_mode="MarkdownV2"
+        f"Applying kill switch to `{escape_markdown_v2(short_name)}`\\.\\.\\.",
+        parse_mode="MarkdownV2",
     )
 
     try:
         client, _ = await get_bots_client(chat_id, context.user_data)
 
         # Stop controller by setting manual_kill_switch=True
-        result = await client.controllers.update_bot_controller_config(
+        config_target = await _controller_config_target(
+            client, bot_name, controller_name
+        )
+        await client.controllers.update_bot_controller_config(
             bot_name=bot_name,
-            controller_name=controller_name,
+            controller_name=config_target,
             config={"manual_kill_switch": True},
         )
 
         keyboard = [
             [
-                InlineKeyboardButton("▶️ Restart", callback_data="bots:start_ctrl"),
+                InlineKeyboardButton(
+                    "▶️ Clear switch", callback_data="bots:start_ctrl"
+                ),
                 InlineKeyboardButton(
                     "⬅️ Back to Bot", callback_data="bots:back_to_bot"
                 ),
@@ -958,7 +982,7 @@ async def handle_confirm_stop_controller(
         ]
 
         await query.message.edit_text(
-            f"*Controller Stopped*\n\n`{escape_markdown_v2(short_name)}`",
+            f"*Controller kill switch requested*\n\n`{escape_markdown_v2(short_name)}`\n\n_Runtime effect is controller-specific; verify executors and positions separately\\._",
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
@@ -1051,16 +1075,20 @@ async def handle_confirm_start_controller(
     short_name = _shorten_controller_name(controller_name, 30)
 
     await query.message.edit_text(
-        f"Starting `{escape_markdown_v2(short_name)}`\\.\\.\\.", parse_mode="MarkdownV2"
+        f"Clearing kill switch for `{escape_markdown_v2(short_name)}`\\.\\.\\.",
+        parse_mode="MarkdownV2",
     )
 
     try:
         client, _ = await get_bots_client(chat_id, context.user_data)
 
         # Start controller by setting manual_kill_switch=False
-        result = await client.controllers.update_bot_controller_config(
+        config_target = await _controller_config_target(
+            client, bot_name, controller_name
+        )
+        await client.controllers.update_bot_controller_config(
             bot_name=bot_name,
-            controller_name=controller_name,
+            controller_name=config_target,
             config={"manual_kill_switch": False},
         )
 
@@ -1069,7 +1097,7 @@ async def handle_confirm_start_controller(
         ]
 
         await query.message.edit_text(
-            f"*Controller Started*\n\n`{escape_markdown_v2(short_name)}`",
+            f"*Controller kill switch cleared*\n\n`{escape_markdown_v2(short_name)}`\n\n_Runtime effect is controller-specific; verify telemetry separately\\._",
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
@@ -1160,15 +1188,18 @@ async def handle_quick_stop_controller(
     controller_name = controllers[controller_idx]
     short_name = _shorten_controller_name(controller_name, 20)
 
-    await query.answer(f"Stopping {short_name}...")
+    await query.answer(f"Applying kill switch to {short_name}...")
 
     try:
         client, _ = await get_bots_client(chat_id, context.user_data)
 
         # Stop controller by setting manual_kill_switch=True
+        config_target = await _controller_config_target(
+            client, bot_name, controller_name
+        )
         await client.controllers.update_bot_controller_config(
             bot_name=bot_name,
-            controller_name=controller_name,
+            controller_name=config_target,
             config={"manual_kill_switch": True},
         )
 
@@ -1199,15 +1230,18 @@ async def handle_quick_start_controller(
     controller_name = controllers[controller_idx]
     short_name = _shorten_controller_name(controller_name, 20)
 
-    await query.answer(f"Starting {short_name}...")
+    await query.answer(f"Clearing kill switch for {short_name}...")
 
     try:
         client, _ = await get_bots_client(chat_id, context.user_data)
 
         # Start controller by setting manual_kill_switch=False
+        config_target = await _controller_config_target(
+            client, bot_name, controller_name
+        )
         await client.controllers.update_bot_controller_config(
             bot_name=bot_name,
-            controller_name=controller_name,
+            controller_name=config_target,
             config={"manual_kill_switch": False},
         )
 

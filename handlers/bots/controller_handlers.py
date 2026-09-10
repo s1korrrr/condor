@@ -21,6 +21,12 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
+from condor.controller_configs import controller_config_identity
+from condor.rsi_controllers import (
+    is_managed_rsi_controller,
+    require_safe_rsi_deployment,
+    resolve_controller_names,
+)
 from handlers.cex._shared import (
     get_cex_balances,
     get_correct_pair_format,
@@ -28,8 +34,6 @@ from handlers.cex._shared import (
     validate_trading_pair,
 )
 from utils.telegram_formatters import escape_markdown_v2, format_error_message
-
-from .controllers import get_controller_info, get_supported_controller_types
 
 from ._shared import (
     GRID_STRIKE_DEFAULTS,
@@ -56,6 +60,7 @@ from ._shared import (
     init_new_controller_config,
     set_controller_config,
 )
+from .controllers import get_controller_info, get_supported_controller_types
 from .controllers.grid_strike.grid_analysis import (
     calculate_natr,
     generate_theoretical_grid,
@@ -75,9 +80,19 @@ logger = logging.getLogger(__name__)
 CONFIGS_PER_PAGE = 8  # Reduced to leave space for action buttons
 
 
+def _selected_deploy_config_names(configs: list[dict], selected: set[int]) -> list[str]:
+    """Return API-addressable config filenames for a Telegram deployment."""
+    return [
+        controller_config_identity(configs[index]) or f"config_{index}"
+        for index in selected
+        if index < len(configs)
+    ]
+
+
 def _get_controller_type_display(controller_name: str) -> tuple[str, str]:
     """Get display name and emoji for controller type"""
     type_map = {
+        "rsi": ("RSI Controller", "🧭"),
         "grid_strike": ("Grid Strike", "📊"),
         "pmm_mister": ("PMM Mister", "📈"),
         "pmm_v1": ("PMM V1", "📈"),
@@ -111,7 +126,7 @@ def _format_config_line(cfg: dict, index: int) -> str:
         display = f"{connector} {pair} {side} {price_range}".strip()
     else:
         # Fallback to config ID
-        config_id = cfg.get("id", "unnamed")
+        config_id = controller_config_identity(cfg) or "unnamed"
         display = config_id
 
     return f"{index}. {display}"
@@ -119,7 +134,7 @@ def _format_config_line(cfg: dict, index: int) -> str:
 
 def _get_config_seq_num(cfg: dict) -> int:
     """Extract sequence number from config ID for sorting"""
-    config_id = cfg.get("id", "")
+    config_id = controller_config_identity(cfg)
     parts = config_id.split("_", 1)
     if parts and parts[0].isdigit():
         return int(parts[0])
@@ -140,7 +155,7 @@ def _get_selected_config_ids(context, type_configs: list) -> list[str]:
     selected = context.user_data.get("selected_configs", {})  # {config_id: True}
     result = []
     for cfg in type_configs:
-        cfg_id = cfg.get("id", "")
+        cfg_id = controller_config_identity(cfg)
         if cfg_id and selected.get(cfg_id):
             result.append(cfg_id)
     return result
@@ -166,8 +181,9 @@ async def show_controller_configs_menu(
         context.user_data["controller_configs_list"] = configs
 
         # Get available types from registry (always shows all supported types)
-        all_types = get_supported_controller_types()
+        registered_types = get_supported_controller_types()
         type_counts = _get_available_controller_types(configs)
+        all_types = list(dict.fromkeys([*registered_types, *sorted(type_counts)]))
 
         # Determine current type (default to first registered or grid_strike)
         current_type = context.user_data.get("configs_controller_type")
@@ -184,7 +200,11 @@ async def show_controller_configs_menu(
         # Get selection state (uses config IDs for persistence)
         # Sync with available configs - remove any IDs that no longer exist
         selected = context.user_data.get("selected_configs", {})  # {config_id: True}
-        available_ids = {c.get("id") for c in configs if c.get("id")}
+        available_ids = {
+            controller_config_identity(config)
+            for config in configs
+            if controller_config_identity(config)
+        }
         selected = {
             cfg_id: is_sel
             for cfg_id, is_sel in selected.items()
@@ -248,15 +268,16 @@ async def show_controller_configs_menu(
             )
 
         # Create button - dynamically routes to the current type's wizard
-        type_row.append(
-            InlineKeyboardButton("➕ New", callback_data=f"bots:new_{current_type}")
-        )
+        if current_type in registered_types:
+            type_row.append(
+                InlineKeyboardButton("➕ New", callback_data=f"bots:new_{current_type}")
+            )
 
         keyboard.append(type_row)
 
         # Config checkboxes - show just the controller name/ID
         for i, cfg in enumerate(page_configs):
-            config_id = cfg.get("id", f"config_{start_idx + i}")
+            config_id = controller_config_identity(cfg) or f"config_{start_idx + i}"
             is_selected = selected.get(config_id, False)
             checkbox = "✅" if is_selected else "⬜"
 
@@ -276,7 +297,9 @@ async def show_controller_configs_menu(
             nav = []
             if page > 0:
                 nav.append(
-                    InlineKeyboardButton("◀️", callback_data=f"bots:cfg_page:{page - 1}")
+                    InlineKeyboardButton(
+                        "◀️", callback_data=f"bots:cfg_page:{page - 1}"
+                    )
                 )
             nav.append(
                 InlineKeyboardButton(
@@ -285,7 +308,9 @@ async def show_controller_configs_menu(
             )
             if page < total_pages - 1:
                 nav.append(
-                    InlineKeyboardButton("▶️", callback_data=f"bots:cfg_page:{page + 1}")
+                    InlineKeyboardButton(
+                        "▶️", callback_data=f"bots:cfg_page:{page + 1}"
+                    )
                 )
             keyboard.append(nav)
 
@@ -408,9 +433,11 @@ async def show_type_selector(
 
     lines = [r"*Select Controller Type*", ""]
 
-    # Show all registered types from registry (not just existing configs)
+    # Include API-stored custom types so managed RSI configs are operable here.
     keyboard = []
-    for ctrl_type, info in get_controller_info().items():
+    registered_info = get_controller_info()
+    all_types = list(dict.fromkeys([*registered_info, *sorted(type_counts)]))
+    for ctrl_type in all_types:
         type_name, emoji = _get_controller_type_display(ctrl_type)
         count = type_counts.get(ctrl_type, 0)
         is_current = "• " if ctrl_type == current_type else ""
@@ -601,7 +628,7 @@ async def handle_cfg_deploy(update: Update, context: ContextTypes.DEFAULT_TYPE) 
     deploy_indices = set()
     for cfg_id in selected_ids:
         for all_idx, all_cfg in enumerate(all_configs):
-            if all_cfg.get("id") == cfg_id:
+            if controller_config_identity(all_cfg) == cfg_id:
                 deploy_indices.add(all_idx)
                 break
 
@@ -636,7 +663,7 @@ async def handle_cfg_edit_loop(
     configs_to_edit = []
     for cfg_id in selected_ids:
         for cfg in all_configs:
-            if cfg.get("id") == cfg_id:
+            if controller_config_identity(cfg) == cfg_id:
                 configs_to_edit.append(cfg.copy())
                 break
 
@@ -1026,9 +1053,7 @@ async def process_cfg_edit_input(
             InlineKeyboardButton("Next ▶️", callback_data="bots:cfg_edit_next")
         )
     keyboard.append(nav_row)
-    keyboard.append(
-        [InlineKeyboardButton("🔀 Branch", callback_data="bots:cfg_branch")]
-    )
+    keyboard.append([InlineKeyboardButton("🔀 Branch", callback_data="bots:cfg_branch")])
     keyboard.append(
         [
             InlineKeyboardButton(
@@ -1093,7 +1118,7 @@ async def handle_cfg_edit_save(
         await query.answer("Config not found", show_alert=True)
         return
 
-    config_id = config.get("id")
+    config_id = controller_config_identity(config)
 
     try:
         client, _ = await get_bots_client(chat_id, context.user_data)
@@ -1145,10 +1170,11 @@ async def handle_cfg_edit_save_all(
 
     for config_id, config in modified.items():
         try:
+            target_name = controller_config_identity(config) or config_id
             await client.controllers.create_or_update_controller_config(
-                config_id, clean_config_for_save(config)
+                target_name, clean_config_for_save(config)
             )
-            saved.append(config_id)
+            saved.append(target_name)
         except Exception as e:
             logger.error(f"Failed to save config {config_id}: {e}")
             failed.append((config_id, str(e)))
@@ -1275,6 +1301,8 @@ async def handle_cfg_branch(update: Update, context: ContextTypes.DEFAULT_TYPE) 
 
     # Deep copy the config with new ID
     new_config = copy.deepcopy(config)
+    new_config.pop("_config_name", None)
+    new_config.pop("config_base_name", None)
     new_config["id"] = new_id
 
     # Add to edit loop right after current config
@@ -1810,8 +1838,7 @@ async def _show_wizard_amount_step(
 
     message_text = (
         rf"*📈 Grid Strike \- Step {step_num}/{total_steps}*" + "\n\n"
-        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`"
-        + "\n"
+        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`" + "\n"
         f"🎯 {side} \\| ⚡ `{leverage}x`"
         + "\n\n"
         + balance_text
@@ -3020,9 +3047,9 @@ async def _background_fetch_market_data(
 
             logger.info(f"Background fetch complete for {pair}: price={current_price}")
         else:
-            context.user_data["gs_market_data_error"] = (
-                f"Could not fetch price for {pair}"
-            )
+            context.user_data[
+                "gs_market_data_error"
+            ] = f"Could not fetch price for {pair}"
 
     except Exception as e:
         logger.error(f"Background fetch error for {pair}: {e}")
@@ -3060,9 +3087,12 @@ async def process_gs_wizard_input(
 
             # Validate trading pair exists on the connector
             client, _ = await get_bots_client(chat_id, context.user_data)
-            is_valid, error_msg, suggestions, correct_pair = (
-                await validate_trading_pair(context.user_data, client, connector, pair)
-            )
+            (
+                is_valid,
+                error_msg,
+                suggestions,
+                correct_pair,
+            ) = await validate_trading_pair(context.user_data, client, connector, pair)
 
             if not is_valid:
                 # Show error with suggestions
@@ -5182,7 +5212,9 @@ def _build_deploy_progressive_message(
             value_display = f"{default} (default)" if default else "Not set"
 
         if field_name == current_field:
-            lines.append(f"➡️ *{escape_markdown_v2(label)}*{required}: _awaiting input_")
+            lines.append(
+                f"➡️ *{escape_markdown_v2(label)}*{required}: _awaiting input_"
+            )
         elif DEPLOY_FIELD_ORDER.index(field_name) < DEPLOY_FIELD_ORDER.index(
             current_field
         ):
@@ -5596,6 +5628,16 @@ async def handle_execute_deploy(
     try:
         client, _ = await get_bots_client(chat_id, context.user_data)
 
+        controller_names = await resolve_controller_names(client, controllers_config)
+        require_safe_rsi_deployment(
+            controller_names=controller_names,
+            image=deploy_params.get("image"),
+            max_global_drawdown_quote=deploy_params.get("max_global_drawdown_quote"),
+            max_controller_drawdown_quote=deploy_params.get(
+                "max_controller_drawdown_quote"
+            ),
+        )
+
         # Deploy using deploy_v2_controllers (this can take time)
         result = await client.bot_orchestration.deploy_v2_controllers(
             instance_name=instance_name,
@@ -5695,11 +5737,13 @@ async def show_deploy_config_step(
         return
 
     # Get selected config names
-    controller_names = [
-        configs[i].get("id", configs[i].get("config_name", f"config_{i}"))
-        for i in selected
-        if i < len(configs)
+    controller_names = _selected_deploy_config_names(configs, selected)
+    selected_controller_names = [
+        str(configs[i].get("controller_name", "")) for i in selected if i < len(configs)
     ]
+    managed_rsi_selected = any(
+        is_managed_rsi_controller(name) for name in selected_controller_names
+    )
 
     # Initialize or get deploy params
     deploy_params = context.user_data.get("deploy_params", {})
@@ -5710,6 +5754,8 @@ async def show_deploy_config_step(
             "credentials_profile": creds_default,
             "image": "hummingbot/hummingbot:latest",
             "instance_name": creds_default,  # Default name = credentials profile
+            "max_global_drawdown_quote": None,
+            "max_controller_drawdown_quote": None,
         }
     context.user_data["deploy_params"] = deploy_params
     context.user_data["deploy_message_id"] = query.message.message_id
@@ -5719,6 +5765,8 @@ async def show_deploy_config_step(
     creds = deploy_params.get("credentials_profile", "master_account")
     image = deploy_params.get("image", "hummingbot/hummingbot:latest")
     instance_name = deploy_params.get("instance_name", creds)
+    max_global = deploy_params.get("max_global_drawdown_quote")
+    max_controller = deploy_params.get("max_controller_drawdown_quote")
 
     # Build controllers list in code block for readability
     controllers_block = "\n".join(controller_names)
@@ -5736,8 +5784,14 @@ async def show_deploy_config_step(
         f"  📝  *Name:*      `{escape_markdown_v2(instance_name)}`",
         f"  👤  *Account:*   `{escape_markdown_v2(creds)}`",
         f"  🐳  *Image:*     `{escape_markdown_v2(image_short)}`",
+        f"  🛡️  *Global DD:* `{escape_markdown_v2(str(max_global or 'not set'))}`",
+        f"  🛡️  *Ctrl DD:*   `{escape_markdown_v2(str(max_controller or 'not set'))}`",
         "",
-        r"_Tap buttons below to change settings_",
+        (
+            r"_RSI requires a pinned image and both positive drawdown limits_"
+            if managed_rsi_selected
+            else r"_Tap buttons below to change settings_"
+        ),
     ]
 
     # Build keyboard - one button per row for better readability
@@ -5757,16 +5811,26 @@ async def show_deploy_config_step(
                 f"🐳 Image: {image_short}", callback_data="bots:select_image:_show"
             )
         ],
+        [
+            InlineKeyboardButton(
+                f"🛡️ Global DD: {max_global or 'set'}",
+                callback_data="bots:deploy_set:max_global_drawdown_quote",
+            ),
+            InlineKeyboardButton(
+                f"🛡️ Ctrl DD: {max_controller or 'set'}",
+                callback_data="bots:deploy_set:max_controller_drawdown_quote",
+            ),
+        ],
+        [
+            InlineKeyboardButton(
+                "📌 Enter pinned image", callback_data="bots:deploy_set:image"
+            )
+        ],
         [InlineKeyboardButton("✅ Deploy Now", callback_data="bots:execute_deploy")],
         [InlineKeyboardButton("« Back", callback_data="bots:deploy_menu")],
     ]
 
     reply_markup = InlineKeyboardMarkup(keyboard)
-
-    # Set drawdowns to None (skip them)
-    deploy_params["max_global_drawdown_quote"] = None
-    deploy_params["max_controller_drawdown_quote"] = None
-    context.user_data["deploy_params"] = deploy_params
 
     await query.message.edit_text(
         "\n".join(lines), parse_mode="MarkdownV2", reply_markup=reply_markup
@@ -5998,11 +6062,7 @@ async def process_instance_name_input(
                     f"🐳 Image: {image_short}", callback_data="bots:select_image:_show"
                 )
             ],
-            [
-                InlineKeyboardButton(
-                    "✅ Deploy Now", callback_data="bots:execute_deploy"
-                )
-            ],
+            [InlineKeyboardButton("✅ Deploy Now", callback_data="bots:execute_deploy")],
             [InlineKeyboardButton("« Back", callback_data="bots:deploy_menu")],
         ]
 
@@ -6074,9 +6134,6 @@ async def handle_deploy_confirm(
 
     # Store the generated name in deploy_params
     deploy_params["instance_name"] = generated_name
-    # Set drawdowns to None (skip them)
-    deploy_params["max_global_drawdown_quote"] = None
-    deploy_params["max_controller_drawdown_quote"] = None
     context.user_data["deploy_params"] = deploy_params
 
     await query.message.edit_text(
@@ -6143,12 +6200,24 @@ async def process_deploy_custom_name_input(
     try:
         client, _ = await get_bots_client(chat_id, context.user_data)
 
+        controller_names = await resolve_controller_names(client, controllers)
+        require_safe_rsi_deployment(
+            controller_names=controller_names,
+            image=image,
+            max_global_drawdown_quote=deploy_params.get("max_global_drawdown_quote"),
+            max_controller_drawdown_quote=deploy_params.get(
+                "max_controller_drawdown_quote"
+            ),
+        )
+
         result = await client.bot_orchestration.deploy_v2_controllers(
             instance_name=custom_name,
             credentials_profile=creds,
             controllers_config=controllers,
-            max_global_drawdown_quote=None,
-            max_controller_drawdown_quote=None,
+            max_global_drawdown_quote=deploy_params.get("max_global_drawdown_quote"),
+            max_controller_drawdown_quote=deploy_params.get(
+                "max_controller_drawdown_quote"
+            ),
             image=image,
         )
 
@@ -6296,8 +6365,7 @@ async def _show_pmm_wizard_connector_step(
         )
 
         await query.message.edit_text(
-            r"*📈 PMM Mister \- New Config*" + "\n\n"
-            r"*Step 1/8:* 🏦 Select Connector",
+            r"*📈 PMM Mister \- New Config*" + "\n\n" r"*Step 1/8:* 🏦 Select Connector",
             parse_mode="MarkdownV2",
             reply_markup=InlineKeyboardMarkup(keyboard),
         )
@@ -6479,8 +6547,7 @@ async def _show_pmm_wizard_allocation_step(
 
     await query.message.edit_text(
         r"*📈 PMM Mister \- New Config*" + "\n\n"
-        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`"
-        + "\n"
+        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`" + "\n"
         f"⚡ `{leverage}x`" + "\n\n"
         r"*Step 4/8:* 💰 Portfolio Allocation" + "\n\n"
         r"_Or type a custom value \(e\.g\. 3% or 0\.03\)_",
@@ -6611,8 +6678,7 @@ async def _show_pmm_wizard_amount_step(
 
     message_text = (
         r"*📈 PMM Mister \- New Config*" + "\n\n"
-        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`"
-        + "\n"
+        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`" + "\n"
         f"⚡ `{leverage}x` \\| 💰 `{allocation*100:.1f}%`"
         + "\n\n"
         + balance_text
@@ -6682,10 +6748,8 @@ async def _show_pmm_wizard_spreads_step(
 
     await query.message.edit_text(
         r"*📈 PMM Mister \- New Config*" + "\n\n"
-        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`"
-        + "\n"
-        f"⚡ `{leverage}x` \\| 💰 `{allocation*100:.0f}%` \\| 💵 `{amount:,.0f}`"
-        + "\n\n"
+        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`" + "\n"
+        f"⚡ `{leverage}x` \\| 💰 `{allocation*100:.0f}%` \\| 💵 `{amount:,.0f}`" + "\n\n"
         r"*Step 6/8:* 📊 Spreads" + "\n\n"
         r"_Or type custom: `0\.01,0\.02`_",
         parse_mode="MarkdownV2",
@@ -6732,10 +6796,8 @@ async def _show_pmm_wizard_spreads_step_msg(
         chat_id=chat_id,
         message_id=message_id,
         text=r"*📈 PMM Mister \- New Config*" + "\n\n"
-        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`"
-        + "\n"
-        f"⚡ `{leverage}x` \\| 💰 `{allocation*100:.0f}%` \\| 💵 `{amount:,.0f}`"
-        + "\n\n"
+        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`" + "\n"
+        f"⚡ `{leverage}x` \\| 💰 `{allocation*100:.0f}%` \\| 💵 `{amount:,.0f}`" + "\n\n"
         r"*Step 6/8:* 📊 Spreads" + "\n\n"
         r"_Or type custom: `0\.01,0\.02`_",
         parse_mode="MarkdownV2",
@@ -6775,8 +6837,7 @@ async def _show_pmm_wizard_amount_step_msg(
         chat_id=chat_id,
         message_id=message_id,
         text=r"*📈 PMM Mister \- New Config*" + "\n\n"
-        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`"
-        + "\n"
+        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`" + "\n"
         f"⚡ `{leverage}x` \\| 💰 `{allocation*100:.1f}%`" + "\n\n"
         r"*Step 5/8:* 💵 Total Amount \(Quote\)" + "\n\n"
         r"Select or type amount:",
@@ -6828,8 +6889,7 @@ async def _show_pmm_wizard_tp_step(
 
     await query.message.edit_text(
         r"*📈 PMM Mister \- New Config*" + "\n\n"
-        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`"
-        + "\n"
+        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`" + "\n"
         f"⚡ `{leverage}x` \\| 💰 `{allocation*100:.0f}%`" + "\n"
         f"📊 Spreads: `{escape_markdown_v2(spreads)}`" + "\n\n"
         r"*Step 7/8:* 🎯 Take Profit",
@@ -7267,8 +7327,7 @@ async def handle_pmm_edit_advanced(
         f"⏱️ *Refresh:* `{config.get('executor_refresh_time', 10)}s`" + "\n"
         f"⏸️ *Cooldowns:* buy=`{config.get('buy_cooldown_time', 10)}s` "
         f"sell=`{config.get('sell_cooldown_time', 10)}s`" + "\n"
-        f"🔢 *Max Executors:* `{config.get('max_active_executors_by_level', 10)}`"
-        + "\n"
+        f"🔢 *Max Executors:* `{config.get('max_active_executors_by_level', 10)}`" + "\n"
         f"🛡️ *Profit Protection:* `{config.get('position_profit_protection', True)}`"
         + "\n"
         f"📊 *Global TP/SL:* `{config.get('global_take_profit', '0.03')}`/`{config.get('global_stop_loss', '0.05')}`",
@@ -8002,8 +8061,7 @@ async def _pmm_show_advanced(context, chat_id, message_id, config):
         f"⏱️ *Refresh:* `{config.get('executor_refresh_time', 10)}s`" + "\n"
         f"⏸️ *Cooldowns:* buy=`{config.get('buy_cooldown_time', 10)}s` "
         f"sell=`{config.get('sell_cooldown_time', 10)}s`" + "\n"
-        f"🔢 *Max Executors:* `{config.get('max_active_executors_by_level', 10)}`"
-        + "\n"
+        f"🔢 *Max Executors:* `{config.get('max_active_executors_by_level', 10)}`" + "\n"
         f"🛡️ *Profit Protection:* `{config.get('position_profit_protection', True)}`"
         + "\n"
         f"📊 *Global TP/SL:* `{config.get('global_take_profit', '0.03')}`/`{config.get('global_stop_loss', '0.05')}`",
@@ -8016,11 +8074,11 @@ async def _pmm_show_advanced(context, chat_id, message_id, config):
 # PMM V1 WIZARD
 # ============================================
 
-from .controllers.pmm_v1 import generate_id as pv1_generate_id
-from .controllers.pmm_v1 import validate_config as pv1_validate_config
-from .controllers.pmm_v1 import parse_spreads as pv1_parse_spreads
 from .controllers.pmm_v1 import FIELD_ORDER as PV1_FIELD_ORDER
 from .controllers.pmm_v1 import FIELDS as PV1_FIELDS
+from .controllers.pmm_v1 import generate_id as pv1_generate_id
+from .controllers.pmm_v1 import parse_spreads as pv1_parse_spreads
+from .controllers.pmm_v1 import validate_config as pv1_validate_config
 
 
 async def show_new_pmm_v1_form(
@@ -8271,8 +8329,7 @@ async def _show_pv1_wizard_spreads_step(
 
     await query.message.edit_text(
         r"*📈 PMM V1 \- New Config*" + "\n\n"
-        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`"
-        + "\n"
+        f"🏦 `{escape_markdown_v2(connector)}` \\| 🔗 `{escape_markdown_v2(pair)}`" + "\n"
         f"💰 Amount: `{escape_markdown_v2(str(amount))}`" + "\n\n"
         r"*Step 4/5:* 📊 Spread" + "\n\n"
         r"_Applied to both buy and sell\. Or type a custom value \(e\.g\. 0\.001\)_",

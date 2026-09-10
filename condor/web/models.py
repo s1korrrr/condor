@@ -112,6 +112,7 @@ class ControllerInfo(BaseModel):
     positions_summary: list[dict[str, Any]] = []
     deployed_at: Optional[str] = None
     config: dict[str, Any] = {}
+    custom_info: dict[str, Any] = {}
 
 
 class BotSummary(BaseModel):

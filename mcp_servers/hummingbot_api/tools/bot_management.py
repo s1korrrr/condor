@@ -7,10 +7,15 @@ status retrieval, log management, and execution control.
 import asyncio
 from typing import Any, Literal
 
-from mcp_servers.hummingbot_api.formatters import format_active_bots_as_table, format_bot_logs_as_table
+from mcp_servers.hummingbot_api.formatters import (
+    format_active_bots_as_table,
+    format_bot_logs_as_table,
+)
 
 
-async def _get_controller_configs_map(client: Any, bot_name: str) -> dict[str, dict[str, Any]]:
+async def _get_controller_configs_map(
+    client: Any, bot_name: str
+) -> dict[str, dict[str, Any]]:
     """
     Fetch a bot's controller configs keyed by both config id and config file name.
 
@@ -58,7 +63,9 @@ async def get_active_bots_status(client: Any) -> dict[str, Any]:
     bots_table = format_active_bots_as_table(active_bots)
 
     # Count total bots
-    total_bots = len(active_bots.get("data", {})) if isinstance(active_bots, dict) else 0
+    total_bots = (
+        len(active_bots.get("data", {})) if isinstance(active_bots, dict) else 0
+    )
 
     return {
         "active_bots": active_bots,
@@ -71,11 +78,11 @@ async def _attach_kill_switches(client: Any, bots: dict[str, Any]) -> None:
     """
     Attach each controller's `manual_kill_switch` to its entry in the status payload.
 
-    The per-controller `status` the API reports is a hardcoded "running" that never
-    reflects a stopped controller, so the kill switch from the bot's controller config
-    is the only way to tell a running controller from a stopped one. Bots whose configs
-    cannot be read keep `kill_switch=None`, which surfaces as state "unknown" rather
-    than a wrong "running".
+    The per-controller `status` the API reports is a hardcoded "running" that does not
+    describe the controller-specific effect of this configuration flag. Attach the
+    persisted flag as a separate control signal; callers must not infer executor closure
+    or position flattening from it. Bots whose configs cannot be read keep the signal
+    unknown rather than projecting a false lifecycle state.
     """
     bot_names = [name for name, data in bots.items() if isinstance(data, dict)]
     if not bot_names:
@@ -97,7 +104,9 @@ async def _attach_kill_switches(client: Any, bots: dict[str, Any]) -> None:
                 continue
             config = configs.get(str(controller_id))
             if config is not None:
-                controller_data["kill_switch"] = bool(config.get("manual_kill_switch", False))
+                controller_data["kill_switch"] = bool(
+                    config.get("manual_kill_switch", False)
+                )
 
 
 async def get_bot_logs(
@@ -150,7 +159,10 @@ async def get_bot_logs(
     if log_type in ["error", "all"] and "error_logs" in bot_data:
         error_logs = bot_data["error_logs"]
         for log_entry in error_logs:
-            if search_term is None or search_term.lower() in log_entry.get("msg", "").lower():
+            if (
+                search_term is None
+                or search_term.lower() in log_entry.get("msg", "").lower()
+            ):
                 log_entry["log_category"] = "error"
                 logs.append(log_entry)
 
@@ -158,7 +170,10 @@ async def get_bot_logs(
     if log_type in ["general", "all"] and "general_logs" in bot_data:
         general_logs = bot_data["general_logs"]
         for log_entry in general_logs:
-            if search_term is None or search_term.lower() in log_entry.get("msg", "").lower():
+            if (
+                search_term is None
+                or search_term.lower() in log_entry.get("msg", "").lower()
+            ):
                 log_entry["log_category"] = "general"
                 logs.append(log_entry)
 
@@ -240,7 +255,7 @@ async def _set_kill_switches(
     would otherwise look like a silent success.
     """
     action = "stop_controllers" if kill_switch else "start_controllers"
-    verb = "stopped" if kill_switch else "started"
+    verb = "enabled" if kill_switch else "cleared"
 
     # Resolve each name to the config file name the update endpoint addresses
     try:
@@ -281,16 +296,22 @@ async def _set_kill_switches(
         updated_configs = {}
     for name in succeeded:
         config = updated_configs.get(name) or updated_configs.get(targets[name])
-        confirmed[name] = bool(config.get("manual_kill_switch", False)) if config else None
+        confirmed[name] = (
+            bool(config.get("manual_kill_switch", False)) if config else None
+        )
 
-    unconfirmed = [name for name, value in confirmed.items() if value is not kill_switch]
+    unconfirmed = [
+        name for name, value in confirmed.items() if value is not kill_switch
+    ]
 
     verified = [name for name in succeeded if name not in unconfirmed]
     message = (
-        f"Controllers {verb} on bot '{bot_name}': {verified or succeeded}. "
+        f"Controller config kill switch {verb} on bot '{bot_name}': {verified or succeeded}. "
         f"manual_kill_switch={kill_switch} written to the controller configs; "
-        f"the bot applies it on its next config reload (~10s), then closes that "
-        f"controller's executors. The controller stays listed in status with state '{verb}'."
+        f"the bot reads it on its next config reload (~10s). Runtime semantics are "
+        f"controller-specific: this may only block new entries and does not prove "
+        f"that executors closed or positions flattened. Verify runtime telemetry, "
+        f"executors, and positions separately."
     )
     if unconfirmed:
         message += f" Write NOT confirmed by read-back for: {unconfirmed}."
@@ -304,6 +325,8 @@ async def _set_kill_switches(
         "succeeded": succeeded,
         "failed": failed,
         "confirmed_kill_switch": confirmed,
+        "runtime_stop_confirmed": False,
+        "lifecycle_semantics": "controller_specific",
         "message": message,
     }
 
@@ -364,14 +387,20 @@ async def update_bot_controller_config(
     config_controller_name = config_data.get("controller_name")
 
     if not config_controller_type or not config_controller_name:
-        raise ValueError("config_data must include 'controller_type' and 'controller_name'")
+        raise ValueError(
+            "config_data must include 'controller_type' and 'controller_name'"
+        )
 
     # Validate config first
-    await client.controllers.validate_controller_config(config_controller_type, config_controller_name, config_data)
+    await client.controllers.validate_controller_config(
+        config_controller_type, config_controller_name, config_data
+    )
+
+    configs_by_key = await _get_controller_configs_map(client, bot_name)
+    config = configs_by_key.get(config_name)
+    target_name = str((config or {}).get("_config_name") or config_name)
 
     if not confirm_override:
-        current_configs = await client.controllers.get_bot_controller_configs(bot_name)
-        config = next((c for c in current_configs if c.get("id") == config_name), None)
         if config:
             return {
                 "action": "update_config",
@@ -379,12 +408,16 @@ async def update_bot_controller_config(
                 "config_name": config_name,
                 "bot_name": bot_name,
                 "current_config": config,
-                "message": (f"Config '{config_name}' already exists in bot '{bot_name}' with data: {config}. "
-                           "Set confirm_override=True to update it."),
+                "message": (
+                    f"Config '{config_name}' already exists in bot '{bot_name}' with data: {config}. "
+                    "Set confirm_override=True to update it."
+                ),
             }
         else:
             clean_data = {k: v for k, v in config_data.items() if not k.startswith("_")}
-            update_op = await client.controllers.update_bot_controller_config(bot_name, config_name, clean_data)
+            update_op = await client.controllers.update_bot_controller_config(
+                bot_name, target_name, clean_data
+            )
             return {
                 "action": "update_config",
                 "exists": False,
@@ -394,11 +427,12 @@ async def update_bot_controller_config(
                 "message": f"Config created in bot '{bot_name}': {update_op}",
             }
     else:
-        # Ensure config_data has the correct id
-        if "id" not in config_data or config_data["id"] != config_name:
-            config_data["id"] = config_name
+        if config is not None and "id" not in config_data and config.get("id"):
+            config_data["id"] = config["id"]
         clean_data = {k: v for k, v in config_data.items() if not k.startswith("_")}
-        update_op = await client.controllers.update_bot_controller_config(bot_name, config_name, clean_data)
+        update_op = await client.controllers.update_bot_controller_config(
+            bot_name, target_name, clean_data
+        )
         return {
             "action": "update_config",
             "exists": True,

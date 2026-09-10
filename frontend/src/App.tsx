@@ -20,6 +20,7 @@ import { StrategyDetail } from "@/pages/StrategyDetail";
 import { useServerCapabilities } from "@/hooks/useServerCapabilities";
 import { WorkspaceTools } from "@/pages/WorkspaceTools";
 import { CapabilityUnavailable } from '@/components/CapabilityUnavailable';
+const Operations = lazy(() => import("@/pages/Operations").then(module => ({default:module.Operations})));
 const Overview = lazy(() => import("@/pages/Overview").then(module => ({default:module.Overview})));
 const Research = lazy(() => import("@/pages/Research").then(module => ({default:module.Research})));
 const TradingVisuals = lazy(() => import("@/pages/TradingVisuals").then(module => ({ default: module.TradingVisuals })));
@@ -84,6 +85,7 @@ export default function App() {
                 }
               >
                 <Route path="/" element={<Home />} />
+                <Route path="/operations" element={<Suspense fallback={<p role="status">Loading operations…</p>}><Operations/></Suspense>} />
                 <Route path="/overview" element={<Suspense fallback={<p role="status">Loading overview…</p>}><Overview/></Suspense>} />
                 <Route path="/research" element={<Suspense fallback={<p role="status">Loading research…</p>}><Research/></Suspense>} />
                 <Route path="/tools" element={<WorkspaceTools/>} />

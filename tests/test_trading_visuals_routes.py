@@ -91,7 +91,7 @@ async def test_visuals_cancellation_closes_stream(monkeypatch):
             await asyncio.gather(task, return_exceptions=True)
 
 
-def client(monkeypatch, *, access=True, authenticated=True, handler=None):
+def client(monkeypatch, *, access=True, authenticated=True, admin=True, handler=None):
     from condor.web.routes import trading_visuals as routes
 
     monkeypatch.setenv('CONDOR_TRADING_VISUALS_SOURCES', json.dumps({
@@ -99,6 +99,8 @@ def client(monkeypatch, *, access=True, authenticated=True, handler=None):
         'ok_rsi_sui_sell_only': {'server': 'local', 'url': 'http://127.0.0.1:5012/api/v1'},
     }))
     class Config:
+        def is_admin(self, user_id):
+            return admin
         def has_server_access(self, user_id, server):
             return access and server == 'local'
     monkeypatch.setattr(routes, 'get_config_manager', lambda: Config())
@@ -183,3 +185,19 @@ def test_visuals_api_hop_uses_only_configured_backend_credentials(monkeypatch):
                    'username_env': 'TEST_API_USERNAME', 'password_env': 'TEST_API_PASSWORD'},
     }))
     assert c.get('/api/v1/trading-visuals/bootstrap').json() == {'pnl': None}
+
+
+@pytest.mark.parametrize('admin,access,status', [(False,True,403),(True,False,404),(True,True,200)])
+def test_operations_requires_admin_and_source_access(monkeypatch,admin,access,status):
+    result=client(monkeypatch,admin=admin,access=access).get('/api/v1/trading-visuals/operations?bot=ok_rsi')
+    assert result.status_code == status
+    if status == 200:
+        assert result.json()['path'] == '/api/v1/operations'
+        assert result.headers['cache-control'] == 'no-store'
+
+
+def test_operations_rejects_duplicate_bot_and_unknown_source(monkeypatch):
+    c=client(monkeypatch)
+    assert c.get('/api/v1/trading-visuals/operations?bot=ok_rsi&bot=ok_rsi').status_code == 400
+    assert c.get('/api/v1/trading-visuals/operations?bot=unknown').status_code == 404
+    assert c.post('/api/v1/trading-visuals/operations?bot=ok_rsi').status_code == 405

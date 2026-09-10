@@ -31,6 +31,7 @@ import { CurrencySelector } from "./CurrencySelector";
 import { ServerSelector } from "./ServerSelector";
 
 const NAV_ITEMS = [
+  { to: "/operations", icon: Activity, label: "Operations" },
   { to: "/overview", icon: ChartNoAxesCombined, label: "Overview" },
   { to: "/research", icon: Network, label: "Research" },
   { to: "/tools", icon: Wrench, label: "Tools" },
@@ -68,8 +69,8 @@ function AppShellBody() {
   const { hasKeys, isLoading: keysLoading } = useCredentials();
   const { data: serverStatus, access, isLoading: capabilitiesLoading, isFetching, unavailableReason, refetch } = useServerCapabilities();
   const capabilityReason = unavailableServerRoute(pathname, serverStatus);
-  const nativeRoutes=['/overview','/portfolio','/trading-visuals','/bots','/research','/tools'];
-  const independentRoutes=['/overview','/trading-visuals','/research','/tools'];
+  const nativeRoutes=['/operations','/overview','/portfolio','/trading-visuals','/bots','/research','/tools'];
+  const independentRoutes=['/operations','/overview','/trading-visuals','/research','/tools'];
   const navigationItems=!access.online ? NAV_ITEMS.filter(item=>independentRoutes.includes(item.to))
     : access.native ? nativeRoutes.map(to=>NAV_ITEMS.find(item=>item.to===to)!) : NAV_ITEMS;
 
@@ -99,7 +100,7 @@ function AppShellBody() {
   // The chat is the landing page and needs no exchange keys, so the blocking
   // overlay would otherwise be the first thing every unconfigured user hits —
   // on the one surface that can talk them through connecting.
-  const exemptRoutes = ["/routines", "/settings", "/trading-visuals", "/overview", "/research", "/tools"];
+  const exemptRoutes = ["/operations", "/routines", "/settings", "/trading-visuals", "/overview", "/research", "/tools"];
   const showKeysOverlay =
     server && !access.native && access.accounts && !capabilityReason && !keysLoading && !hasKeys && !isChatWorkspace &&
     !exemptRoutes.some((r) => pathname.startsWith(r));

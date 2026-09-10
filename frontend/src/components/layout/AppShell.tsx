@@ -12,7 +12,6 @@ import {
   Zap,
   ChartNoAxesCombined,
   Network,
-  Wrench,
 } from "lucide-react";
 import { matchPath, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
@@ -34,7 +33,6 @@ const NAV_ITEMS = [
   { to: "/operations", icon: Activity, label: "Operations" },
   { to: "/overview", icon: ChartNoAxesCombined, label: "Overview" },
   { to: "/research", icon: Network, label: "Research" },
-  { to: "/tools", icon: Wrench, label: "Tools" },
   { to: "/", icon: Brain, label: "Agents" },
   { to: "/portfolio", icon: Wallet, label: "Portfolio" },
   { to: "/trade", icon: Swords, label: "Trade" },
@@ -69,8 +67,8 @@ function AppShellBody() {
   const { hasKeys, isLoading: keysLoading } = useCredentials();
   const { data: serverStatus, access, isLoading: capabilitiesLoading, isFetching, unavailableReason, refetch } = useServerCapabilities();
   const capabilityReason = unavailableServerRoute(pathname, serverStatus);
-  const nativeRoutes=['/operations','/overview','/portfolio','/trading-visuals','/bots','/research','/tools'];
-  const independentRoutes=['/operations','/overview','/trading-visuals','/research','/tools'];
+  const nativeRoutes=['/operations','/overview','/portfolio','/trading-visuals','/bots','/research'];
+  const independentRoutes=['/operations','/overview','/trading-visuals','/research'];
   const navigationItems=!access.online ? NAV_ITEMS.filter(item=>independentRoutes.includes(item.to))
     : access.native ? nativeRoutes.map(to=>NAV_ITEMS.find(item=>item.to===to)!) : NAV_ITEMS;
 
@@ -157,7 +155,7 @@ function AppShellBody() {
         <div className="ml-auto flex items-center gap-3">
           <ServerSelector />
           {pathname === "/trading-visuals" || !access.full || !access.online ? (
-            <span className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm text-[var(--color-text-muted)]" title="Values retain their source units; currencies are shown only for a verified server">{!access.online?'Units unavailable':['/trading-visuals','/overview','/bots'].includes(pathname)?'USDC':'Source units'}</span>
+            <span className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm text-[var(--color-text-muted)]" title="Values retain their source units; currencies are shown only for a verified server">{!access.online?'Units unavailable':['/trading-visuals','/bots'].includes(pathname)?'USDC':'Source units'}</span>
           ) : <CurrencySelector />}
 
           <div className="flex items-center gap-1">

@@ -4,32 +4,24 @@ import {
   ChevronDown,
   ChevronRight,
   Wallet,
-  Server,
   BarChart3,
   Layers,
-  KeyRound,
-  ArrowUpRight,
-  ArrowDownRight,
 } from "lucide-react";
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { useNavigate } from "react-router-dom";
 
 import { NoServerCard } from "@/components/NoServerCard";
 import { AccountPortfolio } from "@/components/AccountPortfolio";
 import { useServerCapabilities } from "@/hooks/useServerCapabilities";
 import { useRates } from "@/hooks/useRates";
 import { useServer } from "@/hooks/useServer";
-import { useCondorWebSocket } from "@/hooks/useWebSocket";
 import {
   api,
-  type AgentSummary,
   type BalanceItem,
   type ConnectorBalance,
-  type ExecutorPeriodSummary,
   type PortfolioHistoryPoint,
   type PortfolioHistoryResponse,
 } from "@/lib/api";
-import { formatCurrency, formatCurrencyPnl, formatCurrencyVolume, isExecutorActive } from "@/lib/formatters";
+import { formatCurrency } from "@/lib/formatters";
 import { getThemeColors } from "@/lib/theme-colors";
 
 // ── Formatters ──
@@ -71,150 +63,6 @@ function getChartColors() {
 // ── KPI helpers ──
 
 const TIME_PERIODS = ["1D", "1W", "1M"] as const;
-
-// ── Unified Dashboard Strip ──
-
-function KpiCell({
-  label,
-  mainValue,
-  pnl,
-  details,
-  currencySymbol,
-}: {
-  label: string;
-  mainValue: string | number;
-  pnl?: number;
-  details: string;
-  currencySymbol?: string;
-}) {
-  return (
-    <div className="flex-1 px-5 py-3 min-w-0">
-      <span className="text-[11px] uppercase tracking-wider font-medium text-[var(--color-text-muted)]">{label}</span>
-      <div className="flex items-baseline gap-2.5 mt-1">
-        <span className="text-2xl font-bold tabular-nums tracking-tight leading-none">{mainValue}</span>
-        {pnl !== undefined && pnl !== null && (
-          <span className="inline-flex items-center gap-0.5 text-sm tabular-nums font-semibold"
-            style={{ color: pnl >= 0 ? "var(--color-green)" : "var(--color-red)" }}>
-            {pnl >= 0 ? <ArrowUpRight className="h-3.5 w-3.5" /> : <ArrowDownRight className="h-3.5 w-3.5" />}
-            {formatCurrencyPnl(pnl, currencySymbol || "$")}
-          </span>
-        )}
-      </div>
-      <div className="text-xs text-[var(--color-text-muted)] mt-1 truncate">{details}</div>
-    </div>
-  );
-}
-
-function DashboardStrip({
-  totalUsd,
-  totalTokens,
-  connectorCount,
-  portfolioPnl,
-  botCount,
-  controllerCount,
-  botPnl,
-  botVolume,
-  activeExecutorCount,
-  execStats,
-  agents,
-  period,
-  onPeriodChange,
-  onNavigate,
-  convertFromUsd,
-  currencySymbol,
-}: {
-  totalUsd: number;
-  totalTokens: number;
-  connectorCount: number;
-  portfolioPnl: number | null;
-  botCount: number;
-  controllerCount: number;
-  botPnl: number;
-  botVolume: number;
-  activeExecutorCount: number;
-  execStats: ExecutorPeriodSummary | undefined;
-  agents: AgentSummary[];
-  period: string;
-  onPeriodChange: (p: string) => void;
-  onNavigate: (path: string) => void;
-  convertFromUsd: (val: number) => number;
-  currencySymbol: string;
-}) {
-  const activeAgents = agents.filter((a) => a.status === "running" || a.status === "active");
-  const agentPnl = agents.reduce((s, a) => s + (a.daily_pnl ?? 0), 0);
-  const agentSessions = agents.reduce((s, a) => s + (a.session_count ?? 0), 0);
-
-  const btnClass = "flex items-center justify-center gap-1.5 rounded-md border border-[var(--color-border)] bg-[var(--color-bg)] px-3 py-1.5 text-[11px] font-medium text-[var(--color-text-muted)] transition-colors hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)] w-full";
-
-  return (
-    <div className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] overflow-hidden">
-      <div className="flex items-stretch divide-x divide-[var(--color-border)]">
-        <KpiCell
-          label="Portfolio"
-          mainValue={formatCurrency(convertFromUsd(totalUsd), currencySymbol)}
-          pnl={portfolioPnl != null ? convertFromUsd(portfolioPnl) : undefined}
-          details={`${totalTokens} assets · ${connectorCount} connector${connectorCount !== 1 ? "s" : ""}`}
-          currencySymbol={currencySymbol}
-        />
-
-        <KpiCell
-          label="Bots"
-          mainValue={botCount}
-          pnl={botPnl}
-          details={`${controllerCount} controller${controllerCount !== 1 ? "s" : ""} · vol ${formatCurrencyVolume(botVolume, currencySymbol)}`}
-          currencySymbol={currencySymbol}
-        />
-
-        <KpiCell
-          label="Executors"
-          mainValue={`${activeExecutorCount} active`}
-          pnl={execStats ? convertFromUsd(execStats.pnl) : undefined}
-          details={
-            execStats
-              ? `${execStats.count} in ${period} · vol ${formatCurrencyVolume(convertFromUsd(execStats.volume), currencySymbol)}${execStats.converted ? "" : " ⚠"}`
-              : `Loading ${period}…`
-          }
-          currencySymbol={currencySymbol}
-        />
-
-        <KpiCell
-          label="Agents"
-          mainValue={activeAgents.length}
-          pnl={convertFromUsd(agentPnl)}
-          details={`${agents.length} total · ${agentSessions} session${agentSessions !== 1 ? "s" : ""}`}
-          currencySymbol={currencySymbol}
-        />
-
-        {/* ── Period + Quick Links ── */}
-        <div className="flex flex-col justify-center gap-1 px-2.5 py-2 shrink-0 w-[100px]">
-          <div className="flex gap-0.5 rounded-md border border-[var(--color-border)] p-0.5 bg-[var(--color-bg)] w-full justify-center">
-            {TIME_PERIODS.map((p) => (
-              <button
-                key={p}
-                onClick={() => onPeriodChange(p)}
-                className={`px-1.5 py-1 text-[10px] rounded font-medium transition-colors flex-1 ${
-                  period === p
-                    ? "bg-[var(--color-accent)] text-white shadow-sm"
-                    : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
-                }`}
-              >
-                {p}
-              </button>
-            ))}
-          </div>
-          <button onClick={() => onNavigate("/settings?tab=keys")} className={btnClass}>
-            <KeyRound className="h-3 w-3" />
-            Keys
-          </button>
-          <button onClick={() => onNavigate("/settings?tab=servers")} className={btnClass}>
-            <Server className="h-3 w-3" />
-            Servers
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ── Horizontal Bar Chart ──
 
@@ -753,7 +601,6 @@ export function Portfolio() {
 
 function FullPortfolio() {
   const { server } = useServer();
-  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [period, setPeriod] = useState<string>("1W");
 
@@ -779,52 +626,6 @@ function FullPortfolio() {
     return () => clearTimeout(timer);
   }, [server, queryClient]);
 
-  const { data: bots } = useQuery({
-    queryKey: ["bots", server],
-    queryFn: () => api.getBots(server!),
-    enabled: !!server,
-    refetchInterval: 30000,
-    placeholderData: keepPreviousData,
-  });
-
-  // Subscribe to the executors WS channel so the KPI strip updates live;
-  // the query below shares the canonical ["executors", server, ""] cache key
-  // (prefetched by usePrefetchData, pushed by useWebSocket) with a relaxed
-  // poll as fallback.
-  const executorChannels = useMemo(
-    () => (server ? [`executors:${server}`] : []),
-    [server],
-  );
-  useCondorWebSocket(executorChannels, server ?? null);
-
-  const { data: allExecutors } = useQuery({
-    queryKey: ["executors", server, ""],
-    queryFn: () => api.getExecutors(server!),
-    enabled: !!server,
-    refetchInterval: 60000,
-    placeholderData: keepPreviousData,
-  });
-
-  // Period totals are aggregated server-side over the whole executor history:
-  // the cache above is bounded to one poll page, so summing it here reported a
-  // fraction of the window on any busy server (CORR-129).
-  const { data: execStats } = useQuery({
-    queryKey: ["executors-summary", server, period],
-    queryFn: () => api.getExecutorsSummary(server!, period),
-    enabled: !!server,
-    refetchInterval: 60000,
-    // No keepPreviousData: the tile labels its own window ("12 in 1M"), so
-    // carrying the previous period's totals across a switch would caption the
-    // old numbers with the new period.
-  });
-
-  const { data: agents } = useQuery({
-    queryKey: ["agents"],
-    queryFn: () => api.getAgents(),
-    refetchInterval: 30000,
-    placeholderData: keepPreviousData,
-  });
-
   const { data: periodHistory } = useQuery({
     queryKey: ["portfolio-history", server, period],
     queryFn: () => api.getPortfolioHistory(server!, period),
@@ -832,20 +633,7 @@ function FullPortfolio() {
     refetchInterval: 60000,
   });
 
-  // Currency conversion for bots + executors (must be before early returns)
-  const controllers = bots?.controllers ?? [];
-  const executorsList = allExecutors ?? [];
-  const quoteCurrencies = useMemo(() => {
-    const quotes = new Set<string>(["USDT"]);
-    for (const c of controllers) {
-      quotes.add(c.trading_pair?.split("-")[1] || "USDT");
-    }
-    for (const e of executorsList) {
-      quotes.add(e.trading_pair?.split("-")[1] || "USDT");
-    }
-    return Array.from(quotes);
-  }, [controllers, executorsList]);
-  const { convert, resolvedSymbol: currencySymbol } = useRates(quoteCurrencies);
+  const { convert, resolvedSymbol: currencySymbol } = useRates(["USDT"]);
 
   // Convert a USDT-denominated value to the display currency
   const convertFromUsd = useCallback(
@@ -901,28 +689,15 @@ function FullPortfolio() {
   const totalUsd = data?.total_usd ?? 0;
   const connectors = data?.connectors ?? [];
 
-  // Compute portfolio PnL from history (follows period selector)
+  // Balance differences include external capital movements; never label as PnL.
   const historyPoints = periodHistory?.points ?? [];
-  const portfolioPnl =
+  const portfolioValueChange =
     historyPoints.length >= 2
       ? historyPoints[historyPoints.length - 1].total_usd - historyPoints[0].total_usd
       : null;
 
   // Compute aggregate stats
   const totalTokens = connectors.reduce((s, c) => s + c.balances.length, 0);
-  const botsList = bots?.bots ?? [];
-  const controllerCount = controllers.length;
-  const activeExecutorCount = executorsList.filter((e) => isExecutorActive(e.status)).length;
-
-  // Convert bot PnL and volume per-controller
-  let botPnl = 0;
-  let botVolume = 0;
-  for (const ctrl of controllers) {
-    const quote = ctrl.trading_pair?.split("-")[1] || "USDT";
-    botPnl += ctrl.global_pnl_quote === null ? Number.NaN : convert(ctrl.global_pnl_quote, quote).value;
-    botVolume += ctrl.volume_traded === null ? Number.NaN : convert(ctrl.volume_traded, quote).value;
-  }
-
   // Flatten all tokens for top holdings
   const allTokens = connectors.flatMap((c) =>
     c.balances.map((b) => ({ token: b.token, usd_value: b.usd_value, connector: c.connector })),
@@ -932,25 +707,10 @@ function FullPortfolio() {
 
   return (
     <div className={`space-y-6 transition-opacity duration-300 ${isPlaceholderData ? "opacity-60" : "opacity-100"}`}>
-      {/* Dashboard Strip */}
-      <DashboardStrip
-        totalUsd={totalUsd}
-        totalTokens={totalTokens}
-        connectorCount={connectors.length}
-        portfolioPnl={portfolioPnl}
-        botCount={botsList.length}
-        controllerCount={controllerCount}
-        botPnl={botPnl}
-        botVolume={botVolume}
-        activeExecutorCount={activeExecutorCount}
-        execStats={execStats}
-        agents={agents ?? []}
-        period={period}
-        onPeriodChange={setPeriod}
-        onNavigate={navigate}
-        convertFromUsd={convertFromUsd}
-        currencySymbol={currencySymbol}
-      />
+      <header className="flex flex-wrap justify-between gap-4 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-5">
+        <div><h1 className="text-xl font-semibold">Portfolio</h1><p className="mt-2 text-2xl tabular-nums">{formatCurrency(convertFromUsd(totalUsd), currencySymbol)}</p><p className="mt-1 text-xs text-[var(--color-text-muted)]">{totalTokens} assets · {connectors.length} connectors</p></div>
+        <div><p className="text-sm">Value change: {portfolioValueChange === null ? 'Unavailable' : formatCurrency(convertFromUsd(portfolioValueChange), currencySymbol)}</p><p className="mt-1 text-xs text-[var(--color-text-muted)]">Includes deposits and withdrawals; not profit.</p><div className="mt-3 flex gap-2">{TIME_PERIODS.map(p=><button key={p} type="button" aria-pressed={period===p} onClick={()=>setPeriod(p)} className={`rounded border px-3 py-1 text-xs ${period===p?'border-[var(--color-primary)] text-[var(--color-primary)]':'border-[var(--color-border)]'}`}>{p}</button>)}</div></div>
+      </header>
 
       {/* Portfolio Evolution + Top Holdings side by side */}
       <div className="flex flex-col lg:flex-row gap-4">

@@ -35,6 +35,7 @@ import {
   LabReadNotice,
 } from "@/features/research/ResearchViews";
 import { ResearchInspector } from "@/features/research/ResearchInspector";
+import { ResearchConclusions } from "@/features/research/ResearchConclusions";
 import { ResearchArchive } from "@/features/research/ResearchArchive";
 import "@/features/research/workspace.css";
 import "@/features/research/lab.css";
@@ -111,7 +112,7 @@ function ResearchLab({ server }: { server: string }) {
     data = available ? object(overview.data?.data) : {},
     freshness = object(data.freshness);
   const revision = text(overview.data?.data.revision, "");
-  const networkVisible = state.view === "overview" || state.view === "graph";
+  const networkVisible = state.view === "graph";
   const networkQuery = useQuery({
     queryKey: ["research-network", server, revision],
     enabled: available && networkVisible && !!revision,
@@ -225,7 +226,7 @@ function ResearchLab({ server }: { server: string }) {
             : `Research connection ${overviewState}`}
         </span>
         <span>Last index sync · {labTimestamp(freshness.last_sync)}</span>
-        <span>Read-only source</span>
+        <span>{server} · Read-only source</span>
         <span title={revision}>
           Revision {revision ? revision.slice(0, 12) : "unavailable"}
         </span>
@@ -238,7 +239,6 @@ function ResearchLab({ server }: { server: string }) {
           </button>
         </div>
       )}
-      <LabCounts data={data} onView={navigate} />
       <nav className="lab-nav" aria-label="Research Lab views">
         {LAB_VIEWS.map((view) => (
           <button
@@ -256,35 +256,24 @@ function ResearchLab({ server }: { server: string }) {
         <main className="lab-main" aria-label={`${viewLabel} research view`}>
           {state.view === "archive" ? (
             <ResearchArchive key={server} server={server} />
+          ) : state.view === "overview" ? (
+            <>
+              <div className="lab-overview-columns">
+                <ResearchConclusions server={server} now={now} revision={available ? revision : ""} kind="assessment" onSelect={select} />
+                <ResearchConclusions server={server} now={now} revision={available ? revision : ""} kind="run" onSelect={select} />
+              </div>
+              <div className="lab-overview-columns"><LabQueue server={server} now={now} preview onSelect={select} /><LabLimitations data={data} /></div>
+              <details className="quant-panel"><summary>Catalog coverage</summary><LabCounts data={data} onView={navigate} /></details>
+            </>
           ) : networkVisible ? (
             <>
-              {state.view === "overview" && network && (
-                <LabCharts
-                  data={network}
-                  expanded
-                  onFilter={(key, value) =>
-                    change(
-                      {
-                        view: "ideas",
-                        q: "",
-                        family: "",
-                        lane: "",
-                        [key]: value,
-                      },
-                      { resetPage: true, clearSelection: true },
-                    )
-                  }
-                />
-              )}
               <section
-                className={`quant-panel lab-network-panel ${state.view === "overview" ? "lab-network-preview" : ""}`}
+                className="quant-panel lab-network-panel"
               >
                 <header className="quant-panel-heading">
                   <div>
                     <h2>
-                      {state.view === "overview"
-                        ? "The research landscape"
-                        : "Research network"}
+                      Research network
                     </h2>
                     <p className="quant-muted">
                       {network
@@ -292,27 +281,11 @@ function ResearchLab({ server }: { server: string }) {
                         : "Complete source topology, including isolated records."}
                     </p>
                   </div>
-                  {state.view === "overview" && (
-                    <button onClick={() => navigate("graph")}>
-                      Explore full network
-                    </button>
-                  )}
                 </header>
                 {graph}
               </section>
               {state.view === "graph" && network && (
-                <LabCharts data={network} onFilter={() => {}} />
-              )}
-              {state.view === "overview" && (
-                <div className="lab-overview-columns">
-                  <LabQueue
-                    server={server}
-                    now={now}
-                    preview
-                    onSelect={select}
-                  />
-                  <LabLimitations data={data} />
-                </div>
+                <LabCharts data={network} expanded onFilter={(key, value) => change({ view: "ideas", q: "", family: "", lane: "", [key]: value }, { resetPage: true, clearSelection: true })} />
               )}
             </>
           ) : (

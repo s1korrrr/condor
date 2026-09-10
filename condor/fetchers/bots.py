@@ -175,7 +175,21 @@ def build_bots_page(
                 )
 
                 # Get config from pre-fetched configs
-                ctrl_config = ctrl_configs.get(ctrl_name, {})
+                ctrl_config = ctrl_configs.get(
+                    f"{bot_name}::{ctrl_name}"
+                ) or ctrl_configs.get(ctrl_name, {})
+                if (
+                    not ctrl_config
+                    and ctrl_configs.get(f"{bot_name}::__unavailable__")
+                    and not (native and ctrl_info.get("status"))
+                ):
+                    ctrl_status = "unknown"
+                if ctrl_config.get("manual_kill_switch") is True:
+                    # This flag has controller-specific semantics: some RSI
+                    # controllers only block new entries, while others also
+                    # stop executors. Never claim runtime shutdown from the
+                    # persisted flag alone.
+                    ctrl_status = "control_requested"
                 config_id = ctrl_config.get("id") or ctrl_config.get(
                     "controller_id", ctrl_name
                 )
@@ -222,7 +236,7 @@ def build_bots_page(
                 positions = _pick_value(live_perf, db_perf, "positions_summary", [])
                 if not isinstance(positions, list):
                     positions = []
-                custom_info = ctrl_info.get("custom_info", {}) if native else {}
+                custom_info = _pick_value(ctrl_info, db_snap or {}, "custom_info", {})
                 if not isinstance(custom_info, dict):
                     custom_info = {}
 
@@ -281,6 +295,7 @@ def build_bots_page(
                         "positions_summary": positions,
                         "deployed_at": bot_runs.get(bot_name),
                         "config": ctrl_config,
+                        "custom_info": custom_info,
                     }
                 )
 

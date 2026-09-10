@@ -31,6 +31,7 @@ import {
 import { useServer } from "@/hooks/useServer";
 import { api, type ControllerConfigSummary } from "@/lib/api";
 import { configToYaml } from "@/lib/configYaml";
+import { isManagedRsiController } from "@/lib/rsiSafety";
 
 // ── Types ──
 
@@ -113,13 +114,15 @@ function ContextMenu({
           New Config
         </button>
       )}
-      <button
-        onClick={() => { onDelete(state.file); onClose(); }}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-left hover:bg-[var(--color-red)]/10 text-[var(--color-red)]"
-      >
-        <Trash2 className="h-3 w-3" />
-        Delete
-      </button>
+      {!(state.file.kind === "controller" && isManagedRsiController(state.file.controllerName ?? "")) && (
+        <button
+          onClick={() => { onDelete(state.file); onClose(); }}
+          className="flex items-center gap-2 w-full px-3 py-1.5 text-left hover:bg-[var(--color-red)]/10 text-[var(--color-red)]"
+        >
+          <Trash2 className="h-3 w-3" />
+          Delete
+        </button>
+      )}
     </div>
   );
 }
@@ -414,13 +417,15 @@ function EditorPane({
               {saveMutation.error instanceof Error ? saveMutation.error.message : "Save failed"}
             </span>
           )}
-          <button
-            onClick={() => onDelete(tab.file)}
-            className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-red)] hover:bg-[var(--color-red)]/10 transition-colors"
-            title="Delete"
-          >
-            <Trash2 className="h-3.5 w-3.5" />
-          </button>
+          {!tab.readOnly && (
+            <button
+              onClick={() => onDelete(tab.file)}
+              className="p-1 rounded text-[var(--color-text-muted)] hover:text-[var(--color-red)] hover:bg-[var(--color-red)]/10 transition-colors"
+              title="Delete"
+            >
+              <Trash2 className="h-3.5 w-3.5" />
+            </button>
+          )}
           {isDirty && !tab.readOnly && (
             <button
               onClick={handleReset}
@@ -913,7 +918,10 @@ function FileContentLoader({
     if (tab.file.kind === "controller") {
       if (controllerQuery.data) {
         loadedRef.current = true;
-        onLoaded(controllerQuery.data.source ?? "", false);
+        onLoaded(
+          controllerQuery.data.source ?? "",
+          isManagedRsiController(tab.file.controllerName ?? ""),
+        );
       } else if (controllerQuery.isError) {
         loadedRef.current = true;
         onError(

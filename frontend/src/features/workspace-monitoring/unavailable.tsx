@@ -13,3 +13,5 @@ function WorkspaceUnavailable({ title }: { title: string }) {
 
 export function Overview() { return <WorkspaceUnavailable title="Overview" />; }
 export function TradingVisuals() { return <WorkspaceUnavailable title="Trading Visuals" />; }
+
+export function Operations() { return <WorkspaceUnavailable title="Operations" />; }

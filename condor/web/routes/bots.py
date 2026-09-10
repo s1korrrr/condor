@@ -12,7 +12,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, ConfigDict
 
+from condor.controller_configs import clean_config_for_save, controller_config_identity
 from condor.fetchers.bots import build_bots_page, extract_bots_list
+from condor.rsi_controllers import (
+    is_managed_rsi_controller,
+    load_deployable_controller_types,
+    validate_controller_config_for_write,
+)
 from condor.web.auth import get_current_user
 from condor.web.models import (
     AvailableControllersResponse,
@@ -27,7 +33,6 @@ from condor.web.models import (
     WebUser,
 )
 from config_manager import get_config_manager
-from handlers.bots._shared import clean_config_for_save
 
 logger = logging.getLogger(__name__)
 
@@ -269,7 +274,12 @@ async def list_bots(name: str, user: WebUser = Depends(get_current_user)):
     logger.info("Server '%s': found %d bot(s)", name, len(bots_list))
 
     # Pre-fetch controller configs, bot runs, AND latest controller performance concurrently
-    ctrl_configs: dict[str, dict] = {}
+    unavailable_configs = {
+        f"{bot_name}::__unavailable__": {"_unavailable": True}
+        for bot in bots_list
+        if (bot_name := bot.get("bot_name", ""))
+    }
+    ctrl_configs: dict[str, dict] = dict(unavailable_configs) if client is None else {}
     bot_runs: dict[str, str] = {}
     latest_perf: dict[str, dict] = {}  # keyed by controller_id
 
@@ -287,14 +297,17 @@ async def list_bots(name: str, user: WebUser = Depends(get_current_user)):
                     configs = await client.controllers.get_bot_controller_configs(bn)
                     if isinstance(configs, list):
                         for cfg in configs:
+                            config_name = controller_config_identity(cfg)
+                            if config_name:
+                                configs_map[f"{bn}::{config_name}"] = cfg
                             cid = cfg.get("id") or cfg.get("controller_id", "")
                             if cid:
-                                configs_map[cid] = cfg
+                                configs_map[f"{bn}::{cid}"] = cfg
                             cname = cfg.get("controller_name", "")
                             if cname and cname != cid:
-                                configs_map[cname] = cfg
+                                configs_map[f"{bn}::{cname}"] = cfg
                 except Exception:
-                    pass
+                    configs_map[f"{bn}::__unavailable__"] = {"_unavailable": True}
 
             await asyncio.gather(*[_get_one(bn) for bn in bot_names])
             return configs_map
@@ -378,7 +391,9 @@ async def list_bots(name: str, user: WebUser = Depends(get_current_user)):
                 return default
 
         ctrl_configs, bot_runs, latest_perf = await asyncio.gather(
-            _with_timeout(_fetch_ctrl_configs(), "controller configs", {}),
+            _with_timeout(
+                _fetch_ctrl_configs(), "controller configs", unavailable_configs
+            ),
             _with_timeout(_fetch_bot_runs(), "bot runs", {}),
             _with_timeout(_fetch_latest_perf(), "latest performance", {}),
         )
@@ -462,12 +477,7 @@ async def list_controller_configs(name: str, user: WebUser = Depends(get_current
     # Fetch controller types and saved configs in parallel
     async def _get_types():
         try:
-            r = await client.controllers.list_controllers()
-            return (
-                {k: v for k, v in r.items() if isinstance(v, list)}
-                if isinstance(r, dict)
-                else {}
-            )
+            return await load_deployable_controller_types(client)
         except Exception as e:
             logger.warning("Failed to list controller types from '%s': %s", name, e)
             return {}
@@ -479,7 +489,11 @@ async def list_controller_configs(name: str, user: WebUser = Depends(get_current
                 return []
             return [
                 ControllerConfigSummary(
-                    id=str(cfg.get("config_base_name") or cfg.get("id", "")),
+                    id=str(
+                        cfg.get("_config_name")
+                        or cfg.get("config_base_name")
+                        or cfg.get("id", "")
+                    ),
                     controller_name=cfg.get("controller_name", ""),
                     controller_type=cfg.get("controller_type", ""),
                     connector_name=cfg.get("connector_name", ""),
@@ -578,12 +592,14 @@ async def update_controller_config(
             # Partial update: merge user edits into existing config
             merged = {**existing, **body}
 
-        merged["id"] = config_id  # ensure id stays consistent
+        if not merged.get("id"):
+            merged["id"] = existing.get("id") or config_id
         # Strip internal fields like _config_name that cause Pydantic validation errors
         merged = {k: v for k, v in merged.items() if not k.startswith("_")}
 
+        validated = await validate_controller_config_for_write(client, merged)
         result = await client.controllers.create_or_update_controller_config(
-            config_id, merged
+            config_id, validated
         )
     except HTTPException:
         raise
@@ -653,6 +669,14 @@ async def update_controller_source(
     source = body.get("source")
     if not source or not isinstance(source, str):
         raise HTTPException(status_code=400, detail="Missing 'source' string")
+    if is_managed_rsi_controller(controller_name):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Managed RSI controller source is read-only in Condor; publish the "
+                "versioned Hummingbot/API bundle instead"
+            ),
+        )
 
     client = await cm.get_client(name)
     try:
@@ -729,7 +753,7 @@ async def create_controller_config(
     try:
         # Strip internal fields like _config_name and normalize stringified enum
         # values (e.g. "PositionMode.ONEWAY" -> "ONEWAY") before saving.
-        clean_body = clean_config_for_save(body)
+        clean_body = await validate_controller_config_for_write(client, body)
         result = await client.controllers.create_or_update_controller_config(
             config_id, clean_body
         )
@@ -770,6 +794,14 @@ async def delete_controller(
     cm = get_config_manager()
     if not cm.has_server_access(user.id, name):
         raise HTTPException(status_code=403, detail="No access")
+    if is_managed_rsi_controller(controller_name):
+        raise HTTPException(
+            status_code=409,
+            detail=(
+                "Managed RSI controller source is read-only in Condor; publish the "
+                "versioned Hummingbot/API bundle instead"
+            ),
+        )
 
     client = await cm.get_client(name)
     try:
@@ -809,6 +841,8 @@ async def deploy_bot_endpoint(
             max_global_drawdown_quote=body.max_global_drawdown_quote,
             max_controller_drawdown_quote=body.max_controller_drawdown_quote,
         )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 
@@ -1059,7 +1093,14 @@ async def update_bot_controller_config_endpoint(
     try:
         # Fetch current bot controller config to merge partial updates
         current_configs = await client.controllers.get_bot_controller_configs(bot_name)
-        existing = next((c for c in current_configs if c.get("id") == config_id), None)
+        existing = next(
+            (
+                config
+                for config in current_configs
+                if controller_config_identity(config) == config_id
+            ),
+            None,
+        )
         if not existing:
             raise HTTPException(
                 status_code=404,
@@ -1067,12 +1108,14 @@ async def update_bot_controller_config_endpoint(
             )
 
         merged = {**existing, **body}
-        merged["id"] = config_id
+        if not merged.get("id"):
+            merged["id"] = existing.get("id") or config_id
         # Strip internal fields like _config_name that cause Pydantic validation errors
         merged = {k: v for k, v in merged.items() if not k.startswith("_")}
 
+        validated = await validate_controller_config_for_write(client, merged)
         result = await client.controllers.update_bot_controller_config(
-            bot_name, config_id, merged
+            bot_name, config_id, validated
         )
     except HTTPException:
         raise

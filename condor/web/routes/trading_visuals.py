@@ -19,7 +19,7 @@ router = APIRouter(prefix='/trading-visuals', tags=['trading-visuals'])
 REPORTING_MAX_BYTES = 16 * 1024 * 1024
 REPORTING_TOTAL_TIMEOUT = 20.0
 READ_ROUTES = frozenset({
-    'health', 'bootstrap', 'overview', 'bots', 'orders', 'fills', 'executors',
+    'operations', 'health', 'bootstrap', 'overview', 'bots', 'orders', 'fills', 'executors',
     'positions', 'pnl-series', 'attribution', 'incidents', 'trade-journal',
     'activity-tape', 'operator-summary', 'chart-series', 'drilldown',
 })
@@ -68,6 +68,8 @@ async def list_sources(user: WebUser = Depends(get_current_user)):
 
 @router.get('/{path:path}')
 async def read_visuals(path: str, request: Request, user: WebUser = Depends(get_current_user)):
+    if path == 'operations' and not get_config_manager().is_admin(user.id):
+        raise HTTPException(403, 'Operations requires administrator access')
     download = re.fullmatch(r'export/(orders|executors)\.(csv|json)', path)
     if path not in READ_ROUTES and not re.fullmatch(r'drilldown/[a-f0-9]+', path) and not download:
         raise HTTPException(404, 'Trading Visuals route not found')

@@ -9,6 +9,7 @@ import {
   RotateCcw,
   Search,
   Settings,
+  ShieldAlert,
   X,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -18,6 +19,7 @@ import {
   api,
   type ControllerConfigSummary,
 } from "@/lib/api";
+import { isManagedRsiController, isPinnedHummingbotImage } from "@/lib/rsiSafety";
 
 // ── Helpers ──
 
@@ -304,7 +306,16 @@ export function DeployBotDialog({
     enabled: open,
   });
 
-  const configs = data?.configs ?? [];
+  const configs = useMemo(() => data?.configs ?? [], [data?.configs]);
+  const hasManagedRsi = useMemo(
+    () => configs.some((config) => selected.has(config.id) && isManagedRsiController(config.controller_name)),
+    [configs, selected],
+  );
+  const rsiSafetyReady = !hasManagedRsi || (
+    isPinnedHummingbotImage(image) &&
+    Number(maxGlobalDrawdown) > 0 &&
+    Number(maxControllerDrawdown) > 0
+  );
 
   const filteredConfigs = useMemo(() => {
     if (!search.trim()) return configs;
@@ -349,6 +360,9 @@ export function DeployBotDialog({
   // Deploy
   const deployMutation = useMutation({
     mutationFn: async () => {
+      if (!rsiSafetyReady) {
+        throw new Error("RSI deployment requires a pinned Hummingbot image and positive global and controller drawdown limits.");
+      }
       for (const [configId, edits] of dirtyConfigs) {
         await api.updateConfig(server, configId, edits);
       }
@@ -387,6 +401,10 @@ export function DeployBotDialog({
       setBotName(`bot_${new Date().toISOString().slice(0, 19).replace(/[-:T]/g, "").slice(0, 15)}`);
     }
   }, [open]);
+
+  useEffect(() => {
+    if (hasManagedRsi) setShowAdvanced(true);
+  }, [hasManagedRsi]);
 
   useEscapeKey(open, handleClose);
 
@@ -500,6 +518,17 @@ export function DeployBotDialog({
 
           {/* Advanced settings (collapsed by default) */}
           <div className="border-t border-[var(--color-border)] pt-4">
+            {hasManagedRsi && (
+              <div className="mb-4 flex gap-3 rounded-lg border border-amber-500/40 bg-amber-500/10 px-4 py-3" role="status">
+                <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-amber-500" />
+                <div>
+                  <p className="text-sm font-medium text-[var(--color-text)]">RSI safety gates are required</p>
+                  <p className="mt-1 text-xs text-[var(--color-text-muted)]">
+                    Use a versioned image tag or digest and set positive loss limits for the bot and each controller.
+                  </p>
+                </div>
+              </div>
+            )}
             <button
               onClick={() => setShowAdvanced(!showAdvanced)}
               className="flex items-center gap-2 text-xs text-[var(--color-text-muted)] hover:text-[var(--color-text)] transition-colors"
@@ -535,7 +564,9 @@ export function DeployBotDialog({
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-[var(--color-text-muted)]">Image</label>
+                    <label className="mb-1 block text-xs text-[var(--color-text-muted)]">
+                      Image{hasManagedRsi ? " (required, pinned)" : ""}
+                    </label>
                     <input
                       type="text"
                       value={image}
@@ -546,22 +577,26 @@ export function DeployBotDialog({
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="mb-1 block text-xs text-[var(--color-text-muted)]">Max Global Drawdown</label>
+                    <label className="mb-1 block text-xs text-[var(--color-text-muted)]">Max Global Drawdown{hasManagedRsi ? " (required)" : ""}</label>
                     <input
                       type="number"
                       value={maxGlobalDrawdown}
                       onChange={(e) => setMaxGlobalDrawdown(e.target.value)}
                       placeholder="Optional"
+                      min="0"
+                      step="any"
                       className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder-[var(--color-text-muted)]/50 outline-none transition-colors focus:border-[var(--color-primary)]"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-[var(--color-text-muted)]">Max Controller Drawdown</label>
+                    <label className="mb-1 block text-xs text-[var(--color-text-muted)]">Max Controller Drawdown{hasManagedRsi ? " (required)" : ""}</label>
                     <input
                       type="number"
                       value={maxControllerDrawdown}
                       onChange={(e) => setMaxControllerDrawdown(e.target.value)}
                       placeholder="Optional"
+                      min="0"
+                      step="any"
                       className="w-full rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 text-sm text-[var(--color-text)] placeholder-[var(--color-text-muted)]/50 outline-none transition-colors focus:border-[var(--color-primary)]"
                     />
                   </div>
@@ -598,7 +633,7 @@ export function DeployBotDialog({
             </button>
             <button
               onClick={() => deployMutation.mutate()}
-              disabled={!hasSelected || !botName.trim() || deployMutation.isPending}
+              disabled={!hasSelected || !botName.trim() || !rsiSafetyReady || deployMutation.isPending}
               className="flex items-center gap-2 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-white transition-opacity disabled:opacity-40"
             >
               <Rocket className="h-4 w-4" />

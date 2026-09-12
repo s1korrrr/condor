@@ -49,3 +49,31 @@ test('an aborted request cannot publish a late network response even if its fetc
   const read = async () => { controller.abort(); return envelope(data()); };
   await assert.rejects(loadConsistentLabNetwork(read, 'native', 'revision-a', controller.signal), { name: 'AbortError' });
 });
+
+test('topology retains exact evidence, reindexes edges and preserves unresolved catalog counts', () => {
+  const input = { nodes: [['isolate'], ['idea'], ['revision'], ['experiment'], ['artifact']], edges: [[2,1,'revision_of','recorded'], [3,4,'references_saved_artifact','hash']], total_nodes: 5, total_edges: 9, unresolved_edges: 7 };
+  const original = structuredClone(input);
+  const dependencies = network.focusNetwork(input, 'dependencies');
+  assert.deepEqual(dependencies.nodes, [input.nodes[3], input.nodes[4]]);
+  assert.deepEqual(dependencies.edges, [[0,1,'references_saved_artifact','hash']]);
+  assert.equal(dependencies.unresolved_edges, 7);
+  assert.equal(dependencies.total_edges, 8);
+  assert.equal(network.layout(dependencies).isolates, 0);
+  assert.equal(network.focusNetwork(input, 'linked').nodes.length, 4);
+  assert.equal(network.focusNetwork(input, 'all'), input);
+  assert.throws(() => network.focusNetwork(input, 'invented'), /topology/i);
+  assert.deepEqual(input, original);
+  assert.equal(network.focusNetwork({nodes:[['x']], edges:[]}, 'dependencies').nodes.length, 0);
+});
+
+test('dependencies retains revision edges when both endpoints also have recorded dependencies', () => {
+  const input = {nodes:[['a'],['b'],['c']],edges:[[0,1,'revision_of'],[0,2,'recorded_in'],[1,2,'references_historical_idea']]};
+  assert.deepEqual(network.focusNetwork(input, 'dependencies').edges, input.edges);
+});
+
+test('catalog search includes hidden records without changing evidence', () => {
+  const input = data();
+  const visible = network.focusNetwork(input, 'dependencies');
+  assert.deepEqual(network.searchCatalog(input, visible, 'Delta', ''), [{id:'d', title:'Delta', hidden:true}]);
+  assert.deepEqual(network.searchCatalog(input, visible, 'Alpha', 'source'), []);
+});

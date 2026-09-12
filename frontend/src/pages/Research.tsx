@@ -82,6 +82,10 @@ export function Research() {
 function ResearchLab({ server }: { server: string }) {
   const [params, setParams] = useSearchParams(),
     state = readLabState(params);
+  const pendingParams = useRef(params);
+  useEffect(() => {
+    pendingParams.current = params;
+  }, [params]);
   const [now, setNow] = useState(Date.now),
     [queryText, setQueryText] = useState(state.q);
   const [cameraStore] = useState(() => new Map<string, Camera>());
@@ -141,7 +145,13 @@ function ResearchLab({ server }: { server: string }) {
     values: Record<string, string>,
     options: { resetPage?: boolean; clearSelection?: boolean } = {},
     replace = false,
-  ) => setParams(updateLabParams(params, values, options), { replace });
+  ) => {
+    // A hidden-result click selects a record and changes topology in one event.
+    // Compose both updates before React Router publishes the next render.
+    const next = updateLabParams(pendingParams.current, values, options);
+    pendingParams.current = next;
+    setParams(next, { replace });
+  };
   const navigate = (view: string) => change({ view }, { resetPage: true });
   const select = (id: string) => {
     if (id && !state.selected && document.activeElement instanceof HTMLElement)
@@ -157,7 +167,7 @@ function ResearchLab({ server }: { server: string }) {
     change({
       view: "graph",
       id,
-      network_focus: `${id}:${Date.now()}:${focusSequence.current}`,
+      network_focus: `${id}:${now}:${focusSequence.current}`,
     });
   };
   const refresh = () => {
@@ -179,12 +189,22 @@ function ResearchLab({ server }: { server: string }) {
       query={state.network_q}
       kind={state.network_kind}
       focus={state.network_focus}
+      topology={state.network_topology}
+      onTopology={(topology, focusId) => {
+        focusSequence.current += 1;
+        change({
+          network_topology: topology,
+          ...(focusId ? { id: focusId } : {}),
+          network_focus: focusId
+            ? `${focusId}:${now}:${focusSequence.current}` : "",
+        }, {}, true);
+      }}
       onSelect={select}
       onFilters={(query, kind) =>
         change({ network_q: query, network_kind: kind }, {}, true)
       }
       cameraStore={cameraStore}
-      cameraKey={`${revision}:${state.view}`}
+      cameraKey={`${revision}:${state.view}:${state.network_topology}`}
     />
   ) : (
     <LabReadNotice
@@ -277,8 +297,8 @@ function ResearchLab({ server }: { server: string }) {
                     </h2>
                     <p className="quant-muted">
                       {network
-                        ? `${network.total_nodes.toLocaleString()} nodes · ${network.total_edges.toLocaleString()} recorded connections`
-                        : "Complete source topology, including isolated records."}
+                        ? `Catalog: ${network.total_nodes.toLocaleString()} nodes · ${network.total_edges.toLocaleString()} recorded connections. Topology controls which records enter the layout.`
+                        : "Explore recorded dependencies, all relationships, or the full indexed catalog."}
                     </p>
                   </div>
                 </header>

@@ -1,10 +1,14 @@
 import type { LabNetwork } from "./lab-network-data";
+export type NetworkTopology = "dependencies" | "linked" | "all";
+export function focusNetwork(data: LabNetwork, topology?: NetworkTopology): LabNetwork;
+export function searchCatalog(catalog: LabNetwork, visible: LabNetwork, query: string, kind: string): { id: string; title: string; hidden: boolean }[];
 export interface Camera {
   x: number;
   y: number;
   scale: number;
 }
 export interface NetworkHandle {
+  setTopology(topology: NetworkTopology, focusId?: string): void;
   select(id: string | null): void;
   fit(): void;
   zoom(factor: number): void;
@@ -17,6 +21,9 @@ export function mount(
   target: HTMLElement,
   data: LabNetwork,
   options?: {
+    onError?(message: string | null): void;
+    initialTopology?: NetworkTopology;
+    onTopologyChange?(topology: NetworkTopology, focusId?: string): void;
     initialCamera?: Camera;
     initialQuery?: string;
     initialKind?: string;

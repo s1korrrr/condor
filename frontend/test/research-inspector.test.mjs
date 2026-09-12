@@ -37,3 +37,13 @@ test('a comparison from another graph revision is withheld while refresh is offe
  const r=renderResearchComponent('ResearchInspector',{server:'fixture',id:'idea:1',onSelect(){},onFindInNetwork(){},onArchiveRecord(){}},{'research-node':{data:envelope({revision:'r2',node:{id:'idea:1',title:'New revision',kind:'idea',data:{}}})},'research-comparisons':{data:envelope({revision:'r1',items:[],limitations:['OLD_COMPARISON_MUST_NOT_RENDER']})}});
  assert.match(r.html,/different graph revision/);assert.doesNotMatch(r.html,/OLD_COMPARISON_MUST_NOT_RENDER/);
 });
+
+
+test('repaired history exposes direction and hash provenance while preserving navigation',()=>{
+ const hash='a'.repeat(64);
+ const r=render({id:'experiment:one',title:'Experiment',kind:'experiment',data:{}},{related:[{id:'source:one',title:'Recorded registry',kind:'source'}],edges:[{source:'experiment:one',target:'source:one',relation:'recorded_in',basis:'explicit_source',provenance:{repair_rule:'source_occurrence',sources:[{sha256:hash}]}}]});
+ assert.match(r.html,/Outgoing/);assert.match(r.html,/Source membership/);assert.match(r.html,/no economic verdict/);assert.match(r.html,/Relationship provenance/);assert.ok(r.html.includes(hash));
+ r.buttons.find(b=>b.text==='Recorded registry').onClick();
+ assert.deepEqual(r.selections,['source:one']);
+ assert.doesNotMatch(r.html,/Idea usage and evaluations/);
+});

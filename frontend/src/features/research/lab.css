@@ -37,7 +37,8 @@
 .research-lab .research-network { background:var(--color-surface); }
 .research-lab .network-toolbar { display:flex; flex-wrap:wrap; align-items:end; gap:8px; padding:14px; border-bottom:1px solid var(--color-border); }
 .research-lab .network-toolbar label { display:flex; flex-direction:column; gap:5px; color:var(--color-text-muted); font-size:11px; }
-.research-lab .network-toolbar label:first-child { flex:1 1 210px; }
+.research-lab .network-toolbar label:first-child { flex:0 1 230px; }
+.research-lab .network-toolbar label:nth-child(2) { flex:1 1 210px; }
 .research-lab .network-toolbar button { padding:8px 10px; font-size:11px; }
 .research-lab .network-stage { height:600px; min-height:300px; background:var(--color-bg); overflow:hidden; }
 .research-lab .lab-network-preview .network-stage { height:400px; }

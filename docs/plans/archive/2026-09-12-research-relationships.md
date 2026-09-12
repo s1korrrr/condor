@@ -33,3 +33,5 @@ Revert the Condor commit to restore catalog layout; stop only task-owned preview
 
 - 2026-09-12: Implementation, independent review, 104 Research frontend tests, 105 backend tests, production build and scoped lint completed. Full lint exactly matches the untouched base (71 errors,20 warnings). Browser verified topology, hidden reveal, source navigation, all Research tabs, missing-record error and narrow viewport. See docs/reports/2026-09-12-research-relationships.md.
 - 2026-09-12: rsibot repair pushed and PR160 opened. Both remote jobs were prevented from starting by account billing/spending-limit restrictions (INFRA_FAILURE); no remote code execution occurred. Condor publication follows this final scoped audit.
+
+- 2026-09-12 completed: Condor commit 7f68ccba published as https://github.com/s1korrrr/condor/pull/8 and rsibot commit 8375bca0 as https://github.com/s1korrrr/rsibot/pull/160. Both PRs are open against main and linked. Condor reports no CI checks; rsibot jobs remain blocked before execution by account billing restrictions. Local implementation and authorized publication are complete; merge and deployment were not performed.

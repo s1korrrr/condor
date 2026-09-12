@@ -38,6 +38,7 @@ LOCAL_LOCATOR = re.compile(
     r"|(?<![\w:/])(?:[A-Za-z]:[\\/]|~/)[^\s\"'<>]+"
 )
 PARAMETERS = {
+    "health": set(),
     "overview": set(),
     "nodes": {"kind", "q", "family", "lane", "limit", "offset"},
     "node": {"id", "relation_limit", "relation_offset"},
@@ -260,6 +261,18 @@ def _node(value):
 def _valid_shape(endpoint, data, parameters):
     if not isinstance(data, dict):
         return False
+    if endpoint == "health":
+        model = data.get("read_model")
+        return (
+            data.get("status") in {"ready", "degraded", "unavailable"}
+            and isinstance(data.get("checked_at"), str)
+            and isinstance(model, dict)
+            and type(model.get("readable")) is bool
+            and (model.get("revision") is None or isinstance(model.get("revision"), str))
+            and isinstance(data.get("freshness"), dict)
+            and data.get("freshness_basis") == "synchronization_receipt"
+            and (data.get("reason") is None or isinstance(data.get("reason"), str))
+        )
     if endpoint == "network":
         return _valid_network(data)
     if endpoint in {"archive", "learning", "queue", "unresolved"}:

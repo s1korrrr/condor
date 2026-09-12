@@ -10,11 +10,11 @@ const rows = (value: unknown) => Array.isArray(value) ? value.map(object) : null
 const text = (value: unknown) => typeof value === 'string' && value.trim() && value !== 'n/a' ? value : null;
 function sum(values: (number | null)[]) { return values.every(value => value !== null) ? values.reduce<number>((total, value) => total + value!, 0) : null; }
 export type BotPairPosition = {
-  id: string; pair: string; baseAsset: string; quote: string; price: number | null; base: number | null;
+  id: string; controllerId: string | null; uniquePair: boolean; pair: string; baseAsset: string; quote: string; price: number | null; base: number | null;
   markValue: number | null; breakeven: number | null; bagPnl: number | null; inventorySource: string;
   phase: string | null; reason: string | null; hold: string | null; riskClear: boolean | null;
   profitPrice: number | null; floor: number | null; peak: number | null; plannedReduction: number | null;
-  targetBase: number | null; planNext: string | null; executors: Row[]; pendingSells: Row[] | null; pendingSellsTruncated: boolean;
+  quantity: string | null; inventoryEntries: Row[]; targetBase: number | null; planNext: string | null; executors: Row[]; pendingSells: Row[] | null; pendingSellsTruncated: boolean;
 };
 export function buildBotPositionView(payload: unknown, bot: string, now: number) {
   const root = object(payload), runtime = object(root.runtime_status), monitoring = object(root.monitoring);
@@ -46,9 +46,10 @@ export function buildBotPositionView(payload: unknown, bot: string, now: number)
     const phase = text(episode.phase) ?? text(controller.state), targetBase = hasEpisode ? nonnegative(episode.target_base) : null;
     // This is an inventory objective. The execution owner still sizes, quantizes and gates each order.
     const plannedReduction = hasEpisode && ['DISTRIBUTE', 'EXIT'].includes(phase ?? '') && base !== null && targetBase !== null && targetBase <= base ? base - targetBase : null;
-    return { id: id ?? `${pair}:${index}`, pair, baseAsset, quote, price, base, markValue, breakeven, bagPnl,
-      inventorySource: failedObservation ? 'Controller observation unavailable' : hasEpisode ? 'Controller episode bag' : 'Retained positions', phase,
+    return { id: id ?? `${pair}:${index}`, controllerId: id, uniquePair: single, pair, baseAsset, quote, price, base, markValue, breakeven, bagPnl,
+      inventorySource: failedObservation ? 'Controller observation unavailable' : hasEpisode ? 'Controller episode bag' : 'Retained bot inventory', phase,
       reason: failedObservation ? 'Controller observation unavailable' : text(episode.reason) ?? text(controller.gate), hold: text(episode.hold_reason), riskClear: typeof episode.exit_risk_clear === 'boolean' ? episode.exit_risk_clear : null,
+      quantity: base === null ? null : hasEpisode ? String(episode.base) : held?.length === 1 ? String(held[0].amount_base) : String(base), inventoryEntries: hasEpisode ? [] : held ?? [],
       profitPrice: positive(episode.minimum_profit_price), floor: positive(trail.floor), peak: positive(trail.peak), plannedReduction, targetBase,
       planNext: text(controller.plan_next), executors: active, pendingSells: rows(info.pending_sell_requests)?.map(request => ({ ...request, request_state: request.termination_requested === true ? 'Cancellation requested' : positive(request.expires_at) !== null && now >= positive(request.expires_at)! * 1000 ? 'Expiry reached; awaiting owner' : request.termination_requested === false ? 'Pending owner request' : 'Request state unavailable' })) ?? null, pendingSellsTruncated: info.pending_sell_requests_truncated === true };
   });
@@ -58,4 +59,14 @@ export function buildBotPositionView(payload: unknown, bot: string, now: number)
   return { observedAt: observedAt!, pairs, activeOrderCount: completeOrderList ? orders.length : count !== null && Number.isInteger(count) ? count : null,
     orderCountLabel: completeOrderList ? "Active orders" : "Active limit orders",
     activeExecutorCount: executors.length, orders, ordersStatus };
+}
+
+/** Display-only grouping; never infer a venue minimum or suppress active execution. */
+export function partitionBotInventory(pairs: BotPairPosition[]) {
+  const small: BotPairPosition[] = [], primary: BotPairPosition[] = [];
+  for (const row of pairs) {
+    const quiet = row.executors.length === 0 && !row.pendingSells?.length && !row.plannedReduction;
+    (quiet && row.markValue !== null && row.markValue >= 0 && row.markValue < 1 ? small : primary).push(row);
+  }
+  return { primary, small };
 }

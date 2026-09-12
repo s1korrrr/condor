@@ -12,6 +12,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from condor.web.routes import (
+    deployment,
     account_balances,
     agents,
     archived,
@@ -95,6 +96,7 @@ def create_app() -> FastAPI:
     app.include_router(routines.router, prefix="/api/v1")
     app.include_router(reports.router, prefix="/api/v1")
     app.include_router(settings.router, prefix="/api/v1")
+    app.include_router(deployment.router, prefix="/api/v1")
     app.include_router(sessions.router, prefix="/api/v1")
     app.include_router(chat_ws.router, prefix="/api/v1")
     app.include_router(confirmations.router, prefix="/api/v1")

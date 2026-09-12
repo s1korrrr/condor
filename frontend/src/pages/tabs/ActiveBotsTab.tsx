@@ -795,7 +795,7 @@ export function ActiveBotsTab() {
 
   if (access.native) return <div className="space-y-6">
     {bots.length > 0 ? <BotsSection bots={bots} server={server} onStopInitiated={onStopInitiated} onStopSettled={onStopSettled} /> : <p role="status" className="text-sm text-[var(--color-text-muted)]">Bot lifecycle observations are unavailable for this server.</p>}
-    <NativeBotPositions key={server} server={server} />
+    <NativeBotPositions key={server} server={server} page={error ? undefined : data} />
   </div>;
 
   return (

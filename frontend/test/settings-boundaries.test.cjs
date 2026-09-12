@@ -30,6 +30,7 @@ function render(file, symbol, props={}, {queries={}, search='', access=nativeAcc
    if(id==='@/hooks/useDeploymentPolicy')return {useDeploymentPolicy:()=>({settingsMutation:allowed, accountManagement:true, isLoading:false,isError:false, refetch:async()=>{}})};
    if(id==='@/hooks/useServerCapabilities')return {useServerCapabilities:()=>({access,data:{status:'online',profile:'native',capabilities:{}},isLoading:false,isError:false,refetch:async()=>{}})};
    if(id==='@/hooks/useServer')return {useServer:()=>({server:'native-ok-rsi'})};
+   if(id==='@/lib/auth-token')return {authFetch:()=>{throw new Error('Unexpected auth request')}};
    if(id==='@/lib/auth')return {useAuth:()=>({logout:()=>{}})};
    if(id==='@/lib/api')return {api:new Proxy({}, {get:(_,name)=>(...args)=>{apiCalls.push({name,args});return Promise.resolve(apiResult)}})};
    if(id==='react-router-dom')return {Link:({children,to})=>React.createElement('a',{href:to},children),useSearchParams:()=>[new URLSearchParams(search),()=>{}],useNavigate:()=>()=>{}};

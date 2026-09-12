@@ -91,6 +91,7 @@ function ResearchDocumentReader({
   const [sourcePage, setSourcePage] = useState(0);
   const [opened, setOpened] = useState<OpenDocument | null>(null);
   const [pending, setPending] = useState<string | null>(null);
+  const [failedRead,setFailedRead]=useState<{document:ResearchDocumentReference;download:boolean}|null>(null);
   const [error, setError] = useState<string | null>(null);
   const request = useRef<AbortController | null>(null);
   const live = useRef(true);
@@ -114,12 +115,14 @@ function ResearchDocumentReader({
     setOpened(null);
     setPending(null);
     setError(null);
+    setFailedRead(null);
   };
   async function read(document: ResearchDocumentReference, download: boolean) {
     request.current?.abort();
     const controller = new AbortController();
     request.current = controller;
     setError(null);
+    setFailedRead(null);
     setPending(document.ref);
     setOpened(null);
     urls.current.forEach((url) => URL.revokeObjectURL(url));
@@ -253,11 +256,11 @@ function ResearchDocumentReader({
         request.current === controller &&
         !controller.signal.aborted
       )
-        setError(
+        { setFailedRead({document,download}); setError(
           error instanceof Error
             ? error.message
             : "Source document could not be opened.",
-        );
+        ); }
     } finally {
       if (live.current && request.current === controller) setPending(null);
     }
@@ -347,7 +350,7 @@ function ResearchDocumentReader({
       )}
       {error && (
         <p role="alert" className="research-read-error">
-          {error}
+          {error} {failedRead && <button type="button" onClick={()=>void read(failedRead.document,failedRead.download)}>Retry source</button>}
         </p>
       )}
       {opened && (

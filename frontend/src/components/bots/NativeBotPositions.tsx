@@ -1,17 +1,19 @@
 import { useEffect, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
+import type { BotsPageResponse } from '@/lib/api';
+import { currentControllerPolicy } from '@/features/bots/observed-policy';
 import { authFetch } from '@/lib/auth-token';
 import { parseTradingVisualsSources, type TradingVisualsSource } from '@/features/trading-visuals/sources';
-import { buildBotPositionView, numeric, type BotPairPosition } from '@/features/bots/position-view';
+import { buildBotPositionView, partitionBotInventory, numeric, type BotPairPosition } from '@/features/bots/position-view';
 
 async function read(path: string, signal: AbortSignal): Promise<unknown> {
   const response = await authFetch(path, { signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]), cache: 'no-store' });
   if (!response.ok) throw new Error(`Bot observation request failed (${response.status}).`);
   return response.json();
 }
-const number = (value: unknown, unit = '') => { const n = numeric(value); return n === null ? 'Unavailable' : `${n.toLocaleString(undefined, { maximumFractionDigits: 8 })}${unit ? ` ${unit}` : ''}`; };
-const label = (value: unknown) => typeof value === 'string' && value ? value.replaceAll('_', ' ') : 'Unavailable';
+const number = (value: unknown, unit = '') => { const n = numeric(value); return n === null ? '—' : `${n.toLocaleString(undefined, { maximumFractionDigits: 8 })}${unit ? ` ${unit}` : ''}`; };
+const label = (value: unknown) => typeof value === 'string' && value ? value.replaceAll('_', ' ') : '—';
 function Metric({ title, value, detail }: { title: string; value: string; detail?: string }) {
   return <div><dt className="text-xs text-[var(--color-text-muted)]">{title}</dt><dd className="mt-1 font-semibold tabular-nums text-sm">{value}</dd>{detail && <dd className="mt-1 text-xs text-[var(--color-text-muted)]">{detail}</dd>}</div>;
 }
@@ -33,50 +35,72 @@ function PriceLevels({ row }: { row: BotPairPosition }) {
     <dl className="flex flex-wrap gap-x-6 gap-y-3">{levels.map(item => <div key={item.name} className="text-xs"><dt className="flex items-center gap-1.5 text-[var(--color-text-muted)]"><span className="inline-block h-2 w-2 rounded-full" style={{ background: item.color }} />{item.name}</dt><dd className="mt-1 tabular-nums">{number(item.value)}</dd></div>)}</dl>
   </figure>;
 }
-function PairPosition({ row, bot }: { row: BotPairPosition; bot: string }) {
+function PairPosition({ row, bot, page, now }: { row: BotPairPosition; bot: string; page?:BotsPageResponse; now:number }) {
   const to = `/trading-visuals?bot=${encodeURIComponent(bot)}&pair=${encodeURIComponent(row.pair)}`;
-  return <article className="rounded-lg border border-[var(--color-border)] p-4 space-y-5" aria-label={`${row.pair} position and sell plan`}>
-    <header className="flex flex-wrap justify-between gap-3"><div><h3 className="font-semibold">{row.pair}</h3><p className="mt-1 text-xs text-[var(--color-text-muted)]">{row.inventorySource} · {label(row.phase)}</p></div><div className="flex gap-4 text-sm text-[var(--color-primary)]"><Link className="underline underline-offset-4" to={`${to}&view=charts`}>Chart</Link><Link className="underline underline-offset-4" to={`${to}&view=activity&record=fills`}>Fills</Link></div></header>
-    <dl className="grid grid-cols-2 gap-5 xl:grid-cols-4">
-      <Metric title="Bag holding" value={number(row.base, row.baseAsset)} />
-      <Metric title="Bag market value" value={number(row.markValue, row.quote)} detail="At the owner-reported current price" />
-      <Metric title="Bag unrealized PnL" value={number(row.bagPnl, row.quote)} detail={row.inventorySource === 'Controller episode bag' ? 'Mark value less tracked cost; before exit costs' : 'Owner-reported retained-position PnL'} />
-      <Metric title="Tracked bag cost" value={number(row.base !== null && row.breakeven !== null ? row.base * row.breakeven : null, row.quote)} detail="Unavailable when acquisition basis is unknown" />
-    </dl>
+  const policy=currentControllerPolicy(page,bot,row,now);
+  const metrics = [
+    ['Tracked inventory cost', row.base !== null && row.breakeven !== null ? row.base * row.breakeven : null, row.quote],
+    ['Planned bag reduction', row.plannedReduction, row.baseAsset], ['Target remaining inventory', row.targetBase, row.baseAsset],
+    ['Price move to trailing floor', row.floor !== null && row.price !== null ? (row.floor / row.price - 1) * 100 : null, '%'],
+  ] as const;
+  return <div className="space-y-4 p-4 bg-[var(--color-bg)]/40">
+    <div className="flex flex-wrap justify-between gap-3"><p className="text-xs text-[var(--color-text-muted)]">{row.inventorySource} · {row.id}</p><div className="flex gap-4 text-sm text-[var(--color-primary)]"><Link to={`${to}&view=charts`}>Chart</Link><Link to={`${to}&view=activity&record=fills`}>Fills</Link></div></div>
     <PriceLevels row={row} />
-    <div className="border-t border-[var(--color-border)] pt-4 space-y-3"><h4 className="text-sm font-medium">Next sell and trailing exit</h4>
-      <dl className="grid grid-cols-2 gap-5 xl:grid-cols-4">
-        <Metric title="Price move to trailing floor" value={number(row.floor !== null && row.price !== null ? (row.floor / row.price - 1) * 100 : null, "%")} detail="From the current price; the floor can move" />
-        <Metric title="Profit floor status" value={row.profitPrice === null || row.price === null ? "Unavailable" : row.price >= row.profitPrice ? "Price above floor" : "Price below floor"} detail="Price alone may not permit a sell" />
-        <Metric title="Planned bag reduction" value={number(row.plannedReduction, row.baseAsset)} detail="Inventory target difference, before order sizing and gates" />
-        <Metric title="Target remaining bag" value={number(row.targetBase, row.baseAsset)} />
-      </dl>
-      <p className="text-sm text-[var(--color-text-muted)]">{row.hold ? `Hold: ${label(row.hold)}. ` : ''}{row.reason ? `Controller: ${label(row.reason)}. ` : 'Controller gate detail is unavailable. '}{row.riskClear === false ? 'Exit risk gate is blocked.' : row.riskClear === true ? 'The reported exit risk gate is clear.' : ''}</p>
-      {row.planNext && <p className="text-sm">Owner plan: {row.planNext}</p>}
-      {row.pendingSells?.length ? <div className="overflow-x-auto"><table className="w-full text-sm text-left"><caption className="text-left text-xs text-[var(--color-text-muted)] pb-2">Owner-issued sell requests · may be awaiting an exchange order</caption><thead><tr>{['Request', 'State', 'Requested price', 'Amount', 'Filled', 'Remaining'].map(name => <th key={name} className="py-2 pr-5 font-medium whitespace-nowrap">{name}</th>)}</tr></thead><tbody>{row.pendingSells.map((request, i) => <tr key={String(request.request_id ?? i)} className="border-t border-[var(--color-border)]/40">{[label(request.request_id), label(request.request_state), number(request.price_quote, row.quote), number(request.amount_base, row.baseAsset), number(request.filled_amount_base, row.baseAsset), number(request.remaining_amount_base, row.baseAsset)].map((value, j) => <td key={j} className="py-2 pr-5 tabular-nums whitespace-nowrap">{value}</td>)}</tr>)}</tbody></table></div> : <p className="text-xs text-[var(--color-text-muted)]">{row.pendingSells ? 'No pending sell request in this observation.' : 'Pending sell requests are not included in this owner snapshot.'} A conditional plan does not guarantee the next order, fill price or closing time.</p>}
-      {row.pendingSellsTruncated && <p role="status" className="text-xs text-[var(--color-yellow)]">The owner limited this sell-request list; additional requests may exist.</p>}
-      {row.executors.length > 0 && <div className="overflow-x-auto"><table className="w-full text-sm text-left"><caption className="text-left text-xs text-[var(--color-text-muted)] pb-2">Active executors · trailing levels and PnL reported by the execution owner</caption><thead><tr>{['Side / executor', 'Status', 'Remaining position', 'PnL', 'Trail state', 'Activation price', 'Trigger price'].map(name => <th key={name} className="py-2 pr-5 font-medium whitespace-nowrap">{name}</th>)}</tr></thead><tbody>{row.executors.map((executor, i) => <tr key={String(executor.executor_id ?? i)} className="border-t border-[var(--color-border)]/40">{[`${label(executor.side)} · ${label(executor.executor_type)}`, label(executor.status), number(executor.remaining_position_amount_base, row.baseAsset), number(executor.net_pnl_quote, row.quote), label(executor.trailing_state), number(executor.trailing_activation_price, row.quote), number(executor.trailing_trigger_price, row.quote)].map((value, j) => <td key={j} className="py-2 pr-5 whitespace-nowrap tabular-nums">{value}</td>)}</tr>)}</tbody></table></div>}
-    </div>
-  </article>;
-}
-export function BotPositionObservation({ payload, bot, now }: { payload: unknown; bot: string; now: number }) {
-  let view;
-  try { view = buildBotPositionView(payload, bot, now); } catch (error) { return <p role="status" className="text-sm text-[var(--color-yellow)]">{error instanceof Error ? error.message : 'Bot state unavailable.'}</p>; }
-  const completeOrders = view.ordersStatus.complete === true;
-  return <div className="space-y-4">
-    <dl className="flex flex-wrap gap-x-10 gap-y-4"><Metric title={view.orderCountLabel} value={number(view.activeOrderCount)} detail={completeOrders ? "Connector-tracked orders, including pending placement" : "Legacy owner count; market orders are not included"} /><Metric title="Active executors" value={number(view.activeExecutorCount)} detail="An executor can manage several orders" /><Metric title="Observed at · UTC" value={new Date(view.observedAt).toISOString().replace('T', ' ').replace('Z', '')} /></dl>
-    {view.orders && completeOrders ? <details className="rounded-lg border border-[var(--color-border)] p-3"><summary className="cursor-pointer text-sm">Inspect active orders ({view.orders.length})</summary>{view.orders.length ? <div className="overflow-x-auto mt-3"><table className="w-full text-sm text-left"><thead><tr>{['Pair', 'Side', 'Price (quote)', 'Amount (base)', 'Filled (base)', 'Remaining (base)', 'Status'].map(name => <th key={name} className="py-2 pr-5 font-medium whitespace-nowrap">{name}</th>)}</tr></thead><tbody>{view.orders.map((order, i) => <tr key={String(order.order_id ?? i)} className="border-t border-[var(--color-border)]/40">{[label(order.pair), label(order.side), number(order.price_quote), number(order.amount_base), number(order.filled_amount_base), number(order.remaining_amount_base), label(order.status)].map((value, j) => <td key={j} className="py-2 pr-5 whitespace-nowrap tabular-nums">{value}</td>)}</tr>)}</tbody></table></div> : <p className="mt-3 text-sm">No active orders in this owner observation.</p>}</details> : <p className="text-xs text-[var(--color-text-muted)]">The detailed active-order list is unavailable or incomplete in this snapshot. Recorded database orders remain available in Trading Visuals.</p>}
-    {view.pairs.length ? view.pairs.map(row => <PairPosition key={row.id} row={row} bot={bot} />) : <p role="status" className="text-sm">No controller positions are included in this observation.</p>}
-    <p className="text-xs text-[var(--color-text-muted)]">Bot inventory and executor PnL describe their stated scopes. Account balances and account history remain in Portfolio. Future trailing levels depend on price movement; no closing time is predicted.</p>
+    {policy && <div><h4 className="text-sm font-medium">Observed trailing policy and operator state</h4><p className="mt-1 text-xs text-[var(--color-text-muted)]">Native controller telemetry · {policy.controllerId} · received {new Date(policy.receivedAt*1000).toISOString()} UTC. Policy settings do not establish an armed trailing price.</p><dl className="mt-3 grid grid-cols-2 lg:grid-cols-3 gap-3">{policy.fields.map(([title,value])=><Metric key={title} title={title} value={value}/>)}</dl></div>}
+    {metrics.some(([,value]) => value !== null) && <dl className="grid grid-cols-2 gap-4 lg:grid-cols-4">{metrics.filter(([,value])=>value!==null).map(([title,value,unit])=><Metric key={title} title={title} value={number(value,unit)}/>)}</dl>}
+    {row.quantity !== null && <p className="text-xs break-all">Observed inventory units: <span className="tabular-nums">{row.quantity} {row.baseAsset}</span></p>}
+    {row.inventoryEntries.length > 1 && <details className="text-xs"><summary>Exact retained inventory entries ({row.inventoryEntries.length})</summary><ul className="mt-2 space-y-1">{row.inventoryEntries.map((entry,i)=><li key={i} className="break-all tabular-nums">{String(entry.amount_base)} {row.baseAsset}{numeric(entry.breakeven_price)!==null ? ` · basis ${String(entry.breakeven_price)} ${row.quote}` : ''}</li>)}</ul></details>}
+    {(row.hold || row.reason || row.planNext || row.riskClear !== null) && <div className="space-y-1 text-sm"><h4 className="font-medium">Controller plan and gates</h4>{row.hold && <p>Hold: {label(row.hold)}</p>}{row.reason && <p>{label(row.reason)}</p>}{row.planNext && <p>Owner plan: {row.planNext}</p>}{row.riskClear !== null && <p>Exit risk gate: {row.riskClear ? 'clear' : 'blocked'}</p>}</div>}
+    {row.plannedReduction !== null && <p className="text-xs text-[var(--color-text-muted)]">The inventory target is before order sizing and gates. A conditional plan does not guarantee an order, fill price or closing time.</p>}
+    {row.pendingSells !== null && <div><h4 className="text-sm font-medium">Owner-issued sell requests</h4>{row.pendingSells.length ? <ObservationTable rows={row.pendingSells} columns={[
+      ['Request', 'request_id'], ['State', 'request_state'], ['Price · '+row.quote, 'price_quote'], ['Amount · '+row.baseAsset,'amount_base'], ['Filled','filled_amount_base'], ['Remaining','remaining_amount_base'],
+    ]}/> : <p className="mt-2 text-xs">No pending sell request in this observation.</p>}<p className="mt-2 text-xs text-[var(--color-text-muted)]">Requests may still be awaiting an exchange order.{row.pendingSellsTruncated ? ' The owner limited this list; additional requests may exist.' : ''}</p></div>}
+    {!!row.executors.length && <div><h4 className="text-sm font-medium">Active executors</h4><ObservationTable rows={row.executors} columns={[
+      ['Side','side'], ['Executor','executor_type'], ['Status','status'], ['Remaining · '+row.baseAsset,'remaining_position_amount_base'], ['PnL · '+row.quote,'net_pnl_quote'], ['Trail state','trailing_state'], ['Activation · '+row.quote,'trailing_activation_price'], ['Trigger · '+row.quote,'trailing_trigger_price'],
+    ]}/></div>}
   </div>;
 }
-function SourcePositions({ source }: { source: TradingVisualsSource }) {
+function ObservationTable({rows,columns}: {rows:Record<string,unknown>[];columns:[string,string][]}) {
+  const visible=columns.filter(([,key])=>rows.some(row=>row[key]!==null && row[key]!==undefined));
+  return <div className="overflow-x-auto"><table className="w-full text-xs text-left"><thead><tr>{visible.map(([title,key])=><th key={key} className="py-3 pr-5 font-medium whitespace-nowrap">{title}</th>)}</tr></thead><tbody>{rows.map((row,i)=><tr key={i} className="border-t border-[var(--color-border)]">{visible.map(([,key])=><td key={key} className="py-3 pr-5 tabular-nums whitespace-nowrap">{row[key]===null || row[key]===undefined ? '—' : String(row[key])}</td>)}</tr>)}</tbody></table></div>;
+}
+function InventoryTable({rows,bot,page,now}: {rows:BotPairPosition[];bot:string;page?:BotsPageResponse;now:number}) {
+  return <div className="space-y-1">{rows.map(row=><details key={row.id} className="border-b border-[var(--color-border)] last:border-0">
+    <summary className="cursor-pointer list-none grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 py-3 text-xs" aria-label={`${row.pair} inventory details`}>
+      <span><strong className="block text-sm text-[var(--color-primary)]">{row.pair}</strong><span className="mt-1 block text-[var(--color-text-muted)]">{label(row.phase)}</span></span>
+      <span className="tabular-nums break-all"><span className="block text-[var(--color-text-muted)]">Held units</span>{row.quantity ?? '—'} {row.baseAsset}</span>
+      <span className="tabular-nums"><span className="block text-[var(--color-text-muted)]">Market value</span>{number(row.markValue,row.quote)}</span>
+      <span className="tabular-nums"><span className="block text-[var(--color-text-muted)]">Unrealized PnL</span>{number(row.bagPnl,row.quote)}<span className="block text-[var(--color-primary)] mt-1">Details</span></span>
+    </summary><PairPosition row={row} bot={bot} page={page} now={now}/></details>)}</div>;
+}
+export function BotPositionObservation({ payload, bot, now, page }: { payload: unknown; bot: string; now: number; page?:BotsPageResponse }) {
+  let view;
+  try { view = buildBotPositionView(payload, bot, now); } catch (error) { return <p role="status" className="text-sm text-[var(--color-yellow)]">{error instanceof Error ? error.message : 'Bot state could not be read.'}</p>; }
+  const completeOrders = view.orders !== null && view.ordersStatus.complete === true;
+  const {primary,small}=partitionBotInventory(view.pairs);
+  const missing:string[]=[];
+  if (!completeOrders) missing.push('complete exchange order detail');
+  if(view.pairs.some(row=>row.base===null)) missing.push('inventory quantities for some controllers');
+  if(view.pairs.some(row=>row.breakeven===null && row.base!==0)) missing.push('acquisition basis for some inventory');
+  if(view.pairs.some(row=>row.pendingSells===null || row.floor===null)) missing.push('detailed sell requests or trailing levels');
+  return <div className="space-y-4">
+    <dl className="flex flex-wrap gap-x-10 gap-y-4">{view.activeOrderCount!==null && <Metric title={view.orderCountLabel} value={number(view.activeOrderCount)} detail={completeOrders ? "Connector-tracked, including pending placement" : "Limit orders only; market orders excluded"} />}<Metric title="Active executors" value={number(view.activeExecutorCount)} /><Metric title="Observed at · UTC" value={new Date(view.observedAt).toISOString().replace('T',' ').replace('Z','')} /></dl>
+    <div aria-label="Observation coverage" className="text-xs leading-relaxed text-[var(--color-text-muted)] border-l-2 border-[var(--color-border)] pl-3"><p>{view.pairs.some(row=>row.inventorySource==='Controller episode bag') ? 'Controller episode inventory and retained bot inventory are shown in their stated scopes.' : 'Retained bot inventory: positions recorded by the execution owner, not the whole account balance.'} Values use each pair’s quote currency. {view.pairs.some(row=>row.inventorySource==='Controller episode bag') ? 'Episode PnL is mark value less tracked cost, before exit costs.' : 'PnL is the owner-reported retained-position result.'}</p>{missing.length>0 && <p className="mt-1">This snapshot does not report {missing.join('; ')}. Only reported fields are shown in details; a dash marks a missing value. Account holdings remain in <Link className="underline" to="/portfolio">Portfolio</Link>.</p>}</div>
+    {completeOrders && <details className="rounded-lg border border-[var(--color-border)] p-3"><summary className="cursor-pointer text-sm">Inspect active orders ({view.orders!.length})</summary>{view.orders!.length ? <ObservationTable rows={view.orders!} columns={[
+      ['Pair','pair'], ['Side','side'], ['Price (quote)','price_quote'], ['Amount (base)','amount_base'], ['Filled (base)','filled_amount_base'], ['Remaining (base)','remaining_amount_base'], ['Status','status'],
+    ]}/> : <p className="mt-3 text-sm">No active orders in this owner observation.</p>}</details>}
+    {!!primary.length && <InventoryTable rows={primary} bot={bot} page={page} now={now}/>}
+    {!!small.length && <details className="rounded-lg border border-[var(--color-border)] px-4 py-3"><summary className="cursor-pointer text-sm">Small &amp; zero inventory ({small.length})</summary><p className="my-3 text-xs text-[var(--color-text-muted)]">Each position is below 1 unit of its quote currency with no active executor or reported pending sell. This display grouping is not a venue trading minimum. Exact reported quantities remain below.</p><InventoryTable rows={small} bot={bot} page={page} now={now}/></details>}
+    {!view.pairs.length && <p role="status" className="text-sm">No controller positions are included in this observation.</p>}
+  </div>;
+}
+function SourcePositions({ source, page }: { source: TradingVisualsSource; page?:BotsPageResponse }) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => { const id = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(id); }, []);
   const query = useQuery({ queryKey: ['native-position-observation', source.server, source.bot], queryFn: ({ signal }) => read(`/api/v1/trading-visuals/bootstrap?bot=${encodeURIComponent(source.bot)}`, signal), refetchInterval: 10_000, retry: false });
-  return <section className="space-y-4" aria-label={`${source.bot} positions and orders`}><h2 className="text-base font-semibold">{source.bot}</h2>{query.isPending ? <p role="status">Reading bot positions and orders…</p> : query.isError ? <p role="alert" className="text-sm">{query.error.message} <button className="underline" onClick={() => void query.refetch()}>Retry</button></p> : <BotPositionObservation payload={query.data} bot={source.bot} now={Math.max(now, query.dataUpdatedAt)} />}</section>;
+  return <section className="space-y-4" aria-label={`${source.bot} positions and orders`}><h2 className="text-base font-semibold">{source.bot}</h2>{query.isPending ? <p role="status">Reading bot positions and orders…</p> : query.isError ? <p role="alert" className="text-sm">{query.error.message} <button className="underline" onClick={() => void query.refetch()}>Retry</button></p> : <BotPositionObservation page={page} payload={query.data} bot={source.bot} now={Math.max(now, query.dataUpdatedAt)} />}</section>;
 }
-export function NativeBotPositions({ server }: { server: string }) {
+export function NativeBotPositions({ server, page }: { server: string; page?:BotsPageResponse }) {
   const query = useQuery({ queryKey: ['native-position-sources', server], queryFn: async ({ signal }) => parseTradingVisualsSources(await read('/api/v1/trading-visuals/sources', signal)).filter(source => source.server === server), retry: false, refetchInterval: 30_000 });
-  return <div className="space-y-6">{query.isPending ? <p role="status">Discovering bot position sources…</p> : query.isError ? <p role="alert">{query.error.message} <button className="underline" onClick={() => void query.refetch()}>Retry</button></p> : query.data?.length ? query.data.map(source => <SourcePositions key={`${source.server}:${source.bot}`} source={source} />) : <p role="status">No authorized bot position source is available for this server.</p>}</div>;
+  return <div className="space-y-6">{query.isPending ? <p role="status">Discovering bot position sources…</p> : query.isError ? <p role="alert">{query.error.message} <button className="underline" onClick={() => void query.refetch()}>Retry</button></p> : query.data?.length ? query.data.map(source => <SourcePositions key={`${source.server}:${source.bot}`} source={source} page={page} />) : <p role="status">No authorized bot position source is available for this server.</p>}</div>;
 }

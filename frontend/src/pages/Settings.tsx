@@ -8,11 +8,12 @@ import { CustomProvidersSettings } from "@/components/settings/CustomProvidersSe
 import { GatewaySettings } from "@/components/settings/GatewaySettings";
 import { ServersSettings } from "@/components/settings/ServersSettings";
 import { VoiceSettings } from "@/components/settings/VoiceSettings";
+import { DeploymentVersions } from "@/components/settings/DeploymentVersions";
 import { useAuth } from "@/lib/auth";
 import { useServerCapabilities } from "@/hooks/useServerCapabilities";
-import { CapabilityUnavailable } from "@/components/CapabilityUnavailable";
 
 const TABS = [
+  { key: "versions", label: "Deployment versions", group: "Deployment" },
   { key: "servers", label: "Servers", group: "Connections" },
   { key: "gateway", label: "Gateway", group: "Integrations" },
   { key: "keys", label: "API Keys", group: "Connections" },
@@ -31,7 +32,12 @@ export function Settings() {
   const [params, setParams] = useSearchParams();
   const requestedTab = params.get("tab");
   const tab = TABS.find((item) => item.key === requestedTab)?.key ?? "servers";
-  const { logout } = useAuth();
+  const { logout, user } = useAuth();
+  const supported = (key: string) => key === 'versions' ? user?.role === 'admin'
+    : key === 'keys' ? access.accountManagement && policy.accountManagement
+    : ['gateway','llm','voice'].includes(key) ? policy.settingsMutation : true;
+  const availableTabs=TABS.filter(item=>supported(item.key));
+  const unavailableTabs=TABS.filter(item=>!supported(item.key) && item.key!=='versions');
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -48,22 +54,19 @@ export function Settings() {
 
       <p className="mb-4 text-sm text-[var(--color-text-muted)]">Selected server: <strong>{server ?? "None"}</strong> · {access.online ? access.native ? "Native runtime" : "Full server" : "Capabilities unavailable"}{access.online && dataUpdatedAt ? ` · Checked ${new Date(dataUpdatedAt).toLocaleString('en-GB', {timeZone:'UTC'}) + ' UTC'}` : ""}</p>
       {unavailableReason && <p role="status" className="mb-4 text-sm">{unavailableReason}</p>}
-      <nav aria-label="Settings sections" className="mb-6 grid gap-3 sm:grid-cols-3">
-        {["Connections", "Integrations", "AI"].map(group => <section key={group} className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-2"><h2 className="px-2 pb-2 text-xs text-[var(--color-text-muted)]">{group}</h2><div className="flex flex-wrap gap-1">{TABS.filter(item => item.group === group).map(item => <button key={item.key} aria-current={tab === item.key ? "page" : undefined} onClick={() => setParams({ tab: item.key })} className={`rounded-md px-2 py-1.5 text-sm ${tab === item.key ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)]" : "text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"}`}>{item.label}</button>)}</div></section>)}
+      <nav aria-label="Settings sections" className="mb-5 flex flex-wrap gap-2">
+        {availableTabs.map(item=><button key={item.key} aria-current={tab===item.key?'page':undefined} onClick={()=>setParams({tab:item.key})} className={`rounded-md border border-[var(--color-border)] px-3 py-2 text-sm ${tab===item.key?'bg-[var(--color-primary)]/15 text-[var(--color-primary)]':'text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]'}`}>{item.label}</button>)}
       </nav>
-
-      {policy.isError ? <SettingsReadError label="Deployment policy" retry={policy.refetch} /> : !policy.settingsMutation && (
-        <p className="mb-4 text-sm text-[var(--color-text-muted)]">
-          {policy.isLoading ? "Checking deployment policy…" : "Server, Gateway, LLM and Voice changes are unavailable in this deployment."}
-        </p>
-      )}
+      {policy.isError && <SettingsReadError label="Deployment policy" retry={policy.refetch} />}
+      {unavailableTabs.length>0 && <details className="mb-5 rounded-lg border border-[var(--color-border)] px-4 py-3 text-sm" open={unavailableTabs.some(item=>item.key===tab) || undefined}><summary className="cursor-pointer text-[var(--color-text-muted)]">Unsupported in this deployment ({unavailableTabs.length})</summary><p className="mt-3 text-xs text-[var(--color-text-muted)]">{policy.isLoading ? 'Checking policy and server capabilities…' : 'These sections require capabilities or configuration changes that this deployment does not expose.'}</p><ul className="mt-3 flex flex-wrap gap-x-5 gap-y-2">{unavailableTabs.map(item=><li key={item.key}>{item.label}</li>)}</ul></details>}
       {/* Tab content */}
+      {tab === "versions" && (user?.role==='admin' ? <DeploymentVersions/> : <p role="status">Administrator access is required to inspect deployment versions.</p>)}
       {tab === "tools" && <WorkspaceCapabilities />}
       {tab === "servers" && <ServersSettings />}
-      {tab === "gateway" && <GatewaySettings />}
-      {tab === "keys" && (access.accountManagement && policy.accountManagement ? <ApiKeysSettings /> : <CapabilityUnavailable reason="Account credential management is unavailable on this server." />)}
-      {tab === "llm" && <CustomProvidersSettings />}
-      {tab === "voice" && <VoiceSettings />}
+      {tab === "gateway" && supported(tab) && <GatewaySettings />}
+      {tab === "keys" && supported(tab) && <ApiKeysSettings />}
+      {tab === "llm" && supported(tab) && <CustomProvidersSettings />}
+      {tab === "voice" && supported(tab) && <VoiceSettings />}
     </div>
   );
 }

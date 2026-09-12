@@ -54,7 +54,7 @@ test('Settings hosts full-server tools and existing settings destinations under 
   });
   const html = renderToStaticMarkup(React.createElement(load('pages/Settings.tsx').Settings));
   for (const to of ['/executors', '/agents', '/routines', '/trade']) assert.ok(html.includes(`href="${to}"`), to);
-  for (const label of ['Connections', 'Integrations', 'AI', 'full-fixture']) assert.ok(html.includes(label), label);
+  for (const label of ['Servers', 'Gateway', 'LLM Endpoints', 'Voice &amp; AI', 'full-fixture']) assert.ok(html.includes(label), label);
   assert.doesNotMatch(html, /href="\/portfolio"|href="\/research"|href="\/settings"/);
 });
 

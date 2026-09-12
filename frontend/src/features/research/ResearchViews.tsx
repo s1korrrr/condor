@@ -332,7 +332,7 @@ export function LabRecords({
                       {text(node.title, text(node.id))}
                     </button>
                     <small>
-                      {text(node.kind)} · {text(node.family, "No family")}
+                      {text(node.kind)} · {text(node.family, "No family")} · {text(node.id)}
                     </small>
                     {labContext(node) && (
                       <p className="lab-record-context">{labContext(node)}</p>

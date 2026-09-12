@@ -62,7 +62,7 @@ function PortfolioAccount({server}: {server:string}) {
   const metric=(label:string,value:string,note:string)=><div className="min-w-0"><dt className="text-xs text-[var(--color-text-muted)]">{label}</dt><dd className="mt-2 break-words text-xl font-semibold tabular-nums sm:text-2xl">{value}</dd><p className="mt-1 text-[11px] text-[var(--color-text-muted)]">{note}</p></div>;
   return <div className="min-w-0 space-y-5">
     <header className="flex flex-wrap items-start justify-between gap-4">
-      <div><h1 className="text-2xl font-semibold tracking-tight">Portfolio</h1><p className="mt-1 text-sm text-[var(--color-text-muted)]">Account holdings and valuation · OKX Spot · USDT</p></div>
+      <div><h1 className="text-2xl font-semibold tracking-tight">Portfolio</h1><p className="mt-1 text-sm text-[var(--color-text-muted)]">Account holdings and valuation · OKX Spot · Reporting currency: USDT</p></div>
       <div className="flex gap-2"><Link to="/settings?tab=keys" className={control}><KeyRound size={14}/>Connections</Link><button type="button" onClick={()=>void refresh()} disabled={refreshing||query.isFetching} className={`${control} bg-[var(--color-primary)] text-[var(--color-bg)]`}><RefreshCw size={14} className={refreshing?'animate-spin motion-reduce:animate-none':''}/>Refresh</button></div>
     </header>
     <nav aria-label="Portfolio views" className="flex gap-6 border-b border-[var(--color-border)]">{(['holdings','history'] as const).map(tab=><button type="button" key={tab} aria-current={view===tab?'page':undefined} onClick={()=>setView(tab)} className={`border-b-2 px-1 py-3 text-sm capitalize ${view===tab?'border-[var(--color-primary)] text-[var(--color-primary)]':'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}`}>{tab}</button>)}</nav>
@@ -71,7 +71,8 @@ function PortfolioAccount({server}: {server:string}) {
     {data&&!data.current&&<div className={`${panel} py-12 text-center`}><h2 className="text-lg font-medium">Connect your account</h2><p className="mx-auto mt-2 max-w-lg text-sm text-[var(--color-text-muted)]">Connect OKX in Settings to see holdings and begin recording portfolio observations.</p><Link to="/settings?tab=keys" className={`${control} mt-5`}>Open Connections</Link></div>}
     {data?.current&&data.scope&&data.history&&<>
       {!summary.current&&<p role="status" className="border-l-2 border-[var(--color-yellow)] pl-3 text-sm">The current balance observation is stale. Refresh to view current holdings. Retained history remains historical.</p>}
-      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--color-text-muted)]"><span>{data.scope.account} · {data.scope.connector} · {summary.current?'Observed':'Last observation'} {utc(data.current.observed_at)} UTC</span><span>{first?`Recording since ${utc(first)} UTC`:'No recorded history'}</span></div>
+      <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-[var(--color-text-muted)]"><span>{data.scope.account} · {data.scope.connector} · {summary.current?'Observed':'Last observation'} {utc(data.current.observed_at)} UTC</span><span role="status">{summary.current ? 'Capture active while this view is open · checks every 15s' : 'Capture awaiting a fresh balance read'}</span><span>{first?`History since ${utc(first)} UTC`:'No recorded history'}</span></div>
+      <p className="text-xs text-[var(--color-text-muted)]">Account values are reported in USDT. Bot charts and inventory use each trading pair’s quote currency, which may be USDC. USDT is not treated as USD.</p>
       {view==='holdings'?<>
         {summary.current&&<>
         <dl className={`${panel} grid grid-cols-2 gap-6 lg:grid-cols-4`}>

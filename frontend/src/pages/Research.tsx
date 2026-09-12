@@ -225,20 +225,12 @@ function ResearchLab({ server }: { server: string }) {
             ? `Index ${text(freshness.state, "unknown").toLowerCase()}`
             : `Research connection ${overviewState}`}
         </span>
-        <span>Last index sync · {labTimestamp(freshness.last_sync)}</span>
+        {available && <span>Last index sync · {labTimestamp(freshness.last_sync)}</span>}
         <span>{server} · Read-only source</span>
-        <span title={revision}>
+        {available && <span title={revision}>
           Revision {revision ? revision.slice(0, 12) : "unavailable"}
-        </span>
+        </span>}
       </div>
-      {overview.isError && (
-        <div className="quant-notice" role="alert">
-          {overview.error.message}
-          <button onClick={() => void overview.refetch()}>
-            Retry connection
-          </button>
-        </div>
-      )}
       <nav className="lab-nav" aria-label="Research Lab views">
         {LAB_VIEWS.map((view) => (
           <button
@@ -251,10 +243,10 @@ function ResearchLab({ server }: { server: string }) {
         ))}
       </nav>
       <div
-        className={`lab-workspace-body ${state.selected && state.view !== "archive" ? "lab-with-inspector" : ""}`}
+        className={`lab-workspace-body ${available && state.selected && state.view !== "archive" ? "lab-with-inspector" : ""}`}
       >
         <main className="lab-main" aria-label={`${viewLabel} research view`}>
-          {state.view === "archive" ? (
+          {state.view !== "archive" && !available ? <LabReadNotice state={overviewState} error={overview.error} onRetry={() => void overview.refetch()} /> : state.view === "archive" ? (
             <ResearchArchive key={server} server={server} />
           ) : state.view === "overview" ? (
             <>
@@ -304,7 +296,7 @@ function ResearchLab({ server }: { server: string }) {
             />
           )}
         </main>
-        {state.selected && state.view !== "archive" && (
+        {available && state.selected && state.view !== "archive" && (
           <ResearchInspector
             key={`${server}:${state.selected}`}
             server={server}
@@ -327,7 +319,7 @@ function ResearchLab({ server }: { server: string }) {
           />
         )}
       </div>
-      <details className="quant-panel quant-source-detail">
+      {available && <details className="quant-panel quant-source-detail">
         <summary>Index provenance and limitations</summary>
         <p>Projection generated · {labTimestamp(data.generated_at)}</p>
         <p>
@@ -342,7 +334,7 @@ function ResearchLab({ server }: { server: string }) {
               <li key={value}>{value}</li>
             ))}
         </ul>
-      </details>
+      </details>}
     </>
   );
 }

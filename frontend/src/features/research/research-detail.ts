@@ -1,4 +1,26 @@
 export type DocumentScope = "node" | "archive" | "receipt";
+
+/** Explain recorded edges without granting idea usage or economic credit. */
+export function relationshipEvidence(edge: Record<string, unknown>, selected: string) {
+  const meanings: Record<string, string> = {
+    recorded_in: "Source membership: this record occurs in the linked document. Membership carries no economic verdict.",
+    references_saved_artifact: "The source explicitly references this saved artifact. The reference carries no economic verdict.",
+    references_historical_idea: "A unique idea reference was recorded in the same historical document. This does not establish modern preregistration or economic support.",
+  };
+  const provenance = edge.provenance && typeof edge.provenance === "object"
+    ? edge.provenance as Record<string, unknown> : {};
+  const sources = Array.isArray(provenance.sources) ? provenance.sources : [];
+  const hashes = [...new Set(sources.flatMap((source: unknown) => {
+    const hash = source && typeof source === "object" ? (source as Record<string, unknown>).sha256 : null;
+    return typeof hash === "string" && /^[a-f0-9]{64}$/i.test(hash) ? [hash] : [];
+  }))];
+  return {
+    direction: edge.source === selected ? "Outgoing" : edge.target === selected ? "Incoming" : "Direction unavailable",
+    meaning: typeof edge.relation === "string" ? meanings[edge.relation] ?? null : null,
+    rule: typeof provenance.repair_rule === "string" ? provenance.repair_rule : null,
+    hashes,
+  };
+}
 export interface ResearchDocumentReference {
   ref: string;
   label: string;

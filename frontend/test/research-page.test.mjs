@@ -165,7 +165,7 @@ test("each library filter clears the previously selected record", () => {
     select.onChange({ target: { value: "FUTURES" } });
   assert.deepEqual(result.searchUpdates, [
     "view=ideas&q=RSI&lane=FUTURES",
-    "view=ideas&q=RSI&family=FUTURES",
+    "view=ideas&q=RSI&lane=FUTURES&family=FUTURES",
   ]);
 });
 
@@ -178,4 +178,23 @@ test("full native fields remain available in a lazy disclosure beyond the former
   assert.ok(!result.html.includes("x".repeat(25000)));
   assert.match(result.html, /Full graph node/);
   assert.doesNotMatch(result.html, /Preview truncated/);
+});
+
+
+test("hidden graph selection and topology updates compose in one event", () => {
+  const queries = selectedIdeaQueries();
+  queries["research-overview"].data.data.revision = "r1";
+  queries["research-network"] = { data: { network: envelope({ revision: "r1", nodes: [], edges: [], total_nodes: 0, total_edges: 0, unresolved_edges: 0 }) } };
+  const result = renderResearch(queries, { search: "view=graph&id=previous" });
+  assert.equal(result.networks.length, 1);
+  result.networks[0].onSelect("idea:hidden");
+  result.networks[0].onTopology("all", "idea:hidden");
+  const final = new URLSearchParams(result.searchUpdates.at(-1));
+  assert.equal(final.get("id"), "idea:hidden");
+  assert.equal(final.get("network_topology"), "all");
+  assert.ok(final.get("network_focus").startsWith("idea:hidden:"));
+  result.networks[0].onTopology("dependencies");
+  const manual = new URLSearchParams(result.searchUpdates.at(-1));
+  assert.equal(manual.get("id"), "idea:hidden");
+  assert.equal(manual.has("network_focus"), false);
 });

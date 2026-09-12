@@ -339,12 +339,117 @@ function relax(p, anchors, adjacency) {
   }
   return movement;
 }
-function mount(target, data, options = {}) {
+const TOPOLOGIES = {
+  dependencies: "Recorded dependencies",
+  linked: "Nodes with relationships",
+  all: "All indexed nodes",
+};
+function focusNetwork(data, topology = "dependencies") {
+  if (!Object.hasOwn(TOPOLOGIES, topology)) throw Error("Unknown network topology");
+  if (topology === "all") return data;
+  const retained = new Set();
+  for (const edge of data.edges) {
+    if (topology === "dependencies" && edge[2] === "revision_of") continue;
+    retained.add(edge[0]);
+    retained.add(edge[1]);
+  }
+  const indices = new Map(), nodes = [];
+  data.nodes.forEach((node, index) => {
+    if (retained.has(index)) {
+      indices.set(index, nodes.length);
+      nodes.push(node);
+    }
+  });
+  const edges = data.edges.filter(edge => indices.has(edge[0]) && indices.has(edge[1]))
+    .map(edge => [indices.get(edge[0]), indices.get(edge[1]), ...edge.slice(2)]);
+  return { ...data, nodes, edges, total_nodes: nodes.length,
+    total_edges: edges.length + (data.unresolved_edges || 0) };
+}
+function searchCatalog(catalog, visible, query, kind) {
+  const ids = new Set(visible.nodes.map(node => node[0]));
+  query = query.trim().toLowerCase();
+  return catalog.nodes.filter(node => (!kind || (node[1] || "unknown") === kind)
+    && (!query || `${node[0]} ${node[2] || ""}`.toLowerCase().includes(query)))
+    .map(node => ({ id: node[0], title: node[2] || node[0], hidden: !ids.has(node[0]) }));
+}
+function mount(target, catalog, options = {}) {
+  let topology = options.initialTopology || "dependencies", view, destroyed = false, transitionError;
+  let selected = options.initialSelected || null;
+  let filters = { query: options.initialQuery || "", kind: options.initialKind || "" };
+  const cameras = new Map();
+  if (options.initialCamera) cameras.set(topology, options.initialCamera);
+  function render() {
+    view = mountView(target, focusNetwork(catalog, topology), {
+      ...options, catalog, topology, initialSelected: selected,
+      initialQuery: filters.query, initialKind: filters.kind,
+      initialCamera: cameras.get(topology),
+      onCamera(camera) {
+        cameras.set(topology, camera);
+        // React may replace this handle with a new per-topology camera key.
+        // Do not publish a new mode's camera under the previous mode's key.
+        if (topology === (options.initialTopology || "dependencies")) options.onCamera?.(camera);
+      },
+      onSelect(id) { selected = id; options.onSelect?.(id); },
+      onClear() { selected = null; options.onClear?.(); },
+      onFilterChange(value) { filters = value; options.onFilterChange?.(value); },
+      onTopologyChange: setTopology,
+      onReveal(id) {
+        selected = id;
+        options.onSelect?.(id);
+        if (setTopology("all", id) !== false) view.focus(id);
+      },
+    });
+  }
+  function setTopology(value, focusId) {
+    if (!Object.hasOwn(TOPOLOGIES, value)) throw Error("Unknown network topology");
+    if (destroyed || value === topology) return;
+    const previous = view, previousTopology = topology;
+    topology = value;
+    try {
+      render();
+    } catch (error) {
+      topology = previousTopology;
+      view = previous;
+      transitionError?.remove();
+      transitionError = target.ownerDocument.createElement("p");
+      transitionError.className = "quant-notice";
+      transitionError.setAttribute("role", "alert");
+      const message = `${error instanceof Error ? error.message : "Network renderer unavailable"}. Previous topology retained. Choose a topology again to retry.`;
+      transitionError.textContent = message;
+      target.append(transitionError);
+      options.onError?.(message);
+      return false;
+    }
+    previous.destroy();
+    transitionError?.remove();
+    transitionError = null;
+    options.onError?.(null);
+    options.onTopologyChange?.(value, focusId);
+    return true;
+  }
+  render();
+  return {
+    select(id) { selected = id; view.select(id); },
+    fit() { view.fit(); }, zoom(value) { view.zoom(value); }, pause(value) { view.pause(value); },
+    focus(id) {
+      if (!catalog.nodes.some(node => node[0] === id)) return false;
+      selected = id;
+      if (!view.focus(id)) {
+        if (setTopology("all", id) === false) return false;
+        return view.focus(id);
+      }
+      return true;
+    },
+    setFilters(value) { filters = value; view.setFilters(value); }, setTopology,
+    destroy() { if (destroyed) return; destroyed = true; view.destroy(); transitionError?.remove(); },
+  };
+}
+function mountView(target, data, options = {}) {
   const graph = layout(data),
     positions = graph.positions,
     ids = new Map(data.nodes.map((n, i) => [n[0], i])),
     kinds = Array.from(
-      new Set(data.nodes.map((n) => n[1] || "unknown")),
+      new Set(options.catalog.nodes.map((n) => n[1] || "unknown")),
     ).sort();
   const doc = target.ownerDocument,
     win = doc.defaultView,
@@ -408,7 +513,18 @@ function mount(target, data, options = {}) {
   searchLabel.append(search);
   const kindLabel = el("label", "", "Kind");
   kindLabel.append(filter);
-  toolbar.append(searchLabel, kindLabel);
+  const topologyLabel = el("label", "", "Topology"), topologyControl = el("select");
+  topologyControl.setAttribute("aria-label", "Network topology");
+  for (const [value, label] of Object.entries(TOPOLOGIES)) {
+    const option = el("option", "", label); option.value = value; topologyControl.append(option);
+  }
+  topologyControl.value = options.topology;
+  topologyLabel.append(topologyControl);
+  toolbar.append(topologyLabel, searchLabel, kindLabel);
+  on(topologyControl, "change", () => {
+    if (options.onTopologyChange(topologyControl.value) === false)
+      topologyControl.value = options.topology;
+  });
   function on(e, type, fn, opts) {
     e.addEventListener(type, fn, opts);
     listeners.push(() => e.removeEventListener(type, fn, opts));
@@ -566,7 +682,7 @@ function mount(target, data, options = {}) {
   function announce() {
     let visible = 0;
     for (let i = 0; i < data.nodes.length; i++) if (accepts(i)) visible++;
-    status.textContent = `${visible.toLocaleString()} / ${data.nodes.length.toLocaleString()} nodes · ${data.edges.length.toLocaleString()} recorded edges · ${graph.components.toLocaleString()} connected islands · ${graph.isolates.toLocaleString()} nodes without resolved edges. ${data.unresolved_edges || 0} unresolved edges excluded. Regions group recorded family; local placement follows topology, not similarity. Faint outer nodes have no resolved edges. ${fallback}`;
+    status.textContent = `${visible.toLocaleString()} / ${data.nodes.length.toLocaleString()} nodes · ${data.edges.length.toLocaleString()} recorded edges · ${graph.components.toLocaleString()} connected islands · ${graph.isolates.toLocaleString()} nodes without resolved edges. ${options.catalog.unresolved_edges || 0} catalog unresolved edges excluded. ${options.catalog.nodes.length - data.nodes.length} catalog nodes hidden by topology. Regions group recorded family; local placement follows topology, not similarity. Faint outer nodes have no resolved edges. ${fallback}`;
   }
   function fit() {
     const b = graph.bounds;
@@ -795,6 +911,14 @@ function mount(target, data, options = {}) {
         ? []
         : data.edges.filter((e) => e[0] === selected || e[1] === selected);
     selection.replaceChildren();
+    if (selected < 0 && id && options.catalog.nodes.some(node => node[0] === id)) {
+      const node = options.catalog.nodes.find(node => node[0] === id);
+      selection.append(el("h3", "", node[2] || id),
+        el("p", "", "Selected record is hidden by current topology. Its evidence remains available in the inspector."),
+        button("Reveal in all indexed nodes", () => options.onReveal(id)),
+        button("Clear selection", () => { select(null); options.onClear?.(); }));
+      if (notify) options.onSelect?.(id);
+    }
     if (selected >= 0) {
       const n = data.nodes[selected];
       selection.append(
@@ -899,26 +1023,14 @@ function mount(target, data, options = {}) {
       request();
       return;
     }
-    let count = 0;
-    for (let i = 0; i < data.nodes.length; i++) {
-      const n = data.nodes[i];
-      if (
-        !accepts(i) ||
-        (query && !`${n[0]} ${n[2] || ""}`.toLowerCase().includes(query))
-      )
-        continue;
-      count++;
-      if (count <= 30) {
-        results.append(
-          button(n[2] || n[0], () => {
-            camera.x = positions[i * 2];
-            camera.y = positions[i * 2 + 1];
-            camera.scale = Math.max(camera.scale, 1.5);
-            changed();
-            select(n[0], true);
-          }),
-        );
-      }
+    const matches = searchCatalog(options.catalog, data, query, kind), count = matches.length;
+    for (const match of matches.slice(0, 30)) {
+      results.append(button(`${match.title}${match.hidden ? " · Hidden by current topology" : ""}`, () => {
+        if (match.hidden) { options.onReveal(match.id); return; }
+        const i = ids.get(match.id);
+        camera.x = positions[i * 2]; camera.y = positions[i * 2 + 1];
+        camera.scale = Math.max(camera.scale, 1.5); changed(); select(match.id, true);
+      }));
     }
     results.prepend(
       el(
@@ -1162,6 +1274,8 @@ function mount(target, data, options = {}) {
 }
 export {
   colorFor,
+  focusNetwork,
+  searchCatalog,
   mount,
   layout,
   worldPoint,

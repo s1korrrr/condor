@@ -63,6 +63,7 @@ export function renderResearch(
     buttons = [],
     selects = [],
     searchUpdates = [],
+    networks = [],
     modules = new Map();
   const captureJsx =
     (name) =>
@@ -71,6 +72,7 @@ export function renderResearch(
       if (type === "button")
         buttons.push({ text: childText(props.children), ...props });
       if (type === "select") selects.push(props);
+      if (type?.name === "ResearchNetwork") networks.push(props);
       return element;
     };
   function load(filename) {
@@ -150,5 +152,5 @@ export function renderResearch(
   }
   const { Research } = load(path.join(sourceRoot, "pages/Research.tsx"));
   const html = renderToStaticMarkup(React.createElement(Research));
-  return { html, requests, refetches, buttons, selects, searchUpdates };
+  return { html, requests, refetches, buttons, selects, searchUpdates, networks };
 }

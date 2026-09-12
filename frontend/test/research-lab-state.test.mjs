@@ -23,3 +23,12 @@ test('research-loop rows expose semantic statement, rationale and supervisor obj
   assert.equal(labContext({ data: { mandate: { objective: 'Test a bounded hypothesis' } } }), 'Test a bounded hypothesis');
   assert.equal(labContext({ data: { rationale: 'Recorded outcome rationale' } }), 'Recorded outcome rationale');
 });
+
+test('topology validates URL values, roundtrips and survives server changes', () => {
+  for (const value of ['', 'invalid']) assert.equal(readLabState(new URLSearchParams({network_topology:value})).network_topology, 'dependencies');
+  for (const value of ['dependencies','linked','all']) {
+    const params = updateLabParams(new URLSearchParams('id=one'), {network_topology:value});
+    assert.equal(readLabState(params).network_topology, value);
+    assert.equal(readLabState(clearLabServerSelection(params)).network_topology, value);
+  }
+});

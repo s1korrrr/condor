@@ -23,6 +23,8 @@ export function readLabState(params: URLSearchParams) {
     gap_kind: params.get("gap_kind") ?? "",
     selected: params.get("id") ?? "",
     offset: Number.isSafeInteger(rawOffset) && rawOffset >= 0 ? rawOffset : 0,
+    network_topology: (["dependencies", "linked", "all"].includes(params.get("network_topology") ?? "")
+      ? params.get("network_topology") : "dependencies") as "dependencies" | "linked" | "all",
     network_q: params.get("network_q") ?? "",
     network_kind: params.get("network_kind") ?? "",
     network_focus: params.get("network_focus") ?? "",

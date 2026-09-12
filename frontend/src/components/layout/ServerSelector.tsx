@@ -1,3 +1,4 @@
+import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, Circle, Server } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 
@@ -7,6 +8,8 @@ import { useServers } from '@/hooks/useServers';
 
 export function ServerSelector() {
   const { server, setServer } = useServer();
+  const location = useLocation();
+  const navigate = useNavigate();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -80,6 +83,12 @@ export function ServerSelector() {
             <button
               key={s.name}
               onClick={() => {
+                if (s.name !== server && location.pathname === "/trading-visuals") {
+                  const params = new URLSearchParams(location.search);
+                  for (const key of ["bot", "pair", "db"]) params.delete(key);
+                  params.set("server", s.name);
+                  navigate({ pathname: location.pathname, search: params.toString() });
+                }
                 setServer(s.name);
                 setOpen(false);
               }}

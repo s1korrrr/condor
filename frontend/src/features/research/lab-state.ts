@@ -72,6 +72,6 @@ export function labContext(node: unknown): string {
 export function labTimestamp(value: unknown) {
   const stamp = typeof value === "string" ? Date.parse(value) : NaN;
   return Number.isFinite(stamp)
-    ? new Date(stamp).toLocaleString()
+    ? new Date(stamp).toLocaleString('en-GB', {timeZone:'UTC'}) + ' UTC'
     : "Not recorded";
 }

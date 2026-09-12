@@ -1,6 +1,7 @@
 import { authFetch } from "./auth-token";
 import type { ServerStatus } from "./server-capabilities";
 import type { AccountBalancesResponse } from "./account-balances";
+import type { PortfolioAnalytics, PortfolioRange } from "@/features/portfolio/model";
 import type { NativeAction, NativeCommandResult } from "./native-bot-controls";
 import { nativeBotPath } from "./native-bot-controls";
 import { parseServerDiscovery } from "./server-discovery";
@@ -1715,6 +1716,9 @@ export const api = {
 
   getCredentials: (server: string) =>
     apiFetch<{ credentials: (CredentialInfo | string)[] }>(`/api/v1/settings/credentials?server=${encodeURIComponent(server)}`),
+
+  getPortfolioAnalytics: (server: string, range: PortfolioRange, refresh = false) =>
+    apiFetch<PortfolioAnalytics>(`/api/v1/servers/${encodeURIComponent(server)}/portfolio/analytics?range=${range}&refresh=${refresh}`, {cache: "no-store"}),
 
   getAccountBalances: (server: string, refresh = false) =>
     apiFetch<AccountBalancesResponse>(`/api/v1/servers/${encodeURIComponent(server)}/account-balances?refresh=${refresh}`, {cache:'no-store'}),

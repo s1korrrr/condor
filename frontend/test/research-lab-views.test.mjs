@@ -10,7 +10,7 @@ function queries() {
   return { ...selectedIdeaQueries(), 'research-network': { data: { network: envelope(network) } }, 'research-queue-preview': { data: envelope({ items: [], total: 0 }) } };
 }
 test('all nine destinations are actionable and route to their dedicated source query', () => {
-  const expected = { overview: 'research-network', ideas: 'research-lab-records', graph: 'research-network', papers: 'research-lab-records', experiments: 'research-lab-records', queue: 'research-lab-records', learning: 'research-lab-records', gaps: 'research-lab-records', archive: 'research-archive' };
+  const expected = { overview: 'research-recent-assessments', ideas: 'research-lab-records', graph: 'research-network', papers: 'research-lab-records', experiments: 'research-lab-records', queue: 'research-lab-records', learning: 'research-lab-records', gaps: 'research-lab-records', archive: 'research-archive' };
   for (const [view, key] of Object.entries(expected)) {
     const result = renderResearch(queries(), { search: `view=${view}` });
     assert.match(result.html, /aria-label="Research Lab views"/);
@@ -20,9 +20,12 @@ test('all nine destinations are actionable and route to their dedicated source q
     if (view === 'queue' || view === 'learning' || view === 'gaps') assert.equal(result.requests.find(request => request.queryKey[0] === key).queryKey[2], { queue: 'queue', learning: 'learning', gaps: 'unresolved' }[view]);
   }
 });
-test('overview includes full composition, connections, family/lane drilldowns, queue and limitations', () => {
-  const result = renderResearch(queries(), { search: 'view=overview' });
-  for (const label of ['Research composition', 'Connection types', 'Research families', 'Accounting lanes', 'Next evidence checks', 'Reading this research', 'Pending events']) assert.ok(result.html.includes(label));
+test('graph owns composition and family/lane drilldowns while overview owns conclusions and evidence checks', () => {
+  const landing = renderResearch(queries(), { search: 'view=overview' });
+  for (const label of ['Recorded conclusions', 'Recent attempt outcomes', 'Next evidence checks', 'Reading this research']) assert.ok(landing.html.includes(label));
+  assert.equal(landing.requests.find(request => request.queryKey[0] === 'research-network').enabled, false);
+  const result = renderResearch(queries(), { search: 'view=graph' });
+  for (const label of ['Research composition', 'Connection types', 'Research families', 'Accounting lanes', 'Pending events']) assert.ok(result.html.includes(label));
   const family = result.buttons.find(button => button.text === 'RSI'); family.onClick();
   const params = new URLSearchParams(result.searchUpdates.at(-1));
   assert.equal(params.get('view'), 'ideas'); assert.equal(params.get('family'), 'RSI');

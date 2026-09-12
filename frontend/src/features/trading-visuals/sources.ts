@@ -14,3 +14,9 @@ export function parseTradingVisualsSources(payload: unknown): TradingVisualsSour
     return { bot: source.bot as TradingVisualsSource['bot'], server: source.server };
   });
 }
+
+/** A generic entry follows the selected account server; an explicit bot never falls back. */
+export function selectTradingVisualsSource(sources: TradingVisualsSource[], requestedBot: string | null, server: string | null) {
+  return requestedBot ? sources.find(source => source.bot === requestedBot)
+    : sources.find(source => source.server === server) ?? sources.find(source => source.bot === 'ok_rsi') ?? sources[0];
+}

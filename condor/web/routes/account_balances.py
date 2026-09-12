@@ -82,3 +82,29 @@ async def account_balances(name: str, refresh: bool = Query(False), user: WebUse
     except Exception:
         raise HTTPException(status_code=502, detail='Account balances could not be refreshed. Check the connection in Settings and retry.') from None
     return JSONResponse(result, headers={'Cache-Control': 'no-store'})
+
+
+@router.get('/servers/{name}/portfolio/analytics')
+async def portfolio_analytics(
+    name: str,
+    range: str = Query('1W', pattern=r'^(1D|1W|1M|3M|ALL)$'),
+    refresh: bool = Query(False),
+    user: WebUser = Depends(get_current_user),
+):
+    from condor.web.portfolio_contract import Analytics
+
+    cm = get_config_manager()
+    if not cm.has_server_access(user.id, name):
+        raise HTTPException(status_code=404, detail='Server not found')
+    try:
+        client = await cm.get_client(name)
+        payload = await client.portfolio._get(
+            'portfolio/analytics', params={'range': range, 'refresh': str(refresh).lower()}
+        )
+        result = Analytics.model_validate(payload).model_dump(by_alias=True)
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail='Portfolio analytics are unavailable. Check the account connection and API version, then retry.',
+        ) from None
+    return JSONResponse(result, headers={'Cache-Control': 'no-store'})

@@ -1,3 +1,4 @@
+import { clearPortfolioAccountCache } from '@/features/portfolio/cache';
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ArrowLeft,
@@ -82,6 +83,7 @@ function ApiKeysForm({ server }: { server: string | null }) {
   }, [connectorsData, server, qc]);
 
   const invalidate = () => Promise.all([
+    clearPortfolioAccountCache(qc, server),
     qc.invalidateQueries({ queryKey: ["settings-credentials", server] }),
     qc.invalidateQueries({ queryKey: ["account-balances", server] }),
     qc.invalidateQueries({ queryKey: ["portfolio", server] }),
@@ -94,7 +96,7 @@ function ApiKeysForm({ server }: { server: string | null }) {
         connector_name: flow.connectorName,
         credentials: credentialPayload(configFields, flow.values),
       }),
-    onSuccess: () => { invalidate(); setFlow(INITIAL_FLOW); },
+    onSuccess: async () => { await invalidate(); setFlow(INITIAL_FLOW); },
   });
 
   const deleteMut = useMutation({

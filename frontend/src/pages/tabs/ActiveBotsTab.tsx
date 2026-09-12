@@ -20,7 +20,7 @@ import { AggregatedPnlChart } from "@/components/bots/AggregatedPnlChart";
 import { ControllerBrowser } from "@/components/bots/ControllerBrowser";
 import { DeployBotDialog } from "@/components/bots/DeployBotDialog";
 import { PnlSparkline } from "@/components/bots/PnlSparkline";
-import { NativeBotStatistics } from "@/components/bots/NativeBotStatistics";
+import { NativeBotPositions } from "@/components/bots/NativeBotPositions";
 import { FallbackSpinner } from "@/components/ui/FallbackSpinner";
 
 import { useRates } from "@/hooks/useRates";
@@ -490,7 +490,7 @@ function BotRow({ bot, server, onStopInitiated, onStopSettled }: { bot: BotSumma
   return (
     <div>
       <div
-        className="flex items-center gap-4 px-4 py-2.5 text-sm cursor-pointer hover:bg-[var(--color-surface-hover)]/50 transition-colors"
+        className="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 text-sm cursor-pointer hover:bg-[var(--color-surface-hover)]/50 transition-colors"
         onClick={() => setShowLogs(!showLogs)}
       >
         <button type="button" className="p-0.5" aria-label={`Logs for ${bot.bot_name}`} aria-expanded={showLogs} onClick={(event) => { event.stopPropagation(); setShowLogs(!showLogs); }}>
@@ -793,6 +793,11 @@ export function ActiveBotsTab() {
     );
   }
 
+  if (access.native) return <div className="space-y-6">
+    {bots.length > 0 ? <BotsSection bots={bots} server={server} onStopInitiated={onStopInitiated} onStopSettled={onStopSettled} /> : <p role="status" className="text-sm text-[var(--color-text-muted)]">Bot lifecycle observations are unavailable for this server.</p>}
+    <NativeBotPositions key={server} server={server} />
+  </div>;
+
   return (
     <div className="space-y-6">
       {!metricsAvailable && <p role="status" className="rounded-lg border border-[var(--color-yellow)]/40 bg-[var(--color-yellow)]/10 px-4 py-3 text-sm text-[var(--color-text)]">{data?.metrics_unavailable_reason || "Current bot performance is unavailable."}</p>}
@@ -887,7 +892,6 @@ export function ActiveBotsTab() {
         </>
       )}
 
-      {access.native && <NativeBotStatistics key={server} server={server} />}
 
       {/* Fullscreen controller overlay */}
       {selectedKey && controllers.length > 0 && (!access.native || quoteCurrencies.every(quote => quote === "USDC")) && (

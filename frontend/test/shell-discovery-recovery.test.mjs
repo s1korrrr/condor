@@ -31,7 +31,7 @@ function fixture({ server='native-owner', status=native, discovery={data:[server
     'react-router-dom': {NavLink:({to,children})=>React.createElement('a',{href:to},children),Link:({to,children})=>React.createElement('a',{href:to},children),Outlet:()=>React.createElement('p',null,'Protected route content'),useLocation:()=>({pathname}),useNavigate:()=>()=>{},matchPath:()=>null},
   });
   function render() { return renderToStaticMarkup(React.createElement(modules.load('components/layout/AppShell.tsx').AppShell)); }
-  function tools() { return renderToStaticMarkup(React.createElement(modules.load('pages/WorkspaceTools.tsx').WorkspaceTools)); }
+  function tools() { return renderToStaticMarkup(React.createElement(modules.load('pages/WorkspaceTools.tsx').WorkspaceCapabilities)); }
   function access() {let result;function Probe(){result=modules.load('hooks/useServerCapabilities.ts').useServerCapabilities();return null;}renderToStaticMarkup(React.createElement(Probe));return result;}
   return { render, tools, access, buttons, refetches, selections, queries };
 }

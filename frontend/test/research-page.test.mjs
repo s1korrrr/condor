@@ -70,7 +70,7 @@ test("stale overview prevents a cached full network being presented as current",
     false,
   );
   click(result, /Retry records/i);
-  assert.deepEqual(result.refetches, ["research-overview", "research-network"]);
+  assert.deepEqual(result.refetches, ["research-overview"], "Network remains gated until a current overview is received");
 });
 
 test("stale comparisons are disclosed without displaying old values", () => {

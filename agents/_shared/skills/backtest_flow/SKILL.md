@@ -19,39 +19,36 @@ the tooling but the judgement:
 - **You are the chat (Condor)** → follow the whole flow below. It is **intake
   only**: the depth — window choice, metric thresholds, parameter sweeps,
   overfitting checks, go/no-go — belongs to the `directional_trader` agent,
-  whose `backtesting` playbook covers it. Delegate rather than improvising it.
+  whose `backtesting` playbook covers it. Use that playbook for the judgement.
+  Delegate a bounded task only when routing policy and available tools permit it
+  and the hand-off improves the work; delegation adds no authority.
 - **You are `directional_trader`** → backtesting is YOUR domain. Use your own
   `backtesting` playbook; do not hand the judgement to another agent. Steps 1–2
   below are still a good intake checklist for what to pin down before running
-  anything. For a long grid you do not want to run turn-by-turn, spawn a
-  background copy of yourself —
-  `delegate(action="start", agent="directional_trader", task="...")` — and let it
-  run the sweep unattended. That is still you: same playbooks, same thresholds.
+  anything. For a long grid, use the asynchronous routine handles below and
+  collect completion or failure evidence. Do not recursively delegate yourself.
 - **You are any other agent** → you can run these, and for a single backtest
   that is the right move. For a sweep, an overfitting check or a deploy
-  decision, hand it over with
+  decision, use the specialist playbook and, when useful and permitted,
   `delegate(action="start", agent="directional_trader", task="...")`.
 
 ### Step 1 — Show available controllers first
-Before asking for any parameters, call
+Reuse a controller/config already identified in the task. For discovery, call
 `manage_controllers(action="list", controller_type="directional_trading")` and
-present what's available (controllers + their saved configs). Ask whether the user
-wants an existing config or a new one.
+present what's available (controllers + their saved configs). Ask only when the
+choice is missing and materially changes the requested comparison.
 
 ### Step 2 — Get parameters
-Once the user picks a config (or decides to create one), ask for:
+Read these from the task and saved config; ask only for missing material inputs:
 - **Date range** — suggest 3 months as a default
 - **Resolution** — `1m`, `5m`, `15m`, `1h` (1m is the finest; 1s only on Binance spot)
-- **Trade cost** — see the cost section below; `0.0006` is the safe default
+- **Trade cost** — derive it from the cost section below; `0.0006` is illustrative
 
 ### Step 3 — Run
 - **Single config** → run the `backtest_chart` routine directly
-- **Multiple configs, a parameter sweep, or "which is best?"** → run it as a
-  background task:
-  `delegate(action="start", agent="directional_trader", task="...")`. It runs them,
-  applies the stability/overfitting rules, and pings the user when done. From
-  another seat that is a hand-off to the specialist; from `directional_trader`'s
-  own seat it is a background copy of itself — same call either way.
+- **Multiple configs, a parameter sweep, or "which is best?"** → use bounded
+  asynchronous runs and collect their results. Optional specialist delegation
+  follows the seat check above; do not treat dispatch as completion.
 
 ### Step 4 — Compare (optional)
 Every backtest is saved, whoever ran it — use the `backtest_compare` routine to
@@ -64,7 +61,7 @@ overlay PnL curves and rank by metrics.
 This section is the **single copy**. Every backtesting playbook links here rather
 than restating it.
 
-There is exactly **one** way to run a backtest: the shared `backtest_chart`
+For this Condor workflow, use the shared `backtest_chart`
 routine. It runs the backtest, saves it, charts it, and hands back the metrics as
 data. Dates are `YYYY-MM-DD` strings, not epoch seconds.
 
@@ -131,7 +128,8 @@ dropped it.
 
 Config variants are created with
 `manage_controllers(action="upsert", target="config", config_name=..., config_data={...})`,
-adding `confirm_override=True` when overwriting.
+adding `confirm_override=True` when overwriting. Config writes require existing
+authority for the target store; a tool confirmation flag is not user authorization.
 
 ---
 
@@ -145,18 +143,21 @@ These are not directional-specific. They apply to any backtest, run by any agent
 | Setting  | Meaning                                                 |
 |----------|---------------------------------------------------------|
 | `0.0002` | Tool default — roughly a maker leg                      |
-| `0.0006` | **Recommended default** — conservative taker round-trip |
+| `0.0006` | Illustrative aggregate cost assumption; verify for the actual venue |
 
-Per-exchange reference (one leg):
+Historical examples (one leg), not current fee quotes:
 
 | Exchange | Maker  | Taker   |
 |----------|--------|---------|
 | Binance  | 0.0002 | 0.0004  |
 | Bybit    | 0.0002 | 0.00055 |
 
-Use the taker rate unless the strategy is provably passive. Understating cost is
-the single easiest way to manufacture a profitable backtest that loses money live —
-**if the edge disappears between `0.0002` and `0.0006`, there was no edge.**
+Verify the venue, account tier, order types and installed adapter semantics. The
+position simulator deducts `trade_cost` once from cumulative returns; derive the
+aggregate modeled cost accordingly. Include fees, spread, slippage, funding,
+latency and partial-fill assumptions as relevant; report unsupported components
+as unavailable. Cost sensitivity can invalidate the measured result without
+proving the underlying signal has no edge in every setting.
 
 ### Resolution is fill fidelity, not the candle interval
 `backtesting_resolution` is the granularity the engine simulates fills at, not the
@@ -170,21 +171,26 @@ controller's candle interval.
   usually intrabar stop/TP ordering.
 
 ### Trade count is a validity gate, not a statistic
-Under ~20 executors, no metric in the report means anything — a Sharpe over 8
-trades is noise with a decimal point. The routine says so itself: a thin run is
+Under ~20 executors, treat inference as thin-sample exploratory evidence. This
+heuristic does not establish validity above 20 trades. A thin run is
 flagged above its own numbers in the summary and carries a `Trades` KPI marked
-below the gate. Widen the window or loosen the filters and re-run *before* reading
-anything into the metrics.
+below the gate. Report the observed metrics with the limitation; widen the
+window under the experiment plan. Do not loosen strategy filters just to pass
+a sample-count gate.
 
 ### Sweeping and deploying
 - **Never sweep every parameter at once** — that is curve fitting with extra steps.
   One parameter at a time, looking for a plateau.
 - **Stability beats the peak.** An isolated Sharpe spike surrounded by collapse is
-  overfit; a plateau is a result.
+  a warning sign; a plateau warrants further validation, not a claim of edge.
 - **Never deploy on in-sample numbers alone** — a held-out window is mandatory.
   Hold out the most recent ~30 days from the sweep and keep it clean.
 - **Report the numbers you actually got, including the bad ones.** A NO-GO is a
   successful outcome, not a failed one.
+
+Passing these research checks does not establish paper, canary or live readiness.
+Report research validity and promotion status separately, keeping spot and futures
+accounting and owner-equivalent baselines distinct.
 
 ### What is NOT shared
 Metric *thresholds* — what Sharpe is acceptable, what win rate is a red flag, how

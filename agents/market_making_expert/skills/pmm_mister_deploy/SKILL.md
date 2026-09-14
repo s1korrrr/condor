@@ -3,7 +3,7 @@ name: pmm_mister_deploy
 description: End-to-end playbook for deploying a pmm_mister bot on a token — regime
   analysis, profile selection, config creation, and bot deployment.
 when_to_use: When asked to set up, deploy, or launch a market making bot on a token/pair.
-  This is the autonomous deployment flow — follow it when running as a delegate task.
+  Prepare the deployment or execute it within explicit task-specific authority.
 created: '2026-07-02T10:31:11Z'
 source: agent:market_making_expert
 ---
@@ -11,8 +11,11 @@ source: agent:market_making_expert
 # PMM Mister Deploy Playbook
 
 Full end-to-end flow for deploying a `pmm_mister` market making bot on a given
-pair. Follow these steps in order. You are running as a background delegate —
-no user confirmation mid-flow. Be decisive and complete the deployment.
+pair. Follow these steps within the existing authorization for account, venue,
+capital, leverage, configuration stores and actions. Delegation adds no authority.
+Complete preparation before asking for any missing deployment authority; do not
+reconfirm an already-approved operation. Require exposure/position limits, maximum
+daily loss, monitoring, rollback and a kill switch before activation.
 
 ---
 
@@ -26,7 +29,8 @@ When managing a running pmm_mister bot, there are **two independent config store
 | **Live bot config** | The running bot's in-memory config (affects live behavior immediately) | `manage_bots(action="update_config", bot_name=..., config_name=..., config_data=...)` |
 
 **Critical rule:** these stores are independent. Updating one does NOT update the other. When asked to update a parameter:
-- Update **both** unless the user explicitly wants only one layer changed.
+- Update only the saved/live stores authorized by the request. When both are
+  authorized, update both and verify each; report intentional divergence.
 - Always verify which bots are running with `manage_bots(action="status")` before updating live config.
 - The live bot name is NOT the config name — discover it with `manage_bots(action="status")` or check `manage_bots(action="logs", bot_name=<guess>)` which returns available bots on 404.
 - Use `confirm_override=True` for both `manage_controllers` upsert and `manage_bots` update_config.
@@ -57,7 +61,8 @@ Use the candle data to classify the current regime:
 - **Normal ranging** (ADX < 25, moderate BBW) → **Balanced**
 - **Volatile / trending / uncertain** (ADX > 25, expanding ATR, volume surge, large candles) → **Conservative**
 
-When in doubt, default to **Balanced**.
+When regime evidence is uncertain, preserve that uncertainty and select a profile
+only within the approved risk policy; the conservative profile is still a template.
 
 ---
 
@@ -80,10 +85,15 @@ Take the JSON block from the template and substitute the actual values:
 - `connector_name` — the target connector
 - `trading_pair` — the target pair
 - `total_amount_quote` — from the task context (user-specified or strategy risk limit)
-- `leverage` — from task context; if not specified use the template default; always 1 for spot
+- `leverage` — always 1 for spot; derivatives require the explicitly approved
+  leverage and margin policy, not a template default
 
 Also validate:
-- **Min order size**: `total_amount_quote × portfolio_allocation ÷ number_of_levels` must exceed the exchange's minimum notional (typically $5–10 on Binance spot, $20 on perps). If not, increase `total_amount_quote` or reduce levels.
+- **Min order size**: derive each order from the runtime's actual normalized
+  buy/sell level weights, allocation and skew, then apply amount/price
+  quantization. Check each resulting order against current pair trading rules,
+  minimum notional and available funds. If invalid, adjust levels only within
+  approved scope or report an insufficient budget; do not raise capital.
 - **Spreads vs fees**: `take_profit` must exceed round-trip maker fee (e.g. if fee is 0.02%, take_profit ≥ 0.04%).
 
 ### Key parameter notes
@@ -126,7 +136,7 @@ manage_bots(
   action="deploy",
   bot_name="pmm_<pair>_<timestamp>",
   controllers_config=["<config_name from step 5>"],
-  account_name="master_account"
+  account_name=<approved_account>
 )
 ```
 
@@ -155,7 +165,7 @@ When the task completes, return a concise summary:
 
 `min_base_pct`, `max_base_pct`, and `target_base_pct` are not just deploy-time settings.
 They are **primary active management levers** — the main way to express a market opinion
-or unblock a stuck bot without redeploying. They can be mutated live at any time via
+within the approved risk policy. Authorized live changes use
 `manage_bots(action="update_config", ...)` with immediate effect.
 
 **Default baseline:** `target_base_pct=0.5`, `min_base_pct=0.3`, `max_base_pct=0.7`
@@ -170,20 +180,22 @@ Constraint that must always hold: `min_base_pct < target_base_pct < max_base_pct
 **Symptoms:** Market drifting down, `position_profit_protection` is blocking new sells,
 base inventory accumulating above `max_base_pct`, bot effectively stopped quoting.
 
-**Cause:** The bot's ceiling (`max_base_pct`) is too low for the current inventory level.
-Once base holdings exceed `max_base_pct`, buys are suppressed and the bot stalls.
+**Diagnosis:** holdings above `max_base_pct` can suppress buys as intended. Inspect
+held-position accounting, sell gates, profit protection, orders and current limits
+before concluding that an inventory band should change.
 
-**Fix — raise all three values upward:**
+**Illustrative risk-policy change — requires explicit exposure authorization:**
 ```
 target_base_pct: 0.5 → 0.65
 min_base_pct:    0.3 → 0.45
 max_base_pct:    0.7 → 0.85
 ```
-This tells the controller "holding more base is acceptable now" — it can resume quoting
-within the new band and will skew toward selling to reach the new (higher) target.
+Raising these bands permits more base exposure and can permit additional buying.
+It is not a routine fix for a downtrend or blocked sells; preserve approved limits
+and diagnose the cause before proposing a change.
 
-**When to apply:** bot is clearly accumulating inventory in a downtrend and has stopped
-placing meaningful sell orders, or `position_profit_protection` is trapping base exposure.
+Apply a changed band only when its exposure effect is understood and the user
+has authorized that policy; otherwise report the blocked condition.
 
 ---
 
@@ -235,7 +247,8 @@ target), or user expresses a directional view and wants the bot to lean into it.
 
 ### How to apply live (no redeploy needed)
 
-Always update **both** the live bot and the saved config:
+When both stores are explicitly within scope, update and verify both. If only one
+is authorized, change that store and report the divergence:
 
 ```python
 # 1. Update the live bot (immediate effect)
@@ -264,8 +277,8 @@ manage_controllers(
 
 **Proactive monitoring:** when checking bot health (e.g. via the `mm_bot_report` skill),
 always note the current base/quote split from `get_portfolio_overview`. If base holdings
-are near or above `max_base_pct`, flag it and suggest raising the band or lowering target.
-If the bot is far below `min_base_pct`, flag it and suggest lowering the band.
+are near or above `max_base_pct`, flag it and inspect the cause against approved
+limits. Being outside a band does not itself justify relaxing it.
 
 ---
 
@@ -287,8 +300,9 @@ same bot**. This enables a live A/B comparison — each controller runs with its
 on an allocated slice of capital, so you observe which params perform better in real market
 conditions **simultaneously**.
 
-This is strictly better than sequential testing: sequential tests run under different market
-conditions, making results incomparable. Simultaneous controllers share the same conditions.
+Simultaneous testing reduces time/regime differences, but controllers can compete
+for shared balances, queue position and fills. Account for those interactions;
+neither simultaneous nor sequential testing is automatically comparable.
 
 ### When to use this pattern
 
@@ -296,9 +310,9 @@ conditions, making results incomparable. Simultaneous controllers share the same
 - User wants to A/B test a single param (e.g. cooldown_time=10s vs 45s, price_distance=0.0005 vs 0.002)
 - User says "try different configs and see which works better"
 
-> **Timing:** raise this option with the user BEFORE deploying. Once the bot is running,
-> A/B is no longer possible without a full redeploy. Ask the user upfront: "Do you want
-> to A/B test two parameter sets simultaneously?"
+> **Timing:** include an A/B design when the user requested a comparison. Do not
+> expand an ordinary deployment into a capital experiment or require an unrelated
+> A/B question before completing its authorized preparation.
 
 ### How to set it up (plan at deploy time)
 
@@ -311,7 +325,8 @@ NNN_pmm_<connector>_<PAIR>_variantB   ← e.g. wider spreads, longer cooldown
 ```
 
 Split `total_amount_quote` proportionally across variants (e.g. $500 each if total budget is $1000).
-Each controller's allocation is independent — they do NOT share capital.
+Each controller has its own accounting allocation; actual account funds and
+connector budget constraints remain shared. Reconcile aggregate reservations.
 
 **2. Deploy a single bot with both controllers:**
 
@@ -323,7 +338,7 @@ manage_bots(
     "NNN_pmm_<connector>_<PAIR>_variantA",
     "NNN_pmm_<connector>_<PAIR>_variantB"
   ],
-  account_name="master_account"
+  account_name=<approved_account>
 )
 ```
 
@@ -352,13 +367,14 @@ You cannot add new controllers. The only levers are:
 
 ### Comparison and follow-up
 
-After sufficient runtime (typically 24–48h), compare performance:
+After a predefined observation window with adequate independent support, compare
+performance. A 24–48h snapshot is exploratory, not sufficient promotion evidence:
 - PnL per controller (via executor history filtered by controller config name)
 - Fill rate, TP hit rate, inventory drift
 
-Promote the winner: upsert its config as the canonical (non-variant) name and redeploy a
-clean single-controller bot, or simply stop the losing variant via `manage_controllers`
-while the bot keeps running.
+Report the candidate comparison with costs, exposure, drawdown and uncertainty.
+Changing canonical configs, redeploying, or stopping a variant requires existing
+authority for that action and the applicable promotion evidence.
 
 ### Guardrails
 

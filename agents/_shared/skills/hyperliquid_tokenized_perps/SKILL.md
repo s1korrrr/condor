@@ -27,7 +27,8 @@ xyz:SPCX-USD      ❌ KeyError at trade time (see below)
 SPCX-USD          ❌ not found
 ```
 
-The biggest issuer is **XYZ**, so `XYZ:` is the default prefix to try.
+`XYZ:` is an example issuer. Discover current canonical pairs and issuer prefixes
+from the installed connector; do not guess an issuer from the underlying ticker.
 
 ## Case matters — use UPPERCASE, and don't trust the price endpoint
 
@@ -53,10 +54,10 @@ plain pair (e.g. `SPCX-USD`) can't be found:
 
 1. Check whether the underlying is a **tokenized asset** (equity / pre-IPO
    ticker, not a native crypto).
-2. If so, retry with the issuer prefix — **uppercase** `XYZ:<TICKER>-USD` by default —
-   **before** concluding the pair is unavailable.
-3. Only report "not available on hyperliquid_perpetual" after the prefixed form
-   also fails.
+2. Discover the actual issuer and canonical pair from the connector symbol map;
+   use its exact case, rather than assuming `XYZ:`.
+3. If discovery or lookup fails, report the searched symbols and capability
+   limitation; failure for one issuer does not prove venue-wide unavailability.
 
 This applies anywhere a hyperliquid perp pair is resolved — quoting, placing an
 order, or deploying an executor/controller. Use the uppercase prefix everywhere,
@@ -64,7 +65,7 @@ including the controller config and bot deploy.
 
 ## Operating rule (host deployments)
 
-Condor's `agents/` tree, `skills/`, and root `store/` are its runtime state. Operate
-Condor ONLY via the `mcp__condor__*` tools — never by reading or editing
-those files directly. If the Condor MCP server is not connected, tell the
-user to connect it instead of improvising against the filesystem.
+For a deployed Condor instance, use connected `mcp__condor__*` tools for runtime
+operations. If unavailable, report that limitation rather than changing runtime
+files. Authorized repository instruction/skill maintenance may inspect and edit
+source files locally without operating the deployed instance.

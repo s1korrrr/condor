@@ -12,7 +12,9 @@ source: agent:directional_trader
 
 # Backtesting
 
-Take an uploaded config → a named winner with confirmed metrics, ready to deploy.
+Take a config → a named research candidate with observed metrics and explicit
+validity limits. Passing these checks does not establish deployment readiness;
+report promotion status separately under the repository research gates.
 Read this hub, then fetch the companion for the step you are actually on:
 
 ```
@@ -27,7 +29,7 @@ manage_skill(action="read_file", name="backtesting", file="interpret_metrics.md"
 | Sizing the window for a controller interval                        | `windows_and_costs.md`     |
 | Reading results — thresholds, red flags, how to report them        | `interpret_metrics.md`     |
 | Designing or ranking a parameter sweep; checking for overfitting   | `parameter_sweep.md`       |
-| Validating out-of-sample and deciding deploy / don't deploy        | `go_no_go.md`              |
+| Validating out-of-sample and deciding research-screen status       | `go_no_go.md`              |
 
 A full pass reads `backtest_flow` once, then all four in that order. A one-off
 "what does this Sharpe mean?" needs only `interpret_metrics.md`.
@@ -56,7 +58,9 @@ strategy families.
    (`interpret_metrics.md`).
 3. **Sweep** — one parameter at a time, look for a plateau (`parameter_sweep.md`).
 4. **Validate** — held-out window, then decide (`go_no_go.md`).
-5. **Document the winner** and hand it to the `deploy_and_monitor` playbook.
+5. **Document the candidate** and research/promotion status. Use
+   `deploy_and_monitor` only for requested operational preparation or authorized
+   deployment; a backtest does not authorize it.
 
 ## Non-negotiables
 
@@ -64,8 +68,9 @@ The universal ones — one parameter at a time, plateau over peak, mandatory
 out-of-sample, the trade-count gate, report the bad numbers too — live in
 `backtest_flow` and apply here unchanged. On top of them, for directional:
 
-- **Sharpe < 0 means the signal is actively harmful.** Go back to `research`; do
-  not sweep a negative-edge signal until it looks positive.
+- **Negative Sharpe is adverse evidence in the tested window and assumptions.**
+  Revisit the hypothesis without tuning until the same sample looks positive;
+  it is not proof of universal harm across venues or regimes.
 - **Never deploy a config that has not passed `go_no_go.md`** — a good baseline is
   not a decision.
 - **Judge the exit, not just the entry.** An average trade duration far off the

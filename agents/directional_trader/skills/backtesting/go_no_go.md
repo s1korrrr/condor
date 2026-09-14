@@ -1,6 +1,9 @@
-# Out-of-Sample Validation and the Deploy Decision
+# Out-of-Sample Validation and Research-Screen Decision
 
-Companion to the `backtesting` playbook. The last gate before live capital.
+Companion to the `backtesting` playbook. This evaluates a research candidate;
+it is not the last gate before capital or evidence of deployment readiness.
+Use task-specific, justified acceptance criteria fixed before evaluation. The
+table below is an illustrative screen, not calibrated promotion thresholds.
 
 ## Step 1 — Run the held-out window
 
@@ -47,7 +50,8 @@ held-out window it stops being out-of-sample and this gate is gone.
 - The user is uncomfortable with the drawdown profile
 
 A NO-GO is a completed workflow, not a failure. Document what didn't work and why,
-save it with `manage_memory`, and return to the phase that owns the problem.
+retain it in the task report, and return to the phase that owns the problem.
+Persistent memory requires an explicit user request.
 
 ## Step 3 — Document the winner
 
@@ -62,7 +66,9 @@ metrics (out-of-sample):
   profit_factor: X.XX        avg_trade_duration_hours: N.N
 in_sample_sharpe: X.XX       retention: XX%
 stability_evidence: adjacent params {a}, {b} → Sharpe {x}, {y}
-deployment_readiness: YES / NO
+research_screen: PASS / HOLD / FAIL
+promotion_status: NOT_AUTHORIZED / HOLD_FOR_EVIDENCE
+missing_evidence: {owner parity, economics, risk rails, or other required gates}
 ```
 
 `avg_trade_duration_hours` is not decoration — `deploy_and_monitor` uses it to size
@@ -70,8 +76,10 @@ the live comparison window.
 
 ## Step 4 — Hand off
 
-Surface the block above and get explicit user confirmation before deploying.
-On GO, continue with the `deploy_and_monitor` playbook.
+Surface the block above. A research GO does not authorize deployment. Continue
+with `deploy_and_monitor` only for requested preparation or when deployment is
+explicitly authorized and its required gates pass. Ask only for missing authority
+or material choices; retain valid existing authorization.
 
 ## Artifacts
 

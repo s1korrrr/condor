@@ -4,16 +4,19 @@ description: Phase 1 — market regime classification, indicator exploration, an
   confirmed signal spec, before any controller code is written
 when_to_use: When starting work on any new strategy or pair, or when the user wants
   to explore a signal idea, validate an indicator, or understand the market regime.
-  Always run this before writing controller code.
+  Reuse accepted research/specs for implementation and existing-controller fixes.
 created: '2026-07-30T20:10:41Z'
 source: agent:directional_trader
 ---
 
 # Phase 1: Research
 
-Produce a confirmed, statistically grounded **signal spec** — indicator params,
-entry/exit logic, regime conditions — backed by visible data. No controller code
-until this passes.
+Produce an exploratory **signal spec** — indicator params, entry/exit logic and
+regime conditions — backed by identified data. Reuse an already accepted spec;
+this workflow does not restart research for routine controller maintenance.
+The example thresholds below are screening heuristics, not calibrated evidence
+of edge. Record hypothesis, invalidation, decision-time availability, costs,
+independent sample support and held-out validation before making stronger claims.
 
 ## Step 1 — Gather market data
 
@@ -52,7 +55,7 @@ df.ta.atr(length=14, append=True)
 # Custom
 df["zscore"] = (df["close"] - df["close"].rolling(20).mean()) / df["close"].rolling(20).std()
 df["ret"]    = df["close"].pct_change()
-df["rvol"]   = df["ret"].rolling(20).std() * (252 ** 0.5)
+df["rvol"]   = df["ret"].rolling(20).std()  # per-bar volatility; label the interval
 ```
 
 ## Step 3 — Classify the regime
@@ -74,9 +77,8 @@ Confirming statistics over ~90d of candles when the table is ambiguous:
 **Verdict:** one line — `TRENDING`, `MEAN_REVERTING` or `AMBIGUOUS`, with the
 supporting values.
 
-**Go/no-go:** on `AMBIGUOUS`, either pick a shorter timeframe that resolves it or
-ask the user whether to force a strategy type. Never build a trend controller on a
-mean-reverting pair.
+On `AMBIGUOUS`, retain that result. Further timeframe or strategy exploration
+is a new recorded hypothesis test, not a way to force a desired classification.
 
 ## Step 4 — Explore indicator combinations
 
@@ -95,8 +97,9 @@ For each combination compute:
 - **Average bars-in-trade** — consecutive bars holding the same signal
 - **Directional accuracy** — % of signals followed by a 1R move the right way
 
-**Go/no-go:** need ≥ 2 signals/week on the chosen timeframe **and** ≥ 55% raw
-directional accuracy before continuing.
+Example screening thresholds are ≥ 2 signals/week and ≥ 55% raw directional
+accuracy. Choose justified criteria before testing; these values do not establish
+net profitability, independence or statistical significance.
 
 ## Step 5 — Write the signal spec
 
@@ -112,7 +115,8 @@ signal_spec:
   lookback_bars: 300–500
 ```
 
-The user must confirm this spec before Phase 2.
+Proceed to authorized implementation when the spec is covered by the request.
+Ask only for unresolved choices that materially change the objective or authority.
 
 ## Step 6 — Data quality check
 
@@ -137,7 +141,7 @@ It should fetch the candles, compute the indicators, mark the signal column, and
 report the last ~20 bars plus a regime summary. Fix it until the run is clean
 before showing the user.
 
-## Go/No-Go → Phase 2
+## Exploratory screening → Phase 2
 
 ✅ **GO** — regime identified with supporting data; a signal hypothesis with > 30
 historical occurrences in the lookback; signal duration matches the intended
@@ -149,9 +153,9 @@ dominant signal direction.
 
 ## Artifacts
 
-1. Market data summary (price range, volume, volatility stats)
+1. Source-bound market data summary (price range, volume, volatility stats)
 2. Indicator dashboard (last 10–20 bars, all values)
 3. Regime verdict + evidence
-4. Signal spec (confirmed by the user)
+4. Signal spec with accepted assumptions and any unresolved material choices
 5. Data quality check results
 6. Research routine (optional)

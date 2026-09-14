@@ -1,8 +1,8 @@
 ---
 name: capital_allocation
-description: How total_amount_quote and initial_positions define a controller's isolated
-  capital — the budget a single pmm_mister controller trades with, and how to seed it
-  with base assets you already hold so each controller is independent from the wider portfolio.
+description: How total_amount_quote and initial_positions define per-controller
+  accounting budgets and seeded inventory while execution funds remain shared
+  with the account and require aggregate exposure checks.
 when_to_use: When sizing a controller, deciding total_amount_quote, splitting one market
   into several controllers, or when the user already holds the base asset (spot) and wants
   to fund the strategy with existing inventory instead of buying fresh. Also read this
@@ -14,8 +14,8 @@ source: agent:market_making_expert
 
 This skill explains the two knobs that define **how much capital a single
 controller trades with** and **which of that capital comes from assets you
-already hold**. Together they make each controller's book independent from the
-rest of your portfolio.
+already hold**. They support per-controller accounting; they do not reserve exchange balances
+or isolate a controller from account-wide exposure.
 
 ---
 
@@ -31,8 +31,9 @@ This is the reference amount everything else is measured against:
   per iteration.
 - `target_base_pct` / `min_base_pct` / `max_base_pct` — the inventory band. These
   percentages are **percentages of `total_amount_quote`**, expressed in quote
-  value. If `total_amount_quote = 2000` and `target_base_pct = 50`, the target
-  base inventory is worth **$1,000** of the base asset.
+  value. If `total_amount_quote = 2000` and `target_base_pct = 0.5`, the target
+  base inventory is worth **$1,000** of the base asset. These fields are fractions:
+  `0.5` means 50%; use `0.3/0.5/0.7`, not `30/50/70`.
 
 So `total_amount_quote` is the denominator. Change it and every absolute
 position size, order size, and inventory band scales with it. It is the single
@@ -92,8 +93,8 @@ What this means:
   already holding this inventory as an open BUY position, instead of holding pure
   quote.
 - `side: BUY` marks it as a long base position that the strategy now manages
-  (its TP/SL and inventory logic apply to it just like a position it opened
-  itself).
+  (the controller's configured held-position risk logic applies; verify enabled
+  TP/SL coverage rather than assuming a per-fill executor protects this seed).
 
 ### You choose whether to use existing assets or not
 
@@ -112,12 +113,13 @@ manages, so it counts toward the inventory band (`target/min/max_base_pct`).
 
 ---
 
-## 4. Why this matters: portfolio independence
+## 4. Per-controller attribution and shared-account limits
 
-This is the mechanism that makes **each controller's book independent from the
-overall portfolio**. Instead of one giant strategy over your whole balance, you
-carve the portfolio into slices and hand each slice to its own controller with
-its own `total_amount_quote` and its own seeded inventory.
+Assign each controller its own accounting budget and seeded inventory. The
+execution connectors still use shared account balances and their budget checker;
+`initial_positions` creates attribution records, not segregated exchange funds.
+Validate aggregate reserved funds, exposure and loss limits across controllers,
+and do not assign the same inventory to multiple books.
 
 ### Worked example — splitting a market into 10 controllers
 
@@ -130,11 +132,10 @@ BTC-USDC. You can deploy **10 controllers**, each with:
   i.e. split the BTC you hold across the 10 controllers so each starts with
   ~1/10 of it as seeded base inventory.
 
-Now each controller runs its own isolated book on a $2,000 budget, half funded by
-quote and half by the BTC you already had. The controllers don't fight over one
-shared balance — each has a fixed, known slice, so their PnL, inventory bands,
-and risk are measured independently. **This is how we make the strategy's capital
-independent from the general portfolio.**
+Each controller now has a $2,000 accounting budget, half assigned quote and half
+seeded BTC. Orders can still contend for shared balances. This example is valid
+only after aggregate funding/reservations and the inventory assignments reconcile
+with the account; per-controller PnL attribution is not capital isolation.
 
 ---
 
@@ -146,7 +147,7 @@ independent from the general portfolio.**
 | `target/min/max_base_pct` | Inventory band as a % of `total_amount_quote`. |
 | Default start | Controller assumes `total_amount_quote` in quote, 0 base — buys base itself. |
 | `initial_positions` | Seed the controller with base you already hold; goes straight to position hold as a managed BUY. Optional. |
-| Splitting a market | Deploy N controllers, each with `total_amount_quote = budget/N` and a proportional slice of existing base via `initial_positions` → N independent books. |
+| Splitting a market | Deploy N controllers, each with `total_amount_quote = budget/N` and a proportional slice of existing base via `initial_positions` → N attributed books sharing account execution constraints. |
 
 ### `initial_positions` fields
 
@@ -158,5 +159,3 @@ independent from the general portfolio.**
 Only applies to **spot** with existing base inventory. It's optional — assign
 existing assets when you want them to be the working inventory; omit it to start
 fresh from quote.
-</content>
-</invoke>

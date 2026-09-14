@@ -1,6 +1,6 @@
 ---
 name: deploy_and_monitor
-description: Phase 4 — deploy the backtest winner live, monitor early performance,
+description: Phase 4 — prepare or perform an authorized directional deployment, monitor early performance,
   and compare live results against backtest expectations to detect drift
 when_to_use: After backtesting produces a confirmed winner and the user wants to deploy
   it, or when comparing live results against backtest expectations and deciding whether
@@ -11,27 +11,32 @@ source: agent:directional_trader
 
 # Phase 4: Deploy, Monitor and Compare
 
-Deploy the validated config, watch the early trades, then compare live results
-against what the backtest said would happen. Output: a decision to scale, hold,
-reduce or stop.
+Prepare the deployment and, when explicitly authorized, deploy the config and
+monitor execution. Compare observed results against a comparable backtest.
+Output a supported operational recommendation; execute changes only within the
+existing authorization for account, venue, capital, leverage and actions. Research
+checks do not grant deployment or scaling authority. Require position/exposure
+limits, maximum daily loss, monitoring, rollback and a kill switch before launch.
 
 ## Step 1 — Pre-deploy checklist
 
-Confirm every item with the user:
+Verify each item from current evidence and session decisions. Ask only for
+missing material choices or authority; do not reconfirm already-approved scope:
 
 - [ ] **Winner confirmed** — passed the `backtesting` go/no-go, config exists
       (`manage_controllers(action="describe", config_name="...")`)
 - [ ] **Exchange connectivity** — connector configured, API keys set
-- [ ] **Leverage matches the backtest** — never deploy at a different leverage than
-      was simulated
+- [ ] **Comparable accounting** — verify which leverage, margin, funding and
+      liquidation mechanics the backtest actually simulated; missing rails
+      remain unavailable and block claims of execution parity
 - [ ] **Position mode** — HEDGE if the strategy goes both long and short:
       `set_account_position_mode_and_leverage(...)`
 - [ ] **Stops set** — `stop_loss` and `take_profit` present; never deploy without them
 - [ ] **`max_loss_quote`** set as a circuit breaker
-- [ ] **Sizing** — ≤ 5% of account for one strategy, and start at 25–50% of the
-      intended size; scale only after the comparison in Step 4 passes
+- [ ] **Sizing** — use the explicitly approved capital and exposure limits;
+      passing the comparison in Step 4 does not authorize a size increase
 - [ ] **`avg_trade_duration_hours` noted** — it sets the minimum monitoring window
-- [ ] User is watching the first 3 trades
+- [ ] Approved monitoring coverage is active for the initial trades
 
 ## Step 2 — Deploy
 
@@ -40,7 +45,7 @@ manage_bots(
     action="deploy",
     bot_name="{strategy_slug}_live_v1",
     controllers_config=["{strategy_slug}_best"],
-    account_name="master_account",
+    account_name=<approved_account>,
     max_global_drawdown_quote=<2 × stop_loss × total_amount>,
     max_controller_drawdown_quote=<1.5 × stop_loss × total_amount>,
 )
@@ -48,7 +53,7 @@ manage_bots(action="status")   # no bot_name — returns all active bots
 ```
 
 **Record the deployment timestamp.** It is the start of the live comparison window
-and cannot be recovered later.
+and must be bound to the deployed config/image and observed activation.
 
 For a single lightweight controller, an executor may fit better than a bot —
 consult the `executor_manager` agent.
@@ -74,7 +79,7 @@ backtest (backtest had N trades in M days → expect ~N/M per day).
 - **Executor open longer than 2× `avg_trade_duration_hours`** → check the exit logic
 - **Immediate large drawdown** → stop and investigate before continuing
 
-**Abort immediately** on: any unhandled exception in `update_processed_data`;
+**Apply the approved emergency-stop policy** on: any unhandled exception in `update_processed_data`;
 drawdown exceeding `max_controller_drawdown_quote` within 5 trades; or a signal
 firing continuously with no exit (runaway position).
 
@@ -98,7 +103,7 @@ manage_routines(
     config={
         "config_name": "{strategy_slug}_best",
         "start_date": <live_deploy_date>, "end_date": <today>,
-        "resolution": "1m", "trade_cost": 0.0006,
+        "resolution": "1m", "trade_cost": <verified_aggregate_cost>,
     },
 )
 # → read it back with manage_routines(action="get_instance", name=<instance_id>)
@@ -114,7 +119,7 @@ Win Rate        58.3%     53.3%      +5.0pp   ✅
 Max Drawdown    -4.1%     -3.5%      +0.6pp   ✅
 Sharpe          0.95      1.18       -0.23    ✅
 ──────────────────────────────────────────────────────
-Verdict: ✅ CONSISTENT — continue live
+Verdict: sample broadly consistent; promotion/scaling requires separate evidence
 ```
 
 | Metric            | Flag threshold      | What it means                                        |
@@ -127,28 +132,34 @@ Verdict: ✅ CONSISTENT — continue live
 
 ## Step 5 — Decision
 
-**✅ CONSISTENT** (all deltas within thresholds)
-Scale to full intended size. Move to a daily monitoring cadence. Re-compare weekly
-for the first month, then monthly. If live DD is under 50% of backtest DD, consider
-tightening stops.
+**✅ CONSISTENT** (all deltas within illustrative thresholds)
+Report consistency for the observed sample and its uncertainty. Keep approved
+limits and cadence; propose any scaling or stop changes for a separate decision.
+Ten live trades and these delta thresholds do not establish promotion readiness.
 
 **⚠️ MINOR DRIFT** (1–2 metrics slightly over)
 Hold at current size — do **not** scale up. Extend the window by another 1× average
 trade duration and re-compare. Widening drift → escalate.
 
 **❌ MAJOR DRIFT** (Sharpe delta > 0.5 or PnL delta > 50%)
-Reduce to minimum size or stop. Investigate in order: regime change (compare current
+Recommend reduction or stop, or execute the action already covered by the
+approved risk policy. Investigate in order: regime change (compare current
 ADX/volatility against the backtest period), execution slippage (fill vs intended
 price), data discrepancy (live vs historical candles for the same window), signal
 flicker. Then re-sweep parameters over the most recent 30 days via the `backtesting`
 playbook. If the re-sweep fails, the hypothesis is dead — back to `research`.
 
 **❌ CRITICAL** (live DD > 2× backtest DD, or loss beyond user tolerance)
-Stop immediately with `manage_bots(action="stop_bot", ...)`, close open positions,
-write a post-mortem. Do not redeploy without a full Phase 1–3 cycle on a new
-hypothesis.
+Use the authorized emergency stop/close policy and verify resulting orders and
+positions. If that authority is missing, alert the user with the exact required
+action. Record the incident in task evidence; redeployment requires a separately
+supported decision and explicit authority.
 
 ## Step 6 — Ongoing cadence
+
+Apply this only to explicitly requested ongoing monitoring. A one-off comparison
+does not schedule checks, start a watcher or authorize routine creation. Adapt the
+example cadence to the approved monitoring policy.
 
 | Period      | Cadence      | Action                              |
 |-------------|--------------|-------------------------------------|
@@ -158,10 +169,12 @@ hypothesis.
 | Quarterly   | Once         | Full parameter re-sweep on 90 days  |
 
 If Sharpe stays below 0.5 for two consecutive months, trigger a full research
-refresh. Log findings with `manage_memory` so the next strategy inherits them.
+refresh. Record findings in the task report; write persistent memory only when
+the user explicitly requests it.
 
-For automated daily snapshots, write a monitoring routine yourself — read the
-`routine_cookbook` playbook first, then create and test it.
+For explicitly requested automated snapshots, read `routine_cookbook`, create
+and validate the scoped routine, and activate it only within the requested
+monitoring authority.
 
 ## Artifacts
 

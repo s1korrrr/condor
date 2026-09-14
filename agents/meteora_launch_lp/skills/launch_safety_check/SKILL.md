@@ -19,12 +19,14 @@ always another graduation.
 ## Gate order (cheapest / most-disqualifying first)
 
 ### 1. Sellability (honeypot) — do this FIRST, it's the killer
-A token you can buy but can't sell is a total loss. Round-trip a quote through the pool:
+A token you cannot sell can trap the position. Request quotes in both directions;
+this is a screening check, not a real round-trip or proof of executable sellability:
 - `manage_amm(action="quote_swap", connector="meteora", network="solana-mainnet-beta", pool_address=<pool>, base_token=<base_mint>, side="SELL", amount=<small>)`
 - and `... side="BUY", amount=<small>`
 
 Both must return a sane quote. If the **SELL** quote errors, reverts, or returns ~0 out / absurd price
-impact → **honeypot, reject.** (A transfer-fee/tax token shows as a large one-directional impact — treat
+impact → **reject/HOLD the candidate and classify the failure.** A quote error
+may reflect infrastructure or stale state rather than prove a honeypot. (A transfer-fee/tax token shows as a large one-directional impact — treat
 high asymmetric impact as a red flag too.)
 
 ### 2. Objective on-chain + static gates — one routine call
@@ -48,6 +50,10 @@ The pump-graduate-**dump** pattern means early full-range LP eats the drawdown. 
   `FeeYield`; a collapsing volume or a one-way sell wall → skip).
 
 ## Decision
-Enter **only if all three pass**. On any failure, journal the reason (token, gate, value) and skip —
+Passing all three makes the candidate eligible for further execution review, not
+authorization to add liquidity. Enter only within explicit capital/action limits.
+On any failure, journal the reason (token, gate, value) and skip —
 these rejections are signal for future picks. Re-run gate 1 (sellability) periodically on held
-positions: if a token *becomes* unsellable, exit immediately at any price you can still get.
+positions: if sellability fails, apply the authorized emergency-exit policy and
+verify transaction outcome. If authority or executable liquidity is unavailable,
+alert with the exact limitation; do not claim an exit or expand slippage limits.

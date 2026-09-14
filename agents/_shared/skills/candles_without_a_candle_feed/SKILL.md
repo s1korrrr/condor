@@ -35,7 +35,7 @@ list the error prints. The list is the authority — never assume from the name.
 ## What still works on that connector
 
 Losing candles does **not** mean losing the venue. On a connector with no candle
-feed these are still live and still correct:
+feed, check which of these capabilities the installed connector actually supports:
 
 - `get_market_data(data_type="prices", trading_pairs=[...])` — the current price
 - `get_market_data(data_type="order_book", ...)` — depth, and the `price_for_volume` /
@@ -43,14 +43,16 @@ feed these are still live and still correct:
 - `explore_dex_pools` — pool discovery, TVL, fees, APR (CLMM connectors)
 - Trading itself: quoting, swaps, LP and executor deployment
 
-So: **execute on the venue the user asked for, source the *history* elsewhere.**
+Keep the requested execution venue in the design and disclose any substitute
+history. Running trades still requires the existing task-specific authority.
 
 ## Where to get the history instead
 
 In order of preference:
 
 1. **A candle-capable venue for the same asset.** `XRP-USDT` on `binance` or
-   `kraken` is the same price series that drives an `xrpl` decision. Pick a
+   `kraken` can be a proxy, not the same venue price series. Verify basis, quote
+   conversion, timestamps and liquidity before using it for XRPL decisions. Pick a
    connector off the list the error printed, and use a **liquid quote** (USDT/USD),
    not whatever the DEX pair happens to quote in.
 2. **GeckoTerminal, for the actual pool.** For a token with no CEX listing, the
@@ -73,7 +75,7 @@ backtest) on a venue, resolve the data source **first**:
 1. Is the execution connector on the candle list? If yes, nothing here applies.
 2. If no — pick the proxy or the GeckoTerminal pool above, and **tell the user in
    the same message**: "xrpl has no candle feed; I'll take the signal from
-   `XRP-USDT` on `binance` and execute on `xrpl`."
+   `XRP-USDT` on `binance` as a disclosed proxy for the proposed XRPL strategy."
 3. If neither source exists, do **not** silently fall back to a spot-price-only
    strategy. Report that the market cannot carry an indicator-driven strategy and
    offer what it can carry — a market-making or LP approach that needs only the
@@ -84,7 +86,7 @@ connector is the answer, not a reason to try again.
 
 ## Operating rule (host deployments)
 
-Condor's `agents/` tree, `skills/`, and root `store/` are its runtime state. Operate
-Condor ONLY via the `mcp__condor__*` tools — never by reading or editing those files
-directly. If the Condor MCP server is not connected, tell the user to connect it
-instead of improvising against the filesystem.
+For a deployed Condor instance, operate runtime state through its connected
+`mcp__condor__*` tools; do not substitute filesystem edits for an unavailable
+runtime operation. Authorized repository instruction/skill maintenance may read
+and edit source files locally without operating the deployed instance.

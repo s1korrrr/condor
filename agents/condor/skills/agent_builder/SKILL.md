@@ -67,17 +67,16 @@ short conversation:
 - **What it's used for** — the kind of question Condor should be able to ask it. This
   becomes `when_to_consult`.
 
-That's enough to create it. **Pick the model from what the operator actually has** —
-call `get_available_models` once and choose a sensible default for THIS agent's job (see
-**Model selection** below for the heuristic); it's the easiest thing to change later.
-Then create:
+That is enough to create it. Omit `agent_key` to inherit the operator's model.
+When the user requests a model choice or change, consult `get_available_models`
+and verify its availability before setting a key. Then create:
 
 ```
 manage_trading_agent(
     action="create_agent",
     name="Executor Manager",
     description="Expert in deploying and tuning Hummingbot executors",
-    agent_key="openrouter:anthropic/claude-sonnet-4-5",   # chosen from get_available_models; change anytime
+    # agent_key omitted: inherit the operator model
     when_to_consult="When the user wants to deploy, tune, or stop an executor",
     tools=[],                              # leave open unless the user named tools
     instructions="<AGENT.md body — the agent's system prompt>"
@@ -126,9 +125,8 @@ consult(agent="<agent_slug>", task="…a real question in its specialty…", con
 Show the answer. This proves the agent runs end-to-end. If the persona or answer is off,
 fix the AGENT.md with `update_agent(agent_slug=…, instructions=…)` and consult again.
 
-When the consult looks good, **stop and tell the user the agent already works as a
-consultable expert** — and that the next way to make it sharper is to give it routines so
-it reasons over real structured data instead of guessing.
+When the consult looks good, report that the consult completed. Continue any
+further authorized work; stop here when creation/consultation was the full request.
 
 ## Step 3 — Improve it with routines
 
@@ -137,10 +135,9 @@ specialty needs (a band scanner, a regime classifier, an inventory snapshot). Of
 as the upgrade, then guide the user through it one routine at a time:
 
 1. **Define** — agree on what this routine should output and why the agent needs it.
-2. **Create** — hand the writing to a background worker
-   (`delegate(action="start", agent="condor", task="...")`); it follows the
-   `routine_cookbook` playbook and tests the routine before reporting. Tell it the
-   target agent so it passes the right `agent`. Routines live at the agent level
+2. **Create** — follow `routine_cookbook` and validate within task authority.
+   A bounded background worker is optional when permitted and useful; tell it
+   the target agent and collect its evidence. Routines live at the agent level
    and are shared across consults and any future loop — pass the **agent slug**:
    ```
    manage_routines(action="create_routine", agent="<agent_slug>",
@@ -196,13 +193,13 @@ Strategy instructions (the tick system prompt) MUST include: **Objective**; **An
 hold); and — only if it trades — an **Executor config** with the FULL schema (every
 required field, type, range, ordering rule), **Parameter inference** (how to derive
 prices/side/TP from routine output + market data), **Risk rules** (max position, position
-limits, stop behaviour), and **Error recovery** (on a failed create, re-fetch the schema,
-fix, retry once, journal it).
+limits, stop behaviour), and **Error recovery** (classify a failed create and reconcile executor/order state
+before a bounded retry; an uncertain response may have created exposure).
 
 **Dry run before live** (if it trades):
 ```
 manage_trading_agent(action="start_agent", strategy_id="<agent_slug.strategy_slug>",
-    config={"execution_mode": "dry_run", "agent_key": "ollama:llama3.1",
+    config={"execution_mode": "dry_run",  # model inherited
             "trading_context": "Trade BTC-USDT on binance_perpetual",
             "frequency_sec": 60, "total_amount_quote": 100,
             "risk_limits": {"max_position_size_quote": 200, "max_open_executors": 3}})
@@ -212,8 +209,10 @@ right, decision logic sound, conditional language ("would place…"), no real cr
 calls, risk rules respected. Don't go live until the user is satisfied.
 
 **Go live:** offer `run_once` (single live tick), `loop` (continuous), or `loop` +
-`max_ticks`. Confirm the live model, start, confirm it's running, give monitoring
-commands. Always include risk limits when a loop agent can trade.
+`max_ticks`. Reuse explicit task-specific live authorization; request only missing
+authority for account, venue, capital and actions. Verify the inherited/requested
+model, position/exposure limits, maximum daily loss, monitoring, rollback and kill
+switch before launch. A successful dry run does not grant trading authority.
 
 ## Monitoring existing agents
 1. `manage_trading_agent(action="list_agent_definitions")` — all agents, with their
@@ -240,25 +239,27 @@ or missing one costs you routing accuracy, so write it well. Rules:
 - **State the boundary** when two agents are close ("…executor deployment — NOT
   controller backtesting"). Same shape applies to a skill's `when_to_use`.
 
-**Model selection:** Set per session, not baked in. The agent/strategy `agent_key` is the
-default; override at launch via `config={"agent_key": "…"}`. **Recommend from what the
-operator actually has — call `get_available_models` and pick for the agent's job. Do NOT
-default to a hardcoded model.** The tool reports:
+**Model selection:** Inherit the operator model unless the user requests a specific
+choice or change. For that request, discover available keys with
+`get_available_models`; do not silently bake a recommendation into agent or launch
+config. The agent/strategy `agent_key` is a default that can be overridden at launch.
+The tool reports:
 - `acp_clis` — subscription/CLI bridges (`claude-code`, `gemini`, `copilot`, `codex`) and
-  whether each CLI is installed. No API key or per-token cost (rides the operator's
-  Claude/ChatGPT subscription); runs unrestricted (does NOT enforce the `tools` allowlist).
+  whether each CLI is installed. Authentication, entitlement and billing depend
+  on the actual provider/account; installation does not prove them. These bridges
+  do NOT enforce the `tools` allowlist.
   **`available` means installed, not signed in** — each bridge needs its own interactive
   login that Condor cannot probe. Never recommend one as if it were ready; name it as an
   option and ask the user to confirm they use it.
 - `local` — `ollama` / `lmstudio`, each with the models currently **loaded** (empty =
-  server not running). Free, private, offline; addressed as `ollama:<model>` /
+  server not running). Verify local routing and network behavior before claiming privacy/offline use; addressed as `ollama:<model>` /
   `lmstudio:<model>`. Only offer a local model that is actually loaded.
 - `cloud_keys` — which of openrouter / openai / anthropic / groq / google keys are set.
 - `custom_endpoints` — the user's own OpenAI-compatible endpoints (Venice, Together,
-  a self-hosted vLLM…), each already validated, with the chat models it serves and a
+  a self-hosted vLLM…), with the reported chat models and a
   ready `agent_key` (`custom@<endpoint>:<model-id>`). These are the strongest signal
-  in the whole report: the user configured them deliberately and Condor verified them
-  reachable, so prefer one when it fits the job.
+  in the report when currently reachable, but a saved endpoint may have drifted;
+  verify readiness before a requested model change.
 - `openrouter` — tool-capable catalog, cheapest first, each with a ready `agent_key`
   (`openrouter:<slug>`) and in/out $/Mtok. **The catalog is public — recommendations work
   with no key.** If `openrouter.key_present` is false, those models need `OPENROUTER_API_KEY`

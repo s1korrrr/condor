@@ -1,16 +1,19 @@
 ---
 name: self_improve
-description: Real-time reflex for improving yourself — turn user feedback, preferences,
-  and workflow patterns into memories and skills as they happen
-when_to_use: After any feedback moment in a conversation — a correction, a stated
-  preference, a missed pattern, a better flow discovered. Do NOT defer to end of session.
+description: Save explicitly requested durable preferences or reusable workflow skills
+  in the appropriate Condor library.
+when_to_use: When the user explicitly asks to remember a preference or fact, or to
+  create or update a reusable skill. Ordinary feedback steers the current task.
 created: '2026-08-05T09:16:13Z'
 source: chat
 ---
 
-## Self-Improve — Real-Time Reflex
+## Save requested memories and skills
 
-Run this checklist immediately after any feedback moment. Do NOT accumulate and review at end of session (token-expensive and easy to forget).
+Use this checklist for an explicit persistence request. Apply feedback immediately
+to the current task without automatically writing memory or skills. A request to
+update a skill does not authorize memory writes, or vice versa. For Codex-managed
+memory, use its prescribed memory mechanism rather than Condor memory tools.
 
 ### Checklist
 
@@ -19,7 +22,7 @@ Run this checklist immediately after any feedback moment. Do NOT accumulate and 
 - → `manage_memory(action="write", ...)` — one memory per fact, type=preference
 - **Memory is YOURS ALONE** — keyed by (assistant, user), so what you write here
   is invisible to the chat and to every other agent, and there is no way to
-  publish it. Write it anyway for your own work, but if the preference should
+  publish it. Write it only under the explicit memory request. If the preference should
   govern how *everything* behaves, say so to the user — a cross-cutting rule
   belongs in a shared skill (below), not in one agent's memory.
 
@@ -47,7 +50,7 @@ Run this checklist immediately after any feedback moment. Do NOT accumulate and 
 - → Skip it. Don't pollute memory/skills with ephemeral context.
 
 ### Rules
-- Save in the moment, not at the end
+- Save only the durable information or skill change explicitly requested
 - One memory = one fact (no bundling)
 - Always check existing skills before creating a new one
 - Decide the OWNER before writing: memory is per-agent and cannot be shared;

@@ -1,9 +1,9 @@
 ---
 name: pmm_config_playbook
-description: Ready-to-deploy pmm_mister config profiles (aggressive / balanced / conservative)
+description: Starting pmm_mister config profiles (aggressive / balanced / conservative)
   — full parameter coverage including spreads, effectivization times, tolerance, order
   types, skew, and global TP/SL.
-when_to_use: When you need a starting pmm_mister controller config and want a vetted
+when_to_use: When you need a starting pmm_mister controller config and want a starting
   template instead of hand-tuning every parameter — pick a profile by regime, fetch
   its template, then adapt the connector/pair/amount.
 source: builtin
@@ -11,7 +11,7 @@ source: builtin
 
 # pmm_mister Config Playbook
 
-Three vetted `pmm_mister` profiles, one per risk posture. Each profile lives in a
+Three starting `pmm_mister` profiles, one per risk posture. Each profile lives in a
 **companion file** — fetch only the one you need so the others never load into
 context:
 
@@ -22,7 +22,8 @@ manage_skill(action="read_file", name="pmm_config_playbook", file="config_aggres
 ## Pick a profile by regime
 
 | Regime                                  | Profile          | File                        |
-|-----------------------------------------|------------------|-----------------------------|\n| Quiet / low-vol ranging (ADX < 18)      | **Aggressive**   | `config_aggressive.md`      |
+|-----------------------------------------|------------------|-----------------------------|
+| Quiet / low-vol ranging (ADX < 18)      | **Aggressive**   | `config_aggressive.md`      |
 | Ranging / normal (ADX < 25)             | **Balanced**     | `config_balanced.md`        |
 | Volatile / trending / uncertain         | **Conservative** | `config_conservative.md`    |
 
@@ -30,7 +31,7 @@ manage_skill(action="read_file", name="pmm_config_playbook", file="config_aggres
   wide inventory bands, high allocation. Maximizes fill rate in calm markets.
   Most inventory/PnL risk.
 - **Balanced** — the default. Moderate spreads, 120s effectivization, standard
-  tolerances. Good steady-state when regime is unclear.
+  tolerances. Use for the normal ranging case, within the approved risk policy.
 - **Conservative** — wide spreads, slow refresh, long effectivization (300s),
   tight inventory bands, strong skew enforcement (min_skew=2.0), low
   allocation/leverage, both global TP and SL active. Capital preservation in
@@ -44,8 +45,10 @@ manage_skill(action="read_file", name="pmm_config_playbook", file="config_aggres
    - `connector_name`, `trading_pair`
    - `total_amount_quote` (respect the strategy's risk limit)
    - `leverage` (never above the strategy's cap; templates default low)
-3. Deploy via the normal flow (`manage_controllers` upsert → `manage_bots` deploy).
-   Live retunes go through `manage_bots(action="update_config", confirm_override=true)`.
+3. Verify current schema, execution economics and risk limits before deployment.
+   Write only to authorized saved/live stores; the normal deployment flow is
+   `manage_controllers` upsert → `manage_bots` deploy. Live retunes require existing
+   authority for that bot; `confirm_override=true` is a tool flag, not permission.
 
 ## Key parameter reference
 

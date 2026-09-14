@@ -10,8 +10,9 @@ source: agent:directional_trader
 
 # Phase 2: Controller Development
 
-Translate the confirmed signal spec into a working controller — fully vectorized,
-uploaded, with an initial named config ready for backtesting.
+Translate the accepted signal spec into a working controller and named config.
+Upload to an API or restart a service only when that surface is authorized;
+otherwise finish local source/config validation and report the pending operation.
 
 ## Step 1 — Define the config class
 
@@ -29,9 +30,9 @@ Required fields (from the base class):
 ## Step 2 — Implement `update_processed_data`
 
 **Critical rules:**
-1. **Fully vectorized** — no `iterrows()`, no `apply()` with Python lambdas, no
-   loops over rows. The engine reads the signal column in bulk; a row-loop
-   silently produces wrong results.
+1. **Generate complete causal features/signals.** Prefer vectorization for this
+   bulk backtest interface. Stateful row processing requires explicit state,
+   no future data and parity tests; a loop alone does not imply incorrect results.
 2. The `signal` column holds only `1`, `-1` or `0` — not booleans, not floats.
 3. Every tunable value comes from `self.config.<param>`.
 4. End with exactly these two exports.
@@ -96,7 +97,8 @@ class EmaCrossAdx(DirectionalTradingControllerBase):
 
 Before uploading:
 
-- [ ] **No row loops** — grep for `iterrows`, `apply`, `for idx`; must be zero
+- [ ] **Causal bulk output** — vectorized where appropriate; stateful logic has
+      explicit state and runtime/backtest parity evidence
 - [ ] **All params from config** — no hardcoded numbers in the signal logic
 - [ ] **Signal values** — only `1`, `-1`, `0`
 - [ ] **Column names** — pandas_ta convention: `EMA_{length}`, `RSI_{length}`,
@@ -106,7 +108,9 @@ Before uploading:
 - [ ] **NaN handling** — indicators emit NaN during warm-up; NaN comparisons yield
       `False`, which correctly maps to `signal = 0`
 - [ ] **`signal` populated for all rows** — default 0, then overwritten by masks
-- [ ] **`iloc[-1]`, not `iloc[0]`** — the current bar is what the engine acts on
+- [ ] **Decision-time row** — verify whether the feed includes an unfinished
+      candle and select the row the runtime actually permits; `iloc[-1]` alone
+      does not establish closed-candle semantics
 - [ ] **Indicator lookback < `max_records - 50`** — headroom for warm-up
 - [ ] **No look-ahead** — `.shift(1)` wherever entry-bar logic needs it
 - [ ] **Complete module** — both classes, all imports
@@ -130,8 +134,9 @@ The `controller_code` string is wrapped as a `Controller` object by the MCP tool
 the endpoint rejects a bare source string.
 
 A new `.py` may still be shadowed by the module cached in `sys.modules` — if the
-upload succeeds but `describe` keeps showing the old fields, restart the API
-container.
+upload succeeds but `describe` keeps showing the old fields, inspect the loaded
+module/image and cache behavior. Restart the API container only within existing
+service-operation authority after assessing running users/bots.
 
 ## Step 5 — Create the initial config
 
@@ -186,17 +191,18 @@ Rules that actually bite:
 
 **Controller code:**
 1. `manage_controllers(action="describe", controller_name="...", include_code=True)`
-2. Rewrite the **full** `update_processed_data` — never patch partial snippets
+2. Make the smallest complete source change; preserve unrelated logic
 3. Re-run the self-review checklist
 4. Upsert with `confirm_override=True`
-5. Re-upload any configs referencing it — they do **not** auto-update
+5. Check referencing configs for changed fields/semantics; update only affected
+   configs and only on authorized stores
 
 ## Go/No-Go → Phase 3
 
 ✅ **GO** — controller and config uploaded without errors, checklist fully passes,
 code is a complete importable module.
 
-❌ **NO-GO** — any row-level loop, hardcoded magic numbers in the signal logic,
+❌ **NO-GO** — unverified stateful signal semantics, unexplained tuning constants,
 column name mismatch, or `max_records` < 2× the longest indicator length.
 
 ## Artifacts

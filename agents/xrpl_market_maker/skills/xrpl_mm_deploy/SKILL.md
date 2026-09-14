@@ -16,11 +16,11 @@ real controller failure (schema reject, deploy/status error, or no on-ledger ord
 ## Phase 1 — Preflight
 
 1. **Pair quality** — `explore_geckoterminal(action="top_pools", network="xrpl")`. Need
-   real depth *and* turnover. RLUSD/XRP is currently the only pair with both.
+   current depth *and* turnover for the requested pair; verify current markets.
 2. **Issuer transfer fee = 0%** — non-zero fees can erase the whole spread.
 3. **XRPL credentials configured** — without them the keyless connector has empty trading
    rules and nothing can size. Stop and tell the user; executor mode will not rescue this.
-4. **Balances** — `get_portfolio_overview()`. Need free XRP for reserves (1 + 0.2×offers),
+4. **Balances** — `get_portfolio_overview()`. Need free XRP for current ledger account/owner reserves and fees,
    a trustline for the issued asset, and inventory on both sides.
 
 ## Phase 2 — Spread viability
@@ -57,7 +57,8 @@ If `viable: false` with the right interval → **do not deploy**. Shorten
 `pmm_simple` centres on XRPL mid, not the CEX reference — if divergence is routinely
 wide, recommend executor mode instead of deploying.
 
-Two stores — update both when retuning later:
+Write only to saved/live stores covered by the request. When both are authorized,
+update and verify each; report intentional divergence:
 
 ```
 manage_controllers(action="upsert", target="config", ...)
@@ -67,13 +68,16 @@ manage_bots(action="deploy", ...)
 Deploy under config `bot_name` (`rlusd-xrp-maker`) — stable name so restarts reattach.
 Set `max_global_drawdown_quote` in the quote asset on every deploy.
 
-**Treat as failed → fall through to executors only when:**
+**Investigate controller failure when:**
 - upsert rejects the config
 - deploy fails / bot status errored soon after
 - bot running but no on-ledger orders within a few ticks
 
-Journal the failure as `category="execution"`. Falling back means clear `bot_name` to `''`
-so PnL attributes to direct executors.
+Journal the failure as `category="execution"`. Before any fallback, reconcile
+controller state, account-owned offers and fills. Stop/disable the prior path
+within existing authority and verify no duplicate exposure. Executor fallback
+requires authorization for that mode; an uncertain deploy response is not proof
+of failure. For an authorized fallback, clear `bot_name` to `''` for attribution.
 
 ### Executor fallback
 
@@ -90,7 +94,8 @@ One LIMIT/LIMIT_MAKER level per side first; confirm on-ledger before laddering.
 get_market_data(data_type="order_book", connector_name="xrpl", trading_pair="<pair>")
 ```
 
-Offer must be visible at the expected price.
+Verify the account-owned offer ID or transaction/fill record at the expected
+price; public order-book depth alone does not identify this bot's order.
 - `tecUNFUNDED_OFFER` → sized against reserved XRP; recompute free balance
 - `tecNO_LINE` / `tecPATH_DRY` → trustline missing
 - Accepted but invisible → likely filled; check balances before re-placing
@@ -98,11 +103,13 @@ Offer must be visible at the expected price.
 ## Phase 5 — Hedge
 
 State which is active: **unhedged** (deliberate XRP exposure) or **hedged**
-(`bitget_perpetual` delta neutral — preferred).
+(only through a separately authorized derivative account, instrument and limits).
 
 ## Rollout
 
-`dry_run` → `run_once` → `loop` with short `max_ticks` and conservative limits.
+Prepare `dry_run` evidence; advance to `run_once` or `loop` only under explicit
+authorization with exposure/position limits, maximum daily loss, monitoring,
+rollback and a kill switch. A successful dry run does not authorize the next mode.
 
 `execution_mode` accepts exactly `dry_run`, `run_once`, or `loop` — nothing else.
 There is no `live` value; continuous live trading is `loop`.

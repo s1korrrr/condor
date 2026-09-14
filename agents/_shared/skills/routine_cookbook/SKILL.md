@@ -40,7 +40,8 @@ them with no `agent` argument (your slug is already the scope).
 general-purpose analysis/monitoring not tied to one agent. From the chat, target
 an agent's local dir explicitly with `agent="<agent_slug>"`.
 
-If the scope is ambiguous, clarify it before writing code.
+Infer scope from the task and owning agent. Ask only when unresolved scope
+materially changes the outcome or write authority.
 
 ## Basic routine anatomy
 
@@ -76,10 +77,12 @@ The `Config` docstring is the UI description. `CATEGORY` groups it in the catalo
 2. **Check existing** — `manage_routines(action="list")` to avoid duplicates.
 3. **Read** — this overview + the companion file(s) for what you are building.
 4. **Create** — `manage_routines(action="create_routine", name="snake_case", code="...")`
-5. **Test** — `manage_routines(action="run", name="snake_case", config={})`
+5. **Test** — use focused local checks and, when its effects are authorized,
+   `manage_routines(action="run", name="snake_case", config={})`
 6. **Iterate** — read the error, fix, re-run until the output is clean.
 
-Never report a routine as done before step 5 comes back clean.
+Report local validation separately from a verified runtime run. If an operational
+run lacks authority or capability, finish local checks and state that limitation.
 
 ## `manage_routines` action reference
 
@@ -114,7 +117,8 @@ manage_routines(action="run", name="x", agent="agent_slug", config={})
   keys and return an error string. This covers API responses, not your own
   report code — never turn it into a blanket `except` over the routine body.
 - One routine per task. Lead with code, be direct.
-- Test after writing (`manage_routines(action="run", ...)`) and fix until the output is clean.
+- Verify changed behavior within the task authority; a routine that can mutate
+  live state must not be executed merely to test its formatting.
 
 These are starting patterns, not a bypass — running a routine still goes through
 the normal execution/confirmation controls.

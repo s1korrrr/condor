@@ -31,7 +31,7 @@ Assume every grid level fills (worst case for LONG = price at start_price, worst
 
 ### Step 2 — Worst-Case Liquidation Price
 
-Using isolated-margin formula:
+Illustrative isolated-margin estimate (not an exchange liquidation calculation):
 
 - **LONG**: `liq_price = avg_entry × (1 - 1/leverage + maintenance_margin_rate)`
 - **SHORT**: `liq_price = avg_entry × (1 + 1/leverage - maintenance_margin_rate)`
@@ -41,7 +41,10 @@ Where `maintenance_margin_rate` depends on the exchange's position tier for the 
 - Tier 2 (medium): 0.5% (0.005)
 - Tier 3 (large): 1-2% (0.01-0.02)
 
-When in doubt, use the higher tier — it's conservative.
+Use the current venue margin model, tier schedule and account margin mode for an
+operational gate. Include fees/funding, liquidation mark basis and stop execution
+latency/slippage. If those inputs are unavailable, report the estimate and HOLD;
+a guessed higher tier does not establish a conservative bound.
 
 ### Step 3 — The Check
 
@@ -75,4 +78,6 @@ On **FAIL**, report:
 
 ### Why this matters
 
-`limit_price` only protects you if the exchange hasn't already liquidated you. At full fill with high leverage, liquidation can be closer than you think. This check guarantees your exit fires first — every time, before every deploy, no exceptions.
+`limit_price` only protects you if the exchange hasn't already liquidated you. At full fill with high leverage, liquidation can be closer than you think. This is a preflight estimate, not a guarantee that a stop will fill before liquidation.
+Validate the required execution buffer and approved risk rails; passing this check
+alone neither authorizes deployment nor proves liquidation protection.

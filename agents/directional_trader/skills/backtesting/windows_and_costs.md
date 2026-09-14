@@ -15,7 +15,7 @@ What follows is the part calibrated to directional trading.
 
 ## Window selection
 
-**Minimum by controller interval** (below this the trade count is never valid):
+**Illustrative windows by controller interval** (verify independent sample support):
 
 | Controller interval | Minimum window | Preferred      |
 |---------------------|----------------|----------------|
@@ -23,9 +23,9 @@ What follows is the part calibrated to directional trading.
 | 1h                  | 30 days        | 90–180 days    |
 | 1d                  | 90 days        | 180–365 days   |
 
-These are *directional* minimums: they exist to accumulate enough discrete
-entry/exit signals for the metrics to mean anything. A strategy that earns
-continuously rather than per-signal sizes its window differently.
+These are starting windows for directional exploration; duration alone cannot
+establish enough independent entry/exit observations or regime coverage. A strategy
+that earns continuously rather than per-signal sizes its window differently.
 
 **Rules:**
 - Prefer 3–6 months covering at least one full regime cycle (trend *and* range).
@@ -49,9 +49,8 @@ The general rule is in `backtest_flow`. Its directional application:
 
 ## Comparability
 
-You no longer record the window, resolution and cost by hand. Every row
-`backtest_chart` returns carries `start_date`, `end_date`, `resolution` and
-`trade_cost` alongside the metrics, so a sweep's table is self-describing and rows
-measured under different parameters cannot be silently ranked against each other.
-Check those columns match your intent before ranking — a row whose parameters
-differ from the rest of the grid is a mistake, not a winner.
+Each `backtest_chart` row carries window, resolution and cost columns; verify
+them before ranking. Also bind controller/config/data/adapter identities,
+decision-time semantics, continuous-account convention and comparable owner
+baseline. Keep spot and futures accounting separate. Metadata makes a comparison
+auditable; it does not itself establish comparability or prevent invalid ranking.

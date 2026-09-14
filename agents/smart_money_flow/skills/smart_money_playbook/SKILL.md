@@ -7,8 +7,10 @@ source: agent:smart_money_flow
 
 # Smart-Money Playbook (Directional Perps, any venue)
 
-The agent's edge is **capital-flow positioning**, not price patterns. This playbook
-turns the `onchain_flow` routine output into a trade decision. Execution is
+The research hypothesis is that **capital-flow proxies** inform positioning.
+Volume/price composites are not direct measurements of investor flows or proven
+edge. This playbook interprets `onchain_flow`; transactions require the approved
+venue, capital, leverage and action scope. Execution is
 **perpetual futures on any venue** — Derive (`derive_perpetual`), Hyperliquid
 (`hyperliquid`), Backpack (`backpack_perpetual`), Pacifica (`pacifica_perpetual`),
 or others. (Orca spot was dropped: Whirlpools are CLMM spot and cannot express the
@@ -19,15 +21,16 @@ directional/short side this composite needs.)
 | Signal | Source | What it tells you |
 |---|---|---|
 | Risk regime | CoinGecko `/global` (mcap 24h, top-asset dominance) | RISK-ON / RISK-OFF / NEUTRAL |
-| Per-asset flow score | `/coins/markets` volume-to-mcap + 24h change | How hard capital moves in/out of an asset |
+| Per-asset flow score | `/coins/markets` volume-to-mcap + 24h change | Volume/price proxy; not measured net capital flows |
 | Trending momentum | `/search/trending` | What is heating up across the market |
-| **Solana on-chain pulse** | GeckoTerminal SOL top pools | Crypto-native DeFi flow (vol, momentum, TVL) — the default signal. Solana carries materially deeper liquidity than XRPL. |
+| **Solana on-chain pulse** | GeckoTerminal SOL top pools | DeFi activity proxy (volume, momentum, TVL); verify actual pool liquidity. |
 | XRPL pulse (optional) | XRPL JSON-RPC AMM/wallets | Legacy cross-check, off by default |
 
 **Flow score scale:** normalized −1 (strong outflow/down) … +1 (strong inflow/up).
-**Entry threshold (DEMO MODE):** `|flow_score| >= 0.05`, ANY regime — direction is
-the sign of the flow. If no asset clears 0.05, open the largest-|flow| asset anyway
-(unless all |flow| < 0.02).
+**Illustrative research threshold:** `|flow_score| >= 0.05`; direction is the
+sign of the proxy. Use only thresholds accepted for the experiment/strategy.
+If none qualifies, HOLD. A demo label does not prove paper isolation or authorize
+orders; verify the actual execution mode and account before any transaction.
 
 ## Decision matrix (Derive perps)
 
@@ -35,20 +38,20 @@ the sign of the flow. If no asset clears 0.05, open the largest-|flow| asset any
 |---|---|---|
 | any | asset ≥ +0.05 | **LONG** that asset (top flow first) |
 | any | asset ≤ −0.05 | **SHORT** that asset |
-| any | no asset clears \|flow\| ≥ 0.05 | open the largest-\|flow\| asset (sign of flow); HOLD only if all \|flow\| < 0.02 |
+| any | no asset clears \|flow\| ≥ 0.05 | **HOLD**; do not force a below-threshold entry |
 
-## Why this lane is open
-Botcamp (110 strategies) is saturated with MM, funding arb, trend-following, and
-pairs trading. **None trade capital-flow as the primary signal.** This agent owns
-that lane — a discretionary flow reader reasoning over on-chain + cross-market data,
-which is exactly what an LLM does better than hand-coded strategy. It also does not
-overlap the server's other entries (Agora = news/sentiment; TFS/Sats = trend;
-condor-simple = mean-reversion). Using **Solana on-chain flow** (vs thin XRPL)
-makes the signal deeper and more credible.
+## Evidence needed
+Compare this flow-proxy hypothesis with an owner-equivalent baseline using
+decision-time data, full execution costs, independent support and held-out periods.
+Liquidity and cross-market coverage must be measured for the actual venue/window.
+Neither a distinctive narrative nor an LLM judgement establishes an edge.
 
 ## Risk rules (hard)
-- Max 2 concurrent positions. Max leverage 3x (5x only at flow conviction ≥ 0.7).
-- Respect `max_drawdown_pct` — Risk Engine enforces it.
+- Keep at most 2 concurrent positions and at most 3x leverage, with stricter
+  approved position/exposure limits taking precedence. Never raise leverage
+  based on a model conviction score. Missing approved limits mean HOLD.
+- Verify maximum daily loss, drawdown enforcement, monitoring, rollback and kill
+  switch in the actual runtime; do not assume a named Risk Engine enforces them.
 - No forced trades on ambiguous reads. Macro-print windows (≤30 min): halve size.
 
 ## Journaling

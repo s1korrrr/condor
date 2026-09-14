@@ -1,7 +1,9 @@
 ---
 name: log_analyzer
 description: AI-driven log analysis for active bots, executors, and gateway — anomaly detection and failure pattern recognition over Hummingbot logs, for both real-time monitoring and retrospective diagnostics.
-when_to_use: ANY request about the state/health of bot or system logs, errors, or warnings — checking, summarizing, triaging, finding recurring failure patterns, diagnosing why a bot is failing, or live log monitoring. Run the logs_summary routine for these, do NOT hand-roll with raw manage_bots. Triggers — "how are the logs", "how are the bots' logs", "any errors in the logs", "logs summary", "what's failing", "why is my bot erroring", "diagnose this bot", "watch the logs"; ES — "cómo están los logs", "hay errores", "resumen de logs", "por qué falla el bot".
+when_to_use: When summarizing or diagnosing Hummingbot bot/executor/Gateway logs,
+  or implementing explicitly requested log monitoring. Prefer logs_summary for
+  aggregate summaries; inspect specific logs when requested or when needed.
 created: 2026-06-26
 source: builtin
 references_routine: logs_summary
@@ -88,10 +90,9 @@ For "watch the logs" / live monitoring, build a **continuous routine**
 keeps a `seen` set of pattern fingerprints, and alerts via
 `context.bot.send_message` only on **new or spiking** patterns (don't re-report
 the same steady error every tick). Use a `LiveReport` to keep one always-current
-incident board. Hand the build to a background worker
-(`delegate(action="start", agent="condor", task="...")`) — it follows the
-`routine_cookbook` playbook — and tell it to reuse the `logs_summary`
-normalization/clustering logic as the core.
+incident board. Follow `routine_cookbook` and reuse the `logs_summary`
+normalization/clustering logic. Optional bounded delegation follows runtime
+routing policy; monitor only the requested scope and notification destination.
 
 ## Triage reference (common Hummingbot patterns)
 
@@ -105,8 +106,8 @@ normalization/clustering logic as the core.
 
 ## Reporting rules (non-negotiable)
 
-- **Always re-fetch** — never reuse a prior run's log counts; logs move every
-  second. Re-run before answering.
+- For current-health claims, fetch current evidence and report its timestamp.
+  For historical analysis, preserve the requested window and source snapshot.
 - Lead with the verdict: healthy vs. how many errors / active incidents. Then the
   top patterns, then the recommendation. `key: value`, not prose.
 - Quote the **normalized pattern** and a **count + last-seen age**, never a single
@@ -116,10 +117,9 @@ normalization/clustering logic as the core.
 
 ## Rules
 
-- Be direct and concise. Run `logs_summary` first for any summary/triage ask;
-  only hand-roll analysis when the routine's output isn't enough.
-- One routine per task; a real-time watcher must be tested before it is handed
-  over — the background worker does that as part of the job, so wait for its
-  report rather than announcing an untested watcher.
+- Prefer `logs_summary` for aggregate summaries; use narrow source logs for a
+  specific incident or when the routine is unavailable. State source limitations.
+- Verify a requested watcher within execution authority before claiming it works.
+  If delegated, collect its result; distinguish local checks from a running watcher.
 - Diagnosis is the deliverable — the counts are evidence, the cause + fix is the
   answer.

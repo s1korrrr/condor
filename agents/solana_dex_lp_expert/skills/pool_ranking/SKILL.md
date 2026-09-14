@@ -27,14 +27,16 @@ Goal: produce a ranked shortlist of Solana CLMM pools to LP into, quoted in `quo
 ## 3. Score — fee yield
 For each survivor: **fee_yield = fees(`ranking_window`) / reserve_usd**.
 - GeckoTerminal pool fields give volume + reserve; when a direct fee figure isn't present, estimate `fees ≈ volume(window) × pool_fee_pct`.
-- Higher fee_yield = more fee income per dollar of liquidity = better. This is the primary sort key.
+- Higher fee_yield ranks gross fee opportunity, not expected net LP return.
+  Disclose fee estimates, range occupancy, IL, adverse selection and transaction
+  costs; missing economics remain unavailable.
 
 ## 4. Sanity-check the top few
 - `explore_dex_pools(action="get_pool_info", connector=<venue>, network="solana-mainnet-beta", pool_address=...)` → live price, `bin_step`/`tick_spacing`, liquidity distribution.
 - `explore_geckoterminal(action="ohlcv", network="solana", pool_address=..., timeframe="1h")` → volatility (for range width) and trend. **Reject** pools in a steep one-directional dump (fees won't cover IL / you'll be single-sided into a falling knife).
 
 ## 5. Output
-Ranked list: `pool | venue | pair | TVL | vol(window) | fee_pct | fee_yield | bin_step/tick | price | trend`. Lead with the single best for the next free slot.
+Ranked list: `pool | venue | pair | TVL | vol(window) | fee_pct | fee_yield | bin_step/tick | price | trend`. Lead with the highest screened candidate and its limitations; selection does not authorize entry.
 
 ## Notes
 - Raydium pool-info comes from the Raydium API (not Gateway); Meteora/Orca via Gateway.

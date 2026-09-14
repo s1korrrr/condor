@@ -18,6 +18,7 @@ import {
   safeSourceUrl,
   researchLabel,
   displayResearchValue,
+  relationshipEvidence,
 } from "./research-detail";
 import "./research-detail.css";
 
@@ -659,19 +660,26 @@ export function ResearchInspector({
                     >
                       {text(item.title, text(item.id))}
                     </button>
-                    <small>
-                      {text(item.kind)} ·{" "}
+                    <small>{text(item.kind)}</small>
                       {edges
                         .filter(
                           (edge) =>
                             edge.source === item.id || edge.target === item.id,
                         )
-                        .map(
-                          (edge) =>
-                            `${text(edge.relation).replaceAll("_", " ")} · ${text(edge.basis, "basis unavailable")}`,
-                        )
-                        .join("; ") || "relation unavailable"}
-                    </small>
+                        .map((edge, index) => {
+                          const evidence = relationshipEvidence(edge, id);
+                          return <div key={index}>
+                            <small>{evidence.direction} · {text(edge.relation).replaceAll("_", " ")} · {text(edge.basis, "basis unavailable")}</small>
+                            {evidence.meaning && <p>{evidence.meaning}</p>}
+                            {(evidence.rule || evidence.hashes.length > 0) && (
+                              <details>
+                                <summary>Relationship provenance</summary>
+                                {evidence.rule && <p>Rule: {evidence.rule}</p>}
+                                {evidence.hashes.map((hash) => <p key={hash}>Source SHA-256: <code style={{ overflowWrap: "anywhere" }}>{hash}</code></p>)}
+                              </details>
+                            )}
+                          </div>;
+                        })}
                   </li>
                 ))}
               </ul>

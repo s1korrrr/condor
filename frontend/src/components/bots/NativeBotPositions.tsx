@@ -1,17 +1,7 @@
-import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { BotsPageResponse } from '@/lib/api';
 import { currentControllerPolicy } from '@/features/bots/observed-policy';
-import { authFetch } from '@/lib/auth-token';
-import { parseTradingVisualsSources, type TradingVisualsSource } from '@/features/trading-visuals/sources';
-import { buildBotPositionView, partitionBotInventory, numeric, type BotPairPosition } from '@/features/bots/position-view';
-
-async function read(path: string, signal: AbortSignal): Promise<unknown> {
-  const response = await authFetch(path, { signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]), cache: 'no-store' });
-  if (!response.ok) throw new Error(`Bot observation request failed (${response.status}).`);
-  return response.json();
-}
+import { numeric, type BotPairPosition } from '@/features/bots/position-view';
 const number = (value: unknown, unit = '') => { const n = numeric(value); return n === null ? '—' : `${n.toLocaleString(undefined, { maximumFractionDigits: 8 })}${unit ? ` ${unit}` : ''}`; };
 const label = (value: unknown) => typeof value === 'string' && value ? value.replaceAll('_', ' ') : '—';
 function Metric({ title, value, detail }: { title: string; value: string; detail?: string }) {
@@ -63,44 +53,4 @@ export function PairPosition({ row, bot, page, now, showLevels = true }: { row: 
 export function ObservationTable({rows,columns}: {rows:Record<string,unknown>[];columns:[string,string][]}) {
   const visible=columns.filter(([,key])=>rows.some(row=>row[key]!==null && row[key]!==undefined));
   return <div className="overflow-x-auto"><table className="w-full text-xs text-left"><thead><tr>{visible.map(([title,key])=><th key={key} className="py-3 pr-5 font-medium whitespace-nowrap">{title}</th>)}</tr></thead><tbody>{rows.map((row,i)=><tr key={i} className="border-t border-[var(--color-border)]">{visible.map(([,key])=><td key={key} className="py-3 pr-5 tabular-nums whitespace-nowrap">{row[key]===null || row[key]===undefined ? '—' : String(row[key])}</td>)}</tr>)}</tbody></table></div>;
-}
-function InventoryTable({rows,bot,page,now}: {rows:BotPairPosition[];bot:string;page?:BotsPageResponse;now:number}) {
-  return <div className="space-y-1">{rows.map(row=><details key={row.id} className="border-b border-[var(--color-border)] last:border-0">
-    <summary className="cursor-pointer list-none grid grid-cols-2 sm:grid-cols-4 gap-x-4 gap-y-2 py-3 text-xs" aria-label={`${row.pair} inventory details`}>
-      <span><strong className="block text-sm text-[var(--color-primary)]">{row.pair}</strong><span className="mt-1 block text-[var(--color-text-muted)]">{label(row.phase)}</span></span>
-      <span className="tabular-nums break-all"><span className="block text-[var(--color-text-muted)]">Managed net units</span>{row.quantity ?? '—'} {row.baseAsset}</span>
-      <span className="tabular-nums"><span className="block text-[var(--color-text-muted)]">Current market value</span>{number(row.markValue,row.quote)}</span>
-      <span className="tabular-nums"><span className="block text-[var(--color-text-muted)]">Open-position PnL</span>{number(row.bagPnl,row.quote)}<span className="block text-[var(--color-primary)] mt-1">Details</span></span>
-    </summary><PairPosition row={row} bot={bot} page={page} now={now}/></details>)}</div>;
-}
-export function BotPositionObservation({ payload, bot, now, page }: { payload: unknown; bot: string; now: number; page?:BotsPageResponse }) {
-  let view;
-  try { view = buildBotPositionView(payload, bot, now); } catch (error) { return <p role="status" className="text-sm text-[var(--color-yellow)]">{error instanceof Error ? error.message : 'Bot state could not be read.'}</p>; }
-  const completeOrders = view.orders !== null && view.ordersStatus.complete === true;
-  const {primary,small}=partitionBotInventory(view.pairs);
-  const missing:string[]=[];
-  if (!completeOrders) missing.push('complete exchange order detail');
-  if(view.pairs.some(row=>row.base===null)) missing.push('inventory quantities for some controllers');
-  if(view.pairs.some(row=>row.breakeven===null && row.base!==0)) missing.push('acquisition basis for some inventory');
-  if(view.pairs.some(row=>row.pendingSells===null || row.floor===null)) missing.push('detailed sell requests or trailing levels');
-  return <div className="space-y-4">
-    <dl className="flex flex-wrap gap-x-10 gap-y-4">{view.activeOrderCount!==null && <Metric title={view.orderCountLabel} value={number(view.activeOrderCount)} detail={completeOrders ? "Connector-tracked, including pending placement" : "Limit orders only; market orders excluded"} />}<Metric title="Active executors" value={number(view.activeExecutorCount)} /><Metric title="Observed at · UTC" value={new Date(view.observedAt).toISOString().replace('T',' ').replace('Z','')} /></dl>
-    <div aria-label="Observation coverage" className="text-xs leading-relaxed text-[var(--color-text-muted)] border-l-2 border-[var(--color-border)] pl-3"><p>Managed inventory combines open and closing position-executor net units and retained units. Controller episode bags already include their inventory and are counted once. This is not the whole account balance. Current market value is net units at the observed price, not gross entry spend; purchase amounts and paid fees are in Fills. Values use each pair’s quote currency. Open-position PnL combines executor net PnL and retained unrealized PnL, not lifetime strategy profit. Episode PnL is mark value less tracked cost, before exit costs.</p>{missing.length>0 && <p className="mt-1">This snapshot does not report {missing.join('; ')}. Only reported fields are shown in details; a dash marks a missing value. Account holdings remain in <Link className="underline" to="/portfolio">Portfolio</Link>.</p>}</div>
-    {completeOrders && <details className="rounded-lg border border-[var(--color-border)] p-3"><summary className="cursor-pointer text-sm">Inspect active orders ({view.orders!.length})</summary>{view.orders!.length ? <ObservationTable rows={view.orders!} columns={[
-      ['Pair','pair'], ['Side','side'], ['Price (quote)','price_quote'], ['Amount (base)','amount_base'], ['Filled (base)','filled_amount_base'], ['Remaining (base)','remaining_amount_base'], ['Status','status'],
-    ]}/> : <p className="mt-3 text-sm">No active orders in this owner observation.</p>}</details>}
-    {!!primary.length && <InventoryTable rows={primary} bot={bot} page={page} now={now}/>}
-    {!!small.length && <details className="rounded-lg border border-[var(--color-border)] px-4 py-3"><summary className="cursor-pointer text-sm">Small &amp; zero inventory ({small.length})</summary><p className="my-3 text-xs text-[var(--color-text-muted)]">Each position is below 1 unit of its quote currency with no active executor or reported pending sell. This display grouping is not a venue trading minimum. Exact reported quantities remain below.</p><InventoryTable rows={small} bot={bot} page={page} now={now}/></details>}
-    {!view.pairs.length && <p role="status" className="text-sm">No controller positions are included in this observation.</p>}
-  </div>;
-}
-function SourcePositions({ source, page }: { source: TradingVisualsSource; page?:BotsPageResponse }) {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => { const id = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(id); }, []);
-  const query = useQuery({ queryKey: ['native-position-observation', source.server, source.bot], queryFn: ({ signal }) => read(`/api/v1/trading-visuals/bootstrap?bot=${encodeURIComponent(source.bot)}`, signal), refetchInterval: 10_000, retry: false });
-  return <section className="space-y-4" aria-label={`${source.bot} positions and orders`}><h2 className="text-base font-semibold">{source.bot}</h2>{query.isPending ? <p role="status">Reading bot positions and orders…</p> : query.isError ? <p role="alert" className="text-sm">{query.error.message} <button className="underline" onClick={() => void query.refetch()}>Retry</button></p> : <BotPositionObservation page={page} payload={query.data} bot={source.bot} now={Math.max(now, query.dataUpdatedAt)} />}</section>;
-}
-export function NativeBotPositions({ server, page }: { server: string; page?:BotsPageResponse }) {
-  const query = useQuery({ queryKey: ['native-position-sources', server], queryFn: async ({ signal }) => parseTradingVisualsSources(await read('/api/v1/trading-visuals/sources', signal)).filter(source => source.server === server), retry: false, refetchInterval: 30_000 });
-  return <div className="space-y-6">{query.isPending ? <p role="status">Discovering bot position sources…</p> : query.isError ? <p role="alert">{query.error.message} <button className="underline" onClick={() => void query.refetch()}>Retry</button></p> : query.data?.length ? query.data.map(source => <SourcePositions key={`${source.server}:${source.bot}`} source={source} page={page} />) : <p role="status">No authorized bot position source is available for this server.</p>}</div>;
 }

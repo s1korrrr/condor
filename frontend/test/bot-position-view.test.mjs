@@ -42,11 +42,12 @@ test('different controller holdings never leak through a shared pair',()=>{const
 test('real position panel renders levels, scope and drilldowns; stale observations suppress all old prices',async()=>{
  const React=await import('react');const {renderToStaticMarkup}=await import('react-dom/server');
  const {load}=frontendModules({'react-router-dom':{Link:({to,children,...rest})=>React.createElement('a',{href:to,...rest},children)}});
- const {BotPositionObservation}=load('components/bots/NativeBotPositions.tsx');
- const html=renderToStaticMarkup(React.createElement(BotPositionObservation,{payload:snapshot(),bot:'ok_rsi',now}));
+ const {CommandDeskObservation}=load('components/bots/NativeBotCommandDesk.tsx');
+ const props={payload:snapshot(),bot:'ok_rsi',now,section:'positions',selected:null,onSelect:()=>{}};
+ const html=renderToStaticMarkup(React.createElement(CommandDeskObservation,props));
  for(const text of ['Active limit orders','Managed net units','Current market value','Open-position PnL','Controller plan and gates','Observed price levels','Planned bag reduction','before exit costs','record=fills'])assert.ok(html.includes(text),text);
  assert.doesNotMatch(html,/No active orders/);
- const stale=renderToStaticMarkup(React.createElement(BotPositionObservation,{payload:snapshot(),bot:'ok_rsi',now:now+31000}));
+ const stale=renderToStaticMarkup(React.createElement(CommandDeskObservation,{...props,now:now+31000}));
  assert.match(stale,/stale/);assert.doesNotMatch(stale,/1,100|ETH-USDC|Bag holding/);
 });
 

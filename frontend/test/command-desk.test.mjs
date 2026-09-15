@@ -48,12 +48,33 @@ test('owner-keyed pending command survives remount without leaking to another ow
   assert.match(show('main'),/Awaiting a fresh owner state transition/);
   assert.doesNotMatch(show('sui'),/Await owner evidence|Awaiting a fresh owner state transition/);
   assert.match(show('main'),/Awaiting a fresh owner state transition/);
+  const newer={submitted:{bootId:boot,sequence:5,action:'start'},receipt:null,requestId:'newer',pending:true};
+  client.setQueryData(['native-control-session','server','main'],newer);
+  mutations[0].onSuccess({result:{httpStatus:409,body:{detail:'Late rejected stop'}},expected:{botName:'main',action:'stop',bootId:boot,instanceId:'instance'}},{action:'stop',requestId:'older'});
+  mutations[0].onError(new Error('Late timeout'),{action:'stop',requestId:'older'});
+  assert.deepEqual(client.getQueryData(['native-control-session','server','main']),newer);
+  assert.match(show('main'),/Awaiting owner/);
+  mutations[0].onError(new Error('Current request timed out'),{action:'start',requestId:'newer'});
+  const uncertain=client.getQueryData(['native-control-session','server','main']);
+  assert.equal(uncertain.pending,false);
+  assert.equal(uncertain.receipt.state,'unknown');
+  assert.deepEqual(uncertain.submitted,newer.submitted);
   // A late response from the old authenticated session must not repopulate cache.
   revision++;
   client.clear();
-  mutations[0].onError(new Error('Session changed while command was in flight'));
+  mutations[0].onError(new Error('Session changed while command was in flight'),{action:'stop',requestId:'older'});
   mutations[0].onSettled();
   assert.equal(client.getQueryData(['native-control-session','server','main']),undefined);
  } finally { client.clear(); }
  assert.equal(client.getQueryData(['native-control-session','server','main']),undefined);
+});
+
+test('native command transport has a bounded wait without converting timeout to rejection',async()=>{
+ const originalTimeout=AbortSignal.timeout;let deadline;
+ AbortSignal.timeout=ms=>{deadline=ms;return AbortSignal.abort(new DOMException('Timeout','TimeoutError'));};
+ const {load}=frontendModules({'./auth-token':{authFetch:async(_path,init)=>{init.signal.throwIfAborted();}}});
+ try {
+  await assert.rejects(load('lib/api.ts').api.nativeBotCommand('server','main','stop'),{name:'TimeoutError'});
+  assert.equal(deadline,65000);
+ } finally {AbortSignal.timeout=originalTimeout;}
 });

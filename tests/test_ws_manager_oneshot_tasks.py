@@ -34,6 +34,8 @@ class _FakeDataType:
 
 def _manager_with_subscriber(channel: str) -> tuple[WebSocketManager, _FakeWS]:
     manager = WebSocketManager()
+    # This fixture isolates task ownership; authorization has dedicated tests.
+    manager._authorized = lambda *_: True
     ws = _FakeWS()
     conn = _Connection(ws, user_id=1)
     conn.channels.add(channel)

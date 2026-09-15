@@ -141,6 +141,15 @@ def create_app() -> FastAPI:
     if dist.is_dir():
         index_html = dist / "index.html"
         dist_root = dist.resolve()
+        # The dashboard shell needs only bundled same-origin scripts. Keep this
+        # policy off authenticated report documents and developer API docs.
+        shell_headers = {
+            "Cache-Control": "no-cache",
+            "Content-Security-Policy": "script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'",
+            "X-Content-Type-Options": "nosniff",
+            "X-Frame-Options": "SAMEORIGIN",
+            "Referrer-Policy": "same-origin",
+        }
         app.mount(
             "/assets", StaticFiles(directory=str(dist / "assets")), name="static-assets"
         )
@@ -178,9 +187,9 @@ def create_app() -> FastAPI:
                 ):
                     if candidate == index_html.resolve():
                         return FileResponse(
-                            candidate, headers={"Cache-Control": "no-cache"}
+                            candidate, headers=shell_headers
                         )
                     return FileResponse(candidate)
-            return FileResponse(index_html, headers={"Cache-Control": "no-cache"})
+            return FileResponse(index_html, headers=shell_headers)
 
     return app

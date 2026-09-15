@@ -1053,7 +1053,9 @@ export const api = {
 
   nativeBotCommand: async (server: string, botName: string, action: NativeAction): Promise<NativeCommandResult> => {
     if (action !== "start" && action !== "stop") throw new Error("Unknown native lifecycle action");
-    const response = await authFetch(nativeBotPath(server, botName, action), {method: "POST"});
+    // Exceed the server's 5s preflight + 55s command deadline, but do not leave
+    // a browser request pending forever. Aborting is an unknown outcome, not a retry.
+    const response = await authFetch(nativeBotPath(server, botName, action), {method: "POST", signal: AbortSignal.timeout(65_000)});
     const body: unknown = await response.json();
     if (!body || typeof body !== "object" || Array.isArray(body)) throw new Error("Native command returned no usable acknowledgement");
     return {httpStatus: response.status, body: body as Record<string, unknown>};

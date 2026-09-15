@@ -97,6 +97,7 @@ GOLDEN_REST = {
                 "trading_pair": "BTC-USDT",
                 "manual_kill_switch": False,
             },
+            "custom_info": {},
         },
         {
             "controller_name": "quiet_ctrl",
@@ -114,6 +115,7 @@ GOLDEN_REST = {
             "positions_summary": [],
             "deployed_at": "2026-07-01T00:00:00Z",
             "config": {},
+            "custom_info": {},
         },
     ],
     "bots": [
@@ -163,6 +165,7 @@ GOLDEN_WS = {
             "positions_summary": [{"pair": "BTC-USDT"}],
             "deployed_at": None,
             "config": {},
+            "custom_info": {},
         },
         {
             "controller_name": "quiet_ctrl",
@@ -180,6 +183,7 @@ GOLDEN_WS = {
             "positions_summary": [],
             "deployed_at": None,
             "config": {},
+            "custom_info": {},
         },
     ],
     "bots": [

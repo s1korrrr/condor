@@ -1,3 +1,5 @@
+import { expireSession, sessionRevision } from './auth-session';
+
 type MessageHandler = (channel: string, data: unknown, ts: number) => void;
 type ConnectHandler = () => void;
 
@@ -13,6 +15,7 @@ export class CondorWebSocket {
   private ws: WebSocket | null = null;
   private url: string;
   private token: string;
+  private authRevision: number;
   private handlers: Set<MessageHandler> = new Set();
   private connectHandlers: Set<ConnectHandler> = new Set();
   private channels: Set<string> = new Set();
@@ -27,6 +30,7 @@ export class CondorWebSocket {
     const proto = window.location.protocol === "https:" ? "wss:" : "ws:";
     this.url = `${proto}//${window.location.host}/api/v1/ws`;
     this.token = token;
+    this.authRevision = sessionRevision();
   }
 
   connect() {
@@ -92,6 +96,7 @@ export class CondorWebSocket {
     };
 
     this.ws.onmessage = (ev) => {
+      if (!this.shouldConnect || this.authRevision !== sessionRevision()) return;
       try {
         const msg = JSON.parse(ev.data);
         for (const handler of this.handlers) {
@@ -102,7 +107,12 @@ export class CondorWebSocket {
       }
     };
 
-    this.ws.onclose = () => {
+    this.ws.onclose = (event) => {
+      if (event.code === 4001 || event.code === 4003) {
+        this.shouldConnect = false;
+        expireSession(this.token, this.authRevision);
+        return;
+      }
       if (this.shouldConnect) {
         setTimeout(() => this._connect(), this.reconnectDelay);
         this.reconnectDelay = Math.min(

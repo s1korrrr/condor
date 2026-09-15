@@ -730,6 +730,13 @@ class ServerDataService:
             )
             health.record_error()
 
+            if key.data_type == ServerDataType.BOTS_STATUS:
+                from condor.performance_history import history
+                try:
+                    await asyncio.to_thread(history.record, key.server, [])
+                except Exception:
+                    logger.exception("Native performance history gap persistence failed for %s", key.server)
+
             # Record error on cache entry
             entry = self._cache.get(key)
             if entry:
@@ -749,6 +756,13 @@ class ServerDataService:
 
         latency_ms = (time.monotonic() - t0) * 1000
         health.record_success(latency_ms)
+
+        if key.data_type == ServerDataType.BOTS_STATUS:
+            from condor.performance_history import history
+            try:
+                await asyncio.to_thread(history.record, key.server, result)
+            except Exception:
+                logger.exception("Native performance history persistence failed for %s", key.server)
 
         old_entry = self._cache.get(key)
         old_value = old_entry.value if old_entry else None

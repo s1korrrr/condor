@@ -9,6 +9,22 @@ const positive = (value: unknown) => { const n = numeric(value); return n !== nu
 const rows = (value: unknown) => Array.isArray(value) ? value.map(object) : null;
 const text = (value: unknown) => typeof value === 'string' && value.trim() && value !== 'n/a' ? value : null;
 function sum(values: (number | null)[]) { return values.every(value => value !== null) ? values.reduce<number>((total, value) => total + value!, 0) : null; }
+// Preserve the owner-reported decimal units; convert only the final display value to Number.
+function quantitySum(values: unknown[]): string | null {
+  const parts = values.map(value => {
+    if (nonnegative(value) === null) return null;
+    const match = String(value).match(/^\+?(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/i);
+    if (!match) return null;
+    const scale = (match[2]?.length ?? 0) - Number(match[3] ?? 0);
+    if (Math.abs(scale) > 100) return null;
+    return { units: BigInt((match[1] || '0') + (match[2] || '')), scale };
+  });
+  if (parts.some(part => part === null)) return null;
+  const scale = Math.max(0, ...parts.map(part => part!.scale));
+  const units = parts.reduce((total, part) => total + part!.units * 10n ** BigInt(scale - part!.scale), 0n);
+  const digits = units.toString().padStart(scale + 1, '0');
+  return scale ? `${digits.slice(0, -scale)}.${digits.slice(-scale)}`.replace(/\.?0+$/, '') : digits;
+}
 export type BotPairPosition = {
   id: string; controllerId: string | null; uniquePair: boolean; pair: string; baseAsset: string; quote: string; price: number | null; base: number | null;
   markValue: number | null; breakeven: number | null; bagPnl: number | null; inventorySource: string;
@@ -24,6 +40,11 @@ export function buildBotPositionView(payload: unknown, bot: string, now: number)
   if (!Number.isFinite(timestamp) || threshold === null || timestamp > now + 5_000 || now - timestamp >= Math.min(threshold, 30) * 1000) throw new Error('Current bot state is unavailable: the owner observation is missing, stale or has clock skew.');
   const controllers = rows(runtime.controllers), positions = rows(runtime.positions_held), executors = rows(runtime.active_executors);
   if (!controllers || !executors) throw new Error('The runtime observation is incomplete.');
+  // Lifecycle includes closing executors until the owner transfers their inventory.
+  // Never add both lists: active executors are a subset of this non-done set.
+  const lifecycle = runtime.lifecycle_executors === undefined ? executors : rows(runtime.lifecycle_executors);
+  if (!lifecycle) throw new Error('The executor lifecycle observation is incomplete.');
+  if (executors.some(active => !lifecycle.some(row => row.executor_id === active.executor_id && row.pair === active.pair && row.controller_id === active.controller_id))) throw new Error('Active and lifecycle executor observations disagree.');
   const identities = controllers.map(row => text(row.controller_id)).filter(Boolean);
   if (new Set(identities).size !== identities.length) throw new Error('Controller identity is duplicated in this observation.');
   const pairs: BotPairPosition[] = controllers.map((controller, index) => {
@@ -33,23 +54,26 @@ export function buildBotPositionView(payload: unknown, bot: string, now: number)
     const id = text(controller.controller_id), single = controllers.filter(row => row.pair === pair).length === 1;
     const matches = (row: Row) => row.pair === pair && (id && row.controller_id ? row.controller_id === id : single);
     const failedObservation = controller.observation_status === 'unavailable';
-    const ambiguousInventory = !single && (!id || positions?.some(row => row.pair === pair && !text(row.controller_id)));
-    const held = failedObservation || ambiguousInventory ? undefined : positions?.filter(matches), active = executors.filter(matches);
+    const ambiguousInventory = !single && (!id || [...(positions ?? []), ...lifecycle].some(row => row.pair === pair && !text(row.controller_id)));
+    const held = failedObservation || ambiguousInventory ? undefined : positions?.filter(matches), active = lifecycle.filter(matches);
     const info = failedObservation ? {} : object(controller.custom_info), episode = object(info.episode), trail = object(info.trailing_policy);
     const hasEpisode = !failedObservation && episode.enabled === true;
-    const base = hasEpisode ? nonnegative(episode.base) : held ? sum(held.map(row => nonnegative(row.amount_base))) : null;
+    const executorIds = active.map(row => text(row.executor_id));
+    const completeActive = active.every(row => row.side === 'buy' && row.executor_type === 'position') && executorIds.every(Boolean) && new Set(executorIds).size === executorIds.length;
+    const quantity = hasEpisode ? nonnegative(episode.base) === null ? null : String(episode.base) : held && completeActive ? quantitySum([...held.map(row => row.amount_base), ...active.map(row => row.remaining_position_amount_base)]) : null;
+    const base = quantity === null ? null : nonnegative(quantity);
     const price = positive(controller.price_quote), cost = hasEpisode && episode.cost_known === true ? nonnegative(episode.cost) : null;
     const markValue = base !== null && price !== null ? base * price : null;
-    const basisCost = held?.length ? sum(held.map(row => { const amount = nonnegative(row.amount_base), basis = positive(row.breakeven_price); return amount !== null && basis !== null ? amount * basis : null; })) : null;
+    const basisCost = !active.length && held?.length ? sum(held.map(row => { const amount = nonnegative(row.amount_base), basis = positive(row.breakeven_price); return amount !== null && basis !== null ? amount * basis : null; })) : null;
     const breakeven = base !== null && base > 0 ? hasEpisode ? cost === null ? null : cost / base : basisCost === null ? null : basisCost / base : null;
-    const bagPnl = hasEpisode ? cost !== null && markValue !== null ? markValue - cost : null : held?.length ? sum(held.map(row => numeric(row.unrealized_pnl_quote))) : null;
+    const bagPnl = hasEpisode ? cost !== null && markValue !== null ? markValue - cost : null : base !== null && (held?.length || active.length) ? sum([...(held ?? []).map(row => numeric(row.unrealized_pnl_quote)), ...active.map(row => numeric(row.net_pnl_quote))]) : null;
     const phase = text(episode.phase) ?? text(controller.state), targetBase = hasEpisode ? nonnegative(episode.target_base) : null;
     // This is an inventory objective. The execution owner still sizes, quantizes and gates each order.
     const plannedReduction = hasEpisode && ['DISTRIBUTE', 'EXIT'].includes(phase ?? '') && base !== null && targetBase !== null && targetBase <= base ? base - targetBase : null;
     return { id: id ?? `${pair}:${index}`, controllerId: id, uniquePair: single, pair, baseAsset, quote, price, base, markValue, breakeven, bagPnl,
-      inventorySource: failedObservation ? 'Controller observation unavailable' : hasEpisode ? 'Controller episode bag' : 'Retained bot inventory', phase,
+      inventorySource: failedObservation ? 'Controller observation unavailable' : hasEpisode ? 'Controller episode bag' : 'Managed bot inventory · executor + retained', phase,
       reason: failedObservation ? 'Controller observation unavailable' : text(episode.reason) ?? text(controller.gate), hold: text(episode.hold_reason), riskClear: typeof episode.exit_risk_clear === 'boolean' ? episode.exit_risk_clear : null,
-      quantity: base === null ? null : hasEpisode ? String(episode.base) : held?.length === 1 ? String(held[0].amount_base) : String(base), inventoryEntries: hasEpisode ? [] : held ?? [],
+      quantity, inventoryEntries: hasEpisode ? [] : held ?? [],
       profitPrice: positive(episode.minimum_profit_price), floor: positive(trail.floor), peak: positive(trail.peak), plannedReduction, targetBase,
       planNext: text(controller.plan_next), executors: active, pendingSells: rows(info.pending_sell_requests)?.map(request => ({ ...request, request_state: request.termination_requested === true ? 'Cancellation requested' : positive(request.expires_at) !== null && now >= positive(request.expires_at)! * 1000 ? 'Expiry reached; awaiting owner' : request.termination_requested === false ? 'Pending owner request' : 'Request state unavailable' })) ?? null, pendingSellsTruncated: info.pending_sell_requests_truncated === true };
   });

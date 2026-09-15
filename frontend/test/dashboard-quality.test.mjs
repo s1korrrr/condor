@@ -14,7 +14,7 @@ test('legacy inventory stays compact, retains tiny owner units and has one sourc
  const {BotPositionObservation}=load('components/bots/NativeBotPositions.tsx');const now=Date.now();
  const payload={monitoring:{bot_name:'b',stale_threshold_seconds:30},runtime_status:{bot_name:'b',updated_at:new Date(now).toISOString(),active_orders_count:0,controllers:[{pair:'ETH-USDC',price_quote:2000,state:'WAIT'}],positions_held:[{pair:'ETH-USDC',amount_base:'0.000000000012345678',breakeven_price:1000}],active_executors:[]}};
  const html=renderToStaticMarkup(React.createElement(BotPositionObservation,{payload,bot:'b',now}));
- assert.match(html,/Retained bot inventory/);assert.match(html,/Small &amp; zero inventory/);assert.match(html,/0.000000000012345678/);assert.doesNotMatch(html,/Unavailable|Bag holding/);
+ assert.match(html,/Managed bot inventory/);assert.match(html,/Small &amp; zero inventory/);assert.match(html,/0.000000000012345678/);assert.doesNotMatch(html,/Unavailable|Bag holding/);
  assert.equal((html.match(/aria-label="Observation coverage"/g)||[]).length,1);
 });
 test('research summaries use bounded titles, preserve full rationale and distinguish attempts',()=>{

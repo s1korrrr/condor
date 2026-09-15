@@ -487,6 +487,14 @@ class ServerDataService:
 
     # ------ Lifecycle ------
 
+    @property
+    def is_running(self) -> bool:
+        return self._running
+
+    @property
+    def has_subscriptions(self) -> bool:
+        return bool(self._subscriptions)
+
     def start(self) -> None:
         if self._running:
             return

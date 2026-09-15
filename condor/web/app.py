@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import os
+from contextlib import asynccontextmanager
 from pathlib import Path
 from urllib.parse import urlparse
+from uuid import uuid4
 
 from fastapi import FastAPI, HTTPException, Request
 from fastapi.exception_handlers import request_validation_exception_handler
@@ -57,8 +59,30 @@ def _build_cors_origins() -> list[str]:
     return origins
 
 
+@asynccontextmanager
+async def _performance_observer_lifespan(app: FastAPI):
+    """Keep native observations running without a browser or Telegram process."""
+    from config_manager import get_config_manager
+    from condor.server_data_service import get_server_data_service, ServerDataType
+
+    service = get_server_data_service()
+    started_here = not service.is_running
+    subscriber = f"web-performance-{uuid4().hex}"
+    service.start()
+    try:
+        for server in get_config_manager().list_servers():
+            await service.subscribe(server, ServerDataType.BOTS_STATUS, subscriber)
+        yield
+    finally:
+        service.unsubscribe_all(subscriber)
+        # Never stop a pre-existing owner, or consumers added during this lifespan.
+        if started_here and not service.has_subscriptions:
+            service.stop()
+
+
 def create_app() -> FastAPI:
-    app = FastAPI(title="Condor Dashboard API", version="0.1.0")
+    app = FastAPI(title="Condor Dashboard API", version="0.1.0",
+                  lifespan=_performance_observer_lifespan)
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, error: RequestValidationError):

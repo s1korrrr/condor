@@ -84,6 +84,7 @@ async def test_background_fetch_records_and_failure_marks_gap(monkeypatch):
     from unittest.mock import AsyncMock, Mock
     from condor import performance_history
     from condor.server_data_service import ServerDataService, ServerDataType, CacheKey
+
     observer = Mock()
     monkeypatch.setattr(performance_history, "history", observer)
     sds = ServerDataService()
@@ -96,6 +97,56 @@ async def test_background_fetch_records_and_failure_marks_gap(monkeypatch):
     fetch.side_effect = RuntimeError("offline")
     await sds._do_fetch_and_cache(key)
     observer.record.assert_called_with("server", [])
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "shared,added_consumer", [(False, False), (True, False), (False, True)]
+)
+async def test_headless_lifespan_observes_only_bots_and_preserves_shared_owner(
+    monkeypatch, shared, added_consumer
+):
+    from types import SimpleNamespace
+    from unittest.mock import AsyncMock, Mock
+    from condor import server_data_service as module
+    from condor import performance_history
+    from condor.web.app import create_app
+    import config_manager
+
+    sds = module.ServerDataService()
+    monkeypatch.setattr(module, "get_server_data_service", lambda: sds)
+    monkeypatch.setattr(
+        config_manager,
+        "get_config_manager",
+        lambda: SimpleNamespace(list_servers=lambda: {"native": {}}),
+    )
+    monkeypatch.setattr(sds, "_get_client", AsyncMock(return_value=object()))
+    observer = Mock()
+    monkeypatch.setattr(performance_history, "history", observer)
+    fetch = AsyncMock(return_value=[packet()])
+    sds.register_fetch(module.ServerDataType.BOTS_STATUS, fetch)
+    if shared:
+        sds.start()
+    app = create_app()
+    try:
+        async with app.router.lifespan_context(app):
+            assert sds._running
+            assert {key.data_type for key in sds._subscriptions} == {
+                module.ServerDataType.BOTS_STATUS
+            }
+            observer.record.assert_called_with("native", [packet()])
+            # No browser request: another background tick still fetches.
+            next(iter(sds._cache.values())).fetched_at = 0
+            await sds._poll_tick()
+            assert fetch.await_count >= 2
+            if added_consumer:
+                await sds.subscribe(
+                    "native", module.ServerDataType.BOTS_STATUS, "other"
+                )
+        assert sds._running is (shared or added_consumer)
+        assert bool(sds._subscriptions) is added_consumer
+    finally:
+        sds.stop()
 
 
 def test_route_authorization_and_range(monkeypatch, tmp_path):

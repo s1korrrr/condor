@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient, skipToken } from "@tanstack/react-query";
 import {
   Bot,
   ChevronDown,
@@ -20,7 +20,7 @@ import { AggregatedPnlChart } from "@/components/bots/AggregatedPnlChart";
 import { ControllerBrowser } from "@/components/bots/ControllerBrowser";
 import { DeployBotDialog } from "@/components/bots/DeployBotDialog";
 import { PnlSparkline } from "@/components/bots/PnlSparkline";
-import { NativeBotPositions } from "@/components/bots/NativeBotPositions";
+import { NativeBotCommandDesk } from "@/components/bots/NativeBotCommandDesk";
 import { FallbackSpinner } from "@/components/ui/FallbackSpinner";
 
 import { useRates } from "@/hooks/useRates";
@@ -31,6 +31,7 @@ import { api, type BotLogEntry, type BotSummary, type ControllerInfo, type Contr
 import { formatCurrencyPnl, formatCurrencyVolume, pnlColor } from "@/lib/formatters";
 import { botPollingPolicy, botCountLabel, expireNativeBotPage, nativeBotQuote, observedFleetCounts, observedPnlColor } from "@/lib/bot-monitoring";
 import { nativeCommandOutcome, nativeControlEligibility, awaitingNativeOwnerTransition, type NativeAction } from "@/lib/native-bot-controls";
+import { sessionRevision } from '@/lib/auth-session';
 
 function formatUptime(deployedAt: string | null): string {
   if (!deployedAt) return "—";
@@ -408,8 +409,16 @@ function NativeBotControls({server,botName}: {server:string;botName:string}) {
   const queryClient=useQueryClient();
   const [now,setNow]=useState(Date.now);
   const [confirmation,setConfirmation]=useState<NativeAction|null>(null);
-  const [submitted,setSubmitted]=useState<{bootId:string;sequence:number;action:NativeAction}|null>(null);
-  const [receipt,setReceipt]=useState<{state:'verified'|'rejected'|'unknown';message:string}|null>(null);
+  const [authRevision]=useState(sessionRevision);
+  type Submitted = {bootId:string;sequence:number;action:NativeAction}|null;
+  type Receipt = {state:'verified'|'rejected'|'unknown';message:string}|null;
+  const sessionKey=['native-control-session',server,botName];
+  const session=useQuery<{submitted:Submitted;receipt:Receipt}>({queryKey:sessionKey,queryFn:skipToken,enabled:false,gcTime:Infinity});
+  const submitted=session.data?.submitted ?? null;
+  const receipt=session.data?.receipt ?? null;
+  // Keep unknown/pending outcomes across owner navigation. Auth changes clear the query cache.
+  const setSubmitted=(value:Submitted)=>{if(authRevision===sessionRevision())queryClient.setQueryData(sessionKey,(prior:{submitted:Submitted;receipt:Receipt}|undefined)=>({...prior,submitted:value}));};
+  const setReceipt=(value:Receipt)=>{if(authRevision===sessionRevision())queryClient.setQueryData(sessionKey,(prior:{submitted:Submitted;receipt:Receipt}|undefined)=>({...prior,receipt:value}));};
   useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),1000);return ()=>window.clearInterval(timer);},[]);
   const status=useQuery({queryKey:['native-bot-status',server,botName],queryFn:()=>api.getNativeBotStatus(server,botName),refetchInterval:5000,staleTime:0,retry:false});
   const allowedStart=capabilities?.capabilities?.native_start===true;
@@ -417,6 +426,7 @@ function NativeBotControls({server,botName}: {server:string;botName:string}) {
   const waitingForOwner=awaitingNativeOwnerTransition(submitted,eligibility);
   const mutation=useMutation({
     mutationFn:async(action:NativeAction)=>{
+      if(authRevision!==sessionRevision())throw new Error('Authentication session changed.');
       const current=nativeControlEligibility(status.isError?undefined:status.data,botName,access.botStop,allowedStart,Date.now());
       const expected={botName,action,bootId:current.bootId,instanceId:current.instanceId};
       if (!current.allowed || current.action!==action || waitingForOwner) return {result:{httpStatus:409,body:{detail:current.reason || 'Await fresh owner telemetry before requesting another transition.'}},expected};
@@ -436,6 +446,7 @@ function NativeBotControls({server,botName}: {server:string;botName:string}) {
       setConfirmation(null);
     },
     onSettled:()=>{
+      if(authRevision!==sessionRevision())return;
       queryClient.invalidateQueries({queryKey:['native-bot-status',server,botName]});
       queryClient.invalidateQueries({queryKey:['bots',server]});
     },
@@ -753,6 +764,12 @@ export function ActiveBotsTab() {
   if (!server) {
     return <NoServerCard message="Select a server from the sidebar to view active bots." />;
   }
+  if (access.native) return <NativeBotCommandDesk page={error ? undefined : data}
+    renderControls={botName=><NativeBotControls key={`${server}:${botName}`} server={server} botName={botName}/>}
+    renderLogs={botName=>{const bot=bots.find(item=>item.bot_name===botName);return bot ? <LogsSection logs={[
+      ...(bot.error_logs ?? []).map(log=>({...log,log_category:'error' as const})),
+      ...(bot.general_logs ?? []).map(log=>({...log,log_category:'general' as const})),
+    ].sort((a,b)=>(b.timestamp??0)-(a.timestamp??0))}/> : null;}}/>;
   if (isLoading) return <FallbackSpinner />;
   if (error)
     return (
@@ -792,11 +809,6 @@ export function ActiveBotsTab() {
       </div>
     );
   }
-
-  if (access.native) return <div className="space-y-6">
-    {bots.length > 0 ? <BotsSection bots={bots} server={server} onStopInitiated={onStopInitiated} onStopSettled={onStopSettled} /> : <p role="status" className="text-sm text-[var(--color-text-muted)]">Bot lifecycle observations are unavailable for this server.</p>}
-    <NativeBotPositions key={server} server={server} page={error ? undefined : data} />
-  </div>;
 
   return (
     <div className="space-y-6">

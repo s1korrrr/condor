@@ -17,7 +17,7 @@ const label = (value: unknown) => typeof value === 'string' && value ? value.rep
 function Metric({ title, value, detail }: { title: string; value: string; detail?: string }) {
   return <div><dt className="text-xs text-[var(--color-text-muted)]">{title}</dt><dd className="mt-1 font-semibold tabular-nums text-sm">{value}</dd>{detail && <dd className="mt-1 text-xs text-[var(--color-text-muted)]">{detail}</dd>}</div>;
 }
-function PriceLevels({ row }: { row: BotPairPosition }) {
+export function PriceLevels({ row }: { row: BotPairPosition }) {
   const levels = [
     { name: 'Breakeven', value: row.breakeven, color: '#94a3b8' },
     { name: 'Minimum profit price', value: row.profitPrice, color: '#d5ae66' },
@@ -35,7 +35,7 @@ function PriceLevels({ row }: { row: BotPairPosition }) {
     <dl className="flex flex-wrap gap-x-6 gap-y-3">{levels.map(item => <div key={item.name} className="text-xs"><dt className="flex items-center gap-1.5 text-[var(--color-text-muted)]"><span className="inline-block h-2 w-2 rounded-full" style={{ background: item.color }} />{item.name}</dt><dd className="mt-1 tabular-nums">{number(item.value)}</dd></div>)}</dl>
   </figure>;
 }
-function PairPosition({ row, bot, page, now }: { row: BotPairPosition; bot: string; page?:BotsPageResponse; now:number }) {
+export function PairPosition({ row, bot, page, now, showLevels = true }: { row: BotPairPosition; bot: string; page?:BotsPageResponse; now:number; showLevels?:boolean }) {
   const to = `/trading-visuals?bot=${encodeURIComponent(bot)}&pair=${encodeURIComponent(row.pair)}`;
   const policy=currentControllerPolicy(page,bot,row,now);
   const metrics = [
@@ -45,7 +45,7 @@ function PairPosition({ row, bot, page, now }: { row: BotPairPosition; bot: stri
   ] as const;
   return <div className="space-y-4 p-4 bg-[var(--color-bg)]/40">
     <div className="flex flex-wrap justify-between gap-3"><p className="text-xs text-[var(--color-text-muted)]">{row.inventorySource} · {row.id}</p><div className="flex gap-4 text-sm text-[var(--color-primary)]"><Link to={`${to}&view=charts`}>Chart</Link><Link to={`${to}&view=activity&record=fills`}>Fills</Link></div></div>
-    <PriceLevels row={row} />
+    {showLevels && <PriceLevels row={row} />}
     {policy && <div><h4 className="text-sm font-medium">Observed trailing policy and operator state</h4><p className="mt-1 text-xs text-[var(--color-text-muted)]">Native controller telemetry · {policy.controllerId} · received {new Date(policy.receivedAt*1000).toISOString()} UTC. Policy settings do not establish an armed trailing price.</p><dl className="mt-3 grid grid-cols-2 lg:grid-cols-3 gap-3">{policy.fields.map(([title,value])=><Metric key={title} title={title} value={value}/>)}</dl></div>}
     {metrics.some(([,value]) => value !== null) && <dl className="grid grid-cols-2 gap-4 lg:grid-cols-4">{metrics.filter(([,value])=>value!==null).map(([title,value,unit])=><Metric key={title} title={title} value={number(value,unit)}/>)}</dl>}
     {row.quantity !== null && <p className="text-xs break-all">Observed inventory units: <span className="tabular-nums">{row.quantity} {row.baseAsset}</span></p>}
@@ -60,7 +60,7 @@ function PairPosition({ row, bot, page, now }: { row: BotPairPosition; bot: stri
     ]}/></div>}
   </div>;
 }
-function ObservationTable({rows,columns}: {rows:Record<string,unknown>[];columns:[string,string][]}) {
+export function ObservationTable({rows,columns}: {rows:Record<string,unknown>[];columns:[string,string][]}) {
   const visible=columns.filter(([,key])=>rows.some(row=>row[key]!==null && row[key]!==undefined));
   return <div className="overflow-x-auto"><table className="w-full text-xs text-left"><thead><tr>{visible.map(([title,key])=><th key={key} className="py-3 pr-5 font-medium whitespace-nowrap">{title}</th>)}</tr></thead><tbody>{rows.map((row,i)=><tr key={i} className="border-t border-[var(--color-border)]">{visible.map(([,key])=><td key={key} className="py-3 pr-5 tabular-nums whitespace-nowrap">{row[key]===null || row[key]===undefined ? '—' : String(row[key])}</td>)}</tr>)}</tbody></table></div>;
 }

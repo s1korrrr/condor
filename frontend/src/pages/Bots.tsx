@@ -51,7 +51,7 @@ export function Bots() {
 
   return (
     <div className="space-y-6">
-      <header><h1 className="text-xl font-bold">Bots</h1><p className="mt-1 text-sm text-[var(--color-text-muted)]">{server ?? "No server selected"} · {access.native ? "Native runtime" : "Server workspace"}</p></header>
+      <header><h1 className="text-xl font-bold">Bots</h1><p className="mt-1 text-sm text-[var(--color-text-muted)]">{server ?? "No server selected"} · {access.native ? "Bot inventory and next decisions" : "Server workspace"}</p></header>
       {unavailableReason && <p role="status">{unavailableReason}</p>}
       {/* Tab bar */}
       {(!access.native || currentTab !== "active") && <div className="flex items-center gap-1 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-1 w-fit">

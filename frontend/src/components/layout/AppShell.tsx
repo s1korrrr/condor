@@ -31,7 +31,7 @@ import { ServerSelector } from "./ServerSelector";
 
 const NAV_ITEMS = [
   { to: "/operations", icon: Activity, label: "Operations" },
-  { to: "/overview", icon: ChartNoAxesCombined, label: "Overview" },
+  { to: "/capital", icon: ChartNoAxesCombined, label: "Capital" },
   { to: "/research", icon: Network, label: "Research" },
   { to: "/", icon: Brain, label: "Agents" },
   { to: "/portfolio", icon: Wallet, label: "Portfolio" },
@@ -67,8 +67,8 @@ function AppShellBody() {
   const { hasKeys, isLoading: keysLoading } = useCredentials();
   const { data: serverStatus, access, isLoading: capabilitiesLoading, isFetching, unavailableReason, refetch } = useServerCapabilities();
   const capabilityReason = unavailableServerRoute(pathname, serverStatus);
-  const nativeRoutes=['/operations','/overview','/portfolio','/trading-visuals','/bots','/research'];
-  const independentRoutes=['/operations','/overview','/trading-visuals','/research'];
+  const nativeRoutes=['/capital','/bots','/trading-visuals','/operations','/research'];
+  const independentRoutes=['/capital','/trading-visuals','/operations','/research'];
   const navigationItems=!access.online ? NAV_ITEMS.filter(item=>independentRoutes.includes(item.to))
     : access.native ? nativeRoutes.map(to=>NAV_ITEMS.find(item=>item.to===to)!) : NAV_ITEMS;
 
@@ -98,7 +98,7 @@ function AppShellBody() {
   // The chat is the landing page and needs no exchange keys, so the blocking
   // overlay would otherwise be the first thing every unconfigured user hits —
   // on the one surface that can talk them through connecting.
-  const exemptRoutes = ["/operations", "/routines", "/settings", "/trading-visuals", "/overview", "/research", "/tools"];
+  const exemptRoutes = ["/operations", "/routines", "/settings", "/trading-visuals", "/capital", "/overview", "/research", "/tools"];
   const showKeysOverlay =
     server && !access.native && access.accounts && !capabilityReason && !keysLoading && !hasKeys && !isChatWorkspace &&
     !exemptRoutes.some((r) => pathname.startsWith(r));
@@ -120,9 +120,9 @@ function AppShellBody() {
   usePrefetchData(!matchPath("/research", pathname));
 
   return (
-    <div className="flex h-screen flex-col">
+    <div className={`condor-shell flex h-screen flex-col ${access.native?'condor-native':''}`}>
       {/* Top bar */}
-      <header className="flex min-h-12 shrink-0 flex-wrap items-center gap-y-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 xl:flex-nowrap lg:px-4 xl:py-0">
+      <header className="condor-topbar flex min-h-12 shrink-0 flex-wrap items-center gap-y-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 xl:flex-nowrap lg:px-4 xl:py-0">
         {/* Left: logo + nav */}
         <div className="flex min-w-0 w-full items-center gap-3 xl:w-auto xl:gap-6">
           <NavLink to="/" className="flex shrink-0 items-center gap-2 font-bold tracking-tight">

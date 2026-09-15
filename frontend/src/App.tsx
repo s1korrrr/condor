@@ -6,6 +6,7 @@ import { AppShell } from "@/components/layout/AppShell";
 import { ServerContext } from "@/hooks/useServer";
 import { AuthContext, SERVER_KEY, useAuth, useAuthState } from "@/lib/auth";
 import { queryClient } from "@/lib/queryClient";
+import { capitalDestination } from '@/lib/capital-route';
 import { AgentDetail } from "@/pages/AgentDetail";
 import { Agents } from "@/pages/Agents";
 const BotDetail = lazy(() => import("@/pages/BotDetail").then(module => ({default:module.BotDetail})));
@@ -29,7 +30,21 @@ function Home() {
   const {access,isLoading}=useServerCapabilities();
   if(isLoading) return <p role="status">Loading workspace…</p>;
   if(!access.online) return <CapabilityUnavailable reason="Server capabilities are unavailable. Select or reconnect a server to open its workspace."/>;
-  return access.native ? <Navigate to="/overview" replace/> : <Agents/>;
+  return access.native ? <Navigate to="/capital" replace/> : <Agents/>;
+}
+
+function LegacyOverview() {
+  const location = useLocation();
+  return <Navigate to={capitalDestination(location.search, location.hash)} replace/>;
+}
+
+function PortfolioRoute() {
+  const {access,isLoading} = useServerCapabilities();
+  const location = useLocation();
+  if (isLoading) return <p role="status">Loading portfolio…</p>;
+  return access.native
+    ? <Navigate to={capitalDestination(location.search, location.hash, 'holdings')} replace/>
+    : <Portfolio/>;
 }
 
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -86,10 +101,11 @@ export default function App() {
               >
                 <Route path="/" element={<Home />} />
                 <Route path="/operations" element={<Suspense fallback={<p role="status">Loading operations…</p>}><Operations/></Suspense>} />
-                <Route path="/overview" element={<Suspense fallback={<p role="status">Loading overview…</p>}><Overview/></Suspense>} />
+                <Route path="/capital" element={<Suspense fallback={<p role="status">Loading capital…</p>}><Overview/></Suspense>} />
+                <Route path="/overview" element={<LegacyOverview/>} />
                 <Route path="/research" element={<Suspense fallback={<p role="status">Loading research…</p>}><Research/></Suspense>} />
                 <Route path="/tools" element={<WorkspaceTools/>} />
-                <Route path="/portfolio" element={<Portfolio />} />
+                <Route path="/portfolio" element={<PortfolioRoute />} />
                 <Route path="/bots" element={<Bots />} />
                 <Route path="/bots/:id" element={<BotDetail />} />
                 <Route path="/trade" element={<CreateExecutor />} />

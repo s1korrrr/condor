@@ -91,6 +91,68 @@ body {
   transition: background-color 0.2s ease, color 0.2s ease;
 }
 
+/* Native Capital workspace: one quiet instrument surface across all routes. */
+.condor-native {
+  --color-bg: #0d1015;
+  --color-surface: #151920;
+  --color-surface-hover: #20262a;
+  --color-border: #2b332f;
+  --color-border-hover: #465049;
+  --color-text: #e6e9e5;
+  --color-text-muted: #9aa69f;
+  --color-primary: #cfb46b;
+  --color-accent: #cfb46b;
+  --color-primary-hover: #e1c681;
+  --chart-bg: #151920;
+  --chart-grid: #2b332f;
+  --chart-text: #9aa69f;
+  background: var(--color-bg);
+  color: var(--color-text);
+}
+[data-theme="light"] .condor-native {
+  --color-bg: #f6f6f3;
+  --color-surface: #ffffff;
+  --color-surface-hover: #efefea;
+  --color-border: #dce0da;
+  --color-border-hover: #b8c2b8;
+  --color-text: #202522;
+  --color-text-muted: #606b65;
+  --color-primary: #856924;
+  --color-accent: #856924;
+  --color-primary-hover: #73581a;
+  --chart-bg: #ffffff;
+  --chart-grid: #dce0da;
+  --chart-text: #606b65;
+}
+[data-theme="colorblind"] .condor-native {
+  --color-primary: #56b4e9;
+  --color-accent: #56b4e9;
+  --color-primary-hover: #7ec8f0;
+}
+.condor-native .condor-topbar { min-height: 62px; padding-inline: 24px; }
+.condor-native nav[aria-label="Main navigation"] a {
+  border-radius: 0;
+  border-bottom: 2px solid transparent;
+  font-size: 12px;
+  padding: 12px;
+}
+.condor-native nav[aria-label="Main navigation"] a[aria-current="page"] {
+  border-bottom-color: var(--color-primary);
+  color: var(--color-text);
+  background: transparent;
+}
+.condor-native main { scrollbar-gutter: stable; }
+.condor-native main > .space-y-6 { max-width: 1600px; margin-inline: auto; }
+.condor-native main h1,
+.condor-native .quant-heading h1 { font-size: 26px; font-weight: 600; letter-spacing: -.65px; line-height: 1.25; }
+.condor-native .quant-heading { margin-top: 0; margin-bottom: 22px; }
+.condor-native table th { font-weight: 500; }
+.condor-native :is(button,a,input,select):focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+@media(max-width: 640px) {
+  .condor-native .condor-topbar { padding-inline: 12px; }
+  .condor-native main h1 { font-size: 24px; }
+}
+
 * {
   box-sizing: border-box;
 }

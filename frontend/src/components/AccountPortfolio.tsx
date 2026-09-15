@@ -29,13 +29,21 @@ function AssetDetail({holding,close}: {holding:Holding;close:()=>void}) {
   </dialog>;
 }
 
-export function AccountPortfolio() {
+export type AccountPortfolioProps = {
+  embedded?: boolean;
+  section?: 'holdings' | 'history';
+  onSectionChange?: (section: 'holdings' | 'history') => void;
+};
+
+export function AccountPortfolio(props: AccountPortfolioProps = {}) {
   const {server}=useServer();
-  return server ? <PortfolioAccount key={server} server={server}/> : <p className="p-8 text-sm text-[var(--color-text-muted)]">Select a server to view its portfolio.</p>;
+  return server ? <PortfolioAccount key={server} server={server} {...props}/> : <p className="p-8 text-sm text-[var(--color-text-muted)]">Select a server to view its portfolio.</p>;
 }
 
-function PortfolioAccount({server}: {server:string}) {
-  const [view,setView]=useState<'holdings'|'history'>('holdings');
+function PortfolioAccount({server,embedded=false,section,onSectionChange}: {server:string}&AccountPortfolioProps) {
+  const [localView,setLocalView]=useState<'holdings'|'history'>('holdings');
+  const view=section??localView;
+  const setView=(next:'holdings'|'history')=>{if(section===undefined)setLocalView(next);onSectionChange?.(next);};
   const [range,setRange]=useState<PortfolioRange>('1W');
   const [search,setSearch]=useState('');
   const [sort,setSort]=useState<{key:SortKey;direction:'asc'|'desc'}>({key:'value',direction:'desc'});
@@ -62,10 +70,10 @@ function PortfolioAccount({server}: {server:string}) {
   const metric=(label:string,value:string,note:string)=><div className="min-w-0"><dt className="text-xs text-[var(--color-text-muted)]">{label}</dt><dd className="mt-2 break-words text-xl font-semibold tabular-nums sm:text-2xl">{value}</dd><p className="mt-1 text-[11px] text-[var(--color-text-muted)]">{note}</p></div>;
   return <div className="min-w-0 space-y-5">
     <header className="flex flex-wrap items-start justify-between gap-4">
-      <div><h1 className="text-2xl font-semibold tracking-tight">Portfolio</h1><p className="mt-1 text-sm text-[var(--color-text-muted)]">Account holdings and valuation · OKX Spot · Reporting currency: USDT</p></div>
+      <div>{!embedded&&<h1 className="text-2xl font-semibold tracking-tight">Portfolio</h1>}<p className="mt-1 text-sm text-[var(--color-text-muted)]">Account holdings and valuation · OKX Spot · Reporting currency: USDT</p></div>
       <div className="flex gap-2"><Link to="/settings?tab=keys" className={control}><KeyRound size={14}/>Connections</Link><button type="button" onClick={()=>void refresh()} disabled={refreshing||query.isFetching} className={`${control} bg-[var(--color-primary)] text-[var(--color-bg)]`}><RefreshCw size={14} className={refreshing?'animate-spin motion-reduce:animate-none':''}/>Refresh</button></div>
     </header>
-    <nav aria-label="Portfolio views" className="flex gap-6 border-b border-[var(--color-border)]">{(['holdings','history'] as const).map(tab=><button type="button" key={tab} aria-current={view===tab?'page':undefined} onClick={()=>setView(tab)} className={`border-b-2 px-1 py-3 text-sm capitalize ${view===tab?'border-[var(--color-primary)] text-[var(--color-primary)]':'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}`}>{tab}</button>)}</nav>
+    {!embedded&&<nav aria-label="Portfolio views" className="flex gap-6 border-b border-[var(--color-border)]">{(['holdings','history'] as const).map(tab=><button type="button" key={tab} aria-current={view===tab?'page':undefined} onClick={()=>setView(tab)} className={`border-b-2 px-1 py-3 text-sm capitalize ${view===tab?'border-[var(--color-primary)] text-[var(--color-primary)]':'border-transparent text-[var(--color-text-muted)] hover:text-[var(--color-text)]'}`}>{tab}</button>)}</nav>}
     {failed&&<div role="alert" className="rounded-md border border-[var(--color-red)]/40 p-4 text-sm"><p>Portfolio could not be refreshed. Current values and history are hidden until a successful read.</p><p className="mt-1 text-xs text-[var(--color-text-muted)]">Check the account connection and that the API supports portfolio analytics, then use Refresh.</p></div>}
     {query.isLoading&&<p role="status" className="py-16 text-center text-sm text-[var(--color-text-muted)]">Loading portfolio observations…</p>}
     {data&&!data.current&&<div className={`${panel} py-12 text-center`}><h2 className="text-lg font-medium">Connect your account</h2><p className="mx-auto mt-2 max-w-lg text-sm text-[var(--color-text-muted)]">Connect OKX in Settings to see holdings and begin recording portfolio observations.</p><Link to="/settings?tab=keys" className={`${control} mt-5`}>Open Connections</Link></div>}

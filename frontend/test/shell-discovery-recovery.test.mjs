@@ -15,7 +15,7 @@ function fixture({ server='native-owner', status=native, discovery={data:[server
   };
   const modules = frontendModules({
     'react/jsx-runtime': {...jsxRuntime,jsx:capture('jsx'),jsxs:capture('jsxs')},
-    '@tanstack/react-query': {useQuery(options){
+    '@tanstack/react-query': {useQueryClient:()=>({getQueryData:()=>status}),useQuery(options){
       queries.push(options);
       const result=options.queryKey[0]==='servers'?discovery:{data:status};
       return {isError:false,isPending:false,isLoading:false,isFetching:false,...result,refetch:async()=>{refetches.push(options.queryKey);return result;}};
@@ -82,6 +82,21 @@ test('successful native discovery retains source units and verified monitoring r
   assert.ok(html.includes('href="/bots"'));
   assert.ok(!html.includes('Display currency'));
   assert.equal(f.access().access.botRead,true);
+});
+
+test('temporary native discovery outage retains the read workspace, never control authority', () => {
+  const f=fixture({pathname:'/bots',discovery:{isError:true,error:Object.assign(new Error('Unavailable'),{status:503}),data:[serverRow]}});
+  const html=f.render();
+  assert.ok(html.includes('Protected route content'));
+  assert.ok(html.includes('href="/bots"'));
+  assert.equal(f.access().access.botStop,false);
+  assert.equal(f.access().access.accountManagement,false);
+});
+test('forbidden discovery and removed identities do not retain a native workspace', () => {
+  for(const discovery of [{isError:true,error:Object.assign(new Error('Denied'),{status:403}),data:[serverRow]},{data:[]}]) {
+    const f=fixture({pathname:'/bots',discovery});
+    assert.ok(!f.render().includes('Protected route content'));
+  }
 });
 
 test('Tools with unknown capabilities offers no automation link or native deployment claim', () => {

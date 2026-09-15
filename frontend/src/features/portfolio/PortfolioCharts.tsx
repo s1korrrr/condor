@@ -29,10 +29,11 @@ export function ValueHistoryChart({points}: {points:HistoryPoint[]}) {
           <XAxis dataKey="time" type="number" domain={['dataMin','dataMax']} tickFormatter={t=>new Date(t).toLocaleString('en-GB',{timeZone:'UTC',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'})} tick={{fill:'var(--color-text-muted)',fontSize:10}} minTickGap={45} axisLine={false} tickLine={false}/>
           <YAxis domain={['auto','auto']} tickFormatter={v=>Number(v).toLocaleString(undefined,{notation:'compact',maximumFractionDigits:2})} tick={{fill:'var(--color-text-muted)',fontSize:11}} axisLine={false} tickLine={false} width={64}/>
           <Tooltip contentStyle={{background:'var(--color-surface)',border:'1px solid var(--color-border)',color:'var(--color-text)'}} labelFormatter={v=>utc(new Date(Number(v)).toISOString())} formatter={v=>[`${formatValue(Number(v))} USDT`,'Account value']}/>
-          <Line dataKey="value" type="linear" stroke="var(--color-primary)" strokeWidth={2} dot={values.length<60?{r:2}:false} activeDot={{r:4}} connectNulls={false} isAnimationActive={false}/>
+          <Line dataKey="value" type="linear" stroke="var(--color-primary)" strokeWidth={2} strokeDasharray="4 4" dot={false} activeDot={false} connectNulls tooltipType="none" legendType="none" isAnimationActive={false}/>
+          <Line dataKey="value" type="linear" stroke="var(--color-primary)" strokeWidth={2} dot={values.length===1?{r:3}:false} activeDot={{r:4}} connectNulls={false} isAnimationActive={false}/>
         </LineChart>
       </ResponsiveContainer>
     </div>:<div className="flex min-h-60 items-center justify-center border-y border-dashed border-[var(--color-border)] px-6 text-center text-sm text-[var(--color-text-muted)]">No fully valued observations in this period. Unpriced holdings remain visible in Holdings.</div>}
-    <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">Value changes include trading, price movements, deposits and withdrawals. This is not a profit or return chart. Missing prices and observation gaps over two minutes break the line.</p>
+    <p className="text-xs leading-relaxed text-[var(--color-text-muted)]">Solid: consecutive observations. Dashed: connection across missing prices or observation gaps; intermediate values were not recorded. Account value includes cash flows and price movements, not just profit.</p>
   </figure>;
 }

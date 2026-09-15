@@ -65,11 +65,11 @@ function AppShellBody() {
   const { theme, toggleTheme } = useTheme();
   const navigate = useNavigate();
   const { hasKeys, isLoading: keysLoading } = useCredentials();
-  const { data: serverStatus, access, isLoading: capabilitiesLoading, isFetching, unavailableReason, refetch } = useServerCapabilities();
-  const capabilityReason = unavailableServerRoute(pathname, serverStatus);
+  const { data: serverStatus, access, readContinuity, isLoading: capabilitiesLoading, isFetching, unavailableReason, refetch } = useServerCapabilities();
+  const capabilityReason = readContinuity && pathname === '/bots' ? null : unavailableServerRoute(pathname, serverStatus);
   const nativeRoutes=['/capital','/bots','/trading-visuals','/operations','/research'];
   const independentRoutes=['/capital','/trading-visuals','/operations','/research'];
-  const navigationItems=!access.online ? NAV_ITEMS.filter(item=>independentRoutes.includes(item.to))
+  const navigationItems=readContinuity ? nativeRoutes.map(to=>NAV_ITEMS.find(item=>item.to===to)!) : !access.online ? NAV_ITEMS.filter(item=>independentRoutes.includes(item.to))
     : access.native ? nativeRoutes.map(to=>NAV_ITEMS.find(item=>item.to===to)!) : NAV_ITEMS;
 
   // The chat workspace takes the full height and owns its own scrolling, so
@@ -197,8 +197,8 @@ function AppShellBody() {
       </div>}
 
       {unavailableReason && <div role={capabilitiesLoading ? 'status' : 'alert'} className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-2 text-sm text-[var(--color-text-muted)]">
-        <span>{unavailableReason}</span>
-        <button type="button" disabled={isFetching} onClick={() => void refetch()} className="underline disabled:opacity-50">Retry connection</button>
+        <span>{readContinuity ? 'Server health read delayed. Retrying in the background; controls are disabled until verified.' : unavailableReason}</span>
+        <button type="button" disabled={isFetching} onClick={() => void refetch()} className="underline disabled:opacity-50">{readContinuity ? 'Check now' : 'Retry connection'}</button>
       </div>}
 
       {/* Main content */}

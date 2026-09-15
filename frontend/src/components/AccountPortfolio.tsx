@@ -33,6 +33,8 @@ export type AccountPortfolioProps = {
   embedded?: boolean;
   section?: 'holdings' | 'history';
   onSectionChange?: (section: 'holdings' | 'history') => void;
+  range?: PortfolioRange;
+  onRangeChange?: (range: PortfolioRange) => void;
 };
 
 export function AccountPortfolio(props: AccountPortfolioProps = {}) {
@@ -40,11 +42,13 @@ export function AccountPortfolio(props: AccountPortfolioProps = {}) {
   return server ? <PortfolioAccount key={server} server={server} {...props}/> : <p className="p-8 text-sm text-[var(--color-text-muted)]">Select a server to view its portfolio.</p>;
 }
 
-function PortfolioAccount({server,embedded=false,section,onSectionChange}: {server:string}&AccountPortfolioProps) {
+function PortfolioAccount({server,embedded=false,section,onSectionChange,range:controlledRange,onRangeChange}: {server:string}&AccountPortfolioProps) {
   const [localView,setLocalView]=useState<'holdings'|'history'>('holdings');
   const view=section??localView;
   const setView=(next:'holdings'|'history')=>{if(section===undefined)setLocalView(next);onSectionChange?.(next);};
-  const [range,setRange]=useState<PortfolioRange>('1W');
+  const [localRange,setLocalRange]=useState<PortfolioRange>('1W');
+  const range=controlledRange??localRange;
+  const setRange=(next:PortfolioRange)=>{if(controlledRange===undefined)setLocalRange(next);onRangeChange?.(next);};
   const [search,setSearch]=useState('');
   const [sort,setSort]=useState<{key:SortKey;direction:'asc'|'desc'}>({key:'value',direction:'desc'});
   const [selected,setSelected]=useState<string|null>(null);

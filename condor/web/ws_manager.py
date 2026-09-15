@@ -136,12 +136,13 @@ class _CandleBuffer:
 
 
 class _Connection:
-    __slots__ = ("ws", "user_id", "channels")
+    __slots__ = ("ws", "user_id", "channels", "expires_at")
 
-    def __init__(self, ws: WebSocket, user_id: int):
+    def __init__(self, ws: WebSocket, user_id: int, expires_at: float = 0):
         self.ws = ws
         self.user_id = user_id
         self.channels: set[str] = set()
+        self.expires_at = expires_at
 
 
 class WebSocketManager:
@@ -317,6 +318,12 @@ class WebSocketManager:
             await ws.close(code=4001, reason="Invalid token")
             return None
 
+        expires = payload.get("exp")
+        if (isinstance(expires, bool) or not isinstance(expires, (int, float))
+                or not math.isfinite(expires) or expires <= time.time()):
+            await ws.close(code=4001, reason="Invalid token expiry")
+            return None
+
         from config_manager import UserRole, get_config_manager
 
         user_id = int(payload["sub"])
@@ -327,7 +334,7 @@ class WebSocketManager:
             return None
 
         await ws.accept(subprotocol=subprotocol)
-        conn = _Connection(ws, user_id)
+        conn = _Connection(ws, user_id, expires_at=expires)
         self._connections.append(conn)
         logger.info("WS connected: user %s", user_id)
         return conn
@@ -376,8 +383,17 @@ class WebSocketManager:
         except json.JSONDecodeError:
             return
 
+        if not isinstance(msg, dict):
+            return
         action = msg.get("action")
         channel = msg.get("channel", "")
+        if not isinstance(channel, str) or not isinstance(action, str):
+            return
+
+        if action in {"subscribe", "set_candle_duration"} and channel:
+            if not self._authorized(conn, channel):
+                await self._reject_authorization(conn)
+                return
 
         if action == "subscribe" and channel:
             # Object-level access control: channels encode their target server as
@@ -427,7 +443,7 @@ class WebSocketManager:
         elif action == "set_candle_duration" and channel:
             # Frontend changed duration without re-subscribing
             duration = _coerce_duration(msg.get("duration"))
-            if channel.startswith("candles:") and duration:
+            if channel in conn.channels and channel.startswith("candles:") and duration:
                 await self._handle_candle_duration_change(conn, channel, duration)
 
     async def _handle_candle_subscribe(
@@ -745,7 +761,29 @@ class WebSocketManager:
             self.disconnect(conn)
 
     async def _send(self, conn: _Connection, channel: str, data: Any) -> None:
+        if not self._authorized(conn, channel):
+            await self._reject_authorization(conn)
+            return
         await conn.ws.send_json({"channel": channel, "data": data, "ts": time.time()})
+
+    def _authorized(self, conn: _Connection, channel: str) -> bool:
+        """Constant-time in-memory checks; never renew signed session expiry."""
+        from config_manager import UserRole, get_config_manager
+
+        cm = get_config_manager()
+        server = self._server_from_channel(channel)
+        return (conn.expires_at > time.time()
+                and cm.get_user_role(conn.user_id) in (UserRole.USER, UserRole.ADMIN)
+                and server is not None
+                and cm.has_server_access(conn.user_id, server))
+
+    async def _reject_authorization(self, conn: _Connection) -> None:
+        # Remove subscription refs before awaiting network close; another pending
+        # broadcast must not keep a revoked consumer alive.
+        self.disconnect(conn)
+        conn.channels.clear()
+        conn.expires_at = 0
+        await asyncio.wait_for(conn.ws.close(code=4003, reason="Authorization expired or revoked"), timeout=2)
 
     # -- Generic stream lifecycle --
 

@@ -10,12 +10,13 @@ test('small holdings are grouped without hiding active execution or unknown valu
  const result=partitionBotInventory([row,{...row,markValue:null},{...row,executors:[{}]},{...row,pendingSells:[{}]}]);
  assert.equal(result.small.length,1);assert.equal(result.primary.length,3);
 });
-test('legacy inventory stays compact, retains tiny owner units and has one source coverage notice',()=>{
- const {BotPositionObservation}=load('components/bots/NativeBotPositions.tsx');const now=Date.now();
+test('command desk groups tiny inventory, retains exact owner units and has one accounting notice',()=>{
+ const {CommandDeskObservation}=load('components/bots/NativeBotCommandDesk.tsx');const now=Date.now();
  const payload={monitoring:{bot_name:'b',stale_threshold_seconds:30},runtime_status:{bot_name:'b',updated_at:new Date(now).toISOString(),active_orders_count:0,controllers:[{pair:'ETH-USDC',price_quote:2000,state:'WAIT'}],positions_held:[{pair:'ETH-USDC',amount_base:'0.000000000012345678',breakeven_price:1000}],active_executors:[]}};
- const html=renderToStaticMarkup(React.createElement(BotPositionObservation,{payload,bot:'b',now}));
- assert.match(html,/Managed bot inventory/);assert.match(html,/Small &amp; zero inventory/);assert.match(html,/0.000000000012345678/);assert.doesNotMatch(html,/Unavailable|Bag holding/);
- assert.equal((html.match(/aria-label="Observation coverage"/g)||[]).length,1);
+ const html=renderToStaticMarkup(React.createElement(CommandDeskObservation,{payload,bot:'b',now,section:'positions',selected:null,onSelect:()=>{}}));
+ assert.match(html,/Managed bot inventory/);assert.match(html,/Small &amp; zero inventory/);assert.match(html,/0.000000000012345678 ETH/);assert.doesNotMatch(html,/Bag holding/);
+ assert.match(html,/ETH-USDC position inspector/);
+ assert.equal((html.match(/Source &amp; accounting details/g)||[]).length,1);
 });
 test('research summaries use bounded titles, preserve full rationale and distinguish attempts',()=>{
  const {researchRecordSummary}=load('features/research/record-summary.ts');

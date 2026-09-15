@@ -412,37 +412,42 @@ function NativeBotControls({server,botName}: {server:string;botName:string}) {
   const [authRevision]=useState(sessionRevision);
   type Submitted = {bootId:string;sequence:number;action:NativeAction}|null;
   type Receipt = {state:'verified'|'rejected'|'unknown';message:string}|null;
+  type CommandSession = {submitted:Submitted;receipt:Receipt;requestId?:string;pending?:boolean};
+  type CommandRequest = {action:NativeAction;requestId:string};
   const sessionKey=['native-control-session',server,botName];
-  const session=useQuery<{submitted:Submitted;receipt:Receipt}>({queryKey:sessionKey,queryFn:skipToken,enabled:false,gcTime:Infinity});
+  const session=useQuery<CommandSession>({queryKey:sessionKey,queryFn:skipToken,enabled:false,gcTime:Infinity});
   const submitted=session.data?.submitted ?? null;
   const receipt=session.data?.receipt ?? null;
   // Keep unknown/pending outcomes across owner navigation. Auth changes clear the query cache.
-  const setSubmitted=(value:Submitted)=>{if(authRevision===sessionRevision())queryClient.setQueryData(sessionKey,(prior:{submitted:Submitted;receipt:Receipt}|undefined)=>({...prior,submitted:value}));};
-  const setReceipt=(value:Receipt)=>{if(authRevision===sessionRevision())queryClient.setQueryData(sessionKey,(prior:{submitted:Submitted;receipt:Receipt}|undefined)=>({...prior,receipt:value}));};
+  const settleCommand=(requestId:string, outcome:NonNullable<Receipt>)=>{
+    if(authRevision!==sessionRevision())return;
+    queryClient.setQueryData<CommandSession>(sessionKey,prior=>
+      prior?.requestId===requestId ? {...prior,pending:false,receipt:outcome,submitted:outcome.state==='rejected'?null:prior.submitted} : prior);
+  };
   useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),1000);return ()=>window.clearInterval(timer);},[]);
   const status=useQuery({queryKey:['native-bot-status',server,botName],queryFn:()=>api.getNativeBotStatus(server,botName),refetchInterval:5000,staleTime:0,retry:false});
   const allowedStart=capabilities?.capabilities?.native_start===true;
   const eligibility=nativeControlEligibility(status.isError?undefined:status.data,botName,access.botStop,allowedStart,now);
   const waitingForOwner=awaitingNativeOwnerTransition(submitted,eligibility);
   const mutation=useMutation({
-    mutationFn:async(action:NativeAction)=>{
+    retry:false,
+    mutationFn:async({action,requestId}:CommandRequest)=>{
       if(authRevision!==sessionRevision())throw new Error('Authentication session changed.');
       const current=nativeControlEligibility(status.isError?undefined:status.data,botName,access.botStop,allowedStart,Date.now());
       const expected={botName,action,bootId:current.bootId,instanceId:current.instanceId};
-      if (!current.allowed || current.action!==action || waitingForOwner) return {result:{httpStatus:409,body:{detail:current.reason || 'Await fresh owner telemetry before requesting another transition.'}},expected};
-      setSubmitted({bootId:current.bootId,sequence:current.sequence,action});
-      setReceipt(null);
+      const prior=queryClient.getQueryData<CommandSession>(sessionKey);
+      if (!current.allowed || current.action!==action || prior?.pending || awaitingNativeOwnerTransition(prior?.submitted??null,current)) return {result:{httpStatus:409,body:{detail:current.reason || 'Await fresh owner telemetry before requesting another transition.'}},expected};
+      queryClient.setQueryData<CommandSession>(sessionKey,{submitted:{bootId:current.bootId,sequence:current.sequence,action},receipt:null,requestId,pending:true});
       const result=await api.nativeBotCommand(server,botName,action);
       return {result,expected};
     },
-    onSuccess:({result,expected})=>{
+    onSuccess:({result,expected},{requestId})=>{
       const outcome=nativeCommandOutcome(result,expected);
-      setReceipt(outcome);
-      if(outcome.state==='rejected')setSubmitted(null);
+      settleCommand(requestId,outcome);
       setConfirmation(null);
     },
-    onError:()=>{
-      setReceipt({state:'unknown',message:'No verified command outcome was received. Await a fresh owner state transition before retrying.'});
+    onError:(_error,{requestId})=>{
+      settleCommand(requestId,{state:'unknown',message:'No verified command outcome was received. Await a fresh owner state transition before retrying.'});
       setConfirmation(null);
     },
     onSettled:()=>{
@@ -451,17 +456,18 @@ function NativeBotControls({server,botName}: {server:string;botName:string}) {
       queryClient.invalidateQueries({queryKey:['bots',server]});
     },
   });
-  const disabled=!eligibility.allowed || mutation.isPending || waitingForOwner;
+  const pending=mutation.isPending || session.data?.pending===true;
+  const disabled=!eligibility.allowed || pending || waitingForOwner;
   const reason=status.isError?'Native status is unavailable. Controls require fresh owner evidence.':waitingForOwner?'Awaiting a fresh owner state transition.':eligibility.reason;
   const action=eligibility.action;
   return <div className="flex max-w-sm flex-col items-end gap-1" onClick={event=>event.stopPropagation()}>
     {confirmation ? <div className="flex flex-wrap items-center justify-end gap-2">
       <span className="text-xs text-[var(--color-text-muted)]">{confirmation==='start'?'Start the registered configuration?':'Stop and reconcile this native strategy?'}</span>
-      <button type="button" disabled={disabled||confirmation!==action} onClick={()=>mutation.mutate(confirmation)} className="rounded bg-[var(--color-primary)] px-3 py-2 text-xs font-medium text-[var(--color-bg)] disabled:opacity-40">{mutation.isPending?'Awaiting owner…':`Confirm ${confirmation}`}</button>
-      <button type="button" disabled={mutation.isPending} onClick={()=>setConfirmation(null)} className="px-2 py-2 text-xs text-[var(--color-text-muted)] disabled:opacity-40">Cancel</button>
+      <button type="button" disabled={disabled||confirmation!==action} onClick={()=>mutation.mutate({action:confirmation,requestId:crypto.randomUUID()})} className="rounded bg-[var(--color-primary)] px-3 py-2 text-xs font-medium text-[var(--color-bg)] disabled:opacity-40">{pending?'Awaiting owner…':`Confirm ${confirmation}`}</button>
+      <button type="button" disabled={pending} onClick={()=>setConfirmation(null)} className="px-2 py-2 text-xs text-[var(--color-text-muted)] disabled:opacity-40">Cancel</button>
     </div> : <button type="button" disabled={disabled||!action} onClick={()=>action&&setConfirmation(action)} title={reason || `${action==='start'?'Start':'Stop'} native strategy using its registered configuration`} className="flex items-center gap-1 rounded px-3 py-2 text-xs font-medium text-[var(--color-primary)] hover:bg-[var(--color-primary)]/10 disabled:opacity-40">
       {action==='start'?<Play className="h-3.5 w-3.5"/>:<Square className="h-3.5 w-3.5"/>}
-      {mutation.isPending?'Awaiting owner…':action==='start'?'Start native':action==='stop'?'Stop native':'Lifecycle unavailable'}
+      {pending?'Awaiting owner…':action==='start'?'Start native':action==='stop'?'Stop native':'Lifecycle unavailable'}
     </button>}
     {reason&&<span role="status" className="max-w-xs text-right text-xs text-[var(--color-text-muted)]">{reason}</span>}
     {receipt&&<span role="status" className={`max-w-xs text-right text-xs ${receipt.state==='verified'?'text-[var(--color-green)]':receipt.state==='rejected'?'text-[var(--color-red)]':'text-[var(--color-yellow)]'}`}>{receipt.state==='unknown'&&submitted&&!waitingForOwner?`The command acknowledgement was unavailable. Fresh owner telemetry now reports ${eligibility.state}.`:receipt.message}</span>}

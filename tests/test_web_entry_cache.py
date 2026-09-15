@@ -26,6 +26,10 @@ def test_entry_html_requires_revalidation(client, path):
     assert response.headers["cache-control"] == "no-cache"
     assert response.headers.get("etag")
     assert "/assets/current.js" in response.text
+    assert response.headers["content-security-policy"] == "script-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'self'"
+    assert response.headers["x-content-type-options"] == "nosniff"
+    assert response.headers["x-frame-options"] == "SAMEORIGIN"
+    assert response.headers["referrer-policy"] == "same-origin"
 
 
 def test_asset_caching_is_unchanged(client):

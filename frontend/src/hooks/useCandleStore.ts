@@ -3,6 +3,8 @@ import { useEffect, useState } from "react";
 import type { CandleData } from "@/lib/api";
 import { candleStore } from "@/lib/candle-store";
 
+const EMPTY_CANDLES: CandleData[] = [];
+
 /** Staleness thresholds by interval category */
 const STALE_THRESHOLD_SUB_1H_MS = 30_000; // 30s for intervals < 1h
 const STALE_THRESHOLD_1H_PLUS_MS = 120_000; // 2min for intervals >= 1h
@@ -89,7 +91,7 @@ export function useCandleStore(
   // Effects run after render: do not expose another market under the new label.
   const matches = Boolean(key) && snapshot.key === key;
   return {
-    candles: matches ? snapshot.candles : [],
+    candles: matches ? snapshot.candles : EMPTY_CANDLES,
     isStale: key ? !matches || snapshot.isStale : false,
     mergeCandles,
     setDuration,

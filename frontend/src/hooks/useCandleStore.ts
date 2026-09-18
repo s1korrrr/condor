@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 
 import type { CandleData } from "@/lib/api";
 import { candleStore } from "@/lib/candle-store";
@@ -35,42 +35,43 @@ export function useCandleStore(
     ? `candles:${server}:${connector}:${pair}:${interval}`
     : "";
 
-  const [candles, setCandles] = useState<CandleData[]>([]);
-  const [isStale, setIsStale] = useState(false);
-  const keyRef = useRef(key);
+  const [snapshot, setSnapshot] = useState<{
+    key: string;
+    candles: CandleData[];
+    isStale: boolean;
+  }>({ key: "", candles: [], isStale: false });
 
   useEffect(() => {
     if (!key) {
-      setCandles([]);
-      setIsStale(false);
+      setSnapshot({ key: "", candles: [], isStale: false });
       return;
     }
 
-    keyRef.current = key;
-
-    // Subscribe — returns cached candles instantly
-    const cached = candleStore.subscribe(key);
-    if (cached.length > 0) {
-      setCandles(cached);
-    }
-
-    // Listen for updates
-    const removeListener = candleStore.onUpdate(key, (updated) => {
-      if (keyRef.current === key) {
-        setCandles(updated);
-        setIsStale(false); // got fresh data
-      }
-    });
-
-    // Periodic staleness check
+    let active = true;
     const threshold = getStaleThreshold(interval);
+    const cached = candleStore.subscribe(key);
+    const publish = (candles: CandleData[]) => {
+      if (!active) return;
+      setSnapshot({
+        key,
+        candles,
+        isStale: candleStore.getLastUpdateAge(key) > threshold,
+      });
+    };
+    const removeListener = candleStore.onUpdate(key, publish);
+    // Empty target caches must replace the previous market, not inherit it.
+    publish(cached);
+
     const timer = setInterval(() => {
-      if (keyRef.current !== key) return;
-      const age = candleStore.getLastUpdateAge(key);
-      setIsStale(age > threshold);
+      if (!active) return;
+      const isStale = candleStore.getLastUpdateAge(key) > threshold;
+      setSnapshot(previous => previous.key === key && previous.isStale !== isStale
+        ? { ...previous, isStale }
+        : previous);
     }, STALE_CHECK_INTERVAL_MS);
 
     return () => {
+      active = false;
       removeListener();
       clearInterval(timer);
       candleStore.unsubscribe(key);
@@ -85,5 +86,12 @@ export function useCandleStore(
     if (key) candleStore.setDuration(key, seconds);
   };
 
-  return { candles, isStale, mergeCandles, setDuration };
+  // Effects run after render: do not expose another market under the new label.
+  const matches = Boolean(key) && snapshot.key === key;
+  return {
+    candles: matches ? snapshot.candles : [],
+    isStale: key ? !matches || snapshot.isStale : false,
+    mergeCandles,
+    setDuration,
+  };
 }

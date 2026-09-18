@@ -61,7 +61,8 @@ for (const [name, index, value] of [['server', 0, 'server-b'], ['connector', 1, 
 test('no server hides the prior series synchronously', () => {
   const h = harness(); h.seed(channel(initial), [candle(100)]); h.render(); h.flush();
   const result = h.render([null, ...initial.slice(1)]);
-  assert.equal(result.candles.length, 0); assert.equal(result.isStale, false); h.flush(); h.unmount();
+  assert.equal(result.candles.length, 0); assert.equal(result.isStale, false);
+  const empty = h.flush().candles; assert.equal(empty, h.render().candles); h.unmount();
 });
 test('cached target series replaces the previous source without mixing values', () => {
   const h = harness(), next = [...initial]; next[2] = 'ETH-USD';

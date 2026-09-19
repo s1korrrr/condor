@@ -199,7 +199,7 @@ test('openTripForPair returns the current bag, not a completed cycle', () => {
   assert.equal(open.remainingBase, '2');
 });
 
-test('openTripForPair prefers remaining inventory over a later unknown-cost remainder', () => {
+test('oversell invalidates the remaining projected basis instead of preserving a stale bag', () => {
   const trips = buildFillTrips({
     fills: [
       buy('b1', '1', 100, { timestamp: '2026-09-01T00:00:00Z' }),

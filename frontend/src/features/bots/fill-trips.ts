@@ -247,7 +247,8 @@ export function buildFillTrips(input: { fills: RecordedRow[]; orders: RecordedRo
       const verified = side !== null && amount !== null && Number.isFinite(price) && price > 0;
 
       if (unknown) {
-        recordUnknown(fill, side, unknown.reason || 'basis_continuity_lost');
+        // recordUnknown retains the first unavailable-basis reason.
+        recordUnknown(fill, side, 'basis_continuity_lost');
         continue;
       }
 

@@ -23,9 +23,8 @@ from telegram.ext import ContextTypes
 
 from condor.controller_configs import controller_config_identity
 from condor.rsi_controllers import (
+    deploy_controller_bot,
     is_managed_rsi_controller,
-    require_safe_rsi_deployment,
-    resolve_controller_names,
 )
 from handlers.cex._shared import (
     get_cex_balances,
@@ -5628,18 +5627,8 @@ async def handle_execute_deploy(
     try:
         client, _ = await get_bots_client(chat_id, context.user_data)
 
-        controller_names = await resolve_controller_names(client, controllers_config)
-        require_safe_rsi_deployment(
-            controller_names=controller_names,
-            image=deploy_params.get("image"),
-            max_global_drawdown_quote=deploy_params.get("max_global_drawdown_quote"),
-            max_controller_drawdown_quote=deploy_params.get(
-                "max_controller_drawdown_quote"
-            ),
-        )
-
-        # Deploy using deploy_v2_controllers (this can take time)
-        result = await client.bot_orchestration.deploy_v2_controllers(
+        result = await deploy_controller_bot(
+            client,
             instance_name=instance_name,
             credentials_profile=credentials_profile,
             controllers_config=controllers_config,
@@ -6200,17 +6189,8 @@ async def process_deploy_custom_name_input(
     try:
         client, _ = await get_bots_client(chat_id, context.user_data)
 
-        controller_names = await resolve_controller_names(client, controllers)
-        require_safe_rsi_deployment(
-            controller_names=controller_names,
-            image=image,
-            max_global_drawdown_quote=deploy_params.get("max_global_drawdown_quote"),
-            max_controller_drawdown_quote=deploy_params.get(
-                "max_controller_drawdown_quote"
-            ),
-        )
-
-        result = await client.bot_orchestration.deploy_v2_controllers(
+        result = await deploy_controller_bot(
+            client,
             instance_name=custom_name,
             credentials_profile=creds,
             controllers_config=controllers,

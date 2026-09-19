@@ -327,3 +327,84 @@ def test_mcp_running_config_update_preserves_id_and_addresses_filename():
             },
         )
     ]
+
+
+@pytest.mark.parametrize(
+    "name", ["ok_rsi", "hl_rsi", "modular_spot", "modular_ok_rsi", "modular_rsi_v5"]
+)
+@pytest.mark.parametrize("limit", [None, 0, float("nan"), float("inf"), True])
+def test_native_and_legacy_families_require_finite_loss_rails(name, limit):
+    with pytest.raises(ValueError):
+        require_safe_rsi_deployment(
+            controller_names=[name],
+            image="repo@sha256:" + "a" * 64,
+            max_global_drawdown_quote=limit,
+            max_controller_drawdown_quote=10,
+        )
+
+
+@pytest.mark.parametrize("name", ["modular_spot", "modular_ok_rsi", "modular_rsi_v5"])
+def test_modular_deployment_requires_immutable_image(name):
+    with pytest.raises(ValueError, match="immutable"):
+        require_safe_rsi_deployment(
+            controller_names=[name],
+            image="repo:version1",
+            max_global_drawdown_quote=100,
+            max_controller_drawdown_quote=10,
+        )
+
+
+def test_modular_seal_reaches_extended_authenticated_api_request():
+    seal = "a" * 64
+    config = {
+        "_config_name": "native",
+        "id": "modular_spot_test",
+        "controller_name": "modular_ok_rsi",
+        "recipe_binding": {"source_sha256": seal},
+    }
+    orchestration = _BotOrchestration()
+
+    async def post(path, json):
+        assert path == "/bot-orchestration/deploy-v2-controllers"
+        orchestration.deployments.append(json)
+        return {"success": True}
+
+    orchestration._post = post
+    result = asyncio.run(
+        deploy_bot(
+            _Client(_Controllers(configs=[config]), orchestration),
+            "isolated",
+            ["native"],
+            image="repo@sha256:" + "b" * 64,
+            max_global_drawdown_quote=100,
+            max_controller_drawdown_quote=10,
+        )
+    )
+    assert result["result"]["success"] is True
+    assert orchestration.deployments[0]["native_bundle_source_sha256"] == seal
+
+
+@pytest.mark.parametrize("bindings", [[None], ["invalid"], ["a" * 64, "b" * 64]])
+def test_missing_or_inconsistent_native_source_identity_never_deploys(bindings):
+    configs = [
+        {
+            "_config_name": f"native{i}",
+            "id": f"modular_spot_{i}",
+            "controller_name": "modular_ok_rsi",
+            "recipe_binding": {"source_sha256": seal},
+        }
+        for i, seal in enumerate(bindings)
+    ]
+    orchestration = _BotOrchestration()
+    with pytest.raises(ValueError):
+        asyncio.run(
+            deploy_bot(
+                _Client(_Controllers(configs=configs), orchestration),
+                "isolated",
+                [c["_config_name"] for c in configs],
+                image="repo@sha256:" + "b" * 64,
+                max_global_drawdown_quote=100,
+                max_controller_drawdown_quote=10,
+            )
+        )
+    assert orchestration.deployments == []

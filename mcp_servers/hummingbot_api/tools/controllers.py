@@ -517,19 +517,10 @@ async def deploy_bot(
     Returns:
         Dictionary containing deployment results
     """
-    from condor.rsi_controllers import (
-        require_safe_rsi_deployment,
-        resolve_controller_names,
-    )
+    from condor.rsi_controllers import deploy_controller_bot
 
-    controller_names = await resolve_controller_names(client, controllers_config)
-    require_safe_rsi_deployment(
-        controller_names=controller_names,
-        image=image,
-        max_global_drawdown_quote=max_global_drawdown_quote,
-        max_controller_drawdown_quote=max_controller_drawdown_quote,
-    )
-    result = await client.bot_orchestration.deploy_v2_controllers(
+    result = await deploy_controller_bot(
+        client,
         instance_name=bot_name,
         controllers_config=controllers_config,
         credentials_profile=account_name,

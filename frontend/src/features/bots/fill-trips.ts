@@ -216,6 +216,16 @@ export function buildFillTrips(input: { fills: RecordedRow[]; orders: RecordedRo
 
     const recordUnknown = (fill: RecordedRow, side: 'buy' | 'sell' | null, reason: string) => {
       const knownSide = side ?? 'buy';
+      if (!unknown && open) {
+        open.unknown = true;
+        open.realized = null;
+        open.reason = reason;
+        open.fills = open.fills.map(item => ({ ...item, realizedPnlQuote: null }));
+        unknown = open;
+        open = null;
+        qty = zero();
+        avg = 0;
+      }
       unknown ??= { ...start(fill), unknown: true, realized: null, reason };
       unknown.reason ??= reason;
       addSide(unknown, knownSide, displayAmount(fill));
@@ -236,6 +246,11 @@ export function buildFillTrips(input: { fills: RecordedRow[]; orders: RecordedRo
       const timestamp = String(fill.timestamp);
       const verified = side !== null && amount !== null && Number.isFinite(price) && price > 0;
 
+      if (unknown) {
+        recordUnknown(fill, side, unknown.reason || 'basis_continuity_lost');
+        continue;
+      }
+
       if (!verified) {
         recordUnknown(fill, side, String(fill.economics_unavailable_reason || 'unverified_fill_receipt'));
         continue;
@@ -245,8 +260,6 @@ export function buildFillTrips(input: { fills: RecordedRow[]; orders: RecordedRo
         recordUnknown(fill, side, wallet ? 'unknown_wallet_acquisition_cost' : 'missing_entry_basis');
         continue;
       }
-
-      flushUnknown();
 
       if (side === 'buy') {
         if (isZero(qty)) open = start(fill);

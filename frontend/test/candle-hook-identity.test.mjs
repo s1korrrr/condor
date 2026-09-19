@@ -93,3 +93,12 @@ test('cleanup balances subscriptions and removes timers; writes keep their sourc
   h.unmount(); assert.equal(h.timers.size, 0); assert.equal(h.listeners.size, 0);
   assert.equal(h.subscriptions.length, h.unsubscriptions.length);
 });
+
+test('resuming the same source cannot label an aged cached snapshot fresh before effects', () => {
+  const h = harness(); h.seed(channel(initial), [candle(100)]); h.render(); h.flush();
+  h.render([null, ...initial.slice(1)]); h.flush();
+  h.age(channel(initial), 30001);
+  assert.equal(h.render(initial).isStale, true);
+  assert.equal(h.flush().isStale, true);
+  h.unmount();
+});

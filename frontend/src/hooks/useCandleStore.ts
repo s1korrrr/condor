@@ -44,10 +44,7 @@ export function useCandleStore(
   }>({ key: "", candles: [], isStale: false });
 
   useEffect(() => {
-    if (!key) {
-      setSnapshot({ key: "", candles: [], isStale: false });
-      return;
-    }
+    if (!key) return;
 
     let active = true;
     const threshold = getStaleThreshold(interval);
@@ -92,7 +89,7 @@ export function useCandleStore(
   const matches = Boolean(key) && snapshot.key === key;
   return {
     candles: matches ? snapshot.candles : EMPTY_CANDLES,
-    isStale: key ? !matches || snapshot.isStale : false,
+    isStale: key ? !matches || snapshot.isStale || candleStore.getLastUpdateAge(key) > getStaleThreshold(interval) : false,
     mergeCandles,
     setDuration,
   };

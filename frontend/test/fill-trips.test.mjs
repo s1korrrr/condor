@@ -77,7 +77,7 @@ test('legacy unverified receipts cannot invent trip PnL', () => {
   assert.equal(trips[0].sellAmountBase, '1');
 });
 
-test('later verified round trip after unverified receipts still scores filled PnL', () => {
+test('unverified receipt keeps later same-source PnL unavailable without an authoritative reset', () => {
   const trips = buildFillTrips({
     fills: [
       buy('legacy', '1', 100, { economics_available: false, economics_unavailable_reason: 'legacy_receipt_unverified', timestamp: '2026-09-01T00:00:00Z' }),
@@ -86,11 +86,35 @@ test('later verified round trip after unverified receipts still scores filled Pn
     ],
     orders: [], executors: [],
   });
-  const filled = trips.find(trip => trip.outcome === 'filled');
-  const unknown = trips.find(trip => trip.outcome === 'unknown_cost');
-  assert.equal(filled.realizedPnlQuote, 10);
-  assert.equal(unknown.realizedPnlQuote, null);
-  assert.equal(unknown.pnlUnavailableReason, 'legacy_receipt_unverified');
+  assert.equal(trips.length, 1);
+  assert.equal(trips[0].outcome, 'unknown_cost');
+  assert.equal(trips[0].realizedPnlQuote, null);
+  assert.equal(trips[0].pnlUnavailableReason, 'legacy_receipt_unverified');
+  assert.equal(trips[0].buyAmountBase, '2');
+  assert.equal(trips[0].sellAmountBase, '1');
+  assert.equal(trips.some(trip => trip.outcome === 'filled'), false);
+});
+
+test('unverified fill inside an open trip invalidates earlier and later leg PnL', () => {
+  const trips = buildFillTrips({
+    fills: [
+      buy('b1', '1', 100, { timestamp: '2026-09-01T00:00:00Z' }),
+      sell('legacy-sell', '0.25', 105, {
+        economics_available: false,
+        economics_unavailable_reason: 'legacy_receipt_unverified',
+        timestamp: '2026-09-01T01:00:00Z',
+      }),
+      sell('s2', '0.75', 110, { timestamp: '2026-09-01T02:00:00Z' }),
+    ],
+    orders: [], executors: [],
+  });
+  assert.equal(trips.length, 1);
+  assert.equal(trips[0].outcome, 'unknown_cost');
+  assert.equal(trips[0].realizedPnlQuote, null);
+  assert.equal(trips[0].pnlUnavailableReason, 'legacy_receipt_unverified');
+  assert.equal(trips[0].buyAmountBase, '1');
+  assert.equal(trips[0].sellAmountBase, '1');
+  assert.deepEqual(trips[0].fills.map(item => item.realizedPnlQuote), [null, null, null]);
 });
 
 test('wallet sales without buys coalesce as one unknown-cost trip', () => {
@@ -185,8 +209,8 @@ test('openTripForPair prefers remaining inventory over a later unknown-cost rema
     orders: [], executors: [],
   });
   const open = openTripForPair(trips, 'ETH-USDC');
-  assert.equal(open.outcome, 'in_bag');
-  assert.equal(open.remainingBase, '0.001');
+  assert.equal(open.outcome, 'unknown_cost');
+  assert.equal(open.realizedPnlQuote, null);
   assert.equal(trips.find(trip => trip.outcome === 'unknown_cost').realizedPnlQuote, null);
 });
 

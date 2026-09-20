@@ -46,6 +46,20 @@ The existing reader at port 8873 rejects Condor's already-required `projection=s
 
 The actual graph was concurrently active and reported Index pending during this preview. The UI retained that state. These counts are an observed revision, not a claim that all later events are indexed.
 
+## 2026-09-20 rebase onto current Condor `main`
+
+Rebased onto Condor `a51a3d6498837ca606c0b7e2cebed4a53bbcd161` (the rsibot-pinned owner). Companion graph repair is already on rsibot `main` as `5f3a7938`; do not merge historical [rsibot #160](https://github.com/s1korrrr/rsibot/pull/160) — that draft would strip later `RunnerConfig` binding provenance.
+
+Merging this frontend does **not** run `repair-graph` and does not rewrite historical events. Repair remains an explicit CLI (`research-knowledge repair-graph --receipt …` with optional `--apply`).
+
+Revalidated on this head:
+
+- `cd frontend && node --test test/research-*.test.mjs`: 104 passed
+- `PYTHONPATH=. …/condor/.venv/bin/python -m pytest -q tests/test_research_read.py tests/test_research_lab_read.py tests/test_research_relation_pages.py`: 105 passed (includes `projection=summary` and relationship pagination bounds)
+- Research OS matching reader on current rsibot `main`: `tests/unit/research_knowledge/test_serve.py` plus graph-repair tests: 50 passed
+
+Browser re-walk of the 2026-09-12 repaired graph was not repeated. Historical preview still does not certify the running 8873 reader.
+
 ## Recovery
 
 Revert the Condor commit to restore its earlier display. No graph records are written by Condor. Stop only the task-owned preview processes; do not restart active trading owners. The companion repair uses append-only graph events and documents separate graph-recovery constraints.

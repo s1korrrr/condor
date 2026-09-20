@@ -1,0 +1,8 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import {entryPath,entryObservation,entryCommandObserved,entryPublicationMessage} from '../src/lib/native-entry-controls.ts';
+const now=1900000000000;
+const payload=()=>({status:'success',verified_at:now/1000,command_allowed:true,data:{bot_name:'v2',bot_status:'running',controllers:[{controller_id:'a',entry_paused:true,last_command_id:'x',updated_at:now/1000}]}});
+test('entry routes encode exact scope and reject arbitrary operations',()=>{assert.equal(entryPath('a/b','v2','pause'),'/api/v1/servers/a%2Fb/bots/v2/native/entries/pause');assert.throws(()=>entryPath('a','b','start'));});
+test('entry observations require current bound complete state',()=>{assert.equal(entryObservation(payload(),'v2',now).allowed,true);assert.equal(entryObservation(payload(),'other',now).allowed,false);assert.equal(entryObservation(payload(),'v2',now+15000).allowed,false);const p=payload();p.data.controllers=[];assert.equal(entryObservation(p,'v2',now).allowed,false);});
+test('publication never grants execution and requires matching observed command state',()=>{assert.equal(entryPublicationMessage(202,{execution_verified:true}).rejected,false);assert.match(entryPublicationMessage(202,{}).text,/does not confirm/);assert.equal(entryPublicationMessage(409,{detail:'Same day'}).rejected,true);const cmd={id:'x',action:'pause',submittedAt:now};assert.equal(entryCommandObserved(payload(),'v2',now,cmd),true);assert.equal(entryCommandObserved(payload(),'v2',now,{...cmd,id:'other'}),false);assert.equal(entryCommandObserved(payload(),'v2',now,{...cmd,action:'resume'}),false);});

@@ -13,10 +13,12 @@ class ReadOnlyWeb:
         *,
         allow_account_management: bool = False,
         allow_native_lifecycle: bool = False,
+        allow_native_entry: bool = False,
     ):
         self.app = app
         self.allow_account_management = allow_account_management
         self.allow_native_lifecycle = allow_native_lifecycle
+        self.allow_native_entry = allow_native_entry
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send):
         if scope["type"] == "websocket" and scope["path"] != "/api/v1/ws":
@@ -28,6 +30,7 @@ class ReadOnlyWeb:
                 "settings_mutation": False,
                 "account_management": self.allow_account_management,
                 "native_lifecycle": self.allow_native_lifecycle,
+                "native_entry": self.allow_native_entry,
             }
             auth = scope["method"] == "POST" and scope["path"] in {
                 "/api/v1/auth/tailscale",
@@ -57,11 +60,23 @@ class ReadOnlyWeb:
                 )
                 is not None
             )
+            native_entry = (
+                self.allow_native_entry
+                and scope["method"] == "POST"
+                and re.fullmatch(
+                    r"/api/v1/servers/[A-Za-z0-9][A-Za-z0-9_-]{0,99}"
+                    r"/bots/[A-Za-z0-9][A-Za-z0-9_-]{0,99}/native/entries/"
+                    r"(pause|resume|acknowledge-daily-loss)",
+                    scope["path"],
+                )
+                is not None
+            )
             if (
                 scope["method"] not in {"GET", "HEAD", "OPTIONS"}
                 and not auth
                 and not account_setup
                 and not native_lifecycle
+                and not native_entry
             ):
                 response = JSONResponse(
                     {

@@ -48,7 +48,9 @@ test('login redirects preserve internal destinations and reject external forms',
 test('source discovery preserves declared server identity and rejects unsupported or duplicate bots', () => {
   assert.deepEqual(parseTradingVisualsSources({ sources: [{ bot: 'ok_rsi', server: 'native-owner' }] }), [{ bot: 'ok_rsi', server: 'native-owner' }]);
   assert.deepEqual(parseTradingVisualsSources({ sources: [] }), []);
-  for (const value of [{}, { sources: [{ bot: 'unknown', server: 'x' }] }, { sources: [{ bot: 'ok_rsi', server: '' }] }, { sources: [{ bot: 'ok_rsi', server: 'a' }, { bot: 'ok_rsi', server: 'b' }] }]) {
+  for (const value of [{}, { sources: [{ bot: '../unknown', server: 'x' }] }, { sources: [{ bot: 'ok_rsi', server: '' }] }, { sources: [{ bot: 'ok_rsi', server: 'a' }, { bot: 'ok_rsi', server: 'b' }] }]) {
     assert.throws(() => parseTradingVisualsSources(value), /invalid|duplicated/);
   }
 });
+
+test('accepts authorized registered V2 and future strategy sources',()=>{const rows=[{bot:'rsi_modular_v2',server:'rsibot-stack-v2'},{bot:'breakout_paper_v2',server:'rsibot-stack-v2'},{bot:'future_strategy',server:'owner'}];assert.deepEqual(parseTradingVisualsSources({sources:rows}),rows);for(const bot of ['', 'a'.repeat(81),'bad/name'])assert.throws(()=>parseTradingVisualsSources({sources:[{bot,server:'owner'}]}));});

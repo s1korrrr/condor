@@ -1,4 +1,4 @@
-export type TradingVisualsSource = { bot: 'ok_rsi' | 'ok_rsi_sui_sell_only'; server: string };
+export type TradingVisualsSource = { bot: string; server: string };
 
 export function parseTradingVisualsSources(payload: unknown): TradingVisualsSource[] {
   if (!payload || typeof payload !== 'object' || !('sources' in payload) || !Array.isArray(payload.sources)) {
@@ -7,7 +7,7 @@ export function parseTradingVisualsSources(payload: unknown): TradingVisualsSour
   const seen = new Set<string>();
   return payload.sources.map((source: unknown) => {
     if (!source || typeof source !== 'object' || !('bot' in source) || !('server' in source) ||
-        !['ok_rsi', 'ok_rsi_sui_sell_only'].includes(String(source.bot)) || typeof source.server !== 'string' || !source.server.trim() || seen.has(String(source.bot))) {
+        (typeof source.bot !== 'string' || !/^[A-Za-z0-9][A-Za-z0-9_-]{0,79}$/.test(source.bot)) || typeof source.server !== 'string' || !source.server.trim() || seen.has(String(source.bot))) {
       throw new Error('Trading Visuals source identity is invalid or duplicated');
     }
     seen.add(String(source.bot));

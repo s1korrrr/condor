@@ -36,3 +36,18 @@ merit, alert delivery, or a paper-to-live inventory transition. A deployment sti
 requires a qualified immutable native engine/API pair and an explicit operator
 mandate. Rollback is reverting this companion change; no existing instance is
 restarted by a repository update.
+
+## Native performance previews
+
+Telegram bot/controller previews preserve missing, invalid and stale native
+metrics as `UNAVAILABLE`. A genuine reported zero stays zero. Missing controller
+contributions cannot produce a complete aggregate, and malformed position data
+is disclosed. Native numeric TradeType values 1/2 render as BUY/SELL; unknown
+sides remain neutral instead of appearing short. These changes affect display,
+not trading or operator command authority.
+
+The root `deploy/modular-validation/native_consumer_smoke.py` exercises genuine
+paper fill/fee/recovery reports through actual API and Condor/Telegram consumer
+functions with captured local transports. It does not prove production broker
+ACLs, command acknowledgement or Telegram delivery. See rsibot #188 for its
+source-bound receipts and the selected shared-account qualification.

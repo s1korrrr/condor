@@ -16,6 +16,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.error import BadRequest
 from telegram.ext import ContextTypes
 
+from condor.fetchers.bots import _native_number
 from utils.telegram_formatters import (
     escape_markdown_v2,
     format_active_bots,
@@ -23,9 +24,62 @@ from utils.telegram_formatters import (
     format_uptime,
 )
 
-from ._shared import SIDE_LONG, clear_bots_state, get_bots_client, set_controller_config
+from ._shared import (
+    SIDE_LONG,
+    SIDE_SHORT,
+    clear_bots_state,
+    get_bots_client,
+    set_controller_config,
+)
 
 logger = logging.getLogger(__name__)
+
+
+def _performance_numbers(bot, performance):
+    """Use the web projection's nullable metrics and native freshness boundary."""
+    if (
+        bot.get("source") == "native_mqtt"
+        and bot.get("performance_current") is not True
+        or bot.get("metrics_available") is False
+    ):
+        return None, None, None
+    performance = performance if isinstance(performance, dict) else {}
+    realized = _native_number(performance, "realized_pnl_quote")
+    unrealized = _native_number(performance, "unrealized_pnl_quote")
+    if performance.get("metrics_available") is False:
+        return None, None, None
+    if performance.get("pnl_available") is False:
+        realized = unrealized = None
+    return realized, unrealized, _native_number(performance, "volume_traded")
+
+
+def _metric_sum(left, right):
+    if left is None or right is None:
+        return None
+    return _native_number({"value": left + right}, "value")
+
+
+def _metric_text(value, *, signed=False, decimals=2, volume=False):
+    if value is None:
+        return "UNAVAILABLE"
+    if volume:
+        return f"{value / 1000:.1f}k" if value >= 1000 else f"{value:.0f}"
+    return format(value, f"{'+' if signed else ''}.{decimals}f")
+
+
+def _position_marker(value):
+    """TradeType serializes as 1/2; an unknown side is not a short position."""
+    if type(value) is int:
+        if value == SIDE_LONG:
+            return "🟢", "L"
+        if value == SIDE_SHORT:
+            return "🔴", "S"
+    if isinstance(value, str):
+        if value.upper() in {"1", "BUY", "LONG", "TRADETYPE.BUY"}:
+            return "🟢", "L"
+        if value.upper() in {"2", "SELL", "SHORT", "TRADETYPE.SELL"}:
+            return "🔴", "S"
+    return "⚪", "?"
 
 
 async def _controller_config_target(
@@ -327,30 +381,28 @@ async def show_bot_detail(
         if performance:
             total_pnl = 0
             total_volume = 0
-            total_realized = 0
-            total_unrealized = 0
 
             # Collect controller data for table
             ctrl_rows = []
+            incomplete_performance = False
             all_positions = []
+            positions_unavailable = False
             all_closed = []
 
             for idx, (ctrl_name, ctrl_info) in enumerate(performance.items()):
                 if not isinstance(ctrl_info, dict):
+                    total_pnl = total_volume = None
+                    incomplete_performance = True
                     continue
 
                 ctrl_status = ctrl_info.get("status", "unknown")
                 ctrl_perf = ctrl_info.get("performance", {})
 
-                realized = ctrl_perf.get("realized_pnl_quote", 0) or 0
-                unrealized = ctrl_perf.get("unrealized_pnl_quote", 0) or 0
-                volume = ctrl_perf.get("volume_traded", 0) or 0
-                pnl = realized + unrealized
+                realized, unrealized, volume = _performance_numbers(bot_info, ctrl_perf)
+                pnl = _metric_sum(realized, unrealized)
 
-                total_pnl += pnl
-                total_volume += volume
-                total_realized += realized
-                total_unrealized += unrealized
+                total_pnl = _metric_sum(total_pnl, pnl)
+                total_volume = _metric_sum(total_volume, volume)
 
                 ctrl_rows.append(
                     {
@@ -365,12 +417,28 @@ async def show_bot_detail(
                 )
 
                 # Collect positions with controller info
+                ctrl_perf = ctrl_perf if isinstance(ctrl_perf, dict) else {}
                 positions = ctrl_perf.get("positions_summary", [])
+                if not isinstance(positions, list):
+                    positions_unavailable = True
+                    positions = []
                 if positions:
                     trading_pair = _extract_pair_from_name(ctrl_name)
                     for pos in positions:
+                        if not isinstance(pos, dict):
+                            positions_unavailable = True
+                            continue
                         all_positions.append(
-                            {"ctrl": ctrl_name, "pair": trading_pair, "pos": pos}
+                            {
+                                "ctrl": ctrl_name,
+                                "pair": trading_pair,
+                                "pos": pos,
+                                "available": (
+                                    bot_info.get("metrics_available") is not False
+                                    and ctrl_perf.get("metrics_available") is not False
+                                    and ctrl_perf.get("pnl_available") is not False
+                                ),
+                            }
                         )
 
                 # Collect closed counts
@@ -392,30 +460,26 @@ async def show_bot_detail(
                 )
                 name_padded = f"{status_char}{name_display}".ljust(28)
 
-                pnl_str = f"{row['pnl']:+.2f}".rjust(8)
-                vol_str = (
-                    f"{row['volume']/1000:.1f}k"
-                    if row["volume"] >= 1000
-                    else f"{row['volume']:.0f}"
-                )
+                pnl_str = _metric_text(row["pnl"], signed=True).rjust(8)
+                vol_str = _metric_text(row["volume"], volume=True)
                 vol_str = vol_str.rjust(7)
 
                 lines.append(f"{name_padded} {pnl_str} {vol_str}")
 
             # Total row
-            if len(ctrl_rows) > 1:
+            if len(ctrl_rows) > 1 or incomplete_performance:
                 lines.append("──────────────────────────── ──────── ───────")
                 total_name = "TOTAL".ljust(28)
-                pnl_str = f"{total_pnl:+.2f}".rjust(8)
-                vol_str = (
-                    f"{total_volume/1000:.1f}k"
-                    if total_volume >= 1000
-                    else f"{total_volume:.0f}"
-                )
+                pnl_str = _metric_text(total_pnl, signed=True).rjust(8)
+                vol_str = _metric_text(total_volume, volume=True)
                 vol_str = vol_str.rjust(7)
                 lines.append(f"{total_name} {pnl_str} {vol_str}")
 
             lines.append("```")
+            if incomplete_performance:
+                lines.append(
+                    "⚠️ Controller performance UNAVAILABLE \\(malformed report\\)"
+                )
 
             # Open Positions section (grouped by controller) - limit to avoid message too long
             MAX_POSITIONS_DISPLAY = 8
@@ -445,18 +509,34 @@ async def show_bot_detail(
                             break
                         pos = item["pos"]
                         trading_pair = item["pair"]
-                        side_raw = pos.get("side", "")
-                        is_long = "BUY" in str(side_raw).upper()
-                        side_emoji = "🟢" if is_long else "🔴"
-                        side_str = "L" if is_long else "S"
-                        amount = pos.get("amount", 0) or 0
-                        breakeven = pos.get("breakeven_price", 0) or 0
-                        pos_value = amount * breakeven
-                        pos_unrealized = pos.get("unrealized_pnl_quote", 0) or 0
+                        side_emoji, side_str = _position_marker(pos.get("side"))
+                        amount = _native_number(pos, "amount")
+                        breakeven = _native_number(pos, "breakeven_price")
+                        pos_value = (
+                            None
+                            if amount is None or breakeven is None
+                            else _native_number({"value": amount * breakeven}, "value")
+                        )
+                        pos_unrealized = _native_number(pos, "unrealized_pnl_quote")
+                        if (
+                            not item["available"]
+                            or pos.get("pnl_available") is False
+                            or pos.get("metrics_available") is False
+                            or (
+                                bot_info.get("source") == "native_mqtt"
+                                and bot_info.get("performance_current") is not True
+                            )
+                        ):
+                            pos_value = breakeven = pos_unrealized = None
                         lines.append(
-                            f"  📍 {side_emoji}{side_str} `${escape_markdown_v2(f'{pos_value:.2f}')}` @ `{escape_markdown_v2(f'{breakeven:.4f}')}` \\| U: `{escape_markdown_v2(f'{pos_unrealized:+.2f}')}`"
+                            f"  📍 {side_emoji}{side_str} `${escape_markdown_v2(_metric_text(pos_value))}` @ `{escape_markdown_v2(_metric_text(breakeven, decimals=4))}` \\| U: `{escape_markdown_v2(_metric_text(pos_unrealized, signed=True))}`"
                         )
                         positions_shown += 1
+
+            if positions_unavailable:
+                lines.append(
+                    "⚠️ Position data UNAVAILABLE \\(malformed native report\\)"
+                )
 
             # Closed Positions section (combined)
             if all_closed:
@@ -734,10 +814,8 @@ async def show_controller_detail(
     ctrl_status = ctrl_info.get("status", "unknown")
     ctrl_perf = ctrl_info.get("performance", {})
 
-    realized = ctrl_perf.get("realized_pnl_quote", 0) or 0
-    unrealized = ctrl_perf.get("unrealized_pnl_quote", 0) or 0
-    volume = ctrl_perf.get("volume_traded", 0) or 0
-    pnl = realized + unrealized
+    realized, unrealized, volume = _performance_numbers(bot_info, ctrl_perf)
+    pnl = _metric_sum(realized, unrealized)
 
     # Try to fetch controller config
     ctrl_config = None
@@ -769,13 +847,13 @@ async def show_controller_detail(
 
     # Build message with P&L summary + editable config
     status_emoji = "▶️" if ctrl_status == "running" else "⏸️"
-    pnl_emoji = "🟢" if pnl >= 0 else "🔴"
-    vol_str = f"{volume/1000:.1f}k" if volume >= 1000 else f"{volume:.0f}"
+    pnl_emoji = "⚪" if pnl is None else ("🟢" if pnl >= 0 else "🔴")
+    vol_str = _metric_text(volume, volume=True)
 
     lines = [
         f"{status_emoji} *{escape_markdown_v2(controller_name)}*",
         "",
-        f"{pnl_emoji} `{escape_markdown_v2(f'{pnl:+.2f}')}` \\| 💰 R: `{escape_markdown_v2(f'{realized:+.2f}')}` \\| 📊 U: `{escape_markdown_v2(f'{unrealized:+.2f}')}` \\| 📦 `{escape_markdown_v2(vol_str)}`",
+        f"{pnl_emoji} `{escape_markdown_v2(_metric_text(pnl, signed=True))}` \\| 💰 R: `{escape_markdown_v2(_metric_text(realized, signed=True))}` \\| 📊 U: `{escape_markdown_v2(_metric_text(unrealized, signed=True))}` \\| 📦 `{escape_markdown_v2(vol_str)}`",
     ]
 
     # Add editable config section if available
@@ -902,7 +980,9 @@ async def handle_stop_controller(
 
     keyboard = [
         [
-            InlineKeyboardButton("✅ Yes, Stop", callback_data="bots:confirm_stop_ctrl"),
+            InlineKeyboardButton(
+                "✅ Yes, Stop", callback_data="bots:confirm_stop_ctrl"
+            ),
             InlineKeyboardButton(
                 "❌ Cancel", callback_data=f"bots:ctrl_idx:{controller_idx}"
             ),
@@ -972,12 +1052,8 @@ async def handle_confirm_stop_controller(
 
         keyboard = [
             [
-                InlineKeyboardButton(
-                    "▶️ Clear switch", callback_data="bots:start_ctrl"
-                ),
-                InlineKeyboardButton(
-                    "⬅️ Back to Bot", callback_data="bots:back_to_bot"
-                ),
+                InlineKeyboardButton("▶️ Clear switch", callback_data="bots:start_ctrl"),
+                InlineKeyboardButton("⬅️ Back to Bot", callback_data="bots:back_to_bot"),
             ]
         ]
 

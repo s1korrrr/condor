@@ -1003,9 +1003,9 @@ export const api = {
       body: JSON.stringify({ yaml_content: yamlContent }),
     }),
 
-  getControllerConfigTemplate: (server: string, controllerType: string, controllerName: string) =>
+  getControllerConfigTemplate: (server: string, controllerType: string, controllerName: string, profile?: string) =>
     apiFetch<Record<string, unknown>>(
-      `/api/v1/servers/${encodeURIComponent(server)}/controllers/${encodeURIComponent(controllerType)}/${encodeURIComponent(controllerName)}/template`,
+      `/api/v1/servers/${encodeURIComponent(server)}/controllers/${encodeURIComponent(controllerType)}/${encodeURIComponent(controllerName)}/template${profile ? `?profile=${encodeURIComponent(profile)}` : ""}`,
     ),
 
   createControllerConfig: (server: string, configId: string, data: Record<string, unknown>) =>

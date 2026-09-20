@@ -34,6 +34,46 @@ test('controller tab retains native evidence and hides unrelated inspector',()=>
  const html=render({section:'controllers'});assert.match(html,/Controller observations/);assert.match(html,/Observed price levels/);assert.doesNotMatch(html,/position inspector/);
 });
 
+test('buy/sell trips tab lists filled realized PnL and omits guessed unknown-cost PnL',()=>{
+ const trips=[{
+  pair:'ETH-USDC',quote:'USDC',sourceDbId:'db',openedAt:'2026-09-01T00:00:00Z',closedAt:'2026-09-01T01:00:00Z',
+  outcome:'filled',pnlUnavailableReason:null,buyAmountBase:'1',sellAmountBase:'1',remainingBase:'0',
+  remainingCostQuote:0,realizedPnlQuote:10,feesQuote:0.1,fills:[{fillId:'s1',orderId:'o',side:'sell',amountBase:'1',priceQuote:110,feeQuote:0,timestamp:'2026-09-01T01:00:00Z',realizedPnlQuote:10}],
+ },{
+  pair:'SUI-USDC',quote:'USDC',sourceDbId:'db',openedAt:'2026-09-12T20:42:00Z',closedAt:null,
+  outcome:'unknown_cost',pnlUnavailableReason:'unknown_wallet_acquisition_cost',buyAmountBase:'0',sellAmountBase:'20.975',remainingBase:'0',
+  remainingCostQuote:null,realizedPnlQuote:null,feesQuote:0,fills:[],
+ }];
+ const html=render({section:'trips',trips});
+ assert.match(html,/Buy\/sell trips/);assert.match(html,/>Filled</);assert.match(html,/\+10 USDC/);assert.match(html,/Unknown cost/);
+ assert.match(html,/unknown wallet acquisition cost/);assert.doesNotMatch(html,/\+20\.975/);assert.doesNotMatch(html,/position inspector/);
+});
+
+test('cancelled unfilled orders collapse out of the trip table',()=>{
+ const trips=[{
+  pair:'ETH-USDC',quote:'USDC',sourceDbId:'db',openedAt:'2026-09-01T00:00:00Z',closedAt:'2026-09-01T01:00:00Z',
+  outcome:'filled',pnlUnavailableReason:null,buyAmountBase:'1',sellAmountBase:'1',remainingBase:'0',
+  remainingCostQuote:0,realizedPnlQuote:10,feesQuote:0,fills:[],
+ },{
+  pair:'ETH-USDC',quote:'USDC',sourceDbId:'db',openedAt:'2026-09-01T03:00:00Z',closedAt:'2026-09-01T03:00:00Z',
+  outcome:'cancelled',pnlUnavailableReason:null,buyAmountBase:'0',sellAmountBase:'0',remainingBase:'0',
+  remainingCostQuote:null,realizedPnlQuote:null,feesQuote:0,fills:[],
+ }];
+ const html=render({section:'trips',trips});
+ assert.match(html,/Cancelled unfilled orders \(1\)/);
+ assert.doesNotMatch(html,/<td>Cancelled</);
+});
+
+test('selected position uses fill-replay remaining cost when the open trip has basis',()=>{
+ const trips=[{
+  pair:'ETH-USDC',quote:'USDC',sourceDbId:'db',openedAt:'2026-09-01T00:00:00Z',closedAt:null,outcome:'in_bag',
+  pnlUnavailableReason:null,buyAmountBase:'0.04',sellAmountBase:'0',remainingBase:'0.04',remainingCostQuote:99,
+  realizedPnlQuote:0,feesQuote:0,fills:[],
+ }];
+ const html=render({trips});
+ assert.match(html,/Fill-replay remaining cost 99 USDC/);assert.match(html,/still in the bag 0.04/);assert.doesNotMatch(html,/Gross purchase spend/);
+});
+
 test('owner-keyed pending command survives remount without leaking to another owner',()=>{
  let revision=0;
  const mutations=[];

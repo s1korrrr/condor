@@ -15,6 +15,7 @@ from pydantic import BaseModel, ConfigDict
 from condor.controller_configs import clean_config_for_save, controller_config_identity
 from condor.fetchers.bots import build_bots_page, extract_bots_list
 from condor.rsi_controllers import (
+    load_controller_template,
     is_managed_rsi_controller,
     load_deployable_controller_types,
     validate_controller_config_for_write,
@@ -696,6 +697,7 @@ async def get_controller_config_template(
     name: str,
     controller_type: str,
     controller_name: str,
+    profile: str | None = None,
     user: WebUser = Depends(get_current_user),
 ):
     """Fetch the config template/schema for a controller."""
@@ -705,9 +707,9 @@ async def get_controller_config_template(
 
     client = await cm.get_client(name)
     try:
-        result = await client.controllers.get_controller_config_template(
-            controller_type, controller_name
-        )
+        result = await load_controller_template(client, controller_type, controller_name, profile)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         raise HTTPException(status_code=502, detail=str(e))
 

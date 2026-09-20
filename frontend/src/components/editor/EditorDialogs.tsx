@@ -551,6 +551,7 @@ export function NewConfigDialog({
   const typeOptions = Object.keys(controllerTypes);
   const [selectedType, setSelectedType] = useState(initialControllerType ?? typeOptions[0] ?? "");
   const namesForType = controllerTypes[selectedType] ?? [];
+  const [selectedProfile, setSelectedProfile] = useState("");
   const [selectedName, setSelectedName] = useState(initialControllerName ?? namesForType[0] ?? "");
 
   // When type changes, reset name to first available
@@ -565,9 +566,9 @@ export function NewConfigDialog({
   );
 
   const { data: template, isLoading } = useQuery({
-    queryKey: ["controller-template", server, selectedType, selectedName],
-    queryFn: () => api.getControllerConfigTemplate(server, selectedType, selectedName),
-    enabled: !!selectedType && !!selectedName,
+    queryKey: ["controller-template", server, selectedType, selectedName, selectedProfile],
+    queryFn: () => api.getControllerConfigTemplate(server, selectedType, selectedName, selectedName === "rsi_modular" ? selectedProfile : undefined),
+    enabled: !!selectedType && !!selectedName && (selectedName !== "rsi_modular" || !!selectedProfile),
   });
 
   const createMutation = useMutation({
@@ -575,6 +576,7 @@ export function NewConfigDialog({
       const config: Record<string, unknown> = {
         ...hiddenDefaults,
         ...fieldValues,
+        ...(selectedName === "rsi_modular" ? { profile: selectedProfile } : {}),
         controller_name: selectedName,
         controller_type: selectedType,
       };
@@ -592,6 +594,7 @@ export function NewConfigDialog({
     "controller_type",
     "manual_kill_switch",
     "initial_positions",
+    "profile",
   ]);
 
   const { visibleFields, hiddenDefaults } = useMemo(() => {
@@ -658,6 +661,17 @@ export function NewConfigDialog({
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
+          {selectedName === "rsi_modular" && (
+            <label className="block text-sm">
+              Compatibility profile
+              <select aria-label="Compatibility profile" value={selectedProfile}
+                onChange={(event) => { setSelectedProfile(event.target.value); setFieldValues({}); }}>
+                <option value="">Select a profile</option>
+                <option value="ok_rsi">OK RSI</option>
+                <option value="rsi_v5">RSI V5</option>
+              </select>
+            </label>
+          )}
           {/* Controller picker */}
           <div className="grid grid-cols-2 gap-3">
             <div>
@@ -711,7 +725,9 @@ export function NewConfigDialog({
             </div>
           ) : visibleFields.length === 0 ? (
             <p className="text-xs text-[var(--color-text-muted)] py-4">
-              No template fields available. The config will be created with basic fields only.
+              {selectedName === "rsi_modular" && !selectedProfile
+                ? "Select a compatibility profile to load its native configuration."
+                : "No configuration template is available."}
             </p>
           ) : (
             <div className="grid grid-cols-2 gap-x-4 gap-y-3">
@@ -777,7 +793,8 @@ export function NewConfigDialog({
           </button>
           <button
             onClick={() => createMutation.mutate()}
-            disabled={!configId.trim() || !selectedName || createMutation.isPending}
+            disabled={!configId.trim() || !selectedName || !template || isLoading ||
+              (selectedName === "rsi_modular" && !selectedProfile) || createMutation.isPending}
             className="flex items-center gap-1.5 rounded-md bg-[var(--color-primary)] px-4 py-1.5 text-sm font-medium text-white transition-all disabled:opacity-40"
           >
             {createMutation.isPending && (

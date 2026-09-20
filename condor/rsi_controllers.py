@@ -52,11 +52,18 @@ async def load_deployable_controller_types(client: Any) -> dict[str, list[str]]:
         payload = await client.controllers._get("/controllers/catalog")
         rows = payload.get("controllers", []) if isinstance(payload, dict) else []
         grouped: dict[str, list[str]] = defaultdict(list)
+        unified = any(isinstance(row, dict) and row.get("deployable") is True
+                      and row.get("controller_type") == "generic"
+                      and row.get("controller_name") == "rsi_modular" for row in rows)
         for row in rows:
             if not isinstance(row, dict) or row.get("deployable") is not True:
                 continue
             controller_type = str(row.get("controller_type", ""))
             controller_name = str(row.get("controller_name", ""))
+            # New configurations use one public entry point. Existing configs
+            # still load through their original API models and receipts.
+            if unified and controller_type == "generic" and controller_name in {"modular_ok_rsi", "modular_rsi_v5"}:
+                continue
             if controller_type and controller_name:
                 grouped[controller_type].append(controller_name)
         return {key: sorted(set(value)) for key, value in grouped.items()}

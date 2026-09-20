@@ -410,3 +410,19 @@ def test_missing_or_inconsistent_native_source_identity_never_deploys(bindings):
             )
         )
     assert orchestration.deployments == []
+
+
+def test_new_config_catalog_uses_one_public_modular_entry():
+    rows = [{'controller_type': 'generic', 'controller_name': name, 'deployable': True}
+            for name in ('modular_ok_rsi', 'modular_rsi_v5', 'rsi_modular', 'modular_spot')]
+    client = _Client(_Controllers(catalog={'controllers': rows}))
+    assert asyncio.run(load_deployable_controller_types(client)) == {
+        'generic': ['modular_spot', 'rsi_modular']}
+
+
+def test_older_api_keeps_existing_modular_choices():
+    rows = [{'controller_type': 'generic', 'controller_name': name, 'deployable': True}
+            for name in ('modular_ok_rsi', 'modular_rsi_v5')]
+    client = _Client(_Controllers(catalog={'controllers': rows}))
+    assert asyncio.run(load_deployable_controller_types(client)) == {
+        'generic': ['modular_ok_rsi', 'modular_rsi_v5']}

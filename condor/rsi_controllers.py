@@ -15,7 +15,25 @@ from typing import Any, Iterable
 
 from condor.controller_configs import clean_config_for_save, controller_config_identity
 
-NATIVE_CONTROLLERS = frozenset({"modular_spot", "modular_ok_rsi", "modular_rsi_v5"})
+NATIVE_CONTROLLERS = frozenset({"modular_spot", "modular_ok_rsi", "modular_rsi_v5", "rsi_modular"})
+
+
+def require_explicit_profile(config: dict[str, Any]) -> None:
+    """Check routing identity only; the native API validates strategy parameters."""
+    if config.get("controller_name") == "rsi_modular" and config.get("profile") not in ("ok_rsi", "rsi_v5"):
+        raise ValueError("RSI Modular requires an explicit ok_rsi or rsi_v5 profile")
+
+
+async def load_controller_template(client: Any, controller_type: str, controller_name: str,
+                                   profile: str | None = None) -> dict:
+    if controller_name == "rsi_modular":
+        require_explicit_profile({"controller_name": controller_name, "profile": profile})
+        # The pinned SDK has no profile argument; use its authenticated transport.
+        return await client.controllers._get(
+            f"/controllers/{controller_type}/{controller_name}/config/template",
+            params={"profile": profile},
+        )
+    return await client.controllers.get_controller_config_template(controller_type, controller_name)
 
 
 def is_managed_rsi_controller(controller_name: str) -> bool:
@@ -79,6 +97,7 @@ async def validate_controller_config_for_write(
 ) -> dict[str, Any]:
     """Normalize and validate a config through its exact API-owned model."""
     clean = clean_config_for_save(config)
+    require_explicit_profile(clean)
     controller_type = str(clean.get("controller_type", "")).strip()
     controller_name = str(clean.get("controller_name", "")).strip()
     if not controller_type or not controller_name:
@@ -153,6 +172,7 @@ async def deploy_controller_bot(client: Any, **parameters) -> dict:
         )
     seals = []
     for config in configs:
+        require_explicit_profile(config)
         binding = config.get("recipe_binding")
         seal = binding.get("source_sha256") if isinstance(binding, dict) else None
         if not isinstance(seal, str) or not re.fullmatch(r"[0-9a-f]{64}", seal):

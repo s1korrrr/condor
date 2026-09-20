@@ -38,17 +38,19 @@ from unittest.mock import AsyncMock
 import pytest
 
 
+@pytest.mark.parametrize("profile", [None, "ok_rsi", "rsi_v5"])
 @pytest.mark.parametrize("flow", ["execute", "custom_name"])
 @pytest.mark.parametrize("seal", ["a" * 64, None])
 def test_telegram_native_deploy_forwards_seal_or_rejects_before_api(
-    monkeypatch, flow, seal
+    monkeypatch, flow, seal, profile
 ):
     from handlers.bots import controller_handlers as handlers
 
     row = {
         "_config_name": "native",
         "id": "modular_spot_test",
-        "controller_name": "modular_ok_rsi",
+        "controller_name": "rsi_modular" if profile else "modular_ok_rsi",
+        **({"profile": profile} if profile else {}),
         "recipe_binding": {"source_sha256": seal},
     }
     transport = AsyncMock(return_value={"success": True, "status": "success"})

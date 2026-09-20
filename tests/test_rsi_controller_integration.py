@@ -343,7 +343,7 @@ def test_native_and_legacy_families_require_finite_loss_rails(name, limit):
         )
 
 
-@pytest.mark.parametrize("name", ["modular_spot", "modular_ok_rsi", "modular_rsi_v5"])
+@pytest.mark.parametrize("name", ["modular_spot", "modular_ok_rsi", "modular_rsi_v5", "rsi_modular"])
 def test_modular_deployment_requires_immutable_image(name):
     with pytest.raises(ValueError, match="immutable"):
         require_safe_rsi_deployment(
@@ -354,12 +354,14 @@ def test_modular_deployment_requires_immutable_image(name):
         )
 
 
-def test_modular_seal_reaches_extended_authenticated_api_request():
+@pytest.mark.parametrize("profile", [None, "ok_rsi", "rsi_v5"])
+def test_modular_seal_reaches_extended_authenticated_api_request(profile):
     seal = "a" * 64
     config = {
         "_config_name": "native",
         "id": "modular_spot_test",
-        "controller_name": "modular_ok_rsi",
+        "controller_name": "rsi_modular" if profile else "modular_ok_rsi",
+        **({"profile": profile} if profile else {}),
         "recipe_binding": {"source_sha256": seal},
     }
     orchestration = _BotOrchestration()

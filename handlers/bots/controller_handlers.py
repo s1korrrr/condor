@@ -99,6 +99,8 @@ def _get_controller_type_display(controller_name: str) -> tuple[str, str]:
         "xemm": ("XEMM", "🔄"),
         "pmm": ("PMM", "📈"),
     }
+    if controller_name == "rsi_modular":
+        return "RSI Modular", "🧭"
     controller_lower = controller_name.lower() if controller_name else ""
     for key, (name, emoji) in type_map.items():
         if key in controller_lower:
@@ -128,6 +130,9 @@ def _format_config_line(cfg: dict, index: int) -> str:
         config_id = controller_config_identity(cfg) or "unnamed"
         display = config_id
 
+    if cfg.get("controller_name") == "rsi_modular":
+        profile = cfg.get("profile")
+        display += f" · RSI Modular / {profile if profile in ('ok_rsi', 'rsi_v5') else 'UNAVAILABLE'}"
     return f"{index}. {display}"
 
 

@@ -350,3 +350,13 @@ async def fetch_bots_status(client, **_kw):
 async def fetch_bot_runs(client, **_kw):
     """Fetch bot run history."""
     return await client.bot_orchestration.get_bot_runs()
+
+
+def extract_fleet_items(result: Any, *, enabled: bool = False) -> list[dict]:
+    """Opt-in Fleet catalogue rows. Disabled keeps the existing bots list unchanged."""
+    if not enabled or not isinstance(result, dict):
+        return []
+    items = result.get("items")
+    if not isinstance(items, list):
+        return []
+    return [item for item in items if isinstance(item, dict)]

@@ -23,6 +23,7 @@ export function serverCapabilities(status: ServerStatus | undefined) {
     executors: supports("executor_management"),
     deployment: supports("docker"),
     botRead: online && (!native || supports("native_status")),
+    fleetCatalogue: native ? supports("fleet_catalogue") : false,
     botStop: online && (native ? supports("native_controls_enabled") && supports("native_stop") : true),
     controllerMutation: online && !native,
     controllerHistory: supports("performance_history"),

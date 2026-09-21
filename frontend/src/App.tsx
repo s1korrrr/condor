@@ -25,6 +25,8 @@ const Operations = lazy(() => import("@/pages/Operations").then(module => ({defa
 const Overview = lazy(() => import("@/pages/Overview").then(module => ({default:module.Overview})));
 const Research = lazy(() => import("@/pages/Research").then(module => ({default:module.Research})));
 const TradingVisuals = lazy(() => import("@/pages/TradingVisuals").then(module => ({ default: module.TradingVisuals })));
+const FleetPage = lazy(() => import("@/fleet/FleetPage").then(module => ({ default: module.FleetRoute })));
+const FleetDetail = lazy(() => import("@/fleet/FleetDetail").then(module => ({ default: module.FleetDetailRoute })));
 
 function Home() {
   const {access,isLoading}=useServerCapabilities();
@@ -108,6 +110,8 @@ export default function App() {
                 <Route path="/portfolio" element={<PortfolioRoute />} />
                 <Route path="/bots" element={<Bots />} />
                 <Route path="/bots/:id" element={<BotDetail />} />
+                <Route path="/fleet" element={<Suspense fallback={<p role="status">Loading fleet…</p>}><FleetPage /></Suspense>} />
+                <Route path="/fleet/:botKey" element={<Suspense fallback={<p role="status">Loading fleet…</p>}><FleetDetail /></Suspense>} />
                 <Route path="/trade" element={<CreateExecutor />} />
                 <Route path="/trading-visuals" element={<Suspense fallback={<p role="status">Loading Trading Visuals…</p>}><TradingVisuals /></Suspense>} />
                 <Route path="/executors" element={<Executors />} />

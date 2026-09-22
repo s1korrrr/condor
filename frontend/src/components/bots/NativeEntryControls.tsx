@@ -39,14 +39,15 @@ export function NativeEntryControls({server,botName}:{server:string;botName:stri
   const observationNow=Math.max(now,status.dataUpdatedAt);
   const view=entryObservation(status.isError?undefined:status.data,botName,observationNow,status.dataUpdatedAt);
   const command=session.data?.command;
+  const commandId=command?.id;
   const observed=!!command && entryCommandObserved(status.isError?undefined:status.data,botName,observationNow,status.dataUpdatedAt,command);
   const waiting=!!command && !observed;
   useEffect(()=>{
-    if(!observed || !command)return;
+    if(!observed || !commandId)return;
     client.setQueryData<Session>(['native-entry-session',server,botName],{
       command:null,message:'Matching command ID and entry state observed from the native owner.'});
     if(pendingKey)clearPendingEntryCommand(browserPendingStorage(),pendingKey);
-  },[botName,client,command?.id,observed,pendingKey,server]);
+  },[botName,client,commandId,observed,pendingKey,server]);
   const setSession=(next:Session,requirePendingWrite=false)=>{
     if(next.command){
       const persisted=!!pendingKey && writePendingEntryCommand(browserPendingStorage(),pendingKey,next.command);

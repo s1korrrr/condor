@@ -61,6 +61,7 @@ export function entryCommandObserved(value:unknown,bot:string,now:number,receive
 }
 export function entryPublicationMessage(status:number,body:unknown) {
   const payload=object(body);
+  if(status>=500) return {rejected:false,text:'Publication outcome unknown. Await matching native state before retrying.'};
   if(status>=400) return {rejected:true,text:typeof payload.detail==='string'?payload.detail:'Native owner rejected this request.'};
   return {rejected:false,text:'Submitted; waiting for matching native entry state. Publication does not confirm execution.'};
 }

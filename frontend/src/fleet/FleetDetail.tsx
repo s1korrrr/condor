@@ -7,7 +7,7 @@ import { toFleetRow } from './view-model'
 
 const TABS = ['Overview', 'Charts', 'Orders/Fills', 'Inventory', 'Decisions', 'Modules', 'Operations', 'Evidence']
 
-export function FleetDetail({ snapshot }) {
+export function FleetDetail({ snapshot }: { snapshot: Record<string, unknown> }) {
   const { botKey } = useParams()
   const row = toFleetRow(snapshot || { bot_key: botKey })
   return (
@@ -33,5 +33,5 @@ export function FleetDetailRoute() {
     enabled: !!server && !!botKey,
   })
   if (query.isPending) return <p role="status">Loading fleet…</p>
-  return <FleetDetail snapshot={query.data || { bot_key: botKey, identity_verified: false, reason_code: query.data?.reason_code }} />
+  return <FleetDetail snapshot={query.data ?? { bot_key: botKey, identity_verified: false, reason_code: query.isError ? 'source_unavailable' : 'catalogue_unavailable' }} />
 }

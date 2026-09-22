@@ -5,7 +5,7 @@ import { useServer } from '@/hooks/useServer'
 import { api } from '@/lib/api'
 import { toFleetRow } from './view-model'
 
-export function FleetPage({ items = [] }) {
+export function FleetPage({ items = [] }: { items?: Array<Record<string, unknown>> }) {
   const rows = items.map(toFleetRow)
   const v2 = rows.filter((row) => row.stackGeneration === 'modular_v2')
   const legacy = rows.filter((row) => row.stackGeneration === 'legacy_v1')

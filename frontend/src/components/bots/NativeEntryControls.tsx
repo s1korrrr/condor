@@ -4,7 +4,7 @@ import {authFetch} from '@/lib/auth-token';
 import {sessionRevision} from '@/lib/auth-session';
 import {entryCommandObserved, entryLabels, entryObservation, entryPath, entryPublicationMessage, type EntryAction} from '@/lib/native-entry-controls';
 
-type Command = {id:string; action:EntryAction; submittedAt:number};
+type Command = {id:string; action:EntryAction};
 type Session = {command:Command|null; message:string};
 
 export function NativeEntryControls({server,botName}:{server:string;botName:string}) {
@@ -20,17 +20,20 @@ export function NativeEntryControls({server,botName}:{server:string;botName:stri
     if(!response.ok) throw new Error(`Native entry state unavailable (${response.status}).`);
     return response.json() as Promise<unknown>;
   },refetchInterval:5000,retry:false});
-  const view=entryObservation(status.isError?undefined:status.data,botName,now);
+  // Both samples use the browser clock. A query can publish between timer
+  // ticks; its receipt is then the newer local clock sample for this render.
+  const observationNow=Math.max(now,status.dataUpdatedAt);
+  const view=entryObservation(status.isError?undefined:status.data,botName,observationNow,status.dataUpdatedAt);
   const command=session.data?.command;
-  const observed=!!command && entryCommandObserved(status.isError?undefined:status.data,botName,now,command);
+  const observed=!!command && entryCommandObserved(status.isError?undefined:status.data,botName,observationNow,status.dataUpdatedAt,command);
   const waiting=!!command && !observed;
   const mutation=useMutation({retry:false,mutationFn:async(action:EntryAction)=>{
     const latest=client.getQueryData<Session>(key);
-    if(authRevision!==sessionRevision() || !entryObservation(status.isError?undefined:status.data,botName,Date.now()).allowed
-      || (latest?.command && !entryCommandObserved(status.data,botName,Date.now(),latest.command))) {
+    if(authRevision!==sessionRevision() || !entryObservation(status.isError?undefined:status.data,botName,Date.now(),status.dataUpdatedAt).allowed
+      || (latest?.command && !entryCommandObserved(status.data,botName,Date.now(),status.dataUpdatedAt,latest.command))) {
       return {status:409,body:{detail:'Fresh matching native state is required before another command.'}};
     }
-    const next={id:crypto.randomUUID(),action,submittedAt:Date.now()};
+    const next={id:crypto.randomUUID(),action};
     client.setQueryData<Session>(key,{command:next,message:'Submitting to the registered native owner…'});
     const response=await authFetch(entryPath(server,botName,action),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({command_id:next.id}),signal:AbortSignal.timeout(20000)});
     return {status:response.status,body:await response.json() as unknown};

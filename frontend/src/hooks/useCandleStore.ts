@@ -47,14 +47,14 @@ export function useCandleStore(
     if (!key) return;
 
     let active = true;
-    const threshold = getStaleThreshold(interval);
+    const threshold = () => candleStore.getStaleThreshold(key, getStaleThreshold(interval));
     const cached = candleStore.subscribe(key);
     const publish = (candles: CandleData[]) => {
       if (!active) return;
       setSnapshot({
         key,
         candles,
-        isStale: candleStore.getLastUpdateAge(key) > threshold,
+        isStale: candleStore.getLastUpdateAge(key) > threshold(),
       });
     };
     const removeListener = candleStore.onUpdate(key, publish);
@@ -63,7 +63,7 @@ export function useCandleStore(
 
     const timer = setInterval(() => {
       if (!active) return;
-      const isStale = candleStore.getLastUpdateAge(key) > threshold;
+      const isStale = candleStore.getLastUpdateAge(key) > threshold();
       setSnapshot(previous => previous.key === key && previous.isStale !== isStale
         ? { ...previous, isStale }
         : previous);
@@ -89,7 +89,7 @@ export function useCandleStore(
   const matches = Boolean(key) && snapshot.key === key;
   return {
     candles: matches ? snapshot.candles : EMPTY_CANDLES,
-    isStale: key ? !matches || snapshot.isStale || candleStore.getLastUpdateAge(key) > getStaleThreshold(interval) : false,
+    isStale: key ? !matches || snapshot.isStale || candleStore.getLastUpdateAge(key) > candleStore.getStaleThreshold(key, getStaleThreshold(interval)) : false,
     mergeCandles,
     setDuration,
   };

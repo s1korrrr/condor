@@ -8,3 +8,9 @@ test('default source follows selected server; explicit bot links fail closed',()
  assert.equal(sources.selectTradingVisualsSource(rows,'ok_rsi','sui').bot,'ok_rsi');
  assert.equal(sources.selectTradingVisualsSource(rows,'unknown','sui'),undefined);
 });
+test('registry owners without ok_rsi still resolve from discovery',()=>{
+ const rows=[{bot:'rsi_modular_v2',server:'native-rsi-modular-v2'},{bot:'breakout_paper_v2',server:'paper'}];
+ assert.equal(sources.selectTradingVisualsSource(rows,null,'native-rsi-modular-v2').bot,'rsi_modular_v2');
+ assert.equal(sources.selectTradingVisualsSource(rows,null,null).bot,'rsi_modular_v2');
+ assert.equal(sources.selectTradingVisualsSource(rows,'breakout_paper_v2',null).bot,'breakout_paper_v2');
+});

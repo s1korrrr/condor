@@ -32,6 +32,7 @@ function harness() {
     unsubscribe: key => unsubscriptions.push(key),
     onUpdate: (key, listener) => { listeners.set(key, listener); return () => listeners.delete(key); },
     getLastUpdateAge: key => ages.get(key) ?? Infinity,
+    getStaleThreshold: (_key, fallback) => fallback,
     mergeCandles: (key, rows) => merges.push([key, rows]),
     setDuration: (key, seconds) => durations.push([key, seconds]),
   };

@@ -89,8 +89,9 @@ export class CandleStore {
   collections = new Map<string, CandleCollection>();
   subscriptions = new Map<string, Subscription>();
   listeners = new Map<string, Set<Listener>>();
-  /** Live receipt time per channel. History writes must not update this. */
+  /** Current stream/poll receipt time; not an exchange event-time guarantee. */
   lastUpdateTime = new Map<string, number>();
+  private receiptAgeLimit = new Map<string, number>();
   historyReceiptTime = new Map<string, number>();
   quality = new Map<string, CandleQuality>();
 
@@ -128,15 +129,25 @@ export class CandleStore {
       this.wsCleanup = null;
     }
     this.ws = null;
+    this._invalidateReceipts();
+  }
+
+  private _invalidateReceipts(): void {
+    const keys = [...this.lastUpdateTime.keys()];
+    this.lastUpdateTime.clear();
+    this.receiptAgeLimit.clear();
+    for (const key of keys) this._notify(key);
   }
 
   private _bindWs(ws: CondorWebSocket): void {
     this.ws = ws;
 
-    this.wsCleanup = ws.onMessage((channel: string, data: unknown) => {
-      if (!channel.startsWith("candles:")) return;
+    const removeMessage = ws.onMessage((channel: string, data: unknown) => {
+      if (typeof channel !== "string" || !channel.startsWith("candles:") || !data || typeof data !== "object") return;
       const payload = data as {
         type: string;
+        kind?: CandleInsertKind;
+        receipt_max_age_ms?: number;
         candle?: CandleData;
         data?: CandleData[];
         message?: string;
@@ -145,11 +156,20 @@ export class CandleStore {
       if (payload.type === "candle_update" && payload.candle) {
         this._upsertOne(channel, payload.candle, "live");
         this._notify(channel);
-      } else if (payload.type === "candles" && payload.data?.length) {
-        this._upsertMany(channel, payload.data, "history");
+      } else if (payload.type === "candles" && Array.isArray(payload.data) && payload.data.length) {
+        // Unmarked/older-server batches are conservatively historical. A
+        // backend current poll or batched stream explicitly supplies kind.
+        this._upsertMany(channel, payload.data, payload.kind === "live" ? "live" : "history", payload.receipt_max_age_ms);
+        this._notify(channel);
+      } else if (payload.type === "error") {
+        this.lastUpdateTime.delete(channel);
+        this.receiptAgeLimit.delete(channel);
         this._notify(channel);
       }
     });
+    const removeConnect = ws.onConnect(() => this._invalidateReceipts());
+    const removeDisconnect = ws.onDisconnect(() => this._invalidateReceipts());
+    this.wsCleanup = () => { removeMessage(); removeConnect(); removeDisconnect(); };
 
     for (const [key, sub] of this.subscriptions) {
       if (sub.refCount > 0) {
@@ -222,6 +242,10 @@ export class CandleStore {
     return t === undefined ? Infinity : this.now() - t;
   }
 
+  getStaleThreshold(key: string, defaultThreshold: number): number {
+    return Math.max(defaultThreshold, this.receiptAgeLimit.get(key) ?? 0);
+  }
+
   getQuality(key: string): CandleQuality {
     return this.quality.get(key) ?? { rejected: 0, conflicts: [] };
   }
@@ -240,6 +264,7 @@ export class CandleStore {
   }
 
   dispose(): void {
+    this._unbindWs();
     if (this.idleTimer !== null) clearInterval(this.idleTimer);
     for (const sub of this.subscriptions.values()) {
       if (sub.teardownTimer !== null) {
@@ -274,13 +299,14 @@ export class CandleStore {
     return col;
   }
 
-  private _accept(key: string, candle: unknown, kind: CandleInsertKind): boolean {
+  private _accept(key: string, candle: unknown, kind: CandleInsertKind, ageLimit?: number): boolean {
     const normalized = validateSpotCandle(candle);
     if (!normalized) {
       this._quality(key).rejected += 1;
       return false;
     }
     const col = this._getOrCreateCollection(key);
+    const latestTimestamp = Math.max(-Infinity, ...col.map.keys());
     const existing = col.map.get(normalized.timestamp);
     if (existing && !sameCandle(existing, normalized)) {
       if (kind === "history") {
@@ -294,8 +320,16 @@ export class CandleStore {
     col.sorted = null;
     col.lastAccessed = this.now();
     const receipt = this.now();
-    if (kind === "live") this.lastUpdateTime.set(key, receipt);
-    else this.historyReceiptTime.set(key, receipt);
+    if (kind === "live") {
+      if (normalized.timestamp >= latestTimestamp) {
+        this.lastUpdateTime.set(key, receipt);
+        // Gecko polls can be 60s apart. Permit the declared two-poll deadline,
+        // bounded by the existing longest freshness category (120 seconds).
+        if (typeof ageLimit === "number" && Number.isFinite(ageLimit) && ageLimit > 0 && ageLimit <= 120000) {
+          this.receiptAgeLimit.set(key, ageLimit);
+        } else this.receiptAgeLimit.delete(key);
+      }
+    } else this.historyReceiptTime.set(key, receipt);
     evictOldest(col);
     return true;
   }
@@ -304,9 +338,9 @@ export class CandleStore {
     this._accept(key, candle, kind);
   }
 
-  private _upsertMany(key: string, candles: CandleData[], kind: CandleInsertKind): void {
+  private _upsertMany(key: string, candles: CandleData[], kind: CandleInsertKind, ageLimit?: number): void {
     if (!candles.length) return;
-    for (const candle of candles) this._accept(key, candle, kind);
+    for (const candle of candles) this._accept(key, candle, kind, ageLimit);
   }
 
   private _notify(key: string): void {
@@ -328,6 +362,7 @@ export class CandleStore {
     this.collections.delete(key);
     this.listeners.delete(key);
     this.lastUpdateTime.delete(key);
+    this.receiptAgeLimit.delete(key);
     this.historyReceiptTime.delete(key);
     this.quality.delete(key);
   }

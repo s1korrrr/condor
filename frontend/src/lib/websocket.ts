@@ -18,6 +18,7 @@ export class CondorWebSocket {
   private authRevision: number;
   private handlers: Set<MessageHandler> = new Set();
   private connectHandlers: Set<ConnectHandler> = new Set();
+  private disconnectHandlers: Set<ConnectHandler> = new Set();
   private channels: Set<string> = new Set();
   private _channelExtras: Map<string, Record<string, unknown> | undefined> = new Map();
   private reconnectDelay = 1000;
@@ -42,6 +43,7 @@ export class CondorWebSocket {
     this.shouldConnect = false;
     this.ws?.close();
     this.ws = null;
+    for (const handler of this.disconnectHandlers) handler();
   }
 
   subscribe(channel: string, extras?: Record<string, unknown>) {
@@ -76,6 +78,12 @@ export class CondorWebSocket {
     };
   }
 
+  /** Invalidate source receipts as soon as transport continuity is lost. */
+  onDisconnect(handler: ConnectHandler) {
+    this.disconnectHandlers.add(handler);
+    return () => { this.disconnectHandlers.delete(handler); };
+  }
+
   private _connect() {
     if (!this.shouldConnect) return;
 
@@ -108,6 +116,7 @@ export class CondorWebSocket {
     };
 
     this.ws.onclose = (event) => {
+      for (const handler of this.disconnectHandlers) handler();
       if (event.code === 4001 || event.code === 4003) {
         this.shouldConnect = false;
         expireSession(this.token, this.authRevision);

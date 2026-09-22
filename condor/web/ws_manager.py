@@ -482,7 +482,16 @@ class WebSocketManager:
         # Send buffered candles as initial snapshot
         sorted_candles = buf.get_sorted()
         if sorted_candles:
-            await self._send(conn, channel, {"type": "candles", "data": sorted_candles})
+            await self._send(
+                conn,
+                channel,
+                {
+                    "type": "candles",
+                    "kind": "history",
+                    "source": "snapshot",
+                    "data": sorted_candles,
+                },
+            )
 
         # If the stream task is still running (kept alive during grace period), skip restart
         self._ensure_stream("candles", channel)
@@ -510,7 +519,15 @@ class WebSocketManager:
         # Broadcast updated snapshot to ALL subscribers on this channel
         sorted_candles = buf.get_sorted()
         if sorted_candles:
-            await self.broadcast(channel, {"type": "candles", "data": sorted_candles})
+            await self.broadcast(
+                channel,
+                {
+                    "type": "candles",
+                    "kind": "history",
+                    "source": "backfill",
+                    "data": sorted_candles,
+                },
+            )
 
     async def _backfill_candles(self, channel: str) -> None:
         """Fetch historical candles to fill the buffer gap."""
@@ -1112,7 +1129,12 @@ class WebSocketManager:
                                 self._upsert_candle_buffer(channel, candle)
                                 await self.broadcast(
                                     channel,
-                                    {"type": "candle_update", "candle": candle},
+                                    {
+                                        "type": "candle_update",
+                                        "kind": "live",
+                                        "source": "stream",
+                                        "candle": candle,
+                                    },
                                 )
                         elif msg_type == "candles":
                             raw_list = msg.get("data") or []
@@ -1126,7 +1148,12 @@ class WebSocketManager:
                                 self._upsert_candle_buffer_many(channel, candles)
                                 await self.broadcast(
                                     channel,
-                                    {"type": "candles", "data": candles},
+                                    {
+                                        "type": "candles",
+                                        "kind": "live",
+                                        "source": "stream",
+                                        "data": candles,
+                                    },
                                 )
                         elif msg_type in ("heartbeat", "subscribed"):
                             continue
@@ -1300,35 +1327,25 @@ class WebSocketManager:
                             if (c := self._normalize_candle(r)) is not None
                         ]
                     if candles:
-                        buf = self._candle_buffers.get(channel)
-                        # Broadcast if we have newer candles OR if the latest
-                        # candle's OHLCV changed (same timestamp, updated values)
-                        newest_buf_ts = (
-                            max(buf._data.keys()) if buf and buf._data else 0
+                        # A successful uncached poll is a current source receipt
+                        # even if the price has not moved. It is not proof of an
+                        # exchange-side event time, nor a historical backfill.
+                        self._upsert_candle_buffer_many(channel, candles)
+                        await self.broadcast(
+                            channel,
+                            {
+                                "type": "candles",
+                                "kind": "live",
+                                "source": "gecko" if gecko else "rest",
+                                "data": candles,
+                                "receipt_max_age_ms": poll_interval * 2000,
+                            },
                         )
-                        newest_poll_ts = max(c["timestamp"] for c in candles)
-                        changed = newest_poll_ts > newest_buf_ts
-                        if not changed and buf and newest_poll_ts in buf._data:
-                            # Same timestamp — check if OHLCV actually changed
-                            old = buf._data[newest_poll_ts]
-                            new = next(
-                                c for c in candles if c["timestamp"] == newest_poll_ts
-                            )
-                            changed = any(
-                                old.get(k) != new.get(k)
-                                for k in ("open", "high", "low", "close", "volume")
-                            )
-                        if changed:
-                            self._upsert_candle_buffer_many(channel, candles)
-                            await self.broadcast(
-                                channel,
-                                {"type": "candles", "data": candles},
-                            )
-                            logger.debug(
-                                "REST fallback delivered %d candles for %s",
-                                len(candles),
-                                channel,
-                            )
+                        logger.debug(
+                            "REST fallback delivered %d candles for %s",
+                            len(candles),
+                            channel,
+                        )
                 except Exception as e:
                     logger.debug("REST candle poll failed for %s: %s", channel, e)
 

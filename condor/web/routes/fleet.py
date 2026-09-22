@@ -3,7 +3,7 @@ from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException
 
-from condor.fetchers.fleet import catalogue_from_api_payload
+from condor.fetchers.fleet import catalogue_from_api_payload, read_full_catalogue
 from condor.web.auth import get_current_user
 from condor.web.models import WebUser
 from config_manager import get_config_manager
@@ -47,7 +47,7 @@ async def list_fleet(name: str, user: WebUser = Depends(get_current_user)):
         client = await cm.get_client(name)
     except Exception:
         return catalogue_from_api_payload(None)
-    payload = await _read_fleet_path(client, "/fleet/v1/bots")
+    payload = await read_full_catalogue(client, _read_fleet_path)
     return catalogue_from_api_payload(payload)
 
 

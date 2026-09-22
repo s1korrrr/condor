@@ -97,3 +97,21 @@ class Analytics(Record):
     history: History | None
     changes: list[Change] = Field(max_length=10000)
     performance: Performance
+
+
+class CapitalMetric(Record):
+    value: Amount | None = None
+    availability: Literal['available', 'unavailable', 'partial', 'insufficient_history', 'not_applicable']
+    reason_code: str | None = None
+    unit: str | None = None
+
+
+class CapitalDashboard(Record):
+    schema_version: Literal['rsibot.native_capital.v1']
+    generated_at: str
+    execution_authorized: Literal[False]
+    range_rewritten: Literal[False]
+    period_pnl: CapitalMetric
+    today_pnl: CapitalMetric
+    classified_flow_count: int = Field(ge=0)
+    observed_change_count: int = Field(ge=0)

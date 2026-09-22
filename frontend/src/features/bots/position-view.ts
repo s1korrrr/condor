@@ -85,6 +85,18 @@ export function buildBotPositionView(payload: unknown, bot: string, now: number)
     activeExecutorCount: executors.length, orders, ordersStatus };
 }
 
+/** Pair-state mix for a multi-asset bot. One pair never labels the rest. */
+export function mixedOperationalLabel(pairs: { phase: string | null }[]): string {
+  const counts = new Map<string, number>();
+  for (const row of pairs) {
+    const key = (row.phase || 'UNKNOWN').toUpperCase();
+    counts.set(key, (counts.get(key) ?? 0) + 1);
+  }
+  if (counts.size === 0) return 'UNKNOWN';
+  if (counts.size === 1) return [...counts.keys()][0];
+  return `MIXED: ${[...counts.entries()].map(([state, n]) => `${n} ${state.toLowerCase()}`).join(' / ')}`;
+}
+
 /** Display-only grouping; never infer a venue minimum or suppress active execution. */
 export function partitionBotInventory(pairs: BotPairPosition[]) {
   const small: BotPairPosition[] = [], primary: BotPairPosition[] = [];

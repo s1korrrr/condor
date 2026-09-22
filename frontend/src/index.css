@@ -93,19 +93,21 @@ body {
 
 /* Native Capital workspace: one quiet instrument surface across all routes. */
 .condor-native {
-  --color-bg: #0d1015;
-  --color-surface: #151920;
-  --color-surface-hover: #20262a;
-  --color-border: #2b332f;
-  --color-border-hover: #465049;
-  --color-text: #e6e9e5;
-  --color-text-muted: #9aa69f;
-  --color-primary: #cfb46b;
-  --color-accent: #cfb46b;
-  --color-primary-hover: #e1c681;
-  --chart-bg: #151920;
-  --chart-grid: #2b332f;
-  --chart-text: #9aa69f;
+  --color-bg: #070f15;
+  --color-surface: #0d1821;
+  --color-surface-hover: #12212d;
+  --color-border: #243542;
+  --color-border-hover: #314656;
+  --color-text: #e8f0f6;
+  --color-text-muted: #a6b5c2;
+  --color-primary: #49b7ff;
+  --color-accent: #49b7ff;
+  --color-primary-hover: #7cc9ff;
+  --color-green: #2cdea0;
+  --color-red: #ff647d;
+  --chart-bg: #0d1821;
+  --chart-grid: #243542;
+  --chart-text: #a6b5c2;
   background: var(--color-bg);
   color: var(--color-text);
 }
@@ -141,8 +143,10 @@ body {
   color: var(--color-text);
   background: transparent;
 }
-.condor-native main { scrollbar-gutter: stable; }
-.condor-native main > .space-y-6 { max-width: 1600px; margin-inline: auto; }
+.condor-native main { scrollbar-gutter: stable; overflow-x: hidden; }
+.condor-native main > .space-y-6,
+.condor-native main > .quant-page,
+.condor-native main > [data-quant-ops] { max-width: 1680px; width: 100%; margin-inline: auto; }
 .condor-native main h1,
 .condor-native .quant-heading h1 { font-size: 26px; font-weight: 600; letter-spacing: -.65px; line-height: 1.25; }
 .condor-native .quant-heading { margin-top: 0; margin-bottom: 22px; }

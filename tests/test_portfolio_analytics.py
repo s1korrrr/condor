@@ -67,3 +67,30 @@ def test_disconnected_owner_shape_remains_an_empty_connection_not_an_error(monke
     r=c.get('/api/v1/servers/local/portfolio/analytics')
     assert r.status_code==200
     assert r.json()['current'] is None
+
+
+def capital_payload():
+    return {
+        'schema_version': 'rsibot.native_capital.v1',
+        'generated_at': '2026-09-22T08:00:55+00:00',
+        'execution_authorized': False,
+        'range_rewritten': False,
+        'period_pnl': {'value': None, 'availability': 'unavailable', 'reason_code': 'FLOW_COVERAGE_INCOMPLETE'},
+        'today_pnl': {'value': None, 'availability': 'unavailable', 'reason_code': 'NO_MIDNIGHT_SNAPSHOT'},
+        'classified_flow_count': 0,
+        'observed_change_count': 0,
+        'secret': 'DO-NOT-RETURN',
+    }
+
+
+def test_capital_dashboard_rejects_30d_and_does_not_authorize_execution(monkeypatch):
+    c, _, upstream = client(monkeypatch, capital_payload())
+    assert c.get('/api/v1/servers/local/portfolio/capital-dashboard?range=30D').status_code == 422
+    assert upstream.await_count == 0
+    r = c.get('/api/v1/servers/local/portfolio/capital-dashboard?range=1W')
+    assert r.status_code == 200
+    body = r.json()
+    assert body['execution_authorized'] is False
+    assert body['period_pnl']['value'] is None
+    assert 'DO-NOT-RETURN' not in r.text
+    assert upstream.call_args.args == ('portfolio/capital-dashboard',)

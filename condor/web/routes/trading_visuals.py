@@ -21,7 +21,8 @@ REPORTING_TOTAL_TIMEOUT = 20.0
 READ_ROUTES = frozenset({
     'operations', 'health', 'bootstrap', 'overview', 'bots', 'orders', 'fills', 'executors',
     'positions', 'pnl-series', 'attribution', 'incidents', 'trade-journal',
-    'activity-tape', 'operator-summary', 'chart-series', 'drilldown',
+    'activity-tape', 'operator-summary', 'quant-summary', 'quant-events', 'quant-execution',
+    'quant-cycles', 'chart-series', 'drilldown',
 })
 
 
@@ -76,8 +77,9 @@ async def read_visuals(path: str, request: Request, user: WebUser = Depends(get_
     bots = request.query_params.getlist('bot')
     if len(bots) > 1:
         raise HTTPException(400, 'Specify one monitoring bot')
-    bot = bots[0] if bots else 'ok_rsi'
-    source = _sources().get(bot)
+    registered = _sources()
+    bot = bots[0] if bots else next(iter(registered), None)
+    source = registered.get(bot) if bot else None
     if source is None or not get_config_manager().has_server_access(user.id, source['server']):
         raise HTTPException(404, 'Monitoring source not found')
     try:

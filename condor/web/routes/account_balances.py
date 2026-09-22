@@ -8,6 +8,7 @@ from fastapi.responses import JSONResponse
 
 from condor.web.auth import get_current_user
 from condor.web.models import WebUser
+from condor.web.portfolio_contract import Analytics, CapitalDashboard
 from config_manager import get_config_manager
 
 router = APIRouter(tags=['portfolio'])
@@ -91,8 +92,6 @@ async def portfolio_analytics(
     refresh: bool = Query(False),
     user: WebUser = Depends(get_current_user),
 ):
-    from condor.web.portfolio_contract import Analytics
-
     cm = get_config_manager()
     if not cm.has_server_access(user.id, name):
         raise HTTPException(status_code=404, detail='Server not found')
@@ -106,5 +105,29 @@ async def portfolio_analytics(
         raise HTTPException(
             status_code=502,
             detail='Portfolio analytics are unavailable. Check the account connection and API version, then retry.',
+        ) from None
+    return JSONResponse(result, headers={'Cache-Control': 'no-store'})
+
+
+@router.get('/servers/{name}/portfolio/capital-dashboard')
+async def capital_dashboard(
+    name: str,
+    range: str = Query('1W', pattern=r'^(1D|1W|1M|3M|ALL)$'),
+    refresh: bool = Query(False),
+    user: WebUser = Depends(get_current_user),
+):
+    cm = get_config_manager()
+    if not cm.has_server_access(user.id, name):
+        raise HTTPException(status_code=404, detail='Server not found')
+    try:
+        client = await cm.get_client(name)
+        payload = await client.portfolio._get(
+            'portfolio/capital-dashboard', params={'range': range, 'refresh': str(refresh).lower()}
+        )
+        result = CapitalDashboard.model_validate(payload).model_dump()
+    except Exception:
+        raise HTTPException(
+            status_code=502,
+            detail='Capital dashboard projection is unavailable. Check the account connection and API version, then retry.',
         ) from None
     return JSONResponse(result, headers={'Cache-Control': 'no-store'})

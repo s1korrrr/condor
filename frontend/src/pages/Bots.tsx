@@ -49,6 +49,17 @@ export function Bots() {
     }
   };
 
+  if (access.native && currentTab === "active") {
+    return (
+      <div className="quant-page">
+        {unavailableReason && <p role="status">{unavailableReason}</p>}
+        <Suspense fallback={<FallbackSpinner />}>
+          <ActiveBotsTab />
+        </Suspense>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <header><h1 className="text-xl font-bold">Bots</h1><p className="mt-1 text-sm text-[var(--color-text-muted)]">{server ?? "No server selected"} · {access.native ? "Bot inventory and next decisions" : "Server workspace"}</p></header>

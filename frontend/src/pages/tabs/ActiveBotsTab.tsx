@@ -21,7 +21,7 @@ import { ControllerBrowser } from "@/components/bots/ControllerBrowser";
 import { DeployBotDialog } from "@/components/bots/DeployBotDialog";
 import { PnlSparkline } from "@/components/bots/PnlSparkline";
 import { NativeEntryControls } from "@/components/bots/NativeEntryControls";
-import { NativeBotCommandDesk } from "@/components/bots/NativeBotCommandDesk";
+import { BotsRoster } from "@/components/bots/BotsRoster";
 import { FallbackSpinner } from "@/components/ui/FallbackSpinner";
 
 import { useRates } from "@/hooks/useRates";
@@ -771,7 +771,7 @@ export function ActiveBotsTab() {
   if (!server) {
     return <NoServerCard message="Select a server from the sidebar to view active bots." />;
   }
-  if (access.native) return <NativeBotCommandDesk page={error ? undefined : data}
+  if (access.native) return <BotsRoster page={error ? undefined : data}
     renderControls={botName=><div key={`${server}:${botName}`}><NativeBotControls server={server} botName={botName}/><NativeEntryControls server={server} botName={botName}/></div>}
     renderLogs={botName=>{const bot=bots.find(item=>item.bot_name===botName);return bot ? <LogsSection logs={[
       ...(bot.error_logs ?? []).map(log=>({...log,log_category:'error' as const})),

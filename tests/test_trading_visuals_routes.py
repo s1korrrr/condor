@@ -153,6 +153,44 @@ def test_visuals_unknown_bot_does_not_fall_back(monkeypatch):
     assert client(monkeypatch).get('/api/v1/trading-visuals/bootstrap?bot=unknown').status_code == 404
 
 
+def test_visuals_default_bot_is_first_registered_source(monkeypatch):
+    seen = {}
+
+    def handler(req):
+        seen['port'] = req.url.port
+        seen['path'] = req.url.path
+        return httpx.Response(200, json={'ok': True})
+
+    fixture = client(monkeypatch, handler=handler)
+    monkeypatch.setenv('CONDOR_TRADING_VISUALS_SOURCES', json.dumps({
+        'rsi_modular_v2': {'server': 'local', 'url': 'http://127.0.0.1:5011/api/v1'},
+        'breakout_paper_v2': {'server': 'local', 'url': 'http://127.0.0.1:5013/api/v1'},
+    }))
+    result = fixture.get('/api/v1/trading-visuals/bootstrap')
+    assert result.status_code == 200
+    assert seen == {'port': 5011, 'path': '/api/v1/bootstrap'}
+
+
+def test_visuals_allows_quant_summary(monkeypatch):
+    result = client(
+        monkeypatch,
+        handler=lambda _: httpx.Response(200, json={'schema_version': 'rsibot.quant_ops.v1'}),
+    ).get('/api/v1/trading-visuals/quant-summary?bot=ok_rsi')
+    assert result.status_code == 200
+    assert result.json()['schema_version'] == 'rsibot.quant_ops.v1'
+
+
+@pytest.mark.parametrize('path', ['quant-events', 'quant-execution', 'quant-cycles'])
+def test_visuals_allows_quant_telemetry(monkeypatch, path):
+    result = client(
+        monkeypatch,
+        handler=lambda _: httpx.Response(200, json={'schema_version': 'rsibot.quant_ops.v1', 'execution_authorized': False}),
+    ).get(f'/api/v1/trading-visuals/{path}?bot=ok_rsi')
+    assert result.status_code == 200
+    assert result.json()['execution_authorized'] is False
+    assert client(monkeypatch).post(f'/api/v1/trading-visuals/{path}?bot=ok_rsi').status_code == 405
+
+
 def test_visuals_unavailable_upstream_is_not_cached_success(monkeypatch):
     def handler(req):
         raise httpx.ConnectError('private address detail', request=req)

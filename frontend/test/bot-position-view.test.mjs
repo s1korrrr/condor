@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {frontendModules} from './helpers/frontend-module.mjs';
 const {load}=frontendModules();
-const {buildBotPositionView}=load('features/bots/position-view.ts');
+const {buildBotPositionView,mixedOperationalLabel}=load('features/bots/position-view.ts');
 const now=Date.parse('2026-09-10T20:00:00Z');
 test('September BTC and ETH receipts reconcile as net active plus retained units, not gross spend',()=>{
  for(const [pair,remaining,retained,total,price] of [['BTC-USDC','0.001675698368',0.000099934992,'0.00177563336',77666.3],['ETH-USDC','0.0440087648',7.984e-7,'0.0440095632',2483.57]]){
@@ -62,3 +62,9 @@ test('actual owner snapshot fixture flows through the UI projection without chan
 test('complete connector order list supplies total count; legacy count is explicitly limit-only',()=>{const p=snapshot();assert.equal(buildBotPositionView(p,'ok_rsi',now).orderCountLabel,'Active limit orders');p.runtime_status.active_orders=[{order_id:'o1',pair:'ETH-USDC'},{order_id:'o2',pair:'ETH-USDC'},{order_id:'o3',pair:'ETH-USDC'}];p.runtime_status.active_orders_status={complete:true};const view=buildBotPositionView(p,'ok_rsi',now);assert.equal(view.activeOrderCount,3);assert.equal(view.orderCountLabel,'Active orders');});
 
 test('cancellation-pending and expired sell requests never look like pending fresh orders',()=>{const p=snapshot();p.runtime_status.controllers[0].custom_info.pending_sell_requests=[{request_id:'canceled',termination_requested:true,expires_at:now/1000+100},{request_id:'expired',termination_requested:false,expires_at:now/1000-1},{request_id:'pending',termination_requested:false,expires_at:now/1000+100}];const rows=buildBotPositionView(p,'ok_rsi',now).pairs[0].pendingSells;assert.deepEqual(rows.map(row=>row.request_state),['Cancellation requested','Expiry reached; awaiting owner','Pending owner request']);});
+
+test('mixed pair states never collapse to one asset label',()=>{
+  assert.equal(mixedOperationalLabel([{phase:'FLAT'},{phase:'HOLDING'}]),'MIXED: 1 flat / 1 holding');
+  assert.equal(mixedOperationalLabel([{phase:'FLAT'},{phase:'FLAT'}]),'FLAT');
+  assert.equal(mixedOperationalLabel([]),'UNKNOWN');
+});

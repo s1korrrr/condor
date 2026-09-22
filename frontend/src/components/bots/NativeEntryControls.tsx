@@ -20,9 +20,12 @@ export function NativeEntryControls({server,botName}:{server:string;botName:stri
     if(!response.ok) throw new Error(`Native entry state unavailable (${response.status}).`);
     return response.json() as Promise<unknown>;
   },refetchInterval:5000,retry:false});
-  const view=entryObservation(status.isError?undefined:status.data,botName,now,status.dataUpdatedAt);
+  // Both samples use the browser clock. A query can publish between timer
+  // ticks; its receipt is then the newer local clock sample for this render.
+  const observationNow=Math.max(now,status.dataUpdatedAt);
+  const view=entryObservation(status.isError?undefined:status.data,botName,observationNow,status.dataUpdatedAt);
   const command=session.data?.command;
-  const observed=!!command && entryCommandObserved(status.isError?undefined:status.data,botName,now,status.dataUpdatedAt,command);
+  const observed=!!command && entryCommandObserved(status.isError?undefined:status.data,botName,observationNow,status.dataUpdatedAt,command);
   const waiting=!!command && !observed;
   const mutation=useMutation({retry:false,mutationFn:async(action:EntryAction)=>{
     const latest=client.getQueryData<Session>(key);

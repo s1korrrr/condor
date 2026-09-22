@@ -10,12 +10,15 @@
 import type { CandleData } from "./api";
 import type { CondorWebSocket } from "./websocket";
 
-// ── Types ──
+export type CandleInsertKind = "live" | "history";
+
+export type CandleQuality = {
+  rejected: number;
+  conflicts: number[];
+};
 
 interface CandleCollection {
-  /** Timestamp-keyed map for O(1) dedup / upsert */
   map: Map<number, CandleData>;
-  /** Lazily recomputed sorted array (null = dirty) */
   sorted: CandleData[] | null;
   maxSize: number;
   lastAccessed: number;
@@ -28,14 +31,10 @@ interface Subscription {
 
 type Listener = (candles: CandleData[]) => void;
 
-// ── Constants ──
-
 const MAX_COLLECTION_SIZE = 2000;
 const MAX_COLLECTIONS = 20;
-const TEARDOWN_DELAY_MS = 5 * 60 * 1000; // 5 minutes
-const IDLE_CLEANUP_MS = 10 * 60 * 1000; // 10 minutes
-
-// ── Helpers ──
+const TEARDOWN_DELAY_MS = 5 * 60 * 1000;
+const IDLE_CLEANUP_MS = 10 * 60 * 1000;
 
 function normalizeTimestamp(ts: number): number {
   return ts > 1e12 ? ts / 1000 : ts;
@@ -47,7 +46,6 @@ function sortedFromMap(map: Map<number, CandleData>): CandleData[] {
 
 function evictOldest(col: CandleCollection): void {
   if (col.map.size <= col.maxSize) return;
-  // Sort keys ascending, remove the oldest ones
   const timestamps = Array.from(col.map.keys()).sort((a, b) => a - b);
   const excess = timestamps.length - col.maxSize;
   for (let i = 0; i < excess; i++) {
@@ -56,42 +54,69 @@ function evictOldest(col: CandleCollection): void {
   col.sorted = null;
 }
 
-// ── Singleton ──
+function sameCandle(left: CandleData, right: CandleData): boolean {
+  return left.open === right.open
+    && left.high === right.high
+    && left.low === right.low
+    && left.close === right.close
+    && left.volume === right.volume;
+}
 
-class CandleStore {
+/** Reject invalid crypto spot OHLC before it can enter a collection. */
+export function validateSpotCandle(candle: unknown): CandleData | null {
+  if (!candle || typeof candle !== "object" || Array.isArray(candle)) return null;
+  const row = candle as Record<string, unknown>;
+  const timestamp = typeof row.timestamp === "number" && Number.isFinite(row.timestamp)
+    ? normalizeTimestamp(row.timestamp)
+    : NaN;
+  const open = row.open;
+  const high = row.high;
+  const low = row.low;
+  const close = row.close;
+  const volume = row.volume;
+  if (typeof open !== "number" || typeof high !== "number" || typeof low !== "number"
+    || typeof close !== "number" || typeof volume !== "number"
+    || ![timestamp, open, high, low, close, volume].every(Number.isFinite)) {
+    return null;
+  }
+  if (open <= 0 || high <= 0 || low <= 0 || close <= 0 || volume < 0) return null;
+  if (low > high) return null;
+  if (open < low || open > high || close < low || close > high) return null;
+  return { timestamp, open, high, low, close, volume };
+}
+
+export class CandleStore {
   collections = new Map<string, CandleCollection>();
   subscriptions = new Map<string, Subscription>();
   listeners = new Map<string, Set<Listener>>();
-  /** Monotonic-ish timestamp of last data update per channel */
+  /** Live receipt time per channel. History writes must not update this. */
   lastUpdateTime = new Map<string, number>();
+  historyReceiptTime = new Map<string, number>();
+  quality = new Map<string, CandleQuality>();
 
   private ws: CondorWebSocket | null = null;
   private wsCleanup: (() => void) | null = null;
-  /** Tracks insertion order for LRU eviction */
   private accessOrder: string[] = [];
+  private readonly now: () => number;
+  private readonly idleTimer: ReturnType<typeof setInterval> | null;
 
-  constructor() {
-    setInterval(() => this._cleanupIdle(), 60_000);
+  constructor(options: { now?: () => number; idleCleanup?: boolean } = {}) {
+    this.now = options.now ?? Date.now;
+    const enableIdle = options.idleCleanup ?? typeof window !== 'undefined';
+    if (!enableIdle) {
+      this.idleTimer = null;
+      return;
+    }
+    const timer = setInterval(() => this._cleanupIdle(), 60_000);
+    this.idleTimer = timer;
   }
 
-  // ── WS wiring ──
-
-  /**
-   * Bind a socket as the candle provider.
-   *
-   * There is only ever one candle-carrying socket in the app — `shared-socket.ts`
-   * refcounts a single connection — so this is called once when that connection
-   * opens and there is no contest to arbitrate. The defensive rebind covers the
-   * one case that does produce a second socket: a token change, which closes the
-   * old connection and opens a new one.
-   */
   attachWs(ws: CondorWebSocket): void {
     if (this.ws === ws) return;
     if (this.ws) this._unbindWs();
     this._bindWs(ws);
   }
 
-  /** Unbind the provider. Called when the shared socket's last reference goes. */
   detachWs(ws: CondorWebSocket): void {
     if (this.ws !== ws) return;
     this._unbindWs();
@@ -118,19 +143,14 @@ class CandleStore {
       };
 
       if (payload.type === "candle_update" && payload.candle) {
-        this._upsertOne(channel, payload.candle);
+        this._upsertOne(channel, payload.candle, "live");
         this._notify(channel);
       } else if (payload.type === "candles" && payload.data?.length) {
-        this._upsertMany(channel, payload.data);
+        this._upsertMany(channel, payload.data, "history");
         this._notify(channel);
       }
-      // errors are still handled by useWebSocket for status display
     });
 
-    // Re-subscribe active channels to trigger a fresh snapshot now that the
-    // message handler is registered. The WS onopen re-subscribe may have fired
-    // before we bound to it, so the initial snapshot would have been missed —
-    // and a socket replacing a closed one has never seen these channels at all.
     for (const [key, sub] of this.subscriptions) {
       if (sub.refCount > 0) {
         ws.subscribe(key);
@@ -138,12 +158,6 @@ class CandleStore {
     }
   }
 
-  // ── Public API ──
-
-  /**
-   * Subscribe to a candle channel. Returns cached candles instantly (may be empty).
-   * Caller must call `unsubscribe` when done.
-   */
   subscribe(key: string): CandleData[] {
     let sub = this.subscriptions.get(key);
     if (!sub) {
@@ -151,7 +165,6 @@ class CandleStore {
       this.subscriptions.set(key, sub);
     }
 
-    // Cancel pending teardown
     if (sub.teardownTimer !== null) {
       clearTimeout(sub.teardownTimer);
       sub.teardownTimer = null;
@@ -159,7 +172,6 @@ class CandleStore {
 
     sub.refCount++;
 
-    // Ensure WS subscription (idempotent on the WS side)
     if (sub.refCount === 1 && this.ws) {
       this.ws.subscribe(key);
     }
@@ -168,10 +180,6 @@ class CandleStore {
     return this.getCandles(key);
   }
 
-  /**
-   * Decrement refCount. At 0: start deferred teardown timer.
-   * Collection stays in memory regardless.
-   */
   unsubscribe(key: string): void {
     const sub = this.subscriptions.get(key);
     if (!sub) return;
@@ -179,7 +187,6 @@ class CandleStore {
     sub.refCount = Math.max(0, sub.refCount - 1);
     if (sub.refCount > 0) return;
 
-    // Start deferred teardown
     sub.teardownTimer = setTimeout(() => {
       sub.teardownTimer = null;
       if (sub.refCount === 0 && this.ws) {
@@ -189,20 +196,17 @@ class CandleStore {
     }, TEARDOWN_DELAY_MS);
   }
 
-  /** Merge externally-fetched candles (e.g. REST backfill for range changes). */
-  mergeCandles(key: string, candles: CandleData[]): void {
-    this._upsertMany(key, candles);
+  mergeCandles(key: string, candles: CandleData[], kind: CandleInsertKind = "history"): void {
+    this._upsertMany(key, candles, kind);
     this._notify(key);
   }
 
-  /** Send a duration hint to the backend without re-subscribing the WS channel. */
   setDuration(key: string, durationSeconds: number): void {
     if (this.ws) {
       this.ws.setCandleDuration(key, durationSeconds);
     }
   }
 
-  /** Get sorted candles for a channel. */
   getCandles(key: string): CandleData[] {
     const col = this.collections.get(key);
     if (!col) return [];
@@ -213,13 +217,15 @@ class CandleStore {
     return col.sorted;
   }
 
-  /** Returns ms since last data update for the given channel, or Infinity if never updated. */
   getLastUpdateAge(key: string): number {
     const t = this.lastUpdateTime.get(key);
-    return t ? Date.now() - t : Infinity;
+    return t === undefined ? Infinity : this.now() - t;
   }
 
-  /** Register a listener. Returns an unsubscribe function. */
+  getQuality(key: string): CandleQuality {
+    return this.quality.get(key) ?? { rejected: 0, conflicts: [] };
+  }
+
   onUpdate(key: string, callback: Listener): () => void {
     let set = this.listeners.get(key);
     if (!set) {
@@ -233,7 +239,24 @@ class CandleStore {
     };
   }
 
-  // ── Internal ──
+  dispose(): void {
+    if (this.idleTimer !== null) clearInterval(this.idleTimer);
+    for (const sub of this.subscriptions.values()) {
+      if (sub.teardownTimer !== null) {
+        clearTimeout(sub.teardownTimer);
+        sub.teardownTimer = null;
+      }
+    }
+  }
+
+  private _quality(key: string): CandleQuality {
+    let current = this.quality.get(key);
+    if (!current) {
+      current = { rejected: 0, conflicts: [] };
+      this.quality.set(key, current);
+    }
+    return current;
+  }
 
   private _getOrCreateCollection(key: string): CandleCollection {
     let col = this.collections.get(key);
@@ -243,34 +266,47 @@ class CandleStore {
         map: new Map(),
         sorted: null,
         maxSize: MAX_COLLECTION_SIZE,
-        lastAccessed: Date.now(),
+        lastAccessed: this.now(),
       };
       this.collections.set(key, col);
+      this._touchAccess(key);
     }
     return col;
   }
 
-  private _upsertOne(key: string, candle: CandleData): void {
+  private _accept(key: string, candle: unknown, kind: CandleInsertKind): boolean {
+    const normalized = validateSpotCandle(candle);
+    if (!normalized) {
+      this._quality(key).rejected += 1;
+      return false;
+    }
     const col = this._getOrCreateCollection(key);
-    const ts = normalizeTimestamp(candle.timestamp);
-    const normalized = { ...candle, timestamp: ts };
-    col.map.set(ts, normalized);
+    const existing = col.map.get(normalized.timestamp);
+    if (existing && !sameCandle(existing, normalized)) {
+      if (kind === "history") {
+        const quality = this._quality(key);
+        if (!quality.conflicts.includes(normalized.timestamp)) quality.conflicts.push(normalized.timestamp);
+        col.lastAccessed = this.now();
+        return false;
+      }
+    }
+    col.map.set(normalized.timestamp, normalized);
     col.sorted = null;
-    col.lastAccessed = Date.now();
-    this.lastUpdateTime.set(key, Date.now());
+    col.lastAccessed = this.now();
+    const receipt = this.now();
+    if (kind === "live") this.lastUpdateTime.set(key, receipt);
+    else this.historyReceiptTime.set(key, receipt);
     evictOldest(col);
+    return true;
   }
 
-  private _upsertMany(key: string, candles: CandleData[]): void {
-    const col = this._getOrCreateCollection(key);
-    for (const c of candles) {
-      const ts = normalizeTimestamp(c.timestamp);
-      col.map.set(ts, { ...c, timestamp: ts });
-    }
-    col.sorted = null;
-    col.lastAccessed = Date.now();
-    this.lastUpdateTime.set(key, Date.now());
-    evictOldest(col);
+  private _upsertOne(key: string, candle: CandleData, kind: CandleInsertKind): void {
+    this._accept(key, candle, kind);
+  }
+
+  private _upsertMany(key: string, candles: CandleData[], kind: CandleInsertKind): void {
+    if (!candles.length) return;
+    for (const candle of candles) this._accept(key, candle, kind);
   }
 
   private _notify(key: string): void {
@@ -288,36 +324,37 @@ class CandleStore {
     this.accessOrder.push(key);
   }
 
+  private _dropInactive(key: string): void {
+    this.collections.delete(key);
+    this.listeners.delete(key);
+    this.lastUpdateTime.delete(key);
+    this.historyReceiptTime.delete(key);
+    this.quality.delete(key);
+  }
+
   private _enforceMaxCollections(): void {
-    // Walk a snapshot of the LRU order (front = oldest). Evict the oldest
-    // collections with no active subscribers until we're back under the cap,
-    // skipping (never deleting) collections that still have subscribers. The
-    // snapshot guarantees termination; if every remaining entry is active we
-    // simply stop without evicting anything.
     if (this.collections.size < MAX_COLLECTIONS) return;
     const survivors: string[] = [];
     for (const key of this.accessOrder) {
       if (this.collections.size >= MAX_COLLECTIONS) {
         const sub = this.subscriptions.get(key);
         if (!sub || sub.refCount === 0) {
-          this.collections.delete(key);
-          this.listeners.delete(key);
-          continue; // drop from accessOrder too
+          this._dropInactive(key);
+          continue;
         }
       }
-      survivors.push(key); // active or already under cap → keep
+      survivors.push(key);
     }
     this.accessOrder = survivors;
   }
 
-  private _cleanupIdle(): void {
-    const now = Date.now();
+  _cleanupIdle(): void {
+    const now = this.now();
     for (const [key, col] of this.collections) {
       if (now - col.lastAccessed > IDLE_CLEANUP_MS) {
         const sub = this.subscriptions.get(key);
         if (!sub || sub.refCount === 0) {
-          this.collections.delete(key);
-          this.listeners.delete(key);
+          this._dropInactive(key);
           const idx = this.accessOrder.indexOf(key);
           if (idx >= 0) this.accessOrder.splice(idx, 1);
         }
@@ -325,7 +362,5 @@ class CandleStore {
     }
   }
 }
-
-// ── Export singleton ──
 
 export const candleStore = new CandleStore();

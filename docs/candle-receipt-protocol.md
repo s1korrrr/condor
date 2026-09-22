@@ -7,7 +7,8 @@ source receipts without changing channel identity or the OHLCV row format.
 |---|---|---|---|
 | Buffered subscription/reconnect snapshot | candles | history | snapshot |
 | Duration expansion/backfill | candles | history | backfill |
-| Upstream stream batch | candles | live | stream |
+| Upstream batch explicitly marked `kind=live` | candles | live | stream |
+| Unmarked or historical upstream batch | candles | history | stream |
 | Upstream single candle | candle_update | live | stream |
 | Successful REST fallback poll | candles | live | rest |
 | Successful uncached Gecko poll | candles | live | gecko |
@@ -23,7 +24,9 @@ Normal interval freshness limits still apply when larger, and resumed streaming
 removes the poll-specific deadline.
 
 History cannot refresh current receipts or overwrite conflicting live values.
-Unmarked `candles` messages from older servers remain historical; the old
+Unmarked upstream batches remain historical and do not suppress REST fallback:
+the stream transport alone does not prove they are current. Unmarked `candles`
+messages from older Condor servers also remain historical; the old
 single-candle message stays compatible. Backend and frontend should therefore
 be shipped together to obtain corrected batch/poll freshness. No deployment or
 restart is implied by merging this source change.

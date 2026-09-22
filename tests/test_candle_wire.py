@@ -59,8 +59,10 @@ async def test_poll_marks_changed_and_unchanged_current_batches(monkeypatch, gec
 
 
 @pytest.mark.asyncio
-async def test_stream_batch_has_current_provenance_and_buffer_snapshot_is_history(
+@pytest.mark.parametrize("provenance", [None, "history", "live"])
+async def test_stream_batch_requires_explicit_current_provenance(
     monkeypatch,
+    provenance,
 ):
     manager = ws_manager.WebSocketManager()
     channel = "candles:v2:okx:BTC-USDC:1h"
@@ -68,7 +70,10 @@ async def test_stream_batch_has_current_provenance_and_buffer_snapshot_is_histor
     manager._ensure_candle_poll_fallback = Mock()
     manager._ensure_stream = Mock()
     manager._send = AsyncMock()
-    messages = iter([{"type": "candles", "data": [candle(103)]}])
+    message = {"type": "candles", "data": [candle(103)]}
+    if provenance is not None:
+        message["kind"] = provenance
+    messages = iter([message])
 
     class Feed:
         subscribe_candles = AsyncMock()
@@ -97,7 +102,9 @@ async def test_stream_batch_has_current_provenance_and_buffer_snapshot_is_histor
     monkeypatch.setattr(ws_manager.dex_candles, "uses_gecko_candles", lambda _: False)
     await manager._candle_stream(channel)
     current = manager.broadcast.await_args.args[1]
-    assert current["kind"] == "live" and current["source"] == "stream"
+    assert current["kind"] == ("live" if provenance == "live" else "history")
+    assert current["source"] == "stream"
+    assert (channel in manager._last_candle_ws_update) is (provenance == "live")
     await manager._handle_candle_subscribe(object(), channel, 0)
     snapshot = manager._send.await_args.args[2]
     assert snapshot["kind"] == "history" and snapshot["source"] == "snapshot"

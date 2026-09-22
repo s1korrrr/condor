@@ -1144,13 +1144,20 @@ class WebSocketManager:
                                 if (c := self._normalize_candle(r)) is not None
                             ]
                             if candles:
-                                self._last_candle_ws_update[channel] = time.monotonic()
+                                # A batch may be a cached subscription snapshot.
+                                # Only affirmative upstream provenance refreshes
+                                # the receipt or suppresses the REST fallback.
+                                current = msg.get("kind") == "live"
+                                if current:
+                                    self._last_candle_ws_update[channel] = (
+                                        time.monotonic()
+                                    )
                                 self._upsert_candle_buffer_many(channel, candles)
                                 await self.broadcast(
                                     channel,
                                     {
                                         "type": "candles",
-                                        "kind": "live",
+                                        "kind": "live" if current else "history",
                                         "source": "stream",
                                         "data": candles,
                                     },

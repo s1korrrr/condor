@@ -19,13 +19,16 @@ def app():
 
 
 @pytest.mark.parametrize('account,lifecycle', [(False, False), (True, False), (False, True), (True, True)])
-def test_policy_reports_actual_independent_middleware_exceptions(account, lifecycle):
-    client = TestClient(ReadOnlyWeb(app(), allow_account_management=account, allow_native_lifecycle=lifecycle))
+@pytest.mark.parametrize('entry', [False, True])
+def test_policy_reports_actual_independent_middleware_exceptions(account, lifecycle, entry):
+    client = TestClient(ReadOnlyWeb(app(), allow_account_management=account,
+                                    allow_native_lifecycle=lifecycle, allow_native_entry=entry))
     response = client.get('/api/v1/settings/policy')
     assert response.status_code == 200
     assert response.headers['cache-control'] == 'no-store'
     assert response.json() == {'read_only': True, 'settings_mutation': False,
-                               'account_management': account, 'native_lifecycle': lifecycle}
+                               'account_management': account, 'native_lifecycle': lifecycle,
+                               'native_entry': entry}
 
 
 def test_full_deployment_policy_and_authenticated_read():

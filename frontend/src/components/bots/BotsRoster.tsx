@@ -173,7 +173,18 @@ function OwnerCard({ source, page, controls, logs }: { source: TradingVisualsSou
   });
   const owner = page?.bots.find(item => item.bot_name === source.bot);
   let pairs: BotPairPosition[] = [];
-  try { if (positions.data) pairs = buildBotPositionView(positions.data, source.bot, Math.max(now, positions.dataUpdatedAt)).pairs; } catch { pairs = []; }
+  let lastKnown: ReturnType<typeof buildBotPositionView> | null = null;
+  let currentObservation = false;
+  try {
+    if (positions.data) {
+      lastKnown = buildBotPositionView(positions.data, source.bot, positions.dataUpdatedAt);
+      if (!positions.isError) {
+        pairs = buildBotPositionView(positions.data, source.bot, Math.max(now, positions.dataUpdatedAt)).pairs;
+        currentObservation = true;
+      }
+    }
+  } catch { lastKnown = null; pairs = []; }
+  const current = !positions.isPending && !positions.isError && currentObservation;
   return <article className="q-card q-bot-card" aria-label={`${source.bot} roster card`}>
     <header className="q-bot-head" data-panel-id="B09">
       <div>
@@ -185,10 +196,13 @@ function OwnerCard({ source, page, controls, logs }: { source: TradingVisualsSou
         <span className="q-muted">{owner?.status ? stateLabel(owner.status) : 'Lifecycle unavailable'}</span>
         <button type="button" disabled title="Pause entries needs a verified native entry-control route. Process stop is a different operation and is not used here." data-panel-id="B10">Pause entries</button>
         <button type="button" disabled title="Settings shows effective configuration only after an owner schema inspector is enabled. Writes stay off.">Settings</button>
-        {controls}
+        {current && controls}
       </div>
     </header>
-    {positions.isPending ? <p className="q-empty" role="status">Reading bot positions and orders…</p> : positions.isError ? <p className="q-empty" role="alert">{positions.error.message} Retrying in the background. <button type="button" onClick={() => void positions.refetch()}>Check now</button></p> : <RosterObservation payload={positions.data} bot={source.bot} now={Math.max(now, positions.dataUpdatedAt)} events={events.isError ? null : events.data} execution={execution.isError ? null : execution.data} eventsUnavailable={events.isError} executionUnavailable={execution.isError} />}
+    {positions.isPending ? <p className="q-empty" role="status">Reading bot positions and orders…</p> : positions.isError ? <>
+      <p className="q-empty" role="alert">{positions.error.message} Current position state and card controls are unavailable. <button type="button" onClick={() => void positions.refetch()}>Check now</button></p>
+      {transientReadFailure(positions.error) && lastKnown && <section aria-label="Last known bot inventory"><h3>Last known inventory</h3><p className="q-empty">Observed {new Date(lastKnown.observedAt).toISOString()}. These values are historical and do not describe current orders or action eligibility.</p><ul>{lastKnown.pairs.map(row => <li key={row.id}>{row.pair}: {row.quantity === null ? 'units unavailable' : `${row.quantity} ${row.baseAsset}`} · marked value {amount(row.markValue, row.quote)}</li>)}</ul></section>}
+    </> : <RosterObservation payload={positions.data} bot={source.bot} now={Math.max(now, positions.dataUpdatedAt)} events={events.isError ? null : events.data} execution={execution.isError ? null : execution.data} eventsUnavailable={events.isError} executionUnavailable={execution.isError} />}
     {logs && <details><summary>Recent owner logs</summary>{logs}</details>}
   </article>;
 }

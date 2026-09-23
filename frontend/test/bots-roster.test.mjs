@@ -62,3 +62,32 @@ test('optional read failures preserve the native position card and report their 
   assert.match(urls[0],/\/bootstrap\?/);
  } finally {global.fetch=originalFetch;}
 });
+
+test('bootstrap transport loss shows only verified last-known inventory and withholds card controls',()=>{
+ const observed=Date.now()-15_000;
+ const cached={...snapshot(),runtime_status:{...snapshot().runtime_status,updated_at:new Date(observed).toISOString()}};
+ const responses=[{data:cached,dataUpdatedAt:observed+1000,isPending:false,isError:true,error:new TypeError('network lost'),refetch:()=>{}},{isError:false},{isError:false}];
+ const {OwnerCard}=frontendModules({
+  'react-router-dom':{Link:({to,children,...rest})=>React.createElement('a',{href:to,...rest},children)},
+  '@tanstack/react-query':{...createRequire(import.meta.url)('@tanstack/react-query'),useQuery:()=>responses.shift()},
+ },{'components/bots/BotsRoster.tsx':['OwnerCard']}).load('components/bots/BotsRoster.tsx');
+ const html=renderToStaticMarkup(React.createElement(OwnerCard,{source:{server:'native',bot:'rsi_modular_v2'},controls:React.createElement('button',null,'Native action'),logs:null}));
+ assert.match(html,/Last known inventory/);
+ assert.match(html,/ETH-USDC: 0.04 ETH/);
+ assert.match(html,/historical and do not describe current orders/);
+ assert.doesNotMatch(html,/Native action|Working exchange orders|Current position<|Recent decisions/);
+});
+
+test('bootstrap denial never replays cached inventory or card controls',()=>{
+ const observed=Date.now()-1000;
+ const cached={...snapshot(),runtime_status:{...snapshot().runtime_status,updated_at:new Date(observed).toISOString()}};
+ const denied=Object.assign(new Error('denied'),{status:403});
+ const responses=[{data:cached,dataUpdatedAt:observed,isPending:false,isError:true,error:denied,refetch:()=>{}},{isError:false},{isError:false}];
+ const {OwnerCard}=frontendModules({
+  'react-router-dom':{Link:({to,children,...rest})=>React.createElement('a',{href:to,...rest},children)},
+  '@tanstack/react-query':{...createRequire(import.meta.url)('@tanstack/react-query'),useQuery:()=>responses.shift()},
+ },{'components/bots/BotsRoster.tsx':['OwnerCard']}).load('components/bots/BotsRoster.tsx');
+ const html=renderToStaticMarkup(React.createElement(OwnerCard,{source:{server:'native',bot:'rsi_modular_v2'},controls:React.createElement('button',null,'Native action'),logs:null}));
+ assert.match(html,/Current position state and card controls are unavailable/);
+ assert.doesNotMatch(html,/Last known inventory|ETH-USDC|Native action/);
+});

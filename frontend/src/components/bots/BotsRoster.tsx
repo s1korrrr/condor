@@ -262,7 +262,7 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
       </PanelFrame>
     </div>
     <PanelFrame panelId="B25" title="Recorded behavior timeline" scopeLabel="Shared, compact, not a new tab">
-      <p className="q-empty">No independent decision journal is admitted beyond the per-card observations above. HOLD/BLOCKED stay on those cards.</p>
+      <p className="q-empty">No recorded behavior timeline is available without owner decision receipts. Current conditions stay on their bot cards.</p>
     </PanelFrame>
     <footer className="q-footer" data-panel-id="S06"><span>{server ?? 'Server not selected'} · UTC</span><span><Link to="/capital">Open Capital</Link></span></footer>
   </div>;

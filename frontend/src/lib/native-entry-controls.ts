@@ -61,7 +61,9 @@ export function entryCommandObserved(value:unknown,bot:string,now:number,receive
 }
 export function entryPublicationMessage(status:number,body:unknown) {
   const payload=object(body);
-  if(status>=500) return {rejected:false,text:'Publication outcome unknown. Await matching native state before retrying.'};
-  if(status>=400) return {rejected:true,text:typeof payload.detail==='string'?payload.detail:'Native owner rejected this request.'};
+  // The serving Condor/API routes emit these only before publication. A 409
+  // can mean the API consumed this same command ID before its response was lost.
+  if([401,403,404,422].includes(status)) return {rejected:true,text:typeof payload.detail==='string'?payload.detail:'Native owner rejected this request.'};
+  if(status>=400) return {rejected:false,text:'Publication outcome unknown. Await matching native state before retrying.'};
   return {rejected:false,text:'Submitted; waiting for matching native entry state. Publication does not confirm execution.'};
 }

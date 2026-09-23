@@ -11,7 +11,8 @@ from condor.web.read_only import ReadOnlyWeb
 
 
 def client(
-    monkeypatch, *, admin=True, access=True, enabled=True, allowed=True, code=202
+    monkeypatch, *, admin=True, access=True, enabled=True, allowed=True, code=202,
+    wrapped=True,
 ):
     from condor.web.routes import native_entry
 
@@ -67,7 +68,7 @@ def client(
     app.dependency_overrides[get_current_user] = lambda: WebUser(
         id=1, role="admin" if admin else "user"
     )
-    return TestClient(ReadOnlyWeb(app, allow_native_entry=enabled)), calls
+    return TestClient(ReadOnlyWeb(app, allow_native_entry=enabled) if wrapped else app), calls
 
 
 @pytest.mark.parametrize("action", ["pause", "resume", "acknowledge-daily-loss"])
@@ -155,3 +156,14 @@ def test_read_only_status_does_not_advertise_disabled_entry_mutations(monkeypatc
     result = c.get("/api/v1/servers/v2/bots/rsi_v2/native/entries/status")
     assert result.status_code == 200
     assert result.json()["command_allowed"] is False
+
+
+def test_unwrapped_app_cannot_publish_without_native_entry_policy(monkeypatch):
+    c, calls = client(monkeypatch, wrapped=False)
+    status = c.get("/api/v1/servers/v2/bots/rsi_v2/native/entries/status")
+    assert status.status_code == 200
+    assert status.json()["command_allowed"] is False
+    response = c.post("/api/v1/servers/v2/bots/rsi_v2/native/entries/pause",
+                      json={"command_id": "id-1"})
+    assert response.status_code == 403
+    assert not any(call[0] == "POST" for call in calls)

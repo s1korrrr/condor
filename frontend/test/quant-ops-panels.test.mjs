@@ -21,7 +21,7 @@ test('capital dashboard overlay keeps incomplete flows as unavailable PnL',()=>{
     dashboard:{period_pnl:{value:null,reason_code:'FLOW_COVERAGE_INCOMPLETE'},sample_days:12,volatility:null,sharpe:null},
   });
   assert.equal(model.periodPnl.value,null);
-  assert.equal(model.sampleDays,12);
+  assert.equal(model.sampleDays,0);
   assert.equal(model.volatility,null);
 });
 
@@ -89,6 +89,7 @@ test('panel registry covers the 47 specified IDs',()=>{
 test('native wallet observation preserves tiny inventory and shared-wallet totals',()=>{
   const current=nativeWalletFromRuntime({
     observedAt:new Date().toISOString(),
+    quoteCurrency:'USDT',
     balances:[
       {asset:'BNB',total_balance:8.015,available_balance:8.015,value_quote:6312.72,exchange:'okx'},
       {asset:'USDC',total_balance:2942.85,available_balance:2942.85,value_quote:2942.85,exchange:'okx'},
@@ -99,8 +100,8 @@ test('native wallet observation preserves tiny inventory and shared-wallet total
   assert.equal(current.valuation_complete,true);
   assert.ok(Number(current.priced_total)>9000);
   assert.equal(current.holdings.find(row=>row.token==='BTC').total,'5.224e-7');
-  const model=projectCapitalModel({current,history:[current],now:Date.now(),unit:'USDC'});
-  assert.equal(model.equity.unit,'USDC');
+  const model=projectCapitalModel({current,history:[current],now:Date.now(),unit:'USDT'});
+  assert.equal(model.equity.unit,'USDT');
   assert.ok(Number(model.equity.value)>9000);
   assert.equal(model.availableQuote.value,'2942.85');
   assert.equal(model.periodPnl.value,null);

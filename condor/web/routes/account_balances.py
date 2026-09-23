@@ -124,7 +124,18 @@ async def capital_dashboard(
         payload = await client.portfolio._get(
             'portfolio/capital-dashboard', params={'range': range, 'refresh': str(refresh).lower()}
         )
-        result = CapitalDashboard.model_validate(payload).model_dump()
+        # The owner also emits risk fields that have not passed the capital
+        # accounting gate. Keep this read boundary explicit and fail on bad
+        # values in the fields that are admitted here.
+        admitted = {
+            key: payload[key] for key in (
+                'schema_version', 'generated_at', 'execution_authorized',
+                'range_rewritten', 'equity', 'available_quote', 'deployed',
+                'period_pnl', 'today_pnl', 'classified_flow_count',
+                'observed_change_count',
+            ) if key in payload
+        }
+        result = CapitalDashboard.model_validate(admitted).model_dump()
     except Exception:
         raise HTTPException(
             status_code=502,

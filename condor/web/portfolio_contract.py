@@ -106,11 +106,34 @@ class CapitalMetric(Record):
     unit: str | None = None
 
 
+class CapitalEquity(Record):
+    value: Amount | None
+    complete: bool
+    unpriced_count: int = Field(ge=0)
+    unit: Literal['USDT'] | None
+
+
+class CapitalAvailableQuote(Record):
+    value: Amount | None
+    unit: Literal['USDC']
+    v2_budget: None
+    v2_budget_reason: str
+
+
+class CapitalDeployed(Record):
+    value: Amount | None
+    reason: str
+
+
 class CapitalDashboard(Record):
     schema_version: Literal['rsibot.native_capital.v1']
     generated_at: str
     execution_authorized: Literal[False]
     range_rewritten: Literal[False]
+    equity: CapitalEquity
+    available_quote: CapitalAvailableQuote
+    deployed: CapitalDeployed
+    risk_statistics_available: Literal[False] = False
     period_pnl: CapitalMetric
     today_pnl: CapitalMetric
     classified_flow_count: int = Field(ge=0)

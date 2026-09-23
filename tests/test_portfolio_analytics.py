@@ -75,10 +75,14 @@ def capital_payload():
         'generated_at': '2026-09-22T08:00:55+00:00',
         'execution_authorized': False,
         'range_rewritten': False,
+        'equity': {'value': '1000', 'complete': True, 'unpriced_count': 0, 'unit': 'USDT'},
+        'available_quote': {'value': '100', 'unit': 'USDC', 'v2_budget': None, 'v2_budget_reason': 'V2 budget not assigned'},
+        'deployed': {'value': '702', 'reason': 'Non-cash account exposure. Not V2-owned capital.'},
         'period_pnl': {'value': None, 'availability': 'unavailable', 'reason_code': 'FLOW_COVERAGE_INCOMPLETE'},
         'today_pnl': {'value': None, 'availability': 'unavailable', 'reason_code': 'NO_MIDNIGHT_SNAPSHOT'},
         'classified_flow_count': 0,
         'observed_change_count': 0,
+        'sharpe': '250.998',
         'secret': 'DO-NOT-RETURN',
     }
 
@@ -92,5 +96,19 @@ def test_capital_dashboard_rejects_30d_and_does_not_authorize_execution(monkeypa
     body = r.json()
     assert body['execution_authorized'] is False
     assert body['period_pnl']['value'] is None
+    assert body['equity']['value'] == '1000'
+    assert body['available_quote']['value'] == '100'
+    assert body['deployed']['value'] == '702'
+    assert body['risk_statistics_available'] is False
+    assert 'sharpe' not in body
     assert 'DO-NOT-RETURN' not in r.text
     assert upstream.call_args.args == ('portfolio/capital-dashboard',)
+
+
+def test_capital_proxy_rejects_invalid_value_or_unit(monkeypatch):
+    for change in ({'deployed': {'value': 'NaN', 'reason': 'bad'}},
+                   {'equity': {'value': '1000', 'complete': True, 'unpriced_count': 0, 'unit': 'USD'}}):
+        data = capital_payload()
+        data.update(change)
+        c, _, _ = client(monkeypatch, data)
+        assert c.get('/api/v1/servers/local/portfolio/capital-dashboard').status_code == 502

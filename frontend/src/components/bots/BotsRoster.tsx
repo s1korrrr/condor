@@ -64,7 +64,7 @@ function PairRow({ row, bot }: { row: BotPairPosition; bot: string }) {
 /** All pair rows stay in page flow. Selecting a row never hides the rest. */
 export function RosterObservation({ payload, bot, now, events, execution }: {
   payload: unknown; bot: string; now: number;
-  events?: { data?: { decisions?: { pair?: string; action?: string; occurred_at?: string; linkage?: string }[] } } | null;
+  events?: { data?: { decisions?: { decision_id?: string; owner_boot_id?: string; config_revision?: string; sequence?: number; pair?: string; action?: string; occurred_at?: string; linkage?: string }[] } } | null;
   execution?: { histogram?: { bins?: { from: number; to: number; count: number }[]; sample_count?: number; excluded_count?: number } } | null;
 }) {
   let view;
@@ -75,22 +75,18 @@ export function RosterObservation({ payload, bot, now, events, execution }: {
   const quote = view.pairs[0]?.quote ?? 'USDC';
   const regimes = [...new Set(view.pairs.map(row => row.phase).filter(Boolean))] as string[];
   const openPairs = view.pairs.filter(row => row.quantity !== null && Number(row.quantity) !== 0).length;
-  const ownerDecisions = events?.data?.decisions?.filter(row => row.action) ?? [];
-  const decisions = ownerDecisions.length ? ownerDecisions.map(row => ({
+  const ownerDecisions = events?.data?.decisions?.filter(row => row.decision_id && row.owner_boot_id && row.config_revision && Number.isInteger(row.sequence) && row.action && row.occurred_at && Number.isFinite(Date.parse(row.occurred_at))) ?? [];
+  const decisions = ownerDecisions.map(row => ({
+    id: String(row.decision_id),
     pair: row.pair || '—',
     action: String(row.action),
-    when: row.occurred_at || view.observedAt,
+    when: String(row.occurred_at),
     link: row.linkage || 'unlinked',
-  })) : view.pairs.map(row => ({
-    pair: row.pair,
-    action: row.planNext || row.reason || row.hold || row.phase,
-    when: view.observedAt,
-    link: 'unlinked',
   }));
   const histogram = execution?.histogram?.sample_count ? execution.histogram.bins ?? [] : [];
   return <div className="q-bot-card">
     <div className="q-state-ribbon" data-panel-id="B11">
-      <div><span>Regime</span><strong>{regimes.length > 1 ? `MIXED — ${mixedOperationalLabel(view.pairs)}` : stateLabel(regimes[0] ?? null)}</strong></div>
+      <div><span>Position phases</span><strong>{regimes.length > 1 ? `MIXED — ${mixedOperationalLabel(view.pairs)}` : stateLabel(regimes[0] ?? null)}</strong></div>
       <div><span>State</span><strong>{mixedOperationalLabel(view.pairs)}</strong></div>
       <div data-panel-id="B12"><span>Current position</span><strong>{amount(owned, quote)}</strong></div>
       <div data-panel-id="B13"><span>DCA progress</span><strong>{bot.includes('sell_only') || bot.includes('sell-only') ? 'N/A' : 'Plan max unavailable'}</strong></div>
@@ -107,8 +103,8 @@ export function RosterObservation({ payload, bot, now, events, execution }: {
         <p className="q-empty">Current marked snapshot by pair; no PnL history is admitted. Open-position PnL is not lifetime strategy profit. {openPairs} open pair{openPairs === 1 ? '' : 's'}.</p>
       </div>
       <div data-panel-id="B18">
-        <span className="q-muted">Open vs closed trips</span>
-        <p>Open {view.activeExecutorCount} · scored closed Unavailable</p>
+        <span className="q-muted">Executor and cycle counts</span>
+        <p>Active executors {view.activeExecutorCount} · scored closed cycles Unavailable</p>
         <p className="q-empty">Transfer-only closures are not losses. Win rate needs scored cycles.</p>
       </div>
       <div data-panel-id="B19">
@@ -118,22 +114,22 @@ export function RosterObservation({ payload, bot, now, events, execution }: {
       </div>
     </div>
     <div className="q-bot-cols">
-      <PanelFrame panelId="B20" title="Recent decisions" scopeLabel="Unlinked owner observations">
+      <PanelFrame panelId="B20" title="Recent decisions" scopeLabel="Recorded owner decisions">
         <table>
           <thead><tr><th>Time</th><th>Action</th><th>Pair</th></tr></thead>
           <tbody>
-            {decisions.map(row => <tr key={`${row.pair}:${row.action}`}><td>{new Date(row.when).toISOString().slice(11, 16)} UTC</td><td>{stateLabel(String(row.action))}</td><td>{row.pair}</td></tr>)}
+            {decisions.map(row => <tr key={row.id}><td>{new Date(row.when).toISOString().slice(11, 16)} UTC</td><td>{stateLabel(String(row.action))}</td><td>{row.pair}</td></tr>)}
             {!decisions.length && <tr><td colSpan={3}>No decision journal is admitted.</td></tr>}
           </tbody>
         </table>
-        <p className="q-empty">No timestamp-nearest fill join. Missing IDs stay {decisions.some(row => row.link === 'unlinked') ? 'unlinked' : 'owner-linked'}.</p>
+        <p className="q-empty">{decisions.length ? `No timestamp-nearest fill join. Missing IDs stay ${decisions.some(row => row.link === 'unlinked') ? 'unlinked' : 'owner-linked'}.` : 'Current conditions stay in the pair table; no historical decision is inferred.'}</p>
       </PanelFrame>
       <PanelFrame panelId="B21" title="Execution quality" scopeLabel="Adverse slippage · bps">
         <Histogram bins={histogram} unit="bps" sampleCount={execution?.histogram?.sample_count ?? 0} excludedCount={execution?.histogram?.excluded_count ?? 0} />
       </PanelFrame>
       <PanelFrame panelId="B22" title="Bot diagnostics" scopeLabel="Each row has its own freshness">
         <ul className="q-diag">
-          <li><span>Lifecycle</span><strong>{mixedOperationalLabel(view.pairs)}</strong></li>
+          <li><span>Pair states</span><strong>{mixedOperationalLabel(view.pairs)}</strong></li>
           <li><span>Heartbeat</span><strong>{new Date(view.observedAt).toLocaleTimeString('en-GB', { timeZone: 'UTC' })} UTC</strong></li>
           <li><span>Working orders</span><strong>{completeOrders ? String(view.orders!.length) : 'Incomplete'}</strong></li>
           <li><span>Inventory</span><strong>{view.pairs.some(row => row.quantity === null) ? 'Partial' : 'Reported'}</strong></li>

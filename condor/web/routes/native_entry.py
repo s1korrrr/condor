@@ -108,8 +108,11 @@ async def command(
     bot_name: str,
     action: str,
     body: EntryCommand,
+    request: Request,
     user: WebUser = Depends(get_current_user),
 ):
+    if getattr(request.state, "deployment_policy", {}).get("native_entry") is not True:
+        raise HTTPException(403, "Native entry controls disabled by deployment policy")
     if action not in ACTIONS:
         raise HTTPException(404, "Unsupported entry operation")
     transport = await transport_for(name, bot_name, user)

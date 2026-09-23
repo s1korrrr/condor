@@ -97,6 +97,7 @@ export type CapitalDashboardOverlay = {
   sharpe?: string | null;
   sample_days?: number;
   concentration?: { top3?: string | null; top5?: string | null };
+  risk_statistics_available?: boolean;
 };
 
 function n(value: string | null | undefined): number | null {
@@ -106,10 +107,12 @@ function n(value: string | null | undefined): number | null {
 
 /** Observed drawdown on admitted complete observations. Not a daily statistic. */
 export function observedDrawdown(points: HistoryPoint[]): number | null {
-  const values = points.filter(point => point.valuation_complete).map(point => n(point.priced_total)).filter((value): value is number => value != null && value > 0);
-  if (values.length < 2) return null;
+  if (points.length < 2 || points.some(point => !point.valuation_complete)) return null;
+  const values = points.map(point => n(point.priced_total));
+  if (values.some(value => value == null || value < 0) || values[0] == null || values[0] <= 0) return null;
   let peak = values[0], worst = 0;
   for (const value of values) {
+    if (value == null) return null;
     peak = Math.max(peak, value);
     worst = Math.min(worst, value / peak - 1);
   }
@@ -117,6 +120,8 @@ export function observedDrawdown(points: HistoryPoint[]): number | null {
 }
 
 export function concentration(holdings: Holding[], pricedTotal: number | null) {
+  if (pricedTotal == null || pricedTotal < 0 || holdings.some(row => n(row.value) == null || n(row.value)! < 0))
+    return { top3: null, top5: null };
   const nonCash = holdings.filter(row => row.token !== 'USDC' && row.token !== 'USDT' && n(row.value) != null && n(row.value)! > 0)
     .map(row => n(row.value)!)
     .sort((a, b) => b - a);
@@ -128,9 +133,12 @@ export function concentration(holdings: Holding[], pricedTotal: number | null) {
 }
 
 export function observedEquityChanges(points: HistoryPoint[]): number[] {
-  const complete = points.filter(point => point.valuation_complete && Number.isFinite(Number(point.priced_total)));
+  if (points.length < 2 || points.some(point => !point.valuation_complete || n(point.priced_total) == null)) return [];
+  const complete = points;
   const values: number[] = [];
   for (let index = 1; index < complete.length; index += 1) {
+    const gap = Date.parse(complete[index].observed_at) - Date.parse(complete[index - 1].observed_at);
+    if (!Number.isFinite(gap) || gap <= 0 || gap > 120000) return [];
     values.push(Number(complete[index].priced_total) - Number(complete[index - 1].priced_total));
   }
   return values;
@@ -154,6 +162,7 @@ export function projectCapitalModel(input: {
   const equity = summary.pricedTotal;
   const deployed = values?.nonCash ?? null;
   const dash = input.dashboard;
+  const riskAdmitted = dash?.risk_statistics_available === true;
   const dashNum = (value: string | null | undefined) => value == null || !Number.isFinite(Number(value)) ? null : Number(value);
   return {
     equity: { value: equity == null ? null : String(equity), complete: summary.complete, unpriced: summary.unpricedCount, unit: input.unit ?? 'USDT' },
@@ -171,13 +180,13 @@ export function projectCapitalModel(input: {
     nonCashValue: deployed,
     holdings,
     flows: input.changes ?? [],
-    drawdown: dashNum(dash?.drawdown) ?? observedDrawdown(input.history ?? []),
-    volatility: dashNum(dash?.volatility),
-    sharpe: dashNum(dash?.sharpe),
-    sampleDays: dash?.sample_days ?? 0,
+    drawdown: riskAdmitted ? dashNum(dash?.drawdown) : null,
+    volatility: riskAdmitted ? dashNum(dash?.volatility) : null,
+    sharpe: riskAdmitted ? dashNum(dash?.sharpe) : null,
+    sampleDays: riskAdmitted ? dash?.sample_days ?? 0 : 0,
     concentration: {
-      top3: dashNum(dash?.concentration?.top3) ?? concentration(holdings, equity).top3,
-      top5: dashNum(dash?.concentration?.top5) ?? concentration(holdings, equity).top5,
+      top3: summary.complete ? concentration(holdings, equity).top3 : null,
+      top5: summary.complete ? concentration(holdings, equity).top5 : null,
     },
     history: input.history ?? [],
   };

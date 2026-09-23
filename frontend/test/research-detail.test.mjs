@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import ts from 'typescript';
 const code=ts.transpileModule(fs.readFileSync(new URL('../src/features/research/research-detail.ts',import.meta.url),'utf8'),{compilerOptions:{module:ts.ModuleKind.ESNext,target:ts.ScriptTarget.ES2022}}).outputText;
-const {safeSourceUrl,metricValue,archiveMetricsAvailable,documentPath,isolatedDocument}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
+const {safeSourceUrl,metricValue,archiveMetricsAvailable,documentPath,isolatedDocument,relationshipEvidence}=await import('data:text/javascript;base64,'+Buffer.from(code).toString('base64'));
 test('source links admit ordinary HTTP(S) without credentials and reject executable, local, protocol-relative and credential URLs',()=>{
  assert.equal(safeSourceUrl('https://arxiv.org/abs/2601.00001'),'https://arxiv.org/abs/2601.00001');
  for(const value of ['javascript:alert(1)','data:text/html,test','file:///secret','//evil.example','https://user:secret@example.com','/etc/passwd','https://example.com/\nsecret',null]) assert.equal(safeSourceUrl(value),null);
@@ -47,4 +47,19 @@ test('source fragment navigation is retained inside preview without executable a
  const hostile=isolatedDocument('<p>Source</p>','</script><script>bad()</script>');
  assert.ok(!hostile.includes('<script>'));
  assert.ok(hostile.includes('\\u003c/script'));
+});
+
+ test('relationship evidence preserves direction, verified hashes and distinct historical meaning',()=>{
+ const hash='a'.repeat(64);
+ const edge={source:'experiment:one',target:'source:two',relation:'references_saved_artifact',provenance:{repair_rule:'exact_reference',sources:[{sha256:hash,path:'/private/source'},{sha256:hash},{sha256:'invalid'}]}};
+ const result=relationshipEvidence(edge,'experiment:one');
+ assert.equal(result.direction,'Outgoing');
+ assert.deepEqual(result.hashes,[hash]);
+ assert.equal(result.rule,'exact_reference');
+ assert.match(result.meaning,/artifact/);
+ assert.equal(relationshipEvidence(edge,'source:two').direction,'Incoming');
+ assert.match(relationshipEvidence({...edge,relation:'recorded_in'},'experiment:one').meaning,/membership/);
+ assert.match(relationshipEvidence({...edge,relation:'references_historical_idea'},'experiment:one').meaning,/preregistration/);
+ assert.equal(relationshipEvidence({...edge,relation:'unknown'},'experiment:one').meaning,null);
+ assert.deepEqual(relationshipEvidence({provenance:{sources:[null,3,{}]}},'x').hashes,[]);
 });

@@ -1,3 +1,4 @@
+import { relationshipEvidence } from "../src/features/research/research-detail.ts";
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
@@ -97,6 +98,7 @@ function fixture() {
     "./ResearchDocument": { ResearchDocuments() {} },
     "./results": { sourceResultBars: () => [] },
     "./research-detail": {
+      relationshipEvidence,
       safeSourceUrl: () => null,
       researchLabel: (v) => v,
       displayResearchValue: (v) => v,

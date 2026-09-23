@@ -6,6 +6,7 @@ import {frontendModules} from './helpers/frontend-module.mjs';
 
 const {load}=frontendModules();
 const {QuantTimeSeries,Heatmap,StackedBar}=load('features/quant-ops/primitives.tsx');
+const {assetColor}=load('features/quant-ops/format.ts');
 
 test('equity curve uses elapsed time and keeps gap fills separate',()=>{
   const start=Date.parse('2026-09-01T00:00:00Z');
@@ -28,6 +29,19 @@ test('selected asset preserves the full allocation denominator',()=>{
   assert.match(html,/data-highlighted="true"/);
 });
 
+test('asset colors follow identity across ordering and membership changes',()=>{
+  const first=renderToStaticMarkup(React.createElement(StackedBar,{rows:[
+    {label:'BTC',value:34},{label:'ETH',value:20},{label:'USDC',value:46},
+  ]}));
+  const reordered=renderToStaticMarkup(React.createElement(StackedBar,{rows:[
+    {label:'USDC',value:46},{label:'BTC',value:34},
+  ]}));
+  const btcColor=assetColor('BTC');
+  assert.ok(btcColor);
+  assert.match(first,new RegExp(`background:${btcColor}[^>]*title="BTC 34\\.0%"`));
+  assert.match(reordered,new RegExp(`background:${btcColor}[^>]*title="BTC 42\\.5%"`));
+});
+
 test('signed controller PnL heatmap identifies PnL rather than exposure',()=>{
   const html=renderToStaticMarkup(React.createElement(Heatmap,{rows:['v2'],columns:['BTC','ETH'],cells:[
     {row:'v2',column:'BTC',value:-50},{row:'v2',column:'ETH',value:30},
@@ -35,4 +49,7 @@ test('signed controller PnL heatmap identifies PnL rather than exposure',()=>{
   assert.match(html,/Controller PnL by symbol heatmap/);
   assert.match(html,/var\(--q-negative\)/);
   assert.match(html,/var\(--q-positive\)/);
+  assert.match(html,/<table[^>]*class="sr-only"/);
+  assert.match(html,/<caption>Controller PnL by symbol/);
+  assert.match(html,/<td>-50\.00<\/td>/);
 });

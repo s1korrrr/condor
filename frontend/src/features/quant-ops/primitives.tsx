@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ASSET_COLORS, formatDecimal, formatSigned } from './format';
+import { assetColor, formatDecimal, formatSigned } from './format';
 
 export function PanelFrame({ panelId, title, scopeLabel, children }: { panelId: string; title: string; scopeLabel?: string; children: ReactNode }) {
   return <section className="q-card" data-panel-id={panelId}>
@@ -31,7 +31,7 @@ export function Donut({ slices, center, unit, complete }: { slices: { label: str
     const r = 44, cx = 56, cy = 56;
     const x1 = cx + r * Math.cos(start), y1 = cy + r * Math.sin(start);
     const x2 = cx + r * Math.cos(end), y2 = cy + r * Math.sin(end);
-    return { d: `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`, color: ASSET_COLORS[index % ASSET_COLORS.length], slice };
+    return { d: `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`, color: assetColor(slice.label), slice };
   });
   return <figure className="q-donut">
     <svg viewBox="0 0 112 112" width="168" height="168" role="img" aria-label={`Capital composition ${center} ${unit}`}>
@@ -50,9 +50,9 @@ export function StackedBar({ rows, highlight }: { rows: { label: string; value: 
   if (total <= 0) return <p className="q-empty">Asset allocation is unavailable.</p>;
   return <figure>
     <div className="q-stacked" role="img" aria-label="Asset allocation">
-      {rows.map((row, index) => <span key={row.label} data-highlighted={highlight === row.label} style={{ width: `${(row.value / total) * 100}%`, background: ASSET_COLORS[index % ASSET_COLORS.length], opacity: highlight && highlight !== row.label ? 0.4 : 1 }} title={`${row.label} ${((row.value / total) * 100).toFixed(1)}%`} />)}
+      {rows.map(row => <span key={row.label} data-highlighted={highlight === row.label} style={{ width: `${(row.value / total) * 100}%`, background: assetColor(row.label), opacity: highlight && highlight !== row.label ? 0.4 : 1 }} title={`${row.label} ${((row.value / total) * 100).toFixed(1)}%`} />)}
     </div>
-    <div className="q-legend">{rows.map((row, index) => <span key={row.label}><i className="q-swatch" style={{ background: ASSET_COLORS[index % ASSET_COLORS.length] }} />{row.label} {((row.value / total) * 100).toFixed(1)}%</span>)}</div>
+    <div className="q-legend">{rows.map(row => <span key={row.label}><i className="q-swatch" style={{ background: assetColor(row.label) }} />{row.label} {((row.value / total) * 100).toFixed(1)}%</span>)}</div>
   </figure>;
 }
 
@@ -72,7 +72,8 @@ export function Heatmap({ rows, columns, cells }: { rows: string[]; columns: str
   const lookup = new Map(cells.map(cell => [`${cell.row}:${cell.column}`, cell.value]));
   const numbers = cells.map(cell => cell.value).filter((value): value is number => value != null);
   const peak = Math.max(1, ...numbers.map(Math.abs));
-  return <div className="q-heat" style={{ gridTemplateColumns: `88px repeat(${columns.length}, minmax(36px, 1fr))` }} role="table" aria-label="Controller PnL by symbol heatmap">
+  return <figure aria-label="Controller PnL by symbol heatmap" style={{ margin: 0 }}>
+    <div className="q-heat" style={{ gridTemplateColumns: `88px repeat(${columns.length}, minmax(36px, 1fr))` }} aria-hidden="true">
     <div />
     {columns.map(column => <div key={column} className="q-muted" style={{ textAlign: 'center', fontSize: 11 }}>{column}</div>)}
     {rows.map(row => (
@@ -86,7 +87,15 @@ export function Heatmap({ rows, columns, cells }: { rows: string[]; columns: str
         })}
       </div>
     ))}
-  </div>;
+    </div>
+    <table className="sr-only"><caption>Controller PnL by symbol, signed quote amounts</caption>
+      <thead><tr><th scope="col">Bot</th>{columns.map(column => <th key={column} scope="col">{column}</th>)}</tr></thead>
+      <tbody>{rows.map(row => <tr key={row}><th scope="row">{row}</th>{columns.map(column => {
+        const value = lookup.get(`${row}:${column}`);
+        return <td key={column}>{value == null ? 'Unavailable' : formatSigned(value)}</td>;
+      })}</tr>)}</tbody>
+    </table>
+  </figure>;
 }
 
 export function Sparkline({ points, positive }: { points: number[]; positive?: boolean }) {
@@ -161,9 +170,9 @@ export function Gauge({ ratio, label }: { ratio: number | null; label: string })
 export function BarList({ rows, max }: { rows: { label: string; value: number; note?: string }[]; max: number }) {
   const peak = max > 0 ? max : 1;
   return <ul className="q-bars">
-    {rows.map((row, index) => <li key={row.label}>
+    {rows.map(row => <li key={row.label}>
       <div className="q-bar-meta"><span>{row.label}</span><span className="q-muted">{row.note ?? `${((row.value / peak) * 100).toFixed(1)}%`}</span></div>
-      <div className="q-bar"><span style={{ width: `${Math.min(100, (row.value / peak) * 100)}%`, background: ASSET_COLORS[index % ASSET_COLORS.length] }} /></div>
+      <div className="q-bar"><span style={{ width: `${Math.min(100, (row.value / peak) * 100)}%`, background: assetColor(row.label) }} /></div>
     </li>)}
   </ul>;
 }

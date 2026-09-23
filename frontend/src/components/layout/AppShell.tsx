@@ -38,6 +38,7 @@ const NAV_ITEMS = [
   { to: "/trade", icon: Swords, label: "Trade" },
   { to: "/trading-visuals", icon: Eye, label: "Trading Visuals" },
   { to: "/bots", icon: Bot, label: "Bots" },
+  { to: "/fleet", icon: Bot, label: "Fleet" },
   { to: "/executors", icon: Activity, label: "Executors" },
   { to: "/routines", icon: Zap, label: "Routines" },
 ] as const;
@@ -67,7 +68,7 @@ function AppShellBody() {
   const { hasKeys, isLoading: keysLoading } = useCredentials();
   const { data: serverStatus, access, readContinuity, isLoading: capabilitiesLoading, isFetching, unavailableReason, refetch } = useServerCapabilities();
   const capabilityReason = readContinuity && pathname === '/bots' ? null : unavailableServerRoute(pathname, serverStatus);
-  const nativeRoutes=['/capital','/bots','/trading-visuals','/operations','/research'];
+  const nativeRoutes=['/capital','/bots','/fleet','/trading-visuals','/operations','/research'];
   const independentRoutes=['/capital','/trading-visuals','/operations','/research'];
   const navigationItems=readContinuity ? nativeRoutes.map(to=>NAV_ITEMS.find(item=>item.to===to)!) : !access.online ? NAV_ITEMS.filter(item=>independentRoutes.includes(item.to))
     : access.native ? nativeRoutes.map(to=>NAV_ITEMS.find(item=>item.to===to)!) : NAV_ITEMS;
@@ -98,7 +99,7 @@ function AppShellBody() {
   // The chat is the landing page and needs no exchange keys, so the blocking
   // overlay would otherwise be the first thing every unconfigured user hits —
   // on the one surface that can talk them through connecting.
-  const exemptRoutes = ["/operations", "/routines", "/settings", "/trading-visuals", "/capital", "/overview", "/research", "/tools"];
+  const exemptRoutes = ["/operations", "/routines", "/settings", "/trading-visuals", "/capital", "/overview", "/research", "/tools", "/fleet"];
   const showKeysOverlay =
     server && !access.native && access.accounts && !capabilityReason && !keysLoading && !hasKeys && !isChatWorkspace &&
     !exemptRoutes.some((r) => pathname.startsWith(r));

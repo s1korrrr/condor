@@ -973,6 +973,16 @@ export const api = {
   getBots: (server: string) =>
     apiFetch<BotsPageResponse>(`/api/v1/servers/${encodeURIComponent(server)}/bots`),
 
+  getFleetBots: (server: string) =>
+    apiFetch<{ bots: Array<Record<string, unknown>>; aggregated_pnl: null; command_available: boolean; reason_code?: string | null }>(
+      `/api/v1/servers/${encodeURIComponent(server)}/fleet/bots`,
+    ),
+
+  getFleetBot: (server: string, botKey: string) =>
+    apiFetch<Record<string, unknown>>(
+      `/api/v1/servers/${encodeURIComponent(server)}/fleet/bots/${encodeURIComponent(botKey)}`,
+    ),
+
   getBot: (server: string, botId: string) =>
     apiFetch<BotDetail>(`/api/v1/servers/${encodeURIComponent(server)}/bots/${encodeURIComponent(botId)}`),
 

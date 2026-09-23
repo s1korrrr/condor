@@ -36,4 +36,29 @@ test('local New Bot draft cannot authorize execution',()=>{
  assert.doesNotMatch(html,/ok_rsi/);
 });
 
-
+test('optional read failures preserve the native position card and report their own gaps',async()=>{
+ const requested=[];
+ const queryResults=[
+  {data:{...snapshot(),runtime_status:{...snapshot().runtime_status,updated_at:new Date().toISOString()}},dataUpdatedAt:Date.now(),isPending:false,isError:false},
+  {data:undefined,isError:true,error:new Error('decision read failed')},
+  {data:undefined,isError:true,error:new Error('execution read failed')},
+ ];
+ const {OwnerCard}=frontendModules({
+  'react-router-dom':{Link:({to,children,...rest})=>React.createElement('a',{href:to,...rest},children)},
+  '@tanstack/react-query':{...createRequire(import.meta.url)('@tanstack/react-query'),useQuery:options=>{requested.push(options);return queryResults[requested.length-1];}},
+ },{'components/bots/BotsRoster.tsx':['OwnerCard']}).load('components/bots/BotsRoster.tsx');
+ const html=renderToStaticMarkup(React.createElement(OwnerCard,{source:{server:'native',bot:'rsi_modular_v2'},controls:null,logs:null}));
+ assert.match(html,/ETH-USDC/);
+ assert.match(html,/Decision read unavailable/);
+ assert.match(html,/Execution-quality read unavailable/);
+ assert.equal(requested.length,3);
+ assert.deepEqual(requested.map(row=>row.queryKey[0]),['native-position-observation','native-decision-observation','native-execution-observation']);
+ const urls=[];
+ const originalFetch=global.fetch;
+ global.fetch=async url=>{urls.push(String(url));return {ok:true,json:async()=>({})};};
+ try {
+  await requested[0].queryFn({signal:new AbortController().signal});
+  assert.equal(urls.length,1);
+  assert.match(urls[0],/\/bootstrap\?/);
+ } finally {global.fetch=originalFetch;}
+});

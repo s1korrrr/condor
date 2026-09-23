@@ -25,12 +25,6 @@ async function read(path: string, signal: AbortSignal) {
   if (!response.ok) throw Object.assign(new Error(`Bot observation request failed (${response.status}).`), { status: response.status });
   return response.json();
 }
-async function readOptional(path: string, signal: AbortSignal) {
-  const response = await authFetch(path, { signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]), cache: 'no-store' });
-  if (!response.ok) return null;
-  return response.json();
-}
-
 function profileTags(bot: string, pairs: BotPairPosition[]) {
   const tags = ['Spot'];
   if (pairs.length > 1) tags.push('Multi-asset');
@@ -62,10 +56,12 @@ function PairRow({ row, bot }: { row: BotPairPosition; bot: string }) {
 }
 
 /** All pair rows stay in page flow. Selecting a row never hides the rest. */
-export function RosterObservation({ payload, bot, now, events, execution }: {
+export function RosterObservation({ payload, bot, now, events, execution, eventsUnavailable, executionUnavailable }: {
   payload: unknown; bot: string; now: number;
   events?: { data?: { decisions?: { decision_id?: string; owner_boot_id?: string; config_revision?: string; sequence?: number; pair?: string; action?: string; occurred_at?: string; linkage?: string }[] } } | null;
   execution?: { histogram?: { bins?: { from: number; to: number; count: number }[]; sample_count?: number; excluded_count?: number } } | null;
+  eventsUnavailable?: boolean;
+  executionUnavailable?: boolean;
 }) {
   let view;
   try { view = buildBotPositionView(payload, bot, now); }
@@ -119,12 +115,13 @@ export function RosterObservation({ payload, bot, now, events, execution }: {
           <thead><tr><th>Time</th><th>Action</th><th>Pair</th></tr></thead>
           <tbody>
             {decisions.map(row => <tr key={row.id}><td>{new Date(row.when).toISOString().slice(11, 16)} UTC</td><td>{stateLabel(String(row.action))}</td><td>{row.pair}</td></tr>)}
-            {!decisions.length && <tr><td colSpan={3}>No decision journal is admitted.</td></tr>}
+            {!decisions.length && <tr><td colSpan={3}>{eventsUnavailable ? 'Decision read unavailable.' : 'No decision journal is admitted.'}</td></tr>}
           </tbody>
         </table>
         <p className="q-empty">{decisions.length ? `No timestamp-nearest fill join. Missing IDs stay ${decisions.some(row => row.link === 'unlinked') ? 'unlinked' : 'owner-linked'}.` : 'Current conditions stay in the pair table; no historical decision is inferred.'}</p>
       </PanelFrame>
       <PanelFrame panelId="B21" title="Execution quality" scopeLabel="Adverse slippage · bps">
+        {executionUnavailable && <p role="status" className="q-empty">Execution-quality read unavailable.</p>}
         <Histogram bins={histogram} unit="bps" sampleCount={execution?.histogram?.sample_count ?? 0} excludedCount={execution?.histogram?.excluded_count ?? 0} />
       </PanelFrame>
       <PanelFrame panelId="B22" title="Bot diagnostics" scopeLabel="Each row has its own freshness">
@@ -159,18 +156,24 @@ export function RosterObservation({ payload, bot, now, events, execution }: {
 function OwnerCard({ source, page, controls, logs }: { source: TradingVisualsSource; page?: BotsPageResponse; controls: ReactNode; logs: ReactNode }) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
-  const query = useQuery({
+  const positions = useQuery({
     queryKey: ['native-position-observation', source.server, source.bot],
-    queryFn: async ({ signal }) => ({
-      bootstrap: await read(`/api/v1/trading-visuals/bootstrap?bot=${encodeURIComponent(source.bot)}`, signal),
-      events: await readOptional(`/api/v1/trading-visuals/quant-events?bot=${encodeURIComponent(source.bot)}`, signal),
-      execution: await readOptional(`/api/v1/trading-visuals/quant-execution?bot=${encodeURIComponent(source.bot)}`, signal),
-    }),
+    queryFn: ({ signal }) => read(`/api/v1/trading-visuals/bootstrap?bot=${encodeURIComponent(source.bot)}`, signal),
+    refetchInterval: 10_000, retry: false,
+  });
+  const events = useQuery({
+    queryKey: ['native-decision-observation', source.server, source.bot],
+    queryFn: ({ signal }) => read(`/api/v1/trading-visuals/quant-events?bot=${encodeURIComponent(source.bot)}`, signal),
+    refetchInterval: 10_000, retry: false,
+  });
+  const execution = useQuery({
+    queryKey: ['native-execution-observation', source.server, source.bot],
+    queryFn: ({ signal }) => read(`/api/v1/trading-visuals/quant-execution?bot=${encodeURIComponent(source.bot)}`, signal),
     refetchInterval: 10_000, retry: false,
   });
   const owner = page?.bots.find(item => item.bot_name === source.bot);
   let pairs: BotPairPosition[] = [];
-  try { if (query.data?.bootstrap) pairs = buildBotPositionView(query.data.bootstrap, source.bot, Math.max(now, query.dataUpdatedAt)).pairs; } catch { pairs = []; }
+  try { if (positions.data) pairs = buildBotPositionView(positions.data, source.bot, Math.max(now, positions.dataUpdatedAt)).pairs; } catch { pairs = []; }
   return <article className="q-card q-bot-card" aria-label={`${source.bot} roster card`}>
     <header className="q-bot-head" data-panel-id="B09">
       <div>
@@ -185,7 +188,7 @@ function OwnerCard({ source, page, controls, logs }: { source: TradingVisualsSou
         {controls}
       </div>
     </header>
-    {query.isPending ? <p className="q-empty" role="status">Reading bot positions and orders…</p> : query.isError ? <p className="q-empty" role="alert">{query.error.message} Retrying in the background. <button type="button" onClick={() => void query.refetch()}>Check now</button></p> : <RosterObservation payload={query.data?.bootstrap} bot={source.bot} now={Math.max(now, query.dataUpdatedAt)} events={query.data?.events} execution={query.data?.execution} />}
+    {positions.isPending ? <p className="q-empty" role="status">Reading bot positions and orders…</p> : positions.isError ? <p className="q-empty" role="alert">{positions.error.message} Retrying in the background. <button type="button" onClick={() => void positions.refetch()}>Check now</button></p> : <RosterObservation payload={positions.data} bot={source.bot} now={Math.max(now, positions.dataUpdatedAt)} events={events.isError ? null : events.data} execution={execution.isError ? null : execution.data} eventsUnavailable={events.isError} executionUnavailable={execution.isError} />}
     {logs && <details><summary>Recent owner logs</summary>{logs}</details>}
   </article>;
 }

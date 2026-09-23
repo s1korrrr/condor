@@ -36,6 +36,24 @@ def test_full_network_preserves_native_indices_and_counts(monkeypatch):
     assert response.json()["data"] == data
 
 
+def test_full_network_requires_session_and_server_access_without_forwarding_credentials(monkeypatch):
+    path = "/api/v1/research/network?server=native-ok-rsi"
+    assert client(monkeypatch, authenticated=False).get(path).status_code in (401, 403)
+    assert client(monkeypatch, access=False).get(path).status_code == 404
+
+    def handler(req):
+        assert str(req.url) == "http://127.0.0.1:8873/api/knowledge/network"
+        assert "authorization" not in req.headers
+        assert "cookie" not in req.headers
+        return httpx.Response(200, json=network())
+
+    response = client(monkeypatch, handler=handler).get(
+        path, headers={"Authorization": "private", "Cookie": "private"}
+    )
+    assert response.status_code == 200
+    assert response.json()["data"]["revision"] == "rev"
+
+
 @pytest.mark.parametrize(
     "mutation", ["index", "duplicate", "count", "unresolved", "revision"]
 )

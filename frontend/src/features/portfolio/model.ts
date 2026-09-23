@@ -1,6 +1,6 @@
 export type PortfolioRange = '1D' | '1W' | '1M' | '3M' | 'ALL';
 export interface Holding {
-  token: string; total: string; available: string; locked: string;
+  token: string; total: string; available: string | null; locked: string | null;
   price: string | null; value: string | null; quote_currency: 'USDT';
   valuation_source: string | null; price_observed_at: string | null;
 }
@@ -26,8 +26,10 @@ export function portfolioSummary(current: CurrentPortfolio | null, now: number, 
   const unpricedCount = holdings.filter(h => Number(h.total) > 0 && (number(h.value) === null || number(h.price) === null)).length;
   const complete = fresh && current!.valuation_complete && unpricedCount === 0;
   return {current: fresh, complete, pricedTotal,
-    availableValue: fresh ? priced.reduce((s,h) => s + Number(h.available) * Number(h.price), 0) : null,
-    lockedValue: fresh ? priced.reduce((s,h) => s + Number(h.locked) * Number(h.price), 0) : null,
+    availableValue: fresh && priced.every(h => h.available !== null)
+      ? priced.reduce((s,h) => s + Number(h.available) * Number(h.price), 0) : null,
+    lockedValue: fresh && priced.every(h => h.locked !== null)
+      ? priced.reduce((s,h) => s + Number(h.locked) * Number(h.price), 0) : null,
     unpricedCount,
     allocation: priced.filter(h=>Number(h.value)>0).sort((a,b)=>Number(b.value)-Number(a.value)).map(h=>({token:h.token,value:Number(h.value),weight:complete && pricedTotal!>0 ? Number(h.value)/pricedTotal! *100 : null})),
   };

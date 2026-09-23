@@ -8,7 +8,8 @@ function asAmount(value: unknown): string | null {
 }
 
 /** Connector balances from a live bot runtime_status. Shared-wallet observation, not V2-owned capital. */
-export function nativeWalletFromRuntime(input: { balances: unknown; observedAt: string | null }): CurrentPortfolio | null {
+export function nativeWalletFromRuntime(input: { balances: unknown; observedAt: string | null; quoteCurrency?: string }): CurrentPortfolio | null {
+  if (input.quoteCurrency !== 'USDT') return null;
   if (!Array.isArray(input.balances) || input.balances.length === 0) return null;
   if (!input.observedAt || !Number.isFinite(Date.parse(input.observedAt))) return null;
   const holdings: Holding[] = [];
@@ -18,25 +19,23 @@ export function nativeWalletFromRuntime(input: { balances: unknown; observedAt: 
     if (!row || typeof row !== 'object') return null;
     const token = typeof (row as { asset?: unknown }).asset === 'string' ? (row as { asset: string }).asset.trim() : '';
     const total = asAmount((row as { total_balance?: unknown }).total_balance);
-    const available = asAmount((row as { available_balance?: unknown }).available_balance) ?? total;
+    const available = asAmount((row as { available_balance?: unknown }).available_balance);
     const value = asAmount((row as { value_quote?: unknown }).value_quote);
-    if (!token || total == null) return null;
+    if (!token || total == null || Number(total) < 0 || (available !== null && (Number(available) < 0 || Number(available) > Number(total)))) return null;
+    const locked = available === null ? null : String(Number(total) - Number(available));
     const valueNum = value == null ? NaN : Number(value);
     if (!Number.isFinite(valueNum) || valueNum < 0) {
       unpriced.push(token);
       holdings.push({
-        token, total, available: available ?? total, locked: '0', price: null, value: null,
+        token, total, available, locked, price: null, value: null,
         quote_currency: 'USDT', valuation_source: 'native-runtime-status', price_observed_at: input.observedAt,
       });
       continue;
     }
     priced += valueNum;
     const totalNum = Number(total);
-    const availableNum = Number(available);
-    const lockedNum = Number.isFinite(totalNum) && Number.isFinite(availableNum) ? totalNum - availableNum : 0;
     holdings.push({
-      token, total, available: available ?? total,
-      locked: Number.isFinite(lockedNum) && lockedNum > 0 ? String(lockedNum) : '0',
+      token, total, available, locked,
       price: totalNum > 0 ? String(valueNum / totalNum) : '0',
       value,
       quote_currency: 'USDT', valuation_source: 'native-runtime-status', price_observed_at: input.observedAt,
@@ -56,7 +55,19 @@ function availableUsdc(current: CurrentPortfolio | null, fresh: boolean): string
   const rows = current.holdings.filter(holding => holding.token === 'USDC');
   if (rows.length !== 1) return null;
   const value = rows[0].available;
-  return /^\d+(\.\d+)?$/.test(value) && Number.isFinite(Number(value)) ? value : null;
+  return typeof value === 'string' && /^\d+(\.\d+)?$/.test(value) && Number.isFinite(Number(value)) ? value : null;
+}
+
+function valuedCashAndNonCash(holdings: Holding[], unit: string): {cash: number; nonCash: number} | null {
+  if (unit !== 'USDT') return null;
+  let cash = 0, nonCash = 0;
+  for (const row of holdings) {
+    const value = n(row.value);
+    if (row.quote_currency !== unit || value === null || value < 0) return null;
+    if (row.token === 'USDC' || row.token === 'USDT') cash += value;
+    else nonCash += value;
+  }
+  return {cash, nonCash};
 }
 
 export type CapitalModel = {
@@ -138,9 +149,10 @@ export function projectCapitalModel(input: {
   const summary = portfolioSummary(input.current, input.now, input.failed);
   const holdings = summary.current && input.current ? input.current.holdings : [];
   const cash = availableUsdc(input.current, summary.current);
-  const cashValue = cash == null || !summary.current ? null : n(cash);
+  const values = summary.complete ? valuedCashAndNonCash(holdings, input.unit ?? 'USDT') : null;
+  const cashValue = values?.cash ?? null;
   const equity = summary.pricedTotal;
-  const deployed = equity == null || cashValue == null ? null : equity - cashValue;
+  const deployed = values?.nonCash ?? null;
   const dash = input.dashboard;
   const dashNum = (value: string | null | undefined) => value == null || !Number.isFinite(Number(value)) ? null : Number(value);
   return {

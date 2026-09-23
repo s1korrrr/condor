@@ -75,7 +75,7 @@ export function RosterObservation({ payload, bot, now, events, execution }: {
   const quote = view.pairs[0]?.quote ?? 'USDC';
   const regimes = [...new Set(view.pairs.map(row => row.phase).filter(Boolean))] as string[];
   const openPairs = view.pairs.filter(row => row.quantity !== null && Number(row.quantity) !== 0).length;
-  const ownerDecisions = events?.data?.decisions?.filter(row => row.decision_id && row.owner_boot_id && row.config_revision && Number.isInteger(row.sequence) && row.action && row.occurred_at && Number.isFinite(Date.parse(row.occurred_at))) ?? [];
+  const ownerDecisions = events?.data?.decisions?.filter(row => row.decision_id?.trim() && row.owner_boot_id?.trim() && row.config_revision?.trim() && Number.isInteger(row.sequence) && row.sequence! >= 0 && row.action?.trim() && row.occurred_at && /(?:Z|[+-]\d{2}:\d{2})$/i.test(row.occurred_at) && Number.isFinite(Date.parse(row.occurred_at))) ?? [];
   const decisions = ownerDecisions.map(row => ({
     id: String(row.decision_id),
     pair: row.pair || '—',

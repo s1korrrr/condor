@@ -25,9 +25,11 @@ test('only a recorded owner decision appears in the recent-decisions panel',()=>
     {decision_id:'d1',owner_boot_id:'boot',config_revision:'rev',sequence:1,
       occurred_at:'2026-09-23T00:00:00Z',action:'Hold risk',pair:'BTC-USDC',linkage:'unlinked'},
     {occurred_at:'2026-09-23T00:00:00Z',action:'Unqualified',pair:'BTC-USDC'},
+    {decision_id:'d2',owner_boot_id:'boot',config_revision:'rev',sequence:-1,
+      occurred_at:'2026-09-23T00:00:00Z',action:'Invalid sequence',pair:'BTC-USDC'},
   ]}};
   const html=renderToStaticMarkup(React.createElement(RosterObservation,{payload,bot:'rsi_modular_v2',now,events}));
   const decisionPanel=html.split('data-panel-id="B20"')[1].split('data-panel-id="B21"')[0];
   assert.match(decisionPanel,/Hold risk/);
-  assert.doesNotMatch(decisionPanel,/Unqualified|Wait for entry/);
+  assert.doesNotMatch(decisionPanel,/Unqualified|Invalid sequence|Wait for entry/);
 });

@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { ASSET_COLORS, formatDecimal } from './format';
+import { ASSET_COLORS, formatDecimal, formatSigned } from './format';
 
 export function PanelFrame({ panelId, title, scopeLabel, children }: { panelId: string; title: string; scopeLabel?: string; children: ReactNode }) {
   return <section className="q-card" data-panel-id={panelId}>
@@ -23,14 +23,14 @@ export function MetricCard({ panelId, title, value, unit, note, tone, sparkline 
 export function Donut({ slices, center, unit, complete }: { slices: { label: string; value: number }[]; center: string; unit: string; complete: boolean }) {
   const total = slices.reduce((sum, slice) => sum + slice.value, 0);
   if (total <= 0) return <p className="q-empty">Composition is unavailable until priced holdings exist.</p>;
-  let angle = -Math.PI / 2;
   const arcs = slices.map((slice, index) => {
     const sweep = (slice.value / total) * Math.PI * 2;
-    const start = angle; angle += sweep;
+    const start = -Math.PI / 2 + slices.slice(0, index).reduce((sum, preceding) => sum + preceding.value, 0) / total * Math.PI * 2;
+    const end = start + sweep;
     const large = sweep > Math.PI ? 1 : 0;
     const r = 44, cx = 56, cy = 56;
     const x1 = cx + r * Math.cos(start), y1 = cy + r * Math.sin(start);
-    const x2 = cx + r * Math.cos(angle), y2 = cy + r * Math.sin(angle);
+    const x2 = cx + r * Math.cos(end), y2 = cy + r * Math.sin(end);
     return { d: `M ${cx} ${cy} L ${x1} ${y1} A ${r} ${r} 0 ${large} 1 ${x2} ${y2} Z`, color: ASSET_COLORS[index % ASSET_COLORS.length], slice };
   });
   return <figure className="q-donut">
@@ -45,12 +45,12 @@ export function Donut({ slices, center, unit, complete }: { slices: { label: str
   </figure>;
 }
 
-export function StackedBar({ rows }: { rows: { label: string; value: number }[] }) {
+export function StackedBar({ rows, highlight }: { rows: { label: string; value: number }[]; highlight?: string | null }) {
   const total = rows.reduce((sum, row) => sum + row.value, 0);
   if (total <= 0) return <p className="q-empty">Asset allocation is unavailable.</p>;
   return <figure>
     <div className="q-stacked" role="img" aria-label="Asset allocation">
-      {rows.map((row, index) => <span key={row.label} style={{ width: `${(row.value / total) * 100}%`, background: ASSET_COLORS[index % ASSET_COLORS.length] }} title={`${row.label} ${((row.value / total) * 100).toFixed(1)}%`} />)}
+      {rows.map((row, index) => <span key={row.label} data-highlighted={highlight === row.label} style={{ width: `${(row.value / total) * 100}%`, background: ASSET_COLORS[index % ASSET_COLORS.length], opacity: highlight && highlight !== row.label ? 0.4 : 1 }} title={`${row.label} ${((row.value / total) * 100).toFixed(1)}%`} />)}
     </div>
     <div className="q-legend">{rows.map((row, index) => <span key={row.label}><i className="q-swatch" style={{ background: ASSET_COLORS[index % ASSET_COLORS.length] }} />{row.label} {((row.value / total) * 100).toFixed(1)}%</span>)}</div>
   </figure>;
@@ -72,7 +72,7 @@ export function Heatmap({ rows, columns, cells }: { rows: string[]; columns: str
   const lookup = new Map(cells.map(cell => [`${cell.row}:${cell.column}`, cell.value]));
   const numbers = cells.map(cell => cell.value).filter((value): value is number => value != null);
   const peak = Math.max(1, ...numbers.map(Math.abs));
-  return <div className="q-heat" style={{ gridTemplateColumns: `88px repeat(${columns.length}, minmax(36px, 1fr))` }} role="table" aria-label="Symbol exposure heatmap">
+  return <div className="q-heat" style={{ gridTemplateColumns: `88px repeat(${columns.length}, minmax(36px, 1fr))` }} role="table" aria-label="Controller PnL by symbol heatmap">
     <div />
     {columns.map(column => <div key={column} className="q-muted" style={{ textAlign: 'center', fontSize: 11 }}>{column}</div>)}
     {rows.map(row => (
@@ -82,7 +82,7 @@ export function Heatmap({ rows, columns, cells }: { rows: string[]; columns: str
           const value = lookup.get(`${row}:${column}`);
           const missing = value == null;
           const alpha = missing ? 0 : Math.abs(value) / peak;
-          return <div key={`${row}:${column}`} className="q-heat-cell" style={{ background: missing ? 'transparent' : `color-mix(in srgb, var(--q-blue) ${Math.round(alpha * 80)}%, var(--q-surface-raised))`, border: missing ? '1px dashed var(--q-border)' : undefined }}>{missing ? '—' : formatDecimal(value, 0)}</div>;
+          return <div key={`${row}:${column}`} className="q-heat-cell" style={{ background: missing ? 'transparent' : `color-mix(in srgb, ${value < 0 ? 'var(--q-negative)' : 'var(--q-positive)'} ${Math.round(alpha * 80)}%, var(--q-surface-raised))`, border: missing ? '1px dashed var(--q-border)' : undefined }}>{missing ? '—' : formatSigned(value)}</div>;
         })}
       </div>
     ))}
@@ -104,20 +104,30 @@ export function Sparkline({ points, positive }: { points: number[]; positive?: b
 export function QuantTimeSeries({ points, unit }: { points: { time: number; value: number | null }[]; unit: string }) {
   const known = points.map(point => point.value).filter((value): value is number => value != null);
   if (known.length < 2) return <p className="q-empty">Equity history is unavailable. Gaps stay gaps. No benchmark is drawn as zero.</p>;
+  if (points.some((point, index) => !Number.isFinite(point.time) || (point.value !== null && !Number.isFinite(point.value)) || (index > 0 && point.time <= points[index - 1].time)))
+    return <p className="q-empty">Equity history timestamps are unavailable or out of order.</p>;
   const min = Math.min(...known), max = Math.max(...known), span = max - min || 1;
-  const coords = points.map((point, index) => {
-    const x = (index / Math.max(1, points.length - 1)) * 320;
+  const firstTime = points[0].time, timeSpan = points.at(-1)!.time - firstTime;
+  const coords = points.map(point => {
+    const x = ((point.time - firstTime) / timeSpan) * 320;
     if (point.value == null) return null;
-    return `${x},${72 - ((point.value - min) / span) * 64}`;
+    return { x, y: 72 - ((point.value - min) / span) * 64 };
   });
-  const line = coords.reduce<{ d: string; open: boolean }>((path, pair) => {
-    if (pair == null) return { d: path.d, open: false };
-    return { d: path.d + (path.open ? ` L ${pair}` : `${path.d ? ' ' : ''}M ${pair}`), open: true };
-  }, { d: '', open: false }).d;
+  const segments: { x: number; y: number }[][] = [];
+  for (const [index, pair] of coords.entries()) {
+    if (pair == null) continue;
+    if (!segments.length || coords[index - 1] == null) segments.push([]);
+    segments.at(-1)!.push(pair);
+  }
   return <figure>
     <svg viewBox="0 0 320 80" width="100%" height="140" role="img" aria-label={`Equity ${unit}`}>
-      <path d={`${line} L 320 80 L 0 80 Z`} fill="var(--q-positive)" opacity="0.16" />
-      <path d={line} fill="none" stroke="var(--q-positive)" strokeWidth="1.8" />
+      {segments.filter(segment => segment.length > 1).map((segment, index) => {
+        const line = segment.map((point, pointIndex) => `${pointIndex ? 'L' : 'M'} ${point.x},${point.y}`).join(' ');
+        return <g key={index}>
+          <path d={`${line} L ${segment.at(-1)!.x} 80 L ${segment[0].x} 80 Z`} fill="var(--q-positive)" opacity="0.16" />
+          <path d={line} fill="none" stroke="var(--q-positive)" strokeWidth="1.8" />
+        </g>;
+      })}
     </svg>
     <table><caption className="q-muted">Admitted marks · {unit}</caption><tbody>
       {points.filter(point => point.value != null).slice(-4).map(point => <tr key={point.time}><td>{new Date(point.time).toISOString().slice(0, 16)}</td><td>{formatDecimal(point.value)}</td></tr>)}

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import type { BotsPageResponse } from '@/lib/api';
@@ -9,7 +9,7 @@ import { useServers } from '@/hooks/useServers';
 import { displayBotName, parseTradingVisualsSources, sourcesForServer, type TradingVisualsSource } from '@/features/trading-visuals/sources';
 import { buildBotPositionView, mixedOperationalLabel, numeric, type BotPairPosition } from '@/features/bots/position-view';
 import { formatSigned, metricTone } from '@/features/quant-ops/format';
-import { Heatmap, Histogram, MetricCard, PanelFrame, Sparkline } from '@/features/quant-ops/primitives';
+import { Heatmap, Histogram, MetricCard, PanelFrame } from '@/features/quant-ops/primitives';
 import { PriceLevels } from './NativeBotPositions';
 import { BotDraftWizard } from './BotDraftWizard';
 import '@/features/quant-ops/quant-ops.css';
@@ -74,7 +74,6 @@ export function RosterObservation({ payload, bot, now, events, execution }: {
   const owned = view.pairs.every(row => row.markValue !== null) ? view.pairs.reduce((total, row) => total + row.markValue!, 0) : null;
   const quote = view.pairs[0]?.quote ?? 'USDC';
   const regimes = [...new Set(view.pairs.map(row => row.phase).filter(Boolean))] as string[];
-  const pnlPoints = view.pairs.map(row => row.bagPnl).filter((value): value is number => value != null);
   const openPairs = view.pairs.filter(row => row.quantity !== null && Number(row.quantity) !== 0).length;
   const ownerDecisions = events?.data?.decisions?.filter(row => row.action) ?? [];
   const decisions = ownerDecisions.length ? ownerDecisions.map(row => ({
@@ -105,8 +104,7 @@ export function RosterObservation({ payload, bot, now, events, execution }: {
         <p className={metricTone(view.pairs.every(row => row.bagPnl != null) ? view.pairs.reduce((sum, row) => sum + (row.bagPnl ?? 0), 0) : null) ? `q-${metricTone(view.pairs.every(row => row.bagPnl != null) ? view.pairs.reduce((sum, row) => sum + (row.bagPnl ?? 0), 0) : null)}` : undefined} style={{ fontSize: 22, fontWeight: 600 }}>
           {view.pairs.every(row => row.bagPnl != null) ? formatSigned(view.pairs.reduce((sum, row) => sum + (row.bagPnl ?? 0), 0)) : 'Unavailable'} {quote}
         </p>
-        <Sparkline points={pnlPoints} positive={!pnlPoints.length || pnlPoints.at(-1)! >= 0} />
-        <p className="q-empty">Open-position PnL is not lifetime strategy profit. {openPairs} open pair{openPairs === 1 ? '' : 's'}.</p>
+        <p className="q-empty">Current marked snapshot by pair; no PnL history is admitted. Open-position PnL is not lifetime strategy profit. {openPairs} open pair{openPairs === 1 ? '' : 's'}.</p>
       </div>
       <div data-panel-id="B18">
         <span className="q-muted">Open vs closed trips</span>
@@ -223,11 +221,11 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
     const values = rows.map(row => numeric(row.global_pnl_quote));
     return { row: bot, column: symbol, value: values.length && values.every(value => value != null) ? values.reduce((sum, value) => sum + value!, 0) : null };
   }));
-  const comparison = useMemo(() => scoped.map(source => {
+  const comparison = scoped.map(source => {
     const rows = (page?.controllers ?? []).filter(row => row.bot_name === source.bot);
     const total = rows.length && rows.every(row => numeric(row.global_pnl_quote) != null) ? rows.reduce((sum, row) => sum + numeric(row.global_pnl_quote)!, 0) : null;
     return { bot: source.bot, total, quote: rows[0]?.trading_pair?.split('-')[1] ?? null };
-  }), [scoped, page]);
+  });
   return <div className="bot-roster" data-quant-ops="bots">
     <header className="q-page-head">
       <div>
@@ -263,8 +261,8 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
       <PanelFrame panelId="B23" title="Bot PnL comparison" scopeLabel="Per-bot native results · not a portfolio sum">
         {quotes.size > 1 ? <p className="q-empty">Quote currencies differ. Comparison is blocked.</p> : <ul style={{ listStyle: 'none', padding: 0, display: 'grid', gap: 8 }}>{comparison.map(row => <li key={row.bot}><strong>{displayBotName(row.bot)}</strong> <span className={metricTone(row.total) ? `q-${metricTone(row.total)}` : undefined}>{row.total == null ? 'Unavailable' : formatSigned(row.total)} {row.quote ?? ''}</span></li>)}</ul>}
       </PanelFrame>
-      <PanelFrame panelId="B24" title="Symbol exposure heatmap" scopeLabel="Per-bot controller PnL, not account weights">
-        {heatmapSymbols.length ? <Heatmap rows={heatmapBots} columns={heatmapSymbols} cells={heatmapCells} /> : <p className="q-empty">No controller symbols are admitted for a heatmap.</p>}
+      <PanelFrame panelId="B24" title="Controller PnL by symbol" scopeLabel="Current per-bot quote PnL; not account exposure">
+        {quotes.size > 1 ? <p className="q-empty">Quote currencies differ. Controller PnL heatmap is unavailable.</p> : heatmapSymbols.length ? <Heatmap rows={heatmapBots} columns={heatmapSymbols} cells={heatmapCells} /> : <p className="q-empty">No controller symbols are admitted for a PnL heatmap.</p>}
       </PanelFrame>
     </div>
     <PanelFrame panelId="B25" title="Recorded behavior timeline" scopeLabel="Shared, compact, not a new tab">

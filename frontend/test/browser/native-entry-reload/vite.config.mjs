@@ -5,7 +5,10 @@ import react from '@vitejs/plugin-react';
 const root=path.resolve(path.dirname(fileURLToPath(import.meta.url)),'../../..');
 let commandId='';
 let posts=0;
+let postIds=[];
+let accepted=0;
 let acknowledged=false;
+let responseMode='duplicate';
 
 export default {
   root,
@@ -14,18 +17,33 @@ export default {
       if(request.url==='/fixture/reset' && request.method==='POST'){
         commandId='';
         posts=0;
+        postIds=[];
+        accepted=0;
         acknowledged=false;
+        responseMode='duplicate';
         response.writeHead(204);
         response.end();
         return;
       }
       if(request.url==='/fixture/receipt'){
         response.writeHead(200,{'Content-Type':'application/json'});
-        response.end(JSON.stringify({commandId,posts,acknowledged}));
+        response.end(JSON.stringify({commandId,posts,postIds,accepted,acknowledged}));
         return;
       }
       if(request.url==='/fixture/ack' && request.method==='POST'){
         acknowledged=true;
+        response.writeHead(204);
+        response.end();
+        return;
+      }
+      if(request.url==='/fixture/mode/response-lost' && request.method==='POST'){
+        responseMode='response-lost';
+        response.writeHead(204);
+        response.end();
+        return;
+      }
+      if(request.url==='/fixture/mode/connection-lost' && request.method==='POST'){
+        responseMode='connection-lost';
         response.writeHead(204);
         response.end();
         return;
@@ -44,8 +62,26 @@ export default {
         let body='';
         request.on('data',chunk=>{body+=chunk;});
         request.on('end',()=>{
-          commandId=JSON.parse(body).command_id;
+          const submittedId=JSON.parse(body).command_id;
           posts+=1;
+          postIds.push(submittedId);
+          if(submittedId===commandId){
+            response.writeHead(409);
+            response.end(JSON.stringify({detail:'Command already submitted; inspect native effective state before retrying'}));
+            return;
+          }
+          commandId=submittedId;
+          accepted+=1;
+          if(responseMode==='connection-lost'){
+            response.destroy();
+            return;
+          }
+          if(responseMode==='response-lost'){
+            response.writeHead(202,{'Content-Type':'application/json'});
+            response.write('{"status":');
+            response.destroy();
+            return;
+          }
           response.writeHead(409);
           response.end(JSON.stringify({detail:'Command already submitted; inspect native effective state before retrying'}));
         });

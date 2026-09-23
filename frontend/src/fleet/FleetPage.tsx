@@ -49,5 +49,6 @@ export function FleetRoute() {
   if (!server) return <p role="status">Select a server to load the fleet catalogue.</p>
   if (query.isPending) return <p role="status">Loading fleet…</p>
   if (query.isError) return <p role="status">Fleet catalogue is unavailable on this server.</p>
+  if (query.data?.reason_code) return <p role="status">Fleet catalogue is unavailable on this server.</p>
   return <FleetPage items={query.data?.bots ?? []} />
 }

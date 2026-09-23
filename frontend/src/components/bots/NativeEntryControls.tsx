@@ -19,7 +19,7 @@ export function NativeEntryControls({server,botName}:{server:string;botName:stri
   const [sessionUserId]=useState(()=>getSessionSnapshot().user?.id??null);
   const key=['native-entry-session',server,botName];
   const pendingKey=sessionUserId?entryPendingStorageKey(server,botName,sessionUserId):null;
-  const [restored]=useState<EntryPendingRead>(()=>pendingKey
+  const [restored,setRestored]=useState<EntryPendingRead>(()=>pendingKey
     ?readPendingEntryCommand(browserPendingStorage(),pendingKey)
     :{status:'empty',command:null});
   const session=useQuery<Session>({queryKey:key,queryFn:skipToken,enabled:false,gcTime:Infinity,
@@ -28,6 +28,18 @@ export function NativeEntryControls({server,botName}:{server:string;botName:stri
       :restored.status==='invalid'
         ?{command:null,message:'Stored pending native command is malformed; entry controls fail closed.'}
         :undefined});
+  useEffect(()=>{
+    if(restored.status!=='unavailable' || !pendingKey)return;
+    const retry=()=>{
+      const next=readPendingEntryCommand(browserPendingStorage(),pendingKey);
+      if(next.status==='unavailable')return;
+      if(next.command)client.setQueryData<Session>(['native-entry-session',server,botName],{command:next.command,message:'Pending native command restored after storage recovery; waiting for matching owner state.'});
+      else if(next.status==='invalid')client.setQueryData<Session>(['native-entry-session',server,botName],{command:null,message:'Stored pending native command is malformed; entry controls fail closed.'});
+      setRestored(next);
+    };
+    const timer=window.setInterval(retry,1000);
+    return()=>window.clearInterval(timer);
+  },[botName,client,pendingKey,restored.status,server]);
   useEffect(()=>{const timer=window.setInterval(()=>setNow(Date.now()),1000);return()=>window.clearInterval(timer);},[]);
   const status=useQuery({queryKey:['native-entry-status',server,botName],queryFn:async()=>{
     const response=await authFetch(entryPath(server,botName,'status'),{cache:'no-store',signal:AbortSignal.timeout(10000)});
@@ -80,7 +92,7 @@ export function NativeEntryControls({server,botName}:{server:string;botName:stri
     const prior=client.getQueryData<Session>(key);
     setSession({command:prior?.command??null,message:'Publication outcome unknown. Await matching native state before retrying.'});
   },onSettled:()=>{setConfirmation(null);if(authRevision===sessionRevision())void client.invalidateQueries({queryKey:['native-entry-status',server,botName]});}});
-  const disabled=!view.allowed || waiting || mutation.isPending || restored.status==='invalid';
+  const disabled=!view.allowed || waiting || mutation.isPending || restored.status==='invalid' || restored.status==='unavailable';
   return <section className="mt-3 max-w-xl rounded border border-[var(--color-border)] p-3" aria-label={`Entry controls for ${botName}`}>
     <h4 className="text-sm font-medium">New entries</h4>
     <p className="mt-1 text-xs text-[var(--color-text-muted)]">Entry pause leaves native protective exits running. Daily-loss acknowledgement requires the next UTC day.</p>
@@ -90,6 +102,6 @@ export function NativeEntryControls({server,botName}:{server:string;botName:stri
       <button type="button" disabled={disabled} onClick={()=>mutation.mutate(confirmation)} className="rounded border px-3 py-1 text-xs disabled:opacity-40">Confirm {entryLabels[confirmation].toLowerCase()}</button>
       <button type="button" disabled={mutation.isPending} onClick={()=>setConfirmation(null)} className="px-2 text-xs">Cancel</button>
     </> : (Object.keys(entryLabels) as EntryAction[]).map(action=><button type="button" key={action} disabled={disabled} onClick={()=>setConfirmation(action)} className="rounded border px-3 py-1 text-xs disabled:opacity-40">{entryLabels[action]}</button>)}</div>
-    {(observed||session.data?.message) && <p role="status" className="mt-2 text-xs">{observed?'Matching command ID and entry state observed from the native owner.':session.data?.message}</p>}
+    {(observed||session.data?.message||restored.status==='unavailable') && <p role="status" className="mt-2 text-xs">{observed?'Matching command ID and entry state observed from the native owner.':restored.status==='unavailable'?'Browser pending-command storage is unavailable; entry controls are held until it can be read.':session.data?.message}</p>}
   </section>;
 }

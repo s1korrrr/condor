@@ -51,8 +51,9 @@ test('missing or stale lifecycle page never becomes zero active bots',()=>{
   client.setQueryData(['native-command-desk-sources'],[{bot:'rsi_modular_v2',server:'native'}]);
   const html=renderToStaticMarkup(React.createElement(QueryClientProvider,{client},React.createElement(BotsRoster,{page,renderControls:()=>null,renderLogs:()=>null})));
   const card=html.match(/<article[^>]*data-panel-id="B01"[\s\S]*?<\/article>/)?.[0];
-  assert.match(card,/Unavailable/);
-  assert.doesNotMatch(card,/0 \/ 1/);
+  if(page===undefined) assert.match(card,/Unavailable/);
+  else { assert.match(card,/0 verified \/ 1/,'a stale lifecycle counts only verified running bots, labelled as such'); assert.match(card,/data-state="stale"/); }
+  assert.doesNotMatch(card,/>0 \/ 1</,'never an unlabelled zero');
   client.clear();
  }
 });

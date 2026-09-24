@@ -111,6 +111,8 @@ class CapitalDashboard(Record):
     generated_at: str
     execution_authorized: Literal[False]
     range_rewritten: Literal[False]
+    range_start: Instant | None = None
+    range_end: Instant | None = None
     period_pnl: CapitalMetric
     today_pnl: CapitalMetric
     classified_flow_count: int = Field(ge=0)

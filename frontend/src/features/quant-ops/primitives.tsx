@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { useEffect, useRef, type ReactNode } from 'react';
 import { assetColor, formatDecimal, formatSigned } from './format';
 
 export function PanelFrame({ panelId, title, scopeLabel, children }: { panelId: string; title: string; scopeLabel?: string; children: ReactNode }) {
@@ -35,7 +35,7 @@ export function Donut({ slices, center, unit, complete }: { slices: { label: str
   });
   return <figure className="q-donut">
     <svg viewBox="0 0 112 112" width="168" height="168" role="img" aria-label={`Capital composition ${center} ${unit}`}>
-      {arcs.map(arc => <path key={arc.slice.label} d={arc.d} fill={arc.color} />)}
+      {arcs.length === 1 ? <circle cx="56" cy="56" r="44" fill={arcs[0].color}/> : arcs.map(arc => <path key={arc.slice.label} d={arc.d} fill={arc.color} />)}
       <circle cx="56" cy="56" r="28" fill="var(--q-surface)" />
       <text x="56" y="53" textAnchor="middle" fill="var(--q-text)" fontSize="11" fontWeight="600">{center}</text>
       <text x="56" y="68" textAnchor="middle" fill="var(--q-muted)" fontSize="8">{complete ? unit : 'priced'}</text>
@@ -178,9 +178,15 @@ export function BarList({ rows, max }: { rows: { label: string; value: number; n
 }
 
 export function EvidenceDrawer({ open, title, sourceRefs, onClose }: { open: boolean; title: string; sourceRefs: string[]; onClose: () => void }) {
-  if (!open) return null;
-  return <dialog className="q-drawer" open aria-label={title}>
-    <header><h2>{title}</h2><button type="button" onClick={onClose}>Close</button></header>
-    <ul>{sourceRefs.length ? sourceRefs.map(ref => <li key={ref}>{ref}</li>) : <li>No source refs are attached.</li>}</ul>
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const node = dialog.current;
+    if (!node) return;
+    if (open && !node.open) node.showModal();
+    else if (!open && node.open) node.close();
+  }, [open]);
+  return <dialog ref={dialog} className="q-drawer" aria-label={title} onCancel={event => {event.preventDefault();onClose();}}>
+    <header><h2>{title}</h2><button type="button" className="q-chip" onClick={onClose}>Close</button></header>
+    <ul>{sourceRefs.length ? sourceRefs.map(ref => <li key={ref}>{ref}</li>) : <li>No incident evidence is attached to this snapshot.</li>}</ul>
   </dialog>;
 }

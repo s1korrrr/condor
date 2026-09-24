@@ -15,11 +15,19 @@ test('quant roster keeps every pair in page flow including a mixed FLAT/HOLDING 
  assert.match(html,/BTC-USDC/);
  assert.match(html,/MIXED: 1 holding \/ 1 flat|MIXED: 1 flat \/ 1 holding/);
  assert.doesNotMatch(html,/position inspector|bot-desk__rail/);
+ assert.doesNotMatch(html,/<svg width="88"/);
+ assert.match(html,/Performance history requires a timestamped/);
 });
 test('wrong owner withholds amounts instead of borrowing another bot',()=>{
  const html=renderToStaticMarkup(React.createElement(RosterObservation,{payload:snapshot(),bot:'ok_rsi',now}));
  assert.match(html,/does not match/);
  assert.doesNotMatch(html,/99 USDC|ETH-USDC/);
+});
+
+test('current controller conditions are never rendered as recorded decisions',()=>{
+ const html=renderToStaticMarkup(React.createElement(RosterObservation,{payload:snapshot(),bot:'rsi_modular_v2',now,events:{schema_version:'rsibot.quant_ops.v1',execution_authorized:false,generated_at:new Date(now).toISOString(),scope:{bot_key:'rsi_modular_v2',execution_mode:'live'},data:{bot_id:'rsi_modular_v2',current_conditions:[{pair:'FAKE-USD',action:'SYNTHETIC_STATUS'}]}}}));
+ assert.match(html,/No identity-validated recorded decision journal is available/);
+ assert.doesNotMatch(html,/FAKE-USD|SYNTHETIC_STATUS/);
 });
 test('bots page KPIs, filters, New Bot draft control and comparison stay in flow',()=>{
  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
@@ -37,3 +45,14 @@ test('local New Bot draft cannot authorize execution',()=>{
 });
 
 
+test('missing or stale lifecycle page never becomes zero active bots',()=>{
+ for(const page of [undefined,{bots:[{bot_name:'rsi_modular_v2',status:'stale'}],controllers:[]}]) {
+  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
+  client.setQueryData(['native-command-desk-sources'],[{bot:'rsi_modular_v2',server:'native'}]);
+  const html=renderToStaticMarkup(React.createElement(QueryClientProvider,{client},React.createElement(BotsRoster,{page,renderControls:()=>null,renderLogs:()=>null})));
+  const card=html.match(/<article[^>]*data-panel-id="B01"[\s\S]*?<\/article>/)?.[0];
+  assert.match(card,/Unavailable/);
+  assert.doesNotMatch(card,/0 \/ 1/);
+  client.clear();
+ }
+});

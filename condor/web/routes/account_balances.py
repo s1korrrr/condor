@@ -1,6 +1,6 @@
 """Authenticated projection of the native API's atomic account observation."""
 
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -85,22 +85,46 @@ async def account_balances(name: str, refresh: bool = Query(False), user: WebUse
     return JSONResponse(result, headers={'Cache-Control': 'no-store'})
 
 
+def _window_params(start: str | None, end: str | None) -> dict[str, str]:
+    if start is None and end is None:
+        return {}
+    try:
+        if not start or not end:
+            raise ValueError()
+        left, right = (datetime.fromisoformat(value.replace('Z', '+00:00')) for value in (start, end))
+        if left.tzinfo is None or right.tzinfo is None or not 0 < (right - left).total_seconds() <= 3650 * 86400:
+            raise ValueError()
+    except (ValueError, TypeError, OverflowError):
+        raise HTTPException(status_code=400, detail='Provide paired timezone-aware start/end bounds within ten years.') from None
+    return {'start': left.astimezone(timezone.utc).isoformat(), 'end': right.astimezone(timezone.utc).isoformat()}
+
+
 @router.get('/servers/{name}/portfolio/analytics')
 async def portfolio_analytics(
     name: str,
     range: str = Query('1W', pattern=r'^(1D|1W|1M|3M|ALL)$'),
+    start: str | None = None,
+    end: str | None = None,
     refresh: bool = Query(False),
     user: WebUser = Depends(get_current_user),
 ):
     cm = get_config_manager()
     if not cm.has_server_access(user.id, name):
         raise HTTPException(status_code=404, detail='Server not found')
+    window = _window_params(start, end)
     try:
         client = await cm.get_client(name)
         payload = await client.portfolio._get(
-            'portfolio/analytics', params={'range': range, 'refresh': str(refresh).lower()}
+            'portfolio/analytics', params={'range': range, 'refresh': str(refresh).lower(), **window}
         )
         result = Analytics.model_validate(payload).model_dump(by_alias=True)
+        if window and result['history'] is not None:
+            history = result['history']
+            for bound in ('start', 'end'):
+                actual = datetime.fromisoformat(history[f'range_{bound}'].replace('Z', '+00:00'))
+                expected = datetime.fromisoformat(window[bound])
+                if actual != expected:
+                    raise ValueError('Owner did not honor the requested window')
     except Exception:
         raise HTTPException(
             status_code=502,
@@ -113,18 +137,26 @@ async def portfolio_analytics(
 async def capital_dashboard(
     name: str,
     range: str = Query('1W', pattern=r'^(1D|1W|1M|3M|ALL)$'),
+    start: str | None = None,
+    end: str | None = None,
     refresh: bool = Query(False),
     user: WebUser = Depends(get_current_user),
 ):
     cm = get_config_manager()
     if not cm.has_server_access(user.id, name):
         raise HTTPException(status_code=404, detail='Server not found')
+    window = _window_params(start, end)
     try:
         client = await cm.get_client(name)
         payload = await client.portfolio._get(
-            'portfolio/capital-dashboard', params={'range': range, 'refresh': str(refresh).lower()}
+            'portfolio/capital-dashboard', params={'range': range, 'refresh': str(refresh).lower(), **window}
         )
         result = CapitalDashboard.model_validate(payload).model_dump()
+        if window:
+            for bound in ('start', 'end'):
+                actual = result.get(f'range_{bound}')
+                if actual is None or datetime.fromisoformat(actual.replace('Z', '+00:00')) != datetime.fromisoformat(window[bound]):
+                    raise ValueError('Owner did not honor the requested window')
     except Exception:
         raise HTTPException(
             status_code=502,

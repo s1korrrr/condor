@@ -1730,11 +1730,11 @@ export const api = {
   getCredentials: (server: string) =>
     apiFetch<{ credentials: (CredentialInfo | string)[] }>(`/api/v1/settings/credentials?server=${encodeURIComponent(server)}`),
 
-  getPortfolioAnalytics: (server: string, range: PortfolioRange, refresh = false) =>
-    apiFetch<PortfolioAnalytics>(`/api/v1/servers/${encodeURIComponent(server)}/portfolio/analytics?range=${range}&refresh=${refresh}`, {cache: "no-store"}),
+  getPortfolioAnalytics: (server: string, range: PortfolioRange, refresh = false, window?: { start: string; end: string }, signal?: AbortSignal) =>
+    apiFetch<PortfolioAnalytics>(`/api/v1/servers/${encodeURIComponent(server)}/portfolio/analytics?range=${range}&refresh=${refresh}${window ? `&${new URLSearchParams(window)}` : ""}`, {cache: "no-store", signal}),
 
-  getCapitalDashboard: (server: string, range: PortfolioRange, refresh = false) =>
-    apiFetch<CapitalDashboardOverlay>(`/api/v1/servers/${encodeURIComponent(server)}/portfolio/capital-dashboard?range=${range}&refresh=${refresh}`, {cache: "no-store"}),
+  getCapitalDashboard: (server: string, range: PortfolioRange, refresh = false, window?: { start: string; end: string }, signal?: AbortSignal) =>
+    apiFetch<CapitalDashboardOverlay>(`/api/v1/servers/${encodeURIComponent(server)}/portfolio/capital-dashboard?range=${range}&refresh=${refresh}${window ? `&${new URLSearchParams(window)}` : ""}`, {cache: "no-store", signal}),
 
   getAccountBalances: (server: string, refresh = false) =>
     apiFetch<AccountBalancesResponse>(`/api/v1/servers/${encodeURIComponent(server)}/account-balances?refresh=${refresh}`, {cache:'no-store'}),

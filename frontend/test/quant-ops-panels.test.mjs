@@ -8,7 +8,7 @@ const {load}=frontendModules({'react-router-dom':{Link:({to,children,...rest})=>
 const {formatDecimal}=load('features/quant-ops/format.ts');
 const {projectCapitalModel,observedDrawdown,concentration,nativeWalletFromRuntime}=load('features/quant-ops/capital-project.ts');
 const {CAPITAL_PANELS,BOT_PANELS,SHELL_PANELS}=load('features/quant-ops/panel-registry.ts');
-const {CapitalPage}=load('/Users/s1kor/dev/trading/rsibot/dashboard/condor-workspace/src/features/overview/CapitalPage.tsx');
+const {CapitalPage}=load(new URL('../../../dashboard/condor-workspace/src/features/overview/CapitalPage.tsx', import.meta.url).pathname);
 const {RosterObservation}=load('components/bots/BotsRoster.tsx');
 
 test('capital dashboard overlay keeps incomplete flows as unavailable PnL',()=>{

@@ -120,3 +120,63 @@
 @media (prefers-reduced-motion: reduce) {
   [data-quant-ops] * { transition: none !important; animation: none !important; }
 }
+
+/* Capital workbench: wide plot, compact evidence and readable small screens. */
+[data-quant-ops="capital"] { --q-radius: 12px; --q-gap: 14px; max-width: none; }
+[data-quant-ops="capital"] .q-page-head { align-items: center; margin-bottom: 16px; }
+[data-quant-ops="capital"] .q-page-head h1 { font-size: 32px; line-height: 42px; margin: 2px 0; }
+[data-quant-ops="capital"] .q-page-head [data-panel-id="S01"] { letter-spacing: .12em; font-size: 12px; color: var(--q-blue); }
+[data-quant-ops="capital"] .q-card { background: linear-gradient(145deg, #101d28, var(--q-surface) 60%); }
+[data-quant-ops="capital"] .q-kpi { align-content: start; min-height: 152px; border-top: 2px solid #2a4356; }
+[data-quant-ops="capital"] .q-kpi:first-child { border-top-color: var(--q-blue); }
+[data-quant-ops="capital"] .q-kpi strong { font-size: clamp(19px, 1.65vw, 30px); line-height: 1.3; margin-block: 8px; }
+[data-quant-ops="capital"] .q-card > header { margin-bottom: 16px; }
+[data-quant-ops="capital"] .q-card > header h2 { margin-bottom: 2px; }
+[data-quant-ops="capital"] .q-hero { grid-template-columns: minmax(0, 3fr) minmax(270px, 1fr); }
+[data-quant-ops="capital"] .q-donut { justify-content: center; padding-top: 18px; }
+[data-quant-ops="capital"] .q-donut svg { width: 210px; height: 210px; }
+[data-quant-ops="capital"] .q-donut .q-legend { display: grid; width: 100%; padding-top: 14px; border-top: 1px solid var(--q-border); }
+[data-quant-ops] .q-context-strip { display: flex; align-items: center; flex-wrap: wrap; gap: 14px 24px; padding: 10px 0 18px; color: var(--q-muted); font-size: 12px; }
+[data-quant-ops] .q-context-strip :is(span,a) { display: inline-flex; align-items: center; gap: 7px; }
+[data-quant-ops] .q-context-strip a { margin-left: auto; }
+[data-quant-ops] .q-equity-chart figcaption { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; padding: 0 0 8px; }
+[data-quant-ops] .q-equity-chart figcaption span { color: var(--q-muted); font-size: 12px; }
+[data-quant-ops] .q-equity-chart figcaption strong { font-size: 19px; font-weight: 550; }
+[data-quant-ops] .q-equity-chart svg { width: 100%; min-height: 210px; display: block; overflow: visible; }
+[data-quant-ops] .q-observation-slider { display: flex; align-items: center; gap: 12px; color: var(--q-muted); font-size: 12px; margin: 8px 0 10px; }
+[data-quant-ops] .q-observation-slider input { flex: 1; min-width: 50px; accent-color: var(--q-blue); }
+[data-quant-ops] .q-return-pane { border-top: 1px solid var(--q-border); display: flex; justify-content: space-between; align-items: center; gap: 18px; padding: 14px 0 0; margin-top: 14px; }
+[data-quant-ops] .q-return-pane > div { display: grid; gap: 4px; flex-shrink: 0; }
+[data-quant-ops] .q-return-pane strong { font-size: 14px; color: var(--q-muted); font-weight: 500; }
+[data-quant-ops] .q-return-pane p { color: var(--q-muted); font-size: 12px; max-width: 340px; }
+[data-quant-ops] .q-chart-empty { min-height: 250px; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 10px; text-align: center; border-block: 1px dashed var(--q-border); }
+[data-quant-ops] .q-chart-empty p { max-width: 380px; color: var(--q-muted); }
+[data-quant-ops] .q-empty-symbol { color: var(--q-blue); font-size: 42px; }
+[data-quant-ops] .q-coverage { font-size: 12px; color: var(--q-muted); padding-top: 16px; }
+[data-quant-ops] .q-custom-window { display: flex; flex-wrap: wrap; align-items: end; gap: 12px; padding: 12px; margin-bottom: 12px; background: var(--q-surface); border: 1px solid var(--q-border); border-radius: 10px; }
+[data-quant-ops] .q-custom-window label { display: grid; gap: 6px; font-size: 12px; }
+[data-quant-ops] :is(input,select) { color-scheme: dark; }
+[data-quant-ops] .q-custom-window input, [data-quant-ops] select { color: var(--q-text); background: var(--q-surface-raised); border: 1px solid var(--q-border); border-radius: 6px; padding: 8px; font: inherit; }
+[data-quant-ops] .q-table-scroll { overflow-x: auto; max-width: 100%; }
+[data-quant-ops] .q-chip-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+[data-quant-ops] .q-footer, [data-quant-ops] .q-tag, [data-quant-ops] .q-state-ribbon span { font-size: 12px; }
+@media (min-width: 1900px) { [data-quant-ops="capital"] .q-equity-chart svg { max-height: 390px; } }
+@media (max-width: 1200px) { [data-quant-ops="capital"] .q-kpis { grid-template-columns: repeat(3,minmax(0,1fr)); } [data-quant-ops="capital"] .q-split-bottom { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { [data-quant-ops="capital"] .q-hero, [data-quant-ops="capital"] .q-split-risk, [data-quant-ops="capital"] .q-split-3 { grid-template-columns: 1fr; } }
+@media (max-width: 560px) {
+  [data-quant-ops="capital"] { padding: 16px 12px; }
+  [data-quant-ops="capital"] .q-kpis { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  [data-quant-ops="capital"] .q-kpi:first-child { grid-column: 1/-1; min-height: 130px; }
+  [data-quant-ops="capital"] .q-kpi strong { font-size: 23px; }
+  [data-quant-ops] .q-card { padding: 14px; }
+  [data-quant-ops] .q-ranges button, [data-quant-ops] .q-chip { min-height: 44px; }
+  [data-quant-ops] .q-return-pane { align-items: start; flex-direction: column; gap: 8px; }
+  [data-quant-ops] .q-search { min-width: 0; width: 100%; }
+  [data-quant-ops] .q-observation-slider { flex-wrap: wrap; }
+  [data-quant-ops] .q-equity-chart figcaption { align-items: start; flex-direction: column; }
+  [data-quant-ops] .q-context-strip a { margin-left: 0; }
+}
+[data-quant-ops] .q-drawer { position: fixed; inset: 0 0 0 auto; margin: 0; width: min(440px, 100%); height: 100dvh; max-height: none; background: var(--q-surface); color: var(--q-text); border: 1px solid var(--q-border); padding: 24px; }
+[data-quant-ops] .q-drawer::backdrop { background: #0009; }
+[data-quant-ops] .q-drawer header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 22px; }
+[data-quant-ops] .q-drawer ul { padding-left: 20px; display: grid; gap: 12px; }

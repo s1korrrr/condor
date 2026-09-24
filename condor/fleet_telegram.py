@@ -22,16 +22,17 @@ import sqlite3
 import sys
 import time
 from datetime import datetime, timezone
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Any, Mapping
-from urllib.parse import quote, urlsplit
+from urllib.parse import quote, urlsplit, parse_qsl, urlencode, urlunsplit
 
 import aiohttp
 from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.error import BadRequest, Conflict, InvalidToken, RetryAfter, TelegramError
 
 from condor import fleet_telegram_views as views
+from condor.fleet_trade_alerts import TradeAlerts, render_fill_alert, source_key
 
 logger = logging.getLogger("condor.fleet_telegram")
 
@@ -72,6 +73,7 @@ class WorkerConfig:
     bots: tuple[BotSource, ...]
     request_timeout_seconds: float = DEFAULT_REQUEST_TIMEOUT
     poll_timeout_seconds: int = DEFAULT_POLL_TIMEOUT
+    trade_alerts: bool = False
 
 
 def _private_file(path: str, kind: str) -> str:
@@ -203,8 +205,11 @@ def load_config(path: str) -> WorkerConfig:
         raise ConfigError("timeouts must be numeric") from exc
     if not 1 <= request_timeout <= 30 or not 1 <= poll_timeout <= 50:
         raise ConfigError("timeouts are outside the supported bounds")
+    trade_alerts = raw.get("trade_alerts", False)
+    if type(trade_alerts) is not bool:
+        raise ConfigError("trade_alerts must be boolean")
     return WorkerConfig(
-        frozenset(authorized), tuple(bots), request_timeout, poll_timeout
+        frozenset(authorized), tuple(bots), request_timeout, poll_timeout, trade_alerts
     )
 
 
@@ -436,6 +441,10 @@ class FleetTelegramWorker:
         )
         self.last_successful_command = previous.get("last_successful_command")
         self._stopping = asyncio.Event()
+        self.trade_alerts = TradeAlerts(self.state.db) if config.trade_alerts else None
+        if self.trade_alerts:
+            for source in config.bots:
+                self.trade_alerts.start(source_key(source), time.time())
 
     def _select_sources(self, target: str) -> list[BotSource] | None:
         if target == "all":
@@ -450,7 +459,30 @@ class FleetTelegramWorker:
             data = await client.get(source, command)
             _validate_owner_identity(data, source, require_rows=command != "status")
             if command == "status":
-                return views.View(title + _render_status(data, source.quote_currency))
+                alert_status = ""
+                if self.trade_alerts is not None:
+                    error = self.state.db.execute(
+                        "SELECT value FROM state WHERE key IN (?,?) AND value != ''",
+                        (
+                            "trade_alert_error:" + source_key(source),
+                            "trade_alert_delivery_error",
+                        ),
+                    ).fetchone()
+                    last = self.state.db.execute(
+                        "SELECT value FROM state WHERE key=?",
+                        ("trade_alert_last_read:" + source_key(source),),
+                    ).fetchone()
+                    current = (
+                        last is not None and 0 <= time.time() - float(last[0]) < 60
+                    )
+                    alert_status = "\n\n🔔 Trade alerts: " + (
+                        "receiving native fills"
+                        if current and not (error and error[0])
+                        else "delayed / awaiting source"
+                    )
+                return views.View(
+                    title + _render_status(data, source.quote_currency) + alert_status
+                )
             result = views.records(command, _extract_rows(data, command), page)
             return views.View(title + result.text, result.page, result.pages)
         except NativeReadError as exc:
@@ -624,6 +656,88 @@ class FleetTelegramWorker:
             last_successful_command=self.last_successful_command,
         )
 
+    async def notify_trades(self):
+        """Read bounded native history and deliver a durable fill outbox."""
+        if self.trade_alerts is None:
+            return
+        by_key = {source_key(source): source for source in self.config.bots}
+        async with NativeReadClient(self.config) as client:
+            for key, source in by_key.items():
+                try:
+                    path = urlsplit(source.endpoints["fills"])
+                    query = [
+                        (k, v) for k, v in parse_qsl(path.query) if k != "limit"
+                    ] + [("limit", "1000")]
+                    endpoint = urlunsplit(("", "", path.path, urlencode(query), ""))
+                    read_source = replace(
+                        source, endpoints={**source.endpoints, "fills": endpoint}
+                    )
+                    payload = await client.get(read_source, "fills")
+                    _validate_owner_identity(payload, source, require_rows=True)
+                    rows = _extract_rows(payload, "fills")
+                    if not self.trade_alerts.has_coverage(key, rows):
+                        # Never quietly advance a truncated history window.
+                        raise NativeReadError(
+                            "trade alert history reached 1000-fill coverage limit"
+                        )
+                    self.trade_alerts.ingest(key, rows, self.config.authorized_user_ids)
+                    self.state._set("trade_alert_last_read:" + key, str(time.time()))
+                    self.state._set("trade_alert_error:" + key, "")
+                except (NativeReadError, ValueError) as exc:
+                    self.state._set("trade_alert_error:" + key, type(exc).__name__)
+                    logger.warning(
+                        "Trade alert read held source=%s error=%s",
+                        source.id,
+                        type(exc).__name__,
+                    )
+        for identity, key, recipient, rows in self.trade_alerts.pending(
+            self.config.authorized_user_ids, by_key
+        ):
+            source = by_key.get(key)
+            if source is None:
+                continue
+            await self._bot.send_message(
+                chat_id=recipient,
+                text=render_fill_alert(source.label, rows),
+                parse_mode="HTML",
+                reply_markup=self.keyboard("fills", source.id),
+            )
+            # Telegram has no idempotency key: ambiguous network/crash delivery can
+            # repeat delivery. Persist only confirmed success, never silently lose it.
+            self.trade_alerts.sent(identity)
+            self.state._set("trade_alert_last_sent", str(time.time()))
+            logger.info(
+                "Trade alert delivered source=%s fills=%d", source.id, len(rows)
+            )
+
+    async def trade_loop(self):
+        delay = 5.0
+        while not self._stopping.is_set():
+            try:
+                await self.notify_trades()
+                self.state._set("trade_alert_delivery_error", "")
+                delay = 5.0
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.warning("Trade notification retry error=%s", type(exc).__name__)
+                self.state._set("trade_alert_delivery_error", type(exc).__name__)
+                delay = min(60.0, delay * 2)
+                if isinstance(exc, RetryAfter):
+                    requested = exc.retry_after
+                    delay = max(
+                        delay,
+                        (
+                            requested.total_seconds()
+                            if hasattr(requested, "total_seconds")
+                            else float(requested)
+                        ),
+                    )
+            try:
+                await asyncio.wait_for(self._stopping.wait(), timeout=delay)
+            except asyncio.TimeoutError:
+                pass
+
     async def run(self) -> None:
         offset = self.state.get_offset()
         retry_seconds = 1.0
@@ -634,12 +748,15 @@ class FleetTelegramWorker:
             )
         self.state.heartbeat(status="starting")
         initialized = False
+        trade_task = None
         try:
             while not self._stopping.is_set():
                 try:
                     if not initialized:
                         await self._bot.initialize()
                         initialized = True
+                        if self.trade_alerts is not None:
+                            trade_task = asyncio.create_task(self.trade_loop())
                     self.last_poll_at = time.time()
                     updates = await self._bot.get_updates(
                         offset=offset,
@@ -745,6 +862,9 @@ class FleetTelegramWorker:
                     await asyncio.sleep(retry_seconds)
                     retry_seconds = min(MAX_RETRY_SECONDS, retry_seconds * 2)
         finally:
+            if trade_task is not None:
+                trade_task.cancel()
+                await asyncio.gather(trade_task, return_exceptions=True)
             current_status = self.state.get_heartbeat().get("status")
             if current_status not in {"conflict", "invalid_token", "rate_limited_hold"}:
                 self.state.heartbeat(

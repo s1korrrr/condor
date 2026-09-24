@@ -2,8 +2,10 @@ import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 
 import { useServer } from '@/hooks/useServer'
+import { useServerCapabilities } from '@/hooks/useServerCapabilities'
 import { api } from '@/lib/api'
 import { toFleetRow } from './view-model'
+import { NativeFleet } from './NativeFleet'
 
 export function FleetPage({ items = [] }: { items?: Array<Record<string, unknown>> }) {
   const rows = items.map(toFleetRow)
@@ -41,12 +43,15 @@ export function FleetPage({ items = [] }: { items?: Array<Record<string, unknown
 
 export function FleetRoute() {
   const { server } = useServer()
+  const { access } = useServerCapabilities()
   const query = useQuery({
     queryKey: ['fleet', server],
     queryFn: () => api.getFleetBots(server!),
-    enabled: !!server,
+    // A native rsibot-stack server has no hummingbot-api catalogue; its fleet is the registered owners.
+    enabled: !!server && !access.native,
   })
   if (!server) return <p role="status">Select a server to load the fleet catalogue.</p>
+  if (access.native) return <NativeFleet />
   if (query.isPending) return <p role="status">Loading fleet…</p>
   if (query.isError) return <p role="status">Fleet catalogue is unavailable on this server.</p>
   if (query.data?.reason_code) return <p role="status">Fleet catalogue is unavailable on this server.</p>

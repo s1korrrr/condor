@@ -87,6 +87,8 @@ export type CapitalModel = {
   sampleDays: number;
   concentration: { top3: number | null; top5: number | null };
   history: HistoryPoint[];
+  /** Observation time of the admitted current snapshot, for stale labelling. */
+  observedAt: string | null;
 };
 
 export type CapitalDashboardOverlay = {
@@ -153,8 +155,10 @@ export function projectCapitalModel(input: {
   accountPerformanceAvailable?: boolean;
   dashboard?: CapitalDashboardOverlay | null;
   unit?: string;
+  /** Admission window for the current snapshot. Widen only for a last-known snapshot that the page labels stale. */
+  maxAgeMs?: number;
 }): CapitalModel {
-  const summary = portfolioSummary(input.current, input.now, input.failed);
+  const summary = portfolioSummary(input.current, input.now, input.failed, input.maxAgeMs);
   const holdings = summary.current && input.current ? input.current.holdings : [];
   const cash = availableUsdc(input.current, summary.current);
   const values = summary.complete ? valuedCashAndNonCash(holdings, input.unit ?? 'USDT') : null;
@@ -189,5 +193,6 @@ export function projectCapitalModel(input: {
       top5: summary.complete ? concentration(holdings, equity).top5 : null,
     },
     history: input.history ?? [],
+    observedAt: summary.current && input.current ? input.current.observed_at : null,
   };
 }

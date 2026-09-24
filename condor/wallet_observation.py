@@ -89,7 +89,9 @@ def project_wallet(payload: object, bot: str) -> dict:
     for row in balances if isinstance(balances, list) else []:
         if not isinstance(row, dict) or not isinstance(row.get("asset"), str):
             continue
-        rows.append({"asset": row["asset"], "total": str(row.get("total_balance")), "value": str(row.get("value_quote"))})
+        rows.append({"asset": row["asset"], "total": str(row.get("total_balance")),
+                     "available": None if row.get("available_balance") is None else str(row.get("available_balance")),
+                     "value": str(row.get("value_quote"))})
     source_id = runtime.get("source_runtime_status_id")
     return {
         "timestamp": parsed.timestamp(),

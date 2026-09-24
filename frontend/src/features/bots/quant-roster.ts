@@ -25,6 +25,8 @@ export type QuantMetric = {
   observedAt: string | null;
   feeBasis: string | null;
   reason: string | null;
+  /** The owner's last published value when the metric is stale; never presented as current. */
+  lastKnown?: string | null;
 };
 
 export type QuantPair = {
@@ -78,6 +80,8 @@ export type QuantBotSummary = {
   wallet: QuantWallet | null;
   controllerName: string | null;
   profile: string | null;
+  /** True when every value above comes from the owner's last publication rather than a current one. */
+  lastKnown: boolean;
 };
 
 function metric(value: unknown, now: number): QuantMetric {
@@ -112,15 +116,18 @@ function wallet(value: unknown, sourceAdmitted: boolean): QuantWallet | null {
   const row = object(value);
   if (!Object.keys(row).length) return null;
   const currency = text(row.currency);
-  const available = sourceAdmitted && row.availability === 'available' && currency !== null && finite(row.value) !== null;
+  const declared = row.availability === 'available' && currency !== null && finite(row.value) !== null;
+  const available = sourceAdmitted && declared;
+  // A declared but no-longer-current wallet keeps its value and balances in the stale state.
+  const keep = available || (declared && !sourceAdmitted);
   return {
-    availability: available ? 'available' : 'unavailable',
-    reason: available ? null : text(row.reason_code) ?? (sourceAdmitted ? 'WALLET_UNAVAILABLE' : 'RUNTIME_NOT_CURRENT'),
-    value: available ? String(row.value) : null,
-    currency: available ? currency : null,
+    availability: available ? 'available' : keep ? 'stale' : 'unavailable',
+    reason: available ? null : keep ? 'RUNTIME_NOT_CURRENT' : text(row.reason_code) ?? (sourceAdmitted ? 'WALLET_UNAVAILABLE' : 'RUNTIME_NOT_CURRENT'),
+    value: keep ? String(row.value) : null,
+    currency: keep ? currency : null,
     scope: text(row.scope),
     observedAt: text(row.observed_at),
-    balances: Array.isArray(row.balances) && available ? row.balances.flatMap((item: unknown) => {
+    balances: Array.isArray(row.balances) && keep ? row.balances.flatMap((item: unknown) => {
       const balance = object(item), asset = text(balance.asset);
       return asset ? [{ asset, total: decimalText(balance.total), available: decimalText(balance.available), value: decimalText(balance.value) }] : [];
     }) : [],
@@ -161,27 +168,50 @@ export function projectQuantBotSummary(value: unknown, bot: string, now: number)
   const counts = object(data.cycle_counts);
   const railsRow = object(data.risk_rails);
   const rails = sourceAdmitted && Array.isArray(railsRow.rails) ? railsRow.rails.map(rail).filter((row): row is RiskRail => row !== null) : [];
+  // What the owner last published, verbatim, when it is no longer current. Rendered as stale, never as current.
+  const known = object(data.last_known);
+  const knownObserved = text(known.observed_at);
+  const knownPairs: QuantPair[] = !sourceAdmitted && Array.isArray(known.pairs) ? known.pairs.flatMap((item: unknown) => {
+    const row = object(item), pair = text(row.pair);
+    if (!pair || !/^[A-Z0-9]+-[A-Z0-9]+$/.test(pair)) return [];
+    return [{
+      controllerId: text(row.controller_id), pair, state: text(row.state) ?? 'UNKNOWN', regime: text(row.regime),
+      units: text(row.units), entryCost: text(row.entry_cost), mark: text(row.mark), markedValue: text(row.marked_value), unrealized: text(row.unrealized),
+      realized: text(row.realized), fees: text(row.fees), workingOrders: nonnegativeInteger(row.working_orders), dcaLevel: text(row.dca_level),
+      nextCondition: text(row.next_condition), observationStatus: text(row.observation_status),
+      planMode: text(row.plan_mode), planTarget: text(row.plan_target), planAnchor: text(row.plan_anchor), planNext: text(row.plan_next),
+      gate: text(row.gate), score: text(row.score), execs: text(row.execs), unrealizedPct: decimalText(row.unrealized_pct),
+    }];
+  }) : [];
+  const knownRailsRow = object(known.risk_rails);
+  const knownRails = !sourceAdmitted && Array.isArray(knownRailsRow.rails) ? knownRailsRow.rails.map(rail).filter((row): row is RiskRail => row !== null) : [];
+  const knownCounts = object(known.cycle_counts);
+  const knownQuote = text(known.quote_currency);
+  const staleMetric = (value: unknown): QuantMetric => ({ value: null, unit: knownQuote, availability: 'unavailable', freshness: 'stale', observedAt: knownObserved, feeBasis: null, reason: 'RUNTIME_NOT_CURRENT', lastKnown: decimalText(value) });
+  const lastKnown = !sourceAdmitted && knownObserved !== null && (knownPairs.length > 0 || knownRails.length > 0);
   return {
-    generatedAt: generatedAt!, observedAt,
+    generatedAt: generatedAt!, observedAt: observedAt ?? knownObserved,
     executionMode, ownershipBasis,
-    freshness: sourceAdmitted ? 'current' : observedAt ? 'stale' : 'unknown',
-    state: sourceAdmitted ? state : 'UNKNOWN', pairs,
-    ownedValue: sourceAdmitted ? metric(data.owned_value, now) : metric(null, now),
-    netLifecycle: sourceAdmitted ? metric(data.net_lifecycle, now) : metric(null, now),
+    freshness: sourceAdmitted ? 'current' : (observedAt ?? knownObserved) ? 'stale' : 'unknown',
+    state: sourceAdmitted ? state : lastKnown ? text(known.operational_label) ?? 'UNKNOWN' : 'UNKNOWN',
+    pairs: sourceAdmitted ? pairs : knownPairs,
+    ownedValue: sourceAdmitted ? metric(data.owned_value, now) : staleMetric(known.owned_value_value),
+    netLifecycle: sourceAdmitted ? metric(data.net_lifecycle, now) : staleMetric(known.net_lifecycle_value),
     cycleCounts: {
-      open: sourceAdmitted ? nonnegativeInteger(counts.open) : null,
-      closedScored: sourceAdmitted ? nonnegativeInteger(counts.closed_scored) : null,
-      ownershipTransfer: sourceAdmitted ? nonnegativeInteger(counts.ownership_transfer) : null,
-      unclassified: sourceAdmitted ? nonnegativeInteger(counts.unclassified) : null,
+      open: sourceAdmitted ? nonnegativeInteger(counts.open) : nonnegativeInteger(knownCounts.open),
+      closedScored: sourceAdmitted ? nonnegativeInteger(counts.closed_scored) : nonnegativeInteger(knownCounts.closed_scored),
+      ownershipTransfer: sourceAdmitted ? nonnegativeInteger(counts.ownership_transfer) : nonnegativeInteger(knownCounts.ownership_transfer),
+      unclassified: sourceAdmitted ? nonnegativeInteger(counts.unclassified) : nonnegativeInteger(knownCounts.unclassified),
     },
     riskRails: {
-      availability: rails.some(row => row.limit !== null) ? 'available' : 'unavailable',
-      rails,
-      tightest: rail(railsRow.tightest),
+      availability: (sourceAdmitted ? rails : knownRails).some(row => row.limit !== null) ? 'available' : 'unavailable',
+      rails: sourceAdmitted ? rails : knownRails,
+      tightest: rail(sourceAdmitted ? railsRow.tightest : knownRailsRow.tightest),
     },
-    wallet: wallet(data.wallet, sourceAdmitted),
+    wallet: sourceAdmitted ? wallet(data.wallet, true) : wallet(known.wallet, false),
     controllerName: text(data.controller_name),
     profile: text(data.profile),
+    lastKnown,
   };
 }
 

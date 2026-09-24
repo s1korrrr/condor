@@ -124,7 +124,7 @@ export function RosterObservation({ payload, bot, now, summary: summaryPayload, 
   summaryIssue?: string | null; eventsIssue?: string | null; executionIssue?: string | null;
 }) {
   let view;
-  try { view = buildBotPositionView(payload, bot, now); }
+  try { view = buildBotPositionView(payload, bot, now, { allowStale: true }); }
   catch (error) { return <p className="q-empty" role="status">{error instanceof Error ? error.message : 'Bot state could not be read.'}</p>; }
   const quant = projectQuantBotSummary(summaryPayload, bot, now);
   const journal = projectRecordedDecisions(events, bot, now) ?? [];
@@ -143,7 +143,7 @@ export function RosterObservation({ payload, bot, now, summary: summaryPayload, 
   const nextConditions = [...new Set<string>(view.pairs.flatMap((row: BotPairPosition) => typeof row.planNext === 'string' && row.planNext.length > 0 ? [row.planNext] : []))];
   const nextCondition: string = nextConditions.length > 1 ? 'MIXED · see per-pair conditions' : nextConditions[0] ?? 'No owner condition recorded; see per-pair rows.';
   const netReport = quant?.netLifecycle;
-  const netValue = netReport?.value ?? null;
+  const netValue = netReport?.value ?? netReport?.lastKnown ?? null;
   const netUnit = netReport?.unit ?? null;
   const pairPnl = quote !== null && view.pairs.length > 0 && view.pairs.every(row => row.bagPnl !== null) ? view.pairs.reduce((total, row) => total + row.bagPnl!, 0) : null;
   const dayPoints = (day?.points ?? []).map(point => point.value).filter((value): value is number => value != null);
@@ -153,9 +153,11 @@ export function RosterObservation({ payload, bot, now, summary: summaryPayload, 
   const cycleState: PanelState = !cycles ? { kind: 'unavailable', reason: 'Cycle projection not readable.' } : cycles.stats.scored < cycles.stats.minSample ? { kind: 'collecting', sample: { have: cycles.stats.scored, need: cycles.stats.minSample }, reason: 'Scored closed cycles' } : { kind: 'fresh' };
   const decisionRows = journal.length ? journal.map(row => ({ key: `${row.ownerBootId}:${row.decisionId}`, at: row.occurredAt, action: row.action, id: `${row.decisionId.slice(0, 12)} · ${row.controllerId} · boot ${row.ownerBootId.slice(0, 8)}`, pair: row.pair, reasons: [...row.reasonCodes, ...row.gateResults.map(gate => [gate.name, gate.result].filter(Boolean).join(': ')).filter(Boolean)].join(' · '), links: row.linkage === 'owner' ? `Order IDs ${row.orderIds.join(', ') || '—'} · fill IDs ${row.fillIds.join(', ') || '—'}` : 'Unlinked · no owner order/fill IDs', outcome: null as string | null }))
     : lifecycle.map(row => ({ key: row.decisionId, at: row.occurredAt, action: row.action, id: `executor ${row.executorId.slice(0, 10)}…`, pair: row.pair, reasons: [...row.reasonCodes, row.decisionPrice ? `decision price ${row.decisionPrice}` : '', row.netPnl ? `net ${formatSigned(row.netPnl)}` : ''].filter(Boolean).join(' · '), links: row.linkage === 'owner' ? `${row.orderIds.length} order ID${row.orderIds.length === 1 ? '' : 's'} · ${row.fillIds.length ? `fill IDs ${row.fillIds.join(', ')}` : 'no fill'}` : 'Unlinked · no owner order IDs', outcome: row.outcome }));
-  return <div className="q-bot-card">
+  const staleBanner = view.stale ? <p className="q-notice" role="status" data-state="stale"><StateGlyph state={{ kind: 'stale', observedAt: view.observedAt, reason: 'Owner observation is not current' }} /> Owner observation is not current: last published {stamp(view.observedAt)} · {ageLabel(view.ageSeconds)} ago. Every value on this card is that last observation; nothing below is live.</p> : null;
+  return <div className="q-bot-card" data-state={view.stale ? 'stale' : 'fresh'}>
+    {staleBanner}
     <div className="q-state-ribbon" data-panel-id="B11">
-      <div><span>Signal regime</span><strong>{quant?.freshness === 'current' ? <span className="q-pill" data-tone={tone(regimes.length > 1 ? 'mixed' : regimes[0])}>{regimes.length > 1 ? `MIXED · ${regimes.join(' / ')}` : regimes[0] ?? 'Not reported'}</span> : 'Stale source'}</strong></div>
+      <div><span>Signal regime</span><strong>{regimes.length ? <span className="q-pill" data-tone={tone(regimes.length > 1 ? 'mixed' : regimes[0])}>{regimes.length > 1 ? `MIXED · ${regimes.join(' / ')}` : regimes[0]}</span> : 'Not reported'}{quant?.lastKnown && <small className="q-block">last known</small>}</strong></div>
       <div><span>State</span><strong><span className="q-pill" data-tone={tone(mixedOperationalLabel(view.pairs))}>{mixedOperationalLabel(view.pairs)}</span></strong></div>
       <div data-panel-id="B12"><span>Reported inventory value</span><strong>{amount(quant?.ownedValue.value ?? owned, quote)}</strong><small className="q-block">{openPairs} open pair{openPairs === 1 ? '' : 's'} · marked PnL {pairPnl === null ? 'Unknown basis' : amount(pairPnl, quote ?? '')}</small></div>
       <div data-panel-id="B13"><span>DCA plan</span><strong>{quant?.pairs.length ? `${entryPairs} entering · ${exitPairs} exiting` : 'No plan reported'}</strong><small className="q-block">{quant?.pairs.length ? 'Per-pair target, anchor and next step in the ladder below' : 'Owner plan fields absent from this observation'}</small></div>
@@ -209,13 +211,13 @@ export function RosterObservation({ payload, bot, now, summary: summaryPayload, 
       </PanelFrame>
       <PanelFrame panelId="B22" title="Bot diagnostics" scopeLabel="Each row has its own freshness">
         <ul className="q-diag">
-          <li><span>Lifecycle</span><strong>{quant?.freshness === 'current' ? quant.state : 'Unavailable / stale'}</strong></li>
+          <li><span>Lifecycle</span><strong>{quant?.freshness === 'current' ? quant.state : quant?.lastKnown ? `${quant.state} · stale` : 'Unavailable / stale'}</strong></li>
           <li><span>Owner heartbeat</span><strong>{quant?.observedAt ?? 'Unavailable'}</strong></li>
           <li><span>Quant summary</span><strong>{quant?.freshness ?? summaryIssue ?? 'Unavailable'}</strong></li>
           <li><span>Execution mode</span><strong>{quant?.executionMode ?? 'Unavailable'}</strong></li>
           <li><span>Ownership evidence</span><strong>{quant?.ownershipBasis ?? 'Unavailable'}</strong></li>
           <li><span>Working orders</span><strong>{completeOrders ? String(view.orders!.length) : 'Incomplete'}</strong></li>
-          <li><span>Inventory</span><strong>{view.pairs.some(row => row.quantity === null) ? 'Partial' : 'Reported'}</strong></li>
+          <li><span>Inventory</span><strong>{view.stale ? `Last known · ${ageLabel(view.ageSeconds)} ago` : view.pairs.some(row => row.quantity === null) ? 'Partial' : 'Reported'}</strong></li>
           <li><span>Risk rails</span><strong>{quant?.riskRails.availability === 'available' ? `${quant.riskRails.rails.filter(rail => rail.limit !== null).length} published · ${quant.riskRails.rails.filter(rail => rail.state === 'absent').length} absent` : 'None published'}</strong></li>
           <li><span>Wallet valuation</span><strong>{quant?.wallet?.availability === 'available' ? `${quant.wallet.currency} declared` : quant?.wallet?.reason?.replaceAll('_', ' ').toLowerCase() ?? 'Unavailable'}</strong></li>
         </ul>
@@ -252,7 +254,7 @@ function useOwnerReads(source: TradingVisualsSource, page: BotsPageResponse | un
   const week = useQuery({ queryKey: ['native-pnl-history', source.server, source.bot, '1W'], queryFn: ({ signal }) => readOptional(`/api/v1/servers/${encodeURIComponent(source.server)}/bots/${encoded}/performance-history?range=1W`, signal), refetchInterval: 60_000, retry: false });
   const owner = page?.bots.find(item => item.bot_name === source.bot);
   let view: OwnerReads['view'] = null;
-  try { if (bootstrap.data) view = buildBotPositionView(bootstrap.data, source.bot, Math.max(now, bootstrap.dataUpdatedAt)); } catch { view = null; }
+  try { if (bootstrap.data) view = buildBotPositionView(bootstrap.data, source.bot, Math.max(now, bootstrap.dataUpdatedAt), { allowStale: true }); } catch { view = null; }
   const reads: OwnerReads = {
     bot: source.bot, server: source.server, status: owner?.status ?? null, view,
     controller: controllerNet(page, source.bot),
@@ -329,20 +331,26 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
   const verifiedRunning = scoped.filter(source => page?.bots.find(item => item.bot_name === source.bot)?.status === 'running').length;
   const fleet = scoped.map(source => readsByBot[`${source.server}:${source.bot}`]).filter((reads): reads is OwnerReads => Boolean(reads));
   const complete = fleet.length === scoped.length && scoped.length > 0;
-  const quotes = new Set(fleet.map(reads => reads.controller.quote ?? reads.quant?.netLifecycle.unit).filter(Boolean));
+  // Net per bot: the current controller report, else the owner's last published net (stale). Never a fabricated zero.
+  const netFor = (reads: OwnerReads): { value: number | null; stale: boolean } => reads.controller.total != null
+    ? { value: reads.controller.total, stale: false }
+    : reads.quant?.netLifecycle.lastKnown != null ? { value: Number(reads.quant.netLifecycle.lastKnown), stale: true } : { value: null, stale: false };
+  const staleBots = fleet.filter(reads => reads.view?.stale || (reads.quant != null && reads.quant.freshness !== 'current'));
+  const quotes = new Set(fleet.map(reads => reads.controller.quote ?? reads.quant?.netLifecycle.unit ?? reads.quant?.pairs[0]?.pair.split('-')[1]).filter(Boolean));
   const singleQuote = quotes.size === 1 ? [...quotes][0]! : null;
   // Aggregates are published only when every registered bot is read and no wallet overlap can double count: one bot, or disjoint pairs.
   const pairsByBot = fleet.map(reads => new Set((reads.quant?.pairs ?? []).map(pair => pair.pair)));
   const disjoint = pairsByBot.every((set, index) => pairsByBot.every((other, otherIndex) => index === otherIndex || [...set].every(pair => !other.has(pair))));
   const aggregateAllowed = complete && singleQuote !== null && (fleet.length === 1 || disjoint);
-  const netTotal = aggregateAllowed ? sum(fleet.map(reads => reads.controller.total)) : null;
+  const netTotal = aggregateAllowed ? sum(fleet.map(reads => netFor(reads).value)) : null;
+  const netStale = aggregateAllowed && fleet.some(reads => netFor(reads).stale);
   const dayTotal = aggregateAllowed ? sum(fleet.map(reads => reads.day.change)) : null;
   const openExecutors = complete ? sum(fleet.map(reads => reads.cycles?.counts.open ?? null)) : null;
   const openPositions = complete ? sum(fleet.map(reads => reads.view ? reads.view.pairs.filter(row => row.quantity !== null && formatDecimal(row.quantity, 18) !== '0').length : null)) : null;
   const openOrders = complete ? sum(fleet.map(reads => reads.view && reads.view.orders !== null && reads.view.ordersStatus.complete === true ? reads.view.orders.length : null)) : null;
   const fillsTotal = complete ? sum(fleet.map(reads => reads.cycles?.stats.fillCount ?? null)) : null;
   const scoredTotal = complete ? sum(fleet.map(reads => reads.cycles?.stats.scored ?? null)) : null;
-  const aggregateNote = !complete ? 'Waiting for every registered bot to be read.' : aggregateAllowed ? (fleet.length === 1 ? 'One registered bot; no wallet overlap to prove.' : 'Disjoint pairs, one quote currency.') : singleQuote === null ? 'Bots report different quote currencies; no sum is published.' : 'Bots share pairs on one wallet; per-bot values stay separate.';
+  const aggregateNote = !complete ? 'Waiting for every registered bot to be read.' : aggregateAllowed ? (fleet.length === 1 ? 'One registered bot; no wallet overlap to prove.' : 'Disjoint pairs, one quote currency.') : singleQuote === null ? (staleBots.length ? `${staleBots.length} bot${staleBots.length === 1 ? '' : 's'} stale; quote currency unknown until the owner publishes again.` : 'Bots report different quote currencies; no sum is published.') : 'Bots share pairs on one wallet; per-bot values stay separate.';
   const assets = [...new Set(fleet.flatMap(reads => (reads.quant?.pairs ?? []).map(pair => pair.pair.split('-')[0])))].sort();
   const heatCells = fleet.flatMap(reads => (reads.quant?.pairs ?? []).map(pair => ({ row: displayBotName(reads.bot), column: pair.pair.split('-')[0], value: pair.markedValue == null ? null : Number(pair.markedValue) })));
   const funnel = fleet.length ? (() => { const totals = new Map<string, number>(); for (const reads of fleet) for (const stage of reads.execution?.funnel ?? []) totals.set(stage.stage, (totals.get(stage.stage) ?? 0) + stage.count); return [...totals.entries()].map(([stage, count]) => ({ stage, count })); })() : [];
@@ -371,19 +379,19 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
       </div>
     </header>
     <section className="q-kpis" aria-label="Registered bots">
-      <MetricCard panelId="B01" title="Active bots" value={statusesKnown ? `${verifiedRunning} / ${scoped.length}` : 'Unavailable'} state={statusesKnown ? { kind: 'fresh' } : { kind: 'unavailable', reason: 'Lifecycle status is missing or stale for a registered bot.' }} note="Verified running / registered. A configured bot is not automatically active." />
+      <MetricCard panelId="B01" title="Active bots" value={statusesKnown ? `${verifiedRunning} / ${scoped.length}` : scoped.length && page ? `${verifiedRunning} verified / ${scoped.length}` : 'Unavailable'} state={statusesKnown ? { kind: 'fresh' } : scoped.length && page ? { kind: 'stale', reason: `Lifecycle status is stale or unknown for ${scoped.length - verifiedRunning} registered bot(s); only verified running bots are counted.` } : { kind: 'unavailable', reason: 'Lifecycle status is missing for a registered bot.' }} note={statusesKnown ? 'Verified running / registered. A configured bot is not automatically active.' : `${scoped.length - verifiedRunning} registered bot(s) without a verified lifecycle: ${scoped.map(source => `${displayBotName(source.bot)} ${stateLabel(page?.bots.find(item => item.bot_name === source.bot)?.status ?? null)}`).join(', ')}.`} />
       <MetricCard panelId="B26" title="Active executors" value={openExecutors == null ? 'Unavailable' : String(openExecutors)} state={openExecutors == null ? { kind: 'collecting', sample: { have: fleet.length, need: scoped.length || 1 }, reason: 'Cycle projections per bot' } : { kind: 'fresh' }} note="Open executors with fills, from the lifecycle projection." />
-      <MetricCard panelId="B03" title="Open positions" value={openPositions == null ? 'Unavailable' : String(openPositions)} state={openPositions == null ? { kind: 'collecting', sample: { have: fleet.length, need: scoped.length || 1 }, reason: 'Inventory per bot' } : { kind: 'fresh' }} note="Pairs holding nonzero units across all bots. Executors are not positions." />
-      <MetricCard panelId="B27" title="Open orders" value={openOrders == null ? 'Unavailable' : String(openOrders)} state={openOrders == null ? { kind: 'incomplete', reason: 'Complete exchange order detail is missing for a bot.' } : { kind: 'fresh' }} note="Working exchange orders in the current owner observations." />
+      <MetricCard panelId="B03" title="Open positions" value={openPositions == null ? 'Unavailable' : String(openPositions)} state={openPositions == null ? { kind: 'collecting', sample: { have: fleet.length, need: scoped.length || 1 }, reason: 'Inventory per bot' } : staleBots.length ? { kind: 'stale', reason: `${staleBots.length} bot observation${staleBots.length === 1 ? '' : 's'} not current; last-known inventory counted.` } : { kind: 'fresh' }} note="Pairs holding nonzero units across all bots. Executors are not positions." />
+      <MetricCard panelId="B27" title="Open orders" value={openOrders == null ? 'Unavailable' : String(openOrders)} state={openOrders == null ? { kind: 'incomplete', reason: 'Complete exchange order detail is missing for a bot.' } : staleBots.length ? { kind: 'stale', reason: 'Last-known order list; the owner observation is not current.' } : { kind: 'fresh' }} note="Working exchange orders in the owner observations." />
       <MetricCard panelId="B04" title="Daily bot PnL" value={dayTotal == null ? 'Unavailable' : formatSigned(dayTotal)} unit={singleQuote ?? undefined} tone={metricTone(dayTotal)} state={dayTotal == null ? { kind: aggregateAllowed ? 'collecting' : 'incomplete', reason: aggregateAllowed ? 'Needs an unbroken saved 24h series per bot.' : aggregateNote } : { kind: 'fresh' }} note="24h change of saved native net PnL." />
-      <MetricCard panelId="B02" title="Total bot PnL" value={netTotal == null ? 'Unavailable' : formatSigned(netTotal)} unit={singleQuote ?? undefined} tone={metricTone(netTotal)} state={netTotal == null ? { kind: 'incomplete', reason: aggregateNote } : { kind: 'fresh' }} note={`${aggregateNote} Controller report: active executors + retained positions.`} />
+      <MetricCard panelId="B02" title="Total bot PnL" value={netTotal == null ? 'Unavailable' : formatSigned(netTotal)} unit={singleQuote ?? undefined} tone={metricTone(netTotal)} state={netTotal == null ? { kind: 'incomplete', reason: aggregateNote } : netStale ? { kind: 'stale', reason: 'Owner last published net; controller report not current.' } : { kind: 'fresh' }} note={`${aggregateNote} ${netStale ? 'Last published net (stale).' : 'Controller report: active executors + retained positions.'}`} />
     </section>
     {sources.isError && <p role="alert" className="q-notice">{sources.error.message} <button type="button" onClick={() => void sources.refetch()}>Check now</button></p>}
     {sources.isPending && <p className="q-empty" role="status">Discovering authorized bot owners…</p>}
     {!sources.isPending && !filtered.length && <p className="q-empty" role="status">No authorized bot source is available for this selection.</p>}
     <section className="q-fleet" data-panel-id="B28" aria-label="Fleet strip">
       <MetricCard panelId="B05" title="Total trades" value={fillsTotal == null ? 'Unavailable' : String(fillsTotal)} state={fillsTotal == null ? { kind: 'collecting', sample: { have: fleet.length, need: scoped.length || 1 }, reason: 'Lifecycle projections per bot' } : { kind: 'fresh' }} note={fillsTotal == null ? 'Native fills, lifetime.' : `native fills · ${scoredTotal ?? 0} scored cycle${scoredTotal === 1 ? '' : 's'} · ${openExecutors ?? 0} open`} />
-      {grid && filtered.map((source, index) => { const reads = readsByBot[`${source.server}:${source.bot}`]; const points = reads?.day.points.map(point => point.value).filter((value): value is number => value != null) ?? []; const net = reads?.controller.total; return <article key={`${source.server}:${source.bot}`} className="q-card q-mini">
+      {grid && filtered.map((source, index) => { const reads = readsByBot[`${source.server}:${source.bot}`]; const points = reads?.day.points.map(point => point.value).filter((value): value is number => value != null) ?? []; const net = reads ? netFor(reads).value : null; return <article key={`${source.server}:${source.bot}`} className="q-card q-mini">
         <header><strong><i className="q-swatch" style={{ background: ASSET_COLORS[index % ASSET_COLORS.length] }} />{displayBotName(source.bot)}</strong><span className="q-pill" data-tone={tone(reads?.status ?? page?.bots.find(item => item.bot_name === source.bot)?.status ?? 'unknown')}>{stateLabel(reads?.status ?? page?.bots.find(item => item.bot_name === source.bot)?.status ?? null)}</span></header>
         {points.length >= 2 ? <Sparkline points={points.slice(-60)} positive={(reads?.day.change ?? 0) >= 0} /> : <small className="q-muted">{reads?.day.reason ?? 'Reading saved performance…'}</small>}
         <div className="q-mini-stats">
@@ -399,12 +407,12 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
         <tbody>
           {filtered.map(source => { const reads = readsByBot[`${source.server}:${source.bot}`]; const q = reads?.quant; const pairs = q?.pairs ?? []; const unrealized = pairs.length && pairs.every(pair => pair.unrealized != null) ? pairs.reduce((total, pair) => total + Number(pair.unrealized), 0) : null; const realized = pairs.length && pairs.every(pair => pair.realized != null) ? pairs.reduce((total, pair) => total + Number(pair.realized), 0) : null; const cycles = reads?.cycles; return <tr key={`${source.server}:${source.bot}`}>
             <th scope="row">{displayBotName(source.bot)}</th>
-            <td><span className="q-pill" data-tone={tone(reads?.status ?? 'unknown')}>{stateLabel(reads?.status ?? null)}</span></td>
+            <td><span className="q-pill" data-tone={tone(reads?.status ?? 'unknown')}>{stateLabel(reads?.status ?? null)}</span>{reads?.view?.stale && <small className="q-block">observation {ageLabel(reads.view.ageSeconds)} old</small>}</td>
             <td>{q?.controllerName ?? '—'}</td>
             <td>{reads?.view ? reads.view.pairs.filter(row => row.quantity !== null && formatDecimal(row.quantity, 18) !== '0').length : '—'}</td>
             <td className={metricTone(reads?.controller.unrealized ?? unrealized) ? `q-${metricTone(reads?.controller.unrealized ?? unrealized)}` : undefined}>{(reads?.controller.unrealized ?? unrealized) == null ? 'Unknown basis' : formatSigned(reads?.controller.unrealized ?? unrealized)}</td>
             <td className={metricTone(reads?.controller.realized ?? realized) ? `q-${metricTone(reads?.controller.realized ?? realized)}` : undefined}>{(reads?.controller.realized ?? realized) == null ? '—' : formatSigned(reads?.controller.realized ?? realized)}</td>
-            <td className={metricTone(reads?.controller.total) ? `q-${metricTone(reads?.controller.total)}` : undefined}>{reads?.controller.total == null ? '—' : `${formatSigned(reads.controller.total)} ${reads.controller.quote ?? ''}`}</td>
+            <td className={metricTone(reads ? netFor(reads).value : null) ? `q-${metricTone(reads ? netFor(reads).value : null)}` : undefined}>{!reads || netFor(reads).value == null ? '—' : `${formatSigned(netFor(reads).value)} ${reads.controller.quote ?? reads.quant?.netLifecycle.unit ?? ''}${netFor(reads).stale ? ' · stale' : ''}`}</td>
             <td className={metricTone(reads?.day.change) ? `q-${metricTone(reads?.day.change)}` : undefined}>{reads?.day.change == null ? '—' : formatSigned(reads.day.change)}</td>
             <td>{cycles ? cycles.stats.winRate == null ? `Collecting ${cycles.stats.scored}/${cycles.stats.minSample}` : `${(cycles.stats.winRate * 100).toFixed(1)}% (n=${cycles.stats.scored})` : '—'}</td>
             <td>{reads?.execution?.fillRatio == null ? '—' : `${(reads.execution.fillRatio * 100).toFixed(1)}%`}</td>
@@ -446,7 +454,7 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
       </PanelFrame>
       <PanelFrame panelId="B22-fleet" title="Bot health" scopeLabel="One line per bot · independent states">
         <ul className="q-diag">
-          {fleet.map(reads => <li key={`${reads.server}:${reads.bot}`}><span>{displayBotName(reads.bot)}</span><strong>{reads.quant?.freshness === 'current' ? 'heartbeat fresh' : 'heartbeat stale'} · {reads.quant?.riskRails.availability === 'available' ? 'rails published' : 'no rails'} · {reads.view ? `${reads.view.pairs.length} pairs` : 'inventory unread'} · {reads.execution?.fillRatio == null ? 'no fills' : `fill ${(reads.execution.fillRatio * 100).toFixed(0)}%`}</strong></li>)}
+          {fleet.map(reads => <li key={`${reads.server}:${reads.bot}`}><span>{displayBotName(reads.bot)}</span><strong>{reads.quant?.freshness === 'current' ? 'heartbeat fresh' : 'heartbeat stale'} · {reads.quant?.riskRails.availability === 'available' ? 'rails published' : 'no rails'} · {reads.view ? `${reads.view.pairs.length} pairs${reads.view.stale ? ` (last known ${ageLabel(reads.view.ageSeconds)} ago)` : ''}` : 'inventory unread'} · {reads.execution?.fillRatio == null ? 'no fills' : `fill ${(reads.execution.fillRatio * 100).toFixed(0)}%`}</strong></li>)}
           {!fleet.length && <li><span>No bot read yet</span><strong>—</strong></li>}
         </ul>
       </PanelFrame>

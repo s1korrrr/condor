@@ -21,6 +21,7 @@ def test_project_wallet_requires_declared_scope_and_currency():
     assert sample["currency"] == "USDT" and sample["value_quote"] == "20691.94"
     assert sample["timestamp"] == 1790250951.0
     assert sample["balances"][0]["asset"] == "USDC"
+    assert sample["balances"][0]["available"] is None
     for bad in [
         runtime(bot="other"),
         runtime(currency=None),
@@ -45,7 +46,7 @@ def test_configured_sources_accepts_only_loopback_http(monkeypatch):
 
 def test_record_wallet_samples_per_minute_and_gaps(tmp_path):
     store = PerformanceHistory(tmp_path / "history.db")
-    sample = lambda t, value="1": {"timestamp": t, "currency": "USDT", "value_quote": value, "source_id": "s"}
+    sample = lambda t, value="1": {"timestamp": t, "currency": "USDT", "value_quote": value, "source_id": "s", "balances": [{"asset": "USDC", "total": value, "available": value, "value": value}]}
     store.record_wallet("v2", {"bot": sample(1000)}, 1000)
     store.record_wallet("v2", {"bot": sample(1030)}, 1030)
     store.record_wallet("v2", {"bot": sample(1060, "2")}, 1060)
@@ -63,7 +64,10 @@ def test_record_wallet_samples_per_minute_and_gaps(tmp_path):
     hourly = store.read_wallet("v2", "bot", "ALL", 1140)
     assert [row["timestamp"] for row in hourly["points"]] == [1130], "ALL keeps the last sample of each hour bucket"
     assert hourly["bucket_seconds"] == 3600
+    assert hourly["latest"]["value_quote"] == "3" and hourly["latest"]["balances"][0]["asset"] == "USDC", "the newest sample carries its balances"
+    assert store.read_wallet("v2", "bot", "1D", 1140)["latest"]["timestamp"] == 1130
     assert PerformanceHistory(tmp_path / "missing.db").read_wallet("v2", "bot", "1D")["points"] == []
+    assert PerformanceHistory(tmp_path / "missing.db").read_wallet("v2", "bot", "1D")["latest"] is None
     assert store.read("v2", "bot", "ALL", 1140)["points"] == [], "PnL points stay separate from wallet samples"
 
 

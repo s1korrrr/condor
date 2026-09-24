@@ -148,7 +148,7 @@ export function MultiLine({ series, unit }: { series: { label: string; color: st
   const min = Math.min(0, ...values), max = Math.max(0, ...values), span = max - min || 1;
   const x = (time: number) => CPAD.left + ((time - t0) / tspan) * (CW - CPAD.left - CPAD.right);
   const y = (value: number) => CPAD.top + (1 - (value - min) / span) * (CH - CPAD.top - CPAD.bottom);
-  const ticks = Array.from({ length: 4 }, (_, index) => min + (span * index) / 3);
+  const ticks = Array.from({ length: 4 }, (_, index) => Number((min + (span * index) / 3).toFixed(6)));
   return <figure>
     <svg viewBox={`0 0 ${CW} ${CH}`} width="100%" height={CH} role="img" aria-label={`Bot PnL comparison · ${unit}`} preserveAspectRatio="none" style={{ display: 'block' }}>
       {ticks.map(tick => <g key={tick}><line x1={CPAD.left} x2={CW - CPAD.right} y1={y(tick)} y2={y(tick)} stroke="var(--q-border)" strokeDasharray="3 4" /><text className="q-axis" x={CPAD.left - 6} y={y(tick) + 3} textAnchor="end">{formatSigned(tick)}</text></g>)}

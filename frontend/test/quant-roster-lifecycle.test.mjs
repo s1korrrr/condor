@@ -41,8 +41,33 @@ test('wallet without a declared currency is unavailable, and stale runtime withh
   assert.equal(undeclared.wallet.availability, 'unavailable');
   assert.equal(undeclared.wallet.reason, 'VALUATION_CURRENCY_UNDECLARED');
   const stale = projectQuantBotSummary(summary({ heartbeat: new Date(now - 31_000).toISOString() }), 'rsi_modular_v2', now);
-  assert.equal(stale.riskRails.rails.length, 0);
-  assert.equal(stale.wallet.availability, 'unavailable');
+  assert.equal(stale.riskRails.rails.length, 0, 'no last_known block: nothing is presented');
+  assert.equal(stale.wallet, null);
+  assert.equal(stale.lastKnown, false);
+});
+
+test('a stale owner renders its last publication as stale, never as current', () => {
+  const observed = new Date(now - 20 * 60_000).toISOString();
+  const payload = summary({ heartbeat: observed, operational_label: 'UNKNOWN', pairs: [], last_known: {
+    observed_at: observed, operational_label: 'MIXED: 2 holding / 1 flat', net_lifecycle_value: '-3.1', owned_value_value: '250.7', quote_currency: 'USDC',
+    pairs: [{ controller_id: 'bnb', pair: 'BNB-USDC', state: 'HOLDING', regime: 'NEUTRAL', units: '0.08', marked_value: '61', plan_mode: 'EXITS', plan_next: 'arm 813', gate: 'ready' }],
+    cycle_counts: { open: 3, closed_scored: 0, ownership_transfer: 3, unclassified: 0 },
+    risk_rails: { availability: 'available', rails: [{ name: 'max_daily_loss_quote', limit: '50', used: '2', remaining: '48', utilization: '0.04', unit: 'USDC', state: 'ok' }], tightest: { name: 'max_daily_loss_quote', limit: '50', utilization: '0.04', state: 'ok' } },
+    wallet: { availability: 'available', value: '20691.94', currency: 'USDT', scope: 'account_wallet', balances: [{ asset: 'BNB', total: '8.49', value: '6530' }] },
+  } });
+  const view = projectQuantBotSummary(payload, 'rsi_modular_v2', now);
+  assert.equal(view.freshness, 'stale');
+  assert.equal(view.lastKnown, true);
+  assert.equal(view.state, 'MIXED: 2 holding / 1 flat');
+  assert.equal(view.pairs[0].planMode, 'EXITS');
+  assert.equal(view.netLifecycle.value, null, 'a stale metric has no current value');
+  assert.equal(view.netLifecycle.lastKnown, '-3.1');
+  assert.equal(view.ownedValue.lastKnown, '250.7');
+  assert.equal(view.cycleCounts.open, 3);
+  assert.equal(view.riskRails.tightest.name, 'max_daily_loss_quote');
+  assert.equal(view.wallet.availability, 'stale');
+  assert.equal(view.wallet.value, '20691.94');
+  assert.equal(view.wallet.balances[0].asset, 'BNB');
 });
 
 test('cycles projection keeps unscored cycles out of wins and losses', () => {

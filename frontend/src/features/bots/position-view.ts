@@ -32,12 +32,16 @@ export type BotPairPosition = {
   profitPrice: number | null; floor: number | null; peak: number | null; plannedReduction: number | null;
   quantity: string | null; inventoryEntries: Row[]; targetBase: number | null; planNext: string | null; executors: Row[]; pendingSells: Row[] | null; pendingSellsTruncated: boolean;
 };
-export function buildBotPositionView(payload: unknown, bot: string, now: number) {
+/** With `allowStale`, an old (but well-formed, same-owner) observation is returned marked `stale` instead of thrown away.
+ * Missing timestamps, clock skew and identity mismatches still throw: staleness is a state, corruption is not. */
+export function buildBotPositionView(payload: unknown, bot: string, now: number, options: { allowStale?: boolean } = {}) {
   const root = object(payload), runtime = object(root.runtime_status), monitoring = object(root.monitoring);
   const observedAt = text(runtime.updated_at), timestamp = observedAt ? Date.parse(observedAt) : NaN;
   const threshold = positive(monitoring.stale_threshold_seconds);
   if (runtime.bot_name !== bot || monitoring.bot_name !== bot) throw new Error('Runtime source does not match this bot.');
-  if (!Number.isFinite(timestamp) || threshold === null || timestamp > now + 5_000 || now - timestamp >= Math.min(threshold, 30) * 1000) throw new Error('Current bot state is unavailable: the owner observation is missing, stale or has clock skew.');
+  if (!Number.isFinite(timestamp) || threshold === null || timestamp > now + 5_000) throw new Error('Current bot state is unavailable: the owner observation is missing or has clock skew.');
+  const stale = now - timestamp >= Math.min(threshold, 30) * 1000;
+  if (stale && !options.allowStale) throw new Error('Current bot state is unavailable: the owner observation is missing, stale or has clock skew.');
   const controllers = rows(runtime.controllers), positions = rows(runtime.positions_held), executors = rows(runtime.active_executors);
   if (!controllers || !executors) throw new Error('The runtime observation is incomplete.');
   // Lifecycle includes closing executors until the owner transfers their inventory.
@@ -80,7 +84,8 @@ export function buildBotPositionView(payload: unknown, bot: string, now: number)
   const count = nonnegative(runtime.active_orders_count);
   const orders = rows(runtime.active_orders), ordersStatus = object(runtime.active_orders_status);
   const completeOrderList = orders !== null && ordersStatus.complete === true;
-  return { observedAt: observedAt!, pairs, activeOrderCount: completeOrderList ? orders.length : count !== null && Number.isInteger(count) ? count : null,
+  return { observedAt: observedAt!, stale, ageSeconds: Math.max(0, Math.floor((now - timestamp) / 1000)), pairs,
+    activeOrderCount: completeOrderList ? orders.length : count !== null && Number.isInteger(count) ? count : null,
     orderCountLabel: completeOrderList ? "Active orders" : "Active limit orders",
     activeExecutorCount: executors.length, orders, ordersStatus };
 }

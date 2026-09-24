@@ -123,6 +123,10 @@ class PerformanceHistory:
             "CREATE TABLE IF NOT EXISTS wallet_cursors (server TEXT, bot TEXT, timestamp REAL, sampled REAL, valid INTEGER, PRIMARY KEY(server,bot))"
         )
         conn.execute("CREATE INDEX IF NOT EXISTS wallet_points_timestamp ON wallet_points(timestamp)")
+        # Additive column: the balances behind each sample, so holdings survive a stopped owner.
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(wallet_points)")}
+        if "balances_json" not in columns:
+            conn.execute("ALTER TABLE wallet_points ADD COLUMN balances_json TEXT")
         try:
             with conn:
                 yield conn
@@ -154,8 +158,9 @@ class PerformanceHistory:
                 sampled = stamp if first or stamp - previous["sampled"] >= 60 else previous["sampled"]
                 if sampled == stamp:
                     conn.execute(
-                        "INSERT OR IGNORE INTO wallet_points VALUES (?,?,?,?,?,?)",
-                        (server, name, stamp, sample["currency"], sample["value_quote"], sample.get("source_id", "")),
+                        "INSERT OR IGNORE INTO wallet_points (server,bot,timestamp,currency,value_quote,source_id,balances_json) VALUES (?,?,?,?,?,?,?)",
+                        (server, name, stamp, sample["currency"], sample["value_quote"], sample.get("source_id", ""),
+                         json.dumps(sample.get("balances") or [], separators=(",", ":"))),
                     )
                 conn.execute(
                     "INSERT OR REPLACE INTO wallet_cursors VALUES (?,?,?,?,1)",
@@ -172,6 +177,7 @@ class PerformanceHistory:
             "coverage_start": None,
             "points": [],
             "truncated": False,
+            "latest": None,
         }
         if not self.path.exists():
             return result
@@ -191,11 +197,26 @@ class PerformanceHistory:
                 "ORDER BY timestamp DESC LIMIT 10001",
                 (server, bot, now - RANGES[period], server, bot, now - RANGES[period], bucket),
             ).fetchall()
+            # The newest sample regardless of window, with its balances: the last-known wallet when the owner is stale.
+            latest_row = conn.execute(
+                "SELECT timestamp,currency,value_quote,source_id,balances_json FROM wallet_points WHERE server=? AND bot=? ORDER BY timestamp DESC LIMIT 1",
+                (server, bot),
+            ).fetchone()
+        latest = None
+        if latest_row is not None:
+            try:
+                balances = json.loads(latest_row["balances_json"]) if latest_row["balances_json"] else []
+            except ValueError:
+                balances = []
+            latest = {"timestamp": latest_row["timestamp"], "currency": latest_row["currency"],
+                      "value_quote": latest_row["value_quote"], "source_id": latest_row["source_id"],
+                      "balances": balances if isinstance(balances, list) else []}
         result.update(
             coverage_start=start,
             bucket_seconds=bucket,
             points=[dict(row) for row in reversed(rows[:10000])],
             truncated=len(rows) > 10000,
+            latest=latest,
         )
         return result
 

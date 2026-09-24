@@ -17,9 +17,10 @@ export interface PortfolioAnalytics {
   performance: {available: false; reason: string};
 }
 const number = (value: string | null) => value === null || value.trim() === '' || !Number.isFinite(Number(value)) ? null : Number(value);
-export function portfolioSummary(current: CurrentPortfolio | null, now: number, failed = false) {
+/** `maxAgeMs` widens the admission window for a last-known snapshot; callers must then label the result stale. */
+export function portfolioSummary(current: CurrentPortfolio | null, now: number, failed = false, maxAgeMs = 30000) {
   const age = current ? now - Date.parse(current.observed_at) : NaN;
-  const fresh = !failed && Number.isFinite(age) && age >= 0 && age < 30000;
+  const fresh = !failed && Number.isFinite(age) && age >= 0 && age < maxAgeMs;
   const holdings = fresh ? current!.holdings : [];
   const priced = holdings.filter(h => number(h.value) !== null && number(h.price) !== null);
   const pricedTotal = fresh ? number(current!.priced_total) : null;

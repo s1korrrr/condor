@@ -22,3 +22,18 @@ def performance_history(
     return JSONResponse(
         history.read(name, bot, range), headers={"Cache-Control": "no-store"}
     )
+
+
+@router.get("/servers/{name}/bots/{bot}/wallet-history")
+def wallet_history(
+    name: str,
+    bot: str,
+    range: Literal["1D", "1W", "1M", "ALL"] = Query("1D"),
+    user: WebUser = Depends(get_current_user),
+):
+    """Shared-wallet valuation samples as the reporting owner published them. Not a profit curve."""
+    if not get_config_manager().has_server_access(user.id, name):
+        raise HTTPException(status_code=403, detail="No access to this server")
+    return JSONResponse(
+        history.read_wallet(name, bot, range), headers={"Cache-Control": "no-store"}
+    )

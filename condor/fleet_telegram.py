@@ -6,7 +6,7 @@ Telegram token and durable polling offset.
 
 The private config file contains an exact numeric Telegram user allowlist and
 one entry per bot. Each bot entry names its native API origin, BasicAuth
-credentials, native bot name, and the fixed GET paths for status, health,
+credentials, native bot name, and the fixed GET paths for status,
 orders, fills, and executors. No endpoint can be supplied by a Telegram user.
 """
 
@@ -28,8 +28,10 @@ from typing import Any, Mapping
 from urllib.parse import quote, urlsplit
 
 import aiohttp
-from telegram import Bot
-from telegram.error import Conflict, InvalidToken, RetryAfter, TelegramError
+from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup
+from telegram.error import BadRequest, Conflict, InvalidToken, RetryAfter, TelegramError
+
+from condor import fleet_telegram_views as views
 
 logger = logging.getLogger("condor.fleet_telegram")
 
@@ -61,6 +63,7 @@ class BotSource:
     native_bot_name: str
     endpoints: Mapping[str, str]
     require_owner_identity: bool = True
+    quote_currency: str = "quote"
 
 
 @dataclass(frozen=True)
@@ -173,6 +176,11 @@ def load_config(path: str) -> WorkerConfig:
             or not password
         ):
             raise ConfigError(f"bots[{index}] needs API credentials")
+        currency = row.get("quote_currency", "quote")
+        if not isinstance(currency, str) or not re.fullmatch(
+            r"[A-Za-z0-9]{1,16}", currency
+        ):
+            raise ConfigError("quote_currency must be an asset label")
         bots.append(
             BotSource(
                 identity,
@@ -182,6 +190,7 @@ def load_config(path: str) -> WorkerConfig:
                 password,
                 bot_name.strip(),
                 endpoints,
+                quote_currency=currency,
             )
         )
 
@@ -382,205 +391,21 @@ def _extract_rows(data: Any, command: str) -> list[dict[str, Any]]:
     return rows
 
 
-def _render_value(value: Any, *, max_chars: int = 1050) -> str:
-    text = json.dumps(value, ensure_ascii=False, default=str, separators=(",", ":"))
-    return text if len(text) <= max_chars else text[: max_chars - 18] + "… [truncated]"
+def _render_rows(command: str, payload: Any, page: int = 0) -> str:
+    return views.records(command, _extract_rows(payload, command), page).text
 
 
-def _render_rows(command: str, payload: Any) -> str:
-    rows = _extract_rows(payload, command)
-    if not rows:
-        return "Records: 0"
-    # Keep the output compact while retaining native ownership and identifiers.
-    safe_fields = {
-        "orders": (
-            "id",
-            "order_id",
-            "client_order_id",
-            "bot_name",
-            "trading_pair",
-            "pair",
-            "symbol",
-            "side",
-            "type",
-            "status",
-            "normalized_status",
-            "price",
-            "price_quote",
-            "amount",
-            "amount_base",
-            "executed_amount",
-            "created_at",
-            "timestamp",
-            "updated_at",
-        ),
-        "fills": (
-            "id",
-            "fill_id",
-            "trade_id",
-            "order_id",
-            "bot_name",
-            "trading_pair",
-            "pair",
-            "symbol",
-            "side",
-            "price",
-            "price_quote",
-            "amount",
-            "amount_base",
-            "fee",
-            "fee_asset",
-            "timestamp",
-            "created_at",
-            "updated_at",
-        ),
-        "executors": (
-            "id",
-            "executor_id",
-            "bot_name",
-            "controller_id",
-            "type",
-            "executor_type",
-            "trading_pair",
-            "pair",
-            "symbol",
-            "side",
-            "status",
-            "normalized_status",
-            "close_type",
-            "net_pnl_quote",
-            "timestamp",
-            "created_at",
-            "updated_at",
-        ),
-    }[command]
-    lines = []
-    for row in rows[:12]:
-        compact = {
-            key: row[key]
-            for key in safe_fields
-            if key in row and isinstance(row[key], (str, int, float, bool, type(None)))
-        }
-        lines.append(
-            _render_value(
-                compact or {"record": "available", "fields": sorted(row)[:12]},
-                max_chars=300,
-            )
-        )
-    if len(rows) > 12:
-        lines.append(f"… and {len(rows) - 12} more records")
-    return f"Records: {len(rows)} (showing {min(len(rows), 12)})\n" + "\n".join(lines)
-
-
-def _render_status(payload: Any) -> str:
-    if not isinstance(payload, dict) or not isinstance(
-        payload.get("runtime_status"), dict
-    ):
-        raise NativeReadError("native API response did not contain runtime_status")
-    status = payload["runtime_status"]
-    source_timestamp = status.get("updated_at")
-    if not isinstance(source_timestamp, (str, int, float)) or isinstance(
-        source_timestamp, bool
-    ):
-        raise NativeReadError("runtime_status did not contain its source updated_at")
+def _render_status(payload: Any, currency: str = "quote") -> str:
     try:
-        timestamp = float(source_timestamp)
-    except (TypeError, ValueError):
-        try:
-            parsed = datetime.fromisoformat(source_timestamp.replace("Z", "+00:00"))
-            if parsed.tzinfo is None:
-                parsed = parsed.replace(tzinfo=timezone.utc)
-            timestamp = parsed.timestamp()
-        except (AttributeError, TypeError, ValueError):
-            raise NativeReadError("runtime_status updated_at is invalid") from None
-    age_seconds = time.time() - timestamp
-    age_text = f"age {int(age_seconds)}s"
-    freshness_state = (
-        "FUTURE_CLOCK"
-        if age_seconds < -5
-        else ("STALE" if age_seconds > SOURCE_STALE_AFTER_SECONDS else "recent")
-    )
-    state = status.get("status") or status.get("state") or status.get("bot_status")
-    summary = status.get("summary")
-    if not isinstance(summary, dict):
-        summary = {}
-    if freshness_state == "STALE":
-        state = "stale runtime snapshot"
-    elif freshness_state == "FUTURE_CLOCK":
-        state = "runtime timestamp is in the future"
-    elif state is None:
-        state = "runtime snapshot received"
-    summary_fields = (
-        "active_executor_count",
-        "lifecycle_executor_count",
-        "positions_held_count",
-        "controller_count",
-        "pnl_available",
-        "net_pnl_quote",
-        "realized_pnl_quote",
-        "unrealized_pnl_quote",
-        "fees_quote",
-    )
-    safe_summary = {}
-    safe_summary = {
-        key: summary[key]
-        for key in summary_fields
-        if key in summary
-        and isinstance(summary[key], (str, int, float, bool, type(None)))
-    }
-    shown: dict[str, Any] = {"summary": safe_summary}
-    for key in ("active_orders_count", "active_orders_status"):
-        value = status.get(key)
-        if isinstance(value, (str, int, float, bool, type(None))):
-            shown[key] = value
-    parity = payload.get("runtime_parity")
-    if isinstance(parity, dict):
-        parity_summary = {}
-        for key in ("pnl_comparison_status", "runtime_status_available"):
-            value = parity.get(key)
-            if isinstance(value, (str, int, float, bool, type(None))):
-                parity_summary[key] = value
-        mismatches = parity.get("mismatches")
-        if isinstance(mismatches, list):
-            parity_summary["mismatch_count"] = len(mismatches)
-            fields = []
-            for item in mismatches:
-                if isinstance(item, str):
-                    fields.append(item[:80])
-                elif isinstance(item, dict):
-                    field = item.get("field") or item.get("key") or item.get("path")
-                    if isinstance(field, str):
-                        fields.append(field[:80])
-            if fields:
-                parity_summary["mismatch_fields"] = fields[:8]
-        shown["runtime_parity"] = parity_summary
-    if isinstance(payload.get("execution_mode"), str):
-        shown["execution_mode"] = payload["execution_mode"]
-    projection = payload.get("api_projection")
-    if isinstance(projection, dict):
-        shown["data_owner"] = {
-            key: projection[key]
-            for key in ("bot_name", "source", "execution_owner")
-            if key in projection
-        }
-    freshness_detail = (
-        f"Source freshness: {freshness_state}, runtime_status.updated_at ({age_text})"
-    )
-    return f"State: {state or 'status received'}\n{freshness_detail}\n{_render_value(shown, max_chars=750)}"
+        return views.status(payload, currency)
+    except (ValueError, TypeError, AttributeError) as exc:
+        raise NativeReadError(
+            "runtime_status or its source updated_at is invalid"
+        ) from exc
 
 
 def _split_response(text: str) -> list[str]:
-    chunks: list[str] = []
-    remaining = text
-    while len(remaining) > MAX_TELEGRAM_TEXT:
-        split_at = remaining.rfind("\n", 0, MAX_TELEGRAM_TEXT)
-        if split_at < 500:
-            split_at = MAX_TELEGRAM_TEXT
-        chunks.append(remaining[:split_at])
-        remaining = remaining[split_at:].lstrip("\n")
-    if remaining:
-        chunks.append(remaining)
-    return chunks
+    return views.chunks(text, MAX_TELEGRAM_TEXT)
 
 
 def parse_command(text: str | None) -> tuple[str, str | None] | None:
@@ -618,65 +443,179 @@ class FleetTelegramWorker:
         return [source for source in self.config.bots if source.id == target]
 
     async def _read_source(
-        self, client: NativeReadClient, source: BotSource, command: str
-    ) -> str:
+        self, client: NativeReadClient, source: BotSource, command: str, page: int = 0
+    ) -> views.View:
+        title = views.header(source.label, command)
         try:
-            if command == "status":
-                data = await client.get(source, "status")
-                _validate_owner_identity(data, source)
-                body = _render_status(data)
-                return f"{source.label} [{source.id}]\n{body}"
             data = await client.get(source, command)
-            _validate_owner_identity(data, source, require_rows=True)
-            return f"{source.label} [{source.id}]\n{_render_rows(command, data)}"
+            _validate_owner_identity(data, source, require_rows=command != "status")
+            if command == "status":
+                return views.View(title + _render_status(data, source.quote_currency))
+            result = views.records(command, _extract_rows(data, command), page)
+            return views.View(title + result.text, result.page, result.pages)
         except NativeReadError as exc:
-            return f"{source.label} [{source.id}]\nUnavailable: {exc}"
-        except Exception as exc:  # source isolation; never echo response or URL
+            return views.View(
+                title
+                + "⚠️ <b>Data unavailable</b>\n"
+                + views.clean(str(exc), 180)
+                + "\n\nTry Refresh in a moment. No trading action was taken."
+            )
+        except Exception as exc:
             logger.warning(
                 "Fleet read failed for source=%s command=%s error=%s",
                 source.id,
                 command,
                 type(exc).__name__,
             )
-            return f"{source.label} [{source.id}]\nUnavailable: unexpected read error"
+            return views.View(
+                title
+                + "⚠️ <b>Data unavailable</b>\nThe source could not be read. Try Refresh."
+            )
 
-    async def execute(self, command: str, target: str) -> str:
-        if command in {"start", "help"}:
-            return "Read-only fleet commands:\n/status [all|bot]\n/orders [all|bot]\n/fills [all|bot]\n/executors [all|bot]"
-        if command not in COMMANDS:
-            return "Supported commands: /status, /orders, /fills, /executors"
+    async def render(self, command: str, target: str, page: int = 0):
+        if command in {"start", "help"} or command not in COMMANDS:
+            return [("all", views.View(views.help_text(self.config.bots)))]
         sources = self._select_sources(target)
         if not sources:
-            known = ", ".join(source.id for source in self.config.bots)
-            return f"Unknown source. Available: all, {known}"
-        # Preserve one section for every configured source, including failed APIs.
+            return [
+                (
+                    "all",
+                    views.View(
+                        "⚠️ <b>Unknown source</b>\n\n"
+                        + views.help_text(self.config.bots)
+                    ),
+                )
+            ]
         async with NativeReadClient(self.config) as client:
-            sections = await asyncio.gather(
-                *(self._read_source(client, source, command) for source in sources)
+            result = await asyncio.gather(
+                *(
+                    self._read_source(client, source, command, page)
+                    for source in sources
+                )
             )
-        return "\n\n".join(sections)
+        return [(source.id, message) for source, message in zip(sources, result)]
+
+    async def execute(self, command: str, target: str) -> str:
+        return "\n\n".join(
+            message.text for _, message in await self.render(command, target)
+        )
+
+    def keyboard(self, command: str, target: str, page: int = 0, pages: int = 1):
+        def button(label, action, target_id=target, index=0):
+            return InlineKeyboardButton(
+                label, callback_data=f"fleet:{target_id}:{action}:{index}"
+            )
+
+        rows = [
+            [button("📊 Status", "status"), button("📋 Orders", "orders")],
+            [button("💱 Fills", "fills"), button("⚙️ Executors", "executors")],
+        ]
+        navigation = []
+        if page > 0:
+            navigation.append(button("‹ Previous", command, index=page - 1))
+        if page + 1 < pages:
+            navigation.append(button("Next ›", command, index=page + 1))
+        if navigation:
+            rows.append(navigation)
+        rows.append(
+            [
+                button(
+                    "🔄 Refresh",
+                    (
+                        command
+                        if command in {"status", "orders", "fills", "executors"}
+                        else "status"
+                    ),
+                    index=page,
+                ),
+                button("❔ Help", "help"),
+            ]
+        )
+        if len(self.config.bots) > 1:
+            for start in range(0, len(self.config.bots), 3):
+                rows.append(
+                    [
+                        button(source.label[:30], "status", source.id)
+                        for source in self.config.bots[start : start + 3]
+                    ]
+                )
+        return InlineKeyboardMarkup(rows)
+
+    def _authorized(self, user, chat):
+        user_id = getattr(user, "id", None)
+        return (
+            user_id in self.config.authorized_user_ids
+            and getattr(chat, "type", None) == "private"
+            and getattr(chat, "id", None) == user_id
+        )
 
     async def process_update(self, update: Any) -> None:
-        message = getattr(update, "message", None)
-        if message is None:
-            return
-        user = getattr(message, "from_user", None)
-        chat = getattr(message, "chat", None)
-        user_id = getattr(user, "id", None)
-        chat_id = getattr(chat, "id", None)
-        chat_type = getattr(chat, "type", None)
-        if (
-            user_id not in self.config.authorized_user_ids
-            or chat_type != "private"
-            or chat_id != user_id
-        ):
-            return
-        parsed = parse_command(getattr(message, "text", None))
-        if parsed is None:
-            return
-        response = await self.execute(*parsed)
-        for chunk in _split_response(response):
-            await self._bot.send_message(chat_id=chat_id, text=chunk)
+        query = getattr(update, "callback_query", None)
+        if query is not None:
+            message = getattr(query, "message", None)
+            if not self._authorized(
+                getattr(query, "from_user", None), getattr(message, "chat", None)
+            ):
+                return
+            parsed = views.parse_callback(getattr(query, "data", None))
+            if parsed is None or (
+                parsed[1] != "all" and not self._select_sources(parsed[1])
+            ):
+                try:
+                    await self._bot.answer_callback_query(
+                        callback_query_id=query.id,
+                        text="This button is no longer available. Send /help.",
+                    )
+                except BadRequest:
+                    logger.info("Ignoring expired unsupported callback")
+                return
+            command, target, page = parsed
+            try:
+                await self._bot.answer_callback_query(callback_query_id=query.id)
+            except BadRequest:
+                # An expired acknowledgement must not poison the durable update cursor.
+                logger.info(
+                    "Callback acknowledgement expired; refreshing authorized view"
+                )
+        else:
+            message = getattr(update, "message", None)
+            if not self._authorized(
+                getattr(message, "from_user", None), getattr(message, "chat", None)
+            ):
+                return
+            text = getattr(message, "text", None)
+            parsed = parse_command(text)
+            if parsed is None:
+                if not isinstance(text, str) or not text.startswith("/"):
+                    return
+                parsed = ("help", "all")
+            command, target = parsed
+            page = 0
+        chat_id = message.chat.id
+        rendered = await self.render(command, target, page)
+        edited = False
+        for source_id, result in rendered:
+            for chunk in _split_response(result.text):
+                options = dict(
+                    chat_id=chat_id,
+                    text=chunk,
+                    parse_mode="HTML",
+                    reply_markup=self.keyboard(
+                        command, source_id, result.page, result.pages
+                    ),
+                )
+                if query is not None and not edited:
+                    try:
+                        await self._bot.edit_message_text(
+                            message_id=message.message_id, **options
+                        )
+                    except BadRequest as exc:
+                        if "message is not modified" not in str(exc).lower():
+                            # Deleted/inaccessible old panels can be replaced with a new view.
+                            await self._bot.send_message(**options)
+                    edited = True
+                else:
+                    await self._bot.send_message(**options)
         self.last_successful_command = time.time()
         self.state.heartbeat(
             status="running",
@@ -705,7 +644,7 @@ class FleetTelegramWorker:
                     updates = await self._bot.get_updates(
                         offset=offset,
                         timeout=self.config.poll_timeout_seconds,
-                        allowed_updates=["message"],
+                        allowed_updates=["message", "callback_query"],
                     )
                     retry_seconds = 1.0
                     self.last_successful_poll_at = time.time()

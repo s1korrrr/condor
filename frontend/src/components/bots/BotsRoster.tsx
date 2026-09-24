@@ -61,9 +61,20 @@ function pnlSeries(payload: unknown, bot: string, now: number): PnlSeries {
     points.push({ time: row.timestamp * 1000, value, owner });
     previous = row;
   }
-  // Sampling gaps (observer downtime) keep the line broken but do not void the window change; an owner change does.
+  // Window change = sum of within-owner changes. Sampling gaps keep the line broken but contribute nothing; owner boundaries contribute nothing.
   void gap;
-  return { points, quote, change: points.length > 1 && owner === 0 && data.truncated !== true ? points[points.length - 1].value! - points[0].value! : null, reason: null };
+  let change: number | null = null;
+  if (points.length > 1 && data.truncated !== true) {
+    change = 0;
+    let runStart: { value: number; owner: number } | null = null, runLast: { value: number; owner: number } | null = null;
+    for (const point of points) {
+      if (point.value == null) continue;
+      if (!runStart || runStart.owner !== point.owner) { if (runStart && runLast) change += runLast.value - runStart.value; runStart = { value: point.value, owner: point.owner }; }
+      runLast = { value: point.value, owner: point.owner };
+    }
+    if (runStart && runLast) change += runLast.value - runStart.value;
+  }
+  return { points, quote, change, reason: null };
 }
 
 function dcaLabel(row: BotPairPosition, reportedLevel?: string | null) {

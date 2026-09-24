@@ -165,7 +165,7 @@ export function projectCapitalModel(input: {
   const riskAdmitted = dash?.risk_statistics_available === true;
   const dashNum = (value: string | null | undefined) => value == null || !Number.isFinite(Number(value)) ? null : Number(value);
   return {
-    equity: { value: equity == null ? null : String(equity), complete: summary.complete, unpriced: summary.unpricedCount, unit: input.unit ?? 'USDT' },
+    equity: { value: equity == null ? null : input.current?.priced_total ?? null, complete: summary.complete, unpriced: summary.unpricedCount, unit: input.unit ?? 'USDT' },
     periodPnl: {
       value: dash?.period_pnl?.value ?? null,
       reason: dash?.period_pnl?.reason_code === 'FLOW_COVERAGE_INCOMPLETE' || !dash?.period_pnl?.value

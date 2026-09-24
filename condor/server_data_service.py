@@ -771,6 +771,14 @@ class ServerDataService:
                 await asyncio.to_thread(history.record, key.server, result)
             except Exception:
                 logger.exception("Native performance history persistence failed for %s", key.server)
+            # Same tick, same durable store: the shared-wallet valuation the reporting owner publishes.
+            from condor import wallet_observation
+            try:
+                samples = await wallet_observation.observe(key.server)
+                if samples:
+                    await asyncio.to_thread(history.record_wallet, key.server, samples)
+            except Exception:
+                logger.exception("Wallet observation persistence failed for %s", key.server)
 
         old_entry = self._cache.get(key)
         old_value = old_entry.value if old_entry else None

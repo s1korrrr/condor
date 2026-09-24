@@ -1,23 +1,184 @@
-import type { ReactNode } from 'react';
-import { assetColor, formatDecimal, formatSigned } from './format';
+import { useEffect, useRef, type ReactNode } from 'react';
+import { assetColor, formatDecimal, formatSigned, metricTone } from './format';
+import { describePanelState, PANEL_STATE_LABEL, type PanelState } from './panel-state';
 
-export function PanelFrame({ panelId, title, scopeLabel, children }: { panelId: string; title: string; scopeLabel?: string; children: ReactNode }) {
-  return <section className="q-card" data-panel-id={panelId}>
-    <header><h2>{title}</h2>{scopeLabel && <p className="q-kicker">{scopeLabel}</p>}</header>
+/** Spec §5.4 glyph: one per panel, tooltip carries the exact reason and observation time. */
+export function StateGlyph({ state }: { state: PanelState }) {
+  return <span className="q-state" data-state={state.kind} title={describePanelState(state)} aria-label={describePanelState(state)}>
+    {PANEL_STATE_LABEL[state.kind]}{state.sample ? ` ${state.sample.have}/${state.sample.need}` : ''}
+  </span>;
+}
+
+export function PanelFrame({ panelId, title, scopeLabel, state, actions, children }: {
+  panelId: string; title: string; scopeLabel?: string; state?: PanelState; actions?: ReactNode; children: ReactNode;
+}) {
+  return <section className="q-card" data-panel-id={panelId} data-state={state?.kind}>
+    <header>
+      <div><h2>{title}</h2>{scopeLabel && <p className="q-kicker">{scopeLabel}</p>}</div>
+      {(state || actions) && <div className="q-card-actions">{actions}{state && <StateGlyph state={state} />}</div>}
+    </header>
     {children}
   </section>;
 }
 
-export function MetricCard({ panelId, title, value, unit, note, tone, sparkline }: {
+export function MetricCard({ panelId, title, value, unit, note, tone, sparkline, delta, state }: {
   panelId: string; title: string; value: string; unit?: string; note?: string;
   tone?: 'positive' | 'negative'; sparkline?: ReactNode;
+  /** Signed change over the comparison window; omitted (never "+0.00%") when that window is incomplete. */
+  delta?: { amount: string | number | null; percent?: number | null } | null;
+  state?: PanelState;
 }) {
-  return <article className="q-card q-kpi" data-panel-id={panelId}>
-    <span>{title}</span>
+  const deltaTone = delta ? metricTone(delta.amount) : undefined;
+  return <article className="q-card q-kpi" data-panel-id={panelId} data-state={state?.kind}>
+    <div className="q-kpi-head"><span>{title}</span>{state && <StateGlyph state={state} />}</div>
     <strong className={tone ? `q-${tone}` : undefined}>{value}{unit ? <small>{unit}</small> : null}</strong>
-    {sparkline}
-    {note ? <small className="q-muted">{note}</small> : null}
+    <div className="q-kpi-foot">
+      {delta && delta.amount != null
+        ? <span className={`q-kpi-delta${deltaTone ? ` q-${deltaTone}` : ''}`}>{deltaTone === 'positive' ? '▲' : deltaTone === 'negative' ? '▼' : '●'} {formatSigned(delta.amount)}{delta.percent != null ? ` (${formatSigned(delta.percent * 100)}%)` : ''}</span>
+        : note ? <small className="q-muted">{note}</small> : <span />}
+      {sparkline}
+    </div>
+    {delta && delta.amount != null && note ? <small className="q-muted">{note}</small> : null}
   </article>;
+}
+
+export type StatTileView = { id: string; label: string; value: string | null; unit?: string; state: PanelState; note?: string };
+
+/** C18 strip: compact stats, each with its own typed state. Percent tiles receive a ratio and print a percent. */
+export function StatStrip({ tiles, panelId = 'C18', ariaLabel = 'Capital statistics' }: { tiles: StatTileView[]; panelId?: string; ariaLabel?: string }) {
+  return <section className="q-stats" data-panel-id={panelId} aria-label={ariaLabel}>
+    {tiles.map(tile => {
+      const isPercent = tile.unit === '%';
+      const numeric = tile.value == null ? null : Number(tile.value);
+      const text = tile.value == null || numeric == null || !Number.isFinite(numeric)
+        ? PANEL_STATE_LABEL[tile.state.kind]
+        : isPercent ? `${formatSigned(numeric * 100)}%` : tile.unit === 'x' ? `${formatDecimal(numeric)}x` : /pnl/i.test(tile.label) ? formatSigned(numeric) : formatDecimal(numeric);
+      const tone = /pnl|drawdown/i.test(tile.label) ? metricTone(numeric) : undefined;
+      return <article key={tile.id} className="q-stat" data-panel-id={tile.id} data-state={tile.state.kind}>
+        <span>{tile.label}<StateGlyph state={tile.state} /></span>
+        <strong className={tone ? `q-${tone}` : undefined}>{text}{tile.value != null && tile.unit && !isPercent && tile.unit !== 'x' ? <small>{tile.unit}</small> : null}</strong>
+        {tile.note ? <small>{tile.note}</small> : tile.state.reason && tile.value == null ? <small>{tile.state.reason}</small> : null}
+      </article>;
+    })}
+  </section>;
+}
+
+type SeriesPoint = { time: number; value: number | null };
+const CW = 640, CH = 220, CPAD = { top: 14, right: 46, bottom: 22, left: 52 };
+const dayLabel = (time: number) => new Date(time).toLocaleDateString('en', { month: 'short', day: 'numeric', timeZone: 'UTC' });
+
+function seriesPath(points: SeriesPoint[], x: (time: number) => number, y: (value: number) => number): string {
+  let d = '', open = false;
+  for (const point of points) {
+    if (point.value == null) { open = false; continue; }
+    d += `${open ? ' L' : `${d ? ' ' : ''}M`} ${x(point.time).toFixed(2)},${y(point.value).toFixed(2)}`;
+    open = true;
+  }
+  return d;
+}
+
+function timeTicks(points: SeriesPoint[], count = 5) {
+  const times = points.map(point => point.time);
+  const min = Math.min(...times), max = Math.max(...times);
+  if (!Number.isFinite(min) || !Number.isFinite(max) || max <= min) return [];
+  return Array.from({ length: count }, (_, index) => min + ((max - min) * index) / (count - 1));
+}
+
+/** C19: inverted drawdown area from 0%, loss fill, marker at the maximum. Values are ratios ≤ 0. */
+export function DrawdownChart({ series, worst }: { series: SeriesPoint[]; worst: SeriesPoint | null }) {
+  const known = series.map(point => point.value).filter((value): value is number => value != null);
+  if (known.length < 2) return <p className="q-empty">Drawdown needs two complete equity observations in the range.</p>;
+  const times = series.map(point => point.time);
+  const t0 = Math.min(...times), t1 = Math.max(...times), tspan = t1 - t0 || 1;
+  const floor = Math.min(-0.01, ...known);
+  const x = (time: number) => CPAD.left + ((time - t0) / tspan) * (CW - CPAD.left - CPAD.right);
+  const y = (value: number) => CPAD.top + (value / floor) * (CH - CPAD.top - CPAD.bottom);
+  const line = seriesPath(series, x, y);
+  const first = series.find(point => point.value != null)!, last = [...series].reverse().find(point => point.value != null)!;
+  const area = `${line} L ${x(last.time).toFixed(2)},${CPAD.top} L ${x(first.time).toFixed(2)},${CPAD.top} Z`;
+  const ticks = [0, floor / 3, (2 * floor) / 3, floor];
+  return <figure>
+    <svg viewBox={`0 0 ${CW} ${CH}`} width="100%" height={CH} role="img" aria-label={`Drawdown, worst ${worst?.value == null ? 'unavailable' : `${(worst.value * 100).toFixed(2)}%`}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+      {ticks.map(tick => <g key={tick}><line x1={CPAD.left} x2={CW - CPAD.right} y1={y(tick)} y2={y(tick)} stroke="var(--q-border)" strokeDasharray="3 4" /><text className="q-axis" x={CPAD.left - 6} y={y(tick) + 3} textAnchor="end">{(tick * 100).toFixed(1)}%</text></g>)}
+      {timeTicks(series).map(tick => <text key={tick} className="q-axis" x={x(tick)} y={CH - 6} textAnchor="middle">{dayLabel(tick)}</text>)}
+      <path d={area} fill="var(--q-negative)" opacity="0.2" />
+      <path d={line} fill="none" stroke="var(--q-negative)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />
+      {worst?.value != null && <g>
+        <circle cx={x(worst.time)} cy={y(worst.value)} r="3.5" fill="var(--q-negative)" />
+        <text className="q-axis" x={Math.min(x(worst.time) + 8, CW - CPAD.right - 90)} y={Math.max(y(worst.value) - 6, CPAD.top + 10)} fill="var(--q-text)">Max DD {(worst.value * 100).toFixed(2)}% · {dayLabel(worst.time)}</text>
+      </g>}
+    </svg>
+  </figure>;
+}
+
+/** C20: daily bars for realized (gain/loss colors) and unrealized (violet), cumulative total as a line. */
+export function PnlBars({ days, unit }: { days: { day: string; realized: number | null; unrealized: number | null; cumulative: number | null }[]; unit: string }) {
+  const valued = days.filter(day => day.realized != null || day.unrealized != null);
+  if (!valued.length) return <p className="q-empty">Daily realized and unrealized changes need at least one day of saved native performance.</p>;
+  const peak = Math.max(1e-9, ...valued.flatMap(day => [Math.abs(day.realized ?? 0), Math.abs(day.unrealized ?? 0)]));
+  const cumulative = valued.map(day => day.cumulative).filter((value): value is number => value != null);
+  const cmin = Math.min(0, ...cumulative), cmax = Math.max(0, ...cumulative), cspan = cmax - cmin || 1;
+  const w = Math.max(220, valued.length * 28), h = 140, mid = 70;
+  const cy = (value: number) => 10 + (1 - (value - cmin) / cspan) * (h - 30);
+  const line = valued.map((day, index) => day.cumulative == null ? null : `${index * 28 + 14},${cy(day.cumulative).toFixed(2)}`).reduce<string>((path, pair) => pair == null ? path : `${path}${path ? ' L ' : 'M '}${pair}`, '');
+  return <figure>
+    <svg viewBox={`0 0 ${w} ${h}`} width="100%" height={h} role="img" aria-label={`Daily realized and unrealized PnL · ${unit}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+      <line x1="0" x2={w} y1={mid} y2={mid} stroke="var(--q-border)" />
+      {valued.map((day, index) => {
+        const x = index * 28;
+        const bar = (value: number | null, offset: number, color: string) => value == null ? null : <rect key={`${day.day}:${offset}`} x={x + 3 + offset} width="10" y={value >= 0 ? mid - (value / peak) * 55 : mid} height={Math.max(1, (Math.abs(value) / peak) * 55)} rx="1.5" fill={color} />;
+        return <g key={day.day}>
+          {bar(day.realized, 0, (day.realized ?? 0) >= 0 ? 'var(--q-positive)' : 'var(--q-negative)')}
+          {bar(day.unrealized, 11, 'var(--q-violet)')}
+        </g>;
+      })}
+      {line && <path d={line} fill="none" stroke="var(--q-cyan)" strokeWidth="1.5" vectorEffect="non-scaling-stroke" />}
+    </svg>
+    <div className="q-legend"><span><i className="q-swatch" style={{ background: 'var(--q-positive)' }} />Realized (daily)</span><span><i className="q-swatch" style={{ background: 'var(--q-violet)' }} />Unrealized (daily change)</span><span><i className="q-swatch" style={{ background: 'var(--q-cyan)' }} />Cumulative net</span><span className="q-muted">{valued[0].day} → {valued[valued.length - 1].day} UTC</span></div>
+  </figure>;
+}
+
+/** B23: several bots on one time axis and one unit. Gaps break lines; each series keeps its own color. */
+export function MultiLine({ series, unit }: { series: { label: string; color: string; points: SeriesPoint[] }[]; unit: string }) {
+  const drawable = series.filter(row => row.points.filter(point => point.value != null).length >= 2);
+  if (!drawable.length) return <p className="q-empty">A comparison line needs two saved observations per bot in the same window and unit.</p>;
+  const all = drawable.flatMap(row => row.points);
+  const times = all.map(point => point.time), values = all.map(point => point.value).filter((value): value is number => value != null);
+  const t0 = Math.min(...times), t1 = Math.max(...times), tspan = t1 - t0 || 1;
+  const min = Math.min(0, ...values), max = Math.max(0, ...values), span = max - min || 1;
+  const x = (time: number) => CPAD.left + ((time - t0) / tspan) * (CW - CPAD.left - CPAD.right);
+  const y = (value: number) => CPAD.top + (1 - (value - min) / span) * (CH - CPAD.top - CPAD.bottom);
+  const ticks = Array.from({ length: 4 }, (_, index) => Number((min + (span * index) / 3).toFixed(6)));
+  return <figure>
+    <svg viewBox={`0 0 ${CW} ${CH}`} width="100%" height={CH} role="img" aria-label={`Bot PnL comparison · ${unit}`} preserveAspectRatio="none" style={{ display: 'block' }}>
+      {ticks.map(tick => <g key={tick}><line x1={CPAD.left} x2={CW - CPAD.right} y1={y(tick)} y2={y(tick)} stroke="var(--q-border)" strokeDasharray="3 4" /><text className="q-axis" x={CPAD.left - 6} y={y(tick) + 3} textAnchor="end">{formatSigned(tick)}</text></g>)}
+      <line x1={CPAD.left} x2={CW - CPAD.right} y1={y(0)} y2={y(0)} stroke="var(--q-muted)" strokeDasharray="2 3" />
+      {timeTicks(all).map(tick => <text key={tick} className="q-axis" x={x(tick)} y={CH - 6} textAnchor="middle">{dayLabel(tick)}</text>)}
+      {drawable.map(row => <path key={row.label} d={seriesPath(row.points, x, y)} fill="none" stroke={row.color} strokeWidth="1.5" vectorEffect="non-scaling-stroke" />)}
+    </svg>
+    <div className="q-legend">{drawable.map(row => { const last = [...row.points].reverse().find(point => point.value != null); return <span key={row.label}><i className="q-swatch" style={{ background: row.color }} />{row.label} {last?.value == null ? '' : formatSigned(last.value)} {unit}</span>; })}</div>
+  </figure>;
+}
+
+/** B31: order lifecycle funnel with absolute counts and percent of the first stage. */
+export function Funnel({ stages }: { stages: { stage: string; count: number }[] }) {
+  if (!stages.length) return <p className="q-empty">No order lifecycle rows are recorded yet.</p>;
+  const top = Math.max(1, stages[0].count);
+  return <ul className="q-funnel" aria-label="Order lifecycle funnel">
+    {stages.map(stage => <li key={stage.stage}>
+      <div className="q-bar-meta"><span>{stage.stage.replaceAll('_', ' ')}</span><span className="q-muted">{stage.count} · {((stage.count / top) * 100).toFixed(1)}%</span></div>
+      <div className="q-bar"><span style={{ width: `${Math.min(100, (stage.count / top) * 100)}%`, background: 'var(--q-blue)' }} /></div>
+    </li>)}
+  </ul>;
+}
+
+/** Rail bar: used / limit with a five-segment scale. Absent rails render as absent, not zero. */
+export function RailBar({ name, used, limit, unit, state, utilization }: { name: string; used: string | null; limit: string | null; unit: string | null; state: string; utilization: number | null }) {
+  const filled = utilization == null ? 0 : Math.max(0, Math.min(1, utilization));
+  return <div className="q-rail" data-state={state}>
+    <div className="q-bar-meta"><span>{name.replaceAll('_', ' ')}</span><span className="q-muted">{limit == null ? state : `${formatDecimal(used ?? '0')} / ${formatDecimal(limit)} ${unit ?? ''} · ${(filled * 100).toFixed(1)}%`}</span></div>
+    <div className="q-rail-segments" aria-hidden="true">{[0, 1, 2, 3, 4].map(index => <span key={index} data-on={filled > index / 5} data-hot={filled > 0.8} />)}</div>
+  </div>;
 }
 
 export function Donut({ slices, center, unit, complete }: { slices: { label: string; value: number }[]; center: string; unit: string; complete: boolean }) {
@@ -35,7 +196,7 @@ export function Donut({ slices, center, unit, complete }: { slices: { label: str
   });
   return <figure className="q-donut">
     <svg viewBox="0 0 112 112" width="168" height="168" role="img" aria-label={`Capital composition ${center} ${unit}`}>
-      {arcs.map(arc => <path key={arc.slice.label} d={arc.d} fill={arc.color} />)}
+      {arcs.length === 1 ? <circle cx="56" cy="56" r="44" fill={arcs[0].color}/> : arcs.map(arc => <path key={arc.slice.label} d={arc.d} fill={arc.color} />)}
       <circle cx="56" cy="56" r="28" fill="var(--q-surface)" />
       <text x="56" y="53" textAnchor="middle" fill="var(--q-text)" fontSize="11" fontWeight="600">{center}</text>
       <text x="56" y="68" textAnchor="middle" fill="var(--q-muted)" fontSize="8">{complete ? unit : 'priced'}</text>
@@ -178,9 +339,15 @@ export function BarList({ rows, max }: { rows: { label: string; value: number; n
 }
 
 export function EvidenceDrawer({ open, title, sourceRefs, onClose }: { open: boolean; title: string; sourceRefs: string[]; onClose: () => void }) {
-  if (!open) return null;
-  return <dialog className="q-drawer" open aria-label={title}>
-    <header><h2>{title}</h2><button type="button" onClick={onClose}>Close</button></header>
-    <ul>{sourceRefs.length ? sourceRefs.map(ref => <li key={ref}>{ref}</li>) : <li>No source refs are attached.</li>}</ul>
+  const dialog = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const node = dialog.current;
+    if (!node) return;
+    if (open && !node.open) node.showModal();
+    else if (!open && node.open) node.close();
+  }, [open]);
+  return <dialog ref={dialog} className="q-drawer" aria-label={title} onCancel={event => {event.preventDefault();onClose();}}>
+    <header><h2>{title}</h2><button type="button" className="q-chip" onClick={onClose}>Close</button></header>
+    <ul>{sourceRefs.length ? sourceRefs.map(ref => <li key={ref}>{ref}</li>) : <li>No incident evidence is attached to this snapshot.</li>}</ul>
   </dialog>;
 }

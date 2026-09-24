@@ -94,3 +94,36 @@ def test_capital_dashboard_rejects_30d_and_does_not_authorize_execution(monkeypa
     assert body['period_pnl']['value'] is None
     assert 'DO-NOT-RETURN' not in r.text
     assert upstream.call_args.args == ('portfolio/capital-dashboard',)
+
+@pytest.mark.parametrize('endpoint', ['analytics', 'capital-dashboard'])
+@pytest.mark.parametrize('query', [
+    'start=2026-09-01T00:00:00Z',
+    'start=bad&end=bad',
+    'start=2026-09-01T00:00:00&end=2026-09-02T00:00:00Z',
+    'start=2026-09-02T00:00:00Z&end=2026-09-01T00:00:00Z',
+    'start=2000-01-01T00:00:00Z&end=2026-09-01T00:00:00Z',
+])
+def test_invalid_exact_window_never_calls_owner(monkeypatch, endpoint, query):
+    c, _, upstream = client(monkeypatch)
+    assert c.get(f'/api/v1/servers/local/portfolio/{endpoint}?{query}').status_code == 400
+    assert upstream.await_count == 0
+
+
+def test_exact_window_is_forwarded_without_rewriting_and_verified(monkeypatch):
+    c, _, upstream = client(monkeypatch)
+    r = c.get('/api/v1/servers/local/portfolio/analytics?range=ALL&start=2026-09-09T00:00:00Z&end=2026-09-10T00:00:00Z')
+    assert r.status_code == 200
+    assert upstream.call_args.kwargs['params']['start'] == '2026-09-09T00:00:00+00:00'
+    # Older owners silently ignoring explicit bounds cannot pass the gateway.
+    r = c.get('/api/v1/servers/local/portfolio/analytics?range=ALL&start=2026-09-01T00:00:00Z&end=2026-09-10T00:00:00Z')
+    assert r.status_code == 502
+
+
+def test_capital_projection_must_echo_exact_window(monkeypatch):
+    data = capital_payload()
+    c, _, upstream = client(monkeypatch, data)
+    query = '/api/v1/servers/local/portfolio/capital-dashboard?range=ALL&start=2026-09-09T00:00:00Z&end=2026-09-10T00:00:00Z'
+    assert c.get(query).status_code == 502
+    data.update(range_start='2026-09-09T00:00:00Z',range_end='2026-09-10T00:00:00Z')
+    assert c.get(query).status_code == 200
+    assert upstream.call_args.kwargs['params']['range'] == 'ALL'

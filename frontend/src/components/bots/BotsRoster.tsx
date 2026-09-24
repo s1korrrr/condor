@@ -109,7 +109,7 @@ export function RosterObservation({ payload, bot, now, summary: summaryPayload, 
           {netValue === null ? 'Unavailable' : formatSigned(netValue)} {netUnit ?? ''}
         </p>
         <p className="q-empty">Performance history requires a timestamped, comparable series.</p>
-        <p className="q-empty">{netReport?.feeBasis ? `Fee basis: ${netReport.feeBasis.replaceAll('_', ' ')}.` : 'Fee basis unavailable.'} Snapshot observed {netReport?.observedAt ?? quant?.observedAt ?? 'Unavailable'}. This is not a selected-period return or completed-cycle history. Open-position marked PnL: {pairPnl === null ? 'Unavailable' : amount(pairPnl, quote ?? '')}. {openPairs} open pair{openPairs === 1 ? '' : 's'}.</p>
+        <details className="q-source-details"><summary>Accounting and observation details</summary><p className="q-empty">{netReport?.feeBasis ? `Fee basis: ${netReport.feeBasis.replaceAll('_', ' ')}.` : 'Fee basis unavailable.'} Snapshot observed {netReport?.observedAt ?? quant?.observedAt ?? 'Unavailable'}. This is not a selected-period return or completed-cycle history. Open-position marked PnL: {pairPnl === null ? 'Unavailable' : amount(pairPnl, quote ?? '')}. {openPairs} open pair{openPairs === 1 ? '' : 's'}.</p></details>
       </div>
       <div data-panel-id="B18">
         <span className="q-muted">Current executor classifications</span>

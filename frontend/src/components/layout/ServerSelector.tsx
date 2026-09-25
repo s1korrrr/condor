@@ -1,10 +1,10 @@
-import { replacementServer } from '@/lib/server-selection';
 import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, Circle, Server } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 
 import { useServer } from "@/hooks/useServer";
 import { type ServerInfo } from "@/lib/api";
+import { replacementServer } from "@/lib/server-selection";
 import { useServers } from '@/hooks/useServers';
 
 export function ServerSelector() {

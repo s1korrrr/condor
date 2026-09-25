@@ -75,6 +75,9 @@ def project_wallet(payload: object, bot: str) -> dict:
     value = _decimal(summary.get("balance_value_quote"))
     if value is None:
         raise ValueError("Wallet value is missing")
+    if value == 0:
+        # A restarting engine publishes 0.0 for every asset until its connector loads balances.
+        raise ValueError("Wallet valuation is zero; connector balances are not loaded")
     observed = runtime.get("updated_at")
     if not isinstance(observed, str):
         raise ValueError("Wallet observation time is missing")

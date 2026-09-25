@@ -33,11 +33,12 @@ export function portfolioSummary(current: CurrentPortfolio | null, now: number, 
     allocation: priced.filter(h=>Number(h.value)>0).sort((a,b)=>Number(b.value)-Number(a.value)).map(h=>({token:h.token,value:Number(h.value),weight:complete && pricedTotal!>0 ? Number(h.value)/pricedTotal! *100 : null})),
   };
 }
-export function historySeries(points: HistoryPoint[]) {
+/** `maxGapMs` is the longest spacing that still counts as continuous; bucketed reads pass a wider one. */
+export function historySeries(points: HistoryPoint[], maxGapMs = 120000) {
   const result: {time:number;value:number|null}[]=[];
   for (const [index,point] of points.entries()) {
     const time=Date.parse(point.observed_at);
-    if (index && time-Date.parse(points[index-1].observed_at)>120000) result.push({time:Date.parse(points[index-1].observed_at)+1,value:null});
+    if (index && time-Date.parse(points[index-1].observed_at)>maxGapMs) result.push({time:Date.parse(points[index-1].observed_at)+1,value:null});
     result.push({time,value:point.valuation_complete ? number(point.priced_total) : null});
   }
   return result;

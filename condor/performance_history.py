@@ -15,6 +15,9 @@ from condor.fetchers.bots import extract_bots_list, _native_observation_times
 RANGES = {"1D": 86400, "1W": 604800, "1M": 2592000, "ALL": 31536000}
 # Wallet reads keep one sample per bucket so a month stays under the row cap without losing day ends.
 WALLET_BUCKETS = {"1D": 60, "1W": 300, "1M": 1800, "ALL": 3600}
+# Zero valuations were recorded before admission rejected them (an engine restarting before its
+# connector loaded balances). They stay stored but are never read back as equity.
+ADMITTED_VALUE = "CAST(value_quote AS REAL) != 0"
 
 
 def number(value):
@@ -193,13 +196,13 @@ class PerformanceHistory:
             bucket = WALLET_BUCKETS[period]
             rows = conn.execute(
                 "SELECT timestamp,currency,value_quote,source_id FROM wallet_points WHERE server=? AND bot=? AND timestamp>=? "
-                "AND timestamp IN (SELECT MAX(timestamp) FROM wallet_points WHERE server=? AND bot=? AND timestamp>=? GROUP BY CAST(timestamp/? AS INTEGER)) "
+                "AND timestamp IN (SELECT MAX(timestamp) FROM wallet_points WHERE server=? AND bot=? AND timestamp>=? AND " + ADMITTED_VALUE + " GROUP BY CAST(timestamp/? AS INTEGER)) "
                 "ORDER BY timestamp DESC LIMIT 10001",
                 (server, bot, now - RANGES[period], server, bot, now - RANGES[period], bucket),
             ).fetchall()
             # The newest sample regardless of window, with its balances: the last-known wallet when the owner is stale.
             latest_row = conn.execute(
-                "SELECT timestamp,currency,value_quote,source_id,balances_json FROM wallet_points WHERE server=? AND bot=? ORDER BY timestamp DESC LIMIT 1",
+                "SELECT timestamp,currency,value_quote,source_id,balances_json FROM wallet_points WHERE server=? AND bot=? AND " + ADMITTED_VALUE + " ORDER BY timestamp DESC LIMIT 1",
                 (server, bot),
             ).fetchone()
         latest = None

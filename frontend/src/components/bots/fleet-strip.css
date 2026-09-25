@@ -1,0 +1,40 @@
+/* B28 fleet cards: one per registered bot, filling the row. Internal layout follows the card width. */
+[data-quant-ops] .fs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: var(--q-gap); margin-bottom: var(--q-gap); }
+[data-quant-ops] .fs-card { container-type: inline-size; display: grid; gap: 10px; border-top: 2px solid var(--fs-accent, var(--q-blue)); align-content: start; }
+[data-quant-ops] .fs-card[data-state=stale] { border-top-color: var(--q-warning); }
+[data-quant-ops] .fs-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+[data-quant-ops] .fs-id { min-width: 0; }
+[data-quant-ops] .fs-id h3 { display: flex; align-items: center; gap: 8px; margin: 0; font-size: 16px; font-weight: 600; overflow-wrap: anywhere; }
+[data-quant-ops] .fs-id h3 i { width: 9px; height: 9px; border-radius: 99px; background: var(--fs-accent, var(--q-blue)); box-shadow: 0 0 10px var(--fs-accent, var(--q-blue)); flex-shrink: 0; }
+[data-quant-ops] .fs-id p { margin: 2px 0 0; font-size: 11px; }
+[data-quant-ops] .fs-head__state { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+[data-quant-ops] .fs-body { display: grid; gap: 12px; }
+[data-quant-ops] .fs-pnl { display: grid; gap: 6px; min-width: 0; background: var(--q-surface-raised); border: 1px solid var(--q-border); border-radius: 6px; padding: 10px 12px; }
+[data-quant-ops] .fs-pnl__head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 12px; }
+[data-quant-ops] .fs-pnl__head > span:first-child { flex-basis: 100%; font-size: 11px; }
+[data-quant-ops] .fs-pnl__head strong { font-size: clamp(20px, 6cqi, 30px); font-weight: 600; letter-spacing: -.02em; white-space: nowrap; }
+[data-quant-ops] .fs-pnl__head strong small { font-size: 12px; font-weight: 500; color: var(--q-muted); margin-left: 6px; }
+[data-quant-ops] .fs-deltas { display: inline-flex; gap: 10px; font-size: 12px; font-variant-numeric: tabular-nums; }
+[data-quant-ops] .fs-pnl .q-spark { min-height: 78px; }
+[data-quant-ops] .fs-empty { min-height: 60px; display: grid; align-items: center; }
+[data-quant-ops] .fs-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+[data-quant-ops] .fs-stats > div { background: var(--q-surface-raised); border: 1px solid var(--q-border); border-radius: 6px; padding: 7px 10px; min-width: 0; }
+[data-quant-ops] .fs-stats dt { color: var(--q-muted); font-size: 10.5px; margin-bottom: 3px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-quant-ops] .fs-stats dd { margin: 0; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+[data-quant-ops] .fs-pairs { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 6px; }
+[data-quant-ops] .fs-pairs a { display: flex; align-items: center; gap: 6px; padding: 6px 8px; border: 1px solid var(--q-border); border-radius: 6px; background: var(--q-surface); color: var(--q-text); text-decoration: none; font-size: 11px; min-width: 0; }
+[data-quant-ops] .fs-pairs a:hover { border-color: #4b6e88; background: #152b3d; }
+[data-quant-ops] .fs-pairs strong { white-space: nowrap; }
+[data-quant-ops] .fs-pairs em { margin-left: auto; font-style: normal; font-variant-numeric: tabular-nums; }
+[data-quant-ops] .fs-pairs .q-pill { font-size: 9.5px; padding: 1px 6px; flex-shrink: 0; }
+[data-quant-ops] .fs-pairs em { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+[data-quant-ops] .fs-actions { display: flex; flex-wrap: wrap; gap: 6px; }
+[data-quant-ops] .fs-actions a { display: inline-flex; align-items: center; gap: 6px; text-decoration: none; color: var(--q-muted); min-height: 30px; }
+@container (min-width: 720px) {
+  [data-quant-ops] .fs-body { grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); align-items: stretch; }
+  [data-quant-ops] .fs-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); align-content: stretch; }
+}
+@container (min-width: 1100px) {
+  [data-quant-ops] .fs-stats { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+  [data-quant-ops] .fs-body { grid-template-columns: minmax(0, 1fr) minmax(0, 1.1fr); }
+}

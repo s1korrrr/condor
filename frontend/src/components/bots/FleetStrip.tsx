@@ -7,13 +7,14 @@ import { StateGlyph } from '@/features/quant-ops/primitives';
 import { SparkChart } from '@/features/quant-ops/kit/charts';
 import type { PanelState } from '@/features/quant-ops/panel-state';
 import type { OwnerReads } from './BotsRoster';
+import { winRateText, type BotNet } from '@/features/bots/bot-net';
 import './fleet-strip.css';
 
 const tone = (value: string | null | undefined) => (value ?? 'unknown').toLowerCase().split(/[\s:]/)[0];
 const label = (value: string | null | undefined) => value?.replaceAll('_', ' ') || 'unknown';
 const toneClass = (value: number | string | null | undefined) => metricTone(value) ? `q-${metricTone(value)}` : undefined;
 
-function FleetBotCard({ source, reads, status, color, net }: { source: TradingVisualsSource; reads: OwnerReads | undefined; status: string | null; color: string; net: { value: number | null; stale: boolean } | null }) {
+function FleetBotCard({ source, reads, status, color, net }: { source: TradingVisualsSource; reads: OwnerReads | undefined; status: string | null; color: string; net: BotNet | null }) {
   const quant = reads?.quant ?? null;
   const quote = reads?.controller.quote ?? quant?.netLifecycle.unit ?? null;
   const pairs = quant?.pairs ?? [];
@@ -45,7 +46,7 @@ function FleetBotCard({ source, reads, status, color, net }: { source: TradingVi
     <div className="fs-body">
       <section className="fs-pnl" aria-label="Net PnL">
         <div className="fs-pnl__head">
-          <span className="q-muted">Net PnL · controller report</span>
+          <span className="q-muted">Net PnL · {net?.source ?? 'no net source'}</span>
           <strong className={toneClass(net?.value)}>{net?.value == null ? 'Unavailable' : formatSigned(net.value)}<small>{quote ?? ''}{net?.stale ? ' · last published' : ''}</small></strong>
           <span className="fs-deltas">
             <span className={toneClass(reads?.day.change)}>24h {reads?.day.change == null ? '—' : formatSigned(reads.day.change)}</span>
@@ -60,7 +61,7 @@ function FleetBotCard({ source, reads, status, color, net }: { source: TradingVi
         <div><dt>Positions</dt><dd>{openPairs == null ? '—' : `${openPairs} / ${reads?.view?.pairs.length ?? pairs.length}`}</dd></div>
         <div><dt>Inventory value</dt><dd>{owned == null ? '—' : `${formatDecimal(owned)} ${quant?.ownedValue.unit ?? ''}`}</dd></div>
         <div><dt>Realized · unrealized</dt><dd><span className={toneClass(reads?.controller.realized)}>{reads?.controller.realized == null ? '—' : formatSigned(reads.controller.realized)}</span> · <span className={toneClass(reads?.controller.unrealized)}>{reads?.controller.unrealized == null ? '—' : formatSigned(reads.controller.unrealized)}</span></dd></div>
-        <div><dt>Win rate</dt><dd>{cycles ? cycles.stats.winRate == null ? `Collecting ${cycles.stats.scored}/${cycles.stats.minSample}` : `${(cycles.stats.winRate * 100).toFixed(1)}%` : '—'}</dd></div>
+        <div><dt>Win rate</dt><dd>{cycles ? winRateText(cycles.stats) : '—'}</dd></div>
         <div><dt>Fill ratio</dt><dd>{execution?.fillRatio == null ? '—' : `${(execution.fillRatio * 100).toFixed(1)}%`}</dd></div>
         <div><dt>Open orders</dt><dd>{orders == null ? '—' : orders}</dd></div>
         <div><dt>Fills · fees</dt><dd>{cycles ? `${cycles.stats.fillCount} · ${cycles.stats.fees == null ? '—' : formatDecimal(cycles.stats.fees, 4)}` : '—'}</dd></div>
@@ -87,7 +88,7 @@ function FleetBotCard({ source, reads, status, color, net }: { source: TradingVi
 /** B28: one rich card per registered bot. Cards fill the row; a lone bot spreads its stats beside its PnL. */
 export function FleetStrip({ sources, readsByBot, page, netFor }: {
   sources: TradingVisualsSource[]; readsByBot: Record<string, OwnerReads>; page?: BotsPageResponse;
-  netFor: (reads: OwnerReads) => { value: number | null; stale: boolean };
+  netFor: (reads: OwnerReads) => BotNet;
 }) {
   if (!sources.length) return null;
   return <section className="fs-grid" data-panel-id="B28" aria-label="Fleet">

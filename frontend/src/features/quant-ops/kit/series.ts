@@ -80,6 +80,7 @@ export function valueDomain(series: ChartSeries[], includeZero = false): [number
   if (includeZero) values.push(0);
   if (!values.length) return null;
   const low = Math.min(...values), high = Math.max(...values);
-  const pad = Math.max((high - low) * 0.08, Math.abs(high) * 0.0005, 1e-9);
+  // A flat series still gets a readable band: 1% of its level, or 0.01 around zero.
+  const pad = high > low ? Math.max((high - low) * 0.08, Math.abs(high) * 0.0005) : Math.abs(high) * 0.01 || 0.01;
   return [low - pad, high + pad];
 }

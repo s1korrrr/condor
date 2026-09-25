@@ -65,7 +65,13 @@ function FleetCard({ reads, now }: { reads: FleetReads; now: number }) {
   const owned = quant?.ownedValue.value ?? quant?.ownedValue.lastKnown ?? null;
   const quote = quant?.netLifecycle.unit ?? quant?.ownedValue.unit ?? '';
   const holding = quant?.pairs.filter(row => row.state.toUpperCase().includes('HOLD')).length ?? 0;
-  const slices = (quant?.pairs ?? []).flatMap(row => row.markedValue != null && Number(row.markedValue) > 0 ? [{ label: row.pair.split('-')[0], value: Number(row.markedValue), color: assetColor(row.pair.split('-')[0]) }] : []);
+  // One slice per base asset: two controllers on the same asset add up instead of repeating a label.
+  const ownedByAsset = new Map<string, number>();
+  for (const row of quant?.pairs ?? []) {
+    const value = row.markedValue == null ? NaN : Number(row.markedValue);
+    if (Number.isFinite(value) && value > 0) ownedByAsset.set(row.pair.split('-')[0], (ownedByAsset.get(row.pair.split('-')[0]) ?? 0) + value);
+  }
+  const slices = [...ownedByAsset].map(([asset, value]) => ({ label: asset, value, color: assetColor(asset) }));
   const heartbeatAge = quant?.observedAt ? duration((now - Date.parse(quant.observedAt)) / 1000) : null;
   return <article className="q-card nf-card" data-state={state.kind} aria-label={`${source.bot} fleet card`}>
     <header className="nf-head">

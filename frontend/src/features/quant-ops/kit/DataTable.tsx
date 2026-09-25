@@ -32,7 +32,17 @@ const textFilter: FilterFn<unknown> = (row, columnId, filter) => String(row.getV
 const numberFilter: FilterFn<unknown> = (row, columnId, filter) => numericFilterMatch(row.getValue(columnId), String(filter));
 const globalFilter: FilterFn<unknown> = (row, columnId, filter) => String(row.getValue(columnId) ?? '').toLowerCase().includes(String(filter).trim().toLowerCase());
 
-const csvCell = (value: unknown) => { const text = String(value ?? ''); return /[",\n]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text; };
+const numeric = (value: unknown): number | null => {
+  if (value == null || value === '') return null;
+  const number = typeof value === 'number' ? value : Number(value);
+  return Number.isFinite(number) ? number : null;
+};
+/** CSV cell with quoting and formula-injection protection; signed numbers stay numbers. */
+const csvCell = (value: unknown) => {
+  let text = String(value ?? '');
+  if (/^[=+\-@\t\r]/.test(text) && numeric(text) === null) text = `'${text}`;
+  return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
+};
 
 export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSize = 12, emptyText = 'No rows.', exportName, toolbar, maxHeight, rowState, dense = false }: {
   rows: T[];
@@ -59,13 +69,13 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
   const definitions = useMemo<ColumnDef<T>[]>(() => columns.map(column => ({
     id: column.id,
     header: column.header,
-    accessorFn: row => column.value(row) ?? null,
+    // Missing values are undefined so `sortUndefined: 'last'` keeps them last in either direction.
+    accessorFn: row => column.value(row) ?? undefined,
     size: column.size ?? (column.kind === 'number' ? 120 : 150),
     minSize: column.minSize ?? 64,
     sortingFn: column.kind === 'number' ? (a, b, id) => {
-      const x = Number(a.getValue(id)), y = Number(b.getValue(id));
-      const fx = Number.isFinite(x), fy = Number.isFinite(y);
-      return fx && fy ? x - y : fx ? 1 : fy ? -1 : 0;
+      const x = numeric(a.getValue(id)), y = numeric(b.getValue(id));
+      return x !== null && y !== null ? x - y : x !== null ? 1 : y !== null ? -1 : 0;
     } : 'alphanumeric',
     sortUndefined: 'last',
     filterFn: (column.kind === 'number' ? numberFilter : textFilter) as FilterFn<T>,
@@ -76,12 +86,16 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
     state: { sorting, columnFilters: filters, globalFilter: search },
     onSortingChange: setSorting, onColumnFiltersChange: setFilters, onGlobalFilterChange: setSearch,
     globalFilterFn: globalFilter as FilterFn<T>,
+    // Search every column, including ones whose first row is empty.
+    getColumnCanGlobalFilter: () => true,
     getCoreRowModel: getCoreRowModel(), getSortedRowModel: getSortedRowModel(), getFilteredRowModel: getFilteredRowModel(),
     enableColumnResizing: true, columnResizeMode: 'onChange',
   });
   const visible = table.getRowModel().rows;
   const shown = expanded ? visible : visible.slice(0, pageSize);
   const filtered = search.trim() !== '' || filters.length > 0;
+  const initialSorting = initialSort ? `${initialSort.id}:${initialSort.desc ? 'desc' : 'asc'}` : '';
+  const changed = filtered || sorting.map(item => `${item.id}:${item.desc ? 'desc' : 'asc'}`).join(',') !== initialSorting || Object.keys(table.getState().columnSizing).length > 0;
   const exportCsv = () => {
     const header = columns.map(column => csvCell(column.header)).join(',');
     const body = visible.map(row => columns.map(column => csvCell(column.value(row.original))).join(','));
@@ -94,7 +108,7 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
     <div className="q-dt__bar">
       <input className="q-dt__search" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search rows…" aria-label={`Search ${label}`} />
       <button type="button" className="q-chip" aria-pressed={showFilters} onClick={() => setShowFilters(value => !value)} title="Per-column filters. Number columns accept >, <, >=, <=, = and a..b.">Filters{filters.length ? ` · ${filters.length}` : ''}</button>
-      {(filtered || sorting.length > 0) && <button type="button" className="q-chip" onClick={() => { setSearch(''); setFilters([]); setSorting(initialSort ? [{ id: initialSort.id, desc: initialSort.desc ?? false }] : []); table.resetColumnSizing(); }}>Reset</button>}
+      {changed && <button type="button" className="q-chip" onClick={() => { setSearch(''); setFilters([]); setSorting(initialSort ? [{ id: initialSort.id, desc: initialSort.desc ?? false }] : []); table.resetColumnSizing(); }}>Reset</button>}
       {toolbar}
       <span className="q-dt__count">{filtered ? `${visible.length} of ${rows.length}` : rows.length} row{rows.length === 1 ? '' : 's'}</span>
       {exportName && <button type="button" className="q-chip" disabled={!visible.length} onClick={exportCsv}>Export CSV</button>}

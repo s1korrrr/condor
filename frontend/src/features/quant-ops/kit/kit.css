@@ -76,7 +76,10 @@
 .q-dt__bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .q-dt__search { flex: 1 1 160px; min-width: 0; max-width: 280px; border: 1px solid var(--q-border, #20313e); background: var(--q-surface-raised, #101f2b); color: var(--q-text, #e5e7eb); border-radius: 5px; padding: 6px 9px; font: inherit; font-size: 11px; }
 .q-dt__count { margin-left: auto; color: var(--q-muted, #a4bacb); font-size: 11px; white-space: nowrap; }
-.q-dt .q-chip { min-height: 28px; padding: 3px 9px; font-size: 11px; }
+.q-dt .q-chip { display: inline-flex; align-items: center; min-height: 28px; padding: 3px 9px; font: inherit; font-size: 11px; color: var(--q-muted, #a4bacb); background: var(--q-surface-raised, #101f2b); border: 1px solid var(--q-border, #20313e); border-radius: 5px; cursor: pointer; }
+.q-dt .q-chip[aria-pressed=true] { color: var(--q-text, #e5e7eb); border-color: var(--q-blue, #259aff); }
+.q-dt .q-chip:disabled { opacity: .45; cursor: not-allowed; }
+.q-dt :is(.q-chip, .q-dt__search, .q-dt__filter):focus-visible { outline: 2px solid var(--q-blue, #259aff); outline-offset: 2px; }
 .q-dt__scroll { overflow: auto; max-width: 100%; border: 1px solid var(--q-border, #20313e); border-radius: 5px; }
 .q-dt table { table-layout: fixed; border-collapse: separate; border-spacing: 0; }
 .q-dt thead th { position: sticky; top: 0; z-index: 1; background: var(--q-surface-raised, #101f2b); padding: 0; vertical-align: top; }
@@ -88,7 +91,7 @@
 .q-dt tbody tr[data-state=highlight] > * { background: color-mix(in srgb, var(--q-blue, #259aff) 14%, transparent); }
 .q-dt tbody tr[data-state=stale] > * { opacity: .72; }
 .q-dt tbody tr:last-child > * { border-bottom: 0; }
-.q-dt__sort { all: unset; box-sizing: border-box; display: flex; width: 100%; gap: 6px; align-items: center; justify-content: space-between; padding: 7px 10px 7px 8px; cursor: pointer; color: var(--q-muted, #a4bacb); font-size: 11px; font-weight: 500; }
+.q-dt .q-dt__sort { all: unset; box-sizing: border-box; display: flex; width: 100%; gap: 6px; align-items: center; justify-content: space-between; padding: 7px 10px 7px 8px; cursor: pointer; color: var(--q-muted, #a4bacb); font-size: 11px; font-weight: 500; }
 .q-dt [data-kind=number] .q-dt__sort { flex-direction: row-reverse; }
 .q-dt__sort span { overflow: hidden; text-overflow: ellipsis; }
 .q-dt__sort i { font-style: normal; font-size: 9px; opacity: .45; }

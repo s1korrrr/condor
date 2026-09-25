@@ -28,3 +28,8 @@ test('one-asset composition renders a full ring legend at 100%',()=>{
  assert.match(html,/100\.0%/);
  assert.match(html,/USDC/);
 });
+test('history gaps follow the read cadence, not a fixed minute',()=>{
+ const points=[0,300,600,2400].map((second,index)=>mark(second,String(100+index)));
+ assert.equal(historySeries(points).filter(point=>point.value===null).length,3,'one-minute cadence: every 5-minute step is a gap');
+ assert.equal(historySeries(points,750_000).filter(point=>point.value===null).length,1,'5-minute buckets: only the 30-minute hole is a gap');
+});

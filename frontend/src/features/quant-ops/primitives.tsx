@@ -148,7 +148,7 @@ export function Histogram({ bins, unit, sampleCount, excludedCount }: { bins: { 
   if (!bins.length) return <p className="q-empty">Execution histogram unavailable. Missing fill benchmarks are excluded, not plotted as zero.</p>;
   return <figure>
     <BarsChart ariaLabel={`Execution quality histogram · ${sampleCount} samples`} height={110} format={value => String(Math.round(value))}
-      rows={bins.map(bin => ({ label: `${bin.from}–${bin.to}`, count: bin.count }))} bars={[{ id: 'count', label: `Fills (${unit})`, color: CHART.blue }]} />
+      rows={bins.map(bin => ({ label: `${bin.from}–${bin.to}`, count: bin.count }))} bars={[{ id: 'count', label: `Fills (${unit})`, color: CHART.blue }]} signed={false} />
     <p className="q-muted">{sampleCount} samples · {unit}. {excludedCount} excluded for missing benchmark.</p>
   </figure>;
 }
@@ -186,20 +186,6 @@ export function Heatmap({ rows, columns, cells }: { rows: string[]; columns: str
 /** Hoverable trend line. Pass timed points to show the sample time in the tooltip. */
 export function Sparkline({ points, positive, unit, height = 28 }: { points: number[] | SeriesPoint[]; positive?: boolean; unit?: string; height?: number }) {
   return <SparkChart points={points} positive={positive} unit={unit} height={height} />;
-}
-
-export function QuantTimeSeries({ points, unit }: { points: { time: number; value: number | null }[]; unit: string }) {
-  const known = points.map(point => point.value).filter((value): value is number => value != null);
-  if (known.length < 2) return <p className="q-empty">Equity history is unavailable. Gaps stay gaps. No benchmark is drawn as zero.</p>;
-  return <TimeSeriesChart ariaLabel={`Equity ${unit}`} height={160} series={[{ id: 'equity', label: 'Equity', color: CHART.positive, area: true, unit, points }]} />;
-}
-
-export function DailyChangeHistogram({ values, unit }: { values: number[]; unit: string }) {
-  if (!values.length) return <p className="q-empty">Daily bars are observed equity changes, not flow-adjusted PnL. Consecutive admitted marks are required.</p>;
-  return <figure>
-    <BarsChart ariaLabel={`Observed equity change · ${unit}`} height={70} unit={unit} rows={values.map((value, index) => ({ label: String(index + 1), change: value }))} bars={[{ id: 'change', label: 'Observed change', color: CHART.positive, signColors: true }]} />
-    <p className="q-muted">Observed equity change · {unit}. Deposits still look like increases here until a classified journal exists.</p>
-  </figure>;
 }
 
 export function Gauge({ ratio, label }: { ratio: number | null; label: string }) {

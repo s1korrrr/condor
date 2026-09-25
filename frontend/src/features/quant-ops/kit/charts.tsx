@@ -78,9 +78,11 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
 export type BarSpec = { id: string; label: string; color: string; signColors?: boolean };
 
 /** Hoverable category bars (days, bins) with an optional line on its own axis. Missing values stay empty. */
-export function BarsChart({ rows, bars, line, height = 160, format = formatSigned, unit, ariaLabel, stacked = false, emptyText = 'No values to plot.' }: {
+export function BarsChart({ rows, bars, line, height = 160, format = formatSigned, signed = true, unit, ariaLabel, stacked = false, emptyText = 'No values to plot.' }: {
   rows: ({ label: string } & Record<string, number | string | null>)[]; bars: BarSpec[]; line?: { id: string; label: string; color: string } | null;
   height?: number; format?: (value: number) => string; unit?: string; ariaLabel: string; stacked?: boolean; emptyText?: ReactNode;
+  /** Signed values color gains and losses in the tooltip; counts are not signed. */
+  signed?: boolean;
 }) {
   const keys = [...bars.map(bar => bar.id), ...(line ? [line.id] : [])];
   if (!rows.some(row => keys.some(key => typeof row[key] === 'number'))) return <p className="q-empty">{emptyText}</p>;
@@ -100,7 +102,7 @@ export function BarsChart({ rows, bars, line, height = 160, format = formatSigne
             return <TooltipCard title={String(label)} rows={specs.flatMap(spec => {
               const value = row[spec.id];
               if (typeof value !== 'number') return [];
-              return [{ key: spec.id, label: spec.label, color: spec.signColors ? (value >= 0 ? CHART.positive : CHART.negative) : spec.color, value: `${format(value)}${unit ? ` ${unit}` : ''}`, tone: toneClass(value, format === formatSigned) }];
+              return [{ key: spec.id, label: spec.label, color: spec.signColors ? (value >= 0 ? CHART.positive : CHART.negative) : spec.color, value: `${format(value)}${unit ? ` ${unit}` : ''}`, tone: toneClass(value, signed) }];
             })} />;
           }} />
         {bars.map(bar => <Bar key={bar.id} yAxisId="left" dataKey={bar.id} name={bar.label} fill={bar.color} radius={[2, 2, 2, 2]} maxBarSize={28} stackId={stacked ? 'stack' : undefined} isAnimationActive={false}>
@@ -122,7 +124,7 @@ export function DonutChart({ slices, center, sub, unit, format = plain }: {
   const focus = active == null ? null : slices[active];
   return <figure className="q-donut-chart"><div className="q-donut-chart__body">
     <div className="q-donut-chart__plot" role="img" aria-label={`${center} ${unit} composition`}>
-      <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+      <ResponsiveContainer width="100%" aspect={1} minWidth={0} initialDimension={{ width: 200, height: 200 }}>
         <PieChart>
           <Pie data={slices} dataKey="value" nameKey="label" innerRadius="64%" outerRadius="96%" paddingAngle={slices.length > 1 ? 1.2 : 0} stroke="none" isAnimationActive={false}
             onMouseEnter={(_, index) => setActive(index)} onMouseLeave={() => setActive(null)}>
@@ -150,13 +152,15 @@ export function SparkChart({ points, positive, color, height = 30, format = plai
 }) {
   const gradient = useId().replaceAll(':', '');
   const rows = (points as (number | SeriesPoint)[]).map((point, index) => typeof point === 'number' ? { index, value: point, time: null as number | null } : { index, value: point.value, time: point.time });
+  // Timed points sit on elapsed time so irregular sampling and gaps keep their true spacing.
+  const timed = rows.length > 0 && rows.every(row => row.time != null && Number.isFinite(row.time));
   if (rows.filter(row => row.value != null).length < 2) return <span className="q-spark q-spark--empty" aria-hidden="true" style={{ height }} />;
   const stroke = color ?? (positive === false ? CHART.negative : CHART.positive);
   return <span className="q-spark" role="img" aria-label={ariaLabel} style={{ height }}>
     <ResponsiveContainer width="100%" height={height} minWidth={0}>
       <ComposedChart data={rows} margin={{ top: 3, right: 2, bottom: 2, left: 2 }}>
         <defs><linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={stroke} stopOpacity={0.32} /><stop offset="100%" stopColor={stroke} stopOpacity={0} /></linearGradient></defs>
-        <XAxis dataKey="index" type="number" domain={['dataMin', 'dataMax']} hide />
+        <XAxis dataKey={timed ? 'time' : 'index'} type="number" domain={['dataMin', 'dataMax']} hide />
         <YAxis domain={['dataMin', 'dataMax']} hide />
         <Tooltip isAnimationActive={false} cursor={{ stroke: CHART.muted, strokeDasharray: '2 3' }} wrapperStyle={{ outline: 'none', zIndex: 5 }} allowEscapeViewBox={{ x: true, y: true }}
           content={({ active, payload }) => {
@@ -164,7 +168,7 @@ export function SparkChart({ points, positive, color, height = 30, format = plai
             const row = payload[0].payload as (typeof rows)[number];
             return <div className="q-tooltip q-tooltip--compact"><strong>{row.value == null ? 'Gap' : `${format(row.value)}${unit ? ` ${unit}` : ''}`}</strong>{row.time != null && <small>{utc(row.time)} UTC</small>}</div>;
           }} />
-        <Area dataKey="value" type="monotone" stroke={stroke} strokeWidth={1.6} fill={`url(#${gradient})`} connectNulls={false} dot={false} activeDot={{ r: 2.5, stroke: 'none', fill: stroke }} isAnimationActive={false} />
+        <Area dataKey="value" type="linear" stroke={stroke} strokeWidth={1.6} fill={`url(#${gradient})`} connectNulls={false} dot={false} activeDot={{ r: 2.5, stroke: 'none', fill: stroke }} isAnimationActive={false} />
       </ComposedChart>
     </ResponsiveContainer>
   </span>;

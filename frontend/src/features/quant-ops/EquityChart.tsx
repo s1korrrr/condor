@@ -8,10 +8,12 @@ type OverlayPoint = { time: number; value: number | null };
 
 /** Observation chart only. Gaps are never interpolated into portfolio returns. Hover shows exact marks.
  * `overlay` (cumulative bot PnL) is drawn on its own secondary scale; `restarts` are owner-change rules. */
-export function EquityChart({ points, unit, overlay, overlayLabel, restarts = [], height = 250 }: {
+export function EquityChart({ points, unit, overlay, overlayLabel, restarts = [], height = 250, maxGapMs }: {
   points: HistoryPoint[]; unit: string; overlay?: OverlayPoint[] | null; overlayLabel?: string; restarts?: number[]; height?: number;
+  /** Longest spacing that is still one continuous line; defaults to the one-minute observer cadence. */
+  maxGapMs?: number;
 }) {
-  const series = useMemo(() => historySeries(points), [points]);
+  const series = useMemo(() => historySeries(points, maxGapMs), [points, maxGapMs]);
   const chartSeries = useMemo<ChartSeries[]>(() => {
     const wallet: ChartSeries = { id: 'wallet', label: `Wallet value`, color: CHART.blue, area: true, unit, points: series };
     if (!overlay || series.length < 2) return [wallet];

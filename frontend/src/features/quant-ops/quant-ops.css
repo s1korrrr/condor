@@ -356,3 +356,10 @@
 [data-quant-ops] .q-open-risk small { display: block; margin-top: 4px; }
 @media (max-width: 1280px) { [data-quant-ops] .q-split-4 { grid-template-columns: 1fr 1fr; } [data-quant-ops] .q-open-risk { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
 @media (max-width: 768px) { [data-quant-ops] .q-split-2, [data-quant-ops] .q-split-4, [data-quant-ops] .q-open-risk { grid-template-columns: 1fr; } [data-quant-ops] .q-timeline li { grid-template-columns: 1fr; gap: 2px; } }
+
+/* ---- Adaptive layout (kit) ---- */
+[data-quant-ops] .q-split-holdings { display: grid; grid-template-columns: minmax(0, 7fr) minmax(300px, 4fr); gap: var(--q-gap); margin-bottom: var(--q-gap); }
+[data-quant-ops] .q-stack { display: grid; gap: var(--q-gap); align-content: start; min-width: 0; }
+@media (max-width: 1100px) { [data-quant-ops] .q-split-holdings { grid-template-columns: 1fr; } }
+[data-quant-ops] .q-table-title { font-size: 13px; font-weight: 600; margin: 4px 0 8px; }
+[data-quant-ops] [data-panel-id="B25"] .q-timeline { max-height: 390px; overflow-y: auto; padding-right: 4px; }

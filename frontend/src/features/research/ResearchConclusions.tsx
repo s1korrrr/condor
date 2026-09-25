@@ -1,3 +1,4 @@
+import { verdictTone } from './verdict-tone';
 import { useQuery } from '@tanstack/react-query';
 import { authFetch } from '@/lib/auth-token';
 import { readResearch } from './read';
@@ -32,7 +33,7 @@ export function ResearchConclusions({ server, now, revision, kind, onSelect }: {
         {items.length ? <ul className="space-y-4">{items.map(item => {
           const row = researchRecordSummary(item);
           return <li key={row.id} className="border-b border-[var(--color-border)] pb-3 last:border-0">
-            <div className="flex flex-wrap items-start justify-between gap-2"><button className="quant-record-link !text-left" title={row.fullTitle} onClick={() => onSelect(row.id)}>{row.title}</button><span className="text-xs font-medium">{row.verdict}</span></div>
+            <div className="flex flex-wrap items-start justify-between gap-2"><button className="quant-record-link !text-left" title={row.fullTitle} onClick={() => onSelect(row.id)}>{row.title}</button><span className="lab-verdict" data-tone={verdictTone(row.verdict)}>{row.verdict}</span></div>
             <p className="mt-1 text-xs quant-muted">{row.scope || 'Scope is in the source record'}{row.start || row.end ? ` · ${row.start || 'Start not recorded'} → ${row.end || 'End not recorded'}` : ''}</p>
             <p className="mt-1 text-xs quant-muted break-all">{labTimestamp(row.recordedAt)} · {row.id}</p>
             {(row.rationale || row.fullTitle !== row.title) && <details className="mt-2 text-sm"><summary className="cursor-pointer text-[var(--color-primary)]">Rationale and source title</summary>{row.fullTitle !== row.title && <p className="mt-2">{row.fullTitle}</p>}{row.rationale && <p className="mt-2 whitespace-pre-wrap break-words">{row.rationale}</p>}</details>}

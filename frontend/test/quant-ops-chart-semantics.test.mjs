@@ -5,18 +5,22 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {frontendModules} from './helpers/frontend-module.mjs';
 
 const {load}=frontendModules();
-const {QuantTimeSeries,Heatmap,StackedBar}=load('features/quant-ops/primitives.tsx');
+const {Heatmap,StackedBar}=load('features/quant-ops/primitives.tsx');
+const {projectTimeSeries,valueAt}=load('features/quant-ops/kit/series.ts');
 const {assetColor}=load('features/quant-ops/format.ts');
 
 test('equity curve uses elapsed time and keeps gap fills separate',()=>{
   const start=Date.parse('2026-09-01T00:00:00Z');
-  const html=renderToStaticMarkup(React.createElement(QuantTimeSeries,{unit:'USDT',points:[
+  const points=[
     {time:start,value:100},{time:start+60_000,value:110},
     {time:start+120_000,value:null},{time:start+86_400_000,value:120},
     {time:start+86_460_000,value:130},
-  ]}));
-  assert.match(html,/L 0\.22[0-9]*,/);
-  assert.equal([...html.matchAll(/opacity="0\.16"/g)].length,2);
+  ];
+  const projection=projectTimeSeries([{id:'equity',label:'Equity',color:'green',points}]);
+  assert.deepEqual(projection.domain,[start,start+86_460_000],'the axis spans elapsed time, not sample count');
+  assert.equal(projection.keys.length,2,'a null observation separates the two filled runs');
+  assert.equal(valueAt(points,start+3_600_000).value,null,'inside the gap the tooltip reports a gap');
+  assert.equal(valueAt(points,start+86_430_000).value,120,'between samples the tooltip reports the latest sample');
 });
 
 test('selected asset preserves the full allocation denominator',()=>{

@@ -51,7 +51,7 @@ test('capital projection does not turn deposits or missing flows into PnL',()=>{
   assert.ok(observedDrawdown(model.history)===null || observedDrawdown(model.history)<=0);
 });
 
-test('Capital page renders every C01-C24 panel and shell panels without nested tabs',()=>{
+test('Capital page renders every C01-C28 panel and shell panels without nested tabs',()=>{
   const model=projectCapitalModel({current:null,history:[],now:Date.now()});
   const stats=statStrip({model,accountAllowed:true,risk:null,walletChange:null,botPnl:{daily:null,weekly:null,monthly:null,quote:null},cycles:null,meanWallet:null,rangeLabel:'1D',unit:'USDT'});
   const html=renderToStaticMarkup(React.createElement(CapitalPage,{
@@ -97,7 +97,7 @@ test('Capital rows draw wallet history, bot overlay, drawdown, rails, cycles and
     strategyAllocation:{owned:250.7,wallet:20691.94,unit:'USDT',ownedUnit:'USDC'},
     pageState:{worst:'incomplete',label:'2 sources incomplete',offenders:['Drawdown','Max drawdown']},
   }));
-  assert.match(html,/Max DD -10\.00%/);
+  assert.match(html,/class="q-negative">-10\.00%</, "worst drawdown heads the C19 panel; the chart marks it on hover");
   assert.match(html,/cumulative net PnL/);
   assert.match(html,/data-panel-id="C03"[^>]*data-state="fresh"/);
   assert.match(html,/\+1\.50/);
@@ -126,10 +126,10 @@ test('Bot roster keeps mixed pair states and B-panel anatomy in page flow',()=>{
   }
 });
 
-test('panel registry keeps the 47 original IDs and adds the revision-2 panels (66 total)',()=>{
+test('panel registry keeps the 47 original IDs and adds the revision-2 and adaptive-layout panels (75 total)',()=>{
   assert.equal(ORIGINAL_SHELL_PANELS.length+ORIGINAL_CAPITAL_PANELS.length+ORIGINAL_BOT_PANELS.length,47);
-  assert.equal(SHELL_PANELS.length+CAPITAL_PANELS.length+BOT_PANELS.length,66);
-  assert.equal(new Set([...SHELL_PANELS,...CAPITAL_PANELS,...BOT_PANELS]).size,66);
+  assert.equal(SHELL_PANELS.length+CAPITAL_PANELS.length+BOT_PANELS.length,75);
+  assert.equal(new Set([...SHELL_PANELS,...CAPITAL_PANELS,...BOT_PANELS]).size,75);
 });
 
 test('native wallet observation preserves tiny inventory and shared-wallet totals',()=>{

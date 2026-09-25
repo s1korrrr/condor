@@ -148,8 +148,9 @@ export function Histogram({ bins, unit, sampleCount, excludedCount }: { bins: { 
   if (!bins.length) return <p className="q-empty">Execution histogram unavailable. Missing fill benchmarks are excluded, not plotted as zero.</p>;
   return <figure>
     <BarsChart ariaLabel={`Execution quality histogram · ${sampleCount} samples`} height={110} format={value => String(Math.round(value))}
-      rows={bins.map(bin => ({ label: `${bin.from}–${bin.to}`, count: bin.count }))} bars={[{ id: 'count', label: `Fills (${unit})`, color: CHART.blue }]} signed={false} />
+      rows={bins.map(bin => ({ label: `${bin.from}–${bin.to}`, count: bin.count }))} bars={[{ id: 'count', label: `Fills (${unit})`, color: CHART.blue }]} signed={false} integer />
     <p className="q-muted">{sampleCount} samples · {unit}. {excludedCount} excluded for missing benchmark.</p>
+    <table className="sr-only"><caption>Fill counts per {unit} bin</caption><tbody>{bins.map(bin => <tr key={`${bin.from}:${bin.to}`}><th scope="row">{bin.from}–{bin.to}</th><td>{bin.count}</td></tr>)}</tbody></table>
   </figure>;
 }
 

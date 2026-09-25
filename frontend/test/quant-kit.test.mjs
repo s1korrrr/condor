@@ -9,7 +9,7 @@ const {TileGrid}=load('features/quant-ops/kit/grid.tsx');
 const {balancedColumns,tileSpans}=load('features/quant-ops/kit/layout.ts');
 const {projectTimeSeries,valueAt,valueDomain}=load('features/quant-ops/kit/series.ts');
 const {DataTable}=load('features/quant-ops/kit/DataTable.tsx');
-const {numericFilterMatch}=load('features/quant-ops/kit/table-filter.ts');
+const {numericFilterMatch,searchMatch}=load('features/quant-ops/kit/table-filter.ts');
 
 test('tile grid fills rows instead of leaving a lone tile',()=>{
   assert.equal(balancedColumns(10,1640,210,10,5),5,'ten KPI tiles become two rows of five');
@@ -62,4 +62,25 @@ test('data table sorts by the raw value and keeps formatted cells',()=>{
   assert.match(html,/3 rows/);
   assert.match(html,/Export CSV/);
   assert.match(html,/role="separator"[^>]*aria-label="Resize Value"/);
+});
+
+test('table search matches displayed text as well as raw values',()=>{
+  assert.equal(searchMatch(['0.553',null],'55.3%'),false);
+  assert.equal(searchMatch(['0.553','55.3%'],'55.3%'),true);
+  assert.equal(searchMatch([null,'Unknown basis'],'unknown'),true);
+  assert.equal(searchMatch(['ETH'],'  '),true,'blank search keeps every row');
+  const rows=[{id:'a',pnl:null},{id:'b',pnl:'1'}];
+  const columns=[{id:'id',header:'Id',value:row=>row.id},{id:'pnl',header:'PnL',kind:'number',value:row=>row.pnl,cell:row=>row.pnl==null?'Unknown basis':row.pnl}];
+  const html=renderToStaticMarkup(React.createElement(DataTable,{label:'T',rows,columns,rowId:row=>row.id}));
+  assert.match(html,/Unknown basis/);
+});
+
+test('a pinned row leads every sort and is never hidden behind Show all',()=>{
+  const rows=Array.from({length:15},(_,index)=>({id:`r${index}`,value:index}));
+  const html=renderToStaticMarkup(React.createElement(DataTable,{label:'T',rows,rowId:row=>row.id,pageSize:5,initialSort:{id:'value',desc:true},pinned:row=>row.id==='r0',
+    columns:[{id:'id',header:'Id',rowHeader:true,value:row=>row.id},{id:'value',header:'Value',kind:'number',value:row=>row.value}]}));
+  const order=[...html.matchAll(/<th scope="row"[^>]*>(r\d+)</g)].map(match=>match[1]);
+  assert.deepEqual(order,['r0','r14','r13','r12','r11'],'the smallest value is pinned first, the rest follow the sort');
+  assert.match(html,/Show all 15 rows/);
+  assert.match(html,/role="separator" tabindex="0"/,'column resize is keyboard reachable');
 });

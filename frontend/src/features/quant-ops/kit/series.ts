@@ -2,16 +2,16 @@
 
 /** Palette tokens with fallbacks, so charts render the same outside a `[data-quant-ops]` scope. */
 export const CHART = {
-  blue: 'var(--q-blue, #259aff)', cyan: 'var(--q-cyan, #22d3ee)', positive: 'var(--q-positive, #35eab5)', negative: 'var(--q-negative, #ff6577)',
-  warning: 'var(--q-warning, #f59e0b)', violet: 'var(--q-violet, #8b5cf6)', neutral: 'var(--q-neutral, #64748b)',
-  grid: 'var(--q-border, #20313e)', muted: 'var(--q-muted, #a4bacb)', text: 'var(--q-text, #e5e7eb)', surface: 'var(--q-surface, #0a151d)',
+  blue: 'var(--q-blue, var(--color-primary, #259aff))', cyan: 'var(--q-cyan, var(--color-accent, #22d3ee))', positive: 'var(--q-positive, var(--color-green, #35eab5))', negative: 'var(--q-negative, var(--color-red, #ff6577))',
+  warning: 'var(--q-warning, var(--color-yellow, #f59e0b))', violet: 'var(--q-violet, #8b5cf6)', neutral: 'var(--q-neutral, #64748b)',
+  grid: 'var(--q-border, var(--color-border, #20313e))', muted: 'var(--q-muted, var(--color-text-muted, #a4bacb))', text: 'var(--q-text, var(--color-text, #e5e7eb))', surface: 'var(--q-surface, var(--color-surface, #0a151d))',
 } as const;
 
 export type SeriesPoint = { time: number; value: number | null };
 export type ChartSeries = {
   id: string; label: string; color: string; points: SeriesPoint[];
   /** Secondary series keep their own scale on the left edge (for example cumulative bot PnL over wallet value). */
-  axis?: 'primary' | 'secondary'; area?: boolean; unit?: string; format?: (value: number) => string; dashed?: boolean;
+  axis?: 'primary' | 'secondary'; area?: boolean; unit?: string; format?: (value: number) => string;
 };
 export type ChartMarker = { time: number; label: string; color?: string };
 

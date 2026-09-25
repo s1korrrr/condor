@@ -14,7 +14,7 @@ const plain = (value: number) => formatDecimal(value);
 const utc = (time: number, withDate = true) => new Date(time).toLocaleString('en-GB', { timeZone: 'UTC', ...(withDate ? { month: 'short', day: 'numeric' } : {}), hour: '2-digit', minute: '2-digit' });
 
 function TooltipCard({ title, rows }: { title: string; rows: { key: string; label: string; color: string; value: string; note?: string; tone?: string }[] }) {
-  return <div className="q-tooltip" role="status">
+  return <div className="q-tooltip">
     <p className="q-tooltip__title">{title}</p>
     {rows.map(row => <p key={row.key} className="q-tooltip__row">
       <i style={{ background: row.color }} /><span>{row.label}</span><strong className={row.tone}>{row.value}</strong>
@@ -67,7 +67,7 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
           }} />
         {projection.keys.map(({ key, series: item }) => item.area
           ? <Area key={key} yAxisId={item.axis === 'secondary' ? 'right' : 'left'} dataKey={key} type="linear" stroke={item.color} strokeWidth={1.8} fill={`url(#${gradient}-${item.id})`} connectNulls isAnimationActive={false} dot={false} activeDot={{ r: 3.5, strokeWidth: 2, stroke: CHART.surface }} name={item.label} />
-          : <Line key={key} yAxisId={item.axis === 'secondary' ? 'right' : 'left'} dataKey={key} type="linear" stroke={item.color} strokeWidth={1.6} strokeDasharray={item.dashed ? '4 3' : undefined} connectNulls isAnimationActive={false} dot={false} activeDot={{ r: 3.5, strokeWidth: 2, stroke: CHART.surface }} name={item.label} />)}
+          : <Line key={key} yAxisId={item.axis === 'secondary' ? 'right' : 'left'} dataKey={key} type="linear" stroke={item.color} strokeWidth={1.6} connectNulls isAnimationActive={false} dot={false} activeDot={{ r: 3.5, strokeWidth: 2, stroke: CHART.surface }} name={item.label} />)}
         {projection.keys.filter(entry => entry.single).map(({ key, series: item, single }) => <ReferenceDot key={`${key}-dot`} yAxisId={item.axis === 'secondary' ? 'right' : 'left'} x={single!.time} y={single!.value as number} r={3} fill={item.color} stroke="none" />)}
         {highlight && inRange(highlight.time) && <ReferenceDot yAxisId="left" x={highlight.time} y={highlight.value} r={4} fill={highlight.color ?? CHART.negative} stroke={CHART.surface} strokeWidth={2} label={{ value: highlight.label, position: 'insideBottomRight', fill: CHART.text, fontSize: 10 }} />}
       </ComposedChart>
@@ -78,9 +78,11 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
 export type BarSpec = { id: string; label: string; color: string; signColors?: boolean };
 
 /** Hoverable category bars (days, bins) with an optional line on its own axis. Missing values stay empty. */
-export function BarsChart({ rows, bars, line, height = 160, format = formatSigned, signed = true, unit, ariaLabel, stacked = false, emptyText = 'No values to plot.' }: {
+export function BarsChart({ rows, bars, line, height = 160, format = formatSigned, signed = true, integer = false, unit, ariaLabel, emptyText = 'No values to plot.' }: {
   rows: ({ label: string } & Record<string, number | string | null>)[]; bars: BarSpec[]; line?: { id: string; label: string; color: string } | null;
-  height?: number; format?: (value: number) => string; unit?: string; ariaLabel: string; stacked?: boolean; emptyText?: ReactNode;
+  height?: number; format?: (value: number) => string; unit?: string; ariaLabel: string; emptyText?: ReactNode;
+  /** Counts: whole-number axis ticks only. */
+  integer?: boolean;
   /** Signed values color gains and losses in the tooltip; counts are not signed. */
   signed?: boolean;
 }) {
@@ -91,7 +93,7 @@ export function BarsChart({ rows, bars, line, height = 160, format = formatSigne
       <ComposedChart data={rows} margin={{ top: 6, right: 4, bottom: 0, left: 0 }} barGap={2} barCategoryGap="22%">
         <CartesianGrid stroke={CHART.grid} strokeDasharray="3 5" vertical={false} />
         <XAxis dataKey="label" tick={{ fill: CHART.muted, fontSize: 10 }} stroke={CHART.grid} tickLine={false} minTickGap={16} />
-        <YAxis yAxisId="left" orientation="right" domain={[(low: number) => Math.min(0, low), (high: number) => Math.max(0, high)]} tickFormatter={value => format(value)} tick={{ fill: CHART.muted, fontSize: 10 }} stroke="transparent" width={56} />
+        <YAxis yAxisId="left" orientation="right" domain={[(low: number) => Math.min(0, low), (high: number) => Math.max(0, high)]} tickFormatter={value => format(value)} tick={{ fill: CHART.muted, fontSize: 10 }} stroke="transparent" width={56} allowDecimals={!integer} />
         {line && <YAxis yAxisId="line" hide />}
         <ReferenceLine yAxisId="left" y={0} stroke={CHART.grid} />
         <Tooltip isAnimationActive={false} cursor={{ fill: 'color-mix(in srgb, var(--q-blue, #259aff) 10%, transparent)' }} wrapperStyle={{ outline: 'none', zIndex: 5 }}
@@ -105,7 +107,7 @@ export function BarsChart({ rows, bars, line, height = 160, format = formatSigne
               return [{ key: spec.id, label: spec.label, color: spec.signColors ? (value >= 0 ? CHART.positive : CHART.negative) : spec.color, value: `${format(value)}${unit ? ` ${unit}` : ''}`, tone: toneClass(value, signed) }];
             })} />;
           }} />
-        {bars.map(bar => <Bar key={bar.id} yAxisId="left" dataKey={bar.id} name={bar.label} fill={bar.color} radius={[2, 2, 2, 2]} maxBarSize={28} stackId={stacked ? 'stack' : undefined} isAnimationActive={false}>
+        {bars.map(bar => <Bar key={bar.id} yAxisId="left" dataKey={bar.id} name={bar.label} fill={bar.color} radius={[2, 2, 2, 2]} maxBarSize={28} isAnimationActive={false}>
           {bar.signColors && rows.map((row, index) => <Cell key={index} fill={typeof row[bar.id] === 'number' && (row[bar.id] as number) < 0 ? CHART.negative : CHART.positive} />)}
         </Bar>)}
         {line && <Line yAxisId="line" dataKey={line.id} name={line.label} stroke={line.color} strokeWidth={1.6} dot={false} activeDot={{ r: 3 }} connectNulls={false} isAnimationActive={false} />}

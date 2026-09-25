@@ -163,7 +163,9 @@ export function NativeFleet() {
   const holding = pairs.filter(row => row.state.toUpperCase().includes('HOLD')).length;
   const single = fleet.length === 1 ? fleet[0] : null;
   const singleOwned = single?.quant ? single.quant.ownedValue.value ?? single.quant.ownedValue.lastKnown : null;
+  const singleOwnedStale = single?.quant != null && single.quant.ownedValue.value == null && single.quant.ownedValue.lastKnown != null;
   const singleNet = single?.quant ? single.quant.netLifecycle.value ?? single.quant.netLifecycle.lastKnown : null;
+  const singleNetStale = single?.quant != null && single.quant.netLifecycle.value == null && single.quant.netLifecycle.lastKnown != null;
   const perBot = 'Per-bot values are never summed across owners on a shared wallet; see each card.';
   return <div className="nf-page" data-quant-ops="fleet">
     <header className="q-page-head">
@@ -182,7 +184,7 @@ export function NativeFleet() {
       <MetricCard panelId="F03" title="Services healthy" value={healthRead ? `${services.healthy} / ${services.total}` : 'Unavailable'} tone={healthRead && services.healthy < services.total ? 'negative' : undefined} state={healthRead ? services.healthy === services.total ? { kind: 'fresh' } : { kind: 'incomplete', reason: 'At least one stack service is not healthy.' } : { kind: 'collecting', reason: 'Reading stack services' }} note={`${heartbeats} / ${fleet.length} heartbeat${fleet.length === 1 ? '' : 's'} healthy`} />
       <MetricCard panelId="F04" title="Fresh observations" value={`${fresh} / ${fleet.length}`} state={fresh === fleet.length ? { kind: 'fresh' } : { kind: 'stale', reason: 'At least one owner observation is not current.' }} note="Owner summary current and heartbeat healthy" />
       <MetricCard panelId="F05" title="Pairs holding" value={`${holding} / ${pairs.length}`} state={fleet.every(row => row.quant) ? { kind: 'fresh' } : { kind: 'collecting', reason: 'Reading owner summaries' }} note="Pairs with a held bag / registered pairs" />
-      <MetricCard panelId="F06" title={single ? 'Owned value' : 'Owned value (per bot)'} value={singleOwned == null ? 'Unavailable' : formatDecimal(singleOwned)} unit={single?.quant?.ownedValue.unit ?? undefined} state={single ? singleOwned == null ? { kind: 'unavailable', reason: 'The owner has not published an owned value.' } : { kind: 'fresh' } : { kind: 'incomplete', reason: perBot }} note={single ? `Net lifecycle ${singleNet == null ? '—' : formatSigned(singleNet)} ${single.quant?.netLifecycle.unit ?? ''}` : perBot} />
+      <MetricCard panelId="F06" title={single ? 'Owned value' : 'Owned value (per bot)'} value={singleOwned == null ? 'Unavailable' : formatDecimal(singleOwned)} unit={single?.quant?.ownedValue.unit ?? undefined} state={single ? singleOwned == null ? { kind: 'unavailable', reason: 'The owner has not published an owned value.' } : singleOwnedStale ? { kind: 'stale', observedAt: single.quant?.observedAt ?? null, reason: 'Owner last published owned value; the current observation is not fresh.' } : { kind: 'fresh' } : { kind: 'incomplete', reason: perBot }} note={single ? `Net lifecycle ${singleNet == null ? '—' : formatSigned(singleNet)} ${single.quant?.netLifecycle.unit ?? ''}${singleNetStale ? ' · last published' : ''}` : perBot} />
     </TileGrid>}
     <div className="nf-grid">
       {fleet.map(reads => <FleetCard key={`${reads.source.server}:${reads.source.bot}`} reads={reads} now={now} />)}

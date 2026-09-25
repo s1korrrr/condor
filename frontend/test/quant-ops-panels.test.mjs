@@ -88,7 +88,7 @@ test('Capital rows draw wallet history, bot overlay, drawdown, rails, cycles and
     stats:statStrip({model,accountAllowed:true,risk:null,walletChange:{amount:8,percent:0.08},botPnl:{daily:1.5,weekly:null,monthly:null,quote:'USDC'},cycles:{scored:0,wins:0,losses:0,winRate:null,profitFactor:null,profitFactorReason:'NO_SCORED_CYCLE',fees:'0.21',grossVolume:'264'},meanWallet:107,rangeLabel:'7D',unit:'USDT'}),
     wallet:{points:history,currency:'USDT',state:{kind:'fresh'},coverageStart:Date.now()/1000-3600},
     drawdown:{series,worst:maxDrawdownPoint(series),state:{kind:'incomplete',reason:'observed'}},
-    botSeries:{points:history.map((point,index)=>({time:Date.parse(point.observed_at),realized:index,unrealized:index,total:index*2,owner:0})),quote:'USDC',state:{kind:'fresh'},restarts:[]},
+    botSeries:{points:history.map((point,index)=>({time:Date.parse(point.observed_at),realized:index,unrealized:index,total:index*2,owner:0})),line:history.map((point,index)=>({time:Date.parse(point.observed_at),value:index*2})),quote:'USDC',state:{kind:'fresh'},restarts:[]},
     dailyBars:[{day:'2026-09-23',realized:1,unrealized:-0.5,cumulative:0.5},{day:'2026-09-24',realized:0.2,unrealized:0.1,cumulative:0.8}],
     risk:{days:5,volatilityDaily:0.012,sharpe:null,sortino:null,maxDrawdown:-0.1,var95:null,expectedShortfall95:null,returns:[0.1,-0.1,0.2,-0.1]},
     rails:{availability:'available',rails:[{name:'max_daily_loss_quote',scope:'bot',limit:'50',used:'2.3',remaining:'47.7',utilization:0.046,unit:'USDC',state:'ok',observedAt:at,source:'runtime_status.daily_entry_risk'}],tightest:{name:'max_daily_loss_quote',scope:'bot',limit:'50',used:'2.3',remaining:'47.7',utilization:0.046,unit:'USDC',state:'ok',observedAt:at,source:'runtime_status.daily_entry_risk'}},

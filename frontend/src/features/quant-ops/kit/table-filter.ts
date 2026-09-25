@@ -1,4 +1,4 @@
-/** Numeric filter expression: `>5`, `<=0`, `=12`, `1..3`, or a plain number (equality by display). */
+/** Number-column filter: `>5`, `<=0`, `=12` or `1..3` compare numerically; any other text (including a bare number) matches as contains. */
 export function numericFilterMatch(raw: unknown, expression: string): boolean {
   const text = expression.trim();
   if (!text) return true;
@@ -12,4 +12,10 @@ export function numericFilterMatch(raw: unknown, expression: string): boolean {
     return compare[1] === '>' ? value > limit : compare[1] === '<' ? value < limit : compare[1] === '>=' ? value >= limit : compare[1] === '<=' ? value <= limit : value === limit;
   }
   return String(raw ?? '').toLowerCase().includes(text.toLowerCase());
+}
+
+/** Table search: case-insensitive contains over each row's raw values and displayed text. */
+export function searchMatch(haystack: (string | number | null | undefined)[], query: string): boolean {
+  const needle = query.trim().toLowerCase();
+  return !needle || haystack.some(value => value != null && String(value).toLowerCase().includes(needle));
 }

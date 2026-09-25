@@ -29,6 +29,8 @@ def test_project_wallet_requires_declared_scope_and_currency():
         runtime(scope="strategy"),
         runtime(value="NaN"),
         runtime(value="-1"),
+        runtime(value="0"),
+        runtime(value="0.0"),
         runtime(observed="2026-09-24T11:55:51"),
         {"runtime_status": []},
         None,
@@ -125,3 +127,18 @@ def test_wallet_route_is_server_scoped(monkeypatch, tmp_path):
     assert client.get(url.replace("ALL", "BAD")).status_code == 422
     cm.has_server_access = lambda *_: False
     assert client.get(url).status_code == 403
+
+
+def test_read_wallet_skips_stored_zero_valuations(tmp_path):
+    """An engine that restarts before its connector loads balances publishes 0.0 for every asset.
+    Older rows recorded before the admission guard stay in the store but never plot as equity."""
+    store = PerformanceHistory(tmp_path / "history.db")
+    sample = lambda t, value: {"timestamp": t, "currency": "USDT", "value_quote": value, "source_id": "s", "balances": [{"asset": "USDC", "total": value, "available": value, "value": value}]}
+    store.record_wallet("v2", {"bot": sample(1000, "21000.5")}, 1000)
+    store.record_wallet("v2", {"bot": sample(1060, "0.0")}, 1060)
+    store.record_wallet("v2", {"bot": sample(1120, "21001.5")}, 1120)
+    result = store.read_wallet("v2", "bot", "1D", 1120)
+    assert [row["value_quote"] for row in result["points"]] == ["21000.5", "21001.5"]
+    assert result["latest"]["value_quote"] == "21001.5"
+    store.record_wallet("v2", {"bot": sample(1180, "0.0")}, 1180)
+    assert store.read_wallet("v2", "bot", "1D", 1180)["latest"]["value_quote"] == "21001.5", "a zero row never becomes the last-known wallet"

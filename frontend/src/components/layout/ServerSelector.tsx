@@ -1,9 +1,10 @@
 import { useLocation, useNavigate } from "react-router-dom";
 import { ChevronDown, Circle, Server } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { useServer } from "@/hooks/useServer";
 import { type ServerInfo } from "@/lib/api";
+import { replacementServer } from "@/lib/server-selection";
 import { useServers } from '@/hooks/useServers';
 
 export function ServerSelector() {
@@ -20,19 +21,11 @@ export function ServerSelector() {
   const offlineServers = servers?.filter((s) => !s.online) ?? [];
   const totalCount = servers?.length ?? 0;
 
-  // Memoize online server names so the useEffect dep is stable between refetches
-  const onlineServerNames = useMemo(
-    () => onlineServers.map((s) => s.name),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [JSON.stringify(onlineServers.map((s) => s.name))],
-  );
-
-  // Auto-select first online server only when no server is saved yet
+  // Auto-select the first online server when none is saved, or when the saved one was retired.
   useEffect(() => {
-    if (!server && onlineServerNames.length > 0) {
-      setServer(onlineServerNames[0]);
-    }
-  }, [server, onlineServerNames, setServer]);
+    const next = replacementServer(server, servers);
+    if (next) setServer(next);
+  }, [server, servers, setServer]);
 
   // Close on outside click or Escape
   useEffect(() => {

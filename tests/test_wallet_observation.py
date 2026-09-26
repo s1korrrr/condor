@@ -10,7 +10,7 @@ def runtime(bot="rsi_modular_v2", *, value="20691.94", currency="USDT", scope="a
             "bot_name": bot,
             "updated_at": observed,
             "source_runtime_status_id": "4314413ab84fc58a",
-            "balances": [{"asset": "USDC", "total_balance": 1997.82, "value_quote": 1997.82}],
+            "balances": [{"asset": "USDC", "total_balance": 1997.82, "value_quote": value}],
             "summary": {"balance_value_quote": value, "balance_value_scope": scope, "balance_value_currency": currency},
         }
     }
@@ -142,3 +142,27 @@ def test_read_wallet_skips_stored_zero_valuations(tmp_path):
     assert result["latest"]["value_quote"] == "21001.5"
     store.record_wallet("v2", {"bot": sample(1180, "0.0")}, 1180)
     assert store.read_wallet("v2", "bot", "1D", 1180)["latest"]["value_quote"] == "21001.5", "a zero row never becomes the last-known wallet"
+
+
+def test_wallet_observer_rejects_incomplete_balances_and_marks_legacy_history(tmp_path):
+    payload = runtime(value='100')
+    payload['runtime_status']['balances'] = [
+        {'asset': 'USDT', 'total_balance': '100', 'value_quote': '100'},
+        {'asset': 'BTC', 'total_balance': '1', 'value_quote': None},
+    ]
+    with pytest.raises(ValueError, match='complete'):
+        project_wallet(payload, 'rsi_modular_v2')
+    store = PerformanceHistory(tmp_path / 'legacy.db')
+    store.record_wallet('v2', {'bot': {
+        'timestamp': 1000, 'currency': 'USDT', 'value_quote': '100',
+        'balances': [{'asset': 'BTC', 'total': '1', 'available': '1', 'value': 'None'}],
+    }}, 1000)
+    assert store.read_wallet('v2', 'bot', '1D', 1000)['points'][0]['valuation_complete'] is False
+
+
+@pytest.mark.parametrize('mark', ['0', '99'])
+def test_wallet_observer_rejects_zero_marks_and_inconsistent_summary(mark):
+    payload = runtime(value='100')
+    payload['runtime_status']['balances'] = [{'asset': 'BTC', 'total_balance': '1', 'value_quote': mark}]
+    with pytest.raises(ValueError, match='complete'):
+        project_wallet(payload, 'rsi_modular_v2')

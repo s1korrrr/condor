@@ -1,3 +1,7 @@
+import time
+from concurrent.futures import ThreadPoolExecutor
+from threading import Barrier
+
 import pytest
 from condor.performance_history import PerformanceHistory, project
 
@@ -77,6 +81,40 @@ def test_read_does_not_create_storage(tmp_path):
     store = PerformanceHistory(tmp_path / "missing.db")
     assert store.read("server", "main", "ALL")["coverage_start"] is None
     assert not store.path.exists()
+
+
+def test_concurrent_first_use_and_wallet_reads_do_not_lose_samples(tmp_path):
+    store = PerformanceHistory(tmp_path / "concurrent-history.db")
+    workers = 24
+    samples_per_worker = 4
+    start = Barrier(workers)
+    base = int(time.time())
+
+    def record(worker):
+        name = f"bot-{worker}"
+        start.wait()
+        for index in range(samples_per_worker):
+            stamp = base + worker * 40000 + index * 3600
+            bot = packet(stamp)
+            bot["bot_name"] = name
+            store.record("server", [bot], now=stamp)
+            store.record_wallet(
+                "server",
+                {name: {"timestamp": stamp, "currency": "USDC", "value_quote": str(index + 1),
+                        "source_id": name, "balances": [{"asset": "USDC", "total": str(index + 1), "value": str(index + 1)}]}},
+                now=stamp,
+            )
+            assert store.read_wallet("server", name, "ALL", now=stamp + 1)["latest"] is not None
+        return name
+
+    with ThreadPoolExecutor(max_workers=workers) as pool:
+        names = list(pool.map(record, range(workers)))
+
+    assert len(names) == workers
+    for name in names:
+        history = store.read_wallet("server", name, "ALL", now=base + workers * 40000 + 1)
+        assert len(history["points"]) == samples_per_worker
+        assert history["latest"]["value_quote"] == str(samples_per_worker)
 
 
 @pytest.mark.asyncio

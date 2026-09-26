@@ -11,6 +11,8 @@ const {CAPITAL_PANELS,BOT_PANELS,SHELL_PANELS,ORIGINAL_CAPITAL_PANELS,ORIGINAL_B
 const {statStrip,drawdownSeries,maxDrawdownPoint}=load(new URL('../../../dashboard/condor-workspace/src/features/overview/capital-stats.ts', import.meta.url).pathname);
 const {CapitalPage}=load(new URL('../../../dashboard/condor-workspace/src/features/overview/CapitalPage.tsx', import.meta.url).pathname);
 const {RosterObservation}=load('components/bots/BotsRoster.tsx');
+const {DataTable}=load('features/quant-ops/kit/DataTable.tsx');
+const {projectBotPnlHistory}=load(new URL('../../../dashboard/condor-workspace/src/features/overview/useBotPnlHistory.ts', import.meta.url).pathname);
 
 test('capital dashboard overlay keeps incomplete flows as unavailable PnL',()=>{
   const model=projectCapitalModel({
@@ -105,7 +107,8 @@ test('Capital rows draw wallet history, bot overlay, drawdown, rails, cycles and
   assert.match(html,/Benchmark off/);
   assert.match(html,/4\.6% of 50/);
   assert.match(html,/84105\.6/);
-  assert.match(html,/Outside V2 \(wallet remainder\)/);
+  assert.doesNotMatch(html,/Outside V2 \(wallet remainder\)/,'USDC strategy value is not subtracted from the USDT wallet');
+  assert.match(html,/not comparable with the USDT wallet/);
   assert.match(html,/21\.8h|oldest open lot/);
   assert.doesNotMatch(html,/>N\/A</);
 });
@@ -151,6 +154,107 @@ test('native wallet observation preserves tiny inventory and shared-wallet total
   assert.ok(Number(model.equity.value)>9000);
   assert.equal(model.availableQuote.value,'2942.85');
   assert.equal(model.periodPnl.value,null);
+});
+
+test('available cash is unavailable when no USDC balance exists, regardless of a fresh USDT wallet',()=>{
+  const current=nativeWalletFromRuntime({observedAt:new Date().toISOString(),quoteCurrency:'USDT',balances:[{asset:'BTC',total_balance:'0.1',available_balance:'0.1',value_quote:'6000'}]});
+  const model=projectCapitalModel({current,history:[],now:Date.now(),unit:'USDT'});
+  const html=renderToStaticMarkup(React.createElement(CapitalPage,{model,range:'1D',onRange:()=>{},bot:null,bots:[],onBot:()=>{},botPnl:{total:null,realized:null,unrealized:null,quote:null},accountAllowed:true,notice:[],footer:'native',onHighlight:()=>{},highlight:null,search:'',onSearch:()=>{},holdingsTable:null}));
+  assert.match(html,/data-panel-id="C04" data-state="unavailable"/);
+  assert.match(html,/Available cash[\s\S]*?Unavailable<small>USDC<\/small>/);
+});
+
+test('same-unit strategy allocation is withheld when owned marked value exceeds wallet value',()=>{
+  const model=projectCapitalModel({current:null,history:[],now:Date.now(),unit:'USDT'});
+  const html=renderToStaticMarkup(React.createElement(CapitalPage,{model,range:'1D',onRange:()=>{},bot:'rsi_modular_v2',bots:['rsi_modular_v2'],onBot:()=>{},botPnl:{total:null,realized:null,unrealized:null,quote:'USDC'},accountAllowed:true,notice:[],footer:'native',onHighlight:()=>{},highlight:null,search:'',onSearch:()=>{},holdingsTable:null,strategyAllocation:{owned:120,wallet:100,ownedUnit:'USDT',unit:'USDT'}}));
+  assert.match(html,/data-panel-id="C21" data-state="incomplete"/);
+  assert.doesNotMatch(html,/Outside V2 \(wallet remainder\)/);
+  assert.match(html,/V2-owned value exceeds the same-unit shared-wallet valuation/);
+  const differentQuote=renderToStaticMarkup(React.createElement(CapitalPage,{model,range:'1D',onRange:()=>{},bot:'rsi_modular_v2',bots:['rsi_modular_v2'],onBot:()=>{},botPnl:{total:null,realized:null,unrealized:null,quote:'USDC'},accountAllowed:true,notice:[],footer:'native',onHighlight:()=>{},highlight:null,search:'',onSearch:()=>{},holdingsTable:null,strategyAllocation:{owned:120,wallet:100,ownedUnit:'USDC',unit:'USDT'}}));
+  assert.match(differentQuote,/data-panel-id="C21" data-state="incomplete"/);
+  assert.doesNotMatch(differentQuote,/exceeds the same-unit shared-wallet/,'different quote assets are incomparable, not over-allocated');
+  for(const owned of [-1,NaN]) {
+    const invalid=renderToStaticMarkup(React.createElement(CapitalPage,{model,range:'1D',onRange:()=>{},bot:'rsi_modular_v2',bots:['rsi_modular_v2'],onBot:()=>{},botPnl:{total:null,realized:null,unrealized:null,quote:'USDC'},accountAllowed:true,notice:[],footer:'native',onHighlight:()=>{},highlight:null,search:'',onSearch:()=>{},holdingsTable:null,strategyAllocation:{owned,wallet:100,ownedUnit:'USDT',unit:'USDT'}}));
+    assert.match(invalid,/The owner published an invalid or negative marked value/);
+    assert.doesNotMatch(invalid,/data-panel-id="C26"[^>]*>[^]*?<strong[^>]*>-[^<]*<small>USDT/);
+  }
+});
+
+test('Capital holdings use the seven-column table adapter and render header and row values',()=>{
+  const rows=[{token:'BTC',total:'0.12',available:'0.12',price:'100000',value:'12000'}];
+  const columns=[
+    {id:'asset',header:'Asset',rowHeader:true,value:row=>row.token,cell:row=>React.createElement('button',null,row.token)},
+    {id:'total',header:'Total',kind:'number',value:row=>row.total,cell:row=>row.total},
+    {id:'available',header:'Available',kind:'number',value:row=>row.available,cell:row=>row.available},
+    {id:'mark',header:'Mark',kind:'number',value:row=>row.price,cell:row=>row.price},
+    {id:'value',header:'Value',kind:'number',value:row=>row.value,cell:row=>row.value},
+    {id:'unrealized',header:'V2 unrealized',kind:'number',value:()=>null,cell:()=>React.createElement('span',{className:'q-muted'},'not V2-owned')},
+    {id:'chart',header:'Chart',value:()=>null,cell:()=>React.createElement('span',{className:'q-muted'},'—')},
+  ];
+  const html=renderToStaticMarkup(React.createElement(DataTable,{label:'Account holdings',rows,columns,rowId:row=>row.token,initialSort:{id:'value',desc:true},pageSize:10}));
+  for(const header of ['Asset','Total','Available','Mark','Value','V2 unrealized','Chart']) assert.match(html,new RegExp(`>${header}<`));
+  for(const cell of ['BTC','0.12','100000','12000','not V2-owned']) assert.match(html,new RegExp(cell));
+  assert.equal((html.match(/<td /g)||[]).length,6);
+  assert.equal((html.match(/<th scope="col"/g)||[]).length,7);
+});
+
+test('bot PnL qualification rejects stale and partial range history while preserving the quote',()=>{
+  const now=Date.parse('2026-09-26T15:00:00Z');
+  const start=Date.parse('2026-09-20T00:00:00Z');
+  const end=Date.parse('2026-09-25T12:32:00Z');
+  const points=Array.from({length:3044},(_,index)=>{
+    const timestamp=Math.floor((start+index*(end-start)/3043)/1000);
+    return {timestamp,total_pnl_quote:String(index/10),realized_pnl_quote:String(index/20),unrealized_pnl_quote:String(index/20),quote:'USDC',identity:'bot-v2',segment:'owner-1'};
+  });
+  const payload={source:'native_mqtt_observer',bot_name:'rsi_modular_v2',range:'1W',coverage_start:points[0].timestamp,points,truncated:false};
+  const stale=projectBotPnlHistory(payload,'rsi_modular_v2','1W',now);
+  assert.equal(stale.state.kind,'stale','a 27-hour-old observation cannot be labeled fresh');
+  assert.equal(stale.change,null,'stale performance cannot produce weekly PnL');
+  assert.equal(stale.quote,'USDC','native bot quote stays separate from wallet USDT');
+  const partialPoints=Array.from({length:5*24+1},(_,index)=>{
+    const timestamp=Math.floor((now-5*86_400_000+index*5*86_400_000/(5*24))/1000);
+    return {timestamp,total_pnl_quote:String(index),realized_pnl_quote:String(index/2),unrealized_pnl_quote:String(index/2),quote:'USDC',identity:'bot-v2',segment:'owner-1'};
+  });
+  const partial=projectBotPnlHistory({...payload,points:partialPoints},'rsi_modular_v2','1W',now);
+  assert.equal(partial.state.kind,'incomplete','five days cannot qualify as a full seven-day window');
+  assert.equal(partial.change,null);
+});
+
+test('a fresh, fully covered selected bot window still withholds its delta across a restart gap',()=>{
+  const now=Date.parse('2026-09-26T15:00:00Z');
+  const start=Math.floor((now-7*86_400_000)/1000);
+  const finish=Math.floor(now/1000);
+  const points=[
+    {timestamp:start,total_pnl_quote:'1',realized_pnl_quote:'0.5',unrealized_pnl_quote:'0.5',quote:'USDC',identity:'bot-v2',segment:'old'},
+    {timestamp:Math.floor((start+finish)/2),total_pnl_quote:'2',realized_pnl_quote:'1',unrealized_pnl_quote:'1',quote:'USDC',identity:'bot-v2',segment:'new'},
+    {timestamp:finish,total_pnl_quote:'3',realized_pnl_quote:'1.5',unrealized_pnl_quote:'1.5',quote:'USDC',identity:'bot-v2',segment:'new'},
+  ];
+  const result=projectBotPnlHistory({source:'native_mqtt_observer',bot_name:'rsi_modular_v2',range:'1W',coverage_start:start,points,truncated:false},'rsi_modular_v2','1W',now);
+  assert.equal(result.state.kind,'incomplete','a restart gap inside the selected window makes its history incomplete');
+  assert.equal(result.change,null,'a segment transition inside the selected window blocks a synthetic partial delta');
+  assert.ok(result.line.some(point=>point.value===null),'the chart retains an explicit break at the segment boundary');
+});
+
+test('broad saved history cannot qualify a long selected range using only its recent tail',()=>{
+  const now=Date.parse('2026-09-26T15:00:00Z');
+  const old=Date.parse('2025-09-01T00:00:00Z');
+  const points=[
+    {timestamp:Math.floor(old/1000),total_pnl_quote:'1',realized_pnl_quote:'0.5',unrealized_pnl_quote:'0.5',quote:'USDC',identity:'bot-v2',segment:'owner'},
+    ...Array.from({length:5*24+1},(_,index)=>{const timestamp=Math.floor((now-5*86_400_000+index*5*86_400_000/(5*24))/1000);return {timestamp,total_pnl_quote:String(index+2),realized_pnl_quote:String(index+1),unrealized_pnl_quote:'1',quote:'USDC',identity:'bot-v2',segment:'owner'};}),
+  ];
+  const result=projectBotPnlHistory({source:'native_mqtt_observer',bot_name:'rsi_modular_v2',range:'ALL',coverage_start:points[0].timestamp,points,truncated:false},'rsi_modular_v2','ALL',now,false,{start:new Date(now-90*86_400_000).toISOString(),end:new Date(now).toISOString()});
+  assert.equal(result.state.kind,'incomplete','the selected 90-day interval has only five days of samples');
+  assert.equal(result.change,null);
+  assert.equal(result.points.length,5*24,'the half-open window excludes its exact end-boundary sample');
+  assert.ok(result.points[0].time >= now-6*86_400_000);
+});
+
+test('old selected-window points cannot masquerade as the latest bot snapshot',()=>{
+  const model=projectCapitalModel({current:null,history:[],now:Date.now(),unit:'USDT'});
+  const old={time:Date.now()-27*60*60*1000,realized:2,unrealized:1,total:3,owner:0};
+  const html=renderToStaticMarkup(React.createElement(CapitalPage,{model,range:'CUSTOM',onRange:()=>{},bot:'rsi_modular_v2',bots:['rsi_modular_v2'],onBot:()=>{},botPnl:{total:null,realized:null,unrealized:null,quote:'USDC'},accountAllowed:true,notice:[],footer:'native',onHighlight:()=>{},highlight:null,search:'',onSearch:()=>{},holdingsTable:null,botSeries:{points:[old],latestPoint:old,line:[{time:old.time,value:3}],quote:'USDC',state:{kind:'stale'},restarts:[]}}));
+  assert.match(html,/data-panel-id="C25" data-state="unavailable"/);
+  assert.doesNotMatch(html,/last saved/);
 });
 
 test('Capital KPIs use observed wallet even when account credential reads are off',()=>{

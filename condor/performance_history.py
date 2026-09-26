@@ -11,6 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from condor.fetchers.bots import extract_bots_list, _native_observation_times
+from condor.wallet_observation import complete_wallet_balances
 
 RANGES = {"1D": 86400, "1W": 604800, "1M": 2592000, "ALL": 31536000}
 # Wallet reads keep one sample per bucket so a month stays under the row cap without losing day ends.
@@ -110,29 +111,37 @@ class PerformanceHistory:
     @contextmanager
     def _connect(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        conn = sqlite3.connect(self.path, timeout=5)
+        # The API's background writer and concurrent dashboard reads share
+        # this file. Reserve the write transaction before schema inspection so
+        # concurrent first use cannot both observe a missing migration column.
+        conn = sqlite3.connect(self.path, timeout=15)
         conn.row_factory = sqlite3.Row
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS points (server TEXT, bot TEXT, timestamp REAL, identity TEXT, segment TEXT, quote TEXT, realized_pnl_quote TEXT, unrealized_pnl_quote TEXT, total_pnl_quote TEXT, PRIMARY KEY(server,bot,timestamp))"
-        )
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS cursors (server TEXT, bot TEXT, timestamp REAL, identity TEXT, segment TEXT, sampled REAL, valid INTEGER, PRIMARY KEY(server,bot))"
-        )
-        conn.execute("CREATE INDEX IF NOT EXISTS points_timestamp ON points(timestamp)")
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS wallet_points (server TEXT, bot TEXT, timestamp REAL, currency TEXT, value_quote TEXT, source_id TEXT, PRIMARY KEY(server,bot,timestamp))"
-        )
-        conn.execute(
-            "CREATE TABLE IF NOT EXISTS wallet_cursors (server TEXT, bot TEXT, timestamp REAL, sampled REAL, valid INTEGER, PRIMARY KEY(server,bot))"
-        )
-        conn.execute("CREATE INDEX IF NOT EXISTS wallet_points_timestamp ON wallet_points(timestamp)")
-        # Additive column: the balances behind each sample, so holdings survive a stopped owner.
-        columns = {row[1] for row in conn.execute("PRAGMA table_info(wallet_points)")}
-        if "balances_json" not in columns:
-            conn.execute("ALTER TABLE wallet_points ADD COLUMN balances_json TEXT")
         try:
-            with conn:
-                yield conn
+            conn.execute("BEGIN IMMEDIATE")
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS points (server TEXT, bot TEXT, timestamp REAL, identity TEXT, segment TEXT, quote TEXT, realized_pnl_quote TEXT, unrealized_pnl_quote TEXT, total_pnl_quote TEXT, PRIMARY KEY(server,bot,timestamp))"
+            )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS cursors (server TEXT, bot TEXT, timestamp REAL, identity TEXT, segment TEXT, sampled REAL, valid INTEGER, PRIMARY KEY(server,bot))"
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS points_timestamp ON points(timestamp)")
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS wallet_points (server TEXT, bot TEXT, timestamp REAL, currency TEXT, value_quote TEXT, source_id TEXT, PRIMARY KEY(server,bot,timestamp))"
+            )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS wallet_cursors (server TEXT, bot TEXT, timestamp REAL, sampled REAL, valid INTEGER, PRIMARY KEY(server,bot))"
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS wallet_points_timestamp ON wallet_points(timestamp)")
+            # Additive column: the balances behind each sample, so holdings survive a stopped owner.
+            columns = {row[1] for row in conn.execute("PRAGMA table_info(wallet_points)")}
+            if "balances_json" not in columns:
+                conn.execute("ALTER TABLE wallet_points ADD COLUMN balances_json TEXT")
+            yield conn
+            conn.commit()
+        except BaseException:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
         finally:
             conn.close()
 
@@ -195,7 +204,7 @@ class PerformanceHistory:
             # Longer windows return the last sample of each bucket so day-end statistics keep full coverage.
             bucket = WALLET_BUCKETS[period]
             rows = conn.execute(
-                "SELECT timestamp,currency,value_quote,source_id FROM wallet_points WHERE server=? AND bot=? AND timestamp>=? "
+                "SELECT timestamp,currency,value_quote,source_id,balances_json FROM wallet_points WHERE server=? AND bot=? AND timestamp>=? "
                 "AND timestamp IN (SELECT MAX(timestamp) FROM wallet_points WHERE server=? AND bot=? AND timestamp>=? AND " + ADMITTED_VALUE + " GROUP BY CAST(timestamp/? AS INTEGER)) "
                 "ORDER BY timestamp DESC LIMIT 10001",
                 (server, bot, now - RANGES[period], server, bot, now - RANGES[period], bucket),
@@ -211,13 +220,23 @@ class PerformanceHistory:
                 balances = json.loads(latest_row["balances_json"]) if latest_row["balances_json"] else []
             except ValueError:
                 balances = []
-            latest = {"timestamp": latest_row["timestamp"], "currency": latest_row["currency"],
-                      "value_quote": latest_row["value_quote"], "source_id": latest_row["source_id"],
-                      "balances": balances if isinstance(balances, list) else []}
+            if complete_wallet_balances(balances, latest_row["value_quote"]):
+                latest = {"timestamp": latest_row["timestamp"], "currency": latest_row["currency"],
+                          "value_quote": latest_row["value_quote"], "source_id": latest_row["source_id"],
+                          "balances": balances}
+        points = []
+        for row in reversed(rows[:10000]):
+            point = dict(row)
+            try:
+                balances = json.loads(point.pop("balances_json") or "null")
+            except (ValueError, TypeError):
+                balances = None
+            point["valuation_complete"] = complete_wallet_balances(balances, point["value_quote"])
+            points.append(point)
         result.update(
             coverage_start=start,
             bucket_seconds=bucket,
-            points=[dict(row) for row in reversed(rows[:10000])],
+            points=points,
             truncated=len(rows) > 10000,
             latest=latest,
         )

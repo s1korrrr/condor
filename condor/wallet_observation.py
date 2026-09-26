@@ -59,6 +59,32 @@ def _decimal(value: object) -> Decimal | None:
     return number if number.is_finite() and number >= 0 else None
 
 
+def complete_wallet_balances(balances: object, expected_value: object = None) -> bool:
+    """Require priced, finite spot holdings before admitting an equity observation."""
+    if not isinstance(balances, list) or not balances:
+        return False
+    assets = set()
+    valued_total = Decimal(0)
+    for row in balances:
+        if not isinstance(row, dict) or not isinstance(row.get("asset"), str) or not row["asset"]:
+            return False
+        if row["asset"] in assets:
+            return False
+        assets.add(row["asset"])
+        total, value = _decimal(row.get("total")), _decimal(row.get("value"))
+        available = _decimal(row.get("available"))
+        if total is None or value is None or (total > 0 and value <= 0) or (total == 0 and value != 0):
+            return False
+        if row.get("available") is not None and (available is None or available > total):
+            return False
+        valued_total += value
+    if expected_value is not None:
+        expected = _decimal(expected_value)
+        if expected is None or abs(valued_total - expected) > max(Decimal("0.000001"), expected * Decimal("0.000000001")):
+            return False
+    return True
+
+
 def project_wallet(payload: object, bot: str) -> dict:
     """Validate one reporting runtime-status body into a wallet sample. Raises ValueError when not admissible."""
     if not isinstance(payload, dict):
@@ -91,10 +117,12 @@ def project_wallet(payload: object, bot: str) -> dict:
     rows = []
     for row in balances if isinstance(balances, list) else []:
         if not isinstance(row, dict) or not isinstance(row.get("asset"), str):
-            continue
+            raise ValueError("Wallet balances are not complete")
         rows.append({"asset": row["asset"], "total": str(row.get("total_balance")),
                      "available": None if row.get("available_balance") is None else str(row.get("available_balance")),
                      "value": str(row.get("value_quote"))})
+    if not complete_wallet_balances(rows, value):
+        raise ValueError("Wallet balances are not complete")
     source_id = runtime.get("source_runtime_status_id")
     return {
         "timestamp": parsed.timestamp(),

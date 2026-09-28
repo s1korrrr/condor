@@ -990,7 +990,7 @@ export const api = {
       `/api/v1/servers/${encodeURIComponent(server)}/screener/candles?${new URLSearchParams({ bot, instrument_id: instrumentId, interval, limit: String(limit), ...(snapshotId ? {snapshot_id: snapshotId} : {}) })}`,
       { signal },
     ),
-  getScreenerHistory: (server: string, bot: string, instrumentId: string, interval: string, limit = 240, signal?: AbortSignal, end?: string) =>
+  getScreenerHistory: (server: string, bot: string, instrumentId: string, interval: string, limit = 100, signal?: AbortSignal, end?: string) =>
     apiFetch<ScreenerHistoryEnvelope>(
       `/api/v1/servers/${encodeURIComponent(server)}/screener/history?${new URLSearchParams({ bot, instrument_id: instrumentId, interval, limit: String(limit), ...(end ? {end} : {}) })}`,
       { signal },

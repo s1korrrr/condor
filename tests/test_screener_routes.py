@@ -125,3 +125,15 @@ def test_screener_gateway_bounds_response_bytes(monkeypatch):
     client, _ = make_client(monkeypatch, response=Upstream(200, b"x" * 17))
     response = client.get("/api/v1/servers/v2/screener/health?bot=alpha")
     assert response.status_code == 502
+
+@pytest.mark.parametrize('instrument', ['okx:spot:A-USDC', 'okx:spot:' + 'A' * 30 + '-USDC'])
+def test_gateway_accepts_reader_instrument_lengths(monkeypatch, instrument):
+    client, session = make_client(monkeypatch)
+    assert client.get('/api/v1/servers/v2/screener/candles', params={'bot':'alpha', 'instrument_id':instrument}).status_code == 200
+    assert session.calls
+
+
+def test_gateway_rejects_foreign_quote_watchlist(monkeypatch):
+    client, session = make_client(monkeypatch)
+    assert client.get('/api/v1/servers/v2/screener/snapshot', params={'bot':'alpha', 'watchlist_ids':'okx:spot:BTC-USDT'}).status_code == 400
+    assert not session.calls

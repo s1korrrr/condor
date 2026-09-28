@@ -18,7 +18,7 @@ TOTAL_TIMEOUT = 5.0
 JSON_MAX_BYTES = 2 * 1024 * 1024
 CANDLES_MAX_BYTES = 5 * 1024 * 1024
 _IDENTIFIER = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_-]{0,99}$")
-_INSTRUMENT = re.compile(r"^okx:spot:[A-Z0-9]{2,20}-[A-Z0-9]{2,20}$")
+_INSTRUMENT = re.compile(r"^okx:spot:[A-Z0-9]{1,30}-USDC$")
 _READ_PATHS = frozenset({"capabilities", "snapshot", "candles", "history", "health"})
 
 

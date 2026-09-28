@@ -1759,6 +1759,52 @@
     "type": "object"
   },
   "status": {
+    "$defs": {
+      "RetentionPolicyDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "aggregate_history_ms": {
+            "title": "Aggregate History Ms",
+            "type": "integer"
+          },
+          "event_retention_ms": {
+            "title": "Event Retention Ms",
+            "type": "integer"
+          },
+          "full_frame_hot_ms": {
+            "title": "Full Frame Hot Ms",
+            "type": "integer"
+          },
+          "full_snapshot_archive_ms": {
+            "title": "Full Snapshot Archive Ms",
+            "type": "integer"
+          },
+          "max_aggregate_history_rows": {
+            "title": "Max Aggregate History Rows",
+            "type": "integer"
+          },
+          "max_payload_bytes": {
+            "title": "Max Payload Bytes",
+            "type": "integer"
+          },
+          "max_retained_frames": {
+            "title": "Max Retained Frames",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "full_frame_hot_ms",
+          "full_snapshot_archive_ms",
+          "aggregate_history_ms",
+          "event_retention_ms",
+          "max_retained_frames",
+          "max_aggregate_history_rows",
+          "max_payload_bytes"
+        ],
+        "title": "RetentionPolicyDTO",
+        "type": "object"
+      }
+    },
     "additionalProperties": false,
     "properties": {
       "available_at_ms": {
@@ -1876,6 +1922,9 @@
         "title": "Reason Codes",
         "type": "array"
       },
+      "retention": {
+        "$ref": "#/$defs/RetentionPolicyDTO"
+      },
       "schema_version": {
         "const": "market-picture.v1",
         "title": "Schema Version",
@@ -1955,6 +2004,7 @@
       "status",
       "reason_codes",
       "latest_snapshot_id",
+      "retention",
       "read_at_ms"
     ],
     "title": "StatusDTO",

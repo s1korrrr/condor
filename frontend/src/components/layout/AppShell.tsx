@@ -12,6 +12,7 @@ import {
   Zap,
   ChartNoAxesCombined,
   Network,
+  ScanSearch,
 } from "lucide-react";
 import { matchPath, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 
@@ -33,6 +34,7 @@ const NAV_ITEMS = [
   { to: "/operations", icon: Activity, label: "Operations" },
   { to: "/capital", icon: ChartNoAxesCombined, label: "Capital" },
   { to: "/research", icon: Network, label: "Research" },
+  { to: "/screener", icon: ScanSearch, label: "Screener" },
   { to: "/", icon: Brain, label: "Agents" },
   { to: "/portfolio", icon: Wallet, label: "Portfolio" },
   { to: "/trade", icon: Swords, label: "Trade" },
@@ -68,7 +70,7 @@ function AppShellBody() {
   const { hasKeys, isLoading: keysLoading } = useCredentials();
   const { data: serverStatus, access, readContinuity, isLoading: capabilitiesLoading, isFetching, unavailableReason, refetch } = useServerCapabilities();
   const capabilityReason = readContinuity && pathname === '/bots' ? null : unavailableServerRoute(pathname, serverStatus);
-  const nativeRoutes=['/capital','/bots','/fleet','/trading-visuals','/operations','/research'];
+  const nativeRoutes=['/capital','/bots','/fleet','/trading-visuals','/operations','/research', ...(access.marketScreener ? ['/screener'] : [])];
   const independentRoutes=['/capital','/trading-visuals','/operations','/research'];
   const navigationItems=readContinuity ? nativeRoutes.map(to=>NAV_ITEMS.find(item=>item.to===to)!) : !access.online ? NAV_ITEMS.filter(item=>independentRoutes.includes(item.to))
     : access.native ? nativeRoutes.map(to=>NAV_ITEMS.find(item=>item.to===to)!) : NAV_ITEMS;

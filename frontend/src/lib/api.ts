@@ -6,6 +6,7 @@ import type { CapitalDashboardOverlay } from "@/features/quant-ops/capital-proje
 import type { NativeAction, NativeCommandResult } from "./native-bot-controls";
 import { nativeBotPath } from "./native-bot-controls";
 import { parseServerDiscovery } from "./server-discovery";
+import type { ScreenFilter, ScreenerCapabilities, ScreenerEnvelope, ScreenerCandlesEnvelope, ScreenerHistoryEnvelope, ScreenerInstrumentResponse, ScreenerOwnerIndex } from "@/features/screener/contracts";
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
@@ -958,6 +959,46 @@ export const api = {
   getServerStatus: (name: string) =>
     apiFetch<ServerStatus>(
       `/api/v1/servers/${encodeURIComponent(name)}/status`,
+    ),
+
+  getScreenerCapabilities: (server: string, bot: string, signal?: AbortSignal) =>
+    apiFetch<ScreenerCapabilities>(
+      `/api/v1/servers/${encodeURIComponent(server)}/screener/capabilities?bot=${encodeURIComponent(bot)}`,
+      { signal },
+    ),
+  getScreenerOwners: (server: string, signal?: AbortSignal) =>
+    apiFetch<ScreenerOwnerIndex>(`/api/v1/servers/${encodeURIComponent(server)}/screener/capabilities`, { signal }),
+  getTradingVisualsSources: (signal?: AbortSignal) =>
+    apiFetch<{ sources: Array<{ bot: string; server: string }> }>("/api/v1/trading-visuals/sources", { signal }),
+  getScreenerSnapshot: (server: string, bot: string, query: {screen: string; interval: string; limit: number; search?: string; cursor?: string; filters?: ScreenFilter; sort?: string; direction?: "asc" | "desc"; watchlistIds?: string[]}, signal?: AbortSignal) => {
+    const params = new URLSearchParams({ bot, interval: query.interval, screen: query.screen, limit: String(query.limit) });
+    if (query.cursor) params.set("cursor", query.cursor);
+    if (query.search) params.set("search", query.search);
+    if (query.filters) params.set("filters", JSON.stringify(query.filters));
+    if (query.sort && query.sort !== "server") params.set("sort", query.sort);
+    if (query.direction) params.set("direction", query.direction);
+    if (query.screen === "watchlist" && query.watchlistIds) query.watchlistIds.forEach(id => params.append("watchlist_ids", id));
+    return apiFetch<ScreenerEnvelope>(`/api/v1/servers/${encodeURIComponent(server)}/screener/snapshot?${params}`, { signal });
+  },
+  getScreenerInstrument: (server: string, bot: string, instrumentId: string, snapshotId: string, signal?: AbortSignal) =>
+    apiFetch<ScreenerInstrumentResponse>(
+      `/api/v1/servers/${encodeURIComponent(server)}/screener/instruments/${encodeURIComponent(instrumentId)}?${new URLSearchParams({ bot, snapshot_id: snapshotId })}`,
+      { signal },
+    ),
+  getScreenerCandles: (server: string, bot: string, instrumentId: string, interval: string, limit = 240, signal?: AbortSignal, snapshotId?: string) =>
+    apiFetch<ScreenerCandlesEnvelope>(
+      `/api/v1/servers/${encodeURIComponent(server)}/screener/candles?${new URLSearchParams({ bot, instrument_id: instrumentId, interval, limit: String(limit), ...(snapshotId ? {snapshot_id: snapshotId} : {}) })}`,
+      { signal },
+    ),
+  getScreenerHistory: (server: string, bot: string, instrumentId: string, interval: string, limit = 240, signal?: AbortSignal, end?: string) =>
+    apiFetch<ScreenerHistoryEnvelope>(
+      `/api/v1/servers/${encodeURIComponent(server)}/screener/history?${new URLSearchParams({ bot, instrument_id: instrumentId, interval, limit: String(limit), ...(end ? {end} : {}) })}`,
+      { signal },
+    ),
+  getScreenerHealth: (server: string, bot: string, signal?: AbortSignal) =>
+    apiFetch<Record<string, unknown>>(
+      `/api/v1/servers/${encodeURIComponent(server)}/screener/health?bot=${encodeURIComponent(bot)}`,
+      { signal },
     ),
 
   getPortfolio: (server: string, refresh = false) =>

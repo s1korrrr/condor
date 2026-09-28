@@ -435,3 +435,16 @@ def test_canonical_context_gateway_rejects_redirect_and_oversized_snapshot(monke
     monkeypatch.setattr(routes, "CONTEXT_MAX_BYTES", 16)
     oversized, _ = make_client(monkeypatch, response=Upstream(body=b"x" * 17))
     assert oversized.get("/api/v1/servers/v2/screener/context").status_code == 502
+
+
+def test_canonical_context_snapshot_read_is_immutable_and_identity_checked(monkeypatch):
+    raw = canonical_context()
+    snapshot_id = json.loads(raw)["snapshot_id"]
+    client, session = make_client(monkeypatch, response=Upstream(body=raw))
+    response = client.get(f"/api/v1/servers/v2/screener/context/{snapshot_id}")
+    assert response.status_code == 200
+    assert session.calls[0][0].endswith(f"/market-context/v1/snapshots/{snapshot_id}")
+    assert (
+        client.get(f"/api/v1/servers/v2/screener/context/{'0' * 64}").status_code == 502
+    )
+    assert client.get("/api/v1/servers/v2/screener/context/invalid").status_code == 404

@@ -1583,13 +1583,32 @@
       "HistoryCoverageDTO": {
         "additionalProperties": false,
         "properties": {
+          "aligned_instrument_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Aligned Instrument Ids",
+            "type": "array"
+          },
           "expected_instruments": {
             "title": "Expected Instruments",
             "type": "integer"
           },
+          "omitted_instrument_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Omitted Instrument Ids",
+            "type": "array"
+          },
           "omitted_instruments": {
             "title": "Omitted Instruments",
             "type": "integer"
+          },
+          "policy": {
+            "const": "newest_fresh_recorded_close.v1",
+            "title": "Policy",
+            "type": "string"
           },
           "valid_fraction": {
             "title": "Valid Fraction",
@@ -1604,7 +1623,10 @@
           "expected_instruments",
           "valid_instruments",
           "omitted_instruments",
-          "valid_fraction"
+          "valid_fraction",
+          "aligned_instrument_ids",
+          "omitted_instrument_ids",
+          "policy"
         ],
         "title": "HistoryCoverageDTO",
         "type": "object"

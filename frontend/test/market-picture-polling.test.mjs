@@ -68,6 +68,16 @@ test('option changes cancel old reads and cannot overwrite newer components',asy
   h.calls[1].resolve(bundle(2));await settle();h.calls[0].resolve(bundle(1));await settle();
   assert.equal(h.render().data.frame.sequence,2);
 });
+test('changing view options cancels replay and rejects its late response',async t=>{
+  const h=harness(t);h.render();h.calls[0].resolve(bundle());await settle();
+  const replay=h.render().replay('a'.repeat(64));
+  const oldReplay=h.calls[1];
+  h.render(['v2','7d','ETH']);
+  assert.equal(oldReplay.params[3].aborted,true);
+  h.calls[2].resolve(bundle(2));await settle();
+  oldReplay.resolve(bundle());await replay;await settle();
+  const result=h.render();assert.equal(result.frozen,false);assert.equal(result.data.frame.sequence,2);
+});
 test('unmount cancels polling and replay, leaving no document listeners',async t=>{
   const h=harness(t);const view=h.render();const replay=view.replay('a'.repeat(64));
   assert.equal(h.calls.length,2);h.unmount();assert.equal(h.listeners.size,0);

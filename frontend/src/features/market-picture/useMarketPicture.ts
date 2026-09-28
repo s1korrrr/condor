@@ -84,7 +84,12 @@ export function useMarketPicture(
     };
   }, [server, window, benchmark, fixture, refresh, frozenId]);
 
-  useEffect(() => () => replayAbort.current?.abort(), []);
+  // Replay belongs to the source and view that requested it. A late reply must
+  // not freeze a new benchmark/window using components from the previous view.
+  useEffect(
+    () => () => replayAbort.current?.abort(),
+    [server, window, benchmark, fixture],
+  );
   const replay = useCallback(
     async (snapshotId: string) => {
       if (!server || fixture) return;

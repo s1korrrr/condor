@@ -51,6 +51,7 @@ export interface ScreenerRow {
 }
 
 export interface ScreenerEnvelope {
+  market_context?: import("./market-context").MarketContext;
   schema_version: "condor-screener.v1";
   snapshot_id: string;
   server_id: string;

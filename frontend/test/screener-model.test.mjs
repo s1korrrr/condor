@@ -171,6 +171,10 @@ test("research packet declares descriptive intent and excludes personal notes", 
       generated_at: "t",
       observed_at: "t",
       counts: { matched: 1 },
+      market_context: {
+        source: { subscribed_count: 5 },
+        breadth: { denominator: 5 },
+      },
       rows: [],
     },
     { screen: "all", interval: "1m" },
@@ -180,6 +184,10 @@ test("research packet declares descriptive intent and excludes personal notes", 
   assert.equal(packet.intent, "descriptive_screen_export_only");
   assert.equal("personal_notes" in packet, false);
   assert.equal(packet.selected_instrument, null);
+  assert.deepEqual(packet.market_context, {
+    source: { subscribed_count: 5 },
+    breadth: { denominator: 5 },
+  });
 });
 
 test("research export preserves the complete query and only explicitly included annotations", () => {
@@ -315,6 +323,14 @@ test("missing timestamps and outages cannot claim current observations", async (
       60000,
     ),
     /aged out/,
+  );
+  assert.equal(
+    snapshotFreshness(
+      { completeness: "partial", observed_at: "2026-09-28T14:58:49Z" },
+      now,
+      60000,
+    ),
+    "Stale · partial coverage",
   );
 });
 

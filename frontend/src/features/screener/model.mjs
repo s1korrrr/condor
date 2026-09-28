@@ -159,8 +159,11 @@ export function snapshotFreshness(snapshot, now, intervalMs, failed = false) {
   if (age > intervalMs * 2) return "Unavailable · observation aged out";
   if (failed) return "Read failed · last snapshot retained";
   if (snapshot.completeness === "unavailable") return "Unavailable";
+  if (age > intervalMs + 10000)
+    return snapshot.completeness === "partial"
+      ? "Stale · partial coverage"
+      : "Stale";
   if (snapshot.completeness === "partial") return "Partial coverage";
-  if (age > intervalMs + 10000) return "Stale";
   return "Recorded candles";
 }
 
@@ -380,6 +383,7 @@ export function makeResearchPacket(
     generated_at: snapshot.generated_at,
     observed_at: snapshot.observed_at,
     coverage: snapshot.counts,
+    market_context: snapshot.market_context ?? null,
     selected_instrument:
       snapshot.rows.find(
         (row) => row.instrument_id === selected?.instrument_id,

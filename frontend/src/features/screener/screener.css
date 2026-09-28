@@ -1132,3 +1132,212 @@
   background: #d7a949;
   box-shadow: 0 0 0 3px #d7a94926;
 }
+
+.market-overview,
+.canonical-context {
+  min-width: 0;
+  margin: 18px 0;
+  border-block: 1px solid var(--sl);
+  padding: 16px 0;
+  color: var(--color-text);
+}
+.market-overview-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+}
+.market-overview h2,
+.canonical-context h2 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.market-overview-head p,
+.market-context-note {
+  color: var(--sm);
+  font-size: 12px;
+  line-height: 1.6;
+  margin: 6px 0 12px;
+  overflow-wrap: anywhere;
+}
+.market-context-state {
+  color: var(--sm);
+  font-size: 12px;
+  text-transform: capitalize;
+}
+.market-context-warning {
+  background: #d7a94912;
+  color: #d7a949;
+  border-left: 2px solid currentColor;
+  padding: 10px 12px;
+  font-size: 12px;
+}
+.market-table-scroll {
+  width: 100%;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+.market-table-scroll:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+.market-context-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  text-align: left;
+}
+.market-context-table caption {
+  text-align: left;
+  color: var(--sm);
+  padding: 0 0 10px;
+}
+.market-context-table th,
+.market-context-table td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--sl);
+  white-space: nowrap;
+}
+.market-context-table thead th {
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--sm);
+}
+.market-context-table tbody th {
+  font-weight: 500;
+}
+.market-context-table td small {
+  display: block;
+  color: var(--sm);
+  font-size: 10px;
+  margin-top: 3px;
+}
+.market-participation {
+  list-style: none;
+  padding: 0;
+  margin: 18px 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(145px, 1fr));
+  gap: 18px 14px;
+}
+.market-participation li {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  font-size: 11px;
+  min-width: 0;
+}
+.market-participation strong {
+  font-size: 17px;
+  font-weight: 500;
+  font-variant-numeric: tabular-nums;
+}
+.market-participation small {
+  color: var(--sm);
+  overflow-wrap: anywhere;
+}
+.market-context-details {
+  padding: 14px 0;
+  border-top: 1px solid var(--sl);
+}
+.market-context-details > summary {
+  font-size: 13px;
+  cursor: pointer;
+  font-weight: 500;
+  padding: 4px 0;
+}
+.market-context-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 20px;
+  font-size: 12px;
+  margin: 18px 0;
+}
+.market-context-controls label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.market-context-controls select {
+  background: var(--sb);
+  border: 1px solid var(--sl);
+  border-radius: 5px;
+  padding: 7px 10px;
+  color: var(--color-text);
+}
+.market-leaders {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+  font-size: 12px;
+}
+.market-leaders li {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 20px;
+}
+.market-definition {
+  max-height: 280px;
+  overflow: auto;
+  background: var(--sb);
+  padding: 12px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.market-provider-list {
+  list-style: none;
+  padding: 0;
+  display: grid;
+  gap: 12px;
+  font-size: 12px;
+}
+.market-provider-list li {
+  display: grid;
+  gap: 4px;
+}
+.market-provider-list span {
+  color: var(--sm);
+  overflow-wrap: anywhere;
+}
+.canonical-context__unit,
+.canonical-context__count {
+  color: var(--sm);
+  margin-inline-start: 0.5em;
+}
+.canonical-context__identity {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px 20px;
+}
+.canonical-context__identity dt,
+.canonical-context__provenance dt {
+  color: var(--sm);
+  margin-bottom: 4px;
+}
+.canonical-context__identity dd,
+.canonical-context__provenance dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+.canonical-context__fits pre {
+  overflow: auto;
+  max-height: 280px;
+  font-size: 11px;
+}
+@media (max-width: 600px) {
+  .market-overview-head {
+    flex-direction: column;
+    gap: 0;
+  }
+  .market-context-table th,
+  .market-context-table td {
+    padding: 10px 8px;
+  }
+  .market-participation {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}

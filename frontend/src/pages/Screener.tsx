@@ -57,6 +57,8 @@ import {
 } from "@/features/screener/model.mjs";
 import "@/features/screener/screener.css";
 import { CandleChart } from "@/features/screener/CandleChart";
+import { MarketOverview } from "@/features/screener/MarketOverview";
+import { CanonicalContext } from "@/features/screener/CanonicalContext";
 
 const INTERVALS = ["1m", "5m", "15m"];
 const ADVANCED_CAPABILITIES = [
@@ -1754,6 +1756,11 @@ export function Screener() {
               </div>
             )}
 
+            <MarketOverview
+              context={snapshot?.market_context}
+              freshness={freshness}
+            />
+            <CanonicalContext server={server} paused={isFrozen} now={ageNow} />
             <div className="screen-summary">
               <div>
                 <strong>{snapshot?.counts.matched ?? "—"}</strong>

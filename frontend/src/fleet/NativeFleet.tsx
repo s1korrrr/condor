@@ -9,13 +9,15 @@ import { useServer } from '@/hooks/useServer';
 import { useServers } from '@/hooks/useServers';
 import { displayBotName, parseTradingVisualsSources, sourcesForServer, type TradingVisualsSource } from '@/features/trading-visuals/sources';
 import { projectQuantBotSummary, type QuantBotSummary } from '@/features/bots/quant-roster';
+import { botNet } from '@/features/bots/bot-net';
+import { projectControllerPnl } from '@/features/bots/controller-pnl';
 import { pnlSeries, type PnlSeries } from '@/features/bots/pnl-series';
 import { assetColor, formatDecimal, formatSigned, metricTone } from '@/features/quant-ops/format';
 import { MetricCard, RailBar, StateGlyph } from '@/features/quant-ops/primitives';
 import { DonutChart, SparkChart } from '@/features/quant-ops/kit/charts';
 import { TileGrid } from '@/features/quant-ops/kit/grid';
 import type { PanelState } from '@/features/quant-ops/panel-state';
-import { fleetCardState, operationsHref, projectFleetHealth, serviceRollup, tradingVisualsHref, type FleetHealth } from './native-fleet';
+import { fleetCardState, fleetLifecycleStatuses, fleetLifecycleSummary, operationsHref, projectFleetHealth, serviceRollup, tradingVisualsHref, type FleetHealth } from './native-fleet';
 import '@/features/quant-ops/quant-ops.css';
 import './native-fleet.css';
 
@@ -34,14 +36,13 @@ async function readOptional(path: string, signal: AbortSignal): Promise<{ payloa
 
 const tone = (value: string | null | undefined) => (value ?? 'unknown').toLowerCase().split(/[\s:]/)[0];
 const toneClass = (value: number | string | null | undefined) => metricTone(value) ? `q-${metricTone(value)}` : undefined;
-const stamp = (iso: string | null | undefined) => iso ? `${iso.replace('T', ' ').slice(11, 19)} UTC` : '—';
 const duration = (seconds: number | null) => seconds == null || !Number.isFinite(seconds) || seconds < 0 ? null : seconds < 3600 ? `${Math.round(seconds / 60)}m` : seconds < 86400 ? `${(seconds / 3600).toFixed(1)}h` : `${(seconds / 86400).toFixed(1)}d`;
 const uptime = (iso: string | null, now: number) => iso ? duration((now - Date.parse(iso)) / 1000) : null;
 
-type FleetReads = { source: TradingVisualsSource; status: string | null; quant: QuantBotSummary | null; health: FleetHealth | null; summaryIssue: string | null; operationsIssue: string | null; summaryPending: boolean; operationsPending: boolean; day: PnlSeries; state: PanelState };
+type FleetReads = { source: TradingVisualsSource; status: string | null; controller: ReturnType<typeof projectControllerPnl>; quant: QuantBotSummary | null; health: FleetHealth | null; summaryIssue: string | null; operationsIssue: string | null; summaryPending: boolean; operationsPending: boolean; day: PnlSeries; state: PanelState };
 
 /** Every owner read the page needs, per registered bot. Query keys match Bots, so both pages share one cache. */
-function useFleetReads(sources: TradingVisualsSource[], statusFor: (bot: string) => string | null, now: number): FleetReads[] {
+function useFleetReads(sources: TradingVisualsSource[], statusFor: (bot: string) => string | null, controllerFor: (bot: string) => ReturnType<typeof projectControllerPnl>, now: number): FleetReads[] {
   const summaries = useQueries({ queries: sources.map(source => ({ queryKey: ['native-quant-summary', source.server, source.bot], queryFn: ({ signal }: { signal: AbortSignal }) => readOptional(`/api/v1/trading-visuals/quant-summary?bot=${encodeURIComponent(source.bot)}`, signal), refetchInterval: 10_000, retry: false })) });
   const operations = useQueries({ queries: sources.map(source => ({ queryKey: ['native-operations', source.server, source.bot], queryFn: ({ signal }: { signal: AbortSignal }) => readOptional(`/api/v1/trading-visuals/operations?bot=${encodeURIComponent(source.bot)}`, signal), refetchInterval: 15_000, retry: false })) });
   const days = useQueries({ queries: sources.map(source => ({ queryKey: ['native-pnl-history', source.server, source.bot, '1D'], queryFn: ({ signal }: { signal: AbortSignal }) => readOptional(`/api/v1/servers/${encodeURIComponent(source.server)}/bots/${encodeURIComponent(source.bot)}/performance-history?range=1D`, signal), refetchInterval: 30_000, retry: false })) });
@@ -51,9 +52,9 @@ function useFleetReads(sources: TradingVisualsSource[], statusFor: (bot: string)
     const health = projectFleetHealth(operation.data?.payload, source.bot, Math.max(now, operation.dataUpdatedAt));
     const summaryIssue = summary.data?.issue ?? null;
     return {
-      source, status: statusFor(source.bot), quant, health, summaryIssue, operationsIssue: operation.data?.issue ?? null,
+      source, status: statusFor(source.bot), controller: controllerFor(source.bot), quant, health, summaryIssue, operationsIssue: operation.data?.issue ?? null,
       summaryPending: summary.isPending, operationsPending: operation.isPending,
-      day: pnlSeries(day.data?.payload, source.bot, now), state: fleetCardState(quant, health, summaryIssue),
+      day: pnlSeries(day.data?.payload, source.bot, now, '1D'), state: fleetCardState(quant, health, summaryIssue),
     };
   });
 }
@@ -61,9 +62,10 @@ function useFleetReads(sources: TradingVisualsSource[], statusFor: (bot: string)
 function FleetCard({ reads, now }: { reads: FleetReads; now: number }) {
   const { source, quant, health, status, state, day } = reads;
   const rollup = serviceRollup(health);
-  const net = quant?.netLifecycle.value ?? quant?.netLifecycle.lastKnown ?? null;
+  const net = botNet(reads.controller.total).value;
+  const retained = quant?.retainedPositionNetPnl.value ?? quant?.retainedPositionNetPnl.lastKnown ?? null;
   const owned = quant?.ownedValue.value ?? quant?.ownedValue.lastKnown ?? null;
-  const quote = quant?.netLifecycle.unit ?? quant?.ownedValue.unit ?? '';
+  const quote = reads.controller.quote ?? quant?.ownedValue.unit ?? '';
   const holding = quant?.pairs.filter(row => row.state.toUpperCase().includes('HOLD')).length ?? 0;
   // One slice per base asset: two controllers on the same asset add up instead of repeating a label.
   const ownedByAsset = new Map<string, number>();
@@ -92,13 +94,15 @@ function FleetCard({ reads, now }: { reads: FleetReads; now: number }) {
       <span className="q-tag">{quant?.ownershipBasis ?? 'ownership unavailable'}</span>
     </div>
     <div className="nf-body">
-      <section className="nf-panel nf-pnl" aria-label="Net lifecycle PnL">
-        <span className="q-muted">Net lifecycle PnL{quant?.lastKnown ? ` · last published ${stamp(quant.observedAt ?? quant.generatedAt)}` : ''}</span>
+      <section className="nf-panel nf-pnl" aria-label="Controller report PnL">
+        <span className="q-muted">Controller report PnL · active executors and retained positions</span>
         <strong className={toneClass(net)}>{net == null ? 'Unavailable' : formatSigned(net)}<small>{quote}</small></strong>
+        <span className="q-muted">Retained-position net diagnostic: {retained == null ? 'Unavailable' : formatSigned(Number(retained))} {quant?.retainedPositionNetPnl.unit ?? ''}{quant?.retainedPositionNetPnl.value == null && quant?.retainedPositionNetPnl.lastKnown != null ? ' · last published' : ''}</span>
         <span className={`nf-delta ${toneClass(day.change) ?? ''}`}>24h {day.change == null ? '—' : formatSigned(day.change)}</span>
         {day.points.filter(point => point.value != null).length >= 2
           ? <SparkChart points={day.points.map(point => ({ time: point.time, value: point.value }))} positive={(day.change ?? 0) >= 0} height={86} unit={day.quote ?? undefined} format={value => formatSigned(value)} ariaLabel="24h saved net PnL" />
           : <p className="q-empty">{day.reason ?? 'Reading saved performance…'}</p>}
+        {day.points.filter(point => point.value != null).length >= 2 && day.reason && <small className="q-empty">24h change unavailable: {day.reason}</small>}
         <p className="nf-state">{quant ? quant.state.replaceAll('_', ' ') : reads.summaryPending ? 'Reading owner summary…' : reads.summaryIssue ?? 'Owner summary unavailable'}</p>
       </section>
       <section className="nf-panel" aria-label="Owned value by asset">
@@ -152,9 +156,10 @@ export function NativeFleet() {
   const page = useQuery({ queryKey: ['bots', server], queryFn: () => api.getBots(server!), enabled: !!server, refetchInterval: 10_000, retry: false });
   const visible = !sources.isError || transientReadFailure(sources.error) ? sources.data ?? [] : [];
   const scoped = sourcesForServer(visible, server, servers.data ?? []);
-  const fleet = useFleetReads(scoped, bot => page.data?.bots.find(row => row.bot_name === bot)?.status ?? null, now);
-  const running = fleet.filter(row => row.status === 'running').length;
-  const statusKnown = Boolean(page.data) && fleet.every(row => row.status != null);
+  const statuses = fleetLifecycleStatuses(page.data, page.isError, scoped.map(source => source.bot), now);
+  const admittedPage = page.isError ? undefined : page.data;
+  const fleet = useFleetReads(scoped, bot => statuses[scoped.findIndex(source => source.bot === bot)] ?? null, bot => projectControllerPnl(admittedPage, bot, now), now);
+  const lifecycle = fleetLifecycleSummary(statuses, page.isError);
   const services = fleet.reduce((total, row) => { const rollup = serviceRollup(row.health); return { healthy: total.healthy + rollup.healthy, total: total.total + rollup.total }; }, { healthy: 0, total: 0 });
   const healthRead = fleet.length > 0 && fleet.every(row => row.health != null);
   const heartbeats = fleet.filter(row => row.health?.heartbeat.state === 'healthy').length;
@@ -164,8 +169,6 @@ export function NativeFleet() {
   const single = fleet.length === 1 ? fleet[0] : null;
   const singleOwned = single?.quant ? single.quant.ownedValue.value ?? single.quant.ownedValue.lastKnown : null;
   const singleOwnedStale = single?.quant != null && single.quant.ownedValue.value == null && single.quant.ownedValue.lastKnown != null;
-  const singleNet = single?.quant ? single.quant.netLifecycle.value ?? single.quant.netLifecycle.lastKnown : null;
-  const singleNetStale = single?.quant != null && single.quant.netLifecycle.value == null && single.quant.netLifecycle.lastKnown != null;
   const perBot = 'Per-bot values are never summed across owners on a shared wallet; see each card.';
   return <div className="nf-page" data-quant-ops="fleet">
     <header className="q-page-head">
@@ -180,11 +183,11 @@ export function NativeFleet() {
     {!sources.isPending && !scoped.length && <p className="q-empty" role="status">No registered owner is authorized for reads on this server.</p>}
     {scoped.length > 0 && <TileGrid label="Fleet summary" min={190} max={6}>
       <MetricCard panelId="F01" title="Registered owners" value={String(scoped.length)} state={{ kind: 'fresh' }} note={scoped.map(source => displayBotName(source.bot)).join(', ')} />
-      <MetricCard panelId="F02" title="Running" value={statusKnown ? `${running} / ${scoped.length}` : 'Unavailable'} state={statusKnown ? { kind: 'fresh' } : { kind: 'stale', reason: 'Lifecycle status is missing for a registered owner.' }} note="Verified running lifecycle / registered" />
+      <MetricCard panelId="F02" title="Running" value={lifecycle.available ? `${lifecycle.running} / ${scoped.length}` : 'Unavailable'} state={lifecycle.available ? { kind: 'fresh' } : { kind: page.isError ? 'stale' : 'incomplete', reason: page.isError ? 'The latest lifecycle read failed; cached status is not current evidence.' : 'Lifecycle status is missing, stale, or not a recognized owner state.' }} note={`${scoped.length - lifecycle.unknown} verified · ${lifecycle.unknown} unknown · registered`} />
       <MetricCard panelId="F03" title="Services healthy" value={healthRead ? `${services.healthy} / ${services.total}` : 'Unavailable'} tone={healthRead && services.healthy < services.total ? 'negative' : undefined} state={healthRead ? services.healthy === services.total ? { kind: 'fresh' } : { kind: 'incomplete', reason: 'At least one stack service is not healthy.' } : { kind: 'collecting', reason: 'Reading stack services' }} note={`${heartbeats} / ${fleet.length} heartbeat${fleet.length === 1 ? '' : 's'} healthy`} />
-      <MetricCard panelId="F04" title="Fresh observations" value={`${fresh} / ${fleet.length}`} state={fresh === fleet.length ? { kind: 'fresh' } : { kind: 'stale', reason: 'At least one owner observation is not current.' }} note="Owner summary current and heartbeat healthy" />
+      <MetricCard panelId="F04" title="Fresh observations" value={`${fresh} / ${fleet.length}`} state={fresh === fleet.length ? { kind: 'fresh' } : { kind: 'stale', reason: 'A summary and current healthy heartbeat are required for every owner.' }} note="Current owner summary and identity-bound heartbeat" />
       <MetricCard panelId="F05" title="Pairs holding" value={`${holding} / ${pairs.length}`} state={fleet.every(row => row.quant) ? { kind: 'fresh' } : { kind: 'collecting', reason: 'Reading owner summaries' }} note="Pairs with a held bag / registered pairs" />
-      <MetricCard panelId="F06" title={single ? 'Owned value' : 'Owned value (per bot)'} value={singleOwned == null ? 'Unavailable' : formatDecimal(singleOwned)} unit={single?.quant?.ownedValue.unit ?? undefined} state={single ? singleOwned == null ? { kind: 'unavailable', reason: 'The owner has not published an owned value.' } : singleOwnedStale ? { kind: 'stale', observedAt: single.quant?.observedAt ?? null, reason: 'Owner last published owned value; the current observation is not fresh.' } : { kind: 'fresh' } : { kind: 'incomplete', reason: perBot }} note={single ? `Net lifecycle ${singleNet == null ? '—' : formatSigned(singleNet)} ${single.quant?.netLifecycle.unit ?? ''}${singleNetStale ? ' · last published' : ''}` : perBot} />
+      <MetricCard panelId="F06" title={single ? 'Owned value' : 'Owned value (per bot)'} value={singleOwned == null ? 'Unavailable' : formatDecimal(singleOwned)} unit={single?.quant?.ownedValue.unit ?? undefined} state={single ? singleOwned == null ? { kind: 'unavailable', reason: 'The owner has not published an owned value.' } : singleOwnedStale ? { kind: 'stale', observedAt: single.quant?.observedAt ?? null, reason: 'Owner last published owned value; the current observation is not fresh.' } : { kind: 'fresh' } : { kind: 'incomplete', reason: perBot }} note={single ? `Controller report PnL ${botNet(single.controller.total).value == null ? 'Unavailable' : formatSigned(botNet(single.controller.total).value!)} ${single.controller.quote ?? ''} · retained-position diagnostic ${single.quant?.retainedPositionNetPnl.value ?? single.quant?.retainedPositionNetPnl.lastKnown ?? 'Unavailable'}` : perBot} />
     </TileGrid>}
     <div className="nf-grid">
       {fleet.map(reads => <FleetCard key={`${reads.source.server}:${reads.source.bot}`} reads={reads} now={now} />)}

@@ -70,7 +70,7 @@ export interface BotInfo {
   status: string;
   connector: string;
   trading_pair: string;
-  pnl: number;
+  pnl: number | null;
   uptime: number;
   controller_type: string;
 }
@@ -143,10 +143,10 @@ export interface BotRunInfo {
   deployment_status: string;
   created_at: string | null;
   stopped_at: string | null;
-  realized_pnl_quote: number;
-  unrealized_pnl_quote: number;
-  global_pnl_quote: number;
-  volume_traded: number;
+  realized_pnl_quote: number | null;
+  unrealized_pnl_quote: number | null;
+  global_pnl_quote: number | null;
+  volume_traded: number | null;
   num_controllers: number;
 }
 
@@ -162,11 +162,11 @@ export interface ControllerPerformanceSnapshot {
   controller_name: string;
   connector: string;
   trading_pair: string;
-  realized_pnl_quote: number;
-  unrealized_pnl_quote: number;
-  global_pnl_quote: number;
-  global_pnl_pct: number;
-  volume_traded: number;
+  realized_pnl_quote: number | null;
+  unrealized_pnl_quote: number | null;
+  global_pnl_quote: number | null;
+  global_pnl_pct: number | null;
+  volume_traded: number | null;
   close_type_counts: Record<string, number>;
   positions_summary: Record<string, unknown>[];
   custom_info: Record<string, unknown>;

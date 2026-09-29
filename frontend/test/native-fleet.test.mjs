@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
 const { load } = frontendModules();
-const { projectFleetHealth, fleetCardState, serviceRollup, tradingVisualsHref } = load('fleet/native-fleet.ts');
+const { projectFleetHealth, fleetCardState, fleetLifecycleStatuses, fleetLifecycleSummary, serviceRollup, tradingVisualsHref } = load('fleet/native-fleet.ts');
 const { projectQuantBotSummary } = load('features/bots/quant-roster.ts');
 const now = Date.parse('2026-09-24T14:00:00Z');
 const at = new Date(now - 1000).toISOString();
@@ -37,10 +37,26 @@ test('card state follows owner freshness, then the stack heartbeat', () => {
     data: { bot_id: 'rsi_modular_v2', operational_label: 'HOLDING', heartbeat: at, pairs: [], owned_value: { value: '1', unit: 'USDC', availability: 'available', freshness: 'fresh', observed_at: at }, net_lifecycle: { value: '0', unit: 'USDC', availability: 'available', freshness: 'fresh', observed_at: at }, cycle_counts: {}, risk_rails: { availability: 'unavailable', rails: [] } } };
   const health = projectFleetHealth(operations(), 'rsi_modular_v2', now);
   assert.equal(fleetCardState(summary(base), health, null).kind, 'fresh');
+  assert.equal(fleetCardState(summary(base), null, null).kind, 'incomplete', 'a fresh summary alone is not a fresh fleet observation');
   assert.equal(fleetCardState(summary(base), projectFleetHealth(operations({ heartbeat: { state: 'stale' } }), 'rsi_modular_v2', now), null).kind, 'incomplete');
   const stale = summary({ ...base, data: { ...base.data, heartbeat: new Date(now - 120_000).toISOString(), last_known: { observed_at: at, pairs: [], operational_label: 'HOLDING' } } });
   assert.equal(fleetCardState(stale, health, null).kind, 'stale');
   assert.equal(fleetCardState(null, health, 'Access denied (403)').kind, 'unauthorized');
   assert.equal(fleetCardState(null, health, null).kind, 'unavailable');
   assert.equal(tradingVisualsHref('rsi_modular_v2', 'BTC-USDC'), '/trading-visuals?bot=rsi_modular_v2&view=charts&pair=BTC-USDC');
+});
+
+test('fleet requires a current healthy heartbeat and refuses failed or expired cached lifecycle reads', () => {
+  const healthy = projectFleetHealth(operations(), 'rsi_modular_v2', now);
+  assert.equal(healthy.freshness, 'current');
+  const old = projectFleetHealth(operations({ generated_at: new Date(now - 31_000).toISOString() }), 'rsi_modular_v2', now);
+  assert.equal(old.freshness, 'stale');
+
+  const current = { bots: [{ bot_name: 'rsi_modular_v2', status: 'running', status_received_at: now / 1000 - 1, status_stale_after_seconds: 30, performance_received_at: now / 1000 - 1, performance_stale_after_seconds: 30, controller_count_current: true, num_controllers: 0 }], controllers: [] };
+  assert.deepEqual(fleetLifecycleStatuses(current, false, ['rsi_modular_v2'], now), ['running']);
+  assert.deepEqual(fleetLifecycleStatuses(current, true, ['rsi_modular_v2'], now), [null], 'a failed refetch cannot reuse React Query cached status as current evidence');
+  assert.deepEqual(fleetLifecycleStatuses(current, false, ['rsi_modular_v2'], now + 31_000), [null], 'expired source time cannot remain verified');
+  assert.deepEqual(fleetLifecycleStatuses(current, false, ['rsi_modular_v2'], now), ['running'], 'a fresh successful read restores admitted status');
+  assert.deepEqual(fleetLifecycleSummary(['running', 'lifecycle_unavailable'], false), { running: 1, unknown: 1, available: false });
+  assert.deepEqual(fleetLifecycleSummary(['stopped'], false), { running: 0, unknown: 0, available: true }, 'explicit stopped is a known observation');
 });

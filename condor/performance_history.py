@@ -223,7 +223,7 @@ class PerformanceHistory:
             if complete_wallet_balances(balances, latest_row["value_quote"]):
                 latest = {"timestamp": latest_row["timestamp"], "currency": latest_row["currency"],
                           "value_quote": latest_row["value_quote"], "source_id": latest_row["source_id"],
-                          "balances": balances}
+                          "balances": balances, "valuation_complete": True}
         points = []
         for row in reversed(rows[:10000]):
             point = dict(row)

@@ -15,7 +15,8 @@ import { TileGrid } from '@/features/quant-ops/kit/grid';
 import { DataTable } from '@/features/quant-ops/kit/DataTable';
 import { FleetStrip } from './FleetStrip';
 import { pnlSeries, type PnlSeries } from '@/features/bots/pnl-series';
-import { botNet, winRateText } from '@/features/bots/bot-net';
+import { botNet, controllerPnlPart, ownerReadsFingerprint, pairOwnershipIsDisjoint, winRateText } from '@/features/bots/bot-net';
+import { projectControllerPnl } from '@/features/bots/controller-pnl';
 import type { PanelState } from '@/features/quant-ops/panel-state';
 import { PriceLevels } from './NativeBotPositions';
 import { BotDraftWizard } from './BotDraftWizard';
@@ -52,19 +53,9 @@ function dcaLabel(row: BotPairPosition, reportedLevel?: string | null) {
   return 'No plan stage reported';
 }
 
-/** Native controller-report total for one bot (active executors + retained positions), the scope Capital and the saved series use. */
-function controllerNet(page: BotsPageResponse | undefined, bot: string): { total: number | null; realized: number | null; unrealized: number | null; quote: string | null } {
-  const rows = (page?.controllers ?? []).filter(row => row.bot_name === bot);
-  const quotes = new Set(rows.map(row => typeof row.trading_pair === 'string' ? row.trading_pair.split('-')[1] : ''));
-  const finite = (value: unknown) => typeof value === 'number' && Number.isFinite(value) ? value : null;
-  const sum = (key: 'global_pnl_quote' | 'realized_pnl_quote' | 'unrealized_pnl_quote') => rows.length && rows.every(row => finite(row[key]) !== null) ? rows.reduce((total, row) => total + (row[key] as number), 0) : null;
-  const usable = rows.length > 0 && quotes.size === 1;
-  return { total: usable ? sum('global_pnl_quote') : null, realized: usable ? sum('realized_pnl_quote') : null, unrealized: usable ? sum('unrealized_pnl_quote') : null, quote: usable ? [...quotes][0] : null };
-}
-
 export type OwnerReads = {
   bot: string; server: string; status: string | null; view: ReturnType<typeof buildBotPositionView> | null;
-  controller: { total: number | null; realized: number | null; unrealized: number | null; quote: string | null };
+  controller: ReturnType<typeof projectControllerPnl>;
   quant: QuantBotSummary | null; cycles: QuantCycles | null; execution: ExecutionStats | null; decisions: LifecycleDecision[];
   day: PnlSeries; week: PnlSeries;
 };
@@ -96,9 +87,8 @@ export function RosterObservation({ payload, bot, now, summary: summaryPayload, 
   const exitPairs = (quant?.pairs ?? []).filter(row => row.planMode === 'EXITS').length;
   const nextConditions = [...new Set<string>(view.pairs.flatMap((row: BotPairPosition) => typeof row.planNext === 'string' && row.planNext.length > 0 ? [row.planNext] : []))];
   const nextCondition: string = nextConditions.length > 1 ? 'MIXED · see per-pair conditions' : nextConditions[0] ?? 'No owner condition recorded; see per-pair rows.';
-  const netReport = quant?.netLifecycle;
-  const netValue = netReport?.value ?? netReport?.lastKnown ?? null;
-  const netUnit = netReport?.unit ?? null;
+  const retainedReport = quant?.retainedPositionNetPnl;
+  const retainedValue = retainedReport?.value ?? retainedReport?.lastKnown ?? null;
   const pairPnl = quote !== null && view.pairs.length > 0 && view.pairs.every(row => row.bagPnl !== null) ? view.pairs.reduce((total, row) => total + row.bagPnl!, 0) : null;
   const dayPoints = (day?.points ?? []).map(point => point.value).filter((value): value is number => value != null);
   const trailing = view.pairs.flatMap(row => row.executors.map(executor => ({ pair: row.pair, activation: Number(executor.distance_to_trailing_activation_pct), trigger: Number(executor.distance_to_trailing_trigger_pct), state: typeof executor.trailing_state === 'string' ? executor.trailing_state : null })).filter(item => Number.isFinite(item.activation) || Number.isFinite(item.trigger)));
@@ -121,13 +111,14 @@ export function RosterObservation({ payload, bot, now, summary: summaryPayload, 
     </div>
     <div className="q-bot-mid">
       <div data-panel-id="B17">
-        <span className="q-muted">Native net PnL · controller report · 24h saved series</span>
-        <p className={metricTone(controllerTotal ?? netValue) ? `q-${metricTone(controllerTotal ?? netValue)}` : undefined} style={{ fontSize: 22, fontWeight: 600 }}>
-          {(controllerTotal ?? netValue) === null ? 'Unavailable' : formatSigned(controllerTotal ?? netValue)} {controllerQuote ?? netUnit ?? ''}
+        <span className="q-muted">Controller report PnL · active executors and retained positions · 24h saved series</span>
+        <p className={metricTone(controllerTotal) ? `q-${metricTone(controllerTotal)}` : undefined} style={{ fontSize: 22, fontWeight: 600 }}>
+          {controllerTotal === null ? 'Unavailable' : formatSigned(controllerTotal)} {controllerQuote ?? ''}
           {day?.change != null && <small className={`q-kpi-delta${metricTone(day.change) ? ` q-${metricTone(day.change)}` : ''}`} style={{ marginLeft: 8 }}>{formatSigned(day.change)} 24h</small>}
         </p>
         {dayPoints.length >= 2 ? <Sparkline points={dayPoints.slice(-60)} positive={(day?.change ?? 0) >= 0} /> : <p className="q-empty">{day?.reason ?? 'Performance history requires a timestamped, comparable series.'}</p>}
-        <details className="q-source-details"><summary>Accounting and observation details</summary><p className="q-empty">{netReport?.feeBasis ? `Fee basis: ${netReport.feeBasis.replaceAll('_', ' ')}.` : 'Fee basis unavailable.'} Retained-position net (reporting summary): {netValue === null ? 'Unavailable' : `${formatSigned(netValue)} ${netUnit ?? ''}`}. Snapshot observed {netReport?.observedAt ?? quant?.observedAt ?? 'Unavailable'}. 7d change {week?.change == null ? 'needs an unbroken saved week' : `${formatSigned(week.change)} ${week.quote ?? ''}`}. Open-position marked PnL: {pairPnl === null ? 'Unknown basis' : amount(pairPnl, quote ?? '')}.</p></details>
+        {dayPoints.length >= 2 && day?.reason && <small className="q-empty">24h change unavailable: {day.reason}</small>}
+        <details className="q-source-details"><summary>Accounting and observation details</summary><p className="q-empty">Controller report is the headline PnL source shared with Capital. Retained-position net diagnostic: {retainedValue === null ? 'Unavailable' : `${formatSigned(retainedValue)} ${retainedReport?.unit ?? ''}`}; this excludes completed executor history and is not controller lifecycle PnL. Fee basis: {retainedReport?.feeBasis ? retainedReport.feeBasis.replaceAll('_', ' ') : 'unavailable'}. Snapshot observed {retainedReport?.observedAt ?? quant?.observedAt ?? 'Unavailable'}. 7d change {week?.change == null ? 'needs an unbroken saved week' : `${formatSigned(week.change)} ${week.quote ?? ''}`}. Open-position marked PnL: {pairPnl === null ? 'Unknown basis' : amount(pairPnl, quote ?? '')}.</p></details>
       </div>
       <div data-panel-id="B18">
         <span className="q-muted">Cycles <StateGlyph state={cycleState} /></span>
@@ -222,12 +213,12 @@ function useOwnerReads(source: TradingVisualsSource, page: BotsPageResponse | un
   try { if (bootstrap.data) view = buildBotPositionView(bootstrap.data, source.bot, Math.max(now, bootstrap.dataUpdatedAt), { allowStale: true }); } catch { view = null; }
   const reads: OwnerReads = {
     bot: source.bot, server: source.server, status: owner?.status ?? null, view,
-    controller: controllerNet(page, source.bot),
+    controller: projectControllerPnl(page, source.bot, now),
     quant: projectQuantBotSummary(summary.data?.payload, source.bot, Math.max(now, summary.dataUpdatedAt)),
     cycles: projectQuantCycles(cycles.data?.payload, source.bot),
     execution: projectExecutionStats(execution.data?.payload, source.bot),
     decisions: projectLifecycleDecisions(events.data?.payload, source.bot, Math.max(now, events.dataUpdatedAt)) ?? [],
-    day: pnlSeries(day.data?.payload, source.bot, now), week: pnlSeries(week.data?.payload, source.bot, now),
+    day: pnlSeries(day.data?.payload, source.bot, now, '1D'), week: pnlSeries(week.data?.payload, source.bot, now, '1W'),
   };
   return { reads, raw: { bootstrap, summary: summary.data, events: events.data, execution: execution.data, cycles: cycles.data } };
 }
@@ -237,7 +228,8 @@ function OwnerCard({ source, page, logs, onReads }: { source: TradingVisualsSour
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const { reads, raw } = useOwnerReads(source, page, now);
   const { bootstrap } = raw;
-  useEffect(() => { onReads(reads); }, [onReads, reads.quant?.generatedAt, reads.cycles?.stats.fillCount, reads.day.change, reads.view?.pairs.length, reads.status]); // eslint-disable-line react-hooks/exhaustive-deps
+  const readsSignature = ownerReadsFingerprint(reads);
+  useEffect(() => { onReads(reads); }, [onReads, readsSignature]);
   const pairs = reads.view?.pairs ?? [];
   const owner = page?.bots.find(item => item.bot_name === source.bot);
   return <article className="q-card q-bot-card" aria-label={`${source.bot} roster card`}>
@@ -275,7 +267,11 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
   const [grid, setGrid] = useState(true);
   const [draft, setDraft] = useState(false);
   const [readsByBot, setReadsByBot] = useState<Record<string, OwnerReads>>({});
-  const onReads = useMemo(() => (reads: OwnerReads) => setReadsByBot(current => ({ ...current, [`${reads.server}:${reads.bot}`]: reads })), []);
+  const onReads = useMemo(() => (reads: OwnerReads) => setReadsByBot(current => {
+    const key = `${reads.server}:${reads.bot}`;
+    if (current[key] && ownerReadsFingerprint(current[key]) === ownerReadsFingerprint(reads)) return current;
+    return { ...current, [key]: reads };
+  }), []);
   const sources = useQuery({ queryKey: ['native-command-desk-sources'], queryFn: async ({ signal }) => parseTradingVisualsSources(await read('/api/v1/trading-visuals/sources', signal)), retry: false, refetchInterval: 30_000 });
   const visible = !sources.isError || transientReadFailure(sources.error) ? sources.data ?? [] : [];
   const scoped = sourcesForServer(visible, server, servers.data ?? []);
@@ -296,14 +292,16 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
   const verifiedRunning = scoped.filter(source => page?.bots.find(item => item.bot_name === source.bot)?.status === 'running').length;
   const fleet = scoped.map(source => readsByBot[`${source.server}:${source.bot}`]).filter((reads): reads is OwnerReads => Boolean(reads));
   const complete = fleet.length === scoped.length && scoped.length > 0;
-  // Net per bot: controller report, else the owner's native net (current, then last published). Never a fabricated zero.
-  const netFor = (reads: OwnerReads) => botNet(reads.controller.total, reads.quant?.netLifecycle);
+  // Headline PnL uses only the current controller report, matching Capital's scope.
+  const netFor = (reads: OwnerReads) => botNet(reads.controller.total);
   const staleBots = fleet.filter(reads => reads.view?.stale || (reads.quant != null && reads.quant.freshness !== 'current'));
-  const quotes = new Set(fleet.map(reads => reads.controller.quote ?? reads.quant?.netLifecycle.unit ?? reads.quant?.pairs[0]?.pair.split('-')[1]).filter(Boolean));
+  const quotes = new Set(fleet.map(reads => reads.controller.quote).filter(Boolean));
   const singleQuote = quotes.size === 1 ? [...quotes][0]! : null;
   // Aggregates are published only when every registered bot is read and no wallet overlap can double count: one bot, or disjoint pairs.
-  const pairsByBot = fleet.map(reads => new Set((reads.quant?.pairs ?? []).map(pair => pair.pair)));
-  const disjoint = pairsByBot.every((set, index) => pairsByBot.every((other, otherIndex) => index === otherIndex || [...set].every(pair => !other.has(pair))));
+  const disjoint = pairOwnershipIsDisjoint(fleet.map(reads => ({
+    pairs: [...(reads.quant?.pairs.map(pair => pair.pair) ?? []), ...reads.controller.rows.map(row => row.pair)],
+    qualified: reads.quant?.freshness === 'current' && reads.controller.rows.length > 0,
+  })));
   const aggregateAllowed = complete && singleQuote !== null && (fleet.length === 1 || disjoint);
   const netTotal = aggregateAllowed ? sum(fleet.map(reads => netFor(reads).value)) : null;
   const netStale = aggregateAllowed && fleet.some(reads => netFor(reads).stale);
@@ -337,9 +335,8 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
   const lotsUnaged = lotsRead && fleet.some(reads => reads.cycles!.inventoryAge.lots.length > 0 && reads.cycles!.inventoryAge.oldestSeconds == null);
   const openLots = lotsRead ? fleet.reduce((total, reads) => total + reads.cycles!.inventoryAge.lots.length, 0) : null;
   const oldestLot = lotsRead && !lotsUnaged ? fleet.reduce<number | null>((oldest, reads) => { const age = reads.cycles!.inventoryAge.oldestSeconds; return age == null ? oldest : Math.max(oldest ?? 0, age); }, null) : null;
-  // Realized/unrealized per bot: the controller report, else that bot's own per-pair sum (never summed across bots).
-  const pairSum = (reads: OwnerReads | undefined, key: 'realized' | 'unrealized') => { const pairs = reads?.quant?.pairs ?? []; return pairs.length && pairs.every(pair => pair[key] != null) ? pairs.reduce((total, pair) => total + Number(pair[key]), 0) : null; };
-  const botPnlPart = (reads: OwnerReads | undefined, key: 'realized' | 'unrealized') => reads?.controller[key] ?? pairSum(reads, key);
+  // Realized/unrealized headline parts use the same controller-report scope as total PnL.
+  const botPnlPart = (reads: OwnerReads | undefined, key: 'realized' | 'unrealized') => controllerPnlPart(reads?.controller[key]);
   const inventoryTotal = inventoryRows.every(([, row]) => row.value != null) ? inventoryRows.reduce((total, [, row]) => total + (row.value ?? 0), 0) : null;
   return <div className={`bot-roster${compact ? ' bot-roster--compact' : ''}`} data-quant-ops="bots">
     <header className="q-page-head">
@@ -388,7 +385,7 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
           { id: 'positions', header: 'Positions', kind: 'number', value: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return reads?.view ? reads.view.pairs.filter(row => row.quantity !== null && formatDecimal(row.quantity, 18) !== '0').length : null; }, size: 90 },
           { id: 'unrealized', header: 'Unrealized', kind: 'number', value: source => botPnlPart(readsByBot[`${source.server}:${source.bot}`], 'unrealized'), cell: source => { const value = botPnlPart(readsByBot[`${source.server}:${source.bot}`], 'unrealized'); return value == null ? 'Unknown basis' : formatSigned(value); }, className: source => { const tone = metricTone(botPnlPart(readsByBot[`${source.server}:${source.bot}`], 'unrealized')); return tone ? `q-${tone}` : undefined; }, size: 110 },
           { id: 'realized', header: 'Realized', kind: 'number', value: source => botPnlPart(readsByBot[`${source.server}:${source.bot}`], 'realized'), cell: source => { const value = botPnlPart(readsByBot[`${source.server}:${source.bot}`], 'realized'); return value == null ? '—' : formatSigned(value); }, className: source => { const tone = metricTone(botPnlPart(readsByBot[`${source.server}:${source.bot}`], 'realized')); return tone ? `q-${tone}` : undefined; }, size: 100 },
-          { id: 'net', header: 'Net', kind: 'number', value: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return reads ? netFor(reads).value : null; }, cell: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return !reads || netFor(reads).value == null ? '—' : `${formatSigned(netFor(reads).value)} ${reads.controller.quote ?? reads.quant?.netLifecycle.unit ?? ''}${netFor(reads).stale ? ' · stale' : ''}`; }, className: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; const tone = metricTone(reads ? netFor(reads).value : null); return tone ? `q-${tone}` : undefined; }, size: 130 },
+          { id: 'net', header: 'Controller PnL', kind: 'number', value: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return reads ? netFor(reads).value : null; }, cell: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return !reads || netFor(reads).value == null ? '—' : `${formatSigned(netFor(reads).value)} ${reads.controller.quote ?? ''}${netFor(reads).stale ? ' · stale' : ''}`; }, className: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; const tone = metricTone(reads ? netFor(reads).value : null); return tone ? `q-${tone}` : undefined; }, size: 130 },
           { id: 'day', header: '24h', kind: 'number', value: source => readsByBot[`${source.server}:${source.bot}`]?.day.change ?? null, cell: source => { const value = readsByBot[`${source.server}:${source.bot}`]?.day.change ?? null; return value == null ? '—' : formatSigned(value); }, className: source => { const tone = metricTone(readsByBot[`${source.server}:${source.bot}`]?.day.change); return tone ? `q-${tone}` : undefined; }, size: 90 },
           { id: 'win', header: 'Win rate %', kind: 'number', value: source => { const rate = readsByBot[`${source.server}:${source.bot}`]?.cycles?.stats.winRate; return rate == null ? null : Number((rate * 100).toFixed(1)); }, cell: source => { const cycles = readsByBot[`${source.server}:${source.bot}`]?.cycles; return cycles ? `${winRateText(cycles.stats)} · ${cycles.stats.wins}W/${cycles.stats.losses}L` : '—'; }, size: 120 },
           { id: 'fill', header: 'Fill ratio %', kind: 'number', value: source => { const ratio = readsByBot[`${source.server}:${source.bot}`]?.execution?.fillRatio; return ratio == null ? null : Number((ratio * 100).toFixed(1)); }, cell: source => { const value = readsByBot[`${source.server}:${source.bot}`]?.execution?.fillRatio; return value == null ? '—' : `${(value * 100).toFixed(1)}%`; }, size: 90 },

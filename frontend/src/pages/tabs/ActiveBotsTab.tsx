@@ -746,7 +746,8 @@ export function ActiveBotsTab() {
         const tb = Date.parse(b.timestamp) || 0;
         return ta - tb;
       });
-      map[key] = sorted.map((s) => s.global_pnl_quote);
+      if (sorted.some(snapshot => snapshot.global_pnl_quote === null)) continue;
+      map[key] = sorted.flatMap((snapshot) => snapshot.global_pnl_quote === null ? [] : [snapshot.global_pnl_quote]);
     }
     return map;
   }, [activeSnapshots]);

@@ -24,6 +24,8 @@ export type QuantMetric = {
   freshness: string;
   observedAt: string | null;
   feeBasis: string | null;
+  metricScope: string | null;
+  calculationVersion: string | null;
   reason: string | null;
   /** The owner's last published value when the metric is stale; never presented as current. */
   lastKnown?: string | null;
@@ -75,6 +77,7 @@ export type QuantBotSummary = {
   pairs: QuantPair[];
   ownedValue: QuantMetric;
   netLifecycle: QuantMetric;
+  retainedPositionNetPnl: QuantMetric;
   cycleCounts: { open: number | null; closedScored: number | null; ownershipTransfer: number | null; unclassified: number | null };
   riskRails: { availability: string; rails: RiskRail[]; tightest: RiskRail | null };
   wallet: QuantWallet | null;
@@ -99,6 +102,8 @@ function metric(value: unknown, now: number): QuantMetric {
     freshness: text(row.freshness) ?? 'unknown',
     observedAt: text(row.observed_at),
     feeBasis: text(row.fee_basis),
+    metricScope: text(row.metric_scope),
+    calculationVersion: text(row.calculation_version),
     reason: text(row.reason_code),
   };
 }
@@ -187,7 +192,11 @@ export function projectQuantBotSummary(value: unknown, bot: string, now: number)
   const knownRails = !sourceAdmitted && Array.isArray(knownRailsRow.rails) ? knownRailsRow.rails.map(rail).filter((row): row is RiskRail => row !== null) : [];
   const knownCounts = object(known.cycle_counts);
   const knownQuote = text(known.quote_currency);
-  const staleMetric = (value: unknown): QuantMetric => ({ value: null, unit: knownQuote, availability: 'unavailable', freshness: 'stale', observedAt: knownObserved, feeBasis: null, reason: 'RUNTIME_NOT_CURRENT', lastKnown: decimalText(value) });
+  const staleMetric = (value: unknown, reason = 'RUNTIME_NOT_CURRENT'): QuantMetric => ({ value: null, unit: knownQuote, availability: 'unavailable', freshness: 'stale', observedAt: knownObserved, feeBasis: null, metricScope: null, calculationVersion: null, reason, lastKnown: decimalText(value) });
+  const retainedPosition = sourceAdmitted ? metric(data.retained_position_net_pnl, now) : staleMetric(known.retained_position_net_pnl_value);
+  const retainedPositionNetPnl = retainedPosition.metricScope === 'retained_positions' && retainedPosition.calculationVersion === 'retained_position_v1'
+    ? retainedPosition
+    : { ...retainedPosition, value: null, availability: 'unavailable', reason: 'RETAINED_POSITION_SCOPE_UNAVAILABLE' };
   const lastKnown = !sourceAdmitted && knownObserved !== null && (knownPairs.length > 0 || knownRails.length > 0);
   return {
     generatedAt: generatedAt!, observedAt: observedAt ?? knownObserved,
@@ -196,7 +205,8 @@ export function projectQuantBotSummary(value: unknown, bot: string, now: number)
     state: sourceAdmitted ? state : lastKnown ? text(known.operational_label) ?? 'UNKNOWN' : 'UNKNOWN',
     pairs: sourceAdmitted ? pairs : knownPairs,
     ownedValue: sourceAdmitted ? metric(data.owned_value, now) : staleMetric(known.owned_value_value),
-    netLifecycle: sourceAdmitted ? metric(data.net_lifecycle, now) : staleMetric(known.net_lifecycle_value),
+    netLifecycle: sourceAdmitted ? metric(data.net_lifecycle, now) : staleMetric(null, 'QUALIFIED_LIFECYCLE_SOURCE_UNAVAILABLE'),
+    retainedPositionNetPnl,
     cycleCounts: {
       open: sourceAdmitted ? nonnegativeInteger(counts.open) : nonnegativeInteger(knownCounts.open),
       closedScored: sourceAdmitted ? nonnegativeInteger(counts.closed_scored) : nonnegativeInteger(knownCounts.closed_scored),
@@ -288,7 +298,7 @@ export function projectLifecycleDecisions(value: unknown, bot: string, now = Dat
   return rows;
 }
 
-export type QuantExecution = { bins: { from: number; to: number; count: number }[]; sampleCount: number; excludedCount: number; paperExcluded: number };
+export type QuantExecution = { bins: { from: number | null; to: number | null; label: string; count: number }[]; sampleCount: number; excludedCount: number; paperExcluded: number };
 
 /** Local syntax guard only; it cannot confirm the venue pair universe or owner schema. */
 export function validDraftPairSyntax(input: string): boolean {
@@ -305,8 +315,10 @@ export function projectQuantExecution(value: unknown, bot: string): QuantExecuti
   const paperExcluded = nonnegativeInteger(histogram.paper_excluded);
   if (sampleCount === null || sampleCount === 0 || excludedCount === null || paperExcluded === null) return null;
   const bins = histogram.bins.flatMap((item: unknown) => {
-    const bin = object(item), from = finite(bin.from), to = finite(bin.to), count = nonnegativeInteger(bin.count);
-    return from !== null && to !== null && to > from && count !== null ? [{ from, to, count }] : [];
+    const bin = object(item), from = bin.from === null ? null : finite(bin.from), to = bin.to === null ? null : finite(bin.to), count = nonnegativeInteger(bin.count);
+    const validBounds = from !== null && to !== null ? to > from : from === null && to !== null || from !== null && to === null;
+    const label = text(bin.label) ?? (from !== null && to !== null ? `${from}–${to}` : from === null ? `< ${to}` : `>= ${from}`);
+    return validBounds && count !== null ? [{ from, to, label, count }] : [];
   });
   if (bins.length !== histogram.bins.length || bins.reduce((sum, bin) => sum + bin.count, 0) !== sampleCount) return null;
   return { bins, sampleCount, excludedCount, paperExcluded };

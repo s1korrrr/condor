@@ -355,7 +355,7 @@ export function MarketPictureSurface({
           <span className="mp-version">V3</span>
           <div>
             <h1>Market Picture</h1>
-            <span>Whole market. A clearer view.</span>
+            <span>Admitted universe. A clearer view.</span>
           </div>
         </div>
         <nav aria-label="Market Picture sections">
@@ -396,6 +396,7 @@ export function MarketPictureSurface({
               {frame.universeRevision} · frame {frame.sequence}
             </span>
           )}
+          {frame && <span>Coverage applies to these {frame.expected} admitted symbols.</span>}
           {fixture && <span className="mp-warning">Synthetic fixture</span>}
           {frame?.source_kind === "reconstructed" && !fixture && (
             <span className="mp-warning">Reconstructed observations</span>

@@ -45,7 +45,7 @@ export function MarketSummaryStrip({
   return (
     <div
       className="mp-summary-strip"
-      aria-label="Whole-universe market summary"
+      aria-label="Admitted-universe market summary"
     >
       <section className="mp-summary-card mp-breadth-card">
         <h2>Market breadth</h2>
@@ -215,7 +215,7 @@ export function MarketPulsePanel({
     <Panel
       id="mp-pulse"
       title="Market Pulse"
-      detail="Whole market breadth & pressure"
+      detail="Admitted-universe breadth & pressure"
       className="mp-pulse"
       actions={
         <div className="mp-segment">

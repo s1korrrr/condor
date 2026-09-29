@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
+import { containDialogTab } from "@/lib/dialog-focus";
 import {
   type DisplayAsset,
   type DisplayEvent,
@@ -35,6 +36,7 @@ export function Drawer({
       ref={ref}
       className={`mp-drawer${wide ? " mp-drawer-wide" : ""}`}
       aria-labelledby="mp-drawer-title"
+      onKeyDown={containDialogTab}
       onCancel={(e) => {
         e.preventDefault();
         close();

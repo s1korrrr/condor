@@ -113,7 +113,7 @@ function FleetCard({ reads, now }: { reads: FleetReads; now: number }) {
         <div><dt>Owned value</dt><dd>{owned == null ? '—' : `${formatDecimal(owned)} ${quote}`}</dd></div>
         <div><dt>Pairs holding</dt><dd>{quant ? `${holding} / ${quant.pairs.length}` : '—'}</dd></div>
         <div><dt>Shared wallet</dt><dd>{quant?.wallet?.value ? `${formatDecimal(quant.wallet.value, 0)} ${quant.wallet.currency ?? ''}` : '—'}</dd></div>
-        <div><dt>Heartbeat</dt><dd>{health ? health.heartbeat.state : '—'}{heartbeatAge ? ` · ${heartbeatAge} ago` : ''}</dd></div>
+        <div><dt>Heartbeat</dt><dd>{health ? health.heartbeat.state : '—'}{heartbeatAge ? ` · owner report ${heartbeatAge} ago` : ''}</dd></div>
         <div><dt>Services</dt><dd>{health ? `${rollup.healthy} / ${rollup.total} healthy` : '—'}</dd></div>
         <div><dt>Lifecycle</dt><dd>{health?.heartbeat.lifecycleState?.replaceAll('_', ' ') ?? quant?.state.replaceAll('_', ' ') ?? '—'}</dd></div>
       </dl>

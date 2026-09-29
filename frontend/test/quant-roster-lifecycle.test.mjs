@@ -101,6 +101,8 @@ test('execution stats are present without a slippage cohort and reject a foreign
   assert.equal(view.funnel[1].count, 13);
   assert.equal(projectExecutionStats(payload, 'other'), null);
   assert.equal(projectExecutionStats({ ...payload, execution_authorized: true }, 'rsi_modular_v2'), null);
+  assert.equal(view.liquidityUnclassifiedCount, null, 'older owners that do not publish it stay unavailable, not zero');
+  assert.equal(projectExecutionStats({ ...payload, liquidity_unclassified_count: 17 }, 'rsi_modular_v2').liquidityUnclassifiedCount, 17);
 });
 
 test('lifecycle decisions need executor identity, an owner source and a time no later than generation', () => {

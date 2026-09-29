@@ -140,6 +140,7 @@ def test_read_wallet_skips_stored_zero_valuations(tmp_path):
     result = store.read_wallet("v2", "bot", "1D", 1120)
     assert [row["value_quote"] for row in result["points"]] == ["21000.5", "21001.5"]
     assert result["latest"]["value_quote"] == "21001.5"
+    assert result["latest"]["valuation_complete"] is True
     store.record_wallet("v2", {"bot": sample(1180, "0.0")}, 1180)
     assert store.read_wallet("v2", "bot", "1D", 1180)["latest"]["value_quote"] == "21001.5", "a zero row never becomes the last-known wallet"
 

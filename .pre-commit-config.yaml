@@ -6,6 +6,8 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
+        # Real builder output exercises the 240-member, 2 MiB frame contract.
+        exclude: ^tests/fixtures/market-picture\.240\.fixture\.json$
 
   -   repo: https://github.com/pycqa/isort
       rev: 5.13.2

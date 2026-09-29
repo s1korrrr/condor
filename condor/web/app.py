@@ -14,27 +14,29 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from condor.web.routes import (
-    deployment,
     account_balances,
     agents,
     archived,
     auth,
     backtesting,
     bots,
-    native_entry,
     chat_ws,
     confirmations,
     controller_performance,
     conversations,
+    deployment,
     executors,
     fleet,
     market,
-    portfolio,
+    market_picture,
+    native_entry,
     performance_history,
+    portfolio,
     positions,
     reports,
     research,
     routines,
+    screener,
     servers,
     sessions,
     settings,
@@ -64,8 +66,8 @@ def _build_cors_origins() -> list[str]:
 @asynccontextmanager
 async def _performance_observer_lifespan(app: FastAPI):
     """Keep native observations running without a browser or Telegram process."""
+    from condor.server_data_service import ServerDataType, get_server_data_service
     from config_manager import get_config_manager
-    from condor.server_data_service import get_server_data_service, ServerDataType
 
     service = get_server_data_service()
     started_here = not service.is_running
@@ -83,8 +85,11 @@ async def _performance_observer_lifespan(app: FastAPI):
 
 
 def create_app() -> FastAPI:
-    app = FastAPI(title="Condor Dashboard API", version="0.1.0",
-                  lifespan=_performance_observer_lifespan)
+    app = FastAPI(
+        title="Condor Dashboard API",
+        version="0.1.0",
+        lifespan=_performance_observer_lifespan,
+    )
 
     @app.exception_handler(RequestValidationError)
     async def validation_error(request: Request, error: RequestValidationError):
@@ -111,6 +116,8 @@ def create_app() -> FastAPI:
     app.include_router(portfolio.router, prefix="/api/v1")
     app.include_router(account_balances.router, prefix="/api/v1")
     app.include_router(research.router, prefix="/api/v1")
+    app.include_router(screener.router, prefix="/api/v1")
+    app.include_router(market_picture.router, prefix="/api/v1")
     app.include_router(bots.router, prefix="/api/v1")
     app.include_router(fleet.router, prefix="/api/v1")
     app.include_router(native_entry.router, prefix="/api/v1")
@@ -190,9 +197,7 @@ def create_app() -> FastAPI:
                     and candidate.is_file()
                 ):
                     if candidate == index_html.resolve():
-                        return FileResponse(
-                            candidate, headers=shell_headers
-                        )
+                        return FileResponse(candidate, headers=shell_headers)
                     return FileResponse(candidate)
             return FileResponse(index_html, headers=shell_headers)
 

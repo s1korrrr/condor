@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -23,6 +24,17 @@ logger = logging.getLogger(__name__)
 router = APIRouter(tags=["controller-performance"])
 
 
+def _optional_float(value: object) -> float | None:
+    """Preserve an observed zero; represent absent or invalid performance as unavailable."""
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        result = float(value)
+    except (TypeError, ValueError):
+        return None
+    return result if math.isfinite(result) else None
+
+
 # ── Helpers ──
 
 
@@ -39,11 +51,11 @@ def _parse_snapshot(raw: dict) -> ControllerPerformanceSnapshot:
         controller_name=raw.get("controller_name", ""),
         connector=raw.get("connector", raw.get("connector_name", "")),
         trading_pair=raw.get("trading_pair", ""),
-        realized_pnl_quote=float(perf.get("realized_pnl_quote", 0) or 0),
-        unrealized_pnl_quote=float(perf.get("unrealized_pnl_quote", 0) or 0),
-        global_pnl_quote=float(perf.get("global_pnl_quote", 0) or 0),
-        global_pnl_pct=float(perf.get("global_pnl_pct", 0) or 0),
-        volume_traded=float(perf.get("volume_traded", 0) or 0),
+        realized_pnl_quote=_optional_float(perf.get("realized_pnl_quote")),
+        unrealized_pnl_quote=_optional_float(perf.get("unrealized_pnl_quote")),
+        global_pnl_quote=_optional_float(perf.get("global_pnl_quote")),
+        global_pnl_pct=_optional_float(perf.get("global_pnl_pct")),
+        volume_traded=_optional_float(perf.get("volume_traded")),
         close_type_counts=perf.get("close_type_counts", {}),
         positions_summary=perf.get("positions_summary", []),
         custom_info=perf.get("custom_info", raw.get("custom_info", {})),
@@ -53,16 +65,16 @@ def _parse_snapshot(raw: dict) -> ControllerPerformanceSnapshot:
 def _parse_bot_run(raw: dict, perf_by_bot: dict[str, dict] | None = None) -> BotRunInfo:
     """Normalize a raw bot run dict into our model."""
     bot_name = raw.get("bot_name", "")
-    realized = 0.0
-    unrealized = 0.0
-    volume = 0.0
+    realized = None
+    unrealized = None
+    volume = None
     num_controllers = 0
 
     if perf_by_bot and bot_name in perf_by_bot:
         agg = perf_by_bot[bot_name]
-        realized = agg.get("realized_pnl_quote", 0.0)
-        unrealized = agg.get("unrealized_pnl_quote", 0.0)
-        volume = agg.get("volume_traded", 0.0)
+        realized = _optional_float(agg.get("realized_pnl_quote"))
+        unrealized = _optional_float(agg.get("unrealized_pnl_quote"))
+        volume = _optional_float(agg.get("volume_traded"))
         num_controllers = agg.get("num_controllers", 0)
 
     return BotRunInfo(
@@ -77,7 +89,7 @@ def _parse_bot_run(raw: dict, perf_by_bot: dict[str, dict] | None = None) -> Bot
         stopped_at=str(raw["stopped_at"]) if raw.get("stopped_at") else None,
         realized_pnl_quote=realized,
         unrealized_pnl_quote=unrealized,
-        global_pnl_quote=realized + unrealized,
+        global_pnl_quote=realized + unrealized if realized is not None and unrealized is not None else None,
         volume_traded=volume,
         num_controllers=num_controllers,
     )

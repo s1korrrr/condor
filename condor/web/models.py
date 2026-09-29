@@ -85,7 +85,7 @@ class BotInfo(BaseModel):
     status: str
     connector: str = ""
     trading_pair: str = ""
-    pnl: float = 0.0
+    pnl: Optional[float] = None
     uptime: float = 0.0
     controller_type: str = ""
 
@@ -103,11 +103,11 @@ class ControllerInfo(BaseModel):
     status: str = "unknown"
     connector: str = ""
     trading_pair: str = ""
-    realized_pnl_quote: Optional[float] = 0.0
-    unrealized_pnl_quote: Optional[float] = 0.0
-    global_pnl_quote: Optional[float] = 0.0
-    global_pnl_pct: Optional[float] = 0.0
-    volume_traded: Optional[float] = 0.0
+    realized_pnl_quote: Optional[float] = None
+    unrealized_pnl_quote: Optional[float] = None
+    global_pnl_quote: Optional[float] = None
+    global_pnl_pct: Optional[float] = None
+    volume_traded: Optional[float] = None
     close_type_counts: dict[str, int] = {}
     positions_summary: list[dict[str, Any]] = []
     deployed_at: Optional[str] = None
@@ -133,8 +133,8 @@ class BotSummary(BaseModel):
 class BotsPageResponse(BaseModel):
     controllers: list[ControllerInfo] = []
     bots: list[BotSummary] = []
-    total_pnl: Optional[float] = 0.0
-    total_volume: Optional[float] = 0.0
+    total_pnl: Optional[float] = None
+    total_volume: Optional[float] = None
     metrics_available: bool = True
     metrics_unavailable_reason: Optional[str] = None
     server_online: bool = True
@@ -154,10 +154,10 @@ class BotRunInfo(BaseModel):
     deployment_status: str = ""
     created_at: Optional[str] = None
     stopped_at: Optional[str] = None
-    realized_pnl_quote: float = 0.0
-    unrealized_pnl_quote: float = 0.0
-    global_pnl_quote: float = 0.0
-    volume_traded: float = 0.0
+    realized_pnl_quote: Optional[float] = None
+    unrealized_pnl_quote: Optional[float] = None
+    global_pnl_quote: Optional[float] = None
+    volume_traded: Optional[float] = None
     num_controllers: int = 0
 
 
@@ -176,11 +176,11 @@ class ControllerPerformanceSnapshot(BaseModel):
     controller_name: str = ""
     connector: str = ""
     trading_pair: str = ""
-    realized_pnl_quote: float = 0.0
-    unrealized_pnl_quote: float = 0.0
-    global_pnl_quote: float = 0.0
-    global_pnl_pct: float = 0.0
-    volume_traded: float = 0.0
+    realized_pnl_quote: Optional[float] = None
+    unrealized_pnl_quote: Optional[float] = None
+    global_pnl_quote: Optional[float] = None
+    global_pnl_pct: Optional[float] = None
+    volume_traded: Optional[float] = None
     close_type_counts: dict[str, int] = {}
     positions_summary: list[dict[str, Any]] = []
     custom_info: dict[str, Any] = {}

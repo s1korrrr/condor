@@ -25,6 +25,7 @@ const Operations = lazy(() => import("@/pages/Operations").then(module => ({defa
 const Overview = lazy(() => import("@/pages/Overview").then(module => ({default:module.Overview})));
 const Research = lazy(() => import("@/pages/Research").then(module => ({default:module.Research})));
 const TradingVisuals = lazy(() => import("@/pages/TradingVisuals").then(module => ({ default: module.TradingVisuals })));
+const Screener = lazy(() => import("@/pages/Screener").then(module => ({ default: module.Screener })));
 const FleetPage = lazy(() => import("@/fleet/FleetPage").then(module => ({ default: module.FleetRoute })));
 const FleetDetail = lazy(() => import("@/fleet/FleetDetail").then(module => ({ default: module.FleetDetailRoute })));
 
@@ -106,6 +107,7 @@ export default function App() {
                 <Route path="/capital" element={<Suspense fallback={<p role="status">Loading capital…</p>}><Overview/></Suspense>} />
                 <Route path="/overview" element={<LegacyOverview/>} />
                 <Route path="/research" element={<Suspense fallback={<p role="status">Loading research…</p>}><Research/></Suspense>} />
+                <Route path="/screener" element={<Suspense fallback={<p role="status">Loading screener…</p>}><Screener/></Suspense>} />
                 <Route path="/tools" element={<WorkspaceTools/>} />
                 <Route path="/portfolio" element={<PortfolioRoute />} />
                 <Route path="/bots" element={<Bots />} />

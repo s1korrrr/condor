@@ -16,7 +16,7 @@ const toneClass = (value: number | string | null | undefined) => metricTone(valu
 
 function FleetBotCard({ source, reads, status, color, net }: { source: TradingVisualsSource; reads: OwnerReads | undefined; status: string | null; color: string; net: BotNet | null }) {
   const quant = reads?.quant ?? null;
-  const quote = reads?.controller.quote ?? quant?.netLifecycle.unit ?? null;
+  const quote = reads?.controller.quote ?? null;
   const pairs = quant?.pairs ?? [];
   const openPairs = reads?.view ? reads.view.pairs.filter(row => row.quantity !== null && formatDecimal(row.quantity, 18) !== '0').length : null;
   const owned = quant?.ownedValue.value ?? quant?.ownedValue.lastKnown ?? null;
@@ -46,12 +46,13 @@ function FleetBotCard({ source, reads, status, color, net }: { source: TradingVi
     <div className="fs-body">
       <section className="fs-pnl" aria-label="Net PnL">
         <div className="fs-pnl__head">
-          <span className="q-muted">Net PnL · {net?.source ?? 'no net source'}</span>
+          <span className="q-muted">Controller report PnL · {net?.source ?? 'unavailable'}</span>
           <strong className={toneClass(net?.value)}>{net?.value == null ? 'Unavailable' : formatSigned(net.value)}<small>{quote ?? ''}{net?.stale ? ' · last published' : ''}</small></strong>
           <span className="fs-deltas">
             <span className={toneClass(reads?.day.change)}>24h {reads?.day.change == null ? '—' : formatSigned(reads.day.change)}</span>
             <span className={toneClass(reads?.week.change)}>7d {reads?.week.change == null ? '—' : formatSigned(reads.week.change)}</span>
           </span>
+          <small className="q-muted">Retained-position net diagnostic: {quant?.retainedPositionNetPnl.value ?? quant?.retainedPositionNetPnl.lastKnown ?? 'Unavailable'} {quant?.retainedPositionNetPnl.unit ?? ''}</small>
         </div>
         {points.filter(point => point.value != null).length >= 2
           ? <SparkChart points={points.map(point => ({ time: point.time, value: point.value }))} positive={(reads?.day.change ?? 0) >= 0} height={78} unit={quote ?? undefined} format={value => formatSigned(value)} ariaLabel="24h saved net PnL" />
@@ -64,7 +65,7 @@ function FleetBotCard({ source, reads, status, color, net }: { source: TradingVi
         <div><dt>Win rate</dt><dd>{cycles ? winRateText(cycles.stats) : '—'}</dd></div>
         <div><dt>Fill ratio</dt><dd>{execution?.fillRatio == null ? '—' : `${(execution.fillRatio * 100).toFixed(1)}%`}</dd></div>
         <div><dt>Open orders</dt><dd>{orders == null ? '—' : orders}</dd></div>
-        <div><dt>Fills · fees</dt><dd>{cycles ? `${cycles.stats.fillCount} · ${cycles.stats.fees == null ? '—' : formatDecimal(cycles.stats.fees, 4)}` : '—'}</dd></div>
+        <div><dt>Fills · fees</dt><dd>{cycles ? `${cycles.stats.fillCount ?? 'Unavailable'} · ${cycles.stats.fees == null ? '—' : formatDecimal(cycles.stats.fees, 4)}` : '—'}</dd></div>
         <div><dt>Heartbeat</dt><dd>{quant?.observedAt ? `${quant.observedAt.slice(11, 19)} UTC` : '—'}</dd></div>
       </dl>
     </div>

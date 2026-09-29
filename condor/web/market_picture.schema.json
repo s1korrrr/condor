@@ -1,0 +1,2109 @@
+{
+  "$defs": {
+    "AssetObservationV1": {
+      "additionalProperties": false,
+      "properties": {
+        "asset_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Asset Id",
+          "type": "string"
+        },
+        "base_asset_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Base Asset Id",
+          "type": "string"
+        },
+        "heatmap_weight": {
+          "$ref": "#/$defs/HeatmapWeightV1"
+        },
+        "instrument_id": {
+          "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+          "title": "Instrument Id",
+          "type": "string"
+        },
+        "market_type": {
+          "const": "spot",
+          "title": "Market Type",
+          "type": "string"
+        },
+        "quote_asset_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Quote Asset Id",
+          "type": "string"
+        },
+        "regime_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Regime Refs",
+          "type": "array"
+        },
+        "sector_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/SectorRefV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "venue": {
+          "maxLength": 32,
+          "minLength": 1,
+          "title": "Venue",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "asset_id",
+        "venue",
+        "market_type",
+        "base_asset_id",
+        "quote_asset_id",
+        "heatmap_weight",
+        "regime_refs"
+      ],
+      "title": "AssetObservationV1",
+      "type": "object"
+    },
+    "BreadthSummaryV1": {
+      "additionalProperties": false,
+      "properties": {
+        "cutoff_ms": {
+          "minimum": 0,
+          "title": "Cutoff Ms",
+          "type": "integer"
+        },
+        "expected_count": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Count",
+          "type": "integer"
+        },
+        "horizon_minutes": {
+          "title": "Horizon Minutes",
+          "type": "integer"
+        },
+        "metric_refs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/MetricRef"
+          },
+          "title": "Metric Refs",
+          "type": "object"
+        },
+        "omission_reasons": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Omission Reasons",
+          "type": "object"
+        },
+        "required_history_minutes": {
+          "maximum": 20160,
+          "minimum": 1,
+          "title": "Required History Minutes",
+          "type": "integer"
+        },
+        "valid_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Valid Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "horizon_minutes",
+        "metric_refs",
+        "valid_count",
+        "expected_count",
+        "cutoff_ms",
+        "required_history_minutes",
+        "omission_reasons"
+      ],
+      "title": "BreadthSummaryV1",
+      "type": "object"
+    },
+    "ComparisonsV1": {
+      "additionalProperties": false,
+      "properties": {
+        "baseline_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Baseline Count",
+          "type": "integer"
+        },
+        "baseline_cutoff_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Cutoff Ms"
+        },
+        "baseline_snapshot_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Snapshot Id"
+        },
+        "common_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Common Count",
+          "type": "integer"
+        },
+        "common_membership_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Common Membership Hash"
+        },
+        "current_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Current Count",
+          "type": "integer"
+        },
+        "interval_ms": {
+          "const": 3600000,
+          "title": "Interval Ms",
+          "type": "integer"
+        },
+        "metric_refs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/MetricRef"
+          },
+          "title": "Metric Refs",
+          "type": "object"
+        }
+      },
+      "required": [
+        "interval_ms",
+        "current_count",
+        "baseline_count",
+        "common_count",
+        "metric_refs"
+      ],
+      "title": "ComparisonsV1",
+      "type": "object"
+    },
+    "ComponentRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "cutoff_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cutoff Ms"
+        },
+        "expires_at_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At Ms"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "snapshot_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Snapshot Id"
+        },
+        "status": {
+          "enum": [
+            "available",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        }
+      },
+      "required": [
+        "status",
+        "reason_codes"
+      ],
+      "title": "ComponentRefV1",
+      "type": "object"
+    },
+    "DefinitionRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "code_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Code Hash",
+          "type": "string"
+        },
+        "definition_id": {
+          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+          "title": "Definition Id",
+          "type": "string"
+        },
+        "definition_version": {
+          "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+          "title": "Definition Version",
+          "type": "string"
+        },
+        "parameter_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Parameter Hash",
+          "type": "string"
+        },
+        "unit": {
+          "enum": [
+            "price_quote",
+            "return_percent",
+            "percentage_points",
+            "share_fraction",
+            "volume_quote",
+            "ratio",
+            "adx_0_100",
+            "rsi_0_100",
+            "correlation_minus1_to1",
+            "index_minus3_to3",
+            "index_points",
+            "ratio_points",
+            "volatility_fraction_annualized",
+            "instruments",
+            "milliseconds",
+            "percentile_0_100",
+            "count",
+            "percent",
+            "atr_percent",
+            "price_percent",
+            "quote_volume",
+            "return_fraction"
+          ],
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "definition_id",
+        "definition_version",
+        "parameter_hash",
+        "code_hash",
+        "unit"
+      ],
+      "title": "DefinitionRefV1",
+      "type": "object"
+    },
+    "DistributionV1": {
+      "additionalProperties": false,
+      "properties": {
+        "best_instrument_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Best Instrument Id"
+        },
+        "counts": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Counts",
+          "type": "array"
+        },
+        "definition_ref": {
+          "additionalProperties": true,
+          "title": "Definition Ref",
+          "type": "object"
+        },
+        "edges": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 41,
+          "minItems": 41,
+          "title": "Edges",
+          "type": "array"
+        },
+        "expected_count": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Count",
+          "type": "integer"
+        },
+        "horizon_minutes": {
+          "title": "Horizon Minutes",
+          "type": "integer"
+        },
+        "overflow_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Overflow Count",
+          "type": "integer"
+        },
+        "span_percent": {
+          "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Span Percent",
+          "type": "string"
+        },
+        "underflow_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Underflow Count",
+          "type": "integer"
+        },
+        "unit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "valid_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Valid Count",
+          "type": "integer"
+        },
+        "worst_instrument_id": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Worst Instrument Id"
+        }
+      },
+      "required": [
+        "horizon_minutes",
+        "unit",
+        "definition_ref",
+        "span_percent",
+        "edges",
+        "counts",
+        "underflow_count",
+        "overflow_count",
+        "valid_count",
+        "expected_count"
+      ],
+      "title": "DistributionV1",
+      "type": "object"
+    },
+    "HeatmapWeightV1": {
+      "additionalProperties": false,
+      "properties": {
+        "effective_at_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Effective At Ms"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "source_ref": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Ref"
+        },
+        "status": {
+          "enum": [
+            "valid",
+            "missing",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "unit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        }
+      },
+      "required": [
+        "unit",
+        "status",
+        "reason_codes"
+      ],
+      "title": "HeatmapWeightV1",
+      "type": "object"
+    },
+    "MetricCellV1": {
+      "additionalProperties": false,
+      "description": "A series cell omits VALID, COMPLETE and empty reasons when they are exact defaults.\n\nThe defaults apply only inside metric-series.v1 cells. Expanded MetricValueV1\nand aggregate metrics still carry their explicit quality fields.",
+      "properties": {
+        "available_at_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Available At Ms"
+        },
+        "computation_status": {
+          "default": "VALID",
+          "enum": [
+            "VALID",
+            "WARMING",
+            "MISSING",
+            "INVALID",
+            "UNAVAILABLE"
+          ],
+          "title": "Computation Status",
+          "type": "string"
+        },
+        "coverage_status": {
+          "default": "COMPLETE",
+          "enum": [
+            "COMPLETE",
+            "PARTIAL"
+          ],
+          "title": "Coverage Status",
+          "type": "string"
+        },
+        "denominator": {
+          "anyOf": [
+            {
+              "maximum": 500,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Denominator"
+        },
+        "expected_denominator": {
+          "anyOf": [
+            {
+              "maximum": 500,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expected Denominator"
+        },
+        "expires_at_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At Ms"
+        },
+        "instrument_id": {
+          "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+          "title": "Instrument Id",
+          "type": "string"
+        },
+        "numerator": {
+          "anyOf": [
+            {
+              "maximum": 500,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Numerator"
+        },
+        "observation_interval_ms": {
+          "anyOf": [
+            {
+              "maximum": 604800000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Interval Ms"
+        },
+        "reason_codes": {
+          "default": [],
+          "items": {
+            "enum": [
+              "SOURCE_UNAVAILABLE",
+              "SOURCE_DISABLED",
+              "SOURCE_IDENTITY_MISMATCH",
+              "QUOTE_MISMATCH",
+              "DUPLICATE_ASSET",
+              "BAR_UNCONFIRMED",
+              "BAR_GAP",
+              "LAGGING_MEMBER",
+              "STALE_SOURCE",
+              "INSUFFICIENT_HISTORY",
+              "INSUFFICIENT_COVERAGE",
+              "CONSTANT_SERIES",
+              "ZERO_BASELINE",
+              "UNQUALIFIED_MODEL",
+              "UNKNOWN_CONFIDENCE_SCALE",
+              "UNKNOWN_SECTOR",
+              "CAPACITY_EXCEEDED",
+              "EXPIRED_SNAPSHOT",
+              "HASH_MISMATCH",
+              "SEQUENCE_REGRESSION",
+              "RECONSTRUCTED_AVAILABILITY",
+              "RETENTION_EXPIRED",
+              "INVALID_INPUT",
+              "CORRECTION_PENDING",
+              "NO_CROSSING",
+              "NO_PRIOR_STATE"
+            ],
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "required_samples": {
+          "anyOf": [
+            {
+              "maximum": 20161,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Samples"
+        },
+        "sample_count": {
+          "maximum": 20161,
+          "minimum": 0,
+          "title": "Sample Count",
+          "type": "integer"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "window_end_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Window End Ms"
+        },
+        "window_start_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Window Start Ms"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "sample_count"
+      ],
+      "title": "MetricCellV1",
+      "type": "object"
+    },
+    "MetricRef": {
+      "additionalProperties": false,
+      "properties": {
+        "metric_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Metric Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metric_id"
+      ],
+      "title": "MetricRef",
+      "type": "object"
+    },
+    "MetricSeriesV1": {
+      "additionalProperties": false,
+      "properties": {
+        "available_at_ms": {
+          "maximum": 253402300799000,
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "cells": {
+          "items": {
+            "$ref": "#/$defs/MetricCellV1"
+          },
+          "maxItems": 500,
+          "title": "Cells",
+          "type": "array"
+        },
+        "definition_ref": {
+          "$ref": "#/$defs/DefinitionRefV1"
+        },
+        "encoding": {
+          "const": "metric-series.v1",
+          "title": "Encoding",
+          "type": "string"
+        },
+        "expected_denominator": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Expected Denominator",
+          "type": "integer"
+        },
+        "expires_at_ms": {
+          "maximum": 253402300799000,
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "fixture_only": {
+          "default": false,
+          "title": "Fixture Only",
+          "type": "boolean"
+        },
+        "horizon_minutes": {
+          "maximum": 10080,
+          "minimum": 1,
+          "title": "Horizon Minutes",
+          "type": "integer"
+        },
+        "metric_id": {
+          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+          "title": "Metric Id",
+          "type": "string"
+        },
+        "observation_interval_ms": {
+          "anyOf": [
+            {
+              "maximum": 604800000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Interval Ms"
+        },
+        "payload_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Payload Digest",
+          "type": "string"
+        },
+        "provider_ref": {
+          "$ref": "#/$defs/ProviderRefV1"
+        },
+        "required_samples": {
+          "maximum": 20161,
+          "minimum": 0,
+          "title": "Required Samples",
+          "type": "integer"
+        },
+        "series_unit": {
+          "enum": [
+            "price_quote",
+            "return_percent",
+            "percentage_points",
+            "share_fraction",
+            "volume_quote",
+            "ratio",
+            "adx_0_100",
+            "rsi_0_100",
+            "correlation_minus1_to1",
+            "index_minus3_to3",
+            "index_points",
+            "ratio_points",
+            "volatility_fraction_annualized",
+            "instruments",
+            "milliseconds",
+            "percentile_0_100",
+            "count",
+            "percent",
+            "atr_percent",
+            "price_percent",
+            "quote_volume",
+            "return_fraction"
+          ],
+          "title": "Series Unit",
+          "type": "string"
+        },
+        "window_end_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Window End Ms"
+        },
+        "window_start_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Window Start Ms"
+        }
+      },
+      "required": [
+        "encoding",
+        "metric_id",
+        "definition_ref",
+        "provider_ref",
+        "horizon_minutes",
+        "series_unit",
+        "available_at_ms",
+        "expires_at_ms",
+        "required_samples",
+        "expected_denominator",
+        "cells",
+        "payload_digest"
+      ],
+      "title": "MetricSeriesV1",
+      "type": "object"
+    },
+    "MetricValueV1": {
+      "additionalProperties": false,
+      "description": "Expanded per-instrument value; consumers receive this shape after series resolution.",
+      "properties": {
+        "available_at_ms": {
+          "maximum": 253402300799000,
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "computation_status": {
+          "enum": [
+            "VALID",
+            "WARMING",
+            "MISSING",
+            "INVALID",
+            "UNAVAILABLE"
+          ],
+          "title": "Computation Status",
+          "type": "string"
+        },
+        "coverage_status": {
+          "enum": [
+            "COMPLETE",
+            "PARTIAL"
+          ],
+          "title": "Coverage Status",
+          "type": "string"
+        },
+        "definition": {
+          "$ref": "#/$defs/DefinitionRefV1"
+        },
+        "denominator": {
+          "anyOf": [
+            {
+              "maximum": 500,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Denominator"
+        },
+        "expected_denominator": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Expected Denominator",
+          "type": "integer"
+        },
+        "expires_at_ms": {
+          "maximum": 253402300799000,
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "horizon_minutes": {
+          "maximum": 10080,
+          "minimum": 1,
+          "title": "Horizon Minutes",
+          "type": "integer"
+        },
+        "metric_id": {
+          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+          "title": "Metric Id",
+          "type": "string"
+        },
+        "numerator": {
+          "anyOf": [
+            {
+              "maximum": 500,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Numerator"
+        },
+        "observation_interval_ms": {
+          "anyOf": [
+            {
+              "maximum": 604800000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Interval Ms"
+        },
+        "reason_codes": {
+          "items": {
+            "enum": [
+              "SOURCE_UNAVAILABLE",
+              "SOURCE_DISABLED",
+              "SOURCE_IDENTITY_MISMATCH",
+              "QUOTE_MISMATCH",
+              "DUPLICATE_ASSET",
+              "BAR_UNCONFIRMED",
+              "BAR_GAP",
+              "LAGGING_MEMBER",
+              "STALE_SOURCE",
+              "INSUFFICIENT_HISTORY",
+              "INSUFFICIENT_COVERAGE",
+              "CONSTANT_SERIES",
+              "ZERO_BASELINE",
+              "UNQUALIFIED_MODEL",
+              "UNKNOWN_CONFIDENCE_SCALE",
+              "UNKNOWN_SECTOR",
+              "CAPACITY_EXCEEDED",
+              "EXPIRED_SNAPSHOT",
+              "HASH_MISMATCH",
+              "SEQUENCE_REGRESSION",
+              "RECONSTRUCTED_AVAILABILITY",
+              "RETENTION_EXPIRED",
+              "INVALID_INPUT",
+              "CORRECTION_PENDING",
+              "NO_CROSSING",
+              "NO_PRIOR_STATE"
+            ],
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "required_samples": {
+          "maximum": 20161,
+          "minimum": 0,
+          "title": "Required Samples",
+          "type": "integer"
+        },
+        "sample_count": {
+          "maximum": 20161,
+          "minimum": 0,
+          "title": "Sample Count",
+          "type": "integer"
+        },
+        "source_ref": {
+          "$ref": "#/$defs/ProviderRefV1"
+        },
+        "unit": {
+          "enum": [
+            "price_quote",
+            "return_percent",
+            "percentage_points",
+            "share_fraction",
+            "volume_quote",
+            "ratio",
+            "adx_0_100",
+            "rsi_0_100",
+            "correlation_minus1_to1",
+            "index_minus3_to3",
+            "index_points",
+            "ratio_points",
+            "volatility_fraction_annualized",
+            "instruments",
+            "milliseconds",
+            "percentile_0_100",
+            "count",
+            "percent",
+            "atr_percent",
+            "price_percent",
+            "quote_volume",
+            "return_fraction"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "window_end_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Window End Ms"
+        },
+        "window_start_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Window Start Ms"
+        }
+      },
+      "required": [
+        "metric_id",
+        "unit",
+        "computation_status",
+        "coverage_status",
+        "reason_codes",
+        "definition",
+        "source_ref",
+        "horizon_minutes",
+        "available_at_ms",
+        "expires_at_ms",
+        "sample_count",
+        "required_samples",
+        "expected_denominator"
+      ],
+      "title": "MetricValueV1",
+      "type": "object"
+    },
+    "ParticipationV1": {
+      "additionalProperties": false,
+      "properties": {
+        "delta_metric_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delta Metric Id"
+        },
+        "denominator": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Denominator",
+          "type": "integer"
+        },
+        "expected_denominator": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Denominator",
+          "type": "integer"
+        },
+        "membership_metric_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Membership Metric Id",
+          "type": "string"
+        },
+        "metric_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Metric Id",
+          "type": "string"
+        },
+        "numerator": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Numerator",
+          "type": "integer"
+        },
+        "predicate_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Predicate Id",
+          "type": "string"
+        },
+        "threshold": {
+          "title": "Threshold",
+          "type": "string"
+        },
+        "threshold_unit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Threshold Unit",
+          "type": "string"
+        },
+        "timeframe_minutes": {
+          "maximum": 20160,
+          "minimum": 1,
+          "title": "Timeframe Minutes",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "predicate_id",
+        "metric_id",
+        "membership_metric_id",
+        "threshold",
+        "threshold_unit",
+        "timeframe_minutes",
+        "numerator",
+        "denominator",
+        "expected_denominator"
+      ],
+      "title": "ParticipationV1",
+      "type": "object"
+    },
+    "PressureV1": {
+      "additionalProperties": false,
+      "properties": {
+        "horizon_minutes": {
+          "title": "Horizon Minutes",
+          "type": "integer"
+        },
+        "metric_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Metric Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "horizon_minutes",
+        "metric_id"
+      ],
+      "title": "PressureV1",
+      "type": "object"
+    },
+    "ProviderCoverageV1": {
+      "additionalProperties": false,
+      "properties": {
+        "coverage_fraction": {
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Coverage Fraction",
+          "type": "string"
+        },
+        "expected_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Expected Count",
+          "type": "integer"
+        },
+        "valid_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Valid Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "expected_count",
+        "valid_count",
+        "coverage_fraction"
+      ],
+      "title": "ProviderCoverageV1",
+      "type": "object"
+    },
+    "ProviderRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "available_at_ms": {
+          "maximum": 253402300799000,
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Capabilities",
+          "type": "array"
+        },
+        "coverage": {
+          "$ref": "#/$defs/ProviderCoverageV1"
+        },
+        "epoch": {
+          "pattern": "^[A-Za-z0-9_-]{1,128}$",
+          "title": "Epoch",
+          "type": "string"
+        },
+        "expires_at_ms": {
+          "maximum": 253402300799000,
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "observed_at_ms": {
+          "maximum": 253402300799000,
+          "minimum": 0,
+          "title": "Observed At Ms",
+          "type": "integer"
+        },
+        "provider_id": {
+          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "sequence": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "source_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Digest",
+          "type": "string"
+        },
+        "source_kind": {
+          "enum": [
+            "observed",
+            "reconstructed"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "source_snapshot_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Snapshot Id",
+          "type": "string"
+        },
+        "stream_id": {
+          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+          "title": "Stream Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider_id",
+        "stream_id",
+        "epoch",
+        "sequence",
+        "source_snapshot_id",
+        "source_digest",
+        "source_kind",
+        "observed_at_ms",
+        "available_at_ms",
+        "expires_at_ms",
+        "coverage",
+        "capabilities"
+      ],
+      "title": "ProviderRefV1",
+      "type": "object"
+    },
+    "RegimeObservationRefV1": {
+      "additionalProperties": false,
+      "description": "Owner regime record plus an API-local join key; semantics remain engine-owned.",
+      "properties": {
+        "available_at_ms": {
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "calibration_status": {
+          "enum": [
+            "calibrated",
+            "uncalibrated",
+            "unknown",
+            "not_applicable"
+          ],
+          "title": "Calibration Status",
+          "type": "string"
+        },
+        "confidence_kind": {
+          "anyOf": [
+            {
+              "enum": [
+                "model_probability",
+                "model_score",
+                "reported_unknown"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence Kind"
+        },
+        "confidence_unit": {
+          "anyOf": [
+            {
+              "enum": [
+                "fraction",
+                "percent",
+                "named_score"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence Unit"
+        },
+        "confidence_value": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence Value"
+        },
+        "context_bias": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Context Bias"
+        },
+        "controller_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Controller Id"
+        },
+        "expires_at_ms": {
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "feature_schema_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Feature Schema Hash"
+        },
+        "fit_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Fit Id"
+        },
+        "instrument_id": {
+          "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+          "title": "Instrument Id",
+          "type": "string"
+        },
+        "model_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Id"
+        },
+        "model_version": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Model Version"
+        },
+        "origin": {
+          "enum": [
+            "controller_recorded",
+            "market_observation"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "producer_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Producer Id",
+          "type": "string"
+        },
+        "provider_ref": {
+          "$ref": "#/$defs/ProviderRefV1"
+        },
+        "regime_definition_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Regime Definition Id"
+        },
+        "regime_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Regime Id",
+          "type": "string"
+        },
+        "regime_label": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Regime Label"
+        },
+        "source_bar_close_ms": {
+          "minimum": 0,
+          "title": "Source Bar Close Ms",
+          "type": "integer"
+        },
+        "source_epoch": {
+          "title": "Source Epoch",
+          "type": "string"
+        },
+        "source_sequence": {
+          "minimum": 1,
+          "title": "Source Sequence",
+          "type": "integer"
+        },
+        "trend_confidence_unit": {
+          "anyOf": [
+            {
+              "enum": [
+                "fraction",
+                "percent",
+                "named_score"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trend Confidence Unit"
+        },
+        "trend_confidence_value": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trend Confidence Value"
+        },
+        "trend_direction": {
+          "anyOf": [
+            {
+              "enum": [
+                "up",
+                "down",
+                "flat"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trend Direction"
+        }
+      },
+      "required": [
+        "regime_id",
+        "instrument_id",
+        "source_bar_close_ms",
+        "origin",
+        "producer_id",
+        "calibration_status",
+        "provider_ref",
+        "available_at_ms",
+        "expires_at_ms",
+        "source_epoch",
+        "source_sequence"
+      ],
+      "title": "RegimeObservationRefV1",
+      "type": "object"
+    },
+    "SectorRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "sector_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sector Id"
+        },
+        "status": {
+          "enum": [
+            "known",
+            "unknown",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "taxonomy_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Taxonomy Id",
+          "type": "string"
+        },
+        "taxonomy_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Taxonomy Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "taxonomy_id",
+        "taxonomy_version",
+        "status"
+      ],
+      "title": "SectorRefV1",
+      "type": "object"
+    },
+    "SummaryV1": {
+      "additionalProperties": false,
+      "properties": {
+        "metric_refs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/MetricRef"
+          },
+          "title": "Metric Refs",
+          "type": "object"
+        }
+      },
+      "required": [
+        "metric_refs"
+      ],
+      "title": "SummaryV1",
+      "type": "object"
+    },
+    "UniverseRefV1": {
+      "additionalProperties": false,
+      "properties": {
+        "effective_at_ms": {
+          "minimum": 0,
+          "title": "Effective At Ms",
+          "type": "integer"
+        },
+        "expected_asset_count": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Asset Count",
+          "type": "integer"
+        },
+        "expected_instrument_count": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Instrument Count",
+          "type": "integer"
+        },
+        "member_asset_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 500,
+          "minItems": 1,
+          "title": "Member Asset Ids",
+          "type": "array"
+        },
+        "member_instrument_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 500,
+          "minItems": 1,
+          "title": "Member Instrument Ids",
+          "type": "array"
+        },
+        "membership_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Membership Hash",
+          "type": "string"
+        },
+        "quote_policy_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Quote Policy Id",
+          "type": "string"
+        },
+        "revision": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "sector_taxonomy_ref": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Sector Taxonomy Ref"
+        },
+        "selected_numeraire": {
+          "maxLength": 32,
+          "minLength": 1,
+          "title": "Selected Numeraire",
+          "type": "string"
+        },
+        "universe_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Universe Id",
+          "type": "string"
+        },
+        "weight_definition_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Weight Definition Id",
+          "type": "string"
+        },
+        "weight_revision": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Weight Revision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "universe_id",
+        "revision",
+        "membership_hash",
+        "weight_definition_id",
+        "weight_revision",
+        "effective_at_ms",
+        "member_instrument_ids",
+        "member_asset_ids",
+        "expected_instrument_count",
+        "expected_asset_count",
+        "quote_policy_id",
+        "selected_numeraire"
+      ],
+      "title": "UniverseRefV1",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "asset_metric_refs": {
+      "additionalProperties": {
+        "$ref": "#/$defs/MetricRef"
+      },
+      "title": "Asset Metric Refs",
+      "type": "object"
+    },
+    "asset_predicate_refs": {
+      "additionalProperties": {
+        "$ref": "#/$defs/MetricRef"
+      },
+      "title": "Asset Predicate Refs",
+      "type": "object"
+    },
+    "assets": {
+      "items": {
+        "$ref": "#/$defs/AssetObservationV1"
+      },
+      "maxItems": 500,
+      "minItems": 1,
+      "title": "Assets",
+      "type": "array"
+    },
+    "available_at_ms": {
+      "minimum": 0,
+      "title": "Available At Ms",
+      "type": "integer"
+    },
+    "breadth": {
+      "items": {
+        "$ref": "#/$defs/BreadthSummaryV1"
+      },
+      "maxItems": 6,
+      "minItems": 6,
+      "title": "Breadth",
+      "type": "array"
+    },
+    "canonical_context_ref": {
+      "$ref": "#/$defs/ComponentRefV1"
+    },
+    "comparisons": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ComparisonsV1"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "coverage": {
+      "additionalProperties": true,
+      "title": "Coverage",
+      "type": "object"
+    },
+    "cutoff_ms": {
+      "minimum": 0,
+      "title": "Cutoff Ms",
+      "type": "integer"
+    },
+    "cutoff_policy_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Cutoff Policy Id",
+      "type": "string"
+    },
+    "definition_registry_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Definition Registry Hash",
+      "type": "string"
+    },
+    "distribution": {
+      "items": {
+        "$ref": "#/$defs/DistributionV1"
+      },
+      "maxItems": 6,
+      "minItems": 6,
+      "title": "Distribution",
+      "type": "array"
+    },
+    "encoding": {
+      "const": "metric-series.v1",
+      "title": "Encoding",
+      "type": "string"
+    },
+    "epoch": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Epoch",
+      "type": "string"
+    },
+    "event_cursor": {
+      "anyOf": [
+        {
+          "maxLength": 2048,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Event Cursor"
+    },
+    "expires_at_ms": {
+      "minimum": 0,
+      "title": "Expires At Ms",
+      "type": "integer"
+    },
+    "feature_set_version": {
+      "const": "market-picture.observation.v1",
+      "title": "Feature Set Version",
+      "type": "string"
+    },
+    "fixture_marker": {
+      "anyOf": [
+        {
+          "const": "fixture-only",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fixture Marker"
+    },
+    "flow_ref": {
+      "$ref": "#/$defs/ComponentRefV1"
+    },
+    "market_metrics": {
+      "additionalProperties": {
+        "$ref": "#/$defs/MetricValueV1"
+      },
+      "title": "Market Metrics",
+      "type": "object"
+    },
+    "metric_series": {
+      "items": {
+        "$ref": "#/$defs/MetricSeriesV1"
+      },
+      "maxItems": 4096,
+      "title": "Metric Series",
+      "type": "array"
+    },
+    "participation": {
+      "items": {
+        "$ref": "#/$defs/ParticipationV1"
+      },
+      "maxItems": 8,
+      "minItems": 8,
+      "title": "Participation",
+      "type": "array"
+    },
+    "payload_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Payload Digest",
+      "type": "string"
+    },
+    "pressure": {
+      "items": {
+        "$ref": "#/$defs/PressureV1"
+      },
+      "maxItems": 6,
+      "minItems": 6,
+      "title": "Pressure",
+      "type": "array"
+    },
+    "providers": {
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/ProviderRefV1"
+          },
+          {
+            "$ref": "#/$defs/ComponentRefV1"
+          }
+        ]
+      },
+      "title": "Providers",
+      "type": "object"
+    },
+    "published_at_ms": {
+      "minimum": 0,
+      "title": "Published At Ms",
+      "type": "integer"
+    },
+    "regime_observations": {
+      "items": {
+        "$ref": "#/$defs/RegimeObservationRefV1"
+      },
+      "maxItems": 1000,
+      "title": "Regime Observations",
+      "type": "array"
+    },
+    "relationship_ref": {
+      "$ref": "#/$defs/ComponentRefV1"
+    },
+    "revision": {
+      "minimum": 0,
+      "title": "Revision",
+      "type": "integer"
+    },
+    "schema_version": {
+      "const": "market-picture.v1",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sequence": {
+      "minimum": 1,
+      "title": "Sequence",
+      "type": "integer"
+    },
+    "snapshot_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "source_kind": {
+      "enum": [
+        "observed",
+        "reconstructed"
+      ],
+      "title": "Source Kind",
+      "type": "string"
+    },
+    "stream_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Stream Id",
+      "type": "string"
+    },
+    "summary": {
+      "$ref": "#/$defs/SummaryV1"
+    },
+    "universe": {
+      "$ref": "#/$defs/UniverseRefV1"
+    }
+  },
+  "required": [
+    "schema_version",
+    "encoding",
+    "feature_set_version",
+    "snapshot_id",
+    "stream_id",
+    "epoch",
+    "sequence",
+    "revision",
+    "cutoff_ms",
+    "cutoff_policy_id",
+    "available_at_ms",
+    "published_at_ms",
+    "expires_at_ms",
+    "source_kind",
+    "universe",
+    "providers",
+    "definition_registry_hash",
+    "coverage",
+    "metric_series",
+    "market_metrics",
+    "asset_metric_refs",
+    "asset_predicate_refs",
+    "breadth",
+    "summary",
+    "assets",
+    "regime_observations",
+    "distribution",
+    "participation",
+    "pressure",
+    "relationship_ref",
+    "canonical_context_ref",
+    "payload_digest"
+  ],
+  "title": "MarketPictureFrameV1",
+  "type": "object"
+}

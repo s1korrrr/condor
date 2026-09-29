@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import math
 import re
 import threading
 import time
@@ -173,15 +174,33 @@ def overlay_stopping_state(server: str, controllers: list, bots: list) -> None:
 
 
 def _parse_bot(bot: dict) -> BotInfo:
-    # Aggregate PnL from controller performance if available
-    pnl = float(bot.get("pnl", 0))
-    if not pnl and "performance" in bot:
+    def optional_float(value: object) -> float | None:
+        if value is None or isinstance(value, bool):
+            return None
+        try:
+            result = float(value)
+        except (TypeError, ValueError):
+            return None
+        return result if math.isfinite(result) else None
+
+    # A supplied zero is a valid observation. Missing or incomplete components stay unknown.
+    pnl = optional_float(bot.get("pnl")) if "pnl" in bot else None
+    if pnl is None and "performance" in bot:
         perf = bot["performance"]
-        if isinstance(perf, dict):
+        if isinstance(perf, dict) and perf:
+            controller_values = []
             for ctrl in perf.values():
-                if isinstance(ctrl, dict):
-                    pnl += float(ctrl.get("realized_pnl_quote", 0))
-                    pnl += float(ctrl.get("unrealized_pnl_quote", 0))
+                if not isinstance(ctrl, dict):
+                    controller_values = []
+                    break
+                realized = optional_float(ctrl.get("realized_pnl_quote"))
+                unrealized = optional_float(ctrl.get("unrealized_pnl_quote"))
+                if realized is None or unrealized is None:
+                    controller_values = []
+                    break
+                controller_values.append(realized + unrealized)
+            if controller_values:
+                pnl = sum(controller_values)
 
     return BotInfo(
         id=str(bot.get("id", bot.get("bot_name", ""))),

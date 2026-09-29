@@ -2,6 +2,17 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { serverCapabilities, unavailableServerRoute } from '../src/lib/server-capabilities.ts';
 
+test('Market Picture has its own explicit read capability on native and full APIs', () => {
+  for (const profile of ['native', 'full']) {
+    const status = {status:'online', profile, capabilities:{market_picture:true, market_screener:false}};
+    assert.equal(serverCapabilities(status).marketPicture, true);
+    assert.equal(unavailableServerRoute('/screener', status), null);
+    const absent = {...status, capabilities:{}};
+    assert.equal(serverCapabilities(absent).marketPicture, false);
+    assert.equal(typeof unavailableServerRoute('/screener', absent), 'string');
+  }
+});
+
 const native = { status:'online', profile:'native', capabilities:{ accounts:false, executor_management:false, docker:false, native_status:true, native_controls_enabled:false, native_stop:false } };
 
 test('native bot reads do not require accounts and unsupported routes explain their boundary', () => {

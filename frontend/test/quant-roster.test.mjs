@@ -13,7 +13,8 @@ function summary(overrides = {}) {
     heartbeat: at,
     pairs: [{ controller_id: 'eth-core', pair: 'ETH-USDC', state: 'HOLDING', regime: 'oversold', units: '0.04', entry_cost: '99', mark: '2500', marked_value: '100', unrealized: '1', fees: '0.1' }],
     owned_value: { value: '100', unit: 'USDC', availability: 'available', freshness: 'fresh', observed_at: at },
-    net_lifecycle: { value: '0.9', unit: 'USDC', availability: 'available', freshness: 'fresh', observed_at: at, fee_basis: 'net_incurred' },
+    net_lifecycle: { value: null, unit: 'USDC', availability: 'unavailable', freshness: 'unknown', observed_at: at, reason_code: 'QUALIFIED_LIFECYCLE_SOURCE_UNAVAILABLE' },
+    retained_position_net_pnl: { value: '0.9', unit: 'USDC', availability: 'available', freshness: 'fresh', observed_at: at, fee_basis: 'net_incurred', metric_scope: 'retained_positions', calculation_version: 'retained_position_v1' },
     cycle_counts: { open: 1, closed_scored: 0, ownership_transfer: 1, unclassified: 2 },
   };
   return {
@@ -33,8 +34,9 @@ test('quant bot summary admits only same-bot current native data and preserves r
   assert.equal(view.ownershipBasis, 'native_verified');
   assert.equal(view.pairs[0].regime, 'oversold');
   assert.equal(view.pairs[0].units, '0.04');
-  assert.equal(view.netLifecycle.value, '0.9');
-  assert.equal(view.netLifecycle.feeBasis, 'net_incurred');
+  assert.equal(view.netLifecycle.value, null);
+  assert.equal(view.retainedPositionNetPnl.value, '0.9');
+  assert.equal(view.retainedPositionNetPnl.feeBasis, 'net_incurred');
   assert.equal(view.cycleCounts.ownershipTransfer, 1);
 });
 
@@ -68,9 +70,10 @@ test('recorded decisions require stable event identity and never synthesize rows
 });
 
 test('execution histogram requires matching owner, an available cohort, and reconciling sample counts', () => {
-  const bins = [{ from: -5, to: 0, count: 1 }, { from: 0, to: 5, count: 2 }];
+  const bins = [{ from: null, to: -5, label: '< -5', count: 1 }, { from: -5, to: 0, label: '-5–0', count: 1 }, { from: 0, to: 5, label: '0–5', count: 0 }, { from: 5, to: null, label: '>= 5', count: 1 }];
   const payload = { bot_id: 'rsi_modular_v2', execution_authorized: false, histogram: { availability: 'available', unit: 'bps', bins, sample_count: 3, excluded_count: 1, paper_excluded: 2 } };
   assert.equal(projectQuantExecution(payload, 'rsi_modular_v2').sampleCount, 3);
+  assert.deepEqual(projectQuantExecution(payload, 'rsi_modular_v2').bins.map(bin => bin.label), ['< -5', '-5–0', '0–5', '>= 5']);
   assert.equal(projectQuantExecution(payload, 'other'), null);
   assert.equal(projectQuantExecution({ ...payload, histogram: { ...payload.histogram, sample_count: 4 } }, 'rsi_modular_v2'), null);
   assert.equal(projectQuantExecution({ ...payload, histogram: { availability: 'unavailable', unit: 'bps', bins: Array.from({ length: 20 }, (_, i) => ({ from: i, to: i + 1, count: 0 })), sample_count: 0, excluded_count: 0, paper_excluded: 0 } }, 'rsi_modular_v2'), null);

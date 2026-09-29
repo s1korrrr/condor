@@ -1,12 +1,19 @@
 /** Saved native PnL points for one window, as the durable observer stored them. */
 export type PnlSeries = { points: { time: number; value: number | null; owner: number }[]; quote: string | null; change: number | null; reason: string | null };
 const RANGE_SECONDS = { '1D': 86_400, '1W': 604_800 } as const;
+/** The server keeps the last sample per UTC bucket per segment for longer reads; 1D returns every stored sample. */
+const BUCKET_SECONDS = { '1D': null, '1W': 300 } as const;
 
 export function pnlSeries(payload: unknown, bot: string, now: number, expectedRange: keyof typeof RANGE_SECONDS): PnlSeries {
   const empty = (reason: string): PnlSeries => ({ points: [], quote: null, change: null, reason });
   if (!payload || typeof payload !== 'object') return empty('Performance history requires a timestamped, comparable series.');
-  const data = payload as { source?: unknown; bot_name?: unknown; range?: unknown; coverage_start?: unknown; points?: unknown; truncated?: unknown };
-  if (data.source !== 'native_mqtt_observer' || data.bot_name !== bot || data.range !== expectedRange || !Array.isArray(data.points)) return empty('Performance history identity or requested window is invalid.');
+  const data = payload as { source?: unknown; bot_name?: unknown; range?: unknown; bucket_seconds?: unknown; coverage_start?: unknown; points?: unknown; truncated?: unknown };
+  // A server without bucketing returns every stored sample; a declared bucket must be the one this range is read at.
+  const declared: number | null = BUCKET_SECONDS[expectedRange];
+  const bucketed = data.bucket_seconds != null;
+  if (data.source !== 'native_mqtt_observer' || data.bot_name !== bot || data.range !== expectedRange || (bucketed && data.bucket_seconds !== declared) || !Array.isArray(data.points)) return empty('Performance history identity or requested window is invalid.');
+  // Samples are about a minute apart and a segment never spans more than 90s without one; a bucket adds its width.
+  const maxGap = 90 + (bucketed ? declared ?? 0 : 0);
   if (!data.points.length) return empty('Performance history requires a timestamped, comparable series. Recording begins with the first verified native report.');
   const points: PnlSeries['points'] = [];
   let owner = 0, previous: { timestamp: number; identity: string; segment: string; quote: string } | null = null, quote: string | null = null;
@@ -19,7 +26,7 @@ export function pnlSeries(payload: unknown, bot: string, now: number, expectedRa
     const value = Number(row.total_pnl_quote);
     if (!Number.isFinite(now) || !Number.isFinite(row.timestamp) || row.timestamp <= 0 || row.timestamp * 1000 > now + 5_000 || !Number.isFinite(value) || typeof row.quote !== 'string' || !row.quote.trim() || (quote && quote !== row.quote) || (previous && row.timestamp <= previous.timestamp)) return empty('Performance history contains incompatible observations.');
     quote = row.quote;
-    if (previous && (previous.segment !== row.segment || previous.identity !== row.identity || row.timestamp - previous.timestamp > 90)) points.push({ time: previous.timestamp * 1000 + 1, value: null, owner });
+    if (previous && (previous.segment !== row.segment || previous.identity !== row.identity || row.timestamp - previous.timestamp > maxGap)) points.push({ time: previous.timestamp * 1000 + 1, value: null, owner });
     if (previous && previous.identity !== row.identity) owner += 1;
     points.push({ time: row.timestamp * 1000, value, owner });
     previous = row;
@@ -32,7 +39,7 @@ export function pnlSeries(payload: unknown, bot: string, now: number, expectedRa
   const last = [...points].reverse().find(point => point.value !== null);
   const oneOwner = new Set(points.filter(point => point.value !== null).map(point => point.owner)).size === 1;
   const noGaps = points.every(point => point.value !== null);
-  const completeEdges = first !== undefined && last !== undefined && first.time / 1000 >= start - 90 && first.time / 1000 <= start + 90 && last.time / 1000 >= now / 1000 - 90;
+  const completeEdges = first !== undefined && last !== undefined && first.time / 1000 >= start - 90 && first.time / 1000 <= start + maxGap && last.time / 1000 >= now / 1000 - 90;
   const completeSource = data.truncated !== true && Number.isFinite(data.coverage_start) && Number(data.coverage_start) <= start + 90;
   const reason = completeEdges && completeSource && oneOwner && noGaps
     ? null

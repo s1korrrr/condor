@@ -43,3 +43,39 @@ test('PnL history rejects missing owner identity and out-of-window boundaries', 
   assert.equal(pnlSeries(full({ points }), 'v2', now, '1D').change, null);
   assert.equal(pnlSeries(full({ points: [null] }), 'v2', now, '1D').change, null);
 });
+
+// The server reads 1W as the last stored sample per UTC five-minute bucket per segment.
+const weekStart = now / 1000 - 604_800;
+const weekPoints = (from = weekStart, to = now / 1000) => {
+  const rows = [];
+  for (let bucket = Math.floor(from / 300); bucket * 300 <= to; bucket += 1) {
+    const time = Math.min(bucket * 300 + 270, to - 10);
+    if (time >= from) rows.push({ timestamp: time, identity: 'boot-a', segment: 'a', quote: 'USDC', total_pnl_quote: String(time - weekStart) });
+  }
+  return rows;
+};
+const week = (changes = {}) => ({ source: 'native_mqtt_observer', bot_name: 'v2', range: '1W', bucket_seconds: 300, coverage_start: weekStart - 600, truncated: false, points: weekPoints(), ...changes });
+
+test('bucketed 7d history is continuous at bucket spacing and covers the whole week', () => {
+  const result = pnlSeries(week(), 'v2', now, '1W');
+  assert.equal(result.reason, null);
+  assert.ok(result.points.every(point => point.value !== null), 'bucket spacing is not a sampling gap');
+  const rows = week().points;
+  assert.equal(result.change, Number(rows.at(-1).total_pnl_quote) - Number(rows[0].total_pnl_quote));
+});
+
+test('bucketed 7d history still voids real gaps, owner changes, late starts and mismatched buckets', () => {
+  const rows = week().points;
+  const gap = rows.filter((_, index) => index !== 1000);
+  assert.equal(pnlSeries(week({ points: gap }), 'v2', now, '1W').change, null, 'a missing bucket is a gap');
+  assert.ok(pnlSeries(week({ points: gap }), 'v2', now, '1W').points.some(point => point.value === null));
+  const segment = rows.map((row, index) => index > 1000 ? { ...row, segment: 'b' } : row);
+  assert.equal(pnlSeries(week({ points: segment }), 'v2', now, '1W').change, null);
+  const owner = rows.map((row, index) => index > 1000 ? { ...row, identity: 'boot-b', segment: 'b' } : row);
+  assert.equal(pnlSeries(week({ points: owner }), 'v2', now, '1W').change, null);
+  const late = week({ points: rows.slice(3), coverage_start: rows[3].timestamp });
+  assert.equal(pnlSeries(late, 'v2', now, '1W').change, null, 'the first point must fall inside the first bucket');
+  assert.equal(pnlSeries(week({ coverage_start: weekStart + 200 }), 'v2', now, '1W').change, null, 'recording that began after the window start is not a full week');
+  for (const bucket_seconds of [1800, 60, '300']) assert.match(pnlSeries(week({ bucket_seconds }), 'v2', now, '1W').reason, /identity|invalid/);
+  assert.match(pnlSeries(full({ bucket_seconds: 300 }), 'v2', now, '1D').reason, /identity|invalid/, '1D reads are never bucketed');
+});

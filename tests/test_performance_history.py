@@ -65,7 +65,8 @@ def test_durable_sampling_dedup_and_segments(tmp_path):
     store = PerformanceHistory(tmp_path / "history.db")
     for t in [1000, 1000, 1005, 1060]:
         store.record("server", [packet(t)], t)
-    rows = PerformanceHistory(store.path).read("server", "main", "ALL", 1060)["points"]
+    # 1D returns every stored sample; longer ranges are bucketed.
+    rows = PerformanceHistory(store.path).read("server", "main", "1D", 1060)["points"]
     assert len(rows) == 2
     assert rows[0]["segment"] == rows[1]["segment"]
     store.record("server", [packet(1065, "new")], 1065)
@@ -77,9 +78,97 @@ def test_durable_sampling_dedup_and_segments(tmp_path):
     assert store.read("other", "main", "ALL", 1300)["points"] == []
 
 
+NOW = 1_800_000_000.0
+
+
+def seed(store, rows):
+    """Stored native samples as (timestamp, identity, segment, total)."""
+    with store._connect() as conn:
+        conn.executemany(
+            "INSERT INTO points VALUES ('server','main',?,?,?,'USDC',?,'0',?)",
+            [(t, identity, segment, str(total), str(total)) for t, identity, segment, total in rows],
+        )
+
+
+def minute_rows(start, end, identity="boot-a", segment="a"):
+    return [(float(t), identity, segment, index) for index, t in enumerate(range(int(start), int(end), 60))]
+
+
+@pytest.mark.parametrize("period,bucket", [("1W", 300), ("1M", 1800), ("ALL", 3600)])
+def test_long_ranges_cover_the_whole_window_with_the_last_sample_per_bucket(tmp_path, period, bucket):
+    from condor.performance_history import RANGES
+
+    store = PerformanceHistory(tmp_path / "history.db")
+    start = NOW - min(RANGES[period], 40 * 86400) - 600
+    raw = minute_rows(start, NOW + 1)
+    seed(store, raw)
+    result = store.read("server", "main", period, NOW)
+    points = result["points"]
+    assert result["truncated"] is False
+    assert result["bucket_seconds"] == bucket
+    assert result["coverage_start"] == raw[0][0]
+    # The window edges are real observations: the newest sample and one inside the first bucket.
+    assert points[-1]["timestamp"] == raw[-1][0]
+    window_start = NOW - RANGES[period]
+    assert window_start <= points[0]["timestamp"] <= max(window_start, raw[0][0]) + bucket
+    # Each returned point is a stored sample and the last one of its bucket; nothing is invented.
+    stored = {t: total for t, _, _, total in raw}
+    last_in_bucket = {}
+    for t, *_ in raw:
+        if t >= window_start:
+            last_in_bucket[int(t // bucket)] = t
+    assert [p["timestamp"] for p in points] == sorted(last_in_bucket.values())
+    assert all(p["total_pnl_quote"] == str(stored[p["timestamp"]]) for p in points)
+    assert all(b["timestamp"] - a["timestamp"] <= bucket + 90 for a, b in zip(points, points[1:]))
+
+
+def test_one_day_reads_stay_unbucketed(tmp_path):
+    store = PerformanceHistory(tmp_path / "history.db")
+    raw = minute_rows(NOW - 86400 - 600, NOW + 1)
+    seed(store, raw)
+    result = store.read("server", "main", "1D", NOW)
+    assert result["bucket_seconds"] is None
+    assert [p["timestamp"] for p in result["points"]] == [t for t, *_ in raw if t >= NOW - 86400]
+
+
+def test_buckets_never_join_across_segments_owners_or_gaps(tmp_path):
+    store = PerformanceHistory(tmp_path / "history.db")
+    # Owner a ends inside a bucket, owner b starts in the same bucket; b then stops and
+    # a later segment of b resumes after a 20 minute gap.
+    first = minute_rows(NOW - 86400, NOW - 7320, "boot-a", "a")
+    second = minute_rows(NOW - 7340, NOW - 3600, "boot-b", "b")
+    third = minute_rows(NOW - 2400, NOW + 1, "boot-b", "c")
+    seed(store, first + second + third)
+    points = store.read("server", "main", "1W", NOW)["points"]
+    segments = [p["segment"] for p in points]
+    assert segments == sorted(segments), "segments stay contiguous and ordered"
+    for segment, rows in (("a", first), ("b", second), ("c", third)):
+        kept = [p for p in points if p["segment"] == segment]
+        assert kept[-1]["timestamp"] == rows[-1][0], f"segment {segment} keeps its last observation"
+        assert {p["identity"] for p in kept} == {rows[0][1]}
+    shared = int(first[-1][0] // 300)
+    assert int(second[0][0] // 300) == shared
+    assert {p["segment"] for p in points if int(p["timestamp"] // 300) == shared} == {"a", "b"}
+    boundary = segments.index("b")
+    assert points[boundary - 1]["segment"] == "a" and points[boundary - 1]["timestamp"] == first[-1][0]
+    resumed = segments.index("c")
+    assert points[resumed]["timestamp"] - points[resumed - 1]["timestamp"] > 1200
+
+
+def test_bucketed_reads_still_report_truncation(tmp_path):
+    store = PerformanceHistory(tmp_path / "history.db")
+    # Every sample in its own segment: a restart per minute cannot be compressed.
+    seed(store, [(t, "boot", f"s{index}", index) for t, _, _, index in minute_rows(NOW - 12000 * 60, NOW + 1)])
+    result = store.read("server", "main", "1M", NOW)
+    assert result["truncated"] is True
+    assert len(result["points"]) == 10000
+    assert result["points"][-1]["timestamp"] <= NOW
+
+
 def test_read_does_not_create_storage(tmp_path):
     store = PerformanceHistory(tmp_path / "missing.db")
     assert store.read("server", "main", "ALL")["coverage_start"] is None
+    assert store.read("server", "main", "1M")["bucket_seconds"] == 1800
     assert not store.path.exists()
 
 

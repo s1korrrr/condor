@@ -1,4 +1,7 @@
-export function sourceResultBars(data: Record<string, unknown>) {
+import { metricValue } from "./research-detail.ts";
+
+export function sourceResultBars(data: Record<string, unknown>, kind?: unknown) {
+  if (kind === "metrics") return [];
   return [
     ["net_pnl_quote", "Net PnL"],
     ["fees_quote", "Fees"],
@@ -10,6 +13,75 @@ export function sourceResultBars(data: Record<string, unknown>) {
       : [];
   });
 }
+
+/** Display only complete, finite values from a captured Research OS metrics receipt. */
+export function metricsReceiptReadout(data: Record<string, unknown>) {
+  const state =
+    typeof data.metrics_state === "string" && data.metrics_state.trim()
+      ? data.metrics_state
+      : "UNAVAILABLE";
+  const reason =
+    typeof data.reason === "string" && data.reason.trim()
+      ? data.reason
+      : state === "UNAVAILABLE"
+        ? "Reason not recorded"
+        : null;
+  if (state !== "CAPTURED") return { state, reason, values: {} };
+
+  const numericKeys = [
+    "net_pnl_quote",
+    "return_fraction",
+    "max_drawdown_quote",
+    "max_drawdown_over_initial_cash",
+    "initial_cash_quote",
+  ];
+  const completeNumbers = numericKeys.every(
+    (key) => typeof data[key] === "number" && Number.isFinite(data[key]),
+  );
+  const pair = typeof data.pair === "string" ? data.pair.trim() : "";
+  const start = typeof data.window_start_utc === "string" ? data.window_start_utc : "";
+  const end = typeof data.window_end_utc === "string" ? data.window_end_utc : "";
+  const startMs = Date.parse(start);
+  const endMs = Date.parse(end);
+  const validWindow =
+    Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs;
+  const trades = data.trades;
+  const validTrades =
+    typeof trades === "number" && Number.isSafeInteger(trades) && trades >= 0;
+  if (
+    !completeNumbers ||
+    !pair ||
+    !validWindow ||
+    !validTrades ||
+    (data.initial_cash_quote as number) <= 0
+  ) {
+    return {
+      state: "RECEIPT_INVALID",
+      reason: "Captured receipt fields are incomplete or invalid; metrics are hidden.",
+      values: {},
+    };
+  }
+
+  const quote = (value: unknown) => metricValue({ value, unit: "quote" });
+  return {
+    state,
+    reason: null,
+    values: {
+      pair,
+      net_pnl_quote: quote(data.net_pnl_quote),
+      return_fraction: metricValue({ value: data.return_fraction, unit: "fraction" }),
+      max_drawdown_quote: quote(data.max_drawdown_quote),
+      max_drawdown_over_initial_cash: metricValue({
+        value: data.max_drawdown_over_initial_cash,
+        unit: "fraction",
+      }),
+      trades: trades.toLocaleString(),
+      initial_cash_quote: quote(data.initial_cash_quote),
+      window: `${start} to ${end} (end exclusive)`,
+    },
+  };
+}
+
 export function comparisonGroups(values: Record<string, unknown>[]) {
   const groups = new Map<
     string,

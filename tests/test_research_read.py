@@ -75,6 +75,20 @@ def test_research_nodes_fixed_origin_bounded_envelope_and_no_forwarded_auth(
     assert response.headers["cache-control"] == "no-store"
 
 
+def test_metrics_is_an_allowed_research_node_kind(monkeypatch):
+    def handler(req):
+        assert req.url.params["kind"] == "metrics"
+        return httpx.Response(
+            200,
+            json={"items": [], "total": 0, "limit": 30, "offset": 0},
+        )
+
+    response = client(monkeypatch, handler=handler).get(
+        "/api/v1/research/nodes?server=native-ok-rsi&kind=metrics"
+    )
+    assert response.status_code == 200
+
+
 @pytest.mark.parametrize(
     "query",
     [
@@ -219,6 +233,44 @@ def test_research_detail_identity_and_record_projection(monkeypatch):
         c.get("/api/v1/research/node?server=native-ok-rsi&id=idea:other").status_code
         == 502
     )
+
+
+def test_metrics_node_detail_preserves_receipt_values_and_redacts_locators(monkeypatch):
+    node = {
+        "id": "run:attempt:metrics",
+        "kind": "metrics",
+        "title": "Metrics for attempt",
+        "family": "UNAVAILABLE",
+        "lane": "UNAVAILABLE",
+        "status": "CAPTURED",
+        "recorded_at": "2026-09-29T00:00:00Z",
+        "source": {"path": "/private/store/metrics.json", "sha256": "receipt-hash"},
+        "data": {
+            "metrics_state": "CAPTURED",
+            "pair": "ETH-USDC",
+            "net_pnl_quote": 0.0,
+            "return_fraction": 0.0,
+            "max_drawdown_quote": 0.0,
+            "max_drawdown_over_initial_cash": 0.0,
+            "initial_cash_quote": 500.0,
+            "trades": 0,
+            "window_start_utc": "2026-05-01T00:00:00Z",
+            "window_end_utc": "2026-09-01T00:00:00Z",
+            "source": {"path": "/private/result.json", "sha256": "result-hash"},
+        },
+    }
+    payload = {"node": node, "edges": [], "related": []}
+    response = client(
+        monkeypatch, handler=lambda req: httpx.Response(200, json=payload)
+    ).get("/api/v1/research/node?server=native-ok-rsi&id=run:attempt:metrics")
+    assert response.status_code == 200
+    projected = response.json()["data"]["node"]
+    assert projected["kind"] == "metrics" and projected["status"] == "CAPTURED"
+    assert projected["data"]["metrics_state"] == "CAPTURED"
+    assert projected["data"]["net_pnl_quote"] == 0.0
+    assert projected["data"]["trades"] == 0
+    assert projected["source"] == {"sha256": "receipt-hash"}
+    assert projected["data"]["source"] == {"sha256": "result-hash"}
 
 
 def test_research_graph_preserves_relation_basis_and_truncation(monkeypatch):

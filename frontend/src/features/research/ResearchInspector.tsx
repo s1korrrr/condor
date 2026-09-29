@@ -11,7 +11,7 @@ import {
 } from "./model";
 import { readResearch as createReader } from "./read";
 import { ResearchResults } from "./ResearchResults";
-import { sourceResultBars } from "./results";
+import { metricsReceiptReadout, sourceResultBars } from "./results";
 import { ResearchDocuments } from "./ResearchDocument";
 import {
   metricValue,
@@ -407,6 +407,27 @@ function ResearchScorecard({ score }: { score: RecordData }) {
     </section>
   );
 }
+function ResearchMetricsReceipt({ data }: { data: RecordData }) {
+  const receipt = metricsReceiptReadout(data);
+  return (
+    <section>
+      <h4>Attempt metrics receipt</h4>
+      <ResearchMetadata
+        values={{
+          receipt_state: receipt.state,
+          ...receipt.values,
+          ...(receipt.reason ? { reason: receipt.reason } : {}),
+        }}
+      />
+      {receipt.state === "CAPTURED" && (
+        <p>
+          Max drawdown over initial cash is the drawdown amount divided by starting cash;
+          it is not peak-relative drawdown.
+        </p>
+      )}
+    </section>
+  );
+}
 export interface ResearchInspectorProps {
   server: string;
   id: string;
@@ -617,6 +638,7 @@ export function ResearchInspector({
           {data.schema === "research_knowledge.campaign_scorecard.v1" && (
             <ResearchScorecard score={data} />
           )}
+          {node.kind === "metrics" && <ResearchMetricsReceipt data={data} />}
           <section>
             <h4>Recorded history</h4>
             {!historyAvailable ? (
@@ -754,7 +776,7 @@ export function ResearchInspector({
                 </button>
               )}
             </div>
-          ) : isIdea || sourceResultBars(data).length > 0 ? (
+          ) : isIdea || sourceResultBars(data, node.kind).length > 0 ? (
             <ResearchResults
               data={data}
               comparisons={isIdea ? comparisons.data?.data : undefined}

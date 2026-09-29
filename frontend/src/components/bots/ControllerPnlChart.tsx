@@ -59,7 +59,7 @@ export function ControllerPnlChart({ server, controllerId, botName, deployedAt, 
     if (snapshots.length === 0) return { data: [], hasPosition: false, latest: null };
 
     const quote = tradingPair?.split("-")[1] || "USDT";
-    const cv = (val: number) => convert ? convert(val, quote).value : val;
+    const cv = (val: number | null) => val === null ? Number.NaN : convert ? convert(val, quote).value : val;
 
     const sorted = [...snapshots].sort((a, b) => toMs(a.timestamp) - toMs(b.timestamp));
 
@@ -73,7 +73,7 @@ export function ControllerPnlChart({ server, controllerId, botName, deployedAt, 
         time: toMs(s.timestamp),
         realized: cv(s.realized_pnl_quote),
         unrealized: cv(s.unrealized_pnl_quote),
-        total: cv(s.realized_pnl_quote + s.unrealized_pnl_quote),
+        total: cv(s.realized_pnl_quote === null || s.unrealized_pnl_quote === null ? null : s.realized_pnl_quote + s.unrealized_pnl_quote),
         volume: cv(s.volume_traded),
         position: cv(posValue),
       };

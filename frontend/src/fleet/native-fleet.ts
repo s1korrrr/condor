@@ -1,5 +1,7 @@
 import type { PanelState } from '@/features/quant-ops/panel-state';
 import type { QuantBotSummary } from '@/features/bots/quant-roster';
+import type { BotsPageResponse } from '@/lib/api';
+import { expireNativeBotPage } from '@/lib/bot-monitoring';
 
 /** Fleet projection for native (rsibot-stack) servers, which have no hummingbot-api catalogue.
  *  Every value comes from the owner's own reporting reads: quant-summary (registry identity,
@@ -8,6 +10,7 @@ import type { QuantBotSummary } from '@/features/bots/quant-roster';
 export type FleetService = { id: string; state: string; detail: string; restartCount: number | null; startedAt: string | null; observedAt: string | null };
 export type FleetHealth = {
   state: string; mode: string; generatedAt: string;
+  freshness: 'current' | 'stale';
   heartbeat: { state: string; bootId: string | null; lifecycleState: string | null; sequence: number | null };
   services: FleetService[]; expected: string[];
 };
@@ -30,6 +33,7 @@ export function projectFleetHealth(payload: unknown, bot: string, now: number): 
   });
   return {
     state: text(health.state) ?? 'unavailable', mode: text(health.mode) ?? 'intent unavailable', generatedAt,
+    freshness: now - Date.parse(generatedAt) < 30_000 ? 'current' : 'stale',
     heartbeat: { state: text(heartbeat.state) ?? 'unavailable', bootId: text(heartbeat.boot_id), lifecycleState: text(heartbeat.lifecycle_state), sequence: count(heartbeat.sequence) },
     services, expected: (Array.isArray(health.expected_services) ? health.expected_services : []).filter((value): value is string => typeof value === 'string'),
   };
@@ -39,8 +43,30 @@ export function projectFleetHealth(payload: unknown, bot: string, now: number): 
 export function fleetCardState(summary: QuantBotSummary | null, health: FleetHealth | null, summaryIssue: string | null): PanelState {
   if (!summary) return { kind: summaryIssue?.startsWith('Access denied') ? 'unauthorized' : 'unavailable', reason: summaryIssue ?? 'No owner summary has been read yet.' };
   if (summary.freshness === 'stale' || summary.lastKnown) return { kind: 'stale', observedAt: summary.observedAt ?? summary.generatedAt, reason: 'Owner status is older than its freshness contract; values are the last publication.' };
-  if (health && health.heartbeat.state !== 'healthy') return { kind: 'incomplete', observedAt: health.generatedAt, reason: `Stack heartbeat is ${health.heartbeat.state}.` };
+  if (!health) return { kind: 'incomplete', observedAt: summary.observedAt ?? summary.generatedAt, reason: 'A current identity-bound stack heartbeat has not been observed.' };
+  if (health.freshness !== 'current') return { kind: 'stale', observedAt: health.generatedAt, reason: 'Stack heartbeat observation is older than 30 seconds.' };
+  if (health.heartbeat.state !== 'healthy') return { kind: 'incomplete', observedAt: health.generatedAt, reason: `Stack heartbeat is ${health.heartbeat.state}.` };
   return { kind: 'fresh', observedAt: summary.observedAt ?? summary.generatedAt };
+}
+
+const KNOWN_LIFECYCLE = new Set(['running', 'starting', 'stopping', 'stopped', 'exited']);
+
+/** A lifecycle count is current only when every registered owner has an admitted observation. */
+export function fleetLifecycleSummary(statuses: readonly (string | null)[], readFailed: boolean) {
+  const running = statuses.filter(status => status === 'running').length;
+  const unknown = statuses.filter(status => status === null || !KNOWN_LIFECYCLE.has(status)).length;
+  const available = statuses.length > 0 && !readFailed && unknown === 0;
+  return { running, unknown, available };
+}
+
+/** Strip cached status after a failed refetch and expire each status from its source timestamp. */
+export function fleetLifecycleStatuses(page: BotsPageResponse | undefined, readFailed: boolean, bots: readonly string[], now: number): (string | null)[] {
+  if (readFailed) return bots.map(() => null);
+  const admitted = expireNativeBotPage(page, true, now);
+  return bots.map(bot => {
+    const status = admitted?.bots.find(row => row.bot_name === bot)?.status ?? null;
+    return status !== null && KNOWN_LIFECYCLE.has(status) ? status : null;
+  });
 }
 
 /** Service roll-up for the fleet strip: counts by observer state, in severity order. */

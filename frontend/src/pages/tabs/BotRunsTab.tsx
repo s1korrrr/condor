@@ -37,14 +37,14 @@ function formatDuration(start: string | null, end: string | null): string {
   return `${mins}m`;
 }
 
-function formatPnl(value: number): string {
-  if (value === 0) return "—";
+function formatPnl(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "Unavailable";
   const sign = value >= 0 ? "+" : "";
   return `${sign}$${Math.abs(value).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-function formatVolume(value: number): string {
-  if (value === 0) return "—";
+function formatVolume(value: number | null): string {
+  if (value === null || !Number.isFinite(value)) return "Unavailable";
   return `$${value.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 })}`;
 }
 
@@ -344,7 +344,7 @@ function BotRunRow({
   const deplClass = DEPLOYMENT_COLORS[run.deployment_status] ?? "bg-[var(--color-surface)] text-[var(--color-text-muted)]";
   const isArchived = run.deployment_status === "ARCHIVED";
   const pnl = run.global_pnl_quote;
-  const pnlColor = pnl > 0 ? "text-[var(--color-green)]" : pnl < 0 ? "text-[var(--color-red)]" : "text-[var(--color-text-muted)]";
+  const pnlColor = pnl != null && pnl > 0 ? "text-[var(--color-green)]" : pnl != null && pnl < 0 ? "text-[var(--color-red)]" : "text-[var(--color-text-muted)]";
 
   return (
     <tr className={`border-b border-[var(--color-border)]/30 transition-colors ${isDeleting ? "opacity-40" : "hover:bg-[var(--color-surface-hover)]/50"}`}>

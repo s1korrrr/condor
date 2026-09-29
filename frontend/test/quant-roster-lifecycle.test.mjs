@@ -49,7 +49,7 @@ test('wallet without a declared currency is unavailable, and stale runtime withh
 test('a stale owner renders its last publication as stale, never as current', () => {
   const observed = new Date(now - 20 * 60_000).toISOString();
   const payload = summary({ heartbeat: observed, operational_label: 'UNKNOWN', pairs: [], last_known: {
-    observed_at: observed, operational_label: 'MIXED: 2 holding / 1 flat', net_lifecycle_value: '-3.1', owned_value_value: '250.7', quote_currency: 'USDC',
+    observed_at: observed, operational_label: 'MIXED: 2 holding / 1 flat', retained_position_net_pnl_value: '-3.1', net_lifecycle_value: '99.9', owned_value_value: '250.7', quote_currency: 'USDC',
     pairs: [{ controller_id: 'bnb', pair: 'BNB-USDC', state: 'HOLDING', regime: 'NEUTRAL', units: '0.08', marked_value: '61', plan_mode: 'EXITS', plan_next: 'arm 813', gate: 'ready' }],
     cycle_counts: { open: 3, closed_scored: 0, ownership_transfer: 3, unclassified: 0 },
     risk_rails: { availability: 'available', rails: [{ name: 'max_daily_loss_quote', limit: '50', used: '2', remaining: '48', utilization: '0.04', unit: 'USDC', state: 'ok' }], tightest: { name: 'max_daily_loss_quote', limit: '50', utilization: '0.04', state: 'ok' } },
@@ -61,7 +61,8 @@ test('a stale owner renders its last publication as stale, never as current', ()
   assert.equal(view.state, 'MIXED: 2 holding / 1 flat');
   assert.equal(view.pairs[0].planMode, 'EXITS');
   assert.equal(view.netLifecycle.value, null, 'a stale metric has no current value');
-  assert.equal(view.netLifecycle.lastKnown, '-3.1');
+  assert.equal(view.netLifecycle.lastKnown, null, 'retained-position PnL is never relabeled as lifecycle PnL');
+  assert.equal(view.retainedPositionNetPnl.lastKnown, '-3.1');
   assert.equal(view.ownedValue.lastKnown, '250.7');
   assert.equal(view.cycleCounts.open, 3);
   assert.equal(view.riskRails.tightest.name, 'max_daily_loss_quote');

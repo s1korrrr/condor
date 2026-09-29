@@ -111,13 +111,12 @@ def test_long_ranges_cover_the_whole_window_with_the_last_sample_per_bucket(tmp_
     assert points[-1]["timestamp"] == raw[-1][0]
     window_start = NOW - RANGES[period]
     assert window_start <= points[0]["timestamp"] <= max(window_start, raw[0][0]) + bucket
-    # Each returned point is a stored sample and the last one of its bucket; nothing is invented.
+    # Each returned point is a stored sample: the segment's first one in the window or the last one of
+    # its bucket. Nothing is invented.
     stored = {t: total for t, _, _, total in raw}
-    last_in_bucket = {}
-    for t, *_ in raw:
-        if t >= window_start:
-            last_in_bucket[int(t // bucket)] = t
-    assert [p["timestamp"] for p in points] == sorted(last_in_bucket.values())
+    in_window = [t for t, *_ in raw if t >= window_start]
+    last_in_bucket = {int(t // bucket): t for t in in_window}
+    assert [p["timestamp"] for p in points] == sorted({in_window[0], *last_in_bucket.values()})
     assert all(p["total_pnl_quote"] == str(stored[p["timestamp"]]) for p in points)
     assert all(b["timestamp"] - a["timestamp"] <= bucket + 90 for a, b in zip(points, points[1:]))
 
@@ -145,6 +144,7 @@ def test_buckets_never_join_across_segments_owners_or_gaps(tmp_path):
     for segment, rows in (("a", first), ("b", second), ("c", third)):
         kept = [p for p in points if p["segment"] == segment]
         assert kept[-1]["timestamp"] == rows[-1][0], f"segment {segment} keeps its last observation"
+        assert kept[0]["timestamp"] == rows[0][0], f"segment {segment} keeps its first observation"
         assert {p["identity"] for p in kept} == {rows[0][1]}
     shared = int(first[-1][0] // 300)
     assert int(second[0][0] // 300) == shared
@@ -153,6 +153,20 @@ def test_buckets_never_join_across_segments_owners_or_gaps(tmp_path):
     assert points[boundary - 1]["segment"] == "a" and points[boundary - 1]["timestamp"] == first[-1][0]
     resumed = segments.index("c")
     assert points[resumed]["timestamp"] - points[resumed - 1]["timestamp"] > 1200
+
+
+@pytest.mark.parametrize("period", ["1W", "1M"])
+def test_an_owner_starting_just_inside_the_window_shows_its_real_start(tmp_path, period):
+    from condor.performance_history import RANGES
+
+    store = PerformanceHistory(tmp_path / "history.db")
+    since = NOW - RANGES[period]
+    # Owner a stops before the window; owner b starts 250s into it. Without b's first sample the
+    # window would begin at the end of b's first bucket and hide the restart.
+    seed(store, minute_rows(since - 3600, since - 100, "boot-a", "a") + minute_rows(since + 250, NOW + 1, "boot-b", "b"))
+    points = store.read("server", "main", period, NOW)["points"]
+    assert points[0]["timestamp"] == since + 250
+    assert {p["segment"] for p in points} == {"b"}
 
 
 def test_bucketed_reads_still_report_truncation(tmp_path):

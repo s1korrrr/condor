@@ -18,7 +18,8 @@ RANGES = {"1D": 86400, "1W": 604800, "1M": 2592000, "ALL": 31536000}
 WALLET_BUCKETS = {"1D": 60, "1W": 300, "1M": 1800, "ALL": 3600}
 # Native PnL is stored about once a minute, so longer reads keep the last sample of each UTC-aligned
 # bucket per segment: the window stays under the row cap, and owner changes and gaps (which always
-# start a new segment) are never merged into one point. 1D returns every stored sample.
+# start a new segment) are never merged into one point. Each segment's first sample in the window is
+# kept too, so a segment that starts inside the window shows its real start. 1D returns every sample.
 PERFORMANCE_BUCKETS = {"1D": None, "1W": 300, "1M": 1800, "ALL": 3600}
 # Zero valuations were recorded before admission rejected them (an engine restarting before its
 # connector loaded balances). They stay stored but are never read back as equity.
@@ -343,10 +344,12 @@ class PerformanceHistory:
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    f"SELECT {columns} FROM points WHERE server=? AND bot=? AND timestamp>=? "
-                    "AND timestamp IN (SELECT MAX(timestamp) FROM points WHERE server=? AND bot=? AND timestamp>=? "
-                    "GROUP BY segment, CAST(timestamp/? AS INTEGER)) ORDER BY timestamp DESC LIMIT 10001",
-                    (server, bot, since, server, bot, since, bucket),
+                    f"SELECT {columns} FROM points WHERE server=? AND bot=? AND timestamp>=? AND ("
+                    "timestamp IN (SELECT MAX(timestamp) FROM points WHERE server=? AND bot=? AND timestamp>=? "
+                    "GROUP BY segment, CAST(timestamp/? AS INTEGER)) "
+                    "OR timestamp IN (SELECT MIN(timestamp) FROM points WHERE server=? AND bot=? AND timestamp>=? GROUP BY segment)"
+                    ") ORDER BY timestamp DESC LIMIT 10001",
+                    (server, bot, since, server, bot, since, bucket, server, bot, since),
                 ).fetchall()
         result.update(
             coverage_start=start,

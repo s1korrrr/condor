@@ -31,7 +31,8 @@ export function pnlSeries(payload: unknown, bot: string, now: number, expectedRa
     points.push({ time: row.timestamp * 1000, value, owner });
     previous = row;
   }
-  // A window change is comparable only with full edge coverage, one owner segment and no gaps.
+  // A window change is comparable only with full edge coverage, one owner segment and no gaps. Bucketed
+  // reads keep each segment's first sample, so the start edge keeps the unbucketed 90s limit.
   let change: number | null = null;
   const duration = RANGE_SECONDS[expectedRange];
   const start = now / 1000 - duration;
@@ -39,7 +40,7 @@ export function pnlSeries(payload: unknown, bot: string, now: number, expectedRa
   const last = [...points].reverse().find(point => point.value !== null);
   const oneOwner = new Set(points.filter(point => point.value !== null).map(point => point.owner)).size === 1;
   const noGaps = points.every(point => point.value !== null);
-  const completeEdges = first !== undefined && last !== undefined && first.time / 1000 >= start - 90 && first.time / 1000 <= start + maxGap && last.time / 1000 >= now / 1000 - 90;
+  const completeEdges = first !== undefined && last !== undefined && first.time / 1000 >= start - 90 && first.time / 1000 <= start + 90 && last.time / 1000 >= now / 1000 - 90;
   const completeSource = data.truncated !== true && Number.isFinite(data.coverage_start) && Number(data.coverage_start) <= start + 90;
   const reason = completeEdges && completeSource && oneOwner && noGaps
     ? null

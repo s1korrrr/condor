@@ -954,6 +954,11 @@ export interface BacktestTask {
 // ── API functions ──
 
 export const api = {
+  getMarketPicture: (server: string, path: string, query: Record<string, string> = {}, signal?: AbortSignal, etag?: string) =>
+    authFetch(`/api/v1/servers/${encodeURIComponent(server)}/market-picture/${path.split('/').map(encodeURIComponent).join('/')}?${new URLSearchParams(query)}`, {
+      signal,
+      headers: etag ? { 'If-None-Match': etag } : {},
+    }),
   getServers: async () => parseServerDiscovery(await apiFetch<unknown>("/api/v1/servers")),
 
   getServerStatus: (name: string) =>

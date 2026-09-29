@@ -18,6 +18,7 @@ interface CanonicalContextProps {
   server: string | null;
   paused: boolean;
   now: number;
+  snapshotId?: string;
 }
 
 interface ViewState {
@@ -170,6 +171,7 @@ export function CanonicalContext({
   server,
   paused,
   now,
+  snapshotId,
 }: CanonicalContextProps) {
   const [state, setState] = useState<ViewState>({
     server: null,
@@ -178,7 +180,8 @@ export function CanonicalContext({
     error: null,
     loading: false,
   });
-  const visibleState = state.server === server ? state : null;
+  const binding = `${server ?? "none"}:${snapshotId ?? "latest"}`;
+  const visibleState = state.server === binding ? state : null;
   const response = visibleState?.response ?? null;
   const snapshot = visibleState?.snapshot ?? null;
   const expiry = useMemo(
@@ -201,14 +204,14 @@ export function CanonicalContext({
     }
 
     setState((current) =>
-      current.server === server
+      current.server === binding
         ? current
-        : { server, response: null, snapshot: null, error: null, loading: false },
+        : { server: binding, response: null, snapshot: null, error: null, loading: false },
     );
 
-    if (paused) {
+    if (paused && !snapshotId) {
       setState((current) =>
-        current.server === server && current.loading
+        current.server === binding && current.loading
           ? { ...current, loading: false }
           : current,
       );
@@ -218,17 +221,17 @@ export function CanonicalContext({
     }
 
     const poll = async () => {
-      if (disposed || paused || isHidden() || inFlight) return;
+      if (disposed || (paused && !snapshotId) || isHidden() || inFlight) return;
       inFlight = true;
       controller = new AbortController();
       setState((current) =>
-        current.server === server
+        current.server === binding
           ? { ...current, loading: true, error: null }
-          : { server, response: null, snapshot: null, error: null, loading: true },
+          : { server: binding, response: null, snapshot: null, error: null, loading: true },
       );
       try {
         const response = await authFetch(
-          `/api/v1/servers/${encodeURIComponent(server)}/screener/context`,
+          `/api/v1/servers/${encodeURIComponent(server)}/screener/context${snapshotId ? `/${encodeURIComponent(snapshotId)}` : ""}`,
           {
             signal: controller.signal,
             headers: { Accept: "application/json" },
@@ -237,7 +240,7 @@ export function CanonicalContext({
         if (!response.ok) {
           if (!disposed && !controller.signal.aborted) {
             setState((current) =>
-              current.server === server
+              current.server === binding
                 ? {
                     ...current,
                     error: sourceError(response.status),
@@ -248,11 +251,12 @@ export function CanonicalContext({
           }
         } else {
           const parsed = parseCanonicalContext(await response.json());
+          if (snapshotId && parsed.availability === "available" && parsed.payload.snapshot_id !== snapshotId) throw new Error("Pinned context identity mismatch");
           if (!disposed && !controller.signal.aborted) {
             setState((current) => {
-              const previous = current.server === server ? current.snapshot : null;
+              const previous = current.server === binding ? current.snapshot : null;
               return {
-                server,
+                server: binding,
                 ...mergeCanonicalContext(previous, parsed),
                 error: null,
                 loading: false,
@@ -263,7 +267,7 @@ export function CanonicalContext({
       } catch (error) {
         if (!disposed && !controller.signal.aborted) {
           setState((current) =>
-            current.server === server
+            current.server === binding
               ? {
                   ...current,
                   error:
@@ -277,7 +281,7 @@ export function CanonicalContext({
         }
       } finally {
         inFlight = false;
-        if (!disposed && !paused && !isHidden())
+        if (!disposed && !paused && !snapshotId && !isHidden())
           timer = setTimeout(poll, POLL_MS);
       }
     };
@@ -300,7 +304,7 @@ export function CanonicalContext({
       if (timer) clearTimeout(timer);
       controller?.abort();
     };
-  }, [server, paused]);
+  }, [server, paused, snapshotId, binding]);
 
   return (
     <section

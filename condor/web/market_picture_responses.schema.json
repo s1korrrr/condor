@@ -1,0 +1,2035 @@
+{
+  "assets": {
+    "$defs": {
+      "AssetObservationV1": {
+        "additionalProperties": false,
+        "properties": {
+          "asset_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Asset Id",
+            "type": "string"
+          },
+          "base_asset_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Base Asset Id",
+            "type": "string"
+          },
+          "heatmap_weight": {
+            "$ref": "#/$defs/HeatmapWeightV1"
+          },
+          "instrument_id": {
+            "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+            "title": "Instrument Id",
+            "type": "string"
+          },
+          "market_type": {
+            "const": "spot",
+            "title": "Market Type",
+            "type": "string"
+          },
+          "quote_asset_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Quote Asset Id",
+            "type": "string"
+          },
+          "regime_refs": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 8,
+            "title": "Regime Refs",
+            "type": "array"
+          },
+          "sector_ref": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SectorRefV1"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
+          },
+          "venue": {
+            "maxLength": 32,
+            "minLength": 1,
+            "title": "Venue",
+            "type": "string"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "asset_id",
+          "venue",
+          "market_type",
+          "base_asset_id",
+          "quote_asset_id",
+          "heatmap_weight",
+          "regime_refs"
+        ],
+        "title": "AssetObservationV1",
+        "type": "object"
+      },
+      "DefinitionRefV1": {
+        "additionalProperties": false,
+        "properties": {
+          "code_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Code Hash",
+            "type": "string"
+          },
+          "definition_id": {
+            "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+            "title": "Definition Id",
+            "type": "string"
+          },
+          "definition_version": {
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+            "title": "Definition Version",
+            "type": "string"
+          },
+          "parameter_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Parameter Hash",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "price_quote",
+              "return_percent",
+              "percentage_points",
+              "share_fraction",
+              "volume_quote",
+              "ratio",
+              "adx_0_100",
+              "rsi_0_100",
+              "correlation_minus1_to1",
+              "index_minus3_to3",
+              "index_points",
+              "ratio_points",
+              "volatility_fraction_annualized",
+              "instruments",
+              "milliseconds",
+              "percentile_0_100",
+              "count",
+              "percent",
+              "atr_percent",
+              "price_percent",
+              "quote_volume",
+              "return_fraction"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "definition_id",
+          "definition_version",
+          "parameter_hash",
+          "code_hash",
+          "unit"
+        ],
+        "title": "DefinitionRefV1",
+        "type": "object"
+      },
+      "HeatmapWeightV1": {
+        "additionalProperties": false,
+        "properties": {
+          "effective_at_ms": {
+            "anyOf": [
+              {
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Effective At Ms"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Reason Codes",
+            "type": "array"
+          },
+          "source_ref": {
+            "anyOf": [
+              {
+                "additionalProperties": true,
+                "type": "object"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Source Ref"
+          },
+          "status": {
+            "enum": [
+              "valid",
+              "missing",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "unit": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Value"
+          }
+        },
+        "required": [
+          "unit",
+          "status",
+          "reason_codes"
+        ],
+        "title": "HeatmapWeightV1",
+        "type": "object"
+      },
+      "MetricValueV1": {
+        "additionalProperties": false,
+        "description": "Expanded per-instrument value; consumers receive this shape after series resolution.",
+        "properties": {
+          "available_at_ms": {
+            "maximum": 253402300799000,
+            "minimum": 0,
+            "title": "Available At Ms",
+            "type": "integer"
+          },
+          "computation_status": {
+            "enum": [
+              "VALID",
+              "WARMING",
+              "MISSING",
+              "INVALID",
+              "UNAVAILABLE"
+            ],
+            "title": "Computation Status",
+            "type": "string"
+          },
+          "coverage_status": {
+            "enum": [
+              "COMPLETE",
+              "PARTIAL"
+            ],
+            "title": "Coverage Status",
+            "type": "string"
+          },
+          "definition": {
+            "$ref": "#/$defs/DefinitionRefV1"
+          },
+          "denominator": {
+            "anyOf": [
+              {
+                "maximum": 500,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Denominator"
+          },
+          "expected_denominator": {
+            "maximum": 500,
+            "minimum": 0,
+            "title": "Expected Denominator",
+            "type": "integer"
+          },
+          "expires_at_ms": {
+            "maximum": 253402300799000,
+            "minimum": 0,
+            "title": "Expires At Ms",
+            "type": "integer"
+          },
+          "horizon_minutes": {
+            "maximum": 10080,
+            "minimum": 1,
+            "title": "Horizon Minutes",
+            "type": "integer"
+          },
+          "metric_id": {
+            "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+            "title": "Metric Id",
+            "type": "string"
+          },
+          "numerator": {
+            "anyOf": [
+              {
+                "maximum": 500,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Numerator"
+          },
+          "observation_interval_ms": {
+            "anyOf": [
+              {
+                "maximum": 604800000,
+                "minimum": 1,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Observation Interval Ms"
+          },
+          "reason_codes": {
+            "items": {
+              "enum": [
+                "SOURCE_UNAVAILABLE",
+                "SOURCE_DISABLED",
+                "SOURCE_IDENTITY_MISMATCH",
+                "QUOTE_MISMATCH",
+                "DUPLICATE_ASSET",
+                "BAR_UNCONFIRMED",
+                "BAR_GAP",
+                "LAGGING_MEMBER",
+                "STALE_SOURCE",
+                "INSUFFICIENT_HISTORY",
+                "INSUFFICIENT_COVERAGE",
+                "CONSTANT_SERIES",
+                "ZERO_BASELINE",
+                "UNQUALIFIED_MODEL",
+                "UNKNOWN_CONFIDENCE_SCALE",
+                "UNKNOWN_SECTOR",
+                "CAPACITY_EXCEEDED",
+                "EXPIRED_SNAPSHOT",
+                "HASH_MISMATCH",
+                "SEQUENCE_REGRESSION",
+                "RECONSTRUCTED_AVAILABILITY",
+                "RETENTION_EXPIRED",
+                "INVALID_INPUT",
+                "CORRECTION_PENDING",
+                "NO_CROSSING",
+                "NO_PRIOR_STATE"
+              ],
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Reason Codes",
+            "type": "array"
+          },
+          "required_samples": {
+            "maximum": 20161,
+            "minimum": 0,
+            "title": "Required Samples",
+            "type": "integer"
+          },
+          "sample_count": {
+            "maximum": 20161,
+            "minimum": 0,
+            "title": "Sample Count",
+            "type": "integer"
+          },
+          "source_ref": {
+            "$ref": "#/$defs/ProviderRefV1"
+          },
+          "unit": {
+            "enum": [
+              "price_quote",
+              "return_percent",
+              "percentage_points",
+              "share_fraction",
+              "volume_quote",
+              "ratio",
+              "adx_0_100",
+              "rsi_0_100",
+              "correlation_minus1_to1",
+              "index_minus3_to3",
+              "index_points",
+              "ratio_points",
+              "volatility_fraction_annualized",
+              "instruments",
+              "milliseconds",
+              "percentile_0_100",
+              "count",
+              "percent",
+              "atr_percent",
+              "price_percent",
+              "quote_volume",
+              "return_fraction"
+            ],
+            "title": "Unit",
+            "type": "string"
+          },
+          "value": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Value"
+          },
+          "window_end_ms": {
+            "anyOf": [
+              {
+                "maximum": 253402300799000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Window End Ms"
+          },
+          "window_start_ms": {
+            "anyOf": [
+              {
+                "maximum": 253402300799000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Window Start Ms"
+          }
+        },
+        "required": [
+          "metric_id",
+          "unit",
+          "computation_status",
+          "coverage_status",
+          "reason_codes",
+          "definition",
+          "source_ref",
+          "horizon_minutes",
+          "available_at_ms",
+          "expires_at_ms",
+          "sample_count",
+          "required_samples",
+          "expected_denominator"
+        ],
+        "title": "MetricValueV1",
+        "type": "object"
+      },
+      "ProviderCoverageV1": {
+        "additionalProperties": false,
+        "properties": {
+          "coverage_fraction": {
+            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+            "title": "Coverage Fraction",
+            "type": "string"
+          },
+          "expected_count": {
+            "maximum": 500,
+            "minimum": 0,
+            "title": "Expected Count",
+            "type": "integer"
+          },
+          "valid_count": {
+            "maximum": 500,
+            "minimum": 0,
+            "title": "Valid Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_count",
+          "valid_count",
+          "coverage_fraction"
+        ],
+        "title": "ProviderCoverageV1",
+        "type": "object"
+      },
+      "ProviderRefV1": {
+        "additionalProperties": false,
+        "properties": {
+          "available_at_ms": {
+            "maximum": 253402300799000,
+            "minimum": 0,
+            "title": "Available At Ms",
+            "type": "integer"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "coverage": {
+            "$ref": "#/$defs/ProviderCoverageV1"
+          },
+          "epoch": {
+            "pattern": "^[A-Za-z0-9_-]{1,128}$",
+            "title": "Epoch",
+            "type": "string"
+          },
+          "expires_at_ms": {
+            "maximum": 253402300799000,
+            "minimum": 0,
+            "title": "Expires At Ms",
+            "type": "integer"
+          },
+          "observed_at_ms": {
+            "maximum": 253402300799000,
+            "minimum": 0,
+            "title": "Observed At Ms",
+            "type": "integer"
+          },
+          "provider_id": {
+            "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "sequence": {
+            "maximum": 9223372036854775807,
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "source_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Digest",
+            "type": "string"
+          },
+          "source_kind": {
+            "enum": [
+              "observed",
+              "reconstructed"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_snapshot_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Snapshot Id",
+            "type": "string"
+          },
+          "stream_id": {
+            "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "stream_id",
+          "epoch",
+          "sequence",
+          "source_snapshot_id",
+          "source_digest",
+          "source_kind",
+          "observed_at_ms",
+          "available_at_ms",
+          "expires_at_ms",
+          "coverage",
+          "capabilities"
+        ],
+        "title": "ProviderRefV1",
+        "type": "object"
+      },
+      "RegimeObservationRefV1": {
+        "additionalProperties": false,
+        "description": "Owner regime record plus an API-local join key; semantics remain engine-owned.",
+        "properties": {
+          "available_at_ms": {
+            "minimum": 0,
+            "title": "Available At Ms",
+            "type": "integer"
+          },
+          "calibration_status": {
+            "enum": [
+              "calibrated",
+              "uncalibrated",
+              "unknown",
+              "not_applicable"
+            ],
+            "title": "Calibration Status",
+            "type": "string"
+          },
+          "confidence_kind": {
+            "anyOf": [
+              {
+                "enum": [
+                  "model_probability",
+                  "model_score",
+                  "reported_unknown"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confidence Kind"
+          },
+          "confidence_unit": {
+            "anyOf": [
+              {
+                "enum": [
+                  "fraction",
+                  "percent",
+                  "named_score"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confidence Unit"
+          },
+          "confidence_value": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Confidence Value"
+          },
+          "context_bias": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Context Bias"
+          },
+          "controller_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Controller Id"
+          },
+          "expires_at_ms": {
+            "minimum": 0,
+            "title": "Expires At Ms",
+            "type": "integer"
+          },
+          "feature_schema_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Feature Schema Hash"
+          },
+          "fit_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Fit Id"
+          },
+          "instrument_id": {
+            "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+            "title": "Instrument Id",
+            "type": "string"
+          },
+          "model_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Id"
+          },
+          "model_version": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Model Version"
+          },
+          "origin": {
+            "enum": [
+              "controller_recorded",
+              "market_observation"
+            ],
+            "title": "Origin",
+            "type": "string"
+          },
+          "producer_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Producer Id",
+            "type": "string"
+          },
+          "provider_ref": {
+            "$ref": "#/$defs/ProviderRefV1"
+          },
+          "regime_definition_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Regime Definition Id"
+          },
+          "regime_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Regime Id",
+            "type": "string"
+          },
+          "regime_label": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "minLength": 1,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Regime Label"
+          },
+          "source_bar_close_ms": {
+            "minimum": 0,
+            "title": "Source Bar Close Ms",
+            "type": "integer"
+          },
+          "source_epoch": {
+            "title": "Source Epoch",
+            "type": "string"
+          },
+          "source_sequence": {
+            "minimum": 1,
+            "title": "Source Sequence",
+            "type": "integer"
+          },
+          "trend_confidence_unit": {
+            "anyOf": [
+              {
+                "enum": [
+                  "fraction",
+                  "percent",
+                  "named_score"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Trend Confidence Unit"
+          },
+          "trend_confidence_value": {
+            "anyOf": [
+              {
+                "maxLength": 64,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Trend Confidence Value"
+          },
+          "trend_direction": {
+            "anyOf": [
+              {
+                "enum": [
+                  "up",
+                  "down",
+                  "flat"
+                ],
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Trend Direction"
+          }
+        },
+        "required": [
+          "regime_id",
+          "instrument_id",
+          "source_bar_close_ms",
+          "origin",
+          "producer_id",
+          "calibration_status",
+          "provider_ref",
+          "available_at_ms",
+          "expires_at_ms",
+          "source_epoch",
+          "source_sequence"
+        ],
+        "title": "RegimeObservationRefV1",
+        "type": "object"
+      },
+      "SectorRefV1": {
+        "additionalProperties": false,
+        "properties": {
+          "sector_id": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Sector Id"
+          },
+          "status": {
+            "enum": [
+              "known",
+              "unknown",
+              "unavailable"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "taxonomy_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Taxonomy Id",
+            "type": "string"
+          },
+          "taxonomy_version": {
+            "maxLength": 64,
+            "minLength": 1,
+            "title": "Taxonomy Version",
+            "type": "string"
+          }
+        },
+        "required": [
+          "taxonomy_id",
+          "taxonomy_version",
+          "status"
+        ],
+        "title": "SectorRefV1",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "asset": {
+        "$ref": "#/$defs/AssetObservationV1"
+      },
+      "metrics": {
+        "additionalProperties": {
+          "$ref": "#/$defs/MetricValueV1"
+        },
+        "title": "Metrics",
+        "type": "object"
+      },
+      "read_at_ms": {
+        "minimum": 0,
+        "title": "Read At Ms",
+        "type": "integer"
+      },
+      "regimes": {
+        "items": {
+          "$ref": "#/$defs/RegimeObservationRefV1"
+        },
+        "title": "Regimes",
+        "type": "array"
+      },
+      "schema_version": {
+        "const": "market-picture.v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "snapshot_id": {
+        "title": "Snapshot Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "snapshot_id",
+      "asset",
+      "metrics",
+      "regimes",
+      "read_at_ms"
+    ],
+    "title": "AssetDTO",
+    "type": "object"
+  },
+  "correlations": {
+    "$defs": {
+      "CorrelationItemDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "correlation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation"
+          },
+          "expected_sample_count": {
+            "title": "Expected Sample Count",
+            "type": "integer"
+          },
+          "instrument_a_id": {
+            "title": "Instrument A Id",
+            "type": "string"
+          },
+          "instrument_b_id": {
+            "title": "Instrument B Id",
+            "type": "string"
+          },
+          "paired_sample_count": {
+            "title": "Paired Sample Count",
+            "type": "integer"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Reason Codes",
+            "type": "array"
+          },
+          "trend": {
+            "items": {
+              "$ref": "#/$defs/CorrelationTrendDTO"
+            },
+            "maxItems": 30,
+            "title": "Trend",
+            "type": "array"
+          },
+          "window_end_ms": {
+            "title": "Window End Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "instrument_a_id",
+          "instrument_b_id",
+          "correlation",
+          "paired_sample_count",
+          "expected_sample_count",
+          "window_end_ms",
+          "reason_codes",
+          "trend"
+        ],
+        "title": "CorrelationItemDTO",
+        "type": "object"
+      },
+      "CorrelationQueryDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "column_offset": {
+            "title": "Column Offset",
+            "type": "integer"
+          },
+          "matrix": {
+            "const": true,
+            "title": "Matrix",
+            "type": "boolean"
+          },
+          "page_size": {
+            "title": "Page Size",
+            "type": "integer"
+          },
+          "row_offset": {
+            "title": "Row Offset",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "matrix",
+          "row_offset",
+          "column_offset",
+          "page_size"
+        ],
+        "title": "CorrelationQueryDTO",
+        "type": "object"
+      },
+      "CorrelationTrendDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "correlation": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Correlation"
+          },
+          "cutoff_ms": {
+            "title": "Cutoff Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "cutoff_ms",
+          "correlation"
+        ],
+        "title": "CorrelationTrendDTO",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/CorrelationItemDTO"
+        },
+        "maxItems": 1500,
+        "title": "Items",
+        "type": "array"
+      },
+      "next_cursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Next Cursor"
+      },
+      "query": {
+        "anyOf": [
+          {
+            "$ref": "#/$defs/CorrelationQueryDTO"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null
+      },
+      "read_at_ms": {
+        "minimum": 0,
+        "title": "Read At Ms",
+        "type": "integer"
+      },
+      "schema_version": {
+        "const": "market-picture.v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "snapshot_id": {
+        "title": "Snapshot Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "snapshot_id",
+      "items",
+      "read_at_ms"
+    ],
+    "title": "CorrelationsDTO",
+    "type": "object"
+  },
+  "events": {
+    "$defs": {
+      "DefinitionRefV1": {
+        "additionalProperties": false,
+        "properties": {
+          "code_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Code Hash",
+            "type": "string"
+          },
+          "definition_id": {
+            "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+            "title": "Definition Id",
+            "type": "string"
+          },
+          "definition_version": {
+            "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+            "title": "Definition Version",
+            "type": "string"
+          },
+          "parameter_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Parameter Hash",
+            "type": "string"
+          },
+          "unit": {
+            "enum": [
+              "price_quote",
+              "return_percent",
+              "percentage_points",
+              "share_fraction",
+              "volume_quote",
+              "ratio",
+              "adx_0_100",
+              "rsi_0_100",
+              "correlation_minus1_to1",
+              "index_minus3_to3",
+              "index_points",
+              "ratio_points",
+              "volatility_fraction_annualized",
+              "instruments",
+              "milliseconds",
+              "percentile_0_100",
+              "count",
+              "percent",
+              "atr_percent",
+              "price_percent",
+              "quote_volume",
+              "return_fraction"
+            ],
+            "title": "Unit",
+            "type": "string"
+          }
+        },
+        "required": [
+          "definition_id",
+          "definition_version",
+          "parameter_hash",
+          "code_hash",
+          "unit"
+        ],
+        "title": "DefinitionRefV1",
+        "type": "object"
+      },
+      "MarketEventV1": {
+        "additionalProperties": false,
+        "properties": {
+          "available_at_ms": {
+            "maximum": 253402300799000,
+            "minimum": 0,
+            "title": "Available At Ms",
+            "type": "integer"
+          },
+          "before": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxProperties": 64,
+            "title": "Before",
+            "type": "object"
+          },
+          "definition_ref": {
+            "$ref": "#/$defs/DefinitionRefV1"
+          },
+          "event_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Event Id",
+            "type": "string"
+          },
+          "event_type": {
+            "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+            "title": "Event Type",
+            "type": "string"
+          },
+          "instrument_id": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Instrument Id"
+          },
+          "is_historical_reconstruction": {
+            "title": "Is Historical Reconstruction",
+            "type": "boolean"
+          },
+          "observed_at_ms": {
+            "maximum": 253402300799000,
+            "minimum": 0,
+            "title": "Observed At Ms",
+            "type": "integer"
+          },
+          "occurrence_key": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Occurrence Key",
+            "type": "string"
+          },
+          "persisted_at_ms": {
+            "maximum": 253402300799000,
+            "minimum": 0,
+            "title": "Persisted At Ms",
+            "type": "integer"
+          },
+          "provider_ref": {
+            "$ref": "#/$defs/ProviderRefV1"
+          },
+          "severity": {
+            "enum": [
+              "info",
+              "notice",
+              "warning",
+              "critical"
+            ],
+            "title": "Severity",
+            "type": "string"
+          },
+          "snapshot_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Snapshot Id",
+            "type": "string"
+          },
+          "source_epoch": {
+            "pattern": "^[A-Za-z0-9_-]{1,128}$",
+            "title": "Source Epoch",
+            "type": "string"
+          },
+          "source_sequence": {
+            "maximum": 9223372036854775807,
+            "minimum": 1,
+            "title": "Source Sequence",
+            "type": "integer"
+          },
+          "source_window_end_ms": {
+            "maximum": 253402300799000,
+            "minimum": 0,
+            "title": "Source Window End Ms",
+            "type": "integer"
+          },
+          "source_window_start_ms": {
+            "maximum": 253402300799000,
+            "minimum": 0,
+            "title": "Source Window Start Ms",
+            "type": "integer"
+          },
+          "status": {
+            "enum": [
+              "original",
+              "corrected",
+              "superseded",
+              "retracted"
+            ],
+            "title": "Status",
+            "type": "string"
+          },
+          "supersedes_event_id": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Supersedes Event Id"
+          },
+          "value": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "maxProperties": 64,
+            "title": "Value",
+            "type": "object"
+          }
+        },
+        "required": [
+          "event_id",
+          "occurrence_key",
+          "event_type",
+          "severity",
+          "definition_ref",
+          "provider_ref",
+          "source_window_start_ms",
+          "source_window_end_ms",
+          "observed_at_ms",
+          "available_at_ms",
+          "persisted_at_ms",
+          "before",
+          "value",
+          "status",
+          "snapshot_id",
+          "source_epoch",
+          "source_sequence",
+          "is_historical_reconstruction"
+        ],
+        "title": "MarketEventV1",
+        "type": "object"
+      },
+      "ProviderCoverageV1": {
+        "additionalProperties": false,
+        "properties": {
+          "coverage_fraction": {
+            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+            "title": "Coverage Fraction",
+            "type": "string"
+          },
+          "expected_count": {
+            "maximum": 500,
+            "minimum": 0,
+            "title": "Expected Count",
+            "type": "integer"
+          },
+          "valid_count": {
+            "maximum": 500,
+            "minimum": 0,
+            "title": "Valid Count",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_count",
+          "valid_count",
+          "coverage_fraction"
+        ],
+        "title": "ProviderCoverageV1",
+        "type": "object"
+      },
+      "ProviderRefV1": {
+        "additionalProperties": false,
+        "properties": {
+          "available_at_ms": {
+            "maximum": 253402300799000,
+            "minimum": 0,
+            "title": "Available At Ms",
+            "type": "integer"
+          },
+          "capabilities": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 64,
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "coverage": {
+            "$ref": "#/$defs/ProviderCoverageV1"
+          },
+          "epoch": {
+            "pattern": "^[A-Za-z0-9_-]{1,128}$",
+            "title": "Epoch",
+            "type": "string"
+          },
+          "expires_at_ms": {
+            "maximum": 253402300799000,
+            "minimum": 0,
+            "title": "Expires At Ms",
+            "type": "integer"
+          },
+          "observed_at_ms": {
+            "maximum": 253402300799000,
+            "minimum": 0,
+            "title": "Observed At Ms",
+            "type": "integer"
+          },
+          "provider_id": {
+            "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+            "title": "Provider Id",
+            "type": "string"
+          },
+          "sequence": {
+            "maximum": 9223372036854775807,
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "source_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Digest",
+            "type": "string"
+          },
+          "source_kind": {
+            "enum": [
+              "observed",
+              "reconstructed"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "source_snapshot_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Snapshot Id",
+            "type": "string"
+          },
+          "stream_id": {
+            "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+            "title": "Stream Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "provider_id",
+          "stream_id",
+          "epoch",
+          "sequence",
+          "source_snapshot_id",
+          "source_digest",
+          "source_kind",
+          "observed_at_ms",
+          "available_at_ms",
+          "expires_at_ms",
+          "coverage",
+          "capabilities"
+        ],
+        "title": "ProviderRefV1",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/MarketEventV1"
+        },
+        "maxItems": 50,
+        "title": "Items",
+        "type": "array"
+      },
+      "next_cursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Next Cursor"
+      },
+      "read_at_ms": {
+        "minimum": 0,
+        "title": "Read At Ms",
+        "type": "integer"
+      },
+      "schema_version": {
+        "const": "market-picture.v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "snapshot_id": {
+        "title": "Snapshot Id",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "snapshot_id",
+      "items",
+      "next_cursor",
+      "read_at_ms"
+    ],
+    "title": "EventsDTO",
+    "type": "object"
+  },
+  "history": {
+    "$defs": {
+      "BreadthHistoryDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "flat": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Flat"
+          },
+          "negative": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Negative"
+          },
+          "positive": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Positive"
+          },
+          "pressure": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pressure"
+          }
+        },
+        "required": [
+          "positive",
+          "negative",
+          "flat",
+          "pressure"
+        ],
+        "title": "BreadthHistoryDTO",
+        "type": "object"
+      },
+      "HistoryCoverageDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "aligned_instrument_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Aligned Instrument Ids",
+            "type": "array"
+          },
+          "expected_instruments": {
+            "title": "Expected Instruments",
+            "type": "integer"
+          },
+          "omitted_instrument_ids": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Omitted Instrument Ids",
+            "type": "array"
+          },
+          "omitted_instruments": {
+            "title": "Omitted Instruments",
+            "type": "integer"
+          },
+          "policy": {
+            "const": "newest_fresh_recorded_close.v1",
+            "title": "Policy",
+            "type": "string"
+          },
+          "valid_fraction": {
+            "title": "Valid Fraction",
+            "type": "string"
+          },
+          "valid_instruments": {
+            "title": "Valid Instruments",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_instruments",
+          "valid_instruments",
+          "omitted_instruments",
+          "valid_fraction",
+          "aligned_instrument_ids",
+          "omitted_instrument_ids",
+          "policy"
+        ],
+        "title": "HistoryCoverageDTO",
+        "type": "object"
+      },
+      "HistoryPointDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "available_at_ms": {
+            "title": "Available At Ms",
+            "type": "integer"
+          },
+          "breadth": {
+            "additionalProperties": {
+              "$ref": "#/$defs/BreadthHistoryDTO"
+            },
+            "title": "Breadth",
+            "type": "object"
+          },
+          "coverage": {
+            "$ref": "#/$defs/HistoryCoverageDTO"
+          },
+          "cutoff_ms": {
+            "title": "Cutoff Ms",
+            "type": "integer"
+          },
+          "definition_registry_hash": {
+            "title": "Definition Registry Hash",
+            "type": "string"
+          },
+          "expires_at_ms": {
+            "title": "Expires At Ms",
+            "type": "integer"
+          },
+          "gap_before": {
+            "default": false,
+            "title": "Gap Before",
+            "type": "boolean"
+          },
+          "membership_hash": {
+            "title": "Membership Hash",
+            "type": "string"
+          },
+          "snapshot_id": {
+            "title": "Snapshot Id",
+            "type": "string"
+          },
+          "source_kind": {
+            "enum": [
+              "observed",
+              "reconstructed"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "summary": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Summary",
+            "type": "object"
+          }
+        },
+        "required": [
+          "snapshot_id",
+          "cutoff_ms",
+          "available_at_ms",
+          "expires_at_ms",
+          "source_kind",
+          "coverage",
+          "membership_hash",
+          "definition_registry_hash",
+          "breadth",
+          "summary"
+        ],
+        "title": "HistoryPointDTO",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "items": {
+        "items": {
+          "$ref": "#/$defs/HistoryPointDTO"
+        },
+        "maxItems": 1500,
+        "title": "Items",
+        "type": "array"
+      },
+      "next_cursor": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Next Cursor"
+      },
+      "read_at_ms": {
+        "minimum": 0,
+        "title": "Read At Ms",
+        "type": "integer"
+      },
+      "resolution": {
+        "const": "1m",
+        "title": "Resolution",
+        "type": "string"
+      },
+      "schema_version": {
+        "const": "market-picture.v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "snapshot_id": {
+        "title": "Snapshot Id",
+        "type": "string"
+      },
+      "stream_id": {
+        "title": "Stream Id",
+        "type": "string"
+      },
+      "window": {
+        "enum": [
+          "1h",
+          "6h",
+          "24h",
+          "7d"
+        ],
+        "title": "Window",
+        "type": "string"
+      }
+    },
+    "required": [
+      "schema_version",
+      "snapshot_id",
+      "stream_id",
+      "window",
+      "resolution",
+      "items",
+      "next_cursor",
+      "read_at_ms"
+    ],
+    "title": "HistoryDTO",
+    "type": "object"
+  },
+  "status": {
+    "$defs": {
+      "RetentionPolicyDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "aggregate_history_ms": {
+            "title": "Aggregate History Ms",
+            "type": "integer"
+          },
+          "event_retention_ms": {
+            "title": "Event Retention Ms",
+            "type": "integer"
+          },
+          "full_frame_hot_ms": {
+            "title": "Full Frame Hot Ms",
+            "type": "integer"
+          },
+          "full_snapshot_archive_ms": {
+            "title": "Full Snapshot Archive Ms",
+            "type": "integer"
+          },
+          "max_aggregate_history_rows": {
+            "title": "Max Aggregate History Rows",
+            "type": "integer"
+          },
+          "max_payload_bytes": {
+            "title": "Max Payload Bytes",
+            "type": "integer"
+          },
+          "max_retained_frames": {
+            "title": "Max Retained Frames",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "full_frame_hot_ms",
+          "full_snapshot_archive_ms",
+          "aggregate_history_ms",
+          "event_retention_ms",
+          "max_retained_frames",
+          "max_aggregate_history_rows",
+          "max_payload_bytes"
+        ],
+        "title": "RetentionPolicyDTO",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "available_at_ms": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Available At Ms"
+      },
+      "cutoff_ms": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Cutoff Ms"
+      },
+      "definition_registry_hash": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Definition Registry Hash"
+      },
+      "epoch": {
+        "title": "Epoch",
+        "type": "string"
+      },
+      "expires_at_ms": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Expires At Ms"
+      },
+      "generation": {
+        "title": "Generation",
+        "type": "integer"
+      },
+      "latest_snapshot_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "title": "Latest Snapshot Id"
+      },
+      "membership_hash": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Membership Hash"
+      },
+      "payload_digest": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Payload Digest"
+      },
+      "published_at_ms": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Published At Ms"
+      },
+      "read_at_ms": {
+        "minimum": 0,
+        "title": "Read At Ms",
+        "type": "integer"
+      },
+      "reason_codes": {
+        "items": {
+          "type": "string"
+        },
+        "title": "Reason Codes",
+        "type": "array"
+      },
+      "retention": {
+        "$ref": "#/$defs/RetentionPolicyDTO"
+      },
+      "schema_version": {
+        "const": "market-picture.v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "sequence": {
+        "anyOf": [
+          {
+            "type": "integer"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Sequence"
+      },
+      "source_kind": {
+        "anyOf": [
+          {
+            "enum": [
+              "observed",
+              "reconstructed"
+            ],
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Source Kind"
+      },
+      "status": {
+        "enum": [
+          "warming",
+          "fresh",
+          "stale"
+        ],
+        "title": "Status",
+        "type": "string"
+      },
+      "stream_id": {
+        "title": "Stream Id",
+        "type": "string"
+      },
+      "universe_id": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Universe Id"
+      },
+      "universe_revision": {
+        "anyOf": [
+          {
+            "type": "string"
+          },
+          {
+            "type": "null"
+          }
+        ],
+        "default": null,
+        "title": "Universe Revision"
+      }
+    },
+    "required": [
+      "schema_version",
+      "stream_id",
+      "epoch",
+      "generation",
+      "status",
+      "reason_codes",
+      "latest_snapshot_id",
+      "retention",
+      "read_at_ms"
+    ],
+    "title": "StatusDTO",
+    "type": "object"
+  }
+}

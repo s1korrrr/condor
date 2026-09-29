@@ -114,11 +114,13 @@ def _validated_request(
 
 
 @router.get("/context")
+@router.get("/context/{snapshot_id}")
 async def read_canonical_context(
     name: str,
     request: Request,
     response: Response,
     user: WebUser = Depends(get_current_user),
+    snapshot_id: str | None = None,
 ):
     """Read the separate canonical market-context owner through its fixed GET route."""
     response.headers["Cache-Control"] = "no-store"
@@ -127,6 +129,8 @@ async def read_canonical_context(
         raise HTTPException(
             400, "Market context route does not accept query parameters"
         )
+    if snapshot_id is not None and not re.fullmatch(r"[0-9a-f]{64}", snapshot_id):
+        raise HTTPException(404, "Market context snapshot not found")
     cm = get_config_manager()
     if not cm.has_server_access(user.id, name):
         raise HTTPException(404, "Market context source not found")
@@ -134,7 +138,8 @@ async def read_canonical_context(
         async with asyncio.timeout(CONTEXT_TIMEOUT):
             client = await cm.get_client(name)
             transport = client.bot_orchestration
-            url = f"{transport.base_url}/screener/market-context/v1/latest"
+            path = "latest" if snapshot_id is None else f"snapshots/{snapshot_id}"
+            url = f"{transport.base_url}/screener/market-context/v1/{path}"
             async with transport.session.get(
                 url,
                 params=[],
@@ -201,6 +206,13 @@ async def read_canonical_context(
                         )
                     body.extend(chunk)
                 payload = _validate_canonical_context(bytes(body))
+                if (
+                    snapshot_id is not None
+                    and payload.get("snapshot_id") != snapshot_id
+                ):
+                    raise HTTPException(
+                        502, "Market context snapshot identity mismatch"
+                    )
                 return {"availability": "available", "payload": payload}
     except HTTPException:
         raise

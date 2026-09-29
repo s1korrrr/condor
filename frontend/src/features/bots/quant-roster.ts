@@ -366,7 +366,7 @@ export type QuantCycles = {
     scored: number; minSample: number; sufficient: boolean; wins: number; losses: number; breakeven: number;
     winRate: number | null; profitFactor: string | null; profitFactorReason: string | null; expectancy: string | null;
     averageWin: string | null; averageLoss: string | null; payoffRatio: string | null; averageHoldingSeconds: number | null;
-    fees: string | null; grossVolume: string | null; fillCount: number;
+    fees: string | null; grossVolume: string | null; fillCount: number | null;
   };
   inventoryAge: {
     availability: string; reason: string | null; oldestAt: string | null; oldestSeconds: number | null; weightedSeconds: number | null;
@@ -398,7 +398,7 @@ export function projectQuantCycles(value: unknown, bot: string): QuantCycles | n
       winRate: finite(stats.win_rate), profitFactor: decimalText(stats.profit_factor), profitFactorReason: text(stats.profit_factor_reason),
       expectancy: decimalText(stats.expectancy_quote), averageWin: decimalText(stats.average_win_quote), averageLoss: decimalText(stats.average_loss_quote),
       payoffRatio: decimalText(stats.payoff_ratio), averageHoldingSeconds: finite(stats.average_holding_seconds),
-      fees: decimalText(stats.fees_quote), grossVolume: decimalText(stats.gross_volume_quote), fillCount: nonnegativeInteger(stats.fill_count) ?? 0,
+      fees: decimalText(stats.fees_quote), grossVolume: decimalText(stats.gross_volume_quote), fillCount: nonnegativeInteger(stats.fill_count),
     },
     inventoryAge: {
       availability: text(age.availability) ?? 'unavailable', reason: text(age.reason_code), oldestAt: text(age.oldest_at),

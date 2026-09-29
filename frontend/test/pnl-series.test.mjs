@@ -24,3 +24,22 @@ test('24h PnL is admitted only for complete, unbroken coverage from one owner', 
   assert.equal(pnlSeries(ownerChange, 'v2', now, '1D').change, null);
   assert.equal(pnlSeries(full({ range: '1W' }), 'v2', now, '1D').change, null, 'the requested window must match the payload');
 });
+
+for (const bad of [null, undefined, '', ' ', false, '0x10', 'NaN', 'Infinity', {}, []]) {
+  test(`PnL history rejects invalid persisted money ${JSON.stringify(bad)}`, () => {
+    const points = completePoints.map((point, index) => index === 720 ? { ...point, total_pnl_quote: bad } : point);
+    const result = pnlSeries(full({ points }), 'v2', now, '1D');
+    assert.equal(result.change, null);
+    assert.deepEqual(result.points, []);
+    assert.match(result.reason, /incompatible/);
+  });
+}
+test('PnL history rejects missing owner identity and out-of-window boundaries', () => {
+  for (const changes of [{ identity: '' }, { segment: null }, { quote: '' }]) {
+    const points = completePoints.map(point => ({ ...point, ...changes }));
+    assert.equal(pnlSeries(full({ points }), 'v2', now, '1D').change, null);
+  }
+  const points = [{ ...completePoints[0], timestamp: start - 3600 }, ...completePoints];
+  assert.equal(pnlSeries(full({ points }), 'v2', now, '1D').change, null);
+  assert.equal(pnlSeries(full({ points: [null] }), 'v2', now, '1D').change, null);
+});

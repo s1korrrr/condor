@@ -149,7 +149,7 @@ export function Histogram({ bins, unit, sampleCount, excludedCount }: { bins: { 
   return <figure>
     <BarsChart ariaLabel={`Execution quality histogram · ${sampleCount} samples`} height={110} format={value => String(Math.round(value))}
       rows={bins.map(bin => ({ label: bin.label ?? (bin.from !== null && bin.to !== null ? `${bin.from}–${bin.to}` : bin.from === null ? `< ${bin.to}` : `>= ${bin.from}`), count: bin.count }))} bars={[{ id: 'count', label: `Fills (${unit})`, color: CHART.blue }]} signed={false} integer />
-    <p className="q-muted">{sampleCount} samples · {unit}. {excludedCount} excluded for missing benchmark.</p>
+    <p className="q-muted">{sampleCount} samples · {unit}. {excludedCount} excluded from histogram.</p>
     <table className="sr-only"><caption>Fill counts per {unit} bin</caption><tbody>{bins.map(bin => <tr key={`${bin.from}:${bin.to}`}><th scope="row">{bin.label ?? (bin.from !== null && bin.to !== null ? `${bin.from}–${bin.to}` : bin.from === null ? `< ${bin.to}` : `>= ${bin.from}`)}</th><td>{bin.count}</td></tr>)}</tbody></table>
   </figure>;
 }

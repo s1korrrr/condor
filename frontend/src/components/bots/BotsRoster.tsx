@@ -125,7 +125,7 @@ export function RosterObservation({ payload, bot, now, summary: summaryPayload, 
         {cycles ? <>
           <div className="q-stacked" role="img" aria-label="Cycle outcomes" style={{ marginTop: 6 }}>{(() => { const total = Object.values(cycles.counts).reduce((sum, value) => sum + value, 0) || 1; const colors: Record<string, string> = { open: 'var(--q-blue)', closed_scored: 'var(--q-positive)', ownership_transfer: 'var(--q-violet)', entry_pending: 'var(--q-cyan)', entry_unfilled: 'var(--q-neutral)', unclassified: 'var(--q-warning)' }; return Object.entries(cycles.counts).filter(([, count]) => count > 0).map(([key, count]) => <span key={key} style={{ width: `${(count / total) * 100}%`, background: colors[key] ?? 'var(--q-neutral)' }} title={`${key.replaceAll('_', ' ')} ${count}`} />); })()}</div>
           <p>{Object.entries(cycles.counts).map(([key, count]) => `${key.replaceAll('_', ' ')} ${count}`).join(' · ')}</p>
-          <p className="q-empty">{cycles.stats.scored} scored · {cycles.stats.wins}W / {cycles.stats.losses}L{cycles.stats.winRate != null ? ` · win rate ${(cycles.stats.winRate * 100).toFixed(1)}%` : ''}{cycles.stats.expectancy ? ` · expectancy ${formatSigned(cycles.stats.expectancy)}` : ''} · {cycles.stats.fillCount} fills. Transfers and unfilled entries are never wins or losses.</p>
+          <p className="q-empty">{cycles.stats.scored} scored · {cycles.stats.wins}W / {cycles.stats.losses}L{cycles.stats.winRate != null ? ` · win rate ${(cycles.stats.winRate * 100).toFixed(1)}%` : ''}{cycles.stats.expectancy ? ` · expectancy ${formatSigned(cycles.stats.expectancy)}` : ''} · {cycles.stats.fillCount ?? 'Unavailable'} fills. Transfers and unfilled entries are never wins or losses.</p>
         </> : <p className="q-empty">Cycle projection is not readable for this owner.</p>}
       </div>
       <div data-panel-id="B19">
@@ -228,8 +228,7 @@ function OwnerCard({ source, page, logs, onReads }: { source: TradingVisualsSour
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const { reads, raw } = useOwnerReads(source, page, now);
   const { bootstrap } = raw;
-  const readsSignature = ownerReadsFingerprint(reads);
-  useEffect(() => { onReads(reads); }, [onReads, readsSignature]);
+  useEffect(() => { onReads(reads); }, [onReads, reads]);
   const pairs = reads.view?.pairs ?? [];
   const owner = page?.bots.find(item => item.bot_name === source.bot);
   return <article className="q-card q-bot-card" aria-label={`${source.bot} roster card`}>

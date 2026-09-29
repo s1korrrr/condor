@@ -11,9 +11,13 @@ export function pnlSeries(payload: unknown, bot: string, now: number, expectedRa
   const points: PnlSeries['points'] = [];
   let owner = 0, previous: { timestamp: number; identity: string; segment: string; quote: string } | null = null, quote: string | null = null;
   for (const raw of data.points) {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return empty('Performance history contains incompatible observations.');
     const row = raw as { timestamp: number; identity: string; segment: string; quote: string; total_pnl_quote: string };
+    if (typeof row.total_pnl_quote !== 'string' || !/^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?$/.test(row.total_pnl_quote)
+      || typeof row.identity !== 'string' || !row.identity.trim()
+      || typeof row.segment !== 'string' || !row.segment.trim()) return empty('Performance history contains incompatible observations.');
     const value = Number(row.total_pnl_quote);
-    if (!Number.isFinite(row.timestamp) || row.timestamp * 1000 > now + 5_000 || !Number.isFinite(value) || typeof row.quote !== 'string' || (quote && quote !== row.quote) || (previous && row.timestamp <= previous.timestamp)) return empty('Performance history contains incompatible observations.');
+    if (!Number.isFinite(now) || !Number.isFinite(row.timestamp) || row.timestamp <= 0 || row.timestamp * 1000 > now + 5_000 || !Number.isFinite(value) || typeof row.quote !== 'string' || !row.quote.trim() || (quote && quote !== row.quote) || (previous && row.timestamp <= previous.timestamp)) return empty('Performance history contains incompatible observations.');
     quote = row.quote;
     if (previous && (previous.segment !== row.segment || previous.identity !== row.identity || row.timestamp - previous.timestamp > 90)) points.push({ time: previous.timestamp * 1000 + 1, value: null, owner });
     if (previous && previous.identity !== row.identity) owner += 1;
@@ -28,7 +32,7 @@ export function pnlSeries(payload: unknown, bot: string, now: number, expectedRa
   const last = [...points].reverse().find(point => point.value !== null);
   const oneOwner = new Set(points.filter(point => point.value !== null).map(point => point.owner)).size === 1;
   const noGaps = points.every(point => point.value !== null);
-  const completeEdges = first !== undefined && last !== undefined && first.time / 1000 <= start + 90 && last.time / 1000 >= now / 1000 - 90;
+  const completeEdges = first !== undefined && last !== undefined && first.time / 1000 >= start - 90 && first.time / 1000 <= start + 90 && last.time / 1000 >= now / 1000 - 90;
   const completeSource = data.truncated !== true && Number.isFinite(data.coverage_start) && Number(data.coverage_start) <= start + 90;
   const reason = completeEdges && completeSource && oneOwner && noGaps
     ? null

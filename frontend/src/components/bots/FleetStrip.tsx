@@ -65,7 +65,7 @@ function FleetBotCard({ source, reads, status, color, net }: { source: TradingVi
         <div><dt>Win rate</dt><dd>{cycles ? winRateText(cycles.stats) : '—'}</dd></div>
         <div><dt>Fill ratio</dt><dd>{execution?.fillRatio == null ? '—' : `${(execution.fillRatio * 100).toFixed(1)}%`}</dd></div>
         <div><dt>Open orders</dt><dd>{orders == null ? '—' : orders}</dd></div>
-        <div><dt>Fills · fees</dt><dd>{cycles ? `${cycles.stats.fillCount} · ${cycles.stats.fees == null ? '—' : formatDecimal(cycles.stats.fees, 4)}` : '—'}</dd></div>
+        <div><dt>Fills · fees</dt><dd>{cycles ? `${cycles.stats.fillCount ?? 'Unavailable'} · ${cycles.stats.fees == null ? '—' : formatDecimal(cycles.stats.fees, 4)}` : '—'}</dd></div>
         <div><dt>Heartbeat</dt><dd>{quant?.observedAt ? `${quant.observedAt.slice(11, 19)} UTC` : '—'}</dd></div>
       </dl>
     </div>

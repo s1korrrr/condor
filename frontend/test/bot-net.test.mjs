@@ -42,3 +42,12 @@ test('win rate waits for the owner minimum sample', () => {
   assert.equal(winRateText({ scored: 0, minSample: 10, winRate: null }), 'Collecting 0/10');
   assert.equal(winRateText({ scored: 12, minSample: 10, winRate: 0.5833 }), '58.3%');
 });
+
+test('every contributing metric must declare the same currency', () => {
+  const { commonMetricQuote } = frontendModules().load('features/bots/bot-net.ts');
+  assert.equal(commonMetricQuote(['USDC']), 'USDC');
+  assert.equal(commonMetricQuote(['USDC','USDC']), 'USDC');
+  for (const units of [[], ['USDC',null], ['USDC','USDT'], ['unknown'], [''], [undefined]]) {
+    assert.equal(commonMetricQuote(units), null);
+  }
+});

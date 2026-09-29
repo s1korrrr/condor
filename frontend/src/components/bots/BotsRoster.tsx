@@ -15,7 +15,7 @@ import { TileGrid } from '@/features/quant-ops/kit/grid';
 import { DataTable } from '@/features/quant-ops/kit/DataTable';
 import { FleetStrip } from './FleetStrip';
 import { pnlSeries, type PnlSeries } from '@/features/bots/pnl-series';
-import { botNet, controllerPnlPart, ownerReadsFingerprint, pairOwnershipIsDisjoint, winRateText } from '@/features/bots/bot-net';
+import { botNet, commonMetricQuote, controllerPnlPart, ownerReadsFingerprint, pairOwnershipIsDisjoint, winRateText } from '@/features/bots/bot-net';
 import { projectControllerPnl } from '@/features/bots/controller-pnl';
 import type { PanelState } from '@/features/quant-ops/panel-state';
 import { PriceLevels } from './NativeBotPositions';
@@ -291,11 +291,12 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
   const verifiedRunning = scoped.filter(source => page?.bots.find(item => item.bot_name === source.bot)?.status === 'running').length;
   const fleet = scoped.map(source => readsByBot[`${source.server}:${source.bot}`]).filter((reads): reads is OwnerReads => Boolean(reads));
   const complete = fleet.length === scoped.length && scoped.length > 0;
+  const soleOwner = complete && fleet.length === 1 ? fleet[0] : null;
   // Headline PnL uses only the current controller report, matching Capital's scope.
   const netFor = (reads: OwnerReads) => botNet(reads.controller.total);
   const staleBots = fleet.filter(reads => reads.view?.stale || (reads.quant != null && reads.quant.freshness !== 'current'));
   const quotes = new Set(fleet.map(reads => reads.controller.quote).filter(Boolean));
-  const singleQuote = quotes.size === 1 ? [...quotes][0]! : null;
+  const singleQuote = commonMetricQuote(fleet.map(reads => reads.controller.quote));
   // Aggregates are published only when every registered bot is read and no wallet overlap can double count: one bot, or disjoint pairs.
   const disjoint = pairOwnershipIsDisjoint(fleet.map(reads => ({
     pairs: [...(reads.quant?.pairs.map(pair => pair.pair) ?? []), ...reads.controller.rows.map(row => row.pair)],
@@ -305,13 +306,15 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
   const netTotal = aggregateAllowed ? sum(fleet.map(reads => netFor(reads).value)) : null;
   const netStale = aggregateAllowed && fleet.some(reads => netFor(reads).stale);
   const netSources = [...new Set(fleet.map(reads => netFor(reads).source).filter((source): source is NonNullable<typeof source> => source != null))];
-  const dayTotal = aggregateAllowed ? sum(fleet.map(reads => reads.day.change)) : null;
+  const dayQuote = commonMetricQuote(fleet.map(reads => reads.day.quote));
+  const dayAllowed = complete && dayQuote !== null && (soleOwner !== null || aggregateAllowed && dayQuote === singleQuote);
+  const dayTotal = dayAllowed ? sum(fleet.map(reads => reads.day.change)) : null;
   const openExecutors = complete ? sum(fleet.map(reads => reads.cycles?.counts.open ?? null)) : null;
   const openPositions = complete ? sum(fleet.map(reads => reads.view ? reads.view.pairs.filter(row => row.quantity !== null && formatDecimal(row.quantity, 18) !== '0').length : null)) : null;
   const openOrders = complete ? sum(fleet.map(reads => reads.view && reads.view.orders !== null && reads.view.ordersStatus.complete === true ? reads.view.orders.length : null)) : null;
   const fillsTotal = complete ? sum(fleet.map(reads => reads.cycles?.stats.fillCount ?? null)) : null;
   const scoredTotal = complete ? sum(fleet.map(reads => reads.cycles?.stats.scored ?? null)) : null;
-  const aggregateNote = !complete ? 'Waiting for every registered bot to be read.' : aggregateAllowed ? (fleet.length === 1 ? 'One registered bot; no wallet overlap to prove.' : 'Disjoint pairs, one quote currency.') : singleQuote === null ? (staleBots.length ? `${staleBots.length} bot${staleBots.length === 1 ? '' : 's'} stale; quote currency unknown until the owner publishes again.` : 'Bots report different quote currencies; no sum is published.') : 'Bots share pairs on one wallet; per-bot values stay separate.';
+  const aggregateNote = !complete ? 'Waiting for every registered bot to be read.' : aggregateAllowed ? (fleet.length === 1 ? 'One registered bot; no wallet overlap to prove.' : 'Disjoint pairs, one quote currency.') : singleQuote === null ? (staleBots.length ? `${staleBots.length} bot${staleBots.length === 1 ? '' : 's'} stale; quote currency unknown until the owner publishes again.` : quotes.size <= 1 ? 'Current controller quote currency is unavailable; no PnL sum is published.' : 'Bots report different quote currencies; no sum is published.') : 'Bots share pairs on one wallet; per-bot values stay separate.';
   const assets = [...new Set(fleet.flatMap(reads => (reads.quant?.pairs ?? []).map(pair => pair.pair.split('-')[0])))].sort();
   const heatCells = fleet.flatMap(reads => (reads.quant?.pairs ?? []).map(pair => ({ row: displayBotName(reads.bot), column: pair.pair.split('-')[0], value: pair.markedValue == null ? null : Number(pair.markedValue) })));
   const funnel = fleet.length ? (() => { const totals = new Map<string, number>(); for (const reads of fleet) for (const stage of reads.execution?.funnel ?? []) totals.set(stage.stage, (totals.get(stage.stage) ?? 0) + stage.count); return [...totals.entries()].map(([stage, count]) => ({ stage, count })); })() : [];
@@ -320,15 +323,20 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
   const inventoryRows = (() => { const byAsset = new Map<string, { positions: number; units: number; value: number | null; oldest: number | null }>(); for (const reads of fleet) { for (const pair of reads.quant?.pairs ?? []) { if (pair.units == null || Number(pair.units) <= 0) continue; const asset = pair.pair.split('-')[0]; const entry = byAsset.get(asset) ?? { positions: 0, units: 0, value: 0, oldest: null }; entry.positions += 1; entry.units += Number(pair.units); entry.value = entry.value == null || pair.markedValue == null ? null : entry.value + Number(pair.markedValue); const lot = reads.cycles?.inventoryAge.lots.filter(item => item.pair === pair.pair).map(item => item.ageSeconds ?? 0).sort((a, b) => b - a)[0] ?? null; entry.oldest = lot == null ? entry.oldest : Math.max(entry.oldest ?? 0, lot); byAsset.set(asset, entry); } } return [...byAsset.entries()].sort(([, a], [, b]) => (b.value ?? 0) - (a.value ?? 0)); })();
   // Inventory value: the owners' marked owned value, summed only under the same overlap rule as PnL.
   const ownedFor = (reads: OwnerReads) => { const value = reads.quant?.ownedValue.value ?? reads.quant?.ownedValue.lastKnown ?? null; return value == null ? null : Number(value); };
-  const ownedTotal = aggregateAllowed ? sum(fleet.map(ownedFor)) : null;
-  const ownedStale = aggregateAllowed && fleet.some(reads => reads.quant?.ownedValue.value == null && reads.quant?.ownedValue.lastKnown != null);
+  const ownedQuote = commonMetricQuote(fleet.map(reads => reads.quant?.ownedValue.unit));
+  const ownedAllowed = complete && ownedQuote !== null && (soleOwner !== null || aggregateAllowed && ownedQuote === singleQuote);
+  const ownedTotal = ownedAllowed ? sum(fleet.map(ownedFor)) : null;
+  const ownedStale = ownedAllowed && fleet.some(reads => reads.quant?.ownedValue.value == null && reads.quant?.ownedValue.lastKnown != null);
   const winsTotal = complete ? sum(fleet.map(reads => reads.cycles?.stats.wins ?? null)) : null;
   const lossesTotal = complete ? sum(fleet.map(reads => reads.cycles?.stats.losses ?? null)) : null;
   const breakevenTotal = complete ? sum(fleet.map(reads => reads.cycles?.stats.breakeven ?? null)) : null;
   const minSample = Math.max(0, ...fleet.map(reads => reads.cycles?.stats.minSample ?? 0));
   const pooledWinRate = scoredTotal != null && winsTotal != null && scoredTotal >= Math.max(1, minSample) ? winsTotal / scoredTotal : null;
   const onlyExecution = fleet.length === 1 ? fleet[0].execution : null;
-  const feesTotal = aggregateAllowed ? sum(fleet.map(reads => reads.cycles?.stats.fees == null ? null : Number(reads.cycles.stats.fees))) : null;
+  const feesQuote = commonMetricQuote(fleet.map(reads => reads.cycles?.quote));
+  const feesAllowed = complete && feesQuote != null && feesQuote !== 'unknown'
+    && (soleOwner !== null || aggregateAllowed) && fleet.every(reads => reads.cycles?.quote === feesQuote);
+  const feesTotal = feesAllowed ? sum(fleet.map(reads => reads.cycles?.stats.fees == null ? null : Number(reads.cycles.stats.fees))) : null;
   // Oldest open lot: unavailable if any bot's cycles are unread or any listed lot has no age; "No open lots" only when every bot lists none.
   const lotsRead = complete && fleet.every(reads => reads.cycles != null);
   const lotsUnaged = lotsRead && fleet.some(reads => reads.cycles!.inventoryAge.lots.length > 0 && reads.cycles!.inventoryAge.oldestSeconds == null);
@@ -362,13 +370,13 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
       <MetricCard panelId="B26" title="Active executors" value={openExecutors == null ? 'Unavailable' : String(openExecutors)} state={openExecutors == null ? { kind: 'collecting', sample: { have: fleet.length, need: scoped.length || 1 }, reason: 'Cycle projections per bot' } : { kind: 'fresh' }} note="Open executors with fills, from the lifecycle projection." />
       <MetricCard panelId="B03" title="Open positions" value={openPositions == null ? 'Unavailable' : String(openPositions)} state={openPositions == null ? { kind: 'collecting', sample: { have: fleet.length, need: scoped.length || 1 }, reason: 'Inventory per bot' } : staleBots.length ? { kind: 'stale', reason: `${staleBots.length} bot observation${staleBots.length === 1 ? '' : 's'} not current; last-known inventory counted.` } : { kind: 'fresh' }} note="Pairs holding nonzero units across all bots. Executors are not positions." />
       <MetricCard panelId="B27" title="Open orders" value={openOrders == null ? 'Unavailable' : String(openOrders)} state={openOrders == null ? { kind: 'incomplete', reason: 'Complete exchange order detail is missing for a bot.' } : staleBots.length ? { kind: 'stale', reason: 'Last-known order list; the owner observation is not current.' } : { kind: 'fresh' }} note="Working exchange orders in the owner observations." />
-      <MetricCard panelId="B04" title="Daily bot PnL" value={dayTotal == null ? 'Unavailable' : formatSigned(dayTotal)} unit={singleQuote ?? undefined} tone={metricTone(dayTotal)} state={dayTotal == null ? { kind: aggregateAllowed ? 'collecting' : 'incomplete', reason: aggregateAllowed ? 'Needs an unbroken saved 24h series per bot.' : aggregateNote } : { kind: 'fresh' }} note="24h change of saved native net PnL." />
+      <MetricCard panelId="B04" title="Daily bot PnL" value={dayTotal == null ? 'Unavailable' : formatSigned(dayTotal)} unit={dayQuote ?? undefined} tone={metricTone(dayTotal)} state={dayTotal == null ? { kind: dayAllowed ? 'collecting' : 'incomplete', reason: dayAllowed ? 'Needs an unbroken saved 24h series per bot.' : dayQuote === null ? 'Saved daily history lacks a verified common currency or comparable coverage.' : aggregateNote } : { kind: 'fresh' }} note="24h change of saved native net PnL." />
       <MetricCard panelId="B02" title="Total bot PnL" value={netTotal == null ? 'Unavailable' : formatSigned(netTotal)} unit={singleQuote ?? undefined} tone={metricTone(netTotal)} state={netTotal == null ? { kind: 'incomplete', reason: aggregateNote } : netStale ? { kind: 'stale', reason: 'Owner last published net; controller report not current.' } : { kind: 'fresh' }} note={`${aggregateNote} Source: ${netSources.length ? netSources.join(' + ') : 'none'}${netStale ? ' (stale)' : ''}.`} />
-      <MetricCard panelId="B35" title="Inventory value" value={ownedTotal == null ? 'Unavailable' : formatDecimal(ownedTotal)} unit={singleQuote ?? undefined} state={ownedTotal == null ? { kind: 'incomplete', reason: aggregateNote } : ownedStale ? { kind: 'stale', reason: 'Owner last published owned value.' } : { kind: 'fresh' }} note="Marked value of bot-owned inventory. Wallet remainder stays in Capital." />
+      <MetricCard panelId="B35" title="Inventory value" value={ownedTotal == null ? 'Unavailable' : formatDecimal(ownedTotal)} unit={ownedQuote ?? undefined} state={ownedTotal == null ? { kind: 'incomplete', reason: aggregateNote } : ownedStale ? { kind: 'stale', reason: 'Owner last published owned value.' } : { kind: 'fresh' }} note="Marked value of bot-owned inventory. Wallet remainder stays in Capital." />
       <MetricCard panelId="B05" title="Total trades" value={fillsTotal == null ? 'Unavailable' : String(fillsTotal)} state={fillsTotal == null ? { kind: 'collecting', sample: { have: fleet.length, need: scoped.length || 1 }, reason: 'Lifecycle projections per bot' } : { kind: 'fresh' }} note={fillsTotal == null ? 'Native fills, lifetime.' : `native fills · ${scoredTotal ?? 0} scored cycle${scoredTotal === 1 ? '' : 's'} · ${openExecutors ?? 0} open`} />
       <MetricCard panelId="B36" title="Win rate" value={pooledWinRate == null ? (scoredTotal == null ? 'Unavailable' : 'Collecting') : `${(pooledWinRate * 100).toFixed(1)}%`} state={pooledWinRate == null ? (scoredTotal == null ? { kind: 'unavailable', reason: 'Cycle projection not readable.' } : { kind: 'collecting', sample: { have: scoredTotal, need: Math.max(1, minSample) }, reason: 'Scored closed cycles' }) : { kind: 'fresh' }} note={winsTotal == null || lossesTotal == null ? 'Scored closed cycles only' : `${winsTotal}W / ${lossesTotal}L${breakevenTotal ? ` / ${breakevenTotal} breakeven` : ''} · scored closed cycles only`} />
       <MetricCard panelId="B37" title="Fill ratio" value={onlyExecution?.fillRatio == null ? 'Unavailable' : `${(onlyExecution.fillRatio * 100).toFixed(1)}%`} state={onlyExecution?.fillRatio == null ? { kind: fleet.length > 1 ? 'incomplete' : 'unavailable', reason: fleet.length > 1 ? 'Per-bot fill ratios are in the performance table.' : 'No execution cohort is readable.' } : onlyExecution.orderSampleSufficient ? { kind: 'fresh' } : { kind: 'collecting', reason: 'Order sample is below the owner minimum; the ratio is provisional.' }} note={onlyExecution ? `cancel ${onlyExecution.cancelRate == null ? '—' : `${(onlyExecution.cancelRate * 100).toFixed(1)}%`} · median fill ${onlyExecution.latencyMedianSeconds == null ? '—' : `${onlyExecution.latencyMedianSeconds.toFixed(1)}s`}` : 'Filled orders / placed orders'} />
-      <MetricCard panelId="B38" title="Lifetime fees" value={feesTotal == null ? 'Unavailable' : formatDecimal(feesTotal, 4)} unit={singleQuote ?? undefined} state={feesTotal == null ? { kind: 'incomplete', reason: aggregateNote } : { kind: 'fresh' }} note="Exact native fill fees across registered bots" />
+      <MetricCard panelId="B38" title="Lifetime fees" value={feesTotal == null ? 'Unavailable' : formatDecimal(feesTotal, 4)} unit={feesQuote ?? undefined} state={feesTotal == null ? { kind: 'incomplete', reason: 'Exact fill receipts and a verified common quote are required; shared bot histories cannot be pooled without ownership qualification.' } : { kind: 'fresh' }} note="Exact native fill fees across registered bots" />
       <MetricCard panelId="B39" title="Oldest open lot" value={!lotsRead ? 'Unavailable' : lotsUnaged ? 'Unavailable' : openLots === 0 ? 'No open lots' : ageLabel(oldestLot)} state={!lotsRead ? { kind: complete ? 'unavailable' : 'collecting', sample: complete ? undefined : { have: fleet.length, need: scoped.length || 1 }, reason: complete ? 'A bot’s cycle projection is not readable.' : 'Cycle projections per bot' } : lotsUnaged ? { kind: 'incomplete', reason: 'An open lot has no fill or open time recorded.' } : { kind: 'fresh' }} note={openLots == null ? 'Age of the oldest filled, unsold lot · from native fill times' : `${openLots} open lot${openLots === 1 ? '' : 's'} · from native fill times`} />
     </TileGrid>
     {sources.isError && <p role="alert" className="q-notice">{sources.error.message} <button type="button" onClick={() => void sources.refetch()}>Check now</button></p>}

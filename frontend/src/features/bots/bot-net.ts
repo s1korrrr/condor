@@ -40,3 +40,10 @@ export function pairOwnershipIsDisjoint(owners: readonly { pairs: readonly strin
 export function winRateText(stats: { scored: number; minSample: number; winRate: number | null }): string {
   return stats.winRate == null || stats.scored < stats.minSample ? `Collecting ${stats.scored}/${stats.minSample}` : `${(stats.winRate * 100).toFixed(1)}%`;
 }
+
+/** A money aggregate needs an explicit matching unit from every contributing owner. */
+export function commonMetricQuote(units: readonly (string | null | undefined)[]): string | null {
+  const first = units[0];
+  return typeof first === 'string' && first.trim() !== '' && first !== 'unknown'
+    && units.every(unit => unit === first) ? first : null;
+}

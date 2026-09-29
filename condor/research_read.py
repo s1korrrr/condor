@@ -63,6 +63,7 @@ KINDS = {
     "experiment",
     "idea",
     "idea_revision",
+    "metrics",
     "paper",
     "paper_version",
     "report",
@@ -268,7 +269,9 @@ def _valid_shape(endpoint, data, parameters):
             and isinstance(data.get("checked_at"), str)
             and isinstance(model, dict)
             and type(model.get("readable")) is bool
-            and (model.get("revision") is None or isinstance(model.get("revision"), str))
+            and (
+                model.get("revision") is None or isinstance(model.get("revision"), str)
+            )
             and isinstance(data.get("freshness"), dict)
             and data.get("freshness_basis") == "synchronization_receipt"
             and (data.get("reason") is None or isinstance(data.get("reason"), str))

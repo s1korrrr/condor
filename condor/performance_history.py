@@ -16,6 +16,11 @@ from condor.wallet_observation import complete_wallet_balances
 RANGES = {"1D": 86400, "1W": 604800, "1M": 2592000, "ALL": 31536000}
 # Wallet reads keep one sample per bucket so a month stays under the row cap without losing day ends.
 WALLET_BUCKETS = {"1D": 60, "1W": 300, "1M": 1800, "ALL": 3600}
+# Native PnL is stored about once a minute, so longer reads keep the last sample of each UTC-aligned
+# bucket per segment: the window stays under the row cap, and owner changes and gaps (which always
+# start a new segment) are never merged into one point. Each segment's first sample in the window is
+# kept too, so a segment that starts inside the window shows its real start. 1D returns every sample.
+PERFORMANCE_BUCKETS = {"1D": None, "1W": 300, "1M": 1800, "ALL": 3600}
 # Zero valuations were recorded before admission rejected them (an engine restarting before its
 # connector loaded balances). They stay stored but are never read back as equity.
 ADMITTED_VALUE = "CAST(value_quote AS REAL) != 0"
@@ -315,6 +320,7 @@ class PerformanceHistory:
             "bot_name": bot,
             "range": period,
             "coverage_start": None,
+            "bucket_seconds": PERFORMANCE_BUCKETS[period],
             "points": [],
             "truncated": False,
         }
@@ -328,10 +334,23 @@ class PerformanceHistory:
                 "SELECT MIN(timestamp) FROM points WHERE server=? AND bot=?",
                 (server, bot),
             ).fetchone()[0]
-            rows = conn.execute(
-                "SELECT timestamp,identity,segment,quote,realized_pnl_quote,unrealized_pnl_quote,total_pnl_quote FROM points WHERE server=? AND bot=? AND timestamp>=? ORDER BY timestamp DESC LIMIT 10001",
-                (server, bot, now - RANGES[period]),
-            ).fetchall()
+            bucket = PERFORMANCE_BUCKETS[period]
+            columns = "timestamp,identity,segment,quote,realized_pnl_quote,unrealized_pnl_quote,total_pnl_quote"
+            since = now - RANGES[period]
+            if bucket is None:
+                rows = conn.execute(
+                    f"SELECT {columns} FROM points WHERE server=? AND bot=? AND timestamp>=? ORDER BY timestamp DESC LIMIT 10001",
+                    (server, bot, since),
+                ).fetchall()
+            else:
+                rows = conn.execute(
+                    f"SELECT {columns} FROM points WHERE server=? AND bot=? AND timestamp>=? AND ("
+                    "timestamp IN (SELECT MAX(timestamp) FROM points WHERE server=? AND bot=? AND timestamp>=? "
+                    "GROUP BY segment, CAST(timestamp/? AS INTEGER)) "
+                    "OR timestamp IN (SELECT MIN(timestamp) FROM points WHERE server=? AND bot=? AND timestamp>=? GROUP BY segment)"
+                    ") ORDER BY timestamp DESC LIMIT 10001",
+                    (server, bot, since, server, bot, since, bucket, server, bot, since),
+                ).fetchall()
         result.update(
             coverage_start=start,
             points=[dict(row) for row in reversed(rows[:10000])],

@@ -43,3 +43,51 @@ test('PnL history rejects missing owner identity and out-of-window boundaries', 
   assert.equal(pnlSeries(full({ points }), 'v2', now, '1D').change, null);
   assert.equal(pnlSeries(full({ points: [null] }), 'v2', now, '1D').change, null);
 });
+
+// Condor's 1W read: the last stored sample of each UTC five-minute bucket per segment, plus each
+// segment's first sample in the window. Stored samples are a minute apart.
+const weekStart = now / 1000 - 604_800;
+const weekPoints = ({ from = weekStart + 20, segmentAt = null } = {}) => {
+  const raw = [];
+  for (let time = from; time <= now / 1000 - 10; time += 60) {
+    const later = segmentAt != null && time >= segmentAt;
+    raw.push({ timestamp: time, identity: later ? 'boot-b' : 'boot-a', segment: later ? 'b' : 'a', quote: 'USDC', total_pnl_quote: String(time - weekStart) });
+  }
+  const keep = new Map();
+  for (const row of raw) {
+    if (row.timestamp < weekStart) continue;
+    keep.set(`${row.segment}/${Math.floor(row.timestamp / 300)}`, row);
+    if (!keep.has(row.segment)) keep.set(row.segment, row);
+  }
+  return [...new Set(keep.values())].sort((a, b) => a.timestamp - b.timestamp);
+};
+const week = (changes = {}) => ({ source: 'native_mqtt_observer', bot_name: 'v2', range: '1W', bucket_seconds: 300, coverage_start: weekStart - 600, truncated: false, points: weekPoints(), ...changes });
+
+test('bucketed 7d history is continuous at bucket spacing and covers the whole week', () => {
+  const result = pnlSeries(week(), 'v2', now, '1W');
+  assert.equal(result.reason, null);
+  assert.ok(result.points.every(point => point.value !== null), 'bucket spacing is not a sampling gap');
+  const rows = week().points;
+  assert.equal(result.change, Number(rows.at(-1).total_pnl_quote) - Number(rows[0].total_pnl_quote));
+});
+
+test('bucketed 7d history still voids real gaps, owner changes, late starts and mismatched buckets', () => {
+  const rows = week().points;
+  const gap = rows.filter((_, index) => index !== 1000);
+  assert.equal(pnlSeries(week({ points: gap }), 'v2', now, '1W').change, null, 'a missing bucket is a gap');
+  assert.ok(pnlSeries(week({ points: gap }), 'v2', now, '1W').points.some(point => point.value === null));
+  const segment = rows.map((row, index) => index > 1000 ? { ...row, segment: 'b' } : row);
+  assert.equal(pnlSeries(week({ points: segment }), 'v2', now, '1W').change, null);
+  assert.equal(pnlSeries(week({ points: weekPoints({ segmentAt: weekStart + 3 * 86_400 }) }), 'v2', now, '1W').change, null);
+  const late = week({ points: weekPoints({ from: weekStart + 600 }), coverage_start: weekStart + 600 });
+  assert.equal(pnlSeries(late, 'v2', now, '1W').change, null, 'the window must start with a real sample');
+  assert.equal(pnlSeries(week({ coverage_start: weekStart + 200 }), 'v2', now, '1W').change, null, 'recording that began after the window start is not a full week');
+  for (const bucket_seconds of [1800, 60, '300']) assert.match(pnlSeries(week({ bucket_seconds }), 'v2', now, '1W').reason, /identity|invalid/);
+  assert.match(pnlSeries(full({ bucket_seconds: 300 }), 'v2', now, '1D').reason, /identity|invalid/, '1D reads are never bucketed');
+});
+
+test('an owner that starts just after the window start is not a full 7d change', () => {
+  // Owner a stopped before the window; owner b started 250s into it. Only b's rows are in the read.
+  const restarted = week({ points: weekPoints({ from: weekStart + 250 }).map(row => ({ ...row, identity: 'boot-b', segment: 'b' })) });
+  assert.equal(pnlSeries(restarted, 'v2', now, '1W').change, null);
+});

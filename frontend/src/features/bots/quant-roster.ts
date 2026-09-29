@@ -327,7 +327,7 @@ export function projectQuantExecution(value: unknown, bot: string): QuantExecuti
 export type ExecutionStats = {
   meanBps: string | null; medianBps: string | null; sampleCount: number; excludedReasons: Record<string, number>; minSample: number;
   latencyMedianSeconds: number | null; latencySamples: number; fillRatio: number | null; cancelRate: number | null; rejectRate: number | null;
-  orderSampleSufficient: boolean; makerCount: number | null; takerCount: number | null; funnel: { stage: string; count: number }[]; benchmarkBasis: string | null;
+  orderSampleSufficient: boolean; makerCount: number | null; takerCount: number | null; liquidityUnclassifiedCount: number | null; funnel: { stage: string; count: number }[]; benchmarkBasis: string | null;
 };
 
 /** Lifecycle-derived execution statistics. Present even when the slippage cohort is still empty. */
@@ -348,6 +348,7 @@ export function projectExecutionStats(value: unknown, bot: string): ExecutionSta
     fillRatio: finite(row.fill_ratio), cancelRate: finite(row.cancel_rate), rejectRate: finite(row.reject_rate),
     orderSampleSufficient: row.order_sample_sufficient === true,
     makerCount: nonnegativeInteger(row.maker_count), takerCount: nonnegativeInteger(row.taker_count),
+    liquidityUnclassifiedCount: nonnegativeInteger(row.liquidity_unclassified_count),
     funnel, benchmarkBasis: text(row.benchmark_basis),
   };
 }

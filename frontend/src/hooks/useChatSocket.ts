@@ -227,6 +227,7 @@ const FLUSH_INTERVAL_MS = 50;
 export function useChatSocket() {
   const { token, user } = useAuth();
   const wsRef = useRef<WebSocket | null>(null);
+  const handleEventRef = useRef<(data: Record<string, unknown>) => void>(() => {});
   const reconnectTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   // Whether this hook still wants a socket. `close()` is asynchronous, so the
   // cleanup that cancels the pending retry cannot also stop the `onclose` that
@@ -514,7 +515,7 @@ export function useChatSocket() {
     };
     ws.onmessage = (ev) => {
       try {
-        handleEvent(JSON.parse(ev.data));
+        handleEventRef.current(JSON.parse(ev.data));
       } catch {
         /* ignore */
       }
@@ -973,6 +974,10 @@ export function useChatSocket() {
       stopStreaming,
     ],
   );
+
+  useEffect(() => {
+    handleEventRef.current = handleEvent;
+  }, [handleEvent]);
 
   const sendMessage = useCallback(
     (slotId: string, text: string) => {

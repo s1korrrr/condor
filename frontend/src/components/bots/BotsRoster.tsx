@@ -415,7 +415,7 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
           ]} />
       </PanelFrame>
       <PanelFrame panelId="B24" title="Symbol exposure heatmap" scopeLabel="Marked owned value per bot and asset · hatched = no position" state={heatCells.length ? { kind: 'fresh' } : { kind: 'unavailable', reason: 'No bot reports pair inventory.' }}>
-        {heatCells.length ? <Heatmap rows={[...new Set(heatCells.map(cell => cell.row))]} columns={assets} cells={heatCells} /> : <p className="q-empty">No marked owned value to plot.</p>}
+        {heatCells.length ? <Heatmap rows={[...new Set(heatCells.map(cell => cell.row))]} columns={assets} cells={heatCells} label="Marked owned value per bot and symbol" unitDescription="Amounts use each bot’s quote currency." /> : <p className="q-empty">No marked owned value to plot.</p>}
       </PanelFrame>
       <PanelFrame panelId="B31" title="Order lifecycle" scopeLabel="Decisions → orders → fills · lifetime owner rows" state={funnel.length ? { kind: 'fresh' } : { kind: 'unavailable', reason: 'No lifecycle rows are readable yet.' }}>
         <Funnel stages={funnel} />

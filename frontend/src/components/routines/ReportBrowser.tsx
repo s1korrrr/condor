@@ -48,7 +48,7 @@ export function ReportBrowser({
   const qc = useQueryClient();
   const [sourceTypeFilter, setSourceTypeFilter] = useState<string>(initialSourceTypeFilter || "all");
   const [isCompact, setIsCompact] = useState(false);
-  const [showConfigPanel, setShowConfigPanel] = useState(false);
+  const [configPanelSource, setConfigPanelSource] = useState<string | null>(null);
   const [showNotifyPanel, setShowNotifyPanel] = useState(false);
   const [showSourceModal, setShowSourceModal] = useState(false);
   const [reportTheme, setReportTheme] = useState<"dark" | "light">("dark");
@@ -60,7 +60,7 @@ export function ReportBrowser({
     queryFn: api.getRoutines,
   });
 
-  const [activeSource, setActiveSource] = useState(initialSource ?? "");
+  const [selectedSource, setSelectedSource] = useState(initialSource ?? "");
 
   // Filter routines by source type
   const filteredRoutines = useMemo(() => {
@@ -71,12 +71,13 @@ export function ReportBrowser({
     return routines.filter((r) => r.source === `agent:${sourceTypeFilter}`);
   }, [routines, sourceTypeFilter]);
 
-  // Set initial source once routines load if not set — pick from filtered list
-  useEffect(() => {
-    if (!activeSource && filteredRoutines.length > 0) {
-      setActiveSource(filteredRoutines[0].name);
-    }
-  }, [activeSource, filteredRoutines]);
+  const activeSource = selectedSource || filteredRoutines[0]?.name || "";
+  const setActiveSource = useCallback((source: string) => setSelectedSource(source), []);
+  const showConfigPanel = configPanelSource === activeSource;
+  const setShowConfigPanel = useCallback((show: boolean | ((current: boolean) => boolean)) => {
+    const next = typeof show === "function" ? show(configPanelSource === activeSource) : show;
+    setConfigPanelSource(next ? activeSource : null);
+  }, [activeSource, configPanelSource]);
 
   // Unique source types for filter
   const hasAgents = routines.some((r) => r.source.startsWith("agent:"));
@@ -118,13 +119,17 @@ export function ReportBrowser({
     enabled: showSourceModal && !!activeSource,
   });
 
-  const [selectedReportIdx, setSelectedReportIdx] = useState(0);
-  const selectedReport = reports[selectedReportIdx] ?? null;
-
-  // Reset report index when source changes
-  useEffect(() => {
-    setSelectedReportIdx(0);
+  const [reportSelection, setReportSelection] = useState<{ source: string; index: number } | null>(null);
+  const selectedReportIdx = reportSelection?.source === activeSource ? reportSelection.index : 0;
+  const setSelectedReportIdx = useCallback((update: number | ((current: number) => number)) => {
+    setReportSelection((current) => ({
+      source: activeSource,
+      index: typeof update === "function"
+        ? update(current?.source === activeSource ? current.index : 0)
+        : update,
+    }));
   }, [activeSource]);
+  const selectedReport = reports[selectedReportIdx] ?? null;
 
   // Active instances for current source
   const sourceInstances = useMemo(
@@ -139,13 +144,18 @@ export function ReportBrowser({
   );
 
   // Config state: merge routine fields with saved localStorage values
-  const [configValues, setConfigValues] = useState<Record<string, unknown>>({});
-
-  useEffect(() => {
-    if (!activeRoutine) return;
-    setConfigValues(buildConfigValues(activeRoutine));
-    setShowConfigPanel(false);
-  }, [activeSource, activeRoutine]);
+  const [configDraft, setConfigDraft] = useState<{ source: string; values: Record<string, unknown> } | null>(null);
+  const routineDefaults = activeRoutine
+    ? Object.fromEntries(Object.entries(activeRoutine.fields).map(([key, field]) => [key, field.default]))
+    : {};
+  const configValues = configDraft?.source === activeSource ? configDraft.values : routineDefaults;
+  const ensureConfigDraft = useCallback(() => {
+    if (!activeRoutine) return {};
+    if (configDraft?.source === activeSource) return configDraft.values;
+    const values = buildConfigValues(activeRoutine);
+    setConfigDraft({ source: activeSource, values });
+    return values;
+  }, [activeRoutine, activeSource, configDraft]);
 
   // Track running instance to poll for completion
   const [pollingInstanceId, setPollingInstanceId] = useState<string | null>(null);
@@ -154,19 +164,18 @@ export function ReportBrowser({
     queryKey: ["routine-instance", pollingInstanceId],
     queryFn: () => api.getRoutineInstance(pollingInstanceId!),
     enabled: !!pollingInstanceId,
-    refetchInterval: 2000,
+    refetchInterval: (query) => query.state.data?.status === "running" ? 2000 : false,
   });
 
   // When polled instance completes, refresh reports
+  const completedPollingId = polledInstance && polledInstance.status !== "running"
+    ? pollingInstanceId : null;
   useEffect(() => {
-    if (polledInstance && polledInstance.status !== "running") {
-      setPollingInstanceId(null);
-      invalidateRoutineQueries(qc, activeSource);
-    }
-  }, [polledInstance, activeSource, qc]);
+    if (completedPollingId) invalidateRoutineQueries(qc, activeSource);
+  }, [completedPollingId, activeSource, qc]);
 
   const runMutation = useMutation({
-    mutationFn: () => api.runRoutine(server!, activeSource, configValues),
+    mutationFn: (values: Record<string, unknown>) => api.runRoutine(server!, activeSource, values),
     onSuccess: (data) => {
       setPollingInstanceId(data.instance_id);
       qc.invalidateQueries({ queryKey: ["routine-instances"] });
@@ -175,8 +184,8 @@ export function ReportBrowser({
   });
 
   const scheduleMutation = useMutation({
-    mutationFn: (intervalSec: number) =>
-      api.scheduleRoutine(server!, activeSource, configValues, intervalSec),
+    mutationFn: ({ intervalSec, values }: { intervalSec: number; values: Record<string, unknown> }) =>
+      api.scheduleRoutine(server!, activeSource, values, intervalSec),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["routine-instances"] });
       setShowConfigPanel(false);
@@ -250,21 +259,21 @@ export function ReportBrowser({
     if (activeSourceIdx > 0) {
       setActiveSource(filteredRoutines[activeSourceIdx - 1].name);
     }
-  }, [activeSourceIdx, filteredRoutines]);
+  }, [activeSourceIdx, filteredRoutines, setActiveSource]);
 
   const goSourceDown = useCallback(() => {
     if (activeSourceIdx < filteredRoutines.length - 1) {
       setActiveSource(filteredRoutines[activeSourceIdx + 1].name);
     }
-  }, [activeSourceIdx, filteredRoutines]);
+  }, [activeSourceIdx, filteredRoutines, setActiveSource]);
 
   const goPrevReport = useCallback(() => {
     if (selectedReportIdx > 0) setSelectedReportIdx((i) => i - 1);
-  }, [selectedReportIdx]);
+  }, [selectedReportIdx, setSelectedReportIdx]);
 
   const goNextReport = useCallback(() => {
     if (selectedReportIdx < reports.length - 1) setSelectedReportIdx((i) => i + 1);
-  }, [selectedReportIdx, reports.length]);
+  }, [selectedReportIdx, reports.length, setSelectedReportIdx]);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => {
@@ -283,7 +292,7 @@ export function ReportBrowser({
     };
     window.addEventListener("keydown", handler);
     return () => window.removeEventListener("keydown", handler);
-  }, [goSourceUp, goSourceDown, goPrevReport, goNextReport, onClose, showConfigPanel, showNotifyPanel, showSourceModal]);
+  }, [goSourceUp, goSourceDown, goPrevReport, goNextReport, onClose, setShowConfigPanel, showConfigPanel, showNotifyPanel, showSourceModal]);
 
   // Scroll active source into view
   useEffect(() => {
@@ -538,7 +547,8 @@ export function ReportBrowser({
                 </button>
                 <button
                   onClick={() => {
-                    setShowConfigPanel((v) => !v);
+                    if (!showConfigPanel) ensureConfigDraft();
+                    setShowConfigPanel(!showConfigPanel);
                     setShowNotifyPanel(false);
                   }}
                   className={`flex items-center gap-1 rounded px-2 py-1 text-[10px] font-semibold transition-colors ${
@@ -567,7 +577,7 @@ export function ReportBrowser({
                   Notify
                 </button>
                 <button
-                  onClick={() => runMutation.mutate()}
+                  onClick={() => runMutation.mutate(ensureConfigDraft())}
                   disabled={runMutation.isPending || !server}
                   className="flex items-center gap-1 rounded bg-[var(--color-primary)] px-2.5 py-1 text-[10px] font-semibold text-white transition-colors hover:bg-[var(--color-primary)]/80 disabled:opacity-50"
                   title="Run with current config"
@@ -581,7 +591,7 @@ export function ReportBrowser({
                 </button>
                 {!activeRoutine.is_continuous && (
                   <ScheduleDropdown
-                    onSchedule={(sec) => scheduleMutation.mutate(sec)}
+                    onSchedule={(sec) => scheduleMutation.mutate({ intervalSec: sec, values: ensureConfigDraft() })}
                     disabled={scheduleMutation.isPending || !server}
                   />
                 )}
@@ -718,11 +728,9 @@ export function ReportBrowser({
                 fields={activeRoutine.fields}
                 values={configValues}
                 onChange={(key, value) => {
-                  setConfigValues((prev) => {
-                    const next = { ...prev, [key]: value };
-                    saveConfig(activeSource, next);
-                    return next;
-                  });
+                  const next = { ...ensureConfigDraft(), [key]: value };
+                  saveConfig(activeSource, next);
+                  setConfigDraft({ source: activeSource, values: next });
                 }}
               />
             ) : (
@@ -827,7 +835,7 @@ export function ReportBrowser({
                     </pre>
                     {activeRoutine && server && (
                       <button
-                        onClick={() => runMutation.mutate()}
+                        onClick={() => runMutation.mutate(ensureConfigDraft())}
                         disabled={runMutation.isPending}
                         className="mt-4 flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-4 py-2 text-xs font-semibold text-white transition-colors hover:bg-[var(--color-primary)]/80 disabled:opacity-50"
                       >
@@ -859,18 +867,16 @@ export function ReportBrowser({
                         fields={activeRoutine.fields}
                         values={configValues}
                         onChange={(key, value) => {
-                          setConfigValues((prev) => {
-                            const next = { ...prev, [key]: value };
-                            saveConfig(activeSource, next);
-                            return next;
-                          });
+                          const next = { ...ensureConfigDraft(), [key]: value };
+                          saveConfig(activeSource, next);
+                          setConfigDraft({ source: activeSource, values: next });
                         }}
                       />
                     </div>
                   )}
                   {activeRoutine && server && (
                     <button
-                      onClick={() => runMutation.mutate()}
+                      onClick={() => runMutation.mutate(ensureConfigDraft())}
                       disabled={runMutation.isPending}
                       className="mt-4 flex items-center gap-1.5 rounded-lg bg-[var(--color-primary)] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[var(--color-primary)]/80 disabled:opacity-50"
                     >

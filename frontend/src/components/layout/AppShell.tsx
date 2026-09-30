@@ -20,7 +20,7 @@ import { ConnectKeysOverlay } from "@/components/ConnectKeysOverlay";
 import { CapabilityUnavailable } from "@/components/CapabilityUnavailable";
 import { FallbackSpinner } from "@/components/ui/FallbackSpinner";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { ChatProvider } from "@/hooks/useChat";
+import { ChatProvider } from "@/components/chat/ChatProvider";
 import { useCredentials } from "@/hooks/useCredentials";
 import { usePrefetchData } from "@/hooks/usePrefetchData";
 import { useServer } from "@/hooks/useServer";

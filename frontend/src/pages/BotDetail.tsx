@@ -9,7 +9,7 @@ import {
   RotateCcw,
   Save,
 } from "lucide-react";
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import yaml from "js-yaml";
 
@@ -25,10 +25,8 @@ export function BotDetail() {
   const queryClient = useQueryClient();
 
   const [editing, setEditing] = useState(false);
-  const [yamlValue, setYamlValue] = useState("");
-  const [originalYaml, setOriginalYaml] = useState("");
-  const [yamlError, setYamlError] = useState<string | null>(null);
-  const prevConfigSig = useRef("");
+  const [yamlDraft, setYamlDraft] = useState<{ configSignature: string; value: string; error: string | null } | null>(null);
+  const [savedYaml, setSavedYaml] = useState<{ configSignature: string; value: string } | null>(null);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["bot", server, id],
@@ -46,31 +44,25 @@ export function BotDetail() {
       )
     : "";
 
-  // Sync config → YAML when data changes (only if not dirty)
-  useMemo(() => {
-    if (!data?.config || Object.keys(data.config).length === 0) return;
-    const sig = JSON.stringify(data.config);
-    if (sig === prevConfigSig.current) return;
-    prevConfigSig.current = sig;
-    const dumped = configToYaml(data.config);
-    setYamlValue(dumped);
-    setOriginalYaml(dumped);
-    setYamlError(null);
-  }, [data?.config]);
+  const configSignature = data?.config && Object.keys(data.config).length > 0 ? JSON.stringify(data.config) : "";
+  const canonicalYaml = data?.config && configSignature ? configToYaml(data.config) : "";
+  const originalYaml = savedYaml?.configSignature === configSignature ? savedYaml.value : canonicalYaml;
+  const currentDraft = yamlDraft?.configSignature === configSignature ? yamlDraft : null;
+  const yamlValue = currentDraft?.value ?? originalYaml;
+  const yamlError = currentDraft?.error ?? null;
 
   const handleYamlChange = useCallback((val: string) => {
-    setYamlValue(val);
+    let error: string | null = null;
     try {
       const parsed = yaml.load(val);
       if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
-        setYamlError("YAML must be a mapping (key: value)");
-      } else {
-        setYamlError(null);
+        error = "YAML must be a mapping (key: value)";
       }
     } catch (e) {
-      setYamlError(e instanceof Error ? e.message : "Invalid YAML");
+      error = e instanceof Error ? e.message : "Invalid YAML";
     }
-  }, []);
+    setYamlDraft({ configSignature, value: val, error });
+  }, [configSignature]);
 
   const isDirty = yamlValue !== originalYaml;
   const canSave = isDirty && !yamlError && !!configId;
@@ -78,16 +70,15 @@ export function BotDetail() {
   const saveMutation = useMutation({
     mutationFn: () => api.updateConfigYaml(server!, configId, yamlValue),
     onSuccess: () => {
-      setOriginalYaml(yamlValue);
-      prevConfigSig.current = ""; // force re-sync on next fetch
+      setSavedYaml({ configSignature, value: yamlValue });
+      setYamlDraft(null);
       queryClient.invalidateQueries({ queryKey: ["bot", server, id] });
     },
   });
 
   const handleSave = () => saveMutation.mutate();
   const handleReset = () => {
-    setYamlValue(originalYaml);
-    setYamlError(null);
+    setYamlDraft(null);
     saveMutation.reset();
   };
   const handleToggleEdit = () => {

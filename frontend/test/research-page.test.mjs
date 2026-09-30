@@ -142,7 +142,8 @@ test("all research panels remain visible with a skewed host clock", () => {
     }
     const result = renderResearch(queries);
     assert.match(result.html, /Fixture idea/);
-    assert.match(result.html, /Index current/);
+    assert.match(result.html, /Index unavailable/);
+    assert.match(result.html, /Event-scan verification unavailable/);
     assert.doesNotMatch(
       result.html,
       /has not refreshed|expired|connection stale/i,
@@ -154,6 +155,69 @@ test("all research panels remain visible with a skewed host clock", () => {
     click(result, /^Refresh$/);
     assert.equal(new Set(result.refetches).size, 4);
   }
+});
+
+test("canonical event-scan freshness is shown with its as-of age and bound", () => {
+  const queries = selectedIdeaQueries();
+  queries["research-overview"].data.data.freshness = {
+    state: "CURRENT",
+    freshness_basis: "verified_event_scan",
+    verification_checked_at: "2026-09-30T12:00:00Z",
+    verification_age_seconds: 5,
+    max_verification_age_seconds: 90,
+  };
+  const result = renderResearch(queries);
+  assert.match(result.html, /Index current · verified as of scan/);
+  assert.match(result.html, /Event scan · .* · 5s old \/ ≤90s detection bound/);
+  assert.doesNotMatch(result.html, /Event-scan verification unavailable/);
+});
+
+test("missing or expired event-scan metadata never renders as verified", () => {
+  const missing = selectedIdeaQueries();
+  missing["research-overview"].data.data.freshness = {
+    state: "CURRENT",
+    freshness_basis: "verified_event_scan",
+    verification_checked_at: "not-a-timestamp",
+    max_verification_age_seconds: 90,
+  };
+  const missingResult = renderResearch(missing);
+  assert.match(missingResult.html, /Event-scan verification unavailable/);
+  assert.match(missingResult.html, /Index unavailable/);
+  assert.doesNotMatch(missingResult.html, /Index current/);
+  assert.doesNotMatch(missingResult.html, /verified as of scan|Event scan ·/);
+
+  const expired = selectedIdeaQueries();
+  expired["research-overview"].data.data.freshness = {
+    state: "CURRENT",
+    freshness_basis: "verified_event_scan",
+    verification_checked_at: "2026-09-30T12:00:00Z",
+    verification_age_seconds: 91,
+    max_verification_age_seconds: 90,
+  };
+  const expiredResult = renderResearch(expired);
+  assert.match(expiredResult.html, /Event-scan verification unavailable/);
+  assert.match(expiredResult.html, /Index unavailable/);
+  assert.doesNotMatch(expiredResult.html, /Index current/);
+  assert.doesNotMatch(expiredResult.html, /verified as of scan|Event scan ·/);
+});
+
+test("event-scan proof expires while a query response is still readable", (t) => {
+  const now = Date.parse("2026-09-30T12:01:31Z");
+  t.mock.method(Date, "now", () => now);
+  const queries = selectedIdeaQueries();
+  queries["research-overview"].dataUpdatedAt = now - 11000;
+  queries["research-overview"].data.data.freshness = {
+    state: "CURRENT",
+    freshness_basis: "verified_event_scan",
+    verification_checked_at: "2026-09-30T12:00:00Z",
+    verification_age_seconds: 80,
+    max_verification_age_seconds: 90,
+  };
+  const result = renderResearch(queries, { search: "" });
+  assert.match(result.html, /Recorded conclusions/);
+  assert.match(result.html, /Index unavailable/);
+  assert.match(result.html, /Event-scan verification unavailable/);
+  assert.doesNotMatch(result.html, /verified as of scan|Event scan ·/);
 });
 
 test("each library filter clears the previously selected record", () => {

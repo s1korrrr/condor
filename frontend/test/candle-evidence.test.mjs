@@ -59,6 +59,17 @@ test('a live update to an open one-hour bar uses receipt time, not the opening t
   assert.equal(harness.candles.getCandles(liveKey)[0].timestamp, opening);
 });
 
+test('last close snapshot is timestamp ordered and leaves access bookkeeping untouched', () => {
+  const harness = store(5_000);
+  harness.candles.mergeCandles(liveKey, [candle(20, 120), candle(10, 110)]);
+  const collection = harness.candles.collections.get(liveKey);
+  const lastAccessed = collection.lastAccessed;
+  harness.advance(10_000);
+  assert.equal(harness.candles.getLastClose(liveKey), 120);
+  assert.equal(collection.lastAccessed, lastAccessed);
+  assert.equal(harness.candles.getLastClose('missing'), undefined);
+});
+
 test('equal-time history that disagrees with a live bar stays a conflict', () => {
   const { candles } = store(1_000);
   candles.mergeCandles(liveKey, [candle(50, 10)], 'live');

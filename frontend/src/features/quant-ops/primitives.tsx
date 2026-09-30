@@ -154,11 +154,17 @@ export function Histogram({ bins, unit, sampleCount, excludedCount }: { bins: { 
   </figure>;
 }
 
-export function Heatmap({ rows, columns, cells }: { rows: string[]; columns: string[]; cells: { row: string; column: string; value: number | null }[] }) {
+export function Heatmap({ rows, columns, cells, label, unitDescription }: {
+  rows: string[];
+  columns: string[];
+  cells: { row: string; column: string; value: number | null }[];
+  label: string;
+  unitDescription: string;
+}) {
   const lookup = new Map(cells.map(cell => [`${cell.row}:${cell.column}`, cell.value]));
   const numbers = cells.map(cell => cell.value).filter((value): value is number => value != null);
   const peak = Math.max(1, ...numbers.map(Math.abs));
-  return <figure aria-label="Controller PnL by symbol heatmap" style={{ margin: 0 }}>
+  return <figure aria-label={`${label} heatmap`} style={{ margin: 0 }}>
     <div className="q-heat" style={{ gridTemplateColumns: `88px repeat(${columns.length}, minmax(36px, 1fr))` }} aria-hidden="true">
     <div />
     {columns.map(column => <div key={column} className="q-muted" style={{ textAlign: 'center', fontSize: 11 }}>{column}</div>)}
@@ -174,7 +180,7 @@ export function Heatmap({ rows, columns, cells }: { rows: string[]; columns: str
       </div>
     ))}
     </div>
-    <table className="sr-only"><caption>Controller PnL by symbol, signed quote amounts</caption>
+    <table className="sr-only"><caption>{label}. {unitDescription}</caption>
       <thead><tr><th scope="col">Bot</th>{columns.map(column => <th key={column} scope="col">{column}</th>)}</tr></thead>
       <tbody>{rows.map(row => <tr key={row}><th scope="row">{row}</th>{columns.map(column => {
         const value = lookup.get(`${row}:${column}`);

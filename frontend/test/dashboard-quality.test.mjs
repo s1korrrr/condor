@@ -40,6 +40,17 @@ test('Research overview failure has one recoverable state and does not start dep
  const recovered=renderResearch({'research-overview':{data:envelope({revision:'r',freshness:{state:'CURRENT'}})}},{search:''});
  assert.match(recovered.html,/Recorded conclusions/);assert.doesNotMatch(recovered.html,/Read failed/);
 });
+test('Research freshness reports the native event-scan bound and leaves older receipts neutral',async()=>{
+ const {renderResearch,envelope}=await import('./helpers/research-render.mjs');
+ const checkedAt='2026-09-30T10:00:00Z';
+ const verified=renderResearch({'research-overview':{data:envelope({revision:'scan-r1',freshness:{state:'CURRENT',last_sync:checkedAt,freshness_basis:'verified_event_scan',verification_checked_at:checkedAt,verification_age_seconds:12,max_verification_age_seconds:90}})}},{search:''});
+ assert.match(verified.html,/Index current · verified as of scan/);
+ assert.match(verified.html,/Event scan · 30\/09\/2026, 10:00:00 UTC · 12s old \/ ≤90s detection bound/);
+ const legacy=renderResearch({'research-overview':{data:envelope({revision:'legacy-r1',freshness:{state:'CURRENT',last_sync:checkedAt}})}},{search:''});
+ assert.match(legacy.html,/Event-scan verification unavailable/);
+ assert.match(legacy.html,/Index unavailable/);
+ assert.doesNotMatch(legacy.html,/quant-positive/);
+});
 test('deployment receipt errors hide previous versions and absence has one explanation',()=>{
  for(const query of [{isError:true,error:new Error('Receipt read failed'),data:{recorded:true,components:[{name:'OLD_IMAGE'}]}},{data:{recorded:false,reason:'Deployment details have not been recorded.'}}]) {
   const {load}=frontendModules({'@/lib/auth-token':{authFetch:()=>{throw new Error('Unexpected request')}},'@tanstack/react-query':{useQuery:()=>({isPending:false,isFetching:false,refetch(){},...query})}});

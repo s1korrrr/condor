@@ -93,10 +93,16 @@ export function PairSelector({
   useEffect(() => {
     if (open) {
       inputRef.current?.focus();
+    }
+  }, [open]);
+
+  const toggleOpen = () => {
+    if (!open) {
       setSearch("");
       setActiveIndex(0);
     }
-  }, [open]);
+    setOpen(!open);
+  };
 
   // Scroll active item into view
   useEffect(() => {
@@ -137,7 +143,7 @@ export function PairSelector({
   return (
     <div ref={containerRef} className="relative">
       <button
-        onClick={() => setOpen(!open)}
+        onClick={toggleOpen}
         className="group flex items-center gap-1 px-4 py-2.5 transition-colors hover:bg-[var(--color-surface-hover)] focus:outline-none focus-visible:ring-1 focus-visible:ring-inset focus-visible:ring-[var(--color-primary)]"
       >
         {isLoading ? (
@@ -237,15 +243,4 @@ export function PairSelector({
       )}
     </div>
   );
-}
-
-// Export the rules map hook for TradingRulesInfo
-export function useTradingRules(server: string, connector: string) {
-  const { data } = useQuery({
-    queryKey: ["trading-rules", server, connector],
-    queryFn: () => api.getTradingRules(server, connector),
-    enabled: !!server && !!connector,
-    staleTime: 5 * 60 * 1000,
-  });
-  return data;
 }

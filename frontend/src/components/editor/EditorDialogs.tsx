@@ -8,6 +8,15 @@ import { useEscapeKey } from "@/hooks/useEscapeKey";
 import { api, type ControllerConfigSummary } from "@/lib/api";
 import { configToYaml } from "@/lib/configYaml";
 
+const HIDDEN_CONTROLLER_FIELDS = new Set([
+  "id",
+  "controller_name",
+  "controller_type",
+  "manual_kill_switch",
+  "initial_positions",
+  "profile",
+]);
+
 // ── Delete Confirm Dialog ──
 
 export function DeleteConfirmDialog({
@@ -403,7 +412,7 @@ export function CloneConfigDialog({
   const queryClient = useQueryClient();
   useEscapeKey(true, onClose);
   const [newId, setNewId] = useState(`${sourceConfig.id}_copy`);
-  const [yamlContent, setYamlContent] = useState("");
+  const [yamlOverride, setYamlOverride] = useState<{ sourceId: string; value: string } | null>(null);
   const [yamlError, setYamlError] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery({
@@ -411,13 +420,10 @@ export function CloneConfigDialog({
     queryFn: () => api.getConfigDetail(server, sourceConfig.id),
   });
 
-  useMemo(() => {
-    if (!data?.config) return;
-    setYamlContent(configToYaml(data.config));
-  }, [data?.config]);
+  const yamlContent = yamlOverride?.sourceId === sourceConfig.id ? yamlOverride.value : data?.config ? configToYaml(data.config) : "";
 
   const handleYamlChange = useCallback((val: string) => {
-    setYamlContent(val);
+    setYamlOverride({ sourceId: sourceConfig.id, value: val });
     try {
       const parsed = yaml.load(val);
       if (typeof parsed !== "object" || parsed === null || Array.isArray(parsed)) {
@@ -428,7 +434,7 @@ export function CloneConfigDialog({
     } catch (e) {
       setYamlError(e instanceof Error ? e.message : "Invalid YAML");
     }
-  }, []);
+  }, [sourceConfig.id]);
 
   const createMutation = useMutation({
     mutationFn: () => {
@@ -575,6 +581,7 @@ export function NewConfigDialog({
     mutationFn: () => {
       const config: Record<string, unknown> = {
         ...hiddenDefaults,
+        ...defaultFieldValues,
         ...fieldValues,
         ...(selectedName === "rsi_modular" ? { profile: selectedProfile } : {}),
         controller_name: selectedName,
@@ -587,15 +594,6 @@ export function NewConfigDialog({
       onClose();
     },
   });
-
-  const HIDDEN_FIELDS = new Set([
-    "id",
-    "controller_name",
-    "controller_type",
-    "manual_kill_switch",
-    "initial_positions",
-    "profile",
-  ]);
 
   const { visibleFields, hiddenDefaults } = useMemo(() => {
     if (!template)
@@ -618,7 +616,7 @@ export function NewConfigDialog({
     const visible: typeof allFields = [];
     const defaults: Record<string, unknown> = {};
     for (const f of allFields) {
-      if (HIDDEN_FIELDS.has(f.name)) {
+      if (HIDDEN_CONTROLLER_FIELDS.has(f.name)) {
         if (f.default !== undefined && f.default !== null) {
           defaults[f.name] = f.default;
         }
@@ -629,16 +627,11 @@ export function NewConfigDialog({
     return { visibleFields: visible, hiddenDefaults: defaults };
   }, [template]);
 
-  useMemo(() => {
-    if (visibleFields.length === 0) return;
-    const defaults: Record<string, unknown> = {};
-    for (const f of visibleFields) {
-      if (f.default !== undefined && f.default !== null) {
-        defaults[f.name] = f.default;
-      }
-    }
-    setFieldValues((prev) => ({ ...defaults, ...prev }));
-  }, [visibleFields]);
+  const defaultFieldValues: Record<string, unknown> = {};
+  for (const field of visibleFields) {
+    if (field.default !== undefined && field.default !== null) defaultFieldValues[field.name] = field.default;
+  }
+  const displayedFieldValues = { ...defaultFieldValues, ...fieldValues };
 
   const updateField = useCallback((name: string, value: unknown) => {
     setFieldValues((prev) => ({ ...prev, [name]: value }));
@@ -741,14 +734,14 @@ export function NewConfigDialog({
                   </label>
                   {field.type === "boolean" || field.type === "bool" ? (
                     <button
-                      onClick={() => updateField(field.name, !fieldValues[field.name])}
+                      onClick={() => updateField(field.name, !displayedFieldValues[field.name])}
                       className={`rounded-md border px-3 py-1.5 text-sm transition-colors ${
-                        fieldValues[field.name]
+                        displayedFieldValues[field.name]
                           ? "border-[var(--color-primary)] bg-[var(--color-primary)]/10 text-[var(--color-primary)]"
                           : "border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text-muted)]"
                       }`}
                     >
-                      {fieldValues[field.name] ? "true" : "false"}
+                      {displayedFieldValues[field.name] ? "true" : "false"}
                     </button>
                   ) : field.type === "number" ||
                     field.type === "float" ||
@@ -757,7 +750,7 @@ export function NewConfigDialog({
                     <input
                       type="number"
                       step="any"
-                      value={String(fieldValues[field.name] ?? "")}
+                      value={String(displayedFieldValues[field.name] ?? "")}
                       onChange={(e) =>
                         updateField(field.name, e.target.value ? Number(e.target.value) : undefined)
                       }
@@ -766,7 +759,7 @@ export function NewConfigDialog({
                   ) : (
                     <input
                       type="text"
-                      value={String(fieldValues[field.name] ?? "")}
+                      value={String(displayedFieldValues[field.name] ?? "")}
                       onChange={(e) => updateField(field.name, e.target.value)}
                       className="w-full rounded-md border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm focus:border-[var(--color-primary)] focus:outline-none"
                     />

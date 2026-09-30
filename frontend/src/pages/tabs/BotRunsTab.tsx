@@ -7,6 +7,8 @@ import { FallbackSpinner } from "@/components/ui/FallbackSpinner";
 import { useServer } from "@/hooks/useServer";
 import { api, type BotRunInfo } from "@/lib/api";
 
+const EMPTY_BOT_RUNS: BotRunInfo[] = [];
+
 function formatTimestamp(ts: string | null): string {
   if (!ts) return "—";
   try {
@@ -135,7 +137,7 @@ export function BotRunsTab() {
     },
   });
 
-  const runs = data?.runs ?? [];
+  const runs = data?.runs ?? EMPTY_BOT_RUNS;
 
   const archivedInView = useMemo(
     () => runs.filter((r) => r.deployment_status === "ARCHIVED"),

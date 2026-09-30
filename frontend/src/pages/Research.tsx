@@ -115,6 +115,24 @@ function ResearchLab({ server }: { server: string }) {
   const available = overviewState === "available",
     data = available ? object(overview.data?.data) : {},
     freshness = object(data.freshness);
+  const freshnessState = text(freshness.state, "unknown").toLowerCase();
+  const verificationCheckedAt = text(freshness.verification_checked_at, "");
+  const reportedVerificationAgeSeconds = typeof freshness.verification_age_seconds === "number" &&
+    Number.isFinite(freshness.verification_age_seconds) && freshness.verification_age_seconds >= 0
+    ? freshness.verification_age_seconds : null;
+  const verificationAgeSeconds = reportedVerificationAgeSeconds !== null &&
+    Number.isFinite(overview.dataUpdatedAt) && overview.dataUpdatedAt > 0
+    ? reportedVerificationAgeSeconds + Math.max(0, now - overview.dataUpdatedAt) / 1000
+    : null;
+  const maxVerificationAgeSeconds = typeof freshness.max_verification_age_seconds === "number" &&
+    Number.isFinite(freshness.max_verification_age_seconds) && freshness.max_verification_age_seconds > 0
+    ? freshness.max_verification_age_seconds : null;
+  const verifiedEventScan = freshness.freshness_basis === "verified_event_scan" &&
+    !!verificationCheckedAt && Number.isFinite(Date.parse(verificationCheckedAt)) &&
+    verificationAgeSeconds !== null && maxVerificationAgeSeconds !== null &&
+    verificationAgeSeconds <= maxVerificationAgeSeconds;
+  const displayedFreshnessState = freshness.state === "CURRENT" && !verifiedEventScan
+    ? "unavailable" : freshnessState;
   const revision = text(overview.data?.data.revision, "");
   const networkVisible = state.view === "graph";
   const networkQuery = useQuery({
@@ -238,14 +256,21 @@ function ResearchLab({ server }: { server: string }) {
       <div className="quant-source-strip">
         <span
           className={
-            available && freshness.state === "CURRENT" ? "quant-positive" : ""
+            available && freshness.state === "CURRENT" && verifiedEventScan ? "quant-positive" : ""
           }
         >
           {available
-            ? `Index ${text(freshness.state, "unknown").toLowerCase()}`
+            ? `Index ${displayedFreshnessState}${freshness.state === "CURRENT" && verifiedEventScan ? " · verified as of scan" : ""}`
             : `Research connection ${overviewState}`}
         </span>
         {available && <span>Last index sync · {labTimestamp(freshness.last_sync)}</span>}
+        {available && verifiedEventScan ? (
+          <span title="Native events may have changed after this scan; changes are detected within the stated verification age bound.">
+            Event scan · {labTimestamp(verificationCheckedAt)} · {Math.floor(verificationAgeSeconds)}s old / ≤{maxVerificationAgeSeconds}s detection bound
+          </span>
+        ) : available ? (
+          <span>Event-scan verification unavailable</span>
+        ) : null}
         <span>{server} · Read-only source</span>
         {available && <span title={revision}>
           Revision {revision ? revision.slice(0, 12) : "unavailable"}

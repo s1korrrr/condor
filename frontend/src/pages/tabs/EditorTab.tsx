@@ -900,13 +900,13 @@ function FileContentLoader({
   const controllerQuery = useQuery({
     queryKey: ["controller-source", server, tab.file.controllerType, tab.file.controllerName],
     queryFn: () => api.getControllerSource(server, tab.file.controllerType!, tab.file.controllerName!),
-    enabled: tab.file.kind === "controller" && !tab.loaded && !loadedRef.current,
+    enabled: tab.file.kind === "controller" && !tab.loaded,
   });
 
   const configQuery = useQuery({
     queryKey: ["config-detail", server, tab.file.configId],
     queryFn: () => api.getConfigDetail(server, tab.file.configId!),
-    enabled: tab.file.kind === "config" && !tab.loaded && !loadedRef.current,
+    enabled: tab.file.kind === "config" && !tab.loaded,
   });
 
   // Defer the parent setState to commit phase: calling onLoaded/onError directly
@@ -940,6 +940,7 @@ function FileContentLoader({
     }
   }, [
     tab.file.kind,
+    tab.file.controllerName,
     controllerQuery.data,
     controllerQuery.isError,
     controllerQuery.error,

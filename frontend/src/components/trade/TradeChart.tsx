@@ -428,7 +428,7 @@ export function TradeChart({
         measureAnchorRef.current = null;
       }
     };
-  }, []);
+  }, [pricePrecision]);
 
   // ── Re-apply chart colors on theme change ──
   useEffect(() => {

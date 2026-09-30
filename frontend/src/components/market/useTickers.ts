@@ -3,6 +3,8 @@ import { useQuery } from "@tanstack/react-query";
 
 import { api, type Ticker } from "@/lib/api";
 
+const EMPTY_TICKERS: Ticker[] = [];
+
 /**
  * 24h tickers for a connector, already sorted by USD volume (highest first) by the
  * backend. Shared by PairSelector and MarketsPanel so both hit one cached query.
@@ -16,7 +18,7 @@ export function useTickers(server: string, connector: string) {
     refetchInterval: 60 * 1000,
   });
 
-  const tickers = data?.tickers ?? [];
+  const tickers = data?.tickers ?? EMPTY_TICKERS;
 
   const byPair = useMemo(() => {
     const map = new Map<string, Ticker>();

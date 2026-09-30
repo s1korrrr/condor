@@ -8,6 +8,8 @@ import { useServer } from "@/hooks/useServer";
 import { api } from "@/lib/api";
 import type { ArchivedBotSummary, ExecutorInfo } from "@/lib/api";
 
+const EMPTY_EXECUTORS: ExecutorInfo[] = [];
+
 function formatUsd(v: number) {
   if (Math.abs(v) >= 1e6) return `$${(v / 1e6).toFixed(2)}M`;
   if (Math.abs(v) >= 1e3) return `$${(v / 1e3).toFixed(1)}K`;
@@ -204,7 +206,7 @@ function ExecutorTable({ server, dbPath, executorCount }: { server: string; dbPa
     staleTime: Infinity,
   });
 
-  const executors = data?.executors ?? [];
+  const executors = data?.executors ?? EMPTY_EXECUTORS;
   const total = data?.total ?? executorCount;
   const totalPages = Math.ceil(total / EXECUTORS_PAGE_SIZE);
 
@@ -360,7 +362,7 @@ function ArchivedBotDetail({ dbPath, startTime: botStartTime, endTime: botEndTim
     staleTime: Infinity,
   });
 
-  const executors: ExecutorInfo[] = execData?.executors ?? [];
+  const executors: ExecutorInfo[] = execData?.executors ?? EMPTY_EXECUTORS;
   const executorCount = execData?.total ?? perf?.executor_count ?? 0;
 
   // Derive available connector+pair combos from executors for pair selector

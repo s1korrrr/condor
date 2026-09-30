@@ -6,7 +6,7 @@ const CONTROLLER = 'rsi_modular_v2';
 export function BotDraftWizard({ bots, onClose }: { bots: string[]; onClose: () => void }) {
   const [mode, setMode] = useState<'paper' | 'live'>('paper');
   const [pairs, setPairs] = useState('BNB-USDC');
-  const requestedPairs = pairs.split(/[\s,]+/).filter(Boolean);
+  const requestedPairs = useMemo(() => pairs.split(/[\s,]+/).filter(Boolean), [pairs]);
   const pairsValid = validDraftPairSyntax(pairs);
   const manifest = useMemo(() => ({
     schema_version: 'rsibot.bot_draft.v1',
@@ -17,7 +17,7 @@ export function BotDraftWizard({ bots, onClose }: { bots: string[]; onClose: () 
     owner_schema_validation: 'unavailable',
     pair_universe_validation: 'syntax_only',
     execution_authorized: false as const,
-  }), [bots, mode, pairs]);
+  }), [bots, mode, requestedPairs]);
   return <section className="q-card" aria-label="New Bot draft">
     <header className="q-bot-head">
       <div>

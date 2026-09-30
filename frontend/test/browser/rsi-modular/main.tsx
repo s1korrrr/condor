@@ -4,7 +4,7 @@ import {QueryClient,QueryClientProvider} from '@tanstack/react-query';
 import {NewConfigDialog} from '@/components/editor/EditorDialogs';
 import '@/index.css';
 const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
-function Fixture(){
+export function Fixture(){
  const [open,setOpen]=useState(true);
  return <QueryClientProvider client={client}><p>ISOLATED PROFILE FORM · SYNTHETIC SAVE · NO LIVE ACCOUNT</p>
  <button onClick={()=>setOpen(true)}>New profile configuration</button>

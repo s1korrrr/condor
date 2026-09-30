@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
@@ -24,7 +24,7 @@ export interface SubmitBacktestPayload {
 export function useBacktest(server: string | null | undefined) {
   const queryClient = useQueryClient();
 
-  const [selectedTaskId, setSelectedTaskId] = useState<string | null>(null);
+  const [selectedTaskOverride, setSelectedTaskOverride] = useState<string | null | undefined>(undefined);
   const [pinnedTaskId, setPinnedTaskId] = useState<string | null>(null);
 
   // Available configs
@@ -41,6 +41,14 @@ export function useBacktest(server: string | null | undefined) {
     enabled: !!server,
     refetchInterval: 5000,
   });
+
+  // Derive the default selection from the current task list so an empty/loading
+  // list never creates stale selection state.
+  const selectedTaskId = selectedTaskOverride === undefined ? (() => {
+    const completed = tasks?.find((task) => task.status === "completed");
+    return completed?.task_id ?? tasks?.[0]?.task_id ?? null;
+  })() : selectedTaskOverride;
+  const setSelectedTaskId = (taskId: string | null) => setSelectedTaskOverride(taskId);
 
   // Selected task detail (polls every 2s while pending/running)
   const { data: selectedTask, isLoading: selectedTaskLoading } = useQuery({
@@ -61,14 +69,6 @@ export function useBacktest(server: string | null | undefined) {
     enabled: !!server && !!pinnedTaskId && pinnedTaskId !== selectedTaskId,
   });
 
-  // Auto-select first completed task
-  useEffect(() => {
-    if (!selectedTaskId && tasks && tasks.length > 0) {
-      const completed = tasks.find((t) => t.status === "completed");
-      setSelectedTaskId(completed?.task_id ?? tasks[0].task_id);
-    }
-  }, [tasks, selectedTaskId]);
-
   // Submit mutation
   const submitMutation = useMutation({
     mutationFn: (payload: SubmitBacktestPayload) =>
@@ -83,7 +83,14 @@ export function useBacktest(server: string | null | undefined) {
   const deleteMutation = useMutation({
     mutationFn: (taskId: string) => api.deleteBacktestTask(server!, taskId),
     onSuccess: (_, taskId) => {
-      if (selectedTaskId === taskId) setSelectedTaskId(null);
+      queryClient.setQueryData<BacktestTask[]>(["backtest-tasks", server], (current) =>
+        current?.filter((task) => task.task_id !== taskId),
+      );
+      if (selectedTaskId === taskId) {
+        const remaining = tasks?.filter((task) => task.task_id !== taskId) ?? [];
+        const completed = remaining.find((task) => task.status === "completed");
+        setSelectedTaskId(completed?.task_id ?? remaining[0]?.task_id ?? null);
+      }
       if (pinnedTaskId === taskId) setPinnedTaskId(null);
       queryClient.invalidateQueries({ queryKey: ["backtest-tasks", server] });
     },

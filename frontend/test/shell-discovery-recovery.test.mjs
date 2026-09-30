@@ -24,6 +24,7 @@ function fixture({ server='native-owner', status=native, discovery={data:[server
     '@/hooks/useTheme': {useTheme:()=>({theme:'dark',toggleTheme:()=>{}})},
     '@/hooks/useCredentials': {useCredentials:()=>({hasKeys:false,isLoading:false})},
     '@/hooks/useChat': {ChatProvider:({children})=>children},
+    '@/components/chat/ChatProvider': {ChatProvider:({children})=>children},
     '@/hooks/usePrefetchData': {usePrefetchData:()=>{}},
     '@/hooks/useDisplayCurrency': {useDisplayCurrency:()=>({currency:'USDT',setCurrency:()=>{}}),CURRENCY_OPTIONS:['USDT'],CURRENCY_SYMBOLS:{USDT:'$'}},
     '@/lib/api': {api:{getServers:()=>{throw new Error('Network forbidden')},getServerStatus:()=>{throw new Error('Network forbidden')}}},

@@ -82,9 +82,10 @@ export function AgentChatTab() {
 
   // Nobody else opens the socket here: the overlay panel is hidden on this
   // route, and `connect()` no-ops on an open socket.
+  const { connect } = chat;
   useEffect(() => {
-    chat.connect();
-  }, [chat.connect]);
+    connect();
+  }, [connect]);
 
   const activeSlot = chat.activeSlot;
   const isActiveStreaming = chat.isSlotStreaming(chat.activeSlotId);

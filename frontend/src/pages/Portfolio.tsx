@@ -24,6 +24,8 @@ import {
 import { formatCurrency } from "@/lib/formatters";
 import { getThemeColors } from "@/lib/theme-colors";
 
+const EMPTY_PORTFOLIO_POINTS: PortfolioHistoryPoint[] = [];
+
 // ── Formatters ──
 
 function formatAmount(val: number) {
@@ -281,7 +283,7 @@ function PortfolioEvolution({ server, range, convertFromUsd, currencySymbol }: {
   });
 
   const activeData: PortfolioHistoryResponse | undefined = stacked && breakdownData ? breakdownData : data;
-  const rawPoints = activeData?.points ?? [];
+  const rawPoints = activeData?.points ?? EMPTY_PORTFOLIO_POINTS;
   const topTokens = activeData?.top_tokens ?? [];
 
   // Convert all values from USDT to display currency

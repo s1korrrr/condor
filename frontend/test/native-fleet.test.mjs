@@ -1,10 +1,13 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
-const { load } = frontendModules();
-const { projectFleetHealth, fleetCardState, fleetLifecycleStatuses, fleetLifecycleSummary, serviceRollup, tradingVisualsHref } = load('fleet/native-fleet.ts');
+const { load } = frontendModules({ 'react-router-dom': { Link: ({to, children, ...rest}) => React.createElement('a', {href:to, ...rest}, children) } });
+const { projectFleetHealth, fleetCardState, fleetLifecycleStatuses, fleetLifecycleSummary, serviceRollup, tradingVisualsHref, walletValueAvailable } = load('fleet/native-fleet.ts');
 const { projectQuantBotSummary } = load('features/bots/quant-roster.ts');
+const { FleetCard } = load('fleet/NativeFleet.tsx');
 const now = Date.parse('2026-09-24T14:00:00Z');
 const at = new Date(now - 1000).toISOString();
 
@@ -29,6 +32,27 @@ test('fleet health keeps only stamped rows for the requested bot', () => {
   const rollup = serviceRollup(health);
   assert.equal(rollup.total, 3); assert.equal(rollup.healthy, 1);
   assert.deepEqual(rollup.attention.map(row => row.id), ['execution-rsi', 'research'], 'degraded outranks unavailable');
+});
+
+test('fleet does not call an empty or partial service inventory complete and preserves zero wallet values', () => {
+  const empty = projectFleetHealth(operations({ services: [] }), 'rsi_modular_v2', now);
+  assert.equal(serviceRollup(empty).complete, false);
+  const partial = projectFleetHealth(operations({ services: operations().health.services.slice(0, 1) }), 'rsi_modular_v2', now);
+  assert.equal(serviceRollup(partial).complete, false);
+  for (const expected_services of [undefined, []]) {
+    const unknown = projectFleetHealth(operations({services: operations().health.services.slice(0, 1), expected_services}), 'rsi_modular_v2', now);
+    assert.equal(serviceRollup(unknown).complete, false);
+  }
+  assert.equal(walletValueAvailable(0), true);
+  assert.equal(walletValueAvailable(null), false);
+});
+
+test('service rollup distinguishes a complete stale inventory from current health', () => {
+  const payload = operations({ generated_at: new Date(now - 31_000).toISOString(), services: [{id:'api',state:'healthy'}], expected_services:['api'] });
+  const old = projectFleetHealth(payload, 'rsi_modular_v2', now);
+  assert.equal(serviceRollup(old).complete, true);
+  assert.equal(serviceRollup(old).current, false);
+  assert.equal(serviceRollup(projectFleetHealth({...payload,health:{...payload.health,generated_at:at}}, 'rsi_modular_v2', now)).current, true);
 });
 
 test('card state follows owner freshness, then the stack heartbeat', () => {
@@ -59,4 +83,17 @@ test('fleet requires a current healthy heartbeat and refuses failed or expired c
   assert.deepEqual(fleetLifecycleStatuses(current, false, ['rsi_modular_v2'], now), ['running'], 'a fresh successful read restores admitted status');
   assert.deepEqual(fleetLifecycleSummary(['running', 'lifecycle_unavailable'], false), { running: 1, unknown: 1, available: false });
   assert.deepEqual(fleetLifecycleSummary(['stopped'], false), { running: 0, unknown: 0, available: true }, 'explicit stopped is a known observation');
+});
+
+test('fleet lifecycle definition follows admitted native status rather than heartbeat or quant state', () => {
+  const health = projectFleetHealth(operations({ heartbeat: { state: 'healthy', lifecycle_state: 'HOLDING' } }), 'rsi_modular_v2', now);
+  for (const status of ['running', 'stopped', null]) {
+    const html = renderToStaticMarkup(React.createElement(FleetCard, { now, reads: {
+      source: {bot:'rsi_modular_v2',server:'native'}, status, quant:null, health,
+      controller:{total:null,quote:null,reason:'No controller observation'}, state:{kind:'incomplete'},
+      day:{points:[],reason:'No saved history'}, summaryPending:false, operationsPending:false,
+    } }));
+    const value = html.match(/<dt>Lifecycle<\/dt><dd>(.*?)<\/dd>/)?.[1];
+    assert.equal(value, status ?? 'Unavailable');
+  }
 });

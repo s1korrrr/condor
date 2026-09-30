@@ -337,6 +337,13 @@ export function parseViewParams(search) {
   };
 }
 
+/** Removing the final predicate restores the unfiltered screener query. */
+export function removeFilterPredicate(filters, index) {
+  if (!filters || !Array.isArray(filters.predicates)) return null;
+  const predicates = filters.predicates.filter((_, i) => i !== index);
+  return predicates.length ? { ...filters, predicates } : null;
+}
+
 function validFilter(filters) {
   return (
     filters &&

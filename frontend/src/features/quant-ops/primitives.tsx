@@ -103,15 +103,11 @@ export function MultiLine({ series, unit, height = 220 }: { series: { label: str
   </figure>;
 }
 
-/** B31: order lifecycle funnel with absolute counts and percent of the first stage. */
-export function Funnel({ stages }: { stages: { stage: string; count: number }[] }) {
-  if (!stages.length) return <p className="q-empty">No order lifecycle rows are recorded yet.</p>;
-  const top = Math.max(1, stages[0].count);
-  return <ul className="q-funnel" aria-label="Order lifecycle funnel">
-    {stages.map(stage => <li key={stage.stage}>
-      <div className="q-bar-meta"><span>{stage.stage.replaceAll('_', ' ')}</span><span className="q-muted">{stage.count} · {((stage.count / top) * 100).toFixed(1)}%</span></div>
-      <div className="q-bar"><span style={{ width: `${Math.min(100, (stage.count / top) * 100)}%`, background: 'var(--q-blue)' }} /></div>
-    </li>)}
+/** Independent lifetime event counts do not imply a shared conversion cohort. */
+export function LifecycleCounts({ stages }: { stages: { stage: string; count: number }[] }) {
+  if (!stages.length) return <p className="q-empty">No lifecycle event counts are available.</p>;
+  return <ul className="q-diag" aria-label="Independent lifecycle event counts">
+    {stages.map(stage => <li key={stage.stage}><span>{stage.stage.replaceAll('_', ' ')}</span><strong>{stage.count}</strong></li>)}
   </ul>;
 }
 
@@ -154,11 +150,11 @@ export function Histogram({ bins, unit, sampleCount, excludedCount }: { bins: { 
   </figure>;
 }
 
-export function Heatmap({ rows, columns, cells }: { rows: string[]; columns: string[]; cells: { row: string; column: string; value: number | null }[] }) {
+export function Heatmap({ rows, columns, cells, metricLabel = 'Controller PnL', unitLabel = 'signed quote amounts' }: { rows: string[]; columns: string[]; cells: { row: string; column: string; value: number | null }[]; metricLabel?: string; unitLabel?: string }) {
   const lookup = new Map(cells.map(cell => [`${cell.row}:${cell.column}`, cell.value]));
   const numbers = cells.map(cell => cell.value).filter((value): value is number => value != null);
   const peak = Math.max(1, ...numbers.map(Math.abs));
-  return <figure aria-label="Controller PnL by symbol heatmap" style={{ margin: 0 }}>
+  return <figure aria-label={`${metricLabel} by symbol heatmap`} style={{ margin: 0 }}>
     <div className="q-heat" style={{ gridTemplateColumns: `88px repeat(${columns.length}, minmax(36px, 1fr))` }} aria-hidden="true">
     <div />
     {columns.map(column => <div key={column} className="q-muted" style={{ textAlign: 'center', fontSize: 11 }}>{column}</div>)}
@@ -174,7 +170,7 @@ export function Heatmap({ rows, columns, cells }: { rows: string[]; columns: str
       </div>
     ))}
     </div>
-    <table className="sr-only"><caption>Controller PnL by symbol, signed quote amounts</caption>
+    <table className="sr-only"><caption>{metricLabel} by symbol, {unitLabel}</caption>
       <thead><tr><th scope="col">Bot</th>{columns.map(column => <th key={column} scope="col">{column}</th>)}</tr></thead>
       <tbody>{rows.map(row => <tr key={row}><th scope="row">{row}</th>{columns.map(column => {
         const value = lookup.get(`${row}:${column}`);

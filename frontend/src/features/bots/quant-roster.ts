@@ -412,7 +412,7 @@ export function projectQuantCycles(value: unknown, bot: string): QuantCycles | n
   };
 }
 
-export type FillRow = { fillId: string; pair: string | null; side: string | null; amount: string | null; price: string | null; volume: string | null; fee: string | null; orderType: string | null; timestamp: string | null; orderId: string | null };
+export type FillRow = { fillId: string; sourceDbId: string | null; pair: string | null; side: string | null; amount: string | null; price: string | null; volume: string | null; fee: string | null; orderType: string | null; timestamp: string | null; orderId: string | null };
 
 /** Native fills for one bot. Exact receipt strings are preferred over float projections. */
 export function projectFills(value: unknown, bot: string): FillRow[] {
@@ -423,8 +423,8 @@ export function projectFills(value: unknown, bot: string): FillRow[] {
     if (!fillId || fill.bot_name !== bot) return [];
     return [{
       fillId, pair: text(fill.pair), side: text(fill.side), amount: decimalText(fill.exact_amount ?? fill.amount_base), price: decimalText(fill.exact_price ?? fill.price_quote),
-      volume: decimalText(fill.gross_volume_quote), fee: decimalText(fill.exact_trade_fee_in_quote ?? fill.fee_quote), orderType: text(fill.order_type),
-      timestamp: text(fill.timestamp), orderId: text(fill.order_id),
+      volume: decimalText(fill.value_quote_exact ?? fill.gross_volume_quote_decimal ?? fill.gross_volume_quote), fee: decimalText(fill.exact_trade_fee_in_quote ?? fill.fee_quote), orderType: text(fill.order_type),
+      timestamp: text(fill.timestamp), sourceDbId: text(fill.source_db_id), orderId: text(fill.order_id),
     }];
   });
 }

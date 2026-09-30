@@ -121,11 +121,21 @@ test('lifecycle decisions need executor identity, an owner source and a time no 
 
 test('fills keep exact receipt strings and ignore other bots', () => {
   const rows = projectFills({ rows: [
-    { fill_id: '1', bot_name: 'rsi_modular_v2', pair: 'BTC-USDC', side: 'buy', exact_amount: '0.00011', exact_price: '84105.6', gross_volume_quote: 9.251616, exact_trade_fee_in_quote: '0.0074012928', order_type: 'LIMIT_MAKER', timestamp: at, order_id: 'o' },
+    { fill_id: '1', source_db_id: 'source-a', bot_name: 'rsi_modular_v2', pair: 'BTC-USDC', side: 'buy', exact_amount: '0.00011', exact_price: '84105.6', gross_volume_quote: 9.251616, exact_trade_fee_in_quote: '0.0074012928', order_type: 'LIMIT_MAKER', timestamp: at, order_id: 'o' },
     { fill_id: '2', bot_name: 'ok_rsi', pair: 'ETH-USDC' },
   ] }, 'rsi_modular_v2');
   assert.equal(rows.length, 1);
   assert.equal(rows[0].price, '84105.6');
+  assert.equal(rows[0].sourceDbId, 'source-a');
+  assert.equal(rows[0].timestamp, at);
   assert.equal(rows[0].fee, '0.0074012928');
   assert.deepEqual(projectFills(null, 'rsi_modular_v2'), []);
+});
+
+
+test('fill export value uses Decimal receipt text without binary residue', () => {
+  const fill = {fill_id:'exact',bot_name:'rsi_modular_v2',exact_amount:'0.1',exact_price:'0.2',gross_volume_quote:0.020000000000000004,value_quote_exact:'0.02',gross_volume_quote_decimal:'0.02'};
+  assert.equal(projectFills({rows:[fill]}, 'rsi_modular_v2')[0].volume, '0.02');
+  delete fill.value_quote_exact;
+  assert.equal(projectFills({rows:[fill]}, 'rsi_modular_v2')[0].volume, '0.02');
 });

@@ -118,7 +118,7 @@ export function MarketOverview({
             <span>{participationLabels[key] || words(key)}</span>
             <strong>{number(entry.percent, "%")}</strong>
             <small>
-              {entry.count}/{entry.denominator} valid · {entry.omitted} omitted
+              {entry.count}/{entry.denominator} matches · {entry.denominator}/{entry.subscribed_denominator} valid · {entry.omitted} omitted
             </small>
           </li>
         ))}

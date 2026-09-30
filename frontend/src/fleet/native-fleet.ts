@@ -18,6 +18,7 @@ export type FleetHealth = {
 const object = (value: unknown): Record<string, unknown> => value && typeof value === 'object' && !Array.isArray(value) ? value as Record<string, unknown> : {};
 const text = (value: unknown): string | null => typeof value === 'string' && value ? value : null;
 const count = (value: unknown): number | null => typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
+export const walletValueAvailable = (value: number | string | null | undefined): value is number | string => value != null;
 
 /** Operations workspace → fleet health. Rejects another bot's payload and a future or unstamped generation. */
 export function projectFleetHealth(payload: unknown, bot: string, now: number): FleetHealth | null {
@@ -70,10 +71,12 @@ export function fleetLifecycleStatuses(page: BotsPageResponse | undefined, readF
 }
 
 /** Service roll-up for the fleet strip: counts by observer state, in severity order. */
-export function serviceRollup(health: FleetHealth | null): { total: number; healthy: number; attention: FleetService[] } {
+export function serviceRollup(health: FleetHealth | null): { total: number; healthy: number; complete: boolean; current: boolean; attention: FleetService[] } {
   const services = health?.services ?? [];
+  const observed = new Set(services.map(row => row.id));
+  const complete = Boolean(health && services.length > 0 && health.expected.length > 0 && health.expected.every(id => observed.has(id)));
   const attention = services.filter(row => row.state !== 'healthy').sort((a, b) => rank(a.state) - rank(b.state));
-  return { total: services.length, healthy: services.filter(row => row.state === 'healthy').length, attention };
+  return { total: services.length, healthy: services.filter(row => row.state === 'healthy').length, complete, current: complete && health?.freshness === 'current', attention };
 }
 const ORDER = ['degraded', 'unavailable', 'stale', 'recovering'];
 const rank = (state: string) => { const index = ORDER.indexOf(state); return index === -1 ? ORDER.length : index; };

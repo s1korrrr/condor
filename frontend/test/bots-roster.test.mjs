@@ -7,7 +7,7 @@ import {frontendModules} from './helpers/frontend-module.mjs';
 const {QueryClient,QueryClientProvider}=createRequire(import.meta.url)('@tanstack/react-query');
 const {load}=frontendModules({'react-router-dom':{Link:({to,children,...rest})=>React.createElement('a',{href:to,...rest},children)},'@/hooks/useServer':{useServer:()=>({server:'native'})}});
 const {RosterObservation,BotsRoster}=load('components/bots/BotsRoster.tsx');
-const {botSourceFreshness,quoteUnavailableReason}=load('features/bots/bot-net.ts');
+const {botSourceFreshness,quoteUnavailableReason,historyComparison}=load('features/bots/bot-net.ts');
 const now=Date.parse('2026-09-15T10:00:00Z');
 function snapshot(){return {runtime_status:{bot_name:'rsi_modular_v2',updated_at:new Date(now-1000).toISOString(),controllers:[{controller_id:'eth',pair:'ETH-USDC',price_quote:2500,state:'HOLDING',custom_info:{episode:{enabled:true,base:'0.04',cost:'99',cost_known:true},trailing_policy:{floor:2490,peak:2520}}},{controller_id:'btc',pair:'BTC-USDC',price_quote:70000,state:'FLAT',custom_info:{}}],positions_held:[],active_executors:[],active_orders:[],active_orders_status:{complete:true}},monitoring:{bot_name:'rsi_modular_v2',stale_threshold_seconds:30}};}
 test('quant roster keeps every pair in page flow including a mixed FLAT/HOLDING bot',()=>{
@@ -83,4 +83,23 @@ test('missing quote evidence and conflicting quote currencies have distinct reas
  assert.match(quoteUnavailableReason([null]),/currency is unavailable/);
  assert.match(quoteUnavailableReason(['USDC',null]),/currency is unavailable/);
  assert.match(quoteUnavailableReason(['USDC','USDT']),/different quote currencies/);
+});
+
+test('lifecycle diagnostics follows native status independently of quant summary',()=>{
+ for(const [status,label] of [['running','running'],['stale','stale'],[null,'Unavailable']]) {
+  const html=renderToStaticMarkup(React.createElement(RosterObservation,{payload:snapshot(),bot:'rsi_modular_v2',now,lifecycleStatus:status}));
+  const row=html.match(/<li><span>Lifecycle<\/span><strong>(.*?)<\/strong><\/li>/)?.[1];
+  assert.equal(row,label,'a missing quant summary must not replace native lifecycle evidence');
+ }
+});
+
+test('weekly comparison admits matching historical quotes and counts observations, not gaps',()=>{
+ const series=quote=>({quote,points:[{time:1,value:1},{time:2,value:2}],reason:null});
+ assert.deepEqual(historyComparison([series('USDC')],true),{quote:'USDC',drawable:true,complete:true});
+ assert.deepEqual(historyComparison([series('USDC'),series('USDT')],true),{quote:null,drawable:false,complete:false});
+ assert.equal(historyComparison([series('USDC'),{quote:null,points:[],reason:'unavailable'}],true).drawable,false);
+ assert.equal(historyComparison([series('USDC')],false).drawable,false);
+ assert.equal(historyComparison([{...series('USDC'),points:[{time:1,value:1},{time:2,value:null}]}],true).drawable,false);
+ assert.equal(historyComparison([],true).drawable,false);
+ assert.equal(historyComparison([{...series('USDC'),reason:'Window incomplete'}],true).complete,false);
 });

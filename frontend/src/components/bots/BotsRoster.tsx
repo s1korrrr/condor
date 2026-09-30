@@ -15,7 +15,7 @@ import { TileGrid } from '@/features/quant-ops/kit/grid';
 import { DataTable } from '@/features/quant-ops/kit/DataTable';
 import { FleetStrip } from './FleetStrip';
 import { pnlSeries, type PnlSeries } from '@/features/bots/pnl-series';
-import { botNet, botSourceFreshness, commonMetricQuote, controllerPnlPart, ownerReadsFingerprint, pairOwnershipIsDisjoint, quoteUnavailableReason, winRateText } from '@/features/bots/bot-net';
+import { botNet, botSourceFreshness, commonMetricQuote, controllerPnlPart, historyComparison, ownerReadsFingerprint, pairOwnershipIsDisjoint, quoteUnavailableReason, winRateText } from '@/features/bots/bot-net';
 import { projectControllerPnl } from '@/features/bots/controller-pnl';
 import type { PanelState } from '@/features/quant-ops/panel-state';
 import { PriceLevels } from './NativeBotPositions';
@@ -61,8 +61,9 @@ export type OwnerReads = {
 };
 
 /** All pair rows stay in page flow. Selecting a row never hides the rest. */
-export function RosterObservation({ payload, bot, now, summary: summaryPayload, events, execution, cycles: cyclesPayload, day, week, controllerTotal = null, controllerQuote = null, summaryIssue, eventsIssue, executionIssue }: {
+export function RosterObservation({ payload, bot, now, lifecycleStatus = null, summary: summaryPayload, events, execution, cycles: cyclesPayload, day, week, controllerTotal = null, controllerQuote = null, summaryIssue, eventsIssue, executionIssue }: {
   payload: unknown; bot: string; now: number; controllerTotal?: number | null; controllerQuote?: string | null;
+  lifecycleStatus?: string | null;
   summary?: unknown; events?: unknown; execution?: unknown; cycles?: unknown;
   day?: PnlSeries; week?: PnlSeries;
   summaryIssue?: string | null; eventsIssue?: string | null; executionIssue?: string | null;
@@ -158,7 +159,8 @@ export function RosterObservation({ payload, bot, now, summary: summaryPayload, 
       </PanelFrame>
       <PanelFrame panelId="B22" title="Bot diagnostics" scopeLabel="Each row has its own freshness">
         <ul className="q-diag">
-          <li><span>Lifecycle</span><strong>{quant?.freshness === 'current' ? quant.state : quant?.lastKnown ? `${quant.state} · stale` : 'Unavailable / stale'}</strong></li>
+          <li><span>Lifecycle</span><strong>{lifecycleStatus ? stateLabel(lifecycleStatus) : 'Unavailable'}</strong></li>
+          <li><span>Quant operational state</span><strong>{quant?.freshness === 'current' ? quant.state : quant?.lastKnown ? `${quant.state} · stale` : 'Unavailable / stale'}</strong></li>
           <li><span>Owner heartbeat</span><strong>{quant?.observedAt ?? 'Unavailable'}</strong></li>
           <li><span>Quant summary</span><strong>{quant?.freshness ?? summaryIssue ?? 'Unavailable'}</strong></li>
           <li><span>Execution mode</span><strong>{quant?.executionMode ?? 'Unavailable'}</strong></li>
@@ -251,7 +253,7 @@ function OwnerCard({ source, page, logs, controls, onReads }: { source: TradingV
         <button type="button" disabled title="Settings shows effective configuration only after an owner schema inspector is enabled. Writes stay off.">Settings</button>
       </div>
     </header>
-    {bootstrap.isPending ? <p className="q-empty" role="status">Reading the current bot inventory and order observation…</p> : bootstrap.isError ? <p className="q-empty" role="alert">{(bootstrap.error as Error & { status?: number }).status === 401 || (bootstrap.error as Error & { status?: number }).status === 403 ? `Owner read denied (${(bootstrap.error as Error & { status?: number }).status}).` : (bootstrap.error as Error).message} Cached inventory is withheld. <button type="button" onClick={() => void bootstrap.refetch()}>Check now</button></p> : <RosterObservation payload={bootstrap.data} summary={raw.summary?.payload} bot={source.bot} now={Math.max(now, bootstrap.dataUpdatedAt)} events={raw.events?.payload} execution={raw.execution?.payload} cycles={raw.cycles?.payload} day={reads.day} week={reads.week} controllerTotal={reads.controller.total} controllerQuote={reads.controller.quote} summaryIssue={raw.summary?.issue} eventsIssue={raw.events?.issue} executionIssue={raw.execution?.issue} />}
+    {bootstrap.isPending ? <p className="q-empty" role="status">Reading the current bot inventory and order observation…</p> : bootstrap.isError ? <p className="q-empty" role="alert">{(bootstrap.error as Error & { status?: number }).status === 401 || (bootstrap.error as Error & { status?: number }).status === 403 ? `Owner read denied (${(bootstrap.error as Error & { status?: number }).status}).` : (bootstrap.error as Error).message} Cached inventory is withheld. <button type="button" onClick={() => void bootstrap.refetch()}>Check now</button></p> : <RosterObservation payload={bootstrap.data} lifecycleStatus={reads.status} summary={raw.summary?.payload} bot={source.bot} now={Math.max(now, bootstrap.dataUpdatedAt)} events={raw.events?.payload} execution={raw.execution?.payload} cycles={raw.cycles?.payload} day={reads.day} week={reads.week} controllerTotal={reads.controller.total} controllerQuote={reads.controller.quote} summaryIssue={raw.summary?.issue} eventsIssue={raw.events?.issue} executionIssue={raw.execution?.issue} />}
     {logs && <details><summary>Recent owner logs</summary>{logs}</details>}
   </article>;
 }
@@ -292,6 +294,8 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
   const verifiedRunning = scoped.filter(source => page?.bots.find(item => item.bot_name === source.bot)?.status === 'running').length;
   const fleet = scoped.map(source => readsByBot[`${source.server}:${source.bot}`]).filter((reads): reads is OwnerReads => Boolean(reads));
   const complete = fleet.length === scoped.length && scoped.length > 0;
+  const weekly = historyComparison(fleet.map(reads => reads.week), complete);
+  const weeklyNote = !weekly.quote ? 'Comparable weekly history and a matching historical quote are required for every registered bot.' : 'Weekly history needs at least two observations per bot; gaps and incomplete window edges remain visible.';
   const soleOwner = complete && fleet.length === 1 ? fleet[0] : null;
   // Headline PnL uses only the current controller report, matching Capital's scope.
   const netFor = (reads: OwnerReads) => botNet(reads.controller.total);
@@ -453,8 +457,8 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
       </PanelFrame>
     </div>
     <div className="q-compare">
-      <PanelFrame panelId="B23" title="Bot PnL comparison" scopeLabel={`7d saved native net PnL${singleQuote ? ` · ${singleQuote}` : ' · shared quote unavailable'}`} state={fleet.some(reads => reads.week.points.length >= 2) ? (singleQuote ? { kind: 'fresh' } : { kind: 'incomplete', reason: aggregateNote }) : { kind: 'collecting', sample: { have: 0, need: 2 }, reason: 'Saved weekly performance per bot' }}>
-        {singleQuote ? <MultiLine unit={singleQuote} height={330} series={fleet.map((reads, index) => ({ label: displayBotName(reads.bot), color: ASSET_COLORS[index % ASSET_COLORS.length], points: reads.week.points.map(point => ({ time: point.time, value: point.value })) }))} /> : <p className="q-empty">{aggregateNote}</p>}
+      <PanelFrame panelId="B23" title="Bot PnL comparison" scopeLabel={`7d saved native net PnL${weekly.quote ? ` · historical ${weekly.quote}` : ' · historical quote unavailable'}`} state={weekly.drawable ? weekly.complete ? { kind: 'fresh' } : { kind: 'incomplete', reason: weeklyNote } : { kind: 'collecting', reason: weeklyNote }}>
+        {weekly.drawable ? <MultiLine unit={weekly.quote!} height={330} series={fleet.map((reads, index) => ({ label: displayBotName(reads.bot), color: ASSET_COLORS[index % ASSET_COLORS.length], points: reads.week.points.map(point => ({ time: point.time, value: point.value })) }))} /> : <p className="q-empty">{weeklyNote}</p>}
       </PanelFrame>
       <PanelFrame panelId="B25" title="Recorded behavior timeline" scopeLabel="Decision → order → fill → exit · linked by owner IDs" state={events.length ? { kind: 'fresh' } : { kind: 'unavailable', reason: 'No lifecycle records are readable yet.' }}>
         <ol className="q-timeline">

@@ -57,6 +57,13 @@ export function commonMetricQuote(units: readonly (string | null | undefined)[])
     && units.every(unit => unit === first) ? first : null;
 }
 
+/** Saved histories own their units and coverage independently of current reports. */
+export function historyComparison(series: readonly { quote: string | null; points: readonly { value: number | null }[]; reason: string | null }[], allOwnersRead: boolean) {
+  const quote = allOwnersRead ? commonMetricQuote(series.map(item => item.quote)) : null;
+  const drawable = quote !== null && series.length > 0 && series.every(item => item.points.filter(point => point.value !== null && Number.isFinite(point.value)).length >= 2);
+  return { quote, drawable, complete: drawable && series.every(item => item.reason === null) };
+}
+
 /** Missing quote evidence is not a currency disagreement unless observed quotes conflict. */
 export function quoteUnavailableReason(units: readonly (string | null | undefined)[], staleBots = 0): string {
   if (staleBots > 0) return `${staleBots} bot${staleBots === 1 ? '' : 's'} stale; quote currency unknown until the owner publishes again.`;

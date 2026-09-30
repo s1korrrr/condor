@@ -33,6 +33,16 @@ test('graph owns composition and family/lane drilldowns while overview owns conc
   assert.deepEqual(request.queryKey, ['research-network', 'fixture', 'fixture-revision']);
   assert.equal(request.staleTime, Infinity); assert.equal(request.refetchInterval, undefined);
 });
+
+test('unassigned graph groups stay named observations and cannot activate an empty filter', () => {
+  const values = queries();
+  values['research-network'].data.network.data = { ...network, stats: { ...network.stats,
+    families: [{key:'',count:2}], lanes: [{key:'',count:2}],
+  } };
+  const result = renderResearch(values, {search:'view=graph'});
+  assert.equal((result.html.match(/>Unassigned<\/span>/g) ?? []).length, 2);
+  assert.equal(result.buttons.filter(button => button.className === 'quant-record-link' && button.text === '').length, 0);
+});
 test('old network revision is not shown beside a new overview revision', () => {
   const values = queries(); values['research-network'].data.network.data = { ...network, revision: 'old-revision' };
   const result = renderResearch(values, { search: 'view=graph' });

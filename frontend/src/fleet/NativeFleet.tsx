@@ -59,7 +59,7 @@ function useFleetReads(sources: TradingVisualsSource[], statusFor: (bot: string)
   });
 }
 
-function FleetCard({ reads, now }: { reads: FleetReads; now: number }) {
+export function FleetCard({ reads, now }: { reads: FleetReads; now: number }) {
   const { source, quant, health, status, state, day } = reads;
   const rollup = serviceRollup(health);
   const net = botNet(reads.controller.total).value;
@@ -115,7 +115,7 @@ function FleetCard({ reads, now }: { reads: FleetReads; now: number }) {
         <div><dt>Shared wallet</dt><dd>{walletValueAvailable(quant?.wallet?.value) ? `${formatDecimal(quant.wallet.value, 0)} ${quant?.wallet?.currency ?? ''}` : '—'}</dd></div>
         <div><dt>Heartbeat</dt><dd>{health ? health.heartbeat.state : '—'}{heartbeatAge ? ` · owner report ${heartbeatAge} ago` : ''}</dd></div>
         <div><dt>Services</dt><dd>{health ? rollup.complete ? `${rollup.healthy} / ${rollup.total} healthy` : 'Unavailable · incomplete service inventory' : '—'}</dd></div>
-        <div><dt>Lifecycle</dt><dd>{health?.heartbeat.lifecycleState?.replaceAll('_', ' ') ?? quant?.state.replaceAll('_', ' ') ?? '—'}</dd></div>
+        <div><dt>Lifecycle</dt><dd>{status?.replaceAll('_', ' ') ?? 'Unavailable'}</dd></div>
       </dl>
     </div>
     {quant && quant.pairs.length > 0 && <ul className="nf-pairs" aria-label="Pairs">
@@ -163,6 +163,7 @@ export function NativeFleet() {
   const services = fleet.reduce((total, row) => { const rollup = serviceRollup(row.health); return { healthy: total.healthy + rollup.healthy, total: total.total + rollup.total }; }, { healthy: 0, total: 0 });
   const healthRead = fleet.length > 0 && fleet.every(row => row.health != null);
   const servicesComplete = healthRead && fleet.every(row => serviceRollup(row.health).complete);
+  const servicesCurrent = servicesComplete && fleet.every(row => serviceRollup(row.health).current);
   const heartbeats = fleet.filter(row => row.health?.heartbeat.state === 'healthy').length;
   const fresh = fleet.filter(row => row.state.kind === 'fresh').length;
   const pairs = fleet.flatMap(row => row.quant?.pairs ?? []);
@@ -185,7 +186,7 @@ export function NativeFleet() {
     {scoped.length > 0 && <TileGrid label="Fleet summary" min={190} max={6}>
       <MetricCard panelId="F01" title="Registered owners" value={String(scoped.length)} state={{ kind: 'fresh' }} note={scoped.map(source => displayBotName(source.bot)).join(', ')} />
       <MetricCard panelId="F02" title="Running" value={lifecycle.available ? `${lifecycle.running} / ${scoped.length}` : 'Unavailable'} state={lifecycle.available ? { kind: 'fresh' } : { kind: page.isError ? 'stale' : 'incomplete', reason: page.isError ? 'The latest lifecycle read failed; cached status is not current evidence.' : 'Lifecycle status is missing, stale, or not a recognized owner state.' }} note={`${scoped.length - lifecycle.unknown} verified · ${lifecycle.unknown} unknown · registered`} />
-      <MetricCard panelId="F03" title="Services healthy" value={servicesComplete ? `${services.healthy} / ${services.total}` : 'Unavailable'} tone={servicesComplete && services.healthy < services.total ? 'negative' : undefined} state={servicesComplete ? services.healthy === services.total ? { kind: 'fresh' } : { kind: 'incomplete', reason: 'At least one stack service is not healthy.' } : { kind: 'incomplete', reason: 'A non-empty service inventory matching expected services is required.' }} note={`${heartbeats} / ${fleet.length} heartbeat${fleet.length === 1 ? '' : 's'} healthy`} />
+      <MetricCard panelId="F03" title="Services healthy" value={servicesComplete ? `${services.healthy} / ${services.total}` : 'Unavailable'} tone={servicesCurrent && services.healthy < services.total ? 'negative' : undefined} state={servicesComplete ? !servicesCurrent ? { kind: 'stale', reason: 'Service counts are the last observation; the operations health source has expired.' } : services.healthy === services.total ? { kind: 'fresh' } : { kind: 'incomplete', reason: 'At least one stack service is not healthy.' } : { kind: 'incomplete', reason: 'A non-empty service inventory matching expected services is required.' }} note={`${servicesCurrent ? '' : 'Last observed: '}${heartbeats} / ${fleet.length} heartbeat${fleet.length === 1 ? '' : 's'} healthy`} />
       <MetricCard panelId="F04" title="Fresh observations" value={`${fresh} / ${fleet.length}`} state={fresh === fleet.length ? { kind: 'fresh' } : { kind: 'stale', reason: 'A summary and current healthy heartbeat are required for every owner.' }} note="Current owner summary and identity-bound heartbeat" />
       <MetricCard panelId="F05" title="Pairs holding" value={`${holding} / ${pairs.length}`} state={fleet.every(row => row.quant) ? { kind: 'fresh' } : { kind: 'collecting', reason: 'Reading owner summaries' }} note="Pairs with a held bag / registered pairs" />
       <MetricCard panelId="F06" title={single ? 'Owned value' : 'Owned value (per bot)'} value={singleOwned == null ? 'Unavailable' : formatDecimal(singleOwned)} unit={single?.quant?.ownedValue.unit ?? undefined} state={single ? singleOwned == null ? { kind: 'unavailable', reason: 'The owner has not published an owned value.' } : singleOwnedStale ? { kind: 'stale', observedAt: single.quant?.observedAt ?? null, reason: 'Owner last published owned value; the current observation is not fresh.' } : { kind: 'fresh' } : { kind: 'incomplete', reason: perBot }} note={single ? `Controller report PnL ${botNet(single.controller.total).value == null ? 'Unavailable' : formatSigned(botNet(single.controller.total).value!)} ${single.controller.quote ?? ''} · retained-position diagnostic ${single.quant?.retainedPositionNetPnl.value ?? single.quant?.retainedPositionNetPnl.lastKnown ?? 'Unavailable'}` : perBot} />

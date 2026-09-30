@@ -1,5 +1,14 @@
 export type BotNet = { value: number | null; stale: boolean; source: 'controller report' | null };
 
+export function botSourceFreshness(reads: { status: string | null; controller: { reason: string | null; observedAt: number | null }; quant: { freshness: string } | null }) {
+  const lifecycleStates = ['running', 'starting', 'stopping', 'stopped', 'exited'];
+  return {
+    lifecycle: reads.status != null && lifecycleStates.includes(reads.status),
+    performance: reads.controller.observedAt != null && (reads.controller.reason == null || reads.controller.reason === 'No current controllers reported.'),
+    quant: reads.quant?.freshness === 'current',
+  };
+}
+
 /** Controller PnL is the single headline scope shared with Capital. Retained-position
  * summaries have a different ownership boundary and must remain a separately named diagnostic. */
 export function botNet(controllerTotal: number | null, stale = false): BotNet {
@@ -46,4 +55,13 @@ export function commonMetricQuote(units: readonly (string | null | undefined)[])
   const first = units[0];
   return typeof first === 'string' && first.trim() !== '' && first !== 'unknown'
     && units.every(unit => unit === first) ? first : null;
+}
+
+/** Missing quote evidence is not a currency disagreement unless observed quotes conflict. */
+export function quoteUnavailableReason(units: readonly (string | null | undefined)[], staleBots = 0): string {
+  if (staleBots > 0) return `${staleBots} bot${staleBots === 1 ? '' : 's'} stale; quote currency unknown until the owner publishes again.`;
+  const quotes = new Set(units.filter((unit): unit is string => typeof unit === 'string' && unit.trim() !== '' && unit !== 'unknown'));
+  return quotes.size > 1
+    ? 'Bots report different quote currencies; no sum is published.'
+    : 'Current controller quote currency is unavailable; no PnL sum is published.';
 }

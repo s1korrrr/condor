@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BENCHMARKS, rankAssets, stableAssetOrder } from "./model.mjs";
+import { BENCHMARKS, rankAssets, rankEmptyLabel, stableAssetOrder } from "./model.mjs";
 import {
   type DisplayAsset,
   type DisplayCorrelation,
@@ -283,7 +283,10 @@ export function LeadersLaggardsPanel({
     sort === "relative"
       ? (a.relative[benchmark]?.value ?? null)
       : (a.returns[sort]?.value ?? null);
-  const { leaders, laggards } = rankAssets(frame?.assets ?? [], value);
+  const assets = frame?.assets ?? [];
+  const { leaders, laggards, qualified, expected } = rankAssets(assets, value);
+  const warming = assets.filter((asset) => (sort === "relative" ? asset.relative[benchmark]?.status : asset.returns[sort]?.status) === "WARMING").length;
+  const emptyRankLabel = rankEmptyLabel(qualified, expected, warming);
   return (
     <Panel
       id="mp-rankings"
@@ -351,7 +354,7 @@ export function LeadersLaggardsPanel({
             ) : (
               <tr key={group}>
                 <td colSpan={4} className="mp-table-empty">
-                  {group === 0 ? "No positive leaders" : "No negative laggards"}
+                  {emptyRankLabel ?? (group === 0 ? "No positive leaders" : "No negative laggards")}
                 </td>
               </tr>
             ),

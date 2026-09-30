@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
 const { load } = frontendModules();
-const { projectFleetHealth, fleetCardState, fleetLifecycleStatuses, fleetLifecycleSummary, serviceRollup, tradingVisualsHref } = load('fleet/native-fleet.ts');
+const { projectFleetHealth, fleetCardState, fleetLifecycleStatuses, fleetLifecycleSummary, serviceRollup, tradingVisualsHref, walletValueAvailable } = load('fleet/native-fleet.ts');
 const { projectQuantBotSummary } = load('features/bots/quant-roster.ts');
 const now = Date.parse('2026-09-24T14:00:00Z');
 const at = new Date(now - 1000).toISOString();
@@ -29,6 +29,15 @@ test('fleet health keeps only stamped rows for the requested bot', () => {
   const rollup = serviceRollup(health);
   assert.equal(rollup.total, 3); assert.equal(rollup.healthy, 1);
   assert.deepEqual(rollup.attention.map(row => row.id), ['execution-rsi', 'research'], 'degraded outranks unavailable');
+});
+
+test('fleet does not call an empty or partial service inventory complete and preserves zero wallet values', () => {
+  const empty = projectFleetHealth(operations({ services: [] }), 'rsi_modular_v2', now);
+  assert.equal(serviceRollup(empty).complete, false);
+  const partial = projectFleetHealth(operations({ services: operations().health.services.slice(0, 1) }), 'rsi_modular_v2', now);
+  assert.equal(serviceRollup(partial).complete, false);
+  assert.equal(walletValueAvailable(0), true);
+  assert.equal(walletValueAvailable(null), false);
 });
 
 test('card state follows owner freshness, then the stack heartbeat', () => {

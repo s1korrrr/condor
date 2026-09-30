@@ -11,7 +11,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { HORIZONS, HORIZON_LABELS } from "./model.mjs";
+import { HORIZONS, HORIZON_LABELS, marketPulseWindow } from "./model.mjs";
 import {
   type DisplayFrame,
   type HistoryPoint,
@@ -179,7 +179,8 @@ export function MarketPulsePanel({
   setWindow: (w: string) => void;
   replay: (id: string) => void;
 }) {
-  const samples = history.map((p) => ({
+  const coverage = marketPulseWindow(history, window);
+  const samples = coverage.samples.map((p) => ({
     ...p,
     ...p.breadth[horizon],
     positive:
@@ -210,7 +211,7 @@ export function MarketPulsePanel({
       : [p],
   );
   const breadth = frame?.breadth[horizon];
-  const coverageChanges = coverageChangePoints(history);
+  const coverageChanges = coverageChangePoints(coverage.samples);
   return (
     <Panel
       id="mp-pulse"
@@ -420,6 +421,7 @@ export function MarketPulsePanel({
         )}
       </div>
       <div className="mp-pulse-tools">
+        <span className="mp-panel-detail" role="status">{coverage.label}</span>
         <div className="mp-segment">
           {["6h", "24h", "7d"].map((w) => (
             <button
@@ -441,7 +443,7 @@ export function MarketPulsePanel({
             }}
           >
             <option value="">Choose a recorded time</option>
-            {history
+            {coverage.samples
               .filter((p) => p.snapshot_id)
               .map((p) => (
                 <option value={p.snapshot_id!} key={p.snapshot_id}>

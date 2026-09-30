@@ -13,6 +13,7 @@ import {
   storageWrite,
   matchTransitions,
   formatDisplayNumber,
+  removeFilterPredicate,
 } from "../src/features/screener/model.mjs";
 
 const metric = (value, status = "valid") => ({
@@ -78,6 +79,11 @@ test("saved state validates every row and malformed persisted values never reach
     ).error,
     /unavailable/i,
   );
+});
+
+test("removing the final screener predicate restores the unfiltered query", () => {
+  assert.equal(removeFilterPredicate({ op: "and", predicates: [{ metric: "rsi_14", operator: "lte", value: "30" }] }, 0), null);
+  assert.deepEqual(removeFilterPredicate({ op: "or", predicates: [1, 2] }, 0), { op: "or", predicates: [2] });
 });
 
 test("local storage is isolated by user, server, owner, lane, quote and interval", () => {

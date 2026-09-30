@@ -47,6 +47,7 @@ import {
   matchTransitions,
   metricFor,
   metricSortValue,
+  removeFilterPredicate,
   parseViewParams,
   scopeKey,
   storageScopeKey,
@@ -889,14 +890,7 @@ export function Screener({ viewSearch }: { viewSearch?: string } = {}) {
   };
   const removeFilter = (index: number) => {
     resetQuerySnapshot();
-    setFilters((current) =>
-      current
-        ? {
-            ...current,
-            predicates: current.predicates.filter((_, i) => i !== index),
-          }
-        : null,
-    );
+    setFilters((current) => removeFilterPredicate(current, index));
   };
   const loadMore = async () => {
     if (!server || !snapshot || !pageCursor || busy) return;

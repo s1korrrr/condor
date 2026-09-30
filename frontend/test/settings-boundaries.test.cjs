@@ -72,6 +72,12 @@ test('unknown settings tab resolves to Servers',()=>{
  const r=render('pages/Settings.tsx','Settings',{}, {search:'tab=invalid',queries:{'settings-servers':{data:[]}}});
  assert.ok(r.queriesSeen.some(k=>k[0]==='settings-servers'));
 });
+test('server lifecycle capability wording does not claim per-bot controls are currently available',()=>{
+ const r=render('pages/WorkspaceTools.tsx','WorkspaceCapabilities',{}, {access:{...nativeAccess,botStop:true}});
+ assert.match(r.html,/Server lifecycle capability · Advertised/);
+ assert.match(r.html,/each bot still requires current identity, health, and admission checks/);
+ assert.doesNotMatch(r.html,/Bot lifecycle · Controls available/);
+});
 const cases=[
  ['ServersSettings',{'settings-servers':{data:[{name:'local',host:'localhost',port:8000,permission:'owner'}]}},{},'Set as default'],
  ['VoiceSettings',{'voice-settings':{data:{voice:{whisper_model:'base',language:null,auto_send:true},available_models:{base:'Base'},available_languages:{en:'English'}}}},{},'Save Voice Settings'],

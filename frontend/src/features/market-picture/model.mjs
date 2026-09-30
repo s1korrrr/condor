@@ -91,6 +91,8 @@ export function rankAssets(assets, valueFor, limit = 5) {
   const tie = (a, b) =>
     a.asset.instrument_id.localeCompare(b.asset.instrument_id);
   return {
+    qualified: valid.length,
+    expected: assets.length,
     leaders: valid
       .filter((a) => a.value > 0)
       .sort((a, b) => b.value - a.value || tie(a, b))
@@ -103,6 +105,29 @@ export function rankAssets(assets, valueFor, limit = 5) {
       .map((a) => a.asset),
   };
 }
+
+export function rankEmptyLabel(qualified, expected, warming) {
+  if (qualified > 0) return null;
+  return warming > 0
+    ? `Warming · ${warming}/${expected} instruments`
+    : `No qualified observations · 0/${expected} available`;
+}
+
+const durationLabel = (ms) => {
+  const hours = ms / 3_600_000;
+  return hours < 24 ? `${Math.max(0, Math.floor(hours))}h` : `${(hours / 24).toFixed(1).replace(/\.0$/, "")}d`;
+};
+
+/** Restrict the pulse to its selected horizon and disclose retained coverage. */
+export function marketPulseWindow(history, window) {
+  const requestedMs = window === "6h" ? 6 * 60 * 60_000 : window === "7d" ? 7 * 24 * 60 * 60_000 : 24 * 60 * 60_000;
+  if (!history.length) return { samples: [], label: `Requested ${window} · no retained observations` };
+  const end = history[history.length - 1].time;
+  const samples = history.filter((point) => point.time >= end - requestedMs);
+  const availableMs = Math.max(0, samples[samples.length - 1].time - samples[0].time);
+  return { samples, label: `Requested ${window} · available ${durationLabel(availableMs)}` };
+}
+
 export function csvCell(value) {
   const text = value == null ? "" : String(value);
   const safe =

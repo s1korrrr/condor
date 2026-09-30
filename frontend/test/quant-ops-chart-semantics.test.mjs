@@ -47,13 +47,13 @@ test('asset colors follow identity across ordering and membership changes',()=>{
 });
 
 test('symbol exposure heatmap labels marked owned value rather than controller PnL',()=>{
-  const html=renderToStaticMarkup(React.createElement(Heatmap,{rows:['v2'],columns:['BTC','ETH'],label:'Marked owned value per bot and symbol',unitDescription:'Amounts use each bot’s quote currency.',cells:[
+  const html=renderToStaticMarkup(React.createElement(Heatmap,{rows:['v2'],columns:['BTC','ETH'],metricLabel:'Marked owned value',unitLabel:'each bot’s quote currency',cells:[
     {row:'v2',column:'BTC',value:-50},{row:'v2',column:'ETH',value:30},
   ]}));
-  assert.match(html,/Marked owned value per bot and symbol heatmap/);
+  assert.match(html,/Marked owned value by symbol heatmap/);
   assert.match(html,/var\(--q-negative\)/);
   assert.match(html,/var\(--q-positive\)/);
   assert.match(html,/<table[^>]*class="sr-only"/);
-  assert.match(html,/<caption>Marked owned value per bot and symbol\. Amounts use each bot’s quote currency\./);
+  assert.match(html,/<caption>Marked owned value by symbol, each bot’s quote currency/);
   assert.match(html,/<td>-50\.00<\/td>/);
 });

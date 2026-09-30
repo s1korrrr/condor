@@ -145,7 +145,7 @@ function LabBars({
       <ul className="lab-bars">
         {sorted.slice(0, 10).map((item) => (
           <li key={item.key}>
-            {onSelect ? (
+            {onSelect && item.key ? (
               <button
                 className="quant-record-link"
                 onClick={() => onSelect(item.key)}
@@ -153,7 +153,7 @@ function LabBars({
                 {item.key.replaceAll("_", " ")}
               </button>
             ) : (
-              <span>{item.key.replaceAll("_", " ")}</span>
+              <span>{item.key ? item.key.replaceAll("_", " ") : "Unassigned"}</span>
             )}
             <strong>{item.count.toLocaleString()}</strong>
             <span className="lab-bar-track" aria-hidden="true">

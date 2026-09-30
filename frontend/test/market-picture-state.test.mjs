@@ -14,7 +14,30 @@ import {
   histogramBinIndex,
   stableAssetOrder,
   pollDelay,
+  rankEmptyLabel,
+  rankCoverageLabel,
+  rankSideEmptyLabel,
 } from "../src/features/market-picture/model.mjs";
+
+test("ranking distinguishes warming coverage from a valid zero-return population", () => {
+  const assets = [1, 2, 3].map((id) => ({ instrument_id: `asset-${id}` }));
+  const warming = rankAssets(assets, () => null);
+  assert.equal(warming.qualified, 0);
+  assert.equal(warming.expected, 3);
+  const zero = rankAssets(assets, () => 0);
+  assert.equal(zero.qualified, 3);
+  assert.equal(zero.leaders.length, 0);
+  assert.equal(zero.laggards.length, 0);
+  assert.equal(rankAssets(assets, (asset) => asset.instrument_id.endsWith("1") ? 2 : -1).leaders.length, 1);
+  assert.equal(rankEmptyLabel(0, 3, 3), "Warming · 3/3 instruments");
+  assert.equal(rankEmptyLabel(0, 3, 0), "No qualified observations · 0/3 available");
+  assert.equal(rankEmptyLabel(3, 3, 0), null, "a valid zero-only population gets its observed empty-rank label");
+  const mixedAssets = [1, 2, 3, 4, 5].map((id) => ({ instrument_id: `asset-${id}` }));
+  const mixed = rankAssets(mixedAssets, (asset) => asset.instrument_id.endsWith("1") ? 2 : null);
+  assert.equal(mixed.qualified, 1);
+  assert.equal(rankCoverageLabel(mixed.qualified, mixed.expected, 4), "1/5 qualified · 4 warming");
+  assert.equal(rankSideEmptyLabel("negative laggards", mixed.qualified, mixed.expected, 4), "No negative laggards · 1/5 qualified");
+});
 
 const frame = (more = {}) => ({
   stream_id: "observation",

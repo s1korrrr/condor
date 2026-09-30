@@ -10,12 +10,12 @@ import { displayBotName, parseTradingVisualsSources, sourcesForServer, type Trad
 import { buildBotPositionView, mixedOperationalLabel, type BotPairPosition } from '@/features/bots/position-view';
 import { projectExecutionStats, projectLifecycleDecisions, projectQuantBotSummary, projectQuantCycles, projectQuantExecution, projectRecordedDecisions, type ExecutionStats, type LifecycleDecision, type QuantBotSummary, type QuantCycles } from '@/features/bots/quant-roster';
 import { ASSET_COLORS, formatDecimal, formatSigned, metricTone } from '@/features/quant-ops/format';
-import { Funnel, Heatmap, Histogram, MetricCard, MultiLine, PanelFrame, RailBar, Sparkline, StateGlyph } from '@/features/quant-ops/primitives';
+import { Heatmap, Histogram, LifecycleCounts, MetricCard, MultiLine, PanelFrame, RailBar, Sparkline, StateGlyph } from '@/features/quant-ops/primitives';
 import { TileGrid } from '@/features/quant-ops/kit/grid';
 import { DataTable } from '@/features/quant-ops/kit/DataTable';
 import { FleetStrip } from './FleetStrip';
 import { pnlSeries, type PnlSeries } from '@/features/bots/pnl-series';
-import { botNet, commonMetricQuote, controllerPnlPart, ownerReadsFingerprint, pairOwnershipIsDisjoint, winRateText } from '@/features/bots/bot-net';
+import { botNet, botSourceFreshness, commonMetricQuote, controllerPnlPart, historyComparison, ownerReadsFingerprint, pairOwnershipIsDisjoint, quoteUnavailableReason, winRateText } from '@/features/bots/bot-net';
 import { projectControllerPnl } from '@/features/bots/controller-pnl';
 import type { PanelState } from '@/features/quant-ops/panel-state';
 import { PriceLevels } from './NativeBotPositions';
@@ -61,8 +61,9 @@ export type OwnerReads = {
 };
 
 /** All pair rows stay in page flow. Selecting a row never hides the rest. */
-export function RosterObservation({ payload, bot, now, summary: summaryPayload, events, execution, cycles: cyclesPayload, day, week, controllerTotal = null, controllerQuote = null, summaryIssue, eventsIssue, executionIssue }: {
+export function RosterObservation({ payload, bot, now, lifecycleStatus = null, summary: summaryPayload, events, execution, cycles: cyclesPayload, day, week, controllerTotal = null, controllerQuote = null, summaryIssue, eventsIssue, executionIssue }: {
   payload: unknown; bot: string; now: number; controllerTotal?: number | null; controllerQuote?: string | null;
+  lifecycleStatus?: string | null;
   summary?: unknown; events?: unknown; execution?: unknown; cycles?: unknown;
   day?: PnlSeries; week?: PnlSeries;
   summaryIssue?: string | null; eventsIssue?: string | null; executionIssue?: string | null;
@@ -158,7 +159,8 @@ export function RosterObservation({ payload, bot, now, summary: summaryPayload, 
       </PanelFrame>
       <PanelFrame panelId="B22" title="Bot diagnostics" scopeLabel="Each row has its own freshness">
         <ul className="q-diag">
-          <li><span>Lifecycle</span><strong>{quant?.freshness === 'current' ? quant.state : quant?.lastKnown ? `${quant.state} · stale` : 'Unavailable / stale'}</strong></li>
+          <li><span>Lifecycle</span><strong>{lifecycleStatus ? stateLabel(lifecycleStatus) : 'Unavailable'}</strong></li>
+          <li><span>Quant operational state</span><strong>{quant?.freshness === 'current' ? quant.state : quant?.lastKnown ? `${quant.state} · stale` : 'Unavailable / stale'}</strong></li>
           <li><span>Owner heartbeat</span><strong>{quant?.observedAt ?? 'Unavailable'}</strong></li>
           <li><span>Quant summary</span><strong>{quant?.freshness ?? summaryIssue ?? 'Unavailable'}</strong></li>
           <li><span>Execution mode</span><strong>{quant?.executionMode ?? 'Unavailable'}</strong></li>
@@ -223,7 +225,7 @@ function useOwnerReads(source: TradingVisualsSource, page: BotsPageResponse | un
   return { reads, raw: { bootstrap, summary: summary.data, events: events.data, execution: execution.data, cycles: cycles.data } };
 }
 
-function OwnerCard({ source, page, logs, onReads }: { source: TradingVisualsSource; page?: BotsPageResponse; logs: ReactNode; onReads: (reads: OwnerReads) => void }) {
+function OwnerCard({ source, page, logs, controls, onReads }: { source: TradingVisualsSource; page?: BotsPageResponse; logs: ReactNode; controls?: ReactNode; onReads: (reads: OwnerReads) => void }) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const { reads, raw } = useOwnerReads(source, page, now);
@@ -246,18 +248,19 @@ function OwnerCard({ source, page, logs, onReads }: { source: TradingVisualsSour
       </div>
       <div className="q-chip-row">
         <span className="q-muted">{owner?.status ? <><span className="q-pill" data-tone={tone(owner.status)}>{stateLabel(owner.status)}</span> status {owner.status_received_at ? new Date(owner.status_received_at * 1000).toISOString() : 'time unavailable'}</> : 'Lifecycle unavailable'}</span>
+        {controls}
         <button type="button" disabled title="Pause entries needs a verified native entry-control route. Process stop is a different operation and is not used here." data-panel-id="B10">Pause entries</button>
         <button type="button" disabled title="Settings shows effective configuration only after an owner schema inspector is enabled. Writes stay off.">Settings</button>
       </div>
     </header>
-    {bootstrap.isPending ? <p className="q-empty" role="status">Reading the current bot inventory and order observation…</p> : bootstrap.isError ? <p className="q-empty" role="alert">{(bootstrap.error as Error & { status?: number }).status === 401 || (bootstrap.error as Error & { status?: number }).status === 403 ? `Owner read denied (${(bootstrap.error as Error & { status?: number }).status}).` : (bootstrap.error as Error).message} Cached inventory is withheld. <button type="button" onClick={() => void bootstrap.refetch()}>Check now</button></p> : <RosterObservation payload={bootstrap.data} summary={raw.summary?.payload} bot={source.bot} now={Math.max(now, bootstrap.dataUpdatedAt)} events={raw.events?.payload} execution={raw.execution?.payload} cycles={raw.cycles?.payload} day={reads.day} week={reads.week} controllerTotal={reads.controller.total} controllerQuote={reads.controller.quote} summaryIssue={raw.summary?.issue} eventsIssue={raw.events?.issue} executionIssue={raw.execution?.issue} />}
+    {bootstrap.isPending ? <p className="q-empty" role="status">Reading the current bot inventory and order observation…</p> : bootstrap.isError ? <p className="q-empty" role="alert">{(bootstrap.error as Error & { status?: number }).status === 401 || (bootstrap.error as Error & { status?: number }).status === 403 ? `Owner read denied (${(bootstrap.error as Error & { status?: number }).status}).` : (bootstrap.error as Error).message} Cached inventory is withheld. <button type="button" onClick={() => void bootstrap.refetch()}>Check now</button></p> : <RosterObservation payload={bootstrap.data} lifecycleStatus={reads.status} summary={raw.summary?.payload} bot={source.bot} now={Math.max(now, bootstrap.dataUpdatedAt)} events={raw.events?.payload} execution={raw.execution?.payload} cycles={raw.cycles?.payload} day={reads.day} week={reads.week} controllerTotal={reads.controller.total} controllerQuote={reads.controller.quote} summaryIssue={raw.summary?.issue} eventsIssue={raw.events?.issue} executionIssue={raw.execution?.issue} />}
     {logs && <details><summary>Recent owner logs</summary>{logs}</details>}
   </article>;
 }
 
 const sum = (values: (number | null)[]) => values.every(value => value != null) && values.length ? values.reduce<number>((total, value) => total + value!, 0) : null;
 
-export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; renderControls?: (bot: string) => ReactNode; renderLogs: (bot: string) => ReactNode }) {
+export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPageResponse; renderControls?: (bot: string) => ReactNode; renderLogs: (bot: string) => ReactNode }) {
   const { server } = useServer();
   const servers = useServers();
   const [search, setSearch] = useState('');
@@ -291,11 +294,12 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
   const verifiedRunning = scoped.filter(source => page?.bots.find(item => item.bot_name === source.bot)?.status === 'running').length;
   const fleet = scoped.map(source => readsByBot[`${source.server}:${source.bot}`]).filter((reads): reads is OwnerReads => Boolean(reads));
   const complete = fleet.length === scoped.length && scoped.length > 0;
+  const weekly = historyComparison(fleet.map(reads => reads.week), complete);
+  const weeklyNote = !weekly.quote ? 'Comparable weekly history and a matching historical quote are required for every registered bot.' : 'Weekly history needs at least two observations per bot; gaps and incomplete window edges remain visible.';
   const soleOwner = complete && fleet.length === 1 ? fleet[0] : null;
   // Headline PnL uses only the current controller report, matching Capital's scope.
   const netFor = (reads: OwnerReads) => botNet(reads.controller.total);
   const staleBots = fleet.filter(reads => reads.view?.stale || (reads.quant != null && reads.quant.freshness !== 'current'));
-  const quotes = new Set(fleet.map(reads => reads.controller.quote).filter(Boolean));
   const singleQuote = commonMetricQuote(fleet.map(reads => reads.controller.quote));
   // Aggregates are published only when every registered bot is read and no wallet overlap can double count: one bot, or disjoint pairs.
   const disjoint = pairOwnershipIsDisjoint(fleet.map(reads => ({
@@ -314,7 +318,7 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
   const openOrders = complete ? sum(fleet.map(reads => reads.view && reads.view.orders !== null && reads.view.ordersStatus.complete === true ? reads.view.orders.length : null)) : null;
   const fillsTotal = complete ? sum(fleet.map(reads => reads.cycles?.stats.fillCount ?? null)) : null;
   const scoredTotal = complete ? sum(fleet.map(reads => reads.cycles?.stats.scored ?? null)) : null;
-  const aggregateNote = !complete ? 'Waiting for every registered bot to be read.' : aggregateAllowed ? (fleet.length === 1 ? 'One registered bot; no wallet overlap to prove.' : 'Disjoint pairs, one quote currency.') : singleQuote === null ? (staleBots.length ? `${staleBots.length} bot${staleBots.length === 1 ? '' : 's'} stale; quote currency unknown until the owner publishes again.` : quotes.size <= 1 ? 'Current controller quote currency is unavailable; no PnL sum is published.' : 'Bots report different quote currencies; no sum is published.') : 'Bots share pairs on one wallet; per-bot values stay separate.';
+  const aggregateNote = !complete ? 'Waiting for every registered bot to be read.' : aggregateAllowed ? (fleet.length === 1 ? 'One registered bot; no wallet overlap to prove.' : 'Disjoint pairs, one quote currency.') : singleQuote === null ? quoteUnavailableReason(fleet.map(reads => reads.controller.quote), staleBots.length) : 'Bots share pairs on one wallet; per-bot values stay separate.';
   const assets = [...new Set(fleet.flatMap(reads => (reads.quant?.pairs ?? []).map(pair => pair.pair.split('-')[0])))].sort();
   const heatCells = fleet.flatMap(reads => (reads.quant?.pairs ?? []).map(pair => ({ row: displayBotName(reads.bot), column: pair.pair.split('-')[0], value: pair.markedValue == null ? null : Number(pair.markedValue) })));
   const funnel = fleet.length ? (() => { const totals = new Map<string, number>(); for (const reads of fleet) for (const stage of reads.execution?.funnel ?? []) totals.set(stage.stage, (totals.get(stage.stage) ?? 0) + stage.count); return [...totals.entries()].map(([stage, count]) => ({ stage, count })); })() : [];
@@ -383,7 +387,7 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
     {sources.isPending && <p className="q-empty" role="status">Discovering authorized bot owners…</p>}
     {!sources.isPending && !filtered.length && <p className="q-empty" role="status">No authorized bot source is available for this selection.</p>}
     <FleetStrip sources={grid ? filtered : []} readsByBot={readsByBot} page={page} netFor={netFor} />
-    <PanelFrame panelId="B29" title="Bot performance" scopeLabel="One row per registered bot · native net · scored cycles only" state={complete ? { kind: 'fresh' } : { kind: 'collecting', sample: { have: fleet.length, need: scoped.length || 1 }, reason: 'Bots read' }}>
+    <PanelFrame panelId="B29" title="Bot performance" scopeLabel="One row per registered bot · native net · scored cycles only" state={complete ? (fleet.every(reads => Object.values(botSourceFreshness(reads)).every(Boolean)) ? { kind: 'fresh' } : { kind: 'stale', reason: 'Lifecycle, performance, and quant freshness are assessed independently; at least one source is unavailable or stale.' }) : { kind: 'collecting', sample: { have: fleet.length, need: scoped.length || 1 }, reason: 'Bots read' }}>
       <DataTable label="Bot performance" rowId={source => `${source.server}:${source.bot}`} rows={filtered} initialSort={{ id: 'net', desc: true }} exportName="bot-performance.csv" emptyText="No registered bot matches the filter."
         columns={[
           { id: 'bot', header: 'Bot', rowHeader: true, value: source => displayBotName(source.bot), size: 150 },
@@ -401,7 +405,7 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
         ]} />
     </PanelFrame>
     {draft && <BotDraftWizard bots={scoped.map(item => item.bot)} onClose={() => setDraft(false)} />}
-    {filtered.map(source => <OwnerCard key={`${source.server}:${source.bot}`} source={source} page={page} logs={renderLogs(source.bot)} onReads={onReads}/>)}
+    {filtered.map(source => <OwnerCard key={`${source.server}:${source.bot}`} source={source} page={page} logs={renderLogs(source.bot)} controls={renderControls?.(source.bot)} onReads={onReads}/>)}
     <div className="q-bot-cols">
       <PanelFrame panelId="B30" title="Position inventory by symbol" scopeLabel="V2-owned units and marked value · wallet remainder stays in Capital" state={inventoryRows.length ? { kind: 'fresh' } : { kind: 'unavailable', reason: 'No bot reports nonzero owned units.' }}>
         <DataTable label="Position inventory by symbol" rowId={([asset]) => asset} rows={inventoryRows} initialSort={{ id: 'value', desc: true }} dense emptyText="No owned units reported."
@@ -415,10 +419,10 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
           ]} />
       </PanelFrame>
       <PanelFrame panelId="B24" title="Symbol exposure heatmap" scopeLabel="Marked owned value per bot and asset · hatched = no position" state={heatCells.length ? { kind: 'fresh' } : { kind: 'unavailable', reason: 'No bot reports pair inventory.' }}>
-        {heatCells.length ? <Heatmap rows={[...new Set(heatCells.map(cell => cell.row))]} columns={assets} cells={heatCells} label="Marked owned value per bot and symbol" unitDescription="Amounts use each bot’s quote currency." /> : <p className="q-empty">No marked owned value to plot.</p>}
+        {heatCells.length ? <Heatmap metricLabel="Owned exposure" unitLabel="marked quote value in each bot’s quote currency" rows={[...new Set(heatCells.map(cell => cell.row))]} columns={assets} cells={heatCells} /> : <p className="q-empty">No marked owned value to plot.</p>}
       </PanelFrame>
-      <PanelFrame panelId="B31" title="Order lifecycle" scopeLabel="Decisions → orders → fills · lifetime owner rows" state={funnel.length ? { kind: 'fresh' } : { kind: 'unavailable', reason: 'No lifecycle rows are readable yet.' }}>
-        <Funnel stages={funnel} />
+      <PanelFrame panelId="B31" title="Order lifecycle event counts" scopeLabel="Independent lifetime counts · no joined cohort or conversion rate" state={funnel.length ? { kind: 'fresh' } : { kind: 'unavailable', reason: 'No lifecycle rows are readable yet.' }}>
+        <LifecycleCounts stages={funnel} />
       </PanelFrame>
     </div>
     <div className="q-bot-cols">
@@ -453,8 +457,8 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
       </PanelFrame>
     </div>
     <div className="q-compare">
-      <PanelFrame panelId="B23" title="Bot PnL comparison" scopeLabel={`7d saved native net PnL${singleQuote ? ` · ${singleQuote}` : ' · mixed quotes are not overlaid'}`} state={fleet.some(reads => reads.week.points.length >= 2) ? (singleQuote ? { kind: 'fresh' } : { kind: 'incomplete', reason: 'Bots report different quote currencies.' }) : { kind: 'collecting', sample: { have: 0, need: 2 }, reason: 'Saved weekly performance per bot' }}>
-        {singleQuote ? <MultiLine unit={singleQuote} height={330} series={fleet.map((reads, index) => ({ label: displayBotName(reads.bot), color: ASSET_COLORS[index % ASSET_COLORS.length], points: reads.week.points.map(point => ({ time: point.time, value: point.value })) }))} /> : <p className="q-empty">Lines are drawn only in one shared quote currency.</p>}
+      <PanelFrame panelId="B23" title="Bot PnL comparison" scopeLabel={`7d saved native net PnL${weekly.quote ? ` · historical ${weekly.quote}` : ' · historical quote unavailable'}`} state={weekly.drawable ? weekly.complete ? { kind: 'fresh' } : { kind: 'incomplete', reason: weeklyNote } : { kind: 'collecting', reason: weeklyNote }}>
+        {weekly.drawable ? <MultiLine unit={weekly.quote!} height={330} series={fleet.map((reads, index) => ({ label: displayBotName(reads.bot), color: ASSET_COLORS[index % ASSET_COLORS.length], points: reads.week.points.map(point => ({ time: point.time, value: point.value })) }))} /> : <p className="q-empty">{weeklyNote}</p>}
       </PanelFrame>
       <PanelFrame panelId="B25" title="Recorded behavior timeline" scopeLabel="Decision → order → fill → exit · linked by owner IDs" state={events.length ? { kind: 'fresh' } : { kind: 'unavailable', reason: 'No lifecycle records are readable yet.' }}>
         <ol className="q-timeline">
@@ -477,6 +481,6 @@ export function BotsRoster({ page, renderLogs }: { page?: BotsPageResponse; rend
           { id: 'reasons', header: 'Reasons', value: row => row.reasonCodes.join(', ') || '—', size: 200, wrap: true },
         ]} />
     </PanelFrame>
-    <footer className="q-footer" data-panel-id="S06"><span className="q-footer-state" data-state={complete ? (fleet.every(reads => reads.quant?.freshness === 'current') ? 'fresh' : 'stale') : 'collecting'}>{complete ? (fleet.every(reads => reads.quant?.freshness === 'current') ? 'All bot sources fresh' : `${fleet.filter(reads => reads.quant?.freshness !== 'current').length} bot source${fleet.filter(reads => reads.quant?.freshness !== 'current').length === 1 ? '' : 's'} stale`) : `${fleet.length} / ${scoped.length} bots read`}</span><span>{server ?? 'Server not selected'} · UTC</span><span><Link to="/capital">Open Capital</Link></span></footer>
+    <footer className="q-footer" data-panel-id="S06"><span className="q-footer-state" data-state={complete ? (fleet.every(reads => Object.values(botSourceFreshness(reads)).every(Boolean)) ? 'fresh' : 'stale') : 'collecting'}>{complete ? (fleet.every(reads => Object.values(botSourceFreshness(reads)).every(Boolean)) ? 'Lifecycle, performance, and quant sources current' : 'Lifecycle, performance, or quant source unavailable/stale') : `${fleet.length} / ${scoped.length} bots read`}</span><span>{server ?? 'Server not selected'} · UTC</span><span><Link to="/capital">Open Capital</Link></span></footer>
   </div>;
 }

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { BENCHMARKS, rankAssets, stableAssetOrder } from "./model.mjs";
+import { BENCHMARKS, rankAssets, rankCoverageLabel, rankSideEmptyLabel, stableAssetOrder } from "./model.mjs";
 import {
   type DisplayAsset,
   type DisplayCorrelation,
@@ -283,7 +283,10 @@ export function LeadersLaggardsPanel({
     sort === "relative"
       ? (a.relative[benchmark]?.value ?? null)
       : (a.returns[sort]?.value ?? null);
-  const { leaders, laggards } = rankAssets(frame?.assets ?? [], value);
+  const assets = frame?.assets ?? [];
+  const { leaders, laggards, qualified, expected } = rankAssets(assets, value);
+  const warming = assets.filter((asset) => (sort === "relative" ? asset.relative[benchmark]?.status : asset.returns[sort]?.status) === "WARMING").length;
+  const coverageLabel = rankCoverageLabel(qualified, expected, warming);
   return (
     <Panel
       id="mp-rankings"
@@ -301,6 +304,7 @@ export function LeadersLaggardsPanel({
         </select>
       }
     >
+      <p className="mp-panel-detail" role="status">{coverageLabel}</p>
       <table className="mp-table">
         <caption className="sr-only">
           Five strictly positive leaders and five strictly negative laggards;
@@ -351,7 +355,7 @@ export function LeadersLaggardsPanel({
             ) : (
               <tr key={group}>
                 <td colSpan={4} className="mp-table-empty">
-                  {group === 0 ? "No positive leaders" : "No negative laggards"}
+                  {rankSideEmptyLabel(group === 0 ? "positive leaders" : "negative laggards", qualified, expected, warming)}
                 </td>
               </tr>
             ),

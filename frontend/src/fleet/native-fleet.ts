@@ -74,7 +74,7 @@ export function fleetLifecycleStatuses(page: BotsPageResponse | undefined, readF
 export function serviceRollup(health: FleetHealth | null): { total: number; healthy: number; complete: boolean; attention: FleetService[] } {
   const services = health?.services ?? [];
   const observed = new Set(services.map(row => row.id));
-  const complete = Boolean(health && services.length > 0 && health.expected.every(id => observed.has(id)));
+  const complete = Boolean(health && services.length > 0 && health.expected.length > 0 && health.expected.every(id => observed.has(id)));
   const attention = services.filter(row => row.state !== 'healthy').sort((a, b) => rank(a.state) - rank(b.state));
   return { total: services.length, healthy: services.filter(row => row.state === 'healthy').length, complete, attention };
 }

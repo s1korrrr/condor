@@ -113,6 +113,16 @@ export function rankEmptyLabel(qualified, expected, warming) {
     : `No qualified observations · 0/${expected} available`;
 }
 
+export function rankCoverageLabel(qualified, expected, warming) {
+  const unavailable = Math.max(0, expected - qualified - warming);
+  return `${qualified}/${expected} qualified${warming ? ` · ${warming} warming` : ""}${unavailable ? ` · ${unavailable} unavailable` : ""}`;
+}
+
+export function rankSideEmptyLabel(side, qualified, expected, warming) {
+  if (qualified === 0) return rankEmptyLabel(qualified, expected, warming);
+  return `No ${side} · ${qualified}/${expected} qualified`;
+}
+
 const durationLabel = (ms) => {
   const hours = ms / 3_600_000;
   return hours < 24 ? `${Math.max(0, Math.floor(hours))}h` : `${(hours / 24).toFixed(1).replace(/\.0$/, "")}d`;

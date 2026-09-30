@@ -129,3 +129,11 @@ test('fills keep exact receipt strings and ignore other bots', () => {
   assert.equal(rows[0].fee, '0.0074012928');
   assert.deepEqual(projectFills(null, 'rsi_modular_v2'), []);
 });
+
+
+test('fill export value uses Decimal receipt text without binary residue', () => {
+  const fill = {fill_id:'exact',bot_name:'rsi_modular_v2',exact_amount:'0.1',exact_price:'0.2',gross_volume_quote:0.020000000000000004,value_quote_exact:'0.02',gross_volume_quote_decimal:'0.02'};
+  assert.equal(projectFills({rows:[fill]}, 'rsi_modular_v2')[0].volume, '0.02');
+  delete fill.value_quote_exact;
+  assert.equal(projectFills({rows:[fill]}, 'rsi_modular_v2')[0].volume, '0.02');
+});

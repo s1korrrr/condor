@@ -36,6 +36,10 @@ test('fleet does not call an empty or partial service inventory complete and pre
   assert.equal(serviceRollup(empty).complete, false);
   const partial = projectFleetHealth(operations({ services: operations().health.services.slice(0, 1) }), 'rsi_modular_v2', now);
   assert.equal(serviceRollup(partial).complete, false);
+  for (const expected_services of [undefined, []]) {
+    const unknown = projectFleetHealth(operations({services: operations().health.services.slice(0, 1), expected_services}), 'rsi_modular_v2', now);
+    assert.equal(serviceRollup(unknown).complete, false);
+  }
   assert.equal(walletValueAvailable(0), true);
   assert.equal(walletValueAvailable(null), false);
 });

@@ -423,7 +423,7 @@ export function projectFills(value: unknown, bot: string): FillRow[] {
     if (!fillId || fill.bot_name !== bot) return [];
     return [{
       fillId, pair: text(fill.pair), side: text(fill.side), amount: decimalText(fill.exact_amount ?? fill.amount_base), price: decimalText(fill.exact_price ?? fill.price_quote),
-      volume: decimalText(fill.gross_volume_quote), fee: decimalText(fill.exact_trade_fee_in_quote ?? fill.fee_quote), orderType: text(fill.order_type),
+      volume: decimalText(fill.value_quote_exact ?? fill.gross_volume_quote_decimal ?? fill.gross_volume_quote), fee: decimalText(fill.exact_trade_fee_in_quote ?? fill.fee_quote), orderType: text(fill.order_type),
       timestamp: text(fill.timestamp), orderId: text(fill.order_id),
     }];
   });

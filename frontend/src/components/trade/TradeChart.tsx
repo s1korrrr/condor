@@ -70,6 +70,11 @@ export function TradeChart({
   const chartRef = useRef<import("lightweight-charts").IChartApi | null>(null);
   const seriesRef = useRef<import("lightweight-charts").ISeriesApi<"Candlestick"> | null>(null);
   const initializedRef = useRef(false);
+  // Signature of the last full setData() render: channel key + earliest
+  // timestamp + count. Lets us tell a wholesale change (first load, pair/
+  // interval switch, history backfill/prepend) apart from a live tick, where
+  // the listener below already applied a cheap series.update().
+  const lastSetDataSigRef = useRef<string>("");
   const crosshairPriceRef = useRef<number | null>(null);
   // Exact price under the pointer (not snapped to candle close) — used by the measure tool
   const cursorPriceRef = useRef<number | null>(null);
@@ -145,6 +150,9 @@ export function TradeChart({
   }, [server, connector, pair, interval, lookbackSeconds]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Initialize chart ONCE ──
+  // Props that can arrive later (price precision, price lines, overlays) are
+  // applied by their own effects keyed on chartReady; rebuilding the chart here
+  // would drop the loaded series.
   useEffect(() => {
     let cancelled = false;
     import("lightweight-charts").then((mod) => {
@@ -173,9 +181,6 @@ export function TradeChart({
         wickUpColor: colors.up,
         wickDownColor: colors.down,
         borderVisible: false,
-        ...(pricePrecision != null && {
-          priceFormat: { type: "price" as const, precision: pricePrecision, minMove: 1 / 10 ** pricePrecision },
-        }),
       });
       seriesRef.current = series;
       setChartReady(true);
@@ -427,8 +432,11 @@ export function TradeChart({
         positionLinesRef.current = [];
         measureAnchorRef.current = null;
       }
+      // A later chart instance starts empty: force its first full setData/fit.
+      lastSetDataSigRef.current = "";
+      initializedRef.current = false;
     };
-  }, [pricePrecision]);
+  }, []);
 
   // ── Re-apply chart colors on theme change ──
   useEffect(() => {
@@ -451,12 +459,6 @@ export function TradeChart({
     observer.observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
     return () => observer.disconnect();
   }, [chartReady]);
-
-  // Signature of the last full setData() render: channel key + earliest
-  // timestamp + count. Lets us tell a wholesale change (first load, pair/
-  // interval switch, history backfill/prepend) apart from a live tick, where
-  // the listener below already applied a cheap series.update().
-  const lastSetDataSigRef = useRef<string>("");
 
   // ── Push candle data to chart (full setData only on structural changes) ──
   useEffect(() => {
@@ -528,19 +530,19 @@ export function TradeChart({
     initializedRef.current = false;
   }, [pair, interval, lookbackSeconds]);
 
-  // ── Update price precision ──
+  // ── Update price precision (also when it resolved before the chart loaded) ──
   useEffect(() => {
-    if (!seriesRef.current || pricePrecision == null) return;
+    if (!chartReady || !seriesRef.current || pricePrecision == null) return;
     seriesRef.current.applyOptions({
       priceFormat: { type: "price" as const, precision: pricePrecision, minMove: 1 / 10 ** pricePrecision },
     });
-  }, [pricePrecision]);
+  }, [pricePrecision, chartReady]);
 
   // ── Price lines (start/end/limit/grid levels/extras) ──
   useEffect(() => {
     const series = seriesRef.current;
     const mod = chartModuleRef.current;
-    if (!series || !mod) return;
+    if (!chartReady || !series || !mod) return;
 
     // Remove existing lines
     if (startLineRef.current) { try { series.removePriceLine(startLineRef.current); } catch { /* ok */ } }
@@ -639,14 +641,14 @@ export function TradeChart({
         extraLinesRef.current.push(pl);
       }
     }
-  }, [startPrice, endPrice, limitPrice, side, minSpread, totalAmountQuote, minOrderAmountQuote, activePickField, extraLines]);
+  }, [chartReady, startPrice, endPrice, limitPrice, side, minSpread, totalAmountQuote, minOrderAmountQuote, activePickField, extraLines]);
 
   // ── Executor overlays ──
   useEffect(() => {
     const chart = chartRef.current;
     const series = seriesRef.current;
     const mod = chartModuleRef.current;
-    if (!chart || !mod) return;
+    if (!chartReady || !chart || !mod) return;
 
     for (const s of overlaySeriesRef.current) {
       try { chart.removeSeries(s); } catch { /* ok */ }
@@ -807,7 +809,7 @@ export function TradeChart({
         }
       }
     }
-  }, [filteredOverlays, selectedExecutorId]);
+  }, [chartReady, filteredOverlays, selectedExecutorId]);
 
   // ── Zoom to selected executor (one-time action) ──
   useEffect(() => {
@@ -844,7 +846,7 @@ export function TradeChart({
   useEffect(() => {
     const series = seriesRef.current;
     const mod = chartModuleRef.current;
-    if (!series || !mod) return;
+    if (!chartReady || !series || !mod) return;
 
     for (const pl of positionLinesRef.current) {
       try { series.removePriceLine(pl); } catch { /* ok */ }
@@ -872,7 +874,7 @@ export function TradeChart({
       });
       positionLinesRef.current.push(pl);
     }
-  }, [positions]);
+  }, [chartReady, positions]);
 
   // ── Measure tool helpers ──
   const clearMeasure = () => {

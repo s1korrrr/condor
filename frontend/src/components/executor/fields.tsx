@@ -343,26 +343,23 @@ export function AmountField({
 
   // When inQuote mode, show quote value; dispatch always stores base amount
   const displayValue = inQuote && currentPrice && currentPrice > 0 ? value * currentPrice : value;
-  const [draft, setDraft] = useState<string | null>(null);
-  const localValue = draft ?? (displayValue === 0 ? "" : String(Number(displayValue.toPrecision(8))));
+  // Text being typed is kept only while it still describes the amount that
+  // will be sent: same stored base value, unit and pair. Any other change
+  // (unit toggle, pair switch, parent reset) shows the derived amount.
+  const [draft, setDraft] = useState<{ text: string; value: number; inQuote: boolean; pair?: string } | null>(null);
+  const draftText = draft && draft.value === value && draft.inQuote === inQuote && draft.pair === pair ? draft.text : null;
+  const localValue = draftText ?? (displayValue === 0 ? "" : String(Number(displayValue.toPrecision(8))));
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setDraft(e.target.value);
     const raw = parseFloat(e.target.value);
-    if (isNaN(raw)) {
-      dispatch({ type: "SET_FIELD", field, value: 0 });
-    } else if (inQuote && currentPrice && currentPrice > 0) {
-      dispatch({ type: "SET_FIELD", field, value: raw / currentPrice });
-    } else {
-      dispatch({ type: "SET_FIELD", field, value: raw });
-    }
+    const next = isNaN(raw) ? 0 : inQuote && currentPrice && currentPrice > 0 ? raw / currentPrice : raw;
+    setDraft({ text: e.target.value, value: next, inQuote, pair });
+    dispatch({ type: "SET_FIELD", field, value: next });
   };
 
   const toggleUnit = () => {
     setInQuote(!inQuote);
-    // Recalc display
-    const newDisplay = !inQuote && currentPrice && currentPrice > 0 ? value * currentPrice : value;
-    setDraft(newDisplay === 0 ? "" : String(Number(newDisplay.toPrecision(8))));
+    setDraft(null);
   };
 
   const hint = inQuote && currentPrice && currentPrice > 0 && value > 0

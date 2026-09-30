@@ -143,19 +143,20 @@ export function ReportBrowser({
     [instances, activeSource],
   );
 
-  // Config state: merge routine fields with saved localStorage values
+  // Config state: routine fields merged with saved localStorage values. The
+  // values shown in the form are the exact object Run/Schedule send, so a saved
+  // config is visible before the first edit and edits only change their field.
   const [configDraft, setConfigDraft] = useState<{ source: string; values: Record<string, unknown> } | null>(null);
-  const routineDefaults = activeRoutine
-    ? Object.fromEntries(Object.entries(activeRoutine.fields).map(([key, field]) => [key, field.default]))
-    : {};
-  const configValues = configDraft?.source === activeSource ? configDraft.values : routineDefaults;
+  const storedConfigValues = useMemo(
+    () => (activeRoutine ? buildConfigValues(activeRoutine) : {}),
+    [activeRoutine],
+  );
+  const configValues = configDraft?.source === activeSource ? configDraft.values : storedConfigValues;
   const ensureConfigDraft = useCallback(() => {
     if (!activeRoutine) return {};
-    if (configDraft?.source === activeSource) return configDraft.values;
-    const values = buildConfigValues(activeRoutine);
-    setConfigDraft({ source: activeSource, values });
-    return values;
-  }, [activeRoutine, activeSource, configDraft]);
+    if (configDraft?.source !== activeSource) setConfigDraft({ source: activeSource, values: configValues });
+    return configValues;
+  }, [activeRoutine, activeSource, configDraft, configValues]);
 
   // Track running instance to poll for completion
   const [pollingInstanceId, setPollingInstanceId] = useState<string | null>(null);

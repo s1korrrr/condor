@@ -26,6 +26,7 @@ export function frontendModules(overrides = {}, privateExports = {}) {
     new Function('require', 'module', 'exports', `${code}\n${expose}`)(id => {
       if (Object.hasOwn(overrides, id)) return overrides[id];
       if (id.endsWith('.css')) return {};
+      if (id.startsWith('@reporting/')) return load(path.resolve(sourceRoot, '../../../dashboard/hummingbot-reporting-next/app', id.slice('@reporting/'.length)));
       if (id.startsWith('@/')) return load(id.slice(2));
       if (id.startsWith('.')) return load(path.resolve(path.dirname(filename), id));
       return require(id);

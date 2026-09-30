@@ -145,18 +145,11 @@ export function AggregatedPnlChart({ snapshots, controllers, currencySymbol = "$
 
   const [enabled, setEnabled] = useState<Set<string>>(() => new Set(controllerIds.map((c) => c.id)));
 
-  // Sync when controllers change
-  useMemo(() => {
+  const activeEnabled = useMemo(() => {
     const allIds = new Set(controllerIds.map((c) => c.id));
-    setEnabled((prev) => {
-      const next = new Set(prev);
-      for (const id of prev) {
-        if (!allIds.has(id)) next.delete(id);
-      }
-      if (next.size === 0) return allIds;
-      return next;
-    });
-  }, [controllerIds]); // eslint-disable-line react-hooks/exhaustive-deps
+    const selected = new Set([...enabled].filter((id) => allIds.has(id)));
+    return selected.size === 0 ? allIds : selected;
+  }, [controllerIds, enabled]);
 
   const toggleController = (id: string) => {
     setEnabled((prev) => {
@@ -171,15 +164,15 @@ export function AggregatedPnlChart({ snapshots, controllers, currencySymbol = "$
     });
   };
 
-  const allEnabled = enabled.size === controllerIds.length;
+  const allEnabled = activeEnabled.size === controllerIds.length;
   const toggleAll = () => {
     if (allEnabled) return;
     setEnabled(new Set(controllerIds.map((c) => c.id)));
   };
 
   const data = useMemo(
-    () => aggregate(snapshots, enabled, controllers, convert),
-    [snapshots, enabled, controllers, convert],
+    () => aggregate(snapshots, activeEnabled, controllers, convert),
+    [snapshots, activeEnabled, controllers, convert],
   );
   // Latest point is the live "now" point appended by aggregate
   const latest = data.length > 0 ? data[data.length - 1] : null;
@@ -240,7 +233,7 @@ export function AggregatedPnlChart({ snapshots, controllers, currencySymbol = "$
           </button>
           {controllerIds.map((c, i) => {
             const color = CTRL_COLORS[i % CTRL_COLORS.length];
-            const active = enabled.has(c.id);
+            const active = activeEnabled.has(c.id);
             return (
               <button
                 key={c.id}

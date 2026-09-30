@@ -211,7 +211,6 @@ function BacktestChart({ data }: { data: BacktestData }) {
         wickUpColor: "#26a69a",
         wickDownColor: "#ef5350",
       });
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       candleSeries.setData(data.candles.map((c) => ({
         time: ts(c.time),
         open: c.open, high: c.high, low: c.low, close: c.close,

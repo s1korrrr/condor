@@ -237,6 +237,17 @@ export class CandleStore {
     return col.sorted;
   }
 
+  /** Read the latest close without updating access bookkeeping during React render. */
+  getLastClose(key: string): number | undefined {
+    const col = this.collections.get(key);
+    if (!col || col.map.size === 0) return undefined;
+    let latest: CandleData | undefined;
+    for (const candle of col.map.values()) {
+      if (!latest || candle.timestamp > latest.timestamp) latest = candle;
+    }
+    return latest?.close;
+  }
+
   getLastUpdateAge(key: string): number {
     const t = this.lastUpdateTime.get(key);
     return t === undefined ? Infinity : this.now() - t;

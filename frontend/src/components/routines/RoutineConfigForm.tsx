@@ -75,23 +75,19 @@ function NumberField({
   value: unknown;
   onChange: (v: number) => void;
 }) {
-  const [draft, setDraft] = useState(String(value ?? ""));
-
-  // Sync from parent when value changes externally
-  useEffect(() => {
-    setDraft(String(value ?? ""));
-  }, [value]);
+  const [draft, setDraft] = useState<string | null>(null);
 
   return (
     <input
       type="number"
       step={fieldType === "float" ? "any" : "1"}
-      value={draft}
+      value={draft ?? String(value ?? "")}
       onChange={(e) => setDraft(e.target.value)}
       onBlur={() => {
-        const v = fieldType === "int" ? parseInt(draft) : parseFloat(draft);
+        const currentDraft = draft ?? String(value ?? "");
+        const v = fieldType === "int" ? parseInt(currentDraft) : parseFloat(currentDraft);
         if (!isNaN(v)) onChange(v);
-        else setDraft(String(value ?? ""));
+        setDraft(null);
       }}
       className="w-full rounded border border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-1.5 text-sm text-[var(--color-text)] focus:border-[var(--color-primary)] focus:outline-none"
     />

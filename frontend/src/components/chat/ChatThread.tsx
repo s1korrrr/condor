@@ -3,23 +3,12 @@ import { AlertTriangle, Bot, Brain, Loader2, MessageSquare, X } from "lucide-rea
 
 import type { ChatSlot } from "@/hooks/useChatSocket";
 import type { ChatAgentOption } from "@/lib/api";
+import { resolveAgentLabel } from "./chatAgentLabel";
 import { ChatInput } from "./ChatInput";
 import { ChatMessageView } from "./ChatMessage";
 
 /** How close to the end still counts as "following the answer", in pixels. */
 const NEAR_BOTTOM_PX = 80;
-
-/** Resolve a short label for an agent key. */
-export function resolveAgentLabel(agentKey: string, agents: ChatAgentOption[]): string {
-  const match = agents.find((a) => a.key === agentKey);
-  if (match) return match.label;
-  // Handle dynamic keys like "openrouter:anthropic/claude-3.5-sonnet"
-  if (agentKey.includes(":")) {
-    const [provider, model] = agentKey.split(":", 2);
-    return model || provider;
-  }
-  return agentKey;
-}
 
 /**
  * The conversation itself, at any width.

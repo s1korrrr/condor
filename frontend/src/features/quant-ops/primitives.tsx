@@ -150,7 +150,13 @@ export function Histogram({ bins, unit, sampleCount, excludedCount }: { bins: { 
   </figure>;
 }
 
-export function Heatmap({ rows, columns, cells, metricLabel = 'Controller PnL', unitLabel = 'signed quote amounts' }: { rows: string[]; columns: string[]; cells: { row: string; column: string; value: number | null }[]; metricLabel?: string; unitLabel?: string }) {
+export function Heatmap({ rows, columns, cells, metricLabel, unitLabel }: {
+  rows: string[];
+  columns: string[];
+  cells: { row: string; column: string; value: number | null }[];
+  metricLabel: string;
+  unitLabel: string;
+}) {
   const lookup = new Map(cells.map(cell => [`${cell.row}:${cell.column}`, cell.value]));
   const numbers = cells.map(cell => cell.value).filter((value): value is number => value != null);
   const peak = Math.max(1, ...numbers.map(Math.abs));

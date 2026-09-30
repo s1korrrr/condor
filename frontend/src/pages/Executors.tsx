@@ -322,6 +322,12 @@ export function Executors() {
   const [pendingStopIds, setPendingStopIds] = useState<string[] | null>(null);
   const [stopError, setStopError] = useState<string | null>(null);
   const [kpiPeriod, setKpiPeriod] = useState<string>("3M");
+  const [clockMs, setClockMs] = useState(() => Date.now());
+
+  useEffect(() => {
+    const timer = window.setInterval(() => setClockMs(Date.now()), 60_000);
+    return () => window.clearInterval(timer);
+  }, []);
 
   // WebSocket for real-time updates
   const wsChannels = useMemo(
@@ -470,13 +476,13 @@ export function Executors() {
   const activeVolume = useMemo(() => activeExecutors.reduce((s, ex) => s + convert(ex.volume, ex.trading_pair?.split("-")[1] || "USDT").value, 0), [activeExecutors, convert]);
 
   const periodFilteredArchived = useMemo(() => {
-    const now = Date.now() / 1000;
+    const now = clockMs / 1000;
     const cutoff =
       kpiPeriod === "1W" ? now - 7 * 86400 :
       kpiPeriod === "1M" ? now - 30 * 86400 :
       now - 90 * 86400;
     return archivedExecutors.filter((ex) => ex.timestamp >= cutoff);
-  }, [archivedExecutors, kpiPeriod]);
+  }, [archivedExecutors, kpiPeriod, clockMs]);
 
   const archivedPnl = useMemo(() => periodFilteredArchived.reduce((s, ex) => s + convert(ex.pnl, ex.trading_pair?.split("-")[1] || "USDT").value, 0), [periodFilteredArchived, convert]);
   const archivedVolume = useMemo(() => periodFilteredArchived.reduce((s, ex) => s + convert(ex.volume, ex.trading_pair?.split("-")[1] || "USDT").value, 0), [periodFilteredArchived, convert]);

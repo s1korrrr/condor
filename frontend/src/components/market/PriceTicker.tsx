@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useRef, useState, useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 
 import { api } from "@/lib/api";
@@ -14,34 +14,34 @@ interface PriceTickerProps {
 
 export function PriceTicker({ server, connector, pair, interval = "1m" }: PriceTickerProps) {
   const prevPriceRef = useRef<number>(0);
-  const [candlePrice, setCandlePrice] = useState<number>(0);
-
-  // Subscribe to candle store for real-time last close price
-  useEffect(() => {
-    if (!server || !connector || !pair) {
-      setCandlePrice(0);
-      return;
-    }
-
-    const key = `candles:${server}:${connector}:${pair}:${interval}`;
-
-    // Check existing cached candles
-    const cached = candleStore.subscribe(key);
-    if (cached.length > 0) {
-      setCandlePrice(cached[cached.length - 1].close);
-    }
-
-    const removeListener = candleStore.onUpdate(key, (candles) => {
-      if (candles.length > 0) {
-        setCandlePrice(candles[candles.length - 1].close);
+  const [direction, setDirection] = useState<"up" | "down" | "flat">("flat");
+  const candleKey = server && connector && pair
+    ? `candles:${server}:${connector}:${pair}:${interval}` : "";
+  const subscribeToCandle = useCallback((notify: () => void) => {
+    if (!candleKey) return () => {};
+    const cached = candleStore.subscribe(candleKey);
+    prevPriceRef.current = cached.at(-1)?.close ?? 0;
+    const removeListener = candleStore.onUpdate(candleKey, (candles) => {
+      const nextPrice = candles.at(-1)?.close;
+      if (nextPrice && nextPrice !== prevPriceRef.current) {
+        const previousPrice = prevPriceRef.current;
+        setDirection(previousPrice > 0
+          ? nextPrice > previousPrice ? "up" : "down"
+          : "flat");
+        prevPriceRef.current = nextPrice;
       }
+      notify();
     });
-
     return () => {
       removeListener();
-      candleStore.unsubscribe(key);
+      candleStore.unsubscribe(candleKey);
     };
-  }, [server, connector, pair, interval]);
+  }, [candleKey]);
+  const getCandleSnapshot = useCallback(
+    () => candleKey ? candleStore.getLastClose(candleKey) ?? 0 : 0,
+    [candleKey],
+  );
+  const candlePrice = useSyncExternalStore(subscribeToCandle, getCandleSnapshot, () => 0);
 
   // REST fallback for bid/ask/spread (less frequent)
   const { data: price } = useQuery({
@@ -53,19 +53,6 @@ export function PriceTicker({ server, connector, pair, interval = "1m" }: PriceT
 
   // Use candle close as primary price, fall back to REST mid_price
   const displayPrice = candlePrice > 0 ? candlePrice : (price?.mid_price ?? 0);
-
-  const direction =
-    displayPrice && prevPriceRef.current
-      ? displayPrice > prevPriceRef.current
-        ? "up"
-        : displayPrice < prevPriceRef.current
-          ? "down"
-          : "flat"
-      : "flat";
-
-  useEffect(() => {
-    if (displayPrice > 0) prevPriceRef.current = displayPrice;
-  }, [displayPrice]);
 
   if (!displayPrice || !pair) return null;
 

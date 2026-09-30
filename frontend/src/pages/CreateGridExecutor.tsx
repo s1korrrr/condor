@@ -5,10 +5,12 @@ import { ArrowLeft, CheckCircle, Loader2, Rocket } from "lucide-react";
 
 import { NoServerCard } from "@/components/NoServerCard";
 import { ExchangeSelector } from "@/components/market/ExchangeSelector";
-import { PairSelector, useTradingRules } from "@/components/market/PairSelector";
+import { PairSelector } from "@/components/market/PairSelector";
+import { useTradingRules } from "@/components/market/useTradingRules";
 import { PriceTicker } from "@/components/market/PriceTicker";
 import { TradeChart } from "@/components/trade/TradeChart";
-import { GridConfigPanel, useGridValidation } from "@/components/grid/GridConfigPanel";
+import { GridConfigPanel } from "@/components/grid/GridConfigPanel";
+import { useGridValidation } from "@/components/grid/useGridValidation";
 import { useServer } from "@/hooks/useServer";
 import { useCondorWebSocket } from "@/hooks/useWebSocket";
 import { api } from "@/lib/api";

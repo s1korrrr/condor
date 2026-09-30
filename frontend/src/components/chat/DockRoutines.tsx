@@ -8,6 +8,7 @@ import { RoutineResultView } from "@/components/routines/RoutineResultView";
 import { api, type ReportSummary, type RoutineInstance } from "@/lib/api";
 import { formatRelativeTime, toMs } from "@/lib/formatters";
 import { formatRoutineName } from "@/lib/routineUtils";
+import { conversationInstances } from "./conversationInstances";
 
 /**
  * A row in the dock: one routine run.
@@ -29,19 +30,6 @@ type Run =
  * count badge that disagreed with the rows under it would be worse than none.
  * The rule itself is explained on {@link DockRoutines}.
  */
-export function conversationInstances(
-  instances: RoutineInstance[],
-  agentSlug: string,
-  conversationId: string,
-): RoutineInstance[] {
-  const prefix = `${agentSlug}/`;
-  return instances.filter((i) =>
-    i.conversation_id
-      ? i.conversation_id === conversationId
-      : !agentSlug || i.routine_name.startsWith(prefix),
-  );
-}
-
 /**
  * What has been run from this conversation, and what the agent has run lately.
  *

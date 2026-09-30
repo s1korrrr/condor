@@ -19,15 +19,20 @@ import {
 
 import { NoServerCard } from "@/components/NoServerCard";
 import { ExchangeSelector } from "@/components/market/ExchangeSelector";
-import { PairSelector, useTradingRules } from "@/components/market/PairSelector";
+import { PairSelector } from "@/components/market/PairSelector";
+import { useTradingRules } from "@/components/market/useTradingRules";
 import { PriceTicker } from "@/components/market/PriceTicker";
 import { MarketDepthPanel } from "@/components/market/MarketDepthPanel";
 import { MarketsPanel } from "@/components/market/MarketsPanel";
 import { TradeChart } from "@/components/trade/TradeChart";
-import { GridConfigPanel, useGridValidation } from "@/components/grid/GridConfigPanel";
-import { PositionConfigPanel, usePositionConfig } from "@/components/executor/PositionConfigPanel";
-import { OrderConfigPanel, useOrderConfig } from "@/components/executor/OrderConfigPanel";
-import { DCAConfigPanel, useDCAConfig } from "@/components/executor/DCAConfigPanel";
+import { GridConfigPanel } from "@/components/grid/GridConfigPanel";
+import { useGridValidation } from "@/components/grid/useGridValidation";
+import { PositionConfigPanel } from "@/components/executor/PositionConfigPanel";
+import { usePositionConfig } from "@/components/executor/PositionConfigModel";
+import { OrderConfigPanel } from "@/components/executor/OrderConfigPanel";
+import { useOrderConfig } from "@/components/executor/OrderConfigModel";
+import { DCAConfigPanel } from "@/components/executor/DCAConfigPanel";
+import { useDCAConfig } from "@/components/executor/DCAConfigModel";
 import { TradeBottomPane } from "@/components/trade/TradeBottomPane";
 import { useServer } from "@/hooks/useServer";
 import { useCondorWebSocket } from "@/hooks/useWebSocket";
@@ -119,7 +124,12 @@ export function CreateExecutor() {
   const [rightPanel, setRightPanel] = useState<"config" | "depth" | "markets">("config");
   const [rightPanelWidth, setRightPanelWidth] = useState(288);
   const [bottomPaneHeight, setBottomPaneHeight] = useState(200);
-  const [selectedExecutorId, setSelectedExecutorId] = useState<string | null>(null);
+  const [selectedExecutor, setSelectedExecutor] = useState<{ market: string; id: string } | null>(null);
+  const marketKey = `${connector}:${pair}`;
+  const selectedExecutorId = selectedExecutor?.market === marketKey ? selectedExecutor.id : null;
+  const setSelectedExecutorId = (id: string | null) => {
+    setSelectedExecutor(id ? { market: marketKey, id } : null);
+  };
 
   const { onMouseDown: startHDrag } = useResizeDrag({
     axis: "x",
@@ -173,12 +183,12 @@ export function CreateExecutor() {
     gridDispatch({ type: "SET_FIELD", field: "lookbackSeconds", value: newLookback });
   }, [server]);
 
-  // Persist last-used connector/pair to localStorage & clear executor selection
+  // Persist last-used connector/pair. Selection is keyed by market above, so
+  // changing markets cannot display an executor from the previous pair.
   useEffect(() => {
     try {
       localStorage.setItem(LAST_MARKET_KEY, JSON.stringify({ connector, pair }));
     } catch { /* ok */ }
-    setSelectedExecutorId(null);
   }, [connector, pair]);
 
   // Sync connector to filtered list
@@ -261,8 +271,8 @@ export function CreateExecutor() {
   }, [executorType, gridState, positionConfig.chartProps, orderConfig.chartProps, dcaConfig.chartProps]);
 
   // Chart price set handler
-  const handlePriceSet = useMemo(
-    () => (field: "start" | "end" | "limit", price: number) => {
+  const handlePriceSet = useCallback(
+    (field: "start" | "end" | "limit", price: number) => {
       switch (executorType) {
         case "grid":
           gridDispatch({ type: "SET_FIELD", field: `${field}_price`, value: price });
@@ -279,7 +289,7 @@ export function CreateExecutor() {
           break;
       }
     },
-    [executorType], // eslint-disable-line react-hooks/exhaustive-deps
+    [executorType, gridDispatch, positionConfig, orderConfig, dcaConfig],
   );
 
   // Create mutation
@@ -571,7 +581,7 @@ export function CreateExecutor() {
                   <OrderConfigPanel state={orderConfig.state} dispatch={orderConfig.dispatch} validation={orderConfig.validation} currentPrice={currentPrice} isSpot={isSpot} pair={pair} />
                 )}
                 {executorType === "dca" && (
-                  <DCAConfigPanel state={dcaConfig.state} dispatch={dcaConfig.dispatch} validation={dcaConfig.validation} currentPrice={currentPrice} isSpot={isSpot} pair={pair} />
+                  <DCAConfigPanel state={dcaConfig.state} dispatch={dcaConfig.dispatch} validation={dcaConfig.validation} currentPrice={currentPrice} isSpot={isSpot} />
                 )}
               </div>
 

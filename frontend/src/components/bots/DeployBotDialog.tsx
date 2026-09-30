@@ -20,34 +20,7 @@ import {
   type ControllerConfigSummary,
 } from "@/lib/api";
 import { isManagedRsiController, isPinnedHummingbotImage } from "@/lib/rsiSafety";
-
-// ── Helpers ──
-
-export const HIDDEN_KEYS = new Set([
-  "id",
-  "controller_name",
-  "controller_type",
-  "candles_config",
-]);
-
-export function inferInputType(value: unknown): "number" | "boolean" | "text" | "json" {
-  if (typeof value === "boolean") return "boolean";
-  if (typeof value === "number") return "number";
-  if (typeof value === "object" && value !== null) return "json";
-  return "text";
-}
-
-export function parseValue(raw: string, type: "number" | "boolean" | "text" | "json"): unknown {
-  if (type === "number") {
-    const n = Number(raw);
-    return isNaN(n) ? raw : n;
-  }
-  if (type === "boolean") return raw === "true";
-  if (type === "json") {
-    try { return JSON.parse(raw); } catch { return raw; }
-  }
-  return raw;
-}
+import { HIDDEN_KEYS, inferInputType, parseValue } from "./deployBotConfig";
 
 // ── Config Editor for a single config ──
 
@@ -71,7 +44,7 @@ export function ConfigEditor({
     enabled: expanded,
   });
 
-  const config = data?.config ?? {};
+  const config = useMemo(() => data?.config ?? {}, [data?.config]);
   const entries = useMemo(
     () => Object.entries(config).filter(([k]) => !HIDDEN_KEYS.has(k)),
     [config],

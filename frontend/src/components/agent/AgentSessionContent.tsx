@@ -13,7 +13,8 @@ import remarkGfm from "remark-gfm";
 
 import { ExecutorChart, type SnapshotBubble } from "@/components/charts/ExecutorChart";
 import { PairLabel } from "@/components/executor/PairLabel";
-import { AgentPnlChart, metricsToDataPoints } from "@/components/agent/AgentPnlChart";
+import { AgentPnlChart } from "@/components/agent/AgentPnlChart";
+import { metricsToDataPoints } from "@/components/agent/agent-pnl-data";
 import { useAgentExecutors } from "@/hooks/useAgentExecutors";
 import { type AgentExecutorRow, type AgentPerformance, type ExecutorInfo, api } from "@/lib/api";
 import { groupExecutorsByMarket } from "@/lib/executor-overlays";
@@ -177,18 +178,20 @@ export function SessionKpis({
 // known it; the HTTP model used to drop it, so the UI could not have shown it.
 
 export function SessionBots({ perf }: { perf?: AgentPerformance | null }) {
-  const instances = perf?.bot_instances ?? [];
-  const controllers = perf?.controllers ?? [];
+  const instances = perf?.bot_instances;
+  const controllers = perf?.controllers;
   const liveNames = useMemo(() => new Set(perf?.bot_names ?? []), [perf?.bot_names]);
 
   // Group controllers under the instance they ran on, keeping deploy order.
   const groups = useMemo(() => {
-    const byBot = new Map<string, typeof controllers>();
-    for (const c of controllers) {
+    const deployNames = instances ?? [];
+    const controllerRows = controllers ?? [];
+    const byBot = new Map<string, typeof controllerRows>();
+    for (const c of controllerRows) {
       const key = c.bot_name || "";
       byBot.set(key, [...(byBot.get(key) ?? []), c]);
     }
-    const names = instances.length > 0 ? instances : Array.from(byBot.keys());
+    const names = deployNames.length > 0 ? deployNames : Array.from(byBot.keys());
     return names.map((name) => ({ name, controllers: byBot.get(name) ?? [] }));
   }, [controllers, instances]);
 
@@ -466,7 +469,6 @@ export function SessionExecutors({
     refetchInterval: 10000,
   });
 
-  const restExecutors = sessionDetail?.executors ?? [];
 
   // WS-backed live executors (if controller IDs provided)
   const { executors: wsExecutors } = useAgentExecutors(
@@ -480,6 +482,7 @@ export function SessionExecutors({
   // PnL, volume and fees. Only the live session takes the unmatched WS rows, and
   // only to show executors the REST endpoint hasn't recorded yet.
   const executorInfos = useMemo(() => {
+    const restExecutors = sessionDetail?.executors ?? [];
     const restInfos = restExecutors.map(agentRowToExecutorInfo);
     if (wsExecutors.length === 0) return restInfos;
 
@@ -492,7 +495,7 @@ export function SessionExecutors({
       if (!restIds.has(ex.id)) merged.push(ex);
     }
     return merged;
-  }, [restExecutors, wsExecutors, isLiveSession]);
+  }, [sessionDetail?.executors, wsExecutors, isLiveSession]);
 
   // Currency conversion
   const quoteCurrencies = useMemo(
@@ -797,7 +800,7 @@ function SnapshotDetail({ slug, sslug, sessionNum, tick }: { slug: string; sslug
   const parsed = useMemo<ParsedSnapshot | null>(() => {
     if (!data?.content) return null;
     return parseSnapshot(data.content);
-  }, [data?.content]);
+  }, [data]);
 
   if (isLoading) {
     return (

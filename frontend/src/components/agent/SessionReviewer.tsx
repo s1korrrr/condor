@@ -169,7 +169,7 @@ export function SessionReviewer({
   const parsedJournal = useMemo<ParsedJournal | null>(() => {
     if (!journalData?.content) return null;
     return parseJournal(journalData.content);
-  }, [journalData?.content]);
+  }, [journalData]);
 
   // Experiment snapshot data
   const { data: experimentData } = useQuery({
@@ -181,7 +181,7 @@ export function SessionReviewer({
   const parsedSnapshot = useMemo<ParsedSnapshot | null>(() => {
     if (!experimentData?.content) return null;
     return parseSnapshot(experimentData.content);
-  }, [experimentData?.content]);
+  }, [experimentData]);
 
   // Session performance data
   const { data: sessionPerfData } = useQuery({

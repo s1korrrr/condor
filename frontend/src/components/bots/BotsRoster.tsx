@@ -419,7 +419,7 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
           ]} />
       </PanelFrame>
       <PanelFrame panelId="B24" title="Symbol exposure heatmap" scopeLabel="Marked owned value per bot and asset · hatched = no position" state={heatCells.length ? { kind: 'fresh' } : { kind: 'unavailable', reason: 'No bot reports pair inventory.' }}>
-        {heatCells.length ? <Heatmap metricLabel="Owned exposure" unitLabel="marked quote value" rows={[...new Set(heatCells.map(cell => cell.row))]} columns={assets} cells={heatCells} /> : <p className="q-empty">No marked owned value to plot.</p>}
+        {heatCells.length ? <Heatmap metricLabel="Owned exposure" unitLabel="marked quote value in each bot’s quote currency" rows={[...new Set(heatCells.map(cell => cell.row))]} columns={assets} cells={heatCells} /> : <p className="q-empty">No marked owned value to plot.</p>}
       </PanelFrame>
       <PanelFrame panelId="B31" title="Order lifecycle event counts" scopeLabel="Independent lifetime counts · no joined cohort or conversion rate" state={funnel.length ? { kind: 'fresh' } : { kind: 'unavailable', reason: 'No lifecycle rows are readable yet.' }}>
         <LifecycleCounts stages={funnel} />

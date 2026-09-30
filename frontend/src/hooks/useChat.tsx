@@ -1,31 +1,13 @@
-import { createContext, useContext } from "react";
+import { useContext } from "react";
 import { useQuery } from "@tanstack/react-query";
 
-import { useChatSocket } from "@/hooks/useChatSocket";
+import { ChatContext } from "@/hooks/chatContext";
 import {
   api,
   type AgentBindingOption,
   type ChatAgentOption,
   type CustomProvider,
 } from "@/lib/api";
-
-/**
- * One chat, however many surfaces are looking at it.
- *
- * `useChatSocket` keeps the socket, the slots, the streaming slot, the prewarm
- * guard and the outbox in a single instance. Calling it twice would open a
- * second socket, spawn a second subprocess against the session budget, and give
- * the two surfaces different ideas about what was said — so it is called once,
- * here, and both the overlay panel and the `/agents` workspace read the same
- * state. Streaming an answer in one and switching to the other shows the same
- * tokens still arriving, because there is only one of them.
- */
-const ChatContext = createContext<ReturnType<typeof useChatSocket> | null>(null);
-
-export function ChatProvider({ children }: { children: React.ReactNode }) {
-  const chat = useChatSocket();
-  return <ChatContext value={chat}>{children}</ChatContext>;
-}
 
 export function useChat() {
   const chat = useContext(ChatContext);

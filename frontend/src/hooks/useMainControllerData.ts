@@ -1,15 +1,8 @@
-import { useMemo, useRef } from "react";
+import { useMemo } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 
 import { api, type ExecutorInfo } from "@/lib/api";
 import { computeMultiOverlays } from "@/lib/executor-overlays";
-
-/** Build a fingerprint string for an executor array to detect real changes */
-function executorsFingerprint(exs: ExecutorInfo[]): string {
-  return exs
-    .map((e) => `${e.id}:${e.status}:${e.pnl}:${e.entry_price}:${e.current_price}:${e.close_timestamp}`)
-    .join("|");
-}
 
 export function useMainControllerData(
   server: string | null,
@@ -31,18 +24,9 @@ export function useMainControllerData(
     return cachedExecutors.filter((ex) => ex.connector === connector);
   }, [cachedExecutors, connector]);
 
-  // Stable reference: only update when executor data actually changes
-  const prevFingerprintRef = useRef("");
-  const stableExecutorsRef = useRef<ExecutorInfo[]>([]);
-
-  const executors = useMemo(() => {
-    const fp = executorsFingerprint(filteredExecutors);
-    if (fp !== prevFingerprintRef.current) {
-      prevFingerprintRef.current = fp;
-      stableExecutorsRef.current = filteredExecutors;
-    }
-    return stableExecutorsRef.current;
-  }, [filteredExecutors]);
+  // The query cache and this filter already provide a stable reference while
+  // the source data is unchanged. Avoid mutating a ref during render to cache it.
+  const executors = filteredExecutors;
 
   const overlays = useMemo(() => computeMultiOverlays(executors), [executors]);
 

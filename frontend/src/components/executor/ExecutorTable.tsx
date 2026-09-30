@@ -730,7 +730,9 @@ export function DetailPanel({
                   // Parse JSON strings into objects for display
                   let parsed = val;
                   if (typeof val === "string") {
-                    try { const p = JSON.parse(val); if (typeof p === "object" && p !== null) parsed = p; } catch {}
+                    try { const p = JSON.parse(val); if (typeof p === "object" && p !== null) parsed = p; } catch {
+                      // The backend may retain non-JSON string config values; show them verbatim.
+                    }
                   }
                   const isNested = typeof parsed === "object" && parsed !== null;
 

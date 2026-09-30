@@ -26,13 +26,15 @@ import { groupExecutorsByMarket } from "@/lib/executor-overlays";
 // strategy.md / learnings editors. The owning Agent's identity lives one level up
 // at /agents/:slug.
 
+const EMPTY_STRATEGY_INSTANCES: NonNullable<Awaited<ReturnType<typeof api.getStrategy>>["instances"]> = [];
+
 export function StrategyDetail() {
   const { slug, sslug } = useParams<{ slug: string; sslug: string }>();
   const navigate = useNavigate();
   const location = useLocation();
 
   const queryClient = useQueryClient();
-  const [reviewerSessionNum, setReviewerSessionNum] = useState<number | null>(null);
+  const [reviewerSessionOverride, setReviewerSessionOverride] = useState<number | null>(null);
   const [reviewerKind, setReviewerKind] = useState<"session" | "experiment">("session");
   const [showStrategyModal, setShowStrategyModal] = useState(false);
   const [showRoutinesBrowser, setShowRoutinesBrowser] = useState(false);
@@ -50,14 +52,17 @@ export function StrategyDetail() {
     },
   });
 
-  // Check location.state for session-deep-linking (SessionReviewer nav)
+  const routeReviewerState = location.state as { openReviewer?: boolean; sessionNum?: number } | null;
+  const reviewerSessionNum = reviewerSessionOverride ?? (
+    routeReviewerState?.openReviewer ? routeReviewerState.sessionNum ?? null : null
+  );
+
+  // Clear the one-shot route payload after deriving the session from it.
   useEffect(() => {
-    const state = location.state as { openReviewer?: boolean; sessionNum?: number } | null;
-    if (state?.openReviewer) {
-      setReviewerSessionNum(state.sessionNum ?? null);
+    if (routeReviewerState?.openReviewer) {
       navigate(location.pathname, { replace: true, state: null });
     }
-  }, [location.state, location.pathname, navigate]);
+  }, [routeReviewerState?.openReviewer, location.pathname, navigate]);
 
   // Close the strategy modal, dropping any unsaved-edit guards.
   const closeStrategyModal = useCallback(() => {
@@ -96,7 +101,7 @@ export function StrategyDetail() {
   });
 
   // Derive controller IDs from active instances for WS executor streaming
-  const instances = strategy?.instances || [];
+  const instances = strategy?.instances ?? EMPTY_STRATEGY_INSTANCES;
   const hasRunning = instances.length > 0;
   const serverName = (strategy?.config?.server_name as string) || "";
 
@@ -110,10 +115,9 @@ export function StrategyDetail() {
     [instances],
   );
 
-  const latestSessionNum = useMemo(
-    () => (strategy?.sessions?.length ? Math.max(...strategy.sessions.map((s) => s.number)) : 0),
-    [strategy?.sessions],
-  );
+  const latestSessionNum = strategy?.sessions?.length
+    ? Math.max(...strategy.sessions.map((session) => session.number))
+    : 0;
 
   const { data: latestSessionPerf } = useQuery({
     queryKey: ["strategy-session-executors", slug, sslug, latestSessionNum],
@@ -146,7 +150,7 @@ export function StrategyDetail() {
 
   // Session/experiment click -> open reviewer
   const handleSessionClick = useCallback((sessionNum: number, kind?: "session" | "experiment") => {
-    setReviewerSessionNum(sessionNum);
+    setReviewerSessionOverride(sessionNum);
     setReviewerKind(kind || "session");
   }, []);
 
@@ -438,7 +442,7 @@ export function StrategyDetail() {
           initialKind={reviewerKind}
           serverName={serverName}
           controllerIds={controllerIds}
-          onClose={() => setReviewerSessionNum(null)}
+          onClose={() => setReviewerSessionOverride(null)}
         />
       )}
     </div>

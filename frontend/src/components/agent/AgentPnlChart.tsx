@@ -1,13 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 
 import { formatCurrencyPnl } from "@/lib/formatters";
-import type { MetricEntry } from "@/lib/parse-agent";
 import { getThemeColors } from "@/lib/theme-colors";
-
-interface PnlDataPoint {
-  time: number; // unix seconds
-  value: number; // pnl
-}
+import type { PnlDataPoint } from "./agent-pnl-data";
 
 interface AgentPnlChartProps {
   data: PnlDataPoint[];
@@ -122,7 +117,7 @@ export function AgentPnlChart({ data, height = 180, title }: AgentPnlChartProps)
       }
       lastLenRef.current = 0;
     };
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+  }, []);
 
   // ── Re-apply chart colors on theme change ──
   useEffect(() => {
@@ -206,36 +201,4 @@ export function AgentPnlChart({ data, height = 180, title }: AgentPnlChartProps)
       </div>
     </div>
   );
-}
-
-// Helper to convert MetricEntry[] to PnlDataPoint[]
-export function metricsToDataPoints(metrics: MetricEntry[]): PnlDataPoint[] {
-  return metrics
-    .filter((m) => m.timestamp)
-    .map((m) => ({
-      time: Math.floor(new Date(m.timestamp).getTime() / 1000),
-      value: m.pnl,
-    }))
-    .sort((a, b) => a.time - b.time);
-}
-
-// Helper to convert session-level performance to PnlDataPoints (aggregate)
-export function sessionsToDataPoints(
-  sessions: { session_num: number; total_pnl: number; status: string }[],
-): PnlDataPoint[] {
-  if (sessions.length === 0) return [];
-  // Use session_num as a proxy for time ordering — each session gets a synthetic timestamp
-  // spaced 1 hour apart from a base time
-  const base = Math.floor(Date.now() / 1000) - sessions.length * 3600;
-  let cumPnl = 0;
-  return sessions
-    .slice()
-    .sort((a, b) => a.session_num - b.session_num)
-    .map((s, i) => {
-      cumPnl += s.total_pnl;
-      return {
-        time: base + i * 3600,
-        value: cumPnl,
-      };
-    });
 }

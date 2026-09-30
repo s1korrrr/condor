@@ -60,21 +60,19 @@ export function OrderBook({ server, connector, pair }: OrderBookProps) {
 
       // Asks: lowest first, take LEVELS, then reverse for display (highest on top)
       const rawAsks = (data.asks ?? []).slice(0, LEVELS);
-      let cum = 0;
-      const asksWithTotal = rawAsks.map((l) => {
-        cum += l.amount;
-        return { ...l, total: cum };
-      });
+      const asksWithTotal = rawAsks.reduce<(OrderBookLevel & { total: number })[]>((rows, level) => {
+        const total = (rows.at(-1)?.total ?? 0) + level.amount;
+        return [...rows, { ...level, total }];
+      }, []);
       // Reverse so highest ask is at top, lowest near spread
       asksWithTotal.reverse();
 
       // Bids: highest first (already sorted), take LEVELS
       const rawBids = (data.bids ?? []).slice(0, LEVELS);
-      cum = 0;
-      const bidsWithTotal = rawBids.map((l) => {
-        cum += l.amount;
-        return { ...l, total: cum };
-      });
+      const bidsWithTotal = rawBids.reduce<(OrderBookLevel & { total: number })[]>((rows, level) => {
+        const total = (rows.at(-1)?.total ?? 0) + level.amount;
+        return [...rows, { ...level, total }];
+      }, []);
 
       const bestAsk = rawAsks.length ? rawAsks[0].price : 0;
       const bestBid = rawBids.length ? rawBids[0].price : 0;

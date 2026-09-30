@@ -6,6 +6,7 @@ import {
   ChevronUp,
   Crosshair,
 } from "lucide-react";
+import { SIDE_OPTIONS } from "./field-options";
 
 // ── Generic dispatch type ──
 
@@ -32,14 +33,8 @@ export function PriceField({
 }) {
   const isActive = activePickField === field;
   const id = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [localValue, setLocalValue] = useState(value === 0 ? "" : String(value));
-
-  useEffect(() => {
-    if (document.activeElement !== inputRef.current) {
-      setLocalValue(value === 0 ? "" : String(value));
-    }
-  }, [value]);
+  const [draft, setDraft] = useState<string | null>(null);
+  const localValue = draft ?? (value === 0 ? "" : String(value));
 
   return (
     <div>
@@ -54,16 +49,15 @@ export function PriceField({
       <div className="flex gap-1">
         <input
           id={id}
-          ref={inputRef}
           type="number"
           step="any"
           value={localValue}
           onChange={(e) => {
-            setLocalValue(e.target.value);
+            setDraft(e.target.value);
             const num = parseFloat(e.target.value);
             dispatch({ type: "SET_FIELD", field, value: isNaN(num) ? 0 : num });
           }}
-          onBlur={() => setLocalValue(value === 0 ? "" : String(value))}
+          onBlur={() => setDraft(null)}
           placeholder="0.00"
           className={`flex-1 rounded border bg-[var(--color-bg)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-muted)]/40 focus:outline-none ${
             isActive
@@ -117,14 +111,8 @@ export function NumberField({
 }) {
   const displayValue = isPercent ? value * 100 : value;
   const id = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [localValue, setLocalValue] = useState(displayValue === 0 ? "" : String(displayValue));
-
-  useEffect(() => {
-    if (document.activeElement !== inputRef.current) {
-      setLocalValue(displayValue === 0 ? "" : String(displayValue));
-    }
-  }, [displayValue]);
+  const [draft, setDraft] = useState<string | null>(null);
+  const localValue = draft ?? (displayValue === 0 ? "" : String(displayValue));
 
   return (
     <div>
@@ -132,17 +120,16 @@ export function NumberField({
       <div className="flex items-center gap-1">
         <input
           id={id}
-          ref={inputRef}
           type="number"
           step={isPercent ? step * 100 : step}
           min={min !== undefined ? (isPercent ? min * 100 : min) : undefined}
           value={localValue}
           onChange={(e) => {
-            setLocalValue(e.target.value);
+            setDraft(e.target.value);
             const raw = parseFloat(e.target.value);
             dispatch({ type: "SET_FIELD", field, value: isPercent ? (isNaN(raw) ? 0 : raw / 100) : (isNaN(raw) ? 0 : raw) });
           }}
-          onBlur={() => setLocalValue(displayValue === 0 ? "" : String(displayValue))}
+          onBlur={() => setDraft(null)}
           placeholder="0"
           className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-muted)]/40 focus:border-[var(--color-primary)] focus:outline-none"
         />
@@ -350,38 +337,29 @@ export function AmountField({
 }) {
   const [inQuote, setInQuote] = useState(false);
   const id = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
 
   const baseAsset = pair?.split("-")[0] ?? "base";
   const quoteAsset = pair?.split("-")[1] ?? "quote";
 
   // When inQuote mode, show quote value; dispatch always stores base amount
   const displayValue = inQuote && currentPrice && currentPrice > 0 ? value * currentPrice : value;
-  const [localValue, setLocalValue] = useState(displayValue === 0 ? "" : String(displayValue));
-
-  useEffect(() => {
-    if (document.activeElement !== inputRef.current) {
-      setLocalValue(displayValue === 0 ? "" : String(Number(displayValue.toPrecision(8))));
-    }
-  }, [displayValue]);
+  // Text being typed is kept only while it still describes the amount that
+  // will be sent: same stored base value, unit and pair. Any other change
+  // (unit toggle, pair switch, parent reset) shows the derived amount.
+  const [draft, setDraft] = useState<{ text: string; value: number; inQuote: boolean; pair?: string } | null>(null);
+  const draftText = draft && draft.value === value && draft.inQuote === inQuote && draft.pair === pair ? draft.text : null;
+  const localValue = draftText ?? (displayValue === 0 ? "" : String(Number(displayValue.toPrecision(8))));
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setLocalValue(e.target.value);
     const raw = parseFloat(e.target.value);
-    if (isNaN(raw)) {
-      dispatch({ type: "SET_FIELD", field, value: 0 });
-    } else if (inQuote && currentPrice && currentPrice > 0) {
-      dispatch({ type: "SET_FIELD", field, value: raw / currentPrice });
-    } else {
-      dispatch({ type: "SET_FIELD", field, value: raw });
-    }
+    const next = isNaN(raw) ? 0 : inQuote && currentPrice && currentPrice > 0 ? raw / currentPrice : raw;
+    setDraft({ text: e.target.value, value: next, inQuote, pair });
+    dispatch({ type: "SET_FIELD", field, value: next });
   };
 
   const toggleUnit = () => {
     setInQuote(!inQuote);
-    // Recalc display
-    const newDisplay = !inQuote && currentPrice && currentPrice > 0 ? value * currentPrice : value;
-    setLocalValue(newDisplay === 0 ? "" : String(Number(newDisplay.toPrecision(8))));
+    setDraft(null);
   };
 
   const hint = inQuote && currentPrice && currentPrice > 0 && value > 0
@@ -398,13 +376,12 @@ export function AmountField({
       <div className="flex items-center gap-1">
         <input
           id={id}
-          ref={inputRef}
           type="number"
           step={inQuote && currentPrice ? step * currentPrice : step}
           min={min}
           value={localValue}
           onChange={handleChange}
-          onBlur={() => setLocalValue(displayValue === 0 ? "" : String(Number(displayValue.toPrecision(8))))}
+          onBlur={() => setDraft(null)}
           placeholder="0"
           className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-muted)]/40 focus:border-[var(--color-primary)] focus:outline-none"
         />
@@ -456,17 +433,6 @@ export function LeverageField({
 }
 
 // ── Shared constants ──
-
-export const ORDER_TYPE_OPTIONS = [
-  { value: 1, label: "Market" },
-  { value: 2, label: "Limit" },
-  { value: 3, label: "Limit Maker" },
-];
-
-export const SIDE_OPTIONS = [
-  { value: 1, label: "LONG", color: "var(--color-green)" },
-  { value: 2, label: "SHORT", color: "var(--color-red)" },
-];
 
 export function SideSelector({ side, dispatch }: { side: 1 | 2; dispatch: FieldDispatch }) {
   return (

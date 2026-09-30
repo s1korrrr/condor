@@ -36,18 +36,18 @@ function formatAmount(n: number): string {
 }
 
 export function RecentTrades({ server, connector, pair }: RecentTradesProps) {
-  const [trades, setTrades] = useState<Trade[]>([]);
+  const [tradeSnapshot, setTradeSnapshot] = useState<{ channel: string; trades: Trade[] }>({
+    channel: "",
+    trades: [],
+  });
   const tradesRef = useRef<Trade[]>([]);
+  const tradesChannelRef = useRef("");
 
   const channel = `trades:${server}:${connector}:${pair}`;
   const channels = useMemo(() => [channel], [channel]);
   const { wsRef, wsVersion } = useCondorWebSocket(channels, server);
 
-  // Reset trades on pair change
-  useEffect(() => {
-    setTrades([]);
-    tradesRef.current = [];
-  }, [connector, pair]);
+  const trades = tradeSnapshot.channel === channel ? tradeSnapshot.trades : [];
 
   const handleMessage = useCallback(
     (msgChannel: string, data: unknown) => {
@@ -59,10 +59,11 @@ export function RecentTrades({ server, connector, pair }: RecentTradesProps) {
       };
 
       if (payload.type === "trades" && payload.data?.length) {
-        const current = tradesRef.current;
+        const current = tradesChannelRef.current === channel ? tradesRef.current : [];
         const merged = [...payload.data, ...current].slice(0, MAX_TRADES);
+        tradesChannelRef.current = channel;
         tradesRef.current = merged;
-        setTrades(merged);
+        setTradeSnapshot({ channel, trades: merged });
       }
     },
     [channel],

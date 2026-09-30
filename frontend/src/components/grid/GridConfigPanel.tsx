@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useRef, useState } from "react";
+import { useId, useMemo, useState } from "react";
 import {
   AlertTriangle,
   Check,
@@ -8,7 +8,8 @@ import {
   Sparkles,
 } from "lucide-react";
 
-import { LeverageField, SelectField, ToggleField, ORDER_TYPE_OPTIONS, type FieldDispatch } from "@/components/executor/fields";
+import { LeverageField, SelectField, ToggleField, type FieldDispatch } from "@/components/executor/fields";
+import { ORDER_TYPE_OPTIONS } from "@/components/executor/field-options";
 import type { GridState, GridAction } from "@/lib/gridExecutor";
 
 interface GridConfigPanelProps {
@@ -38,15 +39,8 @@ function PriceField({
 }) {
   const isActive = activePickField === field;
   const id = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [localValue, setLocalValue] = useState(value === 0 ? "" : String(value));
-
-  // Sync from parent when value changes externally (e.g. auto-fill, chart pick)
-  useEffect(() => {
-    if (document.activeElement !== inputRef.current) {
-      setLocalValue(value === 0 ? "" : String(value));
-    }
-  }, [value]);
+  const [draft, setDraft] = useState<string | null>(null);
+  const localValue = draft ?? (value === 0 ? "" : String(value));
 
   return (
     <div>
@@ -61,16 +55,15 @@ function PriceField({
       <div className="flex gap-1">
         <input
           id={id}
-          ref={inputRef}
           type="number"
           step="any"
           value={localValue}
           onChange={(e) => {
-            setLocalValue(e.target.value);
+            setDraft(e.target.value);
             const num = parseFloat(e.target.value);
             dispatch({ type: "SET_FIELD", field: `${field}_price`, value: isNaN(num) ? 0 : num });
           }}
-          onBlur={() => setLocalValue(value === 0 ? "" : String(value))}
+          onBlur={() => setDraft(null)}
           placeholder="0.00"
           className={`flex-1 rounded border bg-[var(--color-bg)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-muted)]/40 focus:outline-none ${
             isActive
@@ -122,14 +115,8 @@ function NumberField({
 }) {
   const displayValue = isPercent ? value * 100 : value;
   const id = useId();
-  const inputRef = useRef<HTMLInputElement>(null);
-  const [localValue, setLocalValue] = useState(displayValue === 0 ? "" : String(displayValue));
-
-  useEffect(() => {
-    if (document.activeElement !== inputRef.current) {
-      setLocalValue(displayValue === 0 ? "" : String(displayValue));
-    }
-  }, [displayValue]);
+  const [draft, setDraft] = useState<string | null>(null);
+  const localValue = draft ?? (displayValue === 0 ? "" : String(displayValue));
 
   return (
     <div>
@@ -137,17 +124,16 @@ function NumberField({
       <div className="flex items-center gap-1">
         <input
           id={id}
-          ref={inputRef}
           type="number"
           step={isPercent ? step * 100 : step}
           min={min !== undefined ? (isPercent ? min * 100 : min) : undefined}
           value={localValue}
           onChange={(e) => {
-            setLocalValue(e.target.value);
+            setDraft(e.target.value);
             const raw = parseFloat(e.target.value);
             dispatch({ type: "SET_FIELD", field, value: isPercent ? (isNaN(raw) ? 0 : raw / 100) : (isNaN(raw) ? 0 : raw) });
           }}
-          onBlur={() => setLocalValue(displayValue === 0 ? "" : String(displayValue))}
+          onBlur={() => setDraft(null)}
           placeholder="0"
           className="flex-1 rounded border border-[var(--color-border)] bg-[var(--color-bg)] px-2.5 py-1.5 font-mono text-xs text-[var(--color-text)] placeholder:text-[var(--color-text-muted)]/40 focus:border-[var(--color-primary)] focus:outline-none"
         />
@@ -499,31 +485,4 @@ export function GridConfigPanel({ state, dispatch, currentPrice, isSpot = false,
       )}
     </div>
   );
-}
-
-export function useGridValidation(state: GridState) {
-  return useMemo(() => {
-    const errors: string[] = [];
-
-    if (state.start_price <= 0 || state.end_price <= 0 || state.limit_price <= 0) {
-      errors.push("All prices required");
-    }
-    if (state.start_price > 0 && state.end_price > 0 && state.start_price >= state.end_price) {
-      errors.push("Start must be < end");
-    }
-    if (state.side === 1 && state.limit_price > 0 && state.start_price > 0 && state.limit_price >= state.start_price) {
-      errors.push("LONG: limit < start");
-    }
-    if (state.side === 2 && state.limit_price > 0 && state.end_price > 0 && state.limit_price <= state.end_price) {
-      errors.push("SHORT: limit > end");
-    }
-    if (state.total_amount_quote <= 0) {
-      errors.push("Total amount required");
-    }
-    if (state.total_amount_quote > 0 && state.min_order_amount_quote > 0 && state.total_amount_quote < state.min_order_amount_quote) {
-      errors.push("Total >= min order");
-    }
-
-    return { valid: errors.length === 0, errors };
-  }, [state]);
 }

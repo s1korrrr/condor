@@ -47,6 +47,12 @@ export function ChatInput({
     queryFn: () => api.getVoiceSettings(),
     staleTime: 5 * 60 * 1000,
   });
+  // MediaRecorder callbacks outlive the render that started recording. Keep
+  // their auto-send decision aligned with the latest query result.
+  const voiceSettingsRef = useRef(voiceSettings);
+  useEffect(() => {
+    voiceSettingsRef.current = voiceSettings;
+  }, [voiceSettings]);
 
   // Auto-resize textarea
   useEffect(() => {
@@ -170,12 +176,6 @@ export function ChatInput({
   const stopRecording = useCallback(() => {
     mediaRecorderRef.current?.stop();
   }, []);
-
-  // Keep a ref to voice settings so the onstop callback can read latest value
-  const voiceSettingsRef = useRef(voiceSettings);
-  useEffect(() => {
-    voiceSettingsRef.current = voiceSettings;
-  }, [voiceSettings]);
 
   // Global ESC to abort streaming
   useEffect(() => {

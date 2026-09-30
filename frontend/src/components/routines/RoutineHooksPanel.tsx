@@ -1,6 +1,6 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Bell, Check, ChevronDown, Loader2, Plus, Send, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useState } from "react";
 
 import { type RoutineHooks, api } from "@/lib/api";
 
@@ -120,16 +120,23 @@ function Toggle({ on, onClick }: { on: boolean; onClick: () => void }) {
 
 function HooksForm({ routineName }: { routineName: string }) {
   const qc = useQueryClient();
-  const [hooks, setHooks] = useState<RoutineHooks>(EMPTY);
+  const [draft, setDraft] = useState<{ routineName: string; value: RoutineHooks } | null>(null);
 
   const { data: saved } = useQuery({
     queryKey: ["routine-hooks", routineName],
     queryFn: () => api.getRoutineHooks(routineName),
   });
 
-  useEffect(() => {
-    if (saved) setHooks(saved);
-  }, [saved, routineName]);
+  const hooks = draft?.routineName === routineName ? draft.value : saved ?? EMPTY;
+  const setHooks = (update: RoutineHooks | ((current: RoutineHooks) => RoutineHooks)) => {
+    setDraft((current) => {
+      const currentValue = current?.routineName === routineName ? current.value : saved ?? EMPTY;
+      return {
+        routineName,
+        value: typeof update === "function" ? update(currentValue) : update,
+      };
+    });
+  };
 
   const saveMutation = useMutation({
     mutationFn: () => api.saveRoutineHooks(routineName, hooks),

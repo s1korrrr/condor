@@ -2,10 +2,8 @@ import { useQuery } from "@tanstack/react-query";
 import { ChevronDown, ChevronRight, PanelRightClose, Radio, Zap } from "lucide-react";
 import { useEffect, useState } from "react";
 
-import {
-  DockRoutines,
-  conversationInstances,
-} from "@/components/chat/DockRoutines";
+import { DockRoutines } from "@/components/chat/DockRoutines";
+import { conversationInstances } from "@/components/chat/conversationInstances";
 import { DockTasks } from "@/components/chat/DockTasks";
 import { api, type Delegation } from "@/lib/api";
 

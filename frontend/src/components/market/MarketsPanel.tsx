@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowDown, ArrowUp, Loader2, Search, X } from "lucide-react";
 
@@ -195,6 +195,11 @@ export function MarketsPanel({
 
 /** Seconds since the exchange ticker snapshot was taken. */
 function TickerAge({ updatedAt }: { updatedAt: number }) {
-  const age = Math.max(0, Math.round(Date.now() / 1000 - updatedAt));
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const timer = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(timer);
+  }, []);
+  const age = Math.max(0, Math.round(now / 1000 - updatedAt));
   return <span>⟳ {age < 60 ? `${age}s` : `${Math.round(age / 60)}m`}</span>;
 }

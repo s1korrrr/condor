@@ -8,7 +8,8 @@ import {
 } from "lucide-react";
 import { useCallback, useMemo, useState } from "react";
 
-import { AgentPnlChart, sessionsToDataPoints } from "@/components/agent/AgentPnlChart";
+import { AgentPnlChart } from "@/components/agent/AgentPnlChart";
+import { sessionsToDataPoints } from "@/components/agent/agent-pnl-data";
 import { ModeBadge } from "@/components/agent/ModeBadge";
 import { api } from "@/lib/api";
 import { formatCurrency, formatCurrencyPnl, formatCurrencyVolume } from "@/lib/formatters";
@@ -193,6 +194,8 @@ export function PerformancePanel({
   const feesKnown = sessions.every((x) => x.fees_known !== false);
 
   // PnL chart data from session-level performance
+  // Preserve the synthetic time axis across unrelated parent renders.
+  // eslint-disable-next-line react-hooks/preserve-manual-memoization
   const pnlData = useMemo(() => sessionsToDataPoints(sessions), [sessions]);
 
   return (
@@ -342,4 +345,3 @@ export function PerformancePanel({
     </div>
   );
 }
-

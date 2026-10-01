@@ -42,6 +42,7 @@ DEFAULT_REQUEST_TIMEOUT = 8.0
 DEFAULT_POLL_TIMEOUT = 25
 MAX_RETRY_SECONDS = 30
 MAX_TELEGRAM_RETRY_SECONDS = 60
+MAX_TRADE_READ_CONCURRENCY = 8
 HEARTBEAT_MAX_AGE_SECONDS = 90
 SOURCE_STALE_AFTER_SECONDS = 60
 
@@ -1246,80 +1247,107 @@ class FleetTelegramWorker:
             last_successful_command=self.last_successful_command,
         )
 
+    async def _deliver_pending_trades(self, by_key: dict[str, BotSource]) -> None:
+        """Send durable rows serially, recording success only after Telegram confirms it."""
+        assert self.trade_alerts is not None
+        delivery_sources = set(by_key) | set(self._retired_alert_labels)
+        while True:
+            pending = self.trade_alerts.pending(
+                self.config.authorized_user_ids, delivery_sources
+            )
+            if not pending:
+                return
+            for identity, key, recipient, rows in pending:
+                source = by_key.get(key)
+                label = source.label if source is not None else self._retired_alert_labels[key]
+                await self._bot.send_message(
+                    chat_id=recipient,
+                    text=render_fill_alert(label, rows),
+                    parse_mode="HTML",
+                    reply_markup=self.keyboard("fills", source.id) if source is not None else None,
+                )
+                # Telegram has no idempotency key: ambiguous network/crash delivery can
+                # repeat delivery. Persist only confirmed success, never silently lose it.
+                self.trade_alerts.sent(identity)
+                self.state._set("trade_alert_last_sent", str(time.time()))
+                logger.info(
+                    "Trade alert delivered source=%s fills=%d",
+                    source.id if source is not None else "retired",
+                    len(rows),
+                )
+
     async def notify_trades(self):
-        """Read bounded native history and deliver a durable fill outbox."""
+        """Read bounded native history without blocking healthy owners on slow ones."""
         if self.trade_alerts is None:
             return
+        # A prior successful read already has durable rows; do not delay their
+        # delivery behind discovery or any newly slow native source.
+        await self._deliver_pending_trades(
+            {source_key(source): source for source in self.config.bots}
+        )
         await self.refresh_catalogue()
         by_key = {source_key(source): source for source in self.config.bots}
+        semaphore = asyncio.Semaphore(MAX_TRADE_READ_CONCURRENCY)
+
         async with NativeReadClient(self.config) as client:
-            for key, source in by_key.items():
-                try:
+            async def read_source(key: str, source: BotSource):
+                async with semaphore:
                     path = urlsplit(source.endpoints["fills"])
                     query = [
                         (k, v) for k, v in parse_qsl(path.query) if k != "limit"
                     ] + [("limit", "1000")]
                     endpoint = urlunsplit(("", "", path.path, urlencode(query), ""))
-                    read_source = replace(
+                    read_target = replace(
                         source, endpoints={**source.endpoints, "fills": endpoint}
                     )
-                    payload = await client.get(read_source, "fills")
-                    _validate_owner_identity(payload, source, require_rows=True)
-                    rows = _extract_rows(payload, "fills")
-                    if not self.trade_alerts.has_coverage(key, rows):
-                        # Never quietly advance a truncated history window.
-                        raise NativeReadError(
-                            "trade alert history reached 1000-fill coverage limit"
-                        )
-                    self.trade_alerts.ingest(key, rows, self.config.authorized_user_ids)
-                    self.state._set("trade_alert_last_read:" + key, str(time.time()))
-                    self.state._set("trade_alert_error:" + key, "")
-                except (NativeReadError, ValueError) as exc:
-                    details = (
-                        safe_native_read_error(exc)
-                        if isinstance(exc, NativeReadError)
-                        else {"reason": "fill_validation_error", "http_status": None}
-                    )
-                    self.state._set(
-                        "trade_alert_error:" + key,
-                        json.dumps(details, separators=(",", ":"), sort_keys=True),
-                    )
-                    logger.warning(
-                        "Trade alert read held source=%s error_type=%s reason=%s http_status=%s",
-                        source.id,
-                        (
-                            "NativeReadError"
+                    try:
+                        payload = await client.get(read_target, "fills")
+                        _validate_owner_identity(payload, source, require_rows=True)
+                        return key, source, _extract_rows(payload, "fills"), None
+                    except (NativeReadError, ValueError) as exc:
+                        return key, source, None, exc
+
+            tasks = [
+                asyncio.create_task(read_source(key, source))
+                for key, source in by_key.items()
+            ]
+            try:
+                for completed in asyncio.as_completed(tasks):
+                    key, source, rows, read_error = await completed
+                    try:
+                        if read_error is not None:
+                            raise read_error
+                        if not self.trade_alerts.has_coverage(key, rows):
+                            # Never quietly advance a truncated history window.
+                            raise NativeReadError(
+                                "trade alert history reached 1000-fill coverage limit"
+                            )
+                        self.trade_alerts.ingest(key, rows, self.config.authorized_user_ids)
+                        self.state._set("trade_alert_last_read:" + key, str(time.time()))
+                        self.state._set("trade_alert_error:" + key, "")
+                    except (NativeReadError, ValueError) as exc:
+                        details = (
+                            safe_native_read_error(exc)
                             if isinstance(exc, NativeReadError)
-                            else "ValueError"
-                        ),
-                        details["reason"],
-                        (
-                            details["http_status"]
-                            if details["http_status"] is not None
-                            else "none"
-                        ),
-                    )
-        delivery_sources = set(by_key) | set(self._retired_alert_labels)
-        for identity, key, recipient, rows in self.trade_alerts.pending(
-            self.config.authorized_user_ids, delivery_sources
-        ):
-            source = by_key.get(key)
-            label = source.label if source is not None else self._retired_alert_labels[key]
-            await self._bot.send_message(
-                chat_id=recipient,
-                text=render_fill_alert(label, rows),
-                parse_mode="HTML",
-                reply_markup=self.keyboard("fills", source.id) if source is not None else None,
-            )
-            # Telegram has no idempotency key: ambiguous network/crash delivery can
-            # repeat delivery. Persist only confirmed success, never silently lose it.
-            self.trade_alerts.sent(identity)
-            self.state._set("trade_alert_last_sent", str(time.time()))
-            logger.info(
-                "Trade alert delivered source=%s fills=%d",
-                source.id if source is not None else "retired",
-                len(rows),
-            )
+                            else {"reason": "fill_validation_error", "http_status": None}
+                        )
+                        self.state._set(
+                            "trade_alert_error:" + key,
+                            json.dumps(details, separators=(",", ":"), sort_keys=True),
+                        )
+                        logger.warning(
+                            "Trade alert read held source=%s error_type=%s reason=%s http_status=%s",
+                            source.id,
+                            type(exc).__name__,
+                            details["reason"],
+                            details["http_status"] if details["http_status"] is not None else "none",
+                        )
+                    await self._deliver_pending_trades(by_key)
+            finally:
+                for task in tasks:
+                    if not task.done():
+                        task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
 
     async def trade_loop(self):
         delay = 5.0

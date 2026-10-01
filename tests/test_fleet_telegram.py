@@ -1378,3 +1378,165 @@ def test_catalogue_count_matches_shared_owner_contract(tmp_path, count):
             fleet._catalogue_source_rows(payload, config)
     else:
         assert len(fleet._catalogue_source_rows(payload, config)) == count
+
+
+def test_trade_alerts_deliver_pending_and_healthy_source_before_slow_read(tmp_path, monkeypatch):
+    config = _source_config()
+    config["trade_alerts"] = True
+    for index in range(1, 10):
+        row = dict(config["bots"][0])
+        row["id"] = f"owner_{index}"
+        row["native_bot_name"] = f"owner_{index}"
+        row["endpoints"] = {
+            key: value.replace("{bot}", row["native_bot_name"])
+            for key, value in row["endpoints"].items()
+        }
+        config["bots"].append(row)
+    loaded = _load(tmp_path, config)
+    sent = []
+    preexisting_delivered = asyncio.Event()
+    healthy_delivered = asyncio.Event()
+    release_slow = asyncio.Event()
+    eight_started = asyncio.Event()
+    active = 0
+    peak = 0
+
+    def alert_fill(source, fill_id):
+        return {
+            "fill_id": fill_id, "order_id": fill_id, "bot_name": source.native_bot_name,
+            "connector_name": "okx", "source_db_id": "db", "side": "buy",
+            "pair": "BTC-USDC", "exact_amount": "0.001", "exact_price": "100",
+            "exact_trade_fee_in_quote": "0.01", "timestamp": time.time() + 1,
+        }
+
+    class CapturingBot:
+        async def send_message(self, **kwargs):
+            sent.append(kwargs["text"])
+            if "preexisting" in kwargs["text"]:
+                preexisting_delivered.set()
+            if "healthy-fill" in kwargs["text"]:
+                healthy_delivered.set()
+
+    worker = fleet.FleetTelegramWorker(
+        loaded, "test-token-not-sent", str(tmp_path / "alerts.sqlite"), bot=CapturingBot()
+    )
+    source = loaded.bots[0]
+    worker.state.db.execute("UPDATE trade_sources SET started=0")
+    worker.state.db.execute(
+        "INSERT INTO trade_outbox(source,recipient,rows_json) VALUES(?,?,?)",
+        (fleet.source_key(source), 12345, json.dumps([alert_fill(source, "preexisting")])),
+    )
+    worker.state.db.commit()
+
+    async def refresh_after_pending():
+        assert preexisting_delivered.is_set()
+        return False
+
+    monkeypatch.setattr(worker, "refresh_catalogue", refresh_after_pending)
+
+    async def fake_read(_client, selected, command):
+        nonlocal active, peak
+        assert preexisting_delivered.is_set()
+        assert command == "fills" and "limit=1000" in selected.endpoints["fills"]
+        active += 1
+        peak = max(peak, active)
+        if active == 8:
+            eight_started.set()
+        try:
+            if selected.id != "owner_1":
+                await release_slow.wait()
+                return {"api_projection": {"bot_name": selected.native_bot_name}, "rows": []}
+            return {
+                "api_projection": {"bot_name": selected.native_bot_name},
+                "rows": [alert_fill(selected, "healthy-fill")],
+            }
+        finally:
+            active -= 1
+
+    monkeypatch.setattr(fleet.NativeReadClient, "get", fake_read)
+
+    async def scenario():
+        task = asyncio.create_task(worker.notify_trades())
+        try:
+            await asyncio.wait_for(preexisting_delivered.wait(), 2)
+            await asyncio.wait_for(healthy_delivered.wait(), 2)
+            await asyncio.wait_for(eight_started.wait(), 2)
+            assert not release_slow.is_set()
+            assert peak <= 8
+            release_slow.set()
+            await asyncio.wait_for(task, 2)
+        finally:
+            release_slow.set()
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    try:
+        asyncio.run(scenario())
+        assert len(sent) == 2
+        assert worker.trade_alerts.pending([12345]) == []
+    finally:
+        worker.state.close()
+
+
+def test_trade_read_cancellation_closes_bounded_inflight_requests(tmp_path, monkeypatch):
+    config = _source_config()
+    config["trade_alerts"] = True
+    for index in range(1, 12):
+        row = dict(config["bots"][0])
+        row["id"] = f"owner_{index}"
+        row["native_bot_name"] = f"owner_{index}"
+        config["bots"].append(row)
+    entered_eight = asyncio.Event()
+    never_released = asyncio.Event()
+    closed = asyncio.Event()
+    active = 0
+    peak = 0
+
+    class HoldingClient:
+        def __init__(self, _config):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            closed.set()
+
+        async def get(self, _source, _command):
+            nonlocal active, peak
+            active += 1
+            peak = max(peak, active)
+            if active == fleet.MAX_TRADE_READ_CONCURRENCY:
+                entered_eight.set()
+            try:
+                await never_released.wait()
+            finally:
+                active -= 1
+
+    monkeypatch.setattr(fleet, "NativeReadClient", HoldingClient)
+    worker = fleet.FleetTelegramWorker(
+        _load(tmp_path, config), "test-token-not-sent", str(tmp_path / "state.sqlite"),
+        bot=SimpleNamespace(),
+    )
+
+    async def scenario():
+        task = asyncio.create_task(worker.notify_trades())
+        try:
+            await asyncio.wait_for(entered_eight.wait(), 2)
+            assert active == fleet.MAX_TRADE_READ_CONCURRENCY
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await asyncio.wait_for(task, 2)
+            assert active == 0
+            assert closed.is_set()
+            assert peak <= fleet.MAX_TRADE_READ_CONCURRENCY
+        finally:
+            if not task.done():
+                task.cancel()
+                await asyncio.gather(task, return_exceptions=True)
+
+    try:
+        asyncio.run(scenario())
+    finally:
+        worker.state.close()

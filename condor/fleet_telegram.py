@@ -167,7 +167,7 @@ def _catalogue_source_rows(payload: Any, config: WorkerConfig) -> tuple[BotSourc
     ):
         raise ConfigError("catalogue schema is unavailable or unsupported")
     rows = payload.get("bots")
-    if not isinstance(rows, list) or not rows or len(rows) > 100:
+    if not isinstance(rows, list) or not rows or len(rows) > 128:
         raise ConfigError("catalogue bot list is empty or outside its limit")
     discovery = config.discovery
     if discovery is None:

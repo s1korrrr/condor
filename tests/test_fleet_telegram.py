@@ -1367,3 +1367,14 @@ def test_successful_catalogue_removal_retires_reads_but_drains_pending_outbox(
         assert worker.trade_alerts.pending([12345]) == []
     finally:
         worker.state.close()
+
+
+@pytest.mark.parametrize("count", [101, 128, 129])
+def test_catalogue_count_matches_shared_owner_contract(tmp_path, count):
+    config = _load(tmp_path, _discovery_config())
+    payload = _catalogue(*(_catalogue_bot(f"future_{i}") for i in range(count)))
+    if count > 128:
+        with pytest.raises(fleet.ConfigError, match="limit"):
+            fleet._catalogue_source_rows(payload, config)
+    else:
+        assert len(fleet._catalogue_source_rows(payload, config)) == count

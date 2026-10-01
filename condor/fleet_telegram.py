@@ -340,8 +340,10 @@ def load_config(path: str) -> WorkerConfig:
         ):
             raise ConfigError(f"bots[{index}] has an invalid or duplicate id")
         seen_ids.add(identity)
-        if len(label.strip()) > 120 or any(ord(char) < 32 for char in label) or not re.fullmatch(
-            r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}", bot_name.strip()
+        if (
+            len(label.strip()) > 120
+            or any(ord(char) < 32 for char in label)
+            or not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}", bot_name.strip())
         ):
             raise ConfigError(f"bots[{index}] has an invalid label or native bot name")
         if bot_name.strip() in seen_native_names:
@@ -816,7 +818,8 @@ class FleetTelegramWorker:
         self._retired_alert_labels: dict[str, str] = {}
         retired_raw = (
             self.state.get_value("catalogue_retired_alert_labels")
-            if config.discovery is not None else None
+            if config.discovery is not None
+            else None
         )
         if retired_raw is not None:
             try:
@@ -854,14 +857,14 @@ class FleetTelegramWorker:
             )
             if previous is not None:
                 if (
-                    (previous.native_bot_name not in seeds and previous.api_base_url != source.api_base_url)
-                    or any(
-                        key not in previous.endpoints
-                        or not _same_native_endpoint(
-                            previous.endpoints[key], source.endpoints[key]
-                        )
-                        for key in ("status", "orders", "fills", "executors")
+                    previous.native_bot_name not in seeds
+                    and previous.api_base_url != source.api_base_url
+                ) or any(
+                    key not in previous.endpoints
+                    or not _same_native_endpoint(
+                        previous.endpoints[key], source.endpoints[key]
                     )
+                    for key in ("status", "orders", "fills", "executors")
                 ):
                     raise ConfigError("catalogue changed a registered source identity")
                 # Keep its established URLs, quote label and dedup key.
@@ -870,8 +873,13 @@ class FleetTelegramWorker:
                 selected = source
                 additions.append(selected)
             collision = merged.get(selected.id)
-            if collision is not None and collision.native_bot_name != selected.native_bot_name:
-                raise ConfigError("catalogue alias conflicts with another registered source")
+            if (
+                collision is not None
+                and collision.native_bot_name != selected.native_bot_name
+            ):
+                raise ConfigError(
+                    "catalogue alias conflicts with another registered source"
+                )
             merged[selected.id] = selected
         ordered = tuple(merged[key] for key in sorted(merged))
         retired_labels = dict(self._retired_alert_labels)
@@ -907,7 +915,8 @@ class FleetTelegramWorker:
             self.config = replace(self.config, bots=sources)
             registered = {source.native_bot_name for source in discovered}
             self._missing_seed_ids = frozenset(
-                source.id for source in self._seed_sources
+                source.id
+                for source in self._seed_sources
                 if source.native_bot_name not in registered
             )
         except (json.JSONDecodeError, ConfigError, TypeError, ValueError):
@@ -962,13 +971,16 @@ class FleetTelegramWorker:
                 )
                 if len(cached.encode("utf-8")) > 256 * 1024:
                     raise ConfigError("catalogue cache exceeds its size limit")
-                retired_json = json.dumps(retired_labels, separators=(",", ":"), sort_keys=True)
+                retired_json = json.dumps(
+                    retired_labels, separators=(",", ":"), sort_keys=True
+                )
                 self.state.set_catalogue(cached, retired_json)
                 self.config = replace(self.config, bots=sources)
                 self._retired_alert_labels = retired_labels
                 registered = {source.native_bot_name for source in discovered}
                 self._missing_seed_ids = frozenset(
-                    source.id for source in self._seed_sources
+                    source.id
+                    for source in self._seed_sources
                     if source.native_bot_name not in registered
                 )
                 if self.trade_alerts is not None:
@@ -998,7 +1010,9 @@ class FleetTelegramWorker:
                 )
                 return False
 
-    def _with_catalogue_notice(self, view: views.View, source_id: str | None = None) -> views.View:
+    def _with_catalogue_notice(
+        self, view: views.View, source_id: str | None = None
+    ) -> views.View:
         if self.catalogue_error is None and not self._missing_seed_ids:
             return view
         if self.catalogue_error is not None:
@@ -1259,12 +1273,20 @@ class FleetTelegramWorker:
                 return
             for identity, key, recipient, rows in pending:
                 source = by_key.get(key)
-                label = source.label if source is not None else self._retired_alert_labels[key]
+                label = (
+                    source.label
+                    if source is not None
+                    else self._retired_alert_labels[key]
+                )
                 await self._bot.send_message(
                     chat_id=recipient,
                     text=render_fill_alert(label, rows),
                     parse_mode="HTML",
-                    reply_markup=self.keyboard("fills", source.id) if source is not None else None,
+                    reply_markup=(
+                        self.keyboard("fills", source.id)
+                        if source is not None
+                        else None
+                    ),
                 )
                 # Telegram has no idempotency key: ambiguous network/crash delivery can
                 # repeat delivery. Persist only confirmed success, never silently lose it.
@@ -1290,6 +1312,7 @@ class FleetTelegramWorker:
         semaphore = asyncio.Semaphore(MAX_TRADE_READ_CONCURRENCY)
 
         async with NativeReadClient(self.config) as client:
+
             async def read_source(key: str, source: BotSource):
                 async with semaphore:
                     path = urlsplit(source.endpoints["fills"])
@@ -1322,14 +1345,21 @@ class FleetTelegramWorker:
                             raise NativeReadError(
                                 "trade alert history reached 1000-fill coverage limit"
                             )
-                        self.trade_alerts.ingest(key, rows, self.config.authorized_user_ids)
-                        self.state._set("trade_alert_last_read:" + key, str(time.time()))
+                        self.trade_alerts.ingest(
+                            key, rows, self.config.authorized_user_ids
+                        )
+                        self.state._set(
+                            "trade_alert_last_read:" + key, str(time.time())
+                        )
                         self.state._set("trade_alert_error:" + key, "")
                     except (NativeReadError, ValueError) as exc:
                         details = (
                             safe_native_read_error(exc)
                             if isinstance(exc, NativeReadError)
-                            else {"reason": "fill_validation_error", "http_status": None}
+                            else {
+                                "reason": "fill_validation_error",
+                                "http_status": None,
+                            }
                         )
                         self.state._set(
                             "trade_alert_error:" + key,
@@ -1340,7 +1370,11 @@ class FleetTelegramWorker:
                             source.id,
                             type(exc).__name__,
                             details["reason"],
-                            details["http_status"] if details["http_status"] is not None else "none",
+                            (
+                                details["http_status"]
+                                if details["http_status"] is not None
+                                else "none"
+                            ),
                         )
                     await self._deliver_pending_trades(by_key)
             finally:

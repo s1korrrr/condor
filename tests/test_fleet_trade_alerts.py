@@ -128,7 +128,6 @@ def test_worker_delivers_retries_and_rejects_wrong_owner(tmp_path, monkeypatch):
     worker = fleet.FleetTelegramWorker(
         config, "unused", str(tmp_path / "state.sqlite"), bot=bot
     )
-    key = fleet.source_key(source)
     worker.state.db.execute("UPDATE trade_sources SET started=0")
     worker.state.db.commit()
     payload = {"api_projection": {"bot_name": "v2"}, "rows": [fill()]}

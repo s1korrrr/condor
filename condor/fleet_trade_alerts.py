@@ -104,11 +104,13 @@ def render_fill_alert(label, rows):
 class TradeAlerts:
     def __init__(self, db):
         self.db = db
-        db.executescript("""
+        db.executescript(
+            """
         CREATE TABLE IF NOT EXISTS trade_sources (source TEXT PRIMARY KEY, started REAL NOT NULL);
         CREATE TABLE IF NOT EXISTS trade_seen (source TEXT NOT NULL, fill TEXT NOT NULL, PRIMARY KEY(source,fill));
         CREATE TABLE IF NOT EXISTS trade_outbox (id INTEGER PRIMARY KEY, source TEXT NOT NULL, recipient INTEGER NOT NULL, rows_json TEXT NOT NULL, delivered INTEGER NOT NULL DEFAULT 0);
-        """)
+        """
+        )
 
     def start(self, source, now):
         with self.db:

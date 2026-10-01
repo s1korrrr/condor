@@ -1236,9 +1236,9 @@ def test_catalogue_accepts_owner_maximum_id_and_display_name(tmp_path):
     sources = fleet._catalogue_source_rows(
         _catalogue(_catalogue_bot(native_id, label)), config
     )
-    assert [(source.id, source.native_bot_name, source.label) for source in sources] == [
-        ("long", native_id, label)
-    ]
+    assert [
+        (source.id, source.native_bot_name, source.label) for source in sources
+    ] == [("long", native_id, label)]
 
 
 def test_discovery_without_seed_alias_retains_one_native_owner_and_cursor(
@@ -1265,7 +1265,10 @@ def test_discovery_without_seed_alias_retains_one_native_owner_and_cursor(
 
     monkeypatch.setattr(fleet, "NativeReadClient", ReadOnlyClient)
     worker = fleet.FleetTelegramWorker(
-        config, "test-token-not-sent", str(tmp_path / "state.sqlite"), bot=SimpleNamespace()
+        config,
+        "test-token-not-sent",
+        str(tmp_path / "state.sqlite"),
+        bot=SimpleNamespace(),
     )
     try:
         old_key = fleet.source_key(config.bots[0])
@@ -1273,12 +1276,24 @@ def test_discovery_without_seed_alias_retains_one_native_owner_and_cursor(
         assert [source.native_bot_name for source in worker.config.bots].count(
             "rsi_modular_v2"
         ) == 1
-        assert next(
-            source for source in worker.config.bots if source.native_bot_name == "rsi_modular_v2"
-        ).id == "v2"
-        assert fleet.source_key(next(
-            source for source in worker.config.bots if source.native_bot_name == "rsi_modular_v2"
-        )) == old_key
+        assert (
+            next(
+                source
+                for source in worker.config.bots
+                if source.native_bot_name == "rsi_modular_v2"
+            ).id
+            == "v2"
+        )
+        assert (
+            fleet.source_key(
+                next(
+                    source
+                    for source in worker.config.bots
+                    if source.native_bot_name == "rsi_modular_v2"
+                )
+            )
+            == old_key
+        )
     finally:
         worker.state.close()
 
@@ -1330,16 +1345,27 @@ def test_successful_catalogue_removal_retires_reads_but_drains_pending_outbox(
     monkeypatch.setattr(fleet, "NativeReadClient", ReadOnlyClient)
     state_path = str(tmp_path / "state.sqlite")
     bot = CapturingBot()
-    worker = fleet.FleetTelegramWorker(config, "test-token-not-sent", state_path, bot=bot)
+    worker = fleet.FleetTelegramWorker(
+        config, "test-token-not-sent", state_path, bot=bot
+    )
     try:
         assert asyncio.run(worker.refresh_catalogue(force=True)) is True
-        retired = next(source for source in worker.config.bots if source.id == "breakout_v4")
+        retired = next(
+            source for source in worker.config.bots if source.id == "breakout_v4"
+        )
         retired_key = fleet.source_key(retired)
         fill = {
-            "fill_id": "f1", "order_id": "o1", "bot_name": "breakout_v4",
-            "connector_name": "okx", "source_db_id": "db", "side": "buy",
-            "pair": "BTC-USDC", "exact_amount": "0.001", "exact_price": "100",
-            "exact_trade_fee_in_quote": "0.01", "timestamp": time.time() + 1,
+            "fill_id": "f1",
+            "order_id": "o1",
+            "bot_name": "breakout_v4",
+            "connector_name": "okx",
+            "source_db_id": "db",
+            "side": "buy",
+            "pair": "BTC-USDC",
+            "exact_amount": "0.001",
+            "exact_price": "100",
+            "exact_trade_fee_in_quote": "0.01",
+            "timestamp": time.time() + 1,
         }
         worker.state.db.execute(
             "INSERT INTO trade_outbox(source,recipient,rows_json) VALUES(?,?,?)",
@@ -1353,7 +1379,9 @@ def test_successful_catalogue_removal_retires_reads_but_drains_pending_outbox(
         assert worker.catalogue_error is None
         worker.state.close()
 
-        worker = fleet.FleetTelegramWorker(config, "test-token-not-sent", state_path, bot=bot)
+        worker = fleet.FleetTelegramWorker(
+            config, "test-token-not-sent", state_path, bot=bot
+        )
         assert [source.id for source in worker.config.bots] == ["v2", "v3"]
         assert worker._missing_seed_ids == {"v3"}
         status = asyncio.run(worker.render("status", "v3"))
@@ -1380,7 +1408,9 @@ def test_catalogue_count_matches_shared_owner_contract(tmp_path, count):
         assert len(fleet._catalogue_source_rows(payload, config)) == count
 
 
-def test_trade_alerts_deliver_pending_and_healthy_source_before_slow_read(tmp_path, monkeypatch):
+def test_trade_alerts_deliver_pending_and_healthy_source_before_slow_read(
+    tmp_path, monkeypatch
+):
     config = _source_config()
     config["trade_alerts"] = True
     for index in range(1, 10):
@@ -1403,10 +1433,17 @@ def test_trade_alerts_deliver_pending_and_healthy_source_before_slow_read(tmp_pa
 
     def alert_fill(source, fill_id):
         return {
-            "fill_id": fill_id, "order_id": fill_id, "bot_name": source.native_bot_name,
-            "connector_name": "okx", "source_db_id": "db", "side": "buy",
-            "pair": "BTC-USDC", "exact_amount": "0.001", "exact_price": "100",
-            "exact_trade_fee_in_quote": "0.01", "timestamp": time.time() + 1,
+            "fill_id": fill_id,
+            "order_id": fill_id,
+            "bot_name": source.native_bot_name,
+            "connector_name": "okx",
+            "source_db_id": "db",
+            "side": "buy",
+            "pair": "BTC-USDC",
+            "exact_amount": "0.001",
+            "exact_price": "100",
+            "exact_trade_fee_in_quote": "0.01",
+            "timestamp": time.time() + 1,
         }
 
     class CapturingBot:
@@ -1418,13 +1455,20 @@ def test_trade_alerts_deliver_pending_and_healthy_source_before_slow_read(tmp_pa
                 healthy_delivered.set()
 
     worker = fleet.FleetTelegramWorker(
-        loaded, "test-token-not-sent", str(tmp_path / "alerts.sqlite"), bot=CapturingBot()
+        loaded,
+        "test-token-not-sent",
+        str(tmp_path / "alerts.sqlite"),
+        bot=CapturingBot(),
     )
     source = loaded.bots[0]
     worker.state.db.execute("UPDATE trade_sources SET started=0")
     worker.state.db.execute(
         "INSERT INTO trade_outbox(source,recipient,rows_json) VALUES(?,?,?)",
-        (fleet.source_key(source), 12345, json.dumps([alert_fill(source, "preexisting")])),
+        (
+            fleet.source_key(source),
+            12345,
+            json.dumps([alert_fill(source, "preexisting")]),
+        ),
     )
     worker.state.db.commit()
 
@@ -1445,7 +1489,10 @@ def test_trade_alerts_deliver_pending_and_healthy_source_before_slow_read(tmp_pa
         try:
             if selected.id != "owner_1":
                 await release_slow.wait()
-                return {"api_projection": {"bot_name": selected.native_bot_name}, "rows": []}
+                return {
+                    "api_projection": {"bot_name": selected.native_bot_name},
+                    "rows": [],
+                }
             return {
                 "api_projection": {"bot_name": selected.native_bot_name},
                 "rows": [alert_fill(selected, "healthy-fill")],
@@ -1479,7 +1526,9 @@ def test_trade_alerts_deliver_pending_and_healthy_source_before_slow_read(tmp_pa
         worker.state.close()
 
 
-def test_trade_read_cancellation_closes_bounded_inflight_requests(tmp_path, monkeypatch):
+def test_trade_read_cancellation_closes_bounded_inflight_requests(
+    tmp_path, monkeypatch
+):
     config = _source_config()
     config["trade_alerts"] = True
     for index in range(1, 12):
@@ -1516,7 +1565,9 @@ def test_trade_read_cancellation_closes_bounded_inflight_requests(tmp_path, monk
 
     monkeypatch.setattr(fleet, "NativeReadClient", HoldingClient)
     worker = fleet.FleetTelegramWorker(
-        _load(tmp_path, config), "test-token-not-sent", str(tmp_path / "state.sqlite"),
+        _load(tmp_path, config),
+        "test-token-not-sent",
+        str(tmp_path / "state.sqlite"),
         bot=SimpleNamespace(),
     )
 

@@ -143,7 +143,9 @@ def test_message_chunks_keep_balanced_html_and_unicode_budget():
 def test_help_lists_full_catalogue_without_an_oversized_html_line():
     from types import SimpleNamespace
 
-    sources = [SimpleNamespace(id=f"bot_{index:03d}_" + "x" * 85) for index in range(100)]
+    sources = [
+        SimpleNamespace(id=f"bot_{index:03d}_" + "x" * 85) for index in range(100)
+    ]
     message = view.help_text(sources)
     chunks = view.chunks(message)
     assert len(chunks) > 1

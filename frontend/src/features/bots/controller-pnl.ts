@@ -21,9 +21,19 @@ export function projectControllerPnl(payload: unknown, bot: string, now: number)
   const identities = new Set<string>();
   const rows: ControllerPnlRow[] = [];
   for (const controller of current.controllers) {
-    if (typeof controller.controller_id !== 'string' || !controller.controller_id.trim() || identities.has(controller.controller_id) || typeof controller.trading_pair !== 'string' || !/^[A-Z0-9]+-[A-Z0-9]+$/.test(controller.trading_pair)) return unavailable('Controller identity or quote currency is ambiguous.');
+    if (typeof controller.controller_id !== 'string' || !controller.controller_id.trim() || identities.has(controller.controller_id)) return unavailable('Controller identity or quote currency is ambiguous.');
+    let pairs = typeof controller.trading_pair === 'string' && /^[A-Z0-9]+-[A-Z0-9]+$/.test(controller.trading_pair) ? [controller.trading_pair] : [];
+    const symbols = controller.custom_info?.symbols;
+    const entries = symbols && typeof symbols === 'object' && !Array.isArray(symbols) ? Object.entries(symbols) : [];
+    if (entries.length >= 2 || !pairs.length) {
+      if (entries.length < 2 || entries.some(([pair, row]) => !/^[A-Z0-9]+-[A-Z0-9]+$/.test(pair) || !row || typeof row !== 'object' || Array.isArray(row))) return unavailable('Controller identity or quote currency is ambiguous.');
+      pairs = entries.map(([pair]) => pair).sort();
+    }
+    const quotes = new Set(pairs.map(pair => pair.split('-')[1]));
+    if (quotes.size !== 1) return unavailable('Controller identity or quote currency is ambiguous.');
     identities.add(controller.controller_id);
-    rows.push({ id: controller.controller_id, pair: controller.trading_pair, quote: controller.trading_pair.split('-')[1], realized: finite(controller.realized_pnl_quote), unrealized: finite(controller.unrealized_pnl_quote), total: finite(controller.global_pnl_quote), volume: finite(controller.volume_traded) });
+    // A multi-symbol controller publishes one aggregate PnL. Do not duplicate it per pair.
+    rows.push({ id: controller.controller_id, pair: pairs.join(', '), quote: pairs[0].split('-')[1], realized: finite(controller.realized_pnl_quote), unrealized: finite(controller.unrealized_pnl_quote), total: finite(controller.global_pnl_quote), volume: finite(controller.volume_traded) });
   }
   rows.sort((a, b) => a.pair.localeCompare(b.pair) || a.id.localeCompare(b.id));
   if (rows.some(row => row.total !== null && row.realized !== null && row.unrealized !== null && Math.abs(row.total - row.realized - row.unrealized) > 0.000001)) return unavailable('Native controller PnL components do not reconcile.');

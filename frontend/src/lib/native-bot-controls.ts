@@ -17,7 +17,8 @@ export function nativeControlEligibility(value: unknown, botName: string, canCon
   const limit=typeof data.stale_after_seconds==='number' && Number.isFinite(data.stale_after_seconds) && data.stale_after_seconds>0 ? Math.min(data.stale_after_seconds,30)*1000 : 0;
   const fresh=(timestamp:unknown,scale=1000)=>typeof timestamp==='number' && Number.isFinite(timestamp) && limit>0 && now-timestamp*scale>=-5000 && now-timestamp*scale<limit;
   let reason='';
-  if (!canControl || (action==='start'&&!canStart)) reason='Native lifecycle controls are unavailable on this server.';
+  if ('allow_controls' in data && data.allow_controls!==true) reason='This bot is read-only on the shared server.';
+  else if (!canControl || (action==='start'&&!canStart)) reason='Native lifecycle controls are unavailable on this server.';
   else if (data.bot_name!==botName || data.source!=='native_mqtt' || data.execution_owner!=='native_hummingbot' || data.identity_verified!==true || typeof data.mqtt_instance_id!=='string' || !data.mqtt_instance_id) reason='Native process identity is unverified.';
   else if (lifecycle.valid!==true || lifecycle.blocked_reason || typeof lifecycle.boot_id!=='string' || !lifecycle.boot_id || typeof lifecycle.sequence!=='number' || !Number.isSafeInteger(lifecycle.sequence) || lifecycle.sequence<=0 || payload.boot_id!==lifecycle.boot_id || payload.instance_id!==data.mqtt_instance_id || payload.sequence!==lifecycle.sequence || payload.state!==state) reason='Verified owner lifecycle evidence is unavailable.';
   else if (observation.retained!==false || observation.replayed!==false || heartbeat.retained!==false || !fresh(observation.received_at) || !fresh(payload.generated_at) || !fresh(heartbeat.received_at) || !fresh(heartbeat.source_timestamp,0.001)) reason='Native lifecycle or heartbeat is stale. Await fresh owner telemetry.';

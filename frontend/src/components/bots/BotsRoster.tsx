@@ -7,7 +7,7 @@ import { transientReadFailure } from '@/lib/read-continuity';
 import { useServer } from '@/hooks/useServer';
 import { useServers } from '@/hooks/useServers';
 import { displayBotName, parseTradingVisualsSources, sourcesForServer, type TradingVisualsSource } from '@/features/trading-visuals/sources';
-import { buildBotPositionView, mixedOperationalLabel, type BotPairPosition } from '@/features/bots/position-view';
+import { buildBotPositionView, mixedOperationalLabel, openPairCount, type BotPairPosition } from '@/features/bots/position-view';
 import { projectExecutionStats, projectLifecycleDecisions, projectQuantBotSummary, projectQuantCycles, projectQuantExecution, projectRecordedDecisions, type ExecutionStats, type LifecycleDecision, type QuantBotSummary, type QuantCycles } from '@/features/bots/quant-roster';
 import { ASSET_COLORS, formatDecimal, formatSigned, metricTone } from '@/features/quant-ops/format';
 import { Heatmap, Histogram, LifecycleCounts, MetricCard, MultiLine, PanelFrame, RailBar, Sparkline, StateGlyph } from '@/features/quant-ops/primitives';
@@ -83,7 +83,7 @@ export function RosterObservation({ payload, bot, now, lifecycleStatus = null, s
   const quote: string | null = pairQuotes.size === 1 ? [...pairQuotes][0] ?? null : null;
   const owned = view.pairs.length > 0 && quote !== null && view.pairs.every(row => row.markValue !== null) ? view.pairs.reduce((total, row) => total + row.markValue!, 0) : null;
   const regimes = [...new Set((quant?.pairs ?? []).map(row => row.regime).filter(Boolean))] as string[];
-  const openPairs = view.pairs.filter(row => row.quantity !== null && formatDecimal(row.quantity, 18) !== '0').length;
+  const openPairs = openPairCount(view.pairs);
   const entryPairs = (quant?.pairs ?? []).filter(row => row.planMode === 'ENTRIES').length;
   const exitPairs = (quant?.pairs ?? []).filter(row => row.planMode === 'EXITS').length;
   const nextConditions = [...new Set<string>(view.pairs.flatMap((row: BotPairPosition) => typeof row.planNext === 'string' && row.planNext.length > 0 ? [row.planNext] : []))];
@@ -104,7 +104,7 @@ export function RosterObservation({ payload, bot, now, lifecycleStatus = null, s
     <div className="q-state-ribbon" data-panel-id="B11">
       <div><span>Signal regime</span><strong>{regimes.length ? <span className="q-pill" data-tone={tone(regimes.length > 1 ? 'mixed' : regimes[0])}>{regimes.length > 1 ? `MIXED · ${regimes.join(' / ')}` : regimes[0]}</span> : 'Not reported'}{quant?.lastKnown && <small className="q-block">last known</small>}</strong></div>
       <div><span>State</span><strong><span className="q-pill" data-tone={tone(mixedOperationalLabel(view.pairs))}>{mixedOperationalLabel(view.pairs)}</span></strong></div>
-      <div data-panel-id="B12"><span>Reported inventory value</span><strong>{amount(quant?.ownedValue.value ?? owned, quote)}</strong><small className="q-block">{openPairs} open pair{openPairs === 1 ? '' : 's'} · marked PnL {pairPnl === null ? 'Unknown basis' : amount(pairPnl, quote ?? '')}</small></div>
+      <div data-panel-id="B12"><span>Reported inventory value</span><strong>{amount(quant?.ownedValue.value ?? owned, quote)}</strong><small className="q-block">{openPairs === null ? 'Open pair count unavailable' : `${openPairs} open pair${openPairs === 1 ? '' : 's'}`} · marked PnL {pairPnl === null ? 'Unknown basis' : amount(pairPnl, quote ?? '')}</small></div>
       <div data-panel-id="B13"><span>DCA plan</span><strong>{quant?.pairs.length ? `${entryPairs} entering · ${exitPairs} exiting` : 'No plan reported'}</strong><small className="q-block">{quant?.pairs.length ? 'Per-pair target, anchor and next step in the ladder below' : 'Owner plan fields absent from this observation'}</small></div>
       <div data-panel-id="B14"><span>Inventory age</span><strong>{cycles?.inventoryAge.availability === 'available' ? `${ageLabel(cycles.inventoryAge.oldestSeconds)} oldest` : cycles ? 'No open lots' : 'Not readable'}</strong><small className="q-block">{cycles?.inventoryAge.availability === 'available' ? `value-weighted ${ageLabel(cycles.inventoryAge.weightedSeconds)} · ${cycles.inventoryAge.lots.length} lot${cycles.inventoryAge.lots.length === 1 ? '' : 's'} · from native fill times` : cycles?.inventoryAge.reason ?? 'Cycle projection not readable'}</small></div>
       <div data-panel-id="B15"><span>Trailing arm distance</span><strong>{nearest ? `${nearest.pair} ${(nearest.activation * 100).toFixed(2)}%` : trailing.length ? 'Armed' : 'No trailing executor'}</strong><small className="q-block">{nearest ? `to trailing activation · ${nearest.state ?? 'state unavailable'}` : 'Profit capture needs a marked intracycle path; the owner records only the trailing state.'}</small></div>
@@ -303,7 +303,7 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
   const singleQuote = commonMetricQuote(fleet.map(reads => reads.controller.quote));
   // Aggregates are published only when every registered bot is read and no wallet overlap can double count: one bot, or disjoint pairs.
   const disjoint = pairOwnershipIsDisjoint(fleet.map(reads => ({
-    pairs: [...(reads.quant?.pairs.map(pair => pair.pair) ?? []), ...reads.controller.rows.map(row => row.pair)],
+    pairs: [...(reads.quant?.pairs.map(pair => pair.pair) ?? []), ...(reads.view?.pairs.map(pair => pair.pair) ?? []), ...reads.controller.rows.map(row => row.pair)],
     qualified: reads.quant?.freshness === 'current' && reads.controller.rows.length > 0,
   })));
   const aggregateAllowed = complete && singleQuote !== null && (fleet.length === 1 || disjoint);
@@ -314,7 +314,7 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
   const dayAllowed = complete && dayQuote !== null && (soleOwner !== null || aggregateAllowed && dayQuote === singleQuote);
   const dayTotal = dayAllowed ? sum(fleet.map(reads => reads.day.change)) : null;
   const openExecutors = complete ? sum(fleet.map(reads => reads.cycles?.counts.open ?? null)) : null;
-  const openPositions = complete ? sum(fleet.map(reads => reads.view ? reads.view.pairs.filter(row => row.quantity !== null && formatDecimal(row.quantity, 18) !== '0').length : null)) : null;
+  const openPositions = complete ? sum(fleet.map(reads => reads.view ? openPairCount(reads.view.pairs) : null)) : null;
   const openOrders = complete ? sum(fleet.map(reads => reads.view && reads.view.orders !== null && reads.view.ordersStatus.complete === true ? reads.view.orders.length : null)) : null;
   const fillsTotal = complete ? sum(fleet.map(reads => reads.cycles?.stats.fillCount ?? null)) : null;
   const scoredTotal = complete ? sum(fleet.map(reads => reads.cycles?.stats.scored ?? null)) : null;
@@ -393,7 +393,7 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
           { id: 'bot', header: 'Bot', rowHeader: true, value: source => displayBotName(source.bot), size: 150 },
           { id: 'status', header: 'Status', value: source => readsByBot[`${source.server}:${source.bot}`]?.status ?? null, size: 130, cell: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return <><span className="q-pill" data-tone={tone(reads?.status ?? 'unknown')}>{stateLabel(reads?.status ?? null)}</span>{reads?.view?.stale && <small className="q-block">observation {ageLabel(reads.view.ageSeconds)} old</small>}</>; } },
           { id: 'controller', header: 'Controller', value: source => readsByBot[`${source.server}:${source.bot}`]?.quant?.controllerName ?? '—', size: 150 },
-          { id: 'positions', header: 'Positions', kind: 'number', value: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return reads?.view ? reads.view.pairs.filter(row => row.quantity !== null && formatDecimal(row.quantity, 18) !== '0').length : null; }, size: 90 },
+          { id: 'positions', header: 'Positions', kind: 'number', value: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return reads?.view ? openPairCount(reads.view.pairs) : null; }, size: 90 },
           { id: 'unrealized', header: 'Unrealized', kind: 'number', value: source => botPnlPart(readsByBot[`${source.server}:${source.bot}`], 'unrealized'), cell: source => { const value = botPnlPart(readsByBot[`${source.server}:${source.bot}`], 'unrealized'); return value == null ? 'Unknown basis' : formatSigned(value); }, className: source => { const tone = metricTone(botPnlPart(readsByBot[`${source.server}:${source.bot}`], 'unrealized')); return tone ? `q-${tone}` : undefined; }, size: 110 },
           { id: 'realized', header: 'Realized', kind: 'number', value: source => botPnlPart(readsByBot[`${source.server}:${source.bot}`], 'realized'), cell: source => { const value = botPnlPart(readsByBot[`${source.server}:${source.bot}`], 'realized'); return value == null ? '—' : formatSigned(value); }, className: source => { const tone = metricTone(botPnlPart(readsByBot[`${source.server}:${source.bot}`], 'realized')); return tone ? `q-${tone}` : undefined; }, size: 100 },
           { id: 'net', header: 'Controller PnL', kind: 'number', value: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return reads ? netFor(reads).value : null; }, cell: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return !reads || netFor(reads).value == null ? '—' : `${formatSigned(netFor(reads).value)} ${reads.controller.quote ?? ''}${netFor(reads).stale ? ' · stale' : ''}`; }, className: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; const tone = metricTone(reads ? netFor(reads).value : null); return tone ? `q-${tone}` : undefined; }, size: 130 },

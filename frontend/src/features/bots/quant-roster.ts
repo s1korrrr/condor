@@ -154,7 +154,8 @@ export function projectQuantBotSummary(value: unknown, bot: string, now: number)
   const observedMs = instant(observedAt);
   const sourceCurrent = observedMs !== null && observedMs <= now + 5_000 && now - observedMs < 30_000;
   const state = text(data.operational_label) ?? 'UNKNOWN';
-  const sourceAdmitted = sourceCurrent && executionMode !== 'unknown' && state !== 'UNKNOWN';
+  const sourceFresh = sourceCurrent && executionMode !== 'unknown';
+  const sourceAdmitted = sourceFresh && state !== 'UNKNOWN';
   const pairs: QuantPair[] = sourceAdmitted && Array.isArray(data.pairs) ? data.pairs.flatMap((item: unknown) => {
     const row = object(item), pair = text(row.pair);
     if (!pair || !/^[A-Z0-9]+-[A-Z0-9]+$/.test(pair)) return [];
@@ -174,7 +175,7 @@ export function projectQuantBotSummary(value: unknown, bot: string, now: number)
   const railsRow = object(data.risk_rails);
   const rails = sourceAdmitted && Array.isArray(railsRow.rails) ? railsRow.rails.map(rail).filter((row): row is RiskRail => row !== null) : [];
   // What the owner last published, verbatim, when it is no longer current. Rendered as stale, never as current.
-  const known = object(data.last_known);
+  const known = sourceFresh ? {} : object(data.last_known);
   const knownObserved = text(known.observed_at);
   const knownPairs: QuantPair[] = !sourceAdmitted && Array.isArray(known.pairs) ? known.pairs.flatMap((item: unknown) => {
     const row = object(item), pair = text(row.pair);
@@ -192,20 +193,24 @@ export function projectQuantBotSummary(value: unknown, bot: string, now: number)
   const knownRails = !sourceAdmitted && Array.isArray(knownRailsRow.rails) ? knownRailsRow.rails.map(rail).filter((row): row is RiskRail => row !== null) : [];
   const knownCounts = object(known.cycle_counts);
   const knownQuote = text(known.quote_currency);
-  const staleMetric = (value: unknown, reason = 'RUNTIME_NOT_CURRENT'): QuantMetric => ({ value: null, unit: knownQuote, availability: 'unavailable', freshness: 'stale', observedAt: knownObserved, feeBasis: null, metricScope: null, calculationVersion: null, reason, lastKnown: decimalText(value) });
+  const staleMetric = (value: unknown, reason = sourceFresh ? 'OPERATIONAL_STATE_UNAVAILABLE' : 'RUNTIME_NOT_CURRENT'): QuantMetric => ({
+    value: null, unit: sourceFresh ? null : knownQuote, availability: 'unavailable', freshness: sourceFresh ? 'unknown' : 'stale',
+    observedAt: sourceFresh ? observedAt : knownObserved, feeBasis: null, metricScope: null, calculationVersion: null,
+    reason, lastKnown: sourceFresh ? null : decimalText(value),
+  });
   const retainedPosition = sourceAdmitted ? metric(data.retained_position_net_pnl, now) : staleMetric(known.retained_position_net_pnl_value);
-  const retainedPositionNetPnl = retainedPosition.metricScope === 'retained_positions' && retainedPosition.calculationVersion === 'retained_position_v1'
+  const retainedPositionNetPnl = (sourceFresh && !sourceAdmitted) || (retainedPosition.metricScope === 'retained_positions' && retainedPosition.calculationVersion === 'retained_position_v1')
     ? retainedPosition
     : { ...retainedPosition, value: null, availability: 'unavailable', reason: 'RETAINED_POSITION_SCOPE_UNAVAILABLE' };
   const lastKnown = !sourceAdmitted && knownObserved !== null && (knownPairs.length > 0 || knownRails.length > 0);
   return {
     generatedAt: generatedAt!, observedAt: observedAt ?? knownObserved,
     executionMode, ownershipBasis,
-    freshness: sourceAdmitted ? 'current' : (observedAt ?? knownObserved) ? 'stale' : 'unknown',
+    freshness: sourceFresh ? 'current' : (observedAt ?? knownObserved) ? 'stale' : 'unknown',
     state: sourceAdmitted ? state : lastKnown ? text(known.operational_label) ?? 'UNKNOWN' : 'UNKNOWN',
     pairs: sourceAdmitted ? pairs : knownPairs,
     ownedValue: sourceAdmitted ? metric(data.owned_value, now) : staleMetric(known.owned_value_value),
-    netLifecycle: sourceAdmitted ? metric(data.net_lifecycle, now) : staleMetric(null, 'QUALIFIED_LIFECYCLE_SOURCE_UNAVAILABLE'),
+    netLifecycle: sourceAdmitted ? metric(data.net_lifecycle, now) : staleMetric(null, sourceFresh ? 'OPERATIONAL_STATE_UNAVAILABLE' : 'QUALIFIED_LIFECYCLE_SOURCE_UNAVAILABLE'),
     retainedPositionNetPnl,
     cycleCounts: {
       open: sourceAdmitted ? nonnegativeInteger(counts.open) : nonnegativeInteger(knownCounts.open),

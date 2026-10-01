@@ -75,3 +75,13 @@ test('fresh replacement boot releases old request without claiming its execution
   assert.equal(awaitingNativeOwnerTransition(submitted,{...eligible,allowed:false}),true);
   assert.equal(awaitingNativeOwnerTransition(null,eligible),false);
 });
+
+
+test('one shared server retains explicit per-bot read-only lifecycle permissions',()=>{
+  const value=observation();value.data.allow_controls=false;
+  const denied=nativeControlEligibility(value,'bot',true,true,now);
+  assert.equal(denied.allowed,false);
+  assert.match(denied.reason,/read-only/);
+  value.data.allow_controls=true;
+  assert.equal(nativeControlEligibility(value,'bot',true,true,now).allowed,true);
+});

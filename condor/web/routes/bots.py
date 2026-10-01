@@ -905,6 +905,20 @@ async def _native_lifecycle_router(
             503, "Native capability check unavailable; no command forwarded"
         ) from None
     capabilities = health.get("capabilities") if isinstance(health, dict) else None
+    bot_capabilities = None
+    if isinstance(health, dict) and "bot_capabilities" in health:
+        registered = health["bot_capabilities"]
+        bot_capabilities = (
+            registered.get(bot_name) if isinstance(registered, dict) else None
+        )
+        if action is not None and (
+            not isinstance(bot_capabilities, dict)
+            or bot_capabilities.get("native_controls_enabled") is not True
+            or bot_capabilities.get(f"native_{action}") is not True
+        ):
+            raise HTTPException(
+                409, "The selected bot does not allow this native lifecycle operation"
+            )
     if (
         not isinstance(health, dict)
         or health.get("status") != "ok"

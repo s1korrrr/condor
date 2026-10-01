@@ -2,8 +2,14 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {frontendModules} from './helpers/frontend-module.mjs';
 const {load}=frontendModules();
-const {buildBotPositionView,mixedOperationalLabel}=load('features/bots/position-view.ts');
+const {buildBotPositionView,mixedOperationalLabel,openPairCount}=load('features/bots/position-view.ts');
 const now=Date.parse('2026-09-10T20:00:00Z');
+test('unknown multi-pair inventory never becomes zero open positions',()=>{
+ assert.equal(openPairCount([{quantity:null},{quantity:null}]),null);
+ assert.equal(openPairCount([{quantity:'0.0000000001'},{quantity:null}]),null);
+ assert.equal(openPairCount([{quantity:'0'},{quantity:'0.0000000001'}]),1);
+ assert.equal(openPairCount([{quantity:'0'},{quantity:'0'}]),0);
+});
 test('September BTC and ETH receipts reconcile as net active plus retained units, not gross spend',()=>{
  for(const [pair,remaining,retained,total,price] of [['BTC-USDC','0.001675698368',0.000099934992,'0.00177563336',77666.3],['ETH-USDC','0.0440087648',7.984e-7,'0.0440095632',2483.57]]){
   const p=snapshot();p.runtime_status.controllers=[{controller_id:'c',pair,price_quote:price}];
@@ -56,6 +62,16 @@ test('legacy shared-pair controllers do not turn unattributed holdings into zero
 test('explicit failed enriched observation withholds bag values even with empty retained positions',()=>{const p=snapshot();p.runtime_status.controllers[0].observation_status='unavailable';p.runtime_status.controllers[0].custom_info={};p.runtime_status.positions_held=[];const row=buildBotPositionView(p,'ok_rsi',now).pairs[0];assert.equal(row.base,null);assert.equal(row.markValue,null);assert.equal(row.bagPnl,null);assert.match(row.inventorySource,/unavailable/);});
 
 test('duplicate controller identities cannot duplicate a bag',()=>{const p=snapshot();p.runtime_status.controllers.push(p.runtime_status.controllers[0]);assert.throws(()=>buildBotPositionView(p,'ok_rsi',now),/duplicated/);});
+
+test('explicit native multi-pair projection shows distinct pair identities without invented inventory',()=>{
+ const p=snapshot();p.runtime_status.controllers=['BTC-USDC','BNB-USDC'].map(pair=>({controller_id:'meridian',pair,pair_projection_source:'native_owner_symbols',observation_status:'unavailable',price_quote:null,custom_info:{}}));
+ p.runtime_status.positions_held=[];p.runtime_status.active_executors=[{executor_id:'e',controller_id:'meridian',pair:'BTC-USDC',side:'buy',executor_type:'position',remaining_position_amount_base:'0.01'}];
+ const view=buildBotPositionView(p,'ok_rsi',now);assert.deepEqual(view.pairs.map(row=>row.pair),['BTC-USDC','BNB-USDC']);
+ assert.equal(new Set(view.pairs.map(row=>row.id)).size,2);assert.equal(view.activeExecutorCount,1);
+ for(const row of view.pairs){assert.equal(row.quantity,null);assert.equal(row.markValue,null);assert.equal(row.bagPnl,null);assert.match(row.inventorySource,/unavailable/);}
+ p.runtime_status.controllers[1].pair='BTC-USDC';assert.throws(()=>buildBotPositionView(p,'ok_rsi',now),/duplicated/);
+ p.runtime_status.controllers[1].pair='BNB-USDC';delete p.runtime_status.controllers[1].pair_projection_source;assert.throws(()=>buildBotPositionView(p,'ok_rsi',now),/duplicated/);
+});
 
 test('actual owner snapshot fixture flows through the UI projection without changing quantities', {skip: !process.env.BOT_OBSERVATION_FIXTURE}, async()=>{const fs=await import('node:fs');const runtime=JSON.parse(fs.readFileSync(process.env.BOT_OBSERVATION_FIXTURE,'utf8'));const view=buildBotPositionView({runtime_status:runtime,monitoring:{bot_name:runtime.bot_name,stale_threshold_seconds:30}},runtime.bot_name,Date.parse(runtime.updated_at)+1000);assert.equal(view.activeOrderCount,1);assert.equal(view.pairs[0].base,10);assert.equal(view.pairs[0].markValue,125);assert.equal(view.pairs[0].bagPnl,35);assert.equal(view.pairs[0].pendingSells[0].remaining_amount_base,'2');assert.equal(view.pairs[0].executors[0].trailing_trigger_price,'12');assert.equal(view.orders[0].remaining_amount_base,'2');assert.equal(view.ordersStatus.complete,true);});
 

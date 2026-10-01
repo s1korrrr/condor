@@ -263,3 +263,66 @@ def test_native_redirect_is_an_unknown_outcome_not_a_second_request(
     assert response.status_code == 202
     assert response.json()["response"]["outcome_unknown"] is True
     assert len(calls) == 2
+
+
+@pytest.mark.parametrize("action", ["start", "stop"])
+@pytest.mark.parametrize(
+    "bot_capabilities",
+    [
+        None,
+        {},
+        {"other": {}},
+        {
+            "ok_rsi": {
+                "native_controls_enabled": False,
+                "native_start": True,
+                "native_stop": True,
+            }
+        },
+    ],
+)
+def test_shared_api_rejects_read_only_or_missing_bot_capability(
+    monkeypatch, action, bot_capabilities
+):
+    health = {
+        "status": "ok",
+        "profile": "native",
+        "capabilities": {
+            "native_controls_enabled": True,
+            "native_start": True,
+            "native_stop": True,
+        },
+        "bot_capabilities": bot_capabilities,
+    }
+    client, calls = make_client(monkeypatch, health=health)
+    result = client.post(
+        f"/api/v1/servers/native-ok-rsi/bots/ok_rsi/native/{action}", json={}
+    )
+    assert result.status_code == 409
+    assert [call[0] for call in calls] == ["GET"]
+
+
+@pytest.mark.parametrize("action", ["start", "stop"])
+def test_shared_api_preserves_allowed_owner_control(monkeypatch, action):
+    caps = {"native_controls_enabled": True, "native_start": True, "native_stop": True}
+    health = {
+        "status": "ok",
+        "profile": "native",
+        "capabilities": caps,
+        "bot_capabilities": {
+            "ok_rsi": caps,
+            "meridian_v3": {
+                "native_controls_enabled": False,
+                "native_start": False,
+                "native_stop": False,
+            },
+        },
+    }
+    client, calls = make_client(monkeypatch, health=health)
+    assert (
+        client.post(
+            f"/api/v1/servers/native-ok-rsi/bots/ok_rsi/native/{action}", json={}
+        ).status_code
+        == 200
+    )
+    assert [call[0] for call in calls] == ["GET", "POST"]

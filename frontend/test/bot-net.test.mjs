@@ -34,6 +34,7 @@ test('multi-bot PnL requires current, nonempty, disjoint pair ownership', () => 
   assert.equal(pairOwnershipIsDisjoint([{ qualified: true, pairs: ['BTC-USDC'] }, { qualified: true, pairs: ['BTC-USDC'] }]), false);
   assert.equal(pairOwnershipIsDisjoint([{ qualified: true, pairs: ['BTC-USDC'] }, { qualified: false, pairs: [] }]), false);
   assert.equal(pairOwnershipIsDisjoint([{ qualified: true, pairs: [] }, { qualified: true, pairs: ['ETH-USDC'] }]), false);
+  assert.equal(pairOwnershipIsDisjoint([{ qualified: true, pairs: ['BTC-USDC'] }, { qualified: true, pairs: ['BNB-USDC, BTC-USDC'] }]), false, 'a multi-pair display label with missing view/quant identities cannot establish disjoint ownership');
   assert.equal(pairOwnershipIsDisjoint([{ qualified: false, pairs: [] }]), true, 'one owner does not need a cross-owner overlap proof');
 });
 

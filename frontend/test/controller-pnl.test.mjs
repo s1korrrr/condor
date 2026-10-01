@@ -29,3 +29,20 @@ test('controller PnL requires complete current identity and reconciled component
   assert.equal(projectControllerPnl(payload({ bots: [{ ...payload().bots[0], num_controllers: 2 }] }), 'v2', now).total, null);
   assert.equal(projectControllerPnl(payload(), 'v2', now + 31_000).total, null, 'cached metrics expire by source timestamp');
 });
+
+test('multi-symbol owner PnL is counted once with an explicit common quote', () => {
+  const controller = { ...payload().controllers[0], trading_pair: '', custom_info: {
+    symbols: { 'BTC-USDC': { status: 'same_candle' }, 'BNB-USDC': { status: 'same_candle' } },
+  } };
+  const multi = payload({ controllers: [controller] });
+  const view = projectControllerPnl(multi, 'v2', now);
+  assert.equal(view.total, 2);
+  assert.equal(view.quote, 'USDC');
+  assert.equal(view.rows.length, 1, 'one aggregate owner report, not one PnL copy per pair');
+  assert.equal(view.rows[0].pair, 'BNB-USDC, BTC-USDC');
+  assert.equal(projectControllerPnl(payload({ controllers: [{ ...controller, trading_pair: 'BTC-USDC' }] }), 'v2', now).rows[0].pair, 'BNB-USDC, BTC-USDC', 'aggregate symbol scope takes precedence over a scalar pair');
+  for (const symbols of [{}, { 'BTC-USDC': {} }, { 'BTC-USDC': {}, 'BNB-USDT': {} }, { 'BTC-USDC': {}, invalid: {} }, { 'BTC-USDC': {}, 'BNB-USDC': null }]) {
+    assert.equal(projectControllerPnl(payload({ controllers: [{ ...controller, custom_info: { symbols } }] }), 'v2', now).total, null);
+  }
+  assert.equal(projectControllerPnl(multi, 'v2', now + 31_000).total, null);
+});

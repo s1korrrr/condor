@@ -49,6 +49,44 @@ test('wrong owner and future generated source are rejected; stale runtime cannot
   assert.equal(stale.ownedValue.value, null);
 });
 
+test('fresh UNKNOWN operational state is current without promoting unavailable or last-known metrics', () => {
+  const lastKnown = { observed_at: new Date(now - 60_000).toISOString(), operational_label: 'HOLDING',
+    owned_value_value: '777', pairs: [{ controller_id: 'old', pair: 'BTC-USDC', state: 'HOLDING' }],
+    risk_rails: { rails: [{ name: 'old_limit', limit: '50' }] },
+    wallet: { availability: 'available', currency: 'USDC', value: '999', observed_at: new Date(now - 60_000).toISOString() } };
+  const payload = summary({ data: {
+    operational_state: 'UNKNOWN', operational_label: 'UNKNOWN',
+    pairs: [{ controller_id: 'meridian', pair: 'BTC-USDC', units: '9', marked_value: '900' }],
+    owned_value: { value: '900', unit: 'USDC', availability: 'available', freshness: 'stale', observed_at: new Date(now - 60_000).toISOString() },
+    retained_position_net_pnl: { value: '12', unit: 'USDC', availability: 'available', freshness: 'stale', observed_at: new Date(now - 60_000).toISOString() },
+    risk_rails: { availability: 'available', rails: [{ name: 'old_limit', limit: '50' }] },
+    wallet: { availability: 'available', currency: 'USDC', value: '500', observed_at: new Date(now - 60_000).toISOString() },
+    last_known: lastKnown,
+  } });
+  const current = projectQuantBotSummary(payload, 'rsi_modular_v2', now);
+  assert.equal(current.freshness, 'current');
+  assert.equal(current.state, 'UNKNOWN');
+  assert.deepEqual(current.pairs, []);
+  assert.equal(current.ownedValue.value, null);
+  assert.equal(current.ownedValue.lastKnown, null);
+  assert.equal(current.ownedValue.reason, 'OPERATIONAL_STATE_UNAVAILABLE');
+  assert.equal(current.ownedValue.freshness, 'unknown');
+  assert.equal(current.retainedPositionNetPnl.value, null);
+  assert.equal(current.retainedPositionNetPnl.reason, 'OPERATIONAL_STATE_UNAVAILABLE');
+  assert.equal(current.riskRails.availability, 'unavailable');
+  assert.equal(current.wallet, null);
+  assert.equal(current.lastKnown, false);
+
+  payload.data.heartbeat = new Date(now - 31_000).toISOString();
+  const stale = projectQuantBotSummary(payload, 'rsi_modular_v2', now);
+  assert.equal(stale.freshness, 'stale');
+  assert.equal(stale.ownedValue.value, null);
+  assert.equal(stale.ownedValue.lastKnown, '777');
+  assert.equal(stale.pairs[0].pair, 'BTC-USDC');
+  assert.equal(stale.wallet.availability, 'stale');
+  assert.equal(stale.lastKnown, true);
+});
+
 test('recorded decisions require stable event identity and never synthesize rows from current conditions', () => {
   const payload = {
     schema_version: 'rsibot.quant_ops.v1', execution_authorized: false, generated_at: at,

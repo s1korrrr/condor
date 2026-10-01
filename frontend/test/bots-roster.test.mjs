@@ -24,6 +24,15 @@ test('wrong owner withholds amounts instead of borrowing another bot',()=>{
  assert.match(html,/does not match/);
  assert.doesNotMatch(html,/99 USDC|ETH-USDC/);
 });
+test('partial multi-pair report renders unavailable position count rather than a flat bot',()=>{
+ const payload=snapshot();
+ payload.runtime_status.controllers=['BTC-USDC','BNB-USDC'].map(pair=>({controller_id:'meridian',pair,pair_projection_source:'native_owner_symbols',observation_status:'unavailable',price_quote:null,custom_info:{}}));
+ const html=renderToStaticMarkup(React.createElement(RosterObservation,{payload,bot:'rsi_modular_v2',now}));
+ assert.match(html,/Open pair count unavailable/);
+ assert.doesNotMatch(html,/0 open pairs/);
+ assert.match(html,/BTC-USDC/);
+ assert.match(html,/BNB-USDC/);
+});
 
 test('current controller conditions are never rendered as recorded decisions',()=>{
  const html=renderToStaticMarkup(React.createElement(RosterObservation,{payload:snapshot(),bot:'rsi_modular_v2',now,events:{schema_version:'rsibot.quant_ops.v1',execution_authorized:false,generated_at:new Date(now).toISOString(),scope:{bot_key:'rsi_modular_v2',execution_mode:'live'},data:{bot_id:'rsi_modular_v2',current_conditions:[{pair:'FAKE-USD',action:'SYNTHETIC_STATUS'}]}}}));

@@ -32,6 +32,11 @@ export type BotPairPosition = {
   profitPrice: number | null; floor: number | null; peak: number | null; plannedReduction: number | null;
   quantity: string | null; inventoryEntries: Row[]; targetBase: number | null; planNext: string | null; executors: Row[]; pendingSells: Row[] | null; pendingSellsTruncated: boolean;
 };
+/** Unknown pair inventory prevents an exact bot position count. */
+export function openPairCount(pairs: { quantity: string | null }[]): number | null {
+  const amounts = pairs.map(row => nonnegative(row.quantity));
+  return amounts.some(value => value === null) ? null : amounts.filter(value => value! > 0).length;
+}
 /** With `allowStale`, an old (but well-formed, same-owner) observation is returned marked `stale` instead of thrown away.
  * Missing timestamps, clock skew and identity mismatches still throw: staleness is a state, corruption is not. */
 export function buildBotPositionView(payload: unknown, bot: string, now: number, options: { allowStale?: boolean } = {}) {
@@ -50,7 +55,11 @@ export function buildBotPositionView(payload: unknown, bot: string, now: number,
   if (!lifecycle) throw new Error('The executor lifecycle observation is incomplete.');
   if (executors.some(active => !lifecycle.some(row => row.executor_id === active.executor_id && row.pair === active.pair && row.controller_id === active.controller_id))) throw new Error('Active and lifecycle executor observations disagree.');
   const identities = controllers.map(row => text(row.controller_id)).filter(Boolean);
-  if (new Set(identities).size !== identities.length) throw new Error('Controller identity is duplicated in this observation.');
+  if (new Set(identities).size !== identities.length) {
+    const projected = controllers.every(row => row.pair_projection_source === 'native_owner_symbols' && text(row.controller_id) && text(row.pair) && /^[A-Z0-9]+-[A-Z0-9]+$/.test(String(row.pair)));
+    const scoped = new Set(controllers.map(row => `${row.controller_id}:${row.pair}`));
+    if (!projected || scoped.size !== controllers.length) throw new Error('Controller identity is duplicated in this observation.');
+  }
   const pairs: BotPairPosition[] = controllers.map((controller, index) => {
     const pair = text(controller.pair);
     if (!pair || !/^[A-Z0-9]+-[A-Z0-9]+$/.test(pair)) throw new Error('Controller pair identity is invalid.');
@@ -74,9 +83,9 @@ export function buildBotPositionView(payload: unknown, bot: string, now: number,
     const phase = text(episode.phase) ?? text(controller.state), targetBase = hasEpisode ? nonnegative(episode.target_base) : null;
     // This is an inventory objective. The execution owner still sizes, quantizes and gates each order.
     const plannedReduction = hasEpisode && ['DISTRIBUTE', 'EXIT'].includes(phase ?? '') && base !== null && targetBase !== null && targetBase <= base ? base - targetBase : null;
-    return { id: id ?? `${pair}:${index}`, controllerId: id, uniquePair: single, pair, baseAsset, quote, price, base, markValue, breakeven, bagPnl,
-      inventorySource: failedObservation ? 'Controller observation unavailable' : hasEpisode ? 'Controller episode bag' : 'Managed bot inventory · executor + retained', phase,
-      reason: failedObservation ? 'Controller observation unavailable' : text(episode.reason) ?? text(controller.gate), hold: text(episode.hold_reason), riskClear: typeof episode.exit_risk_clear === 'boolean' ? episode.exit_risk_clear : null,
+    return { id: controller.pair_projection_source === 'native_owner_symbols' ? `${id}:${pair}` : id ?? `${pair}:${index}`, controllerId: id, uniquePair: single, pair, baseAsset, quote, price, base, markValue, breakeven, bagPnl,
+      inventorySource: controller.pair_projection_source === 'native_owner_symbols' ? 'Per-pair inventory unavailable in native runtime report' : failedObservation ? 'Controller observation unavailable' : hasEpisode ? 'Controller episode bag' : 'Managed bot inventory · executor + retained', phase,
+      reason: controller.pair_projection_source === 'native_owner_symbols' ? 'Per-pair accounting unavailable in native runtime report' : failedObservation ? 'Controller observation unavailable' : text(episode.reason) ?? text(controller.gate), hold: text(episode.hold_reason), riskClear: typeof episode.exit_risk_clear === 'boolean' ? episode.exit_risk_clear : null,
       quantity, inventoryEntries: hasEpisode ? [] : held ?? [],
       profitPrice: positive(episode.minimum_profit_price), floor: positive(trail.floor), peak: positive(trail.peak), plannedReduction, targetBase,
       planNext: text(controller.plan_next), executors: active, pendingSells: rows(info.pending_sell_requests)?.map(request => ({ ...request, request_state: request.termination_requested === true ? 'Cancellation requested' : positive(request.expires_at) !== null && now >= positive(request.expires_at)! * 1000 ? 'Expiry reached; awaiting owner' : request.termination_requested === false ? 'Pending owner request' : 'Request state unavailable' })) ?? null, pendingSellsTruncated: info.pending_sell_requests_truncated === true };

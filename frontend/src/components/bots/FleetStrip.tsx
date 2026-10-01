@@ -8,6 +8,7 @@ import { SparkChart } from '@/features/quant-ops/kit/charts';
 import type { PanelState } from '@/features/quant-ops/panel-state';
 import type { OwnerReads } from './BotsRoster';
 import { winRateText, type BotNet } from '@/features/bots/bot-net';
+import { openPairCount } from '@/features/bots/position-view';
 import './fleet-strip.css';
 
 const tone = (value: string | null | undefined) => (value ?? 'unknown').toLowerCase().split(/[\s:]/)[0];
@@ -17,11 +18,11 @@ const toneClass = (value: number | string | null | undefined) => metricTone(valu
 function FleetBotCard({ source, reads, status, color, net }: { source: TradingVisualsSource; reads: OwnerReads | undefined; status: string | null; color: string; net: BotNet | null }) {
   const quant = reads?.quant ?? null;
   const quote = reads?.controller.quote ?? null;
-  const pairs = quant?.pairs ?? [];
-  const openPairs = reads?.view ? reads.view.pairs.filter(row => row.quantity !== null && formatDecimal(row.quantity, 18) !== '0').length : null;
+  const pairs = quant?.pairs.length ? quant.pairs : (reads?.view?.pairs ?? []).map(row => ({ controllerId: row.controllerId, pair: row.pair, state: row.phase, planMode: null, planNext: row.planNext, nextCondition: row.reason, unrealized: row.bagPnl === null ? null : String(row.bagPnl) }));
+  const openPairs = reads?.view ? openPairCount(reads.view.pairs) : null;
   const owned = quant?.ownedValue.value ?? quant?.ownedValue.lastKnown ?? null;
   const orders = reads?.view && reads.view.orders !== null && reads.view.ordersStatus.complete === true ? reads.view.orders.length : null;
-  const freshness: PanelState = !reads ? { kind: 'collecting', reason: 'Reading owner observations' } : quant?.freshness === 'current' && !reads.view?.stale ? { kind: 'fresh', observedAt: quant.observedAt } : { kind: 'stale', observedAt: quant?.observedAt ?? null, reason: 'Owner observation is not current; last-known values shown.' };
+  const freshness: PanelState = !reads ? { kind: 'collecting', reason: 'Reading owner observations' } : !reads.view ? { kind: 'unavailable', reason: 'Runtime observation is unavailable' } : quant?.freshness === 'current' && reads.view !== null && !reads.view.stale ? { kind: 'fresh', observedAt: quant.observedAt } : { kind: 'stale', observedAt: quant?.observedAt ?? null, reason: 'Owner observation is not current; last-known values shown.' };
   const cycles = reads?.cycles ?? null;
   const execution = reads?.execution ?? null;
   const points = reads?.day.points ?? [];

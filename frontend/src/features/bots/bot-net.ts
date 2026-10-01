@@ -33,7 +33,7 @@ export function ownerReadsFingerprint(reads: unknown): string {
 /** Multi-owner PnL sums need fresh, nonempty pair ownership from every bot. */
 export function pairOwnershipIsDisjoint(owners: readonly { pairs: readonly string[]; qualified: boolean }[]): boolean {
   if (owners.length <= 1) return true;
-  if (owners.some(owner => !owner.qualified || owner.pairs.length === 0)) return false;
+  if (owners.some(owner => !owner.qualified || owner.pairs.length === 0 || owner.pairs.some(pair => typeof pair !== 'string' || !/^[A-Z0-9]+-[A-Z0-9]+$/.test(pair)))) return false;
   const seen = new Set<string>();
   for (const owner of owners) {
     const ownerPairs = new Set(owner.pairs);

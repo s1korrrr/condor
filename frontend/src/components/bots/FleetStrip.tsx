@@ -17,7 +17,7 @@ const label = (value: string | null | undefined) => value?.replaceAll('_', ' ') 
 const toneClass = (value: number | string | null | undefined) => metricTone(value) ? `q-${metricTone(value)}` : undefined;
 
 export function fleetInput(reads: OwnerReads, name = displayBotName(reads.bot)): FleetBotInput {
-  return { bot: reads.bot, name, status: reads.status, view: reads.view, quant: reads.quant, cycles: reads.cycles, execution: reads.execution, health: reads.health };
+  return { bot: reads.bot, name, status: reads.status, view: reads.view, quant: reads.quant, cycles: reads.cycles, execution: reads.execution, health: reads.health, fillTotals: reads.fillTotals ?? null };
 }
 
 /** One compact card per registered bot: identity, lifecycle, operational counters and a small PnL chip (full PnL stays in Capital). */

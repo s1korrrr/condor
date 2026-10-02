@@ -8,7 +8,7 @@ import { useServer } from '@/hooks/useServer';
 import { useServers } from '@/hooks/useServers';
 import { displayBotName, parseTradingVisualsSources, sourcesForServer, type TradingVisualsSource } from '@/features/trading-visuals/sources';
 import { buildBotPositionView, mixedOperationalLabel, openPairCount, type BotPairPosition } from '@/features/bots/position-view';
-import { projectExecutionStats, projectLifecycleDecisions, projectQuantBotSummary, projectQuantCycles, projectQuantExecution, projectRecordedDecisions, type ExecutionStats, type LifecycleDecision, type QuantBotSummary, type QuantCycles } from '@/features/bots/quant-roster';
+import { projectExecutionStats, projectFills, projectLifecycleDecisions, projectQuantBotSummary, projectQuantCycles, projectQuantExecution, projectRecordedDecisions, type ExecutionStats, type LifecycleDecision, type QuantBotSummary, type QuantCycles } from '@/features/bots/quant-roster';
 import { formatDecimal, formatSigned, metricTone } from '@/features/quant-ops/format';
 import { Heatmap, Histogram, LifecycleCounts, MetricCard, PanelFrame, RailBar, StateGlyph } from '@/features/quant-ops/primitives';
 import { TileGrid } from '@/features/quant-ops/kit/grid';
@@ -17,7 +17,7 @@ import { FleetStrip, fleetInput } from './FleetStrip';
 import { StrategyChartsSlot } from './StrategyChartsSlot';
 import { botChartsHref } from '@/features/bots/chart-links';
 import { projectFleetHealth, type FleetHealth } from '@/features/bots/fleet-health';
-import { durationLabel, projectBotStats, projectFleetTiles, tileNote, type FleetBotInput } from '@/features/bots/fleet-tiles';
+import { durationLabel, fillTotals, projectBotStats, projectFleetTiles, tileNote, type FleetBotInput, type FillTotals } from '@/features/bots/fleet-tiles';
 import { pnlSeries, type PnlSeries } from '@/features/bots/pnl-series';
 import { botNet, botSourceFreshness, ownerReadsFingerprint, winRateText } from '@/features/bots/bot-net';
 import { projectControllerPnl } from '@/features/bots/controller-pnl';
@@ -63,6 +63,7 @@ export type OwnerReads = {
   quant: QuantBotSummary | null; cycles: QuantCycles | null; execution: ExecutionStats | null; decisions: LifecycleDecision[];
   /** Stack heartbeat and service restarts from the operations read; null until that read lands. */
   health: FleetHealth | null;
+  fillTotals: FillTotals | null;
   day: PnlSeries; week: PnlSeries;
 };
 
@@ -215,6 +216,7 @@ function useOwnerReads(source: TradingVisualsSource, page: BotsPageResponse | un
   const cycles = useQuery({ queryKey: ['native-quant-cycles', source.server, source.bot], queryFn: ({ signal }) => readOptional(`/api/v1/trading-visuals/quant-cycles?bot=${encoded}`, signal), refetchInterval: 30_000, retry: false });
   const day = useQuery({ queryKey: ['native-pnl-history', source.server, source.bot, '1D'], queryFn: ({ signal }) => readOptional(`/api/v1/servers/${encodeURIComponent(source.server)}/bots/${encoded}/performance-history?range=1D`, signal), refetchInterval: 30_000, retry: false });
   const week = useQuery({ queryKey: ['native-pnl-history', source.server, source.bot, '1W'], queryFn: ({ signal }) => readOptional(`/api/v1/servers/${encodeURIComponent(source.server)}/bots/${encoded}/performance-history?range=1W`, signal), refetchInterval: 60_000, retry: false });
+  const fills = useQuery({ queryKey: ['native-fill-ledger', source.server, source.bot], queryFn: ({ signal }) => readOptional(`/api/v1/trading-visuals/fills?bot=${encoded}&limit=500`, signal), refetchInterval: 60_000, retry: false });
   const operations = useQuery({ queryKey: ['native-operations', source.server, source.bot], queryFn: ({ signal }) => readOptional(`/api/v1/trading-visuals/operations?bot=${encoded}`, signal), refetchInterval: 15_000, retry: false });
   const owner = page?.bots.find(item => item.bot_name === source.bot);
   let view: OwnerReads['view'] = null;
@@ -227,6 +229,7 @@ function useOwnerReads(source: TradingVisualsSource, page: BotsPageResponse | un
     execution: projectExecutionStats(execution.data?.payload, source.bot),
     decisions: projectLifecycleDecisions(events.data?.payload, source.bot, Math.max(now, events.dataUpdatedAt)) ?? [],
     health: projectFleetHealth(operations.data?.payload, source.bot, Math.max(now, operations.dataUpdatedAt)),
+    fillTotals: fillTotals(projectFills(fills.data?.payload, source.bot)),
     day: pnlSeries(day.data?.payload, source.bot, now, '1D'), week: pnlSeries(week.data?.payload, source.bot, now, '1W'),
   };
   return { reads, raw: { bootstrap, summary: summary.data, events: events.data, execution: execution.data, cycles: cycles.data } };

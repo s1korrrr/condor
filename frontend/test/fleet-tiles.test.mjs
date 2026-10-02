@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
 const { load } = frontendModules();
-const { projectFleetTiles, projectBotStats, tileNote, durationLabel } = load('features/bots/fleet-tiles.ts');
+const { projectFleetTiles, projectBotStats, tileNote, durationLabel, fillTotals } = load('features/bots/fleet-tiles.ts');
 const { projectFleetHealth, stackRestarts } = load('features/bots/fleet-health.ts');
 const now = Date.parse('2026-10-01T12:00:00Z');
 const ago = seconds => new Date(now - seconds * 1000).toISOString();
@@ -139,4 +139,23 @@ test('durations are compact and never negative', () => {
   assert.deepEqual([4, 125, 7200, 172800].map(durationLabel), ['4s', '2m', '2.0h', '2.0d']);
   assert.equal(durationLabel(-1), '—');
   assert.equal(durationLabel(null), '—');
+});
+
+test('a bot without scored cycles still counts its recorded fills, fees and volume', () => {
+  const rows = [
+    { fee: '0.05', volume: '50', pair: 'ETH-USDC', timestamp: ago(3000) },
+    { fee: '0.07', volume: '70', pair: 'BTC-USDC', timestamp: ago(9000) },
+  ];
+  const totals = fillTotals(rows);
+  assert.deepEqual({ count: totals.count, quote: totals.quote }, { count: 2, quote: 'USDC' });
+  assert.ok(Math.abs(totals.fees - 0.12) < 1e-9 && totals.volume === 120);
+  assert.equal(fillTotals([]), null);
+  assert.equal(fillTotals([{ ...rows[0], fee: null }, rows[1]]).fees, null, 'a partial ledger is never presented as complete');
+  const legacy = projectBotStats(bot('v1', { cycles: null, execution: null, quant: null, fillTotals: totals }), now);
+  assert.equal(legacy.fills, 2);
+  assert.equal(legacy.quote, 'USDC');
+  assert.ok(Math.abs(legacy.fees - 0.12) < 1e-9);
+  const tiles = byId(projectFleetTiles([bot('v2'), bot('v1', { cycles: null, execution: null, quant: null, fillTotals: totals })], now));
+  assert.equal(tiles.B05.value, '22', 'V2 fills (20) plus the legacy bot ledger (2)');
+  noUnavailable(Object.values(tiles));
 });

@@ -19,7 +19,20 @@ export type FleetBotInput = {
   cycles: QuantCycles | null;
   execution: ExecutionStats | null;
   health: FleetHealth | null;
+  /** Lifetime totals from the owner's fill ledger; used only where the owner publishes no scored cycles (older reporting). */
+  fillTotals?: FillTotals | null;
 };
+
+export type FillTotals = { count: number; fees: number | null; volume: number | null; quote: string | null; sinceMs: number | null };
+
+/** Sums an owner's recorded fills. Fees and volume stay null when any row lacks a number, so a partial ledger is never presented as complete. */
+export function fillTotals(rows: readonly { fee: string | null; volume: string | null; pair: string | null; timestamp: string | null }[]): FillTotals | null {
+  if (!rows.length) return null;
+  const quotes = new Set(rows.map(row => (row.pair ?? '').split('-')[1]).filter(Boolean));
+  const sum = (pick: (row: (typeof rows)[number]) => string | null) => rows.every(row => finite(pick(row)) !== null) ? rows.reduce((total, row) => total + (finite(pick(row)) ?? 0), 0) : null;
+  const times = rows.map(row => at(row.timestamp)).filter((value): value is number => value !== null);
+  return { count: rows.length, fees: sum(row => row.fee), volume: sum(row => row.volume), quote: quotes.size === 1 ? [...quotes][0] : null, sinceMs: times.length ? Math.min(...times) : null };
+}
 
 export type BotStats = {
   bot: string; name: string; status: string | null;
@@ -87,7 +100,7 @@ export function projectBotStats(input: FleetBotInput, now: number): BotStats {
     held, registered, orders,
     pendingEntries: cycles ? cycles.counts.entry_pending ?? 0 : null,
     unfilledEntries: cycles ? cycles.counts.entry_unfilled ?? 0 : null,
-    fills: stats?.fillCount ?? fillRows, opened24h, closed24h,
+    fills: stats?.fillCount ?? fillRows ?? input.fillTotals?.count ?? null, opened24h, closed24h,
     scored: stats ? stats.scored : null, wins: stats ? stats.wins : null, losses: stats ? stats.losses : null, breakeven: stats ? stats.breakeven : null,
     minSample: stats?.minSample ?? 0,
     avgHoldSeconds: stats && stats.scored > 0 ? stats.averageHoldingSeconds : null,
@@ -95,7 +108,7 @@ export function projectBotStats(input: FleetBotInput, now: number): BotStats {
     ordersCreated: created, ordersFilled: stage(execution, 'orders_filled'), ordersCanceled: stage(execution, 'orders_canceled'), ordersRejected: stage(execution, 'orders_rejected'),
     fillRatio: execution?.fillRatio ?? null, makers: execution?.makerCount ?? null, takers: execution?.takerCount ?? null,
     orderSampleSufficient: execution?.orderSampleSufficient === true,
-    fees: stats ? finite(stats.fees) : null, volume: stats ? finite(stats.grossVolume) : null, quote: cycles?.quote ?? null,
+    fees: stats ? finite(stats.fees) : input.fillTotals?.fees ?? null, volume: stats ? finite(stats.grossVolume) : input.fillTotals?.volume ?? null, quote: cycles?.quote ?? input.fillTotals?.quote ?? null,
     heartbeatAgeSeconds: age, heartbeatCurrent: quant?.freshness === 'current',
     stackHeartbeat: health?.heartbeat.state ?? null, bootId: health?.heartbeat.bootId ?? null, sequence: health?.heartbeat.sequence ?? null,
   };

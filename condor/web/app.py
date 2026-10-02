@@ -33,6 +33,7 @@ from condor.web.routes import (
     performance_history,
     portfolio,
     positions,
+    push,
     reports,
     research,
     routines,
@@ -140,6 +141,7 @@ def create_app() -> FastAPI:
     app.include_router(conversations.router, prefix="/api/v1")
     app.include_router(transcribe.router, prefix="/api/v1")
     app.include_router(trading_visuals.router, prefix="/api/v1")
+    app.include_router(push.router, prefix="/api/v1")
 
     # Report bodies are NOT mounted here. They used to be served by an
     # unauthenticated ``/reports/{filename:path}`` route, which made every

@@ -17,7 +17,7 @@ test('authorized identities are unique registered names; a fourth bot does not n
  assert.throws(()=>sources.parseTradingVisualsSources({sources:[{bot:'bad bot',server:'native-ok-rsi'}]}),/invalid or duplicated/);
 });
 test('display names keep V1 nicknames and leave registered V2 ids intact',()=>{
- assert.equal(sources.displayBotName('ok_rsi'),'Main');
+ assert.equal(sources.displayBotName('ok_rsi'),'V1 · ok_rsi');
  assert.equal(sources.displayBotName('rsi_modular_v2'),'rsi_modular_v2');
  assert.equal(sources.displayBotName('breakout_paper_v2'),'breakout_paper_v2');
 });

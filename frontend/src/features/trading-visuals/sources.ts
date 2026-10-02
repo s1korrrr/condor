@@ -2,7 +2,7 @@ export type TradingVisualsSource = { bot: string; server: string };
 export type ServerAlias = { name: string; host?: string; port?: number };
 
 const V1_DISPLAY: Record<string, string> = {
-  ok_rsi: 'Main',
+  ok_rsi: 'V1 · ok_rsi',
   ok_rsi_sui_sell_only: 'SUI · Sell only',
   rsi_v5: 'RSI v5',
 };

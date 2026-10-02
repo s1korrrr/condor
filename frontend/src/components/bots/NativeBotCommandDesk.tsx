@@ -13,7 +13,7 @@ import './command-desk.css';
 import { botChartsHref } from '@/features/bots/chart-links';
 
 type Section = 'positions' | 'orders' | 'controllers' | 'trips';
-const ownerName = (bot: string) => bot === 'ok_rsi' ? 'Main' : bot === 'ok_rsi_sui_sell_only' ? 'SUI · Sell only' : bot;
+const ownerName = (bot: string) => bot === 'ok_rsi' ? 'V1 · ok_rsi' : bot === 'ok_rsi_sui_sell_only' ? 'SUI · Sell only' : bot;
 const amount = (value: unknown, unit = '') => {
   const n = numeric(value);
   return n === null ? 'Unavailable' : `${n.toLocaleString(undefined, { maximumFractionDigits: 8 })}${unit ? ` ${unit}` : ''}`;

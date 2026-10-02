@@ -33,6 +33,15 @@ test('oversized response streams and non-JSON failures remain observable', async
   await assert.rejects(h.boundedJson(new Response('<html>',{status:502})));
 });
 
+test('FastAPI string detail on a failed stored read preserves a safe status error', async () => {
+  const h=sourceHarness([]);
+  const error = await h.boundedJson(new Response(JSON.stringify({detail:'Market Picture source returned an error'}),{status:502}))
+    .then(() => null, failure => failure);
+  assert.match(error.message,/Observation source unavailable \(502\)/);
+  assert.equal(error.status,502);
+  assert.doesNotMatch(error.message,/Market Picture source returned an error/);
+});
+
 test('a partial outage retains validated components only from the same immutable frame', async () => {
   const h=sourceHarness([new Response(null,{status:304}),new Response('{}',{status:503}),response({items:[]}),response({items:[],next_cursor:null})]);
   const prior={...previous({events:'temporary'}),history:[{time:123}],components:{history:{items:[{time:123}]}}};

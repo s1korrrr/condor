@@ -14,9 +14,9 @@ export type PanelState = {
 export const PANEL_STATE_LABEL: Record<PanelStateKind, string> = {
   fresh: 'Fresh',
   stale: 'Stale',
-  collecting: 'Collecting',
+  collecting: 'Sampling',
   incomplete: 'Incomplete',
-  unavailable: 'Unavailable',
+  unavailable: 'No data',
   unauthorized: 'Unauthorized',
   error: 'Error',
 };
@@ -29,4 +29,18 @@ export function describePanelState(state: PanelState): string {
   if (state.observedAt) parts.push(`observed ${state.observedAt.replace('T', ' ').slice(0, 19)} UTC`);
   if (state.reason) parts.push(state.reason);
   return parts.join(' · ');
+}
+
+/**
+ * State for a panel built from rows. Owners whose heartbeat is not current fall back to last-known rows, and
+ * those rows must read as stale rather than fresh; an empty panel is unavailable, never "fresh with zero rows".
+ */
+export function rowsPanelState(count: number, emptyReason: string, staleOwners: { name: string; observedAt: string | null }[]): PanelState {
+  if (!count) return { kind: 'unavailable', reason: emptyReason };
+  if (!staleOwners.length) return { kind: 'fresh' };
+  const oldest = staleOwners.map(owner => owner.observedAt).filter((at): at is string => Boolean(at)).sort()[0] ?? null;
+  return {
+    kind: 'stale', observedAt: oldest,
+    reason: `Last-known rows: ${staleOwners.map(owner => owner.name).join(', ')} ${staleOwners.length === 1 ? 'has' : 'have'} no current owner heartbeat.`,
+  };
 }

@@ -1,7 +1,18 @@
+/**
+ * Text for a JS number that came out of float math or a float JSON field (mark * units, a - b, cost / base).
+ * A double holds 15 significant digits; the rest is binary noise such as 2672.8763299999996 or 0.30000000000000004.
+ * Exact owner decimals arrive as strings and never pass through here.
+ */
+export function cleanFloat(value: number): string {
+  return String(Number(value.toPrecision(15)));
+}
+
 /** Decimal display without converting financial values through binary floating point. */
 export function decimalParts(value: string | number | null | undefined): { negative: boolean; whole: string; fraction: string } | null {
   if (value == null || value === '') return null;
-  const match = /^([+-]?)(\d+)(?:\.(\d*))?(?:e([+-]?\d+))?$/i.exec(String(value));
+  // Numbers are float-math results (see cleanFloat); strings stay exact.
+  const text = typeof value === 'number' && Number.isFinite(value) ? cleanFloat(value) : String(value);
+  const match = /^([+-]?)(\d+)(?:\.(\d*))?(?:e([+-]?\d+))?$/i.exec(text);
   if (!match) return null;
   const exponent = Number(match[4] ?? 0);
   if (!Number.isInteger(exponent) || Math.abs(exponent) > 1000) return null;

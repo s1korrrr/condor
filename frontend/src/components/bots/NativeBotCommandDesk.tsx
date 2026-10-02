@@ -10,6 +10,7 @@ import { buildBotPositionView, partitionBotInventory, numeric, type BotPairPosit
 import { loadBotFillTrips, openTripForPair, tripOutcomeLabel, type FillTrip } from '@/features/bots/fill-trips';
 import { PairPosition, PriceLevels, ObservationTable } from './NativeBotPositions';
 import './command-desk.css';
+import { botChartsHref } from '@/features/bots/chart-links';
 
 type Section = 'positions' | 'orders' | 'controllers' | 'trips';
 const ownerName = (bot: string) => bot === 'ok_rsi' ? 'Main' : bot === 'ok_rsi_sui_sell_only' ? 'SUI · Sell only' : bot;
@@ -36,7 +37,7 @@ function PositionChoices({ rows, selected, onSelect }: { rows: BotPairPosition[]
 }
 
 function TripReceipt({ row, bot, trip }: { row: BotPairPosition; bot: string; trip?: FillTrip }) {
-  const fills = `/trading-visuals?bot=${encodeURIComponent(bot)}&pair=${encodeURIComponent(row.pair)}&view=activity&record=fills`;
+  const fills = botChartsHref(bot, row.pair, 'activity', 'fills');
   if (trip?.outcome === 'unknown_cost') {
     return <div className="bot-desk__receipts"><h4>Buy/sell trip</h4><p>Acquisition cost is unknown. Realized PnL is unavailable{trip.pnlUnavailableReason ? ` (${trip.pnlUnavailableReason.replaceAll('_', ' ')})` : ''}.</p><Link to={fills}>Inspect recorded fills ↗</Link></div>;
   }

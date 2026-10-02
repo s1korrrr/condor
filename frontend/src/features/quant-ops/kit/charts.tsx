@@ -26,8 +26,10 @@ function TooltipCard({ title, rows }: { title: string; rows: { key: string; labe
 const toneClass = (value: number | null, signed: boolean) => !signed || value == null || value === 0 ? undefined : value > 0 ? 'q-positive' : 'q-negative';
 
 /** Hoverable multi-series time chart with left/right axes, gap-preserving lines and optional markers. */
-export function TimeSeriesChart({ series, height = 220, markers = [], highlight, leftFormat = plain, rightFormat = plain, zeroLine = false, includeZero = false, signed = false, ariaLabel, emptyText = 'No observations in this window.' }: {
+export function TimeSeriesChart({ series, height = 220, markers = [], highlight, domains, leftFormat = plain, rightFormat = plain, zeroLine = false, includeZero = false, signed = false, ariaLabel, emptyText = 'No observations in this window.' }: {
   series: ChartSeries[]; height?: number; markers?: ChartMarker[]; highlight?: { time: number; value: number; label: string; color?: string } | null;
+  /** Fixed value ranges per axis (for example breadth pressure -3..3 beside a 0..100% share), instead of the padded data range. */
+  domains?: { left?: [number, number]; right?: [number, number] };
   leftFormat?: (value: number) => string; rightFormat?: (value: number) => string; zeroLine?: boolean; includeZero?: boolean; signed?: boolean;
   ariaLabel: string; emptyText?: ReactNode;
 }) {
@@ -36,15 +38,15 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
   if (projection.invalid) return <p className="q-empty">{projection.invalid} History cannot be plotted.</p>;
   if (!projection.rows.length || !projection.domain) return <div className="q-chart-empty" style={{ minHeight: Math.min(height, 160) }}><p>{emptyText}</p></div>;
   const left = series.filter(item => item.axis !== 'secondary'), right = series.filter(item => item.axis === 'secondary');
-  const leftDomain = valueDomain(left, includeZero), rightDomain = valueDomain(right, includeZero);
+  const leftDomain = domains?.left ?? valueDomain(left, includeZero), rightDomain = domains?.right ?? valueDomain(right, includeZero);
   const span = projection.domain[1] - projection.domain[0];
   const tick = timeTick(span);
   const inRange = (time: number) => time >= projection.domain![0] && time <= projection.domain![1];
   return <figure className="q-chart" role="img" aria-label={ariaLabel} style={{ height }}>
     <ResponsiveContainer width="100%" height={height} minWidth={0}>
       <ComposedChart data={projection.rows} margin={{ top: 8, right: right.length ? 4 : 10, bottom: 0, left: 0 }}>
-        <defs>{series.filter(item => item.area).map(item => <linearGradient key={item.id} id={`${gradient}-${item.id}`} x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0%" stopColor={item.color} stopOpacity={0.28} /><stop offset="100%" stopColor={item.color} stopOpacity={0} />
+        <defs>{[...new Map(projection.keys.map(entry => [entry.series.id, entry.series])).values()].filter(item => item.area).map(item => <linearGradient key={item.id} id={`${gradient}-${item.id}`} x1="0" y1={item.zeroBase && item.points.every(point => point.value === null || point.value <= 0) ? '1' : '0'} x2="0" y2={item.zeroBase && item.points.every(point => point.value === null || point.value <= 0) ? '0' : '1'}>
+          <stop offset="0%" style={{ stopColor: item.color }} stopOpacity={item.fillOpacity ?? 0.28} /><stop offset="100%" style={{ stopColor: item.color }} stopOpacity={item.zeroBase ? (item.fillOpacity ?? 0.28) * 0.35 : 0} />
         </linearGradient>)}</defs>
         <CartesianGrid stroke={CHART.grid} strokeDasharray="3 5" vertical={false} />
         <XAxis dataKey="time" type="number" scale="time" domain={projection.domain} tickFormatter={tick} tick={{ fill: CHART.muted, fontSize: 10 }} stroke={CHART.grid} minTickGap={48} tickLine={false} />
@@ -65,10 +67,10 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
             const marker = markers.find(item => Math.abs(item.time - label) <= span / 200);
             return <TooltipCard title={`${utc(label)} UTC${marker ? ` · ${marker.label}` : ''}`} rows={rows} />;
           }} />
-        {projection.keys.map(({ key, series: item }) => item.area
-          ? <Area key={key} yAxisId={item.axis === 'secondary' ? 'right' : 'left'} dataKey={key} type="linear" stroke={item.color} strokeWidth={1.8} fill={`url(#${gradient}-${item.id})`} connectNulls isAnimationActive={false} dot={false} activeDot={{ r: 3.5, strokeWidth: 2, stroke: CHART.surface }} name={item.label} />
+        {projection.keys.filter(({ series: item }) => !item.tooltipOnly).map(({ key, series: item }) => item.area
+          ? <Area key={key} yAxisId={item.axis === 'secondary' ? 'right' : 'left'} dataKey={key} type="linear" stroke={item.color} strokeWidth={1.8} fill={`url(#${gradient}-${item.id})`} baseValue={item.zeroBase ? 0 : undefined} connectNulls isAnimationActive={false} dot={false} activeDot={{ r: 3.5, strokeWidth: 2, stroke: CHART.surface }} name={item.label} />
           : <Line key={key} yAxisId={item.axis === 'secondary' ? 'right' : 'left'} dataKey={key} type="linear" stroke={item.color} strokeWidth={1.6} connectNulls isAnimationActive={false} dot={false} activeDot={{ r: 3.5, strokeWidth: 2, stroke: CHART.surface }} name={item.label} />)}
-        {projection.keys.filter(entry => entry.single).map(({ key, series: item, single }) => <ReferenceDot key={`${key}-dot`} yAxisId={item.axis === 'secondary' ? 'right' : 'left'} x={single!.time} y={single!.value as number} r={3} fill={item.color} stroke="none" />)}
+        {projection.keys.filter(entry => entry.single && !entry.series.tooltipOnly).map(({ key, series: item, single }) => <ReferenceDot key={`${key}-dot`} yAxisId={item.axis === 'secondary' ? 'right' : 'left'} x={single!.time} y={single!.value as number} r={3} fill={item.color} stroke="none" />)}
         {highlight && inRange(highlight.time) && <ReferenceDot yAxisId="left" x={highlight.time} y={highlight.value} r={4} fill={highlight.color ?? CHART.negative} stroke={CHART.surface} strokeWidth={2} label={{ value: highlight.label, position: 'insideBottomRight', fill: CHART.text, fontSize: 10 }} />}
       </ComposedChart>
     </ResponsiveContainer>
@@ -161,7 +163,7 @@ export function SparkChart({ points, positive, color, height = 30, format = plai
   return <span className="q-spark" role="img" aria-label={ariaLabel} style={{ height }}>
     <ResponsiveContainer width="100%" height={height} minWidth={0}>
       <ComposedChart data={rows} margin={{ top: 3, right: 2, bottom: 2, left: 2 }}>
-        <defs><linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor={stroke} stopOpacity={0.32} /><stop offset="100%" stopColor={stroke} stopOpacity={0} /></linearGradient></defs>
+        <defs><linearGradient id={gradient} x1="0" y1="0" x2="0" y2="1"><stop offset="0%" style={{ stopColor: stroke }} stopOpacity={0.32} /><stop offset="100%" style={{ stopColor: stroke }} stopOpacity={0} /></linearGradient></defs>
         <XAxis dataKey={timed ? 'time' : 'index'} type="number" domain={['dataMin', 'dataMax']} hide />
         <YAxis domain={['dataMin', 'dataMax']} hide />
         <Tooltip isAnimationActive={false} cursor={{ stroke: CHART.muted, strokeDasharray: '2 3' }} wrapperStyle={{ outline: 'none', zIndex: 5 }} allowEscapeViewBox={{ x: true, y: true }}

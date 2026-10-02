@@ -39,8 +39,8 @@ test('multi-bot PnL requires current, nonempty, disjoint pair ownership', () => 
 });
 
 test('win rate waits for the owner minimum sample', () => {
-  assert.equal(winRateText({ scored: 2, minSample: 10, winRate: 1 }), 'Collecting 2/10');
-  assert.equal(winRateText({ scored: 0, minSample: 10, winRate: null }), 'Collecting 0/10');
+  assert.equal(winRateText({ scored: 2, minSample: 10, winRate: 1 }), '2/10 cycles');
+  assert.equal(winRateText({ scored: 0, minSample: 10, winRate: null }), '0/10 cycles');
   assert.equal(winRateText({ scored: 12, minSample: 10, winRate: 0.5833 }), '58.3%');
 });
 

@@ -14,13 +14,19 @@
 .q-tile-cell .q-kpi { height: 100%; box-sizing: border-box; }
 .q-tile-cell .q-kpi-head { flex-wrap: wrap; row-gap: 4px; }
 .q-tile-cell .q-kpi-head > span:first-child { flex: 1 1 auto; min-width: 0; }
-.q-tile-cell .q-kpi > strong { font-size: clamp(16px, 9.4cqi, 30px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; }
+.q-tile-cell .q-kpi > strong { font-size: clamp(14px, 9.4cqi, 30px); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; line-height: 1.25; }
 .q-tile-cell .q-kpi > strong small { font-size: clamp(10px, 4cqi, 12px); }
+/* A narrow tile (two phone columns) drops the unit under the value instead of truncating it. */
+@container (max-width: 190px) { .q-tile-cell .q-kpi > strong small { display: block; margin-left: 0; line-height: 1.2; } }
 .q-tile-cell .q-kpi-foot { min-width: 0; }
 .q-tile-cell .q-kpi-foot > :first-child { min-width: 0; }
 .q-tile-cell .q-kpi-foot .q-spark { flex: 0 1 44%; max-width: 132px; }
 .q-tile-cell .q-kpi small.q-muted, .q-tile-cell .q-stat > small {
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+}
+/* Narrow tiles (two-up on a phone) wrap the same caveat onto more lines; clipping "…are not positions" at 3 lines hides the caveat. */
+@container (max-width: 200px) {
+  .q-tile-cell .q-kpi small.q-muted, .q-tile-cell .q-stat > small { -webkit-line-clamp: 6; }
 }
 
 /* Compact stat tile (StatStrip) inside a tile cell */

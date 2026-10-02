@@ -5,7 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {createRequire} from 'node:module';
 import {frontendModules} from './helpers/frontend-module.mjs';
 const {QueryClient,QueryClientProvider}=createRequire(import.meta.url)('@tanstack/react-query');
-const {load}=frontendModules({'react-router-dom':{Link:({to,children,...rest})=>React.createElement('a',{href:to,...rest},children)},'@/hooks/useServer':{useServer:()=>({server:'native'})}});
+const {load}=frontendModules({'react-router-dom':{Link:({to,children,...rest})=>React.createElement('a',{href:to,...rest},children),useSearchParams:()=>[new URLSearchParams()]},'@/hooks/useServer':{useServer:()=>({server:'native'})}});
 const {RosterObservation,BotsRoster}=load('components/bots/BotsRoster.tsx');
 const {botSourceFreshness,quoteUnavailableReason,historyComparison}=load('features/bots/bot-net.ts');
 const now=Date.parse('2026-09-15T10:00:00Z');
@@ -39,10 +39,11 @@ test('current controller conditions are never rendered as recorded decisions',()
  assert.match(html,/No identity-validated recorded decision journal is available/);
  assert.doesNotMatch(html,/FAKE-USD|SYNTHETIC_STATUS/);
 });
-test('bots page KPIs, filters, New Bot draft control and comparison stay in flow',()=>{
+test('bots page filters, New Bot draft control and fleet panels stay in flow; money PnL tiles belong to Capital',()=>{
  const client=new QueryClient({defaultOptions:{queries:{retry:false}}});
  const html=renderToStaticMarkup(React.createElement(QueryClientProvider,{client},React.createElement(BotsRoster,{renderControls:()=>null,renderLogs:()=>null})));
- for(const id of ['B01','B02','B03','B04','B05','B06','B07','B08','B23','B24','B25']) assert.match(html,new RegExp(`data-panel-id="${id}"`));
+ for(const id of ['B06','B07','B08','B24','B25','B29','B-fleet-tiles']) assert.match(html,new RegExp(`data-panel-id="${id}"`));
+ for(const id of ['B02','B04','B23']) assert.doesNotMatch(html,new RegExp(`data-panel-id="${id}"`),'PnL headline and comparison tiles are Capital content');
  assert.match(html,/\+ New Bot/);
 });
 
@@ -61,9 +62,10 @@ test('missing or stale lifecycle page never becomes zero active bots',()=>{
   client.setQueryData(['native-command-desk-sources'],[{bot:'rsi_modular_v2',server:'native'}]);
   const html=renderToStaticMarkup(React.createElement(QueryClientProvider,{client},React.createElement(BotsRoster,{page,renderControls:()=>null,renderLogs:()=>null})));
   const card=html.match(/<article[^>]*data-panel-id="B01"[\s\S]*?<\/article>/)?.[0];
-  if(page===undefined) assert.match(card,/Unavailable/);
-  else { assert.match(card,/0 verified \/ 1/,'a stale lifecycle counts only verified running bots, labelled as such'); assert.match(card,/data-state="stale"/); }
+  assert.match(card,/0 verified \/ 1/,'an unverified lifecycle counts only verified running bots, labelled as such');
+  assert.match(card,/data-state="stale"/);
   assert.doesNotMatch(card,/>0 \/ 1</,'never an unlabelled zero');
+  assert.doesNotMatch(html.match(/<section[^>]*data-panel-id="B-fleet-tiles"[\s\S]*?<\/section>/)?.[0] ?? '',/Unavailable/,'no fleet tile prints Unavailable');
   client.clear();
  }
 });

@@ -125,11 +125,21 @@ body {
   --chart-bg: #ffffff;
   --chart-grid: #dce0da;
   --chart-text: #606b65;
+  /* The dark-theme pair (#2cdea0 / #ff647d) is about 1.7:1 and 2.9:1 on white; these are AA on #fff. */
+  --color-green: #15803d;
+  --color-red: #dc2626;
+  --chart-up: #15803d;
+  --chart-down: #dc2626;
 }
 [data-theme="colorblind"] .condor-native {
   --color-primary: #56b4e9;
   --color-accent: #56b4e9;
   --color-primary-hover: #7ec8f0;
+  /* .condor-native pins red/green for every route; the colour-blind theme must keep its blue/orange pair. */
+  --color-green: #56b4e9;
+  --color-red: #e69f00;
+  --chart-up: #56b4e9;
+  --chart-down: #e69f00;
 }
 .condor-native .condor-topbar { min-height: 62px; padding-inline: 24px; }
 .condor-native nav[aria-label="Main navigation"] a {

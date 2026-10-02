@@ -11,6 +11,7 @@ consistent and short.
 | Time series (one or more lines, secondary scale, markers) | `TimeSeriesChart` (`charts.tsx`) | Recharts |
 | Daily bars, histograms, signed bars with a line | `BarsChart` | Recharts |
 | Composition | `DonutChart` (or `Donut` in `primitives.tsx` for asset colors) | Recharts |
+| Share of a population as a ring ("2 of 5 above EMA21") | `RingGauge` (`gauges.tsx`) in a `TileGrid` | SVG |
 | Trend inside a tile | `SparkChart` / `Sparkline` | Recharts |
 | Any table | `DataTable` (`DataTable.tsx`) | TanStack Table |
 
@@ -39,3 +40,10 @@ so it is unit-tested in `test/quant-kit.test.mjs` without a browser.
    glyph. Unavailable, stale and collecting values are labelled, never zero.
 7. **Colors come from tokens.** Use `CHART` / `--q-*` tokens and `assetColor`
    for assets, so a symbol keeps its color on every page.
+
+## Time-series options added for the Market home
+
+- `signSplit` on a series draws one signed value green above zero and red below it (breadth pressure,
+  net flow); the tooltip still shows a single row. `fillOpacity` tunes the area strength.
+- `tooltipOnly` lists a series in the tooltip (with its own axis scale) without drawing it.
+- `domains` on `TimeSeriesChart` fixes an axis range, for example pressure -3..+3 beside a 0..100% share.

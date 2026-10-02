@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom';
 import type { BotsPageResponse } from '@/lib/api';
 import { currentControllerPolicy } from '@/features/bots/observed-policy';
 import { numeric, type BotPairPosition } from '@/features/bots/position-view';
+import { botChartsHref } from '@/features/bots/chart-links';
 const number = (value: unknown, unit = '') => { const n = numeric(value); return n === null ? '—' : `${n.toLocaleString(undefined, { maximumFractionDigits: 8 })}${unit ? ` ${unit}` : ''}`; };
 const label = (value: unknown) => typeof value === 'string' && value ? value.replaceAll('_', ' ') : '—';
 function Metric({ title, value, detail }: { title: string; value: string; detail?: string }) {
@@ -26,7 +27,7 @@ export function PriceLevels({ row }: { row: BotPairPosition }) {
   </figure>;
 }
 export function PairPosition({ row, bot, page, now, showLevels = true }: { row: BotPairPosition; bot: string; page?:BotsPageResponse; now:number; showLevels?:boolean }) {
-  const to = `/trading-visuals?bot=${encodeURIComponent(bot)}&pair=${encodeURIComponent(row.pair)}`;
+  const chartTo = botChartsHref(bot, row.pair, 'charts'), fillsTo = botChartsHref(bot, row.pair, 'activity', 'fills');
   const policy=currentControllerPolicy(page,bot,row,now);
   const metrics = [
     ['Tracked inventory cost', row.base !== null && row.breakeven !== null ? row.base * row.breakeven : null, row.quote],
@@ -34,7 +35,7 @@ export function PairPosition({ row, bot, page, now, showLevels = true }: { row: 
     ['Price move to trailing floor', row.floor !== null && row.price !== null ? (row.floor / row.price - 1) * 100 : null, '%'],
   ] as const;
   return <div className="space-y-4 p-4 bg-[var(--color-bg)]/40">
-    <div className="flex flex-wrap justify-between gap-3"><p className="text-xs text-[var(--color-text-muted)]">{row.inventorySource} · {row.id}</p><div className="flex gap-4 text-sm text-[var(--color-primary)]"><Link to={`${to}&view=charts`}>Chart</Link><Link to={`${to}&view=activity&record=fills`}>Fills</Link></div></div>
+    <div className="flex flex-wrap justify-between gap-3"><p className="text-xs text-[var(--color-text-muted)]">{row.inventorySource} · {row.id}</p><div className="flex gap-4 text-sm text-[var(--color-primary)]"><Link to={chartTo}>Chart</Link><Link to={fillsTo}>Fills</Link></div></div>
     {showLevels && <PriceLevels row={row} />}
     {policy && <div><h4 className="text-sm font-medium">Observed trailing policy and operator state</h4><p className="mt-1 text-xs text-[var(--color-text-muted)]">Native controller telemetry · {policy.controllerId} · received {new Date(policy.receivedAt*1000).toISOString()} UTC. Policy settings do not establish an armed trailing price.</p><dl className="mt-3 grid grid-cols-2 lg:grid-cols-3 gap-3">{policy.fields.map(([title,value])=><Metric key={title} title={title} value={value}/>)}</dl></div>}
     {metrics.some(([,value]) => value !== null) && <dl className="grid grid-cols-2 gap-4 lg:grid-cols-4">{metrics.filter(([,value])=>value!==null).map(([title,value,unit])=><Metric key={title} title={title} value={number(value,unit)}/>)}</dl>}

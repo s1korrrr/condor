@@ -14,12 +14,12 @@ import {
 import { heatmapColor, heatmapAreas, histogramMembers, histogramBinIndex } from "./model.mjs";
 import {
   metricText,
-  metricTitle,
   numberText,
   type DisplayFrame,
-  type DisplayMetric,
 } from "./presentation";
-import { Delta, Empty, Panel, Quality } from "./Primitives";
+import { RingGauge } from "@/features/quant-ops/kit/gauges";
+import { TileGrid } from "@/features/quant-ops/kit/grid";
+import { Empty, Panel } from "./Primitives";
 
 export function MarketHeatmapPanel({
   frame,
@@ -46,7 +46,7 @@ export function MarketHeatmapPanel({
   const layout = heatmapAreas(assets.map(a => a.weight), equal);
   const areas = new Map(assets.map((asset, index) => [asset.instrument_id, layout.areas[index]]));
   const mode = layout.equalSize ? "Equal size" : "Size: activity-scaled prior-day quote volume";
-  const data = visible.map((a) => ({
+  const data = visible.filter((a) => a.returns["1440"]?.value != null).map((a) => ({
     name: a.symbol,
     id: a.instrument_id,
     value: areas.get(a.instrument_id),
@@ -69,6 +69,7 @@ export function MarketHeatmapPanel({
       }
     >
       <div className="mp-heatmap-controls">
+        {sectors.length > 2 ? (
         <div className="mp-sector-chips">
           {sectors.map((s) => (
             <button
@@ -80,6 +81,7 @@ export function MarketHeatmapPanel({
             </button>
           ))}
         </div>
+        ) : <span />}
         <select
           aria-label="Heatmap tile sizing"
           value={equal ? "equal" : "activity"}
@@ -122,7 +124,7 @@ export function MarketHeatmapPanel({
                 if (node.depth === 0) return <g />;
                 const id = String(node.id),
                   change = typeof node.change === "number" ? node.change : null;
-                const label = `${node.name} · ${change == null ? "Unavailable" : numberText(change, 2, true) + "%"} · 24h`;
+                const label = `${node.name} · ${change == null ? "—" : numberText(change, 2, true) + "%"} · 24h`;
                 return (
                   <g
                     role="button"
@@ -184,7 +186,7 @@ export function MarketHeatmapPanel({
                         fontSize={10}
                       >
                         {change === null
-                          ? "No data"
+                          ? "—"
                           : numberText(change, 1, true) + "%"}
                         {change !== null && Math.abs(change) > 10 ? " ↗" : ""}
                       </text>
@@ -328,7 +330,7 @@ export function ReturnDistributionPanel({
             </BarChart>
           </ResponsiveContainer>
         ) : (
-          <Empty>Qualified 24h returns are unavailable.</Empty>
+          <Empty>No instrument has a qualified 24h return yet.</Empty>
         )}
       </div>
       <label className="mp-bin-select">
@@ -365,11 +367,11 @@ export function ReturnDistributionPanel({
       <footer className="mp-panel-footnote">
         Mean {metricText(distribution?.mean)} · σ{" "}
         {metricText(distribution?.dispersion)} · N{" "}
-        {distribution?.total ?? "Unavailable"} / {frame?.expected ?? "Unavailable"} · fixed bins + tails
+        {distribution?.total ?? 0} / {frame?.expected ?? 0} · fixed bins + tails
         <details>
           <summary>Distribution detail</summary>
           <p>Downside magnitude {metricText(distribution?.downside)} · max(−mean return, 0). This describes the mean loss magnitude, not a probability or tail risk.</p>
-          <p>Best {distribution?.bestInstrument ?? "Unavailable"} · worst {distribution?.worstInstrument ?? "Unavailable"}.</p>
+          <p>Best {distribution?.bestInstrument ?? "—"} · worst {distribution?.worstInstrument ?? "—"}.</p>
         </details>
       </footer>
     </Panel>
@@ -378,68 +380,16 @@ export function ReturnDistributionPanel({
 
 const PREDICATES = [
   ["above_ema21", "Above EMA21", "Close > EMA21", "var(--mp-positive)"],
-  ["rsi_above_50", "RSI > 50", "RSI14 · 1m", "var(--mp-positive)"],
-  ["rsi_above_70", "RSI > 70", "RSI14 · 1m", "var(--mp-negative)"],
-  ["rsi_below_30", "RSI < 30", "RSI14 · 1m", "var(--mp-negative)"],
-];
-const SECONDARY = [
-  ["compression", "Compression", "ATR14 percentile ≤ 20"],
-  ["trending", "Trending", "ADX14 > 25"],
-  ["elevated_rvol", "Elevated RVOL", "20-bar baseline > 1.5×"],
-  ["high_volatility", "High vol", "> 80% annualized"],
-];
+  ["rsi_above_50", "RSI > 50", "RSI14 above 50", "var(--mp-positive)"],
+  ["rsi_above_70", "RSI > 70", "RSI14 overbought", "var(--mp-negative)"],
+  ["rsi_below_30", "RSI < 30", "RSI14 oversold", "var(--mp-negative)"],
+  ["trending", "Trending", "ADX14 > 25", "var(--mp-accent)"],
+  ["compression", "Compression", "ATR14 percentile ≤ 20", "var(--mp-pressure)"],
+  ["elevated_rvol", "Elevated RVOL", "20-bar baseline > 1.5×", "var(--mp-warning)"],
+  ["high_volatility", "High vol", "> 80% annualized", "var(--mp-warning)"],
+] as const;
 
-function Gauge({
-  metric,
-  delta,
-  label,
-  hint,
-  color,
-  action,
-}: {
-  metric?: DisplayMetric;
-  delta?: DisplayMetric;
-  label: string;
-  hint: string;
-  color: string;
-  action: () => void;
-}) {
-  const value = metric?.value;
-  return (
-    <button
-      className="mp-gauge-button"
-      onClick={action}
-      title={metric ? metricTitle(metric) : hint}
-      disabled={value == null}
-    >
-      <div className="mp-gauge">
-        <svg
-          viewBox="0 0 80 80"
-          role="img"
-          aria-label={`${label}: ${metricText(metric, 0)}`}
-        >
-          <circle className="mp-gauge-track" cx="40" cy="40" r="31" />
-          <circle
-            cx="40"
-            cy="40"
-            r="31"
-            fill="none"
-            stroke={color}
-            strokeWidth="6"
-            strokeLinecap="round"
-            strokeDasharray={`${(value ?? 0) * 194.78} 194.78`}
-            transform="rotate(-90 40 40)"
-          />
-        </svg>
-        <strong>{value == null ? "—" : metricText(metric, 0)}</strong>
-      </div>
-      <span>{label}</span>
-      <small>{hint}</small>
-      <Delta metric={delta} />
-      <Quality valid={metric?.valid ?? 0} expected={metric?.expected ?? 0} />
-    </button>
-  );
-}
+/** Share of the universe satisfying each observed predicate; a ring per predicate. */
 export function ParticipationPanel({
   frame,
   selectPredicate,
@@ -447,46 +397,40 @@ export function ParticipationPanel({
   frame: DisplayFrame | null;
   selectPredicate: (predicate: string) => void;
 }) {
+  const rings = PREDICATES.flatMap(([key, label, hint, color]) => {
+    const metric = frame?.participation[key];
+    if (!metric || metric.value == null) return [];
+    const delta = frame?.comparisons[`participation/${key}`];
+    const count = Math.round(metric.value * metric.valid);
+    return [
+      <RingGauge
+        key={key}
+        ratio={metric.value}
+        label={label}
+        valueText={metricText(metric, 0)}
+        note={`${count} of ${metric.valid} · ${hint}`}
+        tip={`${count} of ${metric.valid} instruments · ${metric.definition}`}
+        color={color}
+        onClick={() => selectPredicate(key)}
+        delta={
+          delta?.value == null
+            ? null
+            : { text: `${metricText(delta, 1, true)} · 1h`, tone: delta.value < 0 ? "negative" : delta.value > 0 ? "positive" : "neutral" }
+        }
+      />,
+    ];
+  });
+  if (!rings.length) return null;
   return (
     <Panel
       id="mp-participation"
       title="Market participation"
-      detail="1m observations"
+      detail="Share of instruments · 1m observations"
       className="mp-participation"
     >
-      <div className="mp-gauges">
-        {PREDICATES.map(([key, label, hint, color]) => (
-          <Gauge
-            key={key}
-            metric={frame?.participation[key]}
-            delta={frame?.comparisons[`participation/${key}`]}
-            label={label}
-            hint={hint}
-            color={color}
-            action={() => selectPredicate(key)}
-          />
-        ))}
-      </div>
-      <div className="mp-secondary-gauges">
-        {SECONDARY.map(([key, label, hint]) => (
-          <button
-            key={key}
-            onClick={() => selectPredicate(key)}
-            disabled={frame?.participation[key]?.value == null}
-          >
-            <span>{label}</span>
-            <small>{hint}</small>
-            <strong>{metricText(frame?.participation[key], 0)}</strong>
-            <Delta metric={frame?.comparisons[`participation/${key}`]} />
-            <Quality
-              valid={frame?.participation[key]?.valid ?? 0}
-              expected={frame?.expected ?? 0}
-            />
-          </button>
-        ))}
-      </div>
+      <TileGrid min={132} label="Participation predicates">{rings}</TileGrid>
       <footer className="mp-panel-footnote">
-        Predicates overlap. Each measure uses its own qualified denominator.
+        Predicates overlap. Each share uses its own qualified denominator. Select one to highlight its members.
       </footer>
     </Panel>
   );

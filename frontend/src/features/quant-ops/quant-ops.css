@@ -301,3 +301,23 @@
 @media (max-width: 1100px) { [data-quant-ops] .q-split-holdings { grid-template-columns: 1fr; } }
 [data-quant-ops] .q-table-title { font-size: 13px; font-weight: 600; margin: 4px 0 8px; }
 [data-quant-ops] [data-panel-id="B25"] .q-timeline { max-height: 390px; overflow-y: auto; padding-right: 4px; }
+
+/* Colour-blind theme: the quant desk keeps its dark surface but must not signal gain/loss with red/green. */
+[data-theme="colorblind"] [data-quant-ops] {
+  --q-positive: #56b4e9;
+  --q-negative: #e69f00;
+  --color-green: var(--q-positive);
+  --color-red: var(--q-negative);
+}
+
+/* Fleet Capital: bots strip, footnote, skeleton and an auto-fitting row for panels that exist only when computed. */
+[data-quant-ops] .q-split-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: var(--q-gap); margin-bottom: var(--q-gap); }
+[data-quant-ops] .q-fleet-bots { display: inline-flex; flex-wrap: wrap; gap: 6px; }
+[data-quant-ops] .q-fleet-bots .q-chip { min-height: 28px; padding: 3px 9px; text-decoration: none; }
+[data-quant-ops] .q-fleet-bots .q-chip[data-counted="false"] { border-color: var(--q-warning); color: var(--q-warning); }
+[data-quant-ops] .q-fleet-note, [data-quant-ops] .q-footnote { margin: 0 0 12px; }
+[data-quant-ops] .q-skeleton { display: block; width: 100%; border-radius: var(--q-radius); background: linear-gradient(100deg, var(--q-surface) 30%, var(--q-surface-raised) 50%, var(--q-surface) 70%); background-size: 200% 100%; animation: q-shimmer 1.4s linear infinite; margin-bottom: var(--q-gap); }
+@keyframes q-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) { [data-quant-ops] .q-skeleton { animation: none; } }
+[data-quant-ops] .q-head-controls { display: grid; gap: 8px; justify-items: end; }
+@media (max-width: 700px) { [data-quant-ops] .q-head-controls { justify-items: stretch; width: 100%; } [data-quant-ops] .q-head-controls .q-chip-row { display: flex; gap: 8px; } [data-quant-ops] .q-head-controls .q-search { flex: 1 1 auto; min-width: 0; } }

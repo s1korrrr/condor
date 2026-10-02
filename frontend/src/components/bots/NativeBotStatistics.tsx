@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { authFetch } from '@/lib/auth-token';
 import { loadRecordedBotStatistics } from '@/lib/native-bot-statistics';
 import { NativeBotActivityCharts } from './NativeBotActivityCharts';
+import { botChartsHref } from '@/features/bots/chart-links';
 
 type Source = { bot: string; server: string };
 async function readJson(path: string, signal: AbortSignal): Promise<unknown> {
@@ -26,7 +27,7 @@ function SourceStatistics({ source }: { source: Source }) {
   return <section className="rounded-lg border border-[var(--color-border)] p-4 space-y-4" aria-label={`${source.bot} recorded statistics`}>
     <div className="flex flex-wrap items-start justify-between gap-3">
       <div><h3 className="text-sm font-semibold">{source.bot}</h3><p className="text-xs text-[var(--color-text-muted)] mt-1">All events in monitored databases · native Hummingbot</p></div>
-      <Link className="text-sm text-[var(--color-primary)] underline underline-offset-4" to={`/trading-visuals?bot=${encodeURIComponent(source.bot)}`}>Inspect charts and records</Link>
+      <Link className="text-sm text-[var(--color-primary)] underline underline-offset-4" to={botChartsHref(source.bot)}>Inspect charts and records</Link>
     </div>
     {query.isPending ? <p role="status" className="text-sm">Loading recorded statistics…</p> : query.isError ? <p role="alert" className="text-sm text-[var(--color-yellow)]">{query.error.message}. <button className="underline" onClick={() => void query.refetch()}>Retry</button></p> : stats ? <>
       <dl className="grid grid-cols-2 gap-x-6 gap-y-4 sm:grid-cols-3 xl:grid-cols-6">

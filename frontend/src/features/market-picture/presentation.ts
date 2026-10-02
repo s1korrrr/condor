@@ -150,7 +150,7 @@ export function metricTitle(metric: DisplayMetric) {
   return `${metric.original ?? metric.status} ${metric.unit} · ${metric.valid}/${metric.expected} · ${metric.definition} · ${metric.reasons.join(", ")}`;
 }
 export function numberText(value: number | null, digits = 1, signed = false) {
-  if (value == null || !Number.isFinite(value)) return "Unavailable";
+  if (value == null || !Number.isFinite(value)) return "—";
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: digits,
     minimumFractionDigits: digits,
@@ -163,7 +163,7 @@ export function metricText(
   signed = false,
 ) {
   if (!metric || metric.value == null)
-    return metric?.status === "WARMING" ? "Warming" : "Unavailable";
+    return metric?.status === "WARMING" ? "Warming" : "—";
   const percent = ["share_fraction", "volatility_fraction_annualized"].includes(
     metric.unit,
   );

@@ -1,0 +1,13 @@
+/* HeatStrip: one row of equal cells, newest at the left edge. Tokens fall back to the quant-ops palette. */
+.q-heat { display: grid; gap: 1px; width: 100%; min-width: 0; border-radius: 3px; cursor: crosshair; touch-action: pan-y; user-select: none; }
+.q-heat > i { display: block; min-width: 0; border-radius: 1px; }
+.q-heat > i[data-empty] { background: color-mix(in srgb, var(--q-neutral, #64748b) 22%, transparent); }
+.q-heat > i[data-active] { outline: 2px solid var(--q-text, var(--color-text, #e5e7eb)); outline-offset: 0; position: relative; z-index: 1; }
+.q-heat:focus-visible { outline: 2px solid var(--q-blue, var(--color-primary, #259aff)); outline-offset: 3px; }
+.q-heat-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+.q-heat-tip {
+  position: fixed; z-index: 2000; pointer-events: none; box-sizing: border-box; width: max-content; max-width: min(360px, calc(100vw - 16px));
+  background: color-mix(in srgb, var(--q-surface-raised, var(--color-surface-hover, #101f2b)) 96%, transparent); border: 1px solid var(--q-border, var(--color-border, #20313e)); border-radius: 6px;
+  padding: 8px 10px; font-size: 11px; line-height: 1.45; color: var(--q-text, var(--color-text, #e5e7eb)); box-shadow: 0 8px 22px #0008; backdrop-filter: blur(4px); overflow-wrap: anywhere;
+}
+@media (pointer: coarse) { .q-heat { cursor: default; } }

@@ -1,6 +1,6 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { lazy, Suspense, useCallback, useState } from "react";
-import { BrowserRouter, Navigate, Route, Routes, useLocation } from "react-router-dom";
+import { BrowserRouter, Navigate, Route, Routes, useLocation, useParams } from "react-router-dom";
 
 import { AppShell } from "@/components/layout/AppShell";
 import { ServerContext } from "@/hooks/useServer";
@@ -26,14 +26,40 @@ const Overview = lazy(() => import("@/pages/Overview").then(module => ({default:
 const Research = lazy(() => import("@/pages/Research").then(module => ({default:module.Research})));
 const TradingVisuals = lazy(() => import("@/pages/TradingVisuals").then(module => ({ default: module.TradingVisuals })));
 const Screener = lazy(() => import("@/pages/Screener").then(module => ({ default: module.Screener })));
-const FleetPage = lazy(() => import("@/fleet/FleetPage").then(module => ({ default: module.FleetRoute })));
-const FleetDetail = lazy(() => import("@/fleet/FleetDetail").then(module => ({ default: module.FleetDetailRoute })));
 
 function Home() {
   const {access,isLoading}=useServerCapabilities();
   if(isLoading) return <p role="status">Loading workspace…</p>;
   if(!access.online) return <CapabilityUnavailable reason="Server capabilities are unavailable. Select or reconnect a server to open its workspace."/>;
-  return access.native ? <Navigate to="/capital" replace/> : <Agents/>;
+  if(!access.native) return <Agents/>;
+  // Native servers open on Market. Without a market source the home is Capital.
+  return access.marketPicture || access.marketScreener
+    ? <Suspense fallback={<p role="status">Loading market…</p>}><Screener/></Suspense>
+    : <Navigate to="/capital" replace/>;
+}
+
+/** Market Picture is the home tab; old `/screener` links keep their view query. */
+function LegacyScreener() {
+  const location = useLocation();
+  const {access,isLoading}=useServerCapabilities();
+  if(isLoading) return <p role="status">Loading market…</p>;
+  if(!access.native) return <Suspense fallback={<p role="status">Loading screener…</p>}><Screener/></Suspense>;
+  return <Navigate to={`/${location.search}${location.hash}`} replace/>;
+}
+
+/** Fleet is folded into Bots; a bot link keeps its selection. */
+function LegacyFleetDetail() {
+  const { botKey } = useParams();
+  return <Navigate to={botKey ? `/bots?bot=${encodeURIComponent(botKey)}` : "/bots"} replace/>;
+}
+
+/** Strategy charts live in Bots. Native servers keep bot, pair and view; others keep the old page. */
+function LegacyTradingVisuals() {
+  const location = useLocation();
+  const {access,isLoading}=useServerCapabilities();
+  if(isLoading) return <p role="status">Loading…</p>;
+  if(!access.native) return <Suspense fallback={<p role="status">Loading Trading Visuals…</p>}><TradingVisuals /></Suspense>;
+  return <Navigate to={`/bots${location.search}${location.hash}`} replace/>;
 }
 
 function LegacyOverview() {
@@ -107,15 +133,15 @@ export default function App() {
                 <Route path="/capital" element={<Suspense fallback={<p role="status">Loading capital…</p>}><Overview/></Suspense>} />
                 <Route path="/overview" element={<LegacyOverview/>} />
                 <Route path="/research" element={<Suspense fallback={<p role="status">Loading research…</p>}><Research/></Suspense>} />
-                <Route path="/screener" element={<Suspense fallback={<p role="status">Loading screener…</p>}><Screener/></Suspense>} />
+                <Route path="/screener" element={<LegacyScreener/>} />
                 <Route path="/tools" element={<WorkspaceTools/>} />
                 <Route path="/portfolio" element={<PortfolioRoute />} />
                 <Route path="/bots" element={<Bots />} />
                 <Route path="/bots/:id" element={<BotDetail />} />
-                <Route path="/fleet" element={<Suspense fallback={<p role="status">Loading fleet…</p>}><FleetPage /></Suspense>} />
-                <Route path="/fleet/:botKey" element={<Suspense fallback={<p role="status">Loading fleet…</p>}><FleetDetail /></Suspense>} />
+                <Route path="/fleet" element={<Navigate to="/bots" replace />} />
+                <Route path="/fleet/:botKey" element={<LegacyFleetDetail />} />
                 <Route path="/trade" element={<CreateExecutor />} />
-                <Route path="/trading-visuals" element={<Suspense fallback={<p role="status">Loading Trading Visuals…</p>}><TradingVisuals /></Suspense>} />
+                <Route path="/trading-visuals" element={<LegacyTradingVisuals />} />
                 <Route path="/executors" element={<Executors />} />
                 <Route path="/executors/new" element={<Navigate to="/trade" replace />} />
                 <Route path="/executors/new-grid" element={<Navigate to="/trade?type=grid" replace />} />

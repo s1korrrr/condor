@@ -47,7 +47,7 @@ export function pairOwnershipIsDisjoint(owners: readonly { pairs: readonly strin
 
 /** Win rate text: a rate only once the owner's minimum scored sample exists, as on the KPI tile. */
 export function winRateText(stats: { scored: number; minSample: number; winRate: number | null }): string {
-  return stats.winRate == null || stats.scored < stats.minSample ? `Collecting ${stats.scored}/${stats.minSample}` : `${(stats.winRate * 100).toFixed(1)}%`;
+  return stats.winRate == null || stats.scored < stats.minSample ? `${stats.scored}/${stats.minSample} cycles` : `${(stats.winRate * 100).toFixed(1)}%`;
 }
 
 /** A money aggregate needs an explicit matching unit from every contributing owner. */

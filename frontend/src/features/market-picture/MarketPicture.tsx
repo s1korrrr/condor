@@ -25,17 +25,20 @@ import { useMarketPicture } from "./useMarketPicture";
 import { boundedJson, projectEvents, type FrameBundle } from "./source";
 import {
   type DisplayAsset,
+  type DisplayCorrelation,
   type DisplayEvent,
   type DisplayFrame,
   type ViewSettings,
 } from "./presentation";
-import { MarketPulsePanel, MarketSummaryStrip } from "./MarketPulse";
+import { MarketPulseHero, MarketSnapshotTiles } from "./MarketPulse";
 import {
   CorrelationMatrix,
   CorrelationsPanel,
+  InstrumentsPanel,
   LeadersLaggardsPanel,
-  RegimeOverviewPanel,
+  RegimePanel,
 } from "./AssetPanels";
+import { hasCorrelationValues, showDistribution } from "./pulse.mjs";
 import {
   MarketHeatmapPanel,
   ParticipationPanel,
@@ -49,6 +52,7 @@ import {
 } from "./DetailViews";
 import { Empty } from "./Primitives";
 import "./market-picture.css";
+import "./home.css";
 
 const CanonicalContext = lazy(() =>
   import("@/features/screener/CanonicalContext").then((m) => ({
@@ -352,22 +356,11 @@ export function MarketPictureSurface({
     >
       <header className="mp-header">
         <div className="mp-brand">
-          <span className="mp-version">V3</span>
           <div>
-            <h1>Market Picture</h1>
-            <span>Admitted universe. A clearer view.</span>
+            <h1>Market</h1>
+            <span>Observed breadth, pressure and regimes for the admitted universe</span>
           </div>
         </div>
-        <nav aria-label="Market Picture sections">
-          <a href="#mp-pulse" className="mp-command-link">
-            Command center
-          </a>
-          <a href="#mp-regimes">Regimes</a>
-          <a href="#mp-correlations">Correlations</a>
-          <a href="#mp-heatmap">Heatmap</a>
-          <a href="#mp-feed">Alerts</a>
-          <button onClick={() => setDrawer("coverage")}>Research</button>
-        </nav>
         <label className="mp-search">
           <Search size={14} />
           <input
@@ -447,60 +440,76 @@ export function MarketPictureSurface({
           )}
         </div>
       )}
-      <MarketSummaryStrip
+      <MarketPulseHero
         frame={frame}
         history={data?.history ?? []}
         horizon={view.horizon}
+        window={view.window}
         setHorizon={(h) => set({ horizon: h })}
+        setWindow={(w) => set({ window: w })}
+        replay={(id) => void source.replay(id)}
       />
-      <div className="mp-grid">
-        <RegimeOverviewPanel {...common} search={search} />
-        <MarketPulsePanel
-          frame={frame}
-          history={data?.history ?? []}
-          horizon={view.horizon}
-          window={view.window}
-          setHorizon={(h) => set({ horizon: h })}
-          setWindow={(w) => set({ window: w })}
-          replay={(id) => void source.replay(id)}
-        />
-        <CorrelationsPanel
-          {...common}
-          correlations={data?.correlations ?? []}
-          benchmark={view.benchmark}
-          setBenchmark={(b) => set({ benchmark: b })}
-          openMatrix={() => setDrawer("matrix")}
-        />
-        <div className="mp-right-rail">
-          <LeadersLaggardsPanel {...common} benchmark={view.benchmark} />
-          <MarketEventFeed
-            events={events}
-            frame={frame}
-            select={select}
-            nextPage={() => void loadEvents()}
-            hasMore={Boolean(extra ? extra.cursor : data?.eventCursor)}
-            fault={data?.faults.events}
-          />
+      {frame && (
+        <MarketSnapshotTiles frame={frame} history={data?.history ?? []} window={view.window} />
+      )}
+      {!frame && (
+        <div className="mp-loading" role="status" aria-busy={source.loading || undefined}>
+          <span className="mp-skeleton" style={{ height: 120 }} />
+          <span className="mp-skeleton" style={{ height: 260 }} />
         </div>
-        <MarketHeatmapPanel
-          {...common}
-          sector={view.sector}
-          setSector={(s) => set({ sector: s })}
-        />
-        <ReturnDistributionPanel frame={frame} selectCohort={highlight} />
-        <ParticipationPanel
-          frame={frame}
-          selectPredicate={(p) =>
-            highlight(
-              predicateMembers(frame?.assets ?? [], p),
-              p.replaceAll("_", " "),
-            )
-          }
-        />
-      </div>
+      )}
+      {frame && (
+        <div className="mp-sections">
+          <InstrumentsPanel {...common} search={search} />
+          <div className="mp-row mp-row--split">
+            <LeadersLaggardsPanel {...common} benchmark={view.benchmark} />
+            <ParticipationPanel
+              frame={frame}
+              selectPredicate={(p) =>
+                highlight(
+                  predicateMembers(frame.assets, p),
+                  p.replaceAll("_", " "),
+                )
+              }
+            />
+          </div>
+          <RegimePanel {...common} search={search} />
+          <div className="mp-row mp-row--split">
+            {frame.assets.some((a) => a.returns["1440"]?.value != null) && (
+              <MarketHeatmapPanel
+                {...common}
+                sector={view.sector}
+                setSector={(s) => set({ sector: s })}
+              />
+            )}
+            <MarketEventFeed
+              events={events}
+              frame={frame}
+              select={select}
+              nextPage={() => void loadEvents()}
+              hasMore={Boolean(extra ? extra.cursor : data?.eventCursor)}
+              fault={data?.faults.events}
+            />
+          </div>
+          {(showDistribution(frame) || hasCorrelationValues(data?.correlations ?? [])) && (
+            <div className="mp-row">
+              {showDistribution(frame) && (
+                <ReturnDistributionPanel frame={frame} selectCohort={highlight} />
+              )}
+              <CorrelationsPanel
+                {...common}
+                correlations={data?.correlations ?? []}
+                benchmark={view.benchmark}
+                setBenchmark={(b) => set({ benchmark: b })}
+                openMatrix={() => setDrawer("matrix")}
+              />
+            </div>
+          )}
+        </div>
+      )}
       <footer className="mp-page-footer">
         <span>
-          <strong>V3 Market Picture</strong> · {frame?.expected ?? "—"} symbols
+          <strong>Market</strong> · {frame?.expected ?? "—"} symbols
           · one observation frame
         </span>
         <span>
@@ -569,6 +578,7 @@ export function MarketPictureSurface({
             ))}
           {drawer === "coverage" && (
             <CoverageDetails frame={frame} server={server} fixtureTime={fixture?.frame.available_at_ms}
+              correlations={data?.correlations ?? []}
               faults={data?.faults ?? {source: source.error ?? "Source unavailable"}} />
           )}
           {drawer === "matrix" && (
@@ -729,14 +739,26 @@ function SourceStatus({frame, frozen, loading, server, fixtureTime}: {
         </div>
   );
 }
-function CoverageDetails({frame, faults, server, fixtureTime}: {
+function CoverageDetails({frame, faults, server, fixtureTime, correlations}: {
   frame: DisplayFrame | null; faults: Record<string,string>; server: string | null; fixtureTime?: number;
+  correlations: DisplayCorrelation[];
 }) {
   const now = useObservationClock(fixtureTime);
   const canonicalRef = frame?.raw.canonical_context_ref as
     { status?: string; snapshot_id?: string } | undefined;
   return <>
     <CoverageProvenance frame={frame} faults={faults} now={now} />
+    <h3>Observation sources</h3>
+    <ul className="mp-muted mp-source-notes">
+      <li>
+        Correlations: {hasCorrelationValues(correlations)
+          ? "hourly 90-day coefficients are shown in the Correlations panel."
+          : correlations.length
+            ? `still building paired hourly history (${Math.max(...correlations.map((c) => c.samples))} of ${correlations[0].expected} hours); the panel appears once coefficients qualify.`
+            : "no stored correlation set is attached to this frame."}
+      </li>
+      <li>Taker flow, 52-week extremes and stored regime models appear only when their owner publishes them; nothing is estimated in the browser.</li>
+    </ul>
     <h3>Canonical owner context</h3>
     {canonicalRef?.status === "available" && canonicalRef.snapshot_id ? (
       <Suspense fallback={<p>Loading attached context…</p>}>

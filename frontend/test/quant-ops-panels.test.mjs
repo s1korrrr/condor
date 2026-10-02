@@ -53,66 +53,78 @@ test('capital projection does not turn deposits or missing flows into PnL',()=>{
   assert.ok(observedDrawdown(model.history)===null || observedDrawdown(model.history)<=0);
 });
 
-test('Capital page renders every C01-C28 panel and shell panels without nested tabs',()=>{
+const FLEET={bots:['rsi_modular_v2','meridian_v3'],counted:2,expected:2,missing:[],paper:[]};
+const capitalProps=(model,extra={})=>({model,now:Date.now(),range:'7D',onRange:()=>{},fleet:FLEET,accountAllowed:true,notice:[],footer:'native',onHighlight:()=>{},highlight:null,search:'',onSearch:()=>{},holdingsTable:React.createElement('p',null,'holdings'),...extra});
+const fleetWallet=()=>nativeWalletFromRuntime({observedAt:new Date().toISOString(),quoteCurrency:'USDT',balances:[
+  {asset:'BNB',total_balance:8,available_balance:8,value_quote:6300},{asset:'USDC',total_balance:2900,available_balance:2900,value_quote:2898},{asset:'BTC',total_balance:0.05,available_balance:0.05,value_quote:3500},
+]});
+
+test('Capital page with no data renders only shell panels and never prints Unavailable or a strategy selector',()=>{
   const model=projectCapitalModel({current:null,history:[],now:Date.now()});
-  const stats=statStrip({model,accountAllowed:true,risk:null,walletChange:null,botPnl:{daily:null,weekly:null,monthly:null,quote:null},cycles:null,meanWallet:null,rangeLabel:'1D',unit:'USDT'});
-  const html=renderToStaticMarkup(React.createElement(CapitalPage,{
-    model,range:'1D',onRange:()=>{},bot:'rsi_modular_v2',bots:['rsi_modular_v2'],onBot:()=>{},
-    botPnl:{total:null,realized:null,unrealized:null,quote:'USDC'},accountAllowed:true,
-    notice:[],footer:'native',onHighlight:()=>{},highlight:null,search:'',onSearch:()=>{},
-    holdingsTable:React.createElement('p',null,'holdings'),strategyChart:React.createElement('p',null,'chart'),
-    stats,drawdown:{series:[],worst:null,state:{kind:'collecting',sample:{have:0,need:2}}},
-    pageState:{worst:'unavailable',label:'3 sources unavailable',offenders:['a','b','c']},
-  }));
-  for(const id of CAPITAL_PANELS) assert.match(html,new RegExp(`data-panel-id="${id}"`));
-  for(const id of CAPITAL_SLICE_ROWS_1_3) assert.match(html,new RegExp(`data-panel-id="${id}"`));
+  const html=renderToStaticMarkup(React.createElement(CapitalPage,capitalProps(model,{
+    pageState:{worst:'collecting',label:'3 sources collecting',offenders:['a','b','c']},
+  })));
   for(const id of ['S01','S02','S03','S04','S05','S06']) assert.match(html,new RegExp(`data-panel-id="${id}"`));
-  assert.doesNotMatch(html,/role="tablist"|Capital sections/);
+  for(const id of ['C01','C04','C05','C17','C06','C19','C20','C21','C25','C29']) assert.doesNotMatch(html,new RegExp(`data-panel-id="${id}"`),`${id} has no source, so it is not rendered`);
+  assert.doesNotMatch(html,/Unavailable|unavailable/);
+  assert.doesNotMatch(html,/role="tablist"|Capital sections|Capital strategy/);
   assert.match(html,/rsi_modular_v2/);
+  assert.match(html,/meridian_v3/);
+  assert.match(html,/2 of 2 bots counted/);
   assert.match(html,/30D/);
-  assert.match(html,/3 sources unavailable/);
+  assert.match(html,/3 sources collecting/);
   assert.doesNotMatch(html,/All systems operational/i);
-  assert.match(html,/data-state="collecting"/);
+  assert.match(html,/Waiting for a wallet valuation/);
   assert.match(html,/N\/A on spot/,'liquidation risk is explicitly N\/A on the spot lane');
 });
-
-test('Capital rows draw wallet history, bot overlay, drawdown, rails, cycles and fills from admitted data',()=>{
+test('Capital draws fleet tiles, strategy table, allocation, rails and fills from computed data and prints no Unavailable',()=>{
   const t=(minutes)=>new Date(Date.now()-(30-minutes)*60000).toISOString();
   const history=[100,110,99,120,108].map((value,index)=>({observed_at:t(index),priced_total:String(value),valuation_complete:true,unpriced_assets:[]}));
-  const model=projectCapitalModel({current:null,history,now:Date.now(),unit:'USDT'});
+  const current=fleetWallet();
+  const model=projectCapitalModel({current,history:[current],now:Date.now(),unit:'USDT'});
   const series=drawdownSeries(history);
   const at=new Date().toISOString();
-  const html=renderToStaticMarkup(React.createElement(CapitalPage,{
-    model,range:'7D',onRange:()=>{},bot:'rsi_modular_v2',bots:['rsi_modular_v2'],onBot:()=>{},
-    botPnl:{total:12,realized:10,unrealized:2,quote:'USDC'},accountAllowed:true,
-    notice:[],footer:'native',onHighlight:()=>{},highlight:null,search:'',onSearch:()=>{},
-    holdingsTable:React.createElement('p',null,'holdings'),strategyChart:null,
-    stats:statStrip({model,accountAllowed:true,risk:null,walletChange:{amount:8,percent:0.08},botPnl:{daily:1.5,weekly:null,monthly:null,quote:'USDC'},cycles:{scored:0,wins:0,losses:0,winRate:null,profitFactor:null,profitFactorReason:'NO_SCORED_CYCLE',fees:'0.21',grossVolume:'264'},meanWallet:107,rangeLabel:'7D',unit:'USDT'}),
+  const rail={bot:'rsi_modular_v2',name:'max_daily_loss_quote',scope:'bot',limit:'50',used:'2.3',remaining:'47.7',utilization:0.046,unit:'USDC',state:'ok',observedAt:at,source:'runtime_status.daily_entry_risk'};
+  const html=renderToStaticMarkup(React.createElement(CapitalPage,capitalProps(model,{
+    stats:[
+      {id:'C02',label:'Fleet PnL · 7D',value:'12.5',unit:'USDC',state:{kind:'fresh'},note:'since 2026-10-01 07:21 UTC (history starts here) · 2 of 2 bots'},
+      {id:'C03',label:'Daily PnL',value:'4.25',unit:'USDC',state:{kind:'fresh'},note:'24h window · 2 of 2 bots'},
+    ],
+    statsFootnote:'Sharpe, Sortino and volatility appear after 14 days of fleet PnL (3 so far).',
     wallet:{points:history,currency:'USDT',state:{kind:'fresh'},coverageStart:Date.now()/1000-3600},
     drawdown:{series,worst:maxDrawdownPoint(series),state:{kind:'incomplete',reason:'observed'}},
-    botSeries:{points:history.map((point,index)=>({time:Date.parse(point.observed_at),realized:index,unrealized:index,total:index*2,owner:0})),line:history.map((point,index)=>({time:Date.parse(point.observed_at),value:index*2})),quote:'USDC',state:{kind:'fresh'},restarts:[]},
+    pnlNow:{total:12,realized:10,unrealized:2,quote:'USDC',counted:2,expected:2,missing:[],fromHistory:[]},
+    pnlSeries:{line:history.map((point,index)=>({time:Date.parse(point.observed_at),value:index*2})),restarts:[],quote:'USDC'},
     dailyBars:[{day:'2026-09-23',realized:1,unrealized:-0.5,cumulative:0.5},{day:'2026-09-24',realized:0.2,unrealized:0.1,cumulative:0.8}],
-    risk:{days:5,volatilityDaily:0.012,sharpe:null,sortino:null,maxDrawdown:-0.1,var95:null,expectedShortfall95:null,returns:[0.1,-0.1,0.2,-0.1]},
-    rails:{availability:'available',rails:[{name:'max_daily_loss_quote',scope:'bot',limit:'50',used:'2.3',remaining:'47.7',utilization:0.046,unit:'USDC',state:'ok',observedAt:at,source:'runtime_status.daily_entry_risk'}],tightest:{name:'max_daily_loss_quote',scope:'bot',limit:'50',used:'2.3',remaining:'47.7',utilization:0.046,unit:'USDC',state:'ok',observedAt:at,source:'runtime_status.daily_entry_risk'}},
-    cycles:{quote:'USDC',counts:{open:3},cycles:[],stats:{scored:0,minSample:10,sufficient:false,wins:0,losses:0,breakeven:0,winRate:null,profitFactor:null,profitFactorReason:'NO_SCORED_CYCLE',expectancy:null,averageWin:null,averageLoss:null,payoffRatio:null,averageHoldingSeconds:null,fees:'0.21',grossVolume:'264',fillCount:9},inventoryAge:{availability:'available',reason:null,oldestAt:at,oldestSeconds:78577,weightedSeconds:59052,lots:[]}},
-    fills:[{fillId:'5541826',pair:'BTC-USDC',side:'buy',amount:'0.00011',price:'84105.6',volume:'9.251616',fee:'0.0074012928',orderType:'LIMIT_MAKER',timestamp:at,orderId:'o'}],
-    strategyAllocation:{owned:250.7,wallet:20691.94,unit:'USDT',ownedUnit:'USDC'},
-    pageState:{worst:'incomplete',label:'2 sources incomplete',offenders:['Drawdown','Max drawdown']},
-  }));
-  assert.match(html,/class="q-negative">-10\.00%</, "worst drawdown heads the C19 panel; the chart marks it on hover");
-  assert.match(html,/cumulative net PnL/);
-  assert.match(html,/data-panel-id="C03"[^>]*data-state="fresh"/);
-  assert.match(html,/\+1\.50/);
-  assert.match(html,/1\.00x spot/);
-  assert.match(html,/Benchmark off/);
+    walletRisk:{days:5,volatilityDaily:0.012,sharpe:null,sortino:null,maxDrawdown:-0.1,var95:null,expectedShortfall95:null,returns:[0.1,-0.1,0.2,-0.1]},
+    fleetRisk:null,rails:[rail],
+    cycles:{quote:'USDC',bots:2,of:2,scored:3,wins:2,losses:1,winRate:2/3,grossWin:6,grossLoss:2,profitFactor:3,fees:0.21,feeBots:2,grossVolume:264,volumeBots:2,fillCount:9,openLots:3,oldestSeconds:78577},
+    fills:[{bot:'rsi_modular_v2',fillId:'5541826',sourceDbId:'db',pair:'BTC-USDC',side:'buy',amount:'0.00011',price:'84105.6',volume:'9.251616',fee:'0.0074012928',orderType:'LIMIT_MAKER',timestamp:at,orderId:'o'}],
+    strategies:[
+      {bot:'rsi_modular_v2',pnl:9,realized:7,unrealized:2,share:0.72,netNow:9.5,netSource:'controller',quote:'USDC',fees:0.1,trades:5,scored:2,winRate:0.5,owned:200,ownedUnit:'USDT',ownedShare:0.01,since:null,restarts:0,stale:false,note:null},
+      {bot:'meridian_v3',pnl:3.5,realized:3,unrealized:0.5,share:0.28,netNow:2.5,netSource:'history',quote:'USDC',fees:0.11,trades:4,scored:1,winRate:1,owned:null,ownedUnit:null,ownedShare:null,since:Date.now()-3600000,restarts:1,stale:false,note:'History starts inside the range.'},
+    ],
+    allocation:{rows:[{label:'rsi_modular_v2',value:200},{label:'meridian_v3',value:100}],unit:'USDT',remainder:12000,basis:['USDC valued in USDT at the wallet\'s USDC mark 0.9993'],stale:false,exceedsWallet:false},
+    holdingsUnrealized:{BTC:'+0.25 USDC'},
+  })));
+  for(const id of ['C01','C04','C05','C17','C26','C25','C09','C10','C28','C06','C19','C20','C07','C08','C21','C29','C11','C12','C13','C22','C15','C24','C18']) assert.match(html,new RegExp(`data-panel-id="${id}"`),id);
+  assert.doesNotMatch(html,/Unavailable|unavailable/);
+  assert.match(html,/class="q-negative">-10\.00%</,'worst drawdown heads the C19 panel; the chart marks it on hover');
+  assert.match(html,/Fleet cumulative net PnL/);
+  assert.match(html,/since 2026-10-01 07:21 UTC \(history starts here\)/);
+  assert.match(html,/Fleet PnL · 7D/);
+  assert.match(html,/Sharpe, Sortino and volatility appear after 14 days/);
+  assert.match(html,/\+12\.00|\+12/);
   assert.match(html,/4\.6% of 50/);
   assert.match(html,/84105\.6/);
-  assert.doesNotMatch(html,/Outside V2 \(wallet remainder\)/,'USDC strategy value is not subtracted from the USDT wallet');
-  assert.match(html,/not comparable with the USDT wallet/);
-  assert.match(html,/21\.8h|oldest open lot/);
+  assert.match(html,/1\.00x spot/);
+  assert.match(html,/PnL by strategy/);
+  assert.match(html,/meridian_v3/);
+  assert.match(html,/Allocation by strategy/);
+  assert.match(html,/Includes deposits and withdrawals/);
+  assert.match(html,/oldest open lot|oldest 21\.8h/);
   assert.doesNotMatch(html,/>N\/A</);
 });
-
 test('Bot roster keeps mixed pair states and B-panel anatomy in page flow',()=>{
   const now=Date.parse('2026-09-15T10:00:00Z');
   const payload={runtime_status:{bot_name:'rsi_modular_v2',updated_at:new Date(now-1000).toISOString(),controllers:[
@@ -156,30 +168,24 @@ test('native wallet observation preserves tiny inventory and shared-wallet total
   assert.equal(model.periodPnl.value,null);
 });
 
-test('available cash is unavailable when no USDC balance exists, regardless of a fresh USDT wallet',()=>{
+test('available cash tile is not rendered when no USDC balance exists, regardless of a fresh USDT wallet',()=>{
   const current=nativeWalletFromRuntime({observedAt:new Date().toISOString(),quoteCurrency:'USDT',balances:[{asset:'BTC',total_balance:'0.1',available_balance:'0.1',value_quote:'6000'}]});
   const model=projectCapitalModel({current,history:[],now:Date.now(),unit:'USDT'});
-  const html=renderToStaticMarkup(React.createElement(CapitalPage,{model,range:'1D',onRange:()=>{},bot:null,bots:[],onBot:()=>{},botPnl:{total:null,realized:null,unrealized:null,quote:null},accountAllowed:true,notice:[],footer:'native',onHighlight:()=>{},highlight:null,search:'',onSearch:()=>{},holdingsTable:null}));
-  assert.match(html,/data-panel-id="C04" data-state="unavailable"/);
-  assert.match(html,/Available cash[\s\S]*?Unavailable<small>USDC<\/small>/);
+  const html=renderToStaticMarkup(React.createElement(CapitalPage,capitalProps(model,{range:'1D'})));
+  assert.match(html,/data-panel-id="C01"/);
+  assert.doesNotMatch(html,/data-panel-id="C04"/);
+  assert.doesNotMatch(html,/Unavailable/);
 });
-
-test('same-unit strategy allocation is withheld when owned marked value exceeds wallet value',()=>{
+test('allocation by strategy states when no remainder can be computed and when owned value exceeds the wallet',()=>{
   const model=projectCapitalModel({current:null,history:[],now:Date.now(),unit:'USDT'});
-  const html=renderToStaticMarkup(React.createElement(CapitalPage,{model,range:'1D',onRange:()=>{},bot:'rsi_modular_v2',bots:['rsi_modular_v2'],onBot:()=>{},botPnl:{total:null,realized:null,unrealized:null,quote:'USDC'},accountAllowed:true,notice:[],footer:'native',onHighlight:()=>{},highlight:null,search:'',onSearch:()=>{},holdingsTable:null,strategyAllocation:{owned:120,wallet:100,ownedUnit:'USDT',unit:'USDT'}}));
-  assert.match(html,/data-panel-id="C21" data-state="incomplete"/);
-  assert.doesNotMatch(html,/Outside V2 \(wallet remainder\)/);
-  assert.match(html,/V2-owned value exceeds the same-unit shared-wallet valuation/);
-  const differentQuote=renderToStaticMarkup(React.createElement(CapitalPage,{model,range:'1D',onRange:()=>{},bot:'rsi_modular_v2',bots:['rsi_modular_v2'],onBot:()=>{},botPnl:{total:null,realized:null,unrealized:null,quote:'USDC'},accountAllowed:true,notice:[],footer:'native',onHighlight:()=>{},highlight:null,search:'',onSearch:()=>{},holdingsTable:null,strategyAllocation:{owned:120,wallet:100,ownedUnit:'USDC',unit:'USDT'}}));
-  assert.match(differentQuote,/data-panel-id="C21" data-state="incomplete"/);
-  assert.doesNotMatch(differentQuote,/exceeds the same-unit shared-wallet/,'different quote assets are incomparable, not over-allocated');
-  for(const owned of [-1,NaN]) {
-    const invalid=renderToStaticMarkup(React.createElement(CapitalPage,{model,range:'1D',onRange:()=>{},bot:'rsi_modular_v2',bots:['rsi_modular_v2'],onBot:()=>{},botPnl:{total:null,realized:null,unrealized:null,quote:'USDC'},accountAllowed:true,notice:[],footer:'native',onHighlight:()=>{},highlight:null,search:'',onSearch:()=>{},holdingsTable:null,strategyAllocation:{owned,wallet:100,ownedUnit:'USDT',unit:'USDT'}}));
-    assert.match(invalid,/The owner published an invalid or negative marked value/);
-    assert.doesNotMatch(invalid,/data-panel-id="C26"[^>]*>[^]*?<strong[^>]*>-[^<]*<small>USDT/);
-  }
+  const withheld=renderToStaticMarkup(React.createElement(CapitalPage,capitalProps(model,{allocation:{rows:[{label:'rsi_modular_v2',value:120}],unit:'USDC',remainder:null,basis:['Owned values are in USDC; the wallet is in USDT. No wallet mark converts them, so no remainder is computed.'],stale:false,exceedsWallet:false}})));
+  assert.match(withheld,/data-panel-id="C21" data-state="incomplete"/);
+  assert.doesNotMatch(withheld,/Unallocated/);
+  assert.match(withheld,/no remainder is computed/);
+  const exceeds=renderToStaticMarkup(React.createElement(CapitalPage,capitalProps(model,{allocation:{rows:[{label:'rsi_modular_v2',value:120}],unit:'USDT',remainder:0,basis:['Owned value exceeds the wallet valuation; the remainder is shown as zero.'],stale:false,exceedsWallet:true}})));
+  assert.match(exceeds,/data-panel-id="C21" data-state="incomplete"/);
+  assert.match(exceeds,/exceeds the wallet valuation/);
 });
-
 test('Capital holdings use the seven-column table adapter and render header and row values',()=>{
   const rows=[{token:'BTC',total:'0.12',available:'0.12',price:'100000',value:'12000'}];
   const columns=[
@@ -249,13 +255,6 @@ test('broad saved history cannot qualify a long selected range using only its re
   assert.ok(result.points[0].time >= now-6*86_400_000);
 });
 
-test('old selected-window points cannot masquerade as the latest bot snapshot',()=>{
-  const model=projectCapitalModel({current:null,history:[],now:Date.now(),unit:'USDT'});
-  const old={time:Date.now()-27*60*60*1000,realized:2,unrealized:1,total:3,owner:0};
-  const html=renderToStaticMarkup(React.createElement(CapitalPage,{model,range:'CUSTOM',onRange:()=>{},bot:'rsi_modular_v2',bots:['rsi_modular_v2'],onBot:()=>{},botPnl:{total:null,realized:null,unrealized:null,quote:'USDC'},accountAllowed:true,notice:[],footer:'native',onHighlight:()=>{},highlight:null,search:'',onSearch:()=>{},holdingsTable:null,botSeries:{points:[old],latestPoint:old,line:[{time:old.time,value:3}],quote:'USDC',state:{kind:'stale'},restarts:[]}}));
-  assert.match(html,/data-panel-id="C25" data-state="unavailable"/);
-  assert.doesNotMatch(html,/last saved/);
-});
 
 test('Capital KPIs use observed wallet even when account credential reads are off',()=>{
   const model=projectCapitalModel({
@@ -266,12 +265,17 @@ test('Capital KPIs use observed wallet even when account credential reads are of
     now:Date.now(),
     unit:'USDC',
   });
-  const html=renderToStaticMarkup(React.createElement(CapitalPage,{
-    model,range:'1D',onRange:()=>{},bot:'rsi_modular_v2',bots:['rsi_modular_v2'],onBot:()=>{},
-    botPnl:{total:null,realized:null,unrealized:null,quote:'USDC'},accountAllowed:false,
-    notice:[],footer:'rsibot-stack-v2',onHighlight:()=>{},highlight:null,search:'',onSearch:()=>{},
-    holdingsTable:React.createElement('p',null,'holdings'),strategyChart:React.createElement('p',null,'chart'),
-  }));
+  const html=renderToStaticMarkup(React.createElement(CapitalPage,capitalProps(model,{range:'1D',accountAllowed:false,footer:'rsibot-stack-v2'})));
   assert.match(html,/21,182\.86|21182/);
   assert.doesNotMatch(html,/Research read check failed/);
+  assert.doesNotMatch(html,/Unavailable/);
+});
+test('row panels from last-known owner data read stale, never fresh; empty is unavailable',()=>{
+  const {rowsPanelState}=load('features/quant-ops/panel-state.ts');
+  assert.deepEqual(rowsPanelState(3,'none',[]),{kind:'fresh'});
+  assert.deepEqual(rowsPanelState(0,'No rows.',[{name:'v2',observedAt:'2026-10-01T07:00:00Z'}]),{kind:'unavailable',reason:'No rows.'});
+  const one=rowsPanelState(5,'x',[{name:'v2',observedAt:'2026-10-01T07:00:00Z'}]);
+  assert.equal(one.kind,'stale');assert.equal(one.observedAt,'2026-10-01T07:00:00Z');assert.match(one.reason,/v2 has no current owner heartbeat/);
+  const two=rowsPanelState(5,'x',[{name:'a',observedAt:'2026-10-01T08:00:00Z'},{name:'b',observedAt:'2026-10-01T06:00:00Z'},{name:'c',observedAt:null}]);
+  assert.equal(two.observedAt,'2026-10-01T06:00:00Z');assert.match(two.reason,/a, b, c have no current owner heartbeat/);
 });

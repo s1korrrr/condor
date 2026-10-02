@@ -10,6 +10,8 @@ export function researchRecordSummary(item: RecordData) {
     rationale:text(detail.rationale,text(detail.statement,text(detail.reason,''))),
     scope:[...new Set(labels.filter((value):value is string=>typeof value==='string' && !!value))].join(' · '),
     start:text(window.start ?? window.start_date ?? detail.start_date,''),
-    end:text(window.end ?? window.end_date ?? detail.end_date,''), recordedAt:text(item.recorded_at,''),
+    end:text(window.end ?? window.end_date ?? window.end_exclusive ?? detail.end_date,''),
+    endExclusive:window.end===undefined && window.end_date===undefined && window.end_exclusive!==undefined,
+    recordedAt:text(item.recorded_at,''),
   };
 }

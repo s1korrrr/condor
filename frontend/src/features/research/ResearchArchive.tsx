@@ -435,8 +435,9 @@ export function ResearchArchive({ server }: { server: string }) {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
   }, []);
+  // Typing a search term replaces the history entry; otherwise every keystroke would add a Back-button step.
   const change = (patch: Record<string, string>, reset = true) =>
-    setParams(updateArchiveParams(params, patch, reset));
+    setParams(updateArchiveParams(params, patch, reset), { replace: Object.keys(patch).every(key => key === "q") });
   const overview = useQuery({
     queryKey: ["research-archive-overview", server],
     queryFn: ({ signal }) =>

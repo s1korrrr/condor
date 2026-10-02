@@ -12,6 +12,14 @@ export type ChartSeries = {
   id: string; label: string; color: string; points: SeriesPoint[];
   /** Secondary series keep their own scale on the left edge (for example cumulative bot PnL over wallet value). */
   axis?: 'primary' | 'secondary'; area?: boolean; unit?: string; format?: (value: number) => string;
+  /** One signed series drawn green above zero and red below it (breadth pressure, net flow). Tooltip still shows one row. */
+  signSplit?: { positive: string; negative: string };
+  /** Set on the drawn halves of a `signSplit` series: the area fills from zero, not from the axis floor. */
+  zeroBase?: boolean;
+  /** Listed in the tooltip (with its own axis scale) but not drawn, for values a drawn series already implies. */
+  tooltipOnly?: boolean;
+  /** Area gradient strength at the line; defaults to 0.28. */
+  fillOpacity?: number;
 };
 export type ChartMarker = { time: number; label: string; color?: string };
 
@@ -21,6 +29,29 @@ export function timeTick(span: number) {
   return (time: number) => span <= 2 * 86_400_000
     ? new Date(time).toLocaleTimeString('en-GB', { timeZone: 'UTC', hour: '2-digit', minute: '2-digit' })
     : new Date(time).toLocaleDateString('en-GB', { timeZone: 'UTC', month: 'short', day: 'numeric' });
+}
+
+/**
+ * Splits a `signSplit` series into a positive and a negative part joined at the exact zero crossing,
+ * so each part can be coloured on its own. Only drawing uses the parts; values are never altered.
+ */
+export function expandSignSplit(series: ChartSeries[]): ChartSeries[] {
+  return series.flatMap(item => {
+    if (!item.signSplit) return [item];
+    const part = (sign: 1 | -1, color: string): ChartSeries => {
+      const points: SeriesPoint[] = [];
+      item.points.forEach((point, index) => {
+        const previous = item.points[index - 1];
+        if (previous && previous.value !== null && point.value !== null && previous.value * point.value < 0) {
+          const crossing = previous.time + (previous.value / (previous.value - point.value)) * (point.time - previous.time);
+          if (crossing > previous.time && crossing < point.time) points.push({ time: crossing, value: 0 });
+        }
+        points.push({ time: point.time, value: point.value === null ? null : sign * point.value > 0 ? point.value : 0 });
+      });
+      return { ...item, id: `${item.id}${sign > 0 ? '+' : '-'}`, color, points, signSplit: undefined, zeroBase: true };
+    };
+    return [part(1, item.signSplit.positive), part(-1, item.signSplit.negative)];
+  });
 }
 
 export type TimeSeriesProjection = {
@@ -34,7 +65,8 @@ export type TimeSeriesProjection = {
  * Pure projection behind TimeSeriesChart. Each series splits at null values into separate keys, so
  * no line crosses a gap, while samples from other series on the shared time axis never break it.
  */
-export function projectTimeSeries(series: ChartSeries[]): TimeSeriesProjection {
+export function projectTimeSeries(input: ChartSeries[]): TimeSeriesProjection {
+  const series = expandSignSplit(input);
   const byTime = new Map<number, Record<string, number>>();
   const keys: TimeSeriesProjection['keys'] = [];
   let min = Infinity, max = -Infinity;

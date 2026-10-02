@@ -4,6 +4,7 @@ import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
 import vm from 'node:vm';
 import * as portfolio from '../src/features/portfolio/model.ts';
+import * as decimal from '../src/features/quant-ops/decimal-display.ts';
 
 const require=createRequire(new URL('../package.json',import.meta.url));
 const ts=require('typescript');
@@ -11,6 +12,8 @@ const module={exports:{}};
 const source=ts.transpileModule(readFileSync(new URL('../src/features/quant-ops/capital-project.ts',import.meta.url),'utf8'),
   {compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
 vm.runInNewContext(source,{module,exports:module.exports,require(name){
+  // The projection stays I/O-free: only the portfolio model and the pure decimal helper are importable.
+  if(name==='./decimal-display')return decimal;
   assert.equal(name,'@/features/portfolio/model');return portfolio;
 }});
 const {nativeWalletFromRuntime,projectCapitalModel,observedDrawdown,observedEquityChanges,concentration}=module.exports;
@@ -36,6 +39,14 @@ test('native wallet requires an explicit value quote and keeps missing free bala
   const view=projectCapitalModel({current:wallet,history:[],now,unit:'USDT'});
   assert.equal(view.availableQuote.value,null);
   assert.equal(view.cashValue,198);
+});
+
+test('native wallet derived locked balance and mark carry no binary float noise',()=>{
+  const wallet=nativeWalletFromRuntime({balances:[{asset:'BTC',total_balance:0.3,available_balance:0.1,value_quote:2672.8763299999996}],observedAt:at,quoteCurrency:'USDT'});
+  const row=wallet.holdings[0];
+  assert.equal(row.locked,'0.2');
+  assert.equal(row.value,'2672.87633');
+  assert.equal(row.price,'8909.58776666667');
 });
 
 test('incomplete or unpriced holdings do not claim non-cash account exposure',()=>{

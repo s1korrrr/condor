@@ -80,11 +80,8 @@ export function Sparkline({
   );
   if (valid.length < 2)
     return (
-      <span
-        className="mp-sparkline-empty"
-        title={`${label}: history unavailable`}
-      >
-        History unavailable
+      <span className="mp-sparkline-empty" title={`${label}: collecting history`}>
+        —
       </span>
     );
   const low = Math.min(...valid),
@@ -147,25 +144,15 @@ export function Time({ value }: { value: number }) {
   );
 }
 
+/** One-hour change; nothing is drawn while the comparison window is incomplete. */
 export function Delta({ metric }: { metric?: DisplayMetric }) {
+  if (metric?.value == null) return null;
   return (
     <small
-      className={
-        metric?.value == null
-          ? "mp-muted mp-delta"
-          : metric.value < 0
-            ? "mp-down mp-delta"
-            : "mp-up mp-delta"
-      }
-      title={
-        metric
-          ? metricTitle(metric)
-          : "A retained observation with the same definition and common cohort is required."
-      }
+      className={`${metric.value < 0 ? "mp-down" : "mp-up"} mp-delta`}
+      title={metricTitle(metric)}
     >
-      {metric?.value == null
-        ? "1h comparison unavailable"
-        : `${metricText(metric, 1, true)} · 1h`}
+      {`${metricText(metric, 1, true)} · 1h`}
     </small>
   );
 }

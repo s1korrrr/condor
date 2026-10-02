@@ -15,3 +15,11 @@ export function Overview() { return <WorkspaceUnavailable title="Overview" />; }
 export function TradingVisuals() { return <WorkspaceUnavailable title="Trading Visuals" />; }
 
 export function Operations() { return <WorkspaceUnavailable title="Operations" />; }
+
+/** Props of the optional workspace's strategy charts. `bot` mounts one bot's charts; `composite` with `bots` combines
+ *  every strategy. `pair` and `view` focus a pair or chart view (the Bots page forwards its `?pair=&view=` query). */
+export type StrategyChartsProps = { bot?: string; bots?: string[]; composite?: boolean; server?: string | null; pair?: string | null; view?: string | null; records?: boolean };
+
+export function StrategyCharts({ bot, composite }: StrategyChartsProps) {
+  return <p role="status" className="text-sm text-[var(--color-text-muted)]">{composite ? 'Fleet strategy charts' : `Strategy charts for ${bot ?? 'this bot'}`} need the optional monitoring workspace, which this installation does not include.</p>;
+}

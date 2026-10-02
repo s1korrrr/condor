@@ -1,3 +1,4 @@
+import { cleanFloat } from '@/features/quant-ops/decimal-display';
 type Row = Record<string, unknown>;
 
 const object = (value: unknown): Row => value && typeof value === 'object' && !Array.isArray(value) ? value as Row : {};
@@ -14,7 +15,7 @@ const finite = (value: unknown): number | null => {
   return Number.isFinite(result) ? result : null;
 };
 const nonnegativeInteger = (value: unknown): number | null => typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
-const decimalText = (value: unknown): string | null => finite(value) === null ? null : String(value);
+const decimalText = (value: unknown): string | null => finite(value) === null ? null : typeof value === 'number' ? cleanFloat(value) : String(value);
 const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string' && item.length > 0) : [];
 
 export type QuantMetric = {

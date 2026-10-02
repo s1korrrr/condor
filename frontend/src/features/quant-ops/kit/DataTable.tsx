@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable, type ColumnDef, type ColumnFiltersState, type FilterFn, type SortingState } from '@tanstack/react-table';
 import { numericFilterMatch, searchMatch } from './table-filter';
+import { cleanFloat } from '../decimal-display';
 import './kit.css';
 
 /**
@@ -39,7 +40,8 @@ const numeric = (value: unknown): number | null => {
 };
 /** CSV cell with quoting and formula-injection protection; signed numbers stay numbers. */
 const csvCell = (value: unknown) => {
-  let text = String(value ?? '');
+  // Float-math numbers must not export binary noise (see cleanFloat); strings stay exact.
+  let text = typeof value === 'number' && Number.isFinite(value) ? cleanFloat(value) : String(value ?? '');
   if (/^[=+\-@\t\r]/.test(text) && numeric(text) === null) text = `'${text}`;
   return /[",\n\r]/.test(text) ? `"${text.replaceAll('"', '""')}"` : text;
 };

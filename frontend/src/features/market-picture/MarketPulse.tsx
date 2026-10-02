@@ -1,156 +1,26 @@
+import { useMemo } from "react";
+import { TimeSeriesChart } from "@/features/quant-ops/kit/charts";
+import { SparkChart } from "@/features/quant-ops/kit/charts";
+import { TileGrid } from "@/features/quant-ops/kit/grid";
+import { CHART, type ChartSeries, type SeriesPoint } from "@/features/quant-ops/kit/series";
+import { useElementWidth } from "@/features/quant-ops/kit/useElementWidth";
+import { HORIZONS, HORIZON_LABELS } from "./model.mjs";
 import {
-  Area,
-  Brush,
-  CartesianGrid,
-  ComposedChart,
-  Line,
-  ReferenceArea,
-  ReferenceLine,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-} from "recharts";
-import { HORIZONS, HORIZON_LABELS, marketPulseWindow } from "./model.mjs";
+  breadthLadder,
+  horizonLabel,
+  marketVerdict,
+  pulseSeries,
+  VERDICT_THRESHOLD,
+} from "./pulse.mjs";
 import {
   type DisplayFrame,
   type HistoryPoint,
   type Horizon,
   metricText,
+  metricTitle,
+  numberText,
 } from "./presentation";
-import { Delta, Empty, Metric, Panel, Quality, Sparkline } from "./Primitives";
-
-export function MarketSummaryStrip({
-  frame,
-  history,
-  horizon,
-  setHorizon,
-}: {
-  frame: DisplayFrame | null;
-  history: HistoryPoint[];
-  horizon: Horizon;
-  setHorizon: (h: Horizon) => void;
-}) {
-  const breadth = frame?.breadth[horizon];
-  const summaries = [
-    ["Market participation", "market_participation", "Above EMA21 · 1m"],
-    ["Relative volume", "relative_volume_24h", "Median · prior 24h baseline"],
-    ["Trend strength", "trend_strength", "Mean ADX14 · 0–100"],
-    [
-      "Realized volatility",
-      "realized_volatility_24h",
-      "Median · 24h annualized",
-    ],
-  ];
-  return (
-    <div
-      className="mp-summary-strip"
-      aria-label="Admitted-universe market summary"
-    >
-      <section className="mp-summary-card mp-breadth-card">
-        <h2>Market breadth</h2>
-        <div className="mp-breadth-horizons">
-          {HORIZONS.map((h, i) => (
-            <button
-              key={h}
-              aria-pressed={h === horizon}
-              onClick={() => setHorizon(h)}
-              title={`${HORIZON_LABELS[i]} · ${frame?.breadth[h]?.valid ?? 0}/${frame?.expected ?? 0} valid`}
-            >
-              <span>{HORIZON_LABELS[i]}</span>
-              <Metric metric={frame?.breadth[h]?.positive} digits={0} />
-              <Sparkline
-                values={history.flatMap((p) => p.gapBefore ? [null, p.breadth[h]?.positive ?? null] : [p.breadth[h]?.positive ?? null])}
-                label={`${HORIZON_LABELS[i]} advancing share history`}
-              />
-            </button>
-          ))}
-        </div>
-      </section>
-      <section className="mp-summary-card">
-        <h2>
-          Advances / declines{" "}
-          <small>{HORIZON_LABELS[HORIZONS.indexOf(horizon)]}</small>
-        </h2>
-        <div className="mp-adu">
-          <div className="mp-up">
-            {breadth?.advancing ?? "—"}
-            <small>
-              <Metric metric={breadth?.positive} />
-            </small>
-          </div>
-          <div className="mp-down">
-            {breadth?.declining ?? "—"}
-            <small>
-              <Metric metric={breadth?.negative} />
-            </small>
-          </div>
-          <div className="mp-neutral">
-            {breadth?.unchanged ?? "—"}
-            <small>
-              <Metric metric={breadth?.flat} />
-            </small>
-          </div>
-        </div>
-        <div className="mp-share-bar" aria-hidden="true">
-          {breadth &&
-            [
-              breadth.positive.value,
-              breadth.negative.value,
-              breadth.flat.value,
-            ].map((v, i) => <span key={i} style={{ flexGrow: v ?? 0 }} />)}
-        </div>
-        <Quality valid={breadth?.valid ?? 0} expected={frame?.expected ?? 0} />
-      </section>
-      {summaries.map(([title, key, hint]) => (
-        <section className="mp-summary-card" key={key}>
-          <h2>{title}</h2>
-          <div className="mp-summary-value">
-            <Metric metric={frame?.summary[key]} />
-          </div>
-          <small>{hint}</small>
-          <Delta metric={frame?.comparisons[`summary/${key}`]} />
-          <Sparkline
-            values={history.flatMap((p) => p.gapBefore ? [null, p.summary[key] ?? null] : [p.summary[key] ?? null])}
-            label={`${title} history`}
-          />
-          <span className="mp-summary-quality">
-            <Quality
-              valid={frame?.summary[key]?.valid ?? 0}
-              expected={frame?.expected ?? 0}
-            />
-          </span>
-        </section>
-      ))}
-      <section className="mp-summary-card mp-coverage-card">
-        <h2>Coverage</h2>
-        <strong>
-          {frame ? `${frame.valid} / ${frame.expected}` : "Unavailable"}
-        </strong>
-        <small>
-          {frame
-            ? `${frame.quote} · ${frame.universeId}`
-            : "Observation source pending"}
-        </small>
-        <div className="mp-coverage-track">
-          <span
-            style={{
-              width: frame?.expected
-                ? `${(frame.valid / frame.expected) * 100}%`
-                : "0%",
-            }}
-          />
-        </div>
-        <button
-          className="mp-text-button"
-          onClick={() => document.getElementById("mp-coverage-button")?.click()}
-        >
-          Inspect sources ↗
-        </button>
-      </section>
-    </div>
-  );
-}
+import { Metric } from "./Primitives";
 
 /** Coverage changes within a partial universe are just as material as a full/partial flip. */
 function coverageChangePoints(history: HistoryPoint[]): HistoryPoint[] {
@@ -162,7 +32,130 @@ function coverageChangePoints(history: HistoryPoint[]): HistoryPoint[] {
   });
 }
 
-export function MarketPulsePanel({
+const signed = (value: number, digits = 2) =>
+  `${value > 0 ? "+" : ""}${value.toFixed(digits)}`;
+const percent = (value: number) => `${value.toFixed(0)}%`;
+
+/** Diverging bar for a -1..+1 score: fills from the centre toward risk-on or risk-off. */
+function ScoreBar({ score, marks = false }: { score: number; marks?: boolean }) {
+  const magnitude = Math.min(1, Math.abs(score)) * 50;
+  return (
+    <span className="mp-score" aria-hidden="true">
+      <i
+        className="mp-score__fill"
+        data-side={score >= 0 ? "on" : "off"}
+        style={score >= 0 ? { left: "50%", width: `${magnitude}%` } : { right: "50%", width: `${magnitude}%` }}
+      />
+      <i className="mp-score__zero" />
+      {marks && (
+        <>
+          <i className="mp-score__mark" style={{ left: `${50 - VERDICT_THRESHOLD * 50}%` }} />
+          <i className="mp-score__mark" style={{ left: `${50 + VERDICT_THRESHOLD * 50}%` }} />
+        </>
+      )}
+    </span>
+  );
+}
+
+/** Verdict plus the three transparent components behind it. */
+function VerdictCard({ frame, horizon }: { frame: DisplayFrame | null; horizon: Horizon }) {
+  const verdict = useMemo(() => marketVerdict(frame, horizon), [frame, horizon]);
+  if (!frame || !verdict)
+    return (
+      <div className="mp-verdict" data-state="loading" aria-busy="true">
+        <span className="mp-skeleton" style={{ height: 22, width: "40%" }} />
+        <span className="mp-skeleton" style={{ height: 54, width: "70%" }} />
+        <span className="mp-skeleton" style={{ height: 12 }} />
+      </div>
+    );
+  const mean = frame.distribution[horizon]?.mean;
+  return (
+    <div className="mp-verdict" data-state={verdict.state} title={verdict.rule}>
+      <span className="mp-kicker">
+        Market state · {horizonLabel(horizon)} · {frame.expected} instruments
+      </span>
+      <strong className="mp-verdict__word" aria-label={`Market state: ${verdict.label}`}>
+        <span aria-hidden="true">{verdict.state === "risk-on" ? "▲" : verdict.state === "risk-off" ? "▼" : "◆"}</span>
+        {verdict.label}
+      </strong>
+      <div className="mp-verdict__meter">
+        <ScoreBar score={verdict.score} marks />
+        <span className="mp-verdict__ends">
+          <span>Risk-off</span>
+          <b>{signed(verdict.score)}</b>
+          <span>Risk-on</span>
+        </span>
+      </div>
+      <p className="mp-verdict__counts">
+        <span className="mp-up">{verdict.advancing ?? "—"} advancing</span>
+        <span className="mp-down">{verdict.declining ?? "—"} declining</span>
+        <span className="mp-neutral">{verdict.unchanged ?? "—"} unchanged</span>
+        {mean?.value != null && (
+          <span title={metricTitle(mean)}>mean {metricText(mean, 2, true)}</span>
+        )}
+      </p>
+      <ul className="mp-verdict__parts" aria-label="Verdict components">
+        {verdict.components.map((c) => (
+          <li key={c.id} title={c.detail}>
+            <span>{c.label}</span>
+            <ScoreBar score={c.score} />
+            <small>{c.detail}</small>
+          </li>
+        ))}
+      </ul>
+      <details className="mp-verdict__rule">
+        <summary>How is this decided?</summary>
+        <p>{verdict.rule}</p>
+      </details>
+    </div>
+  );
+}
+
+/** Advancing / unchanged / declining share for every horizon; click one to drive the hero. */
+function BreadthLadder({
+  frame,
+  horizon,
+  setHorizon,
+}: {
+  frame: DisplayFrame | null;
+  horizon: Horizon;
+  setHorizon: (h: Horizon) => void;
+}) {
+  const rows = useMemo(() => breadthLadder(frame), [frame]);
+  if (!rows.length) return null;
+  return (
+    <div className="mp-ladder" role="group" aria-label="Breadth by horizon">
+      <span className="mp-kicker">Breadth by horizon</span>
+      {rows.map((row) => {
+        const tip = `${row.label}: ${row.advancing} advancing · ${row.unchanged} unchanged · ${row.declining} declining of ${row.valid}/${row.expected} valid${row.pressure == null ? "" : ` · pressure ${signed(row.pressure)}`}`;
+        return (
+          <button
+            key={row.horizon}
+            className="mp-ladder__row"
+            aria-pressed={row.horizon === horizon}
+            onClick={() => setHorizon(row.horizon as Horizon)}
+            title={tip}
+            aria-label={tip}
+          >
+            <span className="mp-ladder__label">{row.label}</span>
+            <span className="mp-ladder__bar" aria-hidden="true">
+              <i data-side="up" style={{ flexGrow: row.up }} />
+              <i data-side="flat" style={{ flexGrow: row.flat }} />
+              <i data-side="down" style={{ flexGrow: row.down }} />
+            </span>
+            <span className="mp-ladder__value">
+              <b className="mp-up">{row.advancing}</b>
+              <span>/</span>
+              <b className="mp-down">{row.declining}</b>
+            </span>
+          </button>
+        );
+      })}
+    </div>
+  );
+}
+
+export function MarketPulseHero({
   frame,
   history,
   horizon,
@@ -179,319 +172,212 @@ export function MarketPulsePanel({
   setWindow: (w: string) => void;
   replay: (id: string) => void;
 }) {
-  const coverage = marketPulseWindow(history, window);
-  const samples = coverage.samples.map((p) => ({
-    ...p,
-    ...p.breadth[horizon],
-    positive:
-      p.breadth[horizon]?.positive == null
-        ? null
-        : p.breadth[horizon].positive! * 100,
-    negative:
-      p.breadth[horizon]?.negative == null
-        ? null
-        : p.breadth[horizon].negative! * 100,
-    flat:
-      p.breadth[horizon]?.flat == null ? null : p.breadth[horizon].flat! * 100,
-  }));
-  const points = samples.flatMap((p) =>
-    p.gapBefore
-      ? [
-          {
-            ...p,
-            time: p.time - 1,
-            snapshot_id: null,
-            positive: null,
-            negative: null,
-            flat: null,
-            pressure: null,
-          },
-          p,
-        ]
-      : [p],
+  const pulse = useMemo(() => pulseSeries(history, window, horizon), [history, window, horizon]);
+  const markers = useMemo(
+    () => coverageChangePoints(pulse.samples).map((p) => ({ time: p.time, label: "Coverage changed" })),
+    [pulse.samples],
   );
+  const series = useMemo<ChartSeries[]>(
+    () => [
+      {
+        id: "pressure",
+        label: "Breadth pressure",
+        color: CHART.violet,
+        points: pulse.pressure,
+        area: true,
+        signSplit: { positive: CHART.positive, negative: CHART.negative },
+        fillOpacity: 0.7,
+        format: (v: number) => signed(v),
+      },
+      { id: "advancing", label: "Advancing share", color: CHART.blue, points: pulse.advancing, axis: "secondary", tooltipOnly: true, format: percent },
+      { id: "declining", label: "Declining share", color: CHART.negative, points: pulse.declining, axis: "secondary", tooltipOnly: true, format: percent },
+    ],
+    [pulse],
+  );
+  const [ref, width] = useElementWidth<HTMLDivElement>();
   const breadth = frame?.breadth[horizon];
-  const coverageChanges = coverageChangePoints(coverage.samples);
+  const hasHistory = pulse.advancing.some((p) => p.value !== null);
+  const replayable = pulse.samples.filter((p) => p.snapshot_id);
   return (
-    <Panel
-      id="mp-pulse"
-      title="Market Pulse"
-      detail="Admitted-universe breadth & pressure"
-      className="mp-pulse"
-      actions={
-        <div className="mp-segment">
+    <section id="mp-pulse" className="mp-hero" aria-labelledby="mp-pulse-title">
+      <header className="mp-hero__head">
+        <h2 id="mp-pulse-title">Market Pulse</h2>
+        <span className="mp-panel-detail">Observed breadth &amp; pressure across the admitted universe</span>
+        <div className="mp-segment" role="group" aria-label="Breadth horizon">
           {HORIZONS.map((h, i) => (
-            <button
-              key={h}
-              aria-pressed={h === horizon}
-              onClick={() => setHorizon(h)}
-            >
+            <button key={h} aria-pressed={h === horizon} onClick={() => setHorizon(h as Horizon)}>
               {HORIZON_LABELS[i]}
             </button>
           ))}
         </div>
-      }
-    >
-      <div className="mp-chart-legend">
-        <span className="mp-up">
-          ● Advancing <Metric metric={breadth?.positive} digits={0} />
-        </span>
-        <span className="mp-down">
-          ● Declining <Metric metric={breadth?.negative} digits={0} />
-        </span>
-        <span className="mp-neutral">
-          ● Unchanged <Metric metric={breadth?.flat} digits={0} />
-        </span>
-        <span className="mp-pressure-color">● Breadth pressure · RHS</span>
-      </div>
-      <div
-        className="mp-pulse-plot"
-        aria-label="Market breadth history from zero to 100 percent with pressure from minus three to three"
-      >
-        {points.length ? (
-          <ResponsiveContainer
-            width="100%"
-            height="100%"
-            initialDimension={{ width: 1, height: 1 }}
-          >
-            <ComposedChart
-              data={points}
-              margin={{ top: 12, left: -18, right: -12, bottom: 0 }}
-              onClick={(state) => {
-                const point =
-                  state.activeTooltipIndex != null
-                    ? points[Number(state.activeTooltipIndex)]
-                    : null;
-                if (point?.snapshot_id) replay(point.snapshot_id);
-              }}
-            >
-              <defs>
-                <linearGradient
-                  id="mp-pressure-fill"
-                  x1="0"
-                  y1="0"
-                  x2="0"
-                  y2="1"
-                >
-                  <stop offset="0%" stopColor="#A67CFF" stopOpacity={0.45} />
-                  <stop offset="100%" stopColor="#A67CFF" stopOpacity={0.02} />
-                </linearGradient>
-              </defs>
-              <CartesianGrid stroke="#143047" vertical={false} />
-              <XAxis
-                dataKey="time"
-                minTickGap={40}
-                tickFormatter={(t) => new Date(t).toISOString().slice(11, 16)}
-                tick={{ fill: "#91A6B9", fontSize: 10 }}
-                stroke="#17415B"
-              />
-              <YAxis
-                yAxisId="share"
-                domain={[0, 100]}
-                ticks={[0, 25, 50, 75, 100]}
-                tickFormatter={(v) => `${v}%`}
-                tick={{ fill: "#91A6B9", fontSize: 10 }}
-                stroke="none"
-              />
-              <YAxis
-                yAxisId="pressure"
-                orientation="right"
-                domain={[-3, 3]}
-                ticks={[-3, -1.5, 0, 1.5, 3]}
-                tick={{ fill: "#A67CFF", fontSize: 10 }}
-                stroke="none"
-              />
-              <Tooltip
-                contentStyle={{
-                  background: "#0B2032",
-                  border: "1px solid #17415B",
-                  borderRadius: 6,
-                  fontSize: 12,
-                }}
-                labelFormatter={(t, entries) => {
-                  const point = entries?.[0]?.payload as
-                    | { valid?: number; expected?: number }
-                    | undefined;
-                  const coverage = point?.valid != null && point?.expected != null
-                    ? ` · ${point.valid}/${point.expected} valid`
-                    : "";
-                  return `${new Date(Number(t)).toISOString()}${coverage}`;
-                }}
-                formatter={(value, name) => [
-                  value == null
-                    ? "Unavailable"
-                    : `${Number(value).toFixed(2)}${name === "Pressure" ? "" : "%"}`,
-                  name,
-                ]}
-              />
-              {[
-                [-3, -1.5, "Extreme Bear", "#ff536a"],
-                [-1.5, -0.5, "Bear", "#ff536a"],
-                [-0.5, 0.5, "Neutral", "#91a6b9"],
-                [0.5, 1.5, "Bull", "#00d9a0"],
-                [1.5, 3, "Extreme Bull", "#00d9a0"],
-              ].map(([low, high, label, color]) => (
-                <ReferenceArea
-                  key={String(label)}
-                  yAxisId="pressure"
-                  y1={Number(low)}
-                  y2={Number(high)}
-                  fill={String(color)}
-                  fillOpacity={0.025}
-                  stroke="none"
-                  label={{
-                    value: label,
-                    position: "insideRight",
-                    fill: String(color),
-                    fontSize: 8,
+      </header>
+      <div className="mp-hero__body">
+        <aside className="mp-hero__side">
+          <VerdictCard frame={frame} horizon={horizon} />
+          <BreadthLadder frame={frame} horizon={horizon} setHorizon={setHorizon} />
+        </aside>
+        <div className="mp-hero__chart" ref={ref}>
+          <div className="mp-chart-legend">
+            <span className="mp-up">
+              ▲ {breadth?.advancing ?? "—"} advancing <Metric metric={breadth?.positive} digits={0} />
+            </span>
+            <span className="mp-down">
+              ▼ {breadth?.declining ?? "—"} declining <Metric metric={breadth?.negative} digits={0} />
+            </span>
+            <span className="mp-pressure-color">
+              ● Breadth pressure{" "}
+              <Metric metric={frame?.pressure[horizon]} digits={2} signed /> · −3…+3
+            </span>
+          </div>
+          {hasHistory ? (
+            <TimeSeriesChart
+              series={series}
+              markers={markers}
+              height={width > 0 && width < 560 ? 240 : 360}
+              domains={{ left: [-3, 3], right: [0, 100] }}
+              zeroLine
+              leftFormat={(v) => signed(v, 1)}
+              rightFormat={percent}
+              ariaLabel={`Advancing and declining share with breadth pressure over ${window}, ${horizonLabel(horizon)} horizon`}
+              emptyText="Recording market history. The chart fills as frames are stored."
+            />
+          ) : (
+            <div className="mp-hero__recording" role="status">
+              <span className="mp-skeleton" style={{ height: 220 }} />
+              <p>Recording market history. The chart fills as frames are stored.</p>
+            </div>
+          )}
+          <div className="mp-pulse-tools">
+            <span className="mp-panel-detail" role="status">{pulse.label}</span>
+            <div className="mp-segment" role="group" aria-label="History window">
+              {["6h", "24h", "7d"].map((w) => (
+                <button key={w} aria-pressed={w === window} onClick={() => setWindow(w)}>
+                  {w}
+                </button>
+              ))}
+            </div>
+            {replayable.length > 0 && (
+              <label className="mp-history-select">
+                Replay{" "}
+                <select
+                  aria-label="Inspect a stored historical frame"
+                  value=""
+                  onChange={(e) => {
+                    if (e.target.value) replay(e.target.value);
                   }}
-                />
-              ))}
-              <ReferenceLine
-                yAxisId="pressure"
-                y={0}
-                stroke="#74559c"
-                strokeDasharray="3 5"
-              />
-              {coverageChanges.map((p) => (
-                <ReferenceLine
-                  key={p.time}
-                  x={p.time}
-                  yAxisId="share"
-                  stroke="#F5C85B"
-                  strokeDasharray="2 4"
-                />
-              ))}
-              <Area
-                yAxisId="pressure"
-                dataKey="pressure"
-                name="Pressure"
-                type="linear"
-                stroke="#A67CFF"
-                fill="url(#mp-pressure-fill)"
-                baseValue={-3}
-                connectNulls={false}
-                isAnimationActive={false}
-              />
-              <Line
-                yAxisId="share"
-                dataKey="positive"
-                name="Advancing"
-                stroke="#00D9A0"
-                strokeWidth={1.6}
-                dot={false}
-                connectNulls={false}
-                isAnimationActive={false}
-              />
-              <Line
-                yAxisId="share"
-                dataKey="negative"
-                name="Declining"
-                stroke="#FF536A"
-                strokeWidth={1.4}
-                dot={false}
-                connectNulls={false}
-                isAnimationActive={false}
-              />
-              <Line
-                yAxisId="share"
-                dataKey="flat"
-                name="Unchanged"
-                stroke="#7C91A6"
-                strokeWidth={1}
-                dot={false}
-                connectNulls={false}
-                isAnimationActive={false}
-              />
-              <Brush
-                ariaLabel="Select the visible market-history time range"
-                dataKey="time"
-                height={16}
-                stroke="#17415B"
-                fill="#081725"
-                tickFormatter={(t) => new Date(t).toISOString().slice(11, 16)}
-              />
-            </ComposedChart>
-          </ResponsiveContainer>
-        ) : (
-          <Empty>
-            Stored breadth history is unavailable. New observations appear after
-            the source publishes a frame.
-          </Empty>
-        )}
-      </div>
-      <div className="mp-pulse-tools">
-        <span className="mp-panel-detail" role="status">{coverage.label}</span>
-        <div className="mp-segment">
-          {["6h", "24h", "7d"].map((w) => (
-            <button
-              key={w}
-              aria-pressed={w === window}
-              onClick={() => setWindow(w)}
-            >
-              {w}
-            </button>
-          ))}
-        </div>
-        <label className="mp-history-select">
-          Replay{" "}
-          <select
-            aria-label="Inspect a stored historical frame"
-            value=""
-            onChange={(e) => {
-              if (e.target.value) replay(e.target.value);
-            }}
-          >
-            <option value="">Choose a recorded time</option>
-            {coverage.samples
-              .filter((p) => p.snapshot_id)
-              .map((p) => (
-                <option value={p.snapshot_id!} key={p.snapshot_id}>
-                  {new Date(p.time).toISOString()} · {p.valid}/{p.expected} ·{" "}
-                  {p.source_kind}
-                </option>
-              ))}
-          </select>
-        </label>
-      </div>
-      <div
-        className="mp-pulse-footer"
-        title="Breadth pressure = 3 × (advancing − declining) / valid population. Descriptive balance, not trade flow or probability."
-      >
-        {[
-          ["Breadth", breadth?.positive],
-          ["Pressure", frame?.pressure[horizon]],
-          ["New highs · 24h", frame?.summary.new_highs_24h],
-          ["New lows · 24h", frame?.summary.new_lows_24h],
-          ["52W highs · daily", frame?.summary.highs_52w],
-          ["52W lows · daily", frame?.summary.lows_52w],
-        ].map(([label, value]) => (
-          <div key={String(label)}>
-            <span>{String(label)}</span>
-            <strong
-              title={
-                typeof value === "object" && value?.available
-                  ? `Available ${new Date(value.available).toISOString()}`
-                  : undefined
-              }
-            >
-              {metricText(
-                typeof value === "object" ? value : undefined,
-                label === "Pressure" ? 2 : label === "Breadth" ? 1 : 0,
-              )}
-            </strong>
-            {(label === "Breadth" || label === "Pressure") && (
-              <Delta
-                metric={
-                  frame?.comparisons[
-                    `${label === "Breadth" ? "breadth" : "pressure"}/${horizon}`
-                  ]
-                }
-              />
+                >
+                  <option value="">Choose a recorded time</option>
+                  {replayable.slice(-240).reverse().map((p) => (
+                    <option value={p.snapshot_id!} key={p.snapshot_id}>
+                      {new Date(p.time).toISOString().slice(0, 16).replace("T", " ")} · {p.valid}/{p.expected}
+                    </option>
+                  ))}
+                </select>
+              </label>
             )}
           </div>
-        ))}
+        </div>
       </div>
-    </Panel>
+      <footer
+        className="mp-panel-footnote"
+        title="Breadth pressure = 3 × (advancing − declining) / valid population. Descriptive balance, not trade flow or probability."
+      >
+        Pressure = 3 × (advancing − declining) ÷ valid instruments · descriptive balance, not trade flow or probability.
+      </footer>
+    </section>
+  );
+}
+
+interface Tile {
+  key: string;
+  label: string;
+  value: string;
+  hint: string;
+  title: string;
+  points: SeriesPoint[];
+  format: (value: number) => string;
+  delta: string | null;
+  deltaTone: string;
+}
+
+const SNAPSHOT = [
+  ["market_participation", "Participation", "Above EMA21 · 1m", "share"],
+  ["trend_strength", "Trend strength", "Mean ADX14 · 0–100", "adx"],
+  ["realized_volatility_24h", "Realized volatility", "Median · 24h annualized", "share"],
+  ["relative_volume_24h", "Relative volume", "Median · vs prior 24h baseline", "ratio"],
+] as const;
+
+/** Compact market-wide tiles that sit under the hero. Tiles without a value are not drawn. */
+export function MarketSnapshotTiles({
+  frame,
+  history,
+  window,
+}: {
+  frame: DisplayFrame | null;
+  history: HistoryPoint[];
+  window: string;
+}) {
+  const samples = useMemo(() => pulseSeries(history, window, "15").samples, [history, window]);
+  if (!frame) return null;
+  const tiles = SNAPSHOT.flatMap<Tile>(([key, label, hint, kind]) => {
+    const metric = frame.summary[key];
+    if (!metric || metric.value == null) return [];
+    const points = samples.map((p) => ({ time: p.time, value: p.summary[key] ?? null }));
+    const digits = kind === "ratio" && metric.value < 0.1 ? 3 : kind === "ratio" ? 2 : kind === "adx" ? 1 : 0;
+    const count = key === "market_participation" ? Math.round(metric.value * metric.valid) : null;
+    const delta = frame.comparisons[`summary/${key}`];
+    return [
+      {
+        key,
+        label,
+        value: metricText(metric, digits),
+        hint: count == null ? hint : `${count} of ${metric.valid} instruments · ${hint}`,
+        title: metricTitle(metric),
+        points,
+        format: (v: number) =>
+          kind === "share" ? `${(v * 100).toFixed(0)}%` : numberText(v, digits),
+        delta: delta?.value == null ? null : `${metricText(delta, 1, true)} · 1h`,
+        deltaTone: delta?.value == null ? "" : delta.value < 0 ? "mp-down" : "mp-up",
+      },
+    ];
+  });
+  const breaks = [frame.summary.new_highs_24h, frame.summary.new_lows_24h];
+  if (breaks.every((m) => m?.value != null))
+    tiles.push({
+      key: "range_breaks",
+      label: "New highs / lows",
+      value: `${metricText(breaks[0], 0)} / ${metricText(breaks[1], 0)}`,
+      hint: `Instruments breaking their 24h range · of ${frame.expected}`,
+      title: `${metricTitle(breaks[0])} | ${metricTitle(breaks[1])}`,
+      points: samples.map((p) => ({ time: p.time, value: (p.summary.new_highs_24h ?? 0) - (p.summary.new_lows_24h ?? 0) })),
+      format: (v: number) => `net ${signed(v, 0)}`,
+      delta: null,
+      deltaTone: "",
+    });
+  tiles.push({
+    key: "coverage",
+    label: "Coverage",
+    value: `${frame.valid} / ${frame.expected}`,
+    hint: `${frame.quote} · ${frame.universeId}`,
+    title: `${frame.valid} of ${frame.expected} admitted instruments have a qualified observation`,
+    points: [],
+    format: (v: number) => String(v),
+    delta: null,
+    deltaTone: "",
+  });
+  return (
+    <TileGrid min={170} label="Market summary" className="mp-tiles">
+      {tiles.map((tile) => (
+        <article className="mp-tile" key={tile.key} title={tile.title}>
+          <h3>{tile.label}</h3>
+          <strong>{tile.value}</strong>
+          <small>{tile.hint}</small>
+          {tile.delta && <small className={tile.deltaTone}>{tile.delta}</small>}
+          {tile.points.filter((p) => p.value != null).length >= 2 && (
+            <SparkChart points={tile.points} height={34} format={tile.format} ariaLabel={`${tile.label} over ${window}`} color={CHART.blue} />
+          )}
+        </article>
+      ))}
+    </TileGrid>
   );
 }

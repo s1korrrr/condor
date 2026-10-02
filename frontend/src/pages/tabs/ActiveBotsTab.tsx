@@ -189,7 +189,8 @@ function formatLogTime(ts?: number): string {
   if (!ts) return "";
   try {
     const d = new Date(ts * 1000);
-    return d.toLocaleTimeString("en-US", { hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" });
+    // UTC and labelled, like every other stamp on the Bots page; browser-local time would shift by the viewer's offset.
+    return `${d.toLocaleTimeString("en-GB", { timeZone: "UTC", hour12: false, hour: "2-digit", minute: "2-digit", second: "2-digit" })} UTC`;
   } catch {
     return "";
   }

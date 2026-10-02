@@ -45,7 +45,7 @@ export function MetricCard({ panelId, title, value, unit, note, tone, sparkline,
   </article>;
 }
 
-export type StatTileView = { id: string; label: string; value: string | null; unit?: string; state: PanelState; note?: string };
+export type StatTileView = { id: string; label: string; value: string | null; unit?: string; state: PanelState; note?: string; /** Sign and gain/loss color for a value whose label does not say PnL. */ signed?: boolean };
 
 /** C18 strip: compact stats, each with its own typed state. Percent tiles receive a ratio and print a percent. */
 export function StatStrip({ tiles, panelId = 'C18', ariaLabel = 'Capital statistics', min = 150 }: { tiles: StatTileView[]; panelId?: string; ariaLabel?: string; min?: number }) {
@@ -55,8 +55,8 @@ export function StatStrip({ tiles, panelId = 'C18', ariaLabel = 'Capital statist
       const numeric = tile.value == null ? null : Number(tile.value);
       const text = tile.value == null || numeric == null || !Number.isFinite(numeric)
         ? PANEL_STATE_LABEL[tile.state.kind]
-        : isPercent ? `${formatSigned(numeric * 100)}%` : tile.unit === 'x' ? `${formatDecimal(numeric)}x` : /pnl/i.test(tile.label) ? formatSigned(numeric) : formatDecimal(numeric);
-      const tone = /pnl|drawdown/i.test(tile.label) ? metricTone(numeric) : undefined;
+        : isPercent ? `${(tile.signed ? formatSigned : formatDecimal)(numeric * 100)}%` : tile.unit === 'x' ? `${formatDecimal(numeric)}x` : tile.signed || /pnl/i.test(tile.label) ? formatSigned(numeric) : formatDecimal(numeric);
+      const tone = tile.signed || /pnl|drawdown/i.test(tile.label) ? metricTone(numeric) : undefined;
       const note = tile.note ?? (tile.state.reason && tile.value == null ? tile.state.reason : undefined);
       return <article key={tile.id} className="q-stat" data-panel-id={tile.id} data-state={tile.state.kind}>
         <span><span className="q-stat__label">{tile.label}</span><StateGlyph state={tile.state} /></span>
@@ -115,7 +115,7 @@ export function LifecycleCounts({ stages }: { stages: { stage: string; count: nu
 export function RailBar({ name, used, limit, unit, state, utilization }: { name: string; used: string | null; limit: string | null; unit: string | null; state: string; utilization: number | null }) {
   const filled = utilization == null ? 0 : Math.max(0, Math.min(1, utilization));
   return <div className="q-rail" data-state={state}>
-    <div className="q-bar-meta"><span>{name.replaceAll('_', ' ')}</span><span className="q-muted">{limit == null ? state : `${formatDecimal(used ?? '0')} / ${formatDecimal(limit)} ${unit ?? ''} · ${(filled * 100).toFixed(1)}%`}</span></div>
+    <div className="q-bar-meta"><span>{name.replaceAll('_', ' ')}</span><span className="q-muted">{limit == null ? state : used == null && utilization == null ? `Usage unavailable · limit ${formatDecimal(limit)} ${unit ?? ''}` : `${used == null ? 'Used unavailable' : formatDecimal(used)} / ${formatDecimal(limit)} ${unit ?? ''}${utilization == null ? '' : ` · ${(filled * 100).toFixed(1)}%`}`}</span></div>
     <div className="q-rail-segments" aria-hidden="true">{[0, 1, 2, 3, 4].map(index => <span key={index} data-on={filled > index / 5} data-hot={filled > 0.8} />)}</div>
   </div>;
 }
@@ -146,22 +146,27 @@ export function Histogram({ bins, unit, sampleCount, excludedCount }: { bins: { 
     <BarsChart ariaLabel={`Execution quality histogram · ${sampleCount} samples`} height={110} format={value => String(Math.round(value))}
       rows={bins.map(bin => ({ label: bin.label ?? (bin.from !== null && bin.to !== null ? `${bin.from}–${bin.to}` : bin.from === null ? `< ${bin.to}` : `>= ${bin.from}`), count: bin.count }))} bars={[{ id: 'count', label: `Fills (${unit})`, color: CHART.blue }]} signed={false} integer />
     <p className="q-muted">{sampleCount} samples · {unit}. {excludedCount} excluded from histogram.</p>
-    <table className="sr-only"><caption>Fill counts per {unit} bin</caption><tbody>{bins.map(bin => <tr key={`${bin.from}:${bin.to}`}><th scope="row">{bin.label ?? (bin.from !== null && bin.to !== null ? `${bin.from}–${bin.to}` : bin.from === null ? `< ${bin.to}` : `>= ${bin.from}`)}</th><td>{bin.count}</td></tr>)}</tbody></table>
+    <div className="sr-only"><table><caption>Fill counts per {unit} bin</caption><tbody>{bins.map(bin => <tr key={`${bin.from}:${bin.to}`}><th scope="row">{bin.label ?? (bin.from !== null && bin.to !== null ? `${bin.from}–${bin.to}` : bin.from === null ? `< ${bin.to}` : `>= ${bin.from}`)}</th><td>{bin.count}</td></tr>)}</tbody></table></div>
   </figure>;
 }
 
-export function Heatmap({ rows, columns, cells, metricLabel, unitLabel }: {
+/** `signed` colours by sign and prints +/-; `magnitude` (exposure, inventory value) is neutral, unsigned and tinted by size. */
+export function Heatmap({ rows, columns, cells, metricLabel, unitLabel, mode = 'signed' }: {
   rows: string[];
   columns: string[];
   cells: { row: string; column: string; value: number | null }[];
   metricLabel: string;
   unitLabel: string;
+  mode?: 'signed' | 'magnitude';
 }) {
+  const show = (value: number) => mode === 'signed' ? formatSigned(value) : formatDecimal(value);
   const lookup = new Map(cells.map(cell => [`${cell.row}:${cell.column}`, cell.value]));
   const numbers = cells.map(cell => cell.value).filter((value): value is number => value != null);
-  const peak = Math.max(1, ...numbers.map(Math.abs));
+  // Scale to the data itself: a floor of 1 would wash out every cell when all values are below 1 (e.g. +0.25 USDC).
+  const peak = Math.max(0, ...numbers.map(Math.abs)) || 1;
   return <figure aria-label={`${metricLabel} by symbol heatmap`} style={{ margin: 0 }}>
-    <div className="q-heat" style={{ gridTemplateColumns: `88px repeat(${columns.length}, minmax(36px, 1fr))` }} aria-hidden="true">
+    <div style={{ overflowX: 'auto' }} aria-hidden="true">
+    <div className="q-heat" style={{ gridTemplateColumns: `88px repeat(${columns.length}, minmax(36px, 1fr))` }}>
     <div />
     {columns.map(column => <div key={column} className="q-muted" style={{ textAlign: 'center', fontSize: 11 }}>{column}</div>)}
     {rows.map(row => (
@@ -171,18 +176,19 @@ export function Heatmap({ rows, columns, cells, metricLabel, unitLabel }: {
           const value = lookup.get(`${row}:${column}`);
           const missing = value == null;
           const alpha = missing ? 0 : Math.abs(value) / peak;
-          return <div key={`${row}:${column}`} className="q-heat-cell" style={{ background: missing ? 'transparent' : `color-mix(in srgb, ${value < 0 ? 'var(--q-negative)' : 'var(--q-positive)'} ${Math.round(alpha * 80)}%, var(--q-surface-raised))`, border: missing ? '1px dashed var(--q-border)' : undefined }}>{missing ? '—' : formatSigned(value)}</div>;
+          return <div key={`${row}:${column}`} className="q-heat-cell" style={{ background: missing ? 'transparent' : `color-mix(in srgb, ${mode === 'magnitude' ? 'var(--q-blue)' : value < 0 ? 'var(--q-negative)' : 'var(--q-positive)'} ${Math.round(alpha * 80)}%, var(--q-surface-raised))`, border: missing ? '1px dashed var(--q-border)' : undefined }}>{missing ? '—' : show(value)}</div>;
         })}
       </div>
     ))}
     </div>
-    <table className="sr-only"><caption>{metricLabel} by symbol, {unitLabel}</caption>
+    </div>
+    <div className="sr-only"><table><caption>{metricLabel} by symbol, {unitLabel}</caption>
       <thead><tr><th scope="col">Bot</th>{columns.map(column => <th key={column} scope="col">{column}</th>)}</tr></thead>
       <tbody>{rows.map(row => <tr key={row}><th scope="row">{row}</th>{columns.map(column => {
         const value = lookup.get(`${row}:${column}`);
-        return <td key={column}>{value == null ? 'Unavailable' : formatSigned(value)}</td>;
+        return <td key={column}>{value == null ? 'Unavailable' : show(value)}</td>;
       })}</tr>)}</tbody>
-    </table>
+    </table></div>
   </figure>;
 }
 

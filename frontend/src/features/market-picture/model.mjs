@@ -209,7 +209,7 @@ export function pollDelay(failures, random = Math.random()) {
     : 2000;
 }
 export function formatNumber(value, digits = 1, sign = false) {
-  if (value == null || !Number.isFinite(Number(value))) return "Unavailable";
+  if (value == null || !Number.isFinite(Number(value))) return "—";
   return new Intl.NumberFormat("en-US", {
     maximumFractionDigits: digits,
     minimumFractionDigits: digits,

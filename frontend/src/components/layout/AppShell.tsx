@@ -34,13 +34,12 @@ const NAV_ITEMS = [
   { to: "/operations", icon: Activity, label: "Operations" },
   { to: "/capital", icon: ChartNoAxesCombined, label: "Capital" },
   { to: "/research", icon: Network, label: "Research" },
-  { to: "/screener", icon: ScanSearch, label: "Market Picture" },
   { to: "/", icon: Brain, label: "Agents" },
+  { to: "/screener", icon: ScanSearch, label: "Market Picture" },
   { to: "/portfolio", icon: Wallet, label: "Portfolio" },
   { to: "/trade", icon: Swords, label: "Trade" },
   { to: "/trading-visuals", icon: Eye, label: "Trading Visuals" },
   { to: "/bots", icon: Bot, label: "Bots" },
-  { to: "/fleet", icon: Bot, label: "Fleet" },
   { to: "/executors", icon: Activity, label: "Executors" },
   { to: "/routines", icon: Zap, label: "Routines" },
 ] as const;
@@ -70,10 +69,15 @@ function AppShellBody() {
   const { hasKeys, isLoading: keysLoading } = useCredentials();
   const { data: serverStatus, access, readContinuity, isLoading: capabilitiesLoading, isFetching, unavailableReason, refetch } = useServerCapabilities();
   const capabilityReason = readContinuity && pathname === '/bots' ? null : unavailableServerRoute(pathname, serverStatus);
-  const nativeRoutes=['/capital','/bots','/fleet','/trading-visuals','/operations','/research', ...(access.marketScreener || access.marketPicture ? ['/screener'] : [])];
-  const independentRoutes=['/capital','/trading-visuals','/operations','/research'];
-  const navigationItems=readContinuity ? nativeRoutes.map(to=>NAV_ITEMS.find(item=>item.to===to)!) : !access.online ? NAV_ITEMS.filter(item=>independentRoutes.includes(item.to))
-    : access.native ? nativeRoutes.map(to=>NAV_ITEMS.find(item=>item.to===to)!) : NAV_ITEMS;
+  // Native servers: Market is the home tab. Fleet and Trading Visuals are folded into Bots.
+  const MARKET_ITEM = { to: "/", icon: ScanSearch, label: "Market" } as const;
+  const nativeItems = [
+    ...(access.marketScreener || access.marketPicture ? [MARKET_ITEM] : []),
+    ...['/capital', '/bots', '/operations', '/research'].map(to => NAV_ITEMS.find(item => item.to === to)!),
+  ];
+  const independentRoutes=['/capital','/operations','/research'];
+  const navigationItems=readContinuity ? nativeItems : !access.online ? NAV_ITEMS.filter(item=>independentRoutes.includes(item.to))
+    : access.native ? nativeItems : NAV_ITEMS;
 
   // The chat workspace takes the full height and owns its own scrolling, so
   // the shell drops `main`'s padding for it. It lives at `/` — the entry point
@@ -101,7 +105,7 @@ function AppShellBody() {
   // The chat is the landing page and needs no exchange keys, so the blocking
   // overlay would otherwise be the first thing every unconfigured user hits —
   // on the one surface that can talk them through connecting.
-  const exemptRoutes = ["/operations", "/routines", "/settings", "/trading-visuals", "/capital", "/overview", "/research", "/tools", "/fleet"];
+  const exemptRoutes = ["/operations", "/routines", "/settings", "/trading-visuals", "/capital", "/overview", "/research", "/tools"];
   const showKeysOverlay =
     server && !access.native && access.accounts && !capabilityReason && !keysLoading && !hasKeys && !isChatWorkspace &&
     !exemptRoutes.some((r) => pathname.startsWith(r));
@@ -123,14 +127,14 @@ function AppShellBody() {
   usePrefetchData(!matchPath("/research", pathname));
 
   return (
-    <div className={`condor-shell flex h-screen flex-col ${access.native?'condor-native':''}`}>
+    <div className={`condor-shell flex h-dvh flex-col ${access.native?'condor-native':''}`}>
       {/* Top bar */}
       <header className="condor-topbar flex min-h-12 shrink-0 flex-wrap items-center gap-y-2 border-b border-[var(--color-border)] bg-[var(--color-surface)] px-3 py-2 xl:flex-nowrap lg:px-4 xl:py-0">
         {/* Left: logo + nav */}
         <div className="flex min-w-0 w-full items-center gap-3 xl:w-auto xl:gap-6">
           <NavLink to="/" className="flex shrink-0 items-center gap-2 font-bold tracking-tight">
             <img src="/condor_old.jpeg" alt="Condor" className="h-6 w-6 rounded-full" />
-            <span className="text-sm">{access.native ? 'RSIBOT' : 'Condor'}</span>
+            <span className="text-sm">Condor</span>
           </NavLink>
 
           <nav ref={navigationRef} aria-label="Main navigation" className="flex min-w-0 items-center overflow-x-auto whitespace-nowrap">
@@ -157,8 +161,8 @@ function AppShellBody() {
         {/* Right: server selector + controls */}
         <div className="ml-auto flex items-center gap-3">
           <ServerSelector />
-          {pathname === "/trading-visuals" || !access.full || !access.online ? (
-            <span className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm text-[var(--color-text-muted)]" title="Values retain their source units; currencies are shown only for a verified server">{!access.online?'Units unavailable':['/trading-visuals','/bots'].includes(pathname)?'USDC':'Source units'}</span>
+          {!access.full || !access.online ? (
+            <span className="rounded-md border border-[var(--color-border)] px-2.5 py-1.5 text-sm text-[var(--color-text-muted)]" title="Values retain their source units; currencies are shown only for a verified server">{!access.online?'Units unavailable':pathname === '/bots'?'USDC':'Source units'}</span>
           ) : <CurrencySelector />}
 
           <div className="flex items-center gap-1">

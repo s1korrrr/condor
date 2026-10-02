@@ -8,7 +8,26 @@ import {
   metricText,
   metricTitle,
 } from "./presentation";
+import { assetState, derivedRegime, REGIME_BASIS } from "./pulse.mjs";
 import { Empty, Panel, Time } from "./Primitives";
+
+function DerivedRegimeBlock({ asset }: { asset: DisplayAsset }) {
+  const regime = derivedRegime(asset);
+  const state = assetState(asset);
+  if (!regime) return <p className="mp-muted">Indicators are still warming for this instrument.</p>;
+  return (
+    <dl className="mp-provenance-list">
+      <dt>Regime</dt>
+      <dd>{regime.label}{regime.tags.length ? ` · ${regime.tags.join(", ")}` : ""}</dd>
+      <dt>Trend</dt>
+      <dd>{state.trend ?? "—"}{state.adx != null ? ` · ADX14 ${state.adx.toFixed(1)}` : ""}</dd>
+      <dt>Momentum</dt>
+      <dd>{state.rsi != null ? `RSI14 ${state.rsi.toFixed(1)} · ${state.rsiZone}` : "—"}</dd>
+      <dt>Basis</dt>
+      <dd>{REGIME_BASIS}</dd>
+    </dl>
+  );
+}
 
 export function Drawer({
   title,
@@ -86,7 +105,7 @@ export function MarketEventFeed({
   return (
     <Panel
       id="mp-feed"
-      title="Live feed"
+      title="Market alerts"
       detail={
         frame?.source_kind === "reconstructed"
           ? "Reconstructed"
@@ -105,11 +124,6 @@ export function MarketEventFeed({
           </button>
         ))}
       </div>
-      {frame && frame.flow?.status !== "available" && (
-        <p className="mp-muted" title={(frame.flow?.reasons ?? ["SOURCE_UNAVAILABLE"]).join(", ")}>
-          Taker flow unavailable · no qualified trade source
-        </p>
-      )}
       <div className="mp-feed-scroll">
         <table className="mp-table">
           <caption className="sr-only">
@@ -156,7 +170,7 @@ export function MarketEventFeed({
         {!visible.length && (
           <Empty>
             {fault
-              ? `Event history unavailable · ${fault}`
+              ? `Event history could not be read · ${fault}`
               : "No stored events match this filter."}
           </Empty>
         )}
@@ -208,7 +222,7 @@ export function AssetInspector({
         </button>
       </div>
       <p className="mp-muted">
-        {asset.sector} · observation at{" "}
+        {asset.sector === "Unknown" ? "" : `${asset.sector} · `}Observation at{" "}
         {new Date(frame.cutoff_ms).toISOString()} · {frame.source_kind}
       </p>
       <button onClick={openNativeTools}>Inspect recorded candles in native tools</button>
@@ -241,23 +255,21 @@ export function AssetInspector({
             <dd>{r.origin}</dd>
             <dt>Confidence</dt>
             <dd>
-              {r.confidence ?? "Unavailable"} ·{" "}
-              {r.confidenceKind ?? "Kind unavailable"} · {r.calibration}
+              {r.confidence ?? "—"} ·{" "}
+              {r.confidenceKind ?? "—"} · {r.calibration}
             </dd>
             <dt>Model</dt>
-            <dd>{r.model ?? "Unavailable"}</dd>
+            <dd>{r.model ?? "—"}</dd>
             <dt>Trend / context</dt>
             <dd>
-              {r.trend ?? "Unavailable"} / {r.context ?? "Unavailable"}
+              {r.trend ?? "—"} / {r.context ?? "—"}
             </dd>
             <dt>Available</dt>
             <dd>{new Date(r.available).toISOString()}</dd>
           </dl>
         ))
       ) : (
-        <p className="mp-muted">
-          No qualified same-bar regime record is attached to this instrument.
-        </p>
+        <DerivedRegimeBlock asset={asset} />
       )}
       <h3>Owner observations</h3>
       <table className="mp-table">

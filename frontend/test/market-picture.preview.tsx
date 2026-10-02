@@ -10,12 +10,15 @@ import partial from "../../tests/fixtures/market-picture.v1.json";
 import scale from "../../tests/fixtures/market-picture.240.fixture.json";
 import type { DisplayCorrelation, DisplayEvent, HistoryPoint } from "../src/features/market-picture/presentation";
 
-const raw = new URLSearchParams(location.search).get('scale') === '240' ? scale : partial;
-const frame = projectFrame(await validateFrame(raw, { allowFixture: true }));
+const params = new URLSearchParams(location.search);
+// `?bundle=/@fs/<path>` loads a read-only dump of a real frame bundle (see scratchpad); it never ships.
+const real = params.get('bundle') ? await (await fetch(params.get('bundle')!)).json() : null;
+const raw = params.get('scale') === '240' ? scale : partial;
+const frame = real ? real.frame : projectFrame(await validateFrame(raw, { allowFixture: true }));
 // Presentation fixtures exercise populated component layout. The current asset
 // frame above is built by the real owner; these explicit synthetic time series
 // are not persisted observations or replay evidence and never enter the app.
-const populated = raw === scale;
+const populated = !real && raw === scale;
 const history: HistoryPoint[] = populated ? Array.from({length:72}, (_, index) => {
   const positive = .52 + .14 * Math.sin(index / 9), flat = .03;
   return {time:frame.cutoff_ms - (71-index)*60000, snapshot_id:null,
@@ -40,7 +43,7 @@ createRoot(document.getElementById("root")!).render(
     <MarketPictureSurface
       server="Isolated fixture preview"
       userId="fixture"
-      fixture={{
+      fixture={real ?? {
         frame,
         history,
         correlations,

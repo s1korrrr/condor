@@ -185,7 +185,7 @@ export function projectEvents(body, frame) {
       value: Object.entries(values)
         .map(
           ([key, value]) =>
-            `${key.replaceAll("_", " ")}: ${value ?? "Unavailable"}`,
+            `${key.replaceAll("_", " ")}: ${value ?? "—"}`,
         )
         .join(" · "),
     };

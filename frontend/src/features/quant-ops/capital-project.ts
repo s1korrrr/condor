@@ -1,8 +1,9 @@
 import type { CurrentPortfolio, HistoryPoint, Holding } from '@/features/portfolio/model';
 import { portfolioSummary } from '@/features/portfolio/model';
+import { cleanFloat } from './decimal-display';
 
 function asAmount(value: unknown): string | null {
-  if (typeof value === 'number' && Number.isFinite(value)) return String(value);
+  if (typeof value === 'number' && Number.isFinite(value)) return cleanFloat(value);
   if (typeof value === 'string' && value !== '' && Number.isFinite(Number(value))) return value;
   return null;
 }
@@ -22,7 +23,7 @@ export function nativeWalletFromRuntime(input: { balances: unknown; observedAt: 
     const available = asAmount((row as { available_balance?: unknown }).available_balance);
     const value = asAmount((row as { value_quote?: unknown }).value_quote);
     if (!token || total == null || Number(total) < 0 || (available !== null && (Number(available) < 0 || Number(available) > Number(total)))) return null;
-    const locked = available === null ? null : String(Number(total) - Number(available));
+    const locked = available === null ? null : cleanFloat(Number(total) - Number(available));
     const valueNum = value == null ? NaN : Number(value);
     if (!Number.isFinite(valueNum) || valueNum < 0) {
       unpriced.push(token);
@@ -36,7 +37,7 @@ export function nativeWalletFromRuntime(input: { balances: unknown; observedAt: 
     const totalNum = Number(total);
     holdings.push({
       token, total, available, locked,
-      price: totalNum > 0 ? String(valueNum / totalNum) : '0',
+      price: totalNum > 0 ? cleanFloat(valueNum / totalNum) : '0',
       value,
       quote_currency: 'USDT', valuation_source: 'native-runtime-status', price_observed_at: input.observedAt,
     });

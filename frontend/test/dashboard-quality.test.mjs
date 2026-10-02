@@ -24,6 +24,14 @@ test('research summaries use bounded titles, preserve full rationale and disting
  const result=researchRecordSummary({id:'run:attempt-002',title:rationale,status:'FAILED',recorded_at:'2026-09-12T12:00:00Z',data:{rationale,lane:'spot',venue:'okx'}});
  assert.ok(result.title.length<=100);assert.equal(result.rationale,rationale);assert.equal(result.id,'run:attempt-002');assert.ok(result.scope.includes('spot'));assert.equal(result.verdict,'FAILED');
 });
+test('research summaries read the canonical end_exclusive window end',()=>{
+ const {researchRecordSummary}=load('features/research/record-summary.ts');
+ const exclusive=researchRecordSummary({id:'a',title:'t',status:'HOLD',data:{scope:{window:{start:'2026-05-01T00:00:00Z',end_exclusive:'2026-09-01T00:00:00Z'}}}});
+ assert.equal(exclusive.end,'2026-09-01T00:00:00Z');assert.equal(exclusive.endExclusive,true);
+ const inclusive=researchRecordSummary({id:'b',title:'t',status:'HOLD',data:{scope:{window:{start:'2026-05-01',end:'2026-08-31'}}}});
+ assert.equal(inclusive.end,'2026-08-31');assert.equal(inclusive.endExclusive,false);
+ assert.equal(researchRecordSummary({id:'c',title:'t',status:'HOLD',data:{}}).end,'');
+});
 test('MQTT policy requires fresh matching bot, controller and unambiguous pair; ratios display as percentages',()=>{
  const {currentControllerPolicy}=load('features/bots/observed-policy.ts');const now=Date.now();
  const row={pair:'ETH-USDC',controllerId:null,uniquePair:true};

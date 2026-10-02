@@ -1,0 +1,15 @@
+/* Ring gauge tile (kit/gauges.tsx). Sized by its container so it fills any TileGrid cell. */
+.q-ring { position: relative; display: grid; justify-items: center; align-content: start; gap: 4px; padding: 10px 8px 9px; text-align: center; min-width: 0; width: 100%; box-sizing: border-box;
+  background: var(--q-surface, var(--color-surface, #0a151d)); border: 1px solid var(--q-border, var(--color-border, #20313e)); border-radius: 6px; color: var(--q-text, var(--color-text, #e5e7eb)); font: inherit; cursor: default; }
+button.q-ring { cursor: pointer; }
+.q-ring:is(button):hover, .q-ring:focus-visible, .q-ring[aria-pressed=true] { border-color: var(--q-blue, var(--color-primary, #259aff)); outline: none; }
+.q-ring__plot { position: relative; width: min(100%, 92px); aspect-ratio: 1; container-type: inline-size; display: block; }
+.q-ring__plot svg { width: 100%; height: 100%; display: block; }
+.q-ring__track { fill: none; stroke: color-mix(in srgb, var(--q-border, var(--color-border, #20313e)) 70%, transparent); stroke-width: 8; }
+.q-ring__plot strong { position: absolute; inset: 0; display: grid; place-content: center; font-size: clamp(11px, 20cqi, 20px); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.q-ring__label { font-size: 11px; font-weight: 600; line-height: 1.25; overflow-wrap: anywhere; }
+.q-ring__note, .q-ring__delta { font-size: 10px; line-height: 1.3; color: var(--q-muted, var(--color-text-muted, #a4bacb)); overflow-wrap: anywhere; }
+.q-ring__delta[data-tone=positive] { color: var(--q-positive, var(--color-green, #35eab5)); }
+.q-ring__delta[data-tone=negative] { color: var(--q-negative, var(--color-red, #ff6577)); }
+.q-ring__tip { position: absolute; z-index: 6; left: 50%; bottom: calc(100% + 4px); transform: translateX(-50%); width: max-content; max-width: min(260px, 90vw); text-align: left; display: none; white-space: normal; line-height: 1.35; }
+.q-ring:hover .q-ring__tip, .q-ring:focus-visible .q-ring__tip { display: block; }

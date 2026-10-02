@@ -1,0 +1,159 @@
+{
+ "schema_version": "fleet-summary.v1",
+ "view": "glance",
+ "server": "v2",
+ "generated_at_ms": 1800000030000,
+ "sections": {
+  "wallet": {
+   "status": "ok",
+   "observed_at_ms": 1800000000000,
+   "stale_after_ms": 120000,
+   "reason": null
+  },
+  "pnl": {
+   "status": "partial",
+   "observed_at_ms": 1799999970000,
+   "stale_after_ms": 180000,
+   "reason": "PARTIAL_COVERAGE"
+  },
+  "market": {
+   "status": "ok",
+   "observed_at_ms": 1800000000000,
+   "stale_after_ms": 90000,
+   "reason": null
+  },
+  "bots": {
+   "status": "stale",
+   "observed_at_ms": 1800000025000,
+   "stale_after_ms": 30000,
+   "reason": "OWNER_NOT_CURRENT"
+  },
+  "fills": {
+   "status": "ok",
+   "observed_at_ms": 1799999910000,
+   "stale_after_ms": 120000,
+   "reason": null
+  },
+  "incidents": {
+   "status": "ok",
+   "observed_at_ms": 1800000025000,
+   "stale_after_ms": 90000,
+   "reason": null
+  }
+ },
+ "missing": [
+  {
+   "section": "bots",
+   "bot": "rsi_modular_v2",
+   "field": "positions",
+   "reason": "OWNER_NOT_CURRENT"
+  }
+ ],
+ "missing_total": 1,
+ "wallet": {
+  "equity": "1000",
+  "unit": "USDC",
+  "observed_at_ms": 1800000000000,
+  "source_bot": "ok_rsi",
+  "valuation_complete": true,
+  "stale": false
+ },
+ "pnl": {
+  "unit": "USDC",
+  "day": {
+   "total": "4.5",
+   "partial": true,
+   "counted": 2,
+   "expected": 2,
+   "stale": false
+  },
+  "week": {
+   "total": "4.5",
+   "partial": true,
+   "counted": 2,
+   "expected": 2,
+   "stale": false
+  },
+  "month": {
+   "total": "4.5",
+   "partial": true,
+   "counted": 2,
+   "expected": 2,
+   "stale": false
+  },
+  "all": {
+   "total": "4.5",
+   "partial": true,
+   "counted": 2,
+   "expected": 2,
+   "stale": false
+  }
+ },
+ "market": {
+  "state": "mixed",
+  "label": "Mixed",
+  "score": -0.09337916254826577,
+  "horizon_label": "1h",
+  "held": false,
+  "freshness": "fresh",
+  "cutoff_ms": 1800000000000
+ },
+ "bots": [
+  {
+   "bot": "ok_rsi",
+   "display_name": "V1 · ok_rsi",
+   "generation": "V1",
+   "paper": false,
+   "status": "running",
+   "report_stale": false,
+   "pnl_day": "3"
+  },
+  {
+   "bot": "rsi_modular_v2",
+   "display_name": "rsi_modular_v2",
+   "generation": "V2",
+   "paper": false,
+   "status": "running",
+   "report_stale": true,
+   "pnl_day": "1.5"
+  },
+  {
+   "bot": "ok_rsi_paper",
+   "display_name": "ok_rsi_paper",
+   "generation": null,
+   "paper": true,
+   "status": "running",
+   "report_stale": false,
+   "pnl_day": null
+  }
+ ],
+ "bots_total": 3,
+ "fills": [
+  {
+   "bot": "rsi_modular_v2",
+   "pair": "ETH-USDC",
+   "side": "BUY",
+   "volume": "200.05",
+   "time_ms": 1799999910000
+  },
+  {
+   "bot": "rsi_modular_v2",
+   "pair": "BTC-USDC",
+   "side": "SELL",
+   "volume": "600",
+   "time_ms": 1799999850000
+  },
+  {
+   "bot": "ok_rsi",
+   "pair": "ETH-USDC",
+   "side": "BUY",
+   "volume": "200.05",
+   "time_ms": 1799999610000
+  }
+ ],
+ "incidents": {
+  "state": "critical",
+  "open": 2,
+  "critical": 1
+ }
+}

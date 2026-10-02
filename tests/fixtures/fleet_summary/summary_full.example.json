@@ -1,0 +1,437 @@
+{
+ "schema_version": "fleet-summary.v1",
+ "view": "full",
+ "server": "v2",
+ "generated_at_ms": 1800000030000,
+ "sections": {
+  "wallet": {
+   "status": "ok",
+   "observed_at_ms": 1800000000000,
+   "stale_after_ms": 120000,
+   "reason": null
+  },
+  "pnl": {
+   "status": "partial",
+   "observed_at_ms": 1799999970000,
+   "stale_after_ms": 180000,
+   "reason": "PARTIAL_COVERAGE"
+  },
+  "market": {
+   "status": "ok",
+   "observed_at_ms": 1800000000000,
+   "stale_after_ms": 90000,
+   "reason": null
+  },
+  "bots": {
+   "status": "stale",
+   "observed_at_ms": 1800000025000,
+   "stale_after_ms": 30000,
+   "reason": "OWNER_NOT_CURRENT"
+  },
+  "fills": {
+   "status": "ok",
+   "observed_at_ms": 1799999910000,
+   "stale_after_ms": 120000,
+   "reason": null
+  },
+  "incidents": {
+   "status": "ok",
+   "observed_at_ms": 1800000025000,
+   "stale_after_ms": 90000,
+   "reason": null
+  }
+ },
+ "missing": [
+  {
+   "section": "bots",
+   "bot": "rsi_modular_v2",
+   "field": "positions",
+   "reason": "OWNER_NOT_CURRENT"
+  }
+ ],
+ "wallet": {
+  "equity": "1000",
+  "unit": "USDC",
+  "observed_at_ms": 1800000000000,
+  "source_bot": "ok_rsi",
+  "valuation_complete": true,
+  "stale": false
+ },
+ "pnl": {
+  "unit": "USDC",
+  "day": {
+   "span_ms": 86400000,
+   "unit": "USDC",
+   "total": "4.5",
+   "realized": "2.5",
+   "unrealized": "2",
+   "counted": 2,
+   "expected": 2,
+   "partial": true,
+   "since_ms": 1799913690000,
+   "latest_at_ms": 1799999970000,
+   "stale": false,
+   "missing": [],
+   "bots": [
+    {
+     "bot": "ok_rsi",
+     "change": "3",
+     "realized": "1.5",
+     "unrealized": "1.5",
+     "first_at_ms": 1799913690000,
+     "last_at_ms": 1799999970000,
+     "samples": 3,
+     "restarts": 0,
+     "full": true,
+     "stale": false
+    },
+    {
+     "bot": "rsi_modular_v2",
+     "change": "1.5",
+     "realized": "1",
+     "unrealized": "0.5",
+     "first_at_ms": 1799982030000,
+     "last_at_ms": 1799999970000,
+     "samples": 2,
+     "restarts": 0,
+     "full": false,
+     "stale": false
+    }
+   ]
+  },
+  "week": {
+   "span_ms": 604800000,
+   "unit": "USDC",
+   "total": "4.5",
+   "realized": "2.5",
+   "unrealized": "2",
+   "counted": 2,
+   "expected": 2,
+   "partial": true,
+   "since_ms": 1799913690000,
+   "latest_at_ms": 1799999970000,
+   "stale": false,
+   "missing": [],
+   "bots": [
+    {
+     "bot": "ok_rsi",
+     "change": "3",
+     "realized": "1.5",
+     "unrealized": "1.5",
+     "first_at_ms": 1799913690000,
+     "last_at_ms": 1799999970000,
+     "samples": 3,
+     "restarts": 0,
+     "full": false,
+     "stale": false
+    },
+    {
+     "bot": "rsi_modular_v2",
+     "change": "1.5",
+     "realized": "1",
+     "unrealized": "0.5",
+     "first_at_ms": 1799982030000,
+     "last_at_ms": 1799999970000,
+     "samples": 2,
+     "restarts": 0,
+     "full": false,
+     "stale": false
+    }
+   ]
+  },
+  "month": {
+   "span_ms": 2592000000,
+   "unit": "USDC",
+   "total": "4.5",
+   "realized": "2.5",
+   "unrealized": "2",
+   "counted": 2,
+   "expected": 2,
+   "partial": true,
+   "since_ms": 1799913690000,
+   "latest_at_ms": 1799999970000,
+   "stale": false,
+   "missing": [],
+   "bots": [
+    {
+     "bot": "ok_rsi",
+     "change": "3",
+     "realized": "1.5",
+     "unrealized": "1.5",
+     "first_at_ms": 1799913690000,
+     "last_at_ms": 1799999970000,
+     "samples": 3,
+     "restarts": 0,
+     "full": false,
+     "stale": false
+    },
+    {
+     "bot": "rsi_modular_v2",
+     "change": "1.5",
+     "realized": "1",
+     "unrealized": "0.5",
+     "first_at_ms": 1799982030000,
+     "last_at_ms": 1799999970000,
+     "samples": 2,
+     "restarts": 0,
+     "full": false,
+     "stale": false
+    }
+   ]
+  },
+  "all": {
+   "span_ms": null,
+   "unit": "USDC",
+   "total": "4.5",
+   "realized": "2.5",
+   "unrealized": "2",
+   "counted": 2,
+   "expected": 2,
+   "partial": true,
+   "since_ms": 1799913690000,
+   "latest_at_ms": 1799999970000,
+   "stale": false,
+   "missing": [],
+   "bots": [
+    {
+     "bot": "ok_rsi",
+     "change": "3",
+     "realized": "1.5",
+     "unrealized": "1.5",
+     "first_at_ms": 1799913690000,
+     "last_at_ms": 1799999970000,
+     "samples": 3,
+     "restarts": 0,
+     "full": true,
+     "stale": false
+    },
+    {
+     "bot": "rsi_modular_v2",
+     "change": "1.5",
+     "realized": "1",
+     "unrealized": "0.5",
+     "first_at_ms": 1799982030000,
+     "last_at_ms": 1799999970000,
+     "samples": 2,
+     "restarts": 0,
+     "full": false,
+     "stale": false
+    }
+   ]
+  }
+ },
+ "market": {
+  "verdict": {
+   "state": "mixed",
+   "label": "Mixed",
+   "score": -0.09337916254826577,
+   "instant_score": -0.06486064402974724,
+   "smoothed": true,
+   "smoothed_frames": 15,
+   "smoothing_minutes": 15,
+   "held": false,
+   "horizon": "60",
+   "horizon_label": "1h",
+   "components": [
+    {
+     "id": "breadth",
+     "score": -0.1311111111111111
+    },
+    {
+     "id": "persistence",
+     "score": -0.12944444444444442
+    },
+    {
+     "id": "return",
+     "score": -0.019581932089241746
+    }
+   ],
+   "advancing": 108,
+   "declining": 132,
+   "unchanged": 0,
+   "valid": 240,
+   "expected": 240
+  },
+  "frame": {
+   "snapshot_id": "851690a86643a8f2504492efab11fdaab415d1ca87e46dbcc994c7eb4c060758",
+   "cutoff_ms": 1800000000000,
+   "available_at_ms": 1800000001000,
+   "expires_at_ms": 1800000120000,
+   "source_kind": "reconstructed",
+   "freshness": "fresh"
+  },
+  "history_points": 60
+ },
+ "bots": [
+  {
+   "bot": "ok_rsi",
+   "display_name": "V1 · ok_rsi",
+   "generation": "V1",
+   "paper": false,
+   "status": "running",
+   "controllers": 1,
+   "report_at_ms": 1800000025000,
+   "report_stale": false,
+   "positions": {
+    "held": 2,
+    "registered": 3,
+    "current": true
+   },
+   "executors": 1,
+   "executors_basis": "open_lifecycle_cycles",
+   "pnl_day": {
+    "change": "3",
+    "unit": "USDC",
+    "partial": false,
+    "stale": false
+   },
+   "net_now": {
+    "value": "3.5",
+    "unit": "USDC",
+    "source": "controller"
+   },
+   "fees": {
+    "amount": "0.42",
+    "unit": "USDC"
+   },
+   "trades": {
+    "lifetime": 12,
+    "opened_24h": 2,
+    "closed_24h": 1
+   },
+   "missing": []
+  },
+  {
+   "bot": "rsi_modular_v2",
+   "display_name": "rsi_modular_v2",
+   "generation": "V2",
+   "paper": false,
+   "status": "running",
+   "controllers": 1,
+   "report_at_ms": 1799999970000,
+   "report_stale": true,
+   "positions": null,
+   "executors": 1,
+   "executors_basis": "open_lifecycle_cycles",
+   "pnl_day": {
+    "change": "1.5",
+    "unit": "USDC",
+    "partial": true,
+    "stale": false
+   },
+   "net_now": {
+    "value": "1.5",
+    "unit": "USDC",
+    "source": "controller"
+   },
+   "fees": {
+    "amount": "0.42",
+    "unit": "USDC"
+   },
+   "trades": {
+    "lifetime": 12,
+    "opened_24h": 2,
+    "closed_24h": 1
+   },
+   "missing": [
+    {
+     "field": "positions",
+     "reason": "OWNER_NOT_CURRENT"
+    }
+   ]
+  },
+  {
+   "bot": "ok_rsi_paper",
+   "display_name": "ok_rsi_paper",
+   "generation": null,
+   "paper": true,
+   "status": "running",
+   "controllers": 1,
+   "report_at_ms": 1800000025000,
+   "report_stale": false,
+   "positions": {
+    "held": 2,
+    "registered": 3,
+    "current": true
+   },
+   "executors": 1,
+   "executors_basis": "open_lifecycle_cycles",
+   "pnl_day": null,
+   "net_now": {
+    "value": "9",
+    "unit": "USDC",
+    "source": "controller"
+   },
+   "fees": {
+    "amount": "0.42",
+    "unit": "USDC"
+   },
+   "trades": {
+    "lifetime": 12,
+    "opened_24h": 2,
+    "closed_24h": 1
+   },
+   "missing": [
+    {
+     "field": "pnl_day",
+     "reason": "PAPER_EXCLUDED"
+    }
+   ]
+  }
+ ],
+ "fills": [
+  {
+   "bot": "rsi_modular_v2",
+   "fill_id": "rsi_modular_v2-1",
+   "pair": "ETH-USDC",
+   "side": "BUY",
+   "amount": "0.1",
+   "price": "2000.5",
+   "volume": "200.05",
+   "fee": "0.2",
+   "time_ms": 1799999910000
+  },
+  {
+   "bot": "rsi_modular_v2",
+   "fill_id": "rsi_modular_v2-2",
+   "pair": "BTC-USDC",
+   "side": "SELL",
+   "amount": "0.01",
+   "price": "60000",
+   "volume": "600",
+   "fee": "0.6",
+   "time_ms": 1799999850000
+  },
+  {
+   "bot": "ok_rsi",
+   "fill_id": "ok_rsi-1",
+   "pair": "ETH-USDC",
+   "side": "BUY",
+   "amount": "0.1",
+   "price": "2000.5",
+   "volume": "200.05",
+   "fee": "0.2",
+   "time_ms": 1799999610000
+  },
+  {
+   "bot": "ok_rsi",
+   "fill_id": "ok_rsi-2",
+   "pair": "BTC-USDC",
+   "side": "SELL",
+   "amount": "0.01",
+   "price": "60000",
+   "volume": "600",
+   "fee": "0.6",
+   "time_ms": 1799999550000
+  }
+ ],
+ "incidents": {
+  "state": "critical",
+  "open": 2,
+  "critical": 1,
+  "warning": 1,
+  "monitor": "healthy",
+  "generated_at_ms": 1800000025000,
+  "observed_at_ms": 1800000025000
+ }
+}

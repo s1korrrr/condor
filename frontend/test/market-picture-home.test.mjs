@@ -16,8 +16,10 @@ import {
   hasCorrelationValues,
   correlationReadout,
   impliedMove,
+  isHourlyRelativeVolume,
   isShortBreadthCrossing,
   isSingleBarRelativeVolume,
+  nullReasonLabel,
   marketVerdict,
   nextVerdictState,
   pulseSeries,
@@ -345,6 +347,84 @@ test("the Relative volume tile is dropped for the single-bar definition and retu
   assert.match(render("median_relative_volume_1h v1.0.0"), /Relative volume/);
 });
 
+test("the hourly relative-volume definition is recognised separately from the single-bar ones", () => {
+  for (const definition of ["median_relative_volume_1h v1.0.0", "rvol1h v1.0.0"])
+    assert.equal(isHourlyRelativeVolume({ definition }), true, definition);
+  for (const definition of ["median_relative_volume_24h v1.0.0", "rvol20 v1.0.0", "median_relative_volume_1h v2.0.0", "", undefined])
+    assert.equal(isHourlyRelativeVolume({ definition }), false, String(definition));
+  assert.equal(isHourlyRelativeVolume(undefined), false);
+});
+
+test("a withheld value is labelled with its owner reason code, never a generic word", () => {
+  assert.equal(nullReasonLabel(metric(null, { reasons: ["ZERO_BASELINE"] })), "no volume in the 24h baseline (ZERO_BASELINE)");
+  assert.equal(nullReasonLabel(metric(null, { reasons: ["BAR_GAP"] })), "BAR_GAP");
+  assert.equal(nullReasonLabel(metric(null, { reasons: [] })), null);
+  assert.equal(nullReasonLabel(metric(1.2, { reasons: [] })), null);
+  assert.equal(nullReasonLabel(undefined), null);
+});
+
+const tilesFor = (pulse, frame, history = []) =>
+  renderToStaticMarkup(React.createElement(pulse.MarketSnapshotTiles, { frame, history, window: "24h" }));
+
+test("the hourly generation shows a Relative volume (1h) tile and the legacy one keeps hiding the single-minute tile", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const current = await fixtureFrame("market-picture.v1.json");
+  assert.ok("relative_volume_1h" in current.summary && !("relative_volume_24h" in current.summary));
+  const withValue = (frame, key, definition, value = 1.37) => ({
+    ...frame, summary: { ...frame.summary, [key]: metric(value, { unit: "ratio", definition }) },
+  });
+  const shown = tilesFor(pulse, withValue(current, "relative_volume_1h", "median_relative_volume_1h v1.0.0"));
+  assert.match(shown, /Relative volume \(1h\)/);
+  assert.match(shown, /last 60 min vs prior 24h hourly mean/);
+  assert.match(shown, /1\.37/);
+  // The owner's null with a reason code (zero baseline, low coverage) draws no tile and prints no placeholder word.
+  const withheld = tilesFor(pulse, {
+    ...current, summary: { ...current.summary, relative_volume_1h: metric(null, { unit: "ratio", reasons: ["ZERO_BASELINE"], definition: "median_relative_volume_1h v1.0.0" }) },
+  });
+  assert.doesNotMatch(withheld, /Relative volume|navailable/);
+  const legacy = await fixtureFrame("market-picture.240.fixture.json");
+  assert.ok("relative_volume_24h" in legacy.summary && !("relative_volume_1h" in legacy.summary));
+  const hidden = tilesFor(pulse, withValue(legacy, "relative_volume_24h", "median_relative_volume_24h v1.0.0", 0.003));
+  assert.doesNotMatch(hidden, /Relative volume/);
+});
+
+test("tile history reads whichever relative-volume key a stored point carries, never bridging definitions", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const current = await fixtureFrame("market-picture.v1.json");
+  const frame = { ...current, summary: { ...current.summary, relative_volume_1h: metric(1.5, { unit: "ratio", definition: "median_relative_volume_1h v1.0.0" }) } };
+  // Points from before the switch carry the retired key; they are not drawn on the hourly tile.
+  const history = Array.from({ length: 60 }, (_, i) => point(i, {
+    summary: i < 30 ? { relative_volume_24h: 0.2 } : { relative_volume_1h: 1 + i / 100 },
+  }));
+  const markup = tilesFor(pulse, frame, history);
+  assert.match(markup, /Relative volume \(1h\)/);
+  assert.doesNotMatch(markup, /NaN|undefined/);
+});
+
+test("the asset inspector labels hourly relative volume and any withheld reason code", async () => {
+  const views = load("features/market-picture/DetailViews.tsx");
+  const frame = await fixtureFrame("market-picture.v1.json");
+  const asset = frame.assets[0];
+  assert.ok("rvol_1h" in asset.indicators && !("rvol_24h" in asset.indicators));
+  const render = (rvol) => renderToStaticMarkup(React.createElement(views.AssetInspector, {
+    asset: { ...asset, indicators: { ...asset.indicators, rvol_1h: rvol } }, frame, watched: false, toggleWatch() {}, note: "", saveNote() {}, openNativeTools() {},
+  }));
+  const hourly = (extra) => metric(extra.value ?? null, { unit: "ratio", definition: "rvol1h v1.0.0", ...extra });
+  const shown = render(hourly({ value: 0.8123 }));
+  assert.match(shown, /Relative volume \(1h\) · last 60 min vs prior 24h hourly mean/);
+  assert.match(shown, /0\.8123/);
+  const zero = render(hourly({ value: null, reasons: ["ZERO_BASELINE"] }));
+  const row = zero.match(/<tr><th scope="row">Relative volume \(1h\)[\s\S]*?<\/tr>/)[0];
+  assert.match(row, /no volume in the 24h baseline \(ZERO_BASELINE\)/);
+  assert.doesNotMatch(row, /navailable|UNAVAILABLE/);
+  const legacy = await fixtureFrame("market-picture.240.fixture.json");
+  const old = renderToStaticMarkup(React.createElement(views.AssetInspector, {
+    asset: legacy.assets[0], frame: legacy, watched: false, toggleWatch() {}, note: "", saveNote() {}, openNativeTools() {},
+  }));
+  assert.ok("rvol_24h" in legacy.assets[0].indicators);
+  assert.match(old, /rvol 24h/);
+});
+
 // ---- Correlation history ------------------------------------------------------------------------
 
 const corr = (value, samples, expected, extra = {}) => ({ instrument_id: "okx:spot:ETH-USDC", benchmark_id: "okx:spot:BTC-USDC", value, samples, expected, cutoff: 1, reasons: value === null ? ["INSUFFICIENT_HISTORY"] : [], trend: [], ...extra });
@@ -359,7 +439,10 @@ test("correlation readout reports the real window and paired count and never fil
   assert.equal(building.window, "90D");
   assert.ok(Math.abs(building.share - 177 / 2160) < 1e-12);
   const week = correlationReadout([corr(0.62, 168, 168), corr(null, 168, 2160)]);
-  assert.deepEqual(week, { kind: "values", expected: 168, samples: 168, window: "7D", partial: true });
+  assert.deepEqual(week, { kind: "values", expected: 168, samples: 168, window: "7D", definition: "pearson_log_1h_168h", partial: true });
+  assert.equal(correlationReadout([corr(0.4, 2160, 2160)]).definition, "pearson_log_1h_90d");
+  assert.equal(correlationReadout([corr(0.4, 24, 24)]).definition, "pearson_log_1h_24h");
+  assert.equal(correlationReadout([corr(null, 12, 24)]).definition, "pearson_log_1h_24h");
   const full = correlationReadout([corr(0.62, 2160, 2160), corr(0.4, 168, 168)]);
   assert.equal(full.window, "90D");
   assert.equal(full.partial, false);
@@ -374,9 +457,10 @@ test("the correlations panel labels a partial window and shows progress while ev
   assert.match(building, /2,052/);
   assert.match(building, /building history/);
   assert.doesNotMatch(building, /<table/);
-  const partial = renderToStaticMarkup(React.createElement(assets.CorrelationsPanel, { ...props, correlations: [corr(0.62, 168, 168)] }));
+  const partial = renderToStaticMarkup(React.createElement(assets.CorrelationsPanel, { ...props, correlations: [corr(0.62, 168, 168, { definition: "pearson_log_1h_168h" })] }));
   assert.match(partial, /7D of 90D/);
   assert.match(partial, /168 paired hours/);
+  assert.match(partial, /pearson_log_1h_168h/);
   assert.match(partial, /0\.62/);
   assert.equal(renderToStaticMarkup(React.createElement(assets.CorrelationsPanel, { ...props, correlations: [] })), "");
 });

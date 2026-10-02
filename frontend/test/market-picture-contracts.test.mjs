@@ -19,6 +19,7 @@ const read = (file) =>
     ),
   );
 const fixture = () => read("market-picture.v1.json");
+const legacyFixture = () => read("market-picture.legacy-rvol24h.v1.json");
 test("compact valid cell quality defaults preserve series hash and resolved meaning", async () => {
   const series = read("market-picture-series.v1.json");
   const compact = structuredClone(series);
@@ -122,11 +123,11 @@ test("binary-float rounding cannot admit fractional instrument counts", async ()
 
 test("resealed references cannot relabel summary, horizon, distribution or comparison values", async () => {
   const mutations = {
-    summary: f => { f.summary.metric_refs.relative_volume_24h = f.breadth[0].metric_refs.advances; },
+    summary: f => { f.summary.metric_refs.relative_volume_1h = f.breadth[0].metric_refs.advances; },
     breadthHorizon: f => { f.breadth[0].metric_refs.advance_share = f.breadth[1].metric_refs.advance_share; },
     pressureHorizon: f => { f.pressure[0].metric_id = f.pressure[1].metric_id; },
     distribution: f => { f.distribution[0].definition_ref.definition_id = "breadth_share"; },
-    comparison: f => { f.comparisons.metric_refs["summary/relative_volume_24h"] = f.comparisons.metric_refs["summary/trend_strength"]; },
+    comparison: f => { f.comparisons.metric_refs["summary/relative_volume_1h"] = f.comparisons.metric_refs["summary/trend_strength"]; },
   };
   for (const [name, mutate] of Object.entries(mutations)) {
     const frame = fixture();
@@ -168,6 +169,63 @@ test("full API fixture validates with explicit fixture authority and resolves al
   assert.equal(view.assets[0].symbol, "BTC");
   assert.equal(view.assets[0].quote, "USDC");
   assert.equal(view.raw.snapshot_id, frame.snapshot_id);
+});
+
+test("both relative-volume generations validate and project under their own keys", async () => {
+  const current = projectFrame(await validateFrame(fixture(), { allowFixture: true }));
+  const legacy = projectFrame(await validateFrame(legacyFixture(), { allowFixture: true }));
+  assert.ok("rvol_1h" in current.assets[0].indicators && !("rvol_24h" in current.assets[0].indicators));
+  assert.ok("relative_volume_1h" in current.summary && !("relative_volume_24h" in current.summary));
+  assert.ok("summary/relative_volume_1h" in current.comparisons);
+  assert.equal(current.assets[0].indicators.rvol_1h.definition, "rvol1h v1.0.0");
+  assert.ok("rvol_24h" in legacy.assets[0].indicators && !("rvol_1h" in legacy.assets[0].indicators));
+  assert.ok("relative_volume_24h" in legacy.summary && !("relative_volume_1h" in legacy.summary));
+  assert.ok("summary/relative_volume_24h" in legacy.comparisons);
+  assert.equal(legacy.assets[0].indicators.rvol_24h.definition, "rvol24h v1.0.0");
+  assert.notEqual(current.raw.definition_registry_hash, legacy.raw.definition_registry_hash);
+});
+
+test("a frame cannot mix or misbind the two relative-volume generations", async () => {
+  const mutations = {
+    bothAssetKeys: f => { f.asset_metric_refs.rvol_24h = f.asset_metric_refs.rvol_1h; },
+    neitherAssetKey: f => { delete f.asset_metric_refs.rvol_1h; },
+    legacySummaryKey: f => { f.summary.metric_refs.relative_volume_24h = f.summary.metric_refs.relative_volume_1h; delete f.summary.metric_refs.relative_volume_1h; },
+    droppedSummaryKey: f => { delete f.summary.metric_refs.relative_volume_1h; },
+    legacyComparisonKey: f => { f.comparisons.metric_refs["summary/relative_volume_24h"] = f.comparisons.metric_refs["summary/relative_volume_1h"]; delete f.comparisons.metric_refs["summary/relative_volume_1h"]; },
+    summaryDefinition: f => { f.market_metrics.relative_volume_1h.definition.definition_id = "median_relative_volume_24h"; },
+    seriesBinding: f => { f.asset_metric_refs.rvol_1h = f.asset_metric_refs.rvol20; },
+  };
+  for (const [name, mutate] of Object.entries(mutations)) {
+    const frame = fixture();
+    mutate(frame);
+    await assert.rejects(validateFrame(await seal(frame), { allowFixture: true }), undefined, name);
+  }
+  const legacy = legacyFixture();
+  legacy.summary.metric_refs.relative_volume_1h = legacy.summary.metric_refs.relative_volume_24h;
+  delete legacy.summary.metric_refs.relative_volume_24h;
+  await assert.rejects(validateFrame(await seal(legacy), { allowFixture: true }), undefined, "legacy frame with current key");
+  const wrongSeries = fixture();
+  const series = wrongSeries.metric_series.find(s => s.metric_id === "asset_rvol_1h");
+  series.definition_ref.definition_id = "rvol24h";
+  series.payload_digest = await seriesDigest(series);
+  await assert.rejects(validateFrame(await seal(wrongSeries), { allowFixture: true }), /binding/);
+});
+
+test("a zero-baseline relative volume is a null with its reason, and a null without one is rejected", async () => {
+  const frame = fixture();
+  const series = frame.metric_series.find(s => s.metric_id === "asset_rvol_1h");
+  series.cells[0] = {
+    instrument_id: series.cells[0].instrument_id, computation_status: "UNAVAILABLE",
+    coverage_status: "PARTIAL", reason_codes: ["ZERO_BASELINE"], sample_count: 1500,
+  };
+  series.payload_digest = await seriesDigest(series);
+  const view = projectFrame(await validateFrame(await seal(structuredClone(frame)), { allowFixture: true }));
+  const cell = view.assets[0].indicators.rvol_1h;
+  assert.equal(cell.value, null);
+  assert.deepEqual(cell.reasons, ["ZERO_BASELINE"]);
+  delete series.cells[0].reason_codes;
+  series.payload_digest = await seriesDigest(series);
+  await assert.rejects(validateFrame(await seal(frame), { allowFixture: true }));
 });
 
 test("production parser rejects synthetic fixtures even with valid digests", async () => {

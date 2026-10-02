@@ -3,6 +3,7 @@
  * frame (breadth, pressure, asset indicators, predicates) and labelled with its basis; nothing is a
  * stored model output unless the frame itself carries one.
  */
+import { correlationDefinitionId } from "./contract.mjs";
 import { HORIZONS, HORIZON_LABELS, marketPulseWindow } from "./model.mjs";
 
 const MINUTES_PER_YEAR = 525_600;
@@ -400,6 +401,28 @@ export function isSingleBarRelativeVolume(metric) {
 }
 
 /**
+ * The hourly definition (last 60 closed minutes over the mean of the prior 24 hourly sums) is the
+ * aggregated reading the single-minute definitions lacked, so it is shown, with its basis spelled out.
+ */
+const HOURLY_VOLUME_DEFINITIONS = ["median_relative_volume_1h", "rvol1h"];
+export function isHourlyRelativeVolume(metric) {
+  const [id, version = ""] = String(metric?.definition ?? "").split(" ");
+  return HOURLY_VOLUME_DEFINITIONS.includes(id) && /^v1(\.|$)/.test(version);
+}
+
+const NULL_REASON_LABELS = {
+  ZERO_BASELINE: "no volume in the 24h baseline",
+  INSUFFICIENT_HISTORY: "history still building",
+  INSUFFICIENT_COVERAGE: "too few instruments with a value",
+};
+/** A withheld value is labelled with its owner reason code; it is never replaced by a generic word. */
+export function nullReasonLabel(metric) {
+  const codes = metric?.reasons ?? [];
+  if (metric?.value != null || !codes.length) return null;
+  return codes.map((code) => (NULL_REASON_LABELS[code] ? `${NULL_REASON_LABELS[code]} (${code})` : code)).join(", ");
+}
+
+/**
  * On a five-instrument universe every 1m and 5m breadth crossing is one instrument changing sign, so
  * they arrive every minute or two and bury the rest of the alert feed. The feed folds them behind a
  * count instead of deleting them.
@@ -430,7 +453,10 @@ export function correlationReadout(correlations) {
   if (drawn.length) {
     const expected = Math.max(...drawn.map((c) => c.expected));
     const samples = Math.min(...drawn.filter((c) => c.expected === expected).map((c) => c.samples));
-    return { kind: "values", expected, samples, window: correlationWindowLabel(expected), partial: expected < 2160 };
+    return {
+      kind: "values", expected, samples, window: correlationWindowLabel(expected),
+      definition: correlationDefinitionId(expected), partial: expected < 2160,
+    };
   }
   if (!pairs.length) return { kind: "none" };
   const expected = Math.max(...pairs.map((c) => c.expected));
@@ -439,6 +465,7 @@ export function correlationReadout(correlations) {
   return {
     kind: "building",
     expected,
+    definition: correlationDefinitionId(expected),
     samples,
     needed,
     window: correlationWindowLabel(expected),

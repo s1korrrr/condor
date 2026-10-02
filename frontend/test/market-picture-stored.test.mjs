@@ -93,6 +93,54 @@ test("correlations require admitted identities, exact sample coverage and bounde
       projectCorrelations(envelope([{ ...row, ...changes }]), frame),
     );
 });
+test("correlations accept each owner window with its definition id and reject unlisted or mixed windows", () => {
+  const row = {
+    instrument_a_id: frame.assets[0].instrument_id,
+    instrument_b_id: frame.assets[1].instrument_id,
+    correlation: "0.5",
+    paired_sample_count: 0,
+    expected_sample_count: 0,
+    reason_codes: [],
+    window_end_ms: frame.cutoff_ms,
+    trend: [],
+  };
+  const ids = {
+    24: "pearson_log_1h_24h", 72: "pearson_log_1h_72h", 168: "pearson_log_1h_168h",
+    336: "pearson_log_1h_336h", 720: "pearson_log_1h_720h", 2160: "pearson_log_1h_90d",
+  };
+  for (const [hours, definition] of Object.entries(ids)) {
+    const window = Number(hours);
+    const [shown] = projectCorrelations(envelope([{ ...row, expected_sample_count: window, paired_sample_count: window }]), frame);
+    assert.equal(shown.expected, window);
+    assert.equal(shown.definition, definition);
+    const gate = Math.ceil(window * 0.95);
+    assert.equal(projectCorrelations(envelope([{ ...row, expected_sample_count: window, paired_sample_count: gate }]), frame)[0].value, 0.5);
+    assert.throws(() => projectCorrelations(envelope([{ ...row, expected_sample_count: window, paired_sample_count: gate - 1 }]), frame), undefined, `${window} below the gate`);
+    // A pair below the gate is null with its reason and keeps its real sample size.
+    const [withheld] = projectCorrelations(envelope([{ ...row, expected_sample_count: window, paired_sample_count: gate - 1, correlation: null, reason_codes: ["INSUFFICIENT_HISTORY"] }]), frame);
+    assert.equal(withheld.value, null);
+    assert.equal(withheld.samples, gate - 1);
+  }
+  for (const expected of [100, 1000, 2161])
+    assert.throws(() => projectCorrelations(envelope([{ ...row, expected_sample_count: expected, paired_sample_count: expected }]), frame), undefined, String(expected));
+  assert.throws(() => projectCorrelations(envelope([
+    { ...row, expected_sample_count: 168, paired_sample_count: 168 },
+    { ...row, expected_sample_count: 2160, paired_sample_count: 2160 },
+  ]), frame), /mixes/);
+});
+test("history points keep either relative-volume key and never invent the other", () => {
+  const retired = projectHistory(envelope([point({ summary: { relative_volume_24h: "0.004", trend_strength: "25" } })]), frame)[0];
+  assert.equal(retired.summary.relative_volume_24h, 0.004);
+  assert.ok(!("relative_volume_1h" in retired.summary));
+  const hourly = projectHistory(envelope([point({ summary: { relative_volume_1h: "1.25", trend_strength: null } })]), frame)[0];
+  assert.equal(hourly.summary.relative_volume_1h, 1.25);
+  assert.ok(!("relative_volume_24h" in hourly.summary));
+  assert.equal(hourly.summary.trend_strength, null);
+  assert.throws(
+    () => projectHistory(envelope([point({ summary: { relative_volume_24h: "1", relative_volume_1h: "1" } })]), frame),
+    /mixes/,
+  );
+});
 test("events cannot appear in decision replay before their availability", () => {
   const event = {
     event_id: "event-a",

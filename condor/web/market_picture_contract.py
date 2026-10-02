@@ -18,7 +18,7 @@ from jsonschema import Draft202012Validator
 
 MAX_BYTES = 2 * 1024 * 1024
 HORIZONS = [1, 5, 15, 60, 240, 1440]
-ASSET_UNITS = {
+_COMMON_ASSET_UNITS = {
     "price": "price_quote",
     "ema21": "price_quote",
     "rsi14": "rsi_0_100",
@@ -26,10 +26,28 @@ ASSET_UNITS = {
     "atr14_percent": "atr_percent",
     "atr14_percentile": "percentile_0_100",
     "rvol20": "ratio",
-    "rvol_24h": "ratio",
     "realized_volatility_24h": "volatility_fraction_annualized",
     **{f"return_{h}m": "return_percent" for h in [*HORIZONS, 10080]},
     **{f"relative_24h_{b}": "percentage_points" for b in ["btc", "eth", "bnb", "sol"]},
+}
+# Relative-volume generations. Frames stored before the hourly definition carry the single-minute
+# ``rvol_24h`` keys; they stay readable (immutable history) while new frames use ``rvol_1h``.
+# A frame belongs to exactly one generation: asset, summary and comparison keys never mix.
+RVOL_GENERATIONS = {
+    "current": {
+        "asset_key": "rvol_1h",
+        "asset_series": "asset_rvol_1h",
+        "asset_definition": "rvol1h",
+        "summary_key": "relative_volume_1h",
+        "summary_definition": "median_relative_volume_1h",
+    },
+    "legacy": {
+        "asset_key": "rvol_24h",
+        "asset_series": "asset_rvol_24h",
+        "asset_definition": "rvol24h",
+        "summary_key": "relative_volume_24h",
+        "summary_definition": "median_relative_volume_24h",
+    },
 }
 PREDICATES = [
     "above_ema21",
@@ -41,13 +59,8 @@ PREDICATES = [
     "rsi_below_30",
     "trending",
 ]
-SUMMARY_BINDINGS = {
+_COMMON_SUMMARY_BINDINGS = {
     "market_participation": ("market_participation", "share_fraction", "above_ema21"),
-    "relative_volume_24h": (
-        "relative_volume_24h",
-        "ratio",
-        "median_relative_volume_24h",
-    ),
     "trend_strength": ("trend_strength", "adx_0_100", "mean_adx14"),
     "realized_volatility_24h": (
         "realized_volatility_24h",
@@ -93,6 +106,23 @@ PARTICIPATION_DEFINITIONS = {
 # history exists (7D when seven days are stored). Every coefficient must still have >= 95% paired
 # samples of its own window, so a short history is labelled with its real size, never padded.
 CORRELATION_WINDOW_HOURS = frozenset({24, 72, 168, 336, 720, 2160})
+
+
+def correlation_definition_id(window_hours: int) -> str:
+    """Owner definition id of an allowed window; the 90D window keeps its original id."""
+    if window_hours not in CORRELATION_WINDOW_HOURS:
+        raise ValueError("correlation sample window is invalid")
+    return "pearson_log_1h_90d" if window_hours == 2160 else f"pearson_log_1h_{window_hours}h"
+
+
+def rvol_generation(frame) -> dict:
+    """The relative-volume generation a frame was published under, from its asset bindings."""
+    refs = frame["asset_metric_refs"]
+    present = [name for name, row in RVOL_GENERATIONS.items() if row["asset_key"] in refs]
+    if len(present) != 1:
+        raise ValueError("invalid semantic binding keys")
+    return RVOL_GENERATIONS[present[0]]
+
 _DECIMAL = re.compile(r"^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
 _HASH = re.compile(r"^[0-9a-f]{64}$")
 _SCHEMA = json.loads(Path(__file__).with_name("market_picture.schema.json").read_text())
@@ -376,13 +406,22 @@ def validate_frame(frame, *, allow_fixture=False):
             ):
                 raise ValueError("cell time is outside the frame")
     by_id = {s["metric_id"]: s for s in frame["metric_series"]}
-    if set(frame["asset_metric_refs"]) != set(ASSET_UNITS) or set(
+    generation = rvol_generation(frame)
+    asset_units = {**_COMMON_ASSET_UNITS, generation["asset_key"]: "ratio"}
+    if set(frame["asset_metric_refs"]) != set(asset_units) or set(
         frame["asset_predicate_refs"]
     ) != set(PREDICATES):
         raise ValueError("invalid semantic binding keys")
     for key, ref in frame["asset_metric_refs"].items():
-        if by_id.get(ref["metric_id"], {}).get("series_unit") != ASSET_UNITS[key]:
+        if by_id.get(ref["metric_id"], {}).get("series_unit") != asset_units[key]:
             raise ValueError("asset metric unit differs from semantic binding")
+    rvol_ref = frame["asset_metric_refs"][generation["asset_key"]]["metric_id"]
+    if (
+        rvol_ref != generation["asset_series"]
+        or by_id[rvol_ref]["definition_ref"]["definition_id"]
+        != generation["asset_definition"]
+    ):
+        raise ValueError("semantic metric binding mismatch: relative volume generation")
     for ref in frame["asset_predicate_refs"].values():
         if by_id.get(ref["metric_id"], {}).get("series_unit") != "count":
             raise ValueError("predicate binding unit must be count")
@@ -401,7 +440,17 @@ def validate_frame(frame, *, allow_fixture=False):
     ]
     if any(ref["metric_id"] not in metrics for ref in refs):
         raise ValueError("unresolved aggregate reference")
-    for key, (metric_id, unit, definition_id) in SUMMARY_BINDINGS.items():
+    summary_bindings = {
+        **_COMMON_SUMMARY_BINDINGS,
+        generation["summary_key"]: (
+            generation["summary_key"],
+            "ratio",
+            generation["summary_definition"],
+        ),
+    }
+    if set(frame["summary"]["metric_refs"]) != set(summary_bindings):
+        raise ValueError("semantic binding keys mix relative-volume generations")
+    for key, (metric_id, unit, definition_id) in summary_bindings.items():
         _require_binding(
             metrics,
             frame["summary"]["metric_refs"][key]["metric_id"],
@@ -445,13 +494,15 @@ def validate_frame(frame, *, allow_fixture=False):
     if frame.get("comparisons") is not None:
         summary_deltas = {
             "market_participation": ("percentage_points", "share_delta"),
-            "relative_volume_24h": ("ratio_points", "rvol_delta"),
+            generation["summary_key"]: ("ratio_points", "rvol_delta"),
             "trend_strength": ("index_points", "trend_strength_delta"),
             "realized_volatility_24h": ("percentage_points", "volatility_delta"),
         }
         for key, ref in frame["comparisons"]["metric_refs"].items():
             family, semantic = key.split("/", 1)
             if family == "summary":
+                if semantic not in summary_deltas:
+                    raise ValueError("semantic binding keys mix relative-volume generations")
                 unit, definition_id = summary_deltas[semantic]
             elif family in {"participation", "breadth"}:
                 unit, definition_id = "percentage_points", "share_delta"
@@ -600,13 +651,20 @@ def validate_response(path: str, raw: bytes):
                         low, high = (-3, 3) if key == "pressure" else (0, 1)
                         if not low <= _decimal(value) <= high:
                             raise ValueError("history metric exceeds its unit")
+            # A point is stored under the key set of its own generation; both read, never mixed.
+            if {"relative_volume_24h", "relative_volume_1h"} <= set(row["summary"]):
+                raise ValueError("history point mixes relative-volume generations")
             for value in row["summary"].values():
                 if value is not None:
                     _decimal(value)
     elif family == "correlations":
+        # One stored snapshot publishes one window, bound to its owner definition id.
+        if len({row["expected_sample_count"] for row in payload["items"]}) > 1:
+            raise ValueError("correlation page mixes sample windows")
         for row in payload["items"]:
             count, expected = row["paired_sample_count"], row["expected_sample_count"]
-            if not 0 <= count <= expected or expected not in CORRELATION_WINDOW_HOURS:
+            correlation_definition_id(expected)
+            if not 0 <= count <= expected:
                 raise ValueError("correlation sample window is invalid")
             if row["correlation"] is None:
                 if not row["reason_codes"]:

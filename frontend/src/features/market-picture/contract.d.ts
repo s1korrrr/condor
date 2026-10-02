@@ -12,3 +12,9 @@ export function validateFrame(
   options?: { allowFixture?: boolean },
 ): Promise<Record<string, unknown>>;
 export function projectFrame(frame: Record<string, unknown>): DisplayFrame;
+export const RVOL_GENERATIONS: Record<
+  "current" | "legacy",
+  { asset: string; series: string; assetDefinition: string; summary: string; summaryDefinition: string }
+>;
+export const CORRELATION_WINDOW_HOURS: number[];
+export function correlationDefinitionId(hours: number): string;

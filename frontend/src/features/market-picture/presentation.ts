@@ -109,6 +109,8 @@ export interface DisplayCorrelation {
   value: number | null;
   samples: number;
   expected: number;
+  /** Owner definition id of the window, for example `pearson_log_1h_168h`. */
+  definition?: string;
   cutoff: number;
   reasons: string[];
   trend: Array<{ time: number; value: number | null }>;

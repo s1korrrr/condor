@@ -359,6 +359,9 @@ const SNAPSHOT = [
   ["market_participation", "Participation", "Above EMA21 · 1m", "share"],
   ["trend_strength", "Trend strength", "Mean ADX14 · 0–100", "adx"],
   ["realized_volatility_24h", "Realized volatility", "Median · 24h annualized", "share"],
+  // Hourly generation: last 60 closed minutes over the mean of the prior 24 hourly sums.
+  ["relative_volume_1h", "Relative volume (1h)", "Median · last 60 min vs prior 24h hourly mean", "ratio"],
+  // Stored single-minute generation; a frame carries exactly one of the two keys.
   ["relative_volume_24h", "Relative volume", "Median · vs prior 24h baseline", "ratio"],
 ] as const;
 

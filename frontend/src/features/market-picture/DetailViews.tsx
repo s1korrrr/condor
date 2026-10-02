@@ -8,7 +8,7 @@ import {
   metricText,
   metricTitle,
 } from "./presentation";
-import { assetState, derivedRegime, isShortBreadthCrossing, isSingleBarRelativeVolume, REGIME_BASIS } from "./pulse.mjs";
+import { assetState, derivedRegime, isHourlyRelativeVolume, isShortBreadthCrossing, isSingleBarRelativeVolume, nullReasonLabel, REGIME_BASIS } from "./pulse.mjs";
 import { Empty, Panel, Time } from "./Primitives";
 
 function DerivedRegimeBlock({ asset }: { asset: DisplayAsset }) {
@@ -297,11 +297,13 @@ export function AssetInspector({
               <th scope="row">
                 {isSingleBarRelativeVolume(metric)
                   ? `${name.replaceAll("_", " ")} · latest 1-min bar vs ${name === "rvol20" ? "prior 20-bar" : "prior 24h"} mean`
-                  : name.replaceAll("_", " ")}
+                  : isHourlyRelativeVolume(metric)
+                    ? "Relative volume (1h) · last 60 min vs prior 24h hourly mean"
+                    : name.replaceAll("_", " ")}
               </th>
               <td title={metricTitle(metric)}>{metricText(metric, 4)}</td>
               <td>
-                {metric.status} · {metric.valid}/{metric.expected}
+                {(isHourlyRelativeVolume(metric) && nullReasonLabel(metric)) || metric.status} · {metric.valid}/{metric.expected}
               </td>
             </tr>
           ))}

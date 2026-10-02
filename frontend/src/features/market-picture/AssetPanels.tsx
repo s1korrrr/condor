@@ -7,6 +7,7 @@ import {
   assetState,
   derivedRegime,
   correlationReadout,
+  correlationWindowLabel,
   horizonLabel,
   REGIME_BASIS,
   regimeSummary,
@@ -337,7 +338,7 @@ export function CorrelationsPanel({
                     {frame?.assets.find((a) => a.instrument_id === c.instrument_id)?.symbol ?? c.instrument_id.split(":").at(-1)}
                   </button>
                 </th>
-                <td title={`${c.samples}/${c.expected} paired hours (${c.expected / 24}D window) · ${c.reasons.join(", ")} · ${new Date(c.cutoff).toISOString()}`}>{numberText(c.value, 2)}</td>
+                <td title={`${c.samples}/${c.expected} paired hours (${correlationWindowLabel(c.expected)} window${c.definition ? ` · ${c.definition}` : ""}) · ${c.reasons.join(", ")} · ${new Date(c.cutoff).toISOString()}`}>{numberText(c.value, 2)}</td>
                 <td><Sparkline values={c.trend.map((p) => p.value)} color={c.value !== null && c.value < 0 ? "var(--mp-negative)" : undefined} label={`Daily history of ${readout.window} correlation`} /></td>
               </tr>
             ))}
@@ -424,6 +425,7 @@ export function CorrelationMatrix({
   const values = new Map(
     correlations.map((c) => [`${c.instrument_id}|${c.benchmark_id}`, c]),
   );
+  const matrixReadout = correlationReadout(correlations);
   return (
     <>
       {!fixture && stored?.key !== key && (
@@ -433,7 +435,7 @@ export function CorrelationMatrix({
         <p className="mp-warning">{stored.fault}</p>
       )}
       <p className="mp-muted">
-        90-day aligned hourly log returns. Each cell retains its own paired
+        {matrixReadout.kind === "none" ? "Aligned" : `${matrixReadout.window} aligned`} hourly log returns. Each cell retains its own paired
         sample count; pairs without enough history have no coefficient. Showing at most 16
         × 16 cells.
       </p>
@@ -490,7 +492,7 @@ export function CorrelationMatrix({
                       key={b.instrument_id}
                       title={
                         c
-                          ? `${c.samples}/${c.expected} paired hours · ${c.reasons.join(", ")}`
+                          ? `${c.samples}/${c.expected} paired hours (${correlationWindowLabel(c.expected)}) · ${c.reasons.join(", ")}`
                           : "No coefficient: the paired hourly history is still building"
                       }
                       style={{

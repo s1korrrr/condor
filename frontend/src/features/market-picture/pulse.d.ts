@@ -77,10 +77,16 @@ export function rollingMean(
 export function isSingleBarRelativeVolume(
   metric: { definition?: string } | null | undefined,
 ): boolean;
+export function isHourlyRelativeVolume(
+  metric: { definition?: string } | null | undefined,
+): boolean;
+export function nullReasonLabel(
+  metric: { value: number | null; reasons: string[] } | null | undefined,
+): string | null;
 export type CorrelationReadout =
   | { kind: "none" }
-  | { kind: "values"; expected: number; samples: number; window: string; partial: boolean }
-  | { kind: "building"; expected: number; samples: number; needed: number; window: string; share: number };
+  | { kind: "values"; expected: number; samples: number; window: string; definition: string; partial: boolean }
+  | { kind: "building"; expected: number; samples: number; needed: number; window: string; definition: string; share: number };
 export function correlationWindowLabel(hours: number): string;
 export function correlationReadout(correlations: DisplayCorrelation[]): CorrelationReadout;
 export function breadthLadder(frame: DisplayFrame | null): LadderRow[];

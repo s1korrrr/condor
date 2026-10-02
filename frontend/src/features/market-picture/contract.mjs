@@ -2,17 +2,40 @@
 const HASH = /^[0-9a-f]{64}$/;
 const DECIMAL = /^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$/;
 const HORIZONS = [1, 5, 15, 60, 240, 1440];
-const ASSET_UNITS = {
+const COMMON_ASSET_UNITS = {
   price: "price_quote", ema21: "price_quote", rsi14: "rsi_0_100", adx14: "adx_0_100",
-  atr14_percent: "atr_percent", atr14_percentile: "percentile_0_100", rvol20: "ratio", rvol_24h: "ratio",
+  atr14_percent: "atr_percent", atr14_percentile: "percentile_0_100", rvol20: "ratio",
   realized_volatility_24h: "volatility_fraction_annualized",
   ...Object.fromEntries([...HORIZONS, 10080].map(h => [`return_${h}m`, "return_percent"])),
   ...Object.fromEntries(["btc", "eth", "bnb", "sol"].map(b => [`relative_24h_${b}`, "percentage_points"])),
 };
+// Frames stored before the hourly definition carry the single-minute `rvol_24h` keys. They stay
+// readable (immutable history); a frame belongs to exactly one generation and never mixes the two.
+export const RVOL_GENERATIONS = {
+  current: {
+    asset: "rvol_1h", series: "asset_rvol_1h", assetDefinition: "rvol1h",
+    summary: "relative_volume_1h", summaryDefinition: "median_relative_volume_1h",
+  },
+  legacy: {
+    asset: "rvol_24h", series: "asset_rvol_24h", assetDefinition: "rvol24h",
+    summary: "relative_volume_24h", summaryDefinition: "median_relative_volume_24h",
+  },
+};
+function rvolGeneration(frame) {
+  const refs = object(frame.asset_metric_refs);
+  const present = Object.values(RVOL_GENERATIONS).filter(g => Object.hasOwn(refs, g.asset));
+  require(present.length === 1, "Invalid semantic binding keys");
+  return present[0];
+}
+/** Hourly owner correlation windows (hours) and their definition ids; 90D keeps its original id. */
+export const CORRELATION_WINDOW_HOURS = [24, 72, 168, 336, 720, 2160];
+export const correlationDefinitionId = hours => {
+  require(CORRELATION_WINDOW_HOURS.includes(hours), "Correlation sample window is invalid");
+  return hours === 2160 ? "pearson_log_1h_90d" : `pearson_log_1h_${hours}h`;
+};
 const PREDICATES = ["above_ema21", "compression", "elevated_rvol", "high_volatility", "rsi_above_50", "rsi_above_70", "rsi_below_30", "trending"];
-const SUMMARY_BINDINGS = {
+const COMMON_SUMMARY_BINDINGS = {
   market_participation: ["market_participation", "share_fraction", "above_ema21"],
-  relative_volume_24h: ["relative_volume_24h", "ratio", "median_relative_volume_24h"],
   trend_strength: ["trend_strength", "adx_0_100", "mean_adx14"],
   realized_volatility_24h: ["realized_volatility_24h", "volatility_fraction_annualized", "median_realized_volatility_24h"],
   new_highs_24h: ["new_highs_24h", "instruments", "market_high_break_count_24h"],
@@ -391,10 +414,15 @@ export async function validateFrame(frame, { allowFixture = false } = {}) {
   );
   const aggregates = object(frame.market_metrics);
   const byId = Object.fromEntries(series.map(s => [s.metric_id, s]));
-  exactKeys(frame.asset_metric_refs, Object.keys(ASSET_UNITS));
+  const generation = rvolGeneration(frame);
+  const assetUnits = { ...COMMON_ASSET_UNITS, [generation.asset]: "ratio" };
+  exactKeys(frame.asset_metric_refs, Object.keys(assetUnits));
   exactKeys(frame.asset_predicate_refs, PREDICATES);
   for (const [key, ref] of Object.entries(frame.asset_metric_refs))
-    require(byId[ref.metric_id]?.series_unit === ASSET_UNITS[key], "Asset metric unit differs from semantic binding");
+    require(byId[ref.metric_id]?.series_unit === assetUnits[key], "Asset metric unit differs from semantic binding");
+  const rvolRef = frame.asset_metric_refs[generation.asset].metric_id;
+  require(rvolRef === generation.series && byId[rvolRef].definition_ref?.definition_id === generation.assetDefinition,
+    "Semantic metric binding mismatch");
   for (const ref of Object.values(frame.asset_predicate_refs))
     require(byId[ref.metric_id]?.series_unit === "count", "Predicate binding unit must be count");
   for (const [key, metric] of Object.entries(aggregates)) {
@@ -411,7 +439,12 @@ export async function validateFrame(frame, { allowFixture = false } = {}) {
     require(actualId === expectedId && metric?.unit === unit &&
       metric?.definition?.definition_id === definitionId, "Semantic metric binding mismatch");
   };
-  for (const [key, [metricId, unit, definitionId]] of Object.entries(SUMMARY_BINDINGS))
+  const summaryBindings = {
+    ...COMMON_SUMMARY_BINDINGS,
+    [generation.summary]: [generation.summary, "ratio", generation.summaryDefinition],
+  };
+  exactKeys(frame.summary.metric_refs, Object.keys(summaryBindings));
+  for (const [key, [metricId, unit, definitionId]] of Object.entries(summaryBindings))
     binding(frame.summary.metric_refs[key].metric_id, metricId, unit, definitionId);
   for (const row of frame.breadth)
     for (const [key, [unit, definitionId]] of Object.entries(BREADTH_BINDINGS))
@@ -427,12 +460,13 @@ export async function validateFrame(frame, { allowFixture = false } = {}) {
   if (frame.comparisons) {
     const summaryDeltas = {
       market_participation: ["percentage_points", "share_delta"],
-      relative_volume_24h: ["ratio_points", "rvol_delta"],
+      [generation.summary]: ["ratio_points", "rvol_delta"],
       trend_strength: ["index_points", "trend_strength_delta"],
       realized_volatility_24h: ["percentage_points", "volatility_delta"],
     };
     for (const [key, ref] of Object.entries(frame.comparisons.metric_refs)) {
       const [family, semantic] = key.split("/");
+      require(family !== "summary" || Object.hasOwn(summaryDeltas, semantic), "Invalid semantic binding keys");
       const [unit, definitionId] = family === "summary" ? summaryDeltas[semantic]
         : family === "pressure" ? ["index_points", "breadth_pressure_delta"]
           : ["percentage_points", "share_delta"];
@@ -621,7 +655,6 @@ export function projectFrame(frame) {
       aggregate(ref),
     ]),
   );
-  summary.rvol_24h = summary.relative_volume_24h;
   summary.realized_volatility = summary.realized_volatility_24h;
   return {
     snapshot_id: frame.snapshot_id,

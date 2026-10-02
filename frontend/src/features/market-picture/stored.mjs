@@ -1,5 +1,5 @@
 /** Validate and project immutable stored reads. No browser estimator or imputation. */
-import { decimal } from "./contract.mjs";
+import { correlationDefinitionId, decimal } from "./contract.mjs";
 const HASH = /^[0-9a-f]{64}$/;
 const HORIZONS = ["1", "5", "15", "60", "240", "1440"];
 function check(value, message = "Invalid stored observation response.") {
@@ -67,6 +67,11 @@ export function projectHistory(body, frame) {
     const valid = integer(coverage.valid_instruments),
       expected = integer(coverage.expected_instruments);
     check(valid <= expected && HASH.test(row.membership_hash));
+    const summaryKeys = Object.keys(record(row.summary ?? {}));
+    check(
+      !(summaryKeys.includes("relative_volume_24h") && summaryKeys.includes("relative_volume_1h")),
+      "History point mixes relative-volume generations.",
+    );
     const breadth = record(row.breadth);
     check(
       Object.keys(breadth).length === 6 && HORIZONS.every((h) => h in breadth),
@@ -117,7 +122,10 @@ export function projectHistory(body, frame) {
 export function projectCorrelations(body, frame) {
   pinned(body, frame);
   const ids = new Set(frame.assets.map((a) => a.instrument_id));
-  return rows(body.items, 1500).map((row) => {
+  const items = rows(body.items, 1500);
+  // One stored snapshot publishes one window; its owner definition id is derived from that window.
+  check(new Set(items.map((row) => row.expected_sample_count)).size <= 1, "Correlation page mixes sample windows.");
+  return items.map((row) => {
     check(
       ids.has(row.instrument_a_id) && ids.has(row.instrument_b_id),
       "Correlation contains an unbound instrument.",
@@ -125,6 +133,7 @@ export function projectCorrelations(body, frame) {
     const samples = integer(row.paired_sample_count),
       expected = integer(row.expected_sample_count);
     check(samples <= expected && expected > 0);
+    const definition = correlationDefinitionId(expected);
     const value = number(row.correlation, -1, 1),
       reasonCodes = reasons(row.reason_codes);
     check(
@@ -149,6 +158,7 @@ export function projectCorrelations(body, frame) {
       value,
       samples,
       expected,
+      definition,
       cutoff,
       reasons: reasonCodes,
       trend,

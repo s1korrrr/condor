@@ -1,0 +1,93 @@
+{
+ "bots": [
+  {
+   "bot": "ok_rsi",
+   "display_name": "V1 · ok_rsi",
+   "generation": "V1",
+   "newest_ms": 1799999990000,
+   "oldest_ms": 1799999860000,
+   "paper": false,
+   "reason": null,
+   "receipts": {
+    "exact": 0,
+    "legacy_6dp": 3,
+    "unavailable": 0
+   },
+   "rejected": {},
+   "rows_accepted": 3,
+   "rows_read": 3,
+   "saturated": false,
+   "status": "ok"
+  }
+ ],
+ "generated_at_ms": 1800000001000,
+ "has_more": false,
+ "items": [
+  {
+   "amount": "0.123456",
+   "base": "BNB",
+   "bot": "ok_rsi",
+   "connector": "okx",
+   "display_name": "V1 · ok_rsi",
+   "fee": "0.0741",
+   "fee_unit": "USDC",
+   "fill_id": "v1-2",
+   "generation": "V1",
+   "id": "ok_rsi|db-v1|v1-2",
+   "missing": [],
+   "order_id": "v1-order-2",
+   "order_type": "MARKET",
+   "pair": "BNB-USDC",
+   "price": "600.5",
+   "quote": "USDC",
+   "realized_pnl": null,
+   "receipt": "legacy_6dp",
+   "side": "sell",
+   "simulated": false,
+   "source_db_id": "db-v1",
+   "time_ms": 1799999870000,
+   "volume": "74.1"
+  },
+  {
+   "amount": "0.123456",
+   "base": "BNB",
+   "bot": "ok_rsi",
+   "connector": "okx",
+   "display_name": "V1 · ok_rsi",
+   "fee": null,
+   "fee_unit": "USDC",
+   "fill_id": "v1-3",
+   "generation": "V1",
+   "id": "ok_rsi|db-v1|v1-3",
+   "missing": [
+    "fee"
+   ],
+   "order_id": "v1-order-3",
+   "order_type": "MARKET",
+   "pair": "BNB-USDC",
+   "price": "600.5",
+   "quote": "USDC",
+   "realized_pnl": null,
+   "receipt": "legacy_6dp",
+   "side": "sell",
+   "simulated": false,
+   "source_db_id": "db-v1",
+   "time_ms": 1799999860000,
+   "volume": "74.1"
+  }
+ ],
+ "limit": 5,
+ "matched": 2,
+ "next_cursor": null,
+ "notes": [],
+ "partial": false,
+ "reason": null,
+ "schema_version": "fleet-fills.v1",
+ "server": "v2",
+ "status": "ok",
+ "window": {
+  "horizon_ms": null,
+  "owner_limit": 500,
+  "truncated": false
+ }
+}

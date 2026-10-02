@@ -79,10 +79,20 @@ def project(bot, now):
     realized = unrealized = Decimal(0)
     pairs = []
     for controller, row in sorted(reports.items()):
-        pair = row.get("custom_info", {}).get("pair")
-        if not isinstance(pair, str) or not re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", pair):
-            raise ValueError("Unknown quote currency")
-        pairs.append((controller, pair))
+        info = row.get("custom_info", {})
+        pair = info.get("pair")
+        if isinstance(pair, str) and re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", pair):
+            pairs.append((controller, pair))
+        else:
+            # A multi-symbol controller (Meridian V3) publishes its admitted pairs as `symbols`
+            # instead of one `pair`; every key must be a concrete pair or the quote is unknown.
+            symbols = info.get("symbols")
+            names = sorted(symbols) if isinstance(symbols, dict) else []
+            if not names or not all(
+                isinstance(name, str) and re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", name) for name in names
+            ):
+                raise ValueError("Unknown quote currency")
+            pairs.extend((controller, name) for name in names)
         perf = row["performance"]
         if perf.get("pnl_available") is False:
             raise ValueError("Native PnL explicitly unavailable")

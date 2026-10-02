@@ -314,3 +314,25 @@ def test_route_authorization_and_range(monkeypatch, tmp_path):
     cm.has_server_access = lambda *_: False
     assert client.get(url).status_code == 403
     assert not route.history.path.exists()
+
+
+def multi_symbol_packet(symbols):
+    p = packet()
+    p["expected_controller_ids"] = ["meridian"]
+    p["performance"] = {"meridian": {
+        "custom_info": {"symbols": symbols},
+        "performance": {"realized_pnl_quote": "3.5", "unrealized_pnl_quote": "1.5", "global_pnl_quote": "5.0"},
+    }}
+    return p
+
+
+def test_multi_symbol_controller_takes_its_quote_from_symbols():
+    sample = project(multi_symbol_packet({"BTC-USDC": {}, "ETH-USDC": {}}), 1001)
+    assert sample["quote"] == "USDC"
+    assert sample["total_pnl_quote"] == "5.0"
+
+
+@pytest.mark.parametrize("symbols", [{}, None, {"BTC-USDC": {}, "ETH-USDT": {}}, {"meridian": {}}, ["BTC-USDC"]])
+def test_multi_symbol_controller_without_a_single_concrete_quote_is_rejected(symbols):
+    with pytest.raises(ValueError):
+        project(multi_symbol_packet(symbols), 1001)

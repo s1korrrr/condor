@@ -133,8 +133,8 @@ function AppShellBody() {
         {/* Left: logo + nav */}
         <div className="flex min-w-0 w-full items-center gap-3 xl:w-auto xl:gap-6">
           <NavLink to="/" className="flex shrink-0 items-center gap-2 font-bold tracking-tight">
-            <img src="/condor_old.jpeg" alt="Condor" className="h-6 w-6 rounded-full" />
-            <span className="text-sm">Condor</span>
+            <img src="/condor_old.jpeg" alt="RSIBOT" className="h-6 w-6 rounded-full" />
+            <span className="text-sm">RSIBOT</span>
           </NavLink>
 
           <nav ref={navigationRef} aria-label="Main navigation" className="flex min-w-0 items-center overflow-x-auto whitespace-nowrap">

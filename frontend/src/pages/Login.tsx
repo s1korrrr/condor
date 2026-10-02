@@ -63,8 +63,8 @@ export function Login() {
   return (
     <div className="flex h-screen items-center justify-center">
       <div className="w-full max-w-sm rounded-xl border border-[var(--color-border)] bg-[var(--color-surface)] p-8 text-center">
-        <img src="/condor_old.jpeg" alt="Condor" className="mx-auto mb-4 h-16 w-16 rounded-full" />
-        <h1 className="mb-2 text-2xl font-bold">Condor</h1>
+        <img src="/condor_old.jpeg" alt="RSIBOT" className="mx-auto mb-4 h-16 w-16 rounded-full" />
+        <h1 className="mb-2 text-2xl font-bold">RSIBOT</h1>
         {recoveryMessage && <p role="status" className="mb-4 text-sm text-[var(--color-text-muted)]">{recoveryMessage}</p>}
         {loggingIn ? <p role="status" className="text-sm text-[var(--color-text-muted)]">Signing in…</p> : <>
           <button type="button" onClick={() => signIn()} className="mb-4 rounded bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-bg)]">Sign in again</button>

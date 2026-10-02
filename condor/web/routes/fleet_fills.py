@@ -24,7 +24,9 @@ from config_manager import get_config_manager
 router = APIRouter(tags=["fleet"])
 
 TOTAL_TIMEOUT = 12.0
-CACHE_TTL_SECONDS = 5.0  # one owner read serves a burst of dashboard, phone and watch pages
+CACHE_TTL_SECONDS = (
+    5.0  # one owner read serves a burst of dashboard, phone and watch pages
+)
 HEADERS = {
     "Cache-Control": "private, no-cache",
     "X-Content-Type-Options": "nosniff",
@@ -49,7 +51,9 @@ async def _window(server: str) -> dict:
         if hit is None or hit[0] <= time.monotonic():
             try:
                 async with asyncio.timeout(TOTAL_TIMEOUT):
-                    window = await feed.read_window(server, _readers(), time.time() * 1000)
+                    window = await feed.read_window(
+                        server, _readers(), time.time() * 1000
+                    )
             except TimeoutError:
                 raise HTTPException(
                     status_code=504, detail="Fleet fills exceeded their deadline"
@@ -83,11 +87,11 @@ async def fleet_fills(
             detail=f"Unsupported schema; this server speaks {feed.SCHEMA_VERSION}",
         )
     try:
-        limit = (
-            int(params["limit"][0]) if "limit" in params else feed.DEFAULT_LIMIT
-        )
+        limit = int(params["limit"][0]) if "limit" in params else feed.DEFAULT_LIMIT
     except ValueError:
-        raise HTTPException(status_code=400, detail="limit must be an integer") from None
+        raise HTTPException(
+            status_code=400, detail="limit must be an integer"
+        ) from None
     window = await _window(name)
     try:
         body = feed.build_page(
@@ -104,4 +108,6 @@ async def fleet_fills(
     headers = {**HEADERS, "ETag": tag, "X-Fleet-Fills-Schema": feed.SCHEMA_VERSION}
     if summary_route._tag_matches(request.headers.get("If-None-Match"), tag):
         return Response(status_code=304, headers=headers)
-    return Response(canonical_json(body), media_type="application/json", headers=headers)
+    return Response(
+        canonical_json(body), media_type="application/json", headers=headers
+    )

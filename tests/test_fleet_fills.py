@@ -183,8 +183,14 @@ async def test_all_three_generations_merge_newest_first_with_bot_labels():
         ("meridian_v3", "v3-2"),
         ("ok_rsi", "v1-2"),
     ]
-    assert body["status"] == "ok" and body["partial"] is False and body["reason"] is None
-    assert body["matched"] == 6 and body["has_more"] is False and body["next_cursor"] is None
+    assert (
+        body["status"] == "ok" and body["partial"] is False and body["reason"] is None
+    )
+    assert (
+        body["matched"] == 6
+        and body["has_more"] is False
+        and body["next_cursor"] is None
+    )
     labels = {i["bot"]: (i["display_name"], i["generation"]) for i in body["items"]}
     assert labels == {
         "ok_rsi": ("V1 · ok_rsi", "V1"),
@@ -205,12 +211,18 @@ async def test_v1_rows_without_v2_only_fields_are_kept_and_labelled_not_dropped(
         "74.1",
         "0.0741",
     )
-    assert first["fee_unit"] == "USDC" and first["base"] == "BNB" and first["quote"] == "USDC"
+    assert (
+        first["fee_unit"] == "USDC"
+        and first["base"] == "BNB"
+        and first["quote"] == "USDC"
+    )
     assert first["missing"] == [] and first["time_ms"] == T0 - 10_000
     assert first["realized_pnl"] is None
     meta = body["bots"][0]
     assert meta["receipts"] == {"exact": 0, "legacy_6dp": 2, "unavailable": 0}
-    assert meta["rows_read"] == 2 and meta["rows_accepted"] == 2 and meta["rejected"] == {}
+    assert (
+        meta["rows_read"] == 2 and meta["rows_accepted"] == 2 and meta["rejected"] == {}
+    )
 
 
 @sync
@@ -249,9 +261,13 @@ async def test_a_row_missing_fields_keeps_what_it_has_and_lists_what_it_lacks():
 async def test_negative_fee_rebate_and_nonpositive_amount_are_handled_honestly():
     rebate = v2_row(1, T0, exact_trade_fee_in_quote="-0.001")
     zero = v2_row(2, T0 - 1, exact_amount="0", amount_base=0)
-    body = await page(Readers({"rsi_modular_v2": [rebate, zero]}, registry=["rsi_modular_v2"]))
+    body = await page(
+        Readers({"rsi_modular_v2": [rebate, zero]}, registry=["rsi_modular_v2"])
+    )
     assert body["items"][0]["fee"] == "-0.001"
-    assert body["items"][1]["amount"] is None and "amount" in body["items"][1]["missing"]
+    assert (
+        body["items"][1]["amount"] is None and "amount" in body["items"][1]["missing"]
+    )
 
 
 # ── honesty about sources ──
@@ -264,7 +280,11 @@ async def test_a_bot_whose_reader_is_down_is_reported_not_omitted():
     assert body["status"] == "partial" and body["partial"] is True
     assert body["reason"] == "PARTIAL_COVERAGE"
     v1 = next(b for b in body["bots"] if b["bot"] == "ok_rsi")
-    assert (v1["status"], v1["reason"], v1["rows_read"]) == ("unavailable", fs.SOURCE_UNAVAILABLE, 0)
+    assert (v1["status"], v1["reason"], v1["rows_read"]) == (
+        "unavailable",
+        fs.SOURCE_UNAVAILABLE,
+        0,
+    )
     assert {i["bot"] for i in body["items"]} == {"rsi_modular_v2", "meridian_v3"}
 
 
@@ -288,7 +308,9 @@ async def test_a_reader_that_raises_or_returns_garbage_is_unavailable_with_a_rea
 async def test_every_reader_down_is_missing_not_an_empty_success():
     down = {bot: fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE) for bot in BOTS}
     body = await page(Readers(down))
-    assert body["items"] == [] and body["status"] == "missing" and body["partial"] is True
+    assert (
+        body["items"] == [] and body["status"] == "missing" and body["partial"] is True
+    )
     assert body["reason"] == fs.SOURCE_UNAVAILABLE
     assert [b["status"] for b in body["bots"]] == ["unavailable"] * 3
 
@@ -310,23 +332,36 @@ async def test_every_bot_ok_and_empty_is_an_honest_empty_success():
 @sync
 async def test_no_registry_and_no_bots_status_is_missing_no_registry():
     body = await page(Readers({}, registry=None))
-    assert body["status"] == "missing" and body["reason"] == fs.NO_REGISTRY and body["bots"] == []
+    assert (
+        body["status"] == "missing"
+        and body["reason"] == fs.NO_REGISTRY
+        and body["bots"] == []
+    )
 
 
 @sync
 async def test_registry_falls_back_to_the_bots_status_and_says_so():
     status = {"data": {"ok_rsi": {"status": "running", "performance": {}}}}
-    body = await page(Readers({"ok_rsi": default_rows()["ok_rsi"]}, registry=None, status=status))
+    body = await page(
+        Readers({"ok_rsi": default_rows()["ok_rsi"]}, registry=None, status=status)
+    )
     assert [b["bot"] for b in body["bots"]] == ["ok_rsi"]
     assert body["notes"] == [{"reason": fs.REGISTRY_FROM_STATUS}]
 
 
 @sync
 async def test_paper_bots_are_listed_as_excluded_and_never_read():
-    readers = Readers(default_rows() | {"ok_rsi_paper": [v1_row(9, T0)]}, registry=BOTS + ["ok_rsi_paper"])
+    readers = Readers(
+        default_rows() | {"ok_rsi_paper": [v1_row(9, T0)]},
+        registry=BOTS + ["ok_rsi_paper"],
+    )
     body = await page(readers)
     paper = next(b for b in body["bots"] if b["bot"] == "ok_rsi_paper")
-    assert (paper["status"], paper["reason"], paper["paper"]) == ("excluded", fs.PAPER_EXCLUDED, True)
+    assert (paper["status"], paper["reason"], paper["paper"]) == (
+        "excluded",
+        fs.PAPER_EXCLUDED,
+        True,
+    )
     assert "ok_rsi_paper" not in {c[0] for c in readers.calls}
     assert body["status"] == "ok", "paper exclusion is not a data gap"
     assert all(i["bot"] != "ok_rsi_paper" for i in body["items"])
@@ -340,7 +375,9 @@ async def test_duplicates_foreign_rows_and_unidentifiable_rows_are_rejected_and_
     rows = [
         v1_row(1, T0),
         v1_row(1, T0),  # the same identity twice
-        v1_row(2, T0 - 1, source_db_id="db-other"),  # same fill id, other source: a different fill
+        v1_row(
+            2, T0 - 1, source_db_id="db-other"
+        ),  # same fill id, other source: a different fill
         v1_row(3, T0 - 2, bot_name="rsi_modular_v2"),  # another bot's row
         v1_row(4, T0 - 3, fill_id=None),
         v1_row(5, T0 - 4, fill_id="  "),
@@ -362,7 +399,12 @@ async def test_duplicates_foreign_rows_and_unidentifiable_rows_are_rejected_and_
 async def test_the_same_fill_id_under_two_bots_is_two_fills():
     a = v1_row(1, T0, fill_id="shared")
     b = v2_row(1, T0, fill_id="shared")
-    body = await page(Readers({"ok_rsi": [a], "rsi_modular_v2": [b]}, registry=["ok_rsi", "rsi_modular_v2"]))
+    body = await page(
+        Readers(
+            {"ok_rsi": [a], "rsi_modular_v2": [b]},
+            registry=["ok_rsi", "rsi_modular_v2"],
+        )
+    )
     assert len(body["items"]) == 2
 
 
@@ -372,7 +414,11 @@ async def test_the_same_fill_id_under_two_bots_is_two_fills():
 @sync
 async def test_equal_instants_order_by_bot_source_and_fill_id_and_untimed_rows_sort_last():
     rows = {
-        "ok_rsi": [v1_row(1, T0), v1_row(2, T0, source_db_id="a-first"), v1_row(3, T0, timestamp="garbage")],
+        "ok_rsi": [
+            v1_row(1, T0),
+            v1_row(2, T0, source_db_id="a-first"),
+            v1_row(3, T0, timestamp="garbage"),
+        ],
         "meridian_v3": [v3_row(1, T0)],
         "rsi_modular_v2": [v2_row(1, T0)],
     }
@@ -390,8 +436,14 @@ async def test_equal_instants_order_by_bot_source_and_fill_id_and_untimed_rows_s
 @sync
 async def test_walking_every_cursor_equals_the_unpaged_feed_with_no_repeat_or_skip():
     rows = {
-        bot: [row(n, T0 - (n // 3) * 1000) for n in range(9)]  # many equal instants across bots
-        for bot, row in (("ok_rsi", v1_row), ("rsi_modular_v2", v2_row), ("meridian_v3", v3_row))
+        bot: [
+            row(n, T0 - (n // 3) * 1000) for n in range(9)
+        ]  # many equal instants across bots
+        for bot, row in (
+            ("ok_rsi", v1_row),
+            ("rsi_modular_v2", v2_row),
+            ("meridian_v3", v3_row),
+        )
     }
     readers = Readers(rows)
     win = await window(readers)
@@ -427,7 +479,9 @@ async def test_a_cursor_keeps_working_after_newer_fills_arrive():
 @sync
 async def test_filters_bot_side_pair_and_their_combination():
     win = await window()
-    assert {i["bot"] for i in ff.build_page(win, bots=["ok_rsi", "meridian_v3"])["items"]} == {"ok_rsi", "meridian_v3"}
+    assert {
+        i["bot"] for i in ff.build_page(win, bots=["ok_rsi", "meridian_v3"])["items"]
+    } == {"ok_rsi", "meridian_v3"}
     sells = ff.build_page(win, side="SELL")
     assert sells["items"] and all(i["side"] == "sell" for i in sells["items"])
     eth = ff.build_page(win, pair="eth/usdc")
@@ -466,7 +520,10 @@ async def test_a_saturated_bot_ends_the_merged_feed_at_its_horizon():
     rows = {
         # V2's read is full (limit 3): rows older than 4000 ms ago may exist and are unknown.
         "rsi_modular_v2": [v2_row(n, T0 - n * 1000) for n in (1, 2, 4)],
-        "ok_rsi": [v1_row(1, T0 - 2500), v1_row(2, T0 - 9000)],  # the older V1 row is below the horizon
+        "ok_rsi": [
+            v1_row(1, T0 - 2500),
+            v1_row(2, T0 - 9000),
+        ],  # the older V1 row is below the horizon
     }
     readers = Readers(rows, registry=["ok_rsi", "rsi_modular_v2"])
     win = await window(readers, limit=3)
@@ -474,7 +531,11 @@ async def test_a_saturated_bot_ends_the_merged_feed_at_its_horizon():
     body = ff.build_page(win)
     assert win["horizon_ms"] == T0 - 4000
     assert [i["fill_id"] for i in body["items"]] == ["v2-1", "v2-2", "v1-1", "v2-4"]
-    assert body["window"] == {"horizon_ms": T0 - 4000, "truncated": True, "owner_limit": ff.OWNER_FILL_LIMIT}
+    assert body["window"] == {
+        "horizon_ms": T0 - 4000,
+        "truncated": True,
+        "owner_limit": ff.OWNER_FILL_LIMIT,
+    }
     v2 = next(b for b in body["bots"] if b["bot"] == "rsi_modular_v2")
     assert v2["saturated"] is True and v2["oldest_ms"] == T0 - 4000
     assert next(b for b in body["bots"] if b["bot"] == "ok_rsi")["saturated"] is False
@@ -503,20 +564,31 @@ async def test_example_payloads_are_the_builders_output():
     """
     win = await window(Readers(example_rows()))
     first = ff.build_page(win, limit=4)
-    down = Readers(example_rows() | {"meridian_v3": fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)})
+    down = Readers(
+        example_rows() | {"meridian_v3": fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)}
+    )
     cases = {
         "page_first.example.json": first,
-        "page_second.example.json": ff.build_page(win, limit=4, before=first["next_cursor"]),
-        "page_filtered.example.json": ff.build_page(win, bots=["ok_rsi"], side="sell", limit=5),
+        "page_second.example.json": ff.build_page(
+            win, limit=4, before=first["next_cursor"]
+        ),
+        "page_filtered.example.json": ff.build_page(
+            win, bots=["ok_rsi"], side="sell", limit=5
+        ),
         "page_partial.example.json": ff.build_page(await window(down), limit=3),
     }
     for name, body in cases.items():
         path = FIXTURES / name
         if os.environ.get("FLEET_FILLS_WRITE_EXAMPLES") == "1":
             FIXTURES.mkdir(exist_ok=True)
-            path.write_text(json.dumps(body, indent=1, ensure_ascii=False, sort_keys=True) + "\n")
+            path.write_text(
+                json.dumps(body, indent=1, ensure_ascii=False, sort_keys=True) + "\n"
+            )
         assert json.loads(path.read_text()) == body, f"{name} is stale"
-    assert first["status"] == "ok" and cases["page_partial.example.json"]["partial"] is True
+    assert (
+        first["status"] == "ok"
+        and cases["page_partial.example.json"]["partial"] is True
+    )
     assert {i["generation"] for i in first["items"]} == {"V1", "V2", "V3"}
 
 
@@ -549,8 +621,15 @@ URL = f"/api/v1/servers/{SERVER}/fleet/fills"
 
 def test_route_requires_authentication_and_server_access(monkeypatch):
     readers = Readers()
-    assert client_for(monkeypatch, readers, authenticated=False).get(URL).status_code in {401, 403}
-    assert client_for(monkeypatch, readers).get("/api/v1/servers/other/fleet/fills").status_code == 404
+    assert client_for(monkeypatch, readers, authenticated=False).get(
+        URL
+    ).status_code in {401, 403}
+    assert (
+        client_for(monkeypatch, readers)
+        .get("/api/v1/servers/other/fleet/fills")
+        .status_code
+        == 404
+    )
     assert readers.calls == []
 
 
@@ -580,10 +659,18 @@ def test_route_serves_the_feed_with_a_validator_and_revalidates(monkeypatch):
     assert response.headers["X-Fleet-Fills-Schema"] == "fleet-fills.v1"
     assert response.headers["Cache-Control"] == "private, no-cache"
     body = response.json()
-    assert body["schema_version"] == "fleet-fills.v1" and len(body["items"]) == 2 and body["has_more"] is True
+    assert (
+        body["schema_version"] == "fleet-fills.v1"
+        and len(body["items"]) == 2
+        and body["has_more"] is True
+    )
     tag = response.headers["ETag"]
     again = client.get(URL, params={"limit": 2}, headers={"If-None-Match": tag})
-    assert again.status_code == 304 and again.headers["ETag"] == tag and again.content == b""
+    assert (
+        again.status_code == 304
+        and again.headers["ETag"] == tag
+        and again.content == b""
+    )
     other = client.get(URL, params={"limit": 3})
     assert other.headers["ETag"] != tag
 
@@ -593,14 +680,20 @@ def test_route_pages_with_before_and_filters(monkeypatch):
     first = client.get(URL, params={"limit": 4}).json()
     second = client.get(URL, params={"limit": 4, "before": first["next_cursor"]}).json()
     everything = client.get(URL, params={"limit": 200}).json()
-    assert [i["id"] for i in first["items"] + second["items"]] == [i["id"] for i in everything["items"]]
-    both = client.get(URL, params=[("bot", "ok_rsi"), ("bot", "meridian_v3"), ("side", "buy")]).json()
+    assert [i["id"] for i in first["items"] + second["items"]] == [
+        i["id"] for i in everything["items"]
+    ]
+    both = client.get(
+        URL, params=[("bot", "ok_rsi"), ("bot", "meridian_v3"), ("side", "buy")]
+    ).json()
     assert {i["bot"] for i in both["items"]} == {"ok_rsi", "meridian_v3"}
     assert all(i["side"] == "buy" for i in both["items"])
 
 
 def test_route_reports_a_down_bot_and_still_serves_the_rest(monkeypatch):
-    readers = Readers(default_rows() | {"ok_rsi": fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)})
+    readers = Readers(
+        default_rows() | {"ok_rsi": fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)}
+    )
     body = client_for(monkeypatch, readers).get(URL).json()
     assert body["partial"] is True and body["status"] == "partial"
     assert [b["status"] for b in body["bots"]] == ["unavailable", "ok", "ok"]

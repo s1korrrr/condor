@@ -132,7 +132,9 @@ def normalize_fill(row: Any, bot: str) -> tuple[Optional[dict], Optional[str]]:
         and _decimal(fill, "exact_price", positive=True) is not None
     )
     receipt = (
-        "exact" if exact else "legacy_6dp" if amount is not None and price is not None else "unavailable"
+        "exact"
+        if exact
+        else "legacy_6dp" if amount is not None and price is not None else "unavailable"
     )
     item = {
         "bot": bot,
@@ -174,7 +176,9 @@ def normalize_fill(row: Any, bot: str) -> tuple[Optional[dict], Optional[str]]:
     return item, None
 
 
-def normalize_owner_rows(payload: Any, bot: str, limit: int = OWNER_FILL_LIMIT) -> BotRead:
+def normalize_owner_rows(
+    payload: Any, bot: str, limit: int = OWNER_FILL_LIMIT
+) -> BotRead:
     """Rows of one owner ``fills`` response. A payload that is not ``{rows: [...]}`` is ``INVALID``."""
     rows = _obj(payload).get("rows")
     if not isinstance(rows, list):
@@ -226,7 +230,10 @@ def decode_cursor(cursor: str) -> tuple:
     except (ValueError, TypeError, binascii.Error, UnicodeDecodeError):
         raise FeedQueryError("before is not a cursor this feed issued") from None
     if (
-        not (time_ms is None or (isinstance(time_ms, int) and not isinstance(time_ms, bool)))
+        not (
+            time_ms is None
+            or (isinstance(time_ms, int) and not isinstance(time_ms, bool))
+        )
         or not isinstance(bot, str)
         or not (source is None or isinstance(source, str))
         or not isinstance(fill_id, str)

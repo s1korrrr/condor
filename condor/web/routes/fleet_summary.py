@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import os
 import time
 from typing import Any, Optional
 
@@ -28,7 +27,7 @@ from config_manager import get_config_manager
 
 router = APIRouter(tags=["fleet"])
 
-OWNER_TIMEOUT = 4.0
+OWNER_TIMEOUT = 6.0  # a bootstrap observation is the largest read (about 0.7 MB for a busy V1 bot)
 MARKET_TIMEOUT = 4.0
 TOTAL_TIMEOUT = 12.0
 CACHE_TTL_SECONDS = (
@@ -42,8 +41,10 @@ HEADERS = {
 ALLOWED_QUERY = {"view", "schema"}
 HISTORY_WINDOW = "6h"  # the verdict replays the last six hours of stored breadth
 
-_cache: dict[tuple[str, str, bool], tuple[float, dict, str]] = {}
-_locks: dict[tuple[str, str, bool], asyncio.Lock] = {}
+# One computation per (server, admin) serves both views: the glance is a projection of the full body, and
+# the market frame and every owner read behind it are shared inside the cache window.
+_cache: dict[tuple[str, bool], tuple[float, dict]] = {}
+_locks: dict[tuple[str, bool], asyncio.Lock] = {}
 
 
 class LiveReaders:
@@ -126,12 +127,7 @@ class LiveReaders:
         if source is None:
             return summary.OwnerRead(None, summary.NOT_CONFIGURED)
         try:
-            auth = None
-            if source.get("username_env"):
-                auth = httpx.BasicAuth(
-                    os.environ[source["username_env"]],
-                    os.environ[source["password_env"]],
-                )
+            auth = trading_visuals.source_auth(source)
             async with asyncio.timeout(OWNER_TIMEOUT):
                 async with trading_visuals._client() as client:
                     response = await client.get(
@@ -185,15 +181,15 @@ async def fleet_summary(
             detail=f"Unsupported schema; this server speaks {summary.SCHEMA_VERSION}",
         )
     admin = bool(cm.is_admin(user.id))
-    key = (name, view, admin)
+    key = (name, admin)
     async with _locks.setdefault(key, asyncio.Lock()):
         hit = _cache.get(key)
         if hit is None or hit[0] <= time.monotonic():
             try:
                 async with asyncio.timeout(TOTAL_TIMEOUT):
-                    body = await summary.build_fleet_summary(
+                    full = await summary.build_fleet_summary(
                         name,
-                        view,
+                        "full",
                         READERS,
                         time.time() * 1000,
                         is_admin=admin,
@@ -203,10 +199,11 @@ async def fleet_summary(
                 raise HTTPException(
                     status_code=504, detail="Fleet summary exceeded its deadline"
                 ) from None
-            hit = (time.monotonic() + CACHE_TTL_SECONDS, body, summary.etag_for(body))
+            hit = (time.monotonic() + CACHE_TTL_SECONDS, full)
             if CACHE_TTL_SECONDS > 0:
                 _cache[key] = hit
-    _, body, tag = hit
+    body = hit[1] if view == "full" else summary.glance(hit[1])
+    tag = summary.etag_for(body)
     headers = {**HEADERS, "ETag": tag, "X-Fleet-Summary-Schema": summary.SCHEMA_VERSION}
     if _tag_matches(request.headers.get("If-None-Match"), tag):
         return Response(status_code=304, headers=headers)

@@ -45,7 +45,10 @@ from condor.web.market_verdict import (
 SCHEMA_VERSION = "fleet-summary.v1"
 VIEWS = ("full", "glance")
 RECENT_FILLS = {"full": 10, "glance": 3}
-OWNER_FILL_LIMIT = 10
+# One fill-ledger read per bot feeds both the recent-fills list and the lifetime totals for a bot that
+# publishes no scored cycles. Same page size the Bots page reads. A ledger this long is a lower bound.
+OWNER_FILL_LIMIT = 500
+RUNTIME_STALE_CAP_S = 30  # the dashboard calls an owner observation older than min(threshold, 30)s stale
 
 # Per-section staleness thresholds (ms). A section older than this is flagged ``stale`` in ``sections``.
 STALE_AFTER_MS = {
@@ -274,9 +277,10 @@ def project_quant_cycles(payload: Any, bot: str) -> Optional[dict]:
     }
     return {
         "quote": (
-            row.get("quote_currency")
+            row["quote_currency"].strip()
             if isinstance(row.get("quote_currency"), str)
             and row["quote_currency"].strip()
+            and row["quote_currency"].strip().lower() != "unknown"
             else None
         ),
         "counts": counts,
@@ -321,6 +325,168 @@ def project_fills(payload: Any, bot: str) -> list[dict]:
             }
         )
     return out
+
+
+def _rows(value: Any) -> Optional[list[dict]]:
+    return [_obj(item) for item in value] if isinstance(value, list) else None
+
+
+def _text(value: Any) -> Optional[str]:
+    return value if isinstance(value, str) and value.strip() and value != "n/a" else None
+
+
+def _nonneg_dec(value: Any) -> Optional[Decimal]:
+    number = _num(value)
+    return Decimal(str(value)) if number is not None and number >= 0 else None
+
+
+def _quantity(controller: dict, controllers: list, positions, lifecycle) -> Optional[Decimal]:
+    """Base units a controller's pair holds, or ``None`` when the observation cannot say.
+
+    Mirrors the inventory rules of ``buildBotPositionView``: a controller episode bag, else the owner's
+    held positions plus the remaining size of its (all buy, all position) active executors.
+    """
+    pair = _text(controller.get("pair"))
+    ident = _text(controller.get("controller_id"))
+    single = sum(1 for row in controllers if row.get("pair") == pair) == 1
+    if controller.get("observation_status") == "unavailable":
+        return None
+    episode = _obj(_obj(controller.get("custom_info")).get("episode"))
+    if episode.get("enabled") is True:
+        return _nonneg_dec(episode.get("base"))
+    if positions is None:
+        return None
+    ambiguous = not single and (
+        not ident
+        or any(
+            row.get("pair") == pair and not _text(row.get("controller_id"))
+            for row in [*positions, *lifecycle]
+        )
+    )
+    if ambiguous:
+        return None
+
+    def matches(row: dict) -> bool:
+        if row.get("pair") != pair:
+            return False
+        return (
+            row.get("controller_id") == ident
+            if ident and row.get("controller_id")
+            else single
+        )
+
+    held = [row for row in positions if matches(row)]
+    active = [row for row in lifecycle if matches(row)]
+    ids = [_text(row.get("executor_id")) for row in active]
+    if not (
+        all(
+            row.get("side") == "buy" and row.get("executor_type") == "position"
+            for row in active
+        )
+        and all(ids)
+        and len(set(ids)) == len(ids)
+    ):
+        return None
+    parts = [row.get("amount_base") for row in held] + [
+        row.get("remaining_position_amount_base") for row in active
+    ]
+    values = [_nonneg_dec(part) for part in parts]
+    return None if any(v is None for v in values) else sum(values, Decimal(0))
+
+
+def project_runtime_view(payload: Any, bot: str, now_ms: float) -> Optional[dict]:
+    """The owner's own runtime observation (``bootstrap``) as the Bots page reads it: pairs held, active executors.
+
+    Only an identity-bound, well-formed observation is admitted (``None`` otherwise). An old one is returned
+    with ``current: False``: staleness is a state, corruption is not. ``held`` is ``None`` when any pair's
+    inventory is unknown (e.g. a native runtime report that carries no per-pair inventory): never a guess.
+    """
+    root = _obj(payload)
+    runtime, monitoring = _obj(root.get("runtime_status")), _obj(root.get("monitoring"))
+    observed = _instant_ms(runtime.get("updated_at"))
+    threshold = _num(monitoring.get("stale_threshold_seconds"))
+    if (
+        runtime.get("bot_name") != bot
+        or monitoring.get("bot_name") != bot
+        or observed is None
+        or threshold is None
+        or threshold <= 0
+        or observed > now_ms + 5_000
+    ):
+        return None
+    controllers = _rows(runtime.get("controllers"))
+    active = _rows(runtime.get("active_executors"))
+    positions = _rows(runtime.get("positions_held"))
+    lifecycle = (
+        active
+        if "lifecycle_executors" not in runtime
+        else _rows(runtime["lifecycle_executors"])
+    )
+    if controllers is None or active is None or lifecycle is None:
+        return None
+    if any(
+        not any(
+            row.get("executor_id") == a.get("executor_id")
+            and row.get("pair") == a.get("pair")
+            and row.get("controller_id") == a.get("controller_id")
+            for row in lifecycle
+        )
+        for a in active
+    ):
+        return None
+    idents = [i for i in (_text(row.get("controller_id")) for row in controllers) if i]
+    if len(set(idents)) != len(idents):
+        scoped = {(row.get("controller_id"), row.get("pair")) for row in controllers}
+        if len(scoped) != len(controllers) or not all(
+            row.get("pair_projection_source") == "native_owner_symbols"
+            and _text(row.get("controller_id"))
+            and isinstance(row.get("pair"), str)
+            and re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", row["pair"])
+            for row in controllers
+        ):
+            return None
+    if any(
+        not isinstance(row.get("pair"), str)
+        or not re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", row["pair"])
+        for row in controllers
+    ):
+        return None
+    quantities = [_quantity(row, controllers, positions, lifecycle) for row in controllers]
+    return {
+        "observed_ms": observed,
+        "current": now_ms - observed < min(threshold, RUNTIME_STALE_CAP_S) * 1000,
+        "registered": len(controllers),
+        "held": (
+            None
+            if any(q is None for q in quantities)
+            else sum(1 for q in quantities if q > 0)
+        ),
+        "executors": len(active),
+    }
+
+
+def project_fill_totals(payload: Any, bot: str, limit: int) -> Optional[dict]:
+    """Lifetime counters from the owner's fill ledger, for a bot whose reporting publishes no scored cycles.
+
+    Fees stay ``None`` when any row lacks one. A ledger as long as the page limit is only a lower bound, so it
+    is flagged ``saturated`` and never presented as a lifetime total.
+    """
+    rows = project_fills(payload, bot)
+    if not rows:
+        return None
+    raw = _obj(payload).get("rows")
+    quotes = {
+        row["pair"].split("-")[1]
+        for row in rows
+        if isinstance(row["pair"], str) and row["pair"].count("-") == 1
+    }
+    fees = [_dec(row["fee"]) for row in rows]
+    return {
+        "count": len(rows),
+        "fees": None if any(f is None for f in fees) else sum(fees, Decimal(0)),
+        "quote": quotes.pop() if len(quotes) == 1 else None,
+        "saturated": isinstance(raw, list) and len(raw) >= limit,
+    }
 
 
 def project_incidents(payload: Any, now_ms: float) -> Optional[dict]:
@@ -552,6 +718,8 @@ def _bot_cards(
     quant: dict[str, Optional[dict]],
     owner_reasons: dict[tuple[str, str], str],
     cycles: dict[str, Optional[dict]],
+    runtime: dict[str, Optional[dict]],
+    totals: dict[str, Optional[dict]],
     day: fleet_pnl.FleetWindow,
     latest_samples: dict[str, Optional[tuple[fleet_pnl.Sample, str]]],
     now_ms: float,
@@ -573,13 +741,24 @@ def _bot_cards(
 
         status = status_by_bot.get(bot)
         q, c = quant.get(bot), cycles.get(bot)
+        rt, ledger = runtime.get(bot), totals.get(bot)
         summary_reason = owner_reasons.get((bot, "quant-summary"))
         cycles_reason = owner_reasons.get((bot, "quant-cycles"))
+        runtime_reason = owner_reasons.get((bot, "bootstrap"))
         if status is None:
             gap("status", SOURCE_UNAVAILABLE)
 
+        # Inventory and executors: the owner's runtime observation first (what the Bots page reads), then the
+        # quant projections. A bot whose reporting publishes neither stays null, with the reason.
         positions = executors = None
-        if q is not None and (q["pairs"] or q["admitted"]):
+        executors_basis = None
+        if rt is not None and rt["held"] is not None:
+            positions = {
+                "held": rt["held"],
+                "registered": rt["registered"],
+                "current": rt["current"],
+            }
+        elif q is not None and (q["pairs"] or q["admitted"]):
             positions = {
                 "held": sum(1 for p in q["pairs"] if p["held"]),
                 "registered": len(q["pairs"]),
@@ -588,22 +767,35 @@ def _bot_cards(
         else:
             gap(
                 "positions",
-                summary_reason or (OWNER_NOT_CURRENT if q is not None else INVALID),
+                (
+                    SOURCE_UNAVAILABLE  # the runtime report carries no per-pair inventory
+                    if rt is not None
+                    else summary_reason
+                    or (
+                        OWNER_NOT_CURRENT
+                        if q is not None
+                        else runtime_reason or INVALID
+                    )
+                ),
             )
         open_cycles = c["counts"].get("open") if c is not None else None
         if open_cycles is None and q is not None:
             open_cycles = q["open_cycles"]
-        if open_cycles is not None:
-            executors = open_cycles
+        if rt is not None and (rt["current"] or open_cycles is None):
+            executors, executors_basis = rt["executors"], "runtime_active_executors"
+        elif open_cycles is not None:
+            executors, executors_basis = open_cycles, "open_lifecycle_cycles"
         else:
-            gap("executors", cycles_reason or summary_reason or INVALID)
+            gap("executors", cycles_reason or summary_reason or runtime_reason or INVALID)
 
         report_at = None
         if q is not None and q["observed_ms"] is not None:
             report_at = q["observed_ms"]
+        elif rt is not None:
+            report_at = rt["observed_ms"]
         elif status and status.get("performance_received_at"):
             report_at = int(round(float(status["performance_received_at"]) * 1000))
-        report_current = bool(q and q["current"]) or bool(
+        report_current = bool(q and q["current"]) or bool(rt and rt["current"]) or bool(
             status
             and status.get("performance_received_at")
             and status.get("performance_stale_after_seconds")
@@ -611,7 +803,7 @@ def _bot_cards(
             < float(status["performance_stale_after_seconds"])
         )
         if report_at is None:
-            gap("report_at_ms", summary_reason or SOURCE_UNAVAILABLE)
+            gap("report_at_ms", summary_reason or runtime_reason or SOURCE_UNAVAILABLE)
 
         day_window = day_by_bot.get(bot)
         pnl_day = None
@@ -665,16 +857,31 @@ def _bot_cards(
                 listed=not paper,
             )
 
+        # Fees and trades: scored cycles when the owner publishes them, else its fill ledger (a ledger the
+        # page limit cut short is only a lower bound, so it never stands in for a lifetime total).
+        ledger_ok = ledger is not None and not ledger["saturated"]
         fees = trades = None
+        if c is not None and c["fees"] is not None and c["quote"]:
+            fees = {"amount": fleet_pnl.decimal_text(c["fees"]), "unit": c["quote"]}
+        elif ledger_ok and ledger["fees"] is not None and ledger["quote"]:
+            fees = {
+                "amount": fleet_pnl.decimal_text(ledger["fees"]),
+                "unit": ledger["quote"],
+            }
+        else:
+            gap(
+                "fees",
+                INVALID
+                if c is not None or ledger is not None
+                else cycles_reason or INVALID,
+            )
         if c is not None:
-            if c["fees"] is not None and c["quote"]:
-                fees = {"amount": fleet_pnl.decimal_text(c["fees"]), "unit": c["quote"]}
-            else:
-                gap("fees", INVALID)
             since = now_ms - 86_400_000
             lifetime = c["fill_count"]
             if lifetime is None and c["cycles"]:
                 lifetime = sum(row["fill_count"] for row in c["cycles"])
+            if lifetime is None and ledger_ok:
+                lifetime = ledger["count"]
             trades = {
                 "lifetime": lifetime,
                 "opened_24h": sum(
@@ -690,9 +897,15 @@ def _bot_cards(
                     and since <= row["closed_ms"] <= now_ms + 5_000
                 ),
             }
+        elif ledger_ok:
+            # No lifecycle projection: the 24h cycle counts are unknown, not zero.
+            trades = {
+                "lifetime": ledger["count"],
+                "opened_24h": None,
+                "closed_24h": None,
+            }
         else:
-            gap("fees", cycles_reason or INVALID)
-            gap("trades", cycles_reason or INVALID)
+            gap("trades", INVALID if ledger is not None else cycles_reason or INVALID)
 
         cards.append(
             {
@@ -706,9 +919,7 @@ def _bot_cards(
                 "report_stale": not report_current,
                 "positions": positions,
                 "executors": executors,
-                "executors_basis": (
-                    "open_lifecycle_cycles" if executors is not None else None
-                ),
+                "executors_basis": executors_basis,
                 "pnl_day": pnl_day,
                 "net_now": net_now,
                 "fees": fees,
@@ -789,9 +1000,11 @@ async def build_fleet_summary(
 
     # Independent reads run together; each fails into its own reason code.
     owner_jobs: list[tuple[str, str, dict]] = [
-        (bot, path, {}) for bot in bots for path in ("quant-summary", "quant-cycles")
+        (bot, path, {})
+        for bot in bots
+        for path in ("quant-summary", "quant-cycles", "bootstrap")
     ]
-    owner_jobs += [(bot, "fills", {"limit": str(OWNER_FILL_LIMIT)}) for bot in live]
+    owner_jobs += [(bot, "fills", {"limit": str(OWNER_FILL_LIMIT)}) for bot in bots]
     incident_bot = live[0] if live else None
     if is_admin and incident_bot:
         owner_jobs.append((incident_bot, "operations", {}))
@@ -898,8 +1111,20 @@ async def build_fleet_summary(
         bot: project_quant_cycles(owner[(bot, "quant-cycles")].payload, bot)
         for bot in bots
     }
+    runtime = {
+        bot: project_runtime_view(owner[(bot, "bootstrap")].payload, bot, now_ms)
+        for bot in bots
+    }
+    totals = {
+        bot: project_fill_totals(owner[(bot, "fills")].payload, bot, OWNER_FILL_LIMIT)
+        for bot in bots
+    }
     owner_reasons: dict[tuple[str, str], str] = {}
-    projections = {"quant-summary": quant, "quant-cycles": cycles}
+    projections = {
+        "quant-summary": quant,
+        "quant-cycles": cycles,
+        "bootstrap": runtime,
+    }
     for (bot, path), read in owner.items():
         if path in projections and (read.reason or projections[path].get(bot) is None):
             owner_reasons[(bot, path)] = read.reason or INVALID
@@ -918,6 +1143,8 @@ async def build_fleet_summary(
             quant,
             owner_reasons,
             cycles,
+            runtime,
+            totals,
             day_window,
             latest_samples,
             now_ms,

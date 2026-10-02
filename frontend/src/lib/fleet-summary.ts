@@ -50,11 +50,12 @@ export type BotCard = {
   bot: string; display_name: string; generation: 'V1' | 'V2' | 'V3' | null; paper: boolean; status: string | null; controllers: number | null;
   report_at_ms: number | null; report_stale: boolean;
   positions: { held: number; registered: number; current: boolean } | null;
-  executors: number | null; executors_basis: 'open_lifecycle_cycles' | null;
+  executors: number | null; executors_basis: 'runtime_active_executors' | 'open_lifecycle_cycles' | null;
   pnl_day: { change: string | null; unit: string | null; partial: boolean; stale: boolean } | null;
   net_now: { value: string | null; unit: string; source: 'controller' | 'history' } | null;
   fees: Money | null;
-  trades: { lifetime: number | null; opened_24h: number; closed_24h: number } | null;
+  /** The 24h cycle counts are null for a bot whose reporting publishes no lifecycle projection (V1): unknown, not zero. */
+  trades: { lifetime: number | null; opened_24h: number | null; closed_24h: number | null } | null;
   missing: { field: string; reason: string }[];
 };
 export type Fill = { bot: string; fill_id: string; pair: string | null; side: string | null; amount: string | null; price: string | null; volume: string | null; fee: string | null; time_ms: number | null };

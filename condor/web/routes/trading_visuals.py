@@ -53,6 +53,13 @@ def _sources() -> dict[str, dict[str, str]]:
         raise HTTPException(503, 'Trading Visuals source configuration is invalid') from None
 
 
+def source_auth(source: dict[str, str]) -> httpx.BasicAuth | None:
+    """Backend credentials for one validated source, read from the process environment the stack injects."""
+    if not source.get('username_env'):
+        return None
+    return httpx.BasicAuth(os.environ[source['username_env']], os.environ[source['password_env']])
+
+
 def _client() -> httpx.AsyncClient:
     return httpx.AsyncClient(timeout=30, follow_redirects=False, trust_env=False)
 
@@ -83,11 +90,7 @@ async def read_visuals(path: str, request: Request, user: WebUser = Depends(get_
     if source is None or not get_config_manager().has_server_access(user.id, source['server']):
         raise HTTPException(404, 'Monitoring source not found')
     try:
-        auth = None
-        if source.get('username_env'):
-            auth = httpx.BasicAuth(
-                os.environ[source['username_env']], os.environ[source['password_env']],
-            )
+        auth = source_auth(source)
         async with asyncio.timeout(REPORTING_TOTAL_TIMEOUT):
             async with _client() as client:
                 async with client.stream(

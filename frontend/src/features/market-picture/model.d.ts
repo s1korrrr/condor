@@ -1,6 +1,7 @@
 import type { DisplayFrame, ViewSettings } from "./presentation";
 export const HORIZONS: import("./presentation").Horizon[];
 export const HORIZON_LABELS: string[];
+export const DEFAULT_HORIZON: import("./presentation").Horizon;
 export const BENCHMARKS: string[];
 export function acceptFrame<
   T extends Pick<

@@ -107,6 +107,9 @@ test("events cannot appear in decision replay before their availability", () => 
     value: { share: "0.6" },
   };
   assert.equal(projectEvents(envelope([event]), frame)[0].value, "share: 0.6");
+  assert.equal(projectEvents(envelope([event]), frame)[0].horizon_minutes, null);
+  const crossing = { ...event, value: { share: "0.6", horizon_minutes: "5" } };
+  assert.equal(projectEvents(envelope([crossing]), frame)[0].horizon_minutes, 5);
   assert.throws(
     () =>
       projectEvents(

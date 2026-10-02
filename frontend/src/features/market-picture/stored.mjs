@@ -182,6 +182,7 @@ export function projectEvents(body, frame) {
       status: text(row.status),
       reconstructed: row.is_historical_reconstruction,
       snapshot_id: row.snapshot_id,
+      horizon_minutes: /^[0-9]{1,5}$/.test(values.horizon_minutes ?? "") ? Number(values.horizon_minutes) : null,
       value: Object.entries(values)
         .map(
           ([key, value]) =>

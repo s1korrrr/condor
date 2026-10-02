@@ -385,7 +385,7 @@ const PREDICATES = [
   ["rsi_below_30", "RSI < 30", "RSI14 oversold", "var(--mp-negative)"],
   ["trending", "Trending", "ADX14 > 25", "var(--mp-accent)"],
   ["compression", "Compression", "ATR14 percentile ≤ 20", "var(--mp-pressure)"],
-  ["elevated_rvol", "Elevated RVOL", "20-bar baseline > 1.5×", "var(--mp-warning)"],
+  ["elevated_rvol", "Volume burst", "1m volume > 1.5× prior 20 bars", "var(--mp-warning)"],
   ["high_volatility", "High vol", "> 80% annualized", "var(--mp-warning)"],
 ] as const;
 

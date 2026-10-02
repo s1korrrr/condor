@@ -6,15 +6,22 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { frontendModules } from "./helpers/frontend-module.mjs";
 import { projectFrame, validateFrame } from "../src/features/market-picture/contract.mjs";
 import {
+  SMOOTHING_MINUTES,
+  VERDICT_HOLD,
   VERDICT_THRESHOLD,
   assetState,
   breadthLadder,
   bucketMinutes,
   derivedRegime,
   hasCorrelationValues,
+  correlationReadout,
   impliedMove,
+  isShortBreadthCrossing,
+  isSingleBarRelativeVolume,
   marketVerdict,
+  nextVerdictState,
   pulseSeries,
+  rollingMean,
   regimeSummary,
   returnHeat,
   showDistribution,
@@ -225,4 +232,163 @@ test("the single page has no section tab bar and no taker-flow or 52-week tiles"
   assert.ok(!/52W|highs_52w|lows_52w/.test(pulse), "52-week tiles are dropped: no daily history exists");
   const feed = fs.readFileSync(new URL("../src/features/market-picture/DetailViews.tsx", import.meta.url), "utf8");
   assert.ok(!/Taker flow unavailable/.test(feed), "the disabled flow source draws no tile");
+});
+
+// ---- Hero stability: smoothing, hold band, default horizon -------------------------------------
+
+const MINUTE = 60_000;
+const BASE = Date.parse("2026-10-01T00:00:00Z");
+/** One stored minute with the same pressure on every horizon. */
+const flat = (minute, pressure, extra = {}) => ({
+  time: BASE + minute * MINUTE, snapshot_id: null, source_kind: "observed", valid: 5, expected: 5, membership: "m", gapBefore: false, summary: {},
+  breadth: Object.fromEntries(HORIZONS.map((h) => [h, { positive: 0, negative: 0, flat: 1, pressure }])), ...extra,
+});
+const at = (minute, pressure) => ({ ...frameWith({ pressure: Object.fromEntries(HORIZONS.map((h) => [h, pressure])) }), cutoff_ms: BASE + minute * MINUTE });
+
+test("the hold band keeps a state until the score is back inside it, and Mixed needs no history", () => {
+  assert.equal(VERDICT_HOLD, 0.1);
+  assert.equal(nextVerdictState("mixed", 0.24), "mixed");
+  assert.equal(nextVerdictState("mixed", 0.25), "risk-on");
+  assert.equal(nextVerdictState("risk-on", 0.2), "risk-on", "inside the band the held state stays");
+  assert.equal(nextVerdictState("risk-on", 0.1), "mixed", "at the hold edge it is released");
+  assert.equal(nextVerdictState("risk-off", -0.2), "risk-off");
+  assert.equal(nextVerdictState("risk-off", -0.05), "mixed");
+  assert.equal(nextVerdictState("risk-on", -0.3), "risk-off", "crossing straight through still flips");
+});
+
+test("a score drifting around the entry threshold does not flap the verdict", () => {
+  // Prior frames sit at +0.4 (pressure +1.2): risk-on is entered. The latest frame dips to +0.2.
+  const history = Array.from({ length: 30 }, (_, i) => flat(i, 1.2));
+  const dipped = at(30, 0.6);
+  const held = marketVerdict(dipped, "60", { history, smooth: false });
+  assert.equal(held.state, "risk-on");
+  assert.equal(held.held, true, "the state is kept by the band, and says so");
+  assert.ok(held.instantScore < VERDICT_THRESHOLD);
+  // Without stored history the same frame is Mixed: the band needs a state to hold.
+  assert.equal(marketVerdict(dipped, "60").state, "mixed");
+  // A score that falls back inside the band releases the state.
+  assert.equal(marketVerdict(at(30, 0.15), "60", { history, smooth: false }).state, "mixed");
+});
+
+test("smoothing averages the trailing 15 minutes of stored frames and labels what it did", () => {
+  assert.equal(SMOOTHING_MINUTES, 15);
+  // Alternating +3/-3 pressure: the live coarse vote flips every minute.
+  const history = Array.from({ length: 40 }, (_, i) => flat(i, i % 2 ? 3 : -3));
+  const raw = marketVerdict(at(40, 3), "60", { history, smooth: false });
+  assert.equal(raw.state, "risk-on", "unsmoothed, the last vote decides");
+  assert.equal(raw.smoothed, false);
+  const smooth = marketVerdict(at(40, 3), "60", { history, smooth: true });
+  assert.equal(smooth.smoothed, true);
+  assert.equal(smooth.state, "mixed", "the 15-minute mean of a +3/-3 alternation is near zero");
+  assert.ok(Math.abs(smooth.score) < VERDICT_THRESHOLD);
+  assert.equal(smooth.instantScore, raw.instantScore, "the latest-frame score stays visible");
+  assert.deepEqual(smooth.components.filter((c) => c.id !== "return").map((c) => c.label.endsWith("15m mean")), [true, true], "smoothed components say so");
+  assert.ok(smooth.components.find((c) => c.id === "breadth").detail.includes("latest score +1.00"), "the latest value stays in the detail");
+  assert.ok(smooth.smoothedFrames > 1 && smooth.smoothedFrames <= SMOOTHING_MINUTES + 1);
+  assert.match(smooth.rule, /trailing 15 minutes/);
+  assert.match(smooth.rule, /±0\.10/);
+});
+
+test("the smoothing window restarts after a coverage break and skips missing pressure", () => {
+  const pts = [flat(0, 3), flat(1, 3), flat(2, -3, { gapBefore: true }), flat(3, -3)];
+  const v = (p) => p.breadth["60"].pressure;
+  assert.deepEqual(rollingMean(pts, v, 15), [3, 3, -3, -3]);
+  const withHole = [flat(0, 3), flat(1, null), flat(2, 1)];
+  assert.deepEqual(rollingMean(withHole, v, 15), [3, 3, 2]);
+  const sparse = [flat(0, 3), flat(20, -3)];
+  assert.deepEqual(rollingMean(sparse, v, 15), [3, -3], "samples older than the window drop out");
+});
+
+test("pulse series keeps raw pressure and adds the 15-minute mean without bridging gaps", () => {
+  const history = Array.from({ length: 60 }, (_, i) => flat(i, i % 2 ? 3 : -3));
+  const result = pulseSeries(history, "6h", "60");
+  assert.equal(result.pressure.length, result.smoothed.length);
+  assert.ok(result.pressure.every((p) => Math.abs(p.value) === 3), "raw values are untouched");
+  const settled = result.smoothed.slice(20);
+  assert.ok(settled.every((p) => Math.abs(p.value) < 0.5), "alternation averages out");
+  const gapped = pulseSeries(history.map((p, i) => (i === 30 ? { ...p, gapBefore: true } : p)), "6h", "60");
+  assert.ok(gapped.smoothed.some((p) => p.value === null), "the break stays an explicit gap in both series");
+});
+
+test("the hero opens on the 1h horizon with a visible smoothing toggle", async () => {
+  assert.equal(model.DEFAULT_HORIZON, "60");
+  assert.equal(model.normalizeView({}).horizon, "60");
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.240.fixture.json");
+  const history = Array.from({ length: 40 }, (_, i) => flat(i, i % 2 ? 3 : -3, { valid: frame.valid, expected: frame.expected }));
+  const markup = renderToStaticMarkup(React.createElement(pulse.MarketPulseHero, {
+    frame, history, horizon: "60", window: "6h", setHorizon() {}, setWindow() {}, replay() {},
+  }));
+  assert.match(markup, /Pressure smoothing/);
+  assert.match(markup, /15m mean/);
+  assert.match(markup, /15-minute rolling mean, raw grey/);
+  assert.match(markup, /How is this decided\?/);
+});
+
+// ---- Relative volume and volume-burst honesty ----------------------------------------------------
+
+test("single-bar relative volume is recognised by its owner definition and nothing else", () => {
+  for (const definition of ["median_relative_volume_24h v1.0.0", "rvol24h v1.2.0", "rvol20 v1.0.0"])
+    assert.equal(isSingleBarRelativeVolume({ definition }), true, definition);
+  for (const definition of ["median_relative_volume_1h v1.0.0", "median_relative_volume_24h v2.0.0", "", undefined])
+    assert.equal(isSingleBarRelativeVolume({ definition }), false, String(definition));
+  assert.equal(isSingleBarRelativeVolume(undefined), false);
+});
+
+test("the Relative volume tile is dropped for the single-bar definition and returns for an aggregated one", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.240.fixture.json");
+  const render = (definition) => renderToStaticMarkup(React.createElement(pulse.MarketSnapshotTiles, {
+    frame: { ...frame, summary: { ...frame.summary, relative_volume_24h: metric(0.003, { unit: "ratio", definition }) } }, history: [], window: "24h",
+  }));
+  assert.doesNotMatch(render("median_relative_volume_24h v1.0.0"), /Relative volume/);
+  assert.match(render("median_relative_volume_1h v1.0.0"), /Relative volume/);
+});
+
+// ---- Correlation history ------------------------------------------------------------------------
+
+const corr = (value, samples, expected, extra = {}) => ({ instrument_id: "okx:spot:ETH-USDC", benchmark_id: "okx:spot:BTC-USDC", value, samples, expected, cutoff: 1, reasons: value === null ? ["INSUFFICIENT_HISTORY"] : [], trend: [], ...extra });
+
+test("correlation readout reports the real window and paired count and never fills in a coefficient", () => {
+  assert.deepEqual(correlationReadout([]), { kind: "none" });
+  assert.deepEqual(correlationReadout([corr(null, 177, 2160, { benchmark_id: "okx:spot:ETH-USDC" })]), { kind: "none" }, "self pairs are ignored");
+  const building = correlationReadout([corr(null, 177, 2160), corr(null, 120, 2160)]);
+  assert.equal(building.kind, "building");
+  assert.equal(building.samples, 177);
+  assert.equal(building.needed, 2052);
+  assert.equal(building.window, "90D");
+  assert.ok(Math.abs(building.share - 177 / 2160) < 1e-12);
+  const week = correlationReadout([corr(0.62, 168, 168), corr(null, 168, 2160)]);
+  assert.deepEqual(week, { kind: "values", expected: 168, samples: 168, window: "7D", partial: true });
+  const full = correlationReadout([corr(0.62, 2160, 2160), corr(0.4, 168, 168)]);
+  assert.equal(full.window, "90D");
+  assert.equal(full.partial, false);
+});
+
+test("the correlations panel labels a partial window and shows progress while every coefficient is withheld", () => {
+  const assets = load("features/market-picture/AssetPanels.tsx");
+  const frame = { assets: [{ instrument_id: "okx:spot:ETH-USDC", symbol: "ETH" }, { instrument_id: "okx:spot:BTC-USDC", symbol: "BTC" }] };
+  const props = { frame, selected: null, select() {}, cohort: new Set(), benchmark: "BTC", setBenchmark() {}, openMatrix() {} };
+  const building = renderToStaticMarkup(React.createElement(assets.CorrelationsPanel, { ...props, correlations: [corr(null, 177, 2160)] }));
+  assert.match(building, /177 of 2,160 paired hourly returns/);
+  assert.match(building, /2,052/);
+  assert.match(building, /building history/);
+  assert.doesNotMatch(building, /<table/);
+  const partial = renderToStaticMarkup(React.createElement(assets.CorrelationsPanel, { ...props, correlations: [corr(0.62, 168, 168)] }));
+  assert.match(partial, /7D of 90D/);
+  assert.match(partial, /168 paired hours/);
+  assert.match(partial, /0\.62/);
+  assert.equal(renderToStaticMarkup(React.createElement(assets.CorrelationsPanel, { ...props, correlations: [] })), "");
+});
+
+test("the alert feed folds one- and five-minute breadth crossings behind a count", () => {
+  const views = load("features/market-picture/DetailViews.tsx");
+  const event = (id, type, horizon) => ({ event_id: id, instrument_id: null, type, severity: "info", observed: 1, available: 1, status: "original", reconstructed: false, snapshot_id: "s", horizon_minutes: horizon, value: `v-${id}` });
+  const events = [event("a", "breadth_threshold_crossing", 1), event("b", "breadth_threshold_crossing", 5), event("c", "breadth_threshold_crossing", 60), event("d", "provider_quality_transition", null)];
+  assert.deepEqual(events.map(isShortBreadthCrossing), [true, true, false, false]);
+  const markup = renderToStaticMarkup(React.createElement(views.MarketEventFeed, { events, frame: null, select() {}, nextPage() {}, hasMore: false }));
+  assert.match(markup, /2 one- and five-minute breadth crossings folded/);
+  assert.doesNotMatch(markup, /v-a|v-b/);
+  assert.match(markup, /v-c/);
+  assert.match(markup, /v-d/);
 });

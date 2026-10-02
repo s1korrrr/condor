@@ -6,7 +6,7 @@ import { BENCHMARKS, rankAssets, rankCoverageLabel } from "./model.mjs";
 import {
   assetState,
   derivedRegime,
-  hasCorrelationValues,
+  correlationReadout,
   horizonLabel,
   REGIME_BASIS,
   regimeSummary,
@@ -278,7 +278,11 @@ export function LeadersLaggardsPanel({ frame, select, selected, cohort, benchmar
   );
 }
 
-/** Correlations need long paired history; the panel is drawn only once a coefficient exists. */
+/**
+ * Pearson correlation of hourly log returns. The panel carries the window its owner computed (the
+ * full 90D, or a shorter labelled window while history is still building). With every coefficient
+ * withheld it shows the real paired-history size instead of staying blank.
+ */
 export function CorrelationsPanel({
   frame, selected, select, correlations, benchmark, setBenchmark, openMatrix,
 }: AssetPanelProps & {
@@ -288,13 +292,34 @@ export function CorrelationsPanel({
   openMatrix: () => void;
 }) {
   const [inverse, setInverse] = useState(false);
-  if (!hasCorrelationValues(correlations)) return null;
+  const readout = useMemo(() => correlationReadout(correlations), [correlations]);
+  if (readout.kind === "none") return null;
+  if (readout.kind === "building")
+    return (
+      <Panel id="mp-correlations" title="Correlations" detail={`${readout.window} · 1h · building history`} className="mp-correlations">
+        <p className="mp-muted">
+          {readout.samples.toLocaleString("en-US")} of {readout.expected.toLocaleString("en-US")} paired hourly returns stored
+          ({(readout.share * 100).toFixed(0)}%). The owner publishes a coefficient once {readout.needed.toLocaleString("en-US")} ({readout.window}, 95%) are paired; nothing is estimated from less.
+        </p>
+        <meter
+          min={0}
+          max={readout.expected}
+          value={readout.samples}
+          optimum={readout.expected}
+          aria-label={`Paired hourly history ${readout.samples} of ${readout.expected}`}
+          style={{ width: "100%" }}
+        />
+      </Panel>
+    );
   const rows = correlations
     .filter((c) => c.instrument_id !== c.benchmark_id && c.value !== null && c.benchmark_id.split(":").at(-1)?.startsWith(benchmark + "-"))
     .sort((a, b) => (inverse ? (a.value ?? Infinity) - (b.value ?? Infinity) : (b.value ?? -Infinity) - (a.value ?? -Infinity)))
     .slice(0, 8);
+  const detail = readout.partial
+    ? `${readout.window} of 90D · 1h · ${readout.samples.toLocaleString("en-US")} paired hours · still building`
+    : `${readout.window} · 1h`;
   return (
-    <Panel id="mp-correlations" title="Correlations" detail="90D · 1h" className="mp-correlations">
+    <Panel id="mp-correlations" title="Correlations" detail={detail} className="mp-correlations">
       <div className="mp-segment mp-benchmark-chips">
         {BENCHMARKS.map((b) => (
           <button key={b} aria-pressed={benchmark === b} onClick={() => setBenchmark(b)}>{b}</button>
@@ -302,7 +327,7 @@ export function CorrelationsPanel({
       </div>
       <div className="mp-table-scroll">
         <table className="mp-table">
-          <caption className="sr-only">Pearson correlation of aligned hourly log returns over 90 days. Sparkline contains historical 90 day estimates.</caption>
+          <caption className="sr-only">Pearson correlation of aligned hourly log returns over {readout.window}. Sparkline contains historical estimates.</caption>
           <thead><tr><th>Symbol</th><th>Corr ({benchmark})</th><th>30D trend</th></tr></thead>
           <tbody>
             {rows.map((c) => (
@@ -312,8 +337,8 @@ export function CorrelationsPanel({
                     {frame?.assets.find((a) => a.instrument_id === c.instrument_id)?.symbol ?? c.instrument_id.split(":").at(-1)}
                   </button>
                 </th>
-                <td title={`${c.samples}/${c.expected} paired hours · ${c.reasons.join(", ")} · ${new Date(c.cutoff).toISOString()}`}>{numberText(c.value, 2)}</td>
-                <td><Sparkline values={c.trend.map((p) => p.value)} color={c.value !== null && c.value < 0 ? "var(--mp-negative)" : undefined} label="Daily history of 90-day correlation" /></td>
+                <td title={`${c.samples}/${c.expected} paired hours (${c.expected / 24}D window) · ${c.reasons.join(", ")} · ${new Date(c.cutoff).toISOString()}`}>{numberText(c.value, 2)}</td>
+                <td><Sparkline values={c.trend.map((p) => p.value)} color={c.value !== null && c.value < 0 ? "var(--mp-negative)" : undefined} label={`Daily history of ${readout.window} correlation`} /></td>
               </tr>
             ))}
           </tbody>

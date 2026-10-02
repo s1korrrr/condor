@@ -1,6 +1,8 @@
 /** Presentation only. All financial values and denominators come from owner frames. */
 export const HORIZONS = ["1", "5", "15", "60", "240", "1440"];
 export const HORIZON_LABELS = ["1m", "5m", "15m", "1h", "4h", "24h"];
+/** One-minute and 5-minute breadth on five instruments is a coarse vote; the hourly view is the stable default. */
+export const DEFAULT_HORIZON = "60";
 export const BENCHMARKS = ["BTC", "ETH", "BNB", "SOL"];
 const INSTRUMENT = /^okx:spot:[A-Z0-9]{1,30}-[A-Z0-9]{1,12}$/;
 
@@ -51,7 +53,7 @@ export function ageState(frame, now, frozen) {
 
 export function normalizeView(value = {}) {
   return {
-    horizon: HORIZONS.includes(value.horizon) ? value.horizon : "15",
+    horizon: HORIZONS.includes(value.horizon) ? value.horizon : DEFAULT_HORIZON,
     window: ["6h", "24h", "7d"].includes(value.window) ? value.window : "24h",
     benchmark: BENCHMARKS.includes(value.benchmark) ? value.benchmark : "BTC",
     sector:

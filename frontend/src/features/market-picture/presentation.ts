@@ -123,6 +123,8 @@ export interface DisplayEvent {
   status: string;
   reconstructed: boolean;
   snapshot_id: string;
+  /** Breadth horizon of a threshold crossing, when the event states one. */
+  horizon_minutes: number | null;
   value: string;
 }
 export interface ViewSettings {

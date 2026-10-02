@@ -38,7 +38,7 @@ import {
   LeadersLaggardsPanel,
   RegimePanel,
 } from "./AssetPanels";
-import { hasCorrelationValues, showDistribution } from "./pulse.mjs";
+import { correlationReadout, hasCorrelationValues, showDistribution } from "./pulse.mjs";
 import {
   MarketHeatmapPanel,
   ParticipationPanel,
@@ -491,7 +491,7 @@ export function MarketPictureSurface({
               fault={data?.faults.events}
             />
           </div>
-          {(showDistribution(frame) || hasCorrelationValues(data?.correlations ?? [])) && (
+          {(showDistribution(frame) || correlationReadout(data?.correlations ?? []).kind !== "none") && (
             <div className="mp-row">
               {showDistribution(frame) && (
                 <ReturnDistributionPanel frame={frame} selectCohort={highlight} />
@@ -752,9 +752,9 @@ function CoverageDetails({frame, faults, server, fixtureTime, correlations}: {
     <ul className="mp-muted mp-source-notes">
       <li>
         Correlations: {hasCorrelationValues(correlations)
-          ? "hourly 90-day coefficients are shown in the Correlations panel."
+          ? "hourly coefficients are shown in the Correlations panel with the window they cover."
           : correlations.length
-            ? `still building paired hourly history (${Math.max(...correlations.map((c) => c.samples))} of ${correlations[0].expected} hours); the panel appears once coefficients qualify.`
+            ? `still building paired hourly history (${Math.max(...correlations.map((c) => c.samples))} of ${correlations[0].expected} hours); the Correlations panel shows that progress until coefficients qualify.`
             : "no stored correlation set is attached to this frame."}
       </li>
       <li>Taker flow, 52-week extremes and stored regime models appear only when their owner publishes them; nothing is estimated in the browser.</li>

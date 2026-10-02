@@ -12,6 +12,7 @@ export const PERFORMANCE_BUCKET_SECONDS: Readonly<Record<string, number | null>>
 export function performanceGapMs(bucketSeconds: number | null): number {
   return 90_000 + (bucketSeconds ?? 0) * 1000;
 }
+const isBackfill = (point: PerformancePoint) => point.segment.startsWith('backfill-');
 const amount = (value: unknown) => typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
 
 /** Historical observations are not fresh current readings or an equity baseline. */
@@ -36,11 +37,14 @@ export function projectPerformanceHistory(payload: unknown, bot: string, now: nu
     const realized = amount(point.realized_pnl_quote);
     const unrealized = amount(point.unrealized_pnl_quote);
     if (!Number.isFinite(point.timestamp) || point.timestamp <= 0 || point.timestamp*1000 > now || value === null || realized === null || unrealized === null || Math.abs(value-realized-unrealized)>0.000001 || typeof point.identity !== 'string' || !point.identity || typeof point.segment !== 'string' || !point.segment || typeof point.quote !== 'string' || !/^[A-Z0-9]+$/.test(point.quote) || point.quote !== quote || (previous && point.timestamp <= previous.timestamp)) return empty('Performance history contains incompatible or invalid observations.');
-    if (previous && (previous.segment !== point.segment || previous.identity !== point.identity || (point.timestamp-previous.timestamp)*1000 > gapMs)) {
+    // Rows rebuilt from the bot's own recorder (segment `backfill-<bot>`) fill the stretches Condor was not recording.
+    // Native PnL is cumulative across restarts, so a backfill row joins its live neighbours: no gap marker and no owner change.
+    const bridged = previous !== null && (isBackfill(previous) || isBackfill(point));
+    if (previous && ((!bridged && (previous.segment !== point.segment || previous.identity !== point.identity)) || (point.timestamp-previous.timestamp)*1000 > gapMs)) {
       points.push({time:previous.timestamp*1000+1,value:null,owner});
       gap = true;
     }
-    if (previous && previous.identity !== point.identity) owner++;
+    if (previous && previous.identity !== point.identity && !bridged) owner++;
     points.push({time:point.timestamp*1000,value,owner});
     previous=point;
   }

@@ -36,7 +36,7 @@ const events: DisplayEvent[] = populated ? frame.assets.slice(0,12).map((asset,i
   event_id:`synthetic-${index}`, instrument_id:asset.instrument_id,
   type:['new_24h_high','rsi_above_70','volume_crossing','range_breakout'][index%4], severity:'info',
   observed:frame.cutoff_ms-index*60000, available:frame.available_at_ms-index*60000,
-  status:'original', reconstructed:true, snapshot_id:frame.snapshot_id, value:'Synthetic presentation event',
+  status:'original', reconstructed:true, snapshot_id:frame.snapshot_id, horizon_minutes:null, value:'Synthetic presentation event',
 })) : [];
 createRoot(document.getElementById("root")!).render(
   <BrowserRouter>

@@ -114,7 +114,8 @@ test("safe shared views round trip without source credentials or arbitrary URLs"
   const hostile = parseView(
     "?horizon=900&window=forever&benchmark=https://evil&sector=<svg>&selected=../api",
   );
-  assert.equal(hostile.horizon, "15");
+  assert.equal(hostile.horizon, "60", "an invalid horizon falls back to the stable hourly default");
+  assert.equal(parseView("").horizon, "60");
   assert.equal(hostile.benchmark, "BTC");
   assert.equal(hostile.selected, null);
 });

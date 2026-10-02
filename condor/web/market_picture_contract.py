@@ -89,6 +89,10 @@ PARTICIPATION_DEFINITIONS = {
     "rsi_below_30": "rsi_below_30_membership",
     "trending": "adx14_above_25_membership",
 }
+# Hourly-return windows the owner may publish: the full 90 days, or a shorter window while that much
+# history exists (7D when seven days are stored). Every coefficient must still have >= 95% paired
+# samples of its own window, so a short history is labelled with its real size, never padded.
+CORRELATION_WINDOW_HOURS = frozenset({24, 72, 168, 336, 720, 2160})
 _DECIMAL = re.compile(r"^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?$")
 _HASH = re.compile(r"^[0-9a-f]{64}$")
 _SCHEMA = json.loads(Path(__file__).with_name("market_picture.schema.json").read_text())
@@ -602,7 +606,7 @@ def validate_response(path: str, raw: bytes):
     elif family == "correlations":
         for row in payload["items"]:
             count, expected = row["paired_sample_count"], row["expected_sample_count"]
-            if not 0 <= count <= expected or expected != 2160:
+            if not 0 <= count <= expected or expected not in CORRELATION_WINDOW_HOURS:
                 raise ValueError("correlation sample window is invalid")
             if row["correlation"] is None:
                 if not row["reason_codes"]:

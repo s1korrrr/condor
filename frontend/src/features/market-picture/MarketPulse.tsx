@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { TimeSeriesChart } from "@/features/quant-ops/kit/charts";
 import { SparkChart } from "@/features/quant-ops/kit/charts";
 import { TileGrid } from "@/features/quant-ops/kit/grid";
@@ -8,8 +8,11 @@ import { HORIZONS, HORIZON_LABELS } from "./model.mjs";
 import {
   breadthLadder,
   horizonLabel,
+  isSingleBarRelativeVolume,
   marketVerdict,
   pulseSeries,
+  SMOOTHING_MINUTES,
+  VERDICT_HOLD,
   VERDICT_THRESHOLD,
 } from "./pulse.mjs";
 import {
@@ -58,8 +61,21 @@ function ScoreBar({ score, marks = false }: { score: number; marks?: boolean }) 
 }
 
 /** Verdict plus the three transparent components behind it. */
-function VerdictCard({ frame, horizon }: { frame: DisplayFrame | null; horizon: Horizon }) {
-  const verdict = useMemo(() => marketVerdict(frame, horizon), [frame, horizon]);
+function VerdictCard({
+  frame,
+  horizon,
+  history,
+  smooth,
+}: {
+  frame: DisplayFrame | null;
+  horizon: Horizon;
+  history: HistoryPoint[];
+  smooth: boolean;
+}) {
+  const verdict = useMemo(
+    () => marketVerdict(frame, horizon, { history, smooth }),
+    [frame, horizon, history, smooth],
+  );
   if (!frame || !verdict)
     return (
       <div className="mp-verdict" data-state="loading" aria-busy="true">
@@ -85,6 +101,14 @@ function VerdictCard({ frame, horizon }: { frame: DisplayFrame | null; horizon: 
           <b>{signed(verdict.score)}</b>
           <span>Risk-on</span>
         </span>
+        <small className="mp-verdict__basis" role="status">
+          {verdict.smoothed
+            ? `Breadth components: ${verdict.smoothingMinutes}-min mean of ${verdict.smoothedFrames} frames · latest-frame score ${signed(verdict.instantScore)}`
+            : "Latest frame only"}
+          {verdict.held
+            ? ` · ${verdict.label} held until the score is inside ±${VERDICT_HOLD.toFixed(2)}`
+            : ""}
+        </small>
       </div>
       <p className="mp-verdict__counts">
         <span className="mp-up">{verdict.advancing ?? "—"} advancing</span>
@@ -172,27 +196,46 @@ export function MarketPulseHero({
   setWindow: (w: string) => void;
   replay: (id: string) => void;
 }) {
+  const [smooth, setSmooth] = useState(true);
   const pulse = useMemo(() => pulseSeries(history, window, horizon), [history, window, horizon]);
+  const lastSmoothed = useMemo(
+    () => [...pulse.smoothed].reverse().find((p) => p.value !== null)?.value ?? null,
+    [pulse],
+  );
   const markers = useMemo(
     () => coverageChangePoints(pulse.samples).map((p) => ({ time: p.time, label: "Coverage changed" })),
     [pulse.samples],
   );
   const series = useMemo<ChartSeries[]>(
     () => [
-      {
-        id: "pressure",
-        label: "Breadth pressure",
-        color: CHART.violet,
-        points: pulse.pressure,
-        area: true,
-        signSplit: { positive: CHART.positive, negative: CHART.negative },
-        fillOpacity: 0.7,
-        format: (v: number) => signed(v),
-      },
-      { id: "advancing", label: "Advancing share", color: CHART.blue, points: pulse.advancing, axis: "secondary", tooltipOnly: true, format: percent },
-      { id: "declining", label: "Declining share", color: CHART.negative, points: pulse.declining, axis: "secondary", tooltipOnly: true, format: percent },
+      smooth
+        ? {
+            id: "pressure",
+            label: `Breadth pressure · ${SMOOTHING_MINUTES}-min mean`,
+            color: CHART.violet,
+            points: pulse.smoothed,
+            area: true,
+            signSplit: { positive: CHART.positive, negative: CHART.negative },
+            fillOpacity: 0.7,
+            format: (v: number) => signed(v),
+          }
+        : {
+            id: "pressure",
+            label: "Breadth pressure · raw",
+            color: CHART.violet,
+            points: pulse.pressure,
+            area: true,
+            signSplit: { positive: CHART.positive, negative: CHART.negative },
+            fillOpacity: 0.7,
+            format: (v: number) => signed(v),
+          },
+      ...(smooth
+        ? [{ id: "pressure-raw", label: "Breadth pressure · raw", color: CHART.muted, points: pulse.pressure, format: (v: number) => signed(v) } satisfies ChartSeries]
+        : []),
+      { id: "advancing", label: "Advancing share · raw", color: CHART.blue, points: pulse.advancing, axis: "secondary", tooltipOnly: true, format: percent },
+      { id: "declining", label: "Declining share · raw", color: CHART.negative, points: pulse.declining, axis: "secondary", tooltipOnly: true, format: percent },
     ],
-    [pulse],
+    [pulse, smooth],
   );
   const [ref, width] = useElementWidth<HTMLDivElement>();
   const breadth = frame?.breadth[horizon];
@@ -213,7 +256,7 @@ export function MarketPulseHero({
       </header>
       <div className="mp-hero__body">
         <aside className="mp-hero__side">
-          <VerdictCard frame={frame} horizon={horizon} />
+          <VerdictCard frame={frame} horizon={horizon} history={history} smooth={smooth} />
           <BreadthLadder frame={frame} horizon={horizon} setHorizon={setHorizon} />
         </aside>
         <div className="mp-hero__chart" ref={ref}>
@@ -225,8 +268,9 @@ export function MarketPulseHero({
               ▼ {breadth?.declining ?? "—"} declining <Metric metric={breadth?.negative} digits={0} />
             </span>
             <span className="mp-pressure-color">
-              ● Breadth pressure{" "}
-              <Metric metric={frame?.pressure[horizon]} digits={2} signed /> · −3…+3
+              ● Breadth pressure raw{" "}
+              <Metric metric={frame?.pressure[horizon]} digits={2} signed />
+              {smooth && lastSmoothed !== null && <> · {SMOOTHING_MINUTES}-min mean {signed(lastSmoothed)}</>} · −3…+3
             </span>
           </div>
           {hasHistory ? (
@@ -248,7 +292,18 @@ export function MarketPulseHero({
             </div>
           )}
           <div className="mp-pulse-tools">
-            <span className="mp-panel-detail" role="status">{pulse.label}</span>
+            <span className="mp-panel-detail" role="status">
+              {pulse.label}
+              {smooth ? ` · pressure line is a ${SMOOTHING_MINUTES}-minute rolling mean, raw grey` : " · raw one-minute pressure"}
+            </span>
+            <div className="mp-segment" role="group" aria-label="Pressure smoothing">
+              <button aria-pressed={smooth} onClick={() => setSmooth(true)} title={`Trailing ${SMOOTHING_MINUTES}-minute mean of the stored one-minute pressure; raw values stay in the tooltip`}>
+                {SMOOTHING_MINUTES}m mean
+              </button>
+              <button aria-pressed={!smooth} onClick={() => setSmooth(false)} title="Unsmoothed one-minute breadth pressure">
+                Raw
+              </button>
+            </div>
             <div className="mp-segment" role="group" aria-label="History window">
               {["6h", "24h", "7d"].map((w) => (
                 <button key={w} aria-pressed={w === window} onClick={() => setWindow(w)}>
@@ -322,6 +377,8 @@ export function MarketSnapshotTiles({
   const tiles = SNAPSHOT.flatMap<Tile>(([key, label, hint, kind]) => {
     const metric = frame.summary[key];
     if (!metric || metric.value == null) return [];
+    // A single 1-minute bar against a longer mean reads far below 1x on thin books; see pulse.mjs.
+    if (key === "relative_volume_24h" && isSingleBarRelativeVolume(metric)) return [];
     const points = samples.map((p) => ({ time: p.time, value: p.summary[key] ?? null }));
     const digits = kind === "ratio" && metric.value < 0.1 ? 3 : kind === "ratio" ? 2 : kind === "adx" ? 1 : 0;
     const count = key === "market_participation" ? Math.round(metric.value * metric.valid) : null;

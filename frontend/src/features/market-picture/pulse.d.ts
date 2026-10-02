@@ -1,6 +1,7 @@
 import type {
   DisplayAsset,
   DisplayCorrelation,
+  DisplayEvent,
   DisplayFrame,
   HistoryPoint,
   Horizon,
@@ -14,7 +15,14 @@ export interface VerdictComponent {
 export interface Verdict {
   state: "risk-on" | "mixed" | "risk-off";
   label: string;
+  /** Score the state follows: the trailing mean when smoothed, otherwise the latest frame. */
   score: number;
+  instantScore: number;
+  smoothed: boolean;
+  smoothedFrames: number;
+  smoothingMinutes: number;
+  /** The state is kept by the hold band rather than by the entry threshold. */
+  held: boolean;
   horizon: Horizon;
   components: VerdictComponent[];
   rule: string;
@@ -42,6 +50,8 @@ export interface SeriesPointValue {
   value: number | null;
 }
 export const VERDICT_THRESHOLD: number;
+export const VERDICT_HOLD: number;
+export const SMOOTHING_MINUTES: number;
 export const VERDICT_RULE: string;
 export const REGIME_BASIS: string;
 export const MIN_DISTRIBUTION_POPULATION: number;
@@ -53,7 +63,26 @@ export function impliedMove(
 export function marketVerdict(
   frame: DisplayFrame | null,
   horizon: Horizon,
+  context?: { history?: HistoryPoint[]; smooth?: boolean },
 ): Verdict | null;
+export function nextVerdictState(
+  previous: Verdict["state"],
+  score: number,
+): Verdict["state"];
+export function rollingMean(
+  samples: HistoryPoint[],
+  valueOf: (point: HistoryPoint) => number | null | undefined,
+  minutes?: number,
+): Array<number | null>;
+export function isSingleBarRelativeVolume(
+  metric: { definition?: string } | null | undefined,
+): boolean;
+export type CorrelationReadout =
+  | { kind: "none" }
+  | { kind: "values"; expected: number; samples: number; window: string; partial: boolean }
+  | { kind: "building"; expected: number; samples: number; needed: number; window: string; share: number };
+export function correlationWindowLabel(hours: number): string;
+export function correlationReadout(correlations: DisplayCorrelation[]): CorrelationReadout;
 export function breadthLadder(frame: DisplayFrame | null): LadderRow[];
 export function returnHeat(
   asset: DisplayAsset,
@@ -88,8 +117,13 @@ export function pulseSeries(
   advancing: SeriesPointValue[];
   declining: SeriesPointValue[];
   pressure: SeriesPointValue[];
+  /** Trailing 15-minute mean of the one-minute pressure; `pressure` stays the raw value. */
+  smoothed: SeriesPointValue[];
+  bucketMinutes: number;
   label: string;
   samples: HistoryPoint[];
 };
 export function hasCorrelationValues(correlations: DisplayCorrelation[]): boolean;
 export function showDistribution(frame: DisplayFrame | null, horizon?: string): boolean;
+export const SHORT_BREADTH_MINUTES: number;
+export function isShortBreadthCrossing(event: DisplayEvent): boolean;

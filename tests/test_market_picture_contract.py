@@ -9,6 +9,7 @@ from condor.web.market_picture_contract import (
     _compact_series,
     canonical,
     validate_frame,
+    validate_response,
 )
 
 
@@ -256,3 +257,45 @@ def test_resealed_semantic_contract_violations_are_rejected(mutation):
     ).hexdigest()
     with pytest.raises(ValueError):
         validate_frame(seal(frame), allow_fixture=True)
+
+
+def _correlation_read(expected, paired, value):
+    return json.dumps(
+        {
+            "schema_version": "market-picture.v1",
+            "snapshot_id": "a" * 64,
+            "read_at_ms": 1,
+            "items": [
+                {
+                    "instrument_a_id": "okx:spot:BTC-USDC",
+                    "instrument_b_id": "okx:spot:ETH-USDC",
+                    "correlation": value,
+                    "paired_sample_count": paired,
+                    "expected_sample_count": expected,
+                    "reason_codes": [] if value else ["INSUFFICIENT_HISTORY"],
+                    "trend": [],
+                    "window_end_ms": 1,
+                }
+            ],
+        }
+    ).encode()
+
+
+def test_correlation_reads_accept_the_full_window_and_shorter_labelled_windows():
+    for hours in (2160, 168):
+        row = validate_response("correlations", _correlation_read(hours, hours, "0.5"))
+        assert row["items"][0]["expected_sample_count"] == hours
+    # An unqualified history stays null with its real sample size, at any window.
+    row = validate_response("correlations", _correlation_read(2160, 177, None))
+    assert row["items"][0]["paired_sample_count"] == 177
+
+
+@pytest.mark.parametrize(
+    ("expected", "paired", "value"),
+    [(100, 100, "0.5"), (168, 120, "0.5"), (2160, 177, "0.5")],
+)
+def test_correlation_reads_reject_unlisted_windows_and_unqualified_coefficients(
+    expected, paired, value
+):
+    with pytest.raises(ValueError):
+        validate_response("correlations", _correlation_read(expected, paired, value))

@@ -8,7 +8,7 @@ import {
   metricText,
   metricTitle,
 } from "./presentation";
-import { assetState, derivedRegime, REGIME_BASIS } from "./pulse.mjs";
+import { assetState, derivedRegime, isShortBreadthCrossing, isSingleBarRelativeVolume, REGIME_BASIS } from "./pulse.mjs";
 import { Empty, Panel, Time } from "./Primitives";
 
 function DerivedRegimeBlock({ asset }: { asset: DisplayAsset }) {
@@ -99,8 +99,12 @@ export function MarketEventFeed({
   fault?: string;
 }) {
   const [filter, setFilter] = useState("ALL");
+  const [showShort, setShowShort] = useState(false);
+  const short = events.filter(isShortBreadthCrossing).length;
   const visible = events.filter(
-    (e) => filter === "ALL" || eventCategory(e.type) === filter,
+    (e) =>
+      (filter === "ALL" || eventCategory(e.type) === filter) &&
+      (showShort || !isShortBreadthCrossing(e)),
   );
   return (
     <Panel
@@ -124,6 +128,13 @@ export function MarketEventFeed({
           </button>
         ))}
       </div>
+      {short > 0 && (
+        <button className="mp-text-button" aria-pressed={showShort} onClick={() => setShowShort(!showShort)}>
+          {showShort
+            ? `Hide 1m/5m breadth crossings (${short})`
+            : `${short} one- and five-minute breadth crossings folded · show`}
+        </button>
+      )}
       <div className="mp-feed-scroll">
         <table className="mp-table">
           <caption className="sr-only">
@@ -283,7 +294,11 @@ export function AssetInspector({
         <tbody>
           {Object.entries(asset.indicators).map(([name, metric]) => (
             <tr key={name}>
-              <th scope="row">{name.replaceAll("_", " ")}</th>
+              <th scope="row">
+                {isSingleBarRelativeVolume(metric)
+                  ? `${name.replaceAll("_", " ")} · latest 1-min bar vs ${name === "rvol20" ? "prior 20-bar" : "prior 24h"} mean`
+                  : name.replaceAll("_", " ")}
+              </th>
               <td title={metricTitle(metric)}>{metricText(metric, 4)}</td>
               <td>
                 {metric.status} · {metric.valid}/{metric.expected}

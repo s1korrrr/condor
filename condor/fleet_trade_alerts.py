@@ -8,7 +8,12 @@ from decimal import Decimal
 from condor import fleet_telegram_views as views
 
 
-def normalize(row):
+def identity(row):
+    """Validate who/what/when of a fill and return its UTC epoch seconds.
+
+    This is the minimum every row must satisfy to be deduplicated: source origin
+    (bot, source database), order, fill and venue identity, plus a real time.
+    """
     required = (
         "fill_id",
         "order_id",
@@ -24,6 +29,19 @@ def normalize(row):
         raise ValueError("Fill identity incomplete")
     if row.get("side") not in ("buy", "sell") or len(row["pair"].split("-")) != 2:
         raise ValueError("Fill side or pair unavailable")
+    occurred = views.stamp(row.get("timestamp"))
+    if occurred <= 0:
+        raise ValueError("Fill timestamp invalid")
+    return occurred
+
+
+def economics(row):
+    """Return exact (amount, price, fee) or raise; never invent a receipt.
+
+    V1 engine rows that predate exact receipts carry explicit nulls
+    (``exact_amount: null``) beside 6-decimal legacy values. They are treated as
+    unverified and rejected here, never silently promoted to exact amounts.
+    """
     amount = views.decimal(row.get("exact_amount", row.get("amount_base")))
     price = views.decimal(row.get("exact_price", row.get("price_quote")))
     if amount is None or price is None or amount <= 0 or price <= 0:
@@ -32,9 +50,12 @@ def normalize(row):
     fee = views.decimal(raw_fee)
     if raw_fee is not None and fee is None:
         raise ValueError("Fill fee invalid")
-    occurred = views.stamp(row.get("timestamp"))
-    if occurred <= 0:
-        raise ValueError("Fill timestamp invalid")
+    return amount, price, fee
+
+
+def normalize(row):
+    occurred = identity(row)
+    amount, price, fee = economics(row)
     return amount, price, fee, occurred
 
 
@@ -124,7 +145,7 @@ class TradeAlerts:
         started = self.db.execute(
             "SELECT started FROM trade_sources WHERE source=?", (source,)
         ).fetchone()[0]
-        if min(normalize(row)[3] for row in rows) <= started:
+        if min(identity(row) for row in rows) <= started:
             return True
         return any(
             self.db.execute(
@@ -135,18 +156,26 @@ class TradeAlerts:
         )
 
     def ingest(self, source, rows, recipients):
-        # Validate the whole batch before advancing any checkpoint.
-        parsed = [(row, normalize(row), fill_key(row)) for row in rows]
+        # Validate the whole batch before advancing any checkpoint. Every row needs a
+        # complete identity so it can be deduplicated. Only rows that can alert (at or
+        # after activation) need verified economics: older history is recorded as seen
+        # and never announced, so V1's pre-receipt legacy rows cannot block new fills.
         started = self.db.execute(
             "SELECT started FROM trade_sources WHERE source=?", (source,)
         ).fetchone()[0]
+        parsed = []
+        for row in rows:
+            occurred = identity(row)
+            if occurred >= started:
+                economics(row)
+            parsed.append((row, fill_key(row), occurred))
         groups = defaultdict(list)
         with self.db:
-            for row, values, key in parsed:
+            for row, key, occurred in parsed:
                 new = self.db.execute(
                     "INSERT OR IGNORE INTO trade_seen VALUES (?,?)", (source, key)
                 ).rowcount
-                if new and values[3] >= started:
+                if new and occurred >= started:
                     groups[
                         (row["source_db_id"], row["order_id"], row["side"], row["pair"])
                     ].append(row)

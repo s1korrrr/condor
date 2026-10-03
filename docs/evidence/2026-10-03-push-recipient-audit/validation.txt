@@ -1,0 +1,17 @@
+Condor isolated notification identity verification
+repository=/Users/s1kor/.codex/worktrees/fleet-alert-identity/condor
+branch=feat/andrzej_mobile_alert_identity
+base_commit=226cc2e33db62aede15883dad0ab425f98affc83
+patch_sha256=da8558f4fe29e105e4e8f9bd0b4fc90f8184f38b961bfb08c69479ee118998cb
+python=/Users/s1kor/.local/share/rsibot/validation/fleet-alert-identity-20261003/venv/bin/python
+sandbox=/Users/s1kor/.local/share/rsibot/validation/fleet-reliability-20261003/test-isolation.sb
+test_command=sandbox-exec -f $sandbox $python -m pytest -q -rs --basetemp=/private/var/tmp/condor-push-evidence tests/test_push_apns.py tests/test_push_config.py tests/test_push_events.py tests/test_push_httpx_transport.py tests/test_push_routes.py tests/test_push_store.py tests/test_push_worker.py tests/test_web_auth.py
+result_file=/Users/s1kor/.local/share/rsibot/validation/fleet-alert-identity-20261003/evidence/pytest-push.txt
+result=213 passed, no skipped
+format=black --target-version py312 --check six touched files PASS
+imports=isort --check-only six touched files PASS
+diff_check=git diff --check PASS
+restriction=only loopback network during test, fake Apple and local HTTP2 server; no live credentials or production state
+baseline_equivalent=git archive HEAD plus current regression tests in /private/var/tmp/condor-identity-baseline-cu1c8q64
+baseline_red=pytest-baseline-red.txt: 5 failed for intended recipient, queue-owner, delayed-dead, cap, and post-commit response defects
+paired_green=pytest-repaired-paired-green.txt: 5 passed on the repaired patch

@@ -160,7 +160,8 @@
   font-size: 10px;
 }
 .mp-source-state strong[data-freshness="STALE"],
-.mp-source-state strong[data-freshness="LAGGING"] {
+.mp-source-state strong[data-freshness="LAGGING"],
+.mp-source-state strong[data-freshness="DEGRADED"] {
   color: var(--mp-warning);
 }
 .mp-source-state small {

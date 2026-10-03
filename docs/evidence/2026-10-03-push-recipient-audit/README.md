@@ -14,12 +14,12 @@ carry additive recipient fields; older clients can ignore them.
 
 A delayed APNs rejection may deactivate only the registration captured before submission.
 The conditional update matches its owner, token, registration time, environment, topic and
-installation, including Apple's timestamp fence. Reassignment enforces the target user's
+installation and per-registration nonce, including Apple's timestamp fence. Reassignment enforces the target user's
 device limit and does not inherit another user's alert/quiet preferences. Upsert responses
 are captured inside the write transaction to prevent another writer replacing their owner.
 
-Five deterministic regressions fail on the base and pass on the repair. The scoped suite
-passes 213 tests with no skips, including loopback HTTP/2. Black, isort and diff checks pass.
+Five initial deterministic regressions fail on the base and pass on the repair. The scoped suite
+passes 217 tests with no skips, including loopback HTTP/2. Black, isort and diff checks pass.
 Exact commands and patch hash are in validation.txt; logs distinguish original failures and
 repaired outcomes. Test execution denied outbound network except loopback. No APNs or
 production credentials, records or services were used.
@@ -51,3 +51,9 @@ Execution engines and capital/order semantics are outside this read-only compani
 
 Primary API contract: [Apple APNs requests](https://developer.apple.com/documentation/usernotifications/sending-notification-requests-to-apns)
 requires uncompressed JSON within 4096 bytes; recipient metadata is included in that budget.
+
+Final review also reproduced same-timestamp renewal and hard-delete/recreate races against
+`459a3bb9`. A fresh UUID nonce on every registration now distinguishes those lifecycles;
+legacy rows receive a nonce atomically during migration. The two behavioral red receipts
+show incorrect deactivation rather than missing-field failures. Final nonce suite: 217 passed,
+no skips. Initial 213-test receipt applies to the preceding reviewed patch only.

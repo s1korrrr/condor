@@ -15,3 +15,9 @@ restriction=only loopback network during test, fake Apple and local HTTP2 server
 baseline_equivalent=git archive HEAD plus current regression tests in /private/var/tmp/condor-identity-baseline-cu1c8q64
 baseline_red=pytest-baseline-red.txt: 5 failed for intended recipient, queue-owner, delayed-dead, cap, and post-commit response defects
 paired_green=pytest-repaired-paired-green.txt: 5 passed on the repaired patch
+
+final_revision_base=459a3bb9a67a21f5eab2a8f7077afe4e473741d2
+final_nonce_patch_sha256=770283a8d75c2815324254da828d0f63b0fa9642a1b0bcf47afc1ebf5a3d7a7b
+final_suite=pytest-push-registration-nonce-final.txt: 217 passed, no skips
+final_format=black --target-version py312 --check and isort --check-only changed files PASS
+final_behavioral_red=two receipts against 459a3bb9 fail on renewed/deleted registration deactivation

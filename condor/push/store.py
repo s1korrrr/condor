@@ -159,6 +159,7 @@ class Device:
     registered_at: float
     last_seen: float
     recipient_server_id: str
+    registration_nonce: str
     deactivated_reason: str | None = None
 
     def enabled_classes(self) -> dict[str, bool]:
@@ -204,6 +205,7 @@ def _device(row: sqlite3.Row, recipient_server_id: str) -> Device:
         registered_at=row["registered_at"],
         last_seen=row["last_seen"],
         recipient_server_id=recipient_server_id,
+        registration_nonce=row["registration_nonce"],
         deactivated_reason=row["deactivated_reason"],
     )
 
@@ -245,7 +247,8 @@ class Registry:
                     platform TEXT NOT NULL, bundle_id TEXT NOT NULL, environment TEXT NOT NULL,
                     app_version TEXT NOT NULL, classes TEXT NOT NULL, quiet TEXT NOT NULL,
                     active INTEGER NOT NULL DEFAULT 1, registered_at REAL NOT NULL, last_seen REAL NOT NULL,
-                    deactivated_reason TEXT)""",
+                    deactivated_reason TEXT,
+                    registration_nonce TEXT NOT NULL DEFAULT '')""",
                 "CREATE INDEX IF NOT EXISTS devices_user ON devices(user_id)",
                 """CREATE TABLE IF NOT EXISTS push_requests (
                     id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, kind TEXT NOT NULL,
@@ -255,6 +258,20 @@ class Registry:
             ):
                 db.execute(statement)
             with _transaction(db):
+                device_columns = {
+                    row["name"] for row in db.execute("PRAGMA table_info(devices)")
+                }
+                if "registration_nonce" not in device_columns:
+                    db.execute(
+                        "ALTER TABLE devices ADD COLUMN registration_nonce TEXT NOT NULL DEFAULT ''"
+                    )
+                for row in db.execute(
+                    "SELECT device_id FROM devices WHERE registration_nonce=''"
+                ).fetchall():
+                    db.execute(
+                        "UPDATE devices SET registration_nonce=? WHERE device_id=?",
+                        (uuid.uuid4().hex, row["device_id"]),
+                    )
                 db.execute(
                     "INSERT OR IGNORE INTO meta(key,value) VALUES ('recipient_server_id',?)",
                     (uuid.uuid4().hex,),
@@ -311,7 +328,11 @@ class Registry:
                             "too many registered devices; unregister one first"
                         )
                     db.execute(
-                        "INSERT INTO devices VALUES (?,?,?,?,?,?,?,?,?,1,?,?,NULL)",
+                        """INSERT INTO devices (
+                            device_id,user_id,token,platform,bundle_id,environment,
+                            app_version,classes,quiet,active,registered_at,last_seen,
+                            deactivated_reason,registration_nonce
+                        ) VALUES (?,?,?,?,?,?,?,?,?,1,?,?,NULL,?)""",
                         (
                             device_id,
                             user_id,
@@ -326,6 +347,7 @@ class Registry:
                             ),
                             now,
                             now,
+                            uuid.uuid4().hex,
                         ),
                     )
                 else:
@@ -345,7 +367,8 @@ class Registry:
                     db.execute(
                         """UPDATE devices SET user_id=?, platform=?, bundle_id=?, environment=?,
                            app_version=?, classes=?, quiet=?, active=1, registered_at=?, last_seen=?,
-                           deactivated_reason=NULL WHERE token=?""",
+                           deactivated_reason=NULL, registration_nonce=?
+                           WHERE token=?""",
                         (
                             user_id,
                             platform,
@@ -362,6 +385,7 @@ class Registry:
                             ),
                             now,
                             now,
+                            uuid.uuid4().hex,
                             token,
                         ),
                     )
@@ -446,6 +470,7 @@ class Registry:
                             "user_id=?",
                             "token=?",
                             "registered_at=?",
+                            "registration_nonce=?",
                             "environment=?",
                             "bundle_id=?",
                             "EXISTS (SELECT 1 FROM meta WHERE key='recipient_server_id' AND value=?)",
@@ -456,6 +481,7 @@ class Registry:
                             expected.user_id,
                             expected.token,
                             expected.registered_at,
+                            expected.registration_nonce,
                             expected.environment,
                             expected.bundle_id,
                             expected.recipient_server_id,

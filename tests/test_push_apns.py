@@ -715,6 +715,43 @@ def test_late_dead_reply_cannot_deactivate_reassigned_registration(rig):
     assert current.deactivated_reason is None
 
 
+def test_late_dead_reply_cannot_deactivate_same_timestamp_renewal(rig):
+    original = rig.device(TOKEN_A)
+    rig.enqueue()
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    original_post = rig.apple.post
+
+    async def held_post(**kwargs):
+        entered.set()
+        await release.wait()
+        return await original_post(**kwargs)
+
+    rig.apple.post = held_post
+
+    async def exercise():
+        task = asyncio.create_task(rig.deliverer.deliver_due())
+        await entered.wait()
+        renewed = rig.registry.upsert_device(
+            user_id=original.user_id,
+            token=TOKEN_A,
+            platform="iphone",
+            bundle_id=BUNDLE,
+            environment="sandbox",
+            app_version="2",
+            now=original.registered_at,
+        )
+        assert renewed.registered_at == original.registered_at
+        assert renewed.registration_nonce != original.registration_nonce
+        rig.apple.valid_tokens.pop(TOKEN_A)
+        release.set()
+        return await task
+
+    assert dict(run(exercise())) == {"retry": 1}
+    current = rig.registry.get_device(original.device_id)
+    assert current.active and current.deactivated_reason is None
+
+
 def test_dead_tokens_are_deactivated_and_never_retried(rig):
     device = rig.device()
     rig.apple.valid_tokens.pop(TOKEN_A)

@@ -225,6 +225,66 @@ def test_deactivation_honours_apns_timestamp_so_a_fresh_registration_wins(regist
     assert registry.get_device(device.device_id).active is True
 
 
+def test_delayed_dead_reply_cannot_deactivate_same_timestamp_renewal(registry):
+    original = _register(registry, now=NOW)
+    renewed = _register(registry, now=NOW)
+    assert renewed.registered_at == original.registered_at
+    assert renewed.registration_nonce != original.registration_nonce
+    assert (
+        registry.deactivate(original.device_id, "BadDeviceToken", expected=original)
+        is False
+    )
+    assert registry.get_device(original.device_id).active is True
+
+
+def test_delayed_dead_reply_cannot_deactivate_deleted_and_recreated_token(registry):
+    original = _register(registry, now=NOW)
+    assert registry.delete_device(1, original.device_id)
+    recreated = _register(registry, now=NOW)
+    assert recreated.registered_at == original.registered_at
+    assert recreated.registration_nonce != original.registration_nonce
+    assert (
+        registry.deactivate(original.device_id, "BadDeviceToken", expected=original)
+        is False
+    )
+    assert registry.get_device(recreated.device_id).active is True
+
+
+def test_legacy_registry_migrates_registration_nonce_and_rotates(tmp_path):
+    path = tmp_path / "legacy" / "registry.sqlite"
+    path.parent.mkdir()
+    with sqlite3.connect(path) as db:
+        db.execute("""CREATE TABLE devices (
+            device_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, token TEXT NOT NULL UNIQUE,
+            platform TEXT NOT NULL, bundle_id TEXT NOT NULL, environment TEXT NOT NULL,
+            app_version TEXT NOT NULL, classes TEXT NOT NULL, quiet TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1, registered_at REAL NOT NULL, last_seen REAL NOT NULL,
+            deactivated_reason TEXT)""")
+        db.execute(
+            "INSERT INTO devices VALUES (?,?,?,?,?,?,?,?,?,1,?,?,NULL)",
+            (
+                device_id_for(TOKEN_A),
+                1,
+                TOKEN_A,
+                "iphone",
+                BUNDLE,
+                "sandbox",
+                "1.0",
+                "{}",
+                "{}",
+                NOW,
+                NOW,
+            ),
+        )
+    migrated = Registry(path)
+    old = migrated.get_device(device_id_for(TOKEN_A))
+    assert len(old.registration_nonce) == 32
+    new = _register(migrated, now=NOW)
+    assert new.registration_nonce != old.registration_nonce
+    assert migrated.deactivate(old.device_id, "BadDeviceToken", expected=old) is False
+    assert migrated.get_device(old.device_id).active is True
+
+
 def test_test_requests_are_rate_limited_and_scoped(registry):
     device = _register(registry)
     request = registry.add_test_request(1, [device.device_id], now=NOW)

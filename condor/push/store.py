@@ -227,11 +227,11 @@ def _transaction(db: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
     db.execute("BEGIN IMMEDIATE")
     try:
         yield db
-    except BaseException:
-        db.execute("ROLLBACK")
-        raise
-    else:
         db.execute("COMMIT")
+    except BaseException:
+        if db.in_transaction:
+            db.execute("ROLLBACK")
+        raise
 
 
 class Registry:

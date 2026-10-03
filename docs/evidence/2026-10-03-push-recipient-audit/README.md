@@ -19,7 +19,7 @@ device limit and does not inherit another user's alert/quiet preferences. Upsert
 are captured inside the write transaction to prevent another writer replacing their owner.
 
 Five initial deterministic regressions fail on the base and pass on the repair. The scoped suite
-passes 217 tests with no skips, including loopback HTTP/2. Black, isort and diff checks pass.
+passes 218 tests with no skips, including loopback HTTP/2. Black, isort and diff checks pass.
 Exact commands and patch hash are in validation.txt; logs distinguish original failures and
 repaired outcomes. Test execution denied outbound network except loopback. No APNs or
 production credentials, records or services were used.
@@ -57,3 +57,14 @@ Final review also reproduced same-timestamp renewal and hard-delete/recreate rac
 legacy rows receive a nonce atomically during migration. The two behavioral red receipts
 show incorrect deactivation rather than missing-field failures. Final nonce suite: 217 passed,
 no skips. Initial 213-test receipt applies to the preceding reviewed patch only.
+
+Final parent review reproduced failed COMMIT leaving the persistent outbox connection inside
+an open transaction. COMMIT now sits inside the rollback guard; rollback runs only if the
+transaction remains active and the original error is raised. A real temporary SQLite test
+proves the failed write is absent and the next transaction succeeds. Final locked scoped suite:
+218 passed, no skips (`pytest-push-commit-locked-final.txt`). Broad Condor collection was unavailable:
+initial scoped venv lacked unrelated dependencies; after locked sync, collection stopped at
+`test_native_entry_controls` importing missing `test_web_native_lifecycle`. No broad test bodies
+ran; no whole-owner pass is claimed (UNKNOWN unrelated collection status). Full suites with
+unverified local/Unix service entrypoints were not broadened. This does not block scoped draft
+review, but broader repository and production qualification remain unverified.

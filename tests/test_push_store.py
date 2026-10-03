@@ -62,6 +62,33 @@ def _register(registry, token=TOKEN_A, user=1, **kw):
     )
 
 
+def test_transaction_rolls_back_failed_commit_and_allows_next_write(tmp_path):
+    class CommitFailsOnce(sqlite3.Connection):
+        fail_next_commit = True
+
+        def execute(self, sql, *args):
+            if sql == "COMMIT" and self.fail_next_commit:
+                self.fail_next_commit = False
+                raise sqlite3.OperationalError("injected commit failure")
+            return super().execute(sql, *args)
+
+    path = tmp_path / "transactions.sqlite"
+    db = sqlite3.connect(path, factory=CommitFailsOnce, isolation_level=None)
+    try:
+        db.execute("CREATE TABLE writes (value INTEGER NOT NULL)")
+        with pytest.raises(sqlite3.OperationalError, match="injected commit failure"):
+            with push_store._transaction(db):
+                db.execute("INSERT INTO writes VALUES (1)")
+        assert not db.in_transaction
+        assert db.execute("SELECT value FROM writes").fetchall() == []
+        with push_store._transaction(db):
+            db.execute("INSERT INTO writes VALUES (2)")
+    finally:
+        db.close()
+    with sqlite3.connect(path) as reopened:
+        assert reopened.execute("SELECT value FROM writes").fetchall() == [(2,)]
+
+
 # ------------------------------------------------------------------ registry
 
 

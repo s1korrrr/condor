@@ -21,3 +21,9 @@ final_nonce_patch_sha256=770283a8d75c2815324254da828d0f63b0fa9642a1b0bcf47afc1eb
 final_suite=pytest-push-registration-nonce-final.txt: 217 passed, no skips
 final_format=black --target-version py312 --check and isort --check-only changed files PASS
 final_behavioral_red=two receipts against 459a3bb9 fail on renewed/deleted registration deactivation
+
+final_transaction_base=cd4d3ffaff95eef68b88f445959ba6621505f14b
+final_transaction_patch_sha256=4646b4b5e697a0cce95ebd6d38217bb06428f1c8f1374671e647ca5b0770c0e0
+final_locked_scope=pytest-push-commit-locked-final.txt: 218 passed, no skips
+final_transaction_red_green=failed COMMIT open transaction on base; rollback, no partial write, reusable connection on repair
+broad_suite=not run; collection error on missing test_web_native_lifecycle sibling import, UNKNOWN qualification

@@ -7,13 +7,13 @@ tmp_path = PosixPath('/private/var/tmp/condor-commit-failure-red/test_transactio
     def test_transaction_rolls_back_failed_commit_and_allows_next_write(tmp_path):
         class CommitFailsOnce(sqlite3.Connection):
             fail_next_commit = True
-    
+
             def execute(self, sql, *args):
                 if sql == "COMMIT" and self.fail_next_commit:
                     self.fail_next_commit = False
                     raise sqlite3.OperationalError("injected commit failure")
                 return super().execute(sql, *args)
-    
+
         path = tmp_path / "transactions.sqlite"
         db = sqlite3.connect(path, factory=CommitFailsOnce, isolation_level=None)
         try:

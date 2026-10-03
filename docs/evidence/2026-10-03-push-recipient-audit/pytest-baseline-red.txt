@@ -39,7 +39,7 @@ rig = <tests.test_push_apns.Rig object at 0x107e889e0>
         assert reassigned.device_id == original.device_id and reassigned.user_id == 2
 >       assert dict(rig.deliver()) == {"cancelled": 1}
 E       AssertionError: assert {'sent': 1} == {'cancelled': 1}
-E         
+E
 E         Left contains 1 more item:
 E         {'sent': 1}
 E         Right contains 1 more item:
@@ -57,14 +57,14 @@ rig = <tests.test_push_apns.Rig object at 0x107e92480>
         entered = asyncio.Event()
         release = asyncio.Event()
         original_post = rig.apple.post
-    
+
         async def held_post(**kwargs):
             entered.set()
             await release.wait()
             return await original_post(**kwargs)
-    
+
         rig.apple.post = held_post
-    
+
         async def exercise():
             task = asyncio.create_task(rig.deliverer.deliver_due())
             await entered.wait()
@@ -82,10 +82,10 @@ rig = <tests.test_push_apns.Rig object at 0x107e92480>
             rig.apple.valid_tokens.pop(TOKEN_A)  # delayed BadDeviceToken, no APNs timestamp
             release.set()
             return await task
-    
+
 >       assert dict(run(exercise())) == {"retry": 1}
 E       AssertionError: assert {'dead': 1} == {'retry': 1}
-E         
+E
 E         Left contains 1 more item:
 E         {'dead': 1}
 E         Right contains 1 more item:
@@ -117,7 +117,7 @@ monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107ea7200>
         committed = threading.Event()
         release = threading.Event()
         original_transaction = push_store._transaction
-    
+
         @contextmanager
         def pause_after_first_commit(db):
             with original_transaction(db):
@@ -125,17 +125,17 @@ monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107ea7200>
             if threading.current_thread().name == "register-first":
                 committed.set()
                 assert release.wait(timeout=5)
-    
+
         monkeypatch.setattr(push_store, "_transaction", pause_after_first_commit)
         result = []
         errors = []
-    
+
         def first_registration():
             try:
                 result.append(_register(registry, token="aa" * 32, user=1, now=NOW))
             except Exception as error:
                 errors.append(error)
-    
+
         thread = threading.Thread(target=first_registration, name="register-first")
         thread.start()
         try:

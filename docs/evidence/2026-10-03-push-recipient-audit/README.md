@@ -68,3 +68,5 @@ initial scoped venv lacked unrelated dependencies; after locked sync, collection
 ran; no whole-owner pass is claimed (UNKNOWN unrelated collection status). Full suites with
 unverified local/Unix service entrypoints were not broadened. This does not block scoped draft
 review, but broader repository and production qualification remain unverified.
+
+Published text receipts normalize trailing whitespace only; assertion content and results are unchanged.

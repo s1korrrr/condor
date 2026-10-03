@@ -291,6 +291,51 @@ def test_payload_is_shortened_to_fit_apples_4kb_before_anything_is_dropped():
     )  # deep link intact
 
 
+def test_recipient_binding_stays_inside_apns_payload_limit():
+    request = apns.build_request(
+        _event(body="x " * 5000),
+        token=TOKEN_A,
+        topic=BUNDLE,
+        environment="sandbox",
+        device_id="a" * 32,
+        recipient_user_id=123456789,
+        recipient_server_id="b" * 32,
+        now=0,
+        expires_at=3600,
+        silent=False,
+    )
+    assert len(request.body) <= apns.MAX_PAYLOAD_BYTES
+    assert json.loads(request.body)["rsibot"] == {
+        "v": 1,
+        "id": "e1",
+        "class": "fill_entry",
+        "kind": "entry",
+        "link": "rsibot://bot/rsi_modular_v2/fills",
+        "ts": 1_790_000_000,
+        "bot": "rsi_modular_v2",
+        "recipient_user_id": "123456789",
+        "recipient_device_id": "a" * 32,
+        "recipient_server_id": "b" * 32,
+    }
+
+
+@pytest.mark.parametrize("user_id", [0, -1, True, "1"])
+def test_request_rejects_invalid_recipient_user_id(user_id):
+    with pytest.raises(ValueError, match="recipient binding"):
+        apns.build_request(
+            _event(),
+            token=TOKEN_A,
+            topic=BUNDLE,
+            environment="sandbox",
+            device_id="a" * 32,
+            recipient_user_id=user_id,
+            recipient_server_id="b" * 32,
+            now=0,
+            expires_at=3600,
+            silent=False,
+        )
+
+
 def test_collapse_ids_over_64_bytes_cannot_even_be_built():
     with pytest.raises(ValueError):
         _event(collapse="c" * 65)
@@ -560,16 +605,151 @@ def rig(tmp_path, key_path):
 
 
 def test_delivery_sends_to_each_device_with_its_own_topic_and_environment(rig):
-    rig.device(TOKEN_A)
-    rig.device(
+    phone = rig.device(TOKEN_A)
+    watch = rig.device(
         TOKEN_W, platform="watch", bundle_id=WATCH_BUNDLE, environment="production"
     )
     rig.enqueue()
     assert dict(rig.deliver()) == {"sent": 2}
     seen = {(r["environment"], r["headers"]["apns-topic"]) for r in rig.apple.requests}
     assert seen == {("sandbox", BUNDLE), ("production", WATCH_BUNDLE)}
+    assert {
+        payload["rsibot"]["recipient_device_id"] for payload in rig.apple.payloads
+    } == {phone.device_id, watch.device_id}
+    assert {
+        payload["rsibot"]["recipient_user_id"] for payload in rig.apple.payloads
+    } == {"1"}
+    assert {
+        payload["rsibot"]["recipient_server_id"] for payload in rig.apple.payloads
+    } == {rig.registry.recipient_server_id}
     assert rig.outbox.counts() == {"sent": 2}
     assert rig.deliver() == {}  # nothing left to do
+
+
+def test_queued_previous_user_alert_is_cancelled_after_token_changes_owner(rig):
+    original = rig.device(TOKEN_A)
+    rig.enqueue()
+    reassigned = rig.registry.upsert_device(
+        user_id=2,
+        token=TOKEN_A,
+        platform="iphone",
+        bundle_id=BUNDLE,
+        environment="sandbox",
+        app_version="2",
+        now=rig.clock(),
+    )
+    assert reassigned.device_id == original.device_id and reassigned.user_id == 2
+    assert dict(rig.deliver()) == {"cancelled": 1}
+    assert rig.apple.requests == []
+    assert rig.outbox.deliveries_for("e1")[0]["state"] == "cancelled"
+    rig.enqueue(_event(event_id="e2"))
+    assert dict(rig.deliver()) == {"sent": 1}
+    assert rig.apple.payloads[0]["rsibot"]["recipient_user_id"] == "2"
+    assert (
+        rig.apple.payloads[0]["rsibot"]["recipient_device_id"] == reassigned.device_id
+    )
+
+
+def test_legacy_delivery_without_queue_time_owner_is_cancelled(rig):
+    rig.device()
+    rig.enqueue()
+    rig.outbox.db.execute("UPDATE deliveries SET recipient_user_id=NULL")
+    assert dict(rig.deliver()) == {"cancelled": 1}
+    assert rig.apple.requests == []
+
+
+def test_queued_alert_is_cancelled_if_registry_installation_changes(rig, tmp_path):
+    rig.device()
+    rig.enqueue()
+    replacement = Registry(tmp_path / "other-registry.sqlite")
+    replacement.upsert_device(
+        user_id=1,
+        token=TOKEN_A,
+        platform="iphone",
+        bundle_id=BUNDLE,
+        environment="sandbox",
+        app_version="1",
+        now=rig.clock(),
+    )
+    assert replacement.recipient_server_id != rig.registry.recipient_server_id
+    rig.deliverer.registry = replacement
+    assert dict(rig.deliver()) == {"cancelled": 1}
+    assert rig.apple.requests == []
+
+
+def test_late_dead_reply_cannot_deactivate_reassigned_registration(rig):
+    original = rig.device(TOKEN_A)
+    rig.enqueue()
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    original_post = rig.apple.post
+
+    async def held_post(**kwargs):
+        entered.set()
+        await release.wait()
+        return await original_post(**kwargs)
+
+    rig.apple.post = held_post
+
+    async def exercise():
+        task = asyncio.create_task(rig.deliverer.deliver_due())
+        await entered.wait()
+        rig.clock.advance(1)
+        reassigned = rig.registry.upsert_device(
+            user_id=2,
+            token=TOKEN_A,
+            platform="iphone",
+            bundle_id=BUNDLE,
+            environment="sandbox",
+            app_version="2",
+            now=rig.clock(),
+        )
+        assert reassigned.device_id == original.device_id
+        rig.apple.valid_tokens.pop(TOKEN_A)  # delayed BadDeviceToken, no APNs timestamp
+        release.set()
+        return await task
+
+    assert dict(run(exercise())) == {"retry": 1}
+    current = rig.registry.get_device(original.device_id)
+    assert current.user_id == 2 and current.active
+    assert current.deactivated_reason is None
+
+
+def test_late_dead_reply_cannot_deactivate_same_timestamp_renewal(rig):
+    original = rig.device(TOKEN_A)
+    rig.enqueue()
+    entered = asyncio.Event()
+    release = asyncio.Event()
+    original_post = rig.apple.post
+
+    async def held_post(**kwargs):
+        entered.set()
+        await release.wait()
+        return await original_post(**kwargs)
+
+    rig.apple.post = held_post
+
+    async def exercise():
+        task = asyncio.create_task(rig.deliverer.deliver_due())
+        await entered.wait()
+        renewed = rig.registry.upsert_device(
+            user_id=original.user_id,
+            token=TOKEN_A,
+            platform="iphone",
+            bundle_id=BUNDLE,
+            environment="sandbox",
+            app_version="2",
+            now=original.registered_at,
+        )
+        assert renewed.registered_at == original.registered_at
+        assert renewed.registration_nonce != original.registration_nonce
+        rig.apple.valid_tokens.pop(TOKEN_A)
+        release.set()
+        return await task
+
+    assert dict(run(exercise())) == {"retry": 1}
+    current = rig.registry.get_device(original.device_id)
+    assert current.active and current.deactivated_reason is None
 
 
 def test_dead_tokens_are_deactivated_and_never_retried(rig):

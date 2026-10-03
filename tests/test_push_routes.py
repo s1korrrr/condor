@@ -95,6 +95,7 @@ def test_register_update_list_and_unregister_a_device(monkeypatch, tmp_path):
         "environments": ["sandbox", "production"],
     }
     assert TOKEN_A not in created.text and device["token_suffix"] == TOKEN_A[-6:]
+    assert device["recipient_server_id"] == registry.recipient_server_id
     assert (
         device["classes"]["fill_entry"] is True
         and device["classes"]["summary"] is False
@@ -126,6 +127,9 @@ def test_register_update_list_and_unregister_a_device(monkeypatch, tmp_path):
     }
     settings = client.get("/api/v1/push/settings", headers=H).json()
     assert [d["device_id"] for d in settings["devices"]] == [device["device_id"]]
+    assert (
+        settings["devices"][0]["recipient_server_id"] == device["recipient_server_id"]
+    )
     assert (
         settings["read_only"] is True
         and settings["heartbeat"]["state"] == "unavailable"

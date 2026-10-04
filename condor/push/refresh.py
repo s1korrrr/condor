@@ -198,7 +198,9 @@ class RefreshSender:
                     outcome.reason,
                 )
         self.outbox.set_kv(STATE_KEY, state)
-        self.last_stats = stats
+        # An idle cycle keeps the last attempt's outcome for the next heartbeat.
+        if stats:
+            self.last_stats = stats
         return stats
 
     def heartbeat(self) -> dict[str, Any]:

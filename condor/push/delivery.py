@@ -18,6 +18,7 @@ from condor.push.config import PushConfig
 from condor.push.store import (
     MAX_ATTEMPTS,
     DeliveryRow,
+    Device,
     Outbox,
     Registry,
     backoff_seconds,
@@ -90,6 +91,12 @@ class Deliverer:
 
         if device is None or not device.active:
             return finish("cancelled", "device is not registered or was deactivated")
+        if (
+            row.recipient_user_id is None
+            or row.recipient_user_id != device.user_id
+            or row.recipient_server_id != device.recipient_server_id
+        ):
+            return finish("cancelled", "recipient no longer matches registered device")
         if not device.class_enabled(event.cls):
             return finish("suppressed", "alert class is switched off on this device")
         if now - min(row.created, event.occurred_at) > self.config.max_age_seconds:
@@ -107,15 +114,19 @@ class Deliverer:
             topic=device.bundle_id,
             environment=device.environment,
             device_id=device.device_id,
+            recipient_user_id=device.user_id,
+            recipient_server_id=device.recipient_server_id,
             now=now,
             expires_at=min(row.created, event.occurred_at)
             + self.config.max_age_seconds,
             silent=quiet,
         )
         outcome = await self.apns.send(request)
-        return self._record(row, outcome, now)
+        return self._record(row, device, outcome, now)
 
-    def _record(self, row: DeliveryRow, outcome: ApnsOutcome, now: float) -> str:
+    def _record(
+        self, row: DeliveryRow, device: Device, outcome: ApnsOutcome, now: float
+    ) -> str:
         event_id, device_id = row.event.id, row.device_id
         label = f"{outcome.status or 'transport'} {outcome.reason or ''}".strip()
         if outcome.kind == "sent":
@@ -126,6 +137,7 @@ class Deliverer:
                 device_id,
                 outcome.reason or "Unregistered",
                 apns_timestamp=outcome.apns_timestamp,
+                expected=device,
             ):
                 self.outbox.mark(event_id, device_id, "dead", now, error=label)
                 return "dead"

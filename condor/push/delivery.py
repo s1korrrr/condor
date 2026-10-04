@@ -47,6 +47,22 @@ class Deliverer:
         self._auth_paused_until = 0.0
         self.last_stats: Counter[str] = Counter()
 
+    def eligibility_error(self, device) -> str | None:
+        """Why this server must not send to the device, or None. Shared by every sender."""
+        if (
+            device.environment not in self.config.environments
+            or not self.config.allows_bundle(device.bundle_id)
+        ):
+            return "device environment or bundle is not enabled for this server"
+        return None
+
+    def auth_paused(self, now: float) -> bool:
+        """True while Apple is rejecting our credentials; every sender honours the pause."""
+        return now < self._auth_paused_until
+
+    def pause_for_auth(self, now: float) -> None:
+        self._auth_paused_until = now + AUTH_PAUSE_SECONDS
+
     async def deliver_due(
         self, *, limit: int = 100, concurrency: int = 8
     ) -> Counter[str]:
@@ -78,14 +94,9 @@ class Deliverer:
             return finish("suppressed", "alert class is switched off on this device")
         if now - min(row.created, event.occurred_at) > self.config.max_age_seconds:
             return finish("expired", "too old to deliver")
-        if (
-            device.environment not in self.config.environments
-            or not self.config.allows_bundle(device.bundle_id)
-        ):
-            return finish(
-                "failed", "device environment or bundle is not enabled for this server"
-            )
-        if now < self._auth_paused_until:
+        if (reason := self.eligibility_error(device)) is not None:
+            return finish("failed", reason)
+        if self.auth_paused(now):
             return "paused"  # stays pending; retried after the pause
         quiet = in_quiet_hours(device.quiet, now) and not (
             device.quiet.get("bypass_critical", True) and event.severity == "critical"
@@ -129,7 +140,7 @@ class Deliverer:
             )
             return "retry"
         if outcome.kind == "auth":
-            self._auth_paused_until = now + AUTH_PAUSE_SECONDS
+            self.pause_for_auth(now)
             self.outbox.mark(
                 event_id,
                 device_id,

@@ -137,9 +137,17 @@ class FakeApple:
             return self._response(403, {"reason": "InvalidProviderToken"})
         if self.clock() - claim["iat"] > 3600:
             return self._response(403, {"reason": "ExpiredProviderToken"})
-        if headers.get("apns-push-type") != "alert" or headers.get(
-            "apns-priority"
-        ) not in {"5", "10"}:
+        push_type = headers.get("apns-push-type")
+        if push_type == "background":
+            # Apple: background pushes use priority 5 and carry content-available, nothing visible.
+            aps = json.loads(body).get("aps", {})
+            if headers.get("apns-priority") != "5":
+                return self._response(400, {"reason": "BadPriority"})
+            if aps.get("content-available") != 1 or {"alert", "sound", "badge"} & set(
+                aps
+            ):
+                return self._response(400, {"reason": "InvalidPushType"})
+        elif push_type != "alert" or headers.get("apns-priority") not in {"5", "10"}:
             return self._response(400, {"reason": "BadPriority"})
         if len(headers.get("apns-collapse-id", "x").encode()) > 64:
             return self._response(400, {"reason": "BadCollapseId"})

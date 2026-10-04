@@ -39,6 +39,7 @@ _KEYS = frozenset(
         "thresholds",
         "incident_min_severity",
         "summary",
+        "refresh",
         "retention_days",
         "max_age_seconds",
         "poll_seconds",
@@ -48,6 +49,7 @@ _THRESHOLD_KEYS = frozenset(
     {"stale_seconds", "confirm_seconds", "unreadable_seconds", "recover_seconds"}
 )
 _SUMMARY_KEYS = frozenset({"enabled", "hour_utc", "minute"})
+_REFRESH_KEYS = frozenset({"enabled", "interval_seconds"})
 _BUNDLE = re.compile(r"[A-Za-z0-9][A-Za-z0-9-]*(\.[A-Za-z0-9][A-Za-z0-9-]*){2,}")
 _APPLE_ID = re.compile(r"[A-Z0-9]{10}")
 
@@ -61,6 +63,14 @@ class SummaryConfig:
     enabled: bool = False
     hour_utc: int = 20
     minute: int = 0
+
+
+@dataclass(frozen=True)
+class RefreshConfig:
+    """Silent data-refresh pushes to iPhones; off unless explicitly enabled."""
+
+    enabled: bool = False
+    interval_seconds: int = 900
 
 
 @dataclass(frozen=True)
@@ -80,6 +90,7 @@ class PushConfig:
     thresholds: HealthThresholds = HealthThresholds()
     incident_min_severity: str = "critical"
     summary: SummaryConfig = SummaryConfig()
+    refresh: RefreshConfig = RefreshConfig()
     retention_days: int = 14
     max_age_seconds: int = 6 * 3600
     poll_seconds: int = 10
@@ -250,6 +261,12 @@ def parse_push_config(raw: Any) -> PushConfig:
     enabled_summary = raw_summary.get("enabled", False)
     if type(enabled_summary) is not bool:
         raise PushConfigError("push.summary.enabled must be true or false")
+    raw_refresh = raw.get("refresh") or {}
+    if not isinstance(raw_refresh, Mapping) or set(raw_refresh) - _REFRESH_KEYS:
+        raise PushConfigError("push.refresh has unsupported keys")
+    enabled_refresh = raw_refresh.get("enabled", False)
+    if type(enabled_refresh) is not bool:
+        raise PushConfigError("push.refresh.enabled must be true or false")
     severity = raw.get("incident_min_severity", "critical")
     if severity not in ("warning", "critical"):
         raise PushConfigError("push.incident_min_severity must be warning or critical")
@@ -278,6 +295,16 @@ def parse_push_config(raw: Any) -> PushConfig:
             enabled_summary,
             _int(raw_summary.get("hour_utc", 20), "summary.hour_utc", 0, 23),
             _int(raw_summary.get("minute", 0), "summary.minute", 0, 59),
+        ),
+        refresh=RefreshConfig(
+            enabled_refresh,
+            # Apple budgets background pushes; faster than every 5 minutes only gets throttled.
+            _int(
+                raw_refresh.get("interval_seconds", 900),
+                "refresh.interval_seconds",
+                300,
+                3600,
+            ),
         ),
         retention_days=_int(raw.get("retention_days", 14), "retention_days", 1, 90),
         max_age_seconds=_int(

@@ -202,6 +202,25 @@ class PushWorker:
             market_score,
         )
         self.fleet_sources = FleetSources(fleet, outbox)
+        # Refresh has its own APNs client (same key and transport) so its outcomes stay out of
+        # the alert-delivery health; it honours the deliverer's eligibility and credential pause.
+        self.refresh = (
+            rf.RefreshSender(
+                config,
+                registry,
+                outbox,
+                deliverer,
+                ApnsClient(
+                    deliverer.apns.tokens,
+                    deliverer.apns.transport,
+                    timeout=deliverer.apns.timeout,
+                    clock=clock,
+                ),
+                clock=clock,
+            )
+            if config.refresh.enabled
+            else None
+        )
         self._stopping = asyncio.Event()
         self._last_prune = 0.0
         self.last_cycle_at: float | None = None
@@ -287,7 +306,8 @@ class PushWorker:
         self._summary(infos, devices, now)
         await self._market(devices, now)
         await self.deliverer.deliver_due()
-        await self._refresh(devices, now)
+        if self.refresh is not None:
+            await self.refresh.send_due()
         self._finish_test_requests()
         if now - self._last_prune >= PRUNE_EVERY_SECONDS:
             self._last_prune = now
@@ -507,49 +527,6 @@ class PushWorker:
         if event is not None:
             self.outbox.commit("market", events=[event], devices=devices, now=now)
 
-    async def _refresh(self, devices: Sequence[Device], now: float) -> None:
-        """Paced silent pushes so iPhones refresh and relay to their Watch and widgets."""
-        cfg = self.config.refresh
-        if not cfg.enabled or self.deliverer.auth_paused(now):
-            return
-        last = self.outbox.get_kv(rf.LAST_SENT_KEY)
-        if not rf.refresh_due(
-            now, last if isinstance(last, (int, float)) else None, cfg.interval_seconds
-        ):
-            return
-        targets = [
-            d
-            for d in devices
-            if d.active
-            and d.platform == "iphone"
-            and d.environment in self.config.environments
-            and self.config.allows_bundle(d.bundle_id)
-        ]
-        auth_rejected = False
-        for device in targets:
-            outcome = await self.deliverer.apns.send(
-                rf.build_refresh_request(
-                    token=device.token,
-                    topic=device.bundle_id,
-                    environment=device.environment,
-                    device_id=device.device_id,
-                    now=now,
-                    ttl_seconds=cfg.interval_seconds,
-                )
-            )
-            if outcome.kind == "dead":
-                self.registry.deactivate(
-                    device.device_id,
-                    outcome.reason or "Unregistered",
-                    apns_timestamp=outcome.apns_timestamp,
-                )
-            elif outcome.kind == "auth":
-                self.deliverer.pause_for_auth(now)
-                auth_rejected = True
-                break
-        if not auth_rejected:
-            self.outbox.set_kv(rf.LAST_SENT_KEY, now)
-
     # ---- heartbeat
 
     def degraded_reasons(self, now: float) -> list[str]:
@@ -585,6 +562,11 @@ class PushWorker:
                 "auth_ok": apns.auth_ok,
             },
             "sources": self.source_status,
+            **(
+                {"refresh": self.refresh.heartbeat()}
+                if self.refresh is not None
+                else {}
+            ),
             "external_ping": {
                 "configured": self.ping.configured,
                 "last_success_at": self.ping.last_success_at,

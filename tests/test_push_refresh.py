@@ -141,3 +141,76 @@ def test_rejected_credentials_pause_refresh_without_stopping_the_cycle(tmp_path)
         assert background(r)[-1]["headers"]["apns-push-type"] == "background"
     finally:
         r.close()
+
+
+def test_a_transient_failure_retries_soon_instead_of_waiting_a_whole_interval(tmp_path):
+    r = Rig(tmp_path, extra={"refresh": {"enabled": True, "interval_seconds": 900}})
+    try:
+        r.devices()
+        r.apple.script = [(503, {"reason": "ServiceUnavailable"}, None)]
+        r.cycle()
+        assert len(background(r)) == 1
+        r.cycle(30)
+        assert len(background(r)) == 1  # waits at least a minute
+        r.cycle(40)
+        assert len(background(r)) == 2  # retried well before the 15-minute interval
+        r.cycle(60)
+        assert len(background(r)) == 2  # delivered: back to the normal pace
+    finally:
+        r.close()
+
+
+def test_a_rejected_refresh_is_logged_and_paced_not_hammered(tmp_path, caplog):
+    r = Rig(tmp_path, extra={"refresh": {"enabled": True, "interval_seconds": 600}})
+    try:
+        r.devices()
+        r.apple.script = [(400, {"reason": "TopicDisallowed"}, None)]
+        with caplog.at_level("WARNING", logger="condor.push"):
+            r.cycle()
+        assert (
+            "background refresh rejected" in caplog.text
+            and "TopicDisallowed" in caplog.text
+        )
+        assert TOKEN_A not in caplog.text
+        r.cycle(300)
+        assert len(background(r)) == 1
+        r.cycle(300)
+        assert len(background(r)) == 2
+    finally:
+        r.close()
+
+
+def test_a_credential_pause_from_alert_delivery_also_holds_refresh(tmp_path):
+    r = Rig(tmp_path, extra={"refresh": {"enabled": True, "interval_seconds": 600}})
+    try:
+        r.devices()
+        r.deliverer.pause_for_auth(r.clock() + 5)
+        r.cycle()
+        assert background(r) == []
+        r.cycle(120)
+        assert len(background(r)) == 1
+    finally:
+        r.close()
+
+
+def test_refresh_outcomes_stay_out_of_alert_health_and_show_in_the_heartbeat(tmp_path):
+    r = Rig(tmp_path, extra={"refresh": {"enabled": True, "interval_seconds": 600}})
+    try:
+        r.devices()
+        r.cycle()
+        assert r.deliverer.apns.last_success_at is None  # the alert client sent nothing
+        beat = r.worker.heartbeat_payload(r.clock())
+        assert beat["refresh"]["enabled"] is True
+        assert beat["refresh"]["last_stats"] == {"sent": 1}
+        assert beat["refresh"]["last_sent_at"] == r.clock()
+        assert "apns" not in beat["degraded_reasons"]
+    finally:
+        r.close()
+
+
+def test_disabled_refresh_adds_nothing_to_the_heartbeat(tmp_path):
+    r = Rig(tmp_path)
+    try:
+        assert "refresh" not in r.worker.heartbeat_payload(r.clock())
+    finally:
+        r.close()

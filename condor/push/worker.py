@@ -38,6 +38,7 @@ from condor.fleet_telegram import (
 )
 from condor.fleet_trade_alerts import source_key
 from condor.push import events as ev
+from condor.push import refresh as rf
 from condor.push.apns import ApnsClient, HttpxApnsTransport, ProviderTokens
 from condor.push.config import PushConfig, PushConfigError
 from condor.push.delivery import Deliverer
@@ -286,6 +287,7 @@ class PushWorker:
         self._summary(infos, devices, now)
         await self._market(devices, now)
         await self.deliverer.deliver_due()
+        await self._refresh(devices, now)
         self._finish_test_requests()
         if now - self._last_prune >= PRUNE_EVERY_SECONDS:
             self._last_prune = now
@@ -504,6 +506,49 @@ class PushWorker:
         )
         if event is not None:
             self.outbox.commit("market", events=[event], devices=devices, now=now)
+
+    async def _refresh(self, devices: Sequence[Device], now: float) -> None:
+        """Paced silent pushes so iPhones refresh and relay to their Watch and widgets."""
+        cfg = self.config.refresh
+        if not cfg.enabled or self.deliverer.auth_paused(now):
+            return
+        last = self.outbox.get_kv(rf.LAST_SENT_KEY)
+        if not rf.refresh_due(
+            now, last if isinstance(last, (int, float)) else None, cfg.interval_seconds
+        ):
+            return
+        targets = [
+            d
+            for d in devices
+            if d.active
+            and d.platform == "iphone"
+            and d.environment in self.config.environments
+            and self.config.allows_bundle(d.bundle_id)
+        ]
+        auth_rejected = False
+        for device in targets:
+            outcome = await self.deliverer.apns.send(
+                rf.build_refresh_request(
+                    token=device.token,
+                    topic=device.bundle_id,
+                    environment=device.environment,
+                    device_id=device.device_id,
+                    now=now,
+                    ttl_seconds=cfg.interval_seconds,
+                )
+            )
+            if outcome.kind == "dead":
+                self.registry.deactivate(
+                    device.device_id,
+                    outcome.reason or "Unregistered",
+                    apns_timestamp=outcome.apns_timestamp,
+                )
+            elif outcome.kind == "auth":
+                self.deliverer.pause_for_auth(now)
+                auth_rejected = True
+                break
+        if not auth_rejected:
+            self.outbox.set_kv(rf.LAST_SENT_KEY, now)
 
     # ---- heartbeat
 

@@ -47,6 +47,13 @@ class Deliverer:
         self._auth_paused_until = 0.0
         self.last_stats: Counter[str] = Counter()
 
+    def auth_paused(self, now: float) -> bool:
+        """True while Apple is rejecting our credentials; every sender honours the pause."""
+        return now < self._auth_paused_until
+
+    def pause_for_auth(self, now: float) -> None:
+        self._auth_paused_until = now + AUTH_PAUSE_SECONDS
+
     async def deliver_due(
         self, *, limit: int = 100, concurrency: int = 8
     ) -> Counter[str]:

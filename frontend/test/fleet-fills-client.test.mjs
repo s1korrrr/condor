@@ -19,7 +19,7 @@ test('the server\'s documented example pages satisfy the typed client', () => {
   assert.equal(typeof first.next_cursor, 'string');
   assert.deepEqual(first.bots.map(bot => bot.generation), ['V1', 'V2', 'V3']);
   const top = first.items[0];
-  assert.equal(top.id, 'meridian_v3|db-v3|v3-1');
+  assert.equal(top.id, 'meridian_v3|db-v3|SOL-USDC|v3-1');
   assert.equal(top.amount, '1.5', 'money stays a decimal string');
   assert.equal(top.realized_pnl, null, 'realized_pnl is reserved: null, never zero');
   assert.equal(top.receipt, 'exact');

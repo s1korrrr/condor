@@ -372,6 +372,8 @@ def window_payload(
         "latest_at_ms": _ms(window.latest_at),
         "stale": window.stale,
         "missing": window.missing,
+        # Unrecorded time inside this window, summed over counted bots (both views; `gaps` names the bots).
+        "uncovered_ms": round(sum(gap["uncovered_ms"] for gap in window.gaps)),
     }
     if detail:
         payload["bots"] = [

@@ -65,28 +65,32 @@
    "partial": true,
    "counted": 2,
    "expected": 2,
-   "stale": false
+   "stale": false,
+   "uncovered_ms": 104220000
   },
   "week": {
    "total": "4.5",
    "partial": true,
    "counted": 2,
    "expected": 2,
-   "stale": false
+   "stale": false,
+   "uncovered_ms": 104220000
   },
   "month": {
    "total": "4.5",
    "partial": true,
    "counted": 2,
    "expected": 2,
-   "stale": false
+   "stale": false,
+   "uncovered_ms": 104220000
   },
   "all": {
    "total": "4.5",
    "partial": true,
    "counted": 2,
    "expected": 2,
-   "stale": false
+   "stale": false,
+   "uncovered_ms": 104220000
   }
  },
  "market": {

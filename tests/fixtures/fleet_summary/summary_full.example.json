@@ -72,6 +72,7 @@
    "latest_at_ms": 1799999970000,
    "stale": false,
    "missing": [],
+   "uncovered_ms": 104220000,
    "bots": [
     {
      "bot": "ok_rsi",
@@ -124,6 +125,7 @@
    "latest_at_ms": 1799999970000,
    "stale": false,
    "missing": [],
+   "uncovered_ms": 104220000,
    "bots": [
     {
      "bot": "ok_rsi",
@@ -176,6 +178,7 @@
    "latest_at_ms": 1799999970000,
    "stale": false,
    "missing": [],
+   "uncovered_ms": 104220000,
    "bots": [
     {
      "bot": "ok_rsi",
@@ -228,6 +231,7 @@
    "latest_at_ms": 1799999970000,
    "stale": false,
    "missing": [],
+   "uncovered_ms": 104220000,
    "bots": [
     {
      "bot": "ok_rsi",

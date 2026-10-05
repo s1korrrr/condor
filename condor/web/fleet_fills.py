@@ -48,6 +48,7 @@ from condor.web.fleet_summary import (
     display_name,
     generation,
     is_paper,
+    receipt_value,
 )
 
 SCHEMA_VERSION = "fleet-fills.v1"
@@ -125,16 +126,12 @@ def normalize_fill(row: Any, bot: str) -> tuple[Optional[dict], Optional[str]]:
     if fill.get("bot_name") != bot:
         return None, FOREIGN_BOT
     pair, base, quote = normalize_pair(fill.get("pair"))
-    amount = _decimal(fill, "exact_amount", "amount_base", positive=True)
-    price = _decimal(fill, "exact_price", "price_quote", positive=True)
-    exact = (
-        _decimal(fill, "exact_amount", positive=True) is not None
-        and _decimal(fill, "exact_price", positive=True) is not None
-    )
+    amount, amount_precision = receipt_value(fill, "amount", positive=True)
+    price, price_precision = receipt_value(fill, "price", positive=True)
     receipt = (
-        "exact"
-        if exact
-        else "legacy_6dp" if amount is not None and price is not None else "unavailable"
+        "unavailable"
+        if amount is None or price is None
+        else "exact" if amount_precision == price_precision == "exact" else "legacy_6dp"
     )
     item = {
         "bot": bot,
@@ -158,7 +155,7 @@ def normalize_fill(row: Any, bot: str) -> tuple[Optional[dict], Optional[str]]:
             "gross_volume_quote",
             positive=True,
         ),
-        "fee": _decimal(fill, "exact_trade_fee_in_quote", "fee_quote"),
+        "fee": receipt_value(fill, "fee_quote", positive=False)[0],
         "fee_unit": quote,
         "time_ms": _instant_ms(fill.get("timestamp")),
         "receipt": receipt,
@@ -172,7 +169,8 @@ def normalize_fill(row: Any, bot: str) -> tuple[Optional[dict], Optional[str]]:
         for name in ("pair", "side", "amount", "price", "volume", "fee", "time_ms")
         if item[name] is None
     )
-    item["id"] = f"{bot}|{item['source_db_id'] or ''}|{fill_id}"
+    # OKX trade ids are unique per instrument only, so the pair is part of the identity.
+    item["id"] = f"{bot}|{item['source_db_id'] or ''}|{pair or ''}|{fill_id}"
     return item, None
 
 
@@ -209,12 +207,17 @@ def order_key(item: dict) -> tuple:
         item["bot"],
         item["source_db_id"] or "",
         item["fill_id"],
+        item["pair"] or "",
     )
+
+
+# A cursor issued before the pair joined the key stands after every pair of its trade id, as it did then.
+_LEGACY_CURSOR_PAIR = "\U0010ffff"
 
 
 def encode_cursor(item: dict) -> str:
     raw = json.dumps(
-        [item["time_ms"], item["bot"], item["source_db_id"], item["fill_id"]],
+        [item["time_ms"], item["bot"], item["source_db_id"], item["fill_id"], item["pair"]],
         separators=(",", ":"),
     )
     return base64.urlsafe_b64encode(raw.encode()).decode().rstrip("=")
@@ -226,7 +229,12 @@ def decode_cursor(cursor: str) -> tuple:
         if len(cursor) > 512:
             raise ValueError
         raw = base64.urlsafe_b64decode(cursor + "=" * (-len(cursor) % 4))
-        time_ms, bot, source, fill_id = json.loads(raw)
+        fields = json.loads(raw)
+        if not isinstance(fields, list):
+            raise ValueError
+        if len(fields) == 4:
+            fields = [*fields, _LEGACY_CURSOR_PAIR]
+        time_ms, bot, source, fill_id, pair = fields
     except (ValueError, TypeError, binascii.Error, UnicodeDecodeError):
         raise FeedQueryError("before is not a cursor this feed issued") from None
     if (
@@ -237,10 +245,11 @@ def decode_cursor(cursor: str) -> tuple:
         or not isinstance(bot, str)
         or not (source is None or isinstance(source, str))
         or not isinstance(fill_id, str)
+        or not (pair is None or isinstance(pair, str))
     ):
         raise FeedQueryError("before is not a cursor this feed issued")
     return order_key(
-        {"time_ms": time_ms, "bot": bot, "source_db_id": source, "fill_id": fill_id}
+        {"time_ms": time_ms, "bot": bot, "source_db_id": source, "fill_id": fill_id, "pair": pair}
     )
 
 

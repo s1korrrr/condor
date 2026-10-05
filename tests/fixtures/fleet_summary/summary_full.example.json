@@ -83,7 +83,8 @@
      "samples": 3,
      "restarts": 0,
      "full": true,
-     "stale": false
+     "stale": false,
+     "uncovered_ms": 86280000
     },
     {
      "bot": "rsi_modular_v2",
@@ -95,7 +96,18 @@
      "samples": 2,
      "restarts": 0,
      "full": false,
-     "stale": false
+     "stale": false,
+     "uncovered_ms": 17940000
+    }
+   ],
+   "gaps": [
+    {
+     "bot": "ok_rsi",
+     "uncovered_ms": 86280000
+    },
+    {
+     "bot": "rsi_modular_v2",
+     "uncovered_ms": 17940000
     }
    ]
   },
@@ -123,7 +135,8 @@
      "samples": 3,
      "restarts": 0,
      "full": false,
-     "stale": false
+     "stale": false,
+     "uncovered_ms": 86280000
     },
     {
      "bot": "rsi_modular_v2",
@@ -135,7 +148,18 @@
      "samples": 2,
      "restarts": 0,
      "full": false,
-     "stale": false
+     "stale": false,
+     "uncovered_ms": 17940000
+    }
+   ],
+   "gaps": [
+    {
+     "bot": "ok_rsi",
+     "uncovered_ms": 86280000
+    },
+    {
+     "bot": "rsi_modular_v2",
+     "uncovered_ms": 17940000
     }
    ]
   },
@@ -163,7 +187,8 @@
      "samples": 3,
      "restarts": 0,
      "full": false,
-     "stale": false
+     "stale": false,
+     "uncovered_ms": 86280000
     },
     {
      "bot": "rsi_modular_v2",
@@ -175,7 +200,18 @@
      "samples": 2,
      "restarts": 0,
      "full": false,
-     "stale": false
+     "stale": false,
+     "uncovered_ms": 17940000
+    }
+   ],
+   "gaps": [
+    {
+     "bot": "ok_rsi",
+     "uncovered_ms": 86280000
+    },
+    {
+     "bot": "rsi_modular_v2",
+     "uncovered_ms": 17940000
     }
    ]
   },
@@ -203,7 +239,8 @@
      "samples": 3,
      "restarts": 0,
      "full": true,
-     "stale": false
+     "stale": false,
+     "uncovered_ms": 86280000
     },
     {
      "bot": "rsi_modular_v2",
@@ -215,7 +252,18 @@
      "samples": 2,
      "restarts": 0,
      "full": false,
-     "stale": false
+     "stale": false,
+     "uncovered_ms": 17940000
+    }
+   ],
+   "gaps": [
+    {
+     "bot": "ok_rsi",
+     "uncovered_ms": 86280000
+    },
+    {
+     "bot": "rsi_modular_v2",
+     "uncovered_ms": 17940000
     }
    ]
   }

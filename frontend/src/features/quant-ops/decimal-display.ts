@@ -23,17 +23,20 @@ export function decimalParts(value: string | number | null | undefined): { negat
   return { negative: match[1] === '-' && /[1-9]/.test(whole + fraction), whole, fraction };
 }
 
-export function displayDecimal(value: string | number | null | undefined, digits = 2, signed = false): string {
+export function displayDecimal(value: string | number | null | undefined, digits = 2, signed = false, maxFraction?: number): string {
   const parts = decimalParts(value);
   if (!parts) return 'Unavailable';
   const { whole, fraction, negative } = parts;
   if (!/[1-9]/.test(whole + fraction)) return signed ? '0.00' : '0';
-  // Keep tiny holdings nonzero; retain up to eight significant fractional digits.
+  // Keep tiny holdings nonzero; retain up to eight significant fractional digits. A caller-set
+  // `maxFraction` (signed PnL) rounds instead, and a value that rounds to zero prints unsigned 0.00.
   const leading = fraction.search(/[1-9]/);
-  const precision = whole === '0' && leading >= digits ? Math.min(fraction.length, leading + 8) : digits;
+  const wide = whole === '0' && leading >= digits ? Math.min(fraction.length, leading + 8) : digits;
+  const precision = maxFraction === undefined ? wide : Math.min(Math.max(wide, digits), Math.max(maxFraction, digits));
   const kept = fraction.slice(0, precision).padEnd(precision, '0');
   let scaled = BigInt(whole + kept);
   if (Number(fraction[precision] ?? '0') >= 5) scaled += 1n;
+  if (scaled === 0n) return signed ? '0.00' : '0';
   const text = scaled.toString().padStart(precision + 1, '0');
   const integer = (precision ? text.slice(0, -precision) : text).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   const tail = precision ? text.slice(-precision) : '';

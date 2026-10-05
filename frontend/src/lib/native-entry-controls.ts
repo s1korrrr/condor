@@ -67,3 +67,13 @@ export function entryPublicationMessage(status:number,body:unknown) {
   if(status>=400) return {rejected:false,text:'Publication outcome unknown. Await matching native state before retrying.'};
   return {rejected:false,text:'Submitted; waiting for matching native entry state. Publication does not confirm execution.'};
 }
+
+/** Condor marks the one permanent refusal (`X-Condor-Capability`); its value matches condor/web/routes/native_entry.py. */
+export const ENTRY_CONTROLS_UNSUPPORTED = 'entry-controls-unsupported';
+export const CAPABILITY_HEADER = 'X-Condor-Capability';
+/** Entry-state polling cadence. Polling stops only when Condor marks the registered owner as not permitting
+ * native entry controls; other 409s (broker disconnected, owner restarting, stale reports) are transient. */
+export function entryStatusRefetchInterval(error: unknown): number | false {
+  const failure = typeof error === 'object' && error !== null ? error as { status?: unknown; capability?: unknown } : null;
+  return failure?.status === 409 && failure.capability === ENTRY_CONTROLS_UNSUPPORTED ? false : 5000;
+}

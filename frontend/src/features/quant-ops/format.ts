@@ -4,8 +4,9 @@ export function formatDecimal(value: string | number | null | undefined, digits 
   return displayDecimal(value, digits);
 }
 
+/** Signed money change: at least `digits` and at most three decimals. */
 export function formatSigned(value: string | number | null | undefined, digits = 2): string {
-  return displayDecimal(value, digits, true);
+  return displayDecimal(value, digits, true, 3);
 }
 
 export function metricTone(value: string | number | null | undefined): 'positive' | 'negative' | undefined {

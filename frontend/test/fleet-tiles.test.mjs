@@ -84,7 +84,8 @@ test('three bots, one with a failed read: it still counts as registered and the 
   const tiles = byId(projectFleetTiles([bot('rsi'), bot('meridian'), failed], now));
   noUnavailable(Object.values(tiles));
   assert.equal(tiles.B01.value, '3 / 3');
-  assert.equal(tiles.B01.state.kind, 'stale', 'the unread bot has no current heartbeat');
+  assert.equal(tiles.B01.state.kind, 'incomplete', 'an unread heartbeat is missing coverage, not an observed stale heartbeat');
+  assert.match(tiles.B01.state.reason, /not read for 1 bot/);
   assert.equal(tiles.B26.value, '6', 'only the two read bots contribute');
   assert.equal(tiles.B26.state.kind, 'incomplete');
   assert.match(tiles.B26.state.reason, /2 of 3 bots/);
@@ -158,4 +159,74 @@ test('a bot without scored cycles still counts its recorded fills, fees and volu
   const tiles = byId(projectFleetTiles([bot('v2'), bot('v1', { cycles: null, execution: null, quant: null, fillTotals: totals })], now));
   assert.equal(tiles.B05.value, '22', 'V2 fills (20) plus the legacy bot ledger (2)');
   noUnavailable(Object.values(tiles));
+});
+
+// Live shapes 2026-10-05: the owner withholds lifetime fees for V3 (`quote_currency: unknown`) and V1 (13 legacy 6dp
+// receipts), while every fill in each ledger carries a fee. The server fleet summary already falls back to the ledger.
+const ledgerRow = (fee, volume, exact = true) => ({ fee, volume, pair: 'ETH-USDC', timestamp: ago(600), feeExact: exact });
+const v3Cycles = over => ({ ...bot('x').cycles, quote: 'unknown', stats: { ...bot('x').cycles.stats, fees: null, grossVolume: null, fillCount: 2 }, ...over });
+
+test('fees stay the same when the owner cycles land after the fill ledger: a withheld owner total falls back to the ledger', () => {
+  const ledger = fillTotals([ledgerRow('0.6', '700'), ledgerRow('0.5923', '705')], 500);
+  const loading = projectBotStats(bot('v3', { cycles: null, fillTotals: ledger }), now);
+  const loaded = projectBotStats(bot('v3', { cycles: v3Cycles(), fillTotals: ledger }), now);
+  assert.ok(Math.abs(loading.fees - 1.1923) < 1e-9);
+  assert.equal(loaded.fees, loading.fees, 'a null owner aggregate must not erase a value the ledger proves');
+  assert.equal(loaded.volume, 1405, 'volume follows the fee source so the bps rate is one cohort');
+  assert.equal(loaded.quote, 'USDC', "'unknown' is not a currency; the ledger pairs supply it");
+  const tile = byId(projectFleetTiles([bot('v2'), bot('v3', { cycles: v3Cycles(), fillTotals: ledger })], now)).B38;
+  assert.equal(tile.state.kind, 'fresh', 'both bots have fee receipts');
+  assert.equal(tile.unit, 'USDC', 'one quote, not a blank group beside USDC');
+  assert.match(tile.perBot.find(row => row.bot === 'v3').text, /fill ledger/);
+});
+
+test('owner fees win when published; a saturated ledger or an unpriced fee row never stands in for a lifetime total', () => {
+  const ledger = fillTotals([ledgerRow('9', '900')], 500);
+  assert.equal(projectBotStats(bot('v2', { fillTotals: ledger }), now).fees, 1.5, 'owner aggregate precedes the ledger');
+  const saturated = fillTotals([ledgerRow('0.1', '10'), ledgerRow('0.1', '10')], 2);
+  assert.equal(saturated.saturated, true);
+  assert.equal(projectBotStats(bot('v3', { cycles: v3Cycles(), fillTotals: saturated }), now).fees, null, 'a page-limited ledger is a lower bound');
+  assert.equal(projectBotStats(bot('v3', { cycles: null, fillTotals: saturated }), now).fills, null, 'nor is its row count a lifetime fill count');
+  const partial = fillTotals([ledgerRow(null, '10'), ledgerRow('0.1', '10')], 500);
+  assert.equal(projectBotStats(bot('v3', { cycles: v3Cycles(), fillTotals: partial }), now).fees, null);
+});
+
+test('legacy rounded fee receipts are counted and named, not presented as exact', () => {
+  const ledger = fillTotals([ledgerRow('0.006228', '7', false), ledgerRow('0.0908', '100')], 500);
+  assert.equal(ledger.inexactFees, 1);
+  const tile = byId(projectFleetTiles([bot('v1', { cycles: { ...bot('x').cycles, stats: { ...bot('x').cycles.stats, fees: null } }, fillTotals: ledger })], now)).B38;
+  assert.match(tile.basis, /1 legacy rounded fee receipt/);
+});
+
+test('an unadmitted owner summary is not an empty inventory', () => {
+  const unadmitted = bot('v3', { view: null, quant: { freshness: 'current', admitted: false, observedAt: ago(4), pairs: [], cycleCounts: { open: null } } });
+  const stats = projectBotStats(unadmitted, now);
+  assert.equal(stats.held, null, 'zero of zero pairs is not a read');
+  const tile = byId(projectFleetTiles([bot('v1'), bot('v2'), unadmitted], now)).B03;
+  assert.equal(tile.value, '4 / 6');
+  assert.equal(tile.state.kind, 'incomplete');
+  assert.match(tile.state.reason, /2 of 3 bots/);
+  const admittedEmpty = bot('v4', { view: null, quant: { freshness: 'current', admitted: true, observedAt: ago(4), pairs: [{ units: '0', workingOrders: 0 }], cycleCounts: { open: 0 } } });
+  assert.equal(projectBotStats(admittedEmpty, now).held, 0, 'an admitted flat owner is a real zero');
+});
+
+test('a heartbeat that has not been read yet is collecting, not stale; a read old heartbeat is stale', () => {
+  const pending = { bot: 'v3', name: 'V3', status: 'running', view: null, quant: null, cycles: null, execution: null, health: null };
+  const first = byId(projectFleetTiles([bot('v1'), pending], now));
+  assert.notEqual(first.B01.state.kind, 'stale', 'first paint before the owner reads land must not flag a stale bot');
+  assert.equal(first.B01.state.kind, 'incomplete');
+  assert.match(first.B01.state.reason, /not read for 1 bot/);
+  assert.notEqual(first['B01-heartbeat'].state.kind, 'stale');
+  const old = bot('v3', { quant: { ...bot('x').quant, freshness: 'stale', observedAt: ago(120) } });
+  const later = byId(projectFleetTiles([bot('v1'), old], now));
+  assert.equal(later.B01.state.kind, 'stale');
+  assert.equal(later['B01-heartbeat'].state.kind, 'stale');
+});
+
+test('maker/taker keeps the owner unclassified bucket instead of printing 0/0', () => {
+  const plainLimit = bot('v3', { execution: { ...bot('x').execution, makerCount: 0, takerCount: 0, liquidityUnclassifiedCount: 43 } });
+  const stats = projectBotStats(plainLimit, now);
+  assert.equal(stats.liquidityUnclassified, 43);
+  const tile = byId(projectFleetTiles([bot('v1'), plainLimit], now)).B37;
+  assert.match(tile.basis, /maker 5 \/ taker 1 · 43 unclassified/);
 });

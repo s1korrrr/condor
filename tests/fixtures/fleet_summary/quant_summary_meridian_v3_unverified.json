@@ -1,0 +1,120 @@
+{
+ "_fixture_note": "Real reporting envelope shape for meridian_v3 (2026-10-05 06:53Z); wallet balances removed (not under test).",
+ "consistency": "asynchronous",
+ "coverage": {
+  "applicable": 1,
+  "ready": 0,
+  "reasons": [
+   "SOURCE_SCOPE_UNVERIFIED"
+  ]
+ },
+ "data": {
+  "bot_id": "meridian_v3",
+  "controller_name": "meridian_v3_unified",
+  "cycle_counts": {
+   "closed_scored": null,
+   "open": null,
+   "ownership_transfer": null,
+   "unclassified": null
+  },
+  "display_name": "meridian_v3",
+  "dust_retained": null,
+  "execution_authorized": false,
+  "heartbeat": "2026-10-05T06:52:30+00:00",
+  "last_known": null,
+  "net_lifecycle": {
+   "availability": "unavailable",
+   "calculation_version": "lifecycle_unavailable_v1",
+   "expected_count": 1,
+   "fee_basis": "not_applicable",
+   "freshness": "unknown",
+   "observed_at": null,
+   "reason_code": "QUALIFIED_LIFECYCLE_SOURCE_UNAVAILABLE",
+   "sample_count": 1,
+   "source_refs": [],
+   "stale_after_seconds": 30,
+   "unit": "unknown",
+   "value": null,
+   "window_end": null,
+   "window_start": null
+  },
+  "operational_label": "UNKNOWN",
+  "operational_state": "UNKNOWN",
+  "owned_value": {
+   "availability": "unavailable",
+   "calculation_version": "native_net_v1",
+   "expected_count": 1,
+   "fee_basis": "net_incurred",
+   "freshness": "unknown",
+   "observed_at": null,
+   "reason_code": "SOURCE_SCOPE_UNVERIFIED",
+   "sample_count": 1,
+   "source_refs": [
+    "runtime_status"
+   ],
+   "stale_after_seconds": 30,
+   "unit": "unknown",
+   "value": null,
+   "window_end": null,
+   "window_start": null
+  },
+  "pairs": [],
+  "profile": null,
+  "raw_states": [],
+  "retained_position_net_pnl": {
+   "availability": "unavailable",
+   "calculation_version": "retained_position_v1",
+   "expected_count": 1,
+   "fee_basis": "net_incurred",
+   "freshness": "unknown",
+   "metric_scope": "retained_positions",
+   "observed_at": null,
+   "reason_code": "SOURCE_SCOPE_UNVERIFIED",
+   "sample_count": 1,
+   "source_refs": [
+    "native_retained_position_summary"
+   ],
+   "stale_after_seconds": 30,
+   "unit": "unknown",
+   "value": null,
+   "window_end": null,
+   "window_start": null
+  },
+  "risk_rails": {
+   "availability": "unavailable",
+   "rails": [],
+   "tightest": null
+  },
+  "wallet": {
+   "availability": "unavailable",
+   "balances": [],
+   "basis": "engine global_token valuation of connector balances",
+   "currency": null,
+   "observed_at": "2026-10-05T06:52:30+00:00",
+   "reason_code": "VALUATION_CURRENCY_UNDECLARED",
+   "scope": null,
+   "value": null
+  }
+ },
+ "execution_authorized": false,
+ "generated_at": "2026-10-05T06:52:33.807044+00:00",
+ "schema_version": "rsibot.quant_ops.v1",
+ "scope": {
+  "account_key": null,
+  "authority_id": "reporting",
+  "bot_key": "meridian_v3",
+  "controller_ids": [
+   "modular_spot_meridian_v3_unified_live"
+  ],
+  "execution_mode": "live",
+  "owner_boot_id": null,
+  "ownership_basis": "native_verified",
+  "quote_currency": "unknown",
+  "source_revision": "unknown",
+  "stack_id": "unknown"
+ },
+ "snapshot_id": "meridian_v3:2026-10-05T06:52:30+00:00",
+ "source_times": {
+  "runtime_status": "2026-10-05T06:52:30+00:00"
+ }
+}

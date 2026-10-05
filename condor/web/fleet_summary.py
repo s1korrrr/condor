@@ -219,7 +219,16 @@ def project_quant_summary(payload: Any, bot: str, now_ms: float) -> Optional[dic
         and data.get("operational_label").strip()
         else "UNKNOWN"
     )
-    admitted = fresh and state != "UNKNOWN"
+    # The owner's explicit coverage verdict admits the source (a unified multi-pair controller publishes no per-pair
+    # state, so its label stays UNKNOWN while its inventory is verified). Envelopes without coverage keep the label rule.
+    coverage = envelope.get("coverage")
+    if isinstance(coverage, dict):
+        ready = _nonneg_int(coverage.get("ready"))
+        reasons = coverage.get("reasons")
+        owner_admitted = (ready or 0) > 0 and isinstance(reasons, list) and not reasons
+    else:
+        owner_admitted = state != "UNKNOWN"
+    admitted = fresh and owner_admitted
     known = {} if fresh else _obj(data.get("last_known"))
     pairs_raw = data.get("pairs") if admitted else known.get("pairs")
     pairs = []

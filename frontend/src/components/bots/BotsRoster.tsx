@@ -7,7 +7,7 @@ import { transientReadFailure } from '@/lib/read-continuity';
 import { useServer } from '@/hooks/useServer';
 import { useServers } from '@/hooks/useServers';
 import { displayBotName, parseTradingVisualsSources, sourcesForServer, type TradingVisualsSource } from '@/features/trading-visuals/sources';
-import { buildBotPositionView, mixedOperationalLabel, openPairCount, type BotPairPosition } from '@/features/bots/position-view';
+import { withQuantInventory, buildBotPositionView, mixedOperationalLabel, openPairCount, type BotPairPosition } from '@/features/bots/position-view';
 import { projectExecutionStats, projectFills, projectLifecycleDecisions, projectQuantBotSummary, projectQuantCycles, projectQuantExecution, projectRecordedDecisions, type ExecutionStats, type LifecycleDecision, type QuantBotSummary, type QuantCycles } from '@/features/bots/quant-roster';
 import { formatDecimal, formatSigned, metricTone } from '@/features/quant-ops/format';
 import { Heatmap, Histogram, LifecycleCounts, MetricCard, PanelFrame, RailBar, StateGlyph } from '@/features/quant-ops/primitives';
@@ -19,7 +19,7 @@ import { botChartsHref } from '@/features/bots/chart-links';
 import { projectFleetHealth, type FleetHealth } from '@/features/bots/fleet-health';
 import { durationLabel, fillTotals, projectBotStats, projectFleetTiles, tileNote, type FleetBotInput, type FillTotals } from '@/features/bots/fleet-tiles';
 import { pnlSeries, type PnlSeries } from '@/features/bots/pnl-series';
-import { botNet, botSourceFreshness, ownerReadsFingerprint, winRateText } from '@/features/bots/bot-net';
+import { botNet, botSourceFreshness, ownerReadsFingerprint, winRateText, winRateValue } from '@/features/bots/bot-net';
 import { projectControllerPnl } from '@/features/bots/controller-pnl';
 import { rowsPanelState, type PanelState } from '@/features/quant-ops/panel-state';
 import { PriceLevels } from './NativeBotPositions';
@@ -79,6 +79,7 @@ export function RosterObservation({ payload, bot, now, lifecycleStatus = null, s
   try { view = buildBotPositionView(payload, bot, now, { allowStale: true }); }
   catch (error) { return <p className="q-empty" role="status">{error instanceof Error ? error.message : 'Bot state could not be read.'}</p>; }
   const quant = projectQuantBotSummary(summaryPayload, bot, now);
+  view = withQuantInventory(view, quant?.pairs ?? [], quant?.admitted ?? false);
   const journal = projectRecordedDecisions(events, bot, now) ?? [];
   const lifecycle = projectLifecycleDecisions(events, bot, now) ?? [];
   const histogram = projectQuantExecution(execution, bot);
@@ -207,6 +208,9 @@ export function RosterObservation({ payload, bot, now, lifecycleStatus = null, s
   </div>;
 }
 
+/** Fill-ledger page size; a read this long is a lower bound (see `fillTotals`). */
+const FILL_LEDGER_LIMIT = 500;
+
 function useOwnerReads(source: TradingVisualsSource, page: BotsPageResponse | undefined, now: number): { reads: OwnerReads; raw: { bootstrap: ReturnType<typeof useQuery>; summary: { payload: unknown; issue: string | null } | undefined; events: { payload: unknown; issue: string | null } | undefined; execution: { payload: unknown; issue: string | null } | undefined; cycles: { payload: unknown; issue: string | null } | undefined } } {
   const encoded = encodeURIComponent(source.bot);
   const bootstrap = useQuery({ queryKey: ['native-position-observation', source.server, source.bot], queryFn: ({ signal }) => read(`/api/v1/trading-visuals/bootstrap?bot=${encoded}`, signal), refetchInterval: 10_000, retry: false });
@@ -216,7 +220,7 @@ function useOwnerReads(source: TradingVisualsSource, page: BotsPageResponse | un
   const cycles = useQuery({ queryKey: ['native-quant-cycles', source.server, source.bot], queryFn: ({ signal }) => readOptional(`/api/v1/trading-visuals/quant-cycles?bot=${encoded}`, signal), refetchInterval: 30_000, retry: false });
   const day = useQuery({ queryKey: ['native-pnl-history', source.server, source.bot, '1D'], queryFn: ({ signal }) => readOptional(`/api/v1/servers/${encodeURIComponent(source.server)}/bots/${encoded}/performance-history?range=1D`, signal), refetchInterval: 30_000, retry: false });
   const week = useQuery({ queryKey: ['native-pnl-history', source.server, source.bot, '1W'], queryFn: ({ signal }) => readOptional(`/api/v1/servers/${encodeURIComponent(source.server)}/bots/${encoded}/performance-history?range=1W`, signal), refetchInterval: 60_000, retry: false });
-  const fills = useQuery({ queryKey: ['native-fill-ledger', source.server, source.bot], queryFn: ({ signal }) => readOptional(`/api/v1/trading-visuals/fills?bot=${encoded}&limit=500`, signal), refetchInterval: 60_000, retry: false });
+  const fills = useQuery({ queryKey: ['native-fill-ledger', source.server, source.bot], queryFn: ({ signal }) => readOptional(`/api/v1/trading-visuals/fills?bot=${encoded}&limit=${FILL_LEDGER_LIMIT}`, signal), refetchInterval: 60_000, retry: false });
   const operations = useQuery({ queryKey: ['native-operations', source.server, source.bot], queryFn: ({ signal }) => readOptional(`/api/v1/trading-visuals/operations?bot=${encoded}`, signal), refetchInterval: 15_000, retry: false });
   const owner = page?.bots.find(item => item.bot_name === source.bot);
   let view: OwnerReads['view'] = null;
@@ -229,7 +233,7 @@ function useOwnerReads(source: TradingVisualsSource, page: BotsPageResponse | un
     execution: projectExecutionStats(execution.data?.payload, source.bot),
     decisions: projectLifecycleDecisions(events.data?.payload, source.bot, Math.max(now, events.dataUpdatedAt)) ?? [],
     health: projectFleetHealth(operations.data?.payload, source.bot, Math.max(now, operations.dataUpdatedAt)),
-    fillTotals: fillTotals(projectFills(fills.data?.payload, source.bot)),
+    fillTotals: fillTotals(projectFills(fills.data?.payload, source.bot), FILL_LEDGER_LIMIT),
     day: pnlSeries(day.data?.payload, source.bot, now, '1D'), week: pnlSeries(week.data?.payload, source.bot, now, '1W'),
   };
   return { reads, raw: { bootstrap, summary: summary.data, events: events.data, execution: execution.data, cycles: cycles.data } };
@@ -374,7 +378,7 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
           { id: 'orders', header: 'Orders', kind: 'number', value: source => statsFor(source)?.orders ?? null, size: 80 },
           { id: 'pending', header: 'Entries pending', kind: 'number', value: source => statsFor(source)?.pendingEntries ?? null, size: 110 },
           { id: 'trades', header: 'Trades', kind: 'number', value: source => statsFor(source)?.fills ?? null, size: 80 },
-          { id: 'win', header: 'Win rate %', kind: 'number', value: source => { const rate = readsByBot[`${source.server}:${source.bot}`]?.cycles?.stats.winRate; return rate == null ? null : Number((rate * 100).toFixed(1)); }, cell: source => { const cycles = readsByBot[`${source.server}:${source.bot}`]?.cycles; return cycles ? `${winRateText(cycles.stats)} · ${cycles.stats.wins}W/${cycles.stats.losses}L` : '—'; }, size: 120 },
+          { id: 'win', header: 'Win rate %', kind: 'number', value: source => { const stats = readsByBot[`${source.server}:${source.bot}`]?.cycles?.stats; return stats ? winRateValue(stats) : null; }, cell: source => { const cycles = readsByBot[`${source.server}:${source.bot}`]?.cycles; return cycles ? `${winRateText(cycles.stats)} · ${cycles.stats.wins}W/${cycles.stats.losses}L` : '—'; }, size: 120 },
           { id: 'fill', header: 'Fill ratio %', kind: 'number', value: source => { const ratio = statsFor(source)?.fillRatio; return ratio == null ? null : Number((ratio * 100).toFixed(1)); }, cell: source => percentText(statsFor(source)?.fillRatio), size: 90 },
           { id: 'fees', header: 'Fees', kind: 'number', value: source => statsFor(source)?.fees ?? null, cell: source => { const stats = statsFor(source); return stats?.fees == null ? '—' : `${formatDecimal(stats.fees, 4)}${stats.volume ? ` · ${((stats.fees / stats.volume) * 10_000).toFixed(1)} bps` : ''}`; }, size: 130 },
           { id: 'latency', header: 'Latency (s)', kind: 'number', value: source => readsByBot[`${source.server}:${source.bot}`]?.execution?.latencyMedianSeconds ?? null, cell: source => { const value = readsByBot[`${source.server}:${source.bot}`]?.execution?.latencyMedianSeconds; return value == null ? '—' : `${value.toFixed(1)}s`; }, size: 80 },

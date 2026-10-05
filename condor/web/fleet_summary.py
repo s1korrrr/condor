@@ -299,6 +299,33 @@ def project_quant_cycles(payload: Any, bot: str) -> Optional[dict]:
     }
 
 
+# Reporting's per-field receipt verdict (`receipt_precision`) and the keys it applies to.
+RECEIPT_KEYS = {
+    "amount": ("exact_amount", "amount_base"),
+    "price": ("exact_price", "price_quote"),
+    "fee_quote": ("exact_trade_fee_in_quote", "fee_quote"),
+}
+
+
+def receipt_value(fill: dict, field: str, *, positive: bool) -> tuple[Optional[str], str]:
+    """``(decimal text, precision)`` for one receipt field, keeping the owner's admission verdict.
+
+    The owner keeps raw ``exact_*`` strings for provenance even when it refuses them (unverified receipt
+    source); only its verdict decides. Without a verdict (an older reporting image) only the normalized
+    6-decimal value is used and the exact strings are not promoted.
+    """
+    exact_key, normalized_key = RECEIPT_KEYS[field]
+    verdicts = fill.get("receipt_precision")
+    verdict = verdicts.get(field) if isinstance(verdicts, dict) else None
+    if verdict == "unavailable":
+        return None, "unavailable"
+    key = exact_key if verdict == "exact_decimal" else normalized_key
+    number = _dec(fill.get(key))
+    if number is None or (positive and number <= 0):
+        return None, "unavailable"
+    return fleet_pnl.decimal_text(number), "exact" if verdict == "exact_decimal" else "legacy_6dp"
+
+
 def project_fills(payload: Any, bot: str) -> list[dict]:
     """Native fills for one bot. Exact receipt strings are preferred over float projections."""
     rows = _obj(payload).get("rows")
@@ -322,14 +349,14 @@ def project_fills(payload: Any, bot: str) -> list[dict]:
                 "fill_id": fill_id,
                 "pair": fill.get("pair") if isinstance(fill.get("pair"), str) else None,
                 "side": fill.get("side") if isinstance(fill.get("side"), str) else None,
-                "amount": pick("exact_amount", "amount_base"),
-                "price": pick("exact_price", "price_quote"),
+                "amount": receipt_value(fill, "amount", positive=True)[0],
+                "price": receipt_value(fill, "price", positive=True)[0],
                 "volume": pick(
                     "value_quote_exact",
                     "gross_volume_quote_decimal",
                     "gross_volume_quote",
                 ),
-                "fee": pick("exact_trade_fee_in_quote", "fee_quote"),
+                "fee": receipt_value(fill, "fee_quote", positive=False)[0],
                 "time_ms": _instant_ms(fill.get("timestamp")),
             }
         )
@@ -1081,8 +1108,9 @@ async def build_fleet_summary(
                     }
                 )
             stale = latest is None or now_ms - latest > STALE_AFTER_MS["pnl"]
+            # An unrecorded stretch inside a window is not observed change: incomplete (contract `gaps`).
             incomplete = any(
-                w.counted < w.expected or w.partial for w in usable
+                w.counted < w.expected or w.partial or w.gaps for w in usable
             ) or len(usable) < len(windows)
             for name, window in windows.items():
                 for item in window.missing:

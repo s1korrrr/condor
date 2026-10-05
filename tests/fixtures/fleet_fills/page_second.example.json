@@ -71,7 +71,7 @@
    "fee_unit": "USDC",
    "fill_id": "v3-2",
    "generation": "V3",
-   "id": "meridian_v3|db-v3|v3-2",
+   "id": "meridian_v3|db-v3|SOL-USDC|v3-2",
    "missing": [],
    "order_id": "v3-order-2",
    "order_type": "LIMIT",
@@ -96,7 +96,7 @@
    "fee_unit": "USDC",
    "fill_id": "v1-2",
    "generation": "V1",
-   "id": "ok_rsi|db-v1|v1-2",
+   "id": "ok_rsi|db-v1|BNB-USDC|v1-2",
    "missing": [],
    "order_id": "v1-order-2",
    "order_type": "MARKET",
@@ -121,7 +121,7 @@
    "fee_unit": "USDC",
    "fill_id": "v1-3",
    "generation": "V1",
-   "id": "ok_rsi|db-v1|v1-3",
+   "id": "ok_rsi|db-v1|BNB-USDC|v1-3",
    "missing": [
     "fee"
    ],

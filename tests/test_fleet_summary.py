@@ -167,6 +167,9 @@ def fills(bot, base):
                 "exact_price": "2000.5",
                 "value_quote_exact": "200.05",
                 "exact_trade_fee_in_quote": "0.2",
+                # As reporting emits an admitted receipt (sqlite_reader._normalized_fills).
+                "exact_receipt_source": "order_filled_event_v1",
+                "receipt_precision": {"amount": "exact_decimal", "price": "exact_decimal", "fee_quote": "exact_decimal"},
                 "timestamp": iso(base),
             },
             {
@@ -178,6 +181,7 @@ def fills(bot, base):
                 "price_quote": 60000,
                 "gross_volume_quote": 600,
                 "fee_quote": 0.6,
+                "receipt_precision": {"amount": "legacy_6dp", "price": "legacy_6dp", "fee_quote": "legacy_6dp"},
                 "timestamp": iso(base - 60_000),
             },
             {
@@ -772,3 +776,30 @@ def test_route_micro_cache_serves_a_burst_from_one_computation(monkeypatch, stor
     calls = len(readers.calls)
     second = client.get(f"/api/v1/servers/{SERVER}/fleet/summary?view=glance")
     assert first.content == second.content and len(readers.calls) == calls and calls > 0
+
+
+@sync
+async def test_a_recording_gap_makes_pnl_incomplete_even_with_full_coverage(tmp_path):
+    # Contract (fleet-summary-v1.md `gaps`): a window with an unrecorded stretch is incomplete. Every bot
+    # covers every window here, so only the 5 h day gap can make the section partial.
+    store = PerformanceHistory(tmp_path / "gapped.sqlite3")
+    rows = []
+    for bot in BOTS:
+        for minutes in range(41 * 1440, 0, -1):
+            if bot == "rsi_modular_v2" and 300 <= minutes <= 600:
+                continue
+            total = 1 + minutes / 1e5
+            rows.append((SERVER, bot, NOW_S - minutes * 60, f"boot-{bot}", f"seg-{bot}", "USDC",
+                         str(total / 2), str(total / 2), str(total)))
+    with store._connect() as conn:
+        conn.executemany("INSERT INTO points VALUES (?,?,?,?,?,?,?,?,?)", rows)
+    body = await build(store)
+    day = body["pnl"]["day"]
+    assert day["counted"] == day["expected"] == 2 and day["partial"] is False, "both live bots cover the day (paper is not in fleet PnL)"
+    assert [gap["bot"] for gap in day["gaps"]] == ["rsi_modular_v2"]
+    assert all(
+        body["pnl"][name]["counted"] == 2 and not body["pnl"][name]["partial"] for name in ("week", "month")
+    ), "every window is fully covered; only the unrecorded stretch is incomplete"
+    assert body["sections"]["pnl"]["status"] == "partial"
+    glance = await build(store, "glance")
+    assert glance["sections"]["pnl"]["status"] == "partial", "the Watch reads the section status"

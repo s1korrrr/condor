@@ -89,7 +89,7 @@ def v2_row(n, ms, *, pair="ETH-USDC", side="sell", **extra):
         "exact_amount": "0.0105",
         "exact_price": "2000.50",
         "exact_trade_fee_in_quote": "0.02100525",
-        "exact_receipt_source": "okx_fills",
+        "exact_receipt_source": "order_filled_event_v1",
         "value_quote_exact": "21.00525",
         "gross_volume_quote_decimal": "21.00525",
         "amount_base": 0.0105,
@@ -98,7 +98,7 @@ def v2_row(n, ms, *, pair="ETH-USDC", side="sell", **extra):
         "fee_quote": 0.02100525,
         "economics_available": True,
         "economics_status": "AVAILABLE",
-        "receipt_precision": {"amount": "exact_decimal"},
+        "receipt_precision": {"amount": "exact_decimal", "price": "exact_decimal", "fee_quote": "exact_decimal"},
         "simulated": False,
         "timestamp": iso(ms),
     }
@@ -238,6 +238,49 @@ async def test_exact_receipts_win_over_float_projections_and_stay_exact_strings(
     )
     assert item["side"] == "sell" and item["order_type"] == "LIMIT"
     assert item["connector"] == "okx" and item["source_db_id"] == "db-v2"
+
+
+@sync
+async def test_exact_strings_the_owner_refused_are_not_restored_as_exact():
+    # Reporting keeps raw exact strings for provenance but withholds them (null values, `unavailable`
+    # precision) when the receipt source is not admitted. The feed must keep that verdict.
+    refused = v2_row(
+        1, T0, exact_receipt_source="unverified_source", amount_base=None, price_quote=None,
+        fee_quote=None, value_quote_exact=None, gross_volume_quote_decimal=None, gross_volume_quote=None,
+        economics_available=False, economics_status="UNAVAILABLE",
+        receipt_precision={"amount": "unavailable", "price": "unavailable", "fee_quote": "unavailable"},
+    )
+    body = await page(Readers({"rsi_modular_v2": [refused]}, registry=["rsi_modular_v2"]))
+    item = body["items"][0]
+    assert (item["amount"], item["price"], item["fee"], item["receipt"]) == (None, None, None, "unavailable")
+    assert body["bots"][0]["receipts"] == {"exact": 0, "legacy_6dp": 0, "unavailable": 1}
+
+
+@sync
+async def test_the_same_trade_id_on_two_pairs_is_two_fills_on_every_page_size():
+    # OKX trade ids are unique per instrument only (reporting lifecycle keys them by pair as well).
+    btc = v2_row(1, T0, pair="BTC-USDC")
+    eth = v2_row(1, T0, pair="ETH-USDC")
+    readers = Readers({"rsi_modular_v2": [btc, eth]}, registry=["rsi_modular_v2"])
+    win = await window(readers)
+    everything = ff.build_page(win, limit=ff.MAX_LIMIT)
+    assert sorted(item["pair"] for item in everything["items"]) == ["BTC-USDC", "ETH-USDC"]
+    assert everything["bots"][0]["rejected"] == {}
+    first = ff.build_page(win, limit=1)
+    second = ff.build_page(win, limit=1, before=first["next_cursor"])
+    assert ids(first) + ids(second) == ids(everything) and second["has_more"] is False
+
+
+@sync
+async def test_a_cursor_issued_before_the_pair_joined_the_key_still_pages():
+    win = await window(Readers())
+    everything = ff.build_page(win, limit=ff.MAX_LIMIT)
+    last = everything["items"][1]
+    legacy = base64.urlsafe_b64encode(
+        json.dumps([last["time_ms"], last["bot"], last["source_db_id"], last["fill_id"]], separators=(",", ":")).encode()
+    ).decode().rstrip("=")
+    body = ff.build_page(win, limit=ff.MAX_LIMIT, before=legacy)
+    assert ids(body) == ids(everything)[2:]
 
 
 @sync

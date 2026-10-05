@@ -46,3 +46,11 @@ test('portfolio formatValue is locale-independent and never rounds a small chang
   assert.equal(formatValue(null), 'Unavailable');
   assert.equal(formatValue(Number.NaN), 'Unavailable');
 });
+test('signed asset amounts keep their exact small units; only money changes are capped at three places', () => {
+  const { formatSignedAmount } = load('features/quant-ops/format.ts');
+  assert.equal(formatSignedAmount('0.0000000052', 8), '+0.0000000052');
+  assert.equal(formatSignedAmount('-0.00123', 8), '-0.00123');
+  assert.equal(formatSignedAmount('-1.5', 8), '-1.50');
+  assert.equal(formatSignedAmount('0.0000000032', 8), '+0.0000000032');
+  assert.equal(formatSigned('0.0000000032', 8), '0.00');
+});

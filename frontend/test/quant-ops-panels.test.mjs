@@ -98,13 +98,13 @@ test('Capital draws fleet tiles, strategy table, allocation, rails and fills fro
     dailyBars:[{day:'2026-09-23',realized:1,unrealized:-0.5,cumulative:0.5},{day:'2026-09-24',realized:0.2,unrealized:0.1,cumulative:0.8}],
     walletRisk:{days:5,volatilityDaily:0.012,sharpe:null,sortino:null,maxDrawdown:-0.1,var95:null,expectedShortfall95:null,returns:[0.1,-0.1,0.2,-0.1]},
     fleetRisk:null,rails:[rail],
-    cycles:{quote:'USDC',bots:2,of:2,scored:3,wins:2,losses:1,winRate:2/3,grossWin:6,grossLoss:2,profitFactor:3,fees:0.21,feeBots:2,grossVolume:264,volumeBots:2,fillCount:9,openLots:3,oldestSeconds:78577},
+    cycles:{quote:'USDC',bots:2,of:2,scored:3,wins:2,losses:1,winRate:2/3,grossWin:6,grossLoss:2,profitFactor:3,fees:0.21,feeBots:2,grossVolume:264,volumeBots:2,fillCount:9,openLots:3,oldestSeconds:78577,countBots:2,quoteScored:3,volumeFillCount:9,fillBots:2,gaps:{counts:[],quote:[],fees:[],volume:[],fills:[]}},
     fills:[{bot:'rsi_modular_v2',fillId:'5541826',sourceDbId:'db',pair:'BTC-USDC',side:'buy',amount:'0.00011',price:'84105.6',volume:'9.251616',fee:'0.0074012928',orderType:'LIMIT_MAKER',timestamp:at,orderId:'o'}],
     strategies:[
       {bot:'rsi_modular_v2',pnl:9,realized:7,unrealized:2,share:0.72,netNow:9.5,netSource:'controller',quote:'USDC',fees:0.1,trades:5,scored:2,winRate:0.5,owned:200,ownedUnit:'USDT',ownedShare:0.01,since:null,restarts:0,stale:false,note:null},
       {bot:'meridian_v3',pnl:3.5,realized:3,unrealized:0.5,share:0.28,netNow:2.5,netSource:'history',quote:'USDC',fees:0.11,trades:4,scored:1,winRate:1,owned:null,ownedUnit:null,ownedShare:null,since:Date.now()-3600000,restarts:1,stale:false,note:'History starts inside the range.'},
     ],
-    allocation:{rows:[{label:'rsi_modular_v2',value:200},{label:'meridian_v3',value:100}],unit:'USDT',remainder:12000,basis:['USDC valued in USDT at the wallet\'s USDC mark 0.9993'],stale:false,exceedsWallet:false},
+    allocation:{rows:[{label:'rsi_modular_v2',value:200},{label:'meridian_v3',value:100}],unit:'USDT',remainder:12000,basis:['USDC valued in USDT at the wallet\'s USDC mark 0.9993'],stale:false,exceedsWallet:false,excluded:[]},
     holdingsUnrealized:{BTC:'+0.25 USDC'},
   })));
   for(const id of ['C01','C04','C05','C17','C26','C25','C09','C10','C28','C06','C19','C20','C07','C08','C21','C29','C11','C12','C13','C22','C15','C24','C18']) assert.match(html,new RegExp(`data-panel-id="${id}"`),id);
@@ -178,11 +178,11 @@ test('available cash tile is not rendered when no USDC balance exists, regardles
 });
 test('allocation by strategy states when no remainder can be computed and when owned value exceeds the wallet',()=>{
   const model=projectCapitalModel({current:null,history:[],now:Date.now(),unit:'USDT'});
-  const withheld=renderToStaticMarkup(React.createElement(CapitalPage,capitalProps(model,{allocation:{rows:[{label:'rsi_modular_v2',value:120}],unit:'USDC',remainder:null,basis:['Owned values are in USDC; the wallet is in USDT. No wallet mark converts them, so no remainder is computed.'],stale:false,exceedsWallet:false}})));
+  const withheld=renderToStaticMarkup(React.createElement(CapitalPage,capitalProps(model,{allocation:{rows:[{label:'rsi_modular_v2',value:120}],unit:'USDC',remainder:null,basis:['Owned values are in USDC; the wallet is in USDT. No wallet mark converts them, so no remainder is computed.'],stale:false,exceedsWallet:false,excluded:[]}})));
   assert.match(withheld,/data-panel-id="C21" data-state="incomplete"/);
   assert.doesNotMatch(withheld,/Unallocated/);
   assert.match(withheld,/no remainder is computed/);
-  const exceeds=renderToStaticMarkup(React.createElement(CapitalPage,capitalProps(model,{allocation:{rows:[{label:'rsi_modular_v2',value:120}],unit:'USDT',remainder:0,basis:['Owned value exceeds the wallet valuation; the remainder is shown as zero.'],stale:false,exceedsWallet:true}})));
+  const exceeds=renderToStaticMarkup(React.createElement(CapitalPage,capitalProps(model,{allocation:{rows:[{label:'rsi_modular_v2',value:120}],unit:'USDT',remainder:0,basis:['Owned value exceeds the wallet valuation; the remainder is shown as zero.'],stale:false,exceedsWallet:true,excluded:[]}})));
   assert.match(exceeds,/data-panel-id="C21" data-state="incomplete"/);
   assert.match(exceeds,/exceeds the wallet valuation/);
 });

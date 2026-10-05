@@ -30,7 +30,8 @@ function FleetBotCard({ source, reads, status, color, now }: { source: TradingVi
   const cycles = reads?.cycles ?? null;
   const bps = stats?.fees != null && stats.volume ? (stats.fees / stats.volume) * 10_000 : null;
   // A counter this bot has no source for is left out instead of printed as a placeholder.
-  const maker = stats?.makers != null || stats?.takers != null ? ` · ${stats.makers ?? 0}M/${stats.takers ?? 0}T` : '';
+  // The owner's third bucket stays visible: plain limit orders may rest or cross, so 0M/0T alone would misstate them.
+  const maker = stats?.makers != null || stats?.takers != null ? ` · ${stats.makers ?? 0}M/${stats.takers ?? 0}T${stats.liquidityUnclassified ? ` · ${stats.liquidityUnclassified} unclassified` : ''}` : '';
   type Cell = { title: string; value: ReactNode };
   const cells: Cell[] = [];
   const add = (present: boolean, title: string, value: () => ReactNode) => { if (present) cells.push({ title, value: value() }); };
@@ -40,7 +41,7 @@ function FleetBotCard({ source, reads, status, color, now }: { source: TradingVi
     add(stats.orders != null, 'Working orders', () => stats.orders);
     add(stats.pendingEntries != null, 'Entries pending', () => `${stats.pendingEntries}${stats.unfilledEntries ? ` · ${stats.unfilledEntries} unfilled` : ''}`);
     add(stats.fills != null, 'Trades', () => `${stats.fills}${stats.opened24h ? ` · 24h ${stats.opened24h}` : ''}`);
-    add(cycles != null, 'Win rate', () => winRateText(cycles!.stats));
+    add(cycles != null, 'Win rate', () => `${winRateText(cycles!.stats)} · ${cycles!.stats.wins}W/${cycles!.stats.losses}L`);
     add(stats.fillRatio != null, 'Fill ratio', () => `${(stats.fillRatio! * 100).toFixed(1)}%${maker}`);
     add(stats.fees != null, 'Fees', () => `${formatDecimal(stats.fees!, 4)}${bps == null ? '' : ` · ${bps.toFixed(1)} bps`}`);
     add(stats.openLots != null, 'Oldest lot', () => stats.openLots === 0 ? 'none' : durationLabel(stats.oldestLotSeconds));

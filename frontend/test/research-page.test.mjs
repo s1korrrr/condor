@@ -262,3 +262,22 @@ test("hidden graph selection and topology updates compose in one event", () => {
   assert.equal(manual.get("id"), "idea:hidden");
   assert.equal(manual.has("network_focus"), false);
 });
+
+test("a stale or failed overview leaves independent panels rendering their own state", () => {
+  // Live 2026-10-05: overview stale and /queue 503 blanked the whole page behind one notice.
+  const overview = { ...selectedIdeaQueries()["research-overview"], dataUpdatedAt: Date.now() - 120000 };
+  const queue = { isError: true, error: new Error("Queue fixture upstream 503") };
+  const page = renderResearch({ "research-overview": overview, "research-queue-preview": queue }, { search: "" });
+  assert.match(page.html, /has not refreshed/, "the overview notice stays visible");
+  assert.match(page.html, /Next evidence checks/, "the queue panel renders without a current overview");
+  assert.match(page.html, /Queue fixture upstream 503/, "the failed panel shows its own error");
+  assert.equal(page.requests.some((q) => q.queryKey[0] === "research-recent-assessments"), false,
+    "revision-bound conclusions still wait for a current overview");
+  for (const button of page.buttons.filter((button) => /Retry records/i.test(button.text))) button.onClick();
+  assert.deepEqual([...new Set(page.refetches)].sort(), ["research-overview", "research-queue-preview"],
+    "each notice retries only its own read");
+  const records = renderResearch({ ...selectedIdeaQueries(), "research-overview": { isError: true, error: new Error("Overview fixture failure") } });
+  assert.match(records.html, /Overview fixture failure/);
+  assert.match(records.html, /Fixture idea/, "record lists keep their own read and stay visible");
+  assert.ok(records.requests.some((q) => q.queryKey[0] === "research-node"), "the selected record inspector still opens");
+});

@@ -1,0 +1,160 @@
+FFFFF                                                                    [100%]
+=================================== FAILURES ===================================
+____ test_delivery_sends_to_each_device_with_its_own_topic_and_environment _____
+
+rig = <tests.test_push_apns.Rig object at 0x10783eb70>
+
+    def test_delivery_sends_to_each_device_with_its_own_topic_and_environment(rig):
+        phone = rig.device(TOKEN_A)
+        watch = rig.device(
+            TOKEN_W, platform="watch", bundle_id=WATCH_BUNDLE, environment="production"
+        )
+        rig.enqueue()
+        assert dict(rig.deliver()) == {"sent": 2}
+        seen = {(r["environment"], r["headers"]["apns-topic"]) for r in rig.apple.requests}
+        assert seen == {("sandbox", BUNDLE), ("production", WATCH_BUNDLE)}
+        assert {
+>           payload["rsibot"]["recipient_device_id"] for payload in rig.apple.payloads
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        } == {phone.device_id, watch.device_id}
+E       KeyError: 'recipient_device_id'
+
+tests/test_push_apns.py:617: KeyError
+____ test_queued_previous_user_alert_is_cancelled_after_token_changes_owner ____
+
+rig = <tests.test_push_apns.Rig object at 0x107e889e0>
+
+    def test_queued_previous_user_alert_is_cancelled_after_token_changes_owner(rig):
+        original = rig.device(TOKEN_A)
+        rig.enqueue()
+        reassigned = rig.registry.upsert_device(
+            user_id=2,
+            token=TOKEN_A,
+            platform="iphone",
+            bundle_id=BUNDLE,
+            environment="sandbox",
+            app_version="2",
+            now=rig.clock(),
+        )
+        assert reassigned.device_id == original.device_id and reassigned.user_id == 2
+>       assert dict(rig.deliver()) == {"cancelled": 1}
+E       AssertionError: assert {'sent': 1} == {'cancelled': 1}
+E
+E         Left contains 1 more item:
+E         {'sent': 1}
+E         Right contains 1 more item:
+E         {'cancelled': 1}
+E         Use -v to get more diff
+
+tests/test_push_apns.py:642: AssertionError
+________ test_late_dead_reply_cannot_deactivate_reassigned_registration ________
+
+rig = <tests.test_push_apns.Rig object at 0x107e92480>
+
+    def test_late_dead_reply_cannot_deactivate_reassigned_registration(rig):
+        original = rig.device(TOKEN_A)
+        rig.enqueue()
+        entered = asyncio.Event()
+        release = asyncio.Event()
+        original_post = rig.apple.post
+
+        async def held_post(**kwargs):
+            entered.set()
+            await release.wait()
+            return await original_post(**kwargs)
+
+        rig.apple.post = held_post
+
+        async def exercise():
+            task = asyncio.create_task(rig.deliverer.deliver_due())
+            await entered.wait()
+            rig.clock.advance(1)
+            reassigned = rig.registry.upsert_device(
+                user_id=2,
+                token=TOKEN_A,
+                platform="iphone",
+                bundle_id=BUNDLE,
+                environment="sandbox",
+                app_version="2",
+                now=rig.clock(),
+            )
+            assert reassigned.device_id == original.device_id
+            rig.apple.valid_tokens.pop(TOKEN_A)  # delayed BadDeviceToken, no APNs timestamp
+            release.set()
+            return await task
+
+>       assert dict(run(exercise())) == {"retry": 1}
+E       AssertionError: assert {'dead': 1} == {'retry': 1}
+E
+E         Left contains 1 more item:
+E         {'dead': 1}
+E         Right contains 1 more item:
+E         {'retry': 1}
+E         Use -v to get more diff
+
+tests/test_push_apns.py:712: AssertionError
+____________ test_reassignment_cannot_exceed_new_owners_device_cap _____________
+
+registry = <condor.push.store.Registry object at 0x107e8a960>
+
+    def test_reassignment_cannot_exceed_new_owners_device_cap(registry):
+        original = _register(registry, token="aa" * 32, user=1, classes={"summary": True})
+        for index in range(MAX_DEVICES_PER_USER):
+            _register(registry, token=f"{index + 1:02x}" * 32, user=2)
+>       with pytest.raises(RegistryError, match="too many registered devices"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'condor.push.store.RegistryError'>
+
+tests/test_push_store.py:157: Failed
+_______ test_registration_response_remains_bound_to_its_committed_owner ________
+
+registry = <condor.push.store.Registry object at 0x107ea4b30>
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x107ea7200>
+
+    def test_registration_response_remains_bound_to_its_committed_owner(
+        registry, monkeypatch
+    ):
+        committed = threading.Event()
+        release = threading.Event()
+        original_transaction = push_store._transaction
+
+        @contextmanager
+        def pause_after_first_commit(db):
+            with original_transaction(db):
+                yield db
+            if threading.current_thread().name == "register-first":
+                committed.set()
+                assert release.wait(timeout=5)
+
+        monkeypatch.setattr(push_store, "_transaction", pause_after_first_commit)
+        result = []
+        errors = []
+
+        def first_registration():
+            try:
+                result.append(_register(registry, token="aa" * 32, user=1, now=NOW))
+            except Exception as error:
+                errors.append(error)
+
+        thread = threading.Thread(target=first_registration, name="register-first")
+        thread.start()
+        try:
+            assert committed.wait(timeout=5)
+            second = _register(registry, token="aa" * 32, user=2, now=NOW + 1)
+        finally:
+            release.set()
+            thread.join(timeout=5)
+        assert not thread.is_alive() and errors == []
+        assert second.user_id == 2
+>       assert result[0].user_id == 1 and result[0].registered_at == NOW
+E       AssertionError: assert (2 == 1)
+E        +  where 2 = Device(device_id='ffe054fe7ae0cb6dc65c3af9b61d5209', user_id=2, token='aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa...tart': '22:00', 'tz': 'UTC'}, active=True, registered_at=1790001001.0, last_seen=1790001001.0, deactivated_reason=None).user_id
+
+tests/test_push_store.py:199: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_push_apns.py::test_delivery_sends_to_each_device_with_its_own_topic_and_environment
+FAILED tests/test_push_apns.py::test_queued_previous_user_alert_is_cancelled_after_token_changes_owner
+FAILED tests/test_push_apns.py::test_late_dead_reply_cannot_deactivate_reassigned_registration
+FAILED tests/test_push_store.py::test_reassignment_cannot_exceed_new_owners_device_cap
+FAILED tests/test_push_store.py::test_registration_response_remains_bound_to_its_committed_owner
+5 failed in 0.37s

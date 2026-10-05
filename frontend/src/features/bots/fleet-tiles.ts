@@ -15,23 +15,33 @@ type View = Pick<ReturnType<typeof buildBotPositionView>, 'pairs' | 'orders' | '
 export type FleetBotInput = {
   bot: string; name: string; status: string | null;
   view: View | null;
-  quant: Pick<QuantBotSummary, 'freshness' | 'observedAt' | 'pairs' | 'cycleCounts'> | null;
+  quant: Pick<QuantBotSummary, 'freshness' | 'observedAt' | 'pairs' | 'cycleCounts'> & Partial<Pick<QuantBotSummary, 'admitted'>> | null;
   cycles: QuantCycles | null;
   execution: ExecutionStats | null;
   health: FleetHealth | null;
-  /** Lifetime totals from the owner's fill ledger; used only where the owner publishes no scored cycles (older reporting). */
+  /** Lifetime totals from the owner's fill ledger; used where the owner publishes no lifetime fee/fill total. */
   fillTotals?: FillTotals | null;
 };
 
-export type FillTotals = { count: number; fees: number | null; volume: number | null; quote: string | null; sinceMs: number | null };
+export type FillTotals = {
+  count: number; fees: number | null; volume: number | null; quote: string | null; sinceMs: number | null;
+  /** The read returned as many rows as its page limit: a lower bound, never a lifetime total. */
+  saturated: boolean;
+  /** Rows whose fee is the legacy rounded projection rather than the exact receipt. */
+  inexactFees: number;
+};
 
-/** Sums an owner's recorded fills. Fees and volume stay null when any row lacks a number, so a partial ledger is never presented as complete. */
-export function fillTotals(rows: readonly { fee: string | null; volume: string | null; pair: string | null; timestamp: string | null }[]): FillTotals | null {
+/** Sums an owner's recorded fills. Fees and volume stay null when any row lacks a number, so a partial ledger is never presented as complete.
+ * Mirrors the server fleet summary's `project_fill_totals`, including the page-limit saturation rule. */
+export function fillTotals(rows: readonly { fee: string | null; volume: string | null; pair: string | null; timestamp: string | null; feeExact?: boolean }[], limit: number | null = null): FillTotals | null {
   if (!rows.length) return null;
   const quotes = new Set(rows.map(row => (row.pair ?? '').split('-')[1]).filter(Boolean));
   const sum = (pick: (row: (typeof rows)[number]) => string | null) => rows.every(row => finite(pick(row)) !== null) ? rows.reduce((total, row) => total + (finite(pick(row)) ?? 0), 0) : null;
   const times = rows.map(row => at(row.timestamp)).filter((value): value is number => value !== null);
-  return { count: rows.length, fees: sum(row => row.fee), volume: sum(row => row.volume), quote: quotes.size === 1 ? [...quotes][0] : null, sinceMs: times.length ? Math.min(...times) : null };
+  return {
+    count: rows.length, fees: sum(row => row.fee), volume: sum(row => row.volume), quote: quotes.size === 1 ? [...quotes][0] : null, sinceMs: times.length ? Math.min(...times) : null,
+    saturated: limit !== null && rows.length >= limit, inexactFees: rows.filter(row => row.feeExact === false && row.fee !== null).length,
+  };
 }
 
 export type BotStats = {
@@ -45,9 +55,12 @@ export type BotStats = {
   avgHoldSeconds: number | null;
   oldestLotSeconds: number | null; openLots: number | null;
   ordersCreated: number | null; ordersFilled: number | null; ordersCanceled: number | null; ordersRejected: number | null;
-  fillRatio: number | null; makers: number | null; takers: number | null; orderSampleSufficient: boolean;
+  fillRatio: number | null; makers: number | null; takers: number | null; liquidityUnclassified: number | null; orderSampleSufficient: boolean;
   fees: number | null; volume: number | null; quote: string | null;
-  heartbeatAgeSeconds: number | null; heartbeatCurrent: boolean; stackHeartbeat: string | null; bootId: string | null; sequence: number | null;
+  /** Which source the fee total came from; `inexactFees` counts legacy rounded receipts inside a ledger total. */
+  feesBasis: 'owner cycles' | 'fill ledger' | null; inexactFees: number;
+  /** `heartbeatRead` is false until the owner summary has been read: unread is not stale. */
+  heartbeatAgeSeconds: number | null; heartbeatCurrent: boolean; heartbeatRead: boolean; stackHeartbeat: string | null; bootId: string | null; sequence: number | null;
 };
 
 const DAY_MS = 86_400_000;
@@ -77,8 +90,12 @@ export function projectBotStats(input: FleetBotInput, now: number): BotStats {
   const runtimeExecutors = view ? view.activeExecutorCount : null;
   const lifecycleExecutors = cycles?.counts.open ?? quant?.cycleCounts.open ?? null;
   const executors = runtimeExecutors ?? lifecycleExecutors;
-  const held = view ? openPairCount(view.pairs) : quant ? quant.pairs.filter(pair => (finite(pair.units) ?? 0) > 0).length : null;
-  const registered = view?.pairs.length ?? quant?.pairs.length ?? 0;
+  // Runtime inventory first, then the quant summary, as the server fleet summary does. An unadmitted summary
+  // (fresh heartbeat, UNKNOWN state, no pairs) says nothing about inventory; it is not "0 of 0 pairs".
+  const viewHeld = view ? openPairCount(view.pairs) : null;
+  const quantInventory = quant !== null && (quant.pairs.length > 0 || quant.admitted === true);
+  const held = viewHeld ?? (quantInventory ? quant!.pairs.filter(pair => (finite(pair.units) ?? 0) > 0).length : null);
+  const registered = viewHeld !== null ? view!.pairs.length : quantInventory ? quant!.pairs.length : 0;
   const orders = view?.orders != null && view.ordersStatus.complete === true ? view.orders.length
     : view?.activeOrderCount ?? (quant && quant.pairs.length > 0 && quant.pairs.every(pair => pair.workingOrders !== null) ? quant.pairs.reduce((total, pair) => total + pair.workingOrders!, 0) : null);
   const rows = cycles?.cycles ?? [];
@@ -94,22 +111,33 @@ export function projectBotStats(input: FleetBotInput, now: number): BotStats {
   const observedAt = quant?.observedAt ?? view?.observedAt ?? null;
   const observedMs = at(observedAt);
   const age = observedMs === null ? null : Math.max(0, (now - observedMs) / 1000);
+  // Fees: the owner's exact lifetime total when it publishes one in a known quote; when it withholds it (null, or
+  // an `unknown` quote), the fill ledger stands in only if it is complete. Same precedence as the server summary,
+  // so a value never appears from the ledger while cycles load and then vanishes when they land.
+  const cycleQuote = cycles?.quote && cycles.quote !== 'unknown' ? cycles.quote : null;
+  const ledger = input.fillTotals && !input.fillTotals.saturated ? input.fillTotals : null;
+  const ownerFees = stats ? finite(stats.fees) : null;
+  const feesBasis: BotStats['feesBasis'] = ownerFees !== null && cycleQuote !== null ? 'owner cycles' : ledger?.fees != null && ledger.quote ? 'fill ledger' : null;
   return {
     bot: input.bot, name: input.name, status: input.status,
     executors, executorsBasis: runtimeExecutors != null ? 'runtime' : lifecycleExecutors != null ? 'lifecycle' : null,
     held, registered, orders,
     pendingEntries: cycles ? cycles.counts.entry_pending ?? 0 : null,
     unfilledEntries: cycles ? cycles.counts.entry_unfilled ?? 0 : null,
-    fills: stats?.fillCount ?? fillRows ?? input.fillTotals?.count ?? null, opened24h, closed24h,
+    fills: stats?.fillCount ?? fillRows ?? ledger?.count ?? null, opened24h, closed24h,
     scored: stats ? stats.scored : null, wins: stats ? stats.wins : null, losses: stats ? stats.losses : null, breakeven: stats ? stats.breakeven : null,
     minSample: stats?.minSample ?? 0,
     avgHoldSeconds: stats && stats.scored > 0 ? stats.averageHoldingSeconds : null,
     oldestLotSeconds: oldestLot, openLots: lots ? lots.lots.length : null,
     ordersCreated: created, ordersFilled: stage(execution, 'orders_filled'), ordersCanceled: stage(execution, 'orders_canceled'), ordersRejected: stage(execution, 'orders_rejected'),
     fillRatio: execution?.fillRatio ?? null, makers: execution?.makerCount ?? null, takers: execution?.takerCount ?? null,
+    liquidityUnclassified: execution?.liquidityUnclassifiedCount ?? null,
     orderSampleSufficient: execution?.orderSampleSufficient === true,
-    fees: stats ? finite(stats.fees) : input.fillTotals?.fees ?? null, volume: stats ? finite(stats.grossVolume) : input.fillTotals?.volume ?? null, quote: cycles?.quote ?? input.fillTotals?.quote ?? null,
-    heartbeatAgeSeconds: age, heartbeatCurrent: quant?.freshness === 'current',
+    fees: feesBasis === 'owner cycles' ? ownerFees : feesBasis === 'fill ledger' ? ledger!.fees : null,
+    volume: feesBasis === 'fill ledger' ? ledger!.volume : stats ? finite(stats.grossVolume) : ledger?.volume ?? null,
+    quote: feesBasis === 'fill ledger' ? ledger!.quote : cycleQuote ?? ledger?.quote ?? null,
+    feesBasis, inexactFees: feesBasis === 'fill ledger' ? ledger!.inexactFees : 0,
+    heartbeatAgeSeconds: age, heartbeatCurrent: quant?.freshness === 'current', heartbeatRead: quant !== null,
     stackHeartbeat: health?.heartbeat.state ?? null, bootId: health?.heartbeat.bootId ?? null, sequence: health?.heartbeat.sequence ?? null,
   };
 }
@@ -144,11 +172,17 @@ export function projectFleetTiles(inputs: readonly FleetBotInput[], now: number)
   const running = bots.filter(stats => stats.status === 'running').length;
   const known = bots.filter(stats => stats.status != null && ['running', 'starting', 'stopping', 'stopped', 'exited'].includes(stats.status)).length;
   const fresh = bots.filter(stats => stats.heartbeatCurrent).length;
+  const unread = bots.filter(stats => !stats.heartbeatRead).length;
+  const staleRead = bots.filter(stats => stats.heartbeatRead && !stats.heartbeatCurrent).length;
   tiles.push({
     id: 'B01', title: 'Active bots', value: known === total ? `${running} / ${total}` : `${running} verified / ${total}`,
     basis: known === total ? `lifecycle status · heartbeat current ${fresh}/${total}` : `${total - known} bot${total - known === 1 ? '' : 's'} without a verified lifecycle · heartbeat current ${fresh}/${total}`,
-    perBot: per(stats => `${(stats.status ?? 'unverified').replaceAll('_', ' ')}${stats.heartbeatCurrent ? '' : ' · heartbeat stale'}`),
-    state: known === total && fresh === total ? { kind: 'fresh' } : { kind: 'stale', reason: known < total ? `Lifecycle status is stale or unknown for ${total - known} bot(s); only verified running bots are counted.` : `${total - fresh} bot heartbeat(s) are not current.` },
+    perBot: per(stats => `${(stats.status ?? 'unverified').replaceAll('_', ' ')}${stats.heartbeatCurrent ? '' : stats.heartbeatRead ? ' · heartbeat stale' : ' · heartbeat not read'}`),
+    // Stale means an observed lifecycle or heartbeat is old; an owner summary that has not been read yet is incomplete.
+    state: known === total && fresh === total ? { kind: 'fresh' }
+      : known < total ? { kind: 'stale', reason: `Lifecycle status is stale or unknown for ${total - known} bot(s); only verified running bots are counted.` }
+      : staleRead > 0 ? { kind: 'stale', reason: `${staleRead} bot heartbeat(s) are not current.` }
+      : { kind: 'incomplete', reason: `Owner heartbeat not read for ${unread} bot${unread === 1 ? '' : 's'} (read pending or failed); counts cover the bots read.` },
   });
 
   const executors = sum(bots.map(stats => stats.executors));
@@ -239,11 +273,11 @@ export function projectFleetTiles(inputs: readonly FleetBotInput[], now: number)
   const ratios = bots.map(stats => stats.fillRatio);
   if (created !== null && created > 0 && filledOrders !== null) {
     const canceled = sum(bots.map(stats => stats.ordersCanceled)) ?? 0, rejected = sum(bots.map(stats => stats.ordersRejected)) ?? 0;
-    const makers = sum(bots.map(stats => stats.makers)), takers = sum(bots.map(stats => stats.takers));
+    const makers = sum(bots.map(stats => stats.makers)), takers = sum(bots.map(stats => stats.takers)), unclassified = sum(bots.map(stats => stats.liquidityUnclassified));
     const sufficient = bots.filter(stats => stats.ordersCreated != null).every(stats => stats.orderSampleSufficient);
     tiles.push({
       id: 'B37', title: 'Fill ratio', value: percent(filledOrders / created),
-      basis: `${filledOrders}/${created} orders filled · ${canceled} canceled · ${rejected} rejected${makers != null || takers != null ? ` · maker ${makers ?? 0} / taker ${takers ?? 0}` : ''}`,
+      basis: `${filledOrders}/${created} orders filled · ${canceled} canceled · ${rejected} rejected${makers != null || takers != null ? ` · maker ${makers ?? 0} / taker ${takers ?? 0}${unclassified ? ` · ${unclassified} unclassified` : ''}` : ''}`,
       perBot: per(stats => stats.fillRatio == null ? null : percent(stats.fillRatio)),
       state: !sufficient ? { kind: 'collecting', reason: 'Order sample is below the owner minimum for at least one bot; the ratio is provisional.' } : coverage(withValue(stats => stats.ordersCreated), total, 'Order funnel'),
     });
@@ -269,11 +303,13 @@ export function projectFleetTiles(inputs: readonly FleetBotInput[], now: number)
     }
     const groups = [...byQuote.entries()];
     const bps = groups.length === 1 && groups[0][1].volume ? (groups[0][1].fees / groups[0][1].volume) * 10_000 : null;
+    const inexact = feeBots.reduce((count, stats) => count + stats.inexactFees, 0);
+    const legacy = inexact ? ` · includes ${inexact} legacy rounded fee receipt${inexact === 1 ? '' : 's'}` : '';
     tiles.push({
       id: 'B38', title: 'Lifetime fees', value: groups.map(([quote, entry]) => `${formatDecimal(entry.fees, 4)}${quote && groups.length > 1 ? ` ${quote}` : ''}`).join(' + '),
       unit: groups.length === 1 ? groups[0][0] || undefined : undefined,
-      basis: bps == null ? 'exact native fill fees' : `${bps.toFixed(1)} bps of ${formatDecimal(groups[0][1].volume!, 0)} traded`,
-      perBot: per(stats => stats.fees == null ? null : `${formatDecimal(stats.fees, 4)}${stats.volume ? ` · ${((stats.fees / stats.volume) * 10_000).toFixed(1)} bps` : ''}`), state: coverage(feeBots.length, total, 'Fee receipts'),
+      basis: `${bps == null ? 'native fill fees' : `${bps.toFixed(1)} bps of ${formatDecimal(groups[0][1].volume!, 0)} traded`}${legacy}`,
+      perBot: per(stats => stats.fees == null ? null : `${formatDecimal(stats.fees, 4)}${stats.volume ? ` · ${((stats.fees / stats.volume) * 10_000).toFixed(1)} bps` : ''}${stats.feesBasis === 'fill ledger' ? ` · fill ledger${stats.inexactFees ? `, ${stats.inexactFees} legacy` : ''}` : ''}`), state: coverage(feeBots.length, total, 'Fee receipts'),
     });
   }
 
@@ -285,7 +321,10 @@ export function projectFleetTiles(inputs: readonly FleetBotInput[], now: number)
       id: 'B01-heartbeat', title: 'Last report', value: durationLabel(oldest.heartbeatAgeSeconds),
       basis: `oldest owner heartbeat${observed ? ` · stack heartbeat healthy ${healthy}/${observed}` : ''}`,
       perBot: per(stats => stats.heartbeatAgeSeconds == null ? null : `${durationLabel(stats.heartbeatAgeSeconds)} ago`),
-      state: bots.every(stats => stats.heartbeatCurrent) ? coverage(ages.length, total, 'Heartbeat') : { kind: 'stale', reason: 'At least one owner heartbeat is older than its 30 second freshness contract.' },
+      // Stale needs an observed old heartbeat (summary, or the runtime observation's age when the summary is unread).
+      state: bots.some(stats => stats.heartbeatRead ? !stats.heartbeatCurrent : stats.heartbeatAgeSeconds != null && stats.heartbeatAgeSeconds >= 30)
+        ? { kind: 'stale', reason: 'At least one owner heartbeat is older than its 30 second freshness contract.' }
+        : coverage(bots.filter(stats => stats.heartbeatRead).length, total, 'Heartbeat'),
     });
   }
 

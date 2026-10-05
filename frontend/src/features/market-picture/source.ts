@@ -59,11 +59,19 @@ export async function boundedJson(
     bytes.set(chunk, offset);
     offset += chunk.byteLength;
   }
-  const body = record(
-    JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes)),
+  const parsed: unknown = JSON.parse(
+    new TextDecoder("utf-8", { fatal: true }).decode(bytes),
   );
   if (!response.ok) {
-    const reasons = record(body.detail ?? {}).reasons;
+    const body =
+      parsed && typeof parsed === "object" && !Array.isArray(parsed)
+        ? (parsed as Record<string, unknown>)
+        : {};
+    const detail = body.detail;
+    const reasons =
+      detail && typeof detail === "object" && !Array.isArray(detail)
+        ? (detail as Record<string, unknown>).reasons
+        : undefined;
     const reason = Array.isArray(reasons)
       ? reasons
           .filter((r) => typeof r === "string" && /^[A-Z_]+$/.test(r))
@@ -76,7 +84,7 @@ export async function boundedJson(
       { status: response.status },
     );
   }
-  return body;
+  return record(parsed);
 }
 
 export async function fetchBundle(

@@ -717,7 +717,9 @@ class ServerDataService:
             task = asyncio.ensure_future(self._do_fetch_and_cache(key))
             self._inflight[key] = task
             task.add_done_callback(lambda _t, k=key: self._inflight.pop(k, None))
-        return await task
+        # A waiter that is cancelled (client disconnect) must not cancel the shared fetch: the other coalesced
+        # readers and the tick's history persistence still need its result.
+        return await asyncio.shield(task)
 
     async def _do_fetch_and_cache(self, key: CacheKey) -> Optional[Any]:
         """Fetch data and update cache. Returns the fetched value."""

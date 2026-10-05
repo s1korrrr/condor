@@ -1,11 +1,15 @@
 """Device registry, quiet hours and the worker outbox."""
 
+import json
 import sqlite3
 import stat
+import threading
+from contextlib import contextmanager
 
 import pytest
 
 from condor.push import events as ev
+from condor.push import store as push_store
 from condor.push.store import (
     MAX_DEVICES_PER_USER,
     Outbox,
@@ -58,6 +62,33 @@ def _register(registry, token=TOKEN_A, user=1, **kw):
     )
 
 
+def test_transaction_rolls_back_failed_commit_and_allows_next_write(tmp_path):
+    class CommitFailsOnce(sqlite3.Connection):
+        fail_next_commit = True
+
+        def execute(self, sql, *args):
+            if sql == "COMMIT" and self.fail_next_commit:
+                self.fail_next_commit = False
+                raise sqlite3.OperationalError("injected commit failure")
+            return super().execute(sql, *args)
+
+    path = tmp_path / "transactions.sqlite"
+    db = sqlite3.connect(path, factory=CommitFailsOnce, isolation_level=None)
+    try:
+        db.execute("CREATE TABLE writes (value INTEGER NOT NULL)")
+        with pytest.raises(sqlite3.OperationalError, match="injected commit failure"):
+            with push_store._transaction(db):
+                db.execute("INSERT INTO writes VALUES (1)")
+        assert not db.in_transaction
+        assert db.execute("SELECT value FROM writes").fetchall() == []
+        with push_store._transaction(db):
+            db.execute("INSERT INTO writes VALUES (2)")
+    finally:
+        db.close()
+    with sqlite3.connect(path) as reopened:
+        assert reopened.execute("SELECT value FROM writes").fetchall() == [(2,)]
+
+
 # ------------------------------------------------------------------ registry
 
 
@@ -90,10 +121,32 @@ def test_register_is_an_upsert_by_token_and_keeps_settings_unless_given(registry
     assert len(registry.devices_for_user(1)) == 1
 
 
+def test_reassigning_token_to_another_user_does_not_inherit_old_alert_preferences(
+    registry,
+):
+    _register(
+        registry,
+        classes={"fill_entry": False},
+        quiet=normalize_quiet(
+            {
+                "enabled": True,
+                "start": "00:00",
+                "end": "23:59",
+                "tz": "UTC",
+            }
+        ),
+    )
+    new_owner = _register(registry, user=2, now=NOW + 1)
+    assert new_owner.user_id == 2
+    assert new_owner.classes == {}
+    assert new_owner.quiet == normalize_quiet({})
+
+
 def test_public_view_never_contains_the_token(registry):
     device = _register(registry)
     public = device.public()
     assert TOKEN_A not in str(public) and public["token_suffix"] == TOKEN_A[-6:]
+    assert public["recipient_server_id"] == registry.recipient_server_id
     assert (
         public["classes"]["fill_entry"] is True
         and public["classes"]["summary"] is False
@@ -124,6 +177,55 @@ def test_device_count_is_bounded_per_user_but_re_registration_is_not_blocked(reg
     _register(registry, token="ff" * 32, user=2)  # another user has their own budget
 
 
+def test_reassignment_cannot_exceed_new_owners_device_cap(registry):
+    original = _register(registry, token="aa" * 32, user=1, classes={"summary": True})
+    for index in range(MAX_DEVICES_PER_USER):
+        _register(registry, token=f"{index + 1:02x}" * 32, user=2)
+    with pytest.raises(RegistryError, match="too many registered devices"):
+        _register(registry, token="aa" * 32, user=2, now=NOW + 1)
+    retained = registry.get_device(original.device_id)
+    assert retained.user_id == 1 and retained.classes == {"summary": True}
+    assert len(registry.devices_for_user(2)) == MAX_DEVICES_PER_USER
+
+
+def test_registration_response_remains_bound_to_its_committed_owner(
+    registry, monkeypatch
+):
+    committed = threading.Event()
+    release = threading.Event()
+    original_transaction = push_store._transaction
+
+    @contextmanager
+    def pause_after_first_commit(db):
+        with original_transaction(db):
+            yield db
+        if threading.current_thread().name == "register-first":
+            committed.set()
+            assert release.wait(timeout=5)
+
+    monkeypatch.setattr(push_store, "_transaction", pause_after_first_commit)
+    result = []
+    errors = []
+
+    def first_registration():
+        try:
+            result.append(_register(registry, token="aa" * 32, user=1, now=NOW))
+        except Exception as error:
+            errors.append(error)
+
+    thread = threading.Thread(target=first_registration, name="register-first")
+    thread.start()
+    try:
+        assert committed.wait(timeout=5)
+        second = _register(registry, token="aa" * 32, user=2, now=NOW + 1)
+    finally:
+        release.set()
+        thread.join(timeout=5)
+    assert not thread.is_alive() and errors == []
+    assert second.user_id == 2
+    assert result[0].user_id == 1 and result[0].registered_at == NOW
+
+
 def test_delete_is_scoped_to_the_owner(registry):
     device = _register(registry, user=1)
     assert registry.delete_device(2, device.device_id) is False
@@ -148,6 +250,66 @@ def test_deactivation_honours_apns_timestamp_so_a_fresh_registration_wins(regist
         is False
     )
     assert registry.get_device(device.device_id).active is True
+
+
+def test_delayed_dead_reply_cannot_deactivate_same_timestamp_renewal(registry):
+    original = _register(registry, now=NOW)
+    renewed = _register(registry, now=NOW)
+    assert renewed.registered_at == original.registered_at
+    assert renewed.registration_nonce != original.registration_nonce
+    assert (
+        registry.deactivate(original.device_id, "BadDeviceToken", expected=original)
+        is False
+    )
+    assert registry.get_device(original.device_id).active is True
+
+
+def test_delayed_dead_reply_cannot_deactivate_deleted_and_recreated_token(registry):
+    original = _register(registry, now=NOW)
+    assert registry.delete_device(1, original.device_id)
+    recreated = _register(registry, now=NOW)
+    assert recreated.registered_at == original.registered_at
+    assert recreated.registration_nonce != original.registration_nonce
+    assert (
+        registry.deactivate(original.device_id, "BadDeviceToken", expected=original)
+        is False
+    )
+    assert registry.get_device(recreated.device_id).active is True
+
+
+def test_legacy_registry_migrates_registration_nonce_and_rotates(tmp_path):
+    path = tmp_path / "legacy" / "registry.sqlite"
+    path.parent.mkdir()
+    with sqlite3.connect(path) as db:
+        db.execute("""CREATE TABLE devices (
+            device_id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, token TEXT NOT NULL UNIQUE,
+            platform TEXT NOT NULL, bundle_id TEXT NOT NULL, environment TEXT NOT NULL,
+            app_version TEXT NOT NULL, classes TEXT NOT NULL, quiet TEXT NOT NULL,
+            active INTEGER NOT NULL DEFAULT 1, registered_at REAL NOT NULL, last_seen REAL NOT NULL,
+            deactivated_reason TEXT)""")
+        db.execute(
+            "INSERT INTO devices VALUES (?,?,?,?,?,?,?,?,?,1,?,?,NULL)",
+            (
+                device_id_for(TOKEN_A),
+                1,
+                TOKEN_A,
+                "iphone",
+                BUNDLE,
+                "sandbox",
+                "1.0",
+                "{}",
+                "{}",
+                NOW,
+                NOW,
+            ),
+        )
+    migrated = Registry(path)
+    old = migrated.get_device(device_id_for(TOKEN_A))
+    assert len(old.registration_nonce) == 32
+    new = _register(migrated, now=NOW)
+    assert new.registration_nonce != old.registration_nonce
+    assert migrated.deactivate(old.device_id, "BadDeviceToken", expected=old) is False
+    assert migrated.get_device(old.device_id).active is True
 
 
 def test_test_requests_are_rate_limited_and_scoped(registry):
@@ -280,6 +442,60 @@ def test_commit_records_seen_event_and_per_device_deliveries_atomically(
     assert [(r.event.id, r.device_id, r.attempts) for r in rows] == [
         ("e1", on.device_id, 0)
     ]
+    assert rows[0].recipient_user_id == on.user_id
+    assert rows[0].recipient_server_id == on.recipient_server_id
+
+
+def test_legacy_outbox_migrates_with_queued_recipient_unbound(tmp_path):
+    path = tmp_path / "legacy" / "outbox.sqlite"
+    path.parent.mkdir()
+    with sqlite3.connect(path) as db:
+        db.execute("""CREATE TABLE deliveries (
+            event_id TEXT NOT NULL, device_id TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending',
+            attempts INTEGER NOT NULL DEFAULT 0, next_attempt REAL NOT NULL, last_error TEXT,
+            apns_id TEXT, sent_at REAL, created REAL NOT NULL, updated REAL NOT NULL,
+            PRIMARY KEY(event_id, device_id))""")
+        db.execute("""CREATE TABLE events (
+            id TEXT PRIMARY KEY, cls TEXT NOT NULL, severity TEXT NOT NULL, payload TEXT NOT NULL,
+            occurred REAL NOT NULL, created REAL NOT NULL)""")
+        event = _event()
+        db.execute(
+            "INSERT INTO events VALUES (?,?,?,?,?,?)",
+            (
+                event.id,
+                event.cls,
+                event.severity,
+                json.dumps(event.to_dict()),
+                event.occurred_at,
+                NOW,
+            ),
+        )
+        db.execute(
+            "INSERT INTO deliveries(event_id,device_id,next_attempt,created,updated) "
+            "VALUES (?,?,?,?,?)",
+            (event.id, "old-device", NOW, NOW, NOW),
+        )
+    outbox = Outbox(path)
+    try:
+        assert outbox.due(NOW)[0].recipient_user_id is None
+        assert outbox.due(NOW)[0].recipient_server_id is None
+        columns = {
+            row["name"] for row in outbox.db.execute("PRAGMA table_info(deliveries)")
+        }
+        assert {"recipient_user_id", "recipient_server_id"} <= columns
+    finally:
+        outbox.close()
+
+
+def test_registry_installation_id_is_stable_per_database_and_distinct_between_databases(
+    tmp_path,
+):
+    first = Registry(tmp_path / "first.sqlite")
+    reopened = Registry(tmp_path / "first.sqlite")
+    second = Registry(tmp_path / "second.sqlite")
+    assert first.recipient_server_id == reopened.recipient_server_id
+    assert first.recipient_server_id != second.recipient_server_id
+    assert len(first.recipient_server_id) == 32
 
 
 def test_replaying_a_commit_creates_no_second_delivery(outbox, registry):

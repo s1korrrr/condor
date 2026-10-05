@@ -30,7 +30,7 @@ export function Login() {
     try {
       const authenticated = token ? await loginWithToken(token) : await loginWithTailscale();
       if (authenticated) returnToDestination();
-      else setError('Private sign-in is unavailable. Try again or request a new login link.');
+      else setError('Private sign-in is unavailable. Connect to your Tailscale network and try again.');
     } catch (reason) {
       setError(reason instanceof Error ? reason.message : 'Login failed');
     } finally {
@@ -68,7 +68,7 @@ export function Login() {
         {recoveryMessage && <p role="status" className="mb-4 text-sm text-[var(--color-text-muted)]">{recoveryMessage}</p>}
         {loggingIn ? <p role="status" className="text-sm text-[var(--color-text-muted)]">Signing in…</p> : <>
           <button type="button" onClick={() => signIn()} className="mb-4 rounded bg-[var(--color-primary)] px-4 py-2 text-sm font-medium text-[var(--color-bg)]">Sign in again</button>
-          <p className="text-sm text-[var(--color-text-muted)]">You can also request a new login link with the <code className="rounded bg-[var(--color-bg)] px-1.5 py-0.5 font-mono text-xs">/web</code> command in your Telegram bot.</p>
+          <p className="text-sm text-[var(--color-text-muted)]">Connect to your Tailscale network to sign in privately.</p>
         </>}
         {error && <p role="alert" className="mt-4 text-sm text-[var(--color-red)]">{error}</p>}
       </div>

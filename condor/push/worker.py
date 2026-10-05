@@ -38,6 +38,7 @@ from condor.fleet_telegram import (
 )
 from condor.fleet_trade_alerts import source_key
 from condor.push import events as ev
+from condor.push import refresh as rf
 from condor.push.apns import ApnsClient, HttpxApnsTransport, ProviderTokens
 from condor.push.config import PushConfig, PushConfigError
 from condor.push.delivery import Deliverer
@@ -201,6 +202,25 @@ class PushWorker:
             market_score,
         )
         self.fleet_sources = FleetSources(fleet, outbox)
+        # Refresh has its own APNs client (same key and transport) so its outcomes stay out of
+        # the alert-delivery health; it honours the deliverer's eligibility and credential pause.
+        self.refresh = (
+            rf.RefreshSender(
+                config,
+                registry,
+                outbox,
+                deliverer,
+                ApnsClient(
+                    deliverer.apns.tokens,
+                    deliverer.apns.transport,
+                    timeout=deliverer.apns.timeout,
+                    clock=clock,
+                ),
+                clock=clock,
+            )
+            if config.refresh.enabled
+            else None
+        )
         self._stopping = asyncio.Event()
         self._last_prune = 0.0
         self.last_cycle_at: float | None = None
@@ -286,6 +306,8 @@ class PushWorker:
         self._summary(infos, devices, now)
         await self._market(devices, now)
         await self.deliverer.deliver_due()
+        if self.refresh is not None:
+            await self.refresh.send_due()
         self._finish_test_requests()
         if now - self._last_prune >= PRUNE_EVERY_SECONDS:
             self._last_prune = now
@@ -540,6 +562,11 @@ class PushWorker:
                 "auth_ok": apns.auth_ok,
             },
             "sources": self.source_status,
+            **(
+                {"refresh": self.refresh.heartbeat()}
+                if self.refresh is not None
+                else {}
+            ),
             "external_ping": {
                 "configured": self.ping.configured,
                 "last_success_at": self.ping.last_success_at,

@@ -79,3 +79,44 @@ def test_fetch_failure_shared_by_waiters_and_does_not_poison_next_fetch():
         assert sds._inflight == {}
 
     asyncio.run(_drive())
+
+
+def test_cancelled_waiter_does_not_cancel_the_shared_fetch():
+    """A client that disconnects mid-fetch must not fail the other coalesced readers or abort the fetch.
+
+    Live 2026-10-05: closing a browser tab cancelled ``list_bots`` while ``fleet_summary`` was coalesced onto
+    the same BOTS_STATUS fetch; both raised CancelledError and the tick's history persistence was skipped.
+    """
+    completed = {"count": 0}
+
+    async def slow_fetcher(client, **params):
+        await asyncio.sleep(0.05)
+        completed["count"] += 1
+        return {"value": 1}
+
+    async def _drive():
+        sds = _make_sds(slow_fetcher)
+        leaving = asyncio.ensure_future(
+            sds.get_or_fetch("srv", ServerDataType.PORTFOLIO)
+        )
+        staying = asyncio.ensure_future(
+            sds.get_or_fetch("srv", ServerDataType.PORTFOLIO)
+        )
+        await asyncio.sleep(0.01)
+        leaving.cancel()
+        result = await staying
+        try:
+            await leaving
+        except asyncio.CancelledError:
+            pass
+        else:
+            raise AssertionError(
+                "the cancelled waiter must observe its own cancellation"
+            )
+        return sds, result
+
+    sds, result = asyncio.run(_drive())
+    assert result == {"value": 1}
+    assert completed["count"] == 1, "the shared fetch must run to completion"
+    assert sds.get("srv", ServerDataType.PORTFOLIO) == {"value": 1}
+    assert sds._inflight == {}

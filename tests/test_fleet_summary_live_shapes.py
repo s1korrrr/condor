@@ -13,6 +13,8 @@ Each case below states the number a reader should see and the honest null it sho
 
 import asyncio
 import copy
+import json
+from pathlib import Path
 
 import httpx
 from fastapi import HTTPException
@@ -355,3 +357,35 @@ def test_glance_and_full_share_one_computation_inside_the_cache_window(monkeypat
     assert glance.json()["generated_at_ms"] == full.json()["generated_at_ms"]
     assert glance.headers["ETag"] != full.headers["ETag"]
 
+
+
+def _v3_fixture(name):
+    return json.loads(
+        (Path(__file__).parent / "fixtures" / "fleet_summary" / name).read_text()
+    )
+
+
+def test_owner_coverage_not_the_unknown_label_admits_a_current_v3_summary():
+    # Real reporting envelope: the unified controller publishes no per-pair state, so the label stays UNKNOWN
+    # while the owner admits the source through `coverage`. Shared with the browser test (quant-roster).
+    admitted = _v3_fixture("quant_summary_meridian_v3_admitted.json")
+    assert admitted["data"]["operational_label"] == "UNKNOWN"
+    clock = fs._instant_ms(admitted["generated_at"]) + 1_000
+    view = fs.project_quant_summary(admitted, "meridian_v3", clock)
+    assert view["admitted"] is True
+    assert [p["pair"] for p in view["pairs"]] == ["BNB-USDC", "BTC-USDC", "ETH-USDC", "SOL-USDC", "XRP-USDC"]
+    assert all(p["held"] for p in view["pairs"])
+    assert view["open_cycles"] == 10
+    stale = fs.project_quant_summary(admitted, "meridian_v3", clock + 120_000)
+    assert stale["admitted"] is False and stale["pairs"] == []
+
+
+def test_an_owner_declared_unverified_scope_stays_unadmitted():
+    unverified = _v3_fixture("quant_summary_meridian_v3_unverified.json")
+    clock = fs._instant_ms(unverified["generated_at"]) + 1_000
+    forged = copy.deepcopy(unverified)
+    forged["data"]["operational_label"] = "HOLDING"
+    forged["data"]["pairs"] = [{"pair": "ETH-USDC", "units": "1"}]
+    for payload in (unverified, forged):
+        view = fs.project_quant_summary(payload, "meridian_v3", clock)
+        assert view["current"] is True and view["admitted"] is False and view["pairs"] == []

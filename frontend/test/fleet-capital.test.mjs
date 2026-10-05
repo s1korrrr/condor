@@ -171,7 +171,7 @@ test('risk tiles appear after the minimum days of completed fleet PnL and the fo
 });
 
 test('cycle tiles show with their sample size and lifetime basis, and turnover needs a matching unit and a wallet', () => {
-  const fleetCycles = { quote: 'USDT', bots: 2, of: 3, scored: 6, wins: 3, losses: 3, winRate: 0.5, grossWin: 6, grossLoss: 4, profitFactor: 1.5, fees: 2, feeBots: 2, grossVolume: 400, volumeBots: 2, fillCount: 12, openLots: 3, oldestSeconds: 10 };
+  const fleetCycles = { quote: 'USDT', bots: 2, of: 3, scored: 6, wins: 3, losses: 3, winRate: 0.5, grossWin: 6, grossLoss: 4, profitFactor: 1.5, fees: 2, feeBots: 2, grossVolume: 400, volumeBots: 2, fillCount: 12, openLots: 3, oldestSeconds: 10, countBots: 2, quoteScored: 6, volumeFillCount: 12, fillBots: 2, gaps: { counts: ['c'], quote: ['c'], fees: ['c'], volume: ['c'], fills: ['c'] } };
   const result = capital.fleetTiles(tileInput({ cycles: fleetCycles }));
   const byId = Object.fromEntries(result.tiles.map(tile => [tile.id, tile]));
   assert.equal(byId['C18-winrate'].value, '0.5');
@@ -214,4 +214,13 @@ test('holding PnL is merged per asset across bots and never adds different quote
   assert.equal(merged.ETH.value, null, 'ETH is owned by two bots in different quotes');
   assert.equal(merged.SOL.value, null);
   assert.match(merged.SOL.reason, /not current/);
+});
+
+test('a window summed across an unrecorded stretch keeps its value and says it is incomplete', () => {
+  const gapped = capital.fleetTiles(tileInput({ daily: window({ total: 1.5, gaps: [{ bot: 'ok_rsi', uncoveredMs: 38_880_000 }, { bot: 'rsi_modular_v2', uncoveredMs: 38_820_000 }] }) }));
+  const tile = gapped.tiles.find(item => item.id === 'C03');
+  assert.equal(tile.value, '1.5');
+  assert.equal(tile.state.kind, 'incomplete');
+  assert.match(tile.state.reason, /unrecorded stretches \(ok_rsi 10\.8 h, rsi_modular_v2 10\.8 h\)/);
+  assert.equal(capital.fleetTiles(tileInput({ daily: window({ total: 1.5, gaps: [] }) })).tiles.find(item => item.id === 'C03').state.kind, 'fresh');
 });

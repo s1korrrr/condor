@@ -4,8 +4,14 @@ export function formatDecimal(value: string | number | null | undefined, digits 
   return displayDecimal(value, digits);
 }
 
-export function formatSigned(value: string | number | null | undefined, digits = 2): string {
+/** Signed asset amount (a balance change in token units): exact small units are kept, never capped. */
+export function formatSignedAmount(value: string | number | null | undefined, digits = 2): string {
   return displayDecimal(value, digits, true);
+}
+
+/** Signed money change: at least `digits` and at most three decimals. */
+export function formatSigned(value: string | number | null | undefined, digits = 2): string {
+  return displayDecimal(value, digits, true, 3);
 }
 
 export function metricTone(value: string | number | null | undefined): 'positive' | 'negative' | undefined {

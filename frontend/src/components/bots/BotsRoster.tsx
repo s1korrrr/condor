@@ -7,7 +7,7 @@ import { transientReadFailure } from '@/lib/read-continuity';
 import { useServer } from '@/hooks/useServer';
 import { useServers } from '@/hooks/useServers';
 import { displayBotName, parseTradingVisualsSources, sourcesForServer, type TradingVisualsSource } from '@/features/trading-visuals/sources';
-import { buildBotPositionView, mixedOperationalLabel, openPairCount, type BotPairPosition } from '@/features/bots/position-view';
+import { withQuantInventory, buildBotPositionView, mixedOperationalLabel, openPairCount, type BotPairPosition } from '@/features/bots/position-view';
 import { projectExecutionStats, projectFills, projectLifecycleDecisions, projectQuantBotSummary, projectQuantCycles, projectQuantExecution, projectRecordedDecisions, type ExecutionStats, type LifecycleDecision, type QuantBotSummary, type QuantCycles } from '@/features/bots/quant-roster';
 import { formatDecimal, formatSigned, metricTone } from '@/features/quant-ops/format';
 import { Heatmap, Histogram, LifecycleCounts, MetricCard, PanelFrame, RailBar, StateGlyph } from '@/features/quant-ops/primitives';
@@ -79,6 +79,7 @@ export function RosterObservation({ payload, bot, now, lifecycleStatus = null, s
   try { view = buildBotPositionView(payload, bot, now, { allowStale: true }); }
   catch (error) { return <p className="q-empty" role="status">{error instanceof Error ? error.message : 'Bot state could not be read.'}</p>; }
   const quant = projectQuantBotSummary(summaryPayload, bot, now);
+  view = withQuantInventory(view, quant?.pairs ?? [], quant?.admitted ?? false);
   const journal = projectRecordedDecisions(events, bot, now) ?? [];
   const lifecycle = projectLifecycleDecisions(events, bot, now) ?? [];
   const histogram = projectQuantExecution(execution, bot);

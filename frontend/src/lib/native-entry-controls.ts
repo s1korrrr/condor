@@ -67,3 +67,9 @@ export function entryPublicationMessage(status:number,body:unknown) {
   if(status>=400) return {rejected:false,text:'Publication outcome unknown. Await matching native state before retrying.'};
   return {rejected:false,text:'Submitted; waiting for matching native entry state. Publication does not confirm execution.'};
 }
+
+/** Entry-state polling cadence. 409 means the registered owner does not permit native entry controls, a property
+ * of the owner rather than a transient fault, so polling stops until the page is opened again. */
+export function entryStatusRefetchInterval(error: unknown): number | false {
+  return typeof error === 'object' && error !== null && (error as { status?: unknown }).status === 409 ? false : 5000;
+}

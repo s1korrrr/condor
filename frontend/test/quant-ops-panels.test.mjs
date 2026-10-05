@@ -141,10 +141,10 @@ test('Bot roster keeps mixed pair states and B-panel anatomy in page flow',()=>{
   }
 });
 
-test('panel registry keeps the 47 original IDs and adds the revision-2 and adaptive-layout panels (75 total)',()=>{
+test('panel registry keeps the 47 original IDs and adds the revision-2 and adaptive-layout panels and the fleet fills feed (76 total)',()=>{
   assert.equal(ORIGINAL_SHELL_PANELS.length+ORIGINAL_CAPITAL_PANELS.length+ORIGINAL_BOT_PANELS.length,47);
-  assert.equal(SHELL_PANELS.length+CAPITAL_PANELS.length+BOT_PANELS.length,75);
-  assert.equal(new Set([...SHELL_PANELS,...CAPITAL_PANELS,...BOT_PANELS]).size,75);
+  assert.equal(SHELL_PANELS.length+CAPITAL_PANELS.length+BOT_PANELS.length,76);
+  assert.equal(new Set([...SHELL_PANELS,...CAPITAL_PANELS,...BOT_PANELS]).size,76);
 });
 
 test('native wallet observation preserves tiny inventory and shared-wallet totals',()=>{

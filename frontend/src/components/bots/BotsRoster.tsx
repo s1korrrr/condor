@@ -15,6 +15,7 @@ import { TileGrid } from '@/features/quant-ops/kit/grid';
 import { DataTable } from '@/features/quant-ops/kit/DataTable';
 import { FleetStrip, fleetInput } from './FleetStrip';
 import { StrategyChartsSlot } from './StrategyChartsSlot';
+import { FleetFillsPanel } from './FleetFillsPanel';
 import { botChartsHref } from '@/features/bots/chart-links';
 import { projectFleetHealth, type FleetHealth } from '@/features/bots/fleet-health';
 import { durationLabel, fillTotals, projectBotStats, projectFleetTiles, tileNote, type FleetBotInput, type FillTotals } from '@/features/bots/fleet-tiles';
@@ -386,6 +387,7 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
           { id: 'pnl', header: 'PnL (Capital has detail)', kind: 'number', value: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return reads ? netFor(reads).value : null; }, cell: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return !reads || netFor(reads).value == null ? '—' : `${formatSigned(netFor(reads).value)} ${reads.controller.quote ?? ''}`; }, className: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; const toneName = metricTone(reads ? netFor(reads).value : null); return toneName ? `q-${toneName}` : undefined; }, size: 150 },
         ]} />
     </PanelFrame>
+    {scoped.length > 0 && server && <FleetFillsPanel server={server} bots={botIds} />}
     {draft && <BotDraftWizard bots={scoped.map(item => item.bot)} onClose={() => setDraft(false)} />}
     {filtered.map(source => <OwnerCard key={`${source.server}:${source.bot}`} source={source} page={page} logs={renderLogs(source.bot)} controls={renderControls?.(source.bot)} onReads={onReads}/>)}
     {scoped.filter(source => !filtered.includes(source)).map(source => <OwnerReadsFeed key={`${source.server}:${source.bot}:feed`} source={source} page={page} onReads={onReads} />)}

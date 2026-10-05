@@ -600,7 +600,7 @@ async def test_glance_is_a_consistent_compact_projection(store):
     for name in ("day", "week", "month", "all"):
         assert glance["pnl"][name] == {
             k: full["pnl"][name][k]
-            for k in ("total", "partial", "counted", "expected", "stale")
+            for k in ("total", "partial", "counted", "expected", "stale", "uncovered_ms")
         }
     verdict = full["market"]["verdict"]
     assert (
@@ -801,5 +801,28 @@ async def test_a_recording_gap_makes_pnl_incomplete_even_with_full_coverage(tmp_
         body["pnl"][name]["counted"] == 2 and not body["pnl"][name]["partial"] for name in ("week", "month")
     ), "every window is fully covered; only the unrecorded stretch is incomplete"
     assert body["sections"]["pnl"]["status"] == "partial"
+    assert day["uncovered_ms"] == day["gaps"][0]["uncovered_ms"] > 0
     glance = await build(store, "glance")
-    assert glance["sections"]["pnl"]["status"] == "partial", "the Watch reads the section status"
+    assert glance["sections"]["pnl"]["status"] == "partial"
+    # The glance carries no `gaps` list: each window's own unrecorded total is what the Watch can show.
+    assert glance["pnl"]["day"]["uncovered_ms"] == day["uncovered_ms"]
+
+
+@sync
+async def test_an_older_gap_leaves_the_current_day_complete(tmp_path):
+    # A gap two days ago is incomplete for the week, month and all windows only; the day is fully observed.
+    store = PerformanceHistory(tmp_path / "old-gap.sqlite3")
+    rows = []
+    for bot in BOTS:
+        for minutes in range(41 * 1440, 0, -1):
+            if bot == "rsi_modular_v2" and 2 * 1440 <= minutes <= 2 * 1440 + 300:
+                continue
+            total = 1 + minutes / 1e5
+            rows.append((SERVER, bot, NOW_S - minutes * 60, f"boot-{bot}", f"seg-{bot}", "USDC",
+                         str(total / 2), str(total / 2), str(total)))
+    with store._connect() as conn:
+        conn.executemany("INSERT INTO points VALUES (?,?,?,?,?,?,?,?,?)", rows)
+    for view in ("full", "glance"):
+        pnl = (await build(store, view))["pnl"]
+        assert pnl["day"]["uncovered_ms"] == 0 and not pnl["day"]["partial"], view
+        assert all(pnl[name]["uncovered_ms"] > 0 for name in ("week", "month", "all")), view

@@ -1323,7 +1323,7 @@ def glance(full: dict) -> dict:
                 **{
                     name: {
                         k: pnl[name][k]
-                        for k in ("total", "partial", "counted", "expected", "stale")
+                        for k in ("total", "partial", "counted", "expected", "stale", "uncovered_ms")
                     }
                     for name in ("day", "week", "month", "all")
                 },

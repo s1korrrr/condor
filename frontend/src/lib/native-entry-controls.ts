@@ -68,8 +68,12 @@ export function entryPublicationMessage(status:number,body:unknown) {
   return {rejected:false,text:'Submitted; waiting for matching native entry state. Publication does not confirm execution.'};
 }
 
-/** Entry-state polling cadence. 409 means the registered owner does not permit native entry controls, a property
- * of the owner rather than a transient fault, so polling stops until the page is opened again. */
+/** Condor marks the one permanent refusal (`X-Condor-Capability`); its value matches condor/web/routes/native_entry.py. */
+export const ENTRY_CONTROLS_UNSUPPORTED = 'entry-controls-unsupported';
+export const CAPABILITY_HEADER = 'X-Condor-Capability';
+/** Entry-state polling cadence. Polling stops only when Condor marks the registered owner as not permitting
+ * native entry controls; other 409s (broker disconnected, owner restarting, stale reports) are transient. */
 export function entryStatusRefetchInterval(error: unknown): number | false {
-  return typeof error === 'object' && error !== null && (error as { status?: unknown }).status === 409 ? false : 5000;
+  const failure = typeof error === 'object' && error !== null ? error as { status?: unknown; capability?: unknown } : null;
+  return failure?.status === 409 && failure.capability === ENTRY_CONTROLS_UNSUPPORTED ? false : 5000;
 }

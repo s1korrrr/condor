@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from condor.web.compression import SelectiveGZipMiddleware
 from condor.web.routes import (
     account_balances,
     agents,
@@ -112,6 +113,9 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    # Outermost: gzip text-like responses on the wire (charts and bundles compress 5-15x).
+    app.add_middleware(SelectiveGZipMiddleware)
 
     # ── API routes ──
     app.include_router(auth.router, prefix="/api/v1")

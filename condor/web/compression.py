@@ -3,8 +3,9 @@
 Chart, summary and bundle responses are JSON or text and compress 5-15x; the phone's background
 refresh and the dashboard both read them over Tailscale. Binary bodies (documents, archives, audio)
 are already compressed or are downloads whose exact ``Content-Length`` a client may rely on, so they
-pass through untouched, as do event streams and responses that already carry an encoding. A request
-without ``Accept-Encoding: gzip`` is not touched at all.
+pass through untouched, as do event streams and responses that already carry an encoding. Byte-range
+requests and partial (206) responses are never compressed: their offsets describe the identity bytes.
+A request that does not accept gzip (absent, or refused with ``q=0``) is not touched at all.
 """
 
 from starlette.datastructures import Headers
@@ -24,6 +25,30 @@ COMPRESSIBLE_TYPES = frozenset(
 )
 
 
+def accepts_gzip(header: str) -> bool:
+    """RFC 9110 content coding negotiation for gzip: listed (or ``*``) with a non-zero quality."""
+    explicit = wildcard = None
+    for item in header.split(","):
+        name, _, params = item.strip().partition(";")
+        name = name.strip().lower()
+        if name not in ("gzip", "x-gzip", "*"):
+            continue
+        quality = 1.0
+        for param in params.split(";"):
+            key, _, value = param.strip().partition("=")
+            if key.strip().lower() == "q":
+                try:
+                    quality = float(value)
+                except ValueError:
+                    quality = 0.0
+        if name == "*":
+            wildcard = quality
+        else:
+            explicit = quality if explicit is None else max(explicit, quality)
+    chosen = explicit if explicit is not None else wildcard
+    return chosen is not None and chosen > 0
+
+
 def _compressible(content_type: str) -> bool:
     media = content_type.split(";", 1)[0].strip().lower()
     return media in COMPRESSIBLE_TYPES or media.endswith("+json")
@@ -35,8 +60,13 @@ class _SelectiveGZipResponder(GZipResponder):
         if message["type"] == "http.response.start":
             # The responder holds the start message until the first body chunk; mark every
             # non-text body as excluded so it is sent as is, with its own Content-Length.
-            content_type = Headers(raw=message["headers"]).get("content-type", "")
-            self.content_type_is_excluded = self.content_type_is_excluded or not _compressible(content_type)
+            headers = Headers(raw=message["headers"])
+            self.content_type_is_excluded = (
+                self.content_type_is_excluded
+                or not _compressible(headers.get("content-type", ""))
+                or message.get("status") == 206
+                or "content-range" in headers
+            )
 
 
 class SelectiveGZipMiddleware:
@@ -46,7 +76,11 @@ class SelectiveGZipMiddleware:
         self.compresslevel = compresslevel
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
-        if scope["type"] != "http" or "gzip" not in Headers(scope=scope).get("accept-encoding", ""):
+        if scope["type"] != "http":  # lifespan and websocket scopes carry no response to encode
+            await self.app(scope, receive, send)
+            return
+        headers = Headers(scope=scope)
+        if "range" in headers or not accepts_gzip(headers.get("accept-encoding", "")):
             await self.app(scope, receive, send)
             return
         responder = _SelectiveGZipResponder(self.app, self.minimum_size, compresslevel=self.compresslevel)

@@ -7,8 +7,8 @@ chart gzips to ~33 KB, a 688 KB composite page to ~48 KB), which pushed refreshe
 import gzip
 import json
 
-from fastapi import FastAPI
-from fastapi.responses import JSONResponse, Response, StreamingResponse
+from fastapi import FastAPI, WebSocket
+from fastapi.responses import FileResponse, JSONResponse, Response, StreamingResponse
 from fastapi.testclient import TestClient
 
 from condor.web.app import create_app
@@ -16,9 +16,15 @@ from condor.web.compression import SelectiveGZipMiddleware
 
 BIG = {"candles": [{"t": i, "o": 1.0, "h": 2.0, "l": 0.5, "c": 1.5} for i in range(2000)]}
 PDF = b"%PDF-1.7" + bytes(range(256)) * 400
+TEXT = b"line of recorded research text\n" * 300
+TEXT_FILE = None
 
 
-def _client():
+def _client(tmp_path=None):
+    global TEXT_FILE
+    if tmp_path is not None:
+        TEXT_FILE = tmp_path / "doc.txt"
+        TEXT_FILE.write_bytes(TEXT)
     app = FastAPI()
 
     @app.get("/json")
@@ -50,6 +56,10 @@ def _client():
     @app.get("/not-modified")
     def not_modified():
         return Response(status_code=304, headers={"ETag": '"abc"'})
+
+    @app.get("/text-file")
+    def text_file():
+        return FileResponse(TEXT_FILE, media_type="text/plain")
 
     app.add_middleware(SelectiveGZipMiddleware)
     return TestClient(app)
@@ -93,3 +103,44 @@ def test_no_gzip_request_small_body_encoded_body_and_304_are_untouched():
 
 def test_the_condor_app_compresses():
     assert any(m.cls is SelectiveGZipMiddleware for m in create_app().user_middleware)
+
+
+def test_byte_range_responses_are_never_compressed(tmp_path):
+    # Content-Range offsets describe the identity bytes; compressing a partial body would break resume.
+    client = _client(tmp_path)
+    part = client.get("/text-file", headers={"Accept-Encoding": "gzip", "Range": "bytes=0-1499"})
+    assert part.status_code == 206 and "content-encoding" not in part.headers
+    assert part.content == TEXT[:1500] and part.headers["content-range"].startswith("bytes 0-1499/")
+    whole = client.get("/text-file", headers={"Accept-Encoding": "gzip"})
+    assert whole.headers["content-encoding"] == "gzip" and whole.content == TEXT
+
+
+def test_an_explicitly_refused_gzip_is_not_sent():
+    client = _client()
+    for header in ("gzip;q=0, identity;q=1", "identity", "br", "gzip; q=0.0", "*;q=0"):
+        response = client.get("/json", headers={"Accept-Encoding": header})
+        assert "content-encoding" not in response.headers, header
+        assert response.json() == BIG
+    for header in ("gzip;q=0.5", "deflate, gzip", "*"):
+        assert client.get("/json", headers={"Accept-Encoding": header}).headers.get("content-encoding") == "gzip", header
+
+
+def test_lifespan_and_websocket_scopes_pass_through():
+    app = FastAPI()
+    started = []
+
+    @app.on_event("startup")
+    def startup():
+        started.append(True)
+
+    @app.websocket("/ws")
+    async def ws(socket: WebSocket):
+        await socket.accept()
+        await socket.send_text("x" * 5000)
+        await socket.close()
+
+    app.add_middleware(SelectiveGZipMiddleware)
+    with TestClient(app) as client:  # runs the lifespan through the middleware
+        with client.websocket_connect("/ws", headers={"Accept-Encoding": "gzip"}) as socket:
+            assert socket.receive_text() == "x" * 5000
+    assert started == [True]

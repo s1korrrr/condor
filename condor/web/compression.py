@@ -8,7 +8,7 @@ requests and partial (206) responses are never compressed: their offsets describ
 A request that does not accept gzip (absent, or refused with ``q=0``) is not touched at all.
 """
 
-from starlette.datastructures import Headers
+from starlette.datastructures import Headers, MutableHeaders
 from starlette.middleware.gzip import GZipResponder
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
@@ -67,6 +67,13 @@ class _SelectiveGZipResponder(GZipResponder):
                 or message.get("status") == 206
                 or "content-range" in headers
             )
+            etag = headers.get("etag", "")
+            if (not self.content_type_is_excluded and "bytes" in headers.get("accept-ranges", "").lower()
+                    and etag and not etag.startswith("W/")):
+                # A range-capable body (a file) sent gzip-encoded has different bytes from its identity form:
+                # a weak validator keeps If-None-Match working but fails If-Range, so a client can never
+                # resume a compressed copy with identity ranges. API routes serve no ranges and keep theirs.
+                MutableHeaders(raw=message["headers"])["etag"] = "W/" + etag
 
 
 class SelectiveGZipMiddleware:

@@ -144,3 +144,24 @@ def test_lifespan_and_websocket_scopes_pass_through():
         with client.websocket_connect("/ws", headers={"Accept-Encoding": "gzip"}) as socket:
             assert socket.receive_text() == "x" * 5000
     assert started == [True]
+
+
+def test_a_compressed_range_capable_file_cannot_be_resumed_with_its_validator(tmp_path):
+    # The gzip representation has different bytes: its strong ETag must not let If-Range splice identity
+    # ranges onto a compressed copy. Weak validators fail If-Range (strong comparison) and still revalidate.
+    client = _client(tmp_path)
+    identity = client.get("/text-file", headers={"Accept-Encoding": "identity"})
+    compressed = client.get("/text-file", headers={"Accept-Encoding": "gzip"})
+    assert compressed.headers["content-encoding"] == "gzip"
+    assert compressed.headers["etag"] == "W/" + identity.headers["etag"]
+    resumed = client.get("/text-file", headers={"Range": "bytes=100-199", "If-Range": compressed.headers["etag"],
+                                                 "Accept-Encoding": "gzip"})
+    assert resumed.status_code == 200 and resumed.content == TEXT
+    exact = client.get("/text-file", headers={"Range": "bytes=100-199", "If-Range": identity.headers["etag"]})
+    assert exact.status_code == 206 and exact.content == TEXT[100:200]
+
+
+def test_json_validators_are_unchanged_for_route_revalidation():
+    # API routes compare If-None-Match themselves (some accept only strong tags) and never serve ranges.
+    response = _client().get("/json", headers={"Accept-Encoding": "gzip"})
+    assert response.headers["content-encoding"] == "gzip" and response.headers["etag"] == '"abc"'

@@ -161,10 +161,13 @@ class RefreshSender:
                 entry.pop("retry_at", None)
                 self.last_sent_at = now
             elif outcome.kind == "dead":
+                # Fenced by the registration it was sent to, like alert delivery: a token
+                # re-registered meanwhile is not deactivated by this answer.
                 self.registry.deactivate(
                     device.device_id,
                     outcome.reason or "Unregistered",
                     apns_timestamp=outcome.apns_timestamp,
+                    expected=device,
                 )
                 state.pop(device.device_id, None)
             elif outcome.kind == "auth":
@@ -195,7 +198,9 @@ class RefreshSender:
                     outcome.reason,
                 )
         self.outbox.set_kv(STATE_KEY, state)
-        self.last_stats = stats
+        # An idle cycle keeps the last attempt's outcome for the next heartbeat.
+        if stats:
+            self.last_stats = stats
         return stats
 
     def heartbeat(self) -> dict[str, Any]:

@@ -208,9 +208,58 @@ def test_refresh_outcomes_stay_out_of_alert_health_and_show_in_the_heartbeat(tmp
         r.close()
 
 
+def test_idle_cycles_keep_the_last_refresh_outcome_in_the_heartbeat(tmp_path):
+    # The worker cycles far more often than it writes the heartbeat; an idle cycle with nothing
+    # due must not erase the outcome of the last send before the heartbeat can report it.
+    r = Rig(tmp_path, extra={"refresh": {"enabled": True, "interval_seconds": 600}})
+    try:
+        r.devices()
+        r.cycle()
+        sent_at = r.clock()
+        r.cycle(10)
+        r.cycle(10)
+        assert len(background(r)) == 1
+        beat = r.worker.heartbeat_payload(r.clock())
+        assert beat["refresh"]["last_stats"] == {"sent": 1}
+        assert beat["refresh"]["last_sent_at"] == sent_at
+    finally:
+        r.close()
+
+
 def test_disabled_refresh_adds_nothing_to_the_heartbeat(tmp_path):
     r = Rig(tmp_path)
     try:
         assert "refresh" not in r.worker.heartbeat_payload(r.clock())
+    finally:
+        r.close()
+
+
+def test_a_dead_answer_never_deactivates_a_registration_that_changed_meanwhile(
+    tmp_path,
+):
+    # The same token is re-registered (new registration nonce) while Apple answers 400
+    # BadDeviceToken, which carries no timestamp: the fresh registration must stay active,
+    # exactly as for alert deliveries.
+    r = Rig(tmp_path, extra={"refresh": {"enabled": True, "interval_seconds": 600}})
+    try:
+        r.devices()
+        original = r.apple._answer
+
+        def answer(path, headers, body):
+            r.registry.upsert_device(
+                user_id=1,
+                token=TOKEN_A,
+                platform="iphone",
+                bundle_id=BUNDLE,
+                environment="sandbox",
+                app_version="2",
+                now=r.clock() + 1,
+            )
+            r.apple.valid_tokens.pop(TOKEN_A, None)
+            return original(path, headers, body)
+
+        r.apple._answer = answer
+        r.cycle()
+        assert any(d.token == TOKEN_A and d.active for d in r.registry.active_devices())
     finally:
         r.close()

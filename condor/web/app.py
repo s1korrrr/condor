@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from condor.web import live_activity_publisher
 from condor.web.compression import SelectiveGZipMiddleware
 from condor.web.routes import (
     account_balances,
@@ -77,11 +78,15 @@ async def _performance_observer_lifespan(app: FastAPI):
     started_here = not service.is_running
     subscriber = f"web-performance-{uuid4().hex}"
     service.start()
+    publisher = None
     try:
         for server in get_config_manager().list_servers():
             await service.subscribe(server, ServerDataType.BOTS_STATUS, subscriber)
+        # Fleet Live Activity content: published only when the deployment enables it.
+        publisher = live_activity_publisher.start_publisher(fleet_summary.glance_for)
         yield
     finally:
+        await live_activity_publisher.stop_publisher(publisher)
         service.unsubscribe_all(subscriber)
         # Never stop a pre-existing owner, or consumers added during this lifespan.
         if started_here and not service.has_subscriptions:

@@ -1,5 +1,8 @@
 """Authenticated device registry routes, behind the private read-only boundary."""
 
+import json
+from pathlib import Path
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -13,6 +16,17 @@ from tests.push_support import BUNDLE, TOKEN_A, TOKEN_B, TOKEN_W, WATCH_BUNDLE
 
 NOW = 1_790_001_000.0
 H = {"Authorization": "Bearer test"}
+SERVER = "rsibot-stack-v2"
+
+
+class Servers:
+    """Server access as the config manager answers it: users 1 and 2 see SERVER only."""
+
+    def has_server_access(self, user_id, name):
+        return name == SERVER and user_id in (1, 2)
+
+    def is_admin(self, user_id):
+        return user_id == 1
 
 
 def _client(
@@ -39,6 +53,7 @@ def _client(
             monkeypatch.delenv(name, raising=False)
     push_routes._registry_at.cache_clear()
     monkeypatch.setattr(push_routes, "_clock", lambda: NOW)
+    monkeypatch.setattr(push_routes, "get_config_manager", lambda: Servers())
     app = FastAPI()
     app.include_router(push_routes.router, prefix="/api/v1")
     app.dependency_overrides[auth.get_current_user] = lambda: WebUser(
@@ -400,6 +415,7 @@ def test_router_exposes_only_the_documented_paths():
         (("DELETE",), "/push/devices/{device_id}"),
         (("DELETE",), "/push/live-activities/{live_id}"),
         (("GET",), "/push/heartbeat"),
+        (("GET",), "/push/live-activities/content"),
         (("GET",), "/push/settings"),
         (("GET",), "/push/test/{request_id}"),
         (("POST",), "/push/devices"),
@@ -421,6 +437,7 @@ def _live(device_id, **kw):
         "environment": "sandbox",
         "bundle_id": BUNDLE,
         "device_id": device_id,
+        "server": SERVER,
         "activity_id": ACTIVITY,
         **kw,
     }
@@ -482,10 +499,11 @@ def test_register_a_live_activity_token_idempotently_and_unregister_it(
     )
     assert start.status_code == 201 and start.json()["id"] != live_id
     stored = registry.get_live_activity(live_id)
-    assert (stored.kind, stored.activity_id, stored.device_id) == (
+    assert (stored.kind, stored.activity_id, stored.device_id, stored.server) == (
         "update",
         ACTIVITY,
         device_id,
+        SERVER,
     )
     deleted = client.delete(f"/api/v1/push/live-activities/{live_id}", headers=H)
     assert deleted.status_code == 204 and deleted.content == b""
@@ -541,6 +559,14 @@ def test_live_activity_tokens_belong_to_the_devices_owner(monkeypatch, tmp_path)
         ({"device_id": "0" * 32}, 404),
         ({"device_id": "XYZ"}, 404),
         ({"unknown": 1}, 422),
+        ({"server": None}, 422),
+        ({"server": "x" * 101}, 422),
+        ({"server": "../etc"}, 404),
+        ({"server": "-leading-dash"}, 404),
+        (
+            {"server": "other-server"},
+            404,
+        ),  # no access: same answer as an unknown server
     ],
 )
 def test_invalid_live_activity_registrations_store_nothing(
@@ -577,3 +603,104 @@ def test_a_watch_registration_takes_no_live_activity(monkeypatch, tmp_path):
         headers=H,
     )
     assert response.status_code == 422 and "iPhone" in response.text
+
+
+def test_registration_requires_a_server(monkeypatch, tmp_path):
+    client, registry = _client(monkeypatch, tmp_path)
+    device_id = _registered(client)
+    body = _live(device_id)
+    del body["server"]
+    response = client.post("/api/v1/push/live-activities", json=body, headers=H)
+    assert response.status_code == 422 and "server" in response.text
+    assert registry.active_live_activities() == []
+
+
+# ------------------------------------------------------------------ Live Activity content
+
+
+FULL = json.loads(
+    (
+        Path(__file__).parent
+        / "fixtures"
+        / "fleet_summary"
+        / "summary_full.example.json"
+    ).read_text()
+)
+SHARED_CONTENT = json.loads(
+    (Path(__file__).parent / "fixtures" / "live_activity_content_v1.json").read_text()
+)
+
+
+def _content_client(monkeypatch, tmp_path, *, user_id=1, allow=True):
+    from condor.web.routes import fleet_summary as summary_routes
+
+    client, _ = _client(monkeypatch, tmp_path, user_id=user_id, allow=allow)
+    calls = []
+
+    async def cached_summary(name, *, admin, user_id):
+        calls.append((name, admin, user_id))
+        return FULL
+
+    monkeypatch.setattr(summary_routes, "get_config_manager", lambda: Servers())
+    monkeypatch.setattr(summary_routes, "cached_summary", cached_summary)
+    return client, calls
+
+
+def test_content_route_serves_the_content_state_of_the_cached_glance(
+    monkeypatch, tmp_path
+):
+    client, calls = _content_client(monkeypatch, tmp_path)
+    response = client.get(
+        "/api/v1/push/live-activities/content", params={"server": SERVER}, headers=H
+    )
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == "no-store"
+    # The glance of the builder's full example is the glance example; its content state is
+    # the shared fixture the app decodes.
+    assert response.json() == SHARED_CONTENT
+    assert calls == [(SERVER, True, 1)]
+
+
+def test_content_route_needs_a_login_and_access_to_the_server(monkeypatch, tmp_path):
+    app = FastAPI()
+    app.include_router(push_routes.router, prefix="/api/v1")
+    anonymous = TestClient(ReadOnlyWeb(app, allow_push_devices=True))
+    assert anonymous.get(
+        "/api/v1/push/live-activities/content", params={"server": SERVER}
+    ).status_code in (401, 403)
+    client, calls = _content_client(monkeypatch, tmp_path, user_id=3)
+    for server in (SERVER, "unknown", "bad/name", "-x"):
+        response = client.get(
+            "/api/v1/push/live-activities/content", params={"server": server}, headers=H
+        )
+        assert response.status_code == 404, server
+    assert (
+        client.get("/api/v1/push/live-activities/content", headers=H).status_code == 422
+    )
+    assert calls == []
+
+
+def test_content_route_is_a_read_that_needs_no_push_mutation_rights(
+    monkeypatch, tmp_path
+):
+    client, calls = _content_client(monkeypatch, tmp_path, allow=False)
+    response = client.get(
+        "/api/v1/push/live-activities/content", params={"server": SERVER}, headers=H
+    )
+    assert response.status_code == 200 and len(calls) == 1
+
+
+def test_content_route_reports_a_summary_deadline(monkeypatch, tmp_path):
+    from condor.web.routes import fleet_summary as summary_routes
+
+    client, _ = _client(monkeypatch, tmp_path)
+
+    async def slow(name, *, admin, user_id):
+        raise TimeoutError
+
+    monkeypatch.setattr(summary_routes, "get_config_manager", lambda: Servers())
+    monkeypatch.setattr(summary_routes, "cached_summary", slow)
+    response = client.get(
+        "/api/v1/push/live-activities/content", params={"server": SERVER}, headers=H
+    )
+    assert response.status_code == 504

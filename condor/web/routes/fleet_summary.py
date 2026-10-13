@@ -159,6 +159,38 @@ def _tag_matches(header: Optional[str], tag: str) -> bool:
     )
 
 
+async def cached_summary(name: str, *, admin: bool, user_id: Any) -> dict:
+    """The full summary for one server, through the shared micro-cache. Raises TimeoutError."""
+    key = (name, admin)
+    async with _locks.setdefault(key, asyncio.Lock()):
+        hit = _cache.get(key)
+        if hit is None or hit[0] <= time.monotonic():
+            async with asyncio.timeout(TOTAL_TIMEOUT):
+                full = await summary.build_fleet_summary(
+                    name,
+                    "full",
+                    READERS,
+                    time.time() * 1000,
+                    is_admin=admin,
+                    user_id=user_id,
+                )
+            hit = (time.monotonic() + CACHE_TTL_SECONDS, full)
+            if CACHE_TTL_SECONDS > 0:
+                _cache[key] = hit
+    return hit[1]
+
+
+async def glance_for(name: str, user_id: Any) -> dict:
+    """The glance exactly as ``GET /servers/{name}/fleet/summary?view=glance`` serves it to
+    ``user_id``. Raises LookupError when the user has no access to the server, TimeoutError
+    when the computation exceeds its deadline."""
+    cm = get_config_manager()
+    if not cm.has_server_access(user_id, name):
+        raise LookupError("server not found")
+    full = await cached_summary(name, admin=bool(cm.is_admin(user_id)), user_id=user_id)
+    return summary.glance(full)
+
+
 @router.get("/servers/{name}/fleet/summary")
 async def fleet_summary(
     name: str, request: Request, user: WebUser = Depends(get_current_user)
@@ -180,29 +212,15 @@ async def fleet_summary(
             status_code=400,
             detail=f"Unsupported schema; this server speaks {summary.SCHEMA_VERSION}",
         )
-    admin = bool(cm.is_admin(user.id))
-    key = (name, admin)
-    async with _locks.setdefault(key, asyncio.Lock()):
-        hit = _cache.get(key)
-        if hit is None or hit[0] <= time.monotonic():
-            try:
-                async with asyncio.timeout(TOTAL_TIMEOUT):
-                    full = await summary.build_fleet_summary(
-                        name,
-                        "full",
-                        READERS,
-                        time.time() * 1000,
-                        is_admin=admin,
-                        user_id=user.id,
-                    )
-            except TimeoutError:
-                raise HTTPException(
-                    status_code=504, detail="Fleet summary exceeded its deadline"
-                ) from None
-            hit = (time.monotonic() + CACHE_TTL_SECONDS, full)
-            if CACHE_TTL_SECONDS > 0:
-                _cache[key] = hit
-    body = hit[1] if view == "full" else summary.glance(hit[1])
+    try:
+        full = await cached_summary(
+            name, admin=bool(cm.is_admin(user.id)), user_id=user.id
+        )
+    except TimeoutError:
+        raise HTTPException(
+            status_code=504, detail="Fleet summary exceeded its deadline"
+        ) from None
+    body = full if view == "full" else summary.glance(full)
     tag = summary.etag_for(body)
     headers = {**HEADERS, "ETag": tag, "X-Fleet-Summary-Schema": summary.SCHEMA_VERSION}
     if _tag_matches(request.headers.get("If-None-Match"), tag):

@@ -199,6 +199,39 @@ def heartbeat_host(url: str) -> str:
     return urlsplit(url).hostname or "unknown"
 
 
+def parse_live_activity(raw: Any) -> LiveActivityConfig:
+    """Validate ``push.live_activity``. The worker (sender) and the Condor web process
+    (content publisher) read the same section through this function."""
+    if not isinstance(raw, Mapping) or set(raw) - _LIVE_ACTIVITY_KEYS:
+        raise PushConfigError("push.live_activity has unsupported keys")
+    enabled = raw.get("enabled", False)
+    if type(enabled) is not bool:
+        raise PushConfigError("push.live_activity.enabled must be true or false")
+    return LiveActivityConfig(
+        enabled,
+        # The content refreshes at most every 5 minutes without a change anyway.
+        _int(
+            raw.get("interval_seconds", 60),
+            "live_activity.interval_seconds",
+            30,
+            300,
+        ),
+        _int(
+            raw.get("stale_after_seconds", 600),
+            "live_activity.stale_after_seconds",
+            120,
+            3600,
+        ),
+        # iOS ends a Live Activity after 8 hours; a restart must come before that.
+        _int(
+            raw.get("restart_after_seconds", 27900),
+            "live_activity.restart_after_seconds",
+            3600,
+            28800,
+        ),
+    )
+
+
 def parse_push_config(raw: Any) -> PushConfig:
     """Validate the ``push`` section. Unknown keys are errors, not ignored."""
     if not isinstance(raw, Mapping):
@@ -288,12 +321,6 @@ def parse_push_config(raw: Any) -> PushConfig:
     enabled_refresh = raw_refresh.get("enabled", False)
     if type(enabled_refresh) is not bool:
         raise PushConfigError("push.refresh.enabled must be true or false")
-    raw_live = raw.get("live_activity") or {}
-    if not isinstance(raw_live, Mapping) or set(raw_live) - _LIVE_ACTIVITY_KEYS:
-        raise PushConfigError("push.live_activity has unsupported keys")
-    enabled_live = raw_live.get("enabled", False)
-    if type(enabled_live) is not bool:
-        raise PushConfigError("push.live_activity.enabled must be true or false")
     severity = raw.get("incident_min_severity", "critical")
     if severity not in ("warning", "critical"):
         raise PushConfigError("push.incident_min_severity must be warning or critical")
@@ -333,29 +360,7 @@ def parse_push_config(raw: Any) -> PushConfig:
                 3600,
             ),
         ),
-        live_activity=LiveActivityConfig(
-            enabled_live,
-            # The content refreshes at most every 5 minutes without a change anyway.
-            _int(
-                raw_live.get("interval_seconds", 60),
-                "live_activity.interval_seconds",
-                30,
-                300,
-            ),
-            _int(
-                raw_live.get("stale_after_seconds", 600),
-                "live_activity.stale_after_seconds",
-                120,
-                3600,
-            ),
-            # iOS ends a Live Activity after 8 hours; a restart must come before that.
-            _int(
-                raw_live.get("restart_after_seconds", 27900),
-                "live_activity.restart_after_seconds",
-                3600,
-                28800,
-            ),
-        ),
+        live_activity=parse_live_activity(raw.get("live_activity") or {}),
         retention_days=_int(raw.get("retention_days", 14), "retention_days", 1, 90),
         max_age_seconds=_int(
             raw.get("max_age_seconds", 6 * 3600), "max_age_seconds", 300, 86400

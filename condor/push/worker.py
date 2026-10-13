@@ -189,7 +189,6 @@ class PushWorker:
         ping: ExternalPing,
         clock: Callable[[], float] = time.time,
         market_score: Callable[[], Awaitable[float | None]] | None = None,
-        fleet_glance: Callable[[], Awaitable[Mapping[str, Any] | None]] | None = None,
     ):
         self.config, self.registry, self.outbox, self.deliverer = (
             config,
@@ -223,14 +222,8 @@ class PushWorker:
             if config.refresh.enabled
             else None
         )
-        # The Live Activity content is Condor's fleet-summary glance. The worker builds none
-        # itself: enabling the sender without a glance source is a configuration error, not
-        # a silently idle feature.
-        if config.live_activity.enabled and fleet_glance is None:
-            raise PushConfigError(
-                "push.live_activity is enabled but this worker has no fleet glance source"
-            )
-        self._fleet_glance = fleet_glance
+        # Live Activity content is published by Condor web into the shared registry; this
+        # worker only sends it. Missing content never blocks alert delivery.
         self.live_activity = (
             la.LiveActivitySender(
                 config,
@@ -335,8 +328,8 @@ class PushWorker:
         await self.deliverer.deliver_due()
         if self.refresh is not None:
             await self.refresh.send_due()
-        if self.live_activity is not None and self._fleet_glance is not None:
-            await self.live_activity.run(self._fleet_glance)
+        if self.live_activity is not None:
+            await self.live_activity.send_due()
         self._finish_test_requests()
         if now - self._last_prune >= PRUNE_EVERY_SECONDS:
             self._last_prune = now

@@ -5,6 +5,11 @@ nothing here computes PnL, equity or the market verdict. ``content_state`` maps 
 the shared v1 content state the app decodes (``FleetActivityAttributes.ContentState``):
 decimals are strings rounded to 2 places, an unknown value is an absent key (never 0).
 
+Content has one owner, the Condor web process: it builds the glance for every (owner, server)
+with an active token and publishes ``content_state`` into the shared registry
+(``publish_content``). The push worker only reads it (``read_published``); content missing or
+older than twice the interval is never sent.
+
 Pushes (``apns-push-type: liveactivity``, priority 5 so they do not count against the
 ActivityKit budget) go to every active ``update`` token when the content changed or the last
 send is 5 minutes old, paced by ``push.live_activity.interval_seconds``. iOS ends an activity
@@ -25,7 +30,7 @@ import time
 import uuid
 from collections import Counter
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
-from typing import TYPE_CHECKING, Any, Awaitable, Callable, Mapping
+from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 from condor.push.apns import MAX_PAYLOAD_BYTES, ApnsClient, ApnsOutcome, ApnsRequest
 
@@ -39,7 +44,10 @@ logger = logging.getLogger("condor.push")
 CONTENT_VERSION = 1
 ATTRIBUTES_TYPE = "FleetActivityAttributes"
 START_ALERT = {"title": "RSIBOT", "body": "Fleet live view"}
-STATE_KEY = "live_activity_state"  # {"built_at", "tokens": {id: {...}}, "starts": {device: {...}}}
+STATE_KEY = "live_activity_state"  # {"tokens": {id: {...}}, "starts": {device: {...}}}
+# Registry meta key prefix of the content Condor web publishes per (owner, server).
+CONTENT_META_PREFIX = "live_activity_content"
+MAX_PUBLISHED_PAIRS = 8
 UNCHANGED_RESEND_SECONDS = (
     300.0  # an unchanged activity still hears from us every 5 minutes
 )
@@ -178,6 +186,52 @@ def content_digest(state: Mapping[str, Any]) -> str:
     ).hexdigest()[:32]
 
 
+# --------------------------------------------------------------------------- published content
+
+
+def content_key(user_id: int, server: str) -> str:
+    return f"{CONTENT_META_PREFIX}:{int(user_id)}:{server}"
+
+
+def publish_content(
+    registry: "Registry",
+    user_id: int,
+    server: str,
+    state: Mapping[str, Any],
+    *,
+    built_at: float,
+) -> None:
+    """Condor web: store the content for one owner and server, with its build time."""
+    registry.set_meta(
+        content_key(user_id, server), {"built_at": built_at, "content": dict(state)}
+    )
+
+
+def read_published(
+    registry: "Registry",
+    user_id: int,
+    server: str,
+    *,
+    now: float,
+    max_age_seconds: float,
+) -> dict[str, Any] | None:
+    """The worker: the published content, or None when it is missing, malformed or too old."""
+    stored = registry.get_meta(content_key(user_id, server))
+    if not isinstance(stored, dict):
+        return None
+    built_at, content = stored.get("built_at"), stored.get("content")
+    if (
+        isinstance(built_at, bool)
+        or not isinstance(built_at, (int, float))
+        or not isinstance(content, dict)
+        or content.get("v") != CONTENT_VERSION
+        or built_at > now + 60  # a clock far ahead is not "fresh"
+        or now - built_at > max_age_seconds
+    ):
+        return None
+    return content
+
+
 # --------------------------------------------------------------------------- requests
 
 
@@ -278,7 +332,6 @@ class LiveActivitySender:
         self.last_stats: Counter[str] = Counter()
         self.last_sent_at: float | None = None
         self.last_start_at: float | None = None
-        self.last_content_error: str | None = None
 
     def _targets(self) -> list["LiveActivityToken"]:
         devices = {
@@ -302,7 +355,6 @@ class LiveActivitySender:
         tokens = raw.get("tokens") if isinstance(raw.get("tokens"), dict) else {}
         starts = raw.get("starts") if isinstance(raw.get("starts"), dict) else {}
         return {
-            "built_at": raw.get("built_at"),
             "tokens": {
                 k: dict(v)
                 for k, v in tokens.items()
@@ -331,9 +383,8 @@ class LiveActivitySender:
                 kept.append(token)
         return kept
 
-    def _token_due(
-        self, entry: Mapping[str, Any] | None, digest: str, now: float
-    ) -> bool:
+    def _pace_allows(self, entry: Mapping[str, Any] | None, now: float) -> bool:
+        """Whether a token may be sent to now, whatever the content."""
         if not entry:
             return True
         retry_at = entry.get("retry_at")
@@ -342,10 +393,18 @@ class LiveActivitySender:
         last = entry.get("last")
         if last is None or now < last:
             return True  # a clock that moved backwards never blocks updates forever
-        elapsed = now - last
-        if elapsed < self.config.live_activity.interval_seconds:
+        return now - last >= self.config.live_activity.interval_seconds
+
+    def _token_due(
+        self, entry: Mapping[str, Any] | None, digest: str, now: float
+    ) -> bool:
+        """Paced, and the content changed or the activity has not heard from us in 5 min."""
+        if not self._pace_allows(entry, now):
             return False
-        return entry.get("digest") != digest or elapsed >= UNCHANGED_RESEND_SECONDS
+        last = (entry or {}).get("last")
+        if last is None or now < last:
+            return True
+        return entry.get("digest") != digest or now - last >= UNCHANGED_RESEND_SECONDS
 
     def _restarts(
         self, targets: list["LiveActivityToken"], starts: Mapping[str, Any], now: float
@@ -376,54 +435,62 @@ class LiveActivitySender:
                 due.append(start)
         return due
 
-    async def run(
-        self, glance_source: Callable[[], Awaitable[Mapping[str, Any] | None]]
-    ) -> Counter[str]:
-        """One pass: build the glance once when anything may be due, then send."""
+    def _published(
+        self, cache: dict[tuple[int, str], Any], token: "LiveActivityToken", now: float
+    ) -> Mapping[str, Any] | None:
+        key = (token.user_id, token.server)
+        if key not in cache:
+            cache[key] = read_published(
+                self.registry,
+                token.user_id,
+                token.server,
+                now=now,
+                max_age_seconds=2.0 * self.config.live_activity.interval_seconds,
+            )
+        return cache[key]
+
+    async def send_due(self) -> Counter[str]:
+        """Send what is due, with the content Condor web published for each token's owner
+        and server. Missing or old content sends nothing and counts as ``stale_source``.
+        """
         cfg = self.config.live_activity
         now = self._clock()
         if not cfg.enabled or self.deliverer.auth_paused(now):
             return Counter()
         targets = self._expire_old_activities(self._targets(), now)
         state = self._load_state(targets)
-        built_at = state["built_at"]
-        if not targets or (
-            isinstance(built_at, (int, float))
-            and built_at <= now
-            and now - built_at < cfg.interval_seconds
-        ):
-            self.outbox.set_kv(STATE_KEY, state)
-            return Counter()
-        state["built_at"] = now
-        try:
-            glance = await glance_source()
-            content = content_state(glance) if glance is not None else None
-            server = glance.get("server") if glance is not None else None
-            self.last_content_error = None if content is not None else "unavailable"
-        except (
-            Exception
-        ) as exc:  # noqa: BLE001 - a missing glance must never stop the cycle
-            content, server = None, None
-            self.last_content_error = exc.__class__.__name__
-        if content is None:
-            logger.warning(
-                "live activity content unavailable error=%s", self.last_content_error
+        stats: Counter[str] = Counter()
+        published: dict[tuple[int, str], Any] = {}
+        jobs: list[tuple["LiveActivityToken", dict[str, Any], str]] = []
+        for token in targets:
+            if token.kind != "update":
+                continue
+            entry = state["tokens"].get(token.id)
+            if not self._pace_allows(entry, now):
+                continue
+            content = self._published(published, token, now)
+            if content is None:
+                stats["stale_source"] += 1
+                continue
+            digest = content_digest(content)
+            if self._token_due(entry, digest, now):
+                payload = build_update_payload(
+                    content, now=now, stale_after_seconds=cfg.stale_after_seconds
+                )
+                jobs.append((token, payload, digest))
+        for start in self._restarts(targets, state["starts"], now):
+            content = self._published(published, start, now)
+            if content is None:
+                stats["stale_source"] += 1
+                continue
+            payload = build_start_payload(
+                content,
+                server=start.server,
+                now=now,
+                stale_after_seconds=cfg.stale_after_seconds,
             )
-            self.outbox.set_kv(STATE_KEY, state)
-            return Counter({"content_unavailable": 1})
-        digest = content_digest(content)
-        updates = [
-            t
-            for t in targets
-            if t.kind == "update"
-            and self._token_due(state["tokens"].get(t.id), digest, now)
-        ]
-        starts = (
-            self._restarts(targets, state["starts"], now)
-            if isinstance(server, str) and server
-            else []
-        )
-        stats = await self._send(updates, starts, content, digest, server, state, now)
+            jobs.append((start, payload, content_digest(content)))
+        stats.update(await self._send(jobs, state, now))
         self.outbox.set_kv(STATE_KEY, state)
         if stats:
             self.last_stats = stats
@@ -431,39 +498,16 @@ class LiveActivitySender:
 
     async def _send(
         self,
-        updates: list["LiveActivityToken"],
-        starts: list["LiveActivityToken"],
-        content: Mapping[str, Any],
-        digest: str,
-        server: str | None,
+        jobs: list[tuple["LiveActivityToken", dict[str, Any], str]],
         state: dict[str, Any],
         now: float,
     ) -> Counter[str]:
         cfg = self.config.live_activity
         semaphore = asyncio.Semaphore(SEND_CONCURRENCY)
-        update_payload = build_update_payload(
-            content, now=now, stale_after_seconds=cfg.stale_after_seconds
-        )
-        start_payload = (
-            build_start_payload(
-                content,
-                server=server,
-                now=now,
-                stale_after_seconds=cfg.stale_after_seconds,
-            )
-            if starts and server
-            else None
-        )
-        try:
-            for payload in (update_payload, start_payload):
-                if payload is not None:
-                    encode(payload)
-        except ValueError:
-            logger.warning("live activity payload exceeds the APNs limit; nothing sent")
-            return Counter({"too_large": 1})
-
-        async def one(token: "LiveActivityToken", payload: Mapping[str, Any]):
-            async with semaphore:
+        stats: Counter[str] = Counter()
+        requests = []
+        for token, payload, digest in jobs:
+            try:
                 request = build_request(
                     payload,
                     token=token.token,
@@ -473,14 +517,20 @@ class LiveActivitySender:
                     now=now,
                     stale_after_seconds=cfg.stale_after_seconds,
                 )
-                return token, await self.apns.send(request)
+            except ValueError:
+                stats["too_large"] += 1
+                logger.warning("live activity payload exceeds the APNs limit; not sent")
+                continue
+            requests.append((token, request, digest))
 
-        jobs = [one(t, update_payload) for t in updates]
-        if start_payload is not None:
-            jobs += [one(t, start_payload) for t in starts]
-        stats: Counter[str] = Counter()
+        async def one(token: "LiveActivityToken", request: ApnsRequest, digest: str):
+            async with semaphore:
+                return token, digest, await self.apns.send(request)
+
         sent: list[str] = []
-        for token, outcome in await asyncio.gather(*jobs):
+        for token, digest, outcome in await asyncio.gather(
+            *(one(*job) for job in requests)
+        ):
             is_start = token.kind == "start"
             stats[("start_" if is_start else "") + outcome.kind] += 1
             entry = (
@@ -544,6 +594,5 @@ class LiveActivitySender:
             "last_sent_at": self.last_sent_at,
             "last_start_at": self.last_start_at,
             "last_stats": dict(self.last_stats),
-            "content_error": self.last_content_error,
             "apns_auth_ok": self.apns.auth_ok,
         }

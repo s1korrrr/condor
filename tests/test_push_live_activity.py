@@ -31,6 +31,7 @@ UPDATE_TOKEN_2 = "e5" * 40
 START_TOKEN = "f6" * 40
 LIVE_TOPIC = BUNDLE + ".push-type.liveactivity"
 ENABLED = {"live_activity": {"enabled": True}}
+SERVER = "rsibot-stack-v2"
 
 
 def run(coro):
@@ -250,6 +251,7 @@ def _register(registry, device_id, *, token=UPDATE_TOKEN, kind="update", **kw):
     fields = {
         "user_id": 1,
         "device_id": device_id,
+        "server": SERVER,
         "kind": kind,
         "token": token,
         "environment": "sandbox",
@@ -266,7 +268,7 @@ def test_registering_the_same_token_again_keeps_its_id_and_age(tmp_path):
     first = _register(registry, iphone.device_id)
     assert len(first.id) == 32 and first.active and first.activity_id == ACTIVITY
     again = _register(registry, iphone.device_id, now=500.0)
-    assert again.id == first.id
+    assert again.id == first.id and again.server == SERVER
     assert again.created_at == 200.0 and again.registered_at == 500.0
     assert again.registration_nonce != first.registration_nonce
     assert [t.id for t in registry.active_live_activities()] == [first.id]
@@ -284,6 +286,9 @@ def test_registering_the_same_token_again_keeps_its_id_and_age(tmp_path):
         ({"kind": "start", "activity_id": ACTIVITY}, "no activity id"),
         ({"bundle_id": BUNDLE + ".watch"}, "bundle"),
         ({"environment": "production"}, "environment"),
+        ({"server": ""}, "server"),
+        ({"server": "a/b"}, "server"),
+        ({"server": None}, "server"),
     ],
 )
 def test_invalid_live_activity_registrations_are_refused(tmp_path, change, message):
@@ -377,37 +382,265 @@ def test_an_existing_registry_gains_the_table_without_losing_devices(tmp_path):
     assert _register(reopened, iphone.device_id).active
 
 
-# --------------------------------------------------------------------------- sender
+def test_owners_are_the_distinct_active_owner_and_server_pairs(tmp_path):
+    registry, iphone, _ = _registry(tmp_path)
+    _register(registry, iphone.device_id)
+    _register(registry, iphone.device_id, token=START_TOKEN, kind="start")
+    _register(registry, iphone.device_id, token=UPDATE_TOKEN_2, server="other")
+    assert registry.live_activity_owners(8) == [(1, "other"), (1, SERVER)]
+    assert registry.live_activity_owners(1) == [(1, "other")]
+    registry.deactivate(iphone.device_id, "Unregistered")
+    assert registry.live_activity_owners(8) == []
+
+
+# --------------------------------------------------------------------------- published content
+
+
+def test_published_content_is_scoped_by_owner_and_server_and_ages_out(tmp_path):
+    registry, _, _ = _registry(tmp_path)
+    state = la.content_state(GLANCE)
+    la.publish_content(registry, 1, SERVER, state, built_at=1000.0)
+    read = lambda user, server, now: la.read_published(  # noqa: E731
+        registry, user, server, now=now, max_age_seconds=120
+    )
+    assert read(1, SERVER, 1100.0) == state
+    assert read(2, SERVER, 1100.0) is None and read(1, "other", 1100.0) is None
+    assert read(1, SERVER, 1121.0) is None  # older than twice the interval
+    assert read(1, SERVER, 900.0) is None  # built far in the future
+    registry.set_meta(la.content_key(1, SERVER), {"built_at": 1000.0, "content": {}})
+    assert read(1, SERVER, 1001.0) is None  # not v1 content
 
 
 class Glances:
-    """The worker's glance source: the builder's example, adjustable per test."""
+    """``glance_for`` as Condor web serves it: per (server, user), adjustable per test."""
 
-    def __init__(self, clock):
-        self.clock = clock
-        self.glance = copy.deepcopy(GLANCE)
-        self.calls = 0
-        self.fail = False
+    def __init__(self):
+        self.calls = []
+        self.fail = {}
 
-    async def __call__(self):
-        self.calls += 1
-        if self.fail:
-            raise TimeoutError("fleet summary exceeded its deadline")
-        return {**self.glance, "generated_at_ms": int(self.clock() * 1000)}
+    async def __call__(self, server, user_id):
+        self.calls.append((server, user_id))
+        if (server, user_id) in self.fail:
+            raise self.fail[(server, user_id)]
+        return {**copy.deepcopy(GLANCE), "server": server}
+
+
+def test_publisher_writes_scoped_content_for_every_owner_and_server(tmp_path):
+    from condor.web import live_activity_publisher as publisher
+
+    registry, iphone, _ = _registry(tmp_path)
+    _register(registry, iphone.device_id)
+    _register(registry, iphone.device_id, token=UPDATE_TOKEN_2, server="other")
+    glances = Glances()
+    assert run(publisher.publish_once(registry, glances, clock=lambda: 5000.0)) == 2
+    assert sorted(glances.calls) == [("other", 1), (SERVER, 1)]
+    stored = registry.get_meta(la.content_key(1, SERVER))
+    assert stored == {"built_at": 5000.0, "content": la.content_state(GLANCE)}
+    assert registry.get_meta(la.content_key(1, "other"))["built_at"] == 5000.0
+
+
+def test_publisher_builds_nothing_without_active_tokens(tmp_path):
+    from condor.web import live_activity_publisher as publisher
+
+    registry, iphone, _ = _registry(tmp_path)
+    glances = Glances()
+    assert run(publisher.publish_once(registry, glances)) == 0
+    token = _register(registry, iphone.device_id)
+    registry.deactivate_live_activity(token, "Unregistered")
+    assert run(publisher.publish_once(registry, glances)) == 0
+    assert glances.calls == []
+    assert registry.get_meta(la.content_key(1, SERVER)) is None
+
+
+def test_one_failing_pair_never_stops_the_others(tmp_path, caplog):
+    from condor.web import live_activity_publisher as publisher
+
+    registry, iphone, _ = _registry(tmp_path)
+    _register(registry, iphone.device_id)
+    _register(registry, iphone.device_id, token=UPDATE_TOKEN_2, server="other")
+    _register(registry, iphone.device_id, token="c7" * 40, server="third")
+    glances = Glances()
+    glances.fail = {("other", 1): LookupError(), ("third", 1): TimeoutError()}
+    with caplog.at_level("WARNING", logger="condor.web.live_activity"):
+        assert run(publisher.publish_once(registry, glances)) == 1
+    assert "no access" in caplog.text and "TimeoutError" in caplog.text
+    assert registry.get_meta(la.content_key(1, "other")) is None
+    assert registry.get_meta(la.content_key(1, SERVER)) is not None
+
+
+def test_publisher_pairs_are_bounded(tmp_path):
+    from condor.web import live_activity_publisher as publisher
+
+    registry, iphone, _ = _registry(tmp_path)
+    second = registry.upsert_device(
+        user_id=1,
+        token="9a" * 32,
+        platform="iphone",
+        bundle_id=BUNDLE,
+        environment="sandbox",
+        app_version="1",
+    )
+    for n in range(la.MAX_PUBLISHED_PAIRS + 2):
+        device = iphone if n < 6 else second
+        _register(
+            registry, device.device_id, token=f"{n + 16:02x}" * 40, server=f"s{n}"
+        )
+    glances = Glances()
+    assert run(publisher.publish_once(registry, glances)) == la.MAX_PUBLISHED_PAIRS
+
+
+@pytest.mark.parametrize(
+    "env,on",
+    [
+        ({}, False),
+        ({"CONDOR_PUSH_LIVE_ACTIVITY": '{"enabled": true}'}, False),  # no registry
+        ({"CONDOR_PUSH_REGISTRY": "R"}, False),  # no section
+        ({"CONDOR_PUSH_REGISTRY": "R", "CONDOR_PUSH_LIVE_ACTIVITY": "{}"}, False),
+        (
+            {
+                "CONDOR_PUSH_REGISTRY": "R",
+                "CONDOR_PUSH_LIVE_ACTIVITY": '{"enabled": 1}',
+            },
+            False,
+        ),
+        ({"CONDOR_PUSH_REGISTRY": "R", "CONDOR_PUSH_LIVE_ACTIVITY": "not json"}, False),
+        (
+            {
+                "CONDOR_PUSH_REGISTRY": "R",
+                "CONDOR_PUSH_LIVE_ACTIVITY": '{"enabled": true, "interval_seconds": 90}',
+            },
+            True,
+        ),
+    ],
+)
+def test_publisher_runs_only_when_the_deployment_enables_it(
+    tmp_path, monkeypatch, env, on
+):
+    from condor.web import live_activity_publisher as publisher
+
+    for name in ("CONDOR_PUSH_REGISTRY", "CONDOR_PUSH_LIVE_ACTIVITY"):
+        monkeypatch.delenv(name, raising=False)
+    for name, value in env.items():
+        monkeypatch.setenv(
+            name, str(tmp_path / "registry.sqlite") if value == "R" else value
+        )
+    settings = publisher.publisher_settings()
+    assert (settings is not None) is on
+    if on:
+        assert settings[1].interval_seconds == 90
+
+    async def lifecycle():
+        task = publisher.start_publisher(Glances())
+        assert (task is not None) is on
+        await publisher.stop_publisher(task)
+        assert task is None or task.cancelled()
+
+    run(lifecycle())
+
+
+def test_publisher_loop_survives_a_failed_pass_and_stops_when_cancelled(tmp_path):
+    from condor.push.config import LiveActivityConfig
+    from condor.web import live_activity_publisher as publisher
+
+    class Broken:
+        def live_activity_owners(self, limit):
+            raise sqlite3.OperationalError("database is locked")
+
+    sleeps = []
+
+    async def sleep(seconds):
+        sleeps.append(seconds)
+        if len(sleeps) == 3:
+            raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        run(
+            publisher.run_publisher(
+                Broken(),
+                LiveActivityConfig(enabled=True, interval_seconds=45),
+                Glances(),
+                sleep=sleep,
+            )
+        )
+    assert sleeps == [45.0, 45.0, 45.0]
+
+
+def test_the_web_lifespan_starts_and_stops_the_publisher(monkeypatch):
+    from types import SimpleNamespace
+
+    import config_manager
+    from condor import server_data_service
+    from condor.web import app as web_app
+    from condor.web import live_activity_publisher as publisher
+    from condor.web.routes import fleet_summary as summary_routes
+
+    class Service:
+        is_running, has_subscriptions = False, False
+
+        def start(self):
+            pass
+
+        def stop(self):
+            pass
+
+        async def subscribe(self, *args):
+            pass
+
+        def unsubscribe_all(self, subscriber):
+            pass
+
+    events = []
+
+    def start(glance_for):
+        events.append(("start", glance_for))
+        return "task"
+
+    async def stop(task):
+        events.append(("stop", task))
+
+    monkeypatch.setattr(server_data_service, "get_server_data_service", Service)
+    monkeypatch.setattr(
+        config_manager,
+        "get_config_manager",
+        lambda: SimpleNamespace(list_servers=lambda: {}),
+    )
+    monkeypatch.setattr(publisher, "start_publisher", start)
+    monkeypatch.setattr(publisher, "stop_publisher", stop)
+    app = web_app.create_app()
+
+    async def lifespan():
+        async with app.router.lifespan_context(app):
+            assert events == [("start", summary_routes.glance_for)]
+
+    run(lifespan())
+    assert events[-1] == ("stop", "task")
+
+
+# --------------------------------------------------------------------------- sender
 
 
 def live_rig(tmp_path, extra=ENABLED):
-    holder = {}
-
-    async def source():
-        return await holder["glances"]()
-
-    r = Rig(tmp_path, extra=extra, fleet_glance=source)
-    holder["glances"] = r.glances = Glances(r.clock)
+    """The worker with Live Activity on. ``r.cycle`` first lets Condor web publish the content
+    (unless ``r.publishing`` is off), the way the web publisher runs beside the worker.
+    """
+    r = Rig(tmp_path, extra=extra)
+    r.glance = copy.deepcopy(GLANCE)
+    r.publishing = True
     for token in (UPDATE_TOKEN, UPDATE_TOKEN_2, START_TOKEN):
         r.apple.add_device(token, LIVE_TOPIC)
     r.devices()
     r.iphone = next(d for d in r.registry.active_devices() if d.platform == "iphone")
+
+    def cycle(advance=5):
+        r.clock.advance(advance)
+        if r.publishing:
+            glance = {**r.glance, "generated_at_ms": int(r.clock() * 1000)}
+            la.publish_content(
+                r.registry, 1, SERVER, la.content_state(glance), built_at=r.clock()
+            )
+        run(r.worker.cycle())
+
+    r.cycle = cycle
     return r
 
 
@@ -419,10 +652,15 @@ def live(r):
     ]
 
 
-def register(r, token=UPDATE_TOKEN, kind="update", activity_id=ACTIVITY):
+def stats(r):
+    return r.worker.heartbeat_payload(r.clock())["live_activity"]["last_stats"]
+
+
+def register(r, token=UPDATE_TOKEN, kind="update", activity_id=ACTIVITY, server=SERVER):
     return r.registry.upsert_live_activity(
         user_id=1,
         device_id=r.iphone.device_id,
+        server=server,
         kind=kind,
         token=token,
         environment="sandbox",
@@ -469,39 +707,75 @@ def test_updates_go_on_change_or_every_five_minutes_and_survive_a_restart(tmp_pa
         r.cycle()
         assert len(live(r)) == 1
         r.cycle(30)
-        assert (
-            len(live(r)) == 1 and r.glances.calls == 1
-        )  # not even built before the interval
         r.cycle(40)
-        assert len(live(r)) == 1  # built, unchanged: nothing to send
-        r.glances.glance["pnl"]["day"]["total"] = "5.25"
-        r.cycle(60)
-        assert len(live(r)) == 2
-        assert (
-            json.loads(live(r)[-1]["body"])["aps"]["content-state"]["day_pnl"] == "5.25"
-        )
+        assert len(live(r)) == 1  # unchanged: nothing to send
+        r.glance["pnl"]["day"]["total"] = "5.25"
+        r.cycle(10)
+        assert len(live(r)) == 2  # changed, and a minute since the last send
+        content = json.loads(live(r)[-1]["body"])["aps"]["content-state"]
+        assert content["day_pnl"] == "5.25"
+        r.glance["pnl"]["day"]["total"] = "5.5"
+        r.cycle(30)
+        assert len(live(r)) == 2  # changed again, but paced by the interval
+        r.cycle(30)
+        assert len(live(r)) == 3
         r.restart()
         r.cycle(10)
-        assert len(live(r)) == 2  # a restart neither rebuilds early nor bursts
+        assert len(live(r)) == 3  # a restart does not burst
         for _ in range(4):
             r.cycle(60)
-        assert len(live(r)) == 2
+        assert len(live(r)) == 3
         r.cycle(60)
-        assert len(live(r)) == 3  # unchanged for 5 minutes: resent
+        assert len(live(r)) == 4  # unchanged for 5 minutes: resent
     finally:
         r.close()
 
 
-def test_every_active_update_token_gets_the_same_content(tmp_path):
+def test_missing_or_old_content_is_never_sent_and_counts_as_stale_source(tmp_path):
     r = live_rig(tmp_path)
     try:
         register(r)
-        register(r, UPDATE_TOKEN_2, activity_id="0b0f7a30-2a4e-4c8e-8f43-0d8a6c3e9b11")
+        r.publishing = False
         r.cycle()
-        paths = sorted(q["path"] for q in live(r))
-        assert paths == [f"/3/device/{UPDATE_TOKEN}", f"/3/device/{UPDATE_TOKEN_2}"]
-        bodies = {q["body"] for q in live(r)}
-        assert len(bodies) == 1
+        assert live(r) == [] and stats(r) == {"stale_source": 1}
+        assert r.worker.last_cycle_error is None
+        r.publishing = True
+        r.cycle(5)
+        assert len(live(r)) == 1
+        r.publishing = False
+        r.cycle(120)  # exactly twice the interval: still fresh enough; unchanged anyway
+        assert len(live(r)) == 1
+        r.cycle(181)  # 301 s old: past twice the interval
+        assert len(live(r)) == 1 and stats(r) == {"stale_source": 1}
+        r.publishing = True
+        r.cycle(5)
+        assert len(live(r)) == 2  # the 5-minute resend goes out once content is fresh
+    finally:
+        r.close()
+
+
+def test_each_token_gets_the_content_of_its_own_server(tmp_path):
+    r = live_rig(tmp_path)
+    try:
+        register(r)
+        register(
+            r,
+            UPDATE_TOKEN_2,
+            activity_id="0b0f7a30-2a4e-4c8e-8f43-0d8a6c3e9b11",
+            server="other",
+        )
+        r.cycle()
+        # Only SERVER has published content; the other server's activity waits for its own.
+        assert [q["path"] for q in live(r)] == [f"/3/device/{UPDATE_TOKEN}"]
+        assert stats(r) == {"sent": 1, "stale_source": 1}
+        other = {**la.content_state(GLANCE), "market_label": "Risk-on"}
+        la.publish_content(r.registry, 1, "other", other, built_at=r.clock())
+        r.cycle(60)
+        sent = live(r)[-1]
+        assert sent["path"] == f"/3/device/{UPDATE_TOKEN_2}"
+        assert json.loads(sent["body"])["aps"]["content-state"]["market_label"] == (
+            "Risk-on"
+        )
     finally:
         r.close()
 
@@ -519,7 +793,7 @@ def test_a_device_with_only_a_start_token_gets_one_push_to_start_per_window(tmp_
         aps = json.loads(start["body"])["aps"]
         assert aps["event"] == "start"
         assert aps["attributes-type"] == "FleetActivityAttributes"
-        assert aps["attributes"] == {"server": GLANCE["server"]}
+        assert aps["attributes"] == {"server": SERVER}  # the token's server
         assert aps["alert"] == {"title": "RSIBOT", "body": "Fleet live view"}
         assert "sound" not in aps
         assert aps["content-state"]["v"] == 1
@@ -529,6 +803,17 @@ def test_a_device_with_only_a_start_token_gets_one_push_to_start_per_window(tmp_
         assert len(live(r)) == 1  # at most once per restart window, restarts included
         r.cycle(27900 - 6000)
         assert len(live(r)) == 2
+    finally:
+        r.close()
+
+
+def test_no_push_to_start_without_fresh_content(tmp_path):
+    r = live_rig(tmp_path)
+    try:
+        register(r, START_TOKEN, kind="start")
+        r.publishing = False
+        r.cycle(200)
+        assert live(r) == [] and stats(r) == {"stale_source": 1}
     finally:
         r.close()
 
@@ -593,22 +878,34 @@ def test_a_dead_live_activity_token_is_deactivated(tmp_path, dead):
         r.close()
 
 
-def test_disabled_live_activity_sends_nothing_and_builds_nothing(tmp_path):
+def test_disabled_live_activity_sends_nothing(tmp_path):
     r = live_rig(tmp_path, extra=None)
     try:
         register(r)
         register(r, START_TOKEN, kind="start")
         for _ in range(5):
             r.cycle(28000)
-        assert live(r) == [] and r.glances.calls == 0
+        assert live(r) == []
         assert "live_activity" not in r.worker.heartbeat_payload(r.clock())
     finally:
         r.close()
 
 
-def test_enabling_without_a_glance_source_is_refused(tmp_path):
-    with pytest.raises(PushConfigError, match="glance"):
-        Rig(tmp_path, extra=ENABLED)
+def test_enabled_without_a_publisher_never_blocks_alert_delivery(tmp_path):
+    r = live_rig(tmp_path)
+    try:
+        register(r)
+        r.publishing = False
+        r.cycle()
+        r.cycle(60)
+        assert live(r) == [] and r.worker.last_cycle_error is None
+        assert r.worker.heartbeat_payload(r.clock())["status"] in (
+            "running",
+            "degraded",
+        )
+        assert "cycle_error" not in r.worker.degraded_reasons(r.clock())
+    finally:
+        r.close()
 
 
 def test_the_shared_credential_pause_holds_live_activity(tmp_path):
@@ -640,23 +937,6 @@ def test_rejected_credentials_pause_every_sender(tmp_path):
         r.close()
 
 
-def test_a_failed_glance_sends_nothing_and_is_reported(tmp_path):
-    r = live_rig(tmp_path)
-    try:
-        register(r)
-        r.glances.fail = True
-        r.cycle()
-        assert live(r) == [] and r.worker.last_cycle_error is None
-        assert r.worker.heartbeat_payload(r.clock())["live_activity"][
-            "content_error"
-        ] == ("TimeoutError")
-        r.glances.fail = False
-        r.cycle(60)
-        assert len(live(r)) == 1
-    finally:
-        r.close()
-
-
 def test_outcomes_stay_out_of_alert_health_and_show_in_the_heartbeat(tmp_path):
     r = live_rig(tmp_path)
     try:
@@ -665,7 +945,7 @@ def test_outcomes_stay_out_of_alert_health_and_show_in_the_heartbeat(tmp_path):
         assert r.deliverer.apns.last_success_at is None
         beat = r.worker.heartbeat_payload(r.clock())["live_activity"]
         assert beat["enabled"] is True and beat["last_stats"] == {"sent": 1}
-        assert beat["last_sent_at"] == r.clock() and beat["content_error"] is None
+        assert beat["last_sent_at"] == r.clock()
     finally:
         r.close()
 

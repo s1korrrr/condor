@@ -52,6 +52,7 @@ TEST_COOLDOWN_SECONDS = 10.0
 MAX_PENDING_TESTS = 4
 LIVE_ACTIVITY_KINDS = ("update", "start")
 MAX_LIVE_ACTIVITIES_PER_DEVICE = 8
+SERVER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
 
 
 class RegistryError(ValueError):
@@ -237,6 +238,7 @@ class LiveActivityToken:
     id: str
     user_id: int
     device_id: str
+    server: str  # the Condor server whose fleet the activity shows
     kind: str
     token: str
     environment: str
@@ -255,6 +257,7 @@ def _live_activity(row: sqlite3.Row) -> LiveActivityToken:
         id=row["id"],
         user_id=row["user_id"],
         device_id=row["device_id"],
+        server=row["server"],
         kind=row["kind"],
         token=row["token"],
         environment=row["environment"],
@@ -318,7 +321,7 @@ class Registry:
                 # registries simply gain the empty table.
                 """CREATE TABLE IF NOT EXISTS live_activities (
                     id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, device_id TEXT NOT NULL,
-                    kind TEXT NOT NULL, token TEXT NOT NULL UNIQUE, environment TEXT NOT NULL,
+                    server TEXT NOT NULL, kind TEXT NOT NULL, token TEXT NOT NULL UNIQUE, environment TEXT NOT NULL,
                     bundle_id TEXT NOT NULL, activity_id TEXT, created_at REAL NOT NULL,
                     registered_at REAL NOT NULL, last_sent_at REAL,
                     active INTEGER NOT NULL DEFAULT 1, deactivated_reason TEXT,
@@ -589,6 +592,7 @@ class Registry:
         *,
         user_id: int,
         device_id: str,
+        server: str,
         kind: str,
         token: str,
         environment: str,
@@ -605,6 +609,8 @@ class Registry:
         """
         now = time.time() if now is None else now
         token = normalize_token(token)
+        if not isinstance(server, str) or not SERVER_NAME.fullmatch(server):
+            raise RegistryError("server must be a Condor server name")
         if kind not in LIVE_ACTIVITY_KINDS:
             raise RegistryError("kind must be update or start")
         if kind == "update":
@@ -651,14 +657,15 @@ class Registry:
                         )
                     db.execute(
                         """INSERT INTO live_activities (
-                            id,user_id,device_id,kind,token,environment,bundle_id,activity_id,
-                            created_at,registered_at,last_sent_at,active,deactivated_reason,
-                            registration_nonce
-                        ) VALUES (?,?,?,?,?,?,?,?,?,?,NULL,1,NULL,?)""",
+                            id,user_id,device_id,server,kind,token,environment,bundle_id,
+                            activity_id,created_at,registered_at,last_sent_at,active,
+                            deactivated_reason,registration_nonce
+                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL,1,NULL,?)""",
                         (
                             live_id,
                             user_id,
                             device_id,
+                            server,
                             kind,
                             token,
                             environment,
@@ -671,13 +678,14 @@ class Registry:
                     )
                 else:
                     db.execute(
-                        """UPDATE live_activities SET user_id=?, device_id=?, kind=?,
-                           environment=?, bundle_id=?, activity_id=?, registered_at=?,
+                        """UPDATE live_activities SET user_id=?, device_id=?, server=?,
+                           kind=?, environment=?, bundle_id=?, activity_id=?, registered_at=?,
                            active=1, deactivated_reason=NULL, registration_nonce=?
                            WHERE token=?""",
                         (
                             user_id,
                             device_id,
+                            server,
                             kind,
                             environment,
                             bundle_id,
@@ -730,6 +738,21 @@ class Registry:
                    ORDER BY l.device_id, l.created_at, l.id"""
             ).fetchall()
             return [_live_activity(row) for row in rows]
+        finally:
+            db.close()
+
+    def live_activity_owners(self, limit: int) -> list[tuple[int, str]]:
+        """Distinct (owner, server) pairs among the active tokens, at most ``limit``."""
+        db = self._connect()
+        try:
+            rows = db.execute(
+                """SELECT DISTINCT l.user_id, l.server FROM live_activities l JOIN devices d
+                   ON d.device_id = l.device_id AND d.user_id = l.user_id
+                   WHERE l.active=1 AND d.active=1
+                   ORDER BY l.user_id, l.server LIMIT ?""",
+                (limit,),
+            ).fetchall()
+            return [(row[0], row[1]) for row in rows]
         finally:
             db.close()
 

@@ -16,13 +16,15 @@ import time
 from functools import lru_cache
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
+from condor.push import live_activity as la
 from condor.push.config import bundle_allowed
 from condor.push.events import ALERT_CLASSES
 from condor.push.heartbeat import evaluate_heartbeat
 from condor.push.store import (
+    SERVER_NAME,
     Registry,
     RegistryError,
     normalize_classes,
@@ -30,6 +32,8 @@ from condor.push.store import (
 )
 from condor.web.auth import get_current_user
 from condor.web.models import WebUser
+from condor.web.routes import fleet_summary as fleet_summary_routes
+from config_manager import get_config_manager
 
 router = APIRouter(prefix="/push", tags=["push"])
 
@@ -69,6 +73,7 @@ class LiveActivityRegistration(BaseModel):
     environment: Literal["sandbox", "production"]
     bundle_id: str = Field(max_length=155)
     device_id: str = Field(max_length=32)
+    server: str = Field(max_length=100)
     activity_id: str | None = Field(default=None, max_length=64)
 
 
@@ -165,6 +170,10 @@ def register_live_activity(
     registry, bundle, environments = _server()
     if not _DEVICE_ID.fullmatch(body.device_id):
         raise HTTPException(404, "Device not found")
+    if not SERVER_NAME.fullmatch(
+        body.server
+    ) or not get_config_manager().has_server_access(user.id, body.server):
+        raise HTTPException(404, "Server not found")
     if not bundle_allowed(bundle, body.bundle_id):
         raise HTTPException(422, "This server does not send to that bundle identifier")
     if body.environment not in environments:
@@ -175,6 +184,7 @@ def register_live_activity(
         token = registry.upsert_live_activity(
             user_id=user.id,
             device_id=body.device_id,
+            server=body.server,
             kind=body.kind,
             token=body.token,
             environment=body.environment,
@@ -187,6 +197,25 @@ def register_live_activity(
     except RegistryError as exc:
         raise HTTPException(422, str(exc)) from None
     return _json({"id": token.id}, 201)
+
+
+@router.get("/live-activities/content")
+async def live_activity_content(
+    server: str = Query(max_length=100), user: WebUser = Depends(get_current_user)
+):
+    """The Live Activity content state for the caller and server: exactly what the push
+    worker sends, built from the same cached glance as ``/fleet/summary?view=glance``. The app
+    starts and locally updates its activity with it, so it never computes content itself.
+    """
+    if not SERVER_NAME.fullmatch(server):
+        raise HTTPException(404, "Server not found")
+    try:
+        glance = await fleet_summary_routes.glance_for(server, user.id)
+    except LookupError:
+        raise HTTPException(404, "Server not found") from None
+    except TimeoutError:
+        raise HTTPException(504, "Fleet summary exceeded its deadline") from None
+    return _json(la.content_state(glance))
 
 
 @router.delete("/live-activities/{live_id}")

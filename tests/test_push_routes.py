@@ -341,6 +341,11 @@ def test_boundary_allows_only_the_device_and_test_routes_when_push_is_enabled(
         ("post", "/api/v1/push/heartbeat"),
         ("post", "/api/v1/push/test/abc"),
         ("post", "/api/v1/push/send"),
+        ("put", "/api/v1/push/live-activities"),
+        ("post", f"/api/v1/push/live-activities/{device_id}"),
+        ("delete", "/api/v1/push/live-activities"),
+        ("delete", "/api/v1/push/live-activities/NOT-HEX"),
+        ("delete", f"/api/v1/push/live-activities/{device_id}/x"),
         ("post", "/api/v1/servers/local/bots/x/native/start"),
         ("post", "/api/v1/trade/order"),
     ]:
@@ -363,6 +368,16 @@ def test_boundary_blocks_push_mutations_unless_the_deployment_enables_push(
         client.delete("/api/v1/push/devices/" + "0" * 32, headers=H).status_code == 403
     )
     assert (
+        client.post(
+            "/api/v1/push/live-activities", json={"kind": "start"}, headers=H
+        ).status_code
+        == 403
+    )
+    assert (
+        client.delete("/api/v1/push/live-activities/" + "0" * 32, headers=H).status_code
+        == 403
+    )
+    assert (
         client.get("/api/v1/push/settings", headers=H).status_code == 200
     )  # reads stay available
 
@@ -383,9 +398,182 @@ def test_router_exposes_only_the_documented_paths():
     )
     assert paths == [
         (("DELETE",), "/push/devices/{device_id}"),
+        (("DELETE",), "/push/live-activities/{live_id}"),
         (("GET",), "/push/heartbeat"),
         (("GET",), "/push/settings"),
         (("GET",), "/push/test/{request_id}"),
         (("POST",), "/push/devices"),
+        (("POST",), "/push/live-activities"),
         (("POST",), "/push/test"),
     ]
+
+
+# ------------------------------------------------------------------ Live Activity tokens
+
+ACTIVITY = "8a1d3c55-7c2e-4f0b-9a57-2f3e0c7b1d42"
+LIVE_TOKEN = "d4" * 40
+
+
+def _live(device_id, **kw):
+    return {
+        "kind": "update",
+        "token": LIVE_TOKEN,
+        "environment": "sandbox",
+        "bundle_id": BUNDLE,
+        "device_id": device_id,
+        "activity_id": ACTIVITY,
+        **kw,
+    }
+
+
+def _registered(client):
+    return client.post("/api/v1/push/devices", json=_device(), headers=H).json()[
+        "device"
+    ]["device_id"]
+
+
+def test_live_activity_routes_need_a_login_and_a_configured_server(
+    monkeypatch, tmp_path
+):
+    app = FastAPI()
+    app.include_router(push_routes.router, prefix="/api/v1")
+    anonymous = TestClient(ReadOnlyWeb(app, allow_push_devices=True))
+    assert anonymous.post(
+        "/api/v1/push/live-activities", json=_live("0" * 32)
+    ).status_code in (401, 403)
+    assert anonymous.delete("/api/v1/push/live-activities/" + "0" * 32).status_code in (
+        401,
+        403,
+    )
+    client, _ = _client(monkeypatch, tmp_path, configured=False)
+    assert (
+        client.post(
+            "/api/v1/push/live-activities", json=_live("0" * 32), headers=H
+        ).status_code
+        == 503
+    )
+    assert (
+        client.delete("/api/v1/push/live-activities/" + "0" * 32, headers=H).status_code
+        == 503
+    )
+
+
+def test_register_a_live_activity_token_idempotently_and_unregister_it(
+    monkeypatch, tmp_path
+):
+    client, registry = _client(monkeypatch, tmp_path)
+    device_id = _registered(client)
+    created = client.post(
+        "/api/v1/push/live-activities", json=_live(device_id), headers=H
+    )
+    assert created.status_code == 201
+    assert created.headers["cache-control"] == "no-store"
+    live_id = created.json()["id"]
+    assert set(created.json()) == {"id"} and len(live_id) == 32
+    assert LIVE_TOKEN not in created.text
+    again = client.post(
+        "/api/v1/push/live-activities", json=_live(device_id), headers=H
+    )
+    assert again.status_code == 201 and again.json() == {"id": live_id}
+    start = client.post(
+        "/api/v1/push/live-activities",
+        json=_live(device_id, kind="start", token="f6" * 40, activity_id=None),
+        headers=H,
+    )
+    assert start.status_code == 201 and start.json()["id"] != live_id
+    stored = registry.get_live_activity(live_id)
+    assert (stored.kind, stored.activity_id, stored.device_id) == (
+        "update",
+        ACTIVITY,
+        device_id,
+    )
+    deleted = client.delete(f"/api/v1/push/live-activities/{live_id}", headers=H)
+    assert deleted.status_code == 204 and deleted.content == b""
+    assert (
+        client.delete(f"/api/v1/push/live-activities/{live_id}", headers=H).status_code
+        == 404
+    )
+    # Unregistering the device (sign-out, stop alerts) removes its remaining tokens.
+    assert (
+        client.delete(f"/api/v1/push/devices/{device_id}", headers=H).status_code == 200
+    )
+    assert registry.get_live_activity(start.json()["id"]) is None
+
+
+def test_live_activity_tokens_belong_to_the_devices_owner(monkeypatch, tmp_path):
+    client, _ = _client(monkeypatch, tmp_path)
+    device_id = _registered(client)
+    live_id = client.post(
+        "/api/v1/push/live-activities", json=_live(device_id), headers=H
+    ).json()["id"]
+    other, _ = _client(monkeypatch, tmp_path, user_id=2)
+    assert (
+        other.post(
+            "/api/v1/push/live-activities",
+            json=_live(device_id, token="e5" * 40),
+            headers=H,
+        ).status_code
+        == 404
+    )
+    assert (
+        other.delete(f"/api/v1/push/live-activities/{live_id}", headers=H).status_code
+        == 404
+    )
+
+
+@pytest.mark.parametrize(
+    "change,status",
+    [
+        ({"kind": "end"}, 422),
+        ({"token": "not hex"}, 422),
+        ({"token": "ab" * 8}, 422),
+        ({"token": "ab" * 129}, 422),
+        ({"environment": "staging"}, 422),
+        ({"environment": "production"}, 422),  # not the device's environment
+        ({"bundle_id": "com.other.app"}, 422),
+        (
+            {"bundle_id": BUNDLE + ".watch"},
+            422,
+        ),  # allowed by the server, not this device's
+        ({"activity_id": None}, 422),
+        ({"activity_id": "not-a-uuid"}, 422),
+        ({"kind": "start"}, 422),  # a push-to-start token carries no activity id
+        ({"device_id": "0" * 32}, 404),
+        ({"device_id": "XYZ"}, 404),
+        ({"unknown": 1}, 422),
+    ],
+)
+def test_invalid_live_activity_registrations_store_nothing(
+    monkeypatch, tmp_path, change, status
+):
+    client, registry = _client(monkeypatch, tmp_path)
+    device_id = _registered(client)
+    body = {**_live(device_id), **change}
+    response = client.post("/api/v1/push/live-activities", json=body, headers=H)
+    assert response.status_code == status, response.text
+    assert registry.active_live_activities() == []
+
+
+def test_live_activities_need_an_environment_the_server_sends_to(monkeypatch, tmp_path):
+    client, _ = _client(monkeypatch, tmp_path, environment="production")
+    assert (
+        client.post(
+            "/api/v1/push/live-activities", json=_live("0" * 32), headers=H
+        ).status_code
+        == 422
+    )
+
+
+def test_a_watch_registration_takes_no_live_activity(monkeypatch, tmp_path):
+    client, _ = _client(monkeypatch, tmp_path)
+    watch = client.post(
+        "/api/v1/push/devices",
+        json=_device(TOKEN_W, platform="watch", bundle_id=WATCH_BUNDLE),
+        headers=H,
+    ).json()["device"]["device_id"]
+    response = client.post(
+        "/api/v1/push/live-activities",
+        json=_live(watch, bundle_id=WATCH_BUNDLE),
+        headers=H,
+    )
+    assert response.status_code == 422 and "iPhone" in response.text

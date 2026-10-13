@@ -62,6 +62,16 @@ class DeviceRegistration(BaseModel):
     quiet_hours: QuietHours | None = None
 
 
+class LiveActivityRegistration(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["update", "start"]
+    token: str = Field(max_length=256)
+    environment: Literal["sandbox", "production"]
+    bundle_id: str = Field(max_length=155)
+    device_id: str = Field(max_length=32)
+    activity_id: str | None = Field(default=None, max_length=64)
+
+
 class AlertTestRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
     device_id: str | None = Field(default=None, max_length=32)
@@ -143,6 +153,53 @@ def unregister_device(device_id: str, user: WebUser = Depends(get_current_user))
     ):
         raise HTTPException(404, "Device not found")
     return _json({"deleted": device_id})
+
+
+@router.post("/live-activities")
+def register_live_activity(
+    body: LiveActivityRegistration, user: WebUser = Depends(get_current_user)
+):
+    """Register an ActivityKit push token (an activity's update token or the device's
+    push-to-start token) for one of the caller's registered iPhones. The same token is
+    idempotent: it keeps its id."""
+    registry, bundle, environments = _server()
+    if not _DEVICE_ID.fullmatch(body.device_id):
+        raise HTTPException(404, "Device not found")
+    if not bundle_allowed(bundle, body.bundle_id):
+        raise HTTPException(422, "This server does not send to that bundle identifier")
+    if body.environment not in environments:
+        raise HTTPException(
+            422, f"This server sends to {' and '.join(environments)} devices only"
+        )
+    try:
+        token = registry.upsert_live_activity(
+            user_id=user.id,
+            device_id=body.device_id,
+            kind=body.kind,
+            token=body.token,
+            environment=body.environment,
+            bundle_id=body.bundle_id,
+            activity_id=body.activity_id,
+            now=_clock(),
+        )
+    except LookupError:
+        raise HTTPException(404, "Device not found") from None
+    except RegistryError as exc:
+        raise HTTPException(422, str(exc)) from None
+    return _json({"id": token.id}, 201)
+
+
+@router.delete("/live-activities/{live_id}")
+def unregister_live_activity(live_id: str, user: WebUser = Depends(get_current_user)):
+    """The app ends an activity (or turns the Live Activity off): forget its token."""
+    from fastapi.responses import Response
+
+    registry, _, _ = _server()
+    if not _DEVICE_ID.fullmatch(live_id) or not registry.delete_live_activity(
+        user.id, live_id
+    ):
+        raise HTTPException(404, "Live Activity not found")
+    return Response(status_code=204, headers=_NO_STORE)
 
 
 @router.get("/settings")

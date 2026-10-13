@@ -13,8 +13,9 @@ older than twice the interval is never sent.
 Pushes (``apns-push-type: liveactivity``, priority 5 so they do not count against the
 ActivityKit budget) go to every active ``update`` token when the content changed or the last
 send is 5 minutes old, paced by ``push.live_activity.interval_seconds``. iOS ends an activity
-after 8 hours, so an activity older than ``restart_after_seconds`` (or a device with a
-push-to-start token and no activity) gets one push-to-start per window. Per-token and
+after 8 hours, so an activity older than ``restart_after_seconds`` (its age follows the
+activity id, not a rotated token) is replaced by one push-to-start per window; a device with no
+activity (dismissed or switched off in the app) is never started by the server. Per-token and
 per-device send state lives in the outbox kv, so a restart cannot burst. Outcomes use their own
 APNs client and never mix into the alert-delivery health; eligibility and the credential pause
 are the Deliverer's.
@@ -47,6 +48,8 @@ START_ALERT = {"title": "RSIBOT", "body": "Fleet live view"}
 STATE_KEY = "live_activity_state"  # {"tokens": {id: {...}}, "starts": {device: {...}}}
 # Registry meta key prefix of the content Condor web publishes per (owner, server).
 CONTENT_META_PREFIX = "live_activity_content"
+# Registry meta key of the web publisher's last pass (counts, incl. ``dropped_pairs``).
+PUBLISHER_META_KEY = "live_activity_publisher"
 MAX_PUBLISHED_PAIRS = 8
 UNCHANGED_RESEND_SECONDS = (
     300.0  # an unchanged activity still hears from us every 5 minutes
@@ -55,9 +58,6 @@ MIN_RETRY_SECONDS = 60.0
 # iOS ends an activity after 8 hours and removes it from the Lock Screen at most 4 hours later;
 # an update token older than that cannot belong to a visible activity.
 ACTIVITY_MAX_LIFETIME_SECONDS = 12 * 3600.0
-# A freshly registered push-to-start token usually precedes the app's own activity by seconds;
-# do not answer it with a second activity before the app had time to register its update token.
-START_GRACE_SECONDS = 120.0
 SEND_CONCURRENCY = 8
 _CENT = Decimal("0.01")
 _STALE_SECTION_STATES = frozenset({"stale", "missing"})
@@ -272,6 +272,8 @@ def build_start_payload(
             "attributes-type": ATTRIBUTES_TYPE,
             "attributes": {"server": server},
             "alert": dict(START_ALERT),
+            # iOS 18+: the started activity reports a new update token to the app.
+            "input-push-token": 1,
         }
     }
 
@@ -304,6 +306,12 @@ def build_request(
 # --------------------------------------------------------------------------- sender
 
 
+def _activity_start(token: "LiveActivityToken") -> float:
+    """When the token's activity began; a token without a recorded start counts from itself."""
+    started = token.activity_started_at
+    return token.created_at if started is None else started
+
+
 def _retry_wait(outcome: ApnsOutcome, ceiling: float) -> float:
     return min(ceiling, max(MIN_RETRY_SECONDS, outcome.retry_after or 0.0))
 
@@ -332,6 +340,7 @@ class LiveActivitySender:
         self.last_stats: Counter[str] = Counter()
         self.last_sent_at: float | None = None
         self.last_start_at: float | None = None
+        self.last_error: str | None = None
 
     def _targets(self) -> list["LiveActivityToken"]:
         devices = {
@@ -376,7 +385,7 @@ class LiveActivitySender:
         for token in targets:
             if (
                 token.kind == "update"
-                and now - token.created_at >= ACTIVITY_MAX_LIFETIME_SECONDS
+                and now - _activity_start(token) >= ACTIVITY_MAX_LIFETIME_SECONDS
             ):
                 self.registry.deactivate_live_activity(token, "ActivityEnded")
             else:
@@ -409,7 +418,12 @@ class LiveActivitySender:
     def _restarts(
         self, targets: list["LiveActivityToken"], starts: Mapping[str, Any], now: float
     ) -> list["LiveActivityToken"]:
-        """The start token of every device whose activity is missing or about to be ended."""
+        """The start token of every device whose current activity has aged out.
+
+        Only an activity iOS is about to end is replaced. A device with no activity (the
+        user dismissed it, or turned it off) is never started by the server: the app owns
+        that choice. At most once per ``restart_after_seconds`` per device.
+        """
         cfg = self.config.live_activity
         by_device: dict[str, dict[str, list["LiveActivityToken"]]] = {}
         for token in targets:
@@ -418,20 +432,16 @@ class LiveActivitySender:
             ].append(token)
         due = []
         for device_id, kinds in sorted(by_device.items()):
-            if not kinds["start"]:
+            if not kinds["start"] or not kinds["update"]:
                 continue
             start = max(kinds["start"], key=lambda t: (t.registered_at, t.id))
-            newest = max((t.created_at for t in kinds["update"]), default=None)
-            if newest is None:
-                needed = now - start.registered_at >= START_GRACE_SECONDS
-            else:
-                needed = now - newest >= cfg.restart_after_seconds
+            current = max(_activity_start(t) for t in kinds["update"])
             entry = starts.get(device_id) or {}
             retry_at, last = entry.get("retry_at"), entry.get("last")
             allowed = (retry_at is None or now >= retry_at) and (
                 last is None or now < last or now - last >= cfg.restart_after_seconds
             )
-            if needed and allowed:
+            if now - current >= cfg.restart_after_seconds and allowed:
                 due.append(start)
         return due
 
@@ -494,7 +504,13 @@ class LiveActivitySender:
         self.outbox.set_kv(STATE_KEY, state)
         if stats:
             self.last_stats = stats
+            self.last_error = None
         return stats
+
+    def record_failure(self, exc: BaseException) -> None:
+        """A pass that raised: reported in the heartbeat, never in alert health."""
+        self.last_stats = Counter({"error": 1})
+        self.last_error = exc.__class__.__name__
 
     async def _send(
         self,
@@ -594,5 +610,13 @@ class LiveActivitySender:
             "last_sent_at": self.last_sent_at,
             "last_start_at": self.last_start_at,
             "last_stats": dict(self.last_stats),
+            "last_error": self.last_error,
             "apns_auth_ok": self.apns.auth_ok,
+            "publisher": self._publisher_pass(),
         }
+
+    def _publisher_pass(self) -> Any:
+        try:
+            return self.registry.get_meta(PUBLISHER_META_KEY)
+        except Exception:  # noqa: BLE001 - the heartbeat must still go out
+            return None

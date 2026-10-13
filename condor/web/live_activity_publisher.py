@@ -59,15 +59,27 @@ async def publish_once(
     *,
     clock: Callable[[], float] = time.time,
 ) -> int:
-    """Build and store the content for every (owner, server) with an active token."""
-    pairs = await asyncio.to_thread(
-        registry.live_activity_owners, la.MAX_PUBLISHED_PAIRS
-    )
-    written = 0
-    for user_id, server in pairs:
+    """Build and store the content for every (owner, server) with an active token, at most
+    ``MAX_PUBLISHED_PAIRS``; the pass's counts go to the registry for the worker heartbeat.
+    """
+    pairs = await asyncio.to_thread(registry.live_activity_owners)
+    if not pairs:
+        return 0
+    kept = pairs[: la.MAX_PUBLISHED_PAIRS]
+    dropped = len(pairs) - len(kept)
+    if dropped:
+        logger.warning(
+            "live activity publisher dropped %d of %d owner/server pairs (limit %d)",
+            dropped,
+            len(pairs),
+            la.MAX_PUBLISHED_PAIRS,
+        )
+    written = failed = 0
+    for user_id, server in kept:
         try:
             state = la.content_state(await glance_for(server, user_id))
         except LookupError:
+            failed += 1
             logger.warning(
                 "live activity content skipped: user %s has no access to server %s",
                 user_id,
@@ -75,6 +87,7 @@ async def publish_once(
             )
             continue
         except Exception as exc:  # noqa: BLE001 - one pair never stops the others
+            failed += 1
             logger.warning(
                 "live activity content for server %s failed error=%s",
                 server,
@@ -85,6 +98,17 @@ async def publish_once(
             la.publish_content, registry, user_id, server, state, built_at=clock()
         )
         written += 1
+    await asyncio.to_thread(
+        registry.set_meta,
+        la.PUBLISHER_META_KEY,
+        {
+            "built_at": clock(),
+            "pairs": len(pairs),
+            "published": written,
+            "failed": failed,
+            "dropped_pairs": dropped,
+        },
+    )
     return written
 
 

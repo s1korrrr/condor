@@ -387,10 +387,44 @@ def test_owners_are_the_distinct_active_owner_and_server_pairs(tmp_path):
     _register(registry, iphone.device_id)
     _register(registry, iphone.device_id, token=START_TOKEN, kind="start")
     _register(registry, iphone.device_id, token=UPDATE_TOKEN_2, server="other")
-    assert registry.live_activity_owners(8) == [(1, "other"), (1, SERVER)]
-    assert registry.live_activity_owners(1) == [(1, "other")]
+    assert registry.live_activity_owners() == [(1, "other"), (1, SERVER)]
     registry.deactivate(iphone.device_id, "Unregistered")
-    assert registry.live_activity_owners(8) == []
+    assert registry.live_activity_owners() == []
+
+
+def test_an_activitys_age_survives_token_rotation_and_deletion(tmp_path):
+    registry, iphone, _ = _registry(tmp_path)
+    first = _register(registry, iphone.device_id, now=200.0)
+    assert first.activity_started_at == 200.0
+    # iOS rotates the activity's push token: the app deletes the old row, then registers the
+    # new token for the same activity. The activity is still the one started at 200.
+    assert registry.delete_live_activity(1, first.id)
+    rotated = _register(registry, iphone.device_id, token=UPDATE_TOKEN_2, now=5000.0)
+    assert rotated.created_at == 5000.0 and rotated.activity_started_at == 200.0
+    [active] = registry.active_live_activities()
+    assert active.activity_started_at == 200.0
+    other = _register(
+        registry,
+        iphone.device_id,
+        token="c7" * 40,
+        activity_id="0b0f7a30-2a4e-4c8e-8f43-0d8a6c3e9b11",
+        now=6000.0,
+    )
+    assert other.activity_started_at == 6000.0  # a different activity has its own start
+    start = _register(registry, iphone.device_id, token=START_TOKEN, kind="start")
+    assert start.activity_started_at is None
+    # The activity's start is per device: another device cannot borrow or reset it.
+    assert registry.delete_device(1, iphone.device_id)
+    iphone = registry.upsert_device(
+        user_id=1,
+        token=TOKEN_A,
+        platform="iphone",
+        bundle_id=BUNDLE,
+        environment="sandbox",
+        app_version="1",
+    )
+    again = _register(registry, iphone.device_id, now=9000.0)
+    assert again.activity_started_at == 9000.0  # the device's history went with it
 
 
 # --------------------------------------------------------------------------- published content
@@ -468,7 +502,7 @@ def test_one_failing_pair_never_stops_the_others(tmp_path, caplog):
     assert registry.get_meta(la.content_key(1, SERVER)) is not None
 
 
-def test_publisher_pairs_are_bounded(tmp_path):
+def test_publisher_pairs_are_bounded(tmp_path, caplog):
     from condor.web import live_activity_publisher as publisher
 
     registry, iphone, _ = _registry(tmp_path)
@@ -486,7 +520,17 @@ def test_publisher_pairs_are_bounded(tmp_path):
             registry, device.device_id, token=f"{n + 16:02x}" * 40, server=f"s{n}"
         )
     glances = Glances()
-    assert run(publisher.publish_once(registry, glances)) == la.MAX_PUBLISHED_PAIRS
+    with caplog.at_level("WARNING", logger="condor.web.live_activity"):
+        published = run(publisher.publish_once(registry, glances, clock=lambda: 77.0))
+    assert published == la.MAX_PUBLISHED_PAIRS
+    assert caplog.text.count("dropped 2") == 1
+    assert registry.get_meta(la.PUBLISHER_META_KEY) == {
+        "built_at": 77.0,
+        "pairs": la.MAX_PUBLISHED_PAIRS + 2,
+        "published": la.MAX_PUBLISHED_PAIRS,
+        "failed": 0,
+        "dropped_pairs": 2,
+    }
 
 
 @pytest.mark.parametrize(
@@ -780,29 +824,116 @@ def test_each_token_gets_the_content_of_its_own_server(tmp_path):
         r.close()
 
 
-def test_a_device_with_only_a_start_token_gets_one_push_to_start_per_window(tmp_path):
+def starts_sent(r):
+    return [q for q in live(r) if q["path"] == f"/3/device/{START_TOKEN}"]
+
+
+def test_a_device_with_only_a_start_token_is_never_restarted(tmp_path):
     r = live_rig(tmp_path)
     try:
         register(r, START_TOKEN, kind="start")
+        for _ in range(4):
+            r.cycle(27900)
+        assert starts_sent(r) == []
+    finally:
+        r.close()
+
+
+def test_a_dismissed_activity_is_not_brought_back(tmp_path):
+    # Regression (review 2026-10-13): the app started the activity itself, the user swiped
+    # it away and the app deleted its update token; the start token stays registered. The
+    # server used to answer with a push-to-start within a minute and every window after.
+    r = live_rig(tmp_path)
+    try:
+        update = register(r)
+        register(r, START_TOKEN, kind="start")
         r.cycle()
-        assert live(r) == []  # the app is about to register its own activity
-        r.cycle(120)
-        [start] = live(r)
-        assert start["path"] == f"/3/device/{START_TOKEN}"
+        assert [q["path"] for q in live(r)] == [f"/3/device/{UPDATE_TOKEN}"]
+        r.cycle(1800)
+        assert r.registry.delete_live_activity(1, update.id)
+        r.cycle(60)
+        for _ in range(3):
+            r.cycle(27900)
+        assert starts_sent(r) == []
+    finally:
+        r.close()
+
+
+def test_an_aged_out_activity_is_restarted_once_per_window(tmp_path):
+    r = live_rig(tmp_path)
+    try:
+        register(r)
+        register(r, START_TOKEN, kind="start")
+        r.cycle()
+        assert [q["path"] for q in live(r)] == [f"/3/device/{UPDATE_TOKEN}"]
+        r.cycle(27900 - 10)
+        assert starts_sent(r) == []
+        r.cycle(10)
+        [start] = starts_sent(r)
         assert start["headers"]["apns-topic"] == LIVE_TOPIC
+        assert start["headers"]["apns-push-type"] == "liveactivity"
         aps = json.loads(start["body"])["aps"]
         assert aps["event"] == "start"
         assert aps["attributes-type"] == "FleetActivityAttributes"
         assert aps["attributes"] == {"server": SERVER}  # the token's server
         assert aps["alert"] == {"title": "RSIBOT", "body": "Fleet live view"}
+        assert (
+            aps["input-push-token"] == 1
+        )  # iOS 18: the new activity gets an update token
         assert "sound" not in aps
         assert aps["content-state"]["v"] == 1
         r.restart()
         for _ in range(10):
             r.cycle(600)
-        assert len(live(r)) == 1  # at most once per restart window, restarts included
-        r.cycle(27900 - 6000)
-        assert len(live(r)) == 2
+        assert len(starts_sent(r)) == 1  # once per window, restarts included
+    finally:
+        r.close()
+
+
+def test_the_restarted_activity_is_not_restarted_again_early(tmp_path):
+    r = live_rig(tmp_path)
+    try:
+        register(r)
+        register(r, START_TOKEN, kind="start")
+        r.cycle()
+        r.cycle(27900)
+        assert len(starts_sent(r)) == 1
+        # The new activity registers its update token; the old one stays until it dies.
+        register(r, UPDATE_TOKEN_2, activity_id="0b0f7a30-2a4e-4c8e-8f43-0d8a6c3e9b11")
+        r.cycle(27900 - 600)
+        assert len(starts_sent(r)) == 1
+        r.cycle(600)
+        assert len(starts_sent(r)) == 2  # the new activity aged out in turn
+    finally:
+        r.close()
+
+
+def test_restart_age_follows_the_activity_not_its_rotated_token(tmp_path):
+    r = live_rig(tmp_path)
+    try:
+        first = register(r)
+        register(r, START_TOKEN, kind="start")
+        r.cycle()
+        r.cycle(20000)
+        assert r.registry.delete_live_activity(1, first.id)
+        register(r, UPDATE_TOKEN_2)  # same activity, rotated token
+        r.cycle(7900)
+        assert len(starts_sent(r)) == 1  # 27,905 s after the activity began
+    finally:
+        r.close()
+
+
+def test_a_suspended_app_dismissal_is_restarted_once_when_aged_out(tmp_path):
+    # The app is suspended when the user dismisses: nothing deletes the update token, so the
+    # server cannot tell; it restarts once when the activity would have aged out anyway.
+    r = live_rig(tmp_path)
+    try:
+        register(r)
+        register(r, START_TOKEN, kind="start")
+        r.cycle()
+        r.cycle(600)
+        r.cycle(27900)
+        assert len(starts_sent(r)) == 1
     finally:
         r.close()
 
@@ -810,33 +941,13 @@ def test_a_device_with_only_a_start_token_gets_one_push_to_start_per_window(tmp_
 def test_no_push_to_start_without_fresh_content(tmp_path):
     r = live_rig(tmp_path)
     try:
-        register(r, START_TOKEN, kind="start")
-        r.publishing = False
-        r.cycle(200)
-        assert live(r) == [] and stats(r) == {"stale_source": 1}
-    finally:
-        r.close()
-
-
-def test_an_activity_near_the_8_hour_limit_is_restarted_once(tmp_path):
-    r = live_rig(tmp_path)
-    try:
         register(r)
         register(r, START_TOKEN, kind="start")
         r.cycle()
-        assert [q["path"] for q in live(r)] == [f"/3/device/{UPDATE_TOKEN}"]
+        r.publishing = False
         r.cycle(27900)
-        starts = [q for q in live(r) if q["path"] == f"/3/device/{START_TOKEN}"]
-        assert len(starts) == 1
-        r.cycle(300)
-        r.cycle(300)
-        starts = [q for q in live(r) if q["path"] == f"/3/device/{START_TOKEN}"]
-        assert len(starts) == 1
-        # The restarted activity registers its update token: no further restart is due.
-        register(r, UPDATE_TOKEN_2, activity_id="0b0f7a30-2a4e-4c8e-8f43-0d8a6c3e9b11")
-        r.cycle(27900 - 600)
-        starts = [q for q in live(r) if q["path"] == f"/3/device/{START_TOKEN}"]
-        assert len(starts) == 1
+        assert starts_sent(r) == []
+        assert stats(r) == {"stale_source": 2}  # the update and the restart both waited
     finally:
         r.close()
 
@@ -960,5 +1071,45 @@ def test_a_transient_failure_retries_after_a_minute(tmp_path):
         assert len(live(r)) == 1
         r.cycle(40)
         assert len(live(r)) == 2
+    finally:
+        r.close()
+
+
+def test_a_failing_live_activity_pass_never_disturbs_the_alert_cycle(tmp_path, caplog):
+    r = live_rig(tmp_path)
+    try:
+        register(r)
+
+        async def broken():
+            raise RuntimeError("boom")
+
+        r.worker.live_activity.send_due = broken
+        request_id = r.registry.add_test_request(1, [], now=r.clock())
+        with caplog.at_level("WARNING", logger="condor.push"):
+            r.cycle()
+        assert r.worker.last_cycle_error is None
+        assert "cycle_error" not in r.worker.degraded_reasons(r.clock())
+        assert r.registry.get_request(1, request_id)["state"] == "done"
+        beat = r.worker.heartbeat_payload(r.clock())["live_activity"]
+        assert beat["last_stats"] == {"error": 1}
+        assert beat["last_error"] == "RuntimeError"
+        assert "live activity pass failed" in caplog.text
+    finally:
+        r.close()
+
+
+def test_the_heartbeat_shows_the_web_publishers_last_pass(tmp_path):
+    r = live_rig(tmp_path)
+    try:
+        pass_meta = {
+            "built_at": r.clock(),
+            "pairs": 9,
+            "published": 8,
+            "failed": 0,
+            "dropped_pairs": 1,
+        }
+        r.registry.set_meta(la.PUBLISHER_META_KEY, pass_meta)
+        beat = r.worker.heartbeat_payload(r.clock())["live_activity"]
+        assert beat["publisher"] == pass_meta
     finally:
         r.close()

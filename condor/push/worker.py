@@ -329,7 +329,15 @@ class PushWorker:
         if self.refresh is not None:
             await self.refresh.send_due()
         if self.live_activity is not None:
-            await self.live_activity.send_due()
+            # Isolated: a failing Live Activity pass never touches alert health or the rest
+            # of this cycle.
+            try:
+                await self.live_activity.send_due()
+            except Exception as exc:  # noqa: BLE001
+                self.live_activity.record_failure(exc)
+                logger.warning(
+                    "live activity pass failed error=%s", exc.__class__.__name__
+                )
         self._finish_test_requests()
         if now - self._last_prune >= PRUNE_EVERY_SECONDS:
             self._last_prune = now

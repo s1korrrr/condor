@@ -250,6 +250,9 @@ class LiveActivityToken:
     active: bool
     registration_nonce: str
     deactivated_reason: str | None = None
+    # When the *activity* began (update tokens only): the earliest registration of any token
+    # for this activity id on this device, kept across token rotation and deletion.
+    activity_started_at: float | None = None
 
 
 def _live_activity(row: sqlite3.Row) -> LiveActivityToken:
@@ -269,7 +272,17 @@ def _live_activity(row: sqlite3.Row) -> LiveActivityToken:
         active=bool(row["active"]),
         registration_nonce=row["registration_nonce"],
         deactivated_reason=row["deactivated_reason"],
+        activity_started_at=row["activity_started_at"],
     )
+
+
+# Every read of a token carries its activity's start (see LiveActivityToken).
+_LIVE_SELECT = """SELECT l.*, CASE WHEN l.kind='update'
+    THEN COALESCE(s.started_at, l.created_at) END AS activity_started_at
+    FROM live_activities l LEFT JOIN live_activity_starts s
+    ON s.device_id = l.device_id AND s.activity_id = l.activity_id"""
+# An activity lives at most 12 hours; a start older than this cannot matter any more.
+ACTIVITY_START_RETENTION_SECONDS = 86400.0
 
 
 def _open(path: Path, *, wal: bool) -> sqlite3.Connection:
@@ -327,6 +340,11 @@ class Registry:
                     active INTEGER NOT NULL DEFAULT 1, deactivated_reason TEXT,
                     registration_nonce TEXT NOT NULL)""",
                 "CREATE INDEX IF NOT EXISTS live_activities_device ON live_activities(device_id)",
+                # When each activity began, per device. Outlives its tokens: iOS rotates an
+                # activity's push token and the app may delete the old row first.
+                """CREATE TABLE IF NOT EXISTS live_activity_starts (
+                    device_id TEXT NOT NULL, activity_id TEXT NOT NULL,
+                    started_at REAL NOT NULL, PRIMARY KEY(device_id, activity_id))""",
             ):
                 db.execute(statement)
             with _transaction(db):
@@ -434,10 +452,11 @@ class Registry:
                             )
                     if not same_owner:
                         # Live Activity tokens belong to the previous owner's session.
-                        db.execute(
-                            "DELETE FROM live_activities WHERE device_id=?",
-                            (row["device_id"],),
-                        )
+                        for table in ("live_activities", "live_activity_starts"):
+                            db.execute(
+                                f"DELETE FROM {table} WHERE device_id=?",
+                                (row["device_id"],),
+                            )
                     saved_classes = json.loads(row["classes"]) if same_owner else {}
                     saved_quiet = (
                         json.loads(row["quiet"]) if same_owner else normalize_quiet({})
@@ -521,9 +540,10 @@ class Registry:
                     > 0
                 )
                 if deleted:
-                    db.execute(
-                        "DELETE FROM live_activities WHERE device_id=?", (device_id,)
-                    )
+                    for table in ("live_activities", "live_activity_starts"):
+                        db.execute(
+                            f"DELETE FROM {table} WHERE device_id=?", (device_id,)
+                        )
                 return deleted
         finally:
             db.close()
@@ -695,10 +715,17 @@ class Registry:
                             token,
                         ),
                     )
-                return _live_activity(
+                if kind == "update":
                     db.execute(
-                        "SELECT * FROM live_activities WHERE token=?", (token,)
-                    ).fetchone()
+                        "DELETE FROM live_activity_starts WHERE started_at < ?",
+                        (now - ACTIVITY_START_RETENTION_SECONDS,),
+                    )
+                    db.execute(
+                        "INSERT OR IGNORE INTO live_activity_starts VALUES (?,?,?)",
+                        (device_id, activity_id, now),
+                    )
+                return _live_activity(
+                    db.execute(_LIVE_SELECT + " WHERE l.token=?", (token,)).fetchone()
                 )
         finally:
             db.close()
@@ -720,9 +747,7 @@ class Registry:
     def get_live_activity(self, live_id: str) -> LiveActivityToken | None:
         db = self._connect()
         try:
-            row = db.execute(
-                "SELECT * FROM live_activities WHERE id=?", (live_id,)
-            ).fetchone()
+            row = db.execute(_LIVE_SELECT + " WHERE l.id=?", (live_id,)).fetchone()
             return None if row is None else _live_activity(row)
         finally:
             db.close()
@@ -732,8 +757,8 @@ class Registry:
         db = self._connect()
         try:
             rows = db.execute(
-                """SELECT l.* FROM live_activities l JOIN devices d
-                   ON d.device_id = l.device_id AND d.user_id = l.user_id
+                _LIVE_SELECT
+                + """ JOIN devices d ON d.device_id = l.device_id AND d.user_id = l.user_id
                    WHERE l.active=1 AND d.active=1
                    ORDER BY l.device_id, l.created_at, l.id"""
             ).fetchall()
@@ -741,16 +766,15 @@ class Registry:
         finally:
             db.close()
 
-    def live_activity_owners(self, limit: int) -> list[tuple[int, str]]:
-        """Distinct (owner, server) pairs among the active tokens, at most ``limit``."""
+    def live_activity_owners(self) -> list[tuple[int, str]]:
+        """Distinct (owner, server) pairs among the active tokens, in a stable order."""
         db = self._connect()
         try:
             rows = db.execute(
                 """SELECT DISTINCT l.user_id, l.server FROM live_activities l JOIN devices d
                    ON d.device_id = l.device_id AND d.user_id = l.user_id
                    WHERE l.active=1 AND d.active=1
-                   ORDER BY l.user_id, l.server LIMIT ?""",
-                (limit,),
+                   ORDER BY l.user_id, l.server"""
             ).fetchall()
             return [(row[0], row[1]) for row in rows]
         finally:

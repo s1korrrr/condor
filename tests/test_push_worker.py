@@ -144,7 +144,14 @@ class FakePing:
 
 class Rig:
     def __init__(
-        self, tmp_path, *, summary=None, discovery=None, extra=None, bots=tuple(BOTS)
+        self,
+        tmp_path,
+        *,
+        summary=None,
+        discovery=None,
+        extra=None,
+        bots=tuple(BOTS),
+        fleet_glance=None,
     ):
         self.clock = Clock()
         self.tmp = tmp_path
@@ -180,6 +187,7 @@ class Rig:
         self.reader = FakeReader(self.clock)
         self.ping_transport = FakePing()
         self.key_path = key_path
+        self.fleet_glance = fleet_glance
         self.start()
 
     def start(self):
@@ -205,6 +213,7 @@ class Rig:
             reader=self.reader,
             ping=self.ping,
             clock=self.clock,
+            fleet_glance=self.fleet_glance,
         )
 
     def restart(self):

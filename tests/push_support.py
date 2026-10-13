@@ -147,6 +147,24 @@ class FakeApple:
                 aps
             ):
                 return self._response(400, {"reason": "InvalidPushType"})
+        elif push_type == "liveactivity":
+            # ActivityKit: the topic is the app's bundle id with the liveactivity suffix and
+            # the aps carries an event, a timestamp and the content state.
+            aps = json.loads(body).get("aps", {})
+            if headers.get("apns-priority") not in {"5", "10"}:
+                return self._response(400, {"reason": "BadPriority"})
+            if not headers.get("apns-topic", "").endswith(".push-type.liveactivity"):
+                return self._response(400, {"reason": "InvalidPushType"})
+            if (
+                aps.get("event") not in {"update", "start", "end"}
+                or type(aps.get("timestamp")) is not int
+                or not isinstance(aps.get("content-state"), dict)
+                or (
+                    aps["event"] == "start"
+                    and not (aps.get("attributes-type") and "attributes" in aps)
+                )
+            ):
+                return self._response(400, {"reason": "BadPayload"})
         elif push_type != "alert" or headers.get("apns-priority") not in {"5", "10"}:
             return self._response(400, {"reason": "BadPriority"})
         if len(headers.get("apns-collapse-id", "x").encode()) > 64:

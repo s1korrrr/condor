@@ -38,6 +38,7 @@ from condor.fleet_telegram import (
 )
 from condor.fleet_trade_alerts import source_key
 from condor.push import events as ev
+from condor.push import live_activity as la
 from condor.push import refresh as rf
 from condor.push.apns import ApnsClient, HttpxApnsTransport, ProviderTokens
 from condor.push.config import PushConfig, PushConfigError
@@ -188,6 +189,7 @@ class PushWorker:
         ping: ExternalPing,
         clock: Callable[[], float] = time.time,
         market_score: Callable[[], Awaitable[float | None]] | None = None,
+        fleet_glance: Callable[[], Awaitable[Mapping[str, Any] | None]] | None = None,
     ):
         self.config, self.registry, self.outbox, self.deliverer = (
             config,
@@ -219,6 +221,31 @@ class PushWorker:
                 clock=clock,
             )
             if config.refresh.enabled
+            else None
+        )
+        # The Live Activity content is Condor's fleet-summary glance. The worker builds none
+        # itself: enabling the sender without a glance source is a configuration error, not
+        # a silently idle feature.
+        if config.live_activity.enabled and fleet_glance is None:
+            raise PushConfigError(
+                "push.live_activity is enabled but this worker has no fleet glance source"
+            )
+        self._fleet_glance = fleet_glance
+        self.live_activity = (
+            la.LiveActivitySender(
+                config,
+                registry,
+                outbox,
+                deliverer,
+                ApnsClient(
+                    deliverer.apns.tokens,
+                    deliverer.apns.transport,
+                    timeout=deliverer.apns.timeout,
+                    clock=clock,
+                ),
+                clock=clock,
+            )
+            if config.live_activity.enabled
             else None
         )
         self._stopping = asyncio.Event()
@@ -308,6 +335,8 @@ class PushWorker:
         await self.deliverer.deliver_due()
         if self.refresh is not None:
             await self.refresh.send_due()
+        if self.live_activity is not None and self._fleet_glance is not None:
+            await self.live_activity.run(self._fleet_glance)
         self._finish_test_requests()
         if now - self._last_prune >= PRUNE_EVERY_SECONDS:
             self._last_prune = now
@@ -565,6 +594,11 @@ class PushWorker:
             **(
                 {"refresh": self.refresh.heartbeat()}
                 if self.refresh is not None
+                else {}
+            ),
+            **(
+                {"live_activity": self.live_activity.heartbeat()}
+                if self.live_activity is not None
                 else {}
             ),
             "external_ping": {

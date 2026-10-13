@@ -641,15 +641,16 @@ def _content_client(monkeypatch, tmp_path, *, user_id=1, allow=True, index=None)
         calls.append((name, admin, user_id))
         return FULL
 
-    async def market_index_for(server, *, max_age_seconds, timeout_seconds):
-        calls.append(("index", server, max_age_seconds, timeout_seconds))
-        return index
+    async def never(server):
+        raise AssertionError("the content route must not build the Market index")
 
+    market = push_routes.live_activity_market
+    monkeypatch.setattr(market, "_published", {})
+    monkeypatch.setattr(market, "build_market_index", never)
+    if index is not None:
+        market.remember_index(SERVER, index, now=NOW - 30)
     monkeypatch.setattr(summary_routes, "get_config_manager", lambda: Servers())
     monkeypatch.setattr(summary_routes, "cached_summary", cached_summary)
-    monkeypatch.setattr(
-        push_routes.live_activity_market, "market_index_for", market_index_for
-    )
     return client, calls
 
 
@@ -667,8 +668,8 @@ def test_content_route_serves_the_content_state_of_the_cached_glance(
     assert response.headers["cache-control"] == "no-store"
     # The glance of the builder's full example is the glance example; its content state is
     # the shared fixture the app decodes.
-    assert response.json() == SHARED_CONTENT  # no Market index available: omitted
-    assert calls == [(SERVER, True, 1), ("index", SERVER, 120.0, 15.0)]
+    assert response.json() == SHARED_CONTENT  # no Market index published: omitted
+    assert calls == [(SERVER, True, 1)]
 
 
 def test_content_route_adds_the_servers_market_index(monkeypatch, tmp_path):
@@ -679,17 +680,22 @@ def test_content_route_adds_the_servers_market_index(monkeypatch, tmp_path):
         "spark": [100.0, 101.23],
         "pairs": 15,
         "expected": 15,
-        "as_of_ms": 1800000000000,
+        "as_of_ms": int((NOW - 90) * 1000),
     }
     monkeypatch.setenv(
         "CONDOR_PUSH_LIVE_ACTIVITY", '{"enabled": true, "interval_seconds": 90}'
     )
-    client, calls = _content_client(monkeypatch, tmp_path, index=index)
-    body = client.get(
-        "/api/v1/push/live-activities/content", params={"server": SERVER}, headers=H
-    ).json()
-    assert body == {**SHARED_CONTENT, "market_index": index}
-    assert calls[-1] == ("index", SERVER, 180.0, 15.0)  # reuse within 2 x interval
+    client, _ = _content_client(monkeypatch, tmp_path, index=index)
+    url, params = "/api/v1/push/live-activities/content", {"server": SERVER}
+    body = client.get(url, params=params, headers=H).json()
+    assert body == {**SHARED_CONTENT, "market_index": index}  # published 30 s ago
+    # Its newest candle closed 120 s ago: still served (published < 2 x 90 s), now stale.
+    monkeypatch.setattr(push_routes, "_clock", lambda: NOW + 90)
+    body = client.get(url, params=params, headers=H).json()
+    assert body["market_index"] == {**index, "stale": True}
+    # Published more than two intervals ago: omitted, and nothing is built in its place.
+    monkeypatch.setattr(push_routes, "_clock", lambda: NOW + 151)
+    assert "market_index" not in client.get(url, params=params, headers=H).json()
 
 
 def test_content_route_needs_a_login_and_access_to_the_server(monkeypatch, tmp_path):
@@ -718,7 +724,7 @@ def test_content_route_is_a_read_that_needs_no_push_mutation_rights(
     response = client.get(
         "/api/v1/push/live-activities/content", params={"server": SERVER}, headers=H
     )
-    assert response.status_code == 200 and len(calls) == 2
+    assert response.status_code == 200 and len(calls) == 1
 
 
 def test_content_route_reports_a_summary_deadline(monkeypatch, tmp_path):

@@ -6,7 +6,8 @@ membership from its composite page (``chart_mode=composite_rsi_v5``, 1d; cached 
 then every (bot, pair) series (1d, 1m, ``compact=false``, ``projection=ohlc``), at most four
 requests at a time under one overall deadline. ``condor.push.market_index`` builds the index;
 the result is the Live Activity ``market_index`` object. Any failure raises
-``MarketIndexUnavailable``: the caller omits the object, it never fabricates one.
+``MarketIndexUnavailable``: the caller omits the object, it never fabricates one. Only the
+publisher builds; the content route serves what the publisher last built.
 """
 
 from __future__ import annotations
@@ -34,9 +35,16 @@ _SAFE_SEGMENT = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,99}")
 
 # (server, bot) -> (read at, sorted pairs). Only successful reads are kept.
 _membership: dict[tuple[str, str], tuple[float, list[str]]] = {}
-# server -> (built at, market_index object): the last index built in this process.
-_latest: dict[str, tuple[float, dict[str, Any]]] = {}
-_locks: dict[str, asyncio.Lock] = {}
+# server -> (published at, market_index object): the last good index the publisher built in
+# this process. The publisher reuses it for a failed pass; the content route serves it.
+_published: dict[str, tuple[float, dict[str, Any]]] = {}
+
+STEP_MS = INTERVAL_SECONDS * 1000
+# Swift ``isStale``: older than 1.5 intervals, counted from the close of the newest candle.
+# ``as_of_ms`` is the newest mean point, i.e. the start of that candle.
+STALE_AFTER_MS = 90_000
+# A failed pass keeps showing the last good index while it is younger than this.
+REUSE_MAX_AGE_MS = 180_000
 
 
 class MarketIndexUnavailable(RuntimeError):
@@ -214,37 +222,37 @@ async def build_market_index(
     headline = mi.headline(mi.build(inputs, expected, now_date), now_date)
     if headline is None:
         raise MarketIndexUnavailable("the index has no point")
-    _latest[server] = (built_at, headline)
     return headline
 
 
-def recent_market_index(
+def remember_index(server: str, headline: dict[str, Any], *, now: float) -> None:
+    """The publisher keeps the last good index per server (``now`` in epoch seconds)."""
+    _published[server] = (now, dict(headline))
+
+
+def _aged(headline: dict[str, Any], now_ms: float) -> dict[str, Any]:
+    """The stored index with ``stale`` recomputed for its age (Swift ``isStale`` rule)."""
+    old = now_ms - (headline["as_of_ms"] + STEP_MS) > STALE_AFTER_MS
+    return {**headline, "stale": bool(headline["stale"] or old)}
+
+
+def reusable_index(server: str, *, now: float) -> dict[str, Any] | None:
+    """For a pass whose build failed: the last good index while its as-of is < 180 s old."""
+    hit = _published.get(server)
+    if hit is None:
+        return None
+    now_ms = now * 1000
+    if not 0 <= now_ms - hit[1]["as_of_ms"] < REUSE_MAX_AGE_MS:
+        return None
+    return _aged(hit[1], now_ms)
+
+
+def published_index(
     server: str, *, max_age_seconds: float, now: float
 ) -> dict[str, Any] | None:
-    hit = _latest.get(server)
+    """For the content route: the last published index when published within
+    ``max_age_seconds``; never built on demand."""
+    hit = _published.get(server)
     if hit is None or not 0 <= now - hit[0] <= max_age_seconds:
         return None
-    return hit[1]
-
-
-async def market_index_for(
-    server: str,
-    *,
-    max_age_seconds: float,
-    timeout_seconds: float,
-    clock: Callable[[], float] = time.time,
-) -> dict[str, Any] | None:
-    """A recent index for the server, else one built now within ``timeout_seconds``; None
-    when it cannot be had in time. Concurrent callers for one server share one build."""
-    hit = recent_market_index(server, max_age_seconds=max_age_seconds, now=clock())
-    if hit is not None:
-        return hit
-    async with _locks.setdefault(server, asyncio.Lock()):
-        hit = recent_market_index(server, max_age_seconds=max_age_seconds, now=clock())
-        if hit is not None:
-            return hit
-        try:
-            async with asyncio.timeout(timeout_seconds):
-                return await build_market_index(server, clock=clock)
-        except (MarketIndexUnavailable, TimeoutError):
-            return None
+    return _aged(hit[1], now * 1000)

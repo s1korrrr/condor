@@ -420,8 +420,7 @@ class Reporting:
 @pytest.fixture
 def reporting(monkeypatch):
     market._membership.clear()
-    market._latest.clear()
-    market._locks.clear()
+    market._published.clear()
     backend = Reporting({"b1": ["A", "B"], "b2": ["B", "C"]})
     sources = {
         "b1": {"server": SERVER, "url": "http://127.0.0.1:9101/api/v1"},
@@ -519,7 +518,6 @@ def test_a_body_swift_would_reject_is_no_input(reporting):
     reporting.raw[("b2", "C")] = json.dumps(
         {"status": "ok", "pair": "X", "candles": []}
     )
-    market._latest.clear()
     assert build_now(reporting)["pairs"] == 2  # identity mismatch is refused too
 
 
@@ -536,34 +534,61 @@ def test_unbuildable_indexes_raise_instead_of_inventing_one(
         reporting.delay = 1.0
     with pytest.raises(market.MarketIndexUnavailable):
         build_now(reporting)
-    assert market._latest == {}
 
 
-def test_the_route_helper_reuses_a_recent_index_or_builds_one(reporting):
-    clock = lambda: reporting.clock[0]  # noqa: E731
-    first = asyncio.run(
-        market.market_index_for(
-            SERVER, max_age_seconds=120, timeout_seconds=5, clock=clock
-        )
-    )
-    count = len(reporting.requests)
-    reporting.clock[0] += 100
-    again = asyncio.run(
-        market.market_index_for(
-            SERVER, max_age_seconds=120, timeout_seconds=5, clock=clock
-        )
-    )
-    assert again == first and len(reporting.requests) == count
-    reporting.clock[0] += 100
-    reporting.fail = {("b1", "A"), ("b1", "B"), ("b2", "B"), ("b2", "C")}
+def _stored(as_of_s, *, stale=False):
+    return {
+        "value": "101.23",
+        "change_pct": "1.23",
+        "stale": stale,
+        "spark": [101.23],
+        "pairs": 3,
+        "expected": 3,
+        "as_of_ms": int(as_of_s * 1000),
+    }
+
+
+@pytest.mark.parametrize(
+    "as_of_age,reused,stale",
+    [
+        (60, True, False),  # just built: the newest candle closed now
+        (150, True, False),  # closed 90 s ago: not older than 1.5 intervals yet
+        (151, True, True),
+        (179, True, True),
+        (180, False, None),  # too old to stand in for a failed pass
+    ],
+)
+def test_a_failed_pass_reuses_the_last_good_index_for_180_s(as_of_age, reused, stale):
+    market._published.clear()
+    market.remember_index(SERVER, _stored(NOW - as_of_age), now=NOW - as_of_age + 60)
+    got = market.reusable_index(SERVER, now=NOW)
+    assert (got is not None) is reused
+    if reused:
+        assert got["stale"] is stale and got["value"] == "101.23"
+    assert market.reusable_index("other", now=NOW) is None
+
+
+def test_a_stale_index_stays_stale_when_reused():
+    market._published.clear()
+    market.remember_index(SERVER, _stored(NOW - 60, stale=True), now=NOW)
+    assert market.reusable_index(SERVER, now=NOW)["stale"] is True
+
+
+def test_the_route_serves_only_a_recently_published_index():
+    market._published.clear()
+    assert market.published_index(SERVER, max_age_seconds=120, now=NOW) is None
+    market.remember_index(SERVER, _stored(NOW - 70), now=NOW - 10)
     assert (
-        asyncio.run(
-            market.market_index_for(
-                SERVER, max_age_seconds=120, timeout_seconds=5, clock=clock
-            )
-        )
-        is None
+        market.published_index(SERVER, max_age_seconds=120, now=NOW)["stale"] is False
     )
+    late = market.published_index(SERVER, max_age_seconds=120, now=NOW + 100)
+    assert late["stale"] is True  # served, but its candle closed 160 s before
+    assert market.published_index(SERVER, max_age_seconds=120, now=NOW + 111) is None
+
+
+def test_the_route_side_never_builds():
+    assert not hasattr(market, "market_index_for")
+    assert not hasattr(market, "_locks")
 
 
 # --------------------------------------------------------------------------- parity with Swift

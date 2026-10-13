@@ -45,7 +45,6 @@ _DEVICE_ID = re.compile(r"[0-9a-f]{32}")
 _REQUEST_ID = re.compile(r"[0-9a-f]{24}")
 _NO_STORE = {"Cache-Control": "no-store"}
 _clock = time.time
-CONTENT_INDEX_TIMEOUT_SECONDS = 15.0
 
 
 class QuietHours(BaseModel):
@@ -218,12 +217,12 @@ async def live_activity_content(
     except TimeoutError:
         raise HTTPException(504, "Fleet summary exceeded its deadline") from None
     state = la.content_state(glance)
-    # The same Market index the publisher adds: its last one when recent, else one built now
-    # within the route's budget, else none (never a made-up value).
-    index = await live_activity_market.market_index_for(
+    # The Market index the publisher last built for this server, when published within two
+    # intervals (``stale`` recomputed for its age); never built here.
+    index = live_activity_market.published_index(
         server,
         max_age_seconds=2.0 * live_activity_publisher.configured_interval(),
-        timeout_seconds=CONTENT_INDEX_TIMEOUT_SECONDS,
+        now=_clock(),
     )
     if index is not None:
         state["market_index"] = index

@@ -20,6 +20,7 @@ from typing import Any, Awaitable, Callable
 from condor.push import live_activity as la
 from condor.push.config import LiveActivityConfig, PushConfigError, parse_live_activity
 from condor.push.store import Registry
+from condor.web import live_activity_market as market
 
 logger = logging.getLogger("condor.web.live_activity")
 
@@ -64,26 +65,25 @@ def publisher_settings() -> tuple[Registry, LiveActivityConfig] | None:
         return None
 
 
-async def _market_indexes(
-    servers: list[str], market_index: MarketIndexFor
-) -> tuple[dict[str, dict], dict[str, str]]:
-    """One index per server per pass, shared by every owner of that server."""
-    built: dict[str, dict] = {}
-    failed: dict[str, str] = {}
-    for server in servers:
-        try:
-            built[server] = await market_index(server)
-        except Exception as exc:  # noqa: BLE001 - the summary content never waits on it
-            failed[server] = str(exc)[:120] or exc.__class__.__name__
-    if failed:
-        logger.warning(
-            "live activity market index omitted for %d server(s): %s",
-            len(failed),
-            "; ".join(
-                f"{server}: {reason}" for server, reason in sorted(failed.items())
-            ),
-        )
-    return built, failed
+INDEX_BUDGET_MAX_SECONDS = 35.0
+
+
+def index_budget(config: LiveActivityConfig) -> float:
+    """How long one pass waits for the Market index: min(35 s, half the interval)."""
+    return min(INDEX_BUDGET_MAX_SECONDS, 0.5 * config.interval_seconds)
+
+
+async def _index_within(
+    market_index: MarketIndexFor, server: str, budget: float
+) -> dict:
+    async with asyncio.timeout(budget):
+        return await market_index(server)
+
+
+def _reason(exc: BaseException) -> str:
+    if isinstance(exc, TimeoutError):
+        return "exceeded the pass budget"
+    return str(exc)[:120] or exc.__class__.__name__
 
 
 async def publish_once(
@@ -91,12 +91,17 @@ async def publish_once(
     glance_for: GlanceFor,
     *,
     market_index: MarketIndexFor,
+    index_budget_seconds: float = INDEX_BUDGET_MAX_SECONDS,
     clock: Callable[[], float] = time.time,
 ) -> int:
     """Build and store the content for every (owner, server) with an active token, at most
     ``MAX_PUBLISHED_PAIRS``; the pass's counts go to the registry for the worker heartbeat.
-    The Market index is built once per server and added as ``market_index``; when it cannot
-    be built the content goes out without it.
+
+    The summary never waits on the Market index: each server's index build starts first and
+    runs concurrently (bounded by ``index_budget_seconds``) while the glance content is built
+    and published as before, carrying the last good index while it is still reusable. When a
+    fresh index arrives, that server's owners are published again with it. A failed build
+    keeps the last good index for up to 180 s (``stale`` recomputed), then omits it.
     """
     pairs = await asyncio.to_thread(registry.live_activity_owners)
     if not pairs:
@@ -110,35 +115,74 @@ async def publish_once(
             len(pairs),
             la.MAX_PUBLISHED_PAIRS,
         )
-    indexes, index_failed = await _market_indexes(
-        list(dict.fromkeys(server for _, server in kept)), market_index
-    )
+    servers = list(dict.fromkeys(server for _, server in kept))
+    tasks = {
+        server: asyncio.create_task(
+            _index_within(market_index, server, index_budget_seconds)
+        )
+        for server in servers
+    }
     written = failed = 0
-    for user_id, server in kept:
-        try:
-            state = la.content_state(await glance_for(server, user_id))
-            if server in indexes:
-                state["market_index"] = indexes[server]
-        except LookupError:
-            failed += 1
-            logger.warning(
-                "live activity content skipped: user %s has no access to server %s",
+    published: dict[tuple[int, str], dict] = {}
+    try:
+        for user_id, server in kept:
+            try:
+                state = la.content_state(await glance_for(server, user_id))
+            except LookupError:
+                failed += 1
+                logger.warning(
+                    "live activity content skipped: user %s has no access to server %s",
+                    user_id,
+                    server,
+                )
+                continue
+            except Exception as exc:  # noqa: BLE001 - one pair never stops the others
+                failed += 1
+                logger.warning(
+                    "live activity content for server %s failed error=%s",
+                    server,
+                    exc.__class__.__name__,
+                )
+                continue
+            published[(user_id, server)] = state
+            reused = market.reusable_index(server, now=clock())
+            await asyncio.to_thread(
+                la.publish_content,
+                registry,
                 user_id,
                 server,
+                {**state, "market_index": reused} if reused else state,
+                built_at=clock(),
             )
+            written += 1
+        results = await asyncio.gather(*tasks.values(), return_exceptions=True)
+    finally:
+        for task in tasks.values():
+            task.cancel()
+    index_failed: dict[str, str] = {}
+    for server, result in zip(tasks, results):
+        if isinstance(result, BaseException):
+            index_failed[server] = _reason(result)
             continue
-        except Exception as exc:  # noqa: BLE001 - one pair never stops the others
-            failed += 1
-            logger.warning(
-                "live activity content for server %s failed error=%s",
-                server,
-                exc.__class__.__name__,
-            )
-            continue
-        await asyncio.to_thread(
-            la.publish_content, registry, user_id, server, state, built_at=clock()
+        market.remember_index(server, result, now=clock())
+        for (user_id, owner_server), state in published.items():
+            if owner_server == server:
+                await asyncio.to_thread(
+                    la.publish_content,
+                    registry,
+                    user_id,
+                    server,
+                    {**state, "market_index": result},
+                    built_at=clock(),
+                )
+    if index_failed:
+        logger.warning(
+            "live activity market index not refreshed for %d server(s): %s",
+            len(index_failed),
+            "; ".join(
+                f"{server}: {reason}" for server, reason in sorted(index_failed.items())
+            ),
         )
-        written += 1
     await asyncio.to_thread(
         registry.set_meta,
         la.PUBLISHER_META_KEY,
@@ -167,7 +211,11 @@ async def run_publisher(
     while True:
         try:
             await publish_once(
-                registry, glance_for, market_index=market_index, clock=clock
+                registry,
+                glance_for,
+                market_index=market_index,
+                index_budget_seconds=index_budget(config),
+                clock=clock,
             )
         except asyncio.CancelledError:
             raise

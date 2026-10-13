@@ -38,6 +38,16 @@ def run(coro):
     return asyncio.run(coro)
 
 
+@pytest.fixture(autouse=True)
+def _no_published_market_index():
+    """The publisher's last good index per server is process state; tests start clean."""
+    from condor.web import live_activity_market
+
+    live_activity_market._published.clear()
+    yield
+    live_activity_market._published.clear()
+
+
 # --------------------------------------------------------------------------- config
 
 
@@ -1217,7 +1227,9 @@ def test_a_failed_market_index_is_omitted_counted_and_logged_once(tmp_path, capl
         INDEX
     )
     assert registry.get_meta(la.PUBLISHER_META_KEY)["index_failed"] == 1
-    warnings = [r for r in caplog.records if "market index omitted" in r.getMessage()]
+    warnings = [
+        r for r in caplog.records if "market index not refreshed" in r.getMessage()
+    ]
     assert len(warnings) == 1 and "no recorded pair data" in warnings[0].getMessage()
 
 
@@ -1254,3 +1266,105 @@ def test_the_worker_sends_the_market_index_it_reads(tmp_path):
         assert body["aps"]["content-state"]["market_index"] == INDEX
     finally:
         r.close()
+
+
+def test_a_hanging_index_never_delays_the_summary_content(tmp_path):
+    import time as wall
+
+    from condor.web import live_activity_publisher as publisher
+
+    registry, iphone, _ = _registry(tmp_path)
+    _register(registry, iphone.device_id)
+    hanging = asyncio.Event()
+
+    async def hang(server):
+        await hanging.wait()  # never set: the reporting source does not answer
+
+    async def scenario():
+        task = asyncio.create_task(
+            publisher.publish_once(
+                registry, Glances(), market_index=hang, index_budget_seconds=0.5
+            )
+        )
+        started = wall.monotonic()
+        while registry.get_meta(la.content_key(1, SERVER)) is None:
+            assert wall.monotonic() - started < 0.4, "the glance content waited"
+            await asyncio.sleep(0.005)
+        published_after = wall.monotonic() - started
+        assert not task.done()  # the index is still being waited for
+        written = await task
+        return published_after, written, wall.monotonic() - started
+
+    published_after, written, total = run(scenario())
+    assert published_after < 0.4 and written == 1 and total >= 0.5
+    content = registry.get_meta(la.content_key(1, SERVER))["content"]
+    assert content == la.content_state(GLANCE)  # summary out, no index invented
+    assert registry.get_meta(la.PUBLISHER_META_KEY)["index_failed"] == 1
+
+
+def test_index_builds_for_all_servers_run_in_parallel(tmp_path):
+    import time as wall
+
+    from condor.web import live_activity_publisher as publisher
+
+    registry, iphone, _ = _registry(tmp_path)
+    for n, server in enumerate(("s1", "s2", "s3")):
+        _register(registry, iphone.device_id, token=f"{n + 32:02x}" * 40, server=server)
+
+    async def slow(server):
+        await asyncio.sleep(0.3)
+        return {**INDEX, "value": server}
+
+    started = wall.monotonic()
+    assert (
+        run(
+            publisher.publish_once(
+                registry, Glances(), market_index=slow, index_budget_seconds=2
+            )
+        )
+        == 3
+    )
+    assert wall.monotonic() - started < 0.8  # three 0.3 s builds, not 0.9 s in a row
+    for server in ("s1", "s2", "s3"):
+        content = registry.get_meta(la.content_key(1, server))["content"]
+        assert content["market_index"]["value"] == server  # republished with its index
+
+
+def test_the_index_budget_is_half_the_interval_at_most_35_s():
+    from condor.push.config import LiveActivityConfig
+    from condor.web import live_activity_publisher as publisher
+
+    assert publisher.index_budget(LiveActivityConfig(interval_seconds=60)) == 30.0
+    assert publisher.index_budget(LiveActivityConfig(interval_seconds=300)) == 35.0
+
+
+def test_a_failed_pass_keeps_the_last_good_index_for_180_s_then_omits_it(tmp_path):
+    from condor.web import live_activity_publisher as publisher
+
+    registry, iphone, _ = _registry(tmp_path)
+    _register(registry, iphone.device_id)
+    t0 = 1_800_000_000.0
+    clock = [t0]
+    indexes = Indexes()
+
+    async def as_of_a_minute_ago(server):
+        return {**INDEX, "as_of_ms": int((t0 - 60) * 1000)}
+
+    def publish(market_index):
+        run(
+            publisher.publish_once(
+                registry, Glances(), market_index=market_index, clock=lambda: clock[0]
+            )
+        )
+        return registry.get_meta(la.content_key(1, SERVER))["content"]
+
+    assert publish(as_of_a_minute_ago)["market_index"]["stale"] is False
+    indexes.fail = {SERVER: "reporting source timed out"}
+    clock[0] = t0 + 60  # as-of 120 s old: newest candle closed 60 s ago
+    reused = publish(indexes)["market_index"]
+    assert reused == {**INDEX, "as_of_ms": int((t0 - 60) * 1000), "stale": False}
+    clock[0] = t0 + 100  # closed 100 s ago: older than 1.5 intervals
+    assert publish(indexes)["market_index"]["stale"] is True
+    clock[0] = t0 + 120  # as-of 180 s old: no longer reused
+    assert "market_index" not in publish(indexes)
+    assert registry.get_meta(la.PUBLISHER_META_KEY)["index_failed"] == 1

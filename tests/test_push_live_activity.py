@@ -459,17 +459,54 @@ class Glances:
         return {**copy.deepcopy(GLANCE), "server": server}
 
 
+INDEX = {
+    "value": "101.23",
+    "change_pct": "1.23",
+    "stale": False,
+    "spark": [100.0, 100.5, 101.23],
+    "pairs": 15,
+    "expected": 15,
+    "as_of_ms": 1800000000000,
+}
+
+
+class Indexes:
+    """``build_market_index`` per server, adjustable per test."""
+
+    def __init__(self):
+        self.calls = []
+        self.fail = {}
+
+    async def __call__(self, server):
+        from condor.web.live_activity_market import MarketIndexUnavailable
+
+        self.calls.append(server)
+        if server in self.fail:
+            raise MarketIndexUnavailable(self.fail[server])
+        return dict(INDEX)
+
+
 def test_publisher_writes_scoped_content_for_every_owner_and_server(tmp_path):
     from condor.web import live_activity_publisher as publisher
 
     registry, iphone, _ = _registry(tmp_path)
     _register(registry, iphone.device_id)
     _register(registry, iphone.device_id, token=UPDATE_TOKEN_2, server="other")
-    glances = Glances()
-    assert run(publisher.publish_once(registry, glances, clock=lambda: 5000.0)) == 2
+    glances, indexes = Glances(), Indexes()
+    assert (
+        run(
+            publisher.publish_once(
+                registry, glances, market_index=indexes, clock=lambda: 5000.0
+            )
+        )
+        == 2
+    )
     assert sorted(glances.calls) == [("other", 1), (SERVER, 1)]
     stored = registry.get_meta(la.content_key(1, SERVER))
-    assert stored == {"built_at": 5000.0, "content": la.content_state(GLANCE)}
+    assert stored == {
+        "built_at": 5000.0,
+        "content": {**la.content_state(GLANCE), "market_index": INDEX},
+    }
     assert registry.get_meta(la.content_key(1, "other"))["built_at"] == 5000.0
 
 
@@ -478,10 +515,10 @@ def test_publisher_builds_nothing_without_active_tokens(tmp_path):
 
     registry, iphone, _ = _registry(tmp_path)
     glances = Glances()
-    assert run(publisher.publish_once(registry, glances)) == 0
+    assert run(publisher.publish_once(registry, glances, market_index=Indexes())) == 0
     token = _register(registry, iphone.device_id)
     registry.deactivate_live_activity(token, "Unregistered")
-    assert run(publisher.publish_once(registry, glances)) == 0
+    assert run(publisher.publish_once(registry, glances, market_index=Indexes())) == 0
     assert glances.calls == []
     assert registry.get_meta(la.content_key(1, SERVER)) is None
 
@@ -496,7 +533,9 @@ def test_one_failing_pair_never_stops_the_others(tmp_path, caplog):
     glances = Glances()
     glances.fail = {("other", 1): LookupError(), ("third", 1): TimeoutError()}
     with caplog.at_level("WARNING", logger="condor.web.live_activity"):
-        assert run(publisher.publish_once(registry, glances)) == 1
+        assert (
+            run(publisher.publish_once(registry, glances, market_index=Indexes())) == 1
+        )
     assert "no access" in caplog.text and "TimeoutError" in caplog.text
     assert registry.get_meta(la.content_key(1, "other")) is None
     assert registry.get_meta(la.content_key(1, SERVER)) is not None
@@ -521,7 +560,11 @@ def test_publisher_pairs_are_bounded(tmp_path, caplog):
         )
     glances = Glances()
     with caplog.at_level("WARNING", logger="condor.web.live_activity"):
-        published = run(publisher.publish_once(registry, glances, clock=lambda: 77.0))
+        published = run(
+            publisher.publish_once(
+                registry, glances, market_index=Indexes(), clock=lambda: 77.0
+            )
+        )
     assert published == la.MAX_PUBLISHED_PAIRS
     assert caplog.text.count("dropped 2") == 1
     assert registry.get_meta(la.PUBLISHER_META_KEY) == {
@@ -530,6 +573,7 @@ def test_publisher_pairs_are_bounded(tmp_path, caplog):
         "published": la.MAX_PUBLISHED_PAIRS,
         "failed": 0,
         "dropped_pairs": 2,
+        "index_failed": 0,
     }
 
 
@@ -574,7 +618,7 @@ def test_publisher_runs_only_when_the_deployment_enables_it(
         assert settings[1].interval_seconds == 90
 
     async def lifecycle():
-        task = publisher.start_publisher(Glances())
+        task = publisher.start_publisher(Glances(), Indexes())
         assert (task is not None) is on
         await publisher.stop_publisher(task)
         assert task is None or task.cancelled()
@@ -603,6 +647,7 @@ def test_publisher_loop_survives_a_failed_pass_and_stops_when_cancelled(tmp_path
                 Broken(),
                 LiveActivityConfig(enabled=True, interval_seconds=45),
                 Glances(),
+                market_index=Indexes(),
                 sleep=sleep,
             )
         )
@@ -615,6 +660,7 @@ def test_the_web_lifespan_starts_and_stops_the_publisher(monkeypatch):
     import config_manager
     from condor import server_data_service
     from condor.web import app as web_app
+    from condor.web import live_activity_market as market
     from condor.web import live_activity_publisher as publisher
     from condor.web.routes import fleet_summary as summary_routes
 
@@ -635,8 +681,8 @@ def test_the_web_lifespan_starts_and_stops_the_publisher(monkeypatch):
 
     events = []
 
-    def start(glance_for):
-        events.append(("start", glance_for))
+    def start(glance_for, market_index):
+        events.append(("start", glance_for, market_index))
         return "task"
 
     async def stop(task):
@@ -654,7 +700,9 @@ def test_the_web_lifespan_starts_and_stops_the_publisher(monkeypatch):
 
     async def lifespan():
         async with app.router.lifespan_context(app):
-            assert events == [("start", summary_routes.glance_for)]
+            assert events == [
+                ("start", summary_routes.glance_for, market.build_market_index)
+            ]
 
     run(lifespan())
     assert events[-1] == ("stop", "task")
@@ -1111,5 +1159,98 @@ def test_the_heartbeat_shows_the_web_publishers_last_pass(tmp_path):
         r.registry.set_meta(la.PUBLISHER_META_KEY, pass_meta)
         beat = r.worker.heartbeat_payload(r.clock())["live_activity"]
         assert beat["publisher"] == pass_meta
+    finally:
+        r.close()
+
+
+# --------------------------------------------------------------------------- market index
+
+
+def test_the_market_index_is_built_once_per_server_and_shared_by_its_owners(tmp_path):
+    from condor.web import live_activity_publisher as publisher
+
+    registry, iphone, _ = _registry(tmp_path)
+    other_user = registry.upsert_device(
+        user_id=2,
+        token="9b" * 32,
+        platform="iphone",
+        bundle_id=BUNDLE,
+        environment="sandbox",
+        app_version="1",
+    )
+    _register(registry, iphone.device_id)
+    registry.upsert_live_activity(
+        user_id=2,
+        device_id=other_user.device_id,
+        server=SERVER,
+        kind="update",
+        token="c8" * 40,
+        environment="sandbox",
+        bundle_id=BUNDLE,
+        activity_id=ACTIVITY,
+        now=200.0,
+    )
+    indexes = Indexes()
+    assert run(publisher.publish_once(registry, Glances(), market_index=indexes)) == 2
+    assert indexes.calls == [SERVER]
+    for user in (1, 2):
+        content = registry.get_meta(la.content_key(user, SERVER))["content"]
+        assert content["market_index"] == INDEX
+
+
+def test_a_failed_market_index_is_omitted_counted_and_logged_once(tmp_path, caplog):
+    from condor.web import live_activity_publisher as publisher
+
+    registry, iphone, _ = _registry(tmp_path)
+    _register(registry, iphone.device_id)
+    _register(registry, iphone.device_id, token=UPDATE_TOKEN_2, server="other")
+    indexes = Indexes()
+    indexes.fail = {SERVER: "no recorded pair data was available"}
+    with caplog.at_level("WARNING", logger="condor.web.live_activity"):
+        assert (
+            run(publisher.publish_once(registry, Glances(), market_index=indexes)) == 2
+        )
+    failed = registry.get_meta(la.content_key(1, SERVER))["content"]
+    assert "market_index" not in failed
+    assert failed == la.content_state(GLANCE)  # the summary content still goes out
+    assert registry.get_meta(la.content_key(1, "other"))["content"]["market_index"] == (
+        INDEX
+    )
+    assert registry.get_meta(la.PUBLISHER_META_KEY)["index_failed"] == 1
+    warnings = [r for r in caplog.records if "market index omitted" in r.getMessage()]
+    assert len(warnings) == 1 and "no recorded pair data" in warnings[0].getMessage()
+
+
+def test_content_with_a_full_48_point_spark_stays_under_the_limit():
+    spark = [round(98.5 + n * 0.0731, 2) for n in range(48)]
+    index = {**INDEX, "spark": spark, "value": "101.99", "change_pct": "1.99"}
+    state = {**la.content_state(GLANCE), "market_index": index}
+    update = la.encode(
+        la.build_update_payload(state, now=1_800_000_040, stale_after_seconds=600)
+    )
+    start = la.encode(
+        la.build_start_payload(
+            state, server=SERVER, now=1_800_000_040, stale_after_seconds=600
+        )
+    )
+    assert (
+        len(update) < 1536 and len(start) < 1536
+    )  # far under the 4 KB ActivityKit limit
+    assert (
+        len(json.loads(update)["aps"]["content-state"]["market_index"]["spark"]) == 48
+    )
+
+
+def test_the_worker_sends_the_market_index_it_reads(tmp_path):
+    r = live_rig(tmp_path)
+    try:
+        register(r)
+        r.glance = copy.deepcopy(GLANCE)
+        r.publishing = False
+        state = {**la.content_state(GLANCE), "market_index": INDEX}
+        la.publish_content(r.registry, 1, SERVER, state, built_at=r.clock() + 5)
+        r.cycle()
+        body = json.loads(live(r)[0]["body"])
+        assert body["aps"]["content-state"]["market_index"] == INDEX
     finally:
         r.close()

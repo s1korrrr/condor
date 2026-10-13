@@ -29,6 +29,17 @@ ENV_LIVE_ACTIVITY = "CONDOR_PUSH_LIVE_ACTIVITY"
 ENV_REGISTRY = "CONDOR_PUSH_REGISTRY"
 
 GlanceFor = Callable[[str, int], Awaitable[dict]]
+# The Market index object for one server (``live_activity_market.build_market_index``).
+MarketIndexFor = Callable[[str], Awaitable[dict]]
+
+
+def configured_interval() -> int:
+    """``push.live_activity.interval_seconds`` from the deployment, or the section's default."""
+    raw = os.environ.get(ENV_LIVE_ACTIVITY)
+    try:
+        return parse_live_activity(json.loads(raw) if raw else {}).interval_seconds
+    except (ValueError, PushConfigError):
+        return LiveActivityConfig().interval_seconds
 
 
 def publisher_settings() -> tuple[Registry, LiveActivityConfig] | None:
@@ -53,14 +64,39 @@ def publisher_settings() -> tuple[Registry, LiveActivityConfig] | None:
         return None
 
 
+async def _market_indexes(
+    servers: list[str], market_index: MarketIndexFor
+) -> tuple[dict[str, dict], dict[str, str]]:
+    """One index per server per pass, shared by every owner of that server."""
+    built: dict[str, dict] = {}
+    failed: dict[str, str] = {}
+    for server in servers:
+        try:
+            built[server] = await market_index(server)
+        except Exception as exc:  # noqa: BLE001 - the summary content never waits on it
+            failed[server] = str(exc)[:120] or exc.__class__.__name__
+    if failed:
+        logger.warning(
+            "live activity market index omitted for %d server(s): %s",
+            len(failed),
+            "; ".join(
+                f"{server}: {reason}" for server, reason in sorted(failed.items())
+            ),
+        )
+    return built, failed
+
+
 async def publish_once(
     registry: Registry,
     glance_for: GlanceFor,
     *,
+    market_index: MarketIndexFor,
     clock: Callable[[], float] = time.time,
 ) -> int:
     """Build and store the content for every (owner, server) with an active token, at most
     ``MAX_PUBLISHED_PAIRS``; the pass's counts go to the registry for the worker heartbeat.
+    The Market index is built once per server and added as ``market_index``; when it cannot
+    be built the content goes out without it.
     """
     pairs = await asyncio.to_thread(registry.live_activity_owners)
     if not pairs:
@@ -74,10 +110,15 @@ async def publish_once(
             len(pairs),
             la.MAX_PUBLISHED_PAIRS,
         )
+    indexes, index_failed = await _market_indexes(
+        list(dict.fromkeys(server for _, server in kept)), market_index
+    )
     written = failed = 0
     for user_id, server in kept:
         try:
             state = la.content_state(await glance_for(server, user_id))
+            if server in indexes:
+                state["market_index"] = indexes[server]
         except LookupError:
             failed += 1
             logger.warning(
@@ -107,6 +148,7 @@ async def publish_once(
             "published": written,
             "failed": failed,
             "dropped_pairs": dropped,
+            "index_failed": len(index_failed),
         },
     )
     return written
@@ -117,13 +159,16 @@ async def run_publisher(
     config: LiveActivityConfig,
     glance_for: GlanceFor,
     *,
+    market_index: MarketIndexFor,
     clock: Callable[[], float] = time.time,
     sleep: Callable[[float], Awaitable[Any]] = asyncio.sleep,
 ) -> None:
     """Publish every interval until cancelled."""
     while True:
         try:
-            await publish_once(registry, glance_for, clock=clock)
+            await publish_once(
+                registry, glance_for, market_index=market_index, clock=clock
+            )
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001 - the web app outlives a failed pass
@@ -133,7 +178,9 @@ async def run_publisher(
         await sleep(float(config.interval_seconds))
 
 
-def start_publisher(glance_for: GlanceFor) -> asyncio.Task | None:
+def start_publisher(
+    glance_for: GlanceFor, market_index: MarketIndexFor
+) -> asyncio.Task | None:
     """Start the background publisher when configured; None when it stays off."""
     settings = publisher_settings()
     if settings is None:
@@ -141,7 +188,8 @@ def start_publisher(glance_for: GlanceFor) -> asyncio.Task | None:
     registry, config = settings
     logger.info("live activity publisher started interval=%ss", config.interval_seconds)
     return asyncio.create_task(
-        run_publisher(registry, config, glance_for), name="live-activity-publisher"
+        run_publisher(registry, config, glance_for, market_index=market_index),
+        name="live-activity-publisher",
     )
 
 

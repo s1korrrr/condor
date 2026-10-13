@@ -631,7 +631,7 @@ SHARED_CONTENT = json.loads(
 )
 
 
-def _content_client(monkeypatch, tmp_path, *, user_id=1, allow=True):
+def _content_client(monkeypatch, tmp_path, *, user_id=1, allow=True, index=None):
     from condor.web.routes import fleet_summary as summary_routes
 
     client, _ = _client(monkeypatch, tmp_path, user_id=user_id, allow=allow)
@@ -641,14 +641,24 @@ def _content_client(monkeypatch, tmp_path, *, user_id=1, allow=True):
         calls.append((name, admin, user_id))
         return FULL
 
+    async def market_index_for(server, *, max_age_seconds, timeout_seconds):
+        calls.append(("index", server, max_age_seconds, timeout_seconds))
+        return index
+
     monkeypatch.setattr(summary_routes, "get_config_manager", lambda: Servers())
     monkeypatch.setattr(summary_routes, "cached_summary", cached_summary)
+    monkeypatch.setattr(
+        push_routes.live_activity_market, "market_index_for", market_index_for
+    )
     return client, calls
 
 
 def test_content_route_serves_the_content_state_of_the_cached_glance(
     monkeypatch, tmp_path
 ):
+    monkeypatch.delenv(
+        "CONDOR_PUSH_LIVE_ACTIVITY", raising=False
+    )  # default interval 60
     client, calls = _content_client(monkeypatch, tmp_path)
     response = client.get(
         "/api/v1/push/live-activities/content", params={"server": SERVER}, headers=H
@@ -657,8 +667,29 @@ def test_content_route_serves_the_content_state_of_the_cached_glance(
     assert response.headers["cache-control"] == "no-store"
     # The glance of the builder's full example is the glance example; its content state is
     # the shared fixture the app decodes.
-    assert response.json() == SHARED_CONTENT
-    assert calls == [(SERVER, True, 1)]
+    assert response.json() == SHARED_CONTENT  # no Market index available: omitted
+    assert calls == [(SERVER, True, 1), ("index", SERVER, 120.0, 15.0)]
+
+
+def test_content_route_adds_the_servers_market_index(monkeypatch, tmp_path):
+    index = {
+        "value": "101.23",
+        "change_pct": "1.23",
+        "stale": False,
+        "spark": [100.0, 101.23],
+        "pairs": 15,
+        "expected": 15,
+        "as_of_ms": 1800000000000,
+    }
+    monkeypatch.setenv(
+        "CONDOR_PUSH_LIVE_ACTIVITY", '{"enabled": true, "interval_seconds": 90}'
+    )
+    client, calls = _content_client(monkeypatch, tmp_path, index=index)
+    body = client.get(
+        "/api/v1/push/live-activities/content", params={"server": SERVER}, headers=H
+    ).json()
+    assert body == {**SHARED_CONTENT, "market_index": index}
+    assert calls[-1] == ("index", SERVER, 180.0, 15.0)  # reuse within 2 x interval
 
 
 def test_content_route_needs_a_login_and_access_to_the_server(monkeypatch, tmp_path):
@@ -687,7 +718,7 @@ def test_content_route_is_a_read_that_needs_no_push_mutation_rights(
     response = client.get(
         "/api/v1/push/live-activities/content", params={"server": SERVER}, headers=H
     )
-    assert response.status_code == 200 and len(calls) == 1
+    assert response.status_code == 200 and len(calls) == 2
 
 
 def test_content_route_reports_a_summary_deadline(monkeypatch, tmp_path):

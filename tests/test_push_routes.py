@@ -681,6 +681,7 @@ def test_content_route_adds_the_servers_market_index(monkeypatch, tmp_path):
         "pairs": 15,
         "expected": 15,
         "as_of_ms": int((NOW - 90) * 1000),
+        "source_age_ms": 200_000,
     }
     monkeypatch.setenv(
         "CONDOR_PUSH_LIVE_ACTIVITY", '{"enabled": true, "interval_seconds": 90}'
@@ -688,8 +689,11 @@ def test_content_route_adds_the_servers_market_index(monkeypatch, tmp_path):
     client, _ = _content_client(monkeypatch, tmp_path, index=index)
     url, params = "/api/v1/push/live-activities/content", {"server": SERVER}
     body = client.get(url, params=params, headers=H).json()
-    assert body == {**SHARED_CONTENT, "market_index": index}  # published 30 s ago
-    # Its newest candle closed 120 s ago: still served (published < 2 x 90 s), now stale.
+    assert body == {
+        **SHARED_CONTENT,
+        "market_index": index,
+    }  # 200 s + 30 s since: fresh
+    # Published 120 s ago: still served (< 2 x 90 s), but 200 + 120 s is above 300 s.
     monkeypatch.setattr(push_routes, "_clock", lambda: NOW + 90)
     body = client.get(url, params=params, headers=H).json()
     assert body["market_index"] == {**index, "stale": True}

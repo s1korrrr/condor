@@ -1,7 +1,7 @@
 {
   "schema": "fleet_market_index_parity.v1",
   "generated_by": "Swift FleetMarketIndex.build + FleetMarketHeadline (mobile/rsibot-ios); expected values are never edited by hand",
-  "rules": {"mean": "equal-weight mean of base-100 pair lines, 1.5-interval carry, sums left to right in expected_pairs order", "spark": "last mean value per 30-minute UTC bucket (floor(time_ms / 1800000)), oldest first, newest 48, each round_half_away_from_zero(value * 100) / 100", "value": "last mean value, same rounding, printed with 2 decimals", "change_pct": "(last mean value - 100), same rounding, printed with 2 decimals; -0.00 prints as 0.00", "stale": "FleetMarketIndex.isStale(at: now): explicit stale source, missing pair, or age > 1.5 intervals"},
+  "rules": {"mean": "equal-weight mean of base-100 pair lines, 1.5-interval carry, sums left to right in expected_pairs order", "spark": "last mean value per 30-minute UTC bucket (floor(time_ms / 1800000)), oldest first, newest 48, each round_half_away_from_zero(value * 100) / 100", "value": "last mean value, same rounding, printed with 2 decimals", "change_pct": "(last mean value - 100), same rounding, printed with 2 decimals; -0.00 prints as 0.00", "stale": "FleetMarketHeadline.isStale: explicit stale source, missing pair, or source age at now unknown or > 300 s (CompanionFreshnessPolicy.foregroundIndex.staleAfter); not the Market tab 1.5-interval rule", "source_age_ms": "FleetMarketIndex.sourceAgeSeconds(at: now) x 1000, rounded: max(now - newest closed candle end, now - oldest receipt, reported source_age_seconds + time since receipt)"},
   "cases": [
     {
       "name": "live",
@@ -21659,6 +21659,7 @@
         "baseline_ms": 1791799800000,
         "missing_pairs": [],
         "stale": false,
+        "source_age_ms": 30000,
         "latest": 98.123376247566071,
         "value": "98.12",
         "change_pct": "-1.88",
@@ -23151,6 +23152,7 @@
         "baseline_ms": 1791849600000,
         "missing_pairs": [],
         "stale": false,
+        "source_age_ms": 70000,
         "latest": 113.99999999999999,
         "value": "114.00",
         "change_pct": "14.00",
@@ -23207,6 +23209,7 @@
         "baseline_ms": 1791849600000,
         "missing_pairs": [],
         "stale": false,
+        "source_age_ms": 40000,
         "latest": 152.5,
         "value": "152.50",
         "change_pct": "52.50",
@@ -23267,6 +23270,7 @@
         "baseline_ms": 1791849780000,
         "missing_pairs": ["C-USDC", "D-USDC"],
         "stale": true,
+        "source_age_ms": 10000,
         "latest": 108.37676124300329,
         "value": "108.38",
         "change_pct": "8.38",
@@ -23330,6 +23334,7 @@
         "baseline_ms": 1791849600000,
         "missing_pairs": [],
         "stale": false,
+        "source_age_ms": 10000,
         "latest": 285.71428571428572,
         "value": "285.71",
         "change_pct": "185.71",
@@ -23374,6 +23379,7 @@
         "baseline_ms": 1791849600000,
         "missing_pairs": [],
         "stale": true,
+        "source_age_ms": 47000,
         "latest": 98.75,
         "value": "98.75",
         "change_pct": "-1.25",
@@ -23387,6 +23393,94 @@
           [1791849780000, 99.25],
           [1791849840000, 99],
           [1791849900000, 98.75]
+        ]
+      }
+    },
+    {
+      "name": "age_only_fresh_200s",
+      "description": "Complete inputs; at now the newest closed candle is 200 s old (headline stale only above 300 s; the Market tab's 90 s rule would call both stale).",
+      "now_ms": 1791850160000,
+      "expected_pairs": ["A-USDC","B-USDC"],
+      "inputs": [
+        {"bot":"bot1","pair":"A-USDC","interval_seconds":60,"received_at_ms":1791849965000,"series":{"status":"ok","bot_name":"bot1","pair":"A-USDC","interval":"1m","coverage":{"status":"complete","truncated":false,"reasons":[],"reason_messages":[],"source":"recorded_chart_snapshots"},"candles":[
+          {"timestamp":"2026-10-13T00:00:00+00:00","open_price":10,"high_price":10,"low_price":10,"close_price":10},
+          {"timestamp":"2026-10-13T00:01:00+00:00","open_price":11,"high_price":11,"low_price":11,"close_price":11},
+          {"timestamp":"2026-10-13T00:02:00+00:00","open_price":12,"high_price":12,"low_price":12,"close_price":12},
+          {"timestamp":"2026-10-13T00:03:00+00:00","open_price":13,"high_price":13,"low_price":13,"close_price":13},
+          {"timestamp":"2026-10-13T00:04:00+00:00","open_price":14,"high_price":14,"low_price":14,"close_price":14},
+          {"timestamp":"2026-10-13T00:05:00+00:00","open_price":15,"high_price":15,"low_price":15,"close_price":15}
+        ]}},
+        {"bot":"bot1","pair":"B-USDC","interval_seconds":60,"received_at_ms":1791849965000,"series":{"status":"ok","bot_name":"bot1","pair":"B-USDC","interval":"1m","coverage":{"status":"complete","truncated":false,"reasons":[],"reason_messages":[],"source":"recorded_chart_snapshots"},"candles":[
+          {"timestamp":"2026-10-13T00:00:00+00:00","open_price":20,"high_price":20,"low_price":20,"close_price":20},
+          {"timestamp":"2026-10-13T00:01:00+00:00","open_price":19,"high_price":19,"low_price":19,"close_price":19},
+          {"timestamp":"2026-10-13T00:02:00+00:00","open_price":18,"high_price":18,"low_price":18,"close_price":18},
+          {"timestamp":"2026-10-13T00:03:00+00:00","open_price":17,"high_price":17,"low_price":17,"close_price":17},
+          {"timestamp":"2026-10-13T00:04:00+00:00","open_price":16,"high_price":16,"low_price":16,"close_price":16},
+          {"timestamp":"2026-10-13T00:05:00+00:00","open_price":15,"high_price":15,"low_price":15,"close_price":15}
+        ]}}
+      ],
+      "expected": {
+        "baseline_ms": 1791849600000,
+        "missing_pairs": [],
+        "stale": false,
+        "source_age_ms": 200000,
+        "latest": 112.5,
+        "value": "112.50",
+        "change_pct": "12.50",
+        "as_of_ms": 1791849900000,
+        "pairs": 2,
+        "spark": [112.5],
+        "mean": [
+          [1791849600000, 100],
+          [1791849660000, 102.5],
+          [1791849720000, 105],
+          [1791849780000, 107.5],
+          [1791849840000, 110],
+          [1791849900000, 112.5]
+        ]
+      }
+    },
+    {
+      "name": "age_only_stale_400s",
+      "description": "Complete inputs; at now the newest closed candle is 400 s old (headline stale only above 300 s; the Market tab's 90 s rule would call both stale).",
+      "now_ms": 1791850360000,
+      "expected_pairs": ["A-USDC","B-USDC"],
+      "inputs": [
+        {"bot":"bot1","pair":"A-USDC","interval_seconds":60,"received_at_ms":1791849965000,"series":{"status":"ok","bot_name":"bot1","pair":"A-USDC","interval":"1m","coverage":{"status":"complete","truncated":false,"reasons":[],"reason_messages":[],"source":"recorded_chart_snapshots"},"candles":[
+          {"timestamp":"2026-10-13T00:00:00+00:00","open_price":10,"high_price":10,"low_price":10,"close_price":10},
+          {"timestamp":"2026-10-13T00:01:00+00:00","open_price":11,"high_price":11,"low_price":11,"close_price":11},
+          {"timestamp":"2026-10-13T00:02:00+00:00","open_price":12,"high_price":12,"low_price":12,"close_price":12},
+          {"timestamp":"2026-10-13T00:03:00+00:00","open_price":13,"high_price":13,"low_price":13,"close_price":13},
+          {"timestamp":"2026-10-13T00:04:00+00:00","open_price":14,"high_price":14,"low_price":14,"close_price":14},
+          {"timestamp":"2026-10-13T00:05:00+00:00","open_price":15,"high_price":15,"low_price":15,"close_price":15}
+        ]}},
+        {"bot":"bot1","pair":"B-USDC","interval_seconds":60,"received_at_ms":1791849965000,"series":{"status":"ok","bot_name":"bot1","pair":"B-USDC","interval":"1m","coverage":{"status":"complete","truncated":false,"reasons":[],"reason_messages":[],"source":"recorded_chart_snapshots"},"candles":[
+          {"timestamp":"2026-10-13T00:00:00+00:00","open_price":20,"high_price":20,"low_price":20,"close_price":20},
+          {"timestamp":"2026-10-13T00:01:00+00:00","open_price":19,"high_price":19,"low_price":19,"close_price":19},
+          {"timestamp":"2026-10-13T00:02:00+00:00","open_price":18,"high_price":18,"low_price":18,"close_price":18},
+          {"timestamp":"2026-10-13T00:03:00+00:00","open_price":17,"high_price":17,"low_price":17,"close_price":17},
+          {"timestamp":"2026-10-13T00:04:00+00:00","open_price":16,"high_price":16,"low_price":16,"close_price":16},
+          {"timestamp":"2026-10-13T00:05:00+00:00","open_price":15,"high_price":15,"low_price":15,"close_price":15}
+        ]}}
+      ],
+      "expected": {
+        "baseline_ms": 1791849600000,
+        "missing_pairs": [],
+        "stale": true,
+        "source_age_ms": 400000,
+        "latest": 112.5,
+        "value": "112.50",
+        "change_pct": "12.50",
+        "as_of_ms": 1791849900000,
+        "pairs": 2,
+        "spark": [112.5],
+        "mean": [
+          [1791849600000, 100],
+          [1791849660000, 102.5],
+          [1791849720000, 105],
+          [1791849780000, 107.5],
+          [1791849840000, 110],
+          [1791849900000, 112.5]
         ]
       }
     }

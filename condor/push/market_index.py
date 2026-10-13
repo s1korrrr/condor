@@ -524,6 +524,10 @@ def _equal_weight_mean(
 
 SPARK_BUCKET_MS = 30 * 60 * 1000  # 30-minute UTC buckets: 48 over the 1D window
 SPARK_LIMIT = 48
+# ``FleetMarketHeadline.staleAfter`` = ``CompanionFreshnessPolicy.foregroundIndex.staleAfter``.
+# The headline is republished about every minute, so it uses the app's minute-cadence index
+# policy, not the Market tab's strict 1.5-interval rule (``Index.is_stale``, unchanged).
+HEADLINE_STALE_AFTER_SECONDS = 300.0
 
 
 def _away_from_zero(value: float) -> float:
@@ -559,22 +563,36 @@ def spark(mean: Sequence[tuple[float, float]]) -> list[float]:
     return [two_places(value) for _, value in buckets[-SPARK_LIMIT:]]
 
 
+def headline_is_stale(index: Index, now: float) -> bool:
+    """``FleetMarketHeadline.isStale``: a source says stale, a pair is missing, or the source
+    age is unknown or above 300 s."""
+    if index.has_explicit_stale_source or index.missing_pairs:
+        return True
+    age = index.source_age_seconds(now)
+    return age is None or age > HEADLINE_STALE_AFTER_SECONDS
+
+
 def headline(index: Index, now: float) -> dict[str, Any] | None:
     """The Live Activity ``market_index`` object, or None when the index has no mean point.
 
     ``value`` is the mean's last point (the Market widget's number), ``change_pct`` is
     ``latest - 100``, both rounded and printed as Swift does; ``stale`` is
-    ``FleetMarketIndex.isStale`` at ``now``.
+    ``FleetMarketHeadline.isStale`` at ``now``; ``source_age_ms`` is the source age at ``now``
+    (absent when unknown), so a reader can re-age it later.
     """
     if not index.mean:
         return None
     last_time, latest = index.mean[-1]
-    return {
+    out: dict[str, Any] = {
         "value": text(latest),
         "change_pct": text(latest - 100),
-        "stale": index.is_stale(now),
+        "stale": headline_is_stale(index, now),
         "spark": spark(index.mean),
         "pairs": len(index.pairs),
         "expected": len(index.requested),
         "as_of_ms": milliseconds(last_time),
     }
+    age = index.source_age_seconds(now)
+    if age is not None:
+        out["source_age_ms"] = int(_away_from_zero(age * 1000))
+    return out

@@ -1348,7 +1348,8 @@ def test_a_failed_pass_keeps_the_last_good_index_for_180_s_then_omits_it(tmp_pat
     indexes = Indexes()
 
     async def as_of_a_minute_ago(server):
-        return {**INDEX, "as_of_ms": int((t0 - 60) * 1000)}
+        # Built with a 200 s source age (e.g. a slow reporting source).
+        return {**INDEX, "as_of_ms": int((t0 - 60) * 1000), "source_age_ms": 200_000}
 
     def publish(market_index):
         run(
@@ -1360,10 +1361,15 @@ def test_a_failed_pass_keeps_the_last_good_index_for_180_s_then_omits_it(tmp_pat
 
     assert publish(as_of_a_minute_ago)["market_index"]["stale"] is False
     indexes.fail = {SERVER: "reporting source timed out"}
-    clock[0] = t0 + 60  # as-of 120 s old: newest candle closed 60 s ago
+    clock[0] = t0 + 60  # 200 s at build + 60 s since: within the 300 s headline rule
     reused = publish(indexes)["market_index"]
-    assert reused == {**INDEX, "as_of_ms": int((t0 - 60) * 1000), "stale": False}
-    clock[0] = t0 + 100  # closed 100 s ago: older than 1.5 intervals
+    assert reused == {
+        **INDEX,
+        "as_of_ms": int((t0 - 60) * 1000),
+        "source_age_ms": 200_000,
+        "stale": False,
+    }
+    clock[0] = t0 + 110  # 310 s: above the headline rule
     assert publish(indexes)["market_index"]["stale"] is True
     clock[0] = t0 + 120  # as-of 180 s old: no longer reused
     assert "market_index" not in publish(indexes)

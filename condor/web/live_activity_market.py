@@ -39,10 +39,6 @@ _membership: dict[tuple[str, str], tuple[float, list[str]]] = {}
 # this process. The publisher reuses it for a failed pass; the content route serves it.
 _published: dict[str, tuple[float, dict[str, Any]]] = {}
 
-STEP_MS = INTERVAL_SECONDS * 1000
-# Swift ``isStale``: older than 1.5 intervals, counted from the close of the newest candle.
-# ``as_of_ms`` is the newest mean point, i.e. the start of that candle.
-STALE_AFTER_MS = 90_000
 # A failed pass keeps showing the last good index while it is younger than this.
 REUSE_MAX_AGE_MS = 180_000
 
@@ -230,9 +226,15 @@ def remember_index(server: str, headline: dict[str, Any], *, now: float) -> None
     _published[server] = (now, dict(headline))
 
 
-def _aged(headline: dict[str, Any], now_ms: float) -> dict[str, Any]:
-    """The stored index with ``stale`` recomputed for its age (Swift ``isStale`` rule)."""
-    old = now_ms - (headline["as_of_ms"] + STEP_MS) > STALE_AFTER_MS
+def _aged(headline: dict[str, Any], published_at: float, now: float) -> dict[str, Any]:
+    """The stored index with ``stale`` recomputed by the headline's 300 s rule: its age now is
+    ``source_age_ms`` at build plus the time since; an unknown age is stale."""
+    age_ms = headline.get("source_age_ms")
+    if isinstance(age_ms, bool) or not isinstance(age_ms, int):
+        old = True
+    else:
+        age = age_ms / 1000 + max(0.0, now - published_at)
+        old = age > mi.HEADLINE_STALE_AFTER_SECONDS
     return {**headline, "stale": bool(headline["stale"] or old)}
 
 
@@ -241,10 +243,9 @@ def reusable_index(server: str, *, now: float) -> dict[str, Any] | None:
     hit = _published.get(server)
     if hit is None:
         return None
-    now_ms = now * 1000
-    if not 0 <= now_ms - hit[1]["as_of_ms"] < REUSE_MAX_AGE_MS:
+    if not 0 <= now * 1000 - hit[1]["as_of_ms"] < REUSE_MAX_AGE_MS:
         return None
-    return _aged(hit[1], now_ms)
+    return _aged(hit[1], hit[0], now)
 
 
 def published_index(
@@ -255,4 +256,4 @@ def published_index(
     hit = _published.get(server)
     if hit is None or not 0 <= now - hit[0] <= max_age_seconds:
         return None
-    return _aged(hit[1], now * 1000)
+    return _aged(hit[1], hit[0], now)

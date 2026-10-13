@@ -536,8 +536,8 @@ def test_unbuildable_indexes_raise_instead_of_inventing_one(
         build_now(reporting)
 
 
-def _stored(as_of_s, *, stale=False):
-    return {
+def _stored(as_of_s, *, stale=False, source_age_ms=30_000):
+    stored = {
         "value": "101.23",
         "change_pct": "1.23",
         "stale": stale,
@@ -546,25 +546,41 @@ def _stored(as_of_s, *, stale=False):
         "expected": 3,
         "as_of_ms": int(as_of_s * 1000),
     }
+    if source_age_ms is not None:
+        stored["source_age_ms"] = source_age_ms
+    return stored
 
 
 @pytest.mark.parametrize(
-    "as_of_age,reused,stale",
+    "as_of_age,published_ago,source_age_ms,reused,stale",
     [
-        (60, True, False),  # just built: the newest candle closed now
-        (150, True, False),  # closed 90 s ago: not older than 1.5 intervals yet
-        (151, True, True),
-        (179, True, True),
-        (180, False, None),  # too old to stand in for a failed pass
+        (60, 0, 30_000, True, False),  # just built
+        (
+            179,
+            119,
+            30_000,
+            True,
+            False,
+        ),  # 149 s old now: within the 300 s headline rule
+        (100, 40, 260_000, True, False),  # exactly 300 s: not above it
+        (100, 41, 260_000, True, True),  # 301 s
+        (100, 40, None, True, True),  # unknown age is stale
+        (180, 0, 30_000, False, None),  # too old to stand in for a failed pass
     ],
 )
-def test_a_failed_pass_reuses_the_last_good_index_for_180_s(as_of_age, reused, stale):
+def test_a_failed_pass_reuses_the_last_good_index_for_180_s(
+    as_of_age, published_ago, source_age_ms, reused, stale
+):
     market._published.clear()
-    market.remember_index(SERVER, _stored(NOW - as_of_age), now=NOW - as_of_age + 60)
+    stored = _stored(NOW - as_of_age, source_age_ms=source_age_ms)
+    market.remember_index(SERVER, stored, now=NOW - published_ago)
     got = market.reusable_index(SERVER, now=NOW)
     assert (got is not None) is reused
     if reused:
         assert got["stale"] is stale and got["value"] == "101.23"
+        assert (
+            got.get("source_age_ms") == source_age_ms
+        )  # the build-time age, unchanged
     assert market.reusable_index("other", now=NOW) is None
 
 
@@ -577,12 +593,13 @@ def test_a_stale_index_stays_stale_when_reused():
 def test_the_route_serves_only_a_recently_published_index():
     market._published.clear()
     assert market.published_index(SERVER, max_age_seconds=120, now=NOW) is None
-    market.remember_index(SERVER, _stored(NOW - 70), now=NOW - 10)
+    stored = _stored(NOW - 70, source_age_ms=250_000)
+    market.remember_index(SERVER, stored, now=NOW - 10)
     assert (
         market.published_index(SERVER, max_age_seconds=120, now=NOW)["stale"] is False
     )
     late = market.published_index(SERVER, max_age_seconds=120, now=NOW + 100)
-    assert late["stale"] is True  # served, but its candle closed 160 s before
+    assert late["stale"] is True  # 250 s at build + 110 s since: above 300 s
     assert market.published_index(SERVER, max_age_seconds=120, now=NOW + 111) is None
 
 
@@ -625,7 +642,7 @@ def test_the_port_matches_swift_on_the_parity_fixture(case):
     expected = case["expected"]
     assert mi.milliseconds(index.baseline_time) == expected["baseline_ms"]
     assert list(index.missing_pairs) == expected["missing_pairs"]
-    assert index.is_stale(now) is expected["stale"]
+    assert mi.headline_is_stale(index, now) is expected["stale"]
     assert len(index.mean) == len(expected["mean"])
     for (time, value), (want_ms, want) in zip(index.mean, expected["mean"]):
         assert mi.milliseconds(time) == want_ms
@@ -638,3 +655,31 @@ def test_the_port_matches_swift_on_the_parity_fixture(case):
     assert head["pairs"] == expected["pairs"]
     assert head["spark"] == expected["spark"]
     assert head["stale"] is expected["stale"]
+    assert head.get("source_age_ms") == expected.get("source_age_ms")
+
+
+def test_only_the_headline_tolerates_a_minute_cadence():
+    """The headline's 300 s rule is looser than the Market tab's 1.5-interval rule, which stays."""
+    cases = {case["name"]: case for case in PARITY["cases"]}
+    for name, headline_stale in (
+        ("age_only_fresh_200s", False),
+        ("age_only_stale_400s", True),
+    ):
+        case = cases[name]
+        now = mi.date(case["now_ms"] / 1000)
+        index = mi.build(
+            [
+                mi.Input(
+                    item["bot"],
+                    item["pair"],
+                    mi.decode_series(item["series"]),
+                    item["interval_seconds"],
+                    mi.date(item["received_at_ms"] / 1000),
+                )
+                for item in case["inputs"]
+            ],
+            case["expected_pairs"],
+            now,
+        )
+        assert mi.headline_is_stale(index, now) is headline_stale
+        assert index.is_stale(now)

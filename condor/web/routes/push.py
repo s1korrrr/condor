@@ -16,20 +16,25 @@ import time
 from functools import lru_cache
 from typing import Any, Literal
 
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, ConfigDict, Field, StrictBool
 
+from condor.push import live_activity as la
 from condor.push.config import bundle_allowed
 from condor.push.events import ALERT_CLASSES
 from condor.push.heartbeat import evaluate_heartbeat
 from condor.push.store import (
+    SERVER_NAME,
     Registry,
     RegistryError,
     normalize_classes,
     normalize_quiet,
 )
+from condor.web import live_activity_market, live_activity_publisher
 from condor.web.auth import get_current_user
 from condor.web.models import WebUser
+from condor.web.routes import fleet_summary as fleet_summary_routes
+from config_manager import get_config_manager
 
 router = APIRouter(prefix="/push", tags=["push"])
 
@@ -60,6 +65,17 @@ class DeviceRegistration(BaseModel):
     app_version: str = Field(default="", max_length=32)
     classes: dict[str, StrictBool] | None = None
     quiet_hours: QuietHours | None = None
+
+
+class LiveActivityRegistration(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    kind: Literal["update", "start"]
+    token: str = Field(max_length=256)
+    environment: Literal["sandbox", "production"]
+    bundle_id: str = Field(max_length=155)
+    device_id: str = Field(max_length=32)
+    server: str = Field(max_length=100)
+    activity_id: str | None = Field(default=None, max_length=64)
 
 
 class AlertTestRequest(BaseModel):
@@ -143,6 +159,87 @@ def unregister_device(device_id: str, user: WebUser = Depends(get_current_user))
     ):
         raise HTTPException(404, "Device not found")
     return _json({"deleted": device_id})
+
+
+@router.post("/live-activities")
+def register_live_activity(
+    body: LiveActivityRegistration, user: WebUser = Depends(get_current_user)
+):
+    """Register an ActivityKit push token (an activity's update token or the device's
+    push-to-start token) for one of the caller's registered iPhones. The same token is
+    idempotent: it keeps its id."""
+    registry, bundle, environments = _server()
+    if not _DEVICE_ID.fullmatch(body.device_id):
+        raise HTTPException(404, "Device not found")
+    if not SERVER_NAME.fullmatch(
+        body.server
+    ) or not get_config_manager().has_server_access(user.id, body.server):
+        raise HTTPException(404, "Server not found")
+    if not bundle_allowed(bundle, body.bundle_id):
+        raise HTTPException(422, "This server does not send to that bundle identifier")
+    if body.environment not in environments:
+        raise HTTPException(
+            422, f"This server sends to {' and '.join(environments)} devices only"
+        )
+    try:
+        token = registry.upsert_live_activity(
+            user_id=user.id,
+            device_id=body.device_id,
+            server=body.server,
+            kind=body.kind,
+            token=body.token,
+            environment=body.environment,
+            bundle_id=body.bundle_id,
+            activity_id=body.activity_id,
+            now=_clock(),
+        )
+    except LookupError:
+        raise HTTPException(404, "Device not found") from None
+    except RegistryError as exc:
+        raise HTTPException(422, str(exc)) from None
+    return _json({"id": token.id}, 201)
+
+
+@router.get("/live-activities/content")
+async def live_activity_content(
+    server: str = Query(max_length=100), user: WebUser = Depends(get_current_user)
+):
+    """The Live Activity content state for the caller and server: exactly what the push
+    worker sends, built from the same cached glance as ``/fleet/summary?view=glance``. The app
+    starts and locally updates its activity with it, so it never computes content itself.
+    """
+    if not SERVER_NAME.fullmatch(server):
+        raise HTTPException(404, "Server not found")
+    try:
+        glance = await fleet_summary_routes.glance_for(server, user.id)
+    except LookupError:
+        raise HTTPException(404, "Server not found") from None
+    except TimeoutError:
+        raise HTTPException(504, "Fleet summary exceeded its deadline") from None
+    state = la.content_state(glance)
+    # The Market index the publisher last built for this server, when published within two
+    # intervals (``stale`` recomputed for its age); never built here.
+    index = live_activity_market.published_index(
+        server,
+        max_age_seconds=2.0 * live_activity_publisher.configured_interval(),
+        now=_clock(),
+    )
+    if index is not None:
+        state["market_index"] = index
+    return _json(state)
+
+
+@router.delete("/live-activities/{live_id}")
+def unregister_live_activity(live_id: str, user: WebUser = Depends(get_current_user)):
+    """The app ends an activity (or turns the Live Activity off): forget its token."""
+    from fastapi.responses import Response
+
+    registry, _, _ = _server()
+    if not _DEVICE_ID.fullmatch(live_id) or not registry.delete_live_activity(
+        user.id, live_id
+    ):
+        raise HTTPException(404, "Live Activity not found")
+    return Response(status_code=204, headers=_NO_STORE)
 
 
 @router.get("/settings")

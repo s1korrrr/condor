@@ -75,12 +75,25 @@ class ReadOnlyWeb:
                 is not None
             )
             # Push is about where alerts go, never about trading: the caller's own device
-            # rows and a request for a test alert. Nothing here reaches a native bot.
+            # rows, their Live Activity tokens and a request for a test alert. Nothing here
+            # reaches a native bot.
             push_devices = self.allow_push_devices and (
-                (scope["method"] == "POST" and scope["path"] in {"/api/v1/push/devices", "/api/v1/push/test"})
+                (
+                    scope["method"] == "POST"
+                    and scope["path"]
+                    in {
+                        "/api/v1/push/devices",
+                        "/api/v1/push/test",
+                        "/api/v1/push/live-activities",
+                    }
+                )
                 or (
                     scope["method"] == "DELETE"
-                    and re.fullmatch(r"/api/v1/push/devices/[0-9a-f]{32}", scope["path"]) is not None
+                    and re.fullmatch(
+                        r"/api/v1/push/(devices|live-activities)/[0-9a-f]{32}",
+                        scope["path"],
+                    )
+                    is not None
                 )
             )
             if (

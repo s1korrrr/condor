@@ -522,6 +522,15 @@ async def test_incidents_are_admin_only(store):
 
 
 @sync
+async def test_a_paper_bot_alone_does_not_make_the_bots_section_partial(store):
+    body = await build(store, registry=["ok_rsi", "ok_rsi_paper"])
+    paper = card(body, "ok_rsi_paper")
+    assert [m["reason"] for m in paper["missing"]] == [fs.PAPER_EXCLUDED]
+    assert body["sections"]["bots"]["status"] == "ok", body["sections"]["bots"]
+    assert body["sections"]["bots"]["reason"] is None
+
+
+@sync
 async def test_staleness_is_flagged_not_hidden(store):
     body = await build(store, now_ms=NOW_MS + 10 * 60_000)
     assert (
@@ -672,10 +681,21 @@ def test_names_and_generations():
     )
     assert [
         fs.generation(b)
-        for b in ("ok_rsi", "rsi_v5", "rsi_modular_v2", "meridian_v3", "mystery")
-    ] == ["V1", "V1", "V2", "V3", None]
+        for b in (
+            "ok_rsi",
+            "rsi_v5",
+            "rsi_modular_v2",
+            "meridian_v3",
+            "meridian_v4_paper",
+            "meridian_v4_d2h_paper",
+            "mystery",
+            "v40_bot",
+        )
+    ] == ["V1", "V1", "V2", "V3", "V4", "V4", None, None]
     assert (
-        fs.is_paper("ok_rsi_paper")
+        fs.is_paper("meridian_v4_paper")
+        and fs.is_paper("meridian_v4_d2h_paper")
+        and fs.is_paper("ok_rsi_paper")
         and fs.is_paper("paper-v2")
         and not fs.is_paper("papermill")
     )

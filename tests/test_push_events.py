@@ -26,6 +26,36 @@ def test_bot_tags_use_v1_v2_v3_labels_then_version_suffix_then_display_name():
     assert ev.bot_tag("breakout", labels={"breakout": "BRK"}) == "BRK"
 
 
+def test_paper_bot_tags_always_say_paper_whatever_the_label_source():
+    assert ev.bot_tag("meridian_v4_paper") == "V4 PAPER"
+    assert ev.bot_tag("meridian_v4_paper", "V4 paper") == "V4 PAPER"
+    assert ev.bot_tag("meridian_v4_d2h_paper", "V4 D2h paper") == "V4 D2h PAPER"
+    assert ev.bot_tag("meridian_v4_d2h_paper") == "meridian_v4_d2h PAPER"
+    # A configured label cannot hide the paper mark.
+    assert (
+        ev.bot_tag("meridian_v4_paper", labels={"meridian_v4_paper": "V4"})
+        == "V4 PAPER"
+    )
+    assert ev.bot_tag("paper") == "Bot PAPER"
+    # Only a whole "paper" token marks a bot paper.
+    assert ev.bot_tag("papermill_v2") == "V2"
+
+
+def test_a_paper_bots_fill_push_is_titled_paper():
+    paper = ev.SourceInfo(
+        "p" * 64,
+        "meridian_v4_paper",
+        ev.bot_tag("meridian_v4_paper", "V4 paper"),
+        "USDT",
+        paper=True,
+    )
+    detection = ev.detect_fills(
+        paper, [fill_row("f1", "o1", side="buy")], started=STARTED, seen=NEVER
+    )
+    (entry,) = detection.events
+    assert entry.title == "V4 PAPER · BUY BNB-USDT" and entry.bot_tag == "V4 PAPER"
+
+
 def test_deep_links_are_validated_not_interpolated():
     assert ev.link("fills", "meridian_v3") == "rsibot://bot/meridian_v3/fills"
     assert ev.link("operations") == "rsibot://operations"
@@ -610,7 +640,9 @@ def test_a_stale_or_malformed_incident_store_is_not_acted_on():
 # ------------------------------------------------------------------ summary
 
 
-def _bot_day(tag, pnl, *, quote="USDT", fresh=True, held=2, active=1, wallet=None):
+def _bot_day(
+    tag, pnl, *, quote="USDT", fresh=True, held=2, active=1, wallet=None, paper=False
+):
     return ev.BotDay(
         tag,
         quote,
@@ -620,6 +652,7 @@ def _bot_day(tag, pnl, *, quote="USDT", fresh=True, held=2, active=1, wallet=Non
         active,
         None if wallet is None else Decimal(wallet),
         None if wallet is None else quote,
+        paper=paper,
     )
 
 
@@ -648,6 +681,29 @@ def test_daily_summary_totals_only_when_quote_currencies_match_and_data_is_fresh
     assert "V3: status unavailable" in stale.body and "UNAVAILABLE" in stale.body
     with pytest.raises(ValueError):
         ev.fleet_summary([], now=NOW)
+
+
+def test_daily_summary_never_adds_a_paper_bot_to_the_live_fleet_total():
+    event = ev.fleet_summary(
+        [
+            _bot_day("V2", "12.5"),
+            _bot_day("V4 PAPER", "1000", paper=True),
+            _bot_day("V4 D2h PAPER", None, fresh=False, paper=True),
+        ],
+        now=NOW,
+    )
+    assert event.body.splitlines() == [
+        "V2: +12.50 USDT today · 2 held · 1 active",
+        "V4 PAPER: +1,000.00 USDT today · 2 held · 1 active",
+        "V4 D2h PAPER: status unavailable",
+        "Fleet today: +12.50 USDT (paper excluded)",
+    ]
+    only_paper = ev.fleet_summary([_bot_day("V4 PAPER", "5", paper=True)], now=NOW)
+    assert only_paper.body.splitlines()[-1] == "Fleet today: UNAVAILABLE (no live bots)"
+    paper_src = ev.SourceInfo(
+        "p" * 64, "meridian_v4_paper", "V4 PAPER", "USDT", paper=True
+    )
+    assert ev.summarize_bot(paper_src, None, now=NOW, stale_seconds=300).paper is True
 
 
 def test_summarize_bot_takes_day_pnl_from_the_owners_daily_baseline():

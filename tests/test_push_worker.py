@@ -828,6 +828,16 @@ def test_worker_sources_are_the_telegram_fleet_sources_without_a_second_registry
     )
 
 
+def test_a_paper_source_is_tagged_paper_and_kept_out_of_live_totals(rig):
+    paper = ft.BotSource(
+        **{**_source("meridian_v4_d2h_paper").__dict__, "label": "V4 D2h paper"}
+    )
+    info = rig.worker._info(paper)
+    assert (info.tag, info.paper) == ("V4 D2h PAPER", True)
+    live = rig.worker._info(_source("meridian_v3"))
+    assert (live.tag, live.paper) == ("V3", False)
+
+
 def test_delivery_report_counts_per_day_and_state_without_taking_the_workers_lock(rig):
     import subprocess
     import sys

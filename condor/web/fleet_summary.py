@@ -34,6 +34,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Optional, Protocol
 
 from condor.fetchers.bots import build_bots_page
+from condor.fleet_identity import display_name, generation, is_paper
 from condor.web import fleet_pnl
 from condor.web.market_verdict import (
     DEFAULT_HORIZON,
@@ -78,37 +79,6 @@ PARTIAL_COVERAGE = "PARTIAL_COVERAGE"
 FIELDS_MISSING = "FIELDS_MISSING"
 GLANCE_MAX_BOTS = 16
 GLANCE_MAX_MISSING = 16
-
-V1_DISPLAY = {
-    "ok_rsi": "V1 · ok_rsi",
-    "ok_rsi_sui_sell_only": "SUI · Sell only",
-    "rsi_v5": "RSI v5",
-}
-_PAPER = re.compile(r"(?:^|[_-])paper(?:[_-]|$)", re.IGNORECASE)
-_GEN = {
-    "V2": re.compile(r"(?:^|[_-])v2(?:[_-]|$)", re.IGNORECASE),
-    "V3": re.compile(r"(?:^|[_-])v3(?:[_-]|$)", re.IGNORECASE),
-}
-
-
-def display_name(bot: str) -> str:
-    """Same nicknames as ``displayBotName`` in the frontend (V1 nicknames stay; other ids show as themselves)."""
-    return V1_DISPLAY.get(bot, bot)
-
-
-def generation(bot: str) -> Optional[str]:
-    """'V1' for the known V1 bots, 'V2'/'V3' when the id carries that token, otherwise ``None`` (never guessed)."""
-    if bot in V1_DISPLAY:
-        return "V1"
-    for name, pattern in _GEN.items():
-        if pattern.search(bot):
-            return name
-    return None
-
-
-def is_paper(bot: str) -> bool:
-    return bool(_PAPER.search(bot))
-
 
 @dataclass
 class OwnerRead:
@@ -1198,7 +1168,11 @@ async def build_fleet_summary(
     else:
         observed = [c["report_at_ms"] for c in cards if c["report_at_ms"] is not None]
         any_stale = any(c["report_stale"] for c in cards if not c["paper"])
-        incomplete = any(c["missing"] for c in cards) or page is None
+        # A paper bot's PAPER_EXCLUDED fields are by design, not a data gap.
+        incomplete = (
+            any(m["reason"] != PAPER_EXCLUDED for c in cards for m in c["missing"])
+            or page is None
+        )
         sections["bots"] = _section(
             "stale" if any_stale else "partial" if incomplete else "ok",
             max(observed) if observed else None,

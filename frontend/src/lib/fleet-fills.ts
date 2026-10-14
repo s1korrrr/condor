@@ -11,7 +11,7 @@ export const FLEET_FILLS_SCHEMA = 'fleet-fills.v1';
 export const FLEET_FILLS_DEFAULT_LIMIT = 50;
 
 export type FleetFillsStatus = 'ok' | 'partial' | 'missing';
-export type FleetFillGeneration = 'V1' | 'V2' | 'V3';
+export type FleetFillGeneration = 'V1' | 'V2' | 'V3' | 'V4';
 export type FleetFillSide = 'buy' | 'sell';
 /** `unrecognised` is a receipt value this client does not know: shown as such, never promoted to exact. */
 export type FleetFillReceipt = 'exact' | 'legacy_6dp' | 'unavailable' | 'unrecognised';
@@ -96,7 +96,7 @@ const text = (value: unknown): value is string => typeof value === 'string';
 const decimal = (value: unknown): value is string => typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value);
 const nullable = <T>(value: unknown, ok: (value: unknown) => value is T): value is T | null => value === null || ok(value);
 
-const GENERATIONS: readonly string[] = ['V1', 'V2', 'V3'];
+const GENERATIONS: readonly string[] = ['V1', 'V2', 'V3', 'V4'];
 const generation = (value: unknown): FleetFillGeneration | null => typeof value === 'string' && GENERATIONS.includes(value) ? value as FleetFillGeneration : null;
 const RECEIPTS: readonly string[] = ['exact', 'legacy_6dp', 'unavailable'];
 

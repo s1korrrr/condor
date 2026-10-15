@@ -1,4 +1,4 @@
-import { historySourceMatches } from '../quant-ops/performance-history';
+import { historySourceMatches } from '../quant-ops/performance-history.ts';
 
 /** Saved native PnL points for one window, as the durable observer stored them. */
 export type PnlSeries = { points: { time: number; value: number | null; owner: number }[]; quote: string | null; change: number | null; reason: string | null };

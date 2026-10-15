@@ -2,7 +2,7 @@ import {skipToken, useMutation, useQuery, useQueryClient} from '@tanstack/react-
 import {useEffect, useState} from 'react';
 import {authFetch} from '@/lib/auth-token';
 import {getSessionSnapshot, sessionRevision} from '@/lib/auth-session';
-import {CAPABILITY_HEADER,entryStatusRefetchInterval,clearPendingEntryCommand, entryCommandObserved, entryLabels, entryObservation, entryPath, entryPendingStorageKey, entryPublicationMessage, readPendingEntryCommand, writePendingEntryCommand, type EntryAction, type EntryCommand, type EntryPendingRead, type EntryPendingStorage} from '@/lib/native-entry-controls';
+import {CAPABILITY_HEADER,entryStatusRefetchInterval,clearPendingEntryCommand, entryCommandObserved, entryLabels, entryObservation, entryPath, entryPendingStorageKey, entryPublicationMessage, entryRowLabel, readPendingEntryCommand, writePendingEntryCommand, type EntryAction, type EntryCommand, type EntryPendingRead, type EntryPendingStorage} from '@/lib/native-entry-controls';
 
 type Session = {command:EntryCommand|null; message:string};
 
@@ -96,7 +96,7 @@ export function NativeEntryControls({server,botName}:{server:string;botName:stri
   return <section className="mt-3 max-w-xl rounded border border-[var(--color-border)] p-3" aria-label={`Entry controls for ${botName}`}>
     <h4 className="text-sm font-medium">New entries</h4>
     <p className="mt-1 text-xs text-[var(--color-text-muted)]">Entry pause leaves native protective exits running. Daily-loss acknowledgement requires the next UTC day.</p>
-    {view.valid ? <ul className="my-2 text-xs">{view.rows.map(row=><li key={String(row.controller_id)}>{String(row.controller_id)}: {row.entry_paused?'Paused':'Not paused'}{typeof row.pause_reason==='string' && row.pause_reason?` · ${row.pause_reason}`:''}</li>)}</ul> : <p role="status" className="my-2 text-xs">{status.isError?'Native entry controls are unavailable for this owner.':'Waiting for fresh native entry state…'}</p>}
+    {view.valid ? <ul className="my-2 text-xs">{view.rows.map(row=><li key={String(row.controller_id)}>{entryRowLabel(row)}</li>)}</ul> : <p role="status" className="my-2 text-xs">{status.isError?'Native entry controls are unavailable for this owner.':'Waiting for fresh native entry state…'}</p>}
     <div className="flex flex-wrap gap-2">{confirmation ? <>
       <span className="text-xs">{entryLabels[confirmation]} for {botName}?</span>
       <button type="button" disabled={disabled} onClick={()=>mutation.mutate(confirmation)} className="rounded border px-3 py-1 text-xs disabled:opacity-40">Confirm {entryLabels[confirmation].toLowerCase()}</button>

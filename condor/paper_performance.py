@@ -64,7 +64,13 @@ def project_paper(payload: object, bot: str, now: float) -> dict:
         and summary.get("fees_quote") is not None
     ):
         net, fees = _number(summary["net_pnl_quote"]), _number(summary["fees_quote"])
-        if abs(net - (realized + unrealized - fees)) > Decimal("0.00001"):
+        # The paper summary declares whether its native controller PnL already includes fees
+        # (fees_quote is then informational); the live convention subtracts them from net.
+        if summary.get("fees_included_in_pnl") is True:
+            expected = realized + unrealized
+        else:
+            expected = realized + unrealized - fees
+        if abs(net - expected) > Decimal("0.00001"):
             raise ValueError("Inconsistent paper PnL summary")
     observed = runtime.get("updated_at")
     if not isinstance(observed, str):

@@ -271,3 +271,23 @@ async def test_the_status_tick_records_wallets_and_paper_pnl_from_one_runtime_re
     )
     (_, wallets), _ = observer.record_wallet.call_args
     assert set(wallets) == {BOT, "rsi_modular_v2"}
+
+
+def test_reporting_paper_summary_with_fees_included_in_pnl_projects():
+    """The deployed reporting paper summary (2026-10-15): native controller PnL already includes fees,
+    so net = realized + unrealized and fees_quote is informational (fees_included_in_pnl: true)."""
+    body = runtime(realized="-0.07976", unrealized="-2.097358", fees="0.56707", net="-2.177118")
+    body["runtime_status"]["summary"]["fees_included_in_pnl"] = True
+    point = project_paper(body, BOT, NOW)
+    assert point["total_pnl_quote"] == "-2.177118"
+    body["runtime_status"]["summary"]["net_pnl_quote"] = "-2.744188"  # net - fees again: inconsistent
+    with pytest.raises(ValueError, match="Inconsistent"):
+        project_paper(body, BOT, NOW)
+
+
+def test_live_convention_still_requires_net_after_fees():
+    body = runtime(realized="12.5", unrealized="-2.5", fees="1", net="9")
+    assert project_paper(body, BOT, NOW)["total_pnl_quote"] == "10.0"
+    body["runtime_status"]["summary"]["net_pnl_quote"] = "10"
+    with pytest.raises(ValueError, match="Inconsistent"):
+        project_paper(body, BOT, NOW)

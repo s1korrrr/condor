@@ -160,6 +160,14 @@ class PerformanceHistory:
             columns = {row[1] for row in conn.execute("PRAGMA table_info(wallet_points)")}
             if "balances_json" not in columns:
                 conn.execute("ALTER TABLE wallet_points ADD COLUMN balances_json TEXT")
+            # Paper bots: simulated wallet samples, same shape as the live wallet, never mixed with it.
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS paper_wallet_points (server TEXT, bot TEXT, timestamp REAL, currency TEXT, value_quote TEXT, source_id TEXT, balances_json TEXT, PRIMARY KEY(server,bot,timestamp))"
+            )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS paper_wallet_cursors (server TEXT, bot TEXT, timestamp REAL, sampled REAL, valid INTEGER, PRIMARY KEY(server,bot))"
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS paper_wallet_points_timestamp ON paper_wallet_points(timestamp)")
             yield conn
             conn.commit()
         except BaseException:
@@ -169,45 +177,69 @@ class PerformanceHistory:
         finally:
             conn.close()
 
+    @staticmethod
+    def _store_wallet(conn, points, cursors, server, samples, now):
+        """Forward-only, about one sample a minute; a failed read marks the cursor so the next valid sample starts after a gap."""
+        for name, sample in samples.items():
+            if sample is None:
+                conn.execute(f"UPDATE {cursors} SET valid=0 WHERE server=? AND bot=?", (server, name))
+                continue
+            previous = conn.execute(
+                f"SELECT * FROM {cursors} WHERE server=? AND bot=?", (server, name)
+            ).fetchone()
+            stamp = float(sample["timestamp"])
+            if stamp > now + 5:
+                conn.execute(f"UPDATE {cursors} SET valid=0 WHERE server=? AND bot=?", (server, name))
+                continue
+            if previous and stamp <= previous["timestamp"]:
+                continue
+            first = not previous or not previous["valid"]
+            sampled = stamp if first or stamp - previous["sampled"] >= 60 else previous["sampled"]
+            if sampled == stamp:
+                conn.execute(
+                    f"INSERT OR IGNORE INTO {points} (server,bot,timestamp,currency,value_quote,source_id,balances_json) VALUES (?,?,?,?,?,?,?)",
+                    (server, name, stamp, sample["currency"], sample["value_quote"], sample.get("source_id", ""),
+                     json.dumps(sample.get("balances") or [], separators=(",", ":"))),
+                )
+            conn.execute(
+                f"INSERT OR REPLACE INTO {cursors} VALUES (?,?,?,?,1)",
+                (server, name, stamp, sampled),
+            )
+        conn.execute(f"DELETE FROM {points} WHERE timestamp < ?", (now - RANGES["ALL"],))
+
     def record_wallet(self, server, samples, now=None):
         """Forward-only shared-wallet valuation samples from the reporting owner.
 
         `samples` maps bot -> projected wallet sample or None when the read failed.
         A failed read marks the cursor invalid so the next valid sample starts after a gap.
+        Paper bots are never live wallet sources and are skipped; a simulated sample for a live bot marks a gap.
         """
         now = time.time() if now is None else now
+        live = {
+            name: None if sample is not None and sample.get("simulated") else sample
+            for name, sample in samples.items() if not is_paper(name)
+        }
         with self._connect() as conn:
-            for name, sample in samples.items():
-                if sample is None:
-                    conn.execute("UPDATE wallet_cursors SET valid=0 WHERE server=? AND bot=?", (server, name))
-                    continue
-                previous = conn.execute(
-                    "SELECT * FROM wallet_cursors WHERE server=? AND bot=?", (server, name)
-                ).fetchone()
-                stamp = float(sample["timestamp"])
-                if stamp > now + 5:
-                    conn.execute("UPDATE wallet_cursors SET valid=0 WHERE server=? AND bot=?", (server, name))
-                    continue
-                if previous and stamp <= previous["timestamp"]:
-                    continue
-                first = not previous or not previous["valid"]
-                sampled = stamp if first or stamp - previous["sampled"] >= 60 else previous["sampled"]
-                if sampled == stamp:
-                    conn.execute(
-                        "INSERT OR IGNORE INTO wallet_points (server,bot,timestamp,currency,value_quote,source_id,balances_json) VALUES (?,?,?,?,?,?,?)",
-                        (server, name, stamp, sample["currency"], sample["value_quote"], sample.get("source_id", ""),
-                         json.dumps(sample.get("balances") or [], separators=(",", ":"))),
-                    )
-                conn.execute(
-                    "INSERT OR REPLACE INTO wallet_cursors VALUES (?,?,?,?,1)",
-                    (server, name, stamp, sampled),
-                )
-            conn.execute("DELETE FROM wallet_points WHERE timestamp < ?", (now - RANGES["ALL"],))
+            self._store_wallet(conn, "wallet_points", "wallet_cursors", server, live, now)
+
+    def record_paper_wallet(self, server, samples, now=None):
+        """Simulated wallet samples of paper bots (``wallet_observation.paper_wallet_samples``), stored apart from
+        the live wallet. Live bots are skipped; a sample not declared simulated marks a gap for that bot."""
+        now = time.time() if now is None else now
+        paper = {
+            name: sample if sample is not None and sample.get("simulated") is True else None
+            for name, sample in samples.items() if is_paper(name)
+        }
+        with self._connect() as conn:
+            self._store_wallet(conn, "paper_wallet_points", "paper_wallet_cursors", server, paper, now)
 
     def read_wallet(self, server, bot, period, now=None):
         now = time.time() if now is None else now
+        paper = is_paper(bot)
+        # A paper bot reads only its own simulated wallet; a live bot reads only the shared wallet.
+        table = "paper_wallet_points" if paper else "wallet_points"
         result = {
-            "source": "reporting_wallet_observer",
+            "source": "reporting_paper_runtime" if paper else "reporting_wallet_observer",
             "bot_name": bot,
             "range": period,
             "coverage_start": None,
@@ -215,29 +247,29 @@ class PerformanceHistory:
             "truncated": False,
             "latest": None,
         }
-        if is_paper(bot):
+        if paper:
             result["simulated"] = True  # a paper bot's wallet is simulated equity, never capital
         if not self.path.exists():
             return result
         with closing(sqlite3.connect(f"file:{self.path.resolve()}?mode=ro", uri=True)) as conn:
             conn.row_factory = sqlite3.Row
             tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
-            if "wallet_points" not in tables:
+            if table not in tables:
                 return result
             start = conn.execute(
-                "SELECT MIN(timestamp) FROM wallet_points WHERE server=? AND bot=?", (server, bot)
+                f"SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=?", (server, bot)
             ).fetchone()[0]
             # Longer windows return the last sample of each bucket so day-end statistics keep full coverage.
             bucket = WALLET_BUCKETS[period]
             rows = conn.execute(
-                "SELECT timestamp,currency,value_quote,source_id,balances_json FROM wallet_points WHERE server=? AND bot=? AND timestamp>=? "
-                "AND timestamp IN (SELECT MAX(timestamp) FROM wallet_points WHERE server=? AND bot=? AND timestamp>=? AND " + ADMITTED_VALUE + " GROUP BY CAST(timestamp/? AS INTEGER)) "
+                f"SELECT timestamp,currency,value_quote,source_id,balances_json FROM {table} WHERE server=? AND bot=? AND timestamp>=? "
+                f"AND timestamp IN (SELECT MAX(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND " + ADMITTED_VALUE + " GROUP BY CAST(timestamp/? AS INTEGER)) "
                 "ORDER BY timestamp DESC LIMIT 10001",
                 (server, bot, now - RANGES[period], server, bot, now - RANGES[period], bucket),
             ).fetchall()
             # The newest sample regardless of window, with its balances: the last-known wallet when the owner is stale.
             latest_row = conn.execute(
-                "SELECT timestamp,currency,value_quote,source_id,balances_json FROM wallet_points WHERE server=? AND bot=? AND " + ADMITTED_VALUE + " ORDER BY timestamp DESC LIMIT 1",
+                f"SELECT timestamp,currency,value_quote,source_id,balances_json FROM {table} WHERE server=? AND bot=? AND " + ADMITTED_VALUE + " ORDER BY timestamp DESC LIMIT 1",
                 (server, bot),
             ).fetchone()
         latest = None

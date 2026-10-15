@@ -270,7 +270,9 @@ async def test_the_status_tick_records_wallets_and_paper_pnl_from_one_runtime_re
         and samples[BOT]["total_pnl_quote"] == "10.0"
     )
     (_, wallets), _ = observer.record_wallet.call_args
-    assert set(wallets) == {BOT, "rsi_modular_v2"}
+    assert set(wallets) == {"rsi_modular_v2"}, "a paper bot never reaches the live wallet recorder"
+    (_, paper_wallets), _ = observer.record_paper_wallet.call_args
+    assert set(paper_wallets) == {BOT}
 
 
 def test_reporting_paper_summary_with_fees_included_in_pnl_projects():

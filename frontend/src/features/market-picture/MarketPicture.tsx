@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Download,
   Pause,
@@ -29,6 +29,7 @@ import {
   type DisplayCorrelation,
   type DisplayEvent,
   type DisplayFrame,
+  type HistoryPoint,
   type ViewSettings,
 } from "./presentation";
 import { BreadthContextPanel, DailyInternalsPanel, EvidenceMatrixPanel, FlowHistoryPanel, MarketPulseHero, MarketSnapshotTiles, MicrostructurePanel } from "./MarketPulse";
@@ -79,6 +80,8 @@ const EMPTY_PREFS: Preferences = {
   notes: {},
   views: [],
 };
+const EMPTY_HISTORY: HistoryPoint[] = [];
+const EMPTY_CORRELATIONS: DisplayCorrelation[] = [];
 function loadPreferences(key: string): Preferences {
   try {
     const value = JSON.parse(localStorage.getItem(key) ?? "null");
@@ -201,17 +204,26 @@ export function MarketPictureSurface({
   const storedPreferences = useMemo(() => loadPreferences(preferencesKey), [preferencesKey]);
   const [preferences, setPreferences] = useState<{key: string; value: Preferences} | null>(null);
   const scopedPreferences = preferences?.key === preferencesKey ? preferences.value : storedPreferences;
-  const cohortSet = new Set(cohort);
-  const set = (patch: Partial<ViewSettings>) =>
-    setView((v) => ({ ...v, ...patch }));
-  const select = (id: string) => {
+  const cohortSet = useMemo(() => new Set(cohort), [cohort]);
+  const set = useCallback((patch: Partial<ViewSettings>) =>
+    setView((v) => ({ ...v, ...patch })), []);
+  const select = useCallback((id: string) => {
     set({ selected: id });
     setDrawer("asset");
-  };
-  const highlight = (ids: string[], label: string) => {
+  }, [set]);
+  const highlight = useCallback((ids: string[], label: string) => {
     setCohort(ids);
     setCohortLabel(label);
-  };
+  }, []);
+  const setHorizon = useCallback((horizon: ViewSettings["horizon"]) => set({ horizon }), [set]);
+  const setWindow = useCallback((window: ViewSettings["window"]) => set({ window }), [set]);
+  const setBenchmark = useCallback((benchmark: string) => set({ benchmark }), [set]);
+  const setSector = useCallback((sector: string) => set({ sector }), [set]);
+  const selectPredicate = useCallback((predicate: string) => {
+    if (!frame) return;
+    highlight(predicateMembers(frame.assets, predicate), predicate.replaceAll("_", " "));
+  }, [frame, highlight]);
+  const openMatrix = useCallback(() => setDrawer("matrix"), []);
   const savePreferences = (patch: Partial<Preferences>) => {
     const next = {
       ...scopedPreferences,
@@ -302,7 +314,7 @@ export function MarketPictureSurface({
       setMessage(`View link: ${url}`);
     }
   };
-  const loadEvents = async () => {
+  const loadEvents = useCallback(async () => {
     if (!server || !frame || !data || busy) return;
     const cursor =
       additionalEvents?.snapshot === frame.snapshot_id
@@ -340,17 +352,18 @@ export function MarketPictureSurface({
     } finally {
       setBusy(false);
     }
-  };
+  }, [additionalEvents, busy, data, frame, server]);
+  const nextEventsPage = useCallback(() => void loadEvents(), [loadEvents]);
   const extra =
     additionalEvents?.snapshot === frame?.snapshot_id ? additionalEvents : null;
-  const events = [
+  const events = useMemo(() => [
     ...new Map(
       [...(data?.events ?? []), ...(extra?.events ?? [])].map((e) => [
         e.event_id,
         e,
       ]),
     ).values(),
-  ];
+  ], [data?.events, extra?.events]);
   const common = { frame, selected: view.selected, select, cohort: cohortSet };
   return (
     <div
@@ -446,19 +459,19 @@ export function MarketPictureSurface({
       )}
       <MarketPulseHero
         frame={frame}
-        history={data?.history ?? []}
+        history={data?.history ?? EMPTY_HISTORY}
         horizon={view.horizon}
         window={view.window}
-        setHorizon={(h) => set({ horizon: h })}
-        setWindow={(w) => set({ window: w })}
-        replay={(id) => void source.replay(id)}
+        setHorizon={setHorizon}
+        setWindow={setWindow}
+        replay={source.replay}
       />
       {frame && (
-        <MarketSnapshotTiles frame={frame} history={data?.history ?? []} window={view.window} />
+        <MarketSnapshotTiles frame={frame} history={data?.history ?? EMPTY_HISTORY} window={view.window} />
       )}
       {frame && <EvidenceMatrixPanel frame={frame} horizon={view.horizon} asOf={componentAsOf} />}
       {frame && <MicrostructurePanel frame={frame} asOf={componentAsOf} />}
-      {frame && <FlowHistoryPanel history={data?.history ?? []} window={view.window} fault={data?.faults.history ?? null} />}
+      {frame && <FlowHistoryPanel history={data?.history ?? EMPTY_HISTORY} window={view.window} fault={data?.faults.history ?? null} />}
       {frame && <BreadthContextPanel frame={frame} />}
       {frame && <DailyInternalsPanel frame={frame} />}
       {!frame && (
@@ -474,12 +487,7 @@ export function MarketPictureSurface({
             <LeadersLaggardsPanel {...common} benchmark={view.benchmark} />
             <ParticipationPanel
               frame={frame}
-              selectPredicate={(p) =>
-                highlight(
-                  predicateMembers(frame.assets, p),
-                  p.replaceAll("_", " "),
-                )
-              }
+              selectPredicate={selectPredicate}
             />
           </div>
           <RegimePanel {...common} search={search} />
@@ -488,14 +496,14 @@ export function MarketPictureSurface({
               <MarketHeatmapPanel
                 {...common}
                 sector={view.sector}
-                setSector={(s) => set({ sector: s })}
+                setSector={setSector}
               />
             )}
             <MarketEventFeed
               events={events}
               frame={frame}
               select={select}
-              nextPage={() => void loadEvents()}
+              nextPage={nextEventsPage}
               hasMore={Boolean(extra ? extra.cursor : data?.eventCursor)}
               fault={data?.faults.events}
             />
@@ -507,10 +515,10 @@ export function MarketPictureSurface({
               )}
               <CorrelationsPanel
                 {...common}
-                correlations={data?.correlations ?? []}
+                correlations={data?.correlations ?? EMPTY_CORRELATIONS}
                 benchmark={view.benchmark}
-                setBenchmark={(b) => set({ benchmark: b })}
-                openMatrix={() => setDrawer("matrix")}
+                setBenchmark={setBenchmark}
+                openMatrix={openMatrix}
               />
             </div>
           )}

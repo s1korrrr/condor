@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { memo, useMemo, useState } from "react";
 import { TimeSeriesChart } from "@/features/quant-ops/kit/charts";
 import { SparkChart } from "@/features/quant-ops/kit/charts";
 import { TileGrid } from "@/features/quant-ops/kit/grid";
@@ -448,11 +448,20 @@ export function EvidenceMatrixPanel({
   );
 }
 
+const DECIMAL_FORMATTERS = Array.from(
+  { length: 5 },
+  (_, digits) => new Intl.NumberFormat(undefined, { maximumFractionDigits: digits }),
+);
+
 function displayDecimal(value: string | null, digits = 4, signed = false) {
   if (value == null) return "Unavailable";
   const number = Number(value);
   if (!Number.isFinite(number)) return "Invalid";
-  return `${signed && number > 0 ? "+" : ""}${number.toLocaleString(undefined, { maximumFractionDigits: digits })}`;
+  const formatter = DECIMAL_FORMATTERS[digits];
+  const formatted = formatter
+    ? formatter.format(number)
+    : number.toLocaleString(undefined, { maximumFractionDigits: digits });
+  return `${signed && number > 0 ? "+" : ""}${formatted}`;
 }
 
 function rowFresh(expires: number, asOf: number) {
@@ -460,7 +469,7 @@ function rowFresh(expires: number, asOf: number) {
 }
 
 /** Owner-recorded spot-flow and displayed-book observations. Never estimates depth or actionability. */
-export function MicrostructurePanel({ frame, asOf = frame.available_at_ms }: { frame: DisplayFrame; asOf?: number }) {
+function MicrostructurePanelView({ frame, asOf = frame.available_at_ms }: { frame: DisplayFrame; asOf?: number }) {
   const component = frame.microstructure;
   if (!component) return (
     <Panel id="mp-microstructure" title="Executed flow &amp; displayed liquidity" detail="Owner-recorded observations only; no frontend flow or book calculation">
@@ -531,9 +540,10 @@ export function MicrostructurePanel({ frame, asOf = frame.available_at_ms }: { f
     </Panel>
   );
 }
+export const MicrostructurePanel = memo(MicrostructurePanelView);
 
 /** Stored one-minute owner aggregates; points are never summed across gaps or resets. */
-export function FlowHistoryPanel({
+function FlowHistoryPanelView({
   history, window, fault,
 }: { history: HistoryPoint[]; window: string; fault: string | null }) {
   const { samples, label } = marketPulseWindow(history, window);
@@ -591,9 +601,10 @@ export function FlowHistoryPanel({
     </Panel>
   );
 }
+export const FlowHistoryPanel = memo(FlowHistoryPanelView);
 
 /** Owner-computed multi-window breadth trajectory and frozen-cohort contribution context. */
-export function BreadthContextPanel({ frame }: { frame: DisplayFrame }) {
+function BreadthContextPanelView({ frame }: { frame: DisplayFrame }) {
   const rows = frame.breadthTrajectory;
   const normalized = Object.values(frame.normalizedBreadth);
   const diverged = frame.breadthDivergence.find(row => row.interval === 15);
@@ -704,9 +715,10 @@ export function BreadthContextPanel({ frame }: { frame: DisplayFrame }) {
     </Panel>
   );
 }
+export const BreadthContextPanel = memo(BreadthContextPanelView);
 
 /** Previous completed daily bars only; missing or short history stays explicitly unavailable. */
-export function DailyInternalsPanel({ frame }: { frame: DisplayFrame }) {
+function DailyInternalsPanelView({ frame }: { frame: DisplayFrame }) {
   if (!frame.dailyInternals.length) return (
     <Panel id="mp-daily-internals" title="Daily range &amp; moving averages" detail="Owner-confirmed daily candles; no intraday substitutions">
       <p className="mp-panel-footnote">Unavailable · this frame has no owner-qualified daily-internals projection.</p>
@@ -745,6 +757,7 @@ export function DailyInternalsPanel({ frame }: { frame: DisplayFrame }) {
     </Panel>
   );
 }
+export const DailyInternalsPanel = memo(DailyInternalsPanelView);
 
 interface Tile {
   key: string;
@@ -769,7 +782,7 @@ const SNAPSHOT = [
 ] as const;
 
 /** Compact market-wide tiles that sit under the hero. Tiles without a value are not drawn. */
-export function MarketSnapshotTiles({
+function MarketSnapshotTilesView({
   frame,
   history,
   window,
@@ -844,3 +857,4 @@ export function MarketSnapshotTiles({
     </TileGrid>
   );
 }
+export const MarketSnapshotTiles = memo(MarketSnapshotTilesView);

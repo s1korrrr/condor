@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -21,7 +21,7 @@ import { RingGauge } from "@/features/quant-ops/kit/gauges";
 import { TileGrid } from "@/features/quant-ops/kit/grid";
 import { Empty, Panel } from "./Primitives";
 
-export function MarketHeatmapPanel({
+function MarketHeatmapPanelView({
   frame,
   selected,
   select,
@@ -215,8 +215,9 @@ export function MarketHeatmapPanel({
     </Panel>
   );
 }
+export const MarketHeatmapPanel = memo(MarketHeatmapPanelView);
 
-export function ReturnDistributionPanel({
+function ReturnDistributionPanelView({
   frame,
   selectCohort,
 }: {
@@ -377,6 +378,7 @@ export function ReturnDistributionPanel({
     </Panel>
   );
 }
+export const ReturnDistributionPanel = memo(ReturnDistributionPanelView);
 
 const PREDICATES = [
   ["above_ema21", "Above EMA21", "Close > EMA21", "var(--mp-positive)"],
@@ -390,7 +392,7 @@ const PREDICATES = [
 ] as const;
 
 /** Share of the universe satisfying each observed predicate; a ring per predicate. */
-export function ParticipationPanel({
+function ParticipationPanelView({
   frame,
   selectPredicate,
 }: {
@@ -435,3 +437,4 @@ export function ParticipationPanel({
     </Panel>
   );
 }
+export const ParticipationPanel = memo(ParticipationPanelView);

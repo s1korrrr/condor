@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { memo, useEffect, useRef, useState, type ReactNode } from "react";
 import { X } from "lucide-react";
 import { containDialogTab } from "@/lib/dialog-focus";
 import {
@@ -91,7 +91,7 @@ function eventCategory(type: string) {
   if (/high|low|breakout/.test(type)) return "BREAKOUT";
   return "ALERTS";
 }
-export function MarketEventFeed({
+function MarketEventFeedView({
   events,
   frame,
   select,
@@ -205,6 +205,7 @@ export function MarketEventFeed({
     </Panel>
   );
 }
+export const MarketEventFeed = memo(MarketEventFeedView);
 
 export function AssetInspector({
   asset,

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { BarsChart } from "@/features/quant-ops/kit/charts";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
 import { CHART } from "@/features/quant-ops/kit/series";
@@ -71,7 +71,7 @@ function HeatCell({ asset, horizon }: { asset: DisplayAsset; horizon: string }) 
 }
 
 /** Per-instrument strip: price, returns on every horizon as heat cells, momentum and trend state. */
-export function InstrumentsPanel({ frame, selected, select, cohort, search }: AssetPanelProps & { search: string }) {
+function InstrumentsPanelView({ frame, selected, select, cohort, search }: AssetPanelProps & { search: string }) {
   const rows = useMemo(
     () => (frame?.assets ?? []).filter((a) => symbolMatch(a, search)),
     [frame, search],
@@ -143,9 +143,10 @@ export function InstrumentsPanel({ frame, selected, select, cohort, search }: As
     </Panel>
   );
 }
+export const InstrumentsPanel = memo(InstrumentsPanelView);
 
 /** Derived (or stored) regime per instrument, with the observed inputs shown beside the label. */
-export function RegimePanel({ frame, selected, select, cohort, search }: AssetPanelProps & { search: string }) {
+function RegimePanelView({ frame, selected, select, cohort, search }: AssetPanelProps & { search: string }) {
   const rows = useMemo(
     () => (frame?.assets ?? []).filter((a) => symbolMatch(a, search)),
     [frame, search],
@@ -218,9 +219,10 @@ export function RegimePanel({ frame, selected, select, cohort, search }: AssetPa
     </Panel>
   );
 }
+export const RegimePanel = memo(RegimePanelView);
 
 /** Sorted per-instrument return bars: works for any universe size, 5 assets included. */
-export function LeadersLaggardsPanel({ frame, select, selected, cohort, benchmark }: AssetPanelProps & { benchmark: string }) {
+function LeadersLaggardsPanelView({ frame, select, selected, cohort, benchmark }: AssetPanelProps & { benchmark: string }) {
   const [sort, setSort] = useState("1440");
   const value = (a: DisplayAsset) => (sort === "relative" ? (a.relative[benchmark]?.value ?? null) : (a.returns[sort]?.value ?? null));
   const assets = frame?.assets ?? [];
@@ -341,13 +343,14 @@ export function LeadersLaggardsPanel({ frame, select, selected, cohort, benchmar
     </Panel>
   );
 }
+export const LeadersLaggardsPanel = memo(LeadersLaggardsPanelView);
 
 /**
  * Pearson correlation of hourly log returns. The panel carries the window its owner computed (the
  * full 90D, or a shorter labelled window while history is still building). With every coefficient
  * withheld it shows the real paired-history size instead of staying blank.
  */
-export function CorrelationsPanel({
+function CorrelationsPanelView({
   frame, selected, select, correlations, benchmark, setBenchmark, openMatrix,
 }: AssetPanelProps & {
   correlations: DisplayCorrelation[];
@@ -417,6 +420,7 @@ export function CorrelationsPanel({
     </Panel>
   );
 }
+export const CorrelationsPanel = memo(CorrelationsPanelView);
 
 export function CorrelationMatrix({
   frame,

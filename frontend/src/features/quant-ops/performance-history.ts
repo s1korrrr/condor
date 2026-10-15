@@ -1,4 +1,5 @@
-import { isPaperBot } from '@/features/trading-visuals/sources';
+// Relative: the private workspace loads this module directly, without the `@/` alias.
+import { isPaperBot } from '../trading-visuals/sources';
 
 export type PerformancePoint = {
   timestamp: number; total_pnl_quote: string; realized_pnl_quote: string;

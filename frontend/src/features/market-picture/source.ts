@@ -1,5 +1,5 @@
 import { api } from "@/lib/api";
-import { projectFrame, validateFrame } from "./contract.mjs";
+import { projectFrame, projectMicrostructureResponse, validateFrame } from "./contract.mjs";
 import {
   pinned,
   projectHistory,
@@ -110,6 +110,7 @@ export async function fetchBundle(
     : projectFrame(await validateFrame(await boundedJson(response)));
   if (snapshotId && frame.snapshot_id !== snapshotId)
     throw new Error("Requested replay frame identity does not match.");
+  const microstructureRef = frame.raw.microstructure_ref as { status?: string } | undefined;
   const queries = {
     history: {
       snapshot_id: frame.snapshot_id,
@@ -119,11 +120,15 @@ export async function fetchBundle(
     },
     correlations: { snapshot_id: frame.snapshot_id, benchmark, limit: "300" },
     events: { snapshot_id: frame.snapshot_id, limit: "50" },
+    ...(microstructureRef?.status === "available"
+      ? { microstructure: { snapshot_id: frame.snapshot_id } }
+      : {}),
   };
   const projectors = {
     history: projectHistory,
     correlations: projectCorrelations,
     events: projectEvents,
+    microstructure: projectMicrostructureResponse,
   };
   const sameFrame = previous?.frame.snapshot_id === frame.snapshot_id ? previous : null;
   const components: Record<string, unknown> = { ...(sameFrame?.components ?? {}) },
@@ -134,7 +139,7 @@ export async function fetchBundle(
         await api.getMarketPicture(server, path, query, timedSignal),
       );
       pinned(body, frame);
-      const values = projectors[path as keyof typeof projectors](body, frame);
+      const values = await projectors[path as keyof typeof projectors](body, frame);
       components[path] = body;
       return values;
     }),
@@ -147,8 +152,11 @@ export async function fetchBundle(
           ? result.reason.message
           : "Stored component unavailable.";
   });
+  const microstructureResult = projected[Object.keys(queries).indexOf("microstructure")];
   return {
-    frame,
+    frame: microstructureResult?.status === "fulfilled"
+      ? { ...frame, ...(microstructureResult.value as Pick<DisplayFrame, "microstructure" | "sourceCapabilities" | "flow">) }
+      : frame,
     history:
       projected[0].status === "fulfilled"
         ? (projected[0].value as HistoryPoint[])

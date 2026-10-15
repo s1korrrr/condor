@@ -75,6 +75,24 @@ def test_authentication_and_source_authorization_precede_network(monkeypatch):
         assert calls == []
 
 
+def test_microstructure_route_is_snapshot_scoped_and_keeps_source_failures_visible(
+    monkeypatch,
+):
+    client, calls = client_for(monkeypatch)
+    base = "/api/v1/servers/v2/market-picture/microstructure"
+    assert client.get(base).status_code == 400
+    assert client.get(base + "?snapshot_id=invalid").status_code == 400
+    assert (
+        client.get(base + "?snapshot_id=" + "a" * 64 + "&limit=32").status_code == 400
+    )
+    assert calls == []
+    result = client.get(base + "?snapshot_id=" + "a" * 64)
+    assert result.status_code == 503
+    assert result.json() == {"detail": {"reasons": ["SOURCE_DISABLED"]}}
+    assert calls[-1][0].endswith("/screener/market-picture/v1/microstructure")
+    assert calls[-1][1]["params"] == [("snapshot_id", "a" * 64)]
+
+
 @pytest.mark.parametrize(
     "path",
     [

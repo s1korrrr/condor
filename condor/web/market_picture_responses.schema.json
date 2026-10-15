@@ -2456,5 +2456,1079 @@
     ],
     "title": "EventsDTO",
     "type": "object"
+  },
+  "microstructure": {
+    "$defs": {
+      "FlowObservationV1": {
+        "additionalProperties": false,
+        "properties": {
+          "instrument_id": {
+            "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+            "title": "Instrument Id",
+            "type": "string"
+          },
+          "source_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_contract_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Contract Hash",
+            "type": "string"
+          },
+          "input_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Input Digest",
+            "type": "string"
+          },
+          "definition_id": {
+            "const": "spot_executed_flow_1m",
+            "default": "spot_executed_flow_1m",
+            "title": "Definition Id",
+            "type": "string"
+          },
+          "definition_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Definition Hash",
+            "type": "string"
+          },
+          "channel": {
+            "enum": [
+              "trades",
+              "trades-all",
+              "rest-trades"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "window_start_ms": {
+            "minimum": 0,
+            "title": "Window Start Ms",
+            "type": "integer"
+          },
+          "window_end_ms": {
+            "minimum": 0,
+            "title": "Window End Ms",
+            "type": "integer"
+          },
+          "available_at_ms": {
+            "minimum": 0,
+            "title": "Available At Ms",
+            "type": "integer"
+          },
+          "expires_at_ms": {
+            "minimum": 0,
+            "title": "Expires At Ms",
+            "type": "integer"
+          },
+          "reset_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Reset Id",
+            "type": "string"
+          },
+          "reset_at_ms": {
+            "minimum": 0,
+            "title": "Reset At Ms",
+            "type": "integer"
+          },
+          "coverage_start_ms": {
+            "minimum": 0,
+            "title": "Coverage Start Ms",
+            "type": "integer"
+          },
+          "coverage_end_ms": {
+            "minimum": 0,
+            "title": "Coverage End Ms",
+            "type": "integer"
+          },
+          "gap_intervals": {
+            "items": {
+              "maxItems": 2,
+              "minItems": 2,
+              "prefixItems": [
+                {
+                  "type": "integer"
+                },
+                {
+                  "type": "integer"
+                }
+              ],
+              "type": "array"
+            },
+            "maxItems": 64,
+            "title": "Gap Intervals",
+            "type": "array"
+          },
+          "quote_asset": {
+            "pattern": "^[A-Z0-9]{2,16}$",
+            "title": "Quote Asset",
+            "type": "string"
+          },
+          "buy_quote": {
+            "maxLength": 160,
+            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+            "title": "Buy Quote",
+            "type": "string"
+          },
+          "sell_quote": {
+            "maxLength": 160,
+            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+            "title": "Sell Quote",
+            "type": "string"
+          },
+          "unknown_quote": {
+            "maxLength": 160,
+            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+            "title": "Unknown Quote",
+            "type": "string"
+          },
+          "known_imbalance": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Known Imbalance"
+          },
+          "confirmation_imbalance": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Confirmation Imbalance"
+          },
+          "unknown_share": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Unknown Share"
+          },
+          "cumulative_delta_before_quote": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cumulative Delta Before Quote"
+          },
+          "cumulative_delta_quote": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cumulative Delta Quote"
+          },
+          "trade_records": {
+            "maximum": 100000,
+            "minimum": 0,
+            "title": "Trade Records",
+            "type": "integer"
+          },
+          "duplicate_records": {
+            "maximum": 100000,
+            "minimum": 0,
+            "title": "Duplicate Records",
+            "type": "integer"
+          },
+          "complete": {
+            "title": "Complete",
+            "type": "boolean"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Reason Codes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "source_id",
+          "source_contract_hash",
+          "input_digest",
+          "definition_hash",
+          "channel",
+          "window_start_ms",
+          "window_end_ms",
+          "available_at_ms",
+          "expires_at_ms",
+          "reset_id",
+          "reset_at_ms",
+          "coverage_start_ms",
+          "coverage_end_ms",
+          "gap_intervals",
+          "quote_asset",
+          "buy_quote",
+          "sell_quote",
+          "unknown_quote",
+          "known_imbalance",
+          "confirmation_imbalance",
+          "unknown_share",
+          "cumulative_delta_before_quote",
+          "cumulative_delta_quote",
+          "trade_records",
+          "duplicate_records",
+          "complete",
+          "reason_codes"
+        ],
+        "title": "FlowObservationV1",
+        "type": "object"
+      },
+      "LiquidityObservationV1": {
+        "additionalProperties": false,
+        "properties": {
+          "instrument_id": {
+            "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+            "title": "Instrument Id",
+            "type": "string"
+          },
+          "source_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Source Id",
+            "type": "string"
+          },
+          "source_contract_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Contract Hash",
+            "type": "string"
+          },
+          "input_digest": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Input Digest",
+            "type": "string"
+          },
+          "definition_id": {
+            "const": "spot_visible_book_cost",
+            "default": "spot_visible_book_cost",
+            "title": "Definition Id",
+            "type": "string"
+          },
+          "definition_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Definition Hash",
+            "type": "string"
+          },
+          "channel": {
+            "enum": [
+              "books",
+              "books50-l2-tbt",
+              "books-l2-tbt",
+              "books-rpi"
+            ],
+            "title": "Channel",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 0,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "observed_at_ms": {
+            "minimum": 0,
+            "title": "Observed At Ms",
+            "type": "integer"
+          },
+          "available_at_ms": {
+            "minimum": 0,
+            "title": "Available At Ms",
+            "type": "integer"
+          },
+          "expires_at_ms": {
+            "minimum": 0,
+            "title": "Expires At Ms",
+            "type": "integer"
+          },
+          "access_basis": {
+            "enum": [
+              "non_rpi",
+              "rpi_authorized",
+              "unknown"
+            ],
+            "title": "Access Basis",
+            "type": "string"
+          },
+          "side": {
+            "enum": [
+              "buy",
+              "sell"
+            ],
+            "title": "Side",
+            "type": "string"
+          },
+          "requested_size": {
+            "maxLength": 160,
+            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+            "title": "Requested Size",
+            "type": "string"
+          },
+          "size_unit": {
+            "enum": [
+              "base",
+              "quote"
+            ],
+            "title": "Size Unit",
+            "type": "string"
+          },
+          "covered_base": {
+            "maxLength": 160,
+            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+            "title": "Covered Base",
+            "type": "string"
+          },
+          "covered_quote": {
+            "maxLength": 160,
+            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+            "title": "Covered Quote",
+            "type": "string"
+          },
+          "uncovered_size": {
+            "maxLength": 160,
+            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+            "title": "Uncovered Size",
+            "type": "string"
+          },
+          "covered_vwap": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Covered Vwap"
+          },
+          "vwap": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Vwap"
+          },
+          "cost_bps": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Cost Bps"
+          },
+          "fee_bps": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fee Bps"
+          },
+          "fee_source": {
+            "anyOf": [
+              {
+                "maxLength": 128,
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Fee Source"
+          },
+          "total_cost_bps": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Total Cost Bps"
+          },
+          "cost_percentile_7d": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cost Percentile 7D"
+          },
+          "cost_percentile_sample_count": {
+            "default": 0,
+            "maximum": 10080,
+            "minimum": 0,
+            "title": "Cost Percentile Sample Count",
+            "type": "integer"
+          },
+          "cost_percentile_expected_samples": {
+            "const": 10080,
+            "default": 10080,
+            "title": "Cost Percentile Expected Samples",
+            "type": "integer"
+          },
+          "cost_percentile_reason_codes": {
+            "default": [
+              "INSUFFICIENT_HISTORY"
+            ],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Cost Percentile Reason Codes",
+            "type": "array"
+          },
+          "cost_percentile_reference_digest": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cost Percentile Reference Digest"
+          },
+          "spread_bps": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Spread Bps"
+          },
+          "band_bps": {
+            "maxLength": 160,
+            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+            "title": "Band Bps",
+            "type": "string"
+          },
+          "band_bid_covered_quote": {
+            "maxLength": 160,
+            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+            "title": "Band Bid Covered Quote",
+            "type": "string"
+          },
+          "band_ask_covered_quote": {
+            "maxLength": 160,
+            "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+            "title": "Band Ask Covered Quote",
+            "type": "string"
+          },
+          "band_complete": {
+            "title": "Band Complete",
+            "type": "boolean"
+          },
+          "band_imbalance": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Band Imbalance"
+          },
+          "reason_codes": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 16,
+            "title": "Reason Codes",
+            "type": "array"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "source_id",
+          "source_contract_hash",
+          "input_digest",
+          "definition_hash",
+          "channel",
+          "sequence",
+          "observed_at_ms",
+          "available_at_ms",
+          "expires_at_ms",
+          "access_basis",
+          "side",
+          "requested_size",
+          "size_unit",
+          "covered_base",
+          "covered_quote",
+          "uncovered_size",
+          "covered_vwap",
+          "vwap",
+          "cost_bps",
+          "fee_bps",
+          "fee_source",
+          "total_cost_bps",
+          "spread_bps",
+          "band_bps",
+          "band_bid_covered_quote",
+          "band_ask_covered_quote",
+          "band_complete",
+          "band_imbalance",
+          "reason_codes"
+        ],
+        "title": "LiquidityObservationV1",
+        "type": "object"
+      },
+      "MicrostructureCompanionV1": {
+        "additionalProperties": false,
+        "description": "Digest-sealed optional data bound to the stable scope of one frame.",
+        "properties": {
+          "schema_version": {
+            "const": "market-picture.microstructure-companion.v1",
+            "default": "market-picture.microstructure-companion.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "component_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Component Id",
+            "type": "string"
+          },
+          "scope": {
+            "$ref": "#/$defs/MicrostructureScopeV1"
+          },
+          "capabilities": {
+            "items": {
+              "$ref": "#/$defs/SourceCapabilityV1"
+            },
+            "maxItems": 16,
+            "title": "Capabilities",
+            "type": "array"
+          },
+          "microstructure": {
+            "$ref": "#/$defs/MicrostructureComponentV1"
+          }
+        },
+        "required": [
+          "component_id",
+          "scope",
+          "capabilities",
+          "microstructure"
+        ],
+        "title": "MicrostructureCompanionV1",
+        "type": "object"
+      },
+      "MicrostructureComponentV1": {
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "market-picture.microstructure.v1",
+            "default": "market-picture.microstructure.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "component_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Component Id",
+            "type": "string"
+          },
+          "source_kind": {
+            "enum": [
+              "observed",
+              "reconstructed"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "cutoff_ms": {
+            "minimum": 0,
+            "title": "Cutoff Ms",
+            "type": "integer"
+          },
+          "available_at_ms": {
+            "minimum": 0,
+            "title": "Available At Ms",
+            "type": "integer"
+          },
+          "replay_class": {
+            "const": "snapshot_only",
+            "default": "snapshot_only",
+            "title": "Replay Class",
+            "type": "string"
+          },
+          "raw_inputs_retained": {
+            "const": false,
+            "default": false,
+            "title": "Raw Inputs Retained",
+            "type": "boolean"
+          },
+          "flows": {
+            "items": {
+              "$ref": "#/$defs/FlowObservationV1"
+            },
+            "maxItems": 300,
+            "title": "Flows",
+            "type": "array"
+          },
+          "liquidity": {
+            "items": {
+              "$ref": "#/$defs/LiquidityObservationV1"
+            },
+            "maxItems": 1200,
+            "title": "Liquidity",
+            "type": "array"
+          }
+        },
+        "required": [
+          "component_id",
+          "source_kind",
+          "cutoff_ms",
+          "available_at_ms",
+          "flows",
+          "liquidity"
+        ],
+        "title": "MicrostructureComponentV1",
+        "type": "object"
+      },
+      "MicrostructureScopeV1": {
+        "additionalProperties": false,
+        "properties": {
+          "stream_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "epoch": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Epoch",
+            "type": "string"
+          },
+          "sequence": {
+            "minimum": 1,
+            "title": "Sequence",
+            "type": "integer"
+          },
+          "revision": {
+            "minimum": 0,
+            "title": "Revision",
+            "type": "integer"
+          },
+          "universe_id": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Universe Id",
+            "type": "string"
+          },
+          "universe_revision": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Universe Revision",
+            "type": "string"
+          },
+          "membership_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Membership Hash",
+            "type": "string"
+          },
+          "source_kind": {
+            "enum": [
+              "observed",
+              "reconstructed"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "cutoff_ms": {
+            "minimum": 0,
+            "title": "Cutoff Ms",
+            "type": "integer"
+          },
+          "available_at_ms": {
+            "minimum": 0,
+            "title": "Available At Ms",
+            "type": "integer"
+          },
+          "expires_at_ms": {
+            "minimum": 0,
+            "title": "Expires At Ms",
+            "type": "integer"
+          },
+          "member_instrument_ids": {
+            "items": {
+              "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+              "type": "string"
+            },
+            "maxItems": 300,
+            "minItems": 1,
+            "title": "Member Instrument Ids",
+            "type": "array"
+          },
+          "selected_numeraire": {
+            "pattern": "^[A-Z0-9]{2,16}$",
+            "title": "Selected Numeraire",
+            "type": "string"
+          }
+        },
+        "required": [
+          "stream_id",
+          "epoch",
+          "sequence",
+          "revision",
+          "universe_id",
+          "universe_revision",
+          "membership_hash",
+          "source_kind",
+          "cutoff_ms",
+          "available_at_ms",
+          "expires_at_ms",
+          "member_instrument_ids",
+          "selected_numeraire"
+        ],
+        "title": "MicrostructureScopeV1",
+        "type": "object"
+      },
+      "SourceCapabilityV1": {
+        "additionalProperties": false,
+        "properties": {
+          "source_id": {
+            "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+            "title": "Source Id",
+            "type": "string"
+          },
+          "family": {
+            "enum": [
+              "candles",
+              "spot_flow",
+              "spot_liquidity",
+              "derivatives",
+              "liquidations",
+              "options",
+              "external_context",
+              "private_exposure",
+              "conditional_outcomes"
+            ],
+            "title": "Family",
+            "type": "string"
+          },
+          "venue_profile": {
+            "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+            "title": "Venue Profile",
+            "type": "string"
+          },
+          "endpoint": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "Endpoint",
+            "type": "string"
+          },
+          "qualification": {
+            "enum": [
+              "not_probed",
+              "probed",
+              "collecting",
+              "not_qualified",
+              "qualified"
+            ],
+            "title": "Qualification",
+            "type": "string"
+          },
+          "operational": {
+            "enum": [
+              "healthy",
+              "unsupported_region",
+              "permission_required",
+              "disabled",
+              "rate_limited",
+              "degraded",
+              "unavailable"
+            ],
+            "title": "Operational",
+            "type": "string"
+          },
+          "source_contract_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Source Contract Hash",
+            "type": "string"
+          },
+          "instrument_ids": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 300,
+            "title": "Instrument Ids",
+            "type": "array"
+          },
+          "units": {
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "minItems": 1,
+            "title": "Units",
+            "type": "array"
+          },
+          "history_semantics": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "History Semantics",
+            "type": "string"
+          },
+          "access": {
+            "enum": [
+              "anonymous",
+              "separately_authorized_private"
+            ],
+            "title": "Access",
+            "type": "string"
+          },
+          "cadence_ms": {
+            "maximum": 604800000,
+            "minimum": 1,
+            "title": "Cadence Ms",
+            "type": "integer"
+          },
+          "max_records": {
+            "maximum": 100000,
+            "minimum": 1,
+            "title": "Max Records",
+            "type": "integer"
+          },
+          "license_basis": {
+            "maxLength": 256,
+            "minLength": 1,
+            "title": "License Basis",
+            "type": "string"
+          },
+          "probe_receipt_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Probe Receipt Hash"
+          },
+          "probed_at_ms": {
+            "anyOf": [
+              {
+                "maximum": 253402300799000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Probed At Ms"
+          },
+          "collection_receipt_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Collection Receipt Hash"
+          },
+          "collected_at_ms": {
+            "anyOf": [
+              {
+                "maximum": 253402300799000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Collected At Ms"
+          },
+          "qualification_receipt_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Qualification Receipt Hash"
+          },
+          "qualified_at_ms": {
+            "anyOf": [
+              {
+                "maximum": 253402300799000,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Qualified At Ms"
+          },
+          "qualification_contract_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Qualification Contract Hash"
+          },
+          "reasons": {
+            "default": [],
+            "items": {
+              "type": "string"
+            },
+            "maxItems": 32,
+            "title": "Reasons",
+            "type": "array"
+          }
+        },
+        "required": [
+          "source_id",
+          "family",
+          "venue_profile",
+          "endpoint",
+          "qualification",
+          "operational",
+          "source_contract_hash",
+          "instrument_ids",
+          "units",
+          "history_semantics",
+          "access",
+          "cadence_ms",
+          "max_records",
+          "license_basis"
+        ],
+        "title": "SourceCapabilityV1",
+        "type": "object"
+      }
+    },
+    "additionalProperties": false,
+    "properties": {
+      "schema_version": {
+        "const": "market-picture.v1",
+        "title": "Schema Version",
+        "type": "string"
+      },
+      "snapshot_id": {
+        "pattern": "^[0-9a-f]{64}$",
+        "title": "Snapshot Id",
+        "type": "string"
+      },
+      "stream_id": {
+        "maxLength": 128,
+        "minLength": 1,
+        "title": "Stream Id",
+        "type": "string"
+      },
+      "frame_payload_digest": {
+        "pattern": "^[0-9a-f]{64}$",
+        "title": "Frame Payload Digest",
+        "type": "string"
+      },
+      "read_at_ms": {
+        "minimum": 0,
+        "title": "Read At Ms",
+        "type": "integer"
+      },
+      "companion": {
+        "$ref": "#/$defs/MicrostructureCompanionV1"
+      }
+    },
+    "required": [
+      "schema_version",
+      "snapshot_id",
+      "stream_id",
+      "frame_payload_digest",
+      "read_at_ms",
+      "companion"
+    ],
+    "title": "MicrostructureReadDTO",
+    "type": "object"
   }
 }

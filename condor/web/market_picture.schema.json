@@ -2654,6 +2654,86 @@
       "title": "MicrostructureComponentV1",
       "type": "object"
     },
+    "MicrostructureRefV1": {
+      "additionalProperties": false,
+      "description": "Optional pointer to a snapshot-scoped, separately bounded companion.",
+      "properties": {
+        "status": {
+          "enum": [
+            "available",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "component_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Component Id"
+        },
+        "cutoff_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cutoff Ms"
+        },
+        "available_at_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Available At Ms"
+        },
+        "expires_at_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At Ms"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Reason Codes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "status",
+        "reason_codes"
+      ],
+      "title": "MicrostructureRefV1",
+      "type": "object"
+    },
     "NormalizedBreadthV1": {
       "additionalProperties": false,
       "description": "Additive 1bp breadth view; absent on frames written before this extension.",
@@ -3895,6 +3975,17 @@
       "anyOf": [
         {
           "$ref": "#/$defs/MicrostructureComponentV1"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "microstructure_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MicrostructureRefV1"
         },
         {
           "type": "null"

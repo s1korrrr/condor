@@ -49,7 +49,14 @@ def _query(path: str, request: Request) -> list[tuple[str, str]]:
         pattern = _HASH if family == "snapshots" else _INSTRUMENT
         if not pattern.fullmatch(identity):
             raise HTTPException(404, "Market Picture record not found")
-    elif path not in {"status", "latest", "history", "correlations", "events"}:
+    elif path not in {
+        "status",
+        "latest",
+        "history",
+        "correlations",
+        "events",
+        "microstructure",
+    }:
         raise HTTPException(404, "Market Picture route not found")
     common = {"universe", "definition"}
     allowed = {
@@ -79,8 +86,11 @@ def _query(path: str, request: Request) -> list[tuple[str, str]]:
             "page_size",
         },
         "events": common | {"snapshot_id", "event_type", "limit", "cursor"},
+        "microstructure": {"snapshot_id"},
     }[family]
     params = list(request.query_params.multi_items())
+    if family == "microstructure" and "snapshot_id" not in request.query_params:
+        raise HTTPException(400, "Microstructure reads require a snapshot identity")
     if len({key for key, _ in params}) != len(params) or any(
         key not in allowed for key, _ in params
     ):

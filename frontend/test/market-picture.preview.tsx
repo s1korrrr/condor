@@ -4,6 +4,7 @@ import { BrowserRouter } from "react-router-dom";
 import { MarketPictureSurface } from "../src/features/market-picture/MarketPicture";
 import {
   projectFrame,
+  projectMicrostructureResponse,
   validateFrame,
 } from "../src/features/market-picture/contract.mjs";
 import { projectHistory } from "../src/features/market-picture/stored.mjs";
@@ -13,6 +14,8 @@ import m1 from "../../tests/fixtures/market-picture.m1.fixture.json";
 import m1Components from "../../tests/fixtures/market-picture.m1-components.fixture.json";
 import relativeRanks from "../../tests/fixtures/market-picture.relative-ranks.1h.fixture.json";
 import componentsHistory from "../../tests/fixtures/market-picture.m1-components.history.json";
+import companionFrame from "../../tests/fixtures/market-picture.microstructure-companion.frame.fixture.json";
+import companionResponse from "../../tests/fixtures/market-picture.microstructure-companion.response.fixture.json";
 import type { DisplayCorrelation, DisplayEvent, HistoryPoint } from "../src/features/market-picture/presentation";
 
 const params = new URLSearchParams(location.search);
@@ -20,8 +23,11 @@ const fixtureFault = params.get("fault");
 // `?bundle=/@fs/<path>` loads a read-only dump of a real frame bundle (see scratchpad); it never ships.
 const real = params.get('bundle') ? await (await fetch(params.get('bundle')!)).json() : null;
 // These switches select owner-produced, isolated fixtures; none is a live-feed fallback.
-const raw = params.has('relative-ranks') ? relativeRanks : params.has('hourly') || params.has('share-change') || params.has('components') ? m1Components : params.has('m1') ? m1 : params.get('scale') === '240' ? scale : partial;
-const frame = real ? real.frame : projectFrame(await validateFrame(raw, { allowFixture: true }));
+const raw = params.has('companion') ? companionFrame : params.has('relative-ranks') ? relativeRanks : params.has('hourly') || params.has('share-change') || params.has('components') ? m1Components : params.has('m1') ? m1 : params.get('scale') === '240' ? scale : partial;
+let frame = real ? real.frame : projectFrame(await validateFrame(raw, { allowFixture: true }));
+const components = !real && raw === companionFrame && fixtureFault !== 'microstructure'
+  ? { microstructure: companionResponse } : {};
+if (components.microstructure) frame = { ...frame, ...await projectMicrostructureResponse(components.microstructure, frame) };
 // Presentation fixtures exercise populated component layout. The current asset
 // frame above is built by the real owner; these explicit synthetic time series
 // are not persisted observations or replay evidence and never enter the app.
@@ -59,7 +65,7 @@ createRoot(document.getElementById("root")!).render(
         events,
         eventCursor: null,
         faults: fixtureFault ? { [fixtureFault]: "Synthetic preview fault" } : {},
-        components: {},
+        components,
         etag: null,
       }}
     />

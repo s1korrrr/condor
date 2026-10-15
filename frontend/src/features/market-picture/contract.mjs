@@ -120,6 +120,7 @@ const FRAME_KEYS = [
   "contribution_summaries",
   "source_capabilities",
   "microstructure",
+  "microstructure_ref",
   "daily_internals",
   "hourly_internals",
   "candle_anomalies",
@@ -322,50 +323,7 @@ export function resolveSeries(series) {
   );
 }
 
-export async function validateFrame(frame, { allowFixture = false } = {}) {
-  object(frame);
-  safeNumbers(frame);
-  require(Object.keys(frame).every((k) =>
-    FRAME_KEYS.includes(k),
-  ), "Unsupported frame extension");
-  require(
-    frame.schema_version === "market-picture.v1" &&
-      frame.encoding === "metric-series.v1" &&
-      frame.feature_set_version === "market-picture.observation.v1",
-  );
-  require(HASH.test(frame.snapshot_id) && HASH.test(frame.payload_digest));
-  require(["observed", "reconstructed"].includes(frame.source_kind));
-  require(allowFixture ||
-    !frame.fixture_marker, "Fixture observations cannot be a production source");
-  integer(frame.sequence, 1);
-  integer(frame.revision);
-  integer(frame.cutoff_ms);
-  require(frame.cutoff_ms % 60_000 === 0);
-  require(
-    frame.cutoff_ms <= frame.available_at_ms &&
-      frame.available_at_ms <= frame.published_at_ms &&
-      frame.published_at_ms < frame.expires_at_ms,
-  );
-  if (frame.flow_ref !== undefined) {
-    const flow = object(frame.flow_ref);
-    require(
-      Object.keys(flow).every((key) =>
-        ["status", "snapshot_id", "cutoff_ms", "expires_at_ms", "reason_codes"].includes(key)) &&
-      ["available", "unavailable"].includes(flow.status) &&
-      Array.isArray(flow.reason_codes) && flow.reason_codes.length <= 64 &&
-      flow.reason_codes.every((reason) => typeof reason === "string") &&
-      (flow.snapshot_id === undefined || flow.snapshot_id === null ||
-        (typeof flow.snapshot_id === "string" && HASH.test(flow.snapshot_id))) &&
-      ["cutoff_ms", "expires_at_ms"].every((key) =>
-        flow[key] === undefined || flow[key] === null ||
-          (Number.isSafeInteger(flow[key]) && flow[key] >= 0)) &&
-      (flow.status !== "available" ||
-        (typeof flow.snapshot_id === "string" && HASH.test(flow.snapshot_id) &&
-          Number.isSafeInteger(flow.cutoff_ms) && flow.cutoff_ms >= 0 &&
-          Number.isSafeInteger(flow.expires_at_ms) && flow.expires_at_ms >= 0)) &&
-      (flow.status !== "unavailable" || flow.reason_codes.length > 0),
-    "Invalid flow reference");
-  }
+async function validateMicrostructureData(frame) {
   if (frame.source_capabilities !== undefined) {
     const rows = array(frame.source_capabilities, 16);
     const families = ["candles", "spot_flow", "spot_liquidity", "derivatives", "liquidations", "options", "external_context", "private_exposure", "conditional_outcomes"];
@@ -403,7 +361,7 @@ export async function validateFrame(frame, { allowFixture = false } = {}) {
   if (frame.microstructure != null) {
     const component = object(frame.microstructure);
     require(component.schema_version === "market-picture.microstructure.v1" &&
-      HASH.test(component.component_id) && ["observed", "reconstructed"].includes(component.source_kind) &&
+      HASH.test(component.component_id) && component.source_kind === frame.source_kind &&
       component.cutoff_ms === frame.cutoff_ms && component.available_at_ms <= frame.available_at_ms &&
       component.replay_class === "snapshot_only" && component.raw_inputs_retained === false,
     "Invalid microstructure component provenance");
@@ -517,6 +475,120 @@ export async function validateFrame(frame, { allowFixture = false } = {}) {
     if (frame.flow_ref?.status === "available") require(flows.length > 0 && frame.flow_ref.snapshot_id === component.component_id, "Flow pointer does not identify the embedded observation component");
     require((await digest(without(component, "component_id"))) === component.component_id, "Microstructure component hash mismatch");
   }
+}
+
+function validateMicrostructureReference(frame) {
+  if (frame.microstructure_ref == null) return;
+  const ref = object(frame.microstructure_ref);
+  const optional = ["component_id", "cutoff_ms", "available_at_ms", "expires_at_ms"];
+  exactKeys(ref, ["status", "reason_codes", ...optional], optional);
+  require(["available", "unavailable"].includes(ref.status), "Invalid microstructure reference status");
+  require(Array.isArray(ref.reason_codes) && ref.reason_codes.length <= 64 &&
+    ref.reason_codes.every(reason => typeof reason === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(reason)),
+  "Invalid microstructure reference reasons");
+  require(frame.microstructure == null && !(frame.source_capabilities ?? []).length,
+    "Microstructure companion cannot coexist with inline content");
+  if (ref.status === "available") {
+    require(HASH.test(ref.component_id) && ref.cutoff_ms === frame.cutoff_ms &&
+      ref.available_at_ms === frame.available_at_ms && Number.isSafeInteger(ref.expires_at_ms) &&
+      ref.expires_at_ms >= 0 && ref.expires_at_ms <= frame.expires_at_ms &&
+      ref.reason_codes.length === 0, "Microstructure reference does not match its frame");
+  } else {
+    require(ref.reason_codes.length > 0 && ["component_id", "cutoff_ms", "available_at_ms", "expires_at_ms"].every(key => ref[key] == null),
+      "Unavailable microstructure reference cannot carry an identity");
+    require(frame.flow_ref?.status !== "available", "Unavailable microstructure cannot claim available flow");
+  }
+}
+
+export async function projectMicrostructureResponse(body, displayFrame) {
+  require(new TextEncoder().encode(JSON.stringify(body)).byteLength <= 2 * 1024 * 1024,
+    "Microstructure response exceeds the size limit");
+  object(body);
+  safeNumbers(body);
+  exactKeys(body, ["schema_version", "snapshot_id", "stream_id", "frame_payload_digest", "read_at_ms", "companion"]);
+  const frame = displayFrame.raw;
+  require(body.schema_version === "market-picture.v1" && body.snapshot_id === frame.snapshot_id &&
+    body.stream_id === frame.stream_id && body.frame_payload_digest === frame.payload_digest,
+  "Mixed-frame microstructure response rejected");
+  integer(body.read_at_ms);
+  validateMicrostructureReference(frame);
+  const ref = frame.microstructure_ref, companion = object(body.companion);
+  exactKeys(companion, ["schema_version", "component_id", "scope", "capabilities", "microstructure"]);
+  require(ref?.status === "available" && companion.schema_version === "market-picture.microstructure-companion.v1" &&
+    companion.component_id === ref.component_id &&
+    await digest(without(companion, "component_id")) === companion.component_id,
+  "Microstructure companion digest or reference mismatch");
+  const scope = object(companion.scope);
+  const expectedScope = {
+    ...Object.fromEntries(["stream_id", "epoch", "sequence", "revision", "source_kind", "cutoff_ms", "available_at_ms", "expires_at_ms"].map(key => [key, frame[key]])),
+    universe_id: frame.universe.universe_id, universe_revision: frame.universe.revision,
+    membership_hash: frame.universe.membership_hash, member_instrument_ids: frame.universe.member_instrument_ids,
+    selected_numeraire: frame.universe.selected_numeraire,
+  };
+  require(canonical(scope) === canonical(expectedScope), "Microstructure companion scope differs from its frame");
+  const componentFrame = {
+    ...frame, source_capabilities: companion.capabilities, microstructure: companion.microstructure,
+  };
+  await validateMicrostructureData(componentFrame);
+  require(ref.expires_at_ms === Math.min(frame.expires_at_ms,
+    ...companion.microstructure.flows.map(row => row.expires_at_ms),
+    ...companion.microstructure.liquidity.map(row => row.expires_at_ms)),
+  "Microstructure reference expiry differs from its observations");
+  return {
+    ...projectMicrostructureData(componentFrame),
+    flow: {
+      status: frame.flow_ref?.status ?? "unavailable",
+      reasons: frame.flow_ref?.reason_codes ?? ["SOURCE_UNAVAILABLE"],
+    },
+  };
+}
+
+export async function validateFrame(frame, { allowFixture = false } = {}) {
+  object(frame);
+  safeNumbers(frame);
+  require(Object.keys(frame).every((k) =>
+    FRAME_KEYS.includes(k),
+  ), "Unsupported frame extension");
+  require(
+    frame.schema_version === "market-picture.v1" &&
+      frame.encoding === "metric-series.v1" &&
+      frame.feature_set_version === "market-picture.observation.v1",
+  );
+  require(HASH.test(frame.snapshot_id) && HASH.test(frame.payload_digest));
+  require(["observed", "reconstructed"].includes(frame.source_kind));
+  require(allowFixture ||
+    !frame.fixture_marker, "Fixture observations cannot be a production source");
+  integer(frame.sequence, 1);
+  integer(frame.revision);
+  integer(frame.cutoff_ms);
+  require(frame.cutoff_ms % 60_000 === 0);
+  require(
+    frame.cutoff_ms <= frame.available_at_ms &&
+      frame.available_at_ms <= frame.published_at_ms &&
+      frame.published_at_ms < frame.expires_at_ms,
+  );
+  if (frame.flow_ref !== undefined) {
+    const flow = object(frame.flow_ref);
+    require(
+      Object.keys(flow).every((key) =>
+        ["status", "snapshot_id", "cutoff_ms", "expires_at_ms", "reason_codes"].includes(key)) &&
+      ["available", "unavailable"].includes(flow.status) &&
+      Array.isArray(flow.reason_codes) && flow.reason_codes.length <= 64 &&
+      flow.reason_codes.every((reason) => typeof reason === "string") &&
+      (flow.snapshot_id === undefined || flow.snapshot_id === null ||
+        (typeof flow.snapshot_id === "string" && HASH.test(flow.snapshot_id))) &&
+      ["cutoff_ms", "expires_at_ms"].every((key) =>
+        flow[key] === undefined || flow[key] === null ||
+          (Number.isSafeInteger(flow[key]) && flow[key] >= 0)) &&
+      (flow.status !== "available" ||
+        (typeof flow.snapshot_id === "string" && HASH.test(flow.snapshot_id) &&
+          Number.isSafeInteger(flow.cutoff_ms) && flow.cutoff_ms >= 0 &&
+          Number.isSafeInteger(flow.expires_at_ms) && flow.expires_at_ms >= 0)) &&
+      (flow.status !== "unavailable" || flow.reason_codes.length > 0),
+    "Invalid flow reference");
+  }
+  validateMicrostructureReference(frame);
+  await validateMicrostructureData(frame);
   require((await digest(without(frame, "payload_digest"))) ===
     frame.payload_digest, "Market Picture content hash mismatch");
   require((await digest(without(frame, "snapshot_id", "payload_digest"))) ===
@@ -1001,6 +1073,63 @@ function displayDailyCell(value, metricId, unit, requiredSamples, samples, reaso
   };
 }
 
+function projectMicrostructureData(frame) {
+  return {
+    sourceCapabilities: (frame.source_capabilities ?? []).map(row => ({
+      sourceId: row.source_id, family: row.family, venueProfile: row.venue_profile,
+      endpoint: row.endpoint, qualification: row.qualification, operational: row.operational,
+      sourceContractHash: row.source_contract_hash, instrumentIds: row.instrument_ids,
+      units: row.units, historySemantics: row.history_semantics, access: row.access,
+      cadenceMs: row.cadence_ms, maxRecords: row.max_records, licenseBasis: row.license_basis,
+      probeReceiptHash: row.probe_receipt_hash ?? null, probedAtMs: row.probed_at_ms ?? null,
+      collectionReceiptHash: row.collection_receipt_hash ?? null, collectedAtMs: row.collected_at_ms ?? null,
+      qualificationReceiptHash: row.qualification_receipt_hash ?? null,
+      qualificationContractHash: row.qualification_contract_hash ?? null, qualifiedAtMs: row.qualified_at_ms ?? null, reasons: row.reasons,
+    })),
+    microstructure: frame.microstructure ? {
+      componentId: frame.microstructure.component_id, sourceKind: frame.microstructure.source_kind,
+      cutoff: frame.microstructure.cutoff_ms, available: frame.microstructure.available_at_ms,
+      replayClass: frame.microstructure.replay_class, rawInputsRetained: frame.microstructure.raw_inputs_retained,
+      flows: frame.microstructure.flows.map(row => {
+        const cap = (frame.source_capabilities ?? []).find(item => item.source_id === row.source_id);
+        return {
+          instrumentId: row.instrument_id, sourceId: row.source_id, inputDigest: row.input_digest,
+          quoteAsset: row.quote_asset, channel: row.channel,
+          windowStart: row.window_start_ms, windowEnd: row.window_end_ms, available: row.available_at_ms, expires: row.expires_at_ms,
+          resetId: row.reset_id, resetAt: row.reset_at_ms,
+          coverageStart: row.coverage_start_ms, coverageEnd: row.coverage_end_ms,
+          gaps: row.gap_intervals,
+          buyQuote: row.buy_quote, sellQuote: row.sell_quote, unknownQuote: row.unknown_quote,
+          knownImbalance: row.known_imbalance, confirmationImbalance: row.confirmation_imbalance, unknownShare: row.unknown_share,
+          cumulativeBefore: row.cumulative_delta_before_quote, cumulativeAfter: row.cumulative_delta_quote,
+          trades: row.trade_records, duplicates: row.duplicate_records, complete: row.complete, reasons: row.reason_codes,
+          capabilityUsable: cap?.qualification === "qualified" && cap?.operational === "healthy",
+        };
+      }),
+      liquidity: frame.microstructure.liquidity.map(row => {
+        const cap = (frame.source_capabilities ?? []).find(item => item.source_id === row.source_id);
+        return {
+          instrumentId: row.instrument_id, sourceId: row.source_id, channel: row.channel, sequence: row.sequence,
+          observed: row.observed_at_ms, available: row.available_at_ms, expires: row.expires_at_ms, access: row.access_basis,
+          side: row.side, requestedSize: row.requested_size, sizeUnit: row.size_unit, coveredBase: row.covered_base,
+          coveredQuote: row.covered_quote, uncovered: row.uncovered_size, coveredVwap: row.covered_vwap,
+          vwap: row.vwap, costBps: row.cost_bps,
+          costPercentile7d: row.cost_percentile_7d == null ? null : Number(row.cost_percentile_7d),
+          costPercentileSampleCount: row.cost_percentile_sample_count ?? 0,
+          costPercentileExpectedSamples: row.cost_percentile_expected_samples ?? 10080,
+          costPercentileReasons: row.cost_percentile_reason_codes ?? (row.cost_percentile_7d == null ? ["INSUFFICIENT_HISTORY"] : []),
+          costPercentileReferenceDigest: row.cost_percentile_reference_digest ?? null,
+          feeBps: row.fee_bps, feeSource: row.fee_source,
+          totalCostBps: row.total_cost_bps, spreadBps: row.spread_bps, bandBps: row.band_bps,
+          bidCovered: row.band_bid_covered_quote, askCovered: row.band_ask_covered_quote,
+          bandComplete: row.band_complete, bandImbalance: row.band_imbalance, reasons: row.reason_codes,
+          capabilityUsable: cap?.qualification === "qualified" && cap?.operational === "healthy",
+        };
+      }),
+    } : null,
+  };
+}
+
 export function projectFrame(frame) {
   const resolved = new Map(
     frame.metric_series.map((s) => [s.metric_id, resolveSeries(s)]),
@@ -1169,58 +1298,7 @@ export function projectFrame(frame) {
       equalReturn: aggregate(row.equal_weight_return_ref), cappedReturn: aggregate(row.capped_liquidity_return_ref),
       equalTop5: aggregate(row.top5_abs_equal_ref), cappedTop5: aggregate(row.top5_abs_capped_ref),
     }])),
-    sourceCapabilities: (frame.source_capabilities ?? []).map(row => ({
-      sourceId: row.source_id, family: row.family, venueProfile: row.venue_profile,
-      endpoint: row.endpoint, qualification: row.qualification, operational: row.operational,
-      sourceContractHash: row.source_contract_hash, instrumentIds: row.instrument_ids,
-      units: row.units, historySemantics: row.history_semantics, access: row.access,
-      cadenceMs: row.cadence_ms, maxRecords: row.max_records, licenseBasis: row.license_basis,
-      probeReceiptHash: row.probe_receipt_hash ?? null, probedAtMs: row.probed_at_ms ?? null,
-      collectionReceiptHash: row.collection_receipt_hash ?? null, collectedAtMs: row.collected_at_ms ?? null,
-      qualificationReceiptHash: row.qualification_receipt_hash ?? null,
-      qualificationContractHash: row.qualification_contract_hash ?? null, qualifiedAtMs: row.qualified_at_ms ?? null, reasons: row.reasons,
-    })),
-    microstructure: frame.microstructure ? {
-      componentId: frame.microstructure.component_id, sourceKind: frame.microstructure.source_kind,
-      cutoff: frame.microstructure.cutoff_ms, available: frame.microstructure.available_at_ms,
-      replayClass: frame.microstructure.replay_class, rawInputsRetained: frame.microstructure.raw_inputs_retained,
-      flows: frame.microstructure.flows.map(row => {
-        const cap = (frame.source_capabilities ?? []).find(item => item.source_id === row.source_id);
-        return {
-          instrumentId: row.instrument_id, sourceId: row.source_id, inputDigest: row.input_digest,
-          quoteAsset: row.quote_asset, channel: row.channel,
-          windowStart: row.window_start_ms, windowEnd: row.window_end_ms, available: row.available_at_ms, expires: row.expires_at_ms,
-          resetId: row.reset_id, resetAt: row.reset_at_ms,
-          coverageStart: row.coverage_start_ms, coverageEnd: row.coverage_end_ms,
-          gaps: row.gap_intervals,
-          buyQuote: row.buy_quote, sellQuote: row.sell_quote, unknownQuote: row.unknown_quote,
-          knownImbalance: row.known_imbalance, confirmationImbalance: row.confirmation_imbalance, unknownShare: row.unknown_share,
-          cumulativeBefore: row.cumulative_delta_before_quote, cumulativeAfter: row.cumulative_delta_quote,
-          trades: row.trade_records, duplicates: row.duplicate_records, complete: row.complete, reasons: row.reason_codes,
-          capabilityUsable: cap?.qualification === "qualified" && cap?.operational === "healthy",
-        };
-      }),
-      liquidity: frame.microstructure.liquidity.map(row => {
-        const cap = (frame.source_capabilities ?? []).find(item => item.source_id === row.source_id);
-        return {
-          instrumentId: row.instrument_id, sourceId: row.source_id, channel: row.channel, sequence: row.sequence,
-          observed: row.observed_at_ms, available: row.available_at_ms, expires: row.expires_at_ms, access: row.access_basis,
-          side: row.side, requestedSize: row.requested_size, sizeUnit: row.size_unit, coveredBase: row.covered_base,
-          coveredQuote: row.covered_quote, uncovered: row.uncovered_size, coveredVwap: row.covered_vwap,
-          vwap: row.vwap, costBps: row.cost_bps,
-          costPercentile7d: row.cost_percentile_7d == null ? null : Number(row.cost_percentile_7d),
-          costPercentileSampleCount: row.cost_percentile_sample_count ?? 0,
-          costPercentileExpectedSamples: row.cost_percentile_expected_samples ?? 10080,
-          costPercentileReasons: row.cost_percentile_reason_codes ?? (row.cost_percentile_7d == null ? ["INSUFFICIENT_HISTORY"] : []),
-          costPercentileReferenceDigest: row.cost_percentile_reference_digest ?? null,
-          feeBps: row.fee_bps, feeSource: row.fee_source,
-          totalCostBps: row.total_cost_bps, spreadBps: row.spread_bps, bandBps: row.band_bps,
-          bidCovered: row.band_bid_covered_quote, askCovered: row.band_ask_covered_quote,
-          bandComplete: row.band_complete, bandImbalance: row.band_imbalance, reasons: row.reason_codes,
-          capabilityUsable: cap?.qualification === "qualified" && cap?.operational === "healthy",
-        };
-      }),
-    } : null,
+    ...projectMicrostructureData(frame),
     dailyInternals: (frame.daily_internals ?? []).map(row => {
       const bindings = [
         ["high_break", "daily_high_break_20d", "count", 21],
@@ -1269,8 +1347,8 @@ export function projectFrame(frame) {
     }),
     summary,
     flow: {
-      status: frame.flow_ref?.status ?? "unavailable",
-      reasons: frame.flow_ref?.reason_codes ?? ["SOURCE_UNAVAILABLE"],
+      status: frame.microstructure_ref?.status === "available" ? "unavailable" : (frame.flow_ref?.status ?? "unavailable"),
+      reasons: frame.microstructure_ref?.status === "available" ? ["SOURCE_UNAVAILABLE"] : (frame.flow_ref?.reason_codes ?? ["SOURCE_UNAVAILABLE"]),
     },
     pressure: Object.fromEntries(
       frame.pressure.map((p) => [

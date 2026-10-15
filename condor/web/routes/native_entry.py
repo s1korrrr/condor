@@ -12,6 +12,12 @@ from condor.web.auth import get_current_user
 from condor.web.models import WebUser
 from config_manager import get_config_manager
 
+# A registered owner without native entry controls is a property of the owner, not a transient conflict:
+# the browser stops polling on this mark. Upstream 409s (broker disconnected, owner restarting, stale reports)
+# pass through without it.
+CAPABILITY_HEADER = "X-Condor-Capability"
+ENTRY_CONTROLS_UNSUPPORTED = "entry-controls-unsupported"
+
 router = APIRouter()
 ACTIONS = frozenset({"pause", "resume", "acknowledge-daily-loss"})
 
@@ -53,7 +59,9 @@ async def transport_for(name, bot_name, user):
             or owner.get("entry_controls") is not True
         ):
             raise HTTPException(
-                409, "Registered owner does not permit native entry controls"
+                409,
+                "Registered owner does not permit native entry controls",
+                headers={CAPABILITY_HEADER: ENTRY_CONTROLS_UNSUPPORTED},
             )
         return transport
     except (ClientError, TimeoutError, ValueError, AttributeError, TypeError):

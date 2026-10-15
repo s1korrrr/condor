@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 
+from condor.fleet_identity import is_paper
 from condor.performance_history import PERFORMANCE_BUCKETS
 
 RANGE_SPAN_MS = {"1D": 86_400_000, "1W": 7 * 86_400_000, "1M": 30 * 86_400_000}
@@ -107,8 +108,12 @@ def parse_bot_history(
         range_ in PERFORMANCE_BUCKETS and bucket == PERFORMANCE_BUCKETS[range_]
     )
     rows = payload.get("points")
+    # A paper bot's history is simulated and recorded from reporting; a live bot's is native. Never crossed.
+    paper = is_paper(bot)
+    expected_source = "reporting_paper_runtime" if paper else "native_mqtt_observer"
     if (
-        payload.get("source") != "native_mqtt_observer"
+        payload.get("source") != expected_source
+        or (paper and payload.get("simulated") is not True)
         or payload.get("bot_name") != bot
         or payload.get("range") != range_
         or not valid_bucket
@@ -199,6 +204,8 @@ class BotWindow:
     restarts: int
     full: bool
     stale: bool
+    # Time between consecutive samples inside the window beyond the read's spacing: summed across, not observed.
+    uncovered_ms: float = 0.0
 
 
 def bot_window(
@@ -221,6 +228,11 @@ def bot_window(
         restarts=deltas[3] if deltas else 0,
         full=first is not None and first.time <= from_ms + history.gap_ms,
         stale=last is None or now_ms - last.time > history.gap_ms + SAMPLE_GAP_MS,
+        uncovered_ms=sum(
+            later.time - earlier.time
+            for earlier, later in zip(inside, inside[1:])
+            if later.time - earlier.time > history.gap_ms
+        ),
     )
 
 
@@ -240,6 +252,8 @@ class FleetWindow:
     partial: bool
     full_bots: int
     latest_at: Optional[float]
+    # Counted bots whose window contains an unrecorded stretch longer than their sample spacing.
+    gaps: list[dict] = field(default_factory=list)
 
     @property
     def stale(self) -> bool:
@@ -319,6 +333,11 @@ def fleet_window(
         partial=any(not w.full for w in counted),
         full_bots=sum(1 for w in counted if w.full),
         latest_at=max(w.last_at for w in counted) if counted else None,
+        gaps=[
+            {"bot": w.bot, "uncovered_ms": round(w.uncovered_ms)}
+            for w in counted
+            if w.uncovered_ms > 0
+        ],
     )
 
 
@@ -358,6 +377,8 @@ def window_payload(
         "latest_at_ms": _ms(window.latest_at),
         "stale": window.stale,
         "missing": window.missing,
+        # Unrecorded time inside this window, summed over counted bots (both views; `gaps` names the bots).
+        "uncovered_ms": round(sum(gap["uncovered_ms"] for gap in window.gaps)),
     }
     if detail:
         payload["bots"] = [
@@ -372,9 +393,11 @@ def window_payload(
                 "restarts": w.restarts,
                 "full": w.full,
                 "stale": w.stale,
+                "uncovered_ms": round(w.uncovered_ms),
             }
             for w in window.bots
         ]
+        payload["gaps"] = window.gaps
     return payload
 
 

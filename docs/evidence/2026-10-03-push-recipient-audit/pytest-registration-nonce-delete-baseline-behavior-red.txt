@@ -1,0 +1,24 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_delayed_dead_reply_cannot_deactivate_deleted_and_recreated_token _____
+
+registry = <condor.push.store.Registry object at 0x107c3c2f0>
+
+    def test_delayed_dead_reply_cannot_deactivate_deleted_and_recreated_token(registry):
+        original = _register(registry, now=NOW)
+        assert registry.delete_device(1, original.device_id)
+        recreated = _register(registry, now=NOW)
+        assert recreated.registered_at == original.registered_at
+>       assert (
+            registry.deactivate(original.device_id, "BadDeviceToken", expected=original)
+            is False
+        )
+E       AssertionError: assert True is False
+E        +  where True = deactivate('3490f80401886d12f3861ec190f5c164', 'BadDeviceToken', expected=Device(device_id='3490f80401886d12f3861ec190f5c164', user_id=1, token='a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a...=1790001000.0, last_seen=1790001000.0, recipient_server_id='4672185196004d61ae3d625e50862b74', deactivated_reason=None))
+E        +    where deactivate = <condor.push.store.Registry object at 0x107c3c2f0>.deactivate
+E        +    and   '3490f80401886d12f3861ec190f5c164' = Device(device_id='3490f80401886d12f3861ec190f5c164', user_id=1, token='a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a1a...=1790001000.0, last_seen=1790001000.0, recipient_server_id='4672185196004d61ae3d625e50862b74', deactivated_reason=None).device_id
+
+tests/test_push_store.py:245: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_push_store.py::test_delayed_dead_reply_cannot_deactivate_deleted_and_recreated_token
+1 failed in 0.65s

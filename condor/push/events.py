@@ -23,6 +23,7 @@ from decimal import Decimal
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from condor import fleet_telegram_views as views
+from condor.fleet_identity import PAPER_TOKEN, is_paper
 from condor.fleet_trade_alerts import economics, fill_key, identity
 
 # --------------------------------------------------------------------------- contract
@@ -212,8 +213,9 @@ class SourceInfo:
 
     key: str  # fleet_trade_alerts.source_key: stable dedup identity of the source
     bot_id: str  # native bot name, e.g. rsi_modular_v2
-    tag: str  # "V1" / "V2" / "V3" or a display name
+    tag: str  # "V1" / "V2" / "V3" or a display name; a paper bot's tag ends in "PAPER"
     quote: str = "quote"
+    paper: bool = False  # a paper bot: never part of a live fleet total
 
 
 @dataclass(frozen=True)
@@ -232,13 +234,27 @@ def bot_tag(
     display_name: str | None = None,
     labels: Mapping[str, str] | None = None,
 ) -> str:
+    """Short bot label for a notification. A paper bot's label always ends in ``PAPER``.
+
+    The paper mark comes from the bot id (the same rule as the dashboard), so neither a
+    display name nor a configured ``push.labels`` entry can drop it.
+    """
     mapping = {**DEFAULT_LABELS, **(labels or {})}
+    paper = is_paper(bot_id)
     if bot_id in mapping:
-        return clean_text(mapping[bot_id], 16)
-    match = re.search(r"(?:^|[_-])(v\d{1,2})$", bot_id.lower())
-    if match:
-        return match.group(1).upper()
-    return clean_text(display_name or bot_id, 24) or "Bot"
+        tag = clean_text(mapping[bot_id], 16)
+    else:
+        base = PAPER_TOKEN.sub("_", bot_id).strip("_-") if paper else bot_id
+        match = re.search(r"(?:^|[_-])(v\d{1,2})$", base.lower())
+        tag = (
+            match.group(1).upper()
+            if match
+            else clean_text(display_name or base, 24) or "Bot"
+        )
+    if not paper:
+        return tag
+    core = clean_text(re.sub(r"(?i)(?:^|(?<=[\s_-]))paper(?=[\s_-]|$)", " ", tag), 24)
+    return f"{core} PAPER" if core else "PAPER"
 
 
 def link(section: str, bot_id: str | None = None) -> str:
@@ -894,6 +910,7 @@ class BotDay:
         None  # the owner's account wallet value, in ``wallet_currency``
     )
     wallet_currency: str | None = None
+    paper: bool = False
 
 
 def summarize_bot(
@@ -901,7 +918,7 @@ def summarize_bot(
 ) -> BotDay:
     runtime = _runtime(payload)
     if runtime is None:
-        return BotDay(src.tag, src.quote, False, None, None, None)
+        return BotDay(src.tag, src.quote, False, None, None, None, paper=src.paper)
     updated = _epoch(runtime.get("updated_at"))
     fresh = updated is not None and 0 <= now - updated <= stale_seconds
     summary = (
@@ -946,11 +963,14 @@ def summarize_bot(
         count("active_executor_count"),
         wallet if fresh else None,
         clean_text(currency, 8) if wallet is not None and fresh else None,
+        paper=src.paper,
     )
 
 
 def fleet_summary(days: Sequence[BotDay], *, now: float) -> AlertEvent:
     """One daily event. Quote currencies are never mixed: a mixed total is UNAVAILABLE.
+
+    The fleet total sums live bots only; a paper bot keeps its own line and is never added.
 
     The wallet value is the owner's account-wide balance, so bots that share an
     account report the same wallet. It is shown per bot and never summed.
@@ -974,11 +994,16 @@ def fleet_summary(days: Sequence[BotDay], *, now: float) -> AlertEvent:
         if day.wallet is not None:
             line += f" · wallet {views.number(day.wallet, money=True)} {day.wallet_currency}"
         lines.append(line)
-    quotes = {d.quote for d in days}
-    if all(d.fresh and d.pnl_day is not None for d in days) and len(quotes) == 1:
-        total = sum((d.pnl_day for d in days), Decimal(0))
+    # The fleet total is live capital only: paper bots are listed above and never summed.
+    live = [d for d in days if not d.paper]
+    excluded = " (paper excluded)" if len(live) < len(days) else ""
+    quotes = {d.quote for d in live}
+    if not live:
+        lines.append("Fleet today: UNAVAILABLE (no live bots)")
+    elif all(d.fresh and d.pnl_day is not None for d in live) and len(quotes) == 1:
+        total = sum((d.pnl_day for d in live), Decimal(0))
         lines.append(
-            f"Fleet today: {views.number(total, signed=True, money=True)} {next(iter(quotes))}"
+            f"Fleet today: {views.number(total, signed=True, money=True)} {next(iter(quotes))}{excluded}"
         )
     else:
         lines.append(

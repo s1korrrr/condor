@@ -15,6 +15,11 @@ from fastapi import HTTPException
 from fastapi.responses import StreamingResponse
 
 ORIGIN = "http://127.0.0.1:8873/api/knowledge"
+# Whole-request deadlines (connect, status and complete body). A missed deadline is
+# reported as 504, not as an unusable observation: the owner may still be computing.
+READ_DEADLINE_SECONDS = 15
+LONG_READ_DEADLINE_SECONDS = 45
+LONG_READ_ENDPOINTS = {"network", "archive", "archive-record", "archive-overview"}
 MAX_BYTES = 1024 * 1024
 DETAIL_MAX_BYTES = 4 * MAX_BYTES
 NETWORK_MAX_BYTES = (
@@ -486,12 +491,13 @@ async def read_research(endpoint, parameters, server):
     upstream_parameters = dict(parameters)
     if endpoint in {"nodes", "node", "graph"}:
         upstream_parameters["projection"] = "summary"
+    deadline = (
+        LONG_READ_DEADLINE_SECONDS
+        if endpoint in LONG_READ_ENDPOINTS
+        else READ_DEADLINE_SECONDS
+    )
     try:
-        async with asyncio.timeout(
-            45
-            if endpoint in {"network", "archive", "archive-record", "archive-overview"}
-            else 15
-        ):
+        async with asyncio.timeout(deadline):
             async with _client() as client:
                 async with client.stream(
                     "GET", ORIGIN + "/" + endpoint, params=upstream_parameters
@@ -588,7 +594,12 @@ async def read_research(endpoint, parameters, server):
         }
     except HTTPException:
         raise
-    except (httpx.HTTPError, TimeoutError, ValueError, TypeError, RecursionError):
+    except (TimeoutError, httpx.TimeoutException):
+        raise HTTPException(
+            504,
+            f"Research OS did not answer within the {deadline:g} s read deadline",
+        ) from None
+    except (httpx.HTTPError, ValueError, TypeError, RecursionError):
         raise HTTPException(
             502, "Research OS returned no usable bounded knowledge observation"
         ) from None

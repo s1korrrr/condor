@@ -13,6 +13,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
+from condor.web import live_activity_market, live_activity_publisher
+from condor.web.compression import SelectiveGZipMiddleware
 from condor.web.routes import (
     account_balances,
     agents,
@@ -27,6 +29,7 @@ from condor.web.routes import (
     deployment,
     executors,
     fleet,
+    fleet_fills,
     fleet_summary,
     market,
     market_picture,
@@ -75,11 +78,17 @@ async def _performance_observer_lifespan(app: FastAPI):
     started_here = not service.is_running
     subscriber = f"web-performance-{uuid4().hex}"
     service.start()
+    publisher = None
     try:
         for server in get_config_manager().list_servers():
             await service.subscribe(server, ServerDataType.BOTS_STATUS, subscriber)
+        # Fleet Live Activity content: published only when the deployment enables it.
+        publisher = live_activity_publisher.start_publisher(
+            fleet_summary.glance_for, live_activity_market.build_market_index
+        )
         yield
     finally:
+        await live_activity_publisher.stop_publisher(publisher)
         service.unsubscribe_all(subscriber)
         # Never stop a pre-existing owner, or consumers added during this lifespan.
         if started_here and not service.has_subscriptions:
@@ -112,6 +121,9 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    # Outermost: gzip text-like responses on the wire (charts and bundles compress 5-15x).
+    app.add_middleware(SelectiveGZipMiddleware)
+
     # ── API routes ──
     app.include_router(auth.router, prefix="/api/v1")
     app.include_router(servers.router, prefix="/api/v1")
@@ -123,6 +135,7 @@ def create_app() -> FastAPI:
     app.include_router(bots.router, prefix="/api/v1")
     app.include_router(fleet.router, prefix="/api/v1")
     app.include_router(fleet_summary.router, prefix="/api/v1")
+    app.include_router(fleet_fills.router, prefix="/api/v1")
     app.include_router(native_entry.router, prefix="/api/v1")
     app.include_router(performance_history.router, prefix="/api/v1")
     app.include_router(controller_performance.router, prefix="/api/v1")

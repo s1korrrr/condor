@@ -101,6 +101,7 @@ def summarize(w):
         "missing": [m["bot"] for m in w.missing],
         "restarts": {b.bot: b.restarts for b in w.bots},
         "per_bot": {b.bot: float(b.change) for b in w.bots},
+        "gaps": w.gaps,
     }
 
 

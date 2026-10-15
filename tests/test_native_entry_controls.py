@@ -167,3 +167,24 @@ def test_unwrapped_app_cannot_publish_without_native_entry_policy(monkeypatch):
                       json={"command_id": "id-1"})
     assert response.status_code == 403
     assert not any(call[0] == "POST" for call in calls)
+
+
+def test_owner_without_entry_controls_is_marked_apart_from_transient_conflicts(
+    monkeypatch,
+):
+    """Only the registered-owner refusal is permanent; the browser stops polling on that mark alone. Upstream
+    409s (broker disconnected, owner restarting, stale reports) pass through without it and keep polling.
+    """
+    from condor.web.routes import native_entry
+
+    refused, _ = client(monkeypatch, allowed=False)
+    response = refused.get("/api/v1/servers/v2/bots/rsi_v2/native/entries/status")
+    assert response.status_code == 409
+    assert (
+        response.headers.get(native_entry.CAPABILITY_HEADER)
+        == native_entry.ENTRY_CONTROLS_UNSUPPORTED
+    )
+
+    allowed, _ = client(monkeypatch)
+    ok = allowed.get("/api/v1/servers/v2/bots/rsi_v2/native/entries/status")
+    assert ok.status_code == 200 and native_entry.CAPABILITY_HEADER not in ok.headers

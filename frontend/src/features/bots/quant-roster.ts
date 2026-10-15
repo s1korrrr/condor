@@ -86,6 +86,8 @@ export type QuantBotSummary = {
   profile: string | null;
   /** True when every value above comes from the owner's last publication rather than a current one. */
   lastKnown: boolean;
+  /** Current and admitted by the owner's coverage verdict: pairs, rails and metrics are the live observation. */
+  admitted: boolean;
 };
 
 function metric(value: unknown, now: number): QuantMetric {
@@ -156,7 +158,13 @@ export function projectQuantBotSummary(value: unknown, bot: string, now: number)
   const sourceCurrent = observedMs !== null && observedMs <= now + 5_000 && now - observedMs < 30_000;
   const state = text(data.operational_label) ?? 'UNKNOWN';
   const sourceFresh = sourceCurrent && executionMode !== 'unknown';
-  const sourceAdmitted = sourceFresh && state !== 'UNKNOWN';
+  // The owner's explicit coverage verdict admits the source. A unified multi-pair controller publishes no per-pair
+  // state, so its label stays UNKNOWN while its inventory is verified. Envelopes without coverage keep the label rule.
+  const coverage = envelope.coverage && typeof envelope.coverage === 'object' && !Array.isArray(envelope.coverage) ? object(envelope.coverage) : null;
+  const ownerAdmitted = coverage
+    ? (nonnegativeInteger(coverage.ready) ?? 0) > 0 && Array.isArray(coverage.reasons) && coverage.reasons.length === 0
+    : state !== 'UNKNOWN';
+  const sourceAdmitted = sourceFresh && ownerAdmitted;
   const pairs: QuantPair[] = sourceAdmitted && Array.isArray(data.pairs) ? data.pairs.flatMap((item: unknown) => {
     const row = object(item), pair = text(row.pair);
     if (!pair || !/^[A-Z0-9]+-[A-Z0-9]+$/.test(pair)) return [];
@@ -228,6 +236,7 @@ export function projectQuantBotSummary(value: unknown, bot: string, now: number)
     controllerName: text(data.controller_name),
     profile: text(data.profile),
     lastKnown,
+    admitted: sourceAdmitted,
   };
 }
 
@@ -418,7 +427,9 @@ export function projectQuantCycles(value: unknown, bot: string): QuantCycles | n
   };
 }
 
-export type FillRow = { fillId: string; sourceDbId: string | null; pair: string | null; side: string | null; amount: string | null; price: string | null; volume: string | null; fee: string | null; orderType: string | null; timestamp: string | null; orderId: string | null };
+export type FillRow = { fillId: string; sourceDbId: string | null; pair: string | null; side: string | null; amount: string | null; price: string | null; volume: string | null; fee: string | null;
+  /** False when the fee is the legacy rounded projection (`fee_quote`), not the exact receipt string. */
+  feeExact: boolean; orderType: string | null; timestamp: string | null; orderId: string | null };
 
 /** Native fills for one bot. Exact receipt strings are preferred over float projections. */
 export function projectFills(value: unknown, bot: string): FillRow[] {
@@ -429,7 +440,8 @@ export function projectFills(value: unknown, bot: string): FillRow[] {
     if (!fillId || fill.bot_name !== bot) return [];
     return [{
       fillId, pair: text(fill.pair), side: text(fill.side), amount: decimalText(fill.exact_amount ?? fill.amount_base), price: decimalText(fill.exact_price ?? fill.price_quote),
-      volume: decimalText(fill.value_quote_exact ?? fill.gross_volume_quote_decimal ?? fill.gross_volume_quote), fee: decimalText(fill.exact_trade_fee_in_quote ?? fill.fee_quote), orderType: text(fill.order_type),
+      volume: decimalText(fill.value_quote_exact ?? fill.gross_volume_quote_decimal ?? fill.gross_volume_quote), fee: decimalText(fill.exact_trade_fee_in_quote ?? fill.fee_quote),
+      feeExact: decimalText(fill.exact_trade_fee_in_quote) !== null, orderType: text(fill.order_type),
       timestamp: text(fill.timestamp), sourceDbId: text(fill.source_db_id), orderId: text(fill.order_id),
     }];
   });

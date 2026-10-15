@@ -3,6 +3,11 @@
 The engine values its connector balances in its configured global token and
 reporting republishes that value with the declared currency. Condor only
 observes and stores it; nothing here infers prices, currencies or equity.
+
+A paper bot's reporting declares its own simulated wallet (scope ``paper_simulated_wallet``).
+The scope must match the bot identity: a live bot only with ``account_wallet``, a paper bot only
+with ``paper_simulated_wallet``. Paper samples carry ``simulated: True`` and are recorded apart
+from the live wallet, so they never enter a live wallet total.
 """
 
 from __future__ import annotations
@@ -18,11 +23,15 @@ from urllib.parse import urlsplit
 
 import httpx
 
+from condor.fleet_identity import is_paper
+
 logger = logging.getLogger(__name__)
 
 READ_TIMEOUT = 8.0
 MAX_BYTES = 2 * 1024 * 1024
 CURRENCY = re.compile(r"^[A-Z0-9]{2,12}$")
+LIVE_SCOPE = "account_wallet"
+PAPER_SCOPE = "paper_simulated_wallet"
 
 
 def configured_sources() -> dict[str, dict[str, str]]:
@@ -93,8 +102,13 @@ def project_wallet(payload: object, bot: str) -> dict:
     if not isinstance(runtime, dict) or runtime.get("bot_name") != bot:
         raise ValueError("Runtime status does not belong to this bot")
     summary = runtime.get("summary")
-    if not isinstance(summary, dict) or summary.get("balance_value_scope") != "account_wallet":
-        raise ValueError("Wallet scope is not declared")
+    paper = is_paper(bot)
+    if not isinstance(summary, dict) or summary.get("balance_value_scope") != (PAPER_SCOPE if paper else LIVE_SCOPE):
+        raise ValueError("Wallet scope is not declared for this bot")
+    # Each layer may declare `simulated`; a declaration that contradicts the bot identity is never admitted.
+    declared = {layer.get("simulated") for layer in (payload, runtime, summary)}
+    if (False if paper else True) in declared:
+        raise ValueError("Wallet simulation flag contradicts the bot identity")
     currency = summary.get("balance_value_currency")
     if not isinstance(currency, str) or not CURRENCY.fullmatch(currency):
         raise ValueError("Wallet valuation currency is not declared")
@@ -124,13 +138,16 @@ def project_wallet(payload: object, bot: str) -> dict:
     if not complete_wallet_balances(rows, value):
         raise ValueError("Wallet balances are not complete")
     source_id = runtime.get("source_runtime_status_id")
-    return {
+    sample = {
         "timestamp": parsed.timestamp(),
         "currency": currency,
         "value_quote": str(value),
         "source_id": source_id if isinstance(source_id, str) else "",
         "balances": rows,
     }
+    if paper:
+        sample["simulated"] = True  # a paper wallet is simulated equity, never capital
+    return sample
 
 
 async def _read(client: httpx.AsyncClient, source: dict[str, str], bot: str) -> object:
@@ -148,19 +165,47 @@ async def _read(client: httpx.AsyncClient, source: dict[str, str], bot: str) -> 
     return json.loads(bytes(content))
 
 
-async def observe(server: str, sources: dict[str, dict[str, str]] | None = None) -> dict[str, dict | None]:
-    """One sample per configured bot on `server`; None when the read or validation failed."""
+async def observe_runtime(server: str, sources: dict[str, dict[str, str]] | None = None) -> dict[str, object | None]:
+    """One runtime-status body per configured bot on `server`; None when the read failed."""
     sources = configured_sources() if sources is None else sources
     scoped = {bot: source for bot, source in sources.items() if source.get("server") == server}
     if not scoped:
         return {}
-    samples: dict[str, dict | None] = {}
+    bodies: dict[str, object | None] = {}
     async with httpx.AsyncClient(timeout=READ_TIMEOUT, follow_redirects=False, trust_env=False) as client:
         for bot, source in scoped.items():
             try:
                 async with asyncio.timeout(READ_TIMEOUT + 2):
-                    samples[bot] = project_wallet(await _read(client, source, bot), bot)
+                    bodies[bot] = await _read(client, source, bot)
             except (ValueError, httpx.HTTPError, TimeoutError, json.JSONDecodeError) as exc:
-                logger.debug("Wallet observation unavailable for %s/%s: %s", server, bot, exc)
-                samples[bot] = None
+                logger.debug("Runtime status unavailable for %s/%s: %s", server, bot, exc)
+                bodies[bot] = None
+    return bodies
+
+
+def _samples(bodies: dict[str, object | None], paper: bool) -> dict[str, dict | None]:
+    samples: dict[str, dict | None] = {}
+    for bot, body in bodies.items():
+        if is_paper(bot) != paper:
+            continue
+        try:
+            samples[bot] = None if body is None else project_wallet(body, bot)
+        except ValueError as exc:
+            logger.debug("Wallet observation unavailable for %s: %s", bot, exc)
+            samples[bot] = None
     return samples
+
+
+def wallet_samples(bodies: dict[str, object | None]) -> dict[str, dict | None]:
+    """One live wallet sample per live bot read; None when the read or validation failed. Paper bots are skipped."""
+    return _samples(bodies, paper=False)
+
+
+def paper_wallet_samples(bodies: dict[str, object | None]) -> dict[str, dict | None]:
+    """One simulated wallet sample per paper bot read; None when the read or validation failed. Live bots are skipped."""
+    return _samples(bodies, paper=True)
+
+
+async def observe(server: str, sources: dict[str, dict[str, str]] | None = None) -> dict[str, dict | None]:
+    """One live wallet sample per configured live bot on `server`; None when the read or validation failed."""
+    return wallet_samples(await observe_runtime(server, sources))

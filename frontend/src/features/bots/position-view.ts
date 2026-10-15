@@ -29,6 +29,8 @@ export type BotPairPosition = {
   id: string; controllerId: string | null; uniquePair: boolean; pair: string; baseAsset: string; quote: string; price: number | null; base: number | null;
   markValue: number | null; breakeven: number | null; bagPnl: number | null; inventorySource: string;
   phase: string | null; reason: string | null; hold: string | null; riskClear: boolean | null;
+  /** Row built by the API from the owner's symbol list (`native_owner_symbols`): no inventory of its own. */
+  projected: boolean;
   profitPrice: number | null; floor: number | null; peak: number | null; plannedReduction: number | null;
   quantity: string | null; inventoryEntries: Row[]; targetBase: number | null; planNext: string | null; executors: Row[]; pendingSells: Row[] | null; pendingSellsTruncated: boolean;
 };
@@ -84,6 +86,7 @@ export function buildBotPositionView(payload: unknown, bot: string, now: number,
     // This is an inventory objective. The execution owner still sizes, quantizes and gates each order.
     const plannedReduction = hasEpisode && ['DISTRIBUTE', 'EXIT'].includes(phase ?? '') && base !== null && targetBase !== null && targetBase <= base ? base - targetBase : null;
     return { id: controller.pair_projection_source === 'native_owner_symbols' ? `${id}:${pair}` : id ?? `${pair}:${index}`, controllerId: id, uniquePair: single, pair, baseAsset, quote, price, base, markValue, breakeven, bagPnl,
+      projected: controller.pair_projection_source === 'native_owner_symbols',
       inventorySource: controller.pair_projection_source === 'native_owner_symbols' ? 'Per-pair inventory unavailable in native runtime report' : failedObservation ? 'Controller observation unavailable' : hasEpisode ? 'Controller episode bag' : 'Managed bot inventory · executor + retained', phase,
       reason: controller.pair_projection_source === 'native_owner_symbols' ? 'Per-pair accounting unavailable in native runtime report' : failedObservation ? 'Controller observation unavailable' : text(episode.reason) ?? text(controller.gate), hold: text(episode.hold_reason), riskClear: typeof episode.exit_risk_clear === 'boolean' ? episode.exit_risk_clear : null,
       quantity, inventoryEntries: hasEpisode ? [] : held ?? [],
@@ -97,6 +100,24 @@ export function buildBotPositionView(payload: unknown, bot: string, now: number,
     activeOrderCount: completeOrderList ? orders.length : count !== null && Number.isInteger(count) ? count : null,
     orderCountLabel: completeOrderList ? "Active orders" : "Active limit orders",
     activeExecutorCount: executors.length, orders, ordersStatus };
+}
+
+/**
+ * A symbol-only row (the API projects a multi-pair owner's symbol list; the native report has no per-pair
+ * inventory) takes units, mark, marked value, open-position PnL and state from the admitted reporting quant
+ * summary for the same pair, which reads them from held positions and running executors. Owner-reported rows,
+ * and every row while the summary is not admitted, are returned unchanged.
+ */
+export function withQuantInventory<V extends { pairs: BotPairPosition[] }>(view: V, pairs: { pair: string; controllerId: string | null; state: string; units: string | null; mark: string | null; markedValue: string | null; unrealized: string | null }[], admitted: boolean): V {
+  if (!admitted) return view;
+  const number = (value: string | null) => { const parsed = value === null ? NaN : Number(value); return Number.isFinite(parsed) ? parsed : null; };
+  return { ...view, pairs: view.pairs.map(row => {
+    const source = row.projected ? pairs.find(item => item.pair === row.pair && (!item.controllerId || item.controllerId === row.controllerId)) : undefined;
+    if (!source || source.units === null) return row;
+    return { ...row, quantity: source.units, base: number(source.units), price: number(source.mark), markValue: number(source.markedValue),
+      bagPnl: number(source.unrealized), phase: source.state, inventorySource: 'Reporting projection · held positions + running executors',
+      reason: row.planNext ?? null };
+  }) };
 }
 
 /** Pair-state mix for a multi-asset bot. One pair never labels the rest. */

@@ -71,6 +71,8 @@ export type BotWindow = {
   lastAt: number | null;
   samples: number;
   restarts: number;
+  /** Time between consecutive samples inside the window that exceeds the read's spacing: changes are summed across it, but it was not observed. */
+  uncoveredMs: number;
   /** First sample is within one sample spacing of the window start. */
   full: boolean;
   /** Newest sample is older than the read's spacing plus 90s at `now`. */
@@ -86,6 +88,10 @@ export function botWindow(history: BotHistory, from: number, to: number, now: nu
     bot: history.bot, quote: history.quote,
     change: deltas?.total ?? null, realized: deltas?.realized ?? null, unrealized: deltas?.unrealized ?? null,
     firstAt: first?.time ?? null, lastAt: last?.time ?? null, samples: inside.length, restarts: deltas?.restarts ?? 0,
+    uncoveredMs: inside.slice(1).reduce((total, sample, index) => {
+      const spacing = sample.time - inside[index].time;
+      return spacing > history.gapMs ? total + spacing : total;
+    }, 0),
     full: first != null && first.time <= from + history.gapMs,
     stale: last == null || now - last.time > history.gapMs + 90_000,
   };
@@ -109,6 +115,8 @@ export type FleetWindow = {
   partial: boolean;
   /** Counted bots whose history covers the whole window. */
   fullBots: number;
+  /** Counted bots whose window contains a recording hole longer than their sample spacing. */
+  gaps: { bot: string; uncoveredMs: number }[];
   latestAt: number | null;
 };
 
@@ -160,6 +168,7 @@ export function fleetWindow(histories: BotHistory[], bots: string[], from: numbe
     since: counted.length ? Math.min(...counted.map(window => window.firstAt!)) : null,
     partial: counted.some(window => !window.full),
     fullBots: counted.filter(window => window.full).length,
+    gaps: counted.filter(window => window.uncoveredMs > 0).map(window => ({ bot: window.bot, uncoveredMs: window.uncoveredMs })),
     latestAt: counted.length ? Math.max(...counted.map(window => window.lastAt!)) : null,
   };
 }

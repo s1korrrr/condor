@@ -624,3 +624,27 @@ def test_pagination_still_rejects_offsets_past_owner_bound(monkeypatch):
         "/api/v1/research/nodes?server=native-ok-rsi&offset=1000001"
     )
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize("slow", ["deadline", "transport"])
+def test_research_timeout_is_reported_as_gateway_timeout(monkeypatch, slow):
+    # Live 2026-10-05: Research OS /queue took 81 s and /overview 27 s; a missed
+    # deadline must say so instead of claiming an unusable upstream observation.
+    import asyncio
+
+    from condor import research_read
+
+    monkeypatch.setattr(research_read, "READ_DEADLINE_SECONDS", 0.05)
+
+    async def handler(req):
+        if slow == "transport":
+            raise httpx.ReadTimeout("/private/path timed out", request=req)
+        await asyncio.sleep(1)
+        return httpx.Response(200, json={"items": [], "total": 0})
+
+    response = client(monkeypatch, handler=handler).get(
+        "/api/v1/research/queue?server=native-ok-rsi&limit=6&offset=0"
+    )
+    assert response.status_code == 504
+    assert "did not answer within" in response.json()["detail"]
+    assert "private" not in response.text

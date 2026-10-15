@@ -193,3 +193,19 @@ test('daily bars for a closed window stop at its end', () => {
   assert.ok(bars.length <= 11);
   assert.ok(bars.every(day => Date.parse(day.day) <= to));
 });
+
+test('a recording hole inside one owner run is summed across but reported, never presented as covered', () => {
+  // Live 2026-10-05: V1/V2 history had no samples 10-04 18:47 → 10-05 05:35 (API rejected both bots).
+  const rows = [];
+  for (let minute = hours(24); minute >= hours(12); minute -= 1) rows.push([minute, 10 + (hours(24) - minute) / 1000]);
+  for (let minute = hours(1.2); minute >= 0; minute -= 1) rows.push([minute, 20 + (hours(1.2) - minute) / 1000]);
+  const v1 = history('v1', rows);
+  const window = fleet.fleetWindow([v1], ['v1'], NOW - 86_400_000, NOW, NOW);
+  assert.equal(window.partial, false);
+  assert.ok(Math.abs(window.total - (rows.at(-1)[1] - rows[0][1])) < 1e-9);
+  assert.equal(window.gaps.length, 1);
+  assert.equal(window.gaps[0].bot, 'v1');
+  assert.equal(window.gaps[0].uncoveredMs, (hours(12) - hours(1.2)) * MIN);
+  const dense = history('v2', rows.filter(([minute]) => minute >= hours(12)));
+  assert.deepEqual(fleet.fleetWindow([dense], ['v2'], NOW - hours(24) * MIN, NOW - hours(12) * MIN, NOW).gaps, []);
+});

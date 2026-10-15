@@ -6,8 +6,9 @@ repos:
       - id: end-of-file-fixer
       - id: check-yaml
       - id: check-added-large-files
-        # Real builder output exercises the 240-member, 2 MiB frame contract.
-        exclude: ^tests/fixtures/market-picture\.240\.fixture\.json$
+        # Real builder output exercises the 240-member, 2 MiB frame contract; the fleet market
+        # index parity fixture is the iOS repo's file byte for byte (real 1D pair responses).
+        exclude: ^tests/fixtures/(market-picture\.240\.fixture|fleet_market_index_parity_v1)\.json$
 
   -   repo: https://github.com/pycqa/isort
       rev: 5.13.2

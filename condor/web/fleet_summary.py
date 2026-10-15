@@ -34,6 +34,7 @@ from decimal import Decimal, InvalidOperation
 from typing import Any, Optional, Protocol
 
 from condor.fetchers.bots import build_bots_page
+from condor.fleet_identity import display_name, generation, is_paper
 from condor.web import fleet_pnl
 from condor.web.market_verdict import (
     DEFAULT_HORIZON,
@@ -78,37 +79,6 @@ PARTIAL_COVERAGE = "PARTIAL_COVERAGE"
 FIELDS_MISSING = "FIELDS_MISSING"
 GLANCE_MAX_BOTS = 16
 GLANCE_MAX_MISSING = 16
-
-V1_DISPLAY = {
-    "ok_rsi": "V1 · ok_rsi",
-    "ok_rsi_sui_sell_only": "SUI · Sell only",
-    "rsi_v5": "RSI v5",
-}
-_PAPER = re.compile(r"(?:^|[_-])paper(?:[_-]|$)", re.IGNORECASE)
-_GEN = {
-    "V2": re.compile(r"(?:^|[_-])v2(?:[_-]|$)", re.IGNORECASE),
-    "V3": re.compile(r"(?:^|[_-])v3(?:[_-]|$)", re.IGNORECASE),
-}
-
-
-def display_name(bot: str) -> str:
-    """Same nicknames as ``displayBotName`` in the frontend (V1 nicknames stay; other ids show as themselves)."""
-    return V1_DISPLAY.get(bot, bot)
-
-
-def generation(bot: str) -> Optional[str]:
-    """'V1' for the known V1 bots, 'V2'/'V3' when the id carries that token, otherwise ``None`` (never guessed)."""
-    if bot in V1_DISPLAY:
-        return "V1"
-    for name, pattern in _GEN.items():
-        if pattern.search(bot):
-            return name
-    return None
-
-
-def is_paper(bot: str) -> bool:
-    return bool(_PAPER.search(bot))
-
 
 @dataclass
 class OwnerRead:
@@ -219,7 +189,16 @@ def project_quant_summary(payload: Any, bot: str, now_ms: float) -> Optional[dic
         and data.get("operational_label").strip()
         else "UNKNOWN"
     )
-    admitted = fresh and state != "UNKNOWN"
+    # The owner's explicit coverage verdict admits the source (a unified multi-pair controller publishes no per-pair
+    # state, so its label stays UNKNOWN while its inventory is verified). Envelopes without coverage keep the label rule.
+    coverage = envelope.get("coverage")
+    if isinstance(coverage, dict):
+        ready = _nonneg_int(coverage.get("ready"))
+        reasons = coverage.get("reasons")
+        owner_admitted = (ready or 0) > 0 and isinstance(reasons, list) and not reasons
+    else:
+        owner_admitted = state != "UNKNOWN"
+    admitted = fresh and owner_admitted
     known = {} if fresh else _obj(data.get("last_known"))
     pairs_raw = data.get("pairs") if admitted else known.get("pairs")
     pairs = []
@@ -290,6 +269,33 @@ def project_quant_cycles(payload: Any, bot: str) -> Optional[dict]:
     }
 
 
+# Reporting's per-field receipt verdict (`receipt_precision`) and the keys it applies to.
+RECEIPT_KEYS = {
+    "amount": ("exact_amount", "amount_base"),
+    "price": ("exact_price", "price_quote"),
+    "fee_quote": ("exact_trade_fee_in_quote", "fee_quote"),
+}
+
+
+def receipt_value(fill: dict, field: str, *, positive: bool) -> tuple[Optional[str], str]:
+    """``(decimal text, precision)`` for one receipt field, keeping the owner's admission verdict.
+
+    The owner keeps raw ``exact_*`` strings for provenance even when it refuses them (unverified receipt
+    source); only its verdict decides. Without a verdict (an older reporting image) only the normalized
+    6-decimal value is used and the exact strings are not promoted.
+    """
+    exact_key, normalized_key = RECEIPT_KEYS[field]
+    verdicts = fill.get("receipt_precision")
+    verdict = verdicts.get(field) if isinstance(verdicts, dict) else None
+    if verdict == "unavailable":
+        return None, "unavailable"
+    key = exact_key if verdict == "exact_decimal" else normalized_key
+    number = _dec(fill.get(key))
+    if number is None or (positive and number <= 0):
+        return None, "unavailable"
+    return fleet_pnl.decimal_text(number), "exact" if verdict == "exact_decimal" else "legacy_6dp"
+
+
 def project_fills(payload: Any, bot: str) -> list[dict]:
     """Native fills for one bot. Exact receipt strings are preferred over float projections."""
     rows = _obj(payload).get("rows")
@@ -313,14 +319,14 @@ def project_fills(payload: Any, bot: str) -> list[dict]:
                 "fill_id": fill_id,
                 "pair": fill.get("pair") if isinstance(fill.get("pair"), str) else None,
                 "side": fill.get("side") if isinstance(fill.get("side"), str) else None,
-                "amount": pick("exact_amount", "amount_base"),
-                "price": pick("exact_price", "price_quote"),
+                "amount": receipt_value(fill, "amount", positive=True)[0],
+                "price": receipt_value(fill, "price", positive=True)[0],
                 "volume": pick(
                     "value_quote_exact",
                     "gross_volume_quote_decimal",
                     "gross_volume_quote",
                 ),
-                "fee": pick("exact_trade_fee_in_quote", "fee_quote"),
+                "fee": receipt_value(fill, "fee_quote", positive=False)[0],
                 "time_ms": _instant_ms(fill.get("timestamp")),
             }
         )
@@ -566,10 +572,11 @@ def _wallet_section(
     """Newest complete wallet valuation among the live bots' reporting wallet observers.
 
     ``reads`` maps each live bot to its wallet read, or ``None`` when the read itself failed.
+    A paper bot's or a simulated wallet read is never the fleet wallet, even if one is passed in.
     """
     best: Optional[tuple[float, str, dict]] = None
     for bot, payload in reads.items():
-        if payload is None:
+        if payload is None or is_paper(bot) or _obj(payload).get("simulated") is True:
             continue
         latest = _obj(_obj(payload).get("latest"))
         stamp = _num(latest.get("timestamp"))
@@ -724,9 +731,15 @@ def _bot_cards(
     latest_samples: dict[str, Optional[tuple[fleet_pnl.Sample, str]]],
     now_ms: float,
     missing: list,
+    paper_day: Optional[dict[str, fleet_pnl.FleetWindow]] = None,
 ) -> list[dict]:
+    """One card per bot. A paper card carries its own simulated numbers (``simulated: true``); its gaps
+    stay on the card and never enter the fleet ``missing`` list."""
     status_by_bot = {b.get("bot_name"): b for b in (page or {}).get("bots", [])}
     day_by_bot = {w.bot: w for w in day.bots}
+    paper_day = paper_day or {}
+    for window in paper_day.values():
+        day_by_bot.update({w.bot: w for w in window.bots})
     cards = []
     for bot in bots:
         gaps: list[dict] = []
@@ -734,7 +747,7 @@ def _bot_cards(
 
         def gap(field: str, reason: str, *, listed: bool = True) -> None:
             gaps.append({"field": field, "reason": reason})
-            if listed:
+            if listed and not paper:
                 missing.append(
                     {"section": "bots", "bot": bot, "field": field, "reason": reason}
                 )
@@ -814,8 +827,16 @@ def _bot_cards(
                 "partial": not day_window.full,
                 "stale": day_window.stale,
             }
+            if paper:
+                pnl_day["simulated"] = True
         elif paper:
-            gap("pnl_day", PAPER_EXCLUDED, listed=False)
+            own = paper_day.get(bot)
+            gap(
+                "pnl_day",
+                next((m["reason"] for m in own.missing), fleet_pnl.NO_SAMPLES)
+                if own is not None
+                else fleet_pnl.NOT_READ,
+            )
         else:
             gap(
                 "pnl_day",
@@ -840,6 +861,8 @@ def _bot_cards(
                     "unit": unit,
                     "source": "controller",
                 }
+                if paper:
+                    net_now["simulated"] = True
         if (
             net_now is None
             and sample is not None
@@ -850,12 +873,10 @@ def _bot_cards(
                 "unit": sample[1],
                 "source": "history",
             }
+            if paper:
+                net_now["simulated"] = True
         if net_now is None:
-            gap(
-                "net_now",
-                PAPER_EXCLUDED if paper else fleet_pnl.NO_SAMPLES,
-                listed=not paper,
-            )
+            gap("net_now", fleet_pnl.NO_SAMPLES)
 
         # Fees and trades: scored cycles when the owner publishes them, else its fill ledger (a ledger the
         # page limit cut short is only a lower bound, so it never stands in for a lifetime total).
@@ -938,8 +959,17 @@ async def _safe_owner(readers: Readers, bot: str, path: str, params: dict) -> Ow
 
 
 def _sync_reads(
-    readers: Readers, server: str, live: list[str], now_ms: float
-) -> tuple[dict[str, list[fleet_pnl.BotHistory]], dict[str, Optional[dict]]]:
+    readers: Readers,
+    server: str,
+    live: list[str],
+    now_ms: float,
+    paper: tuple[str, ...] = (),
+) -> tuple[
+    dict[str, list[fleet_pnl.BotHistory]],
+    dict[str, Optional[dict]],
+    list[fleet_pnl.BotHistory],
+]:
+    """Live histories and wallets for the fleet numbers; paper bots' own 1D histories for their cards only."""
     clock = now_ms + 5_000
     histories: dict[str, list[fleet_pnl.BotHistory]] = {
         r: [] for r in ("1D", "1W", "1M", "ALL")
@@ -961,7 +991,16 @@ def _sync_reads(
             wallets[bot] = readers.wallet(server, bot, "1D", now_ms / 1000)
         except Exception:
             wallets[bot] = None
-    return histories, wallets
+    paper_histories: list[fleet_pnl.BotHistory] = []
+    for bot in paper:
+        try:
+            payload, failed = readers.performance(server, bot, "1D", now_ms / 1000), False
+        except Exception:
+            payload, failed = None, True
+        paper_histories.append(
+            fleet_pnl.parse_bot_history(payload, bot, "1D", clock, failed)
+        )
+    return histories, wallets, paper_histories
 
 
 async def build_fleet_summary(
@@ -1008,7 +1047,10 @@ async def build_fleet_summary(
     incident_bot = live[0] if live else None
     if is_admin and incident_bot:
         owner_jobs.append((incident_bot, "operations", {}))
-    sync_task = asyncio.to_thread(_sync_reads, readers, server, live, now_ms)
+    paper_bots = tuple(b for b in bots if is_paper(b))
+    sync_task = asyncio.to_thread(
+        _sync_reads, readers, server, live, now_ms, paper_bots
+    )
     market_task = readers.market(server, user_id)
     results = await asyncio.gather(
         sync_task,
@@ -1019,8 +1061,12 @@ async def build_fleet_summary(
     sync_result, market_result, owner_results = results[0], results[1], results[2:]
     if isinstance(sync_result, BaseException):
         histories, wallets = {r: [] for r in ("1D", "1W", "1M", "ALL")}, {}
+        paper_histories = [
+            fleet_pnl.BotHistory(bot, "1D", reason=fleet_pnl.HISTORY_READ_FAILED)
+            for bot in paper_bots
+        ]
     else:
-        histories, wallets = sync_result
+        histories, wallets, paper_histories = sync_result
     market_read = (
         market_result
         if isinstance(market_result, MarketRead)
@@ -1072,8 +1118,9 @@ async def build_fleet_summary(
                     }
                 )
             stale = latest is None or now_ms - latest > STALE_AFTER_MS["pnl"]
+            # An unrecorded stretch inside a window is not observed change: incomplete (contract `gaps`).
             incomplete = any(
-                w.counted < w.expected or w.partial for w in usable
+                w.counted < w.expected or w.partial or w.gaps for w in usable
             ) or len(usable) < len(windows)
             for name, window in windows.items():
                 for item in window.missing:
@@ -1129,13 +1176,25 @@ async def build_fleet_summary(
         if path in projections and (read.reason or projections[path].get(bot) is None):
             owner_reasons[(bot, path)] = read.reason or INVALID
     latest_samples: dict[str, Optional[tuple[fleet_pnl.Sample, str]]] = {}
-    for history in histories.get("1D", []):
+    for history in [*histories.get("1D", []), *paper_histories]:
         latest_samples[history.bot] = (
             (history.samples[-1], history.quote or "")
             if history.samples and history.quote
             else None
         )
     day_window = windows.get("day") or fleet_pnl.fleet_window([], [], 0, 0, 0)
+    # Each paper bot's own simulated day change, for its card only: never part of a fleet window
+    # (one window per bot, so two paper quotes never compete).
+    paper_day = {
+        history.bot: fleet_pnl.fleet_window(
+            [history],
+            [history.bot],
+            now_ms - fleet_pnl.RANGE_SPAN_MS["1D"],
+            now_ms,
+            now_ms + 5_000,
+        )
+        for history in paper_histories
+    }
     cards = (
         _bot_cards(
             bots,
@@ -1149,6 +1208,7 @@ async def build_fleet_summary(
             latest_samples,
             now_ms,
             missing,
+            paper_day,
         )
         if bots
         else []
@@ -1161,7 +1221,10 @@ async def build_fleet_summary(
     else:
         observed = [c["report_at_ms"] for c in cards if c["report_at_ms"] is not None]
         any_stale = any(c["report_stale"] for c in cards if not c["paper"])
-        incomplete = any(c["missing"] for c in cards) or page is None
+        # The section verdict is the live fleet's: a paper card's own gaps never make it partial.
+        incomplete = (
+            any(c["missing"] for c in cards if not c["paper"]) or page is None
+        )
         sections["bots"] = _section(
             "stale" if any_stale else "partial" if incomplete else "ok",
             max(observed) if observed else None,
@@ -1205,6 +1268,20 @@ async def build_fleet_summary(
         )
         sections["fills"] = _section("missing", None, STALE_AFTER_MS["fills"], reason)
         missing.append({"section": "fills", "reason": reason})
+
+    # paper fills: a separate, labelled list (full view only), never merged into ``fills``
+    paper_fills: Optional[list[dict]] = None
+    if paper_bots:
+        paper_merged = [
+            {**fill, "simulated": True}
+            for bot in paper_bots
+            if owner[(bot, "fills")].payload is not None
+            for fill in project_fills(owner[(bot, "fills")].payload, bot)
+        ]
+        paper_merged.sort(
+            key=lambda f: (f["time_ms"] is not None, f["time_ms"] or 0), reverse=True
+        )
+        paper_fills = paper_merged[: RECENT_FILLS["full"]]
 
     # incidents
     incidents = None
@@ -1254,6 +1331,8 @@ async def build_fleet_summary(
         "fills": fills,
         "incidents": incidents,
     }
+    if view == "full":
+        body["paper_fills"] = paper_fills
     return glance(body) if view == "glance" else body
 
 
@@ -1286,7 +1365,7 @@ def glance(full: dict) -> dict:
                 **{
                     name: {
                         k: pnl[name][k]
-                        for k in ("total", "partial", "counted", "expected", "stale")
+                        for k in ("total", "partial", "counted", "expected", "stale", "uncovered_ms")
                     }
                     for name in ("day", "week", "month", "all")
                 },

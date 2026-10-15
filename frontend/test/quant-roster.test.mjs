@@ -1,4 +1,5 @@
 import test from 'node:test';
+import fs from 'node:fs';
 import assert from 'node:assert/strict';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
@@ -131,4 +132,36 @@ test('fresh heartbeat cannot refresh an independently stale metric',()=>{
  assert.equal(view.freshness,'current');
  assert.equal(view.netLifecycle.value,null);
  assert.equal(view.ownedValue.value,'100');
+});
+
+// Real reporting envelopes for meridian_v3 (shared with the Python fleet summary tests). The unified controller
+// publishes no per-pair state, so the owner admits the source through `coverage` while the label stays UNKNOWN.
+const v3Fixture = name => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/fleet_summary/${name}`, import.meta.url), 'utf8'));
+
+test('owner coverage, not the UNKNOWN label sentinel, admits a current V3 summary', () => {
+  const admitted = v3Fixture('quant_summary_meridian_v3_admitted.json');
+  const clock = Date.parse(admitted.generated_at) + 1000;
+  const view = projectQuantBotSummary(admitted, 'meridian_v3', clock);
+  assert.equal(admitted.data.operational_label, 'UNKNOWN', 'fixture proves the label sentinel is present');
+  assert.equal(view.admitted, true);
+  assert.deepEqual(view.pairs.map(pair => pair.pair), ['BNB-USDC', 'BTC-USDC', 'ETH-USDC', 'SOL-USDC', 'XRP-USDC']);
+  assert.ok(view.pairs.every(pair => pair.units !== null && pair.markedValue !== null));
+  assert.equal(view.ownedValue.availability, 'available');
+  assert.equal(view.riskRails.availability, 'available');
+  assert.equal(view.cycleCounts.open, 10);
+  const stale = projectQuantBotSummary(admitted, 'meridian_v3', clock + 120_000);
+  assert.equal(stale.freshness, 'stale', 'consumer freshness still gates an owner-admitted envelope');
+  assert.equal(stale.admitted, false);
+  assert.deepEqual(stale.pairs, [], 'no last_known block means nothing is shown as current');
+});
+
+test('an owner-declared unverified scope stays unadmitted even with a fresh heartbeat', () => {
+  const unverified = v3Fixture('quant_summary_meridian_v3_unverified.json');
+  assert.deepEqual(unverified.coverage.reasons, ['SOURCE_SCOPE_UNVERIFIED']);
+  const view = projectQuantBotSummary(unverified, 'meridian_v3', Date.parse(unverified.generated_at) + 1000);
+  assert.equal(view.freshness, 'current');
+  assert.equal(view.admitted, false);
+  assert.deepEqual(view.pairs, []);
+  const forged = { ...unverified, data: { ...unverified.data, operational_label: 'HOLDING', pairs: [{ pair: 'ETH-USDC', units: '1' }] } };
+  assert.deepEqual(projectQuantBotSummary(forged, 'meridian_v3', Date.parse(unverified.generated_at) + 1000).pairs, [], 'a label cannot override the owner coverage verdict');
 });

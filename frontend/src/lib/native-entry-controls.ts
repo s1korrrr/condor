@@ -54,6 +54,12 @@ export function entryObservation(value:unknown,bot:string,now:number,receivedAt:
     && new Set(rows.map(row=>row.controller_id)).size===rows.length;
   return {valid,allowed:valid && payload.command_allowed===true,rows:valid?rows:[]};
 }
+export function entryRowLabel(row:Record<string,unknown>) {
+  const state=row.entry_paused?'Paused':'Not paused';
+  // The owner keeps the last reason after a resume or restore (e.g. 'restored'); it explains only an active pause.
+  const reason=row.entry_paused===true && typeof row.pause_reason==='string' && row.pause_reason?` · ${row.pause_reason}`:'';
+  return `${String(row.controller_id)}: ${state}${reason}`;
+}
 export function entryCommandObserved(value:unknown,bot:string,now:number,receivedAt:number,command:EntryCommand) {
   const view=entryObservation(value,bot,now,receivedAt);
   return view.valid && view.rows.every(row=>row.last_command_id===command.id && row.entry_paused===(command.action==='pause')
@@ -66,4 +72,14 @@ export function entryPublicationMessage(status:number,body:unknown) {
   if([401,403,404,422].includes(status)) return {rejected:true,text:typeof payload.detail==='string'?payload.detail:'Native owner rejected this request.'};
   if(status>=400) return {rejected:false,text:'Publication outcome unknown. Await matching native state before retrying.'};
   return {rejected:false,text:'Submitted; waiting for matching native entry state. Publication does not confirm execution.'};
+}
+
+/** Condor marks the one permanent refusal (`X-Condor-Capability`); its value matches condor/web/routes/native_entry.py. */
+export const ENTRY_CONTROLS_UNSUPPORTED = 'entry-controls-unsupported';
+export const CAPABILITY_HEADER = 'X-Condor-Capability';
+/** Entry-state polling cadence. Polling stops only when Condor marks the registered owner as not permitting
+ * native entry controls; other 409s (broker disconnected, owner restarting, stale reports) are transient. */
+export function entryStatusRefetchInterval(error: unknown): number | false {
+  const failure = typeof error === 'object' && error !== null ? error as { status?: unknown; capability?: unknown } : null;
+  return failure?.status === 409 && failure.capability === ENTRY_CONTROLS_UNSUPPORTED ? false : 5000;
 }

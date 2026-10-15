@@ -1,0 +1,31 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+_______ test_transaction_rolls_back_failed_commit_and_allows_next_write ________
+
+tmp_path = PosixPath('/private/var/tmp/condor-commit-failure-red/test_transaction_rolls_back_fa0')
+
+    def test_transaction_rolls_back_failed_commit_and_allows_next_write(tmp_path):
+        class CommitFailsOnce(sqlite3.Connection):
+            fail_next_commit = True
+
+            def execute(self, sql, *args):
+                if sql == "COMMIT" and self.fail_next_commit:
+                    self.fail_next_commit = False
+                    raise sqlite3.OperationalError("injected commit failure")
+                return super().execute(sql, *args)
+
+        path = tmp_path / "transactions.sqlite"
+        db = sqlite3.connect(path, factory=CommitFailsOnce, isolation_level=None)
+        try:
+            db.execute("CREATE TABLE writes (value INTEGER NOT NULL)")
+            with pytest.raises(sqlite3.OperationalError, match="injected commit failure"):
+                with push_store._transaction(db):
+                    db.execute("INSERT INTO writes VALUES (1)")
+>           assert not db.in_transaction
+E           assert not True
+E            +  where True = <tests.test_push_store.test_transaction_rolls_back_failed_commit_and_allows_next_write.<locals>.CommitFailsOnce object at 0x107c3d950>.in_transaction
+
+tests/test_push_store.py:82: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_push_store.py::test_transaction_rolls_back_failed_commit_and_allows_next_write
+1 failed in 0.19s

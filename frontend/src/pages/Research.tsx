@@ -288,21 +288,34 @@ function ResearchLab({ server }: { server: string }) {
         ))}
       </nav>
       <div
-        className={`lab-workspace-body ${available && state.selected && state.view !== "archive" ? "lab-with-inspector" : ""}`}
+        className={`lab-workspace-body ${state.selected && state.view !== "archive" ? "lab-with-inspector" : ""}`}
       >
         <main className="lab-main" aria-label={`${viewLabel} research view`}>
-          {state.view !== "archive" && !available ? <LabReadNotice state={overviewState} error={overview.error} onRetry={() => void overview.refetch()} /> : state.view === "archive" ? (
+          {/* Only index-bound panels (revision-bound conclusions, catalog coverage, network)
+              wait for a current overview. Panels with their own reads keep their own state. */}
+          {state.view !== "archive" && !available && (
+            <section className="quant-panel" aria-label="Research index overview">
+              <header className="quant-panel-heading">
+                <div>
+                  <h2>Index overview</h2>
+                  <p className="quant-muted">Conclusions, catalog coverage and the network are bound to the current index revision and wait for it. Other panels load and report their own state.</p>
+                </div>
+              </header>
+              <LabReadNotice state={overviewState} error={overview.error} onRetry={() => void overview.refetch()} />
+            </section>
+          )}
+          {state.view === "archive" ? (
             <ResearchArchive key={server} server={server} />
           ) : state.view === "overview" ? (
             <>
-              <div className="lab-overview-columns">
-                <ResearchConclusions server={server} now={now} revision={available ? revision : ""} kind="assessment" onSelect={select} />
-                <ResearchConclusions server={server} now={now} revision={available ? revision : ""} kind="run" onSelect={select} />
-              </div>
-              <div className="lab-overview-columns"><LabQueue server={server} now={now} preview onSelect={select} /><LabLimitations data={data} /></div>
-              <details className="quant-panel"><summary>Catalog coverage</summary><LabCounts data={data} onView={navigate} /></details>
+              {available && <div className="lab-overview-columns">
+                <ResearchConclusions server={server} now={now} revision={revision} kind="assessment" onSelect={select} />
+                <ResearchConclusions server={server} now={now} revision={revision} kind="run" onSelect={select} />
+              </div>}
+              <div className="lab-overview-columns"><LabQueue server={server} now={now} preview onSelect={select} />{available && <LabLimitations data={data} />}</div>
+              {available && <details className="quant-panel"><summary>Catalog coverage</summary><LabCounts data={data} onView={navigate} /></details>}
             </>
-          ) : networkVisible ? (
+          ) : networkVisible ? (!available ? null : (
             <>
               <section
                 className="quant-panel lab-network-panel"
@@ -325,7 +338,7 @@ function ResearchLab({ server }: { server: string }) {
                 <LabCharts data={network} expanded onFilter={(key, value) => change({ view: "ideas", q: "", family: "", lane: "", [key]: value }, { resetPage: true, clearSelection: true })} />
               )}
             </>
-          ) : (
+          )) : (
             <LabRecords
               key={`${server}:${state.view}`}
               server={server}
@@ -341,7 +354,7 @@ function ResearchLab({ server }: { server: string }) {
             />
           )}
         </main>
-        {available && state.selected && state.view !== "archive" && (
+        {state.selected && state.view !== "archive" && (
           <ResearchInspector
             key={`${server}:${state.selected}`}
             server={server}

@@ -27,6 +27,7 @@ import os
 import re
 import sqlite3
 import time
+import uuid
 from contextlib import contextmanager
 from dataclasses import dataclass
 from datetime import datetime
@@ -49,6 +50,9 @@ HHMM = re.compile(r"([01][0-9]|2[0-3]):[0-5][0-9]")
 MAX_ATTEMPTS = 8
 TEST_COOLDOWN_SECONDS = 10.0
 MAX_PENDING_TESTS = 4
+LIVE_ACTIVITY_KINDS = ("update", "start")
+MAX_LIVE_ACTIVITIES_PER_DEVICE = 8
+SERVER_NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_-]{0,99}")
 
 
 class RegistryError(ValueError):
@@ -157,6 +161,8 @@ class Device:
     active: bool
     registered_at: float
     last_seen: float
+    recipient_server_id: str
+    registration_nonce: str
     deactivated_reason: str | None = None
 
     def enabled_classes(self) -> dict[str, bool]:
@@ -172,6 +178,7 @@ class Device:
         """A device as the app sees it. The token is never returned, only its tail."""
         return {
             "device_id": self.device_id,
+            "recipient_server_id": self.recipient_server_id,
             "platform": self.platform,
             "bundle_id": self.bundle_id,
             "environment": self.environment,
@@ -186,7 +193,7 @@ class Device:
         }
 
 
-def _device(row: sqlite3.Row) -> Device:
+def _device(row: sqlite3.Row, recipient_server_id: str) -> Device:
     return Device(
         device_id=row["device_id"],
         user_id=row["user_id"],
@@ -200,8 +207,82 @@ def _device(row: sqlite3.Row) -> Device:
         active=bool(row["active"]),
         registered_at=row["registered_at"],
         last_seen=row["last_seen"],
+        recipient_server_id=recipient_server_id,
+        registration_nonce=row["registration_nonce"],
         deactivated_reason=row["deactivated_reason"],
     )
+
+
+# --------------------------------------------------------------------------- live activities
+
+
+def live_activity_id_for(token: str) -> str:
+    return hashlib.sha256(b"live-activity:" + token.encode("ascii")).hexdigest()[:32]
+
+
+def normalize_activity_id(value: Any) -> str:
+    """The ActivityKit activity id, a UUID; stored in canonical lower-case form."""
+    try:
+        return (
+            str(uuid.UUID(value)) if isinstance(value, str) and len(value) <= 64 else ""
+        )
+    except ValueError:
+        return ""
+
+
+@dataclass(frozen=True)
+class LiveActivityToken:
+    """An ActivityKit push token: ``update`` for one running activity, ``start`` for the
+    device's push-to-start token. It belongs to one registered device and its owner."""
+
+    id: str
+    user_id: int
+    device_id: str
+    server: str  # the Condor server whose fleet the activity shows
+    kind: str
+    token: str
+    environment: str
+    bundle_id: str
+    activity_id: str | None
+    created_at: float
+    registered_at: float
+    last_sent_at: float | None
+    active: bool
+    registration_nonce: str
+    deactivated_reason: str | None = None
+    # When the *activity* began (update tokens only): the earliest registration of any token
+    # for this activity id on this device, kept across token rotation and deletion.
+    activity_started_at: float | None = None
+
+
+def _live_activity(row: sqlite3.Row) -> LiveActivityToken:
+    return LiveActivityToken(
+        id=row["id"],
+        user_id=row["user_id"],
+        device_id=row["device_id"],
+        server=row["server"],
+        kind=row["kind"],
+        token=row["token"],
+        environment=row["environment"],
+        bundle_id=row["bundle_id"],
+        activity_id=row["activity_id"],
+        created_at=row["created_at"],
+        registered_at=row["registered_at"],
+        last_sent_at=row["last_sent_at"],
+        active=bool(row["active"]),
+        registration_nonce=row["registration_nonce"],
+        deactivated_reason=row["deactivated_reason"],
+        activity_started_at=row["activity_started_at"],
+    )
+
+
+# Every read of a token carries its activity's start (see LiveActivityToken).
+_LIVE_SELECT = """SELECT l.*, CASE WHEN l.kind='update'
+    THEN COALESCE(s.started_at, l.created_at) END AS activity_started_at
+    FROM live_activities l LEFT JOIN live_activity_starts s
+    ON s.device_id = l.device_id AND s.activity_id = l.activity_id"""
+# An activity lives at most 12 hours; a start older than this cannot matter any more.
+ACTIVITY_START_RETENTION_SECONDS = 86400.0
 
 
 def _open(path: Path, *, wal: bool) -> sqlite3.Connection:
@@ -221,11 +302,11 @@ def _transaction(db: sqlite3.Connection) -> Iterator[sqlite3.Connection]:
     db.execute("BEGIN IMMEDIATE")
     try:
         yield db
-    except BaseException:
-        db.execute("ROLLBACK")
-        raise
-    else:
         db.execute("COMMIT")
+    except BaseException:
+        if db.in_transaction:
+            db.execute("ROLLBACK")
+        raise
 
 
 class Registry:
@@ -241,15 +322,60 @@ class Registry:
                     platform TEXT NOT NULL, bundle_id TEXT NOT NULL, environment TEXT NOT NULL,
                     app_version TEXT NOT NULL, classes TEXT NOT NULL, quiet TEXT NOT NULL,
                     active INTEGER NOT NULL DEFAULT 1, registered_at REAL NOT NULL, last_seen REAL NOT NULL,
-                    deactivated_reason TEXT)""",
+                    deactivated_reason TEXT,
+                    registration_nonce TEXT NOT NULL DEFAULT '')""",
                 "CREATE INDEX IF NOT EXISTS devices_user ON devices(user_id)",
                 """CREATE TABLE IF NOT EXISTS push_requests (
                     id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, kind TEXT NOT NULL,
                     device_ids TEXT NOT NULL, state TEXT NOT NULL, result TEXT,
                     created REAL NOT NULL, updated REAL NOT NULL)""",
                 "CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
+                # Added 2026-10-13. CREATE IF NOT EXISTS is the whole migration: older
+                # registries simply gain the empty table.
+                """CREATE TABLE IF NOT EXISTS live_activities (
+                    id TEXT PRIMARY KEY, user_id INTEGER NOT NULL, device_id TEXT NOT NULL,
+                    server TEXT NOT NULL, kind TEXT NOT NULL, token TEXT NOT NULL UNIQUE, environment TEXT NOT NULL,
+                    bundle_id TEXT NOT NULL, activity_id TEXT, created_at REAL NOT NULL,
+                    registered_at REAL NOT NULL, last_sent_at REAL,
+                    active INTEGER NOT NULL DEFAULT 1, deactivated_reason TEXT,
+                    registration_nonce TEXT NOT NULL)""",
+                "CREATE INDEX IF NOT EXISTS live_activities_device ON live_activities(device_id)",
+                # When each activity began, per device. Outlives its tokens: iOS rotates an
+                # activity's push token and the app may delete the old row first.
+                """CREATE TABLE IF NOT EXISTS live_activity_starts (
+                    device_id TEXT NOT NULL, activity_id TEXT NOT NULL,
+                    started_at REAL NOT NULL, PRIMARY KEY(device_id, activity_id))""",
             ):
                 db.execute(statement)
+            with _transaction(db):
+                device_columns = {
+                    row["name"] for row in db.execute("PRAGMA table_info(devices)")
+                }
+                if "registration_nonce" not in device_columns:
+                    db.execute(
+                        "ALTER TABLE devices ADD COLUMN registration_nonce TEXT NOT NULL DEFAULT ''"
+                    )
+                for row in db.execute(
+                    "SELECT device_id FROM devices WHERE registration_nonce=''"
+                ).fetchall():
+                    db.execute(
+                        "UPDATE devices SET registration_nonce=? WHERE device_id=?",
+                        (uuid.uuid4().hex, row["device_id"]),
+                    )
+                db.execute(
+                    "INSERT OR IGNORE INTO meta(key,value) VALUES ('recipient_server_id',?)",
+                    (uuid.uuid4().hex,),
+                )
+                server_id = db.execute(
+                    "SELECT value FROM meta WHERE key='recipient_server_id'"
+                ).fetchone()[0]
+                if not isinstance(server_id, str) or not re.fullmatch(
+                    r"[0-9a-f]{32}", server_id
+                ):
+                    raise RegistryError(
+                        "push registry installation identity is invalid"
+                    )
+                self.recipient_server_id = server_id
         finally:
             db.close()
 
@@ -292,7 +418,11 @@ class Registry:
                             "too many registered devices; unregister one first"
                         )
                     db.execute(
-                        "INSERT INTO devices VALUES (?,?,?,?,?,?,?,?,?,1,?,?,NULL)",
+                        """INSERT INTO devices (
+                            device_id,user_id,token,platform,bundle_id,environment,
+                            app_version,classes,quiet,active,registered_at,last_seen,
+                            deactivated_reason,registration_nonce
+                        ) VALUES (?,?,?,?,?,?,?,?,?,1,?,?,NULL,?)""",
                         (
                             device_id,
                             user_id,
@@ -307,13 +437,35 @@ class Registry:
                             ),
                             now,
                             now,
+                            uuid.uuid4().hex,
                         ),
                     )
                 else:
+                    same_owner = row["user_id"] == user_id
+                    if not same_owner:
+                        count = db.execute(
+                            "SELECT COUNT(*) FROM devices WHERE user_id=?", (user_id,)
+                        ).fetchone()[0]
+                        if count >= MAX_DEVICES_PER_USER:
+                            raise RegistryError(
+                                "too many registered devices; unregister one first"
+                            )
+                    if not same_owner:
+                        # Live Activity tokens belong to the previous owner's session.
+                        for table in ("live_activities", "live_activity_starts"):
+                            db.execute(
+                                f"DELETE FROM {table} WHERE device_id=?",
+                                (row["device_id"],),
+                            )
+                    saved_classes = json.loads(row["classes"]) if same_owner else {}
+                    saved_quiet = (
+                        json.loads(row["quiet"]) if same_owner else normalize_quiet({})
+                    )
                     db.execute(
                         """UPDATE devices SET user_id=?, platform=?, bundle_id=?, environment=?,
                            app_version=?, classes=?, quiet=?, active=1, registered_at=?, last_seen=?,
-                           deactivated_reason=NULL WHERE token=?""",
+                           deactivated_reason=NULL, registration_nonce=?
+                           WHERE token=?""",
                         (
                             user_id,
                             platform,
@@ -321,29 +473,26 @@ class Registry:
                             environment,
                             version,
                             json.dumps(
-                                dict(
-                                    classes
-                                    if classes is not None
-                                    else json.loads(row["classes"])
-                                ),
+                                dict(classes if classes is not None else saved_classes),
                                 sort_keys=True,
                             ),
                             json.dumps(
-                                dict(
-                                    quiet
-                                    if quiet is not None
-                                    else json.loads(row["quiet"])
-                                ),
+                                dict(quiet if quiet is not None else saved_quiet),
                                 sort_keys=True,
                             ),
                             now,
                             now,
+                            uuid.uuid4().hex,
                             token,
                         ),
                     )
-            return _device(
-                db.execute("SELECT * FROM devices WHERE token=?", (token,)).fetchone()
-            )
+                device = _device(
+                    db.execute(
+                        "SELECT * FROM devices WHERE token=?", (token,)
+                    ).fetchone(),
+                    self.recipient_server_id,
+                )
+            return device
         finally:
             db.close()
 
@@ -353,7 +502,7 @@ class Registry:
             row = db.execute(
                 "SELECT * FROM devices WHERE device_id=?", (device_id,)
             ).fetchone()
-            return None if row is None else _device(row)
+            return None if row is None else _device(row, self.recipient_server_id)
         finally:
             db.close()
 
@@ -364,7 +513,7 @@ class Registry:
                 "SELECT * FROM devices WHERE user_id=? ORDER BY registered_at, device_id",
                 (user_id,),
             ).fetchall()
-            return [_device(row) for row in rows]
+            return [_device(row, self.recipient_server_id) for row in rows]
         finally:
             db.close()
 
@@ -374,26 +523,38 @@ class Registry:
             rows = db.execute(
                 "SELECT * FROM devices WHERE active=1 ORDER BY device_id"
             ).fetchall()
-            return [_device(row) for row in rows]
+            return [_device(row, self.recipient_server_id) for row in rows]
         finally:
             db.close()
 
     def delete_device(self, user_id: int, device_id: str) -> bool:
+        """Unregister a device and every Live Activity token it registered."""
         db = self._connect()
         try:
             with _transaction(db):
-                return (
+                deleted = (
                     db.execute(
                         "DELETE FROM devices WHERE device_id=? AND user_id=?",
                         (device_id, user_id),
                     ).rowcount
                     > 0
                 )
+                if deleted:
+                    for table in ("live_activities", "live_activity_starts"):
+                        db.execute(
+                            f"DELETE FROM {table} WHERE device_id=?", (device_id,)
+                        )
+                return deleted
         finally:
             db.close()
 
     def deactivate(
-        self, device_id: str, reason: str, *, apns_timestamp: float | None = None
+        self,
+        device_id: str,
+        reason: str,
+        *,
+        apns_timestamp: float | None = None,
+        expected: Device | None = None,
     ) -> bool:
         """Stop sending to a token Apple reports dead.
 
@@ -403,19 +564,272 @@ class Registry:
         db = self._connect()
         try:
             with _transaction(db):
-                row = db.execute(
-                    "SELECT registered_at FROM devices WHERE device_id=?", (device_id,)
-                ).fetchone()
-                if row is None or (
-                    apns_timestamp is not None and row["registered_at"] > apns_timestamp
-                ):
+                if expected is not None and expected.device_id != device_id:
                     return False
+                predicates = ["device_id=?", "active=1"]
+                values: list[Any] = [reason[:60], device_id]
+                if expected is not None:
+                    predicates.extend(
+                        (
+                            "user_id=?",
+                            "token=?",
+                            "registered_at=?",
+                            "registration_nonce=?",
+                            "environment=?",
+                            "bundle_id=?",
+                            "EXISTS (SELECT 1 FROM meta WHERE key='recipient_server_id' AND value=?)",
+                        )
+                    )
+                    values.extend(
+                        (
+                            expected.user_id,
+                            expected.token,
+                            expected.registered_at,
+                            expected.registration_nonce,
+                            expected.environment,
+                            expected.bundle_id,
+                            expected.recipient_server_id,
+                        )
+                    )
+                if apns_timestamp is not None:
+                    predicates.append("registered_at<=?")
+                    values.append(apns_timestamp)
                 return (
                     db.execute(
-                        "UPDATE devices SET active=0, deactivated_reason=? WHERE device_id=? AND active=1",
-                        (reason[:60], device_id),
+                        "UPDATE devices SET active=0, deactivated_reason=? WHERE "
+                        + " AND ".join(predicates),
+                        values,
                     ).rowcount
                     > 0
+                )
+        finally:
+            db.close()
+
+    # ---- live activities
+
+    def upsert_live_activity(
+        self,
+        *,
+        user_id: int,
+        device_id: str,
+        server: str,
+        kind: str,
+        token: str,
+        environment: str,
+        bundle_id: str,
+        activity_id: str | None = None,
+        now: float | None = None,
+    ) -> LiveActivityToken:
+        """Register an ActivityKit token for one of the caller's active iPhones.
+
+        The same token always maps to the same id, so registering it again is idempotent.
+        ``created_at`` is when the token was first seen (the activity's age, used for the
+        restart); ``registered_at`` and the nonce change on every registration, which fences a
+        late "token is dead" answer from Apple exactly like device tokens.
+        """
+        now = time.time() if now is None else now
+        token = normalize_token(token)
+        if not isinstance(server, str) or not SERVER_NAME.fullmatch(server):
+            raise RegistryError("server must be a Condor server name")
+        if kind not in LIVE_ACTIVITY_KINDS:
+            raise RegistryError("kind must be update or start")
+        if kind == "update":
+            activity_id = normalize_activity_id(activity_id)
+            if not activity_id:
+                raise RegistryError("an update token needs the activity id (a UUID)")
+        elif activity_id is not None:
+            raise RegistryError("a push-to-start token has no activity id")
+        live_id = live_activity_id_for(token)
+        db = self._connect()
+        try:
+            with _transaction(db):
+                device = db.execute(
+                    "SELECT * FROM devices WHERE device_id=? AND user_id=?",
+                    (device_id, user_id),
+                ).fetchone()
+                if device is None:
+                    raise LookupError("device not found")
+                if not device["active"]:
+                    raise RegistryError("the device is not active; register it again")
+                if device["platform"] != "iphone":
+                    raise RegistryError("Live Activities run on an iPhone registration")
+                if bundle_id != device["bundle_id"]:
+                    raise RegistryError("bundle_id must match the device's bundle")
+                if environment != device["environment"]:
+                    raise RegistryError(
+                        "environment must match the device's environment"
+                    )
+                row = db.execute(
+                    "SELECT * FROM live_activities WHERE token=?", (token,)
+                ).fetchone()
+                if row is None:
+                    db.execute(
+                        "DELETE FROM live_activities WHERE device_id=? AND active=0",
+                        (device_id,),
+                    )
+                    count = db.execute(
+                        "SELECT COUNT(*) FROM live_activities WHERE device_id=?",
+                        (device_id,),
+                    ).fetchone()[0]
+                    if count >= MAX_LIVE_ACTIVITIES_PER_DEVICE:
+                        raise RegistryError(
+                            "too many Live Activity tokens on this device; end one first"
+                        )
+                    db.execute(
+                        """INSERT INTO live_activities (
+                            id,user_id,device_id,server,kind,token,environment,bundle_id,
+                            activity_id,created_at,registered_at,last_sent_at,active,
+                            deactivated_reason,registration_nonce
+                        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,NULL,1,NULL,?)""",
+                        (
+                            live_id,
+                            user_id,
+                            device_id,
+                            server,
+                            kind,
+                            token,
+                            environment,
+                            bundle_id,
+                            activity_id,
+                            now,
+                            now,
+                            uuid.uuid4().hex,
+                        ),
+                    )
+                else:
+                    db.execute(
+                        """UPDATE live_activities SET user_id=?, device_id=?, server=?,
+                           kind=?, environment=?, bundle_id=?, activity_id=?, registered_at=?,
+                           active=1, deactivated_reason=NULL, registration_nonce=?
+                           WHERE token=?""",
+                        (
+                            user_id,
+                            device_id,
+                            server,
+                            kind,
+                            environment,
+                            bundle_id,
+                            activity_id,
+                            now,
+                            uuid.uuid4().hex,
+                            token,
+                        ),
+                    )
+                if kind == "update":
+                    db.execute(
+                        "DELETE FROM live_activity_starts WHERE started_at < ?",
+                        (now - ACTIVITY_START_RETENTION_SECONDS,),
+                    )
+                    db.execute(
+                        "INSERT OR IGNORE INTO live_activity_starts VALUES (?,?,?)",
+                        (device_id, activity_id, now),
+                    )
+                return _live_activity(
+                    db.execute(_LIVE_SELECT + " WHERE l.token=?", (token,)).fetchone()
+                )
+        finally:
+            db.close()
+
+    def delete_live_activity(self, user_id: int, live_id: str) -> bool:
+        db = self._connect()
+        try:
+            with _transaction(db):
+                return (
+                    db.execute(
+                        "DELETE FROM live_activities WHERE id=? AND user_id=?",
+                        (live_id, user_id),
+                    ).rowcount
+                    > 0
+                )
+        finally:
+            db.close()
+
+    def get_live_activity(self, live_id: str) -> LiveActivityToken | None:
+        db = self._connect()
+        try:
+            row = db.execute(_LIVE_SELECT + " WHERE l.id=?", (live_id,)).fetchone()
+            return None if row is None else _live_activity(row)
+        finally:
+            db.close()
+
+    def active_live_activities(self) -> list[LiveActivityToken]:
+        """Active tokens whose device is still active and owned by the same user."""
+        db = self._connect()
+        try:
+            rows = db.execute(
+                _LIVE_SELECT
+                + """ JOIN devices d ON d.device_id = l.device_id AND d.user_id = l.user_id
+                   WHERE l.active=1 AND d.active=1
+                   ORDER BY l.device_id, l.created_at, l.id"""
+            ).fetchall()
+            return [_live_activity(row) for row in rows]
+        finally:
+            db.close()
+
+    def live_activity_owners(self) -> list[tuple[int, str]]:
+        """Distinct (owner, server) pairs among the active tokens, in a stable order."""
+        db = self._connect()
+        try:
+            rows = db.execute(
+                """SELECT DISTINCT l.user_id, l.server FROM live_activities l JOIN devices d
+                   ON d.device_id = l.device_id AND d.user_id = l.user_id
+                   WHERE l.active=1 AND d.active=1
+                   ORDER BY l.user_id, l.server"""
+            ).fetchall()
+            return [(row[0], row[1]) for row in rows]
+        finally:
+            db.close()
+
+    def deactivate_live_activity(
+        self,
+        expected: LiveActivityToken,
+        reason: str,
+        *,
+        apns_timestamp: float | None = None,
+    ) -> bool:
+        """Stop sending to a token Apple reports dead, unless it was registered again since."""
+        predicates = [
+            "id=?",
+            "active=1",
+            "user_id=?",
+            "token=?",
+            "registered_at=?",
+            "registration_nonce=?",
+        ]
+        values: list[Any] = [
+            reason[:60],
+            expected.id,
+            expected.user_id,
+            expected.token,
+            expected.registered_at,
+            expected.registration_nonce,
+        ]
+        if apns_timestamp is not None:
+            predicates.append("registered_at<=?")
+            values.append(apns_timestamp)
+        db = self._connect()
+        try:
+            with _transaction(db):
+                return (
+                    db.execute(
+                        "UPDATE live_activities SET active=0, deactivated_reason=? WHERE "
+                        + " AND ".join(predicates),
+                        values,
+                    ).rowcount
+                    > 0
+                )
+        finally:
+            db.close()
+
+    def mark_live_activities_sent(self, live_ids: Sequence[str], now: float) -> None:
+        if not live_ids:
+            return
+        db = self._connect()
+        try:
+            with _transaction(db):
+                db.executemany(
+                    "UPDATE live_activities SET last_sent_at=? WHERE id=?",
+                    [(now, live_id) for live_id in live_ids],
                 )
         finally:
             db.close()
@@ -563,6 +977,8 @@ class DeliveryRow:
     device_id: str
     attempts: int
     created: float
+    recipient_user_id: int | None
+    recipient_server_id: str | None
 
 
 def backoff_seconds(attempts: int) -> float:
@@ -594,12 +1010,28 @@ class Outbox:
                 event_id TEXT NOT NULL, device_id TEXT NOT NULL, state TEXT NOT NULL DEFAULT 'pending',
                 attempts INTEGER NOT NULL DEFAULT 0, next_attempt REAL NOT NULL, last_error TEXT,
                 apns_id TEXT, sent_at REAL, created REAL NOT NULL, updated REAL NOT NULL,
+                recipient_user_id INTEGER, recipient_server_id TEXT,
                 PRIMARY KEY(event_id, device_id))""",
             "CREATE INDEX IF NOT EXISTS deliveries_due ON deliveries(state, next_attempt)",
             "CREATE TABLE IF NOT EXISTS conditions (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
             "CREATE TABLE IF NOT EXISTS kv (key TEXT PRIMARY KEY, value TEXT NOT NULL)",
         ):
             self.db.execute(statement)
+        # Existing queued deliveries have no trustworthy recipient owner. Keep
+        # them unbound so the deliverer cancels them rather than sending them
+        # to whoever currently owns the same APNs token.
+        with _transaction(self.db):
+            columns = {
+                row["name"] for row in self.db.execute("PRAGMA table_info(deliveries)")
+            }
+            if "recipient_user_id" not in columns:
+                self.db.execute(
+                    "ALTER TABLE deliveries ADD COLUMN recipient_user_id INTEGER"
+                )
+            if "recipient_server_id" not in columns:
+                self.db.execute(
+                    "ALTER TABLE deliveries ADD COLUMN recipient_server_id TEXT"
+                )
 
     # ---- activation and dedup
 
@@ -687,9 +1119,17 @@ class Outbox:
                 for device in devices:
                     if device.active and device.class_enabled(event.cls):
                         created += self.db.execute(
-                            "INSERT OR IGNORE INTO deliveries(event_id,device_id,next_attempt,created,updated) "
-                            "VALUES (?,?,?,?,?)",
-                            (event.id, device.device_id, now, now, now),
+                            "INSERT OR IGNORE INTO deliveries(event_id,device_id,next_attempt,created,updated,recipient_user_id,recipient_server_id) "
+                            "VALUES (?,?,?,?,?,?,?)",
+                            (
+                                event.id,
+                                device.device_id,
+                                now,
+                                now,
+                                now,
+                                device.user_id,
+                                device.recipient_server_id,
+                            ),
                         ).rowcount
         return created
 
@@ -703,7 +1143,8 @@ class Outbox:
 
     def due(self, now: float, limit: int = 100) -> list[DeliveryRow]:
         rows = self.db.execute(
-            """SELECT d.event_id, d.device_id, d.attempts, d.created, e.payload
+            """SELECT d.event_id, d.device_id, d.attempts, d.created,
+                      d.recipient_user_id, d.recipient_server_id, e.payload
                FROM deliveries d JOIN events e ON e.id = d.event_id
                WHERE d.state='pending' AND d.next_attempt <= ?
                ORDER BY d.created, e.occurred, d.device_id LIMIT ?""",
@@ -715,6 +1156,8 @@ class Outbox:
                 r["device_id"],
                 r["attempts"],
                 r["created"],
+                r["recipient_user_id"],
+                r["recipient_server_id"],
             )
             for r in rows
         ]

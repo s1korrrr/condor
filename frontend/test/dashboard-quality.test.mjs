@@ -40,10 +40,11 @@ test('MQTT policy requires fresh matching bot, controller and unambiguous pair; 
  for(const [bot,scope,time] of [['other',row,now],['b',{...row,controllerId:'conflict'},now],['b',{...row,uniquePair:false},now],['b',row,now+31000]]) assert.equal(currentControllerPolicy(page,bot,scope,time),null);
  page.controllers.push(page.controllers[0]);assert.equal(currentControllerPolicy(page,'b',row,now),null);
 });
-test('Research overview failure has one recoverable state and does not start dependent record reads',async()=>{
+test('Research overview failure has one recoverable state and does not start revision-bound record reads',async()=>{
  const {renderResearch,envelope}=await import('./helpers/research-render.mjs');
  const failed=renderResearch({'research-overview':{isError:true,error:new Error('Read failed')}},{search:''});
- assert.equal((failed.html.match(/Read failed/g)||[]).length,1);assert.doesNotMatch(failed.html,/Loading research records|Recorded conclusions/);
+ // Panels with their own reads (the evidence-check queue) keep rendering their own state.
+ assert.equal((failed.html.match(/Read failed/g)||[]).length,1);assert.doesNotMatch(failed.html,/Recorded conclusions/);assert.match(failed.html,/Next evidence checks/);
  assert.ok(!failed.requests.some(q=>q.queryKey[0]==='research-recent-assessments'));
  const recovered=renderResearch({'research-overview':{data:envelope({revision:'r',freshness:{state:'CURRENT'}})}},{search:''});
  assert.match(recovered.html,/Recorded conclusions/);assert.doesNotMatch(recovered.html,/Read failed/);

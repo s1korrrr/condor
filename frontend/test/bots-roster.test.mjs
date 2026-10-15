@@ -5,7 +5,7 @@ import {renderToStaticMarkup} from 'react-dom/server';
 import {createRequire} from 'node:module';
 import {frontendModules} from './helpers/frontend-module.mjs';
 const {QueryClient,QueryClientProvider}=createRequire(import.meta.url)('@tanstack/react-query');
-const {load}=frontendModules({'react-router-dom':{Link:({to,children,...rest})=>React.createElement('a',{href:to,...rest},children),useSearchParams:()=>[new URLSearchParams()]},'@/hooks/useServer':{useServer:()=>({server:'native'})}});
+const {load}=frontendModules({'react-router-dom':{Link:({to,children,...rest})=>React.createElement('a',{href:to,...rest},children),useSearchParams:()=>[new URLSearchParams()],useLocation:()=>({hash:''})},'@/hooks/useServer':{useServer:()=>({server:'native'})}});
 const {RosterObservation,BotsRoster}=load('components/bots/BotsRoster.tsx');
 const {botSourceFreshness,quoteUnavailableReason,historyComparison}=load('features/bots/bot-net.ts');
 const now=Date.parse('2026-09-15T10:00:00Z');
@@ -65,6 +65,8 @@ test('missing or stale lifecycle page never becomes zero active bots',()=>{
   assert.match(card,/0 verified \/ 1/,'an unverified lifecycle counts only verified running bots, labelled as such');
   assert.match(card,/data-state="stale"/);
   assert.doesNotMatch(card,/>0 \/ 1</,'never an unlabelled zero');
+  assert.match(html,/<section[^>]*data-panel-id="B40"[^>]*data-state="collecting"/,'the all-bots fills feed is part of the fleet composite and reads its own source');
+  assert.match(html,/id="fleet-fills"/);
   assert.doesNotMatch(html.match(/<section[^>]*data-panel-id="B-fleet-tiles"[\s\S]*?<\/section>/)?.[0] ?? '',/Unavailable/,'no fleet tile prints Unavailable');
   client.clear();
  }

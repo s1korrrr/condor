@@ -161,6 +161,7 @@ test("browser fleet windows reproduce the shared performance cases (server parit
       missing: window.missing.map((item) => item.bot),
       restarts: Object.fromEntries(window.bots.map((bot) => [bot.bot, bot.restarts])),
       per_bot: Object.fromEntries(window.bots.map((bot) => [bot.bot, Number(bot.change)])),
+      gaps: window.gaps.map((gap) => ({ bot: gap.bot, uncovered_ms: Math.round(gap.uncoveredMs) })),
     };
     assertSame(actual, entry.expected, entry.name);
   }

@@ -38,6 +38,8 @@ from condor.fleet_telegram import (
 )
 from condor.fleet_trade_alerts import source_key
 from condor.push import events as ev
+from condor.push import live_activity as la
+from condor.push import refresh as rf
 from condor.push.apns import ApnsClient, HttpxApnsTransport, ProviderTokens
 from condor.push.config import PushConfig, PushConfigError
 from condor.push.delivery import Deliverer
@@ -201,6 +203,44 @@ class PushWorker:
             market_score,
         )
         self.fleet_sources = FleetSources(fleet, outbox)
+        # Refresh has its own APNs client (same key and transport) so its outcomes stay out of
+        # the alert-delivery health; it honours the deliverer's eligibility and credential pause.
+        self.refresh = (
+            rf.RefreshSender(
+                config,
+                registry,
+                outbox,
+                deliverer,
+                ApnsClient(
+                    deliverer.apns.tokens,
+                    deliverer.apns.transport,
+                    timeout=deliverer.apns.timeout,
+                    clock=clock,
+                ),
+                clock=clock,
+            )
+            if config.refresh.enabled
+            else None
+        )
+        # Live Activity content is published by Condor web into the shared registry; this
+        # worker only sends it. Missing content never blocks alert delivery.
+        self.live_activity = (
+            la.LiveActivitySender(
+                config,
+                registry,
+                outbox,
+                deliverer,
+                ApnsClient(
+                    deliverer.apns.tokens,
+                    deliverer.apns.transport,
+                    timeout=deliverer.apns.timeout,
+                    clock=clock,
+                ),
+                clock=clock,
+            )
+            if config.live_activity.enabled
+            else None
+        )
         self._stopping = asyncio.Event()
         self._last_prune = 0.0
         self.last_cycle_at: float | None = None
@@ -286,6 +326,18 @@ class PushWorker:
         self._summary(infos, devices, now)
         await self._market(devices, now)
         await self.deliverer.deliver_due()
+        if self.refresh is not None:
+            await self.refresh.send_due()
+        if self.live_activity is not None:
+            # Isolated: a failing Live Activity pass never touches alert health or the rest
+            # of this cycle.
+            try:
+                await self.live_activity.send_due()
+            except Exception as exc:  # noqa: BLE001
+                self.live_activity.record_failure(exc)
+                logger.warning(
+                    "live activity pass failed error=%s", exc.__class__.__name__
+                )
         self._finish_test_requests()
         if now - self._last_prune >= PRUNE_EVERY_SECONDS:
             self._last_prune = now
@@ -303,6 +355,7 @@ class PushWorker:
             source.native_bot_name,
             ev.bot_tag(source.native_bot_name, source.label, self.config.labels),
             quote_currency,
+            paper=ev.is_paper(source.native_bot_name),
         )
 
     def _ingest(
@@ -540,6 +593,16 @@ class PushWorker:
                 "auth_ok": apns.auth_ok,
             },
             "sources": self.source_status,
+            **(
+                {"refresh": self.refresh.heartbeat()}
+                if self.refresh is not None
+                else {}
+            ),
+            **(
+                {"live_activity": self.live_activity.heartbeat()}
+                if self.live_activity is not None
+                else {}
+            ),
             "external_ping": {
                 "configured": self.ping.configured,
                 "last_success_at": self.ping.last_success_at,

@@ -163,7 +163,14 @@ class ApnsRequest:
     body: bytes
 
 
-def build_payload(event: AlertEvent, *, silent: bool) -> dict[str, Any]:
+def build_payload(
+    event: AlertEvent,
+    *,
+    silent: bool,
+    recipient_user_id: int | None = None,
+    recipient_device_id: str | None = None,
+    recipient_server_id: str | None = None,
+) -> dict[str, Any]:
     """The notification. No action buttons: categories open the app and nothing else."""
     level = "passive" if silent else interruption_level(event.severity)
     aps: dict[str, Any] = {
@@ -184,6 +191,22 @@ def build_payload(event: AlertEvent, *, silent: bool) -> dict[str, Any]:
     }
     if event.bot:
         meta["bot"] = event.bot
+    if any(
+        value is not None
+        for value in (recipient_user_id, recipient_device_id, recipient_server_id)
+    ):
+        if (
+            type(recipient_user_id) is not int
+            or recipient_user_id <= 0
+            or not isinstance(recipient_device_id, str)
+            or not recipient_device_id
+            or not isinstance(recipient_server_id, str)
+            or not recipient_server_id
+        ):
+            raise ValueError("notification recipient binding is invalid")
+        meta["recipient_user_id"] = str(recipient_user_id)
+        meta["recipient_device_id"] = recipient_device_id
+        meta["recipient_server_id"] = recipient_server_id
     return {"aps": aps, "rsibot": meta}
 
 
@@ -212,6 +235,8 @@ def build_request(
     now: float,
     expires_at: float,
     silent: bool,
+    recipient_user_id: int | None = None,
+    recipient_server_id: str | None = None,
 ) -> ApnsRequest:
     level = "passive" if silent else interruption_level(event.severity)
     headers = {
@@ -229,7 +254,17 @@ def build_request(
         environment=environment,
         path=f"/3/device/{token}",
         headers=headers,
-        body=encode_payload(build_payload(event, silent=silent)),
+        body=encode_payload(
+            build_payload(
+                event,
+                silent=silent,
+                recipient_user_id=recipient_user_id,
+                recipient_device_id=(
+                    device_id if recipient_user_id is not None else None
+                ),
+                recipient_server_id=recipient_server_id,
+            )
+        ),
     )
 
 

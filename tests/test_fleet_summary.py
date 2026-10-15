@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from condor.performance_history import PerformanceHistory
+from condor.web import fleet_pnl
 from condor.web import fleet_summary as fs
 from condor.web import market_verdict as mv
 from condor.web.auth import get_current_user
@@ -57,7 +58,8 @@ def seed(store, bots=("ok_rsi", "rsi_modular_v2")):
         for bot in bots:
             for minutes, total, realized in rows.get(bot, [(300, 0, 0), (1, 1, 0.5)]):
                 conn.execute(
-                    "INSERT INTO points VALUES (?,?,?,?,?,?,?,?,?)",
+                    # A paper bot's simulated history lives apart from live points.
+                    f"INSERT INTO {'paper_points' if fs.is_paper(bot) else 'points'} VALUES (?,?,?,?,?,?,?,?,?)",
                     (
                         SERVER,
                         bot,
@@ -167,6 +169,9 @@ def fills(bot, base):
                 "exact_price": "2000.5",
                 "value_quote_exact": "200.05",
                 "exact_trade_fee_in_quote": "0.2",
+                # As reporting emits an admitted receipt (sqlite_reader._normalized_fills).
+                "exact_receipt_source": "order_filled_event_v1",
+                "receipt_precision": {"amount": "exact_decimal", "price": "exact_decimal", "fee_quote": "exact_decimal"},
                 "timestamp": iso(base),
             },
             {
@@ -178,6 +183,7 @@ def fills(bot, base):
                 "price_quote": 60000,
                 "gross_volume_quote": 600,
                 "fee_quote": 0.6,
+                "receipt_precision": {"amount": "legacy_6dp", "price": "legacy_6dp", "fee_quote": "legacy_6dp"},
                 "timestamp": iso(base - 60_000),
             },
             {
@@ -403,15 +409,22 @@ async def test_full_summary_golden_numbers(store):
     assert ok["net_now"] == {"value": "3.5", "unit": "USDC", "source": "controller"}
     assert ok["fees"] == {"amount": "0.42", "unit": "USDC"}
     assert ok["trades"] == {"lifetime": 12, "opened_24h": 2, "closed_24h": 1}
-    assert (
-        paper["paper"] is True
-        and paper["pnl_day"] is None
-        and {"field": "pnl_day", "reason": fs.PAPER_EXCLUDED} in paper["missing"]
-    )
-    assert all(
-        m.get("bot") != "ok_rsi_paper" or m["field"] != "pnl_day"
-        for m in body["missing"]
-    ), "paper exclusion is not a data gap"
+    # A paper card carries its own simulated numbers; they never enter the fleet windows above.
+    assert paper["paper"] is True and paper["missing"] == []
+    assert paper["pnl_day"] == {
+        "change": "4",
+        "unit": "USDC",
+        "partial": True,
+        "stale": False,
+        "simulated": True,
+    }
+    assert paper["net_now"] == {
+        "value": "9",
+        "unit": "USDC",
+        "source": "controller",
+        "simulated": True,
+    }
+    assert all(m.get("bot") != "ok_rsi_paper" for m in body["missing"])
 
     assert [(f["bot"], f["fill_id"]) for f in body["fills"]][:3] == [
         ("rsi_modular_v2", "rsi_modular_v2-1"),
@@ -518,6 +531,38 @@ async def test_incidents_are_admin_only(store):
 
 
 @sync
+async def test_a_paper_bot_alone_does_not_make_the_bots_section_partial(tmp_path):
+    empty = PerformanceHistory(tmp_path / "native-performance.sqlite3")
+    seed(empty, ("ok_rsi",))  # the paper bot has no recorded history yet
+    body = await build(empty, registry=["ok_rsi", "ok_rsi_paper"])
+    paper = card(body, "ok_rsi_paper")
+    assert paper["pnl_day"] is None
+    assert [m["reason"] for m in paper["missing"]] == [fleet_pnl.NO_SAMPLES]
+    assert all(m.get("bot") != "ok_rsi_paper" for m in body["missing"])
+    assert body["sections"]["bots"]["status"] == "ok", body["sections"]["bots"]
+    assert body["sections"]["bots"]["reason"] is None
+
+
+@sync
+async def test_paper_numbers_never_enter_the_fleet_pnl_wallet_or_fills(store):
+    with_paper = await build(store)
+    without = await build(store, registry=["ok_rsi", "rsi_modular_v2"])
+    for key in ("pnl", "wallet", "fills"):
+        assert with_paper[key] == without[key], key
+    assert [f["bot"] for f in with_paper["paper_fills"]] == ["ok_rsi_paper"] * len(
+        with_paper["paper_fills"]
+    )
+    assert with_paper["paper_fills"] and all(
+        f["simulated"] is True for f in with_paper["paper_fills"]
+    )
+    assert without["paper_fills"] is None
+    glance_body = await build(store, "glance")
+    assert "paper_fills" not in glance_body
+    paper = next(b for b in glance_body["bots"] if b["bot"] == "ok_rsi_paper")
+    assert paper["paper"] is True and paper["pnl_day"] == "4"
+
+
+@sync
 async def test_staleness_is_flagged_not_hidden(store):
     body = await build(store, now_ms=NOW_MS + 10 * 60_000)
     assert (
@@ -596,7 +641,7 @@ async def test_glance_is_a_consistent_compact_projection(store):
     for name in ("day", "week", "month", "all"):
         assert glance["pnl"][name] == {
             k: full["pnl"][name][k]
-            for k in ("total", "partial", "counted", "expected", "stale")
+            for k in ("total", "partial", "counted", "expected", "stale", "uncovered_ms")
         }
     verdict = full["market"]["verdict"]
     assert (
@@ -668,10 +713,21 @@ def test_names_and_generations():
     )
     assert [
         fs.generation(b)
-        for b in ("ok_rsi", "rsi_v5", "rsi_modular_v2", "meridian_v3", "mystery")
-    ] == ["V1", "V1", "V2", "V3", None]
+        for b in (
+            "ok_rsi",
+            "rsi_v5",
+            "rsi_modular_v2",
+            "meridian_v3",
+            "meridian_v4_paper",
+            "meridian_v4_d2h_paper",
+            "mystery",
+            "v40_bot",
+        )
+    ] == ["V1", "V1", "V2", "V3", "V4", "V4", None, None]
     assert (
-        fs.is_paper("ok_rsi_paper")
+        fs.is_paper("meridian_v4_paper")
+        and fs.is_paper("meridian_v4_d2h_paper")
+        and fs.is_paper("ok_rsi_paper")
         and fs.is_paper("paper-v2")
         and not fs.is_paper("papermill")
     )
@@ -772,3 +828,53 @@ def test_route_micro_cache_serves_a_burst_from_one_computation(monkeypatch, stor
     calls = len(readers.calls)
     second = client.get(f"/api/v1/servers/{SERVER}/fleet/summary?view=glance")
     assert first.content == second.content and len(readers.calls) == calls and calls > 0
+
+
+@sync
+async def test_a_recording_gap_makes_pnl_incomplete_even_with_full_coverage(tmp_path):
+    # Contract (fleet-summary-v1.md `gaps`): a window with an unrecorded stretch is incomplete. Every bot
+    # covers every window here, so only the 5 h day gap can make the section partial.
+    store = PerformanceHistory(tmp_path / "gapped.sqlite3")
+    rows = []
+    for bot in BOTS:
+        for minutes in range(41 * 1440, 0, -1):
+            if bot == "rsi_modular_v2" and 300 <= minutes <= 600:
+                continue
+            total = 1 + minutes / 1e5
+            rows.append((SERVER, bot, NOW_S - minutes * 60, f"boot-{bot}", f"seg-{bot}", "USDC",
+                         str(total / 2), str(total / 2), str(total)))
+    with store._connect() as conn:
+        conn.executemany("INSERT INTO points VALUES (?,?,?,?,?,?,?,?,?)", rows)
+    body = await build(store)
+    day = body["pnl"]["day"]
+    assert day["counted"] == day["expected"] == 2 and day["partial"] is False, "both live bots cover the day (paper is not in fleet PnL)"
+    assert [gap["bot"] for gap in day["gaps"]] == ["rsi_modular_v2"]
+    assert all(
+        body["pnl"][name]["counted"] == 2 and not body["pnl"][name]["partial"] for name in ("week", "month")
+    ), "every window is fully covered; only the unrecorded stretch is incomplete"
+    assert body["sections"]["pnl"]["status"] == "partial"
+    assert day["uncovered_ms"] == day["gaps"][0]["uncovered_ms"] > 0
+    glance = await build(store, "glance")
+    assert glance["sections"]["pnl"]["status"] == "partial"
+    # The glance carries no `gaps` list: each window's own unrecorded total is what the Watch can show.
+    assert glance["pnl"]["day"]["uncovered_ms"] == day["uncovered_ms"]
+
+
+@sync
+async def test_an_older_gap_leaves_the_current_day_complete(tmp_path):
+    # A gap two days ago is incomplete for the week, month and all windows only; the day is fully observed.
+    store = PerformanceHistory(tmp_path / "old-gap.sqlite3")
+    rows = []
+    for bot in BOTS:
+        for minutes in range(41 * 1440, 0, -1):
+            if bot == "rsi_modular_v2" and 2 * 1440 <= minutes <= 2 * 1440 + 300:
+                continue
+            total = 1 + minutes / 1e5
+            rows.append((SERVER, bot, NOW_S - minutes * 60, f"boot-{bot}", f"seg-{bot}", "USDC",
+                         str(total / 2), str(total / 2), str(total)))
+    with store._connect() as conn:
+        conn.executemany("INSERT INTO points VALUES (?,?,?,?,?,?,?,?,?)", rows)
+    for view in ("full", "glance"):
+        pnl = (await build(store, view))["pnl"]
+        assert pnl["day"]["uncovered_ms"] == 0 and not pnl["day"]["partial"], view
+        assert all(pnl[name]["uncovered_ms"] > 0 for name in ("week", "month", "all")), view

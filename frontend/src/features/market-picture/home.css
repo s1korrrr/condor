@@ -51,6 +51,7 @@
 .mp-ladder { display: grid; gap: 4px; }
 .mp-page .mp-ladder__row { display: grid; grid-template-columns: 34px minmax(0, 1fr) 48px; align-items: center; gap: 8px; width: 100%; min-height: 26px; padding: 3px 6px; border-color: transparent; background: transparent; text-align: left; }
 .mp-page .mp-ladder__row[aria-pressed=true] { background: #0e3150; border-color: #3979ac; }
+.mp-page .mp-ladder__row[aria-pressed=true] .mp-down { color: #ff7082; }
 .mp-ladder__label { font-size: 11px; color: var(--mp-muted); }
 .mp-ladder__bar { display: flex; height: 10px; border-radius: 3px; overflow: hidden; background: #0d2a40; gap: 1px; }
 .mp-ladder__bar i { display: block; min-width: 0; }

@@ -59,11 +59,12 @@ function HeatCell({ asset, horizon }: { asset: DisplayAsset; horizon: string }) 
   const heat = returnHeat(asset, horizon);
   if (heat.value === null) return <span className="mp-heat" data-empty>—</span>;
   const tone = heat.value === 0 ? "var(--mp-unchanged)" : heat.value > 0 ? "var(--mp-positive)" : "var(--mp-negative)";
+  // Cap the tint at 44% so small return labels remain readable at full intensity.
   return (
     <span
       className="mp-heat"
       title={`${horizonLabel(horizon)} return ${asset.returns[horizon].original}% · tint = move ÷ 2× its volatility-implied move`}
-      style={{ background: `color-mix(in srgb, ${tone} ${Math.round(8 + heat.intensity * 52)}%, transparent)` }}
+      style={{ background: `color-mix(in srgb, ${tone} ${Math.round(8 + heat.intensity * 36)}%, transparent)` }}
     >
       {signedPercent(heat.value, Math.abs(heat.value) < 0.1 ? 3 : 2)}
     </span>

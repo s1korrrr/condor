@@ -297,6 +297,7 @@ export function MarketPulseHero({
             <span className="mp-panel-detail" role="status">
               {pulse.label}
               {smooth ? ` · pressure line is a ${SMOOTHING_MINUTES}-minute rolling mean, raw grey` : " · raw one-minute pressure"}
+              {" · filled area shows breadth pressure from zero"}
             </span>
             <div className="mp-segment" role="group" aria-label="Pressure smoothing">
               <button aria-pressed={smooth} onClick={() => setSmooth(true)} title={`Trailing ${SMOOTHING_MINUTES}-minute mean of the stored one-minute pressure; raw values stay in the tooltip`}>

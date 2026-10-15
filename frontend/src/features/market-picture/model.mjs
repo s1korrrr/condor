@@ -142,6 +142,8 @@ export function rankSideEmptyLabel(side, qualified, expected, warming) {
 }
 
 const durationLabel = (ms) => {
+  if (ms < 60_000) return "<1m";
+  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m`;
   const hours = ms / 3_600_000;
   return hours < 24 ? `${Math.max(0, Math.floor(hours))}h` : `${(hours / 24).toFixed(1).replace(/\.0$/, "")}d`;
 };
@@ -152,6 +154,7 @@ export function marketPulseWindow(history, window) {
   if (!history.length) return { samples: [], label: `Requested ${window} · no retained observations` };
   const end = history[history.length - 1].time;
   const samples = history.filter((point) => point.time >= end - requestedMs);
+  if (samples.length === 1) return { samples, label: `Requested ${window} · single retained observation` };
   const availableMs = Math.max(0, samples[samples.length - 1].time - samples[0].time);
   return { samples, label: `Requested ${window} · available ${durationLabel(availableMs)}` };
 }
@@ -166,9 +169,10 @@ export function heatmapColor(value) {
   if (value == null || !Number.isFinite(value)) return "#182b3d";
   if (value === 0) return "#536b80";
   const intensity = Math.min(Math.abs(value) / 10, 1);
+  // Keep the fixed pale treemap labels above 4.5:1 across the saturated palette.
   return value > 0
-    ? `hsl(162 83% ${18 + 24 * intensity}%)`
-    : `hsl(351 70% ${22 + 29 * intensity}%)`;
+    ? `hsl(162 83% ${18 + 8 * intensity}%)`
+    : `hsl(351 70% ${22 + 26 * intensity}%)`;
 }
 /** Layout area only. Owner weights are prior-day quote-volume shares. */
 export function heatmapAreas(weights, equal = false) {

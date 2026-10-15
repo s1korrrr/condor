@@ -230,3 +230,24 @@ test('maker/taker keeps the owner unclassified bucket instead of printing 0/0', 
   const tile = byId(projectFleetTiles([bot('v1'), plainLimit], now)).B37;
   assert.match(tile.basis, /maker 5 \/ taker 1 · 43 unclassified/);
 });
+
+test('paper bots never add to fleet tiles; they get their own clearly labelled count', () => {
+  const live = bot('rsi');
+  const paperA = bot('meridian_v4_paper', { execution: { fillRatio: 0.1, makerCount: 0, takerCount: 9, orderSampleSufficient: true, funnel: funnel(100, 10) } });
+  const paperB = bot('meridian_v4_d2h_paper', { status: 'stopped' });
+  const tiles = byId(projectFleetTiles([live, paperA, paperB], now));
+  const alone = byId(projectFleetTiles([live], now));
+  for (const id of ['B01', 'B26', 'B03', 'B27', 'B03-entries', 'B05', 'B36', 'B37', 'B38', 'B38-restarts']) {
+    assert.equal(tiles[id].value, alone[id].value, `${id} counts live bots only`);
+    assert.ok(tiles[id].perBot.every(row => !/paper/i.test(row.bot)), `${id} lists no paper bot`);
+  }
+  assert.equal(tiles.B01.value, '1 / 1');
+  assert.match(tiles.B01.basis, /\+2 paper bots, not counted/);
+  assert.equal(tiles['B01-paper'].value, '+2');
+  assert.equal(tiles['B01-paper'].unit, 'paper');
+  assert.deepEqual(tiles['B01-paper'].perBot.map(row => row.bot), ['meridian_v4_paper', 'meridian_v4_d2h_paper']);
+  assert.equal(alone['B01-paper'], undefined, 'no paper tile without paper bots');
+  const onlyPaper = projectFleetTiles([paperA], now);
+  assert.deepEqual(onlyPaper.map(tile => tile.id), ['B01-paper'], 'paper alone never produces live fleet figures');
+  assert.match(tileNote(onlyPaper[0]), /not counted/);
+});

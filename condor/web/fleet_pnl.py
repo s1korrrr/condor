@@ -29,6 +29,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal, InvalidOperation
 from typing import Any, Optional
 
+from condor.fleet_identity import is_paper
 from condor.performance_history import PERFORMANCE_BUCKETS
 
 RANGE_SPAN_MS = {"1D": 86_400_000, "1W": 7 * 86_400_000, "1M": 30 * 86_400_000}
@@ -107,8 +108,12 @@ def parse_bot_history(
         range_ in PERFORMANCE_BUCKETS and bucket == PERFORMANCE_BUCKETS[range_]
     )
     rows = payload.get("points")
+    # A paper bot's history is simulated and recorded from reporting; a live bot's is native. Never crossed.
+    paper = is_paper(bot)
+    expected_source = "reporting_paper_runtime" if paper else "native_mqtt_observer"
     if (
-        payload.get("source") != "native_mqtt_observer"
+        payload.get("source") != expected_source
+        or (paper and payload.get("simulated") is not True)
         or payload.get("bot_name") != bot
         or payload.get("range") != range_
         or not valid_bucket

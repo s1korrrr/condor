@@ -128,7 +128,7 @@
    "paper": true,
    "status": "running",
    "report_stale": false,
-   "pnl_day": null
+   "pnl_day": "4"
   }
  ],
  "bots_total": 3,

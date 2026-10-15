@@ -11,6 +11,7 @@ from pathlib import Path
 from uuid import uuid4
 
 from condor.fetchers.bots import extract_bots_list, _native_observation_times
+from condor.fleet_identity import is_paper
 from condor.wallet_observation import complete_wallet_balances
 
 RANGES = {"1D": 86400, "1W": 604800, "1M": 2592000, "ALL": 31536000}
@@ -140,6 +141,14 @@ class PerformanceHistory:
                 "CREATE TABLE IF NOT EXISTS cursors (server TEXT, bot TEXT, timestamp REAL, identity TEXT, segment TEXT, sampled REAL, valid INTEGER, PRIMARY KEY(server,bot))"
             )
             conn.execute("CREATE INDEX IF NOT EXISTS points_timestamp ON points(timestamp)")
+            # Paper bots: simulated points from the reporting runtime status, never mixed with live points.
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS paper_points (server TEXT, bot TEXT, timestamp REAL, identity TEXT, segment TEXT, quote TEXT, realized_pnl_quote TEXT, unrealized_pnl_quote TEXT, total_pnl_quote TEXT, PRIMARY KEY(server,bot,timestamp))"
+            )
+            conn.execute(
+                "CREATE TABLE IF NOT EXISTS paper_cursors (server TEXT, bot TEXT, timestamp REAL, identity TEXT, segment TEXT, sampled REAL, valid INTEGER, PRIMARY KEY(server,bot))"
+            )
+            conn.execute("CREATE INDEX IF NOT EXISTS paper_points_timestamp ON paper_points(timestamp)")
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS wallet_points (server TEXT, bot TEXT, timestamp REAL, currency TEXT, value_quote TEXT, source_id TEXT, PRIMARY KEY(server,bot,timestamp))"
             )
@@ -206,6 +215,8 @@ class PerformanceHistory:
             "truncated": False,
             "latest": None,
         }
+        if is_paper(bot):
+            result["simulated"] = True  # a paper bot's wallet is simulated equity, never capital
         if not self.path.exists():
             return result
         with closing(sqlite3.connect(f"file:{self.path.resolve()}?mode=ro", uri=True)) as conn:
@@ -257,6 +268,47 @@ class PerformanceHistory:
         )
         return result
 
+    @staticmethod
+    def _store_point(conn, points, cursors, server, name, point):
+        """Forward-only, about one sample a minute; an owner change, a gap or an invalid read starts a segment."""
+        previous = conn.execute(
+            f"SELECT * FROM {cursors} WHERE server=? AND bot=?", (server, name)
+        ).fetchone()
+        stamp = point["timestamp"]
+        if previous and stamp <= previous["timestamp"]:
+            return
+        split = (
+            not previous
+            or not previous["valid"]
+            or previous["identity"] != point["identity"]
+            or stamp - previous["timestamp"] > 90
+        )
+        segment = uuid4().hex if split else previous["segment"]
+        sampled = (
+            stamp
+            if split or stamp - previous["sampled"] >= 60
+            else previous["sampled"]
+        )
+        if sampled == stamp:
+            conn.execute(
+                f"INSERT OR IGNORE INTO {points} VALUES (?,?,?,?,?,?,?,?,?)",
+                (
+                    server,
+                    name,
+                    stamp,
+                    point["identity"],
+                    segment,
+                    point["quote"],
+                    point["realized_pnl_quote"],
+                    point["unrealized_pnl_quote"],
+                    point["total_pnl_quote"],
+                ),
+            )
+        conn.execute(
+            f"INSERT OR REPLACE INTO {cursors} VALUES (?,?,?,?,?,?,1)",
+            (server, name, stamp, point["identity"], segment, sampled),
+        )
+
     def record(self, server, raw, now=None):
         now = time.time() if now is None else now
         with self._connect() as conn:
@@ -264,6 +316,9 @@ class PerformanceHistory:
             for bot in extract_bots_list(raw):
                 name = bot.get("bot_name")
                 if not isinstance(name, str) or not name:
+                    continue
+                if is_paper(name):
+                    # A paper bot is never a live PnL source, whatever the API publishes for it.
                     continue
                 seen.add(name)
                 try:
@@ -274,43 +329,7 @@ class PerformanceHistory:
                         (server, name),
                     )
                     continue
-                previous = conn.execute(
-                    "SELECT * FROM cursors WHERE server=? AND bot=?", (server, name)
-                ).fetchone()
-                stamp = point["timestamp"]
-                if previous and stamp <= previous["timestamp"]:
-                    continue
-                split = (
-                    not previous
-                    or not previous["valid"]
-                    or previous["identity"] != point["identity"]
-                    or stamp - previous["timestamp"] > 90
-                )
-                segment = uuid4().hex if split else previous["segment"]
-                sampled = (
-                    stamp
-                    if split or stamp - previous["sampled"] >= 60
-                    else previous["sampled"]
-                )
-                if sampled == stamp:
-                    conn.execute(
-                        "INSERT OR IGNORE INTO points VALUES (?,?,?,?,?,?,?,?,?)",
-                        (
-                            server,
-                            name,
-                            stamp,
-                            point["identity"],
-                            segment,
-                            point["quote"],
-                            point["realized_pnl_quote"],
-                            point["unrealized_pnl_quote"],
-                            point["total_pnl_quote"],
-                        ),
-                    )
-                conn.execute(
-                    "INSERT OR REPLACE INTO cursors VALUES (?,?,?,?,?,?,1)",
-                    (server, name, stamp, point["identity"], segment, sampled),
-                )
+                self._store_point(conn, "points", "cursors", server, name, point)
             for row in conn.execute(
                 "SELECT bot FROM cursors WHERE server=?", (server,)
             ).fetchall():
@@ -323,10 +342,30 @@ class PerformanceHistory:
                 "DELETE FROM points WHERE timestamp < ?", (now - RANGES["ALL"],)
             )
 
+    def record_paper(self, server, samples, now=None):
+        """Simulated paper points (``paper_performance.paper_samples``); None marks a gap for that bot."""
+        now = time.time() if now is None else now
+        with self._connect() as conn:
+            for name, point in samples.items():
+                if not is_paper(name):
+                    continue
+                if point is None or float(point["timestamp"]) > now + 5:
+                    conn.execute(
+                        "UPDATE paper_cursors SET valid=0 WHERE server=? AND bot=?",
+                        (server, name),
+                    )
+                    continue
+                self._store_point(conn, "paper_points", "paper_cursors", server, name, point)
+            conn.execute(
+                "DELETE FROM paper_points WHERE timestamp < ?", (now - RANGES["ALL"],)
+            )
+
     def read(self, server, bot, period, now=None):
         now = time.time() if now is None else now
+        paper = is_paper(bot)
+        table = "paper_points" if paper else "points"
         result = {
-            "source": "native_mqtt_observer",
+            "source": "reporting_paper_runtime" if paper else "native_mqtt_observer",
             "bot_name": bot,
             "range": period,
             "coverage_start": None,
@@ -334,14 +373,19 @@ class PerformanceHistory:
             "points": [],
             "truncated": False,
         }
+        if paper:
+            result["simulated"] = True
         if not self.path.exists():
             return result
         with closing(
             sqlite3.connect(f"file:{self.path.resolve()}?mode=ro", uri=True)
         ) as conn:
             conn.row_factory = sqlite3.Row
+            tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'")}
+            if table not in tables:
+                return result
             start = conn.execute(
-                "SELECT MIN(timestamp) FROM points WHERE server=? AND bot=?",
+                f"SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=?",
                 (server, bot),
             ).fetchone()[0]
             bucket = PERFORMANCE_BUCKETS[period]
@@ -349,15 +393,15 @@ class PerformanceHistory:
             since = now - RANGES[period]
             if bucket is None:
                 rows = conn.execute(
-                    f"SELECT {columns} FROM points WHERE server=? AND bot=? AND timestamp>=? ORDER BY timestamp DESC LIMIT 10001",
+                    f"SELECT {columns} FROM {table} WHERE server=? AND bot=? AND timestamp>=? ORDER BY timestamp DESC LIMIT 10001",
                     (server, bot, since),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    f"SELECT {columns} FROM points WHERE server=? AND bot=? AND timestamp>=? AND ("
-                    "timestamp IN (SELECT MAX(timestamp) FROM points WHERE server=? AND bot=? AND timestamp>=? "
+                    f"SELECT {columns} FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND ("
+                    f"timestamp IN (SELECT MAX(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? "
                     "GROUP BY segment, CAST(timestamp/? AS INTEGER)) "
-                    "OR timestamp IN (SELECT MIN(timestamp) FROM points WHERE server=? AND bot=? AND timestamp>=? GROUP BY segment)"
+                    f"OR timestamp IN (SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? GROUP BY segment)"
                     ") ORDER BY timestamp DESC LIMIT 10001",
                     (server, bot, since, server, bot, since, bucket, server, bot, since),
                 ).fetchall()

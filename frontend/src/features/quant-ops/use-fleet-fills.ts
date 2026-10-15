@@ -1,6 +1,6 @@
 import { keepPreviousData, useInfiniteQuery } from '@tanstack/react-query';
 import { authFetch } from '@/lib/auth-token';
-import { FLEET_FILLS_DEFAULT_LIMIT, fleetFillsPath, parseFleetFills, type FleetFillSide, type FleetFillsPage } from '@/lib/fleet-fills';
+import { FLEET_FILLS_DEFAULT_LIMIT, fleetFillsPath, parseFleetFills, type FleetFillSide, type FleetFillsPage, type FleetFillsScope } from '@/lib/fleet-fills';
 
 export type FleetFillsFilters = { bots: readonly string[]; side: FleetFillSide | null; pair: string | null };
 export const NO_FLEET_FILL_FILTERS: FleetFillsFilters = { bots: [], side: null, pair: null };
@@ -11,14 +11,14 @@ export const NO_FLEET_FILL_FILTERS: FleetFillsFilters = { bots: [], side: null, 
  * from the top, so the list never keeps a gap between new fills and an older continuation. Changing a filter keeps the
  * previous rows on screen until the filtered read arrives. The rows and their order are the server's.
  */
-export function useFleetFills(server: string | null, filters: FleetFillsFilters = NO_FLEET_FILL_FILTERS, limit = FLEET_FILLS_DEFAULT_LIMIT) {
+export function useFleetFills(server: string | null, filters: FleetFillsFilters = NO_FLEET_FILL_FILTERS, limit = FLEET_FILLS_DEFAULT_LIMIT, scope: FleetFillsScope = 'live') {
   const bots = [...filters.bots].sort();
   return useInfiniteQuery({
-    queryKey: ['fleet-fills', server, limit, bots, filters.side, filters.pair],
+    queryKey: ['fleet-fills', server, scope, limit, bots, filters.side, filters.pair],
     enabled: Boolean(server),
     initialPageParam: null as string | null,
     queryFn: async ({ pageParam, signal }): Promise<FleetFillsPage> => {
-      const response = await authFetch(fleetFillsPath(server!, { limit, before: pageParam, bots, side: filters.side, pair: filters.pair }), { signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) });
+      const response = await authFetch(fleetFillsPath(server!, { scope, limit, before: pageParam, bots, side: filters.side, pair: filters.pair }), { signal: AbortSignal.any([signal, AbortSignal.timeout(20_000)]) });
       if (!response.ok) throw Object.assign(new Error(`Fleet fills request failed (${response.status})`), { status: response.status });
       return parseFleetFills(await response.json());
     },

@@ -49,6 +49,16 @@ test('a different schema is refused explicitly, never guessed', () => {
   assert.throws(() => client.parseFleetFills([]), /not an object/);
 });
 
+test('a V4 bot keeps its generation and a paper bot stays marked paper', () => {
+  const body = structuredClone(example('page_first'));
+  body.items[0].generation = 'V4';
+  body.bots[0] = { ...body.bots[0], bot: 'meridian_v4_paper', display_name: 'meridian_v4_paper', generation: 'V4', paper: true };
+  const page = client.parseFleetFills(body);
+  assert.equal(page.items[0].generation, 'V4');
+  assert.equal(page.bots[0].generation, 'V4');
+  assert.equal(page.bots[0].paper, true);
+});
+
 test('extra fields are ignored (v1 only adds) and unknown enums fall back without inventing a value', () => {
   const body = structuredClone(example('page_first'));
   body.new_in_v1_1 = { anything: true };

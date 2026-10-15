@@ -4,6 +4,8 @@ import logging
 import math
 from typing import Any, Optional
 
+from condor.fleet_identity import is_paper
+
 logger = logging.getLogger(__name__)
 
 
@@ -143,7 +145,13 @@ def build_bots_page(
         bot_status = bot_data.get("status", "unknown")
         performance = bot_data.get("performance", {})
         native = bot_data.get("source") == "native_mqtt"
-        if native and (not isinstance(performance, dict) or not performance):
+        paper_bot = is_paper(str(bot_name))
+        # Fleet metric completeness is a live-capital verdict; a paper bot never decides it.
+        if (
+            native
+            and not paper_bot
+            and (not isinstance(performance, dict) or not performance)
+        ):
             metrics_available = False
         if (
             bot_data.get("source") == "native_mqtt"
@@ -152,7 +160,8 @@ def build_bots_page(
             # Shared/retained/stale MQTT observations cannot establish current
             # controller identity. Never revive them through DB enrichment.
             performance = {}
-            metrics_available = False
+            if not paper_bot:
+                metrics_available = False
         error_logs = bot_data.get("error_logs", [])
         general_logs = bot_data.get("general_logs", [])
         if not isinstance(error_logs, list):
@@ -165,7 +174,7 @@ def build_bots_page(
         if isinstance(performance, dict):
             for ctrl_name, ctrl_info in performance.items():
                 if not isinstance(ctrl_info, dict):
-                    if native:
+                    if native and not paper_bot:
                         metrics_available = False
                     continue
 
@@ -222,7 +231,10 @@ def build_bots_page(
                     )
                     global_pnl_pct = _native_number(live_perf, "global_pnl_pct")
                     volume = _native_number(live_perf, "volume_traded")
-                    if None in (realized, unrealized, global_pnl_pct, volume):
+                    if (
+                        None in (realized, unrealized, global_pnl_pct, volume)
+                        and not paper_bot
+                    ):
                         metrics_available = False
                 else:
                     realized = _pick(live_perf, db_perf, "realized_pnl_quote")
@@ -269,9 +281,10 @@ def build_bots_page(
                                 connector = "_".join(parts[:i])
                             break
 
-                if global_pnl is not None:
+                # Fleet totals are live capital: a paper bot's controllers keep their own rows but never add in.
+                if global_pnl is not None and not paper_bot:
                     total_pnl += global_pnl
-                if volume is not None:
+                if volume is not None and not paper_bot:
                     total_volume += volume
 
                 config_cname = ctrl_config.get("controller_name", "")

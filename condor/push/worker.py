@@ -355,6 +355,7 @@ class PushWorker:
             source.native_bot_name,
             ev.bot_tag(source.native_bot_name, source.label, self.config.labels),
             quote_currency,
+            paper=ev.is_paper(source.native_bot_name),
         )
 
     def _ingest(

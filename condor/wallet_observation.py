@@ -148,19 +148,36 @@ async def _read(client: httpx.AsyncClient, source: dict[str, str], bot: str) -> 
     return json.loads(bytes(content))
 
 
-async def observe(server: str, sources: dict[str, dict[str, str]] | None = None) -> dict[str, dict | None]:
-    """One sample per configured bot on `server`; None when the read or validation failed."""
+async def observe_runtime(server: str, sources: dict[str, dict[str, str]] | None = None) -> dict[str, object | None]:
+    """One runtime-status body per configured bot on `server`; None when the read failed."""
     sources = configured_sources() if sources is None else sources
     scoped = {bot: source for bot, source in sources.items() if source.get("server") == server}
     if not scoped:
         return {}
-    samples: dict[str, dict | None] = {}
+    bodies: dict[str, object | None] = {}
     async with httpx.AsyncClient(timeout=READ_TIMEOUT, follow_redirects=False, trust_env=False) as client:
         for bot, source in scoped.items():
             try:
                 async with asyncio.timeout(READ_TIMEOUT + 2):
-                    samples[bot] = project_wallet(await _read(client, source, bot), bot)
+                    bodies[bot] = await _read(client, source, bot)
             except (ValueError, httpx.HTTPError, TimeoutError, json.JSONDecodeError) as exc:
-                logger.debug("Wallet observation unavailable for %s/%s: %s", server, bot, exc)
-                samples[bot] = None
+                logger.debug("Runtime status unavailable for %s/%s: %s", server, bot, exc)
+                bodies[bot] = None
+    return bodies
+
+
+def wallet_samples(bodies: dict[str, object | None]) -> dict[str, dict | None]:
+    """One wallet sample per read body; None when the read or validation failed."""
+    samples: dict[str, dict | None] = {}
+    for bot, body in bodies.items():
+        try:
+            samples[bot] = None if body is None else project_wallet(body, bot)
+        except ValueError as exc:
+            logger.debug("Wallet observation unavailable for %s: %s", bot, exc)
+            samples[bot] = None
     return samples
+
+
+async def observe(server: str, sources: dict[str, dict[str, str]] | None = None) -> dict[str, dict | None]:
+    """One sample per configured bot on `server`; None when the read or validation failed."""
+    return wallet_samples(await observe_runtime(server, sources))

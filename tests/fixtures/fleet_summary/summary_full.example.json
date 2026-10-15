@@ -408,11 +408,18 @@
    },
    "executors": 1,
    "executors_basis": "open_lifecycle_cycles",
-   "pnl_day": null,
+   "pnl_day": {
+    "change": "4",
+    "unit": "USDC",
+    "partial": true,
+    "stale": false,
+    "simulated": true
+   },
    "net_now": {
     "value": "9",
     "unit": "USDC",
-    "source": "controller"
+    "source": "controller",
+    "simulated": true
    },
    "fees": {
     "amount": "0.42",
@@ -423,12 +430,7 @@
     "opened_24h": 2,
     "closed_24h": 1
    },
-   "missing": [
-    {
-     "field": "pnl_day",
-     "reason": "PAPER_EXCLUDED"
-    }
-   ]
+   "missing": []
   }
  ],
  "fills": [
@@ -485,5 +487,31 @@
   "monitor": "healthy",
   "generated_at_ms": 1800000025000,
   "observed_at_ms": 1800000025000
- }
+ },
+ "paper_fills": [
+  {
+   "bot": "ok_rsi_paper",
+   "fill_id": "ok_rsi_paper-1",
+   "pair": "ETH-USDC",
+   "side": "BUY",
+   "amount": "0.1",
+   "price": "2000.5",
+   "volume": "200.05",
+   "fee": "0.2",
+   "time_ms": 1799999910000,
+   "simulated": true
+  },
+  {
+   "bot": "ok_rsi_paper",
+   "fill_id": "ok_rsi_paper-2",
+   "pair": "BTC-USDC",
+   "side": "SELL",
+   "amount": "0.01",
+   "price": "60000",
+   "volume": "600",
+   "fee": "0.6",
+   "time_ms": 1799999850000,
+   "simulated": true
+  }
+ ]
 }

@@ -11,7 +11,7 @@ export const FLEET_FILLS_SCHEMA = 'fleet-fills.v1';
 export const FLEET_FILLS_DEFAULT_LIMIT = 50;
 
 export type FleetFillsStatus = 'ok' | 'partial' | 'missing';
-export type FleetFillGeneration = 'V1' | 'V2' | 'V3';
+export type FleetFillGeneration = 'V1' | 'V2' | 'V3' | 'V4';
 export type FleetFillSide = 'buy' | 'sell';
 /** `unrecognised` is a receipt value this client does not know: shown as such, never promoted to exact. */
 export type FleetFillReceipt = 'exact' | 'legacy_6dp' | 'unavailable' | 'unrecognised';
@@ -39,6 +39,8 @@ export type FleetFillItem = {
   time_ms: number | null;
   receipt: FleetFillReceipt;
   simulated: boolean;
+  /** True on the paper feed (`scope=paper`): a simulated fill, never part of the live feed. */
+  paper: boolean;
   /** Reserved by the contract: `null` in v1. Shown as an absent value, never as zero. */
   realized_pnl: string | null;
   /** Names of the nullable fields above that are `null` on this row. */
@@ -76,9 +78,15 @@ export type FleetFillsPage = {
   window: { horizon_ms: number | null; truncated: boolean; owner_limit: number };
   bots: FleetFillsBot[];
   notes: { reason: string }[];
+  /** `paper` for the separate paper feed; the default feed is live. */
+  scope: FleetFillsScope;
 };
 
+/** The live feed (default) or the separate, labelled paper feed. Never merged. */
+export type FleetFillsScope = 'live' | 'paper';
+
 export type FleetFillsQuery = {
+  scope?: FleetFillsScope;
   limit?: number;
   /** The previous page's `next_cursor`; opaque, never parsed here. */
   before?: string | null;
@@ -96,7 +104,7 @@ const text = (value: unknown): value is string => typeof value === 'string';
 const decimal = (value: unknown): value is string => typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value);
 const nullable = <T>(value: unknown, ok: (value: unknown) => value is T): value is T | null => value === null || ok(value);
 
-const GENERATIONS: readonly string[] = ['V1', 'V2', 'V3'];
+const GENERATIONS: readonly string[] = ['V1', 'V2', 'V3', 'V4'];
 const generation = (value: unknown): FleetFillGeneration | null => typeof value === 'string' && GENERATIONS.includes(value) ? value as FleetFillGeneration : null;
 const RECEIPTS: readonly string[] = ['exact', 'legacy_6dp', 'unavailable'];
 
@@ -121,7 +129,7 @@ function parseItem(raw: unknown): FleetFillItem {
     amount: raw.amount as string | null, price: raw.price as string | null, volume: raw.volume as string | null, fee: raw.fee as string | null,
     fee_unit: (raw.fee_unit as string | null | undefined) ?? null, time_ms: raw.time_ms as number | null,
     receipt: typeof raw.receipt === 'string' && RECEIPTS.includes(raw.receipt) ? raw.receipt as FleetFillReceipt : 'unrecognised',
-    simulated: raw.simulated === true, realized_pnl: raw.realized_pnl as string | null, missing: raw.missing as string[],
+    simulated: raw.simulated === true, paper: raw.paper === true, realized_pnl: raw.realized_pnl as string | null, missing: raw.missing as string[],
   };
 }
 
@@ -168,12 +176,14 @@ export function parseFleetFills(payload: unknown): FleetFillsPage {
     matched: payload.matched, window: { horizon_ms: window.horizon_ms, truncated: window.truncated, owner_limit: window.owner_limit },
     bots: payload.bots.map(parseBot),
     notes: Array.isArray(payload.notes) ? payload.notes.filter(object).flatMap(note => text(note.reason) ? [{ reason: note.reason }] : []) : [],
+    scope: payload.scope === 'paper' ? 'paper' : 'live',
   };
 }
 
 /** `/api/v1/servers/{server}/fleet/fills?…`; a bot filter repeats `bot=`, and empty filters are left out. */
 export function fleetFillsPath(server: string, query: FleetFillsQuery = {}): string {
   const params = new URLSearchParams();
+  if (query.scope === 'paper') params.set('scope', 'paper');
   if (query.limit !== undefined) params.set('limit', String(query.limit));
   if (query.before) params.set('before', query.before);
   for (const bot of query.bots ?? []) params.append('bot', bot);

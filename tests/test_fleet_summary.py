@@ -13,6 +13,7 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from condor.performance_history import PerformanceHistory
+from condor.web import fleet_pnl
 from condor.web import fleet_summary as fs
 from condor.web import market_verdict as mv
 from condor.web.auth import get_current_user
@@ -57,7 +58,8 @@ def seed(store, bots=("ok_rsi", "rsi_modular_v2")):
         for bot in bots:
             for minutes, total, realized in rows.get(bot, [(300, 0, 0), (1, 1, 0.5)]):
                 conn.execute(
-                    "INSERT INTO points VALUES (?,?,?,?,?,?,?,?,?)",
+                    # A paper bot's simulated history lives apart from live points.
+                    f"INSERT INTO {'paper_points' if fs.is_paper(bot) else 'points'} VALUES (?,?,?,?,?,?,?,?,?)",
                     (
                         SERVER,
                         bot,
@@ -407,15 +409,22 @@ async def test_full_summary_golden_numbers(store):
     assert ok["net_now"] == {"value": "3.5", "unit": "USDC", "source": "controller"}
     assert ok["fees"] == {"amount": "0.42", "unit": "USDC"}
     assert ok["trades"] == {"lifetime": 12, "opened_24h": 2, "closed_24h": 1}
-    assert (
-        paper["paper"] is True
-        and paper["pnl_day"] is None
-        and {"field": "pnl_day", "reason": fs.PAPER_EXCLUDED} in paper["missing"]
-    )
-    assert all(
-        m.get("bot") != "ok_rsi_paper" or m["field"] != "pnl_day"
-        for m in body["missing"]
-    ), "paper exclusion is not a data gap"
+    # A paper card carries its own simulated numbers; they never enter the fleet windows above.
+    assert paper["paper"] is True and paper["missing"] == []
+    assert paper["pnl_day"] == {
+        "change": "4",
+        "unit": "USDC",
+        "partial": True,
+        "stale": False,
+        "simulated": True,
+    }
+    assert paper["net_now"] == {
+        "value": "9",
+        "unit": "USDC",
+        "source": "controller",
+        "simulated": True,
+    }
+    assert all(m.get("bot") != "ok_rsi_paper" for m in body["missing"])
 
     assert [(f["bot"], f["fill_id"]) for f in body["fills"]][:3] == [
         ("rsi_modular_v2", "rsi_modular_v2-1"),
@@ -519,6 +528,38 @@ async def test_incidents_are_admin_only(store):
     assert not [
         call for call in readers.calls if call[1] == "operations"
     ], "a non-admin never triggers the operations read"
+
+
+@sync
+async def test_a_paper_bot_alone_does_not_make_the_bots_section_partial(tmp_path):
+    empty = PerformanceHistory(tmp_path / "native-performance.sqlite3")
+    seed(empty, ("ok_rsi",))  # the paper bot has no recorded history yet
+    body = await build(empty, registry=["ok_rsi", "ok_rsi_paper"])
+    paper = card(body, "ok_rsi_paper")
+    assert paper["pnl_day"] is None
+    assert [m["reason"] for m in paper["missing"]] == [fleet_pnl.NO_SAMPLES]
+    assert all(m.get("bot") != "ok_rsi_paper" for m in body["missing"])
+    assert body["sections"]["bots"]["status"] == "ok", body["sections"]["bots"]
+    assert body["sections"]["bots"]["reason"] is None
+
+
+@sync
+async def test_paper_numbers_never_enter_the_fleet_pnl_wallet_or_fills(store):
+    with_paper = await build(store)
+    without = await build(store, registry=["ok_rsi", "rsi_modular_v2"])
+    for key in ("pnl", "wallet", "fills"):
+        assert with_paper[key] == without[key], key
+    assert [f["bot"] for f in with_paper["paper_fills"]] == ["ok_rsi_paper"] * len(
+        with_paper["paper_fills"]
+    )
+    assert with_paper["paper_fills"] and all(
+        f["simulated"] is True for f in with_paper["paper_fills"]
+    )
+    assert without["paper_fills"] is None
+    glance_body = await build(store, "glance")
+    assert "paper_fills" not in glance_body
+    paper = next(b for b in glance_body["bots"] if b["bot"] == "ok_rsi_paper")
+    assert paper["paper"] is True and paper["pnl_day"] == "4"
 
 
 @sync
@@ -672,10 +713,21 @@ def test_names_and_generations():
     )
     assert [
         fs.generation(b)
-        for b in ("ok_rsi", "rsi_v5", "rsi_modular_v2", "meridian_v3", "mystery")
-    ] == ["V1", "V1", "V2", "V3", None]
+        for b in (
+            "ok_rsi",
+            "rsi_v5",
+            "rsi_modular_v2",
+            "meridian_v3",
+            "meridian_v4_paper",
+            "meridian_v4_d2h_paper",
+            "mystery",
+            "v40_bot",
+        )
+    ] == ["V1", "V1", "V2", "V3", "V4", "V4", None, None]
     assert (
-        fs.is_paper("ok_rsi_paper")
+        fs.is_paper("meridian_v4_paper")
+        and fs.is_paper("meridian_v4_d2h_paper")
+        and fs.is_paper("ok_rsi_paper")
         and fs.is_paper("paper-v2")
         and not fs.is_paper("papermill")
     )

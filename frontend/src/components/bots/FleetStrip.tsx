@@ -69,7 +69,7 @@ function FleetBotCard({ source, reads, status, color, now }: { source: TradingVi
     </div>
     <dl className="fs-stats">
       {cells.map(cell => <div key={cell.title}><dt>{cell.title}</dt><dd>{cell.value}</dd></div>)}
-      <div><dt title="Controller-report PnL; full PnL history is in Capital">PnL (controller)</dt><dd><span className={toneClass(net)}>{net == null ? '—' : `${formatSigned(net)} ${reads?.controller.quote ?? ''}`}</span></dd></div>
+      <div><dt title="Controller-report PnL; full PnL history is in Capital">PnL (controller)</dt><dd><span className={toneClass(net)}>{net == null ? '—' : `${formatSigned(net)} ${reads?.controller.quote ?? ''}`}</span>{net != null && reads?.controller.simulated && <> <span className="q-pill" data-tone="blocked" title="Simulated paper PnL: never counted as capital.">paper</span></>}</dd></div>
     </dl>
     {pairs.length > 0 && <ul className="fs-pairs" aria-label="Pairs">
       {pairs.map(pair => <li key={`${pair.controllerId ?? ''}:${pair.pair}`}>

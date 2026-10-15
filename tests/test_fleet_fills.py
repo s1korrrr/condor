@@ -410,6 +410,28 @@ async def test_paper_bots_are_listed_as_excluded_and_never_read():
     assert all(i["bot"] != "ok_rsi_paper" for i in body["items"])
 
 
+@sync
+async def test_the_paper_scope_is_a_separate_labelled_feed_of_paper_bots_only():
+    readers = Readers(
+        default_rows() | {"ok_rsi_paper": [v1_row(9, T0, bot_name="ok_rsi_paper")], "meridian_v4_paper": fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)},
+        registry=BOTS + ["ok_rsi_paper", "meridian_v4_paper"],
+    )
+    live = ff.build_page(await window(readers))
+    readers.calls.clear()
+    paper = ff.build_page(await window(readers, scope="paper"))
+    assert {c[0] for c in readers.calls} == {"ok_rsi_paper", "meridian_v4_paper"}, "only paper bots are read"
+    assert paper["scope"] == "paper" and "scope" not in live
+    assert [b["bot"] for b in paper["bots"]] == ["ok_rsi_paper", "meridian_v4_paper"]
+    assert all(b["paper"] for b in paper["bots"])
+    assert paper["items"] and all(i["bot"] == "ok_rsi_paper" and i["paper"] is True for i in paper["items"])
+    assert (paper["status"], paper["reason"]) == ("partial", fs.PARTIAL_COVERAGE)
+    assert all(i["bot"] in BOTS and "paper" not in i for i in live["items"]), "the live feed never carries paper rows"
+    none = ff.build_page(await window(Readers(), scope="paper"))
+    assert (none["status"], none["reason"], none["items"]) == ("missing", fs.NO_REGISTRY, [])
+    with pytest.raises(ff.FeedQueryError):
+        await window(readers, scope="both")
+
+
 # ── identity: no double counting ──
 
 
@@ -689,6 +711,8 @@ def test_route_requires_authentication_and_server_access(monkeypatch):
         "bot=nobody",
         "before=zzz",
         "schema=fleet-fills.v2",
+        "scope=all",
+        "scope=paper&scope=live",
     ],
 )
 def test_route_rejects_unsupported_queries(monkeypatch, query):
@@ -716,6 +740,18 @@ def test_route_serves_the_feed_with_a_validator_and_revalidates(monkeypatch):
     )
     other = client.get(URL, params={"limit": 3})
     assert other.headers["ETag"] != tag
+
+
+def test_route_serves_the_paper_scope_from_its_own_window(monkeypatch):
+    readers = Readers(
+        default_rows() | {"ok_rsi_paper": [v1_row(9, T0, bot_name="ok_rsi_paper")]},
+        registry=BOTS + ["ok_rsi_paper"],
+    )
+    client = client_for(monkeypatch, readers)
+    live = client.get(URL).json()
+    paper = client.get(URL, params={"scope": "paper"}).json()
+    assert {i["bot"] for i in paper["items"]} == {"ok_rsi_paper"} and paper["scope"] == "paper"
+    assert "ok_rsi_paper" not in {i["bot"] for i in live["items"]}
 
 
 def test_route_pages_with_before_and_filters(monkeypatch):

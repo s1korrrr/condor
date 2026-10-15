@@ -3,10 +3,12 @@ import { formatDecimal } from '@/features/quant-ops/format';
 import { openPairCount, type buildBotPositionView } from './position-view';
 import type { ExecutionStats, QuantBotSummary, QuantCycles } from './quant-roster';
 import { stackRestarts, type FleetHealth } from './fleet-health';
+import { paperNote, splitPaper } from './fleet-inventory';
 
 /**
- * Bot-focused fleet KPIs. Every tile is a sum or union over ALL registered bots, computed from the reads the
- * Bots page already holds; money PnL stays in Capital. A tile with no source in any bot is omitted, never
+ * Bot-focused fleet KPIs. Every tile is a sum or union over the registered LIVE bots, computed from the reads the
+ * Bots page already holds; money PnL stays in Capital. Paper bots are never added in: they are counted in their
+ * own "Paper bots" tile. A tile with no source in any bot is omitted, never
  * printed as "Unavailable". When only some bots have a source the tile says how many it covers.
  */
 
@@ -159,11 +161,18 @@ const coverage = (known: number, total: number, source: string): PanelState =>
   known >= total ? { kind: 'fresh' } : { kind: 'incomplete', reason: `${source} read for ${known} of ${total} bots; the value covers those bots only.` };
 const percent = (ratio: number, digits = 1) => `${(ratio * 100).toFixed(digits)}%`;
 
-/** Tiles over the whole set of bots. Empty when no bot is registered. */
-export function projectFleetTiles(inputs: readonly FleetBotInput[], now: number): FleetTile[] {
+/** Tiles over the live bots, plus a separate paper count. Empty when no bot is registered. */
+export function projectFleetTiles(allInputs: readonly FleetBotInput[], now: number): FleetTile[] {
+  const { live: inputs, paper } = splitPaper(allInputs);
+  const paperTile: FleetTile[] = paper.length ? [{
+    id: 'B01-paper', title: 'Paper bots', value: `+${paper.length}`, unit: 'paper',
+    basis: 'simulated lanes · listed below, not counted in these tiles',
+    perBot: paper.length > 1 ? paper.map(input => ({ bot: input.bot, name: input.name, text: (input.status ?? 'unverified').replaceAll('_', ' ') })) : [],
+    state: { kind: 'fresh' },
+  }] : [];
   const bots = inputs.map(input => projectBotStats(input, now));
   const total = bots.length;
-  if (!total) return [];
+  if (!total) return paperTile;
   const tiles: FleetTile[] = [];
   const per = (read: (stats: BotStats) => string | null) => bots.flatMap(stats => { const text = read(stats); return text == null ? [] : [{ bot: stats.bot, name: stats.name, text }]; });
   const withValue = (read: (stats: BotStats) => number | null) => bots.filter(stats => read(stats) != null).length;
@@ -176,7 +185,7 @@ export function projectFleetTiles(inputs: readonly FleetBotInput[], now: number)
   const staleRead = bots.filter(stats => stats.heartbeatRead && !stats.heartbeatCurrent).length;
   tiles.push({
     id: 'B01', title: 'Active bots', value: known === total ? `${running} / ${total}` : `${running} verified / ${total}`,
-    basis: known === total ? `lifecycle status · heartbeat current ${fresh}/${total}` : `${total - known} bot${total - known === 1 ? '' : 's'} without a verified lifecycle · heartbeat current ${fresh}/${total}`,
+    basis: `${known === total ? `lifecycle status · heartbeat current ${fresh}/${total}` : `${total - known} bot${total - known === 1 ? '' : 's'} without a verified lifecycle · heartbeat current ${fresh}/${total}`}${paper.length ? ` · ${paperNote(paper.length)}` : ''}`,
     perBot: per(stats => `${(stats.status ?? 'unverified').replaceAll('_', ' ')}${stats.heartbeatCurrent ? '' : stats.heartbeatRead ? ' · heartbeat stale' : ' · heartbeat not read'}`),
     // Stale means an observed lifecycle or heartbeat is old; an owner summary that has not been read yet is incomplete.
     state: known === total && fresh === total ? { kind: 'fresh' }
@@ -184,6 +193,7 @@ export function projectFleetTiles(inputs: readonly FleetBotInput[], now: number)
       : staleRead > 0 ? { kind: 'stale', reason: `${staleRead} bot heartbeat(s) are not current.` }
       : { kind: 'incomplete', reason: `Owner heartbeat not read for ${unread} bot${unread === 1 ? '' : 's'} (read pending or failed); counts cover the bots read.` },
   });
+  tiles.push(...paperTile);
 
   const executors = sum(bots.map(stats => stats.executors));
   if (executors !== null) {

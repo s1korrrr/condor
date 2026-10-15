@@ -47,7 +47,7 @@ export type Market = {
 
 export type Money = { amount: string; unit: string };
 export type BotCard = {
-  bot: string; display_name: string; generation: 'V1' | 'V2' | 'V3' | null; paper: boolean; status: string | null; controllers: number | null;
+  bot: string; display_name: string; generation: 'V1' | 'V2' | 'V3' | 'V4' | null; paper: boolean; status: string | null; controllers: number | null;
   report_at_ms: number | null; report_stale: boolean;
   positions: { held: number; registered: number; current: boolean } | null;
   executors: number | null; executors_basis: 'runtime_active_executors' | 'open_lifecycle_cycles' | null;

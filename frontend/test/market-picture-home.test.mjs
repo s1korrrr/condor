@@ -41,7 +41,7 @@ const { load } = frontendModules({
   "./contract.mjs": contract,
   "./stored.mjs": stored,
   "@/lib/api": { api: {} },
-});
+}, { "features/market-picture/MarketPulse.tsx": ["PulseDataTable", "pulseDataRows"] });
 const read = (file) =>
   JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/${file}`, import.meta.url), "utf8"));
 const metric = (value, extra = {}) => ({ value, original: String(value), unit: "x", status: value == null ? "UNAVAILABLE" : "VALID", reasons: [], valid: 5, expected: 5, available: 1, expires: 2, definition: "d v1", ...extra });
@@ -651,6 +651,64 @@ test("the hero opens on the 1h horizon with a visible smoothing toggle", async (
   assert.match(markup, /15m mean/);
   assert.match(markup, /15-minute rolling mean, raw grey/);
   assert.match(markup, /How is this decided\?/);
+});
+
+test("the breadth chart exposes a keyboard-operable data-table disclosure", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.240.fixture.json");
+  const history = [flat(0, 3), flat(1, -3), flat(3, 0, { gapBefore: true })];
+  const markup = renderToStaticMarkup(React.createElement(pulse.MarketPulseHero, {
+    frame, history, horizon: "60", window: "6h", setHorizon() {}, setWindow() {}, replay() {},
+  }));
+  assert.match(markup, /<details class="mp-pulse-data">/);
+  assert.match(markup, /<summary>Accessible breadth data table/);
+  assert.doesNotMatch(markup, /id="mp-pulse-data-table"/, "table rows stay unmounted until disclosure opens");
+});
+
+test("breadth table rows preserve plotted zeros, nulls, raw pressure and explicit gap sentinels", () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const sample = (minute, pressure, positive, negative, gapBefore = false) => ({
+    ...flat(minute, pressure, { gapBefore }),
+    breadth: Object.fromEntries(HORIZONS.map((h) => [h, { positive, negative, flat: 0, pressure }])),
+  });
+  const history = [
+    sample(0, null, null, null),
+    sample(1, -3, 0.25, 0.75),
+    sample(3, 0, 0.5, 0.5, true),
+    sample(4, null, null, null),
+  ];
+  const projection = pulseSeries(history, "6h", "60");
+  const smoothRows = pulse.pulseDataRows(
+    projection.samples, projection.smoothed, projection.advancing, projection.declining, projection.pressure,
+  );
+  const rawRows = pulse.pulseDataRows(
+    projection.samples, projection.pressure, projection.advancing, projection.declining,
+  );
+  assert.equal(smoothRows.length, projection.smoothed.length);
+  assert.deepEqual(smoothRows.map((row) => row.gap), [false, false, true, false, false]);
+  assert.deepEqual([smoothRows[0].pressure, smoothRows[0].rawPressure, smoothRows[0].advancing], [null, null, null]);
+  assert.deepEqual([smoothRows[1].pressure, smoothRows[1].rawPressure, smoothRows[1].advancing, smoothRows[1].declining], [-3, -3, 25, 75]);
+  assert.deepEqual([smoothRows[2].pressure, smoothRows[2].rawPressure, smoothRows[2].advancing, smoothRows[2].declining], [null, null, null, null]);
+  assert.deepEqual([smoothRows[3].pressure, smoothRows[3].rawPressure], [0, 0], "a real zero stays zero");
+  assert.deepEqual([rawRows[4].pressure, rawRows[4].rawPressure], [null, null], "raw mode does not fill a missing raw point");
+});
+
+test("opened breadth table discloses chart context and renders every plotted point", () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const history = [flat(0, 3), flat(1, -3), flat(3, 0, { gapBefore: true })];
+  const projection = pulseSeries(history, "6h", "60");
+  const markup = renderToStaticMarkup(React.createElement(pulse.PulseDataTable, {
+    pulse: projection,
+    horizon: "60",
+    window: "6h",
+    pressureSeries: { id: "pressure", label: "Breadth pressure · 15m mean", color: "violet", points: projection.smoothed },
+    rawPressureSeries: { id: "pressure-raw", label: "Breadth pressure · raw", color: "grey", points: projection.pressure },
+  }));
+  assert.match(markup, /1h breadth · requested 6h · Requested 6h · available 3m · 1-minute buckets · Breadth pressure · 15m mean selected · raw pressure also shown/);
+  assert.match(markup, /Raw pressure \(−3…\+3\)/);
+  assert.match(markup, /Coverage gap before <time dateTime="2026-10-01T00:03:00\.000Z">2026-10-01T00:03:00\.000Z<\/time>/);
+  assert.match(markup, /2026-10-01T00:00:00\.000Z/);
+  assert.equal((markup.match(/<tr\b/g) ?? []).length, projection.smoothed.length + 1, "header plus one row per chart point");
 });
 
 // ---- Relative volume and volume-burst honesty ----------------------------------------------------

@@ -181,6 +181,103 @@ function BreadthLadder({
   );
 }
 
+type PulseDataRow = {
+  time: number;
+  gap: boolean;
+  advancing: number | null;
+  declining: number | null;
+  pressure: number | null;
+  rawPressure: number | null;
+};
+
+/** Align the table to the exact plotted arrays; a non-sample null is the chart's gap sentinel. */
+function pulseDataRows(
+  samples: HistoryPoint[],
+  plottedPressure: SeriesPoint[],
+  advancing: SeriesPoint[],
+  declining: SeriesPoint[],
+  rawPressure?: SeriesPoint[],
+): PulseDataRow[] {
+  const sampleTimes = new Set(samples.map((sample) => sample.time));
+  return plottedPressure.map((point, index) => {
+    const up = advancing[index]?.value ?? null;
+    const down = declining[index]?.value ?? null;
+    const raw = rawPressure?.[index]?.value ?? null;
+    return {
+      time: point.time,
+      gap: !sampleTimes.has(point.time) && [point.value, up, down, raw].every((value) => value === null),
+      advancing: up,
+      declining: down,
+      pressure: point.value,
+      rawPressure: raw,
+    };
+  });
+}
+
+function PulseDataTable({
+  pulse,
+  horizon,
+  window,
+  pressureSeries,
+  rawPressureSeries,
+}: {
+  pulse: ReturnType<typeof pulseSeries>;
+  horizon: Horizon;
+  window: string;
+  pressureSeries: ChartSeries;
+  rawPressureSeries?: ChartSeries;
+}) {
+  const rows = useMemo(
+    () => pulseDataRows(
+      pulse.samples,
+      pressureSeries.points,
+      pulse.advancing,
+      pulse.declining,
+      rawPressureSeries?.points,
+    ),
+    [pulse, pressureSeries, rawPressureSeries],
+  );
+  const shareText = (value: number | null) => value === null ? "—" : `${value.toFixed(2)}%`;
+  const pressureText = (value: number | null) => value === null ? "—" : signed(value);
+
+  return (
+    <div className="mp-table-scroll mp-pulse-data__scroll" tabIndex={0} role="region" aria-labelledby="mp-pulse-data-caption">
+      <table className="mp-table" id="mp-pulse-data-table">
+        <caption id="mp-pulse-data-caption">
+          {horizonLabel(horizon)} breadth · requested {window} · {pulse.label} · {pulse.bucketMinutes}-minute buckets · {pressureSeries.label} selected
+          {rawPressureSeries ? " · raw pressure also shown" : ""}
+        </caption>
+        <thead>
+          <tr>
+            <th scope="col">UTC time / coverage</th>
+            <th scope="col">Advancing share</th>
+            <th scope="col">Declining share</th>
+            <th scope="col">{pressureSeries.label} (−3…+3)</th>
+            {rawPressureSeries && <th scope="col">Raw pressure (−3…+3)</th>}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row, index) => {
+            const time = new Date(row.time).toISOString();
+            const gapStart = new Date(row.time + 1).toISOString();
+            return (
+              <tr key={`${row.time}-${index}`} data-gap={row.gap || undefined}>
+                <th scope="row">
+                  {row.gap ? <>Coverage gap before <time dateTime={gapStart}>{gapStart}</time></> : <time dateTime={time}>{time}</time>}
+                </th>
+                <td>{row.gap ? "—" : shareText(row.advancing)}</td>
+                <td>{row.gap ? "—" : shareText(row.declining)}</td>
+                <td>{row.gap ? "—" : pressureText(row.pressure)}</td>
+                {rawPressureSeries && <td>{row.gap ? "—" : pressureText(row.rawPressure)}</td>}
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export function MarketPulseHero({
   frame,
   history,
@@ -199,6 +296,7 @@ export function MarketPulseHero({
   replay: (id: string) => void;
 }) {
   const [smooth, setSmooth] = useState(true);
+  const [dataTableOpen, setDataTableOpen] = useState(false);
   const pulse = useMemo(() => pulseSeries(history, window, horizon), [history, window, horizon]);
   const lastSmoothed = useMemo(
     () => [...pulse.smoothed].reverse().find((p) => p.value !== null)?.value ?? null,
@@ -239,6 +337,8 @@ export function MarketPulseHero({
     ],
     [pulse, smooth],
   );
+  const pressureSeries = series[0];
+  const rawPressureSeries = smooth ? series.find((item) => item.id === "pressure-raw") : undefined;
   const [ref, width] = useElementWidth<HTMLDivElement>();
   const breadth = frame?.breadth[horizon];
   const hasHistory = pulse.advancing.some((p) => p.value !== null);
@@ -334,6 +434,18 @@ export function MarketPulseHero({
               </label>
             )}
           </div>
+          <details className="mp-pulse-data" onToggle={(event) => setDataTableOpen(event.currentTarget.open)}>
+            <summary>Accessible breadth data table · {horizonLabel(horizon)} · {window}</summary>
+            {dataTableOpen && hasHistory && (
+              <PulseDataTable
+                pulse={pulse}
+                horizon={horizon}
+                window={window}
+                pressureSeries={pressureSeries}
+                rawPressureSeries={rawPressureSeries}
+              />
+            )}
+          </details>
         </div>
       </div>
       <footer

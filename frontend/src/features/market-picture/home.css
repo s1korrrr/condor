@@ -59,6 +59,12 @@
 .mp-ladder__bar i[data-side=flat] { background: #536b80; }
 .mp-ladder__bar i[data-side=down] { background: var(--mp-negative); }
 .mp-ladder__value { display: flex; gap: 3px; justify-content: flex-end; font-size: 11px; font-variant-numeric: tabular-nums; }
+.mp-pulse-data { margin: 0 14px 8px; color: var(--mp-muted); font-size: 11px; }
+.mp-pulse-data > summary { width: fit-content; cursor: pointer; color: var(--mp-accent); }
+.mp-pulse-data > summary:focus-visible { outline: 2px solid var(--mp-accent); outline-offset: 3px; }
+.mp-pulse-data__scroll { max-height: 280px; overscroll-behavior: contain; }
+.mp-pulse-data__scroll:focus-visible { outline: 2px solid var(--mp-accent); outline-offset: 2px; }
+.mp-pulse-data__scroll caption { padding: 6px 0; text-align: left; white-space: normal; }
 
 /* Chart */
 .mp-hero .mp-chart-legend { padding: 2px 4px 6px; font-size: 12px; gap: 6px 18px; }

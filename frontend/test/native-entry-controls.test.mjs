@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import {clearPendingEntryCommand,entryPath,entryObservation,entryCommandObserved,entryPendingStorageKey,entryPublicationMessage,readPendingEntryCommand,writePendingEntryCommand} from '../src/lib/native-entry-controls.ts';
+import {clearPendingEntryCommand,entryPath,entryRowLabel,entryObservation,entryCommandObserved,entryPendingStorageKey,entryPublicationMessage,readPendingEntryCommand,writePendingEntryCommand} from '../src/lib/native-entry-controls.ts';
 const now=1900000000000;
 const payload=()=>({status:'success',verified_at:now/1000,command_allowed:true,data:{bot_name:'v2',bot_status:'running',controllers:[{controller_id:'a',entry_paused:true,last_command_id:'x',updated_at:now/1000}]}});
 class MemoryStorage{constructor(){this.data=new Map();}getItem(key){return this.data.has(key)?this.data.get(key):null;}setItem(key,value){this.data.set(key,value);}removeItem(key){this.data.delete(key);}}
@@ -18,4 +18,14 @@ test('gateway failures retain the pending command because publication may have r
   assert.equal(entryPublicationMessage(409,{detail:'Command already submitted; inspect native effective state before retrying'}).rejected,false);
   assert.equal(entryPublicationMessage(429,{detail:'Gateway throttled'}).rejected,false);
   assert.match(entryPublicationMessage(502,{}).text,/outcome unknown/);
+});
+test('entry rows show the pause reason only while the controller is paused',()=>{
+  // Live 2026-10-15 rsi_modular_v2: the V2 script restores each persisted flag with reason 'restored',
+  // so a running controller read "Not paused · restored" like an incident.
+  assert.equal(entryRowLabel({controller_id:'modular_spot_v2_btc',entry_paused:false,pause_reason:'restored'}),'modular_spot_v2_btc: Not paused');
+  assert.equal(entryRowLabel({controller_id:'a',entry_paused:true,pause_reason:'restored'}),'a: Paused · restored');
+  assert.equal(entryRowLabel({controller_id:'a',entry_paused:true,pause_reason:'daily loss limit'}),'a: Paused · daily loss limit');
+  assert.equal(entryRowLabel({controller_id:'a',entry_paused:true,pause_reason:''}),'a: Paused');
+  assert.equal(entryRowLabel({controller_id:'a',entry_paused:true,pause_reason:null}),'a: Paused');
+  assert.equal(entryRowLabel({controller_id:'a',entry_paused:false}),'a: Not paused');
 });

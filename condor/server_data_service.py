@@ -774,7 +774,7 @@ class ServerDataService:
             except Exception:
                 logger.exception("Native performance history persistence failed for %s", key.server)
             # Same tick, same durable store, one runtime-status read per reporting source: the shared-wallet
-            # valuation, and the simulated PnL of paper bots (stored apart from live points).
+            # valuation, and the simulated PnL and simulated wallet of paper bots (stored apart from live rows).
             from condor import paper_performance, wallet_observation
             try:
                 bodies = await wallet_observation.observe_runtime(key.server)
@@ -784,6 +784,9 @@ class ServerDataService:
                 paper = paper_performance.paper_samples(bodies, time.time())
                 if paper:
                     await asyncio.to_thread(history.record_paper, key.server, paper)
+                paper_wallets = wallet_observation.paper_wallet_samples(bodies)
+                if paper_wallets:
+                    await asyncio.to_thread(history.record_paper_wallet, key.server, paper_wallets)
             except Exception:
                 logger.exception("Wallet and paper observation persistence failed for %s", key.server)
 

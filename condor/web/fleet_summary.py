@@ -572,10 +572,11 @@ def _wallet_section(
     """Newest complete wallet valuation among the live bots' reporting wallet observers.
 
     ``reads`` maps each live bot to its wallet read, or ``None`` when the read itself failed.
+    A paper bot's or a simulated wallet read is never the fleet wallet, even if one is passed in.
     """
     best: Optional[tuple[float, str, dict]] = None
     for bot, payload in reads.items():
-        if payload is None:
+        if payload is None or is_paper(bot) or _obj(payload).get("simulated") is True:
             continue
         latest = _obj(_obj(payload).get("latest"))
         stamp = _num(latest.get("timestamp"))

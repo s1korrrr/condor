@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
 const snapshot = 'a'.repeat(64);
@@ -49,4 +50,15 @@ test('a partial outage retains validated components only from the same immutable
   assert.deepEqual(result.history,[{time:123}]);
   assert.deepEqual(result.components.history,prior.components.history);
   assert.match(result.faults.history,/unavailable/);
+});
+
+
+test('partial component faults are projected as degraded operator state', () => {
+  const page=fs.readFileSync(new URL('../src/features/market-picture/MarketPicture.tsx',import.meta.url),'utf8');
+  const css=fs.readFileSync(new URL('../src/features/market-picture/market-picture.css',import.meta.url),'utf8');
+  assert.match(page,/degradedComponents = Object\.keys\(data\?\.faults \?\? \{\}\)\.sort\(\)/);
+  assert.match(page,/displayedFreshness =\s*degraded && state\.freshness === "FRESH"\s*\? "DEGRADED"/);
+  assert.match(page,/Partial Market Picture observation/);
+  assert.match(page,/className=\{degraded \? "mp-warning" : "mp-up"\}/);
+  assert.match(css,/data-freshness="DEGRADED"/);
 });

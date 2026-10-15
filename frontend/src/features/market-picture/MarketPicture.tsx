@@ -190,6 +190,11 @@ export function MarketPictureSurface({
   const source = useMarketPicture(server, view.window, view.benchmark, fixture);
   const data = source.data,
     frame = data?.frame ?? null;
+  const degradedComponents = Object.keys(data?.faults ?? {}).sort();
+  const componentFault = degradedComponents.length
+    ? `Partial Market Picture observation · ${degradedComponents.join(", ")} unavailable. Retained values, when present, remain bound to the same validated frame.`
+    : null;
+  const degraded = Boolean(source.error || componentFault);
   const state = ageState(frame, Date.now(), source.frozen);
   const selected =
     frame?.assets.find((a) => a.instrument_id === view.selected) ?? null;
@@ -372,7 +377,7 @@ export function MarketPictureSurface({
           />
           <kbd>/</kbd>
         </label>
-        <SourceStatus frame={frame} frozen={source.frozen} loading={source.loading} server={server} fixtureTime={fixture?.frame.available_at_ms} />
+        <SourceStatus frame={frame} frozen={source.frozen} loading={source.loading} server={server} degraded={degraded} fixtureTime={fixture?.frame.available_at_ms} />
         <button
           className="mp-icon-button"
           aria-label="Market Picture settings"
@@ -421,14 +426,14 @@ export function MarketPictureSurface({
           </button>
         </div>
       </div>
-      {(source.error || message) && (
+      {(source.error || componentFault || message) && (
         <div className="mp-notice" role="status">
           <span>
             {source.error
               ? `${source.error}${frame ? " · Retaining the last validated frame with its original expiry." : ""}`
-              : message}
+              : (componentFault ?? message)}
           </span>
-          {source.error ? (
+          {source.error || componentFault ? (
             <button onClick={source.retry}>Retry</button>
           ) : (
             <button
@@ -516,7 +521,7 @@ export function MarketPictureSurface({
           {source.frozen
             ? "View frozen · source age continues"
             : "Read-only market intelligence"}{" "}
-          <span className="mp-up">●</span>
+          <span className={degraded ? "mp-warning" : "mp-up"}>●</span>
         </span>
       </footer>
       {drawer && (
@@ -708,23 +713,25 @@ function useObservationClock(fixtureTime?: number) {
   }, [fixtureTime]);
   return now;
 }
-function SourceStatus({frame, frozen, loading, server, fixtureTime}: {
-  frame: DisplayFrame | null; frozen: boolean; loading: boolean; server: string | null; fixtureTime?: number;
+function SourceStatus({frame, frozen, loading, server, degraded, fixtureTime}: {
+  frame: DisplayFrame | null; frozen: boolean; loading: boolean; server: string | null; degraded: boolean; fixtureTime?: number;
 }) {
   const now = useObservationClock(fixtureTime);
   const state = ageState(frame, now, frozen);
+  const displayedFreshness =
+    degraded && state.freshness === "FRESH" ? "DEGRADED" : state.freshness;
   return (
         <div className="mp-source-state">
-          <strong data-freshness={state.freshness}>
+          <strong data-freshness={displayedFreshness}>
             {loading
               ? "Loading"
               : state.mode === "LIVE"
                 ? frame?.valid === 0
                   ? "No qualified data"
-                  : state.freshness !== "FRESH"
-                    ? state.freshness
+                  : displayedFreshness !== "FRESH"
+                    ? displayedFreshness
                     : "LIVE"
-                : `${state.mode}${state.freshness === "FRESH" ? "" : ` · ${state.freshness}`}`}
+                : `${state.mode}${displayedFreshness === "FRESH" ? "" : ` · ${displayedFreshness}`}`}
             <span aria-hidden="true">●</span>
           </strong>
           <time>

@@ -180,7 +180,7 @@ test('the hook polls every 30s, pages by cursor, keeps previous rows while a fil
   assert.equal(options.placeholderData, keep);
   assert.equal(options.retry, false);
   assert.equal(options.enabled, true);
-  assert.deepEqual(options.queryKey, ['fleet-fills', 'v2', 50, ['meridian_v3', 'rsi_modular_v2'], 'buy', 'BNB-USDC']);
+  assert.deepEqual(options.queryKey, ['fleet-fills', 'v2', 'live', 50, ['meridian_v3', 'rsi_modular_v2'], 'buy', 'BNB-USDC'], 'the live and paper feeds never share a cache entry');
   assert.equal(useFleetFills(null).enabled, false);
   assert.equal(options.getNextPageParam(page('page_first')), page('page_first').next_cursor);
   assert.equal(options.getNextPageParam(page('page_second')), undefined);

@@ -52,6 +52,7 @@ from condor.web.fleet_summary import (
 )
 
 SCHEMA_VERSION = "fleet-fills.v1"
+SCOPES = ("live", "paper")
 OWNER_FILL_LIMIT = 500
 DEFAULT_LIMIT = 50
 MAX_LIMIT = 200
@@ -257,9 +258,20 @@ def decode_cursor(cursor: str) -> tuple:
 
 
 async def read_window(
-    server: str, readers: Readers, now_ms: float, *, limit: int = OWNER_FILL_LIMIT
+    server: str,
+    readers: Readers,
+    now_ms: float,
+    *,
+    limit: int = OWNER_FILL_LIMIT,
+    scope: str = "live",
 ) -> dict:
-    """Read every registered bot's ledger and merge. Independent of any request filter, so it can be cached."""
+    """Read every registered bot's ledger and merge. Independent of any request filter, so it can be cached.
+
+    ``scope="live"`` (the default feed) reads live bots and lists paper bots as excluded. ``scope="paper"`` is
+    the separate, labelled paper feed: it reads paper bots only and marks every row and bot ``paper: true``.
+    The two are never merged."""
+    if scope not in SCOPES:
+        raise FeedQueryError("scope must be live or paper")
     status_raw = await readers.bots_status(server)
     page = build_bots_page(status_raw) if status_raw is not None else None
     status_names = [
@@ -274,7 +286,9 @@ async def read_window(
         notes.append({"reason": REGISTRY_FROM_STATUS})
     else:
         bots = []
-    live = [b for b in bots if not is_paper(b)]
+    if scope == "paper":
+        bots = [b for b in bots if is_paper(b)]
+    live = [b for b in bots if not is_paper(b)] if scope == "live" else bots
 
     async def one(bot: str) -> BotRead:
         try:
@@ -293,7 +307,9 @@ async def read_window(
 
     items: list[dict] = []
     for read in reads_in_order:
-        items.extend(read.rows)
+        items.extend(
+            [{**row, "paper": True} for row in read.rows] if scope == "paper" else read.rows
+        )
     items.sort(key=order_key)
 
     # A full read may have more rows below its oldest row: nothing older than the newest such horizon is
@@ -332,6 +348,7 @@ async def read_window(
         )
     return {
         "server": server,
+        "scope": scope,
         "generated_at_ms": int(now_ms),
         "items": items,
         "bots": bot_meta,
@@ -393,7 +410,9 @@ def build_page(
     live_meta = [b for b in meta if b["status"] != "excluded"]
     down = [b for b in live_meta if b["status"] == "unavailable"]
     if not live_meta:
-        status, reason = "missing", (PAPER_EXCLUDED if window["bots"] else NO_REGISTRY)
+        status, reason = "missing", (
+            PAPER_EXCLUDED if window["bots"] and window.get("scope") != "paper" else NO_REGISTRY
+        )
     elif len(down) == len(live_meta):
         status, reason = "missing", down[0]["reason"]
     elif down:
@@ -420,4 +439,5 @@ def build_page(
         },
         "bots": meta,
         "notes": window["notes"],
+        **({"scope": "paper"} if window.get("scope") == "paper" else {}),
     }

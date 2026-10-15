@@ -19,10 +19,10 @@ import { FleetFillsPanel } from './FleetFillsPanel';
 import { botChartsHref } from '@/features/bots/chart-links';
 import { projectFleetHealth, type FleetHealth } from '@/features/bots/fleet-health';
 import { durationLabel, fillTotals, projectBotStats, projectFleetTiles, tileNote, type FleetBotInput, type FillTotals } from '@/features/bots/fleet-tiles';
-import { paperNote, projectFleetAggregates } from '@/features/bots/fleet-inventory';
+import { paperNote, projectFleetAggregates, splitPaper } from '@/features/bots/fleet-inventory';
 import { pnlSeries, type PnlSeries } from '@/features/bots/pnl-series';
 import { botNet, botSourceFreshness, ownerReadsFingerprint, winRateText, winRateValue } from '@/features/bots/bot-net';
-import { projectControllerPnl } from '@/features/bots/controller-pnl';
+import { projectBotPnl } from '@/features/bots/controller-pnl';
 import { rowsPanelState, type PanelState } from '@/features/quant-ops/panel-state';
 import { PriceLevels } from './NativeBotPositions';
 import { BotDraftWizard } from './BotDraftWizard';
@@ -61,7 +61,7 @@ function dcaLabel(row: BotPairPosition, reportedLevel?: string | null) {
 
 export type OwnerReads = {
   bot: string; server: string; status: string | null; view: ReturnType<typeof buildBotPositionView> | null;
-  controller: ReturnType<typeof projectControllerPnl>;
+  controller: ReturnType<typeof projectBotPnl>;
   quant: QuantBotSummary | null; cycles: QuantCycles | null; execution: ExecutionStats | null; decisions: LifecycleDecision[];
   /** Stack heartbeat and service restarts from the operations read; null until that read lands. */
   health: FleetHealth | null;
@@ -229,7 +229,7 @@ function useOwnerReads(source: TradingVisualsSource, page: BotsPageResponse | un
   try { if (bootstrap.data) view = buildBotPositionView(bootstrap.data, source.bot, Math.max(now, bootstrap.dataUpdatedAt), { allowStale: true }); } catch { view = null; }
   const reads: OwnerReads = {
     bot: source.bot, server: source.server, status: owner?.status ?? null, view,
-    controller: projectControllerPnl(page, source.bot, now),
+    controller: projectBotPnl(page, bootstrap.data, source.bot, now),
     quant: projectQuantBotSummary(summary.data?.payload, source.bot, Math.max(now, summary.dataUpdatedAt)),
     cycles: projectQuantCycles(cycles.data?.payload, source.bot),
     execution: projectExecutionStats(execution.data?.payload, source.bot),
@@ -338,6 +338,9 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
   const events = fleet.flatMap(reads => reads.decisions.map(row => ({ ...row, bot: reads.bot }))).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, 40);
   const allFresh = fleet.every(reads => Object.values(botSourceFreshness(reads)).every(Boolean));
   const botIds = scoped.map(source => source.bot);
+  // Live and paper fills are two separate feeds; a paper bot is never a chip of the live one.
+  const { live: liveSources, paper: paperSources } = splitPaper(scoped);
+  const liveBotIds = liveSources.map(source => source.bot), paperBotIds = paperSources.map(source => source.bot);
   return <div className={`bot-roster${compact ? ' bot-roster--compact' : ''}`} data-quant-ops="bots">
     <header className="q-page-head">
       <div>
@@ -383,10 +386,11 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
           { id: 'fees', header: 'Fees', kind: 'number', value: source => statsFor(source)?.fees ?? null, cell: source => { const stats = statsFor(source); return stats?.fees == null ? '—' : `${formatDecimal(stats.fees, 4)}${stats.volume ? ` · ${((stats.fees / stats.volume) * 10_000).toFixed(1)} bps` : ''}`; }, size: 130 },
           { id: 'latency', header: 'Latency (s)', kind: 'number', value: source => readsByBot[`${source.server}:${source.bot}`]?.execution?.latencyMedianSeconds ?? null, cell: source => { const value = readsByBot[`${source.server}:${source.bot}`]?.execution?.latencyMedianSeconds; return value == null ? '—' : `${value.toFixed(1)}s`; }, size: 80 },
           { id: 'heartbeat', header: 'Last report', kind: 'number', value: source => { const age = statsFor(source)?.heartbeatAgeSeconds; return age == null ? null : Math.round(age); }, cell: source => { const age = statsFor(source)?.heartbeatAgeSeconds; return age == null ? '—' : `${durationLabel(age)} ago`; }, size: 100 },
-          { id: 'pnl', header: 'PnL (Capital has detail)', kind: 'number', value: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return reads ? netFor(reads).value : null; }, cell: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return !reads || netFor(reads).value == null ? '—' : `${formatSigned(netFor(reads).value)} ${reads.controller.quote ?? ''}`; }, className: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; const toneName = metricTone(reads ? netFor(reads).value : null); return toneName ? `q-${toneName}` : undefined; }, size: 150 },
+          { id: 'pnl', header: 'PnL (Capital has detail)', kind: 'number', value: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return reads ? netFor(reads).value : null; }, cell: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return !reads || netFor(reads).value == null ? '—' : `${formatSigned(netFor(reads).value)} ${reads.controller.quote ?? ''}${reads.controller.simulated ? ' · paper (simulated)' : ''}`; }, className: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; const toneName = metricTone(reads ? netFor(reads).value : null); return toneName ? `q-${toneName}` : undefined; }, size: 150 },
         ]} />
     </PanelFrame>
-    {scoped.length > 0 && server && <FleetFillsPanel server={server} bots={botIds} />}
+    {liveBotIds.length > 0 && server && <FleetFillsPanel server={server} bots={liveBotIds} />}
+    {paperBotIds.length > 0 && server && <FleetFillsPanel server={server} bots={paperBotIds} scope="paper" />}
     {draft && <BotDraftWizard bots={scoped.map(item => item.bot)} onClose={() => setDraft(false)} />}
     {filtered.map(source => <OwnerCard key={`${source.server}:${source.bot}`} source={source} page={page} logs={renderLogs(source.bot)} controls={renderControls?.(source.bot)} onReads={onReads}/>)}
     {scoped.filter(source => !filtered.includes(source)).map(source => <OwnerReadsFeed key={`${source.server}:${source.bot}:feed`} source={source} page={page} onReads={onReads} />)}

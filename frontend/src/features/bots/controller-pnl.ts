@@ -1,8 +1,11 @@
 import type { BotsPageResponse } from '@/lib/api';
 import { expireNativeBotPage } from '@/lib/bot-monitoring';
+import { isPaperBot } from '@/features/trading-visuals/sources';
 
 export type ControllerPnlRow = { id: string; pair: string; quote: string; realized: number | null; unrealized: number | null; total: number | null; volume: number | null };
-export type ControllerPnlView = { rows: ControllerPnlRow[]; reason: string | null; observedAt: number | null; quote: string | null; total: number | null; realized: number | null; unrealized: number | null };
+export type ControllerPnlView = { rows: ControllerPnlRow[]; reason: string | null; observedAt: number | null; quote: string | null; total: number | null; realized: number | null; unrealized: number | null;
+  /** True for a paper bot: simulated PnL that never counts as capital. */
+  simulated?: boolean };
 const finite = (value: unknown): number | null => typeof value === 'number' && Number.isFinite(value) ? value : null;
 
 /** Native controller performance includes active executors and retained positions.
@@ -41,4 +44,42 @@ export function projectControllerPnl(payload: unknown, bot: string, now: number)
   const quote = currencies.size === 1 ? rows[0].quote : null;
   const sum = (key: 'total' | 'realized' | 'unrealized') => quote && rows.length > 0 && rows.every(row => row[key] !== null) ? rows.reduce((total, row) => total + row[key]!, 0) : null;
   return { rows, quote, reason: rows.length ? null : 'No current controllers reported.', observedAt: finite(selected.performance_received_at), total: sum('total'), realized: sum('realized'), unrealized: sum('unrealized') };
+}
+
+/** A paper bot's runtime observation older than this no longer stands for its current simulated PnL. */
+const PAPER_RUNTIME_STALE_MS = 120_000;
+const numeric = (value: unknown): number | null => {
+  const number = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
+  return Number.isFinite(number) ? number : null;
+};
+
+/** A paper bot publishes no controller performance to the API. Its simulated PnL comes from the reporting
+ * runtime summary, which has the live shape (`summary.realized_pnl_quote` + `unrealized_pnl_quote`, the same
+ * total as a live controller's `global_pnl_quote`). Always `simulated`; a live bot never reads this. */
+export function projectPaperRuntimePnl(payload: unknown, bot: string, now: number): ControllerPnlView {
+  const unavailable = (reason: string): ControllerPnlView => ({ rows: [], reason, observedAt: null, quote: null, total: null, realized: null, unrealized: null, simulated: true });
+  if (!isPaperBot(bot)) return unavailable('Only a paper bot reads simulated runtime PnL.');
+  const root = payload && typeof payload === 'object' ? payload as Record<string, unknown> : {};
+  const runtime = root.runtime_status && typeof root.runtime_status === 'object' ? root.runtime_status as Record<string, unknown> : null;
+  if (!runtime || runtime.bot_name !== bot) return unavailable('Waiting for the paper runtime observation.');
+  if (runtime.simulated === false || root.simulated === false) return unavailable('The paper runtime observation is not marked simulated.');
+  const summary = runtime.summary && typeof runtime.summary === 'object' ? runtime.summary as Record<string, unknown> : null;
+  if (!summary || summary.pnl_available === false) return unavailable('Paper PnL is not available yet.');
+  const realized = numeric(summary.realized_pnl_quote), unrealized = numeric(summary.unrealized_pnl_quote);
+  const observed = typeof runtime.updated_at === 'string' ? Date.parse(runtime.updated_at) : NaN;
+  if (realized === null || unrealized === null) return unavailable('Paper PnL is not available yet.');
+  if (!Number.isFinite(observed) || observed > now + 5_000) return unavailable('The paper runtime observation has no usable time.');
+  if (now - observed > PAPER_RUNTIME_STALE_MS) return unavailable('The paper runtime observation is stale.');
+  const pairs = Array.isArray(runtime.controllers) ? runtime.controllers.flatMap(row => row && typeof row === 'object' && typeof (row as { pair?: unknown }).pair === 'string' && /^[A-Z0-9]+-[A-Z0-9]+$/.test((row as { pair: string }).pair) ? [(row as { pair: string }).pair] : []) : [];
+  const quotes = new Set(pairs.map(pair => pair.split('-')[1]));
+  if (quotes.size !== 1) return unavailable('Paper quote currency is ambiguous.');
+  return { rows: [], reason: null, observedAt: observed / 1000, quote: [...quotes][0], total: realized + unrealized, realized, unrealized, simulated: true };
+}
+
+/** The PnL a bot card shows: native controller performance, or for a paper bot (which has none in the API)
+ * its simulated runtime PnL. A paper view is always marked `simulated`. */
+export function projectBotPnl(page: unknown, bootstrap: unknown, bot: string, now: number): ControllerPnlView {
+  const native = projectControllerPnl(page, bot, now);
+  if (!isPaperBot(bot)) return native;
+  return native.total !== null ? { ...native, simulated: true } : projectPaperRuntimePnl(bootstrap, bot, now);
 }

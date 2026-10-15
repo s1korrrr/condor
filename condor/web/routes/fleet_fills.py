@@ -32,12 +32,13 @@ HEADERS = {
     "X-Content-Type-Options": "nosniff",
     "Vary": "Authorization",
 }
-ALLOWED_QUERY = {"limit", "before", "bot", "side", "pair", "schema"}
+ALLOWED_QUERY = {"limit", "before", "bot", "side", "pair", "schema", "scope"}
 SINGLE_VALUED = ALLOWED_QUERY - {"bot"}
 
-# The window does not depend on the user, only on the server: filters and the cursor apply per request.
-_cache: dict[str, tuple[float, dict]] = {}
-_locks: dict[str, asyncio.Lock] = {}
+# The window does not depend on the user, only on the server and the scope (live or paper): filters and the
+# cursor apply per request.
+_cache: dict[tuple[str, str], tuple[float, dict]] = {}
+_locks: dict[tuple[str, str], asyncio.Lock] = {}
 
 
 def _readers():
@@ -45,14 +46,15 @@ def _readers():
     return summary_route.READERS
 
 
-async def _window(server: str) -> dict:
-    async with _locks.setdefault(server, asyncio.Lock()):
-        hit = _cache.get(server)
+async def _window(server: str, scope: str = "live") -> dict:
+    key = (server, scope)
+    async with _locks.setdefault(key, asyncio.Lock()):
+        hit = _cache.get(key)
         if hit is None or hit[0] <= time.monotonic():
             try:
                 async with asyncio.timeout(TOTAL_TIMEOUT):
                     window = await feed.read_window(
-                        server, _readers(), time.time() * 1000
+                        server, _readers(), time.time() * 1000, scope=scope
                     )
             except TimeoutError:
                 raise HTTPException(
@@ -60,7 +62,7 @@ async def _window(server: str) -> dict:
                 ) from None
             hit = (time.monotonic() + CACHE_TTL_SECONDS, window)
             if CACHE_TTL_SECONDS > 0:
-                _cache[server] = hit
+                _cache[key] = hit
     return hit[1]
 
 
@@ -92,7 +94,10 @@ async def fleet_fills(
         raise HTTPException(
             status_code=400, detail="limit must be an integer"
         ) from None
-    window = await _window(name)
+    scope = params["scope"][0] if "scope" in params else "live"
+    if scope not in feed.SCOPES:
+        raise HTTPException(status_code=400, detail="scope must be live or paper")
+    window = await _window(name, scope)
     try:
         body = feed.build_page(
             window,

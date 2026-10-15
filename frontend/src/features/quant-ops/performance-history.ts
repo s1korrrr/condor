@@ -1,9 +1,11 @@
+import { isPaperBot } from '@/features/trading-visuals/sources';
+
 export type PerformancePoint = {
   timestamp: number; total_pnl_quote: string; realized_pnl_quote: string;
   unrealized_pnl_quote: string; quote: string; identity: string; segment: string;
 };
 export type PerformanceHistory = {
-  source: 'native_mqtt_observer'; bot_name: string; range: string;
+  source: 'native_mqtt_observer' | 'reporting_paper_runtime'; simulated?: boolean; bot_name: string; range: string;
   coverage_start: number | null; bucket_seconds?: number | null; points: PerformancePoint[]; truncated: boolean;
 };
 /** Condor reads longer ranges as the last stored sample per UTC bucket per segment; 1D returns every stored sample. */
@@ -11,6 +13,10 @@ export const PERFORMANCE_BUCKET_SECONDS: Readonly<Record<string, number | null>>
 /** Longest spacing inside one segment: native samples are at most 90s apart, and a bucketed read adds its width. */
 export function performanceGapMs(bucketSeconds: number | null): number {
   return 90_000 + (bucketSeconds ?? 0) * 1000;
+}
+/** A live bot's history is the native observer's; a paper bot's is simulated, recorded from reporting. Never crossed. */
+export function historySourceMatches(data: { source?: unknown; simulated?: unknown }, bot: string): boolean {
+  return isPaperBot(bot) ? data.source === 'reporting_paper_runtime' && data.simulated === true : data.source === 'native_mqtt_observer';
 }
 const isBackfill = (point: PerformancePoint) => point.segment.startsWith('backfill-');
 const amount = (value: unknown) => typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : null;
@@ -23,7 +29,7 @@ export function projectPerformanceHistory(payload: unknown, bot: string, now: nu
   // A server without bucketing returns every stored sample; a declared bucket must be the one its range is read at.
   const bucketSeconds = data.bucket_seconds ?? null;
   const validBucket = bucketSeconds === null || (Object.hasOwn(PERFORMANCE_BUCKET_SECONDS, data.range) && bucketSeconds === PERFORMANCE_BUCKET_SECONDS[data.range]);
-  if (data.source !== 'native_mqtt_observer' || data.bot_name !== bot || (expectedRange != null && data.range !== expectedRange) || !validBucket || !Array.isArray(data.points)) return empty('Performance history identity is invalid.');
+  if (!historySourceMatches(data, bot) || data.bot_name !== bot || (expectedRange != null && data.range !== expectedRange) || !validBucket || !Array.isArray(data.points)) return empty('Performance history identity is invalid.');
   const gapMs = performanceGapMs(bucketSeconds);
   if (!data.points.length) return empty('Recording begins with the first verified native performance report. Earlier history is not reconstructed.');
   const points: {time:number;value:number|null;owner:number}[] = [];

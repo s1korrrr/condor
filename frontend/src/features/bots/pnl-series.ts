@@ -1,3 +1,5 @@
+import { historySourceMatches } from '@/features/quant-ops/performance-history';
+
 /** Saved native PnL points for one window, as the durable observer stored them. */
 export type PnlSeries = { points: { time: number; value: number | null; owner: number }[]; quote: string | null; change: number | null; reason: string | null };
 const RANGE_SECONDS = { '1D': 86_400, '1W': 604_800 } as const;
@@ -7,11 +9,11 @@ const BUCKET_SECONDS = { '1D': null, '1W': 300 } as const;
 export function pnlSeries(payload: unknown, bot: string, now: number, expectedRange: keyof typeof RANGE_SECONDS): PnlSeries {
   const empty = (reason: string): PnlSeries => ({ points: [], quote: null, change: null, reason });
   if (!payload || typeof payload !== 'object') return empty('Performance history requires a timestamped, comparable series.');
-  const data = payload as { source?: unknown; bot_name?: unknown; range?: unknown; bucket_seconds?: unknown; coverage_start?: unknown; points?: unknown; truncated?: unknown };
+  const data = payload as { source?: unknown; simulated?: unknown; bot_name?: unknown; range?: unknown; bucket_seconds?: unknown; coverage_start?: unknown; points?: unknown; truncated?: unknown };
   // A server without bucketing returns every stored sample; a declared bucket must be the one this range is read at.
   const declared: number | null = BUCKET_SECONDS[expectedRange];
   const bucketed = data.bucket_seconds != null;
-  if (data.source !== 'native_mqtt_observer' || data.bot_name !== bot || data.range !== expectedRange || (bucketed && data.bucket_seconds !== declared) || !Array.isArray(data.points)) return empty('Performance history identity or requested window is invalid.');
+  if (!historySourceMatches(data, bot) || data.bot_name !== bot || data.range !== expectedRange || (bucketed && data.bucket_seconds !== declared) || !Array.isArray(data.points)) return empty('Performance history identity or requested window is invalid.');
   // Samples are about a minute apart and a segment never spans more than 90s without one; a bucket adds its width.
   const maxGap = 90 + (bucketed ? declared ?? 0 : 0);
   if (!data.points.length) return empty('Performance history requires a timestamped, comparable series. Recording begins with the first verified native report.');

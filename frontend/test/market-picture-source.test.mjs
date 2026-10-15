@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { frontendModules } from './helpers/frontend-module.mjs';
+import { marketPictureHealth, marketSourceLabel } from '../src/features/market-picture/health.mjs';
 
 const snapshot = 'a'.repeat(64);
 function sourceHarness(responses) {
@@ -49,4 +50,21 @@ test('a partial outage retains validated components only from the same immutable
   assert.deepEqual(result.history,[{time:123}]);
   assert.deepEqual(result.components.history,prior.components.history);
   assert.match(result.faults.history,/unavailable/);
+});
+
+test('304 plus failed stored read keeps retained values but reports degraded page health', async () => {
+  const h=sourceHarness([new Response(null,{status:304}),new Response('{}',{status:503}),response({items:[]}),response({items:[],next_cursor:null})]);
+  const retainedHistory=[{time:123}], prior={...previous({history:'temporary'}),history:retainedHistory,components:{history:{items:retainedHistory}}};
+  const result=await h.fetchBundle('v2','24h','BTC',new AbortController().signal,prior);
+  const health=marketPictureHealth(result.faults,null,'FRESH');
+  assert.equal(result.frame,prior.frame);
+  assert.equal(result.history,retainedHistory);
+  assert.deepEqual(health.components,['history']);
+  assert.equal(health.degraded,true);
+  assert.equal(health.freshness,'DEGRADED');
+  assert.equal(marketSourceLabel({mode:'LIVE',freshness:health.freshness,valid:240,loading:false}),'DEGRADED');
+  assert.equal(health.footerTone,'warning');
+  assert.notEqual(marketSourceLabel({mode:'LIVE',freshness:health.freshness,valid:240,loading:false}),'LIVE');
+  assert.match(health.notice,/Retained values remain bound to the same validated frame/);
+  assert.equal(marketPictureHealth({},null,'FRESH').freshness,'FRESH');
 });

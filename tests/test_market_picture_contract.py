@@ -1,6 +1,7 @@
 import copy
 import hashlib
 import json
+from decimal import Decimal
 from pathlib import Path
 
 import pytest
@@ -8,6 +9,8 @@ import pytest
 from condor.web.market_picture_contract import (
     CORRELATION_WINDOW_HOURS,
     _compact_series,
+    _validate_candle_anomalies,
+    _validate_relative_strength_changes,
     canonical,
     correlation_definition_id,
     validate_frame,
@@ -57,6 +60,201 @@ def test_compact_cell_quality_defaults_are_hash_equivalent_and_expand_in_frame()
     validate_frame(seal(frame), allow_fixture=True)
 
 
+def test_owner_candle_context_rows_and_source_capabilities_validate_and_bind_to_metrics():
+    frame = with_candle_context(fixture())
+    parsed = validate_frame(seal(frame), allow_fixture=True)
+    assert len(parsed["normalized_breadth"]) == 6
+    assert len(parsed["breadth_trajectory"]) == 9
+    assert len(parsed["breadth_divergence"]) == 3
+    assert len(parsed["contribution_summaries"]) == 4
+    assert parsed["source_capabilities"][0]["qualification"] == "not_probed"
+
+    bad_ref = with_candle_context(fixture())
+    bad_ref["breadth_trajectory"][0]["metric_refs"]["acceleration"]["metric_id"] = "breadth_pressure_velocity_5_5m"
+    with pytest.raises(ValueError, match="semantic metric binding"):
+        validate_frame(seal(bad_ref), allow_fixture=True)
+
+    bad_capability = with_candle_context(fixture())
+    bad_capability["source_capabilities"][0]["operational"] = "healthy"
+    with pytest.raises(ValueError, match="unprobed capability"):
+        validate_frame(seal(bad_capability), allow_fixture=True)
+
+
+def test_owner_builder_fixture_is_accepted_by_gateway_schema_and_semantic_checks():
+    frame = fixture("market-picture.m1.fixture.json")
+    validate_frame(frame, allow_fixture=True)
+
+
+def test_exact_one_hour_rank_projection_is_typed_and_bound_to_the_frozen_cohort():
+    frame = fixture("market-picture.relative-ranks.1h.fixture.json")
+    parsed = validate_frame(frame, allow_fixture=True)
+    changes = parsed["relative_strength_changes"]
+    assert changes["baseline_cutoff_ms"] == changes["current_cutoff_ms"] - 3_600_000
+    assert changes["rank_deltas"] == [-1, 1]
+    assert changes["valid_count"] == changes["expected_count"] == len(parsed["assets"])
+
+    for mutation in ("wrong_definition", "wrong_cohort", "non_permutation", "wrong_interval", "unavailable_with_cohort"):
+        invalid = copy.deepcopy(frame)
+        changes = invalid["relative_strength_changes"]
+        if mutation == "wrong_definition":
+            changes["definition_hash"] = "f" * 64
+        elif mutation == "wrong_cohort":
+            changes["cohort_hash"] = "f" * 64
+        elif mutation == "non_permutation":
+            changes["rank_deltas"] = [0, 1]
+        elif mutation == "unavailable_with_cohort":
+            changes.update(
+                valid_count=0,
+                rank_deltas=[None] * len(invalid["assets"]),
+                reason_codes=["INSUFFICIENT_COVERAGE"],
+                cohort_hash="a" * 64,
+            )
+        else:
+            changes["baseline_cutoff_ms"] += 60_000
+        resealed = seal(invalid)
+        if mutation == "unavailable_with_cohort":
+            with pytest.raises(ValueError, match="unavailable relative-strength rank"):
+                _validate_relative_strength_changes(resealed)
+        else:
+            with pytest.raises(ValueError, match="relative-strength|rank change|permutation"):
+                validate_frame(resealed, allow_fixture=True)
+
+
+def test_owner_combined_fixture_keeps_daily_flow_and_partial_depth_at_the_gateway():
+    frame = fixture("market-picture.m1-components.fixture.json")
+    parsed = validate_frame(frame, allow_fixture=True)
+    assert len(parsed["daily_internals"]) == len(parsed["assets"]) == 5
+    assert parsed["microstructure"]["replay_class"] == "snapshot_only"
+    assert parsed["microstructure"]["raw_inputs_retained"] is False
+    flow = parsed["microstructure"]["flows"]
+    books = parsed["microstructure"]["liquidity"]
+    assert flow and books
+    assert all(row["source_contract_hash"] for row in flow + books)
+    partial = next(row for row in books if Decimal(row["uncovered_size"]) > 0)
+    assert partial["vwap"] is None
+    assert partial["cost_bps"] is None
+    assert parsed["source_capabilities"]
+
+    private = copy.deepcopy(frame)
+    private["source_capabilities"][0]["family"] = "private_exposure"
+    private["source_capabilities"][0]["access"] = "separately_authorized_private"
+    with pytest.raises(ValueError, match="private source metadata"):
+        validate_frame(seal(private), allow_fixture=True)
+
+
+def test_owner_combined_fixture_carries_valid_hourly_candle_anomalies():
+    frame = fixture("market-picture.m1-components.fixture.json")
+    parsed = validate_frame(frame, allow_fixture=True)
+    anomalies = parsed["candle_anomalies"]
+    assert anomalies["cutoff_ms"] == frame["cutoff_ms"] // 3_600_000 * 3_600_000
+    assert anomalies["decision_available_at_ms"] == frame["available_at_ms"]
+    assert anomalies["expected_count"] == len(frame["assets"])
+    assert len(anomalies["source_hash"]) == 64
+
+    for mutation in (
+        "wrong_cutoff", "wrong_source_count", "short_vector", "nonbinary", "wrong_high_count",
+        "wrong_definition", "wrong_share", "unknown_metric",
+    ):
+        invalid = copy.deepcopy(frame)
+        panel = invalid["candle_anomalies"]
+        metric = panel["metrics"]["dictionary_rvol_1h_high"]
+        if mutation == "wrong_cutoff":
+            panel["cutoff_ms"] += 3_600_000
+        elif mutation == "wrong_source_count":
+            panel["source_count"] -= 1
+        elif mutation == "short_vector":
+            metric["values"].pop()
+        elif mutation == "nonbinary":
+            metric["values"][0] = 2
+        elif mutation == "wrong_high_count":
+            metric["high_count"] = 999
+        elif mutation == "wrong_definition":
+            metric["definition_hash"] = "f" * 64
+        elif mutation == "wrong_share":
+            metric["share_fraction"] = "1.1"
+        else:
+            panel["metrics"]["unreviewed"] = metric
+        with pytest.raises(ValueError, match="candle-anomaly"):
+            _validate_candle_anomalies(seal(invalid))
+
+
+@pytest.mark.parametrize("mutation", ["flow_after_component", "book_after_frame", "book_observed_after_cutoff"])
+def test_microstructure_rows_cannot_cross_component_or_frame_decision_time(mutation):
+    frame = fixture("market-picture.m1-components.fixture.json")
+    component = frame["microstructure"]
+    if mutation == "flow_after_component":
+        component["available_at_ms"] -= 1
+        component["flows"][0]["available_at_ms"] = frame["available_at_ms"]
+    elif mutation == "book_after_frame":
+        component["liquidity"][0]["available_at_ms"] = frame["available_at_ms"] + 1
+        component["liquidity"][0]["expires_at_ms"] += 1
+    else:
+        component["liquidity"][0]["observed_at_ms"] = frame["cutoff_ms"] + 1
+    component["component_id"] = hashlib.sha256(
+        canonical({key: value for key, value in component.items() if key != "component_id"})
+    ).hexdigest()
+    with pytest.raises(ValueError, match="decision-time bounds"):
+        validate_frame(seal(frame), allow_fixture=True)
+
+
+@pytest.mark.parametrize("mutation", [
+    "quantity", "covered_vwap", "full_vwap", "missing_full_cost", "negative_cost",
+    "sell_cost_bound", "zero_spread", "fee_bound", "total_cost", "band_imbalance",
+    "unknown_access", "unknown_spread", "unknown_band", "unknown_percentile",
+])
+def test_liquidity_execution_and_cost_fields_reconcile_before_publication(mutation):
+    frame = fixture("market-picture.m1-components.fixture.json")
+    row = next(item for item in frame["microstructure"]["liquidity"] if item["uncovered_size"] == "0")
+    if mutation == "quantity":
+        row["uncovered_size"] = "0.1"
+    elif mutation == "covered_vwap":
+        row["covered_vwap"] = "22"
+    elif mutation == "full_vwap":
+        row["vwap"] = "22"
+    elif mutation == "missing_full_cost":
+        row["cost_bps"] = None
+    elif mutation == "negative_cost":
+        row["cost_bps"] = "-1"
+    elif mutation == "sell_cost_bound":
+        row["cost_bps"] = "10000"
+    elif mutation == "zero_spread":
+        row["spread_bps"] = "0"
+    elif mutation == "fee_bound":
+        row["fee_bps"] = "10001"
+    elif mutation == "total_cost":
+        row["total_cost_bps"] = "30"
+    elif mutation == "band_imbalance":
+        row["band_imbalance"] = "0.5"
+    elif mutation == "unknown_access":
+        row["access_basis"] = "unknown"
+    elif mutation in {"unknown_spread", "unknown_band", "unknown_percentile"}:
+        row.update(
+            access_basis="unknown", covered_base="0", covered_quote="0", uncovered_size=row["requested_size"],
+            covered_vwap=None, vwap=None, cost_bps=None, fee_bps=None, fee_source=None, total_cost_bps=None,
+            spread_bps=None, band_bid_covered_quote="0", band_ask_covered_quote="0", band_complete=False,
+            band_imbalance=None, cost_percentile_7d=None, cost_percentile_sample_count=0,
+            cost_percentile_expected_samples=10080, cost_percentile_reason_codes=["INSUFFICIENT_HISTORY"],
+            cost_percentile_reference_digest=None,
+        )
+        if mutation == "unknown_spread":
+            row["spread_bps"] = "1"
+        elif mutation == "unknown_band":
+            row["band_bid_covered_quote"] = "1"
+        else:
+            row.update(
+                cost_percentile_7d="0.5", cost_percentile_sample_count=9500,
+                cost_percentile_reason_codes=[], cost_percentile_reference_digest="c" * 64,
+            )
+    component = frame["microstructure"]
+    component["component_id"] = hashlib.sha256(
+        canonical({key: value for key, value in component.items() if key != "component_id"})
+    ).hexdigest()
+    if frame["flow_ref"]["status"] == "available":
+        frame["flow_ref"]["snapshot_id"] = component["component_id"]
+    with pytest.raises(ValueError):
+        validate_frame(seal(frame), allow_fixture=True)
+
+
 def test_unavailable_cell_still_requires_explicit_status_and_reasons():
     for missing in ("computation_status", "reason_codes"):
         frame = fixture()
@@ -85,6 +283,84 @@ def seal(frame):
     frame.pop("payload_digest", None)
     frame["snapshot_id"] = hashlib.sha256(canonical(frame)).hexdigest()
     frame["payload_digest"] = hashlib.sha256(canonical(frame)).hexdigest()
+    return frame
+
+
+def with_candle_context(frame):
+    """Add owner-shaped optional M1 rows while reusing source-bound aggregate provenance."""
+    base = copy.deepcopy(frame["market_metrics"]["breadth_1440_advances"])
+
+    def add(metric_id, unit, definition_id, value="0"):
+        metric = copy.deepcopy(base)
+        metric.update(
+            metric_id=metric_id,
+            value=value,
+            unit=unit,
+            computation_status="VALID",
+            coverage_status="COMPLETE",
+            reason_codes=[],
+            definition={**metric["definition"], "definition_id": definition_id, "unit": unit},
+            denominator=2,
+            expected_denominator=2,
+            sample_count=2,
+        )
+        frame["market_metrics"][metric_id] = metric
+        return {"metric_id": metric_id}
+
+    normalized = []
+    for horizon in (1, 5, 15, 60, 240, 1440):
+        normalized.append({
+            "horizon_minutes": horizon, "valid_count": 2, "expected_count": 2,
+            "cutoff_ms": frame["cutoff_ms"],
+            "metric_refs": {
+                "advances": add(f"breadth_1bp_{horizon}_advances", "instruments", "breadth_instrument_count", "1"),
+                "declines": add(f"breadth_1bp_{horizon}_declines", "instruments", "breadth_instrument_count", "1"),
+                "unchanged": add(f"breadth_1bp_{horizon}_unchanged", "instruments", "breadth_instrument_count"),
+                "pressure": add(f"breadth_pressure_1bp_{horizon}", "index_minus1_to1", "breadth_pressure_1bp"),
+            },
+        })
+    trajectory = []
+    for horizon in (5, 15, 60):
+        for interval in (5, 15, 60):
+            trajectory.append({
+                "horizon_minutes": horizon, "interval_minutes": interval,
+                "cutoff_ms": frame["cutoff_ms"], "matched_count": 2, "expected_count": 2,
+                "matched_membership_hash": "b" * 64,
+                "metric_refs": {
+                    "level": add(f"breadth_pressure_level_{horizon}_{interval}m", "index_minus1_to1", "breadth_pressure_1bp"),
+                    "change": add(f"breadth_pressure_change_{horizon}_{interval}m", "index_points", "breadth_pressure_change"),
+                    "velocity": add(f"breadth_pressure_velocity_{horizon}_{interval}m", "index_points_per_minute", "breadth_pressure_velocity"),
+                    "acceleration": add(f"breadth_pressure_acceleration_{horizon}_{interval}m", "index_points_per_minute_squared", "breadth_pressure_acceleration"),
+                },
+            })
+    divergences = [{
+        "benchmark": "btc", "horizon_minutes": 15, "interval_minutes": interval,
+        "cutoff_ms": frame["cutoff_ms"], "matched_count": 2, "expected_count": 2,
+        "matched_membership_hash": "b" * 64,
+        "metric_ref": add(f"breadth_divergence_btc_15_{interval}m", "count", "breadth_price_divergence"),
+    } for interval in (5, 15, 60)]
+    contributions = []
+    for horizon in (5, 15, 60, 1440):
+        contributions.append({
+            "horizon_minutes": horizon, "expected_count": 2, "valid_count": 2,
+            "start_cohort_available": True, "prior_liquidity_weights_available": False,
+            "equal_weight_return_ref": add(f"cohort_equal_return_{horizon}", "return_percent", "cohort_equal_weight_return"),
+            "capped_liquidity_return_ref": add(f"cohort_capped_liquidity_return_{horizon}", "return_percent", "cohort_capped_liquidity_return"),
+            "top5_abs_equal_ref": add(f"contribution_top5_abs_equal_{horizon}", "share_fraction", "return_concentration_abs_top5_equal", "0.5"),
+            "top5_abs_capped_ref": add(f"contribution_top5_abs_capped_{horizon}", "share_fraction", "return_concentration_abs_top5_capped_liquidity", "0.5"),
+        })
+    frame["normalized_breadth"] = normalized
+    frame["breadth_trajectory"] = trajectory
+    frame["breadth_divergence"] = divergences
+    frame["contribution_summaries"] = contributions
+    frame["source_capabilities"] = [{
+        "source_id": "okx.spot_flow", "family": "spot_flow", "venue_profile": "okx_spot",
+        "endpoint": "trades.public", "qualification": "not_probed", "operational": "unavailable",
+        "source_contract_hash": "a" * 64,
+        "instrument_ids": frame["universe"]["member_instrument_ids"], "units": ["notional_usd"],
+        "history_semantics": "venue trade event time", "access": "anonymous", "cadence_ms": 1000,
+        "max_records": 1000, "license_basis": "public venue terms", "reasons": [],
+    }]
     return frame
 
 

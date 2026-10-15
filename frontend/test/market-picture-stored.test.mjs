@@ -48,6 +48,45 @@ test("history resolves canonical coverage and ascends in source time", () => {
   assert.equal(rows[0].snapshot_id, first.snapshot_id);
   assert.equal(rows[1].valid, raw.coverage.valid_instruments);
   assert.equal(rows[1].summary.trend_strength, 25);
+  assert.equal(rows[1].flowHistory, null, "older history rows without the optional flow projection remain valid");
+});
+
+test("owner history keeps normalized counts separate from legacy shares and carries trajectory share change", () => {
+  const ownerFrame = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/market-picture.m1-components.fixture.json", import.meta.url), "utf8"));
+  const history = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/market-picture.m1-components.history.json", import.meta.url), "utf8"));
+  const points = projectHistory(history, projectFrame(ownerFrame));
+  assert.equal(points.length, 3);
+  assert.deepEqual(points[0].normalizedBreadth["15"], { advances: 3, declines: 2, unchanged: 0, pressure: 0.2 });
+  assert.deepEqual(points[0].breadth["15"], { positive: 0.6, negative: 0.4, flat: 0, pressure: 0.6 });
+  assert.equal(points[0].breadthTrajectory["15/5"].shareChange, -20);
+  assert.equal(points[0].flowHistory.cumulativeDeltaQuote, "10.811060122");
+  assert.equal(points[2].flowHistory.cumulativeDeltaQuote, null);
+  assert.ok(points[2].flowHistory.reasons.includes("UNKNOWN_AGGRESSOR"));
+});
+
+test("stored flow history preserves owner scope, coverage, reset and nullable CVD", () => {
+  const aggregate = {
+    component_id: "a".repeat(64), quote_asset: "USDC", scope_hash: "b".repeat(64),
+    expected_instruments: 2, observed_instruments: 2, complete_instruments: 2,
+    buy_quote: "120.5", sell_quote: "100", unknown_quote: "0",
+    cumulative_delta_quote: "20.5", reset_at_ms: frame.cutoff_ms - 300_000, reason_codes: [],
+  };
+  const projected = projectHistory(envelope([point({ flow_history: aggregate })]), frame)[0].flowHistory;
+  assert.deepEqual(projected, {
+    componentId: aggregate.component_id, quoteAsset: "USDC", scopeHash: aggregate.scope_hash,
+    expectedInstruments: 2, observedInstruments: 2, completeInstruments: 2,
+    buyQuote: "120.5", sellQuote: "100", unknownQuote: "0",
+    cumulativeDeltaQuote: "20.5", resetAt: aggregate.reset_at_ms, reasons: [],
+  });
+  assert.throws(() => projectHistory(envelope([point({
+    flow_history: { ...aggregate, observed_instruments: 1, complete_instruments: 1 },
+  })]), frame), /Unqualified flow history/);
+  assert.throws(() => projectHistory(envelope([point({
+    flow_history: { ...aggregate, cumulative_delta_quote: null },
+  })]), frame), /needs an owner reason/);
+  assert.throws(() => projectHistory(envelope([point({
+    flow_history: { ...aggregate, observed_instruments: 0, complete_instruments: 0 },
+  })]), frame));
 });
 test("history rejects late revisions, mixed frames and nonnumeric shares", () => {
   assert.throws(

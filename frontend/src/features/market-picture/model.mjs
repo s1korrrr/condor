@@ -108,6 +108,22 @@ export function rankAssets(assets, valueFor, limit = 5) {
   };
 }
 
+/** Current pullback screen; both owner metrics must be valid for the same frame. */
+export function relativePullbackCandidates(assets, benchmark, limit = 5) {
+  const qualified = assets.filter((asset) => {
+    const relative = asset.relative?.[benchmark];
+    const shortReturn = asset.returns?.["60"];
+    return relative?.status === "VALID" && Number.isFinite(relative.value) &&
+      shortReturn?.status === "VALID" && Number.isFinite(shortReturn.value);
+  });
+  const candidates = qualified
+    .filter((asset) => asset.relative[benchmark].value > 0 && asset.returns["60"].value < 0)
+    .sort((a, b) => b.relative[benchmark].value - a.relative[benchmark].value ||
+      a.instrument_id.localeCompare(b.instrument_id))
+    .slice(0, limit);
+  return { candidates, qualified: qualified.length, expected: assets.length };
+}
+
 export function rankEmptyLabel(qualified, expected, warming) {
   if (qualified > 0) return null;
   return warming > 0

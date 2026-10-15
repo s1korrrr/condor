@@ -31,7 +31,7 @@ function reasons(value) {
   check(
     Array.isArray(value) &&
       value.length <= 32 &&
-      value.every((r) => typeof r === "string" && /^[A-Z_]+$/.test(r)),
+      value.every((r) => typeof r === "string" && /^[A-Z][A-Z0-9_]{0,63}$/.test(r)),
   );
   return value;
 }
@@ -76,6 +76,81 @@ export function projectHistory(body, frame) {
     check(
       Object.keys(breadth).length === 6 && HORIZONS.every((h) => h in breadth),
     );
+    const normalizedRaw = record(row.normalized_breadth ?? {});
+    const normalizedBreadth = {};
+    if (Object.keys(normalizedRaw).length) {
+      check(Object.keys(normalizedRaw).length === 6 && HORIZONS.every(h => h in normalizedRaw), "History normalized breadth must cover all six horizons.");
+      for (const horizon of HORIZONS) {
+        const normalized = record(normalizedRaw[horizon]);
+        check(Object.keys(normalized).sort().join("|") === ["advances", "declines", "unchanged", "pressure"].sort().join("|"), "History normalized breadth fields are invalid.");
+        const count = value => {
+          const parsed = number(value, 0);
+          check(parsed === null || Number.isInteger(parsed), "History breadth counts must be whole instruments.");
+          return parsed;
+        };
+        normalizedBreadth[horizon] = {
+          advances: count(normalized.advances), declines: count(normalized.declines),
+          unchanged: count(normalized.unchanged), pressure: number(normalized.pressure, -1, 1),
+        };
+      }
+    }
+    const trajectoryRaw = record(row.breadth_trajectory ?? {});
+    const breadthTrajectory = {};
+    if (Object.keys(trajectoryRaw).length) {
+      const expectedKeys = [5, 15, 60].flatMap(h => [5, 15, 60].map(t => `${h}/${t}`));
+      check(Object.keys(trajectoryRaw).length === 9 && expectedKeys.every(key => key in trajectoryRaw), "History breadth trajectory must cover all nine intervals.");
+      for (const key of expectedKeys) {
+        const trajectory = record(trajectoryRaw[key]);
+        const required = ["level", "change", "velocity", "acceleration", "matched_count", "expected_count", "matched_membership_hash"];
+        const keys = Object.keys(trajectory).sort();
+        check(keys.join("|") === [...required].sort().join("|") || keys.join("|") === [...required, "share_change"].sort().join("|"), "History trajectory fields are invalid.");
+        const matched = integer(trajectory.matched_count), expectedMatched = integer(trajectory.expected_count);
+        const membership = trajectory.matched_membership_hash;
+        check(matched <= expectedMatched && (membership === null || HASH.test(membership)), "History matched cohort is invalid.");
+        breadthTrajectory[key] = {
+          level: number(trajectory.level, -1, 1), change: number(trajectory.change, -2, 2),
+          velocity: number(trajectory.velocity), acceleration: number(trajectory.acceleration),
+          shareChange: number(trajectory.share_change, -100, 100),
+          matched, expected: expectedMatched, membership,
+        };
+      }
+    }
+    let flowHistory = null;
+    if (row.flow_history != null) {
+      const flow = record(row.flow_history);
+      const componentId = text(flow.component_id, 64),
+        scopeHash = text(flow.scope_hash, 64),
+        quoteAsset = text(flow.quote_asset, 16),
+        expectedInstruments = integer(flow.expected_instruments),
+        observedInstruments = integer(flow.observed_instruments),
+        completeInstruments = integer(flow.complete_instruments),
+        buyQuote = text(flow.buy_quote, 128),
+        sellQuote = text(flow.sell_quote, 128),
+        unknownQuote = text(flow.unknown_quote, 128),
+        cumulativeDeltaQuote = flow.cumulative_delta_quote == null ? null : text(flow.cumulative_delta_quote, 128),
+        resetAt = flow.reset_at_ms == null ? null : integer(flow.reset_at_ms),
+        flowReasons = reasons(flow.reason_codes);
+      check(flowReasons.length <= 16);
+      check(HASH.test(componentId) && HASH.test(scopeHash));
+      check(/^[A-Z0-9]{2,16}$/.test(quoteAsset));
+      check(expectedInstruments > 0 && expectedInstruments <= 300 &&
+        observedInstruments > 0 && observedInstruments <= expectedInstruments && completeInstruments <= observedInstruments);
+      check(number(buyQuote, 0) !== null && number(sellQuote, 0) !== null && number(unknownQuote, 0) !== null);
+      check(resetAt == null || resetAt <= cutoff, "Flow history reset occurs after its stored point.");
+      if (cumulativeDeltaQuote != null) {
+        check(resetAt != null && observedInstruments === expectedInstruments &&
+          completeInstruments === expectedInstruments && number(unknownQuote, 0) === 0 && flowReasons.length === 0,
+        "Unqualified flow history cannot publish cumulative delta.");
+        number(cumulativeDeltaQuote);
+      } else {
+        check(flowReasons.length > 0, "Unavailable cumulative delta needs an owner reason.");
+      }
+      flowHistory = {
+        componentId, quoteAsset, scopeHash, expectedInstruments, observedInstruments,
+        completeInstruments, buyQuote, sellQuote, unknownQuote, cumulativeDeltaQuote,
+        resetAt, reasons: flowReasons,
+      };
+    }
     return {
       time: cutoff,
       snapshot_id: row.snapshot_id,
@@ -84,6 +159,9 @@ export function projectHistory(body, frame) {
       expected,
       membership: row.membership_hash,
       gapBefore: row.gap_before === true,
+      flowHistory,
+      normalizedBreadth,
+      breadthTrajectory,
       summary: Object.fromEntries(
         Object.entries(record(row.summary ?? {})).map(([key, value]) => [
           key,

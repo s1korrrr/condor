@@ -28,6 +28,17 @@ export function rankAssets<T extends { instrument_id: string }>(
   valueFor: (asset: T) => number | null,
   limit?: number,
 ): { leaders: T[]; laggards: T[] };
+export function relativePullbackCandidates<
+  T extends {
+    instrument_id: string;
+    relative: Record<string, { status: string; value: number | null }>;
+    returns: Record<string, { status: string; value: number | null }>;
+  },
+>(
+  assets: T[],
+  benchmark: string,
+  limit?: number,
+): { candidates: T[]; qualified: number; expected: number };
 export function csvCell(value: unknown): string;
 export function heatmapColor(value: number | null): string;
 export function histogramBinIndex(value: number, edges: number[]): number;

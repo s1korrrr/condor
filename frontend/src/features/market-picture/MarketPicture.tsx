@@ -23,6 +23,7 @@ import {
 import { canonical, digest } from "./contract.mjs";
 import { useMarketPicture } from "./useMarketPicture";
 import { boundedJson, projectEvents, type FrameBundle } from "./source";
+import { marketPictureHealth, marketSourceLabel } from "./health.mjs";
 import {
   type DisplayAsset,
   type DisplayCorrelation,
@@ -30,7 +31,7 @@ import {
   type DisplayFrame,
   type ViewSettings,
 } from "./presentation";
-import { MarketPulseHero, MarketSnapshotTiles } from "./MarketPulse";
+import { BreadthContextPanel, DailyInternalsPanel, EvidenceMatrixPanel, FlowHistoryPanel, MarketPulseHero, MarketSnapshotTiles, MicrostructurePanel } from "./MarketPulse";
 import {
   CorrelationMatrix,
   CorrelationsPanel,
@@ -190,6 +191,9 @@ export function MarketPictureSurface({
   const source = useMarketPicture(server, view.window, view.benchmark, fixture);
   const data = source.data,
     frame = data?.frame ?? null;
+  const observationNow = useObservationClock(fixture?.frame.available_at_ms);
+  const componentAsOf = source.frozen ? frame?.available_at_ms ?? observationNow : observationNow;
+  const health = marketPictureHealth(data?.faults, source.error, ageState(frame, Date.now(), source.frozen).freshness);
   const state = ageState(frame, Date.now(), source.frozen);
   const selected =
     frame?.assets.find((a) => a.instrument_id === view.selected) ?? null;
@@ -372,7 +376,7 @@ export function MarketPictureSurface({
           />
           <kbd>/</kbd>
         </label>
-        <SourceStatus frame={frame} frozen={source.frozen} loading={source.loading} server={server} fixtureTime={fixture?.frame.available_at_ms} />
+        <SourceStatus frame={frame} frozen={source.frozen} loading={source.loading} server={server} degraded={health.degraded} fixtureTime={fixture?.frame.available_at_ms} />
         <button
           className="mp-icon-button"
           aria-label="Market Picture settings"
@@ -421,14 +425,14 @@ export function MarketPictureSurface({
           </button>
         </div>
       </div>
-      {(source.error || message) && (
+      {(source.error || health.notice || message) && (
         <div className="mp-notice" role="status">
           <span>
             {source.error
-              ? `${source.error}${frame ? " · Retaining the last validated frame with its original expiry." : ""}`
-              : message}
+              ? `${source.error}${frame ? " · Retaining the last validated frame with its original expiry." : ""}${health.componentNotice ? ` · ${health.componentNotice}` : ""}`
+              : (health.notice ?? message)}
           </span>
-          {source.error ? (
+          {source.error || health.degraded ? (
             <button onClick={source.retry}>Retry</button>
           ) : (
             <button
@@ -452,6 +456,11 @@ export function MarketPictureSurface({
       {frame && (
         <MarketSnapshotTiles frame={frame} history={data?.history ?? []} window={view.window} />
       )}
+      {frame && <EvidenceMatrixPanel frame={frame} horizon={view.horizon} asOf={componentAsOf} />}
+      {frame && <MicrostructurePanel frame={frame} asOf={componentAsOf} />}
+      {frame && <FlowHistoryPanel history={data?.history ?? []} window={view.window} fault={data?.faults.history ?? null} />}
+      {frame && <BreadthContextPanel frame={frame} />}
+      {frame && <DailyInternalsPanel frame={frame} />}
       {!frame && (
         <div className="mp-loading" role="status" aria-busy={source.loading || undefined}>
           <span className="mp-skeleton" style={{ height: 120 }} />
@@ -516,7 +525,7 @@ export function MarketPictureSurface({
           {source.frozen
             ? "View frozen · source age continues"
             : "Read-only market intelligence"}{" "}
-          <span className="mp-up">●</span>
+          <span className={health.footerTone === "warning" ? "mp-warning" : "mp-up"}>●</span>
         </span>
       </footer>
       {drawer && (
@@ -542,6 +551,7 @@ export function MarketPictureSurface({
               <AssetInspector
                 asset={selected}
                 frame={frame}
+                asOf={componentAsOf}
                 openNativeTools={() => {
                   setNativeSearch(`?${new URLSearchParams({search: selected.symbol})}`);
                   openTools();
@@ -708,23 +718,17 @@ function useObservationClock(fixtureTime?: number) {
   }, [fixtureTime]);
   return now;
 }
-function SourceStatus({frame, frozen, loading, server, fixtureTime}: {
-  frame: DisplayFrame | null; frozen: boolean; loading: boolean; server: string | null; fixtureTime?: number;
+function SourceStatus({frame, frozen, loading, server, degraded, fixtureTime}: {
+  frame: DisplayFrame | null; frozen: boolean; loading: boolean; server: string | null; degraded: boolean; fixtureTime?: number;
 }) {
   const now = useObservationClock(fixtureTime);
   const state = ageState(frame, now, frozen);
+  const displayedFreshness = marketPictureHealth({}, degraded ? "source degraded" : null, state.freshness).freshness;
+  const label = marketSourceLabel({mode: state.mode, freshness: displayedFreshness, valid: frame?.valid ?? 0, loading});
   return (
         <div className="mp-source-state">
-          <strong data-freshness={state.freshness}>
-            {loading
-              ? "Loading"
-              : state.mode === "LIVE"
-                ? frame?.valid === 0
-                  ? "No qualified data"
-                  : state.freshness !== "FRESH"
-                    ? state.freshness
-                    : "LIVE"
-                : `${state.mode}${state.freshness === "FRESH" ? "" : ` · ${state.freshness}`}`}
+          <strong data-freshness={displayedFreshness}>
+            {label}
             <span aria-hidden="true">●</span>
           </strong>
           <time>

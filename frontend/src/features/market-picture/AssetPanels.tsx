@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { BarsChart } from "@/features/quant-ops/kit/charts";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
 import { CHART } from "@/features/quant-ops/kit/series";
-import { BENCHMARKS, rankAssets, rankCoverageLabel } from "./model.mjs";
+import { BENCHMARKS, rankAssets, rankCoverageLabel, relativePullbackCandidates } from "./model.mjs";
 import {
   assetState,
   derivedRegime,
@@ -230,6 +230,22 @@ export function LeadersLaggardsPanel({ frame, select, selected, cohort, benchmar
     .map((a) => ({ a, v: value(a) }))
     .filter((row): row is { a: DisplayAsset; v: number } => row.v !== null)
     .sort((x, y) => y.v - x.v);
+  const pullbacks = relativePullbackCandidates(assets, benchmark);
+  const relativeChange = frame?.comparisons[`relative_strength/${benchmark.toLowerCase()}`];
+  const relativeTrend = relativeChange?.status === "VALID" && relativeChange.value != null
+    ? relativeChange.value > 0 ? "Strengthening" : relativeChange.value < 0 ? "Weakening" : "Unchanged"
+    : "Unavailable";
+  const comparisonContext = frame?.comparisonContext;
+  const rankChanges = frame?.relativeStrengthChanges ?? null;
+  const rankChangesQualified = rankChanges !== null && rankChanges.valid === rankChanges.expected &&
+    rankChanges.expected > 0 && rankChanges.cohortHash !== null;
+  const rankMovers = rankChangesQualified
+    ? assets.map(asset => ({ asset, delta: rankChanges.rankDeltas[asset.instrument_id] }))
+      .filter((row): row is { asset: DisplayAsset; delta: number } => row.delta !== null && row.delta !== undefined && row.delta !== 0)
+      .sort((a, b) => b.delta - a.delta || a.asset.instrument_id.localeCompare(b.asset.instrument_id))
+    : [];
+  const improvingRank = rankMovers.filter(row => row.delta > 0).slice(0, 5);
+  const weakeningRank = rankMovers.filter(row => row.delta < 0).sort((a, b) => a.delta - b.delta || a.asset.instrument_id.localeCompare(b.asset.instrument_id)).slice(0, 5);
   const unit = sort === "relative" ? " pp" : "%";
   const label = sort === "relative" ? `vs ${benchmark} (pp)` : `${horizonLabel(sort)} return`;
   return (
@@ -274,6 +290,53 @@ export function LeadersLaggardsPanel({ frame, select, selected, cohort, benchmar
             </button>
           )) : <small>None negative</small>}
         </div>
+      </div>
+      <div className="mp-relative-context">
+        <div>
+          <span className="mp-kicker">Relative strength change</span>
+          <strong>{relativeTrend}</strong>
+          <small title={relativeChange?.definition ?? "No prior compatible comparison reference is attached."}>
+            {relativeChange?.status === "VALID" && relativeChange.value != null
+              ? `Median matched-cohort change in 24h excess return · ${numberText(relativeChange.value, 2, true)} pp over 1h · ${comparisonContext?.common ?? relativeChange.valid}/${comparisonContext?.current ?? relativeChange.expected} matched · baseline ${comparisonContext?.baselineCutoff == null ? "unavailable" : new Date(comparisonContext.baselineCutoff).toISOString()}`
+              : "Unavailable · no qualified prior relative-strength reference"}
+          </small>
+        </div>
+        <div>
+          <span className="mp-kicker">24h relative strength · 1h pullback</span>
+          <small>{pullbacks.candidates.length} candidates · {pullbacks.qualified}/{pullbacks.expected} have both qualified owner metrics</small>
+        </div>
+        <div className="mp-relative-rank-changes">
+          <span className="mp-kicker">1h relative-rank movement</span>
+          <small title={rankChanges ? `Definition ${rankChanges.definitionHash} · source ${rankChanges.sourceHash ?? "unavailable"} · cohort ${rankChanges.cohortHash ?? "unavailable"}` : "No owner-produced rank-change projection is attached."}>
+            {rankChangesQualified
+              ? `${rankChanges.valid}/${rankChanges.expected} common instruments · baseline ${rankChanges.baselineCutoff == null ? "unavailable" : new Date(rankChanges.baselineCutoff).toISOString()} · positive means rank improvement`
+              : `Unavailable · ${rankChanges?.reasons.join(", ") || "no qualified exact 1h rank comparison"}`}
+          </small>
+          {rankChangesQualified ? <div className="mp-rank-movement-columns">
+            <div aria-label="Improving relative ranks">
+              <b>Improving</b>
+              {improvingRank.length ? improvingRank.map(({ asset, delta }) => (
+                <button key={asset.instrument_id} onClick={() => select(asset.instrument_id)} aria-pressed={selected === asset.instrument_id}>
+                  {asset.symbol}<strong>↑ {delta} {Math.abs(delta) === 1 ? "place" : "places"}</strong>
+                </button>
+              )) : <small>No improving ranks.</small>}
+            </div>
+            <div aria-label="Weakening relative ranks">
+              <b>Weakening</b>
+              {weakeningRank.length ? weakeningRank.map(({ asset, delta }) => (
+                <button key={asset.instrument_id} onClick={() => select(asset.instrument_id)} aria-pressed={selected === asset.instrument_id}>
+                  {asset.symbol}<strong>↓ {Math.abs(delta)} {Math.abs(delta) === 1 ? "place" : "places"}</strong>
+                </button>
+              )) : <small>No weakening ranks.</small>}
+            </div>
+          </div> : null}
+        </div>
+        {pullbacks.candidates.length ? pullbacks.candidates.map((asset) => (
+          <button key={asset.instrument_id} aria-pressed={selected === asset.instrument_id} onClick={() => select(asset.instrument_id)}>
+            {asset.symbol}<b>{signedPercent(asset.relative[benchmark].value!, 2)} vs {benchmark}</b><small>1h {signedPercent(asset.returns["60"].value!, 2)}</small>
+          </button>
+        )) : <span className="mp-muted">No qualified current pullback candidates.</span>}
+        <p className="mp-panel-footnote">Predicate: positive 24h arithmetic excess return and negative 1h asset return. Pullbacks use qualified same-frame owner metrics; strengthening or weakening uses the matched one-hour comparison reference and remains unavailable when its baseline is missing.</p>
       </div>
     </Panel>
   );

@@ -434,7 +434,7 @@ function ParticipationPanelView({
     >
       <TileGrid min={132} label="Participation predicates">{rings}</TileGrid>
       <footer className="mp-panel-footnote">
-        Predicates overlap. Each share uses its own qualified denominator. Select one to highlight its members.
+        Predicates overlap. Each share uses its own qualified denominator. Select one to filter the instrument table to its qualified members.
       </footer>
     </Panel>
   );

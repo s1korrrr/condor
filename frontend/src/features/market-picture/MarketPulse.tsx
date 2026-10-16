@@ -26,6 +26,7 @@ import {
   numberText,
 } from "./presentation";
 import { Metric, Panel } from "./Primitives";
+import { selectMetricCohort, type MetricCohortRequest } from "./metric-cohort.mjs";
 
 /** Coverage changes within a partial universe are just as material as a full/partial flip. */
 function coverageChangePoints(history: HistoryPoint[]): HistoryPoint[] {
@@ -304,6 +305,7 @@ export function MarketPulseHero({
   replay,
   asOf,
   historical = false,
+  onSelectMetric,
 }: {
   frame: DisplayFrame | null;
   history: HistoryPoint[];
@@ -314,6 +316,7 @@ export function MarketPulseHero({
   replay: (id: string) => void;
   asOf?: number;
   historical?: boolean;
+  onSelectMetric?: (request: MetricCohortRequest) => void;
 }) {
   const [smooth, setSmooth] = useState(true);
   const [dataTableOpen, setDataTableOpen] = useState(false);
@@ -383,12 +386,15 @@ export function MarketPulseHero({
         </aside>
         <div className="mp-hero__chart" ref={ref}>
           <div className="mp-chart-legend">
-            <span className="mp-up">
+            <button type="button" className="mp-up" disabled={!onSelectMetric || !frame} aria-label={`Filter instruments: ${horizonLabel(horizon)} advancing`} onClick={() => onSelectMetric?.({ kind: "breadth", horizon, side: "advancing" })}>
               ▲ {breadth?.advancing ?? "—"} advancing <Metric metric={breadth?.positive} digits={0} />
-            </span>
-            <span className="mp-down">
+            </button>
+            <button type="button" className="mp-down" disabled={!onSelectMetric || !frame} aria-label={`Filter instruments: ${horizonLabel(horizon)} declining`} onClick={() => onSelectMetric?.({ kind: "breadth", horizon, side: "declining" })}>
               ▼ {breadth?.declining ?? "—"} declining <Metric metric={breadth?.negative} digits={0} />
-            </span>
+            </button>
+            <button type="button" disabled={!onSelectMetric || !frame} aria-label={`Filter instruments: ${horizonLabel(horizon)} unchanged`} onClick={() => onSelectMetric?.({ kind: "breadth", horizon, side: "unchanged" })}>
+              {breadth?.unchanged ?? "—"} unchanged
+            </button>
             <span className="mp-pressure-color">
               ● Breadth pressure raw{" "}
               <Metric metric={frame?.pressure[horizon]} digits={2} signed />
@@ -478,26 +484,16 @@ export function MarketPulseHero({
   );
 }
 
-/** Deterministic source-family summary. Correlated price measures stay one family. */
-export function EvidenceMatrixPanel({
-  frame,
-  horizon,
-  asOf = frame.available_at_ms,
-}: {
-  frame: DisplayFrame;
-  horizon: Horizon;
-  asOf?: number;
-}) {
-  const breadth = frame.breadth[horizon];
-  const pressure = frame.pressure[horizon];
-  const freshness = ageState(frame, asOf, false).freshness;
-  const validBreadth = freshness === "FRESH" && breadth?.positive.status === "VALID" && pressure?.status === "VALID";
-  const completeBreadth = validBreadth && breadth.positive.valid === breadth.positive.expected &&
-    pressure.valid === pressure.expected;
-  const pressureValue = validBreadth ? pressure?.value : null;
+export interface SourceFamilyReading {
+  key: string; family: string; state: string; evidence: string;
+  qualified: boolean; freshness: string; scope: string;
+}
+
+/** Shared source-family qualification for the summary and its evidence panel. */
+function sourceFamilyReadings(frame: DisplayFrame, asOf: number): SourceFamilyReading[] {
   const sourceReference = frame.flow ?? { status: "unavailable", reasons: ["SOURCE_UNAVAILABLE"] };
   const capabilityFor = (families: string[]) => {
-    const capabilities = frame.sourceCapabilities.filter(capability => families.includes(capability.family));
+    const capabilities = (frame.sourceCapabilities ?? []).filter(capability => families.includes(capability.family));
     if (!capabilities.length) return { state: "NOT PROBED", detail: "No owner source-capability receipt is attached." };
     const states = capabilities.map(capability => {
       const qualification = capability.qualification.replaceAll("_", " ").toUpperCase();
@@ -529,6 +525,40 @@ export function EvidenceMatrixPanel({
   const external = capabilityFor(["external_context"]);
   const privateExposure = capabilityFor(["private_exposure"]);
   const research = capabilityFor(["conditional_outcomes"]);
+  return [
+    {
+      key: "spot_flow", family: "Executed spot flow", qualified: flowQualified,
+      freshness: flowFuture && !flowQualified ? "FUTURE" : flowExpired ? "EXPIRED" : currentFlows.length ? "CURRENT" : "UNAVAILABLE",
+      scope: `${currentFlows.filter(row => row.capabilityUsable && row.complete && !row.reasons.length).length}/${observedFlows.length} complete qualified flow rows`,
+      state: flowQualified ? "OBSERVED · QUALIFIED" : flowFuture ? "OBSERVED · FUTURE" : flowExpired ? "OBSERVED · EXPIRED" : spotFlow.state,
+      evidence: `${spotFlow.detail} ${observedFlows.length ? `${observedFlows.length} stored flow rows; ${currentFlows.filter(row => row.complete && !row.reasons.length).length} complete, reason-free, available and unexpired at ${new Date(asOf).toISOString()}.` : "No executed-flow component is attached."} Status-only pointer: ${sourceReference.status}${sourceReference.reasons.length ? ` · ${sourceReference.reasons.join(", ")}` : ""}.`,
+    },
+    { key: "spot_liquidity", family: "Displayed liquidity", qualified: bookQualified, freshness: bookFuture && !bookQualified ? "FUTURE" : bookExpired ? "EXPIRED" : observedBooks.some(row => rowTimeState(frame, row, asOf) === "CURRENT") ? "CURRENT" : "UNAVAILABLE", scope: `${observedBooks.filter(row => row.capabilityUsable && !row.reasons.length && rowTimeState(frame, row, asOf) === "CURRENT").length}/${observedBooks.length} qualified size scenarios`, state: bookQualified ? "OBSERVED · QUALIFIED" : bookFuture ? "OBSERVED · FUTURE" : bookExpired ? "OBSERVED · EXPIRED" : spotLiquidity.state, evidence: `${spotLiquidity.detail} ${observedBooks.length ? `${observedBooks.length} stored order-size scenarios; partial coverage stays visibly partial.` : "No visible-book component is attached."}` },
+    { key: "derivatives", family: "Derivatives positioning", qualified: false, freshness: "UNAVAILABLE", scope: "No qualified derivatives metric", state: derivatives.state, evidence: `${derivatives.detail} No qualified derivatives metric is attached.` },
+    { key: "options", family: "Options", qualified: false, freshness: "UNAVAILABLE", scope: "No qualified observation", state: options.state, evidence: `${options.detail} Options remain outside the qualified evidence set.` },
+    { key: "external_context", family: "External context", qualified: false, freshness: "UNAVAILABLE", scope: "No qualified observation", state: external.state, evidence: `${external.detail} External observations remain outside the qualified evidence set.` },
+    { key: "private_exposure", family: "Private exposure", qualified: false, freshness: "UNAVAILABLE", scope: "No qualified observation", state: privateExposure.state, evidence: `${privateExposure.detail} No private owner data is read or projected here.` },
+    { key: "conditional_outcomes", family: "Conditional outcomes", qualified: false, freshness: "UNAVAILABLE", scope: "No qualified observation", state: research.state === "NOT PROBED" ? "UNQUALIFIED" : research.state, evidence: `${research.detail} Deferred pending separately approved research and after-cost evidence.` },
+  ];
+}
+
+/** Deterministic source-family summary. Correlated price measures stay one family. */
+export function EvidenceMatrixPanel({
+  frame,
+  horizon,
+  asOf = frame.available_at_ms,
+}: {
+  frame: DisplayFrame;
+  horizon: Horizon;
+  asOf?: number;
+}) {
+  const breadth = frame.breadth[horizon];
+  const pressure = frame.pressure[horizon];
+  const freshness = ageState(frame, asOf, false).freshness;
+  const validBreadth = freshness === "FRESH" && breadth?.positive.status === "VALID" && pressure?.status === "VALID";
+  const completeBreadth = validBreadth && breadth.positive.valid === breadth.positive.expected &&
+    pressure.valid === pressure.expected;
+  const pressureValue = validBreadth ? pressure?.value : null;
   const familyRows = [
     {
       family: "Price & participation",
@@ -537,17 +567,7 @@ export function EvidenceMatrixPanel({
         ? `${metricText(breadth.positive, 0)} advancing · pressure ${metricText(pressure, 2, true)} · ${horizonLabel(horizon)}`
         : "Breadth or pressure is unavailable for this horizon.",
     },
-    {
-      family: "Executed spot flow",
-      state: flowQualified ? "OBSERVED · QUALIFIED" : flowFuture ? "OBSERVED · FUTURE" : flowExpired ? "OBSERVED · EXPIRED" : spotFlow.state,
-      evidence: `${spotFlow.detail} ${observedFlows.length ? `${observedFlows.length} stored flow rows; ${currentFlows.filter(row => row.complete && !row.reasons.length).length} complete, reason-free, available and unexpired at ${new Date(asOf).toISOString()}.` : "No executed-flow component is attached."} Status-only pointer: ${sourceReference.status}${sourceReference.reasons.length ? ` · ${sourceReference.reasons.join(", ")}` : ""}.`,
-    },
-    { family: "Displayed liquidity", state: bookQualified ? "OBSERVED · QUALIFIED" : bookFuture ? "OBSERVED · FUTURE" : bookExpired ? "OBSERVED · EXPIRED" : spotLiquidity.state, evidence: `${spotLiquidity.detail} ${observedBooks.length ? `${observedBooks.length} stored order-size scenarios; partial coverage stays visibly partial.` : "No visible-book component is attached."}` },
-    { family: "Derivatives positioning", state: derivatives.state, evidence: `${derivatives.detail} No qualified derivatives metric is attached.` },
-    { family: "Options", state: options.state, evidence: `${options.detail} Options remain outside the qualified evidence set.` },
-    { family: "External context", state: external.state, evidence: `${external.detail} External observations remain outside the qualified evidence set.` },
-    { family: "Private exposure", state: privateExposure.state, evidence: `${privateExposure.detail} No private owner data is read or projected here.` },
-    { family: "Conditional outcomes", state: research.state === "NOT PROBED" ? "UNQUALIFIED" : research.state, evidence: `${research.detail} Deferred pending separately approved research and after-cost evidence.` },
+    ...sourceFamilyReadings(frame, asOf),
   ];
   const continuation = !validBreadth || pressureValue == null
     ? "Continuation conditions are unavailable because this breadth horizon is not qualified."
@@ -608,20 +628,21 @@ function rowTimeState(frame: DisplayFrame, row: { available: number; expires: nu
 }
 
 /** Owner-recorded spot-flow and displayed-book observations. Never estimates depth or actionability. */
-function MicrostructurePanelView({ frame, asOf = frame.available_at_ms }: { frame: DisplayFrame; asOf?: number }) {
+function MicrostructurePanelView({ frame, asOf = frame.available_at_ms, only, idPrefix = "mp" }: { frame: DisplayFrame; asOf?: number; only?: "flow" | "liquidity"; idPrefix?: string }) {
   const component = frame.microstructure;
   if (!component) return (
-    <Panel id="mp-microstructure" title="Executed flow &amp; displayed liquidity" detail="Owner-recorded observations only; no frontend flow or book calculation">
+    <Panel id={`${idPrefix}-microstructure`} title="Executed flow &amp; displayed liquidity" detail="Owner-recorded observations only; no frontend flow or book calculation">
       <p className="mp-panel-footnote">Source held · this frame contains no microstructure component. The status-only flow pointer is not an observation.</p>
     </Panel>
   );
-  const flows = component.flows, books = component.liquidity;
+  const flows = only === "liquidity" ? [] : component.flows;
+  const books = only === "flow" ? [] : component.liquidity;
   return (
-    <Panel id="mp-microstructure" title="Executed flow &amp; displayed liquidity" detail="Observed quantities from the owner component; price participation remains a separate correlated family">
+    <Panel id={`${idPrefix}-microstructure`} title="Executed flow &amp; displayed liquidity" detail="Observed quantities from the owner component; price participation remains a separate correlated family">
       <p className="mp-panel-footnote">{component.sourceKind.toUpperCase()} · {component.replayClass.replaceAll("_", " ")} · assessed as of {new Date(asOf).toISOString()} · raw trades/books not retained · digest {component.componentId.slice(0, 12)}…</p>
-      {flows.length ? <div className="mp-table-scroll" tabIndex={0} role="region" aria-labelledby="mp-flow-observations-caption">
+      {flows.length ? <div className="mp-table-scroll" tabIndex={0} role="region" aria-labelledby={`${idPrefix}-flow-observations-caption`}>
         <table className="mp-table mp-trajectory-table">
-          <caption id="mp-flow-observations-caption">Executed spot notional by aggressor side · quote {frame.quote}</caption>
+          <caption id={`${idPrefix}-flow-observations-caption`}>Executed spot notional by aggressor side · quote {frame.quote}</caption>
           <thead><tr><th>Instrument</th><th>Buy quote</th><th>Sell quote</th><th>Unknown quote</th><th>Unknown share</th><th>Known imbalance</th><th>Confirmation</th><th>Cumulative delta · before → after</th><th>Coverage / source</th></tr></thead>
           <tbody>{flows.map(row => {
             const timeState = rowTimeState(frame, row, asOf);
@@ -647,10 +668,10 @@ function MicrostructurePanelView({ frame, asOf = frame.available_at_ms }: { fram
             </tr>;
           })}</tbody>
         </table>
-      </div> : <p className="mp-panel-footnote">No executed-flow rows in this owner snapshot.</p>}
-      {books.length ? <div className="mp-table-scroll" tabIndex={0} role="region" aria-labelledby="mp-book-observations-caption">
+      </div> : only !== "liquidity" && <p className="mp-panel-footnote">No executed-flow rows in this owner snapshot.</p>}
+      {books.length ? <div className="mp-table-scroll" tabIndex={0} role="region" aria-labelledby={`${idPrefix}-book-observations-caption`}>
         <table className="mp-table mp-trajectory-table">
-          <caption id="mp-book-observations-caption">Visible-book walk for recorded order sizes; no orders are sent</caption>
+          <caption id={`${idPrefix}-book-observations-caption`}>Visible-book walk for recorded order sizes; no orders are sent</caption>
           <thead><tr><th>Instrument</th><th>Side / size</th><th>Covered / uncovered</th><th>Covered VWAP</th><th>Full-size VWAP</th><th>Book cost</th><th>Prior 7d cost percentile · midrank</th><th>Fee / total</th><th>Spread / band</th><th>State</th></tr></thead>
           <tbody>{books.map((row, index) => {
             const timeState = rowTimeState(frame, row, asOf);
@@ -686,7 +707,7 @@ function MicrostructurePanelView({ frame, asOf = frame.available_at_ms }: { fram
             </tr>;
           })}</tbody>
         </table>
-      </div> : <p className="mp-panel-footnote">No displayed-liquidity rows in this owner snapshot.</p>}
+      </div> : only !== "flow" && <p className="mp-panel-footnote">No displayed-liquidity rows in this owner snapshot.</p>}
       <p className="mp-panel-footnote">Confirmation and execution-cost claims require a frame and row available at the assessment time and unexpired. Incomplete flow, unknown aggressor notional, partial book depth, missing fee provenance, and unsupported access remain unavailable; no candle color is used as trade flow.</p>
     </Panel>
   );
@@ -869,7 +890,7 @@ function BreadthContextPanelView({ frame }: { frame: DisplayFrame }) {
 export const BreadthContextPanel = memo(BreadthContextPanelView);
 
 /** Previous completed daily bars only; missing or short history stays explicitly unavailable. */
-function DailyInternalsPanelView({ frame }: { frame: DisplayFrame }) {
+function DailyInternalsPanelView({ frame, asOf = frame.available_at_ms, onSelectMetric }: { frame: DisplayFrame; asOf?: number; onSelectMetric?: (request: MetricCohortRequest) => void }) {
   if (!frame.dailyInternals.length) return (
     <Panel id="mp-daily-internals" title="Daily range &amp; moving averages" detail="Owner-confirmed daily candles; no intraday substitutions">
       <p className="mp-panel-footnote">Unavailable · this frame has no owner-qualified daily-internals projection.</p>
@@ -877,6 +898,17 @@ function DailyInternalsPanelView({ frame }: { frame: DisplayFrame }) {
   );
   return (
     <Panel id="mp-daily-internals" title="Daily range &amp; moving averages" detail="Previous completed daily bars only; each value carries its own sample coverage">
+      {onSelectMetric && <div className="mp-daily-filters" role="group" aria-label="Filter instruments by daily metric">
+        {([
+          ...(["20", "50", "200"] as const).map(period => ({ kind: "daily-above" as const, period })),
+          ...(["high_break", "low_break", "close_break_high", "close_break_low"] as const).map(key => ({ kind: "daily-break" as const, key })),
+        ] satisfies MetricCohortRequest[]).map(request => {
+          const selection = selectMetricCohort(frame, request, asOf);
+          return <button type="button" key={selection.label} onClick={() => onSelectMetric(request)} title={`${selection.definition} · ${selection.reasons.join(", ")}`}>
+            {selection.label} · {selection.status === "available" ? `${selection.instrumentIds.length} matches · ${selection.valid}/${selection.expected} valid` : "Unavailable"}
+          </button>;
+        })}
+      </div>}
       <div className="mp-table-scroll" tabIndex={0} role="region" aria-labelledby="mp-daily-internals-caption">
         <table className="mp-table mp-daily-internals-table">
           <caption id="mp-daily-internals-caption">Prior 20-day range breaks and 20/50/200-day simple moving averages</caption>
@@ -920,6 +952,17 @@ export interface SummaryTile {
   format: (value: number) => string;
   delta: string | null;
   deltaTone: string;
+  freshness: string;
+  metric?: DisplayMetric;
+  horizon?: Horizon;
+  sourceReading?: SourceFamilyReading;
+  asOf?: number;
+}
+
+function summaryMetricFreshness(frame: DisplayFrame, metric: DisplayMetric | undefined, asOf: number): string {
+  if (!metric || metric.available == null || metric.expires == null) return "UNAVAILABLE";
+  const state = rowTimeState(frame, { available: metric.available, expires: metric.expires }, asOf);
+  return state === "CURRENT" ? ageState(frame, asOf, false).freshness : state;
 }
 
 const SNAPSHOT = [
@@ -948,11 +991,17 @@ function MarketSnapshotTilesView({
   history,
   window,
   onInspect,
+  horizon = "15",
+  asOf = frame?.available_at_ms ?? 0,
+  historical = false,
 }: {
   frame: DisplayFrame | null;
   history: HistoryPoint[];
   window: string;
   onInspect?: (tile: SummaryTile, samples: HistoryPoint[]) => void;
+  horizon?: Horizon;
+  asOf?: number;
+  historical?: boolean;
 }) {
   const samples = useMemo(() => pulseSeries(history, window, "15").samples, [history, window]);
   if (!frame) return null;
@@ -977,6 +1026,7 @@ function MarketSnapshotTilesView({
           kind === "share" ? `${(v * 100).toFixed(0)}%` : numberText(v, digits),
         delta: delta?.value == null ? null : `${metricText(delta, 1, true)} · 1h`,
         deltaTone: delta?.value == null ? "" : delta.value < 0 ? "mp-down" : "mp-up",
+        freshness: summaryMetricFreshness(frame, metric, asOf),
       },
     ];
   });
@@ -995,6 +1045,7 @@ function MarketSnapshotTilesView({
       format: (v: number) => `net ${signed(v, 0)}`,
       delta: null,
       deltaTone: "",
+      freshness: breaks.map(metric => summaryMetricFreshness(frame, metric, asOf)).filter((value, index, states) => states.indexOf(value) === index).join(" / "),
     });
   tiles.push({
     key: "coverage",
@@ -1006,20 +1057,42 @@ function MarketSnapshotTilesView({
     format: (v: number) => String(v),
     delta: null,
     deltaTone: "",
+    freshness: ageState(frame, asOf, false).freshness,
   });
+  const contribution = frame.contributions?.[horizon];
+  const equalReturn = contribution?.equalReturn;
+  const returnFreshness = summaryMetricFreshness(frame, equalReturn, asOf);
+  tiles.push({
+    key: "equal_weight_return", label: "Equal-weight return",
+    value: equalReturn?.value == null || returnFreshness === "FUTURE" ? "Unavailable" : metricText(equalReturn, 2, true),
+    hint: `${horizonLabel(horizon)} · full start cohort ${contribution ? `${contribution.valid}/${contribution.expected}` : "unavailable"} · change unavailable`,
+    title: equalReturn ? metricTitle(equalReturn) : "No owner-computed frozen start-cohort return is attached.",
+    metric: equalReturn, horizon, freshness: returnFreshness,
+    points: [], format: value => `${numberText(value, 2, true)}%`, delta: null, deltaTone: "",
+  });
+  for (const reading of sourceFamilyReadings(frame, asOf).filter(row => ["spot_flow", "spot_liquidity", "derivatives"].includes(row.key))) {
+    tiles.push({
+      key: reading.key, label: reading.key === "derivatives" ? "Derivatives stress" : reading.family,
+      value: reading.qualified ? "Observed" : "Unavailable", hint: `${reading.scope} · ${reading.state}`,
+      title: reading.evidence, sourceReading: reading, asOf, freshness: reading.freshness,
+      points: [], format: String, delta: null, deltaTone: "",
+    });
+  }
   return (
     <TileGrid min={170} label="Market summary" className="mp-tiles">
       {tiles.map((tile) => {
         const observation = <>
-          <strong>{tile.value}</strong>
+          <strong id={`mp-summary-${tile.key}-value`}>{tile.value}</strong>
           <small>{tile.hint}</small>
           {tile.delta && <small className={tile.deltaTone}>{tile.delta}</small>}
+          <small id={`mp-summary-${tile.key}-freshness`} className="mp-tile__freshness">{historical ? "Recorded · " : ""}{tile.freshness} · Frame observed at {Number.isFinite(frame.cutoff_ms) ? new Date(frame.cutoff_ms).toISOString() : "Unavailable"}</small>
         </>;
         return (
         <article className="mp-tile" key={tile.key} title={tile.title}>
           <h3>{tile.label}</h3>
           {onInspect ? <button type="button" className="mp-tile__inspect"
             aria-label={`Inspect ${tile.label} evidence`} aria-haspopup="dialog"
+            aria-describedby={`mp-summary-${tile.key}-value mp-summary-${tile.key}-freshness`}
             onClick={() => onInspect(tile, samples)}>
             {observation}<small className="mp-tile__action">View evidence</small>
           </button> : observation}

@@ -26,7 +26,6 @@ import { useMarketPicture } from "./useMarketPicture";
 import { boundedJson, projectEvents, type FrameBundle } from "./source";
 import { marketPictureHealth, marketSourceLabel } from "./health.mjs";
 import {
-  type DisplayAsset,
   type DisplayCorrelation,
   type DisplayEvent,
   type DisplayFrame,
@@ -35,6 +34,8 @@ import {
 } from "./presentation";
 import { BreadthContextPanel, DailyInternalsPanel, EvidenceMatrixPanel, FlowHistoryPanel, MarketPulseHero, MarketSnapshotTiles, MicrostructurePanel, type SummaryTile } from "./MarketPulse";
 import { SummaryEvidence, type SummarySelection } from "./SummaryEvidence";
+import { selectMetricCohort, type MetricCohortRequest } from "./metric-cohort.mjs";
+import { instrumentExportMetadata, instrumentRows } from "./instrument-view";
 import {
   CorrelationMatrix,
   CorrelationsPanel,
@@ -127,12 +128,6 @@ function loadPreferences(key: string): Preferences {
     return EMPTY_PREFS;
   }
 }
-function predicateMembers(assets: DisplayAsset[], key: string) {
-  return assets
-    .filter((a) => a.predicates[key]?.value === 1)
-    .map((a) => a.instrument_id);
-}
-
 export function MarketPicture() {
   const { server } = useServer();
   const { user } = useAuth();
@@ -164,6 +159,7 @@ export function MarketPictureSurface({
   const [summarySelection, setSummarySelection] = useState<SummarySelection | null>(null);
   const [cohort, setCohort] = useState<string[]>([]),
     [cohortLabel, setCohortLabel] = useState("");
+  const [metricRule, setMetricRule] = useState<{ request: MetricCohortRequest; definition: string | null } | null>(null);
   const [message, setMessage] = useState<string | null>(null),
     [viewName, setViewName] = useState("");
   const [additionalEvents, setAdditionalEvents] = useState<{
@@ -199,6 +195,15 @@ export function MarketPictureSurface({
     frame = data?.frame ?? null;
   const observationNow = useObservationClock(fixture?.frame.available_at_ms);
   const componentAsOf = observationAsOf(frame, observationNow, source.frozen);
+  const metricFilter = useMemo(() => {
+    if (!metricRule) return null;
+    const result = selectMetricCohort(frame, metricRule.request, componentAsOf, metricRule.definition ?? undefined);
+    // An unavailable click did not establish a definition to carry across frames.
+    return metricRule.definition === null
+      ? { ...result, status: "unavailable" as const, instrumentIds: [], reasons: [...result.reasons, "RESELECT_TO_QUALIFY"] }
+      : result;
+  }, [frame, metricRule, componentAsOf]);
+  const selectedRows = useMemo(() => instrumentRows(frame, search, metricFilter), [frame, search, metricFilter]);
   const state = ageState(frame, observationNow, source.frozen);
   const health = marketPictureHealth(data?.faults, source.error, state.freshness);
   const selected =
@@ -222,10 +227,11 @@ export function MarketPictureSurface({
   const setWindow = useCallback((window: ViewSettings["window"]) => set({ window }), [set]);
   const setBenchmark = useCallback((benchmark: string) => set({ benchmark }), [set]);
   const setSector = useCallback((sector: string) => set({ sector }), [set]);
-  const selectPredicate = useCallback((predicate: string) => {
-    if (!frame) return;
-    highlight(predicateMembers(frame.assets, predicate), predicate.replaceAll("_", " "));
-  }, [frame, highlight]);
+  const selectMetric = useCallback((request: MetricCohortRequest) => {
+    const result = selectMetricCohort(frame, request, componentAsOf);
+    setMetricRule({ request, definition: result.status === "available" ? result.definition : null });
+  }, [frame, componentAsOf]);
+  const selectPredicate = useCallback((key: string) => selectMetric({ kind: "predicate", key }), [selectMetric]);
   const openMatrix = useCallback(() => setDrawer("matrix"), []);
   const inspectSummary = useCallback((tile: SummaryTile, samples: HistoryPoint[]) => {
     if (!frame) return;
@@ -270,6 +276,11 @@ export function MarketPictureSurface({
       components: data.components,
       selected_view: view,
       selected_cohort: cohort,
+      metric_filter: metricFilter,
+      symbol_search: search,
+      metric_symbol_subset_ids: selectedRows.map(row => row.instrument_id),
+      instrument_selection_scope: "metric_filter_and_symbol_search_before_table_controls",
+      assessed_at_ms: componentAsOf,
       full_universe_count: data.frame.expected,
       source_server: server,
       exported_at_ms: Date.now(),
@@ -288,22 +299,21 @@ export function MarketPictureSurface({
   };
   const exportCsv = () => {
     if (!frame) return;
+    const metadata = instrumentExportMetadata(frame, metricFilter, search, componentAsOf);
     const rows = [
       [
         "instrument_id",
         "price_quote",
         "return_24h_percent",
         "return_7d_percent",
-        "snapshot_id",
-        "source_kind",
+        ...Object.keys(metadata),
       ],
-      ...frame.assets.map((a) => [
+      ...selectedRows.map((a) => [
         a.instrument_id,
         a.price.original,
         a.returns["1440"].original,
         a.returns["10080"].original,
-        frame.snapshot_id,
-        frame.source_kind,
+        ...Object.values(metadata),
       ]),
     ];
     downloadFile(
@@ -429,6 +439,15 @@ export function MarketPictureSurface({
               <X size={12} />
             </button>
           )}
+          {metricFilter && <div className="mp-metric-filter" role="status">
+            <span>Display filter · {metricFilter.label} · {metricFilter.status === "available" ? `${metricFilter.instrumentIds.length} matches · ${metricFilter.valid}/${metricFilter.expected} valid` : "Unavailable"}</span>
+            <small>Instrument table only; market readings keep the full universe. Frame {frame?.sequence} · {metricFilter.cutoff == null ? "time unavailable" : new Date(metricFilter.cutoff).toISOString()}</small>
+            {metricFilter.reasons.length > 0 && <small>{[...new Set(metricFilter.reasons)].join(", ")}</small>}
+            <details><summary>Filter definition &amp; snapshot</summary><p>{metricFilter.definition ?? "No qualified definition"} · {metricFilter.snapshotId}</p></details>
+            <a href="#mp-instruments">View filtered instruments</a>
+            <button onClick={() => selectMetric(metricFilter.request)}>Reapply metric filter</button>
+            <button aria-label="Clear metric filter" onClick={() => setMetricRule(null)}>Clear filter <X size={12} /></button>
+          </div>}
         </div>
         <div>
           <button disabled={!frame} onClick={source.toggleFreeze}>
@@ -483,15 +502,16 @@ export function MarketPictureSurface({
         replay={source.replay}
         asOf={componentAsOf}
         historical={source.frozen}
+        onSelectMetric={selectMetric}
       />
       {frame && (
-        <MarketSnapshotTiles frame={frame} history={data?.history ?? EMPTY_HISTORY} window={view.window} onInspect={inspectSummary} />
+        <MarketSnapshotTiles frame={frame} history={data?.history ?? EMPTY_HISTORY} window={view.window} horizon={view.horizon} asOf={componentAsOf} historical={source.frozen} onInspect={inspectSummary} />
       )}
       {frame && <EvidenceMatrixPanel frame={frame} horizon={view.horizon} asOf={componentAsOf} />}
       {frame && <MicrostructurePanel frame={frame} asOf={componentAsOf} />}
       {frame && <FlowHistoryPanel history={data?.history ?? EMPTY_HISTORY} window={view.window} fault={data?.faults.history ?? null} />}
       {frame && <BreadthContextPanel frame={frame} />}
-      {frame && <DailyInternalsPanel frame={frame} />}
+      {frame && <DailyInternalsPanel frame={frame} asOf={componentAsOf} onSelectMetric={selectMetric} />}
       {!frame && (
         <div className="mp-loading" role="status" aria-busy={source.loading || undefined}>
           <span className="mp-skeleton" style={{ height: 120 }} />
@@ -500,7 +520,7 @@ export function MarketPictureSurface({
       )}
       {frame && (
         <div className="mp-sections">
-          <InstrumentsPanel {...common} search={search} />
+          <InstrumentsPanel {...common} search={search} displayFilter={metricFilter} asOf={componentAsOf} />
           <div className="mp-row mp-row--split">
             <LeadersLaggardsPanel {...common} benchmark={view.benchmark} />
             <ParticipationPanel
@@ -646,12 +666,12 @@ export function MarketPictureSurface({
               <button onClick={() => void exportContext()}>
                 <Download size={16} /> Full context & research JSON
               </button>
-              <button onClick={exportCsv}>
-                <Download size={16} /> All-asset CSV
+              <button onClick={exportCsv} disabled={!selectedRows.length}>
+                <Download size={16} /> Instrument subset CSV
               </button>
               <p className="mp-muted">
                 JSON includes source checksums, stored components, local view
-                selection and highlighted cohort. Private notes are excluded.
+                selection, metric filter and highlighted cohort. CSV applies the metric filter and symbol search; use the instrument table export for its additional column filters. Empty subsets are recorded in JSON. Private notes are excluded.
               </p>
             </div>
           )}

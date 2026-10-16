@@ -152,3 +152,24 @@
 }
 .mp-brand { min-width: 0; flex-shrink: 1; }
 .mp-brand > div > span { white-space: normal; overflow-wrap: anywhere; letter-spacing: 1.2px; }
+
+/* Metric actions select a display subset; owner market readings retain their scope. */
+.mp-chart-legend > button,
+.mp-daily-filters > button {
+  min-height: 44px;
+  padding: 6px 10px;
+  border: 1px solid var(--mp-border);
+  border-radius: 7px;
+  background: var(--mp-panel);
+  text-align: left;
+  cursor: pointer;
+}
+.mp-daily-filters { display: flex; flex-wrap: wrap; gap: 8px; padding: 12px 0; }
+.mp-metric-filter { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; max-width: 100%; }
+.mp-metric-filter > small { flex-basis: 100%; }
+.mp-metric-filter details { max-width: 100%; overflow-wrap: anywhere; }
+.mp-metric-filter button, .mp-metric-filter summary, .mp-metric-filter a { min-height: 44px; align-content: center; }
+.mp-tile__freshness { overflow-wrap: anywhere; }
+
+.mp-chart-legend > button.mp-up { color: var(--mp-positive); }
+.mp-chart-legend > button.mp-down { color: var(--mp-negative); }

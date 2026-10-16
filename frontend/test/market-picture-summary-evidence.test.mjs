@@ -41,9 +41,9 @@ test("each visible summary tile opens its own evidence with the exact selected h
   const selected = [];
   const tree = MarketSnapshotTilesView({ frame, history, window: "24h", onInspect: (tile, samples) => selected.push({ tile, samples }) });
   const actions = [...walk(tree)].filter(node => node.type === "button" && node.props["aria-haspopup"] === "dialog");
-  assert.equal(actions.length, 6, "all five observation tiles and coverage have evidence actions");
+  assert.equal(actions.length, 10, "all observation tiles, coverage and independent source readings have evidence actions");
   for (const action of actions) action.props.onClick();
-  assert.deepEqual(selected.map(v => v.tile.key), ["market_participation", "trend_strength", "realized_volatility_24h", "relative_volume_1h", "range_breaks", "coverage"]);
+  assert.deepEqual(selected.map(v => v.tile.key), ["market_participation", "trend_strength", "realized_volatility_24h", "relative_volume_1h", "range_breaks", "coverage", "equal_weight_return", "spot_flow", "spot_liquidity", "derivatives"]);
   assert.ok(selected.every(v => v.samples.length === 3 && v.samples.every((p, i) => p === history[i])));
   assert.deepEqual(selected[0].tile.points.map(p => p.value), [0.25, null, null, 0.5]);
   assert.deepEqual(selected[4].tile.points.map(p => p.value), [0, null, null, 1]);

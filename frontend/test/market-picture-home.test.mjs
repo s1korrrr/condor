@@ -867,11 +867,12 @@ test("the hourly generation shows a Relative volume (1h) tile and the legacy one
   assert.match(shown, /Relative volume \(1h\)/);
   assert.match(shown, /last 60 min vs prior 24h hourly mean/);
   assert.match(shown, /1\.37/);
-  // The owner's null with a reason code (zero baseline, low coverage) draws no tile and prints no placeholder word.
+  // Withheld relative volume draws no tile; independent source-family readings can be unavailable.
   const withheld = tilesFor(pulse, {
     ...current, summary: { ...current.summary, relative_volume_1h: metric(null, { unit: "ratio", reasons: ["ZERO_BASELINE"], definition: "median_relative_volume_1h v1.0.0" }) },
   });
-  assert.doesNotMatch(withheld, /Relative volume|navailable/);
+  assert.doesNotMatch(withheld, /Relative volume/);
+  assert.match(withheld, /Derivatives stress/, "independent source state remains visible");
   const legacy = await fixtureFrame("market-picture.240.fixture.json");
   assert.ok("relative_volume_24h" in legacy.summary && !("relative_volume_1h" in legacy.summary));
   const hidden = tilesFor(pulse, withValue(legacy, "relative_volume_24h", "median_relative_volume_24h v1.0.0", 0.003));

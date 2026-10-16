@@ -22,6 +22,8 @@ import {
 import { api } from "@/lib/api";
 import { boundedJson, projectCorrelations } from "./source";
 import { Metric, Panel, Sparkline } from "./Primitives";
+import type { MetricCohortSelection } from "./metric-cohort.mjs";
+import { instrumentExportMetadata, instrumentRows } from "./instrument-view";
 
 interface AssetPanelProps {
   frame: DisplayFrame | null;
@@ -72,10 +74,10 @@ function HeatCell({ asset, horizon }: { asset: DisplayAsset; horizon: string }) 
 }
 
 /** Per-instrument strip: price, returns on every horizon as heat cells, momentum and trend state. */
-function InstrumentsPanelView({ frame, selected, select, cohort, search }: AssetPanelProps & { search: string }) {
+function InstrumentsPanelView({ frame, selected, select, cohort, search, displayFilter = null, asOf = frame?.available_at_ms ?? 0 }: AssetPanelProps & { search: string; displayFilter?: MetricCohortSelection | null; asOf?: number }) {
   const rows = useMemo(
-    () => (frame?.assets ?? []).filter((a) => symbolMatch(a, search)),
-    [frame, search],
+    () => instrumentRows(frame, search, displayFilter),
+    [frame, search, displayFilter],
   );
   const columns = useMemo<TableColumn<DisplayAsset>[]>(
     () => [
@@ -133,9 +135,13 @@ function InstrumentsPanelView({ frame, selected, select, cohort, search }: Asset
           initialSort={{ id: "r1440", desc: true }}
           pageSize={25}
           exportName="market-instruments.csv"
+          exportMetadata={instrumentExportMetadata(frame, displayFilter, search, asOf)}
           dense
           rowState={(a) => (a.instrument_id === selected ? "highlight" : cohort.has(a.instrument_id) ? "highlight" : undefined)}
-          emptyText="No symbols match this search."
+          emptyText={displayFilter?.status === "unavailable"
+            ? `Metric filter unavailable · ${displayFilter.reasons.join(", ")}. Reapply or clear the filter.`
+            : displayFilter && !displayFilter.instrumentIds.length ? "No instruments satisfy this metric in its qualified population."
+            : "No symbols match this search."}
         />
       </div>
       <footer className="mp-panel-footnote">

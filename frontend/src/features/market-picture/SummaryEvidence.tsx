@@ -1,4 +1,4 @@
-import type { SummaryTile } from "./MarketPulse";
+import { MicrostructurePanel, type SummaryTile } from "./MarketPulse";
 import type { DisplayFrame, DisplayMetric, HistoryPoint } from "./presentation";
 
 export interface SummarySelection {
@@ -31,6 +31,9 @@ export function SummaryEvidence({ selection }: { selection: SummarySelection }) 
   const { tile, frame, samples, window } = selection;
   const coverage = tile.key === "coverage";
   const range = tile.key === "range_breaks";
+  const ownerReturn = tile.key === "equal_weight_return";
+  const sourceReading = tile.sourceReading;
+  const summaryHistory = !ownerReturn && !sourceReading;
   const metrics = range
     ? [["new_highs_24h", "New highs (24h)"], ["new_lows_24h", "New lows (24h)"]]
     : [[tile.key, tile.label]];
@@ -48,7 +51,22 @@ export function SummaryEvidence({ selection }: { selection: SummarySelection }) 
       <dt>Universe</dt><dd>{frame.universeId} · {frame.universeRevision} · {frame.quote}</dd>
       <dt>Frame coverage</dt><dd>{frame.valid} / {frame.expected} instruments</dd>
     </dl>
-    {coverage ? <p>Frame coverage counts admitted instruments with a qualified observation. Each metric can have a different valid count. A change in coverage is unavailable unless the owner records a comparison.</p> : <>
+    {sourceReading ? <>
+      <h3>Source evidence</h3>
+      <p>{sourceReading.evidence}</p>
+      <dl className="mp-provenance-list">
+        <dt>Reading state</dt><dd>{sourceReading.state} · {sourceReading.freshness}</dd>
+        <dt>Scope</dt><dd>{sourceReading.scope}</dd>
+        <dt>Assessed at</dt><dd>{utc(tile.asOf ?? null)}</dd>
+      </dl>
+      <p>Each flow row and order-size scenario keeps its own instrument, source, timing and coverage. This status is not a market-wide imbalance or a universal execution-cost estimate.</p>
+      {(tile.key === "spot_flow" || tile.key === "spot_liquidity") && <MicrostructurePanel
+        frame={frame} asOf={tile.asOf} only={tile.key === "spot_flow" ? "flow" : "liquidity"} idPrefix="mp-summary" />}
+    </> : ownerReturn ? <>
+      <h3>Owner return evidence</h3>
+      <MetricEvidence label={tile.label} metric={tile.metric} />
+      <p>The owner uses the complete frozen start cohort for this horizon. Missing constituent endpoints remain missing; their weight is not redistributed. Change and retained return history are unavailable in these summary samples.</p>
+    </> : coverage ? <p>Frame coverage counts admitted instruments with a qualified observation. Each metric can have a different valid count. A change in coverage is unavailable unless the owner records a comparison.</p> : <>
       <h3>Metric evidence</h3>
       {metrics.map(([key, label]) => <section key={key}>
         <MetricEvidence label={label} metric={frame.summary[key]} />
@@ -62,7 +80,7 @@ export function SummaryEvidence({ selection }: { selection: SummarySelection }) 
         <dt>Baseline snapshot</dt><dd>{comparison.baselineSnapshotId ?? "Unavailable"}</dd>
       </dl>}
     </>}
-    <h3>Retained history</h3>
+    {summaryHistory ? <><h3>Retained history</h3>
     <p className="mp-muted">The table uses the tile’s selected {window} history samples. Values keep their stored units; missing values are unavailable. Historical metric definitions, metric coverage, availability and expiry are not retained in these summary rows.</p>
     {range && <p>Plotted net = new highs minus new lows. Both counts must be present; an absent count cannot become zero.</p>}
     {samples.length ? <div className="mp-table-scroll mp-pulse-data__scroll" role="region" aria-label={`${tile.label} history table`} tabIndex={0}>
@@ -86,7 +104,7 @@ export function SummaryEvidence({ selection }: { selection: SummarySelection }) 
           </tr>;
         })}</tbody>
       </table>
-    </div> : <p>Unavailable · no retained history samples in this window.</p>}
+    </div> : <p>Unavailable · no retained history samples in this window.</p>}</> : <p>Unavailable · this summary does not retain a comparable history series for this reading.</p>}
     <details>
       <summary>Selected frame identity</summary>
       <dl className="mp-provenance-list">

@@ -541,7 +541,8 @@
 }
 .mp-benchmark-chips {
   padding: 0 9px 7px;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 4px;
 }
 .mp-correlations .mp-table th,
 .mp-correlations .mp-table td {
@@ -582,7 +583,8 @@
 }
 .mp-feed-filters {
   padding: 0 7px 6px;
-  justify-content: space-between;
+  justify-content: flex-start;
+  gap: 4px;
 }
 .mp-page .mp-feed-filters button {
   font-size: 10px;
@@ -1358,3 +1360,20 @@
 .mp-drawer .canonical-context details {
   margin-top: 10px;
 }
+/* Correlations: signed bar on a fixed −1…+1 track, hoverable daily history. */
+.mp-corr-list { table-layout: fixed; width: 100%; }
+.mp-corr-list th:first-child { width: 90px; }
+.mp-corr-list th:nth-child(3) { width: 34%; }
+.mp-corr-list th:last-child, .mp-corr-list td:last-child { width: 96px; text-align: right; font-variant-numeric: tabular-nums; }
+.mp-corr-cell { display: flex; align-items: center; gap: 10px; }
+.mp-corr-trend .q-spark { display: block; width: 100%; }
+.mp-corr-bar { position: relative; flex: 1 1 auto; height: 8px; border-radius: 4px; background: var(--mp-raised); }
+.mp-corr-bar::after { content: ""; position: absolute; left: 50%; top: -3px; bottom: -3px; width: 1px; background: var(--mp-muted); opacity: .6; }
+.mp-corr-bar i { position: absolute; top: 0; bottom: 0; border-radius: 4px; background: var(--mp-accent); }
+.mp-corr-bar[data-sign=negative] i { background: var(--mp-warning); }
+.mp-corr-value { min-width: 46px; text-align: right; font-variant-numeric: tabular-nums; }
+.mp-correlations .mp-table th button { display: inline-flex; align-items: center; }
+.mp-relative-trend { display: grid; gap: 2px; margin-top: 10px; padding: 8px 10px; border-radius: 6px; border: 1px solid var(--mp-border); background: color-mix(in srgb, var(--mp-raised) 55%, transparent); }
+.mp-relative-trend strong { font-size: 15px; }
+.mp-relative-trend small { color: var(--mp-muted); font-size: 11px; }
+.mp-corr-list th:nth-child(3) { text-align: left; padding-left: 12px; }

@@ -13,3 +13,4 @@ export interface HistoryComparisonResult {
 }
 export function historyComparisons(samples: HistoryPoint[], horizon: string, interval: string,
   view: HistoryComparison, range?: [number, number] | null): HistoryComparisonResult;
+export function valuedDomain(comparison: HistoryComparisonResult): [number, number] | undefined;

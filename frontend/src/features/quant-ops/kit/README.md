@@ -47,3 +47,7 @@ so it is unit-tested in `test/quant-kit.test.mjs` without a browser.
   net flow); the tooltip still shows a single row. `fillOpacity` tunes the area strength.
 - `tooltipOnly` lists a series in the tooltip (with its own axis scale) without drawing it.
 - `domains` on `TimeSeriesChart` fixes an axis range, for example pressure -3..+3 beside a 0..100% share.
+- `zoom` / `onZoom` on `TimeSeriesChart` turn on drag-to-zoom: a drag across the plot selects a UTC range,
+  a double-click resets it. The caller owns the range, so several charts can share one zoom. The value
+  axis fits what is visible. Offer a visible reset control as well; double-click is not discoverable.
+- `TooltipCard` is exported so custom plots (scatter, SVG timelines) use the same tooltip as the kit.

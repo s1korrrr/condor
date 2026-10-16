@@ -251,6 +251,21 @@ export function roundedAxis(extent: [number, number] | null, { integer = false, 
   return domain.every(Number.isFinite) && Number.isFinite(domain[1] - domain[0]) ? { ...nice, domain } : null;
 }
 
+/**
+ * A drag across a time chart becomes a zoom range only when it spans at least `minFraction` of the
+ * visible domain; a click or a tiny wobble is not a zoom. The range is sorted and kept inside the domain.
+ */
+export function zoomSelection(start: number, end: number, [low, high]: [number, number], minFraction = 0.01): [number, number] | null {
+  if (![start, end, low, high].every(Number.isFinite) || high <= low) return null;
+  const from = Math.max(low, Math.min(start, end)), to = Math.min(high, Math.max(start, end));
+  return to - from >= (high - low) * minFraction ? [from, to] : null;
+}
+
+/** Only the points inside [from, to], so a zoomed chart fits its value axis to what it shows. */
+export function seriesInRange(series: ChartSeries[], [from, to]: [number, number]): ChartSeries[] {
+  return series.map(item => ({ ...item, points: item.points.filter(point => point.time >= from && point.time <= to) }));
+}
+
 /** Marker presentation: up to three markers carry on-plot labels; one within 1% of the right edge gets room. */
 export function markerLayout(markers: ChartMarker[], [start, end]: [number, number]) {
   const labelled = markers.length > 0 && markers.length <= 3;

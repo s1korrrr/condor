@@ -32,7 +32,7 @@ import {
   type HistoryPoint,
   type ViewSettings,
 } from "./presentation";
-import { BreadthContextPanel, DailyInternalsPanel, EvidenceMatrixPanel, FlowHistoryPanel, MarketPulseHero, MarketSnapshotTiles, MicrostructurePanel, type SummaryTile } from "./MarketPulse";
+import { AvailabilityLine, BreadthContextPanel, DailyInternalsPanel, EvidenceMatrixPanel, FlowHistoryPanel, MarketPulseHero, MarketSnapshotTiles, MicrostructurePanel, type SummaryTile } from "./MarketPulse";
 import { SummaryEvidence, type SummarySelection } from "./SummaryEvidence";
 import { selectMetricCohort, type MetricCohortRequest } from "./metric-cohort.mjs";
 import { instrumentExportMetadata, instrumentRows } from "./instrument-view";
@@ -57,6 +57,7 @@ import {
 } from "./DetailViews";
 import { Empty, Panel } from "./Primitives";
 import { RelativeStrengthVisuals } from "./RelativeStrengthVisuals";
+import { HistoryComparisons } from "./HistoryComparisons";
 import "./market-picture.css";
 import "./home.css";
 
@@ -189,6 +190,8 @@ export function MarketPictureSurface({
     document.addEventListener("keydown", shortcut);
     return () => document.removeEventListener("keydown", shortcut);
   }, []);
+  // Visible UTC range of the breadth timeline and comparison charts; null shows the whole window.
+  const [zoom, setZoom] = useState<[number, number] | null>(null);
   const [busy, setBusy] = useState(false),
     [resumeAfterTools, setResumeAfterTools] = useState(false);
   const source = useMarketPicture(server, view.window, view.benchmark, fixture);
@@ -207,6 +210,8 @@ export function MarketPictureSurface({
   const selectedRows = useMemo(() => instrumentRows(frame, search, metricFilter), [frame, search, metricFilter]);
   const state = ageState(frame, observationNow, source.frozen);
   const health = marketPictureHealth(data?.faults, source.error, state.freshness);
+  // The market-state card already explains a missing canonical history; the banner would repeat it.
+  const onlyCanonicalFault = !source.error && health.components.length === 1 && health.components[0] === "canonical_history";
   const selected =
     frame?.assets.find((a) => a.instrument_id === view.selected) ?? null;
   const preferencesKey = `condor.market-picture.v1:${encodeURIComponent(userId)}:${encodeURIComponent(server ?? "none")}:${encodeURIComponent(frame?.universeId ?? "pending")}`;
@@ -467,12 +472,12 @@ export function MarketPictureSurface({
           </button>
         </div>
       </div>
-      {(source.error || health.notice || message) && (
+      {(source.error || (health.notice && !onlyCanonicalFault) || message) && (
         <div className="mp-notice" role="status">
           <span>
             {source.error
               ? `${source.error}${frame ? " · Retaining the last validated frame with its original expiry." : ""}${health.componentNotice ? ` · ${health.componentNotice}` : ""}`
-              : (health.notice ?? message)}
+              : ((onlyCanonicalFault ? null : health.notice) ?? message)}
           </span>
           {source.error || health.degraded ? (
             <button onClick={source.retry}>Retry</button>
@@ -506,18 +511,14 @@ export function MarketPictureSurface({
         asOf={componentAsOf}
         historical={source.frozen}
         onSelectMetric={selectMetric}
+        zoom={zoom}
+        onZoom={setZoom}
       />
       {frame && (
         <MarketSnapshotTiles frame={frame} history={data?.history ?? EMPTY_HISTORY} window={view.window} horizon={view.horizon} asOf={componentAsOf} historical={source.frozen} onInspect={inspectSummary} />
       )}
-      {frame && <EvidenceMatrixPanel frame={frame} horizon={view.horizon} asOf={componentAsOf} />}
-      {frame && <MicrostructurePanel frame={frame} asOf={componentAsOf} />}
-      {frame && <FlowHistoryPanel history={data?.history ?? EMPTY_HISTORY} window={view.window} fault={data?.faults.history ?? null} />}
-      {frame && <BreadthContextPanel frame={frame} />}
-      {frame && <Panel id="mp-relative-strength" title="Relative strength & rank movement" detail="Price-derived comparisons · exact owner observations at the recorded cutoff">
-        <RelativeStrengthVisuals frame={frame} benchmark={view.benchmark} asOf={componentAsOf} select={select} selected={view.selected} />
-      </Panel>}
-      {frame && <DailyInternalsPanel frame={frame} asOf={componentAsOf} onSelectMetric={selectMetric} />}
+      {frame && <AvailabilityLine frame={frame} asOf={componentAsOf} horizon={view.horizon} benchmark={view.benchmark}
+        history={data?.history ?? EMPTY_HISTORY} window={view.window} historyFault={data?.faults.history ?? null} onOpen={() => setDrawer("coverage")} />}
       {!frame && (
         <div className="mp-loading" role="status" aria-busy={source.loading || undefined}>
           <span className="mp-skeleton" style={{ height: 120 }} />
@@ -534,6 +535,9 @@ export function MarketPictureSurface({
               selectPredicate={selectPredicate}
             />
           </div>
+          <Panel id="mp-relative-strength" title="Relative strength & rank movement" detail="Price-derived comparisons · exact owner observations at the recorded cutoff">
+            <RelativeStrengthVisuals frame={frame} benchmark={view.benchmark} asOf={componentAsOf} select={select} selected={view.selected} />
+          </Panel>
           <RegimePanel {...common} search={search} />
           <div className="mp-row mp-row--split">
             {frame.assets.some((a) => a.returns["1440"]?.value != null) && (
@@ -566,6 +570,12 @@ export function MarketPictureSurface({
               />
             </div>
           )}
+          <HistoryComparisons history={data?.history ?? EMPTY_HISTORY} window={view.window} horizon={view.horizon} zoom={zoom} onZoom={setZoom} />
+          <BreadthContextPanel frame={frame} select={select} />
+          <DailyInternalsPanel frame={frame} asOf={componentAsOf} onSelectMetric={selectMetric} select={select} />
+          <MicrostructurePanel frame={frame} asOf={componentAsOf} />
+          <FlowHistoryPanel history={data?.history ?? EMPTY_HISTORY} window={view.window} fault={data?.faults.history ?? null} />
+          <EvidenceMatrixPanel frame={frame} horizon={view.horizon} asOf={componentAsOf} />
         </div>
       )}
       <footer className="mp-page-footer">

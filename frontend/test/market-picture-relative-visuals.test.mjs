@@ -13,7 +13,7 @@ const { load } = frontendModules({
   "./relative-visuals.mjs": { groupCoincident, placeScatterLabels, projectRelativeStrength, projectRelativeRankMovers },
   "@/features/quant-ops/kit/series": { CHART: { blue: "blue", warning: "yellow", positive: "green", negative: "red", grid: "gray", muted: "gray", neutral: "gray", text: "white" }, niceTicks, axisFormatter },
   "./Primitives": { Empty: ({ children }) => React.createElement("p", null, children) },
-  recharts: Object.fromEntries(["Bar", "BarChart", "CartesianGrid", "Cell", "LabelList", "ReferenceLine", "ResponsiveContainer", "Scatter", "ScatterChart", "Tooltip", "XAxis", "YAxis"].map(name => [name, chartStub(name)])),
+  recharts: Object.fromEntries(["Bar", "BarChart", "CartesianGrid", "Cell", "LabelList", "ReferenceArea", "ReferenceDot", "ReferenceLine", "ResponsiveContainer", "Scatter", "ScatterChart", "Tooltip", "XAxis", "YAxis", "ZAxis"].map(name => [name, chartStub(name)])),
 }, { "features/market-picture/RelativeStrengthVisuals.tsx": ["RelativeStrengthVisuals"] });
 
 // Owner metric timing: available before the 10_000_000 cutoff's assessment, expiring well after it.
@@ -135,8 +135,8 @@ test("scatter axes are rounded quadrants and small sets name every point on the 
   });
   const plot = [...walk(render(3))].find(node => node.props?.labelCandidates);
   const { xAxis: x, yAxis: y } = plot.props;
-  assert.deepEqual(x.ticks, [0, 0.25, 0.5, 0.75, 1], "the x axis spans zero and the largest 1h return on rounded ticks");
-  assert.deepEqual(y.ticks, [-10, -7.5, -5, -2.5, 0]);
+  assert.deepEqual(x.ticks, [-0.25, 0, 0.25, 0.5, 0.75, 1], "the x axis spans zero, the largest 1h return and a readable opposite quadrant");
+  assert.ok(y.ticks[0] <= -8.08 && y.ticks.at(-1) > 0 && y.ticks.includes(0), "the y axis keeps room above zero for the leading quadrants");
   assert.ok(x.domain[0] < 0 && x.domain[1] > 1, "a margin beyond the outer ticks keeps edge points off the frame");
   assert.equal(y.format(-7.5), "-7.5");
   assert.equal(plot.props.labelCandidates.length, 3, "small sets are offered for direct labels");
@@ -190,7 +190,7 @@ test("rendered relative views explain a frame that is not current instead of plo
     benchmark: "BTC", asOf: 20_000_000, selected: null, select: () => {},
   });
   const html = renderToStaticMarkup(component);
-  assert.match(html, /0\/1 qualified; 1 missing, unavailable or not current/);
+  assert.match(html, /0\/1 qualified · 1 missing or not current/);
   assert.match(html, /not current at this assessment time \(FRAME_EXPIRED\)/);
   assert.equal([...walk(component)].some(node => node.props?.["data-chart-component"] === "ScatterChart" || node.type?.name === "ChartStub"), false, "no chart is drawn");
 });

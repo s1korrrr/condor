@@ -72,3 +72,9 @@ export function historyComparisons(samples, horizon, interval, view, range = nul
       : "No qualified owner observations are retained for this comparison and range.";
   return { series, markers, rows, unavailable, label: selected.label, unit: selected.unit };
 }
+
+/** First and last row that carries any value: empty edges (before a definition existed) are not plotted. */
+export function valuedDomain(comparison) {
+  const valued = comparison.rows.filter((row) => Object.values(row.values).some((value) => value !== null));
+  return valued.length > 1 ? [valued[0].time, valued.at(-1).time] : undefined;
+}

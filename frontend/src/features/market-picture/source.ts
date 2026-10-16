@@ -1,5 +1,6 @@
 import { api } from "@/lib/api";
 import { projectFrame, projectMicrostructureResponse, validateFrame } from "./contract.mjs";
+import { observationErrorMessage } from "./source-errors";
 import {
   pinned,
   projectHistory,
@@ -191,15 +192,8 @@ export async function boundedJson(
       detail && typeof detail === "object" && !Array.isArray(detail)
         ? (detail as Record<string, unknown>).reasons
         : undefined;
-    const reason = Array.isArray(reasons)
-      ? reasons
-          .filter((r) => typeof r === "string" && /^[A-Z_]+$/.test(r))
-          .join(", ")
-      : "";
     throw Object.assign(
-      new Error(
-        reason || `Observation source unavailable (${response.status}).`,
-      ),
+      new Error(observationErrorMessage(response.status, Array.isArray(reasons) ? reasons : [])),
       { status: response.status },
     );
   }

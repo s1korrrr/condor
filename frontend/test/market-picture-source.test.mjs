@@ -77,7 +77,7 @@ test('FastAPI string detail on a failed stored read preserves a safe status erro
   const h=sourceHarness([]);
   const error = await h.boundedJson(new Response(JSON.stringify({detail:'Market Picture source returned an error'}),{status:502}))
     .then(() => null, failure => failure);
-  assert.match(error.message,/Observation source unavailable \(502\)/);
+  assert.equal(error.message,"Error · Market Picture source unavailable (HTTP 502)","the same typed wording as the other panels");
   assert.equal(error.status,502);
   assert.doesNotMatch(error.message,/Market Picture source returned an error/);
 });

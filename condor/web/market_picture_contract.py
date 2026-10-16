@@ -534,7 +534,7 @@ def _validate_relative_strength_changes(frame):
         return
     ids = [asset["instrument_id"] for asset in frame["assets"]]
     deltas = changes["rank_deltas"]
-    reasons = changes["reason_codes"]
+    reasons = changes.get("reason_codes", [])
     if (
         changes["current_cutoff_ms"] != frame["cutoff_ms"]
         or changes.get("interval_ms", 3_600_000) != 3_600_000
@@ -612,9 +612,9 @@ def _validate_candle_anomalies(frame):
         or not _HASH.fullmatch(anomalies["source_hash"])
         or anomalies["expected_count"] != expected
         or not 0 <= anomalies["source_count"] <= expected
-        or (anomalies["source_count"] == 0) != (anomalies["expires_at_ms"] is None)
+        or (anomalies["source_count"] == 0) != (anomalies.get("expires_at_ms") is None)
         or (
-            anomalies["expires_at_ms"] is not None
+            anomalies.get("expires_at_ms") is not None
             and anomalies["expires_at_ms"] <= frame["available_at_ms"]
         )
     ):
@@ -661,22 +661,24 @@ def _validate_candle_anomalies(frame):
             )
         ):
             raise ValueError("candle-anomaly reason codes are invalid")
+        # Schema defaults: the owner omits null counts when no instrument is valid.
+        high, share_fraction = metric.get("high_count"), metric.get("share_fraction")
         if metric["valid_count"] == 0:
-            if (
-                metric["high_count"] is not None
-                or metric["share_fraction"] is not None
-                or not reasons
-            ):
+            if high is not None or share_fraction is not None or not reasons:
                 raise ValueError(
                     "unavailable candle anomaly must remain null with a reason"
                 )
         else:
-            _decimal(metric["share_fraction"])
-            share = Decimal(metric["share_fraction"])
+            if share_fraction is None:
+                raise ValueError(
+                    "candle-anomaly count, share or missingness is incoherent"
+                )
+            _decimal(share_fraction)
+            share = Decimal(share_fraction)
             if (
-                type(metric["high_count"]) is not int
-                or metric["high_count"] != high_count
-                or metric["high_count"] > metric["valid_count"]
+                type(high) is not int
+                or high != high_count
+                or high > metric["valid_count"]
                 or not Decimal(0) <= share <= Decimal(1)
                 or share != Decimal(high_count) / Decimal(metric["valid_count"])
                 or (metric["valid_count"] < expected) != bool(reasons)
@@ -1278,7 +1280,7 @@ def validate_frame(frame, *, allow_fixture=False):
                 or row["expected_count"] != len(ids)
                 or not 0 <= row["matched_count"] <= row["expected_count"]
                 or (row["matched_count"] == 0)
-                != (row["matched_membership_hash"] is None)
+                != (row.get("matched_membership_hash") is None)
             ):
                 raise ValueError("divergence cohort differs from universe")
             require_aggregate(
@@ -1287,7 +1289,7 @@ def validate_frame(frame, *, allow_fixture=False):
                 "count",
                 "breadth_price_divergence",
             )
-            value = metrics[row["metric_ref"]["metric_id"]]["value"]
+            value = metrics[row["metric_ref"]["metric_id"]].get("value")
             if value not in (None, "0", "1"):
                 raise ValueError(
                     "breadth divergence flag must be zero, one, or unavailable"
@@ -1378,7 +1380,11 @@ def validate_frame(frame, *, allow_fixture=False):
                 for cell in return_series["cells"]
             }
             median = _exact_member_median(member_values, ids)
-            if median is None or Decimal(metric["value"]) != median:
+            if (
+                median is None
+                or metric.get("value") is None
+                or Decimal(metric["value"]) != median
+            ):
                 raise ValueError(
                     "cohort median aggregate differs from exact frozen member returns"
                 )
@@ -1612,8 +1618,8 @@ def validate_response(path: str, raw: bytes):
                     divergence["matched_count"],
                     divergence["expected_count"],
                 )
-                cohort_hash = divergence["matched_membership_hash"]
-                value = divergence["value"]
+                cohort_hash = divergence.get("matched_membership_hash")
+                value = divergence.get("value")
                 if (
                     type(expected) is not int
                     or type(matched) is not int

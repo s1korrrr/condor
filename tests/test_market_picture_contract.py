@@ -1126,3 +1126,50 @@ def test_zero_baseline_rvol_cell_is_a_null_with_its_reason_not_a_value():
     reseal_series(frame, "asset_rvol_1h")
     with pytest.raises(ValueError):
         validate_frame(seal(frame), allow_fixture=True)
+
+
+def _unavailable_anomaly(frame, *, omit):
+    """The owner may omit null-default counts for an anomaly with no valid instruments."""
+    metric = frame["candle_anomalies"]["metrics"]["extreme_realized_volatility_1h_95p"]
+    metric["values"] = [None] * len(metric["values"])
+    metric["valid_count"] = 0
+    metric["reason_codes"] = ["BAR_GAP", "INSUFFICIENT_HISTORY"]
+    for key in ("high_count", "share_fraction"):
+        if key in omit:
+            metric.pop(key, None)
+        else:
+            metric[key] = None
+    return metric
+
+
+@pytest.mark.parametrize("omit", [(), ("high_count", "share_fraction")])
+def test_unavailable_candle_anomaly_accepts_omitted_or_explicit_null_counts(omit):
+    frame = fixture("market-picture.m1-components.fixture.json")
+    _unavailable_anomaly(frame, omit=omit)
+    parsed = validate_frame(seal(frame), allow_fixture=True)
+    metric = parsed["candle_anomalies"]["metrics"]["extreme_realized_volatility_1h_95p"]
+    assert metric["valid_count"] == 0
+
+
+@pytest.mark.parametrize("key", ["high_count", "share_fraction"])
+def test_available_candle_anomaly_without_counts_is_rejected_as_incoherent(key):
+    frame = fixture("market-picture.m1-components.fixture.json")
+    frame["candle_anomalies"]["metrics"]["dictionary_rvol_1h_high"].pop(key)
+    with pytest.raises(ValueError, match="candle-anomaly"):
+        _validate_candle_anomalies(seal(frame))
+
+
+def test_candle_anomaly_panel_without_sources_may_omit_null_expiry_and_counts():
+    frame = fixture("market-picture.m1-components.fixture.json")
+    panel = frame["candle_anomalies"]
+    for metric in panel["metrics"].values():
+        metric.update(
+            values=[None] * len(metric["values"]),
+            valid_count=0,
+            reason_codes=["INSUFFICIENT_HISTORY"],
+        )
+        metric.pop("high_count", None)
+        metric.pop("share_fraction", None)
+    panel["source_count"] = 0
+    panel.pop("expires_at_ms", None)
+    _validate_candle_anomalies(seal(frame))

@@ -570,3 +570,40 @@ test("lossless JS metric resolver matches the engine golden output", () => {
     read("market-picture-series-resolved.v1.json"),
   );
 });
+
+test("an unavailable candle anomaly may omit its null-default counts, as the owner schema allows", async () => {
+  for (const omit of [false, true]) {
+    const raw = read("market-picture.m1-components.fixture.json");
+    const metric = raw.candle_anomalies.metrics.extreme_realized_volatility_1h_95p;
+    metric.values = metric.values.map(() => null);
+    metric.valid_count = 0;
+    metric.reason_codes = ["BAR_GAP", "INSUFFICIENT_HISTORY"];
+    if (omit) { delete metric.high_count; delete metric.share_fraction; } else { metric.high_count = null; metric.share_fraction = null; }
+    const frame = await validateFrame(await seal(raw), { allowFixture: true });
+    const projected = projectFrame(frame).candleAnomalies.metrics.extreme_realized_volatility_1h_95p;
+    assert.equal(projected.high, null, `omitted=${omit}: unavailable high count projects as null`);
+    assert.equal(projected.share, null);
+    assert.equal(projected.valid, 0);
+  }
+  for (const key of ["high_count", "share_fraction"]) {
+    const raw = read("market-picture.m1-components.fixture.json");
+    delete raw.candle_anomalies.metrics.dictionary_rvol_1h_high[key];
+    await assert.rejects(validateFrame(await seal(raw), { allowFixture: true }), undefined, `a valid anomaly without ${key} is rejected`);
+  }
+});
+
+test("a candle-anomaly panel with no valid source may omit its null expiry and counts", async () => {
+  const raw = read("market-picture.m1-components.fixture.json");
+  const panel = raw.candle_anomalies;
+  for (const metric of Object.values(panel.metrics)) {
+    metric.values = metric.values.map(() => null);
+    metric.valid_count = 0;
+    metric.reason_codes = ["INSUFFICIENT_HISTORY"];
+    delete metric.high_count; delete metric.share_fraction;
+  }
+  panel.source_count = 0;
+  delete panel.expires_at_ms;
+  const projected = projectFrame(await validateFrame(await seal(raw), { allowFixture: true })).candleAnomalies;
+  assert.equal(projected.expires, null);
+  assert.ok(Object.values(projected.metrics).every(metric => metric.high === null && metric.share === null));
+});

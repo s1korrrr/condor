@@ -231,3 +231,15 @@ export function dayTicks([start, end]: [number, number], maxTicks = 7): number[]
 export function ratioPercentTick(value: number, step: number): string {
   return `${axisFormatter(cleanTick(step * 100))(cleanTick(value * 100))}%`;
 }
+
+/**
+ * Rounded ticks and the axis extent they span. With `margin`, an extent that sits exactly on an outer
+ * tick gets 3% headroom past it (no extra label), so a line on that value does not merge with the
+ * frame; bars keep a flush zero baseline. Null when no rounded axis exists.
+ */
+export function roundedAxis(extent: [number, number] | null, { integer = false, margin = false }: { integer?: boolean; margin?: boolean } = {}) {
+  const nice = extent && niceTicks(extent[0], extent[1], 5, integer);
+  if (!nice) return null;
+  const first = nice.ticks[0], last = nice.ticks[nice.ticks.length - 1], room = margin ? (last - first) * 0.03 : 0;
+  return { ...nice, domain: [extent[0] === first ? first - room : first, extent[1] === last ? last + room : last] as [number, number] };
+}

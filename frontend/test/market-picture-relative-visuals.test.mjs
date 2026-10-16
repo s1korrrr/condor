@@ -140,7 +140,7 @@ test("scatter axes are rounded quadrants and small sets name every point on the 
   assert.ok(x.domain[0] < 0 && x.domain[1] > 1, "a margin beyond the outer ticks keeps edge points off the frame");
   assert.equal(y.format(-7.5), "-7.5");
   assert.equal(plot.props.labelCandidates.length, 3, "small sets are offered for direct labels");
-  assert.equal([...walk(render(25))].find(node => node.props?.labelCandidates).props.labelCandidates.length, 0, "dense sets rely on the table instead of overlapping labels");
+  assert.equal([...walk(render(25))].find(node => node.props?.labelCandidates).props.labelCandidates.length, 24, "dense sets offer a bounded label budget; placement drops overlaps and the table lists every point");
   assert.match(renderToStaticMarkup(render(3)), /Horizontal axis is one-hour asset return/, "the plot renders through React with its own width state");
 });
 
@@ -207,4 +207,16 @@ test("scatter labels flip away from the right edge and never overlap", () => {
   assert.equal(placed.has("SAME-B"), false, "a third coincident label is suppressed instead of overlapping");
   assert.equal(placed.get("FREE"), "right");
   assert.equal(placeScatterLabels([point("X", 0, 0)], [0, 0], [-1, 1], box).size, 0, "a degenerate domain places nothing");
+});
+
+test("dense scatters still label pullbacks first, then the most extreme points, within one budget", () => {
+  const assets = Array.from({ length: 40 }, (_, index) => asset(`P${String(index).padStart(2, "0")}`, { oneHour: index < 2 ? -0.5 : (index - 20) / 20, relative: index < 2 ? 3 : -(index % 7) }));
+  const plot = [...walk(load("features/market-picture/RelativeStrengthVisuals.tsx").RelativeStrengthVisuals({
+    frame: { ...current, assets, expected: 40, relativeStrengthChanges: null }, benchmark: "BTC", asOf: AS_OF, selected: "venue:spot:P30-USDC", select: () => {},
+  }))].find(node => node.props?.labelCandidates);
+  const ids = plot.props.labelCandidates.map(point => point.symbol);
+  assert.equal(ids.length, 24, "one label budget");
+  assert.deepEqual(ids.slice(0, 2), ["P00", "P01"], "pullback candidates come first");
+  assert.ok(ids.includes("P39") && ids.includes("P02"), "the most extreme other points follow");
+  assert.equal(plot.props.selected, "venue:spot:P30-USDC", "the plot receives the selected instrument for its ring");
 });

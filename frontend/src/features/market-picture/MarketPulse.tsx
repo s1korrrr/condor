@@ -787,7 +787,9 @@ function FlowHistoryPanelView({
   const [selectedQuote, setSelectedQuote] = useState("");
   const quotes = [...new Set(points.flatMap(point => point.flowHistory ? [point.flowHistory.quoteAsset] : []))];
   const quote = quotes.includes(selectedQuote) ? selectedQuote : quotes[0] ?? "";
-  const { rows, notional, cvd } = flowHistoryVisuals(points, quote);
+  const { rows, notional, cvd, breaks } = flowHistoryVisuals(points, quote);
+  // Named continuity breaks; the line already stops there, the marker says why.
+  const breakMarkers = breaks.map(item => ({ time: item.time, label: `Break · ${item.label}`, color: CHART.warning }));
   const timeDomain: [number, number] | undefined = points.length > 1 ? [points[0].time, points.at(-1)!.time] : undefined;
   const compact = (value: number) => new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 2 }).format(value);
   const notionalSeries: ChartSeries[] = [
@@ -809,7 +811,7 @@ function FlowHistoryPanelView({
             <header><h3>Executed notional over time</h3><span className="mp-kicker">Recorded trades</span></header>
             <p className="mp-visual-unit">{quote} per stored minute · UTC</p>
             <div className="mp-visual-legend">{notionalSeries.map(item => <span key={item.id}><svg width="26" height="10" aria-hidden="true"><line x1="0" x2="26" y1="5" y2="5" stroke={item.color} strokeWidth="2" strokeDasharray={item.dash} /></svg>{item.label}</span>)}</div>
-            <TimeSeriesChart series={notionalSeries} timeDomain={timeDomain} height={210} leftFormat={compact} includeZero ariaLabel={`Executed buy, sell and unknown notional per stored minute in ${quote}`} />
+            <TimeSeriesChart series={notionalSeries} markers={breakMarkers} timeDomain={timeDomain} height={210} leftFormat={compact} includeZero ariaLabel={`Executed buy, sell and unknown notional per stored minute in ${quote}`} />
             <p className="mp-panel-footnote">Unknown-side trades stay separate. Partial instrument coverage remains partial; exact coverage accompanies each point in the table below.</p>
           </article>
           <article className="mp-visual-card">
@@ -817,7 +819,7 @@ function FlowHistoryPanelView({
             <p className="mp-visual-unit">{quote} · UTC · reset-aware</p>
             <div className="mp-visual-legend"><span>Buy minus sell since the recorded reset</span></div>
             <TimeSeriesChart series={[{id:"cvd", label:"Recorded cumulative delta", color:CHART.blue, points:cvd, unit:quote}]}
-              timeDomain={timeDomain} height={210} leftFormat={compact} zeroLine ariaLabel={`Owner-recorded cumulative delta in ${quote}; gaps, scope changes and resets interrupt the line`}
+              markers={breakMarkers} timeDomain={timeDomain} height={210} leftFormat={compact} zeroLine ariaLabel={`Owner-recorded cumulative delta in ${quote}; gaps, scope changes and resets interrupt the line`}
               emptyText="No qualified owner cumulative delta is retained. Unknown sides and incomplete coverage cannot become a synthetic balance." />
             <p className="mp-panel-footnote">Gaps, resets and changes of source, quote or scope break the line. The browser never accumulates the displayed trade totals. {cvd.at(-1)?.value == null ? "The latest retained point has no qualified cumulative delta." : ""}</p>
           </article>

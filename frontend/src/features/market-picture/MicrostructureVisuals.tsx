@@ -73,6 +73,8 @@ function FlowVisual({ frame, asOf, id }: { frame: DisplayFrame; asOf: number; id
       ariaLabel={`Recorded buy, sell and unknown aggressor quote notional for ${pair(cohort.instrumentId)}, source ${shortSource(cohort.sourceId)}, ${duration(cohort.windowMs)} window`}
       emptyText="No current, qualified flow amounts are available to plot. The retained row states remain below."
     />
+    {plotted.length > 0 && plotted.every(row => row.buyQuote === 0 && row.sellQuote === 0 && row.unknownQuote === 0) &&
+      <p className="mp-panel-footnote">Every plotted window recorded zero buy, sell and unknown notional, so no bar rises above the axis.</p>}
     <details>
       <summary>Exact recorded values and row state</summary>
       <p className="mp-panel-footnote">Selected identity: {cohort.instrumentId} · source {cohort.sourceId} · channel {cohort.channel} · quote {cohort.quoteAsset}.</p>
@@ -135,10 +137,11 @@ function BookVisual({ frame, asOf, id }: { frame: DisplayFrame; asOf: number; id
     </p>}
     </section><section aria-labelledby={`${id}-coverage-title`}>
     <h4 id={`${id}-coverage-title`}>Recorded size coverage</h4>
-    <ul className="mp-visual-legend" aria-label="Coverage chart series"><li><i aria-hidden="true" style={{ background: CHART.cyan }} />Covered share of requested size (%)</li></ul>
+    <ul className="mp-visual-legend" aria-label="Coverage chart series"><li><i aria-hidden="true" style={{ background: CHART.cyan }} />Covered share of requested size (%)</li>
+      {plotted.some(row => row.state === "PARTIAL DEPTH") && <li><i aria-hidden="true" style={{ background: CHART.warning }} />Partial depth (no full-size cost)</li>}</ul>
     <BarsChart
-      rows={plotted.map(row => ({ label: row.label, coverage: row.coveragePercent }))}
-      bars={[{ id: "coverage", label: "Covered share of requested size", color: CHART.cyan }]}
+      rows={plotted.map(row => ({ label: row.label, coverage: row.coveragePercent, state: row.state }))}
+      bars={[{ id: "coverage", label: "Covered share of requested size", color: CHART.cyan, colorFor: row => row.state === "PARTIAL DEPTH" ? CHART.warning : undefined }]}
       signed={false} format={axisNumber} tickFormat={stepTick} unit="%"
       ariaLabel={`Recorded size coverage by side and requested size for ${pair(cohort.instrumentId)}, source ${shortSource(cohort.sourceId)}, observed ${conciseUtc(cohort.observed)}`}
       emptyText="Size coverage is unavailable because requested, covered, or uncovered amounts are missing or invalid."

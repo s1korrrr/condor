@@ -41,3 +41,14 @@ test('missing flow or CVD never becomes zero; quote selection keeps currency sep
   assert.equal(result.cvd.find(p=>p.time===rows[2].time).value,null);
   assert.ok(flowHistoryVisuals(rows,'USDT').cvd.every(p=>p.value===null));
 });
+
+test('continuity breaks after the first stored point become named chart markers', async () => {
+  const { flowHistoryVisuals } = await import('../src/features/market-picture/flow-history-visuals.mjs');
+  const flow = (cvd) => ({ quoteAsset: 'USDC', buyQuote: '1', sellQuote: '1', unknownQuote: '0', cumulativeDeltaQuote: cvd, scopeHash: 's', resetAt: 1 });
+  const point = (time, flowHistory) => ({ time, source_kind: 'reconstructed', membership: 'm', definitionRegistryHash: 'd', gapBefore: false, flowHistory });
+  const { breaks } = flowHistoryVisuals([point(60_000, flow('1')), point(120_000, flow('2')), point(180_000, flow(null)), point(300_000, flow('3'))], 'USDC');
+  assert.deepEqual(breaks, [
+    { time: 180_000, label: 'CVD unavailable' },
+    { time: 300_000, label: 'previous CVD unavailable, non-1m interval' },
+  ], 'the window start is not a break; each later break keeps its reasons');
+});

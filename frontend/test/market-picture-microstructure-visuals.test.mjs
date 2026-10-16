@@ -146,6 +146,7 @@ test('rendered future rows redact exact flow, cost, and coverage values and use 
   const zeroHtml = renderToStaticMarkup(React.createElement(MicrostructureVisuals, { frame: futureFrame, asOf: futureAsOf, only: 'flow' }));
   assert.match(zeroHtml, /Buy quote notional \(USD\)<b>0<\/b>.*Sell quote notional \(USD\)<b>0<\/b>.*Unknown aggressor quote notional \(USD\)<b>0<\/b>/, 'recorded zeros are written in the value strip, not left as missing bars');
   assert.match(zeroHtml, /latest qualified window ending 2027-01-15T08:00:00.000Z · COMPLETE/);
+  assert.match(zeroHtml, /Every plotted window recorded zero buy, sell and unknown notional/, 'an all-zero plot says why it is empty');
 });
 
 test('malformed or over-covered requested sizes cannot create a cost bar or >100 percent coverage', () => {
@@ -183,6 +184,10 @@ test('rendered cost chart names rows without a full-size cost, and flow windows 
   const end = new Date(asOf).toISOString();
   assert.deepEqual(flowChart.rows.map(row => row.label), [`${new Date(asOf - day).toISOString().slice(5, 10)} ${new Date(asOf - day).toISOString().slice(11, 16)}Z`, `${end.slice(5, 10)} ${end.slice(11, 16)}Z`], 'windows crossing a UTC day keep their date');
   assert.deepEqual(costChart.rows.map(row => row.cost), [12.5, null]);
+  const coverageChart = charts[2];
+  assert.equal(coverageChart.bars[0].colorFor({ state: 'PARTIAL DEPTH' }), 'var(--q-warning, var(--color-yellow, #f59e0b))', 'partial-depth coverage is tinted');
+  assert.equal(coverageChart.bars[0].colorFor({ state: 'COVERED' }), undefined);
+  assert.match(html, /Partial depth \(no full-size cost\)/);
   assert.equal(costChart.tickFormat(5, 5), '5', 'axis labels follow the rounded tick step');
 
   charts.length = 0;

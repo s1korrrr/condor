@@ -172,8 +172,12 @@
 }
 .mp-evidence-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
   gap: 8px;
+}
+/* Eight families read as two even rows on wide screens instead of seven plus an orphan. */
+@media (min-width: 1100px) {
+  .mp-evidence-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 .mp-evidence-row {
   display: grid;
@@ -190,11 +194,13 @@
 .mp-evidence-row small { grid-column: 1 / -1; color: var(--mp-muted); line-height: 1.45; }
 .mp-evidence-scenarios {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
   gap: 8px 20px;
-  margin-top: 12px;
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  border-top: 1px solid var(--mp-border);
 }
-.mp-evidence-scenarios p { margin: 0; color: var(--mp-muted); line-height: 1.5; }
+.mp-evidence-scenarios p { margin: 0; color: var(--mp-muted); font-size: 11px; line-height: 1.5; }
 .mp-evidence-scenarios b { color: var(--mp-text); }
 .mp-relative-context { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 8px; margin-top: 12px; }
 .mp-relative-context > div { display: grid; align-content: start; gap: 4px; }
@@ -211,8 +217,8 @@
 .mp-rank-movement-columns button { display: flex; justify-content: space-between; gap: 6px; min-width: 0; padding: 5px 7px; color: var(--mp-text); text-align: left; background: var(--mp-raised); border: 1px solid var(--mp-border); border-radius: 6px; }
 .mp-rank-movement-columns button strong { color: var(--mp-positive); white-space: nowrap; }
 .mp-rank-movement-columns > div[aria-label="Weakening relative ranks"] button strong { color: var(--mp-negative); }
-.mp-candle-anomalies { display: grid; gap: 7px; min-width: 0; margin-top: 12px; }
-.mp-candle-anomalies h3 { margin: 0; color: var(--mp-text); font-size: 11px; font-weight: 600; letter-spacing: .35px; text-transform: uppercase; }
+.mp-candle-anomalies { display: grid; gap: 7px; min-width: 0; margin-top: 12px; padding-top: 9px; border-top: 1px solid var(--mp-border); }
+.mp-candle-anomalies h3 { margin: 0; padding: 0 11px; color: var(--mp-text); font-size: 11px; font-weight: 600; letter-spacing: .35px; text-transform: uppercase; }
 .mp-candle-anomalies th small { display: block; margin-top: 4px; max-width: 340px; color: var(--mp-muted); font-size: 10px; font-weight: 400; line-height: 1.35; text-transform: none; white-space: normal; }
 .mp-icon-button {
   display: grid;

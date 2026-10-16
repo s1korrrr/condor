@@ -35,7 +35,7 @@ export function HistoryRangeSelector({
   const full = normalized === null || (start === 0 && end === times.length - 1);
   const status = times.length === 0
     ? "No plotted timestamps are available."
-    : `Showing ${full ? "the full retained interval" : "the selected interval"}: ${startTime} to ${endTime} UTC · ${end - start + 1} of ${times.length} plotted timestamps.`;
+    : `${full ? "Full retained interval" : "Selected interval"} · ${end - start + 1} of ${times.length} plotted timestamps · bounds in UTC.`;
 
   const changeStart = (event: ChangeEvent<HTMLInputElement>) => {
     const requested = Number(event.currentTarget.value);
@@ -59,7 +59,7 @@ export function HistoryRangeSelector({
     <p id={`${id}-instructions`}>Drag either handle or use its arrow keys; Home and End move to the bounds. Escape resets the full retained interval.</p>
     <div className="mp-history-range__controls">
       <label>
-        Chart range start
+        <span className="mp-history-range__label">Chart range start <span className="mp-history-range__bound">From <time dateTime={utcDateTime(times[start])}>{startTime}</time></span></span>
         <input
           type="range"
           aria-label="Chart range start"
@@ -73,10 +73,9 @@ export function HistoryRangeSelector({
           onChange={changeStart}
           onKeyDown={resetOnEscape}
         />
-        <span className="mp-history-range__bound">From <time dateTime={utcDateTime(times[start])}>{startTime}</time></span>
       </label>
       <label>
-        Chart range end
+        <span className="mp-history-range__label">Chart range end <span className="mp-history-range__bound">To <time dateTime={utcDateTime(times[end])}>{endTime}</time></span></span>
         <input
           type="range"
           aria-label="Chart range end"
@@ -90,10 +89,11 @@ export function HistoryRangeSelector({
           onChange={changeEnd}
           onKeyDown={resetOnEscape}
         />
-        <span className="mp-history-range__bound">To <time dateTime={utcDateTime(times[end])}>{endTime}</time></span>
       </label>
     </div>
-    <p className="mp-history-range__status" role="status">{status}</p>
-    <button type="button" disabled={disabled} onClick={() => onChange(null)}>Reset range</button>
+    <div className="mp-history-range__footer">
+      <p className="mp-history-range__status" role="status">{status}</p>
+      <button type="button" disabled={disabled} onClick={() => onChange(null)}>Reset range</button>
+    </div>
   </fieldset>;
 }

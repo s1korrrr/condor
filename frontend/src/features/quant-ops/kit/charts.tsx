@@ -1,7 +1,7 @@
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { formatDecimal, formatSigned } from '../format';
-import { CHART, dayTicks, niceTicks, projectTimeSeries, timeTick, valueAt, valueExtent, type ChartMarker, type ChartSeries, type SeriesPoint } from './series';
+import { CHART, dayTicks, projectTimeSeries, roundedAxis, timeTick, valueAt, valueExtent, type ChartMarker, type ChartSeries, type SeriesPoint } from './series';
 import './kit.css';
 
 /**
@@ -23,11 +23,6 @@ function TooltipCard({ title, rows }: { title: string; rows: { key: string; labe
   </div>;
 }
 
-/** Rounded ticks and the axis extent they span; values outside never occur because ticks cover the data domain. */
-function rounded(domain: [number, number] | null, integer = false) {
-  const nice = domain && niceTicks(domain[0], domain[1], 5, integer);
-  return nice ? { ...nice, domain: [nice.ticks[0], nice.ticks[nice.ticks.length - 1]] as [number, number] } : null;
-}
 
 const toneClass = (value: number | null, signed: boolean) => !signed || value == null || value === 0 ? undefined : value > 0 ? 'q-positive' : 'q-negative';
 
@@ -50,7 +45,7 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
   if (!projection.rows.length || !projection.domain) return <div className="q-chart-empty" style={{ minHeight: Math.min(height, 160) }}><p>{emptyText}</p></div>;
   const left = series.filter(item => item.axis !== 'secondary'), right = series.filter(item => item.axis === 'secondary');
   // Data-derived axes widen to rounded ticks; caller-fixed domains (for example -3..3 pressure) stay exact.
-  const leftNice = domains?.left ? null : rounded(valueExtent(left, includeZero)), rightNice = domains?.right ? null : rounded(valueExtent(right, includeZero));
+  const leftNice = domains?.left ? null : roundedAxis(valueExtent(left, includeZero), { margin: true }), rightNice = domains?.right ? null : roundedAxis(valueExtent(right, includeZero), { margin: true });
   const leftDomain = domains?.left ?? leftNice?.domain ?? null, rightDomain = domains?.right ?? rightNice?.domain ?? null;
   // Values whose span cannot form an axis (for example ±1.7e308) are reported, never handed to Recharts as 'auto'.
   if ((!domains?.left && valueExtent(left, includeZero) && !leftNice) || (!domains?.right && valueExtent(right, includeZero) && !rightNice)) return <p className="q-empty">Values span an unsupported numeric range. History cannot be plotted.</p>;
@@ -96,7 +91,11 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
   </figure>;
 }
 
-export type BarSpec = { id: string; label: string; color: string; signColors?: boolean };
+export type BarSpec = {
+  id: string; label: string; color: string; signColors?: boolean;
+  /** Per-row fill (for example a state colour); a row without one keeps the bar colour. */
+  colorFor?: (row: Record<string, number | string | null>) => string | undefined;
+};
 
 /** Hoverable category bars (days, bins) with an optional line on its own axis. Missing values stay empty. */
 export function BarsChart({ rows, bars, line, height = 160, format = formatSigned, tickFormat, signed = true, integer = false, unit, ariaLabel, emptyText = 'No values to plot.' }: {
@@ -114,7 +113,7 @@ export function BarsChart({ rows, bars, line, height = 160, format = formatSigne
   const barValues = rows.flatMap(row => bars.map(bar => row[bar.id]).filter((value): value is number => typeof value === 'number' && Number.isFinite(value)));
   const barLow = Math.min(0, ...barValues), barHigh = Math.max(0, ...barValues);
   // All-zero bars keep a 0..1 axis instead of inventing a negative band around zero.
-  const axis = barValues.length ? rounded([barLow, barHigh === barLow ? barLow + 1 : barHigh], integer) : null;
+  const axis = barValues.length ? roundedAxis([barLow, barHigh === barLow ? barLow + 1 : barHigh], { integer }) : null;
   if (barValues.length && !axis) return <p className="q-empty">Values span an unsupported numeric range. Bars cannot be plotted.</p>;
   return <figure className="q-chart" role="img" aria-label={ariaLabel} style={{ height }}>
     <ResponsiveContainer width="100%" height={height} minWidth={0}>
@@ -132,11 +131,11 @@ export function BarsChart({ rows, bars, line, height = 160, format = formatSigne
             return <TooltipCard title={String(label)} rows={specs.flatMap(spec => {
               const value = row[spec.id];
               if (typeof value !== 'number') return [];
-              return [{ key: spec.id, label: spec.label, color: spec.signColors ? (value >= 0 ? CHART.positive : CHART.negative) : spec.color, value: `${format(value)}${unit ? ` ${unit}` : ''}`, tone: toneClass(value, signed) }];
+              return [{ key: spec.id, label: spec.label, color: 'colorFor' in spec && spec.colorFor?.(row) || (spec.signColors ? (value >= 0 ? CHART.positive : CHART.negative) : spec.color), value: `${format(value)}${unit ? ` ${unit}` : ''}`, tone: toneClass(value, signed) }];
             })} />;
           }} />
         {bars.map(bar => <Bar key={bar.id} yAxisId="left" dataKey={bar.id} name={bar.label} fill={bar.color} radius={[2, 2, 2, 2]} maxBarSize={28} isAnimationActive={false}>
-          {bar.signColors && rows.map((row, index) => <Cell key={index} fill={typeof row[bar.id] === 'number' && (row[bar.id] as number) < 0 ? CHART.negative : CHART.positive} />)}
+          {(bar.signColors || bar.colorFor) && rows.map((row, index) => <Cell key={index} fill={bar.colorFor?.(row) ?? (bar.signColors ? (typeof row[bar.id] === 'number' && (row[bar.id] as number) < 0 ? CHART.negative : CHART.positive) : bar.color)} />)}
         </Bar>)}
         {line && <Line yAxisId="line" dataKey={line.id} name={line.label} stroke={line.color} strokeWidth={1.6} dot={false} activeDot={{ r: 3 }} connectNulls={false} isAnimationActive={false} />}
       </ComposedChart>

@@ -137,3 +137,14 @@ test('large axes stay distinct: compact labels only for steps of a thousand or m
   assert.equal(axisFormatter(0.25)(100000.25),'100,000.25');
   assert.equal(axisFormatter(5000)(1_500_000),'1.5M');
 });
+
+test('time-series axes keep a small margin where data sits exactly on an outer tick',()=>{
+  const {roundedAxis}=load('features/quant-ops/kit/series.ts');
+  const zeroFloor=roundedAxis([0,40],{margin:true});
+  assert.deepEqual(zeroFloor.ticks,[0,10,20,30,40]);
+  assert.ok(zeroFloor.domain[0]<0&&zeroFloor.domain[1]>40,'a recorded zero no longer lies on the x-axis baseline');
+  const inside=roundedAxis([1.16,4.422],{margin:true});
+  assert.deepEqual(inside.domain,[1,5],'no margin when the data stays inside the outer ticks');
+  assert.deepEqual(roundedAxis([0,40]).domain,[0,40],'bars keep their zero baseline flush');
+  assert.equal(roundedAxis(null),null);
+});

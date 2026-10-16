@@ -83,9 +83,13 @@ export function HistoryComparisons({ samples, horizon, range }: {
         <ComparisonPlot comparison={trajectory} horizon={horizon} interval={interval} />
       </article>
     </div>
-    <p className="mp-panel-footnote">The chart range above applies to both views. Raw owner points; no extra smoothing. Gaps and changes of source or cohort break the line. Level, change, velocity and acceleration have separate units.</p>
-    <p className="mp-panel-footnote">Divergence markers use BTC confirmed-close breaks of the prior 24-hour range and opposing matched breadth change at H=15m.
-      {horizon !== "15" ? " Select the 15m return horizon to show those markers." : " A missing marker does not prove agreement; the tables distinguish unavailable from not observed."}
-      {" Stored flags retain their definition and window; raw benchmark candles are not part of this history response."}</p>
+    {horizon !== "15" && <p className="mp-panel-footnote">Select the 15m return horizon to show price–breadth divergence markers.</p>}
+    <details className="mp-pulse-data mp-visual-notes">
+      <summary>How to read these charts</summary>
+      <p className="mp-panel-footnote">The chart range above applies to both views. Raw owner points; no extra smoothing. Gaps and changes of source or cohort break the line. Level, change, velocity and acceleration have separate units.</p>
+      <p className="mp-panel-footnote">Divergence markers use BTC confirmed-close breaks of the prior 24-hour range and opposing matched breadth change at H=15m.
+        {horizon === "15" ? " A missing marker does not prove agreement; the tables distinguish unavailable from not observed." : ""}
+        {" Stored flags retain their definition and window; raw benchmark candles are not part of this history response."}</p>
+    </details>
   </section>;
 }

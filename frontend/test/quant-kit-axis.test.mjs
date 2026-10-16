@@ -135,7 +135,11 @@ test('large axes stay distinct: compact labels only for steps of a thousand or m
   const labels=ticks.map(axisFormatter(step));
   assert.equal(new Set(labels).size,labels.length,labels.join(', '));
   assert.equal(axisFormatter(0.25)(100000.25),'100,000.25');
-  assert.equal(axisFormatter(5000)(1_500_000),'1.5M');
+  assert.equal(axisFormatter(500_000)(1_500_000),'1.5M');
+  for(const [low,high] of [[1e9,1e9+10000],[1_495_000,1_505_000],[0,2e12]]){
+    const nice=niceTicks(low,high),labels=nice.ticks.map(axisFormatter(nice.step));
+    assert.equal(new Set(labels).size,labels.length,`distinct labels for [${low}, ${high}]: ${labels.join(', ')}`);
+  }
 });
 
 test('time-series axes keep a small margin where data sits exactly on an outer tick',()=>{
@@ -155,4 +159,16 @@ test('markers near the right edge get room and short marker sets are labelled on
   assert.deepEqual(markerLayout([{time:50,label:'a'}],[0,100]),{labelled:true,edgeRoom:false});
   assert.deepEqual(markerLayout([1,2,3,4].map(time=>({time,label:'x'})),[0,100]),{labelled:false,edgeRoom:false},'dense markers stay unlabelled to avoid clutter');
   assert.deepEqual(markerLayout([],[0,100]),{labelled:false,edgeRoom:false});
+});
+
+test('rounded axes near the largest finite number never produce infinite ticks or domains',()=>{
+  const {roundedAxis}=load('features/quant-ops/kit/series.ts');
+  for(const [low,high] of [[0,1.51e308],[-1.51e308,0],[1.7e308,1.79e308]]){
+    const nice=niceTicks(low,high);
+    assert.ok(nice===null||nice.ticks.every(Number.isFinite),`[${low}, ${high}] ticks are finite or absent`);
+    for(const margin of [false,true]){
+      const axis=roundedAxis([low,high],{margin});
+      assert.ok(axis===null||(axis.domain.every(Number.isFinite)&&Number.isFinite(axis.domain[1]-axis.domain[0])),`[${low}, ${high}] margin ${margin}: finite domain and span, or no plan`);
+    }
+  }
 });

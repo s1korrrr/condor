@@ -154,7 +154,8 @@ export function niceTicks(low: number, high: number, count = 5, integer = false)
   if (!(step > 0) || !Number.isSafeInteger(first) || !Number.isSafeInteger(last) || last - first > 50) return null;
   const ticks: number[] = [];
   for (let index = 0; index <= last - first; index++) ticks.push(cleanTick((first + index) * step));
-  return new Set(ticks).size === ticks.length && ticks.length >= 2 ? { ticks, step } : null;
+  // Near the largest finite number a tick can overflow; such a range has no rounded axis.
+  return ticks.every(Number.isFinite) && new Set(ticks).size === ticks.length && ticks.length >= 2 ? { ticks, step } : null;
 }
 
 /** Decimal places that write every multiple of `step` exactly (2.5 → 1, 0.25 → 2). */
@@ -166,7 +167,6 @@ function stepDecimals(step: number) {
   return 12;
 }
 
-const COMPACT = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
 
 /**
  * One label rule for a whole axis: the precision follows the tick step, so neighbouring ticks never
@@ -183,9 +183,13 @@ export function axisFormatter(step: number, signed = false) {
   const grouped = new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   return (value: number) => {
     if (value === 0) return decimals ? (0).toFixed(decimals) : '0';
-    // Compact K/M only when the step is coarse enough that neighbouring ticks still differ.
-    if (Math.abs(value) >= 10_000 && step >= 1000) return `${prefix(value)}${COMPACT.format(value)}`;
-    return `${prefix(value)}${Math.abs(value) >= 10_000 ? grouped.format(value) : value.toFixed(decimals)}`;
+    if (Math.abs(value) < 10_000) return `${prefix(value)}${value.toFixed(decimals)}`;
+    // Compact K/M/B/T only with enough digits to keep neighbouring ticks distinct (at most two);
+    // otherwise the full grouped number.
+    const unit = Math.min(12, 3 * Math.floor(Math.log10(Math.abs(value)) / 3));
+    const digits = stepDecimals(cleanTick(step / 10 ** unit));
+    if (digits > 2) return `${prefix(value)}${grouped.format(value)}`;
+    return `${prefix(value)}${new Intl.NumberFormat('en-US', { notation: 'compact', minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value)}`;
   };
 }
 
@@ -242,7 +246,9 @@ export function roundedAxis(extent: [number, number] | null, { integer = false, 
   const nice = extent && niceTicks(extent[0], extent[1], 5, integer);
   if (!nice) return null;
   const first = nice.ticks[0], last = nice.ticks[nice.ticks.length - 1], room = margin ? Math.max((last - first) * 0.03, nice.step / 4) : 0;
-  return { ...nice, domain: [extent[0] === first ? first - room : first, extent[1] === last ? last + room : last] as [number, number] };
+  const domain: [number, number] = [extent[0] === first ? first - room : first, extent[1] === last ? last + room : last];
+  // The scale needs a finite domain and span; otherwise the chart reports an unsupported range.
+  return domain.every(Number.isFinite) && Number.isFinite(domain[1] - domain[0]) ? { ...nice, domain } : null;
 }
 
 /** Marker presentation: up to three markers carry on-plot labels; one within 1% of the right edge gets room. */

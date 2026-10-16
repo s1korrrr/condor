@@ -91,6 +91,10 @@ test('charts with an unsupported value range say so instead of handing Recharts 
   assert.match(huge,/unsupported numeric range/);
   const bars=renderToStaticMarkup(React.createElement(BarsChart,{ariaLabel:'b',rows:[{label:'a',v:-1.7e308},{label:'b',v:1.7e308}],bars:[{id:'v',label:'V',color:'b'}]}));
   assert.match(bars,/unsupported numeric range/);
+  const nearMax=renderToStaticMarkup(React.createElement(TimeSeriesChart,{ariaLabel:'m',series:[{id:'m',label:'M',color:'r',points:[{time:0,value:0},{time:60_000,value:1.51e308}]}]}));
+  assert.match(nearMax,/unsupported numeric range/,'a range whose rounded axis would overflow is reported, not plotted at NaN');
+  const nearMaxBars=renderToStaticMarkup(React.createElement(BarsChart,{ariaLabel:'mb',rows:[{label:'a',v:1.51e308}],bars:[{id:'v',label:'V',color:'b'}]}));
+  assert.match(nearMaxBars,/unsupported numeric range/);
   const tiny=renderToStaticMarkup(React.createElement(TimeSeriesChart,{ariaLabel:'t',series:[{id:'t',label:'T',color:'r',points:[{time:0,value:0},{time:60_000,value:Number.MIN_VALUE}]}]}));
   assert.doesNotMatch(tiny,/unsupported numeric range/,'an underflowing range still plots on the flat band');
 });

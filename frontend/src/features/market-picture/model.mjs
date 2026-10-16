@@ -51,6 +51,11 @@ export function ageState(frame, now, frozen) {
   };
 }
 
+/** Replay uses the recorded decision time, but freezing cannot advance the clock. */
+export function observationAsOf(frame, now, frozen) {
+  return frozen && frame ? Math.min(frame.available_at_ms, now) : now;
+}
+
 export function normalizeView(value = {}) {
   return {
     horizon: HORIZONS.includes(value.horizon) ? value.horizon : DEFAULT_HORIZON,

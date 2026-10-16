@@ -470,10 +470,11 @@ export function EvidenceMatrixPanel({
 }) {
   const breadth = frame.breadth[horizon];
   const pressure = frame.pressure[horizon];
-  const validBreadth = breadth?.positive.status === "VALID" && pressure?.status === "VALID";
+  const frameAvailable = frame.available_at_ms <= asOf;
+  const validBreadth = frameAvailable && breadth?.positive.status === "VALID" && pressure?.status === "VALID";
   const completeBreadth = validBreadth && breadth.positive.valid === breadth.positive.expected &&
     pressure.valid === pressure.expected;
-  const pressureValue = pressure?.value;
+  const pressureValue = validBreadth ? pressure?.value : null;
   const sourceReference = frame.flow ?? { status: "unavailable", reasons: ["SOURCE_UNAVAILABLE"] };
   const capabilityFor = (families: string[]) => {
     const capabilities = frame.sourceCapabilities.filter(capability => families.includes(capability.family));
@@ -496,10 +497,13 @@ export function EvidenceMatrixPanel({
   const spotLiquidity = capabilityFor(["spot_liquidity"]);
   const observedFlows = frame.microstructure?.flows ?? [];
   const observedBooks = frame.microstructure?.liquidity ?? [];
-  const flowQualified = observedFlows.some(row => row.capabilityUsable && row.complete && !row.reasons.length && row.expires > asOf);
-  const bookQualified = observedBooks.some(row => row.capabilityUsable && !row.reasons.length && row.expires > asOf);
-  const flowExpired = observedFlows.length > 0 && observedFlows.every(row => row.expires <= asOf);
-  const bookExpired = observedBooks.length > 0 && observedBooks.every(row => row.expires <= asOf);
+  const currentFlows = observedFlows.filter(row => rowTimeState(frame, row, asOf) === "CURRENT");
+  const flowQualified = currentFlows.some(row => row.capabilityUsable && row.complete && !row.reasons.length);
+  const bookQualified = observedBooks.some(row => row.capabilityUsable && !row.reasons.length && rowTimeState(frame, row, asOf) === "CURRENT");
+  const flowFuture = observedFlows.some(row => rowTimeState(frame, row, asOf) === "FUTURE");
+  const bookFuture = observedBooks.some(row => rowTimeState(frame, row, asOf) === "FUTURE");
+  const flowExpired = observedFlows.length > 0 && observedFlows.every(row => rowTimeState(frame, row, asOf) === "EXPIRED");
+  const bookExpired = observedBooks.length > 0 && observedBooks.every(row => rowTimeState(frame, row, asOf) === "EXPIRED");
   const derivatives = capabilityFor(["derivatives", "liquidations"]);
   const options = capabilityFor(["options"]);
   const external = capabilityFor(["external_context"]);
@@ -508,17 +512,17 @@ export function EvidenceMatrixPanel({
   const familyRows = [
     {
       family: "Price & participation",
-      state: !validBreadth ? "UNAVAILABLE" : completeBreadth ? "OBSERVED" : "PARTIAL",
+      state: !frameAvailable ? "FUTURE" : !validBreadth ? "UNAVAILABLE" : completeBreadth ? "OBSERVED" : "PARTIAL",
       evidence: validBreadth
         ? `${metricText(breadth.positive, 0)} advancing · pressure ${metricText(pressure, 2, true)} · ${horizonLabel(horizon)}`
         : "Breadth or pressure is unavailable for this horizon.",
     },
     {
       family: "Executed spot flow",
-      state: flowQualified ? "OBSERVED · QUALIFIED" : flowExpired ? "OBSERVED · EXPIRED" : spotFlow.state,
-      evidence: `${spotFlow.detail} ${observedFlows.length ? `${observedFlows.length} stored flow rows; ${observedFlows.filter(row => row.complete && !row.reasons.length && row.expires > asOf).length} complete, reason-free, unexpired at ${new Date(asOf).toISOString()}.` : "No executed-flow component is attached."} Status-only pointer: ${sourceReference.status}${sourceReference.reasons.length ? ` · ${sourceReference.reasons.join(", ")}` : ""}.`,
+      state: flowQualified ? "OBSERVED · QUALIFIED" : flowFuture ? "OBSERVED · FUTURE" : flowExpired ? "OBSERVED · EXPIRED" : spotFlow.state,
+      evidence: `${spotFlow.detail} ${observedFlows.length ? `${observedFlows.length} stored flow rows; ${currentFlows.filter(row => row.complete && !row.reasons.length).length} complete, reason-free, available and unexpired at ${new Date(asOf).toISOString()}.` : "No executed-flow component is attached."} Status-only pointer: ${sourceReference.status}${sourceReference.reasons.length ? ` · ${sourceReference.reasons.join(", ")}` : ""}.`,
     },
-    { family: "Displayed liquidity", state: bookQualified ? "OBSERVED · QUALIFIED" : bookExpired ? "OBSERVED · EXPIRED" : spotLiquidity.state, evidence: `${spotLiquidity.detail} ${observedBooks.length ? `${observedBooks.length} stored order-size scenarios; partial coverage stays visibly partial.` : "No visible-book component is attached."}` },
+    { family: "Displayed liquidity", state: bookQualified ? "OBSERVED · QUALIFIED" : bookFuture ? "OBSERVED · FUTURE" : bookExpired ? "OBSERVED · EXPIRED" : spotLiquidity.state, evidence: `${spotLiquidity.detail} ${observedBooks.length ? `${observedBooks.length} stored order-size scenarios; partial coverage stays visibly partial.` : "No visible-book component is attached."}` },
     { family: "Derivatives positioning", state: derivatives.state, evidence: `${derivatives.detail} No qualified derivatives metric is attached.` },
     { family: "Options", state: options.state, evidence: `${options.detail} Options remain outside the qualified evidence set.` },
     { family: "External context", state: external.state, evidence: `${external.detail} External observations remain outside the qualified evidence set.` },
@@ -577,8 +581,10 @@ function displayDecimal(value: string | null, digits = 4, signed = false) {
   return `${signed && number > 0 ? "+" : ""}${formatted}`;
 }
 
-function rowFresh(expires: number, asOf: number) {
-  return expires > asOf;
+function rowTimeState(frame: DisplayFrame, row: { available: number; expires: number }, asOf: number) {
+  if (asOf < Math.max(frame.available_at_ms, row.available)) return "FUTURE";
+  if (asOf >= Math.min(frame.expires_at_ms, row.expires)) return "EXPIRED";
+  return "CURRENT";
 }
 
 /** Owner-recorded spot-flow and displayed-book observations. Never estimates depth or actionability. */
@@ -598,8 +604,14 @@ function MicrostructurePanelView({ frame, asOf = frame.available_at_ms }: { fram
           <caption id="mp-flow-observations-caption">Executed spot notional by aggressor side · quote {frame.quote}</caption>
           <thead><tr><th>Instrument</th><th>Buy quote</th><th>Sell quote</th><th>Unknown quote</th><th>Unknown share</th><th>Known imbalance</th><th>Confirmation</th><th>Cumulative delta · before → after</th><th>Coverage / source</th></tr></thead>
           <tbody>{flows.map(row => {
-            const valid = row.capabilityUsable && row.complete && !row.reasons.length && rowFresh(row.expires, asOf);
-            const state = !row.capabilityUsable ? "SOURCE NOT QUALIFIED" : !rowFresh(row.expires, asOf) ? "EXPIRED" : row.reasons.length ? row.reasons.join(", ") : row.complete ? "COMPLETE" : "PARTIAL";
+            const timeState = rowTimeState(frame, row, asOf);
+            if (timeState === "FUTURE") return <tr key={`${row.instrumentId}/${row.sourceId}`}>
+              <th scope="row">{row.instrumentId.split(":").at(-1)}</th>
+              {Array.from({ length: 7 }, (_, index) => <td key={index}>Unavailable · FUTURE</td>)}
+              <td title={`${row.sourceId} · ${row.channel} · available ${row.available} · frame available ${frame.available_at_ms}`}>FUTURE</td>
+            </tr>;
+            const valid = row.capabilityUsable && row.complete && !row.reasons.length && timeState === "CURRENT";
+            const state = timeState !== "CURRENT" ? timeState : !row.capabilityUsable ? "SOURCE NOT QUALIFIED" : row.reasons.length ? row.reasons.join(", ") : row.complete ? "COMPLETE" : "PARTIAL";
             const gapSummary = row.gaps.length ? row.gaps.map(([start, end]) => `${start}–${end}`).join(", ") : "none";
             return <tr key={`${row.instrumentId}/${row.sourceId}`}>
               <th scope="row">{row.instrumentId.split(":").at(-1)}</th>
@@ -609,7 +621,7 @@ function MicrostructurePanelView({ frame, asOf = frame.available_at_ms }: { fram
               <td>{displayDecimal(row.knownImbalance, 3, true)}</td>
               <td>{valid ? displayDecimal(row.confirmationImbalance, 3, true) : "Unavailable"}</td>
               <td>{row.cumulativeBefore == null && row.cumulativeAfter == null ? "Unavailable" : `${row.quoteAsset} ${row.cumulativeBefore == null ? "Unavailable" : displayDecimal(row.cumulativeBefore, 2, true)} → ${row.cumulativeAfter == null ? "Unavailable" : displayDecimal(row.cumulativeAfter, 2, true)}`}</td>
-              <td title={`${row.sourceId} · ${row.channel} · input ${row.inputDigest} · window ${row.windowStart}–${row.windowEnd} · coverage ${row.coverageStart}–${row.coverageEnd} · reset ${row.resetId} at ${row.resetAt} · gaps ${gapSummary} · ${row.reasons.join(", ")}`}>
+              <td title={`${row.sourceId} · ${row.channel} · input ${row.inputDigest} · window ${row.windowStart}–${row.windowEnd} · available ${row.available} · expires ${row.expires} · coverage ${row.coverageStart}–${row.coverageEnd} · reset ${row.resetId} at ${row.resetAt} · gaps ${gapSummary} · ${row.reasons.join(", ")}`}>
                 {state} · {row.trades} trades · {row.duplicates} duplicates · reset {row.resetId} · {row.gaps.length} gap{row.gaps.length === 1 ? "" : "s"}
               </td>
             </tr>;
@@ -621,13 +633,19 @@ function MicrostructurePanelView({ frame, asOf = frame.available_at_ms }: { fram
           <caption id="mp-book-observations-caption">Visible-book walk for recorded order sizes; no orders are sent</caption>
           <thead><tr><th>Instrument</th><th>Side / size</th><th>Covered / uncovered</th><th>Covered VWAP</th><th>Full-size VWAP</th><th>Book cost</th><th>Prior 7d cost percentile · midrank</th><th>Fee / total</th><th>Spread / band</th><th>State</th></tr></thead>
           <tbody>{books.map((row, index) => {
-            const valid = row.capabilityUsable && !row.reasons.length && rowFresh(row.expires, asOf);
+            const timeState = rowTimeState(frame, row, asOf);
+            if (timeState === "FUTURE") return <tr key={`${row.instrumentId}/${row.sourceId}/${row.side}/${row.sizeUnit}/${row.requestedSize}/${index}`}>
+              <th scope="row">{row.instrumentId.split(":").at(-1)}</th>
+              {Array.from({ length: 8 }, (_, column) => <td key={column}>Unavailable · FUTURE</td>)}
+              <td title={`${row.sourceId} · ${row.channel} · available ${row.available} · frame available ${frame.available_at_ms}`}>FUTURE</td>
+            </tr>;
+            const valid = row.capabilityUsable && !row.reasons.length && timeState === "CURRENT";
             const partial = Number(row.uncovered) > 0;
             const bookEstimateValid = row.capabilityUsable && row.access !== "unknown" &&
-              rowFresh(row.expires, asOf) && !partial &&
+              timeState === "CURRENT" && !partial &&
               row.vwap != null && row.costBps != null;
             const percentileReasons = row.costPercentileReasons ?? ["INSUFFICIENT_HISTORY"];
-            const state = !row.capabilityUsable ? "SOURCE NOT QUALIFIED" : !rowFresh(row.expires, asOf) ? "EXPIRED" : partial ? `PARTIAL DEPTH${row.reasons.length ? ` · ${row.reasons.join(", ")}` : ""}` : row.reasons.length ? row.reasons.join(", ") : "COVERED";
+            const state = timeState !== "CURRENT" ? timeState : !row.capabilityUsable ? "SOURCE NOT QUALIFIED" : partial ? `PARTIAL DEPTH${row.reasons.length ? ` · ${row.reasons.join(", ")}` : ""}` : row.reasons.length ? row.reasons.join(", ") : "COVERED";
             return <tr key={`${row.instrumentId}/${row.sourceId}/${row.side}/${row.sizeUnit}/${row.requestedSize}/${index}`}>
               <th scope="row">{row.instrumentId.split(":").at(-1)}</th>
               <td>{row.side} · {displayDecimal(row.requestedSize)} {row.sizeUnit}</td>
@@ -636,7 +654,7 @@ function MicrostructurePanelView({ frame, asOf = frame.available_at_ms }: { fram
               <td>{bookEstimateValid ? `${frame.quote} ${displayDecimal(row.vwap)}` : "Unavailable"}</td>
               <td>{bookEstimateValid ? `${displayDecimal(row.costBps, 2, true)} bps` : "Unavailable"}</td>
               <td title={`${percentileReasons.join(", ") || "Qualified against prior seven completed days"}${row.costPercentileReferenceDigest ? ` · reference ${row.costPercentileReferenceDigest}` : ""}`}>
-                {row.costPercentile7d == null
+                {timeState !== "CURRENT" ? `Unavailable · ${timeState}` : row.costPercentile7d == null
                   ? `Unavailable · ${percentileReasons.join(", ") || "no owner reason"}`
                   : `${displayDecimal(String(row.costPercentile7d * 100), 1)} percentile`}
                 {` · ${row.costPercentileSampleCount ?? 0}/${row.costPercentileExpectedSamples ?? 10080} samples`}
@@ -644,12 +662,12 @@ function MicrostructurePanelView({ frame, asOf = frame.available_at_ms }: { fram
               </td>
               <td>{row.feeBps == null ? "Fee unavailable" : `${displayDecimal(row.feeBps, 2)} bps · ${row.feeSource ?? "source unknown"}`} / {valid && row.totalCostBps != null ? `${displayDecimal(row.totalCostBps, 2)} bps` : "total unavailable"}</td>
               <td>{row.spreadBps == null ? "Spread unavailable" : `${displayDecimal(row.spreadBps, 2)} bps`} · ±{displayDecimal(row.bandBps, 1)} bps band · {row.bandComplete ? "complete" : "partial"}</td>
-              <td title={`${row.sourceId} · ${row.channel} · sequence ${row.sequence} · ${row.access} · observed ${row.observed} · expires ${row.expires} · band bid ${row.bidCovered}, ask ${row.askCovered} · imbalance ${row.bandImbalance ?? "unavailable"} · ${row.reasons.join(", ")}`}>{state}</td>
+              <td title={`${row.sourceId} · ${row.channel} · sequence ${row.sequence} · ${row.access} · observed ${row.observed} · available ${row.available} · expires ${row.expires} · band bid ${row.bidCovered}, ask ${row.askCovered} · imbalance ${row.bandImbalance ?? "unavailable"} · ${row.reasons.join(", ")}`}>{state}</td>
             </tr>;
           })}</tbody>
         </table>
       </div> : <p className="mp-panel-footnote">No displayed-liquidity rows in this owner snapshot.</p>}
-      <p className="mp-panel-footnote">Values expire per row. Incomplete flow, unknown aggressor notional, partial book depth, missing fee provenance, and unsupported access remain unavailable; no candle color is used as trade flow.</p>
+      <p className="mp-panel-footnote">Confirmation and execution-cost claims require a frame and row available at the assessment time and unexpired. Incomplete flow, unknown aggressor notional, partial book depth, missing fee provenance, and unsupported access remain unavailable; no candle color is used as trade flow.</p>
     </Panel>
   );
 }

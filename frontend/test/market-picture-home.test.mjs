@@ -47,6 +47,75 @@ const read = (file) =>
 const metric = (value, extra = {}) => ({ value, original: String(value), unit: "x", status: value == null ? "UNAVAILABLE" : "VALID", reasons: [], valid: 5, expected: 5, available: 1, expires: 2, definition: "d v1", ...extra });
 const HORIZONS = ["1", "5", "15", "60", "240", "1440"];
 
+test("future microstructure never qualifies before both the frame and row are available", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const source = await fixtureFrame("market-picture.m1-components.fixture.json");
+  const decision = source.available_at_ms;
+  for (const pending of ["frame", "row", "both"]) {
+    const frame = structuredClone(source);
+    const flow = frame.microstructure.flows.find(row => row.confirmationImbalance != null && row.complete && !row.reasons.length);
+    const book = frame.microstructure.liquidity.find(row => row.vwap != null && Number(row.uncovered) === 0);
+    assert.ok(flow && book);
+    frame.microstructure.flows = [flow];
+    frame.microstructure.liquidity = [book];
+    Object.assign(book, { reasons: [], totalCostBps: "25", costPercentile7d: 0.75, costPercentileReasons: [] });
+    frame.available_at_ms = pending === "row" ? decision - 2 : decision;
+    flow.available = book.available = pending === "frame" ? decision - 2 : decision;
+    const render = (Component, asOf) => renderToStaticMarkup(React.createElement(Component, { frame, horizon: "15", asOf }));
+    const future = render(pulse.MicrostructurePanel, decision - 1);
+    const families = render(pulse.EvidenceMatrixPanel, decision - 1);
+    const tables = [...future.matchAll(/<tbody>(.*?)<\/tbody>/gs)].map(match => match[1]);
+    const cells = html => [...html.matchAll(/<td(?:\s[^>]*)?>(.*?)<\/td>/gs)].map(match => match[1]);
+    assert.deepEqual(cells(tables[0]).slice(0, 7), Array(7).fill("Unavailable · FUTURE"), `${pending}: no future flow values`);
+    assert.deepEqual(cells(tables[1]).slice(0, 8), Array(8).fill("Unavailable · FUTURE"), `${pending}: no future book values`);
+    assert.match(future, /FUTURE/);
+    assert.doesNotMatch(families, /OBSERVED · QUALIFIED/);
+    assert.match(families, /data-state="OBSERVED · FUTURE"/);
+    assert.match(families, /0 complete, reason-free, available and unexpired/);
+    const available = render(pulse.MicrostructurePanel, decision);
+    assert.doesNotMatch(available, /FUTURE/);
+    assert.match(available, /75 percentile/);
+    assert.match(available, /25 bps/);
+    assert.match(available, /\+0\.2/);
+    assert.match(available, /USDC 21\.614/);
+    assert.match(render(pulse.EvidenceMatrixPanel, decision), /OBSERVED · QUALIFIED/);
+  }
+});
+
+test("frozen assessment never advances the clock to a future frame", () => {
+  const frame = { available_at_ms: 1000 };
+  assert.equal(model.observationAsOf(frame, 999, false), 999);
+  assert.equal(model.observationAsOf(frame, 999, true), 999);
+  assert.equal(model.observationAsOf(frame, 1000, true), 1000);
+  assert.equal(model.observationAsOf(frame, 2000, true), 1000);
+  assert.equal(model.observationAsOf(frame, 2000, false), 2000);
+  assert.equal(model.observationAsOf(null, 2000, true), 2000);
+});
+
+test("microstructure qualification ends exactly at the earlier frame or row expiry", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const source = await fixtureFrame("market-picture.m1-components.fixture.json");
+  const expiry = source.available_at_ms + 5_000;
+  for (const firstExpiry of ["frame", "row"]) {
+    const frame = structuredClone(source);
+    const flow = frame.microstructure.flows.find(row => row.confirmationImbalance != null && row.complete && !row.reasons.length);
+    const book = frame.microstructure.liquidity.find(row => row.vwap != null && Number(row.uncovered) === 0);
+    frame.microstructure.flows = [flow];
+    frame.microstructure.liquidity = [book];
+    frame.expires_at_ms = firstExpiry === "frame" ? expiry : expiry + 1;
+    flow.expires = book.expires = firstExpiry === "row" ? expiry : expiry + 1;
+    Object.assign(book, { reasons: [], totalCostBps: "25", costPercentile7d: 0.75, costPercentileReasons: [] });
+    const render = (Component, asOf) => renderToStaticMarkup(React.createElement(Component, { frame, horizon: "15", asOf }));
+    assert.match(render(pulse.EvidenceMatrixPanel, expiry - 1), /OBSERVED · QUALIFIED/);
+    assert.match(render(pulse.MicrostructurePanel, expiry - 1), /75 percentile/);
+    const expired = render(pulse.MicrostructurePanel, expiry);
+    assert.match(expired, /Unavailable · EXPIRED/);
+    assert.doesNotMatch(expired, /75 percentile|25 bps/);
+    assert.doesNotMatch(render(pulse.EvidenceMatrixPanel, expiry), /OBSERVED · QUALIFIED/);
+    assert.match(render(pulse.EvidenceMatrixPanel, expiry), /OBSERVED · EXPIRED/);
+  }
+});
+
 function frameWith({ pressure = {}, mean = {}, vol = 0.5, advancing = 3 } = {}) {
   return {
     expected: 5,

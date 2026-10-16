@@ -14,6 +14,7 @@ import { useServer } from "@/hooks/useServer";
 import { api } from "@/lib/api";
 import {
   ageState,
+  observationAsOf,
   csvCell,
   downloadFile,
   parseView,
@@ -195,7 +196,7 @@ export function MarketPictureSurface({
   const data = source.data,
     frame = data?.frame ?? null;
   const observationNow = useObservationClock(fixture?.frame.available_at_ms);
-  const componentAsOf = source.frozen ? frame?.available_at_ms ?? observationNow : observationNow;
+  const componentAsOf = observationAsOf(frame, observationNow, source.frozen);
   const health = marketPictureHealth(data?.faults, source.error, ageState(frame, Date.now(), source.frozen).freshness);
   const state = ageState(frame, Date.now(), source.frozen);
   const selected =

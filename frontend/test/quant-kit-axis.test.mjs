@@ -77,14 +77,15 @@ test('multi-day axes tick at UTC midnights, so date labels never repeat',()=>{
   assert.ok(month.every((tick,index)=>index===0||tick-month[index-1]===stride),'one whole-day stride');
 });
 
-test('ranges narrower than float precision terminate and stay readable',{timeout:2000},()=>{
-  for(const [low,high] of [[1000,1000.0000000000001],[1e15,1e15+0.125],[-5e300,-5e300],[0,Number.MIN_VALUE],[1e-300,2e-300]]){
-    const nice=niceTicks(low,high);
-    assert.ok(nice===null||(nice.ticks.length>=2&&nice.ticks.length<=50&&nice.ticks[0]<=low&&nice.ticks.at(-1)>=high),`[${low}, ${high}]`);
-    if(nice) assert.equal(new Set(nice.ticks).size,nice.ticks.length,'ticks are distinct');
+test('ranges narrower than float precision terminate and stay readable (external watchdog)',()=>{
+  const run=inChild(`console.log(JSON.stringify([[1000,1000.0000000000001],[1e15,1e15+0.125],[-5e300,-5e300],[0,Number.MIN_VALUE],[1e-300,2e-300]].map(([a,b])=>[a,b,kit.niceTicks(a,b)])));`);
+  assert.equal(run.signal,null,`child was killed by the watchdog: ${run.signal}`);
+  assert.equal(run.status,0,run.stderr);
+  for(const [low,high,nice] of JSON.parse(run.stdout)){
+    assert.ok(nice&&nice.ticks.length>=2&&nice.ticks.length<=50&&nice.ticks[0]<=low&&nice.ticks.at(-1)>=high,`[${low}, ${high}]`);
+    assert.equal(new Set(nice.ticks).size,nice.ticks.length,'ticks are distinct');
   }
-  const flat=niceTicks(1000,1000.0000000000001);
-  assert.ok(flat&&flat.step>=1,'a range flat relative to its magnitude gets the flat-series band');
+  assert.ok(JSON.parse(run.stdout)[0][2].step>=1,'a range flat relative to its magnitude gets the flat-series band');
 });
 
 test('drawdown percent ticks keep distinct labels for tiny ranges',()=>{
@@ -94,4 +95,45 @@ test('drawdown percent ticks keep distinct labels for tiny ranges',()=>{
   assert.deepEqual(labels,['-0.06%','-0.04%','-0.02%','0.00%'],'the old one-decimal formatter printed -0.1%, -0.0%, -0.0%, 0.0%');
   assert.equal(ratioPercentTick(-0.01,0.005),'-1.0%');
   assert.equal(ratioPercentTick(0,0.005),'0.0%');
+});
+
+// A synchronous infinite loop cannot be pre-empted by node:test timeouts, so extreme inputs run in a
+// child process under an external watchdog.
+import {spawnSync} from 'node:child_process';
+const helperUrl=new URL('./helpers/frontend-module.mjs',import.meta.url).href;
+function inChild(body){
+  const code=`const {frontendModules}=await import(${JSON.stringify(helperUrl)});const kit=frontendModules().load('features/quant-ops/kit/series.ts');${body}`;
+  return spawnSync(process.execPath,['--input-type=module','-e',code],{timeout:5000,encoding:'utf8'});
+}
+
+test('extreme numeric and time ranges terminate (external watchdog)',()=>{
+  const run=inChild(`
+    const out=[];
+    for(const [a,b] of [[1000,1000.0000000000001],[0,Number.MIN_VALUE],[1e-300,2e-300],[-1.7e308,1.7e308],[1e308,1.0000000000000002e308]]) out.push(kit.niceTicks(a,b));
+    out.push(kit.dayTicks([1e308,1.0000000000000002e308]),kit.dayTicks([-8.64e15,8.64e15]),kit.dayTicks([0,8.64e15]));
+    console.log(JSON.stringify(out));`);
+  assert.equal(run.signal,null,`child was killed by the watchdog: ${run.signal}`);
+  assert.equal(run.status,0,run.stderr);
+  const [narrow,underflow,tiny,overflow,huge,dayHuge,dayAll,dayHalf]=JSON.parse(run.stdout);
+  assert.deepEqual(narrow.ticks,[990,995,1000,1005,1010]);
+  assert.ok(underflow&&underflow.ticks[0]<=0&&underflow.ticks.at(-1)>=Number.MIN_VALUE,'an underflowing span gets the flat band instead of no axis');
+  assert.ok(tiny&&tiny.ticks.length>=2);
+  assert.equal(overflow,null,'a span that overflows has no rounded axis');
+  assert.ok(huge&&huge.ticks.length>=2);
+  assert.deepEqual(dayHuge,[],'timestamps outside the Date range get no day ticks');
+  assert.ok(dayAll.length>=2&&dayAll.length<=8&&dayHalf.length>=2&&dayHalf.length<=8);
+});
+
+test('time series outside the Date range are rejected as invalid timestamps',()=>{
+  const {projectTimeSeries}=load('features/quant-ops/kit/series.ts');
+  assert.match(projectTimeSeries([{id:'x',label:'X',color:'r',points:[{time:1e308,value:1},{time:1.0000000000000002e308,value:2}]}]).invalid,/timestamps are invalid/);
+  assert.equal(projectTimeSeries([{id:'x',label:'X',color:'r',points:[{time:8.64e15,value:1}]}]).invalid,null,'the last valid Date is accepted');
+});
+
+test('large axes stay distinct: compact labels only for steps of a thousand or more',()=>{
+  const {ticks,step}=niceTicks(100000,100001);
+  const labels=ticks.map(axisFormatter(step));
+  assert.equal(new Set(labels).size,labels.length,labels.join(', '));
+  assert.equal(axisFormatter(0.25)(100000.25),'100,000.25');
+  assert.equal(axisFormatter(5000)(1_500_000),'1.5M');
 });

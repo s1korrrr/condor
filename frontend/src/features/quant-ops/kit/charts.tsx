@@ -52,6 +52,8 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
   // Data-derived axes widen to rounded ticks; caller-fixed domains (for example -3..3 pressure) stay exact.
   const leftNice = domains?.left ? null : rounded(valueExtent(left, includeZero)), rightNice = domains?.right ? null : rounded(valueExtent(right, includeZero));
   const leftDomain = domains?.left ?? leftNice?.domain ?? null, rightDomain = domains?.right ?? rightNice?.domain ?? null;
+  // Values whose span cannot form an axis (for example ±1.7e308) are reported, never handed to Recharts as 'auto'.
+  if ((!domains?.left && valueExtent(left, includeZero) && !leftNice) || (!domains?.right && valueExtent(right, includeZero) && !rightNice)) return <p className="q-empty">Values span an unsupported numeric range. History cannot be plotted.</p>;
   const domain = timeDomain ?? projection.domain;
   const span = domain[1] - domain[0];
   const tick = timeTick(span);
@@ -113,6 +115,7 @@ export function BarsChart({ rows, bars, line, height = 160, format = formatSigne
   const barLow = Math.min(0, ...barValues), barHigh = Math.max(0, ...barValues);
   // All-zero bars keep a 0..1 axis instead of inventing a negative band around zero.
   const axis = barValues.length ? rounded([barLow, barHigh === barLow ? barLow + 1 : barHigh], integer) : null;
+  if (barValues.length && !axis) return <p className="q-empty">Values span an unsupported numeric range. Bars cannot be plotted.</p>;
   return <figure className="q-chart" role="img" aria-label={ariaLabel} style={{ height }}>
     <ResponsiveContainer width="100%" height={height} minWidth={0}>
       <ComposedChart data={rows} margin={{ top: 6, right: 4, bottom: 0, left: 0 }} barGap={2} barCategoryGap="22%">

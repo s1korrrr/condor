@@ -7,6 +7,9 @@ export const CHART = {
   grid: 'var(--q-border, var(--color-border, #20313e))', muted: 'var(--q-muted, var(--color-text-muted, #a4bacb))', text: 'var(--q-text, var(--color-text, #e5e7eb))', surface: 'var(--q-surface, var(--color-surface, #0a151d))',
 } as const;
 
+/** Largest JavaScript Date offset; later or earlier timestamps cannot be shown as a time. */
+const MAX_TIME_MS = 8.64e15;
+
 export type SeriesPoint = { time: number; value: number | null };
 export type ChartSeries = {
   id: string; label: string; color: string; points: SeriesPoint[];
@@ -75,7 +78,7 @@ export function projectTimeSeries(input: ChartSeries[]): TimeSeriesProjection {
   for (const item of series) {
     for (let index = 0; index < item.points.length; index++) {
       const point = item.points[index];
-      if (!Number.isFinite(point.time) || (index > 0 && point.time <= item.points[index - 1].time)) return { rows: [], keys: [], domain: null, invalid: `${item.label}: timestamps are invalid or out of order.` };
+      if (!Number.isFinite(point.time) || Math.abs(point.time) > MAX_TIME_MS || (index > 0 && point.time <= item.points[index - 1].time)) return { rows: [], keys: [], domain: null, invalid: `${item.label}: timestamps are invalid or out of order.` };
       if (point.value !== null && !Number.isFinite(point.value)) return { rows: [], keys: [], domain: null, invalid: `${item.label}: a value is not a finite number.` };
     }
     let segment: SeriesPoint[] = [];
@@ -136,10 +139,11 @@ const cleanTick = (value: number) => {
  * widens to the nearest tick; plotted values are never changed or clipped.
  */
 export function niceTicks(low: number, high: number, count = 5, integer = false): { ticks: number[]; step: number } | null {
-  if (!Number.isFinite(low) || !Number.isFinite(high) || high < low) return null;
-  // A range flat relative to its own magnitude (beyond float precision) gets the flat-series band.
-  if (high - low <= Math.max(Math.abs(low), Math.abs(high)) * 1e-9) {
-    const pad = Math.abs(high) * 0.01 || (integer ? 1 : 0.01); low -= pad; high += pad;
+  if (!Number.isFinite(low) || !Number.isFinite(high) || high < low || !Number.isFinite(high - low)) return null;
+  // A range flat relative to its magnitude, or so small it underflows, gets the flat-series band.
+  if (high - low <= Math.max(Math.abs(low), Math.abs(high)) * 1e-9 || high - low < 1e-250) {
+    const relative = Math.abs(high) * 0.01;
+    const pad = relative >= 1e-250 ? relative : integer ? 1 : 0.01; low -= pad; high += pad;
   }
   const raw = (high - low) / Math.max(1, count - 1);
   const power = 10 ** Math.floor(Math.log10(raw));
@@ -176,10 +180,12 @@ export function axisFormatter(step: number, signed = false) {
     return (value: number) => value === 0 ? '0' : `${prefix(value)}${(value / 10 ** exponent).toFixed(decimals)}e${exponent}`;
   }
   const decimals = stepDecimals(step);
+  const grouped = new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
   return (value: number) => {
     if (value === 0) return decimals ? (0).toFixed(decimals) : '0';
-    if (Math.abs(value) >= 10_000) return `${prefix(value)}${COMPACT.format(value)}`;
-    return `${prefix(value)}${value.toFixed(decimals)}`;
+    // Compact K/M only when the step is coarse enough that neighbouring ticks still differ.
+    if (Math.abs(value) >= 10_000 && step >= 1000) return `${prefix(value)}${COMPACT.format(value)}`;
+    return `${prefix(value)}${Math.abs(value) >= 10_000 ? grouped.format(value) : value.toFixed(decimals)}`;
   };
 }
 
@@ -208,11 +214,14 @@ const DAY_MS = 86_400_000;
  * Ticks within 3% of either end are left out, so a centred date label is never cut by the plot edge.
  */
 export function dayTicks([start, end]: [number, number], maxTicks = 7): number[] {
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || Math.abs(start) > MAX_TIME_MS || Math.abs(end) > MAX_TIME_MS) return [];
   const stride = Math.max(1, Math.ceil((end - start) / DAY_MS / maxTicks)) * DAY_MS;
-  const edge = (end - start) * 0.03;
+  const edge = (end - start) * 0.03, first = Math.ceil(start / DAY_MS) * DAY_MS;
   const ticks: number[] = [];
-  for (let tick = Math.ceil(start / DAY_MS) * DAY_MS; tick <= end; tick += stride) {
+  // Index-bounded: at most maxTicks + 1 candidates whatever the float arithmetic does.
+  for (let index = 0; index <= maxTicks; index++) {
+    const tick = first + index * stride;
+    if (tick > end) break;
     if (tick - start >= edge && end - tick >= edge) ticks.push(tick);
   }
   return ticks;

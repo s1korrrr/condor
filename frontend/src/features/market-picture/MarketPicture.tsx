@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Download,
   Pause,
@@ -14,6 +14,7 @@ import { useServer } from "@/hooks/useServer";
 import { api } from "@/lib/api";
 import {
   ageState,
+  observationAsOf,
   csvCell,
   downloadFile,
   parseView,
@@ -23,14 +24,18 @@ import {
 import { canonical, digest } from "./contract.mjs";
 import { useMarketPicture } from "./useMarketPicture";
 import { boundedJson, projectEvents, type FrameBundle } from "./source";
+import { marketPictureHealth, marketSourceLabel } from "./health.mjs";
 import {
-  type DisplayAsset,
   type DisplayCorrelation,
   type DisplayEvent,
   type DisplayFrame,
+  type HistoryPoint,
   type ViewSettings,
 } from "./presentation";
-import { MarketPulseHero, MarketSnapshotTiles } from "./MarketPulse";
+import { BreadthContextPanel, DailyInternalsPanel, EvidenceMatrixPanel, FlowHistoryPanel, MarketPulseHero, MarketSnapshotTiles, MicrostructurePanel, type SummaryTile } from "./MarketPulse";
+import { SummaryEvidence, type SummarySelection } from "./SummaryEvidence";
+import { selectMetricCohort, type MetricCohortRequest } from "./metric-cohort.mjs";
+import { instrumentExportMetadata, instrumentRows } from "./instrument-view";
 import {
   CorrelationMatrix,
   CorrelationsPanel,
@@ -50,7 +55,8 @@ import {
   Drawer,
   MarketEventFeed,
 } from "./DetailViews";
-import { Empty } from "./Primitives";
+import { Empty, Panel } from "./Primitives";
+import { RelativeStrengthVisuals } from "./RelativeStrengthVisuals";
 import "./market-picture.css";
 import "./home.css";
 
@@ -65,7 +71,7 @@ const NativeTools = lazy(() =>
   })),
 );
 type DrawerName =
-  "asset" | "coverage" | "matrix" | "settings" | "tools" | "export" | null;
+  "asset" | "coverage" | "summary" | "matrix" | "settings" | "tools" | "export" | null;
 interface Preferences {
   universe: string | null;
   watchlist: string[];
@@ -78,6 +84,8 @@ const EMPTY_PREFS: Preferences = {
   notes: {},
   views: [],
 };
+const EMPTY_HISTORY: HistoryPoint[] = [];
+const EMPTY_CORRELATIONS: DisplayCorrelation[] = [];
 function loadPreferences(key: string): Preferences {
   try {
     const value = JSON.parse(localStorage.getItem(key) ?? "null");
@@ -121,12 +129,6 @@ function loadPreferences(key: string): Preferences {
     return EMPTY_PREFS;
   }
 }
-function predicateMembers(assets: DisplayAsset[], key: string) {
-  return assets
-    .filter((a) => a.predicates[key]?.value === 1)
-    .map((a) => a.instrument_id);
-}
-
 export function MarketPicture() {
   const { server } = useServer();
   const { user } = useAuth();
@@ -155,8 +157,10 @@ export function MarketPictureSurface({
   const [search, setSearch] = useState(""),
     [drawer, setDrawer] = useState<DrawerName>(() => nativeViewSearch(location.search) ? "tools" : null);
   const [nativeSearch, setNativeSearch] = useState(() => nativeViewSearch(location.search));
+  const [summarySelection, setSummarySelection] = useState<SummarySelection | null>(null);
   const [cohort, setCohort] = useState<string[]>([]),
     [cohortLabel, setCohortLabel] = useState("");
+  const [metricRule, setMetricRule] = useState<{ request: MetricCohortRequest; definition: string | null } | null>(null);
   const [message, setMessage] = useState<string | null>(null),
     [viewName, setViewName] = useState("");
   const [additionalEvents, setAdditionalEvents] = useState<{
@@ -190,29 +194,51 @@ export function MarketPictureSurface({
   const source = useMarketPicture(server, view.window, view.benchmark, fixture);
   const data = source.data,
     frame = data?.frame ?? null;
-  const degradedComponents = Object.keys(data?.faults ?? {}).sort();
-  const componentFault = degradedComponents.length
-    ? `Partial Market Picture observation · ${degradedComponents.join(", ")} unavailable. Retained values, when present, remain bound to the same validated frame.`
-    : null;
-  const degraded = Boolean(source.error || componentFault);
-  const state = ageState(frame, Date.now(), source.frozen);
+  const observationNow = useObservationClock(fixture?.frame.available_at_ms);
+  const componentAsOf = observationAsOf(frame, observationNow, source.frozen);
+  const metricFilter = useMemo(() => {
+    if (!metricRule) return null;
+    const result = selectMetricCohort(frame, metricRule.request, componentAsOf, metricRule.definition ?? undefined);
+    // An unavailable click did not establish a definition to carry across frames.
+    return metricRule.definition === null
+      ? { ...result, status: "unavailable" as const, instrumentIds: [], reasons: [...result.reasons, "RESELECT_TO_QUALIFY"] }
+      : result;
+  }, [frame, metricRule, componentAsOf]);
+  const selectedRows = useMemo(() => instrumentRows(frame, search, metricFilter), [frame, search, metricFilter]);
+  const state = ageState(frame, observationNow, source.frozen);
+  const health = marketPictureHealth(data?.faults, source.error, state.freshness);
   const selected =
     frame?.assets.find((a) => a.instrument_id === view.selected) ?? null;
   const preferencesKey = `condor.market-picture.v1:${encodeURIComponent(userId)}:${encodeURIComponent(server ?? "none")}:${encodeURIComponent(frame?.universeId ?? "pending")}`;
   const storedPreferences = useMemo(() => loadPreferences(preferencesKey), [preferencesKey]);
   const [preferences, setPreferences] = useState<{key: string; value: Preferences} | null>(null);
   const scopedPreferences = preferences?.key === preferencesKey ? preferences.value : storedPreferences;
-  const cohortSet = new Set(cohort);
-  const set = (patch: Partial<ViewSettings>) =>
-    setView((v) => ({ ...v, ...patch }));
-  const select = (id: string) => {
+  const cohortSet = useMemo(() => new Set(cohort), [cohort]);
+  const set = useCallback((patch: Partial<ViewSettings>) =>
+    setView((v) => ({ ...v, ...patch })), []);
+  const select = useCallback((id: string) => {
     set({ selected: id });
     setDrawer("asset");
-  };
-  const highlight = (ids: string[], label: string) => {
+  }, [set]);
+  const highlight = useCallback((ids: string[], label: string) => {
     setCohort(ids);
     setCohortLabel(label);
-  };
+  }, []);
+  const setHorizon = useCallback((horizon: ViewSettings["horizon"]) => set({ horizon }), [set]);
+  const setWindow = useCallback((window: ViewSettings["window"]) => set({ window }), [set]);
+  const setBenchmark = useCallback((benchmark: string) => set({ benchmark }), [set]);
+  const setSector = useCallback((sector: string) => set({ sector }), [set]);
+  const selectMetric = useCallback((request: MetricCohortRequest) => {
+    const result = selectMetricCohort(frame, request, componentAsOf);
+    setMetricRule({ request, definition: result.status === "available" ? result.definition : null });
+  }, [frame, componentAsOf]);
+  const selectPredicate = useCallback((key: string) => selectMetric({ kind: "predicate", key }), [selectMetric]);
+  const openMatrix = useCallback(() => setDrawer("matrix"), []);
+  const inspectSummary = useCallback((tile: SummaryTile, samples: HistoryPoint[]) => {
+    if (!frame) return;
+    setSummarySelection({ tile, frame, samples, window: view.window });
+    setDrawer("summary");
+  }, [frame, view.window]);
   const savePreferences = (patch: Partial<Preferences>) => {
     const next = {
       ...scopedPreferences,
@@ -230,6 +256,7 @@ export function MarketPictureSurface({
   };
   const closeDrawer = () => {
     setDrawer(null);
+    setSummarySelection(null);
     if (resumeAfterTools) {
       source.toggleFreeze();
       setResumeAfterTools(false);
@@ -250,6 +277,11 @@ export function MarketPictureSurface({
       components: data.components,
       selected_view: view,
       selected_cohort: cohort,
+      metric_filter: metricFilter,
+      symbol_search: search,
+      metric_symbol_subset_ids: selectedRows.map(row => row.instrument_id),
+      instrument_selection_scope: "metric_filter_and_symbol_search_before_table_controls",
+      assessed_at_ms: componentAsOf,
       full_universe_count: data.frame.expected,
       source_server: server,
       exported_at_ms: Date.now(),
@@ -268,22 +300,21 @@ export function MarketPictureSurface({
   };
   const exportCsv = () => {
     if (!frame) return;
+    const metadata = instrumentExportMetadata(frame, metricFilter, search, componentAsOf);
     const rows = [
       [
         "instrument_id",
         "price_quote",
         "return_24h_percent",
         "return_7d_percent",
-        "snapshot_id",
-        "source_kind",
+        ...Object.keys(metadata),
       ],
-      ...frame.assets.map((a) => [
+      ...selectedRows.map((a) => [
         a.instrument_id,
         a.price.original,
         a.returns["1440"].original,
         a.returns["10080"].original,
-        frame.snapshot_id,
-        frame.source_kind,
+        ...Object.values(metadata),
       ]),
     ];
     downloadFile(
@@ -303,7 +334,7 @@ export function MarketPictureSurface({
       setMessage(`View link: ${url}`);
     }
   };
-  const loadEvents = async () => {
+  const loadEvents = useCallback(async () => {
     if (!server || !frame || !data || busy) return;
     const cursor =
       additionalEvents?.snapshot === frame.snapshot_id
@@ -341,17 +372,18 @@ export function MarketPictureSurface({
     } finally {
       setBusy(false);
     }
-  };
+  }, [additionalEvents, busy, data, frame, server]);
+  const nextEventsPage = useCallback(() => void loadEvents(), [loadEvents]);
   const extra =
     additionalEvents?.snapshot === frame?.snapshot_id ? additionalEvents : null;
-  const events = [
+  const events = useMemo(() => [
     ...new Map(
       [...(data?.events ?? []), ...(extra?.events ?? [])].map((e) => [
         e.event_id,
         e,
       ]),
     ).values(),
-  ];
+  ], [data?.events, extra?.events]);
   const common = { frame, selected: view.selected, select, cohort: cohortSet };
   return (
     <div
@@ -377,7 +409,7 @@ export function MarketPictureSurface({
           />
           <kbd>/</kbd>
         </label>
-        <SourceStatus frame={frame} frozen={source.frozen} loading={source.loading} server={server} degraded={degraded} fixtureTime={fixture?.frame.available_at_ms} />
+        <SourceStatus frame={frame} frozen={source.frozen} loading={source.loading} server={server} degraded={health.degraded} fixtureTime={fixture?.frame.available_at_ms} />
         <button
           className="mp-icon-button"
           aria-label="Market Picture settings"
@@ -408,6 +440,15 @@ export function MarketPictureSurface({
               <X size={12} />
             </button>
           )}
+          {metricFilter && <div className="mp-metric-filter" role="status">
+            <span>Display filter · {metricFilter.label} · {metricFilter.status === "available" ? `${metricFilter.instrumentIds.length} matches · ${metricFilter.valid}/${metricFilter.expected} valid` : "Unavailable"}</span>
+            <small>Instrument table only; market readings keep the full universe. Frame {frame?.sequence} · {metricFilter.cutoff == null ? "time unavailable" : new Date(metricFilter.cutoff).toISOString()}</small>
+            {metricFilter.reasons.length > 0 && <small>{[...new Set(metricFilter.reasons)].join(", ")}</small>}
+            <details><summary>Filter definition &amp; snapshot</summary><p>{metricFilter.definition ?? "No qualified definition"} · {metricFilter.snapshotId}</p></details>
+            <a href="#mp-instruments">View filtered instruments</a>
+            <button onClick={() => selectMetric(metricFilter.request)}>Reapply metric filter</button>
+            <button aria-label="Clear metric filter" onClick={() => setMetricRule(null)}>Clear filter <X size={12} /></button>
+          </div>}
         </div>
         <div>
           <button disabled={!frame} onClick={source.toggleFreeze}>
@@ -426,14 +467,14 @@ export function MarketPictureSurface({
           </button>
         </div>
       </div>
-      {(source.error || componentFault || message) && (
+      {(source.error || health.notice || message) && (
         <div className="mp-notice" role="status">
           <span>
             {source.error
-              ? `${source.error}${frame ? " · Retaining the last validated frame with its original expiry." : ""}`
-              : (componentFault ?? message)}
+              ? `${source.error}${frame ? " · Retaining the last validated frame with its original expiry." : ""}${health.componentNotice ? ` · ${health.componentNotice}` : ""}`
+              : (health.notice ?? message)}
           </span>
-          {source.error || componentFault ? (
+          {source.error || health.degraded ? (
             <button onClick={source.retry}>Retry</button>
           ) : (
             <button
@@ -445,18 +486,38 @@ export function MarketPictureSurface({
           )}
         </div>
       )}
+      {frame && (source.frozen || state.freshness !== "FRESH") && (
+        <div className="mp-notice" role="status">
+          {source.frozen
+            ? `Historical inspection · recorded values are assessed at ${new Date(componentAsOf).toISOString()}. Source age continues; this is not a current market verdict.`
+            : `${state.freshness} observation · values below are retained for inspection with their original timestamps. A current market verdict is unavailable.`}
+        </div>
+      )}
       <MarketPulseHero
         frame={frame}
-        history={data?.history ?? []}
+        history={data?.history ?? EMPTY_HISTORY}
+        canonicalHistory={data?.canonicalHistory ?? null}
+        canonicalHistoryFault={data?.canonicalHistoryFault ?? null}
         horizon={view.horizon}
         window={view.window}
-        setHorizon={(h) => set({ horizon: h })}
-        setWindow={(w) => set({ window: w })}
-        replay={(id) => void source.replay(id)}
+        setHorizon={setHorizon}
+        setWindow={setWindow}
+        replay={source.replay}
+        asOf={componentAsOf}
+        historical={source.frozen}
+        onSelectMetric={selectMetric}
       />
       {frame && (
-        <MarketSnapshotTiles frame={frame} history={data?.history ?? []} window={view.window} />
+        <MarketSnapshotTiles frame={frame} history={data?.history ?? EMPTY_HISTORY} window={view.window} horizon={view.horizon} asOf={componentAsOf} historical={source.frozen} onInspect={inspectSummary} />
       )}
+      {frame && <EvidenceMatrixPanel frame={frame} horizon={view.horizon} asOf={componentAsOf} />}
+      {frame && <MicrostructurePanel frame={frame} asOf={componentAsOf} />}
+      {frame && <FlowHistoryPanel history={data?.history ?? EMPTY_HISTORY} window={view.window} fault={data?.faults.history ?? null} />}
+      {frame && <BreadthContextPanel frame={frame} />}
+      {frame && <Panel id="mp-relative-strength" title="Relative strength & rank movement" detail="Price-derived comparisons · exact owner observations at the recorded cutoff">
+        <RelativeStrengthVisuals frame={frame} benchmark={view.benchmark} asOf={componentAsOf} select={select} selected={view.selected} />
+      </Panel>}
+      {frame && <DailyInternalsPanel frame={frame} asOf={componentAsOf} onSelectMetric={selectMetric} />}
       {!frame && (
         <div className="mp-loading" role="status" aria-busy={source.loading || undefined}>
           <span className="mp-skeleton" style={{ height: 120 }} />
@@ -465,17 +526,12 @@ export function MarketPictureSurface({
       )}
       {frame && (
         <div className="mp-sections">
-          <InstrumentsPanel {...common} search={search} />
+          <InstrumentsPanel {...common} search={search} displayFilter={metricFilter} asOf={componentAsOf} />
           <div className="mp-row mp-row--split">
             <LeadersLaggardsPanel {...common} benchmark={view.benchmark} />
             <ParticipationPanel
               frame={frame}
-              selectPredicate={(p) =>
-                highlight(
-                  predicateMembers(frame.assets, p),
-                  p.replaceAll("_", " "),
-                )
-              }
+              selectPredicate={selectPredicate}
             />
           </div>
           <RegimePanel {...common} search={search} />
@@ -484,14 +540,14 @@ export function MarketPictureSurface({
               <MarketHeatmapPanel
                 {...common}
                 sector={view.sector}
-                setSector={(s) => set({ sector: s })}
+                setSector={setSector}
               />
             )}
             <MarketEventFeed
               events={events}
               frame={frame}
               select={select}
-              nextPage={() => void loadEvents()}
+              nextPage={nextEventsPage}
               hasMore={Boolean(extra ? extra.cursor : data?.eventCursor)}
               fault={data?.faults.events}
             />
@@ -503,10 +559,10 @@ export function MarketPictureSurface({
               )}
               <CorrelationsPanel
                 {...common}
-                correlations={data?.correlations ?? []}
+                correlations={data?.correlations ?? EMPTY_CORRELATIONS}
                 benchmark={view.benchmark}
-                setBenchmark={(b) => set({ benchmark: b })}
-                openMatrix={() => setDrawer("matrix")}
+                setBenchmark={setBenchmark}
+                openMatrix={openMatrix}
               />
             </div>
           )}
@@ -521,7 +577,7 @@ export function MarketPictureSurface({
           {source.frozen
             ? "View frozen · source age continues"
             : "Read-only market intelligence"}{" "}
-          <span className={degraded ? "mp-warning" : "mp-up"}>●</span>
+          <span className={health.footerTone === "warning" ? "mp-warning" : "mp-up"}>●</span>
         </span>
       </footer>
       {drawer && (
@@ -529,6 +585,8 @@ export function MarketPictureSurface({
           title={
             drawer === "asset"
               ? `${selected?.symbol ?? "Asset"} · observation`
+              : drawer === "summary"
+                ? `${summarySelection?.tile.label ?? "Summary"} · evidence`
               : drawer === "coverage"
                 ? "Coverage, provenance & research"
                 : drawer === "matrix"
@@ -542,11 +600,13 @@ export function MarketPictureSurface({
           wide={drawer === "matrix" || drawer === "tools"}
           close={closeDrawer}
         >
+          {drawer === "summary" && summarySelection && <SummaryEvidence selection={summarySelection} />}
           {drawer === "asset" &&
             (selected && frame ? (
               <AssetInspector
                 asset={selected}
                 frame={frame}
+                asOf={componentAsOf}
                 openNativeTools={() => {
                   setNativeSearch(`?${new URLSearchParams({search: selected.symbol})}`);
                   openTools();
@@ -612,12 +672,12 @@ export function MarketPictureSurface({
               <button onClick={() => void exportContext()}>
                 <Download size={16} /> Full context & research JSON
               </button>
-              <button onClick={exportCsv}>
-                <Download size={16} /> All-asset CSV
+              <button onClick={exportCsv} disabled={!selectedRows.length}>
+                <Download size={16} /> Instrument subset CSV
               </button>
               <p className="mp-muted">
                 JSON includes source checksums, stored components, local view
-                selection and highlighted cohort. Private notes are excluded.
+                selection, metric filter and highlighted cohort. CSV applies the metric filter and symbol search; use the instrument table export for its additional column filters. Empty subsets are recorded in JSON. Private notes are excluded.
               </p>
             </div>
           )}
@@ -718,25 +778,19 @@ function SourceStatus({frame, frozen, loading, server, degraded, fixtureTime}: {
 }) {
   const now = useObservationClock(fixtureTime);
   const state = ageState(frame, now, frozen);
-  const displayedFreshness =
-    degraded && state.freshness === "FRESH" ? "DEGRADED" : state.freshness;
+  const displayedFreshness = marketPictureHealth({}, degraded ? "source degraded" : null, state.freshness).freshness;
+  const label = marketSourceLabel({mode: state.mode, freshness: displayedFreshness, valid: frame?.valid ?? 0, loading});
   return (
         <div className="mp-source-state">
           <strong data-freshness={displayedFreshness}>
-            {loading
-              ? "Loading"
-              : state.mode === "LIVE"
-                ? frame?.valid === 0
-                  ? "No qualified data"
-                  : displayedFreshness !== "FRESH"
-                    ? displayedFreshness
-                    : "LIVE"
-                : `${state.mode}${displayedFreshness === "FRESH" ? "" : ` · ${displayedFreshness}`}`}
+            {label}
             <span aria-hidden="true">●</span>
           </strong>
-          <time>
-            {new Date(now).toISOString().replace("T", " ").slice(0, 19)} UTC
-          </time>
+          {frame ? (
+            <time dateTime={new Date(frame.cutoff_ms).toISOString()} title="Last successful observation cutoff">
+              Observed {new Date(frame.cutoff_ms).toISOString().replace("T", " ").slice(0, 19)} UTC
+            </time>
+          ) : <span>Observation unavailable</span>}
           <small>
             {frame
               ? `${frame.expected} symbols · ${frame.quote} spot · ${Math.floor((state.ageMs ?? 0) / 1000)}s old`

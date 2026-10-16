@@ -6,9 +6,9 @@ import * as model from '../src/features/market-picture/model.mjs';
 // Execute the real hook/effects with a deterministic clock and deferred network.
 // Real React mounting, DOM focus and layout are covered by the browser smoke.
 function harness(t) {
-  const original = {setTimeout:globalThis.setTimeout,clearTimeout:globalThis.clearTimeout,document:globalThis.document};
+  const original = {setTimeout:globalThis.setTimeout,clearTimeout:globalThis.clearTimeout,document:globalThis.document,now:Date.now};
   const timers = new Map(), listeners = new Map(), calls = [], slots = [], pending = [];
-  let timerId = 0, index = 0, args = ['v2','24h','BTC'];
+  let timerId = 0, index = 0, now = 10_000, args = ['v2','24h','BTC'];
   const changed = (a,b) => !a || b.some((v,i)=>!Object.is(v,a[i]));
   const react = {
     useState(initial) {
@@ -23,6 +23,7 @@ function harness(t) {
   };
   const document={hidden:false,addEventListener:(name,fn)=>listeners.set(name,fn),removeEventListener:(name,fn)=>{if(listeners.get(name)===fn)listeners.delete(name);}};
   globalThis.document=document;
+  Date.now=()=>now;
   globalThis.setTimeout=(fn,ms)=>{const id=++timerId;timers.set(id,{fn,ms});return id;};
   globalThis.clearTimeout=id=>timers.delete(id);
   const fetchBundle=(...params)=>new Promise((resolve,reject)=>calls.push({params,resolve,reject}));
@@ -30,8 +31,9 @@ function harness(t) {
   const hook=modules.load('features/market-picture/useMarketPicture.ts').useMarketPicture;
   const render=(next=args)=>{args=next;index=0;const value=hook(...args);pending.splice(0).forEach(fn=>fn());return value;};
   const unmount=()=>slots.forEach(slot=>slot?.cleanup?.());
-  t.after(()=>{unmount();Object.assign(globalThis,original);});
+  t.after(()=>{unmount();Object.assign(globalThis,{setTimeout:original.setTimeout,clearTimeout:original.clearTimeout,document:original.document});Date.now=original.now;});
   return {render,calls,timers,listeners,document,unmount,
+    setNow:value=>{now=value;},
     tick:()=>{const [id,timer]=timers.entries().next().value??[];if(timer){timers.delete(id);timer.fn();}},
     visibility:hidden=>{document.hidden=hidden;listeners.get('visibilitychange')?.();},
   };
@@ -83,4 +85,57 @@ test('unmount cancels polling and replay, leaving no document listeners',async t
   assert.equal(h.calls.length,2);h.unmount();assert.equal(h.listeners.size,0);
   assert.ok(h.calls.every(call=>call.params[3].aborted));
   h.calls.forEach(call=>call.resolve(bundle()));await replay;await settle();assert.equal(h.timers.size,0);
+});
+
+test('a first future frame is rejected and reported as unavailable',async t=>{
+  const h=harness(t);h.setNow(1000);h.render();
+  h.calls[0].resolve(bundle());await settle();
+  const result=h.render();
+  assert.equal(result.data,null);
+  assert.match(result.error,/future|unavailable/i);
+});
+
+test('future updates preserve the committed frame and its revalidation identity until available',async t=>{
+  const h=harness(t);h.setNow(1001);h.render();
+  h.calls[0].resolve(bundle(1));await settle();
+  assert.equal(h.render().data.frame.sequence,1);
+
+  h.tick();assert.equal(h.calls[1].params[4].frame.sequence,1);
+  h.calls[1].resolve(bundle(2));await settle();
+  let result=h.render();
+  assert.equal(result.data.frame.sequence,1);
+  assert.match(result.error,/future|unavailable/i);
+
+  h.tick();assert.equal(h.calls[2].params[4].frame.sequence,1);
+  h.setNow(1002);h.calls[2].resolve(bundle(2));await settle();
+  result=h.render();
+  assert.equal(result.data.frame.sequence,2);
+  assert.equal(result.error,null);
+});
+
+test('future replay and pinned refresh preserve the displayed frame; available expired replay remains allowed',async t=>{
+  const h=harness(t);h.setNow(1001);h.render();
+  h.calls[0].resolve(bundle(1));await settle();
+  h.render().toggleFreeze();h.render();
+  assert.equal(h.calls[1].params[5],bundle(1).frame.snapshot_id);
+
+  h.calls[1].resolve(bundle(2));await settle();
+  let result=h.render();
+  assert.equal(result.frozen,true);
+  assert.equal(result.data.frame.sequence,1);
+  assert.match(result.error,/future|unavailable/i);
+
+  const futureReplay=h.render().replay('a'.repeat(64));
+  h.calls[2].resolve(bundle(3));await futureReplay;await settle();
+  result=h.render();
+  assert.equal(result.frozen,true);
+  assert.equal(result.data.frame.sequence,1);
+  assert.match(result.error,/future|unavailable/i);
+
+  h.setNow(3000);
+  const expiredReplay=h.render().replay('b'.repeat(64));
+  h.calls[3].resolve(bundle(4));await expiredReplay;await settle();
+  result=h.render();
+  assert.equal(result.frozen,true);
+  assert.equal(result.data.frame.sequence,4);
 });

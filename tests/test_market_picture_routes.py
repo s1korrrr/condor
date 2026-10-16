@@ -75,6 +75,24 @@ def test_authentication_and_source_authorization_precede_network(monkeypatch):
         assert calls == []
 
 
+def test_microstructure_route_is_snapshot_scoped_and_keeps_source_failures_visible(
+    monkeypatch,
+):
+    client, calls = client_for(monkeypatch)
+    base = "/api/v1/servers/v2/market-picture/microstructure"
+    assert client.get(base).status_code == 400
+    assert client.get(base + "?snapshot_id=invalid").status_code == 400
+    assert (
+        client.get(base + "?snapshot_id=" + "a" * 64 + "&limit=32").status_code == 400
+    )
+    assert calls == []
+    result = client.get(base + "?snapshot_id=" + "a" * 64)
+    assert result.status_code == 503
+    assert result.json() == {"detail": {"reasons": ["SOURCE_DISABLED"]}}
+    assert calls[-1][0].endswith("/screener/market-picture/v1/microstructure")
+    assert calls[-1][1]["params"] == [("snapshot_id", "a" * 64)]
+
+
 @pytest.mark.parametrize(
     "path",
     [
@@ -170,6 +188,116 @@ def test_stored_read_rejects_undeclared_data(monkeypatch):
     }
     client, _ = client_for(monkeypatch, Upstream(200, json.dumps(body).encode()))
     assert client.get("/api/v1/servers/v2/market-picture/events").status_code == 502
+
+
+def canonical_history_payload():
+    import json
+
+    snapshot = "a" * 64
+    item = {
+        "snapshot_id": "b" * 64,
+        "cutoff_ms": 1_800_000_000_000 - 60_000,
+        "available_at_ms": 1_800_000_000_000 - 59_000,
+        "source_kind": "observed",
+        "membership_hash": "c" * 64,
+        "definition_registry_hash": "d" * 64,
+        "coverage": {"expected_instruments": 300, "valid_instruments": 300},
+        "breadth": {
+            horizon: {"pressure": "0"}
+            for horizon in ("1", "5", "15", "60", "240", "1440")
+        },
+        "gap_before": False,
+    }
+    return json.dumps(
+        {
+            "schema_version": "market-picture.v1",
+            "projection": "canonical_state",
+            "snapshot_id": snapshot,
+            "stream_id": "synthetic-state",
+            "window": "6h",
+            "resolution": "1m",
+            "items": [item],
+            "next_cursor": None,
+            "read_at_ms": 1_800_000_000_100,
+        },
+        separators=(",", ":"),
+    ).encode()
+
+
+def test_canonical_history_projection_is_forwarded_and_validated_as_its_own_response(
+    monkeypatch,
+):
+    raw = canonical_history_payload()
+    client, calls = client_for(
+        monkeypatch, Upstream(200, raw, {"Content-Type": "application/json"})
+    )
+    response = client.get(
+        "/api/v1/servers/v2/market-picture/history"
+        "?snapshot_id="
+        + "a" * 64
+        + "&window=6h&resolution=1m&limit=1500&projection=canonical_state"
+    )
+    assert response.status_code == 200, response.text
+    assert response.content == raw
+    assert calls[0][0] == "http://native/api/v1/screener/market-picture/v1/history"
+    assert calls[0][1]["params"] == [
+        ("snapshot_id", "a" * 64),
+        ("window", "6h"),
+        ("resolution", "1m"),
+        ("limit", "1500"),
+        ("projection", "canonical_state"),
+    ]
+
+
+@pytest.mark.parametrize("mutation", ["pressure", "duplicate_snapshot"])
+def test_canonical_history_projection_rejects_invalid_semantics(monkeypatch, mutation):
+    import json
+
+    body = json.loads(canonical_history_payload())
+    if mutation == "pressure":
+        body["items"][0]["breadth"]["1"]["pressure"] = "3.000000000000000001"
+    else:
+        body["items"].append(dict(body["items"][0]))
+        body["items"][1]["cutoff_ms"] += 60_000
+        body["items"][1]["available_at_ms"] += 60_000
+    client, _ = client_for(
+        monkeypatch,
+        Upstream(200, json.dumps(body).encode(), {"Content-Type": "application/json"}),
+    )
+    response = client.get(
+        "/api/v1/servers/v2/market-picture/history"
+        "?snapshot_id="
+        + "a" * 64
+        + "&window=6h&resolution=1m&limit=1500&projection=canonical_state"
+    )
+    assert response.status_code == 502
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "projection=ordinary",
+        "projection=canonical_state&window=24h&resolution=1m&limit=1500&snapshot_id="
+        + "a" * 64,
+        "projection=canonical_state&window=6h&resolution=5m&limit=1500&snapshot_id="
+        + "a" * 64,
+        "projection=canonical_state&window=6h&resolution=1m&limit=360&snapshot_id="
+        + "a" * 64,
+        "projection=canonical_state&window=6h&resolution=1m&limit=1500",
+        "projection=canonical_state&window=6h&resolution=1m&limit=1500&snapshot_id="
+        + "a" * 64
+        + "&cursor=x",
+    ],
+)
+def test_canonical_history_projection_rejects_unsupported_scopes_before_owner(
+    monkeypatch, query
+):
+    client, calls = client_for(monkeypatch)
+    assert (
+        client.get("/api/v1/servers/v2/market-picture/history?" + query).status_code
+        == 400
+    )
+    assert calls == []
 
 
 def test_cursor_principal_supports_server_labels_with_spaces_and_unicode(monkeypatch):

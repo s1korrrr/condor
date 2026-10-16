@@ -138,6 +138,23 @@ function trailingWindow(scored, until) {
   return window;
 }
 
+/** Reason the fixed canonical replay cannot support the selected horizon. */
+export function canonicalVerdictHistoryFault(history, horizon, until) {
+  if (!Array.isArray(history) || !Number.isSafeInteger(until))
+    return "Canonical six-hour history is unavailable.";
+  const points = history.filter((point) => point.time < until);
+  if (points.length !== STATE_LOOKBACK_MS / 60_000)
+    return `Canonical replay needs ${STATE_LOOKBACK_MS / 60_000} complete one-minute points.`;
+  const required = String(horizon);
+  for (const point of points) {
+    const selected = point.breadth?.[required]?.pressure;
+    const persistence = PERSISTENCE_HORIZONS.filter((h) => finite(point.breadth?.[h]?.pressure));
+    if (!finite(selected) || persistence.length < 2)
+      return `Canonical replay lacks historical pressure for ${horizonLabel(horizon)} and two persistence horizons.`;
+  }
+  return null;
+}
+
 /**
  * Headline market state. Returns null when no component can be computed, so the page can skip the
  * block rather than print a placeholder. With `context.history` the breadth components use their

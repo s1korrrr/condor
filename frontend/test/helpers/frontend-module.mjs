@@ -19,7 +19,9 @@ export function frontendModules(overrides = {}, privateExports = {}) {
     const module = { exports: {} };
     modules.set(filename, module);
     const code = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
-      fileName: filename,
+      // This synchronous harness executes every source module as CommonJS.
+      // TypeScript otherwise preserves ESM for .mjs despite ModuleKind.CommonJS.
+      fileName: filename.replace(/\.mjs$/, '.js'),
       compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, esModuleInterop: true },
     }).outputText;
     const expose = (privateExports[path.relative(sourceRoot, filename)] ?? []).map(name => `module.exports.${name} = ${name};`).join('\n');

@@ -3,10 +3,26 @@
     "AssetObservationV1": {
       "additionalProperties": false,
       "properties": {
+        "instrument_id": {
+          "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+          "title": "Instrument Id",
+          "type": "string"
+        },
         "asset_id": {
           "maxLength": 128,
           "minLength": 1,
           "title": "Asset Id",
+          "type": "string"
+        },
+        "venue": {
+          "maxLength": 32,
+          "minLength": 1,
+          "title": "Venue",
+          "type": "string"
+        },
+        "market_type": {
+          "const": "spot",
+          "title": "Market Type",
           "type": "string"
         },
         "base_asset_id": {
@@ -15,32 +31,11 @@
           "title": "Base Asset Id",
           "type": "string"
         },
-        "heatmap_weight": {
-          "$ref": "#/$defs/HeatmapWeightV1"
-        },
-        "instrument_id": {
-          "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
-          "title": "Instrument Id",
-          "type": "string"
-        },
-        "market_type": {
-          "const": "spot",
-          "title": "Market Type",
-          "type": "string"
-        },
         "quote_asset_id": {
           "maxLength": 128,
           "minLength": 1,
           "title": "Quote Asset Id",
           "type": "string"
-        },
-        "regime_refs": {
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 8,
-          "title": "Regime Refs",
-          "type": "array"
         },
         "sector_ref": {
           "anyOf": [
@@ -53,11 +48,16 @@
           ],
           "default": null
         },
-        "venue": {
-          "maxLength": 32,
-          "minLength": 1,
-          "title": "Venue",
-          "type": "string"
+        "heatmap_weight": {
+          "$ref": "#/$defs/HeatmapWeightV1"
+        },
+        "regime_refs": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Regime Refs",
+          "type": "array"
         }
       },
       "required": [
@@ -73,12 +73,37 @@
       "title": "AssetObservationV1",
       "type": "object"
     },
-    "BreadthSummaryV1": {
+    "BreadthDivergenceV1": {
       "additionalProperties": false,
       "properties": {
+        "benchmark": {
+          "const": "btc",
+          "title": "Benchmark",
+          "type": "string"
+        },
+        "horizon_minutes": {
+          "const": 15,
+          "title": "Horizon Minutes",
+          "type": "integer"
+        },
+        "interval_minutes": {
+          "enum": [
+            5,
+            15,
+            60
+          ],
+          "title": "Interval Minutes",
+          "type": "integer"
+        },
         "cutoff_ms": {
           "minimum": 0,
           "title": "Cutoff Ms",
+          "type": "integer"
+        },
+        "matched_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Matched Count",
           "type": "integer"
         },
         "expected_count": {
@@ -87,6 +112,38 @@
           "title": "Expected Count",
           "type": "integer"
         },
+        "matched_membership_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Matched Membership Hash"
+        },
+        "metric_ref": {
+          "$ref": "#/$defs/MetricRef"
+        }
+      },
+      "required": [
+        "benchmark",
+        "horizon_minutes",
+        "interval_minutes",
+        "cutoff_ms",
+        "matched_count",
+        "expected_count",
+        "metric_ref"
+      ],
+      "title": "BreadthDivergenceV1",
+      "type": "object"
+    },
+    "BreadthSummaryV1": {
+      "additionalProperties": false,
+      "properties": {
         "horizon_minutes": {
           "title": "Horizon Minutes",
           "type": "integer"
@@ -98,12 +155,22 @@
           "title": "Metric Refs",
           "type": "object"
         },
-        "omission_reasons": {
-          "additionalProperties": {
-            "type": "integer"
-          },
-          "title": "Omission Reasons",
-          "type": "object"
+        "valid_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Valid Count",
+          "type": "integer"
+        },
+        "expected_count": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Count",
+          "type": "integer"
+        },
+        "cutoff_ms": {
+          "minimum": 0,
+          "title": "Cutoff Ms",
+          "type": "integer"
         },
         "required_history_minutes": {
           "maximum": 20160,
@@ -111,11 +178,12 @@
           "title": "Required History Minutes",
           "type": "integer"
         },
-        "valid_count": {
-          "maximum": 500,
-          "minimum": 0,
-          "title": "Valid Count",
-          "type": "integer"
+        "omission_reasons": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "title": "Omission Reasons",
+          "type": "object"
         }
       },
       "required": [
@@ -130,14 +198,291 @@
       "title": "BreadthSummaryV1",
       "type": "object"
     },
+    "BreadthTrajectoryV1": {
+      "additionalProperties": false,
+      "properties": {
+        "horizon_minutes": {
+          "enum": [
+            5,
+            15,
+            60
+          ],
+          "title": "Horizon Minutes",
+          "type": "integer"
+        },
+        "interval_minutes": {
+          "enum": [
+            5,
+            15,
+            60
+          ],
+          "title": "Interval Minutes",
+          "type": "integer"
+        },
+        "cutoff_ms": {
+          "minimum": 0,
+          "title": "Cutoff Ms",
+          "type": "integer"
+        },
+        "matched_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Matched Count",
+          "type": "integer"
+        },
+        "expected_count": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Count",
+          "type": "integer"
+        },
+        "matched_membership_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Matched Membership Hash"
+        },
+        "metric_refs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/MetricRef"
+          },
+          "title": "Metric Refs",
+          "type": "object"
+        }
+      },
+      "required": [
+        "horizon_minutes",
+        "interval_minutes",
+        "cutoff_ms",
+        "matched_count",
+        "expected_count",
+        "metric_refs"
+      ],
+      "title": "BreadthTrajectoryV1",
+      "type": "object"
+    },
+    "CandleAnomaliesV1": {
+      "additionalProperties": false,
+      "properties": {
+        "interval_ms": {
+          "const": 3600000,
+          "title": "Interval Ms",
+          "type": "integer"
+        },
+        "cutoff_ms": {
+          "minimum": 0,
+          "title": "Cutoff Ms",
+          "type": "integer"
+        },
+        "decision_available_at_ms": {
+          "minimum": 0,
+          "title": "Decision Available At Ms",
+          "type": "integer"
+        },
+        "source_kind": {
+          "enum": [
+            "observed",
+            "reconstructed"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "source_count": {
+          "maximum": 300,
+          "minimum": 0,
+          "title": "Source Count",
+          "type": "integer"
+        },
+        "expires_at_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At Ms"
+        },
+        "expected_count": {
+          "maximum": 300,
+          "minimum": 1,
+          "title": "Expected Count",
+          "type": "integer"
+        },
+        "source_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Hash",
+          "type": "string"
+        },
+        "metrics": {
+          "additionalProperties": {
+            "$ref": "#/$defs/CandleAnomalyMetricV1"
+          },
+          "maxProperties": 3,
+          "minProperties": 3,
+          "title": "Metrics",
+          "type": "object"
+        }
+      },
+      "required": [
+        "interval_ms",
+        "cutoff_ms",
+        "decision_available_at_ms",
+        "source_kind",
+        "source_count",
+        "expected_count",
+        "source_hash",
+        "metrics"
+      ],
+      "title": "CandleAnomaliesV1",
+      "type": "object"
+    },
+    "CandleAnomalyMetricV1": {
+      "additionalProperties": false,
+      "properties": {
+        "definition_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Definition Id",
+          "type": "string"
+        },
+        "definition_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Definition Hash",
+          "type": "string"
+        },
+        "valid_count": {
+          "maximum": 300,
+          "minimum": 0,
+          "title": "Valid Count",
+          "type": "integer"
+        },
+        "expected_count": {
+          "maximum": 300,
+          "minimum": 1,
+          "title": "Expected Count",
+          "type": "integer"
+        },
+        "high_count": {
+          "anyOf": [
+            {
+              "maximum": 300,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "High Count"
+        },
+        "share_fraction": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Share Fraction"
+        },
+        "values": {
+          "items": {
+            "anyOf": [
+              {
+                "maximum": 1,
+                "minimum": 0,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxItems": 300,
+          "minItems": 1,
+          "title": "Values",
+          "type": "array"
+        },
+        "reason_codes": {
+          "default": [],
+          "items": {
+            "enum": [
+              "SOURCE_UNAVAILABLE",
+              "SOURCE_DISABLED",
+              "SOURCE_IDENTITY_MISMATCH",
+              "QUOTE_MISMATCH",
+              "DUPLICATE_ASSET",
+              "BAR_UNCONFIRMED",
+              "BAR_GAP",
+              "LAGGING_MEMBER",
+              "STALE_SOURCE",
+              "INSUFFICIENT_HISTORY",
+              "INSUFFICIENT_COVERAGE",
+              "CONSTANT_SERIES",
+              "ZERO_BASELINE",
+              "ZERO_DENOMINATOR",
+              "UNQUALIFIED_MODEL",
+              "UNKNOWN_CONFIDENCE_SCALE",
+              "UNKNOWN_SECTOR",
+              "CAPACITY_EXCEEDED",
+              "EXPIRED_SNAPSHOT",
+              "HASH_MISMATCH",
+              "SEQUENCE_REGRESSION",
+              "RECONSTRUCTED_AVAILABILITY",
+              "RETENTION_EXPIRED",
+              "INVALID_INPUT",
+              "CORRECTION_PENDING",
+              "NO_CROSSING",
+              "NO_PRIOR_STATE"
+            ],
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Reason Codes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "definition_id",
+        "definition_hash",
+        "valid_count",
+        "expected_count",
+        "values"
+      ],
+      "title": "CandleAnomalyMetricV1",
+      "type": "object"
+    },
     "ComparisonsV1": {
       "additionalProperties": false,
       "properties": {
-        "baseline_count": {
-          "maximum": 500,
-          "minimum": 0,
-          "title": "Baseline Count",
-          "type": "integer"
+        "baseline_snapshot_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Snapshot Id"
         },
         "baseline_cutoff_ms": {
           "anyOf": [
@@ -152,23 +497,9 @@
           "default": null,
           "title": "Baseline Cutoff Ms"
         },
-        "baseline_snapshot_id": {
-          "anyOf": [
-            {
-              "pattern": "^[0-9a-f]{64}$",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Baseline Snapshot Id"
-        },
-        "common_count": {
-          "maximum": 500,
-          "minimum": 0,
-          "title": "Common Count",
+        "interval_ms": {
+          "const": 3600000,
+          "title": "Interval Ms",
           "type": "integer"
         },
         "common_membership_hash": {
@@ -190,9 +521,16 @@
           "title": "Current Count",
           "type": "integer"
         },
-        "interval_ms": {
-          "const": 3600000,
-          "title": "Interval Ms",
+        "baseline_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Baseline Count",
+          "type": "integer"
+        },
+        "common_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Common Count",
           "type": "integer"
         },
         "metric_refs": {
@@ -216,6 +554,27 @@
     "ComponentRefV1": {
       "additionalProperties": false,
       "properties": {
+        "status": {
+          "enum": [
+            "available",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "snapshot_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Snapshot Id"
+        },
         "cutoff_ms": {
           "anyOf": [
             {
@@ -249,27 +608,6 @@
           "maxItems": 64,
           "title": "Reason Codes",
           "type": "array"
-        },
-        "snapshot_id": {
-          "anyOf": [
-            {
-              "pattern": "^[0-9a-f]{64}$",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Snapshot Id"
-        },
-        "status": {
-          "enum": [
-            "available",
-            "unavailable"
-          ],
-          "title": "Status",
-          "type": "string"
         }
       },
       "required": [
@@ -279,14 +617,349 @@
       "title": "ComponentRefV1",
       "type": "object"
     },
+    "ContributionSummaryV1": {
+      "additionalProperties": false,
+      "properties": {
+        "horizon_minutes": {
+          "enum": [
+            5,
+            15,
+            60,
+            1440
+          ],
+          "title": "Horizon Minutes",
+          "type": "integer"
+        },
+        "equal_weight_return_ref": {
+          "$ref": "#/$defs/MetricRef"
+        },
+        "capped_liquidity_return_ref": {
+          "$ref": "#/$defs/MetricRef"
+        },
+        "top5_abs_equal_ref": {
+          "$ref": "#/$defs/MetricRef"
+        },
+        "top5_abs_capped_ref": {
+          "$ref": "#/$defs/MetricRef"
+        },
+        "median_return_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MetricRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "expected_count": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Count",
+          "type": "integer"
+        },
+        "valid_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Valid Count",
+          "type": "integer"
+        },
+        "start_cohort_available": {
+          "title": "Start Cohort Available",
+          "type": "boolean"
+        },
+        "prior_liquidity_weights_available": {
+          "title": "Prior Liquidity Weights Available",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "horizon_minutes",
+        "equal_weight_return_ref",
+        "capped_liquidity_return_ref",
+        "top5_abs_equal_ref",
+        "top5_abs_capped_ref",
+        "expected_count",
+        "valid_count",
+        "start_cohort_available",
+        "prior_liquidity_weights_available"
+      ],
+      "title": "ContributionSummaryV1",
+      "type": "object"
+    },
+    "DailyCoverageV1": {
+      "additionalProperties": false,
+      "properties": {
+        "expected_daily_bars": {
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Expected Daily Bars",
+          "type": "integer"
+        },
+        "valid_daily_bars": {
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Valid Daily Bars",
+          "type": "integer"
+        },
+        "gap_count": {
+          "maximum": 1000,
+          "minimum": 0,
+          "title": "Gap Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "expected_daily_bars",
+        "valid_daily_bars",
+        "gap_count"
+      ],
+      "title": "DailyCoverageV1",
+      "type": "object"
+    },
+    "DailyInstrumentInternalsV1": {
+      "additionalProperties": false,
+      "properties": {
+        "instrument_id": {
+          "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+          "title": "Instrument Id",
+          "type": "string"
+        },
+        "cutoff_ms": {
+          "minimum": 0,
+          "title": "Cutoff Ms",
+          "type": "integer"
+        },
+        "source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DailySourceV1"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "source_coverage_status": {
+          "enum": [
+            "COMPLETE",
+            "PARTIAL",
+            "UNAVAILABLE"
+          ],
+          "title": "Source Coverage Status",
+          "type": "string"
+        },
+        "source_reason_codes": {
+          "default": [],
+          "items": {
+            "enum": [
+              "SOURCE_UNAVAILABLE",
+              "SOURCE_DISABLED",
+              "SOURCE_IDENTITY_MISMATCH",
+              "QUOTE_MISMATCH",
+              "DUPLICATE_ASSET",
+              "BAR_UNCONFIRMED",
+              "BAR_GAP",
+              "LAGGING_MEMBER",
+              "STALE_SOURCE",
+              "INSUFFICIENT_HISTORY",
+              "INSUFFICIENT_COVERAGE",
+              "CONSTANT_SERIES",
+              "ZERO_BASELINE",
+              "ZERO_DENOMINATOR",
+              "UNQUALIFIED_MODEL",
+              "UNKNOWN_CONFIDENCE_SCALE",
+              "UNKNOWN_SECTOR",
+              "CAPACITY_EXCEEDED",
+              "EXPIRED_SNAPSHOT",
+              "HASH_MISMATCH",
+              "SEQUENCE_REGRESSION",
+              "RECONSTRUCTED_AVAILABILITY",
+              "RETENTION_EXPIRED",
+              "INVALID_INPUT",
+              "CORRECTION_PENDING",
+              "NO_CROSSING",
+              "NO_PRIOR_STATE"
+            ],
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Source Reason Codes",
+          "type": "array"
+        },
+        "source_coverage": {
+          "$ref": "#/$defs/DailyCoverageV1"
+        },
+        "values": {
+          "items": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxItems": 16,
+          "minItems": 16,
+          "title": "Values",
+          "type": "array"
+        },
+        "contiguous_daily_bars": {
+          "maximum": 201,
+          "minimum": 0,
+          "title": "Contiguous Daily Bars",
+          "type": "integer"
+        },
+        "feature_reasons": {
+          "additionalProperties": {
+            "items": {
+              "enum": [
+                "SOURCE_UNAVAILABLE",
+                "SOURCE_DISABLED",
+                "SOURCE_IDENTITY_MISMATCH",
+                "QUOTE_MISMATCH",
+                "DUPLICATE_ASSET",
+                "BAR_UNCONFIRMED",
+                "BAR_GAP",
+                "LAGGING_MEMBER",
+                "STALE_SOURCE",
+                "INSUFFICIENT_HISTORY",
+                "INSUFFICIENT_COVERAGE",
+                "CONSTANT_SERIES",
+                "ZERO_BASELINE",
+                "ZERO_DENOMINATOR",
+                "UNQUALIFIED_MODEL",
+                "UNKNOWN_CONFIDENCE_SCALE",
+                "UNKNOWN_SECTOR",
+                "CAPACITY_EXCEEDED",
+                "EXPIRED_SNAPSHOT",
+                "HASH_MISMATCH",
+                "SEQUENCE_REGRESSION",
+                "RECONSTRUCTED_AVAILABILITY",
+                "RETENTION_EXPIRED",
+                "INVALID_INPUT",
+                "CORRECTION_PENDING",
+                "NO_CROSSING",
+                "NO_PRIOR_STATE"
+              ],
+              "type": "string"
+            },
+            "type": "array"
+          },
+          "maxProperties": 16,
+          "title": "Feature Reasons",
+          "type": "object"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "cutoff_ms",
+        "source_coverage_status",
+        "source_coverage",
+        "values",
+        "contiguous_daily_bars"
+      ],
+      "title": "DailyInstrumentInternalsV1",
+      "type": "object"
+    },
+    "DailySourceV1": {
+      "additionalProperties": false,
+      "properties": {
+        "provider_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "stream_epoch": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Stream Epoch",
+          "type": "string"
+        },
+        "stream_sequence": {
+          "minimum": 0,
+          "title": "Stream Sequence",
+          "type": "integer"
+        },
+        "source_epoch": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Epoch"
+        },
+        "source_sequence": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Sequence"
+        },
+        "source_kind": {
+          "enum": [
+            "observed",
+            "reconstructed"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "cutoff_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cutoff Ms"
+        },
+        "available_at_ms": {
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "expires_at_ms": {
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "provider_id",
+        "stream_epoch",
+        "stream_sequence",
+        "source_kind",
+        "available_at_ms",
+        "expires_at_ms"
+      ],
+      "title": "DailySourceV1",
+      "type": "object"
+    },
     "DefinitionRefV1": {
       "additionalProperties": false,
       "properties": {
-        "code_hash": {
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Code Hash",
-          "type": "string"
-        },
         "definition_id": {
           "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
           "title": "Definition Id",
@@ -302,9 +975,15 @@
           "title": "Parameter Hash",
           "type": "string"
         },
+        "code_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Code Hash",
+          "type": "string"
+        },
         "unit": {
           "enum": [
             "price_quote",
+            "basis_points",
             "return_percent",
             "percentage_points",
             "share_fraction",
@@ -313,8 +992,11 @@
             "adx_0_100",
             "rsi_0_100",
             "correlation_minus1_to1",
+            "index_minus1_to1",
             "index_minus3_to3",
             "index_points",
+            "index_points_per_minute",
+            "index_points_per_minute_squared",
             "ratio_points",
             "volatility_fraction_annualized",
             "instruments",
@@ -344,6 +1026,68 @@
     "DistributionV1": {
       "additionalProperties": false,
       "properties": {
+        "horizon_minutes": {
+          "title": "Horizon Minutes",
+          "type": "integer"
+        },
+        "unit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "definition_ref": {
+          "additionalProperties": true,
+          "title": "Definition Ref",
+          "type": "object"
+        },
+        "span_percent": {
+          "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Span Percent",
+          "type": "string"
+        },
+        "edges": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 41,
+          "minItems": 41,
+          "title": "Edges",
+          "type": "array"
+        },
+        "counts": {
+          "items": {
+            "type": "integer"
+          },
+          "maxItems": 128,
+          "minItems": 1,
+          "title": "Counts",
+          "type": "array"
+        },
+        "underflow_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Underflow Count",
+          "type": "integer"
+        },
+        "overflow_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Overflow Count",
+          "type": "integer"
+        },
+        "valid_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Valid Count",
+          "type": "integer"
+        },
+        "expected_count": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Count",
+          "type": "integer"
+        },
         "best_instrument_id": {
           "anyOf": [
             {
@@ -356,68 +1100,6 @@
           ],
           "default": null,
           "title": "Best Instrument Id"
-        },
-        "counts": {
-          "items": {
-            "type": "integer"
-          },
-          "maxItems": 128,
-          "minItems": 1,
-          "title": "Counts",
-          "type": "array"
-        },
-        "definition_ref": {
-          "additionalProperties": true,
-          "title": "Definition Ref",
-          "type": "object"
-        },
-        "edges": {
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 41,
-          "minItems": 41,
-          "title": "Edges",
-          "type": "array"
-        },
-        "expected_count": {
-          "maximum": 500,
-          "minimum": 1,
-          "title": "Expected Count",
-          "type": "integer"
-        },
-        "horizon_minutes": {
-          "title": "Horizon Minutes",
-          "type": "integer"
-        },
-        "overflow_count": {
-          "maximum": 500,
-          "minimum": 0,
-          "title": "Overflow Count",
-          "type": "integer"
-        },
-        "span_percent": {
-          "pattern": "^(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
-          "title": "Span Percent",
-          "type": "string"
-        },
-        "underflow_count": {
-          "maximum": 500,
-          "minimum": 0,
-          "title": "Underflow Count",
-          "type": "integer"
-        },
-        "unit": {
-          "maxLength": 64,
-          "minLength": 1,
-          "title": "Unit",
-          "type": "string"
-        },
-        "valid_count": {
-          "maximum": 500,
-          "minimum": 0,
-          "title": "Valid Count",
-          "type": "integer"
         },
         "worst_instrument_id": {
           "anyOf": [
@@ -448,9 +1130,298 @@
       "title": "DistributionV1",
       "type": "object"
     },
+    "FlowObservationV1": {
+      "additionalProperties": false,
+      "properties": {
+        "instrument_id": {
+          "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+          "title": "Instrument Id",
+          "type": "string"
+        },
+        "source_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_contract_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Contract Hash",
+          "type": "string"
+        },
+        "input_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Digest",
+          "type": "string"
+        },
+        "definition_id": {
+          "const": "spot_executed_flow_1m",
+          "default": "spot_executed_flow_1m",
+          "title": "Definition Id",
+          "type": "string"
+        },
+        "definition_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Definition Hash",
+          "type": "string"
+        },
+        "channel": {
+          "enum": [
+            "trades",
+            "trades-all",
+            "rest-trades"
+          ],
+          "title": "Channel",
+          "type": "string"
+        },
+        "window_start_ms": {
+          "minimum": 0,
+          "title": "Window Start Ms",
+          "type": "integer"
+        },
+        "window_end_ms": {
+          "minimum": 0,
+          "title": "Window End Ms",
+          "type": "integer"
+        },
+        "available_at_ms": {
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "expires_at_ms": {
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "reset_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Reset Id",
+          "type": "string"
+        },
+        "reset_at_ms": {
+          "minimum": 0,
+          "title": "Reset At Ms",
+          "type": "integer"
+        },
+        "coverage_start_ms": {
+          "minimum": 0,
+          "title": "Coverage Start Ms",
+          "type": "integer"
+        },
+        "coverage_end_ms": {
+          "minimum": 0,
+          "title": "Coverage End Ms",
+          "type": "integer"
+        },
+        "gap_intervals": {
+          "items": {
+            "maxItems": 2,
+            "minItems": 2,
+            "prefixItems": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "integer"
+              }
+            ],
+            "type": "array"
+          },
+          "maxItems": 64,
+          "title": "Gap Intervals",
+          "type": "array"
+        },
+        "quote_asset": {
+          "pattern": "^[A-Z0-9]{2,16}$",
+          "title": "Quote Asset",
+          "type": "string"
+        },
+        "buy_quote": {
+          "maxLength": 160,
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Buy Quote",
+          "type": "string"
+        },
+        "sell_quote": {
+          "maxLength": 160,
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Sell Quote",
+          "type": "string"
+        },
+        "unknown_quote": {
+          "maxLength": 160,
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Unknown Quote",
+          "type": "string"
+        },
+        "known_imbalance": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Known Imbalance"
+        },
+        "confirmation_imbalance": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Confirmation Imbalance"
+        },
+        "unknown_share": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Unknown Share"
+        },
+        "cumulative_delta_before_quote": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cumulative Delta Before Quote"
+        },
+        "cumulative_delta_quote": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cumulative Delta Quote"
+        },
+        "trade_records": {
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Trade Records",
+          "type": "integer"
+        },
+        "duplicate_records": {
+          "maximum": 100000,
+          "minimum": 0,
+          "title": "Duplicate Records",
+          "type": "integer"
+        },
+        "complete": {
+          "title": "Complete",
+          "type": "boolean"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Reason Codes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "source_id",
+        "source_contract_hash",
+        "input_digest",
+        "definition_hash",
+        "channel",
+        "window_start_ms",
+        "window_end_ms",
+        "available_at_ms",
+        "expires_at_ms",
+        "reset_id",
+        "reset_at_ms",
+        "coverage_start_ms",
+        "coverage_end_ms",
+        "gap_intervals",
+        "quote_asset",
+        "buy_quote",
+        "sell_quote",
+        "unknown_quote",
+        "known_imbalance",
+        "confirmation_imbalance",
+        "unknown_share",
+        "cumulative_delta_before_quote",
+        "cumulative_delta_quote",
+        "trade_records",
+        "duplicate_records",
+        "complete",
+        "reason_codes"
+      ],
+      "title": "FlowObservationV1",
+      "type": "object"
+    },
     "HeatmapWeightV1": {
       "additionalProperties": false,
       "properties": {
+        "value": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "unit": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        },
+        "status": {
+          "enum": [
+            "valid",
+            "missing",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "source_ref": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Ref"
+        },
         "effective_at_ms": {
           "anyOf": [
             {
@@ -471,46 +1442,6 @@
           "maxItems": 64,
           "title": "Reason Codes",
           "type": "array"
-        },
-        "source_ref": {
-          "anyOf": [
-            {
-              "additionalProperties": true,
-              "type": "object"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Source Ref"
-        },
-        "status": {
-          "enum": [
-            "valid",
-            "missing",
-            "unavailable"
-          ],
-          "title": "Status",
-          "type": "string"
-        },
-        "unit": {
-          "maxLength": 64,
-          "minLength": 1,
-          "title": "Unit",
-          "type": "string"
-        },
-        "value": {
-          "anyOf": [
-            {
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Value"
         }
       },
       "required": [
@@ -521,14 +1452,120 @@
       "title": "HeatmapWeightV1",
       "type": "object"
     },
-    "MetricCellV1": {
+    "HourlyAggregateMetricV1": {
       "additionalProperties": false,
-      "description": "A series cell omits VALID, COMPLETE and empty reasons when they are exact defaults.\n\nThe defaults apply only inside metric-series.v1 cells. Expanded MetricValueV1\nand aggregate metrics still carry their explicit quality fields.",
       "properties": {
-        "available_at_ms": {
+        "definition_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Definition Id",
+          "type": "string"
+        },
+        "unit": {
+          "enum": [
+            "share_fraction",
+            "return_percent",
+            "instruments",
+            "ratio"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
           "anyOf": [
             {
-              "maximum": 253402300799000,
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "valid_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Valid Count",
+          "type": "integer"
+        },
+        "expected_count": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Count",
+          "type": "integer"
+        },
+        "reason_codes": {
+          "default": [],
+          "items": {
+            "enum": [
+              "SOURCE_UNAVAILABLE",
+              "SOURCE_DISABLED",
+              "SOURCE_IDENTITY_MISMATCH",
+              "QUOTE_MISMATCH",
+              "DUPLICATE_ASSET",
+              "BAR_UNCONFIRMED",
+              "BAR_GAP",
+              "LAGGING_MEMBER",
+              "STALE_SOURCE",
+              "INSUFFICIENT_HISTORY",
+              "INSUFFICIENT_COVERAGE",
+              "CONSTANT_SERIES",
+              "ZERO_BASELINE",
+              "ZERO_DENOMINATOR",
+              "UNQUALIFIED_MODEL",
+              "UNKNOWN_CONFIDENCE_SCALE",
+              "UNKNOWN_SECTOR",
+              "CAPACITY_EXCEEDED",
+              "EXPIRED_SNAPSHOT",
+              "HASH_MISMATCH",
+              "SEQUENCE_REGRESSION",
+              "RECONSTRUCTED_AVAILABILITY",
+              "RETENTION_EXPIRED",
+              "INVALID_INPUT",
+              "CORRECTION_PENDING",
+              "NO_CROSSING",
+              "NO_PRIOR_STATE"
+            ],
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Reason Codes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "definition_id",
+        "unit",
+        "valid_count",
+        "expected_count"
+      ],
+      "title": "HourlyAggregateMetricV1",
+      "type": "object"
+    },
+    "HourlyInternalsV1": {
+      "additionalProperties": false,
+      "properties": {
+        "interval_minutes": {
+          "const": 60,
+          "title": "Interval Minutes",
+          "type": "integer"
+        },
+        "cutoff_ms": {
+          "minimum": 0,
+          "title": "Cutoff Ms",
+          "type": "integer"
+        },
+        "decision_available_at_ms": {
+          "minimum": 0,
+          "title": "Decision Available At Ms",
+          "type": "integer"
+        },
+        "expires_at_ms": {
+          "anyOf": [
+            {
               "minimum": 0,
               "type": "integer"
             },
@@ -537,7 +1574,409 @@
             }
           ],
           "default": null,
-          "title": "Available At Ms"
+          "title": "Expires At Ms"
+        },
+        "source_kind": {
+          "enum": [
+            "observed",
+            "reconstructed"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "source_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Digest",
+          "type": "string"
+        },
+        "source_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Source Count",
+          "type": "integer"
+        },
+        "expected_count": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Count",
+          "type": "integer"
+        },
+        "metrics": {
+          "additionalProperties": {
+            "$ref": "#/$defs/HourlyAggregateMetricV1"
+          },
+          "title": "Metrics",
+          "type": "object"
+        }
+      },
+      "required": [
+        "interval_minutes",
+        "cutoff_ms",
+        "decision_available_at_ms",
+        "source_kind",
+        "source_digest",
+        "source_count",
+        "expected_count",
+        "metrics"
+      ],
+      "title": "HourlyInternalsV1",
+      "type": "object"
+    },
+    "LiquidityObservationV1": {
+      "additionalProperties": false,
+      "properties": {
+        "instrument_id": {
+          "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+          "title": "Instrument Id",
+          "type": "string"
+        },
+        "source_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_contract_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Contract Hash",
+          "type": "string"
+        },
+        "input_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Input Digest",
+          "type": "string"
+        },
+        "definition_id": {
+          "const": "spot_visible_book_cost",
+          "default": "spot_visible_book_cost",
+          "title": "Definition Id",
+          "type": "string"
+        },
+        "definition_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Definition Hash",
+          "type": "string"
+        },
+        "channel": {
+          "enum": [
+            "books",
+            "books50-l2-tbt",
+            "books-l2-tbt",
+            "books-rpi"
+          ],
+          "title": "Channel",
+          "type": "string"
+        },
+        "sequence": {
+          "minimum": 0,
+          "title": "Sequence",
+          "type": "integer"
+        },
+        "observed_at_ms": {
+          "minimum": 0,
+          "title": "Observed At Ms",
+          "type": "integer"
+        },
+        "available_at_ms": {
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "expires_at_ms": {
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "access_basis": {
+          "enum": [
+            "non_rpi",
+            "rpi_authorized",
+            "unknown"
+          ],
+          "title": "Access Basis",
+          "type": "string"
+        },
+        "side": {
+          "enum": [
+            "buy",
+            "sell"
+          ],
+          "title": "Side",
+          "type": "string"
+        },
+        "requested_size": {
+          "maxLength": 160,
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Requested Size",
+          "type": "string"
+        },
+        "size_unit": {
+          "enum": [
+            "base",
+            "quote"
+          ],
+          "title": "Size Unit",
+          "type": "string"
+        },
+        "covered_base": {
+          "maxLength": 160,
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Covered Base",
+          "type": "string"
+        },
+        "covered_quote": {
+          "maxLength": 160,
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Covered Quote",
+          "type": "string"
+        },
+        "uncovered_size": {
+          "maxLength": 160,
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Uncovered Size",
+          "type": "string"
+        },
+        "covered_vwap": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Covered Vwap"
+        },
+        "vwap": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Vwap"
+        },
+        "cost_bps": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Cost Bps"
+        },
+        "fee_bps": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fee Bps"
+        },
+        "fee_source": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Fee Source"
+        },
+        "total_cost_bps": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Total Cost Bps"
+        },
+        "cost_percentile_7d": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cost Percentile 7D"
+        },
+        "cost_percentile_sample_count": {
+          "default": 0,
+          "maximum": 10080,
+          "minimum": 0,
+          "title": "Cost Percentile Sample Count",
+          "type": "integer"
+        },
+        "cost_percentile_expected_samples": {
+          "const": 10080,
+          "default": 10080,
+          "title": "Cost Percentile Expected Samples",
+          "type": "integer"
+        },
+        "cost_percentile_reason_codes": {
+          "default": [
+            "INSUFFICIENT_HISTORY"
+          ],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Cost Percentile Reason Codes",
+          "type": "array"
+        },
+        "cost_percentile_reference_digest": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cost Percentile Reference Digest"
+        },
+        "spread_bps": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Spread Bps"
+        },
+        "band_bps": {
+          "maxLength": 160,
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Band Bps",
+          "type": "string"
+        },
+        "band_bid_covered_quote": {
+          "maxLength": 160,
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Band Bid Covered Quote",
+          "type": "string"
+        },
+        "band_ask_covered_quote": {
+          "maxLength": 160,
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Band Ask Covered Quote",
+          "type": "string"
+        },
+        "band_complete": {
+          "title": "Band Complete",
+          "type": "boolean"
+        },
+        "band_imbalance": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Band Imbalance"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 16,
+          "title": "Reason Codes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "source_id",
+        "source_contract_hash",
+        "input_digest",
+        "definition_hash",
+        "channel",
+        "sequence",
+        "observed_at_ms",
+        "available_at_ms",
+        "expires_at_ms",
+        "access_basis",
+        "side",
+        "requested_size",
+        "size_unit",
+        "covered_base",
+        "covered_quote",
+        "uncovered_size",
+        "covered_vwap",
+        "vwap",
+        "cost_bps",
+        "fee_bps",
+        "fee_source",
+        "total_cost_bps",
+        "spread_bps",
+        "band_bps",
+        "band_bid_covered_quote",
+        "band_ask_covered_quote",
+        "band_complete",
+        "band_imbalance",
+        "reason_codes"
+      ],
+      "title": "LiquidityObservationV1",
+      "type": "object"
+    },
+    "MetricCellV1": {
+      "additionalProperties": false,
+      "description": "A series cell omits VALID, COMPLETE and empty reasons when they are exact defaults.\n\nThe defaults apply only inside metric-series.v1 cells. Expanded MetricValueV1\nand aggregate metrics still carry their explicit quality fields.",
+      "properties": {
+        "instrument_id": {
+          "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+          "title": "Instrument Id",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
         },
         "computation_status": {
           "default": "VALID",
@@ -559,6 +1998,148 @@
           ],
           "title": "Coverage Status",
           "type": "string"
+        },
+        "reason_codes": {
+          "default": [],
+          "items": {
+            "enum": [
+              "SOURCE_UNAVAILABLE",
+              "SOURCE_DISABLED",
+              "SOURCE_IDENTITY_MISMATCH",
+              "QUOTE_MISMATCH",
+              "DUPLICATE_ASSET",
+              "BAR_UNCONFIRMED",
+              "BAR_GAP",
+              "LAGGING_MEMBER",
+              "STALE_SOURCE",
+              "INSUFFICIENT_HISTORY",
+              "INSUFFICIENT_COVERAGE",
+              "CONSTANT_SERIES",
+              "ZERO_BASELINE",
+              "ZERO_DENOMINATOR",
+              "UNQUALIFIED_MODEL",
+              "UNKNOWN_CONFIDENCE_SCALE",
+              "UNKNOWN_SECTOR",
+              "CAPACITY_EXCEEDED",
+              "EXPIRED_SNAPSHOT",
+              "HASH_MISMATCH",
+              "SEQUENCE_REGRESSION",
+              "RECONSTRUCTED_AVAILABILITY",
+              "RETENTION_EXPIRED",
+              "INVALID_INPUT",
+              "CORRECTION_PENDING",
+              "NO_CROSSING",
+              "NO_PRIOR_STATE"
+            ],
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "window_start_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Window Start Ms"
+        },
+        "window_end_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Window End Ms"
+        },
+        "observation_interval_ms": {
+          "anyOf": [
+            {
+              "maximum": 604800000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Interval Ms"
+        },
+        "available_at_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Available At Ms"
+        },
+        "expires_at_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At Ms"
+        },
+        "sample_count": {
+          "maximum": 20161,
+          "minimum": 0,
+          "title": "Sample Count",
+          "type": "integer"
+        },
+        "required_samples": {
+          "anyOf": [
+            {
+              "maximum": 20161,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Required Samples"
+        },
+        "numerator": {
+          "anyOf": [
+            {
+              "maximum": 500,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Numerator"
         },
         "denominator": {
           "anyOf": [
@@ -587,151 +2168,6 @@
           ],
           "default": null,
           "title": "Expected Denominator"
-        },
-        "expires_at_ms": {
-          "anyOf": [
-            {
-              "maximum": 253402300799000,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Expires At Ms"
-        },
-        "instrument_id": {
-          "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
-          "title": "Instrument Id",
-          "type": "string"
-        },
-        "numerator": {
-          "anyOf": [
-            {
-              "maximum": 500,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Numerator"
-        },
-        "observation_interval_ms": {
-          "anyOf": [
-            {
-              "maximum": 604800000,
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Observation Interval Ms"
-        },
-        "reason_codes": {
-          "default": [],
-          "items": {
-            "enum": [
-              "SOURCE_UNAVAILABLE",
-              "SOURCE_DISABLED",
-              "SOURCE_IDENTITY_MISMATCH",
-              "QUOTE_MISMATCH",
-              "DUPLICATE_ASSET",
-              "BAR_UNCONFIRMED",
-              "BAR_GAP",
-              "LAGGING_MEMBER",
-              "STALE_SOURCE",
-              "INSUFFICIENT_HISTORY",
-              "INSUFFICIENT_COVERAGE",
-              "CONSTANT_SERIES",
-              "ZERO_BASELINE",
-              "UNQUALIFIED_MODEL",
-              "UNKNOWN_CONFIDENCE_SCALE",
-              "UNKNOWN_SECTOR",
-              "CAPACITY_EXCEEDED",
-              "EXPIRED_SNAPSHOT",
-              "HASH_MISMATCH",
-              "SEQUENCE_REGRESSION",
-              "RECONSTRUCTED_AVAILABILITY",
-              "RETENTION_EXPIRED",
-              "INVALID_INPUT",
-              "CORRECTION_PENDING",
-              "NO_CROSSING",
-              "NO_PRIOR_STATE"
-            ],
-            "type": "string"
-          },
-          "maxItems": 32,
-          "title": "Reason Codes",
-          "type": "array"
-        },
-        "required_samples": {
-          "anyOf": [
-            {
-              "maximum": 20161,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Required Samples"
-        },
-        "sample_count": {
-          "maximum": 20161,
-          "minimum": 0,
-          "title": "Sample Count",
-          "type": "integer"
-        },
-        "value": {
-          "anyOf": [
-            {
-              "maxLength": 128,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Value"
-        },
-        "window_end_ms": {
-          "anyOf": [
-            {
-              "maximum": 253402300799000,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Window End Ms"
-        },
-        "window_start_ms": {
-          "anyOf": [
-            {
-              "maximum": 253402300799000,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Window Start Ms"
         }
       },
       "required": [
@@ -760,44 +2196,21 @@
     "MetricSeriesV1": {
       "additionalProperties": false,
       "properties": {
-        "available_at_ms": {
-          "maximum": 253402300799000,
-          "minimum": 0,
-          "title": "Available At Ms",
-          "type": "integer"
-        },
-        "cells": {
-          "items": {
-            "$ref": "#/$defs/MetricCellV1"
-          },
-          "maxItems": 500,
-          "title": "Cells",
-          "type": "array"
-        },
-        "definition_ref": {
-          "$ref": "#/$defs/DefinitionRefV1"
-        },
         "encoding": {
           "const": "metric-series.v1",
           "title": "Encoding",
           "type": "string"
         },
-        "expected_denominator": {
-          "maximum": 500,
-          "minimum": 0,
-          "title": "Expected Denominator",
-          "type": "integer"
+        "metric_id": {
+          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+          "title": "Metric Id",
+          "type": "string"
         },
-        "expires_at_ms": {
-          "maximum": 253402300799000,
-          "minimum": 0,
-          "title": "Expires At Ms",
-          "type": "integer"
+        "definition_ref": {
+          "$ref": "#/$defs/DefinitionRefV1"
         },
-        "fixture_only": {
-          "default": false,
-          "title": "Fixture Only",
-          "type": "boolean"
+        "provider_ref": {
+          "$ref": "#/$defs/ProviderRefV1"
         },
         "horizon_minutes": {
           "maximum": 10080,
@@ -805,42 +2218,10 @@
           "title": "Horizon Minutes",
           "type": "integer"
         },
-        "metric_id": {
-          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
-          "title": "Metric Id",
-          "type": "string"
-        },
-        "observation_interval_ms": {
-          "anyOf": [
-            {
-              "maximum": 604800000,
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Observation Interval Ms"
-        },
-        "payload_digest": {
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Payload Digest",
-          "type": "string"
-        },
-        "provider_ref": {
-          "$ref": "#/$defs/ProviderRefV1"
-        },
-        "required_samples": {
-          "maximum": 20161,
-          "minimum": 0,
-          "title": "Required Samples",
-          "type": "integer"
-        },
         "series_unit": {
           "enum": [
             "price_quote",
+            "basis_points",
             "return_percent",
             "percentage_points",
             "share_fraction",
@@ -849,8 +2230,11 @@
             "adx_0_100",
             "rsi_0_100",
             "correlation_minus1_to1",
+            "index_minus1_to1",
             "index_minus3_to3",
             "index_points",
+            "index_points_per_minute",
+            "index_points_per_minute_squared",
             "ratio_points",
             "volatility_fraction_annualized",
             "instruments",
@@ -866,6 +2250,20 @@
           "title": "Series Unit",
           "type": "string"
         },
+        "window_start_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Window Start Ms"
+        },
         "window_end_ms": {
           "anyOf": [
             {
@@ -880,11 +2278,11 @@
           "default": null,
           "title": "Window End Ms"
         },
-        "window_start_ms": {
+        "observation_interval_ms": {
           "anyOf": [
             {
-              "maximum": 253402300799000,
-              "minimum": 0,
+              "maximum": 604800000,
+              "minimum": 1,
               "type": "integer"
             },
             {
@@ -892,7 +2290,49 @@
             }
           ],
           "default": null,
-          "title": "Window Start Ms"
+          "title": "Observation Interval Ms"
+        },
+        "available_at_ms": {
+          "maximum": 253402300799000,
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "expires_at_ms": {
+          "maximum": 253402300799000,
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "required_samples": {
+          "maximum": 20161,
+          "minimum": 0,
+          "title": "Required Samples",
+          "type": "integer"
+        },
+        "expected_denominator": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Expected Denominator",
+          "type": "integer"
+        },
+        "fixture_only": {
+          "default": false,
+          "title": "Fixture Only",
+          "type": "boolean"
+        },
+        "cells": {
+          "items": {
+            "$ref": "#/$defs/MetricCellV1"
+          },
+          "maxItems": 500,
+          "title": "Cells",
+          "type": "array"
+        },
+        "payload_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Payload Digest",
+          "type": "string"
         }
       },
       "required": [
@@ -916,11 +2356,55 @@
       "additionalProperties": false,
       "description": "Expanded per-instrument value; consumers receive this shape after series resolution.",
       "properties": {
-        "available_at_ms": {
-          "maximum": 253402300799000,
-          "minimum": 0,
-          "title": "Available At Ms",
-          "type": "integer"
+        "metric_id": {
+          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+          "title": "Metric Id",
+          "type": "string"
+        },
+        "value": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Value"
+        },
+        "unit": {
+          "enum": [
+            "price_quote",
+            "basis_points",
+            "return_percent",
+            "percentage_points",
+            "share_fraction",
+            "volume_quote",
+            "ratio",
+            "adx_0_100",
+            "rsi_0_100",
+            "correlation_minus1_to1",
+            "index_minus1_to1",
+            "index_minus3_to3",
+            "index_points",
+            "index_points_per_minute",
+            "index_points_per_minute_squared",
+            "ratio_points",
+            "volatility_fraction_annualized",
+            "instruments",
+            "milliseconds",
+            "percentile_0_100",
+            "count",
+            "percent",
+            "atr_percent",
+            "price_percent",
+            "quote_volume",
+            "return_fraction"
+          ],
+          "title": "Unit",
+          "type": "string"
         },
         "computation_status": {
           "enum": [
@@ -941,74 +2425,6 @@
           "title": "Coverage Status",
           "type": "string"
         },
-        "definition": {
-          "$ref": "#/$defs/DefinitionRefV1"
-        },
-        "denominator": {
-          "anyOf": [
-            {
-              "maximum": 500,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Denominator"
-        },
-        "expected_denominator": {
-          "maximum": 500,
-          "minimum": 0,
-          "title": "Expected Denominator",
-          "type": "integer"
-        },
-        "expires_at_ms": {
-          "maximum": 253402300799000,
-          "minimum": 0,
-          "title": "Expires At Ms",
-          "type": "integer"
-        },
-        "horizon_minutes": {
-          "maximum": 10080,
-          "minimum": 1,
-          "title": "Horizon Minutes",
-          "type": "integer"
-        },
-        "metric_id": {
-          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
-          "title": "Metric Id",
-          "type": "string"
-        },
-        "numerator": {
-          "anyOf": [
-            {
-              "maximum": 500,
-              "minimum": 0,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Numerator"
-        },
-        "observation_interval_ms": {
-          "anyOf": [
-            {
-              "maximum": 604800000,
-              "minimum": 1,
-              "type": "integer"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Observation Interval Ms"
-        },
         "reason_codes": {
           "items": {
             "enum": [
@@ -1025,6 +2441,7 @@
               "INSUFFICIENT_COVERAGE",
               "CONSTANT_SERIES",
               "ZERO_BASELINE",
+              "ZERO_DENOMINATOR",
               "UNQUALIFIED_MODEL",
               "UNKNOWN_CONFIDENCE_SCALE",
               "UNKNOWN_SECTOR",
@@ -1045,61 +2462,31 @@
           "title": "Reason Codes",
           "type": "array"
         },
-        "required_samples": {
-          "maximum": 20161,
-          "minimum": 0,
-          "title": "Required Samples",
-          "type": "integer"
-        },
-        "sample_count": {
-          "maximum": 20161,
-          "minimum": 0,
-          "title": "Sample Count",
-          "type": "integer"
+        "definition": {
+          "$ref": "#/$defs/DefinitionRefV1"
         },
         "source_ref": {
           "$ref": "#/$defs/ProviderRefV1"
         },
-        "unit": {
-          "enum": [
-            "price_quote",
-            "return_percent",
-            "percentage_points",
-            "share_fraction",
-            "volume_quote",
-            "ratio",
-            "adx_0_100",
-            "rsi_0_100",
-            "correlation_minus1_to1",
-            "index_minus3_to3",
-            "index_points",
-            "ratio_points",
-            "volatility_fraction_annualized",
-            "instruments",
-            "milliseconds",
-            "percentile_0_100",
-            "count",
-            "percent",
-            "atr_percent",
-            "price_percent",
-            "quote_volume",
-            "return_fraction"
-          ],
-          "title": "Unit",
-          "type": "string"
+        "horizon_minutes": {
+          "maximum": 10080,
+          "minimum": 1,
+          "title": "Horizon Minutes",
+          "type": "integer"
         },
-        "value": {
+        "window_start_ms": {
           "anyOf": [
             {
-              "maxLength": 128,
-              "type": "string"
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
             },
             {
               "type": "null"
             }
           ],
           "default": null,
-          "title": "Value"
+          "title": "Window Start Ms"
         },
         "window_end_ms": {
           "anyOf": [
@@ -1115,10 +2502,48 @@
           "default": null,
           "title": "Window End Ms"
         },
-        "window_start_ms": {
+        "observation_interval_ms": {
           "anyOf": [
             {
-              "maximum": 253402300799000,
+              "maximum": 604800000,
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Observation Interval Ms"
+        },
+        "available_at_ms": {
+          "maximum": 253402300799000,
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "expires_at_ms": {
+          "maximum": 253402300799000,
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "sample_count": {
+          "maximum": 20161,
+          "minimum": 0,
+          "title": "Sample Count",
+          "type": "integer"
+        },
+        "required_samples": {
+          "maximum": 20161,
+          "minimum": 0,
+          "title": "Required Samples",
+          "type": "integer"
+        },
+        "numerator": {
+          "anyOf": [
+            {
+              "maximum": 500,
               "minimum": 0,
               "type": "integer"
             },
@@ -1127,7 +2552,27 @@
             }
           ],
           "default": null,
-          "title": "Window Start Ms"
+          "title": "Numerator"
+        },
+        "denominator": {
+          "anyOf": [
+            {
+              "maximum": 500,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Denominator"
+        },
+        "expected_denominator": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Expected Denominator",
+          "type": "integer"
         }
       },
       "required": [
@@ -1148,13 +2593,94 @@
       "title": "MetricValueV1",
       "type": "object"
     },
-    "ParticipationV1": {
+    "MicrostructureComponentV1": {
       "additionalProperties": false,
       "properties": {
-        "delta_metric_id": {
+        "schema_version": {
+          "const": "market-picture.microstructure.v1",
+          "default": "market-picture.microstructure.v1",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "component_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Component Id",
+          "type": "string"
+        },
+        "source_kind": {
+          "enum": [
+            "observed",
+            "reconstructed"
+          ],
+          "title": "Source Kind",
+          "type": "string"
+        },
+        "cutoff_ms": {
+          "minimum": 0,
+          "title": "Cutoff Ms",
+          "type": "integer"
+        },
+        "available_at_ms": {
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "replay_class": {
+          "const": "snapshot_only",
+          "default": "snapshot_only",
+          "title": "Replay Class",
+          "type": "string"
+        },
+        "raw_inputs_retained": {
+          "const": false,
+          "default": false,
+          "title": "Raw Inputs Retained",
+          "type": "boolean"
+        },
+        "flows": {
+          "items": {
+            "$ref": "#/$defs/FlowObservationV1"
+          },
+          "maxItems": 300,
+          "title": "Flows",
+          "type": "array"
+        },
+        "liquidity": {
+          "items": {
+            "$ref": "#/$defs/LiquidityObservationV1"
+          },
+          "maxItems": 1200,
+          "title": "Liquidity",
+          "type": "array"
+        }
+      },
+      "required": [
+        "component_id",
+        "source_kind",
+        "cutoff_ms",
+        "available_at_ms",
+        "flows",
+        "liquidity"
+      ],
+      "title": "MicrostructureComponentV1",
+      "type": "object"
+    },
+    "MicrostructureRefV1": {
+      "additionalProperties": false,
+      "description": "Optional pointer to a snapshot-scoped, separately bounded companion.",
+      "properties": {
+        "status": {
+          "enum": [
+            "available",
+            "unavailable"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "component_id": {
           "anyOf": [
             {
-              "maxLength": 128,
+              "pattern": "^[0-9a-f]{64}$",
               "type": "string"
             },
             {
@@ -1162,24 +2688,121 @@
             }
           ],
           "default": null,
-          "title": "Delta Metric Id"
+          "title": "Component Id"
         },
-        "denominator": {
+        "cutoff_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cutoff Ms"
+        },
+        "available_at_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Available At Ms"
+        },
+        "expires_at_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Expires At Ms"
+        },
+        "reason_codes": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Reason Codes",
+          "type": "array"
+        }
+      },
+      "required": [
+        "status",
+        "reason_codes"
+      ],
+      "title": "MicrostructureRefV1",
+      "type": "object"
+    },
+    "NormalizedBreadthV1": {
+      "additionalProperties": false,
+      "description": "Additive 1bp breadth view; absent on frames written before this extension.",
+      "properties": {
+        "horizon_minutes": {
+          "enum": [
+            1,
+            5,
+            15,
+            60,
+            240,
+            1440
+          ],
+          "title": "Horizon Minutes",
+          "type": "integer"
+        },
+        "metric_refs": {
+          "additionalProperties": {
+            "$ref": "#/$defs/MetricRef"
+          },
+          "title": "Metric Refs",
+          "type": "object"
+        },
+        "valid_count": {
           "maximum": 500,
           "minimum": 0,
-          "title": "Denominator",
+          "title": "Valid Count",
           "type": "integer"
         },
-        "expected_denominator": {
+        "expected_count": {
           "maximum": 500,
           "minimum": 1,
-          "title": "Expected Denominator",
+          "title": "Expected Count",
           "type": "integer"
         },
-        "membership_metric_id": {
+        "cutoff_ms": {
+          "minimum": 0,
+          "title": "Cutoff Ms",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "horizon_minutes",
+        "metric_refs",
+        "valid_count",
+        "expected_count",
+        "cutoff_ms"
+      ],
+      "title": "NormalizedBreadthV1",
+      "type": "object"
+    },
+    "ParticipationV1": {
+      "additionalProperties": false,
+      "properties": {
+        "predicate_id": {
           "maxLength": 128,
           "minLength": 1,
-          "title": "Membership Metric Id",
+          "title": "Predicate Id",
           "type": "string"
         },
         "metric_id": {
@@ -1188,16 +2811,10 @@
           "title": "Metric Id",
           "type": "string"
         },
-        "numerator": {
-          "maximum": 500,
-          "minimum": 0,
-          "title": "Numerator",
-          "type": "integer"
-        },
-        "predicate_id": {
+        "membership_metric_id": {
           "maxLength": 128,
           "minLength": 1,
-          "title": "Predicate Id",
+          "title": "Membership Metric Id",
           "type": "string"
         },
         "threshold": {
@@ -1215,6 +2832,37 @@
           "minimum": 1,
           "title": "Timeframe Minutes",
           "type": "integer"
+        },
+        "numerator": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Numerator",
+          "type": "integer"
+        },
+        "denominator": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Denominator",
+          "type": "integer"
+        },
+        "expected_denominator": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Denominator",
+          "type": "integer"
+        },
+        "delta_metric_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Delta Metric Id"
         }
       },
       "required": [
@@ -1255,11 +2903,6 @@
     "ProviderCoverageV1": {
       "additionalProperties": false,
       "properties": {
-        "coverage_fraction": {
-          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
-          "title": "Coverage Fraction",
-          "type": "string"
-        },
         "expected_count": {
           "maximum": 500,
           "minimum": 0,
@@ -1271,6 +2914,11 @@
           "minimum": 0,
           "title": "Valid Count",
           "type": "integer"
+        },
+        "coverage_fraction": {
+          "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+          "title": "Coverage Fraction",
+          "type": "string"
         }
       },
       "required": [
@@ -1284,43 +2932,19 @@
     "ProviderRefV1": {
       "additionalProperties": false,
       "properties": {
-        "available_at_ms": {
-          "maximum": 253402300799000,
-          "minimum": 0,
-          "title": "Available At Ms",
-          "type": "integer"
+        "provider_id": {
+          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+          "title": "Provider Id",
+          "type": "string"
         },
-        "capabilities": {
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 64,
-          "title": "Capabilities",
-          "type": "array"
-        },
-        "coverage": {
-          "$ref": "#/$defs/ProviderCoverageV1"
+        "stream_id": {
+          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+          "title": "Stream Id",
+          "type": "string"
         },
         "epoch": {
           "pattern": "^[A-Za-z0-9_-]{1,128}$",
           "title": "Epoch",
-          "type": "string"
-        },
-        "expires_at_ms": {
-          "maximum": 253402300799000,
-          "minimum": 0,
-          "title": "Expires At Ms",
-          "type": "integer"
-        },
-        "observed_at_ms": {
-          "maximum": 253402300799000,
-          "minimum": 0,
-          "title": "Observed At Ms",
-          "type": "integer"
-        },
-        "provider_id": {
-          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
-          "title": "Provider Id",
           "type": "string"
         },
         "sequence": {
@@ -1328,6 +2952,11 @@
           "minimum": 1,
           "title": "Sequence",
           "type": "integer"
+        },
+        "source_snapshot_id": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Snapshot Id",
+          "type": "string"
         },
         "source_digest": {
           "pattern": "^[0-9a-f]{64}$",
@@ -1342,15 +2971,34 @@
           "title": "Source Kind",
           "type": "string"
         },
-        "source_snapshot_id": {
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Source Snapshot Id",
-          "type": "string"
+        "observed_at_ms": {
+          "maximum": 253402300799000,
+          "minimum": 0,
+          "title": "Observed At Ms",
+          "type": "integer"
         },
-        "stream_id": {
-          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
-          "title": "Stream Id",
-          "type": "string"
+        "available_at_ms": {
+          "maximum": 253402300799000,
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "expires_at_ms": {
+          "maximum": 253402300799000,
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "coverage": {
+          "$ref": "#/$defs/ProviderCoverageV1"
+        },
+        "capabilities": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Capabilities",
+          "type": "array"
         }
       },
       "required": [
@@ -1374,29 +3022,41 @@
       "additionalProperties": false,
       "description": "Owner regime record plus an API-local join key; semantics remain engine-owned.",
       "properties": {
-        "available_at_ms": {
-          "minimum": 0,
-          "title": "Available At Ms",
-          "type": "integer"
-        },
-        "calibration_status": {
-          "enum": [
-            "calibrated",
-            "uncalibrated",
-            "unknown",
-            "not_applicable"
-          ],
-          "title": "Calibration Status",
+        "regime_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Regime Id",
           "type": "string"
         },
-        "confidence_kind": {
+        "instrument_id": {
+          "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
+          "title": "Instrument Id",
+          "type": "string"
+        },
+        "source_bar_close_ms": {
+          "minimum": 0,
+          "title": "Source Bar Close Ms",
+          "type": "integer"
+        },
+        "origin": {
+          "enum": [
+            "controller_recorded",
+            "market_observation"
+          ],
+          "title": "Origin",
+          "type": "string"
+        },
+        "producer_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Producer Id",
+          "type": "string"
+        },
+        "controller_id": {
           "anyOf": [
             {
-              "enum": [
-                "model_probability",
-                "model_score",
-                "reported_unknown"
-              ],
+              "maxLength": 128,
+              "minLength": 1,
               "type": "string"
             },
             {
@@ -1404,7 +3064,48 @@
             }
           ],
           "default": null,
-          "title": "Confidence Kind"
+          "title": "Controller Id"
+        },
+        "regime_label": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Regime Label"
+        },
+        "regime_definition_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Regime Definition Id"
+        },
+        "confidence_value": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Confidence Value"
         },
         "confidence_unit": {
           "anyOf": [
@@ -1423,10 +3124,14 @@
           "default": null,
           "title": "Confidence Unit"
         },
-        "confidence_value": {
+        "confidence_kind": {
           "anyOf": [
             {
-              "maxLength": 64,
+              "enum": [
+                "model_probability",
+                "model_score",
+                "reported_unknown"
+              ],
               "type": "string"
             },
             {
@@ -1434,69 +3139,16 @@
             }
           ],
           "default": null,
-          "title": "Confidence Value"
+          "title": "Confidence Kind"
         },
-        "context_bias": {
-          "anyOf": [
-            {
-              "maxLength": 128,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
+        "calibration_status": {
+          "enum": [
+            "calibrated",
+            "uncalibrated",
+            "unknown",
+            "not_applicable"
           ],
-          "default": null,
-          "title": "Context Bias"
-        },
-        "controller_id": {
-          "anyOf": [
-            {
-              "maxLength": 128,
-              "minLength": 1,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Controller Id"
-        },
-        "expires_at_ms": {
-          "minimum": 0,
-          "title": "Expires At Ms",
-          "type": "integer"
-        },
-        "feature_schema_hash": {
-          "anyOf": [
-            {
-              "pattern": "^[0-9a-f]{64}$",
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Feature Schema Hash"
-        },
-        "fit_id": {
-          "anyOf": [
-            {
-              "maxLength": 128,
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Fit Id"
-        },
-        "instrument_id": {
-          "pattern": "^[a-z0-9_]{1,24}:spot:[A-Z0-9]{1,32}-[A-Z0-9]{1,32}$",
-          "title": "Instrument Id",
+          "title": "Calibration Status",
           "type": "string"
         },
         "model_id": {
@@ -1525,28 +3177,10 @@
           "default": null,
           "title": "Model Version"
         },
-        "origin": {
-          "enum": [
-            "controller_recorded",
-            "market_observation"
-          ],
-          "title": "Origin",
-          "type": "string"
-        },
-        "producer_id": {
-          "maxLength": 128,
-          "minLength": 1,
-          "title": "Producer Id",
-          "type": "string"
-        },
-        "provider_ref": {
-          "$ref": "#/$defs/ProviderRefV1"
-        },
-        "regime_definition_id": {
+        "fit_id": {
           "anyOf": [
             {
               "maxLength": 128,
-              "minLength": 1,
               "type": "string"
             },
             {
@@ -1554,19 +3188,12 @@
             }
           ],
           "default": null,
-          "title": "Regime Definition Id"
+          "title": "Fit Id"
         },
-        "regime_id": {
-          "maxLength": 128,
-          "minLength": 1,
-          "title": "Regime Id",
-          "type": "string"
-        },
-        "regime_label": {
+        "feature_schema_hash": {
           "anyOf": [
             {
-              "maxLength": 128,
-              "minLength": 1,
+              "pattern": "^[0-9a-f]{64}$",
               "type": "string"
             },
             {
@@ -1574,21 +3201,37 @@
             }
           ],
           "default": null,
-          "title": "Regime Label"
+          "title": "Feature Schema Hash"
         },
-        "source_bar_close_ms": {
-          "minimum": 0,
-          "title": "Source Bar Close Ms",
-          "type": "integer"
+        "trend_direction": {
+          "anyOf": [
+            {
+              "enum": [
+                "up",
+                "down",
+                "flat"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trend Direction"
         },
-        "source_epoch": {
-          "title": "Source Epoch",
-          "type": "string"
-        },
-        "source_sequence": {
-          "minimum": 1,
-          "title": "Source Sequence",
-          "type": "integer"
+        "trend_confidence_value": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Trend Confidence Value"
         },
         "trend_confidence_unit": {
           "anyOf": [
@@ -1607,10 +3250,10 @@
           "default": null,
           "title": "Trend Confidence Unit"
         },
-        "trend_confidence_value": {
+        "context_bias": {
           "anyOf": [
             {
-              "maxLength": 64,
+              "maxLength": 128,
               "type": "string"
             },
             {
@@ -1618,24 +3261,29 @@
             }
           ],
           "default": null,
-          "title": "Trend Confidence Value"
+          "title": "Context Bias"
         },
-        "trend_direction": {
-          "anyOf": [
-            {
-              "enum": [
-                "up",
-                "down",
-                "flat"
-              ],
-              "type": "string"
-            },
-            {
-              "type": "null"
-            }
-          ],
-          "default": null,
-          "title": "Trend Direction"
+        "provider_ref": {
+          "$ref": "#/$defs/ProviderRefV1"
+        },
+        "available_at_ms": {
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "expires_at_ms": {
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "source_epoch": {
+          "title": "Source Epoch",
+          "type": "string"
+        },
+        "source_sequence": {
+          "minimum": 1,
+          "title": "Source Sequence",
+          "type": "integer"
         }
       },
       "required": [
@@ -1654,9 +3302,175 @@
       "title": "RegimeObservationRefV1",
       "type": "object"
     },
+    "RelativeStrengthChangesV1": {
+      "additionalProperties": false,
+      "description": "Compact 1h rank movement; positive rank deltas mean stronger rank.",
+      "properties": {
+        "baseline_snapshot_id": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Snapshot Id"
+        },
+        "baseline_cutoff_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Baseline Cutoff Ms"
+        },
+        "current_cutoff_ms": {
+          "minimum": 0,
+          "title": "Current Cutoff Ms",
+          "type": "integer"
+        },
+        "interval_ms": {
+          "const": 3600000,
+          "default": 3600000,
+          "title": "Interval Ms",
+          "type": "integer"
+        },
+        "definition_id": {
+          "const": "relative_return",
+          "default": "relative_return",
+          "title": "Definition Id",
+          "type": "string"
+        },
+        "definition_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Definition Hash",
+          "type": "string"
+        },
+        "source_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Source Hash"
+        },
+        "cohort_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cohort Hash"
+        },
+        "expected_count": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Count",
+          "type": "integer"
+        },
+        "valid_count": {
+          "maximum": 500,
+          "minimum": 0,
+          "title": "Valid Count",
+          "type": "integer"
+        },
+        "reason_codes": {
+          "default": [],
+          "items": {
+            "enum": [
+              "SOURCE_UNAVAILABLE",
+              "SOURCE_DISABLED",
+              "SOURCE_IDENTITY_MISMATCH",
+              "QUOTE_MISMATCH",
+              "DUPLICATE_ASSET",
+              "BAR_UNCONFIRMED",
+              "BAR_GAP",
+              "LAGGING_MEMBER",
+              "STALE_SOURCE",
+              "INSUFFICIENT_HISTORY",
+              "INSUFFICIENT_COVERAGE",
+              "CONSTANT_SERIES",
+              "ZERO_BASELINE",
+              "ZERO_DENOMINATOR",
+              "UNQUALIFIED_MODEL",
+              "UNKNOWN_CONFIDENCE_SCALE",
+              "UNKNOWN_SECTOR",
+              "CAPACITY_EXCEEDED",
+              "EXPIRED_SNAPSHOT",
+              "HASH_MISMATCH",
+              "SEQUENCE_REGRESSION",
+              "RECONSTRUCTED_AVAILABILITY",
+              "RETENTION_EXPIRED",
+              "INVALID_INPUT",
+              "CORRECTION_PENDING",
+              "NO_CROSSING",
+              "NO_PRIOR_STATE"
+            ],
+            "type": "string"
+          },
+          "maxItems": 8,
+          "title": "Reason Codes",
+          "type": "array"
+        },
+        "rank_deltas": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "maxItems": 500,
+          "title": "Rank Deltas",
+          "type": "array"
+        }
+      },
+      "required": [
+        "current_cutoff_ms",
+        "definition_hash",
+        "expected_count",
+        "valid_count",
+        "rank_deltas"
+      ],
+      "title": "RelativeStrengthChangesV1",
+      "type": "object"
+    },
     "SectorRefV1": {
       "additionalProperties": false,
       "properties": {
+        "taxonomy_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Taxonomy Id",
+          "type": "string"
+        },
+        "taxonomy_version": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Taxonomy Version",
+          "type": "string"
+        },
         "sector_id": {
           "anyOf": [
             {
@@ -1678,18 +3492,6 @@
           ],
           "title": "Status",
           "type": "string"
-        },
-        "taxonomy_id": {
-          "maxLength": 128,
-          "minLength": 1,
-          "title": "Taxonomy Id",
-          "type": "string"
-        },
-        "taxonomy_version": {
-          "maxLength": 64,
-          "minLength": 1,
-          "title": "Taxonomy Version",
-          "type": "string"
         }
       },
       "required": [
@@ -1698,6 +3500,241 @@
         "status"
       ],
       "title": "SectorRefV1",
+      "type": "object"
+    },
+    "SourceCapabilityV1": {
+      "additionalProperties": false,
+      "properties": {
+        "source_id": {
+          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "family": {
+          "enum": [
+            "candles",
+            "spot_flow",
+            "spot_liquidity",
+            "derivatives",
+            "liquidations",
+            "options",
+            "external_context",
+            "private_exposure",
+            "conditional_outcomes"
+          ],
+          "title": "Family",
+          "type": "string"
+        },
+        "venue_profile": {
+          "pattern": "^[a-z0-9][a-z0-9_.:-]{0,127}$",
+          "title": "Venue Profile",
+          "type": "string"
+        },
+        "endpoint": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "Endpoint",
+          "type": "string"
+        },
+        "qualification": {
+          "enum": [
+            "not_probed",
+            "probed",
+            "collecting",
+            "not_qualified",
+            "qualified"
+          ],
+          "title": "Qualification",
+          "type": "string"
+        },
+        "operational": {
+          "enum": [
+            "healthy",
+            "unsupported_region",
+            "permission_required",
+            "disabled",
+            "rate_limited",
+            "degraded",
+            "unavailable"
+          ],
+          "title": "Operational",
+          "type": "string"
+        },
+        "source_contract_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Source Contract Hash",
+          "type": "string"
+        },
+        "instrument_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 300,
+          "title": "Instrument Ids",
+          "type": "array"
+        },
+        "units": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "minItems": 1,
+          "title": "Units",
+          "type": "array"
+        },
+        "history_semantics": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "History Semantics",
+          "type": "string"
+        },
+        "access": {
+          "enum": [
+            "anonymous",
+            "separately_authorized_private"
+          ],
+          "title": "Access",
+          "type": "string"
+        },
+        "cadence_ms": {
+          "maximum": 604800000,
+          "minimum": 1,
+          "title": "Cadence Ms",
+          "type": "integer"
+        },
+        "max_records": {
+          "maximum": 100000,
+          "minimum": 1,
+          "title": "Max Records",
+          "type": "integer"
+        },
+        "license_basis": {
+          "maxLength": 256,
+          "minLength": 1,
+          "title": "License Basis",
+          "type": "string"
+        },
+        "probe_receipt_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Probe Receipt Hash"
+        },
+        "probed_at_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Probed At Ms"
+        },
+        "collection_receipt_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Collection Receipt Hash"
+        },
+        "collected_at_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Collected At Ms"
+        },
+        "qualification_receipt_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Qualification Receipt Hash"
+        },
+        "qualified_at_ms": {
+          "anyOf": [
+            {
+              "maximum": 253402300799000,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Qualified At Ms"
+        },
+        "qualification_contract_hash": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Qualification Contract Hash"
+        },
+        "reasons": {
+          "default": [],
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 32,
+          "title": "Reasons",
+          "type": "array"
+        }
+      },
+      "required": [
+        "source_id",
+        "family",
+        "venue_profile",
+        "endpoint",
+        "qualification",
+        "operational",
+        "source_contract_hash",
+        "instrument_ids",
+        "units",
+        "history_semantics",
+        "access",
+        "cadence_ms",
+        "max_records",
+        "license_basis"
+      ],
+      "title": "SourceCapabilityV1",
       "type": "object"
     },
     "SummaryV1": {
@@ -1720,31 +3757,39 @@
     "UniverseRefV1": {
       "additionalProperties": false,
       "properties": {
+        "universe_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Universe Id",
+          "type": "string"
+        },
+        "revision": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "membership_hash": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Membership Hash",
+          "type": "string"
+        },
+        "weight_definition_id": {
+          "maxLength": 128,
+          "minLength": 1,
+          "title": "Weight Definition Id",
+          "type": "string"
+        },
+        "weight_revision": {
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Weight Revision",
+          "type": "string"
+        },
         "effective_at_ms": {
           "minimum": 0,
           "title": "Effective At Ms",
           "type": "integer"
-        },
-        "expected_asset_count": {
-          "maximum": 500,
-          "minimum": 1,
-          "title": "Expected Asset Count",
-          "type": "integer"
-        },
-        "expected_instrument_count": {
-          "maximum": 500,
-          "minimum": 1,
-          "title": "Expected Instrument Count",
-          "type": "integer"
-        },
-        "member_asset_ids": {
-          "items": {
-            "type": "string"
-          },
-          "maxItems": 500,
-          "minItems": 1,
-          "title": "Member Asset Ids",
-          "type": "array"
         },
         "member_instrument_ids": {
           "items": {
@@ -1755,10 +3800,26 @@
           "title": "Member Instrument Ids",
           "type": "array"
         },
-        "membership_hash": {
-          "pattern": "^[0-9a-f]{64}$",
-          "title": "Membership Hash",
-          "type": "string"
+        "member_asset_ids": {
+          "items": {
+            "type": "string"
+          },
+          "maxItems": 500,
+          "minItems": 1,
+          "title": "Member Asset Ids",
+          "type": "array"
+        },
+        "expected_instrument_count": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Instrument Count",
+          "type": "integer"
+        },
+        "expected_asset_count": {
+          "maximum": 500,
+          "minimum": 1,
+          "title": "Expected Asset Count",
+          "type": "integer"
         },
         "quote_policy_id": {
           "maxLength": 128,
@@ -1766,10 +3827,10 @@
           "title": "Quote Policy Id",
           "type": "string"
         },
-        "revision": {
-          "maxLength": 64,
+        "selected_numeraire": {
+          "maxLength": 32,
           "minLength": 1,
-          "title": "Revision",
+          "title": "Selected Numeraire",
           "type": "string"
         },
         "sector_taxonomy_ref": {
@@ -1784,30 +3845,6 @@
           ],
           "default": null,
           "title": "Sector Taxonomy Ref"
-        },
-        "selected_numeraire": {
-          "maxLength": 32,
-          "minLength": 1,
-          "title": "Selected Numeraire",
-          "type": "string"
-        },
-        "universe_id": {
-          "maxLength": 128,
-          "minLength": 1,
-          "title": "Universe Id",
-          "type": "string"
-        },
-        "weight_definition_id": {
-          "maxLength": 128,
-          "minLength": 1,
-          "title": "Weight Definition Id",
-          "type": "string"
-        },
-        "weight_revision": {
-          "maxLength": 64,
-          "minLength": 1,
-          "title": "Weight Revision",
-          "type": "string"
         }
       },
       "required": [
@@ -1830,61 +3867,47 @@
   },
   "additionalProperties": false,
   "properties": {
-    "asset_metric_refs": {
-      "additionalProperties": {
-        "$ref": "#/$defs/MetricRef"
-      },
-      "title": "Asset Metric Refs",
-      "type": "object"
+    "schema_version": {
+      "const": "market-picture.v1",
+      "title": "Schema Version",
+      "type": "string"
     },
-    "asset_predicate_refs": {
-      "additionalProperties": {
-        "$ref": "#/$defs/MetricRef"
-      },
-      "title": "Asset Predicate Refs",
-      "type": "object"
+    "encoding": {
+      "const": "metric-series.v1",
+      "title": "Encoding",
+      "type": "string"
     },
-    "assets": {
-      "items": {
-        "$ref": "#/$defs/AssetObservationV1"
-      },
-      "maxItems": 500,
-      "minItems": 1,
-      "title": "Assets",
-      "type": "array"
+    "feature_set_version": {
+      "const": "market-picture.observation.v1",
+      "title": "Feature Set Version",
+      "type": "string"
     },
-    "available_at_ms": {
-      "minimum": 0,
-      "title": "Available At Ms",
+    "snapshot_id": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Snapshot Id",
+      "type": "string"
+    },
+    "stream_id": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Stream Id",
+      "type": "string"
+    },
+    "epoch": {
+      "maxLength": 128,
+      "minLength": 1,
+      "title": "Epoch",
+      "type": "string"
+    },
+    "sequence": {
+      "minimum": 1,
+      "title": "Sequence",
       "type": "integer"
     },
-    "breadth": {
-      "items": {
-        "$ref": "#/$defs/BreadthSummaryV1"
-      },
-      "maxItems": 6,
-      "minItems": 6,
-      "title": "Breadth",
-      "type": "array"
-    },
-    "canonical_context_ref": {
-      "$ref": "#/$defs/ComponentRefV1"
-    },
-    "comparisons": {
-      "anyOf": [
-        {
-          "$ref": "#/$defs/ComparisonsV1"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null
-    },
-    "coverage": {
-      "additionalProperties": true,
-      "title": "Coverage",
-      "type": "object"
+    "revision": {
+      "minimum": 0,
+      "title": "Revision",
+      "type": "integer"
     },
     "cutoff_ms": {
       "minimum": 0,
@@ -1897,52 +3920,27 @@
       "title": "Cutoff Policy Id",
       "type": "string"
     },
-    "definition_registry_hash": {
-      "pattern": "^[0-9a-f]{64}$",
-      "title": "Definition Registry Hash",
-      "type": "string"
+    "available_at_ms": {
+      "minimum": 0,
+      "title": "Available At Ms",
+      "type": "integer"
     },
-    "distribution": {
-      "items": {
-        "$ref": "#/$defs/DistributionV1"
-      },
-      "maxItems": 6,
-      "minItems": 6,
-      "title": "Distribution",
-      "type": "array"
-    },
-    "encoding": {
-      "const": "metric-series.v1",
-      "title": "Encoding",
-      "type": "string"
-    },
-    "epoch": {
-      "maxLength": 128,
-      "minLength": 1,
-      "title": "Epoch",
-      "type": "string"
-    },
-    "event_cursor": {
-      "anyOf": [
-        {
-          "maxLength": 2048,
-          "type": "string"
-        },
-        {
-          "type": "null"
-        }
-      ],
-      "default": null,
-      "title": "Event Cursor"
+    "published_at_ms": {
+      "minimum": 0,
+      "title": "Published At Ms",
+      "type": "integer"
     },
     "expires_at_ms": {
       "minimum": 0,
       "title": "Expires At Ms",
       "type": "integer"
     },
-    "feature_set_version": {
-      "const": "market-picture.observation.v1",
-      "title": "Feature Set Version",
+    "source_kind": {
+      "enum": [
+        "observed",
+        "reconstructed"
+      ],
+      "title": "Source Kind",
       "type": "string"
     },
     "fixture_marker": {
@@ -1958,46 +3956,8 @@
       "default": null,
       "title": "Fixture Marker"
     },
-    "flow_ref": {
-      "$ref": "#/$defs/ComponentRefV1"
-    },
-    "market_metrics": {
-      "additionalProperties": {
-        "$ref": "#/$defs/MetricValueV1"
-      },
-      "title": "Market Metrics",
-      "type": "object"
-    },
-    "metric_series": {
-      "items": {
-        "$ref": "#/$defs/MetricSeriesV1"
-      },
-      "maxItems": 4096,
-      "title": "Metric Series",
-      "type": "array"
-    },
-    "participation": {
-      "items": {
-        "$ref": "#/$defs/ParticipationV1"
-      },
-      "maxItems": 8,
-      "minItems": 8,
-      "title": "Participation",
-      "type": "array"
-    },
-    "payload_digest": {
-      "pattern": "^[0-9a-f]{64}$",
-      "title": "Payload Digest",
-      "type": "string"
-    },
-    "pressure": {
-      "items": {
-        "$ref": "#/$defs/PressureV1"
-      },
-      "maxItems": 6,
-      "minItems": 6,
-      "title": "Pressure",
-      "type": "array"
+    "universe": {
+      "$ref": "#/$defs/UniverseRefV1"
     },
     "providers": {
       "additionalProperties": {
@@ -2013,10 +3973,185 @@
       "title": "Providers",
       "type": "object"
     },
-    "published_at_ms": {
-      "minimum": 0,
-      "title": "Published At Ms",
-      "type": "integer"
+    "source_capabilities": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/SourceCapabilityV1"
+      },
+      "maxItems": 16,
+      "title": "Source Capabilities",
+      "type": "array"
+    },
+    "microstructure": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MicrostructureComponentV1"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "microstructure_ref": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/MicrostructureRefV1"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "daily_internals": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/DailyInstrumentInternalsV1"
+      },
+      "maxItems": 500,
+      "title": "Daily Internals",
+      "type": "array"
+    },
+    "hourly_internals": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/HourlyInternalsV1"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "candle_anomalies": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/CandleAnomaliesV1"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "definition_registry_hash": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Definition Registry Hash",
+      "type": "string"
+    },
+    "coverage": {
+      "additionalProperties": true,
+      "title": "Coverage",
+      "type": "object"
+    },
+    "metric_series": {
+      "items": {
+        "$ref": "#/$defs/MetricSeriesV1"
+      },
+      "maxItems": 4096,
+      "title": "Metric Series",
+      "type": "array"
+    },
+    "market_metrics": {
+      "additionalProperties": {
+        "$ref": "#/$defs/MetricValueV1"
+      },
+      "title": "Market Metrics",
+      "type": "object"
+    },
+    "asset_metric_refs": {
+      "additionalProperties": {
+        "$ref": "#/$defs/MetricRef"
+      },
+      "title": "Asset Metric Refs",
+      "type": "object"
+    },
+    "asset_predicate_refs": {
+      "additionalProperties": {
+        "$ref": "#/$defs/MetricRef"
+      },
+      "title": "Asset Predicate Refs",
+      "type": "object"
+    },
+    "breadth": {
+      "items": {
+        "$ref": "#/$defs/BreadthSummaryV1"
+      },
+      "maxItems": 6,
+      "minItems": 6,
+      "title": "Breadth",
+      "type": "array"
+    },
+    "normalized_breadth": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/NormalizedBreadthV1"
+      },
+      "maxItems": 6,
+      "title": "Normalized Breadth",
+      "type": "array"
+    },
+    "breadth_trajectory": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/BreadthTrajectoryV1"
+      },
+      "maxItems": 27,
+      "title": "Breadth Trajectory",
+      "type": "array"
+    },
+    "breadth_divergence": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/BreadthDivergenceV1"
+      },
+      "maxItems": 3,
+      "title": "Breadth Divergence",
+      "type": "array"
+    },
+    "contribution_summaries": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/ContributionSummaryV1"
+      },
+      "maxItems": 4,
+      "title": "Contribution Summaries",
+      "type": "array"
+    },
+    "summary": {
+      "$ref": "#/$defs/SummaryV1"
+    },
+    "comparisons": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/ComparisonsV1"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "relative_strength_changes": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/RelativeStrengthChangesV1"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "assets": {
+      "items": {
+        "$ref": "#/$defs/AssetObservationV1"
+      },
+      "maxItems": 500,
+      "minItems": 1,
+      "title": "Assets",
+      "type": "array"
     },
     "regime_observations": {
       "items": {
@@ -2026,48 +4161,59 @@
       "title": "Regime Observations",
       "type": "array"
     },
+    "distribution": {
+      "items": {
+        "$ref": "#/$defs/DistributionV1"
+      },
+      "maxItems": 6,
+      "minItems": 6,
+      "title": "Distribution",
+      "type": "array"
+    },
+    "participation": {
+      "items": {
+        "$ref": "#/$defs/ParticipationV1"
+      },
+      "maxItems": 8,
+      "minItems": 8,
+      "title": "Participation",
+      "type": "array"
+    },
+    "pressure": {
+      "items": {
+        "$ref": "#/$defs/PressureV1"
+      },
+      "maxItems": 6,
+      "minItems": 6,
+      "title": "Pressure",
+      "type": "array"
+    },
     "relationship_ref": {
       "$ref": "#/$defs/ComponentRefV1"
     },
-    "revision": {
-      "minimum": 0,
-      "title": "Revision",
-      "type": "integer"
+    "flow_ref": {
+      "$ref": "#/$defs/ComponentRefV1"
     },
-    "schema_version": {
-      "const": "market-picture.v1",
-      "title": "Schema Version",
-      "type": "string"
-    },
-    "sequence": {
-      "minimum": 1,
-      "title": "Sequence",
-      "type": "integer"
-    },
-    "snapshot_id": {
-      "pattern": "^[0-9a-f]{64}$",
-      "title": "Snapshot Id",
-      "type": "string"
-    },
-    "source_kind": {
-      "enum": [
-        "observed",
-        "reconstructed"
+    "event_cursor": {
+      "anyOf": [
+        {
+          "maxLength": 2048,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
       ],
-      "title": "Source Kind",
+      "default": null,
+      "title": "Event Cursor"
+    },
+    "canonical_context_ref": {
+      "$ref": "#/$defs/ComponentRefV1"
+    },
+    "payload_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Payload Digest",
       "type": "string"
-    },
-    "stream_id": {
-      "maxLength": 128,
-      "minLength": 1,
-      "title": "Stream Id",
-      "type": "string"
-    },
-    "summary": {
-      "$ref": "#/$defs/SummaryV1"
-    },
-    "universe": {
-      "$ref": "#/$defs/UniverseRefV1"
     }
   },
   "required": [

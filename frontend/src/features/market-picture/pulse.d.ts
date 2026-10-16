@@ -74,6 +74,11 @@ export function rollingMean(
   valueOf: (point: HistoryPoint) => number | null | undefined,
   minutes?: number,
 ): Array<number | null>;
+export function canonicalVerdictHistoryFault(
+  history: HistoryPoint[] | null | undefined,
+  horizon: Horizon,
+  until: number,
+): string | null;
 export function isSingleBarRelativeVolume(
   metric: { definition?: string } | null | undefined,
 ): boolean;

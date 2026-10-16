@@ -168,8 +168,279 @@ test("full API fixture validates with explicit fixture authority and resolves al
   assert.equal(Object.keys(view.participation).length, 8);
   assert.equal(view.assets[0].symbol, "BTC");
   assert.equal(view.assets[0].quote, "USDC");
+  assert.equal(view.candleAnomalies, null, "older frames without candle anomalies remain supported");
   assert.equal(view.raw.snapshot_id, frame.snapshot_id);
 });
+
+test("owner-produced candle-context fixture projects trajectories, cohorts, and source states", async () => {
+  const frame = await validateFrame(read("market-picture.m1.fixture.json"), { allowFixture: true });
+  const display = projectFrame(frame);
+  assert.equal(display.normalizedBreadth["15"].pressure.unit, "index_minus1_to1");
+  assert.equal(display.breadthTrajectory.length, 9);
+  assert.equal(display.breadthTrajectory[0].acceleration.unit, "index_points_per_minute_squared");
+  assert.equal(display.breadthDivergence.length, 3);
+  assert.equal(display.contributions["5"].startCohortAvailable, true);
+  assert.deepEqual(display.sourceCapabilities, []);
+});
+
+test("owner-produced combined fixture projects daily and microstructure components", async () => {
+  const frame = await validateFrame(read("market-picture.m1-components.fixture.json"), { allowFixture: true });
+  const display = projectFrame(frame);
+  assert.equal(display.assets.length, 5);
+  assert.equal(display.dailyInternals.length, 5);
+  assert.equal(display.dailyInternals[0].contiguousBars, 201);
+  assert.equal(display.dailyInternals[0].averages["200"].sma.required, 200);
+  assert.equal(display.dailyInternals[0].averages["200"].sma.samples, 200);
+  assert.ok(display.dailyInternals.every(row => row.source !== null), "daily rows retain owner source provenance");
+  assert.equal(display.microstructure?.replayClass, "snapshot_only");
+  assert.equal(display.microstructure?.rawInputsRetained, false);
+  assert.ok(display.microstructure?.flows.length);
+  assert.ok(display.microstructure?.liquidity.length);
+});
+
+test("future daily source receipt stays unavailable across the gateway boundary", async () => {
+  const frame = await validateFrame(read("market-picture.delayed-daily.fixture.json"), { allowFixture: true });
+  const daily = projectFrame(frame).dailyInternals;
+  assert.equal(daily.length, frame.assets.length);
+  assert.ok(daily.every(row => row.source === null));
+  assert.ok(daily.every(row => row.sourceCoverageStatus === "UNAVAILABLE"));
+  assert.ok(daily.find(row => row.instrumentId === "okx:spot:BTC-USDC").sourceReasons.includes("BAR_UNCONFIRMED"));
+  assert.ok(daily.find(row => row.instrumentId === "okx:spot:ETH-USDC").sourceReasons.includes("SOURCE_UNAVAILABLE"));
+  assert.equal(daily.find(row => row.instrumentId === "okx:spot:BTC-USDC").averages["200"].sma.metric.value, null);
+});
+
+test("owner-produced hourly internals preserve aggregate timing, definitions, and coverage", async () => {
+  const frame = await validateFrame(read("market-picture.m1-components.fixture.json"), { allowFixture: true });
+  const display = projectFrame(frame);
+  assert.equal(display.hourlyInternals.interval, 60);
+  assert.equal(display.hourlyInternals.decisionAvailable, frame.available_at_ms);
+  assert.equal(display.hourlyInternals.sourceCount, 5);
+  assert.equal(display.hourlyInternals.metrics.above_sma20_share.value, 0.6);
+  assert.equal(display.hourlyInternals.metrics.above_sma20_share.definition, "above_sma20_share");
+  const invalid = structuredClone(frame);
+  invalid.hourly_internals.metrics.above_sma20_share.definition_id = "share_delta";
+  await assert.rejects(validateFrame(await seal(invalid), { allowFixture: true }), /Hourly internals metric definition mismatch/);
+});
+
+test("owner-produced hourly candle anomalies keep frozen binary vectors, counts and definitions coherent", async () => {
+  const raw = read("market-picture.m1-components.fixture.json");
+  assert.ok(raw.candle_anomalies, "owner fixture includes the optional hourly anomaly projection");
+  const frame = await validateFrame(raw, { allowFixture: true });
+  const projected = projectFrame(frame).candleAnomalies;
+  assert.equal(projected.interval, 3_600_000);
+  assert.equal(projected.cutoff, Math.floor(frame.cutoff_ms / 3_600_000) * 3_600_000);
+  assert.equal(projected.decisionAvailable, frame.available_at_ms);
+  assert.equal(projected.expected, frame.assets.length);
+  assert.deepEqual(Object.keys(projected.metrics).sort(), [
+    "bollinger_inside_ema_atr_compression_1h",
+    "dictionary_rvol_1h_high",
+    "extreme_realized_volatility_1h_95p",
+  ].sort());
+  for (const mutate of [
+    anomaly => { anomaly.cutoff_ms += 3_600_000; },
+    anomaly => { anomaly.source_count -= 1; },
+    anomaly => { anomaly.metrics.dictionary_rvol_1h_high.values.pop(); },
+    anomaly => { anomaly.metrics.dictionary_rvol_1h_high.values[0] = 2; },
+    anomaly => { anomaly.metrics.dictionary_rvol_1h_high.high_count += 1; },
+    anomaly => { anomaly.metrics.bollinger_inside_ema_atr_compression_1h.definition_hash = "f".repeat(64); },
+    anomaly => { anomaly.metrics.extreme_realized_volatility_1h_95p.share_fraction = "1.1"; },
+    anomaly => { anomaly.metrics.dictionary_rvol_1h_high.unreviewed = true; },
+  ]) {
+    const invalid = structuredClone(raw);
+    mutate(invalid.candle_anomalies);
+    await assert.rejects(validateFrame(await seal(invalid), { allowFixture: true }));
+  }
+});
+
+test("matched trajectory share change keeps its metric-specific definition", async () => {
+  const frame = await validateFrame(read("market-picture.m1-components.fixture.json"), { allowFixture: true });
+  const trajectory = projectFrame(frame).breadthTrajectory.find(row => row.horizon === 15 && row.interval === 5);
+  assert.equal(trajectory.shareChange.definition, "breadth_advancing_share_change v1.0.0");
+  assert.equal(trajectory.shareChange.unit, "percentage_points");
+  assert.equal(trajectory.shareChange.value, 0);
+});
+
+test("owner-produced exact one-hour rank changes preserve aligned improving and weakening movements", async () => {
+  const frame = await validateFrame(read("market-picture.relative-ranks.1h.fixture.json"), { allowFixture: true });
+  const display = projectFrame(frame);
+  const changes = display.relativeStrengthChanges;
+  assert.equal(changes.interval, 3_600_000);
+  assert.equal(changes.currentCutoff - changes.baselineCutoff, 3_600_000);
+  assert.equal(changes.expected, frame.assets.length);
+  assert.equal(changes.valid, frame.assets.length);
+  assert.deepEqual(frame.assets.map(asset => changes.rankDeltas[asset.instrument_id]), [-1, 1]);
+  assert.equal(changes.definitionId, "relative_return");
+  assert.equal(changes.definitionHash, "54936e39a1c8ba50b1226d16efd45aa683165fe82a958e9b577f2856849f3259");
+
+  for (const mutate of [
+    value => { value.rank_deltas = [0, 1]; },
+    value => { value.baseline_cutoff_ms += 60_000; },
+    value => { value.definition_hash = "f".repeat(64); },
+    value => { value.rank_deltas = [1]; },
+    value => {
+      value.valid_count = 0;
+      value.rank_deltas = [null, null];
+      value.reason_codes = ["INSUFFICIENT_COVERAGE"];
+      value.cohort_hash = "a".repeat(64);
+    },
+  ]) {
+    const invalid = structuredClone(frame);
+    mutate(invalid.relative_strength_changes);
+    await assert.rejects(validateFrame(await seal(invalid), { allowFixture: true }));
+  }
+});
+
+test("book-cost percentile is independent of fee provenance and requires matched historical coverage", async () => {
+  const frame = read("market-picture.m1-components.fixture.json");
+  const book = frame.microstructure.liquidity.find(row => row.fee_bps == null && row.cost_bps != null);
+  assert.ok(book, "fixture includes a full-size book walk without fee provenance");
+  Object.assign(book, {
+    cost_percentile_7d: "0.75", cost_percentile_sample_count: 9500,
+    cost_percentile_expected_samples: 10080, cost_percentile_reason_codes: [],
+    cost_percentile_reference_digest: "c".repeat(64),
+  });
+  const component = { ...frame.microstructure };
+  delete component.component_id;
+  frame.microstructure.component_id = await digest(component);
+  if (frame.flow_ref?.status === "available") frame.flow_ref.snapshot_id = frame.microstructure.component_id;
+  const parsed = await validateFrame(await seal(frame), { allowFixture: true });
+  const display = projectFrame(parsed).microstructure.liquidity.find(row => row.sourceId === book.source_id && row.requestedSize === book.requested_size);
+  assert.equal(display.costPercentile7d, 0.75);
+  assert.equal(display.costPercentileSampleCount, 9500);
+  assert.equal(display.feeBps, null, "book-only percentile does not require fee provenance");
+
+  const insufficient = read("market-picture.m1-components.fixture.json");
+  const invalid = insufficient.microstructure.liquidity.find(row => row.fee_bps == null && row.cost_bps != null);
+  Object.assign(invalid, {
+    cost_percentile_7d: "0.75", cost_percentile_sample_count: 9000,
+    cost_percentile_expected_samples: 10080, cost_percentile_reason_codes: [],
+    cost_percentile_reference_digest: "c".repeat(64),
+  });
+  const invalidComponent = { ...insufficient.microstructure };
+  delete invalidComponent.component_id;
+  insufficient.microstructure.component_id = await digest(invalidComponent);
+  if (insufficient.flow_ref?.status === "available") insufficient.flow_ref.snapshot_id = insufficient.microstructure.component_id;
+  await assert.rejects(validateFrame(await seal(insufficient), { allowFixture: true }), /comparable full-size history/);
+});
+
+test("public Market Picture rejects separately authorized private source metadata", async () => {
+  const frame = read("market-picture.m1-components.fixture.json");
+  frame.source_capabilities[0].family = "private_exposure";
+  frame.source_capabilities[0].access = "separately_authorized_private";
+  await assert.rejects(validateFrame(await seal(frame), { allowFixture: true }), /Private source metadata/);
+});
+
+test("source capability probe receipt cannot occur after the frame decision", async () => {
+  const frame = read("market-picture.m1-components.fixture.json");
+  delete frame.microstructure;
+  const capability = frame.source_capabilities[0];
+  capability.qualification = "probed";
+  capability.operational = "unavailable";
+  delete capability.collection_receipt_hash;
+  delete capability.collected_at_ms;
+  delete capability.qualification_receipt_hash;
+  delete capability.qualification_contract_hash;
+  delete capability.qualified_at_ms;
+  capability.probed_at_ms = frame.available_at_ms + 1;
+  await assert.rejects(validateFrame(await seal(frame), { allowFixture: true }), /Capability receipt occurs after bundle decision/);
+});
+
+test("microstructure observations cannot become available after their component or frame decision", async () => {
+  for (const mutation of ["flow_after_component", "book_after_frame", "book_observed_after_cutoff"]) {
+    const frame = read("market-picture.m1-components.fixture.json");
+    const component = frame.microstructure;
+    if (mutation === "flow_after_component") {
+      component.available_at_ms -= 1;
+      component.flows[0].available_at_ms = frame.available_at_ms;
+    } else if (mutation === "book_after_frame") {
+      component.liquidity[0].available_at_ms = frame.available_at_ms + 1;
+      component.liquidity[0].expires_at_ms += 1;
+    } else {
+      component.liquidity[0].observed_at_ms = frame.cutoff_ms + 1;
+    }
+    const componentBody = { ...component };
+    delete componentBody.component_id;
+    component.component_id = await digest(componentBody);
+    await assert.rejects(validateFrame(await seal(frame), { allowFixture: true }), /decision-time bounds/, mutation);
+  }
+});
+
+test("microstructure flow windows cannot overlap and quote units stay tied to the selected numeraire", async () => {
+  const rehashComponent = async frame => {
+    const body = { ...frame.microstructure };
+    delete body.component_id;
+    frame.microstructure.component_id = await digest(body);
+    if (frame.flow_ref?.status === "available") frame.flow_ref.snapshot_id = frame.microstructure.component_id;
+    return frame;
+  };
+  const quoteMismatch = read("market-picture.m1-components.fixture.json");
+  quoteMismatch.microstructure.flows[0].quote_asset = "USDT";
+  await assert.rejects(validateFrame(await seal(await rehashComponent(quoteMismatch)), { allowFixture: true }), /executed-flow identity/);
+
+  const overlap = read("market-picture.m1-components.fixture.json");
+  const original = overlap.microstructure.flows.find(row => row.instrument_id === "okx:spot:BTC-USDC");
+  const capability = structuredClone(overlap.source_capabilities.find(row => row.source_id === original.source_id));
+  capability.source_id = "synthetic-spot_flow-alt";
+  overlap.source_capabilities.push(capability);
+  overlap.source_capabilities.sort((a, b) => a.source_id.localeCompare(b.source_id));
+  const duplicate = { ...original, source_id: capability.source_id };
+  overlap.microstructure.flows.push(duplicate);
+  overlap.microstructure.flows.sort((a, b) => `${a.instrument_id}|${a.source_id}`.localeCompare(`${b.instrument_id}|${b.source_id}`));
+  await assert.rejects(validateFrame(await seal(await rehashComponent(overlap)), { allowFixture: true }), /Flow source windows overlap/);
+});
+
+test("displayed-liquidity size, VWAP, cost, fee, and band values must reconcile", async () => {
+  const mutations = {
+    quantity: row => { row.uncovered_size = "0.1"; },
+    coveredVwap: row => { row.covered_vwap = "22"; },
+    fullVwap: row => { row.vwap = "22"; },
+    missingCost: row => { row.cost_bps = null; },
+    negativeCost: row => { row.cost_bps = "-1"; },
+    sellCostBound: row => { row.cost_bps = "10000"; },
+    zeroSpread: row => { row.spread_bps = "0"; },
+    feeBound: row => { row.fee_bps = "10001"; },
+    totalCost: row => { row.total_cost_bps = "30"; },
+    bandImbalance: row => { row.band_imbalance = "0.5"; },
+    unknownAccess: row => { row.access_basis = "unknown"; },
+    unknownSpread: row => {
+      makeUnknownBook(row);
+      row.spread_bps = "1";
+    },
+    unknownBand: row => {
+      makeUnknownBook(row);
+      row.band_bid_covered_quote = "1";
+    },
+    unknownPercentile: row => {
+      makeUnknownBook(row);
+      Object.assign(row, {
+        cost_percentile_7d: "0.5", cost_percentile_sample_count: 9500,
+        cost_percentile_expected_samples: 10080, cost_percentile_reason_codes: [], cost_percentile_reference_digest: "c".repeat(64),
+      });
+    },
+  };
+  for (const [name, mutate] of Object.entries(mutations)) {
+    const frame = read("market-picture.m1-components.fixture.json");
+    const row = frame.microstructure.liquidity.find(item => item.uncovered_size === "0");
+    assert.ok(row, "fixture contains complete displayed depth");
+    mutate(row);
+    const component = { ...frame.microstructure };
+    delete component.component_id;
+    frame.microstructure.component_id = await digest(component);
+    if (frame.flow_ref?.status === "available") frame.flow_ref.snapshot_id = frame.microstructure.component_id;
+    await assert.rejects(validateFrame(await seal(frame), { allowFixture: true }), undefined, name);
+  }
+});
+
+function makeUnknownBook(row) {
+  Object.assign(row, {
+    access_basis: "unknown", covered_base: "0", covered_quote: "0", uncovered_size: row.requested_size,
+    covered_vwap: null, vwap: null, cost_bps: null, fee_bps: null, fee_source: null, total_cost_bps: null,
+    spread_bps: null, band_bid_covered_quote: "0", band_ask_covered_quote: "0", band_complete: false,
+    band_imbalance: null, cost_percentile_7d: null, cost_percentile_sample_count: 0,
+    cost_percentile_expected_samples: 10080, cost_percentile_reason_codes: ["INSUFFICIENT_HISTORY"],
+    cost_percentile_reference_digest: null,
+  });
+}
 
 test("both relative-volume generations validate and project under their own keys", async () => {
   const current = projectFrame(await validateFrame(fixture(), { allowFixture: true }));

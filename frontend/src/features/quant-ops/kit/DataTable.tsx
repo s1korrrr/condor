@@ -47,7 +47,7 @@ const csvCell = (value: unknown) => {
 };
 const RESIZE_STEP = 16;
 
-export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSize = 12, emptyText = 'No rows.', exportName, maxHeight = 480, rowState, pinned, dense = false }: {
+export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSize = 12, emptyText = 'No rows.', exportName, exportMetadata, maxHeight = 480, rowState, pinned, dense = false }: {
   rows: T[];
   columns: TableColumn<T>[];
   rowId: (row: T, index: number) => string;
@@ -58,6 +58,8 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
   emptyText?: ReactNode;
   /** CSV file name; the export holds raw values of the filtered, sorted rows. */
   exportName?: string;
+  /** Constant per-export provenance appended as columns without changing the table view. */
+  exportMetadata?: Record<string, string | number | null>;
   /** Scroll height; the header row stays visible while the body scrolls. */
   maxHeight?: number;
   /** Optional `data-state` per row (for example a highlighted or stale row). */
@@ -106,8 +108,16 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
   const initialSorting = initialSort ? `${initialSort.id}:${initialSort.desc ? 'desc' : 'asc'}` : '';
   const changed = filtered || sorting.map(item => `${item.id}:${item.desc ? 'desc' : 'asc'}`).join(',') !== initialSorting || Object.keys(table.getState().columnSizing).length > 0;
   const exportCsv = () => {
-    const header = columns.map(column => csvCell(column.header)).join(',');
-    const body = visible.map(row => columns.map(column => csvCell(column.value(row.original))).join(','));
+    const metadata = Object.entries(exportMetadata ?? {});
+    const exportStateHeaders = exportMetadata === undefined ? [] : [
+      'table_search', 'table_column_filters', 'table_sort', 'table_exported_count', 'table_row_id',
+    ];
+    const header = [...columns.map(column => column.header), ...metadata.map(([key]) => key), ...exportStateHeaders].map(csvCell).join(',');
+    const body = visible.map(row => [
+      ...columns.map(column => column.value(row.original)),
+      ...metadata.map(([, value]) => value),
+      ...(exportMetadata === undefined ? [] : [search, JSON.stringify(filters), JSON.stringify(sorting), visible.length, row.id]),
+    ].map(csvCell).join(','));
     const url = URL.createObjectURL(new Blob([[header, ...body].join('\n')], { type: 'text/csv' }));
     const link = document.createElement('a');
     link.href = url; link.download = exportName ?? 'table.csv'; link.click();

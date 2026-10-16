@@ -7,6 +7,9 @@ export const CHART = {
   grid: 'var(--q-border, var(--color-border, #20313e))', muted: 'var(--q-muted, var(--color-text-muted, #a4bacb))', text: 'var(--q-text, var(--color-text, #e5e7eb))', surface: 'var(--q-surface, var(--color-surface, #0a151d))',
 } as const;
 
+/** Largest JavaScript Date offset; later or earlier timestamps cannot be shown as a time. */
+const MAX_TIME_MS = 8.64e15;
+
 export type SeriesPoint = { time: number; value: number | null };
 export type ChartSeries = {
   id: string; label: string; color: string; points: SeriesPoint[];
@@ -20,6 +23,8 @@ export type ChartSeries = {
   tooltipOnly?: boolean;
   /** Area gradient strength at the line; defaults to 0.28. */
   fillOpacity?: number;
+  /** Optional line pattern shared with visible legends for non-color identification. */
+  dash?: string;
 };
 export type ChartMarker = { time: number; label: string; color?: string };
 
@@ -73,7 +78,7 @@ export function projectTimeSeries(input: ChartSeries[]): TimeSeriesProjection {
   for (const item of series) {
     for (let index = 0; index < item.points.length; index++) {
       const point = item.points[index];
-      if (!Number.isFinite(point.time) || (index > 0 && point.time <= item.points[index - 1].time)) return { rows: [], keys: [], domain: null, invalid: `${item.label}: timestamps are invalid or out of order.` };
+      if (!Number.isFinite(point.time) || Math.abs(point.time) > MAX_TIME_MS || (index > 0 && point.time <= item.points[index - 1].time)) return { rows: [], keys: [], domain: null, invalid: `${item.label}: timestamps are invalid or out of order.` };
       if (point.value !== null && !Number.isFinite(point.value)) return { rows: [], keys: [], domain: null, invalid: `${item.label}: a value is not a finite number.` };
     }
     let segment: SeriesPoint[] = [];
@@ -106,6 +111,13 @@ export function valueAt(points: SeriesPoint[], time: number): SeriesPoint | null
   return found < 0 ? null : points[found];
 }
 
+/** Unpadded [min, max] of the drawn values (and zero when asked); rounded axes add their own headroom. */
+export function valueExtent(series: ChartSeries[], includeZero = false): [number, number] | null {
+  const values = series.flatMap(item => item.points.map(point => point.value).filter((value): value is number => value !== null));
+  if (includeZero) values.push(0);
+  return values.length ? [Math.min(...values), Math.max(...values)] : null;
+}
+
 /** Padded numeric domain for the values of the given series; flat lines get a visible band. */
 export function valueDomain(series: ChartSeries[], includeZero = false): [number, number] | null {
   const values = series.flatMap(item => item.points.map(point => point.value).filter((value): value is number => value !== null));
@@ -115,4 +127,133 @@ export function valueDomain(series: ChartSeries[], includeZero = false): [number
   // A flat series still gets a readable band: 1% of its level, or 0.01 around zero.
   const pad = high > low ? Math.max((high - low) * 0.08, Math.abs(high) * 0.0005) : Math.abs(high) * 0.01 || 0.01;
   return [low - pad, high + pad];
+}
+
+const cleanTick = (value: number) => {
+  const rounded = Number(value.toPrecision(12));
+  return rounded === 0 ? 0 : rounded;
+};
+
+/**
+ * Rounded axis ticks that cover [low, high] in steps of 1, 2, 2.5 or 5 × 10^n. Only the axis extent
+ * widens to the nearest tick; plotted values are never changed or clipped.
+ */
+export function niceTicks(low: number, high: number, count = 5, integer = false): { ticks: number[]; step: number } | null {
+  if (!Number.isFinite(low) || !Number.isFinite(high) || high < low || !Number.isFinite(high - low)) return null;
+  // A range flat relative to its magnitude, or so small it underflows, gets the flat-series band.
+  if (high - low <= Math.max(Math.abs(low), Math.abs(high)) * 1e-9 || high - low < 1e-250) {
+    const relative = Math.abs(high) * 0.01;
+    const pad = relative >= 1e-250 ? relative : integer ? 1 : 0.01; low -= pad; high += pad;
+  }
+  const raw = (high - low) / Math.max(1, count - 1);
+  const power = 10 ** Math.floor(Math.log10(raw));
+  let step = [1, 2, 2.5, 5, 10].map(multiple => cleanTick(multiple * power)).find(candidate => candidate >= raw * (1 - 1e-9)) ?? 10 * power;
+  if (integer) step = Math.max(1, Math.ceil(step));
+  const first = Math.floor(low / step + 1e-9), last = Math.ceil(high / step - 1e-9);
+  // Bounded, precision-safe iteration; null means no rounded axis (callers use the chart's own).
+  if (!(step > 0) || !Number.isSafeInteger(first) || !Number.isSafeInteger(last) || last - first > 50) return null;
+  const ticks: number[] = [];
+  for (let index = 0; index <= last - first; index++) ticks.push(cleanTick((first + index) * step));
+  // Near the largest finite number a tick can overflow; such a range has no rounded axis.
+  return ticks.every(Number.isFinite) && new Set(ticks).size === ticks.length && ticks.length >= 2 ? { ticks, step } : null;
+}
+
+/** Decimal places that write every multiple of `step` exactly (2.5 → 1, 0.25 → 2). */
+function stepDecimals(step: number) {
+  for (let decimals = 0; decimals <= 12; decimals++) {
+    const scaled = step * 10 ** decimals;
+    if (Math.abs(scaled - Math.round(scaled)) < 1e-6) return decimals;
+  }
+  return 12;
+}
+
+
+/**
+ * One label rule for a whole axis: the precision follows the tick step, so neighbouring ticks never
+ * mix forms. Steps below 0.001 use a compact exponent (+1e-4); exact values stay in tables.
+ */
+export function axisFormatter(step: number, signed = false) {
+  const prefix = (value: number) => signed && value > 0 ? '+' : '';
+  if (step > 0 && step < 1e-3) {
+    const exponent = Math.floor(Math.log10(step));
+    const decimals = stepDecimals(cleanTick(step / 10 ** exponent));
+    return (value: number) => value === 0 ? '0' : `${prefix(value)}${(value / 10 ** exponent).toFixed(decimals)}e${exponent}`;
+  }
+  const decimals = stepDecimals(step);
+  const grouped = new Intl.NumberFormat('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
+  return (value: number) => {
+    if (value === 0) return decimals ? (0).toFixed(decimals) : '0';
+    if (Math.abs(value) < 10_000) return `${prefix(value)}${value.toFixed(decimals)}`;
+    // Compact K/M/B/T only with enough digits to keep neighbouring ticks distinct (at most two);
+    // otherwise the full grouped number.
+    const unit = Math.min(12, 3 * Math.floor(Math.log10(Math.abs(value)) / 3));
+    const digits = stepDecimals(cleanTick(step / 10 ** unit));
+    if (digits > 2) return `${prefix(value)}${grouped.format(value)}`;
+    return `${prefix(value)}${new Intl.NumberFormat('en-US', { notation: 'compact', minimumFractionDigits: digits, maximumFractionDigits: digits }).format(value)}`;
+  };
+}
+
+const SUPERSCRIPT: Record<string, string> = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
+
+/**
+ * Axis labels with one shared multiplier for tiny steps: ticks read -3, -2, … and the unit heading
+ * carries ×10⁻⁴. The exponent follows the largest tick, so a narrow band near 0.00178 reads 1.76–1.80
+ * ×10⁻³. Only the label is divided; plotted and tabulated values stay exact.
+ */
+export function axisScale(step: number, signed = false, ticks: number[] = []): { multiplier: string | null; format: (value: number) => string } {
+  if (!(step > 0 && step < 1e-3)) return { multiplier: null, format: axisFormatter(step, signed) };
+  const largest = Math.max(0, ...ticks.map(Math.abs));
+  const exponent = Math.floor(Math.log10(largest > step ? largest : step));
+  const mantissa = axisFormatter(cleanTick(step / 10 ** exponent), signed);
+  return {
+    multiplier: `×10${String(exponent).split('').map(char => SUPERSCRIPT[char]).join('')}`,
+    format: value => mantissa(cleanTick(value / 10 ** exponent)),
+  };
+}
+
+const DAY_MS = 86_400_000;
+
+/**
+ * UTC-midnight ticks inside a multi-day domain at one whole-day stride (at most about seven labels).
+ * Ticks within 3% of either end are left out, so a centred date label is never cut by the plot edge.
+ */
+export function dayTicks([start, end]: [number, number], maxTicks = 7): number[] {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start || Math.abs(start) > MAX_TIME_MS || Math.abs(end) > MAX_TIME_MS) return [];
+  const stride = Math.max(1, Math.ceil((end - start) / DAY_MS / maxTicks)) * DAY_MS;
+  const edge = (end - start) * 0.03, first = Math.ceil(start / DAY_MS) * DAY_MS;
+  const ticks: number[] = [];
+  // Index-bounded: at most maxTicks + 1 candidates whatever the float arithmetic does.
+  for (let index = 0; index <= maxTicks; index++) {
+    const tick = first + index * stride;
+    if (tick > end) break;
+    if (tick - start >= edge && end - tick >= edge) ticks.push(tick);
+  }
+  return ticks;
+}
+
+/** Axis label for a ratio shown in percent (-0.0005 → -0.05%), at the precision of the tick step. */
+export function ratioPercentTick(value: number, step: number): string {
+  return `${axisFormatter(cleanTick(step * 100))(cleanTick(value * 100))}%`;
+}
+
+/**
+ * Rounded ticks and the axis extent they span. With `margin`, an extent that sits exactly on an outer
+ * tick gets headroom past it (the larger of 3% of the span and a quarter step; no extra label), so a
+ * line on that value does not merge with the frame; bars keep a flush zero baseline. Null when no
+ * rounded axis exists.
+ */
+export function roundedAxis(extent: [number, number] | null, { integer = false, margin = false }: { integer?: boolean; margin?: boolean } = {}) {
+  const nice = extent && niceTicks(extent[0], extent[1], 5, integer);
+  if (!nice) return null;
+  const first = nice.ticks[0], last = nice.ticks[nice.ticks.length - 1], room = margin ? Math.max((last - first) * 0.03, nice.step / 4) : 0;
+  const domain: [number, number] = [extent[0] === first ? first - room : first, extent[1] === last ? last + room : last];
+  // The scale needs a finite domain and span; otherwise the chart reports an unsupported range.
+  return domain.every(Number.isFinite) && Number.isFinite(domain[1] - domain[0]) ? { ...nice, domain } : null;
+}
+
+/** Marker presentation: up to three markers carry on-plot labels; one within 1% of the right edge gets room. */
+export function markerLayout(markers: ChartMarker[], [start, end]: [number, number]) {
+  const labelled = markers.length > 0 && markers.length <= 3;
+  const edgeRoom = labelled && end > start && markers.some(marker => end - marker.time <= (end - start) * 0.01);
+  return { labelled, edgeRoom };
 }

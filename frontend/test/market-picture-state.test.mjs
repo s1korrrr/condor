@@ -6,6 +6,7 @@ import {
   parseView,
   viewQuery,
   rankAssets,
+  relativePullbackCandidates,
   csvCell,
   normalizeView,
   heatmapColor,
@@ -37,6 +38,21 @@ test("ranking distinguishes warming coverage from a valid zero-return population
   assert.equal(mixed.qualified, 1);
   assert.equal(rankCoverageLabel(mixed.qualified, mixed.expected, 4), "1/5 qualified · 4 warming");
   assert.equal(rankSideEmptyLabel("negative laggards", mixed.qualified, mixed.expected, 4), "No negative laggards · 1/5 qualified");
+});
+
+test("relative pullbacks require qualified same-frame relative and short-return values", () => {
+  const metric = (value, status = "VALID") => ({ value, status });
+  const assets = [
+    { instrument_id: "b", relative: { BTC: metric(1) }, returns: { 60: metric(-0.5) } },
+    { instrument_id: "a", relative: { BTC: metric(0.5) }, returns: { 60: metric(-0.2) } },
+    { instrument_id: "c", relative: { BTC: metric(2, "WARMING") }, returns: { 60: metric(-2) } },
+    { instrument_id: "d", relative: { BTC: metric(2) }, returns: { 60: metric(null) } },
+    { instrument_id: "e", relative: { BTC: metric(-1) }, returns: { 60: metric(-2) } },
+  ];
+  const result = relativePullbackCandidates(assets, "BTC");
+  assert.equal(result.qualified, 3);
+  assert.equal(result.expected, 5);
+  assert.deepEqual(result.candidates.map((asset) => asset.instrument_id), ["b", "a"]);
 });
 
 const frame = (more = {}) => ({

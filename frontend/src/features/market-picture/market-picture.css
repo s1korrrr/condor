@@ -159,6 +159,7 @@
   order: -1;
   font-size: 10px;
 }
+.mp-source-state strong[data-freshness="FUTURE"],
 .mp-source-state strong[data-freshness="STALE"],
 .mp-source-state strong[data-freshness="LAGGING"],
 .mp-source-state strong[data-freshness="DEGRADED"] {
@@ -169,6 +170,56 @@
   color: var(--mp-muted);
   font-size: 10px;
 }
+.mp-evidence-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 190px), 1fr));
+  gap: 8px;
+}
+/* Eight families read as two even rows on wide screens instead of seven plus an orphan. */
+@media (min-width: 1100px) {
+  .mp-evidence-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+.mp-evidence-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 10px;
+  padding: 10px;
+  border: 1px solid var(--mp-border);
+  border-radius: 8px;
+  background: var(--mp-raised);
+}
+.mp-evidence-row strong { font-size: 12px; }
+.mp-evidence-row span { color: var(--mp-warning); font: 10px ui-monospace, monospace; text-align: right; }
+.mp-evidence-row span[data-state="OBSERVED"] { color: var(--mp-positive); }
+.mp-evidence-row small { grid-column: 1 / -1; color: var(--mp-muted); line-height: 1.45; }
+.mp-evidence-scenarios {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr));
+  gap: 8px 20px;
+  margin: 12px 0 0;
+  padding: 9px 11px;
+  border-top: 1px solid var(--mp-border);
+}
+.mp-evidence-scenarios p { margin: 0; color: var(--mp-muted); font-size: 11px; line-height: 1.5; }
+.mp-evidence-scenarios b { color: var(--mp-text); }
+.mp-relative-context { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: 8px; margin-top: 12px; }
+.mp-relative-context > div { display: grid; align-content: start; gap: 4px; }
+.mp-relative-context > div small,
+.mp-relative-context > button small { color: var(--mp-muted); }
+.mp-relative-context > button { display: grid; gap: 3px; padding: 8px; color: var(--mp-text); text-align: left; background: var(--mp-raised); border: 1px solid var(--mp-border); border-radius: 7px; }
+.mp-relative-context > button b { color: var(--mp-positive); }
+.mp-relative-context > p { grid-column: 1 / -1; margin: 0; }
+.mp-relative-rank-changes { display: grid; align-content: start; gap: 6px; min-width: 0; }
+.mp-relative-rank-changes > small { color: var(--mp-muted); overflow-wrap: anywhere; }
+.mp-rank-movement-columns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.mp-rank-movement-columns > div { display: grid; align-content: start; gap: 4px; min-width: 0; }
+.mp-rank-movement-columns > div > b { color: var(--mp-muted); font-size: 10px; text-transform: uppercase; }
+.mp-rank-movement-columns button { display: flex; justify-content: space-between; gap: 6px; min-width: 0; padding: 5px 7px; color: var(--mp-text); text-align: left; background: var(--mp-raised); border: 1px solid var(--mp-border); border-radius: 6px; }
+.mp-rank-movement-columns button strong { color: var(--mp-positive); white-space: nowrap; }
+.mp-rank-movement-columns > div[aria-label="Weakening relative ranks"] button strong { color: var(--mp-negative); }
+.mp-candle-anomalies { display: grid; gap: 7px; min-width: 0; margin-top: 12px; padding-top: 9px; border-top: 1px solid var(--mp-border); }
+.mp-candle-anomalies h3 { margin: 0; padding: 0 11px; color: var(--mp-text); font-size: 11px; font-weight: 600; letter-spacing: .35px; text-transform: uppercase; }
+.mp-candle-anomalies th small { display: block; margin-top: 4px; max-width: 340px; color: var(--mp-muted); font-size: 10px; font-weight: 400; line-height: 1.35; text-transform: none; white-space: normal; }
 .mp-icon-button {
   display: grid;
   place-items: center;
@@ -857,7 +908,7 @@
   justify-content: space-between;
   gap: 15px;
   position: sticky;
-  top: -22px;
+  top: 0;
   z-index: 5;
   padding: 12px 0 15px;
   margin-top: -8px;
@@ -1247,6 +1298,26 @@
   }
   .mp-gauge-button .mp-coverage {
     font-size: 10px;
+  }
+}
+@media (max-width: 600px), (pointer: coarse) {
+  .mp-page button,
+  .mp-page input,
+  .mp-page select,
+  .mp-drawer button,
+  .mp-drawer input,
+  .mp-drawer select,
+  .mp-drawer textarea {
+    min-height: 44px;
+  }
+  .mp-page .mp-segment button {
+    min-width: 44px;
+    min-height: 44px;
+  }
+  .mp-drawer button[aria-label="Close details"] {
+    min-width: 44px;
+    display: grid;
+    place-items: center;
   }
 }
 @media (prefers-reduced-motion: reduce) {

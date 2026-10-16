@@ -100,10 +100,10 @@
 .q-dt .q-dt__sort { all: unset; box-sizing: border-box; display: flex; width: 100%; gap: 6px; align-items: center; justify-content: space-between; padding: 7px 10px 7px 8px; cursor: pointer; color: var(--q-muted, var(--color-text-muted, #a4bacb)); font-size: 11px; font-weight: 500; }
 .q-dt [data-kind=number] .q-dt__sort { flex-direction: row-reverse; }
 .q-dt__sort span { overflow: hidden; text-overflow: ellipsis; }
-.q-dt__sort i { font-style: normal; font-size: 9px; opacity: .45; }
+.q-dt__sort i { font-style: normal; font-size: 9px; }
 .q-dt th[aria-sort=ascending] .q-dt__sort, .q-dt th[aria-sort=descending] .q-dt__sort { color: var(--q-text, var(--color-text, #e5e7eb)); }
 .q-dt th[aria-sort=ascending] .q-dt__sort i, .q-dt th[aria-sort=descending] .q-dt__sort i { opacity: 1; color: var(--q-blue, var(--color-primary, #259aff)); }
-.q-dt__sort:focus-visible { outline: 2px solid var(--q-blue, var(--color-primary, #259aff)); outline-offset: -2px; }
+.q-dt .q-dt__sort:focus-visible { outline: 2px solid var(--q-blue, var(--color-primary, #259aff)); outline-offset: -2px; }
 .q-dt__filter { display: block; box-sizing: border-box; width: calc(100% - 12px); margin: 0 6px 6px; border: 1px solid var(--q-border, var(--color-border, #20313e)); background: var(--q-surface, var(--color-surface, #0a151d)); color: var(--q-text, var(--color-text, #e5e7eb)); border-radius: 4px; padding: 3px 6px; font: inherit; font-size: 11px; }
 .q-dt__resize { position: absolute; top: 0; right: 0; width: 7px; height: 100%; cursor: col-resize; touch-action: none; user-select: none; }
 .q-dt__resize::after { content: ''; position: absolute; top: 25%; bottom: 25%; right: 3px; width: 1px; background: var(--q-border, var(--color-border, #20313e)); }

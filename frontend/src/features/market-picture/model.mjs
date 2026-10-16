@@ -29,6 +29,12 @@ export function acceptFrame(previous, incoming) {
   return incoming;
 }
 
+/** Neither polling nor replay may publish an observation before it was available. */
+export function requireFrameAvailable(frame, now) {
+  if (frame.available_at_ms > now)
+    throw new Error(`Market Picture future frame unavailable until ${new Date(frame.available_at_ms).toISOString()}.`);
+}
+
 export function ageState(frame, now, frozen) {
   if (!frame) return { mode: "UNAVAILABLE", freshness: "STALE", ageMs: null };
   return {
@@ -49,6 +55,11 @@ export function ageState(frame, now, frozen) {
           : "FRESH",
     ageMs: Math.max(0, now - frame.cutoff_ms),
   };
+}
+
+/** Replay uses the recorded decision time, but freezing cannot advance the clock. */
+export function observationAsOf(frame, now, frozen) {
+  return frozen && frame ? Math.min(frame.available_at_ms, now) : now;
 }
 
 export function normalizeView(value = {}) {
@@ -108,6 +119,22 @@ export function rankAssets(assets, valueFor, limit = 5) {
   };
 }
 
+/** Current pullback screen; both owner metrics must be valid for the same frame. */
+export function relativePullbackCandidates(assets, benchmark, limit = 5) {
+  const qualified = assets.filter((asset) => {
+    const relative = asset.relative?.[benchmark];
+    const shortReturn = asset.returns?.["60"];
+    return relative?.status === "VALID" && Number.isFinite(relative.value) &&
+      shortReturn?.status === "VALID" && Number.isFinite(shortReturn.value);
+  });
+  const candidates = qualified
+    .filter((asset) => asset.relative[benchmark].value > 0 && asset.returns["60"].value < 0)
+    .sort((a, b) => b.relative[benchmark].value - a.relative[benchmark].value ||
+      a.instrument_id.localeCompare(b.instrument_id))
+    .slice(0, limit);
+  return { candidates, qualified: qualified.length, expected: assets.length };
+}
+
 export function rankEmptyLabel(qualified, expected, warming) {
   if (qualified > 0) return null;
   return warming > 0
@@ -126,6 +153,8 @@ export function rankSideEmptyLabel(side, qualified, expected, warming) {
 }
 
 const durationLabel = (ms) => {
+  if (ms < 60_000) return "<1m";
+  if (ms < 3_600_000) return `${Math.floor(ms / 60_000)}m`;
   const hours = ms / 3_600_000;
   return hours < 24 ? `${Math.max(0, Math.floor(hours))}h` : `${(hours / 24).toFixed(1).replace(/\.0$/, "")}d`;
 };
@@ -136,6 +165,7 @@ export function marketPulseWindow(history, window) {
   if (!history.length) return { samples: [], label: `Requested ${window} · no retained observations` };
   const end = history[history.length - 1].time;
   const samples = history.filter((point) => point.time >= end - requestedMs);
+  if (samples.length === 1) return { samples, label: `Requested ${window} · single retained observation` };
   const availableMs = Math.max(0, samples[samples.length - 1].time - samples[0].time);
   return { samples, label: `Requested ${window} · available ${durationLabel(availableMs)}` };
 }
@@ -150,9 +180,10 @@ export function heatmapColor(value) {
   if (value == null || !Number.isFinite(value)) return "#182b3d";
   if (value === 0) return "#536b80";
   const intensity = Math.min(Math.abs(value) / 10, 1);
+  // Keep the fixed pale treemap labels above 4.5:1 across the saturated palette.
   return value > 0
-    ? `hsl(162 83% ${18 + 24 * intensity}%)`
-    : `hsl(351 70% ${22 + 29 * intensity}%)`;
+    ? `hsl(162 83% ${18 + 8 * intensity}%)`
+    : `hsl(351 70% ${22 + 26 * intensity}%)`;
 }
 /** Layout area only. Owner weights are prior-day quote-volume shares. */
 export function heatmapAreas(weights, equal = false) {

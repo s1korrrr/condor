@@ -5,7 +5,7 @@ export function containDialogTab(event: KeyboardEvent<HTMLDialogElement>) {
   if (event.key !== "Tab") return;
   const dialog = event.currentTarget;
   const stops = Array.from(dialog.querySelectorAll<HTMLElement>(
-    'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), [tabindex], [contenteditable="true"]',
+    'button:not(:disabled), a[href], input:not(:disabled), select:not(:disabled), textarea:not(:disabled), details > summary:first-of-type, [tabindex], [contenteditable="true"]',
   )).filter((element) => element.tabIndex >= 0 && element.getClientRects().length > 0 && !element.matches(":disabled"));
   const first = stops[0];
   const last = stops[stops.length - 1];

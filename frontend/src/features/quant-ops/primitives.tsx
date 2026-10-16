@@ -2,7 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { assetColor, formatDecimal, formatSigned, metricTone } from './format';
 import { describePanelState, PANEL_STATE_LABEL, type PanelState } from './panel-state';
 import { BarsChart, DonutChart, SparkChart, TimeSeriesChart } from './kit/charts';
-import { CHART } from './kit/series';
+import { CHART, ratioPercentTick } from './kit/series';
 import { TileGrid } from './kit/grid';
 
 /** Spec §5.4 glyph: one per panel, tooltip carries the exact reason and observation time. */
@@ -74,7 +74,7 @@ const pctTick = (value: number) => `${(value * 100).toFixed(1)}%`;
 export function DrawdownChart({ series, worst, height = 220 }: { series: SeriesPoint[]; worst: SeriesPoint | null; height?: number }) {
   const known = series.filter(point => point.value != null);
   if (known.length < 2) return <p className="q-empty">Drawdown needs two complete equity observations in the range.</p>;
-  return <TimeSeriesChart ariaLabel={`Drawdown, worst ${worst?.value == null ? 'unavailable' : pctTick(worst.value)}`} height={height} includeZero leftFormat={pctTick} signed
+  return <TimeSeriesChart ariaLabel={`Drawdown, worst ${worst?.value == null ? 'unavailable' : pctTick(worst.value)}`} height={height} includeZero leftFormat={pctTick} leftTickFormat={ratioPercentTick} signed
     series={[{ id: 'drawdown', label: 'Drawdown', color: CHART.negative, area: true, points: series }]}
     highlight={worst?.value == null ? null : { time: worst.time, value: worst.value, label: `Max DD ${pctTick(worst.value)}` }} />;
 }

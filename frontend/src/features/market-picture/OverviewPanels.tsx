@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useState } from "react";
 import {
   Bar,
   BarChart,
@@ -21,7 +21,7 @@ import { RingGauge } from "@/features/quant-ops/kit/gauges";
 import { TileGrid } from "@/features/quant-ops/kit/grid";
 import { Empty, Panel } from "./Primitives";
 
-export function MarketHeatmapPanel({
+function MarketHeatmapPanelView({
   frame,
   selected,
   select,
@@ -92,7 +92,7 @@ export function MarketHeatmapPanel({
         </select>
       </div>
       <div className="mp-heatmap-plot">
-        {!data.length ? (
+        {!visible.length ? (
           <Empty>No assets in this sector.</Empty>
         ) : showList ? (
           <div className="mp-heatmap-list">
@@ -108,6 +108,8 @@ export function MarketHeatmapPanel({
               </button>
             ))}
           </div>
+        ) : !data.length ? (
+          <Empty>No qualified 24h returns in this sector.</Empty>
         ) : (
           <ResponsiveContainer
             width="100%"
@@ -215,8 +217,9 @@ export function MarketHeatmapPanel({
     </Panel>
   );
 }
+export const MarketHeatmapPanel = memo(MarketHeatmapPanelView);
 
-export function ReturnDistributionPanel({
+function ReturnDistributionPanelView({
   frame,
   selectCohort,
 }: {
@@ -377,6 +380,7 @@ export function ReturnDistributionPanel({
     </Panel>
   );
 }
+export const ReturnDistributionPanel = memo(ReturnDistributionPanelView);
 
 const PREDICATES = [
   ["above_ema21", "Above EMA21", "Close > EMA21", "var(--mp-positive)"],
@@ -390,7 +394,7 @@ const PREDICATES = [
 ] as const;
 
 /** Share of the universe satisfying each observed predicate; a ring per predicate. */
-export function ParticipationPanel({
+function ParticipationPanelView({
   frame,
   selectPredicate,
 }: {
@@ -430,8 +434,9 @@ export function ParticipationPanel({
     >
       <TileGrid min={132} label="Participation predicates">{rings}</TileGrid>
       <footer className="mp-panel-footnote">
-        Predicates overlap. Each share uses its own qualified denominator. Select one to highlight its members.
+        Predicates overlap. Each share uses its own qualified denominator. Select one to filter the instrument table to its qualified members.
       </footer>
     </Panel>
   );
 }
+export const ParticipationPanel = memo(ParticipationPanelView);

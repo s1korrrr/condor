@@ -1,8 +1,8 @@
-import { useEffect, useMemo, useState } from "react";
+import { memo, useEffect, useMemo, useState } from "react";
 import { BarsChart } from "@/features/quant-ops/kit/charts";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
 import { CHART } from "@/features/quant-ops/kit/series";
-import { BENCHMARKS, rankAssets, rankCoverageLabel } from "./model.mjs";
+import { BENCHMARKS, rankAssets, rankCoverageLabel, relativePullbackCandidates } from "./model.mjs";
 import {
   assetState,
   derivedRegime,
@@ -22,6 +22,8 @@ import {
 import { api } from "@/lib/api";
 import { boundedJson, projectCorrelations } from "./source";
 import { Metric, Panel, Sparkline } from "./Primitives";
+import type { MetricCohortSelection } from "./metric-cohort.mjs";
+import { instrumentExportMetadata, instrumentRows } from "./instrument-view";
 
 interface AssetPanelProps {
   frame: DisplayFrame | null;
@@ -59,11 +61,12 @@ function HeatCell({ asset, horizon }: { asset: DisplayAsset; horizon: string }) 
   const heat = returnHeat(asset, horizon);
   if (heat.value === null) return <span className="mp-heat" data-empty>—</span>;
   const tone = heat.value === 0 ? "var(--mp-unchanged)" : heat.value > 0 ? "var(--mp-positive)" : "var(--mp-negative)";
+  // Cap the tint at 44% so small return labels remain readable at full intensity.
   return (
     <span
       className="mp-heat"
       title={`${horizonLabel(horizon)} return ${asset.returns[horizon].original}% · tint = move ÷ 2× its volatility-implied move`}
-      style={{ background: `color-mix(in srgb, ${tone} ${Math.round(8 + heat.intensity * 52)}%, transparent)` }}
+      style={{ background: `color-mix(in srgb, ${tone} ${Math.round(8 + heat.intensity * 36)}%, transparent)` }}
     >
       {signedPercent(heat.value, Math.abs(heat.value) < 0.1 ? 3 : 2)}
     </span>
@@ -71,10 +74,10 @@ function HeatCell({ asset, horizon }: { asset: DisplayAsset; horizon: string }) 
 }
 
 /** Per-instrument strip: price, returns on every horizon as heat cells, momentum and trend state. */
-export function InstrumentsPanel({ frame, selected, select, cohort, search }: AssetPanelProps & { search: string }) {
+function InstrumentsPanelView({ frame, selected, select, cohort, search, displayFilter = null, asOf = frame?.available_at_ms ?? 0 }: AssetPanelProps & { search: string; displayFilter?: MetricCohortSelection | null; asOf?: number }) {
   const rows = useMemo(
-    () => (frame?.assets ?? []).filter((a) => symbolMatch(a, search)),
-    [frame, search],
+    () => instrumentRows(frame, search, displayFilter),
+    [frame, search, displayFilter],
   );
   const columns = useMemo<TableColumn<DisplayAsset>[]>(
     () => [
@@ -132,9 +135,13 @@ export function InstrumentsPanel({ frame, selected, select, cohort, search }: As
           initialSort={{ id: "r1440", desc: true }}
           pageSize={25}
           exportName="market-instruments.csv"
+          exportMetadata={instrumentExportMetadata(frame, displayFilter, search, asOf)}
           dense
           rowState={(a) => (a.instrument_id === selected ? "highlight" : cohort.has(a.instrument_id) ? "highlight" : undefined)}
-          emptyText="No symbols match this search."
+          emptyText={displayFilter?.status === "unavailable"
+            ? `Metric filter unavailable · ${displayFilter.reasons.join(", ")}. Reapply or clear the filter.`
+            : displayFilter && !displayFilter.instrumentIds.length ? "No instruments satisfy this metric in its qualified population."
+            : "No symbols match this search."}
         />
       </div>
       <footer className="mp-panel-footnote">
@@ -143,9 +150,10 @@ export function InstrumentsPanel({ frame, selected, select, cohort, search }: As
     </Panel>
   );
 }
+export const InstrumentsPanel = memo(InstrumentsPanelView);
 
 /** Derived (or stored) regime per instrument, with the observed inputs shown beside the label. */
-export function RegimePanel({ frame, selected, select, cohort, search }: AssetPanelProps & { search: string }) {
+function RegimePanelView({ frame, selected, select, cohort, search }: AssetPanelProps & { search: string }) {
   const rows = useMemo(
     () => (frame?.assets ?? []).filter((a) => symbolMatch(a, search)),
     [frame, search],
@@ -218,9 +226,10 @@ export function RegimePanel({ frame, selected, select, cohort, search }: AssetPa
     </Panel>
   );
 }
+export const RegimePanel = memo(RegimePanelView);
 
 /** Sorted per-instrument return bars: works for any universe size, 5 assets included. */
-export function LeadersLaggardsPanel({ frame, select, selected, cohort, benchmark }: AssetPanelProps & { benchmark: string }) {
+function LeadersLaggardsPanelView({ frame, select, selected, cohort, benchmark }: AssetPanelProps & { benchmark: string }) {
   const [sort, setSort] = useState("1440");
   const value = (a: DisplayAsset) => (sort === "relative" ? (a.relative[benchmark]?.value ?? null) : (a.returns[sort]?.value ?? null));
   const assets = frame?.assets ?? [];
@@ -230,6 +239,22 @@ export function LeadersLaggardsPanel({ frame, select, selected, cohort, benchmar
     .map((a) => ({ a, v: value(a) }))
     .filter((row): row is { a: DisplayAsset; v: number } => row.v !== null)
     .sort((x, y) => y.v - x.v);
+  const pullbacks = relativePullbackCandidates(assets, benchmark);
+  const relativeChange = frame?.comparisons[`relative_strength/${benchmark.toLowerCase()}`];
+  const relativeTrend = relativeChange?.status === "VALID" && relativeChange.value != null
+    ? relativeChange.value > 0 ? "Strengthening" : relativeChange.value < 0 ? "Weakening" : "Unchanged"
+    : "Unavailable";
+  const comparisonContext = frame?.comparisonContext;
+  const rankChanges = frame?.relativeStrengthChanges ?? null;
+  const rankChangesQualified = rankChanges !== null && rankChanges.valid === rankChanges.expected &&
+    rankChanges.expected > 0 && rankChanges.cohortHash !== null;
+  const rankMovers = rankChangesQualified
+    ? assets.map(asset => ({ asset, delta: rankChanges.rankDeltas[asset.instrument_id] }))
+      .filter((row): row is { asset: DisplayAsset; delta: number } => row.delta !== null && row.delta !== undefined && row.delta !== 0)
+      .sort((a, b) => b.delta - a.delta || a.asset.instrument_id.localeCompare(b.asset.instrument_id))
+    : [];
+  const improvingRank = rankMovers.filter(row => row.delta > 0).slice(0, 5);
+  const weakeningRank = rankMovers.filter(row => row.delta < 0).sort((a, b) => a.delta - b.delta || a.asset.instrument_id.localeCompare(b.asset.instrument_id)).slice(0, 5);
   const unit = sort === "relative" ? " pp" : "%";
   const label = sort === "relative" ? `vs ${benchmark} (pp)` : `${horizonLabel(sort)} return`;
   return (
@@ -275,16 +300,64 @@ export function LeadersLaggardsPanel({ frame, select, selected, cohort, benchmar
           )) : <small>None negative</small>}
         </div>
       </div>
+      <div className="mp-relative-context">
+        <div>
+          <span className="mp-kicker">Relative strength change</span>
+          <strong>{relativeTrend}</strong>
+          <small title={relativeChange?.definition ?? "No prior compatible comparison reference is attached."}>
+            {relativeChange?.status === "VALID" && relativeChange.value != null
+              ? `Median matched-cohort change in 24h excess return · ${numberText(relativeChange.value, 2, true)} pp over 1h · ${comparisonContext?.common ?? relativeChange.valid}/${comparisonContext?.current ?? relativeChange.expected} matched · baseline ${comparisonContext?.baselineCutoff == null ? "unavailable" : new Date(comparisonContext.baselineCutoff).toISOString()}`
+              : "Unavailable · no qualified prior relative-strength reference"}
+          </small>
+        </div>
+        <div>
+          <span className="mp-kicker">24h relative strength · 1h pullback</span>
+          <small>{pullbacks.candidates.length} candidates · {pullbacks.qualified}/{pullbacks.expected} have both qualified owner metrics</small>
+        </div>
+        <div className="mp-relative-rank-changes">
+          <span className="mp-kicker">1h relative-rank movement</span>
+          <small title={rankChanges ? `Definition ${rankChanges.definitionHash} · source ${rankChanges.sourceHash ?? "unavailable"} · cohort ${rankChanges.cohortHash ?? "unavailable"}` : "No owner-produced rank-change projection is attached."}>
+            {rankChangesQualified
+              ? `${rankChanges.valid}/${rankChanges.expected} common instruments · baseline ${rankChanges.baselineCutoff == null ? "unavailable" : new Date(rankChanges.baselineCutoff).toISOString()} · positive means rank improvement`
+              : `Unavailable · ${rankChanges?.reasons.join(", ") || "no qualified exact 1h rank comparison"}`}
+          </small>
+          {rankChangesQualified ? <div className="mp-rank-movement-columns">
+            <div aria-label="Improving relative ranks">
+              <b>Improving</b>
+              {improvingRank.length ? improvingRank.map(({ asset, delta }) => (
+                <button key={asset.instrument_id} onClick={() => select(asset.instrument_id)} aria-pressed={selected === asset.instrument_id}>
+                  {asset.symbol}<strong>↑ {delta} {Math.abs(delta) === 1 ? "place" : "places"}</strong>
+                </button>
+              )) : <small>No improving ranks.</small>}
+            </div>
+            <div aria-label="Weakening relative ranks">
+              <b>Weakening</b>
+              {weakeningRank.length ? weakeningRank.map(({ asset, delta }) => (
+                <button key={asset.instrument_id} onClick={() => select(asset.instrument_id)} aria-pressed={selected === asset.instrument_id}>
+                  {asset.symbol}<strong>↓ {Math.abs(delta)} {Math.abs(delta) === 1 ? "place" : "places"}</strong>
+                </button>
+              )) : <small>No weakening ranks.</small>}
+            </div>
+          </div> : null}
+        </div>
+        {pullbacks.candidates.length ? pullbacks.candidates.map((asset) => (
+          <button key={asset.instrument_id} aria-pressed={selected === asset.instrument_id} onClick={() => select(asset.instrument_id)}>
+            {asset.symbol}<b>{signedPercent(asset.relative[benchmark].value!, 2)} vs {benchmark}</b><small>1h {signedPercent(asset.returns["60"].value!, 2)}</small>
+          </button>
+        )) : <span className="mp-muted">No qualified current pullback candidates.</span>}
+        <p className="mp-panel-footnote">Predicate: positive 24h arithmetic excess return and negative 1h asset return. Pullbacks use qualified same-frame owner metrics; strengthening or weakening uses the matched one-hour comparison reference and remains unavailable when its baseline is missing.</p>
+      </div>
     </Panel>
   );
 }
+export const LeadersLaggardsPanel = memo(LeadersLaggardsPanelView);
 
 /**
  * Pearson correlation of hourly log returns. The panel carries the window its owner computed (the
  * full 90D, or a shorter labelled window while history is still building). With every coefficient
  * withheld it shows the real paired-history size instead of staying blank.
  */
-export function CorrelationsPanel({
+function CorrelationsPanelView({
   frame, selected, select, correlations, benchmark, setBenchmark, openMatrix,
 }: AssetPanelProps & {
   correlations: DisplayCorrelation[];
@@ -354,6 +427,7 @@ export function CorrelationsPanel({
     </Panel>
   );
 }
+export const CorrelationsPanel = memo(CorrelationsPanelView);
 
 export function CorrelationMatrix({
   frame,

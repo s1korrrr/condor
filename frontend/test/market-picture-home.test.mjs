@@ -41,11 +41,80 @@ const { load } = frontendModules({
   "./contract.mjs": contract,
   "./stored.mjs": stored,
   "@/lib/api": { api: {} },
-});
+}, { "features/market-picture/MarketPulse.tsx": ["PulseDataTable", "pulseDataRows", "VerdictCard"] });
 const read = (file) =>
   JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/${file}`, import.meta.url), "utf8"));
 const metric = (value, extra = {}) => ({ value, original: String(value), unit: "x", status: value == null ? "UNAVAILABLE" : "VALID", reasons: [], valid: 5, expected: 5, available: 1, expires: 2, definition: "d v1", ...extra });
 const HORIZONS = ["1", "5", "15", "60", "240", "1440"];
+
+test("future microstructure never qualifies before both the frame and row are available", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const source = await fixtureFrame("market-picture.m1-components.fixture.json");
+  const decision = source.available_at_ms;
+  for (const pending of ["frame", "row", "both"]) {
+    const frame = structuredClone(source);
+    const flow = frame.microstructure.flows.find(row => row.confirmationImbalance != null && row.complete && !row.reasons.length);
+    const book = frame.microstructure.liquidity.find(row => row.vwap != null && Number(row.uncovered) === 0);
+    assert.ok(flow && book);
+    frame.microstructure.flows = [flow];
+    frame.microstructure.liquidity = [book];
+    Object.assign(book, { reasons: [], totalCostBps: "25", costPercentile7d: 0.75, costPercentileReasons: [] });
+    frame.available_at_ms = pending === "row" ? decision - 2 : decision;
+    flow.available = book.available = pending === "frame" ? decision - 2 : decision;
+    const render = (Component, asOf) => renderToStaticMarkup(React.createElement(Component, { frame, horizon: "15", asOf }));
+    const future = render(pulse.MicrostructurePanel, decision - 1);
+    const families = render(pulse.EvidenceMatrixPanel, decision - 1);
+    const tables = [...future.matchAll(/<tbody>(.*?)<\/tbody>/gs)].map(match => match[1]);
+    const cells = html => [...html.matchAll(/<td(?:\s[^>]*)?>(.*?)<\/td>/gs)].map(match => match[1]);
+    assert.deepEqual(cells(tables[0]).slice(0, 7), Array(7).fill("Unavailable · FUTURE"), `${pending}: no future flow values`);
+    assert.deepEqual(cells(tables[1]).slice(0, 8), Array(8).fill("Unavailable · FUTURE"), `${pending}: no future book values`);
+    assert.match(future, /FUTURE/);
+    assert.doesNotMatch(families, /OBSERVED · QUALIFIED/);
+    assert.match(families, /data-state="OBSERVED · FUTURE"/);
+    assert.match(families, /0 complete, reason-free, available and unexpired/);
+    const available = render(pulse.MicrostructurePanel, decision);
+    assert.doesNotMatch(available, /FUTURE/);
+    assert.match(available, /75 percentile/);
+    assert.match(available, /25 bps/);
+    assert.match(available, /\+0\.2/);
+    assert.match(available, /USDC 21\.614/);
+    assert.match(render(pulse.EvidenceMatrixPanel, decision), /OBSERVED · QUALIFIED/);
+  }
+});
+
+test("frozen assessment never advances the clock to a future frame", () => {
+  const frame = { available_at_ms: 1000 };
+  assert.equal(model.observationAsOf(frame, 999, false), 999);
+  assert.equal(model.observationAsOf(frame, 999, true), 999);
+  assert.equal(model.observationAsOf(frame, 1000, true), 1000);
+  assert.equal(model.observationAsOf(frame, 2000, true), 1000);
+  assert.equal(model.observationAsOf(frame, 2000, false), 2000);
+  assert.equal(model.observationAsOf(null, 2000, true), 2000);
+});
+
+test("microstructure qualification ends exactly at the earlier frame or row expiry", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const source = await fixtureFrame("market-picture.m1-components.fixture.json");
+  const expiry = source.available_at_ms + 5_000;
+  for (const firstExpiry of ["frame", "row"]) {
+    const frame = structuredClone(source);
+    const flow = frame.microstructure.flows.find(row => row.confirmationImbalance != null && row.complete && !row.reasons.length);
+    const book = frame.microstructure.liquidity.find(row => row.vwap != null && Number(row.uncovered) === 0);
+    frame.microstructure.flows = [flow];
+    frame.microstructure.liquidity = [book];
+    frame.expires_at_ms = firstExpiry === "frame" ? expiry : expiry + 1;
+    flow.expires = book.expires = firstExpiry === "row" ? expiry : expiry + 1;
+    Object.assign(book, { reasons: [], totalCostBps: "25", costPercentile7d: 0.75, costPercentileReasons: [] });
+    const render = (Component, asOf) => renderToStaticMarkup(React.createElement(Component, { frame, horizon: "15", asOf }));
+    assert.match(render(pulse.EvidenceMatrixPanel, expiry - 1), /OBSERVED · QUALIFIED/);
+    assert.match(render(pulse.MicrostructurePanel, expiry - 1), /75 percentile/);
+    const expired = render(pulse.MicrostructurePanel, expiry);
+    assert.match(expired, /Unavailable · EXPIRED/);
+    assert.doesNotMatch(expired, /75 percentile|25 bps/);
+    assert.doesNotMatch(render(pulse.EvidenceMatrixPanel, expiry), /OBSERVED · QUALIFIED/);
+    assert.match(render(pulse.EvidenceMatrixPanel, expiry), /OBSERVED · EXPIRED/);
+  }
+});
 
 function frameWith({ pressure = {}, mean = {}, vol = 0.5, advancing = 3 } = {}) {
   return {
@@ -56,6 +125,52 @@ function frameWith({ pressure = {}, mean = {}, vol = 0.5, advancing = 3 } = {}) 
     breadth: Object.fromEntries(HORIZONS.map((h) => [h, { advancing, declining: 5 - advancing, unchanged: 0, valid: 5, expected: 5, positive: metric(advancing / 5), negative: metric((5 - advancing) / 5), flat: metric(0) }])),
   };
 }
+
+function completeVerdictHistory(cutoff, pressure = 0) {
+  return Array.from({ length: 360 }, (_, i) => ({
+    time: cutoff - (360 - i) * 60_000,
+    gapBefore: false,
+    breadth: Object.fromEntries(HORIZONS.map((h) => [h, { pressure }])),
+  }));
+}
+
+test("positive verdicts require current data and historical inspection stays explicit", () => {
+  const { VerdictCard } = load("features/market-picture/MarketPulse.tsx");
+  const frame = {
+    ...frameWith({ pressure: Object.fromEntries(HORIZONS.map(h => [h, 3])), mean: { 15: 5 } }),
+    cutoff_ms: 100_000, available_at_ms: 101_000, expires_at_ms: 220_000,
+  };
+  const stateHistory = completeVerdictHistory(frame.cutoff_ms, 3);
+  const render = (asOf, historical = false) => renderToStaticMarkup(React.createElement(VerdictCard, {
+    frame, horizon: "15", history: stateHistory, smooth: false, asOf, historical,
+  }));
+  for (const [now, state] of [[100_999, "FUTURE"], [190_001, "LAGGING"], [220_000, "STALE"]]) {
+    const html = render(now);
+    assert.match(html, new RegExp(`Unavailable · ${state}`));
+    assert.doesNotMatch(html, /data-state="risk-on"|mp-score__fill|Market state: Risk-on/);
+  }
+  assert.match(render(101_000), /data-state="risk-on"/);
+  const historical = render(101_000, true);
+  assert.match(historical, /Recorded market state: Risk-on/);
+  assert.match(historical, /data-state="historical"/);
+  assert.doesNotMatch(historical, /data-state="risk-on"/);
+  assert.match(render(100_999, true), /Unavailable · FUTURE/);
+});
+
+test("stale or lagging breadth cannot produce positive conditional readings", () => {
+  const { EvidenceMatrixPanel } = load("features/market-picture/MarketPulse.tsx");
+  const frame = {
+    ...frameWith({ pressure: Object.fromEntries(HORIZONS.map(h => [h, 3])), advancing: 5 }),
+    cutoff_ms: 100_000, available_at_ms: 101_000, expires_at_ms: 220_000,
+    sourceCapabilities: [],
+  };
+  for (const [asOf, state] of [[190_001, "LAGGING"], [220_000, "STALE"]]) {
+    const html = renderToStaticMarkup(React.createElement(EvidenceMatrixPanel, { frame, horizon: "15", asOf }));
+    assert.match(html, new RegExp(`data-state="${state}"`));
+    assert.match(html, /Deterministic reading unavailable/);
+    assert.match(html, /Continuation conditions are unavailable/);
+  }
+});
 
 test("verdict averages the three disclosed components and applies the published thresholds", () => {
   const strong = marketVerdict(frameWith({ pressure: Object.fromEntries(HORIZONS.map((h) => [h, 3])), mean: { 15: 5 } }), "15");
@@ -191,7 +306,7 @@ async function fixtureFrame(name) {
   return projectFrame(await validateFrame(read(name), { allowFixture: true }));
 }
 
-test("home sections render real frames without printing Unavailable", async () => {
+test("home sections render current frames with explicit evidence-gated states", async () => {
   const pulse = load("features/market-picture/MarketPulse.tsx");
   const assets = load("features/market-picture/AssetPanels.tsx");
   const overview = load("features/market-picture/OverviewPanels.tsx");
@@ -203,14 +318,299 @@ test("home sections render real frames without printing Unavailable", async () =
     const markup = [
       React.createElement(pulse.MarketPulseHero, { frame, history, horizon: "15", window: "24h", setHorizon: noop, setWindow: noop, replay: noop }),
       React.createElement(pulse.MarketSnapshotTiles, { frame, history, window: "24h" }),
+      React.createElement(pulse.EvidenceMatrixPanel, { frame, horizon: "15" }),
       React.createElement(assets.InstrumentsPanel, common),
       React.createElement(assets.RegimePanel, common),
       React.createElement(assets.LeadersLaggardsPanel, { ...common, benchmark: "BTC" }),
       React.createElement(overview.ParticipationPanel, { frame, selectPredicate: noop }),
     ].map((element) => renderToStaticMarkup(element)).join("\n");
-    assert.doesNotMatch(markup, /Unavailable|unavailable/, `${name} must not render an Unavailable label`);
+    assert.match(markup, /Unavailable · no qualified prior relative-strength reference/);
     assert.match(markup, /Market Pulse/);
   }
+});
+
+test("evidence matrix keeps correlated price inputs together and unqualified families explicit", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.240.fixture.json");
+  const markup = renderToStaticMarkup(React.createElement(pulse.EvidenceMatrixPanel, { frame, horizon: "15" }));
+  assert.match(markup, /Price &amp; participation/);
+  assert.match(markup, /count as one correlated family/);
+  assert.match(markup, /Displayed liquidity/);
+  assert.match(markup, /Derivatives positioning/);
+  assert.match(markup, /Options/);
+  assert.match(markup, /External context/);
+  assert.match(markup, /Private exposure/);
+  assert.match(markup, /Conditional outcomes/);
+  assert.match(markup, /NOT PROBED/);
+  assert.match(markup, /Conditional outcomes/);
+  assert.match(markup, /Deferred pending separately approved research/);
+  assert.match(markup, /not a future cross/);
+});
+
+test("breadth scenarios describe the current pressure sign without stating a past cross as future", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.240.fixture.json");
+  const renderAt = (value) => {
+    frame.pressure["15"] = { ...frame.pressure["15"], value, original: String(value) };
+    frame.breadth["15"].positive = { ...frame.breadth["15"].positive, value: value < 0 ? 0.4 : value > 0 ? 0.6 : 0.5 };
+    return renderToStaticMarkup(React.createElement(pulse.EvidenceMatrixPanel, { frame, horizon: "15" }));
+  };
+
+  const negative = renderAt(-0.6);
+  assert.match(negative, /Pressure is currently below zero/);
+  assert.match(negative, /Continued weakness would require it to remain below zero/);
+  assert.match(negative, /already below zero; that is the current deterioration sign/);
+  assert.doesNotMatch(negative, /cross below zero in 15m breadth pressure would describe deterioration/i);
+
+  const zero = renderAt(0);
+  assert.match(zero, /Pressure is currently at zero/);
+  assert.match(zero, /Continuation is not established/);
+  assert.match(zero, /A cross below zero in 15m breadth pressure would describe deterioration/);
+
+  const positive = renderAt(0.6);
+  assert.match(positive, /Pressure is currently above zero/);
+  assert.match(positive, /pressure staying above zero/);
+  assert.match(positive, /A cross below zero in 15m breadth pressure would describe deterioration/);
+});
+
+test("source capability state never overrides operational degradation or creates missing metrics", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.240.fixture.json");
+  frame.sourceCapabilities = [{
+    sourceId: "example_flow", family: "spot_flow", qualification: "qualified",
+    operational: "degraded", reasons: ["SOURCE_TIMEOUT"],
+  }];
+  const markup = renderToStaticMarkup(React.createElement(pulse.EvidenceMatrixPanel, { frame, horizon: "15" }));
+  assert.match(markup, /QUALIFIED · DEGRADED/);
+  assert.match(markup, /source status alone does not qualify a frame metric/i);
+  assert.match(markup, /SOURCE_TIMEOUT/);
+  assert.match(markup, /No visible-book component is attached/i);
+  assert.doesNotMatch(markup, /Executed spot flow<\/strong><span data-state="QUALIFIED · HEALTHY"/);
+});
+
+test("microstructure panel keeps incomplete rows unavailable and never fills a full-size book cost", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.240.fixture.json");
+  const absent = renderToStaticMarkup(React.createElement(pulse.MicrostructurePanel, { frame }));
+  assert.match(absent, /Source held/);
+  assert.match(absent, /status-only flow pointer is not an observation/);
+  const asOf = frame.available_at_ms;
+  frame.microstructure = {
+    componentId: "b".repeat(64), sourceKind: "reconstructed", cutoff: asOf, available: asOf,
+    replayClass: "snapshot_only", rawInputsRetained: false,
+    flows: [{ instrumentId: "okx:spot:BTC-USDC", sourceId: "fixture-flow", quoteAsset: "USDC", channel: "trades",
+      windowStart: asOf - 60_000, windowEnd: asOf, available: asOf, expires: asOf + 1000,
+      inputDigest: "a".repeat(64), resetId: "test-reset", resetAt: asOf - 300_000,
+      coverageStart: asOf - 60_000, coverageEnd: asOf, gaps: [[asOf - 30_000, asOf - 20_000]],
+      buyQuote: "100", sellQuote: "60", unknownQuote: "40", knownImbalance: "0.25", confirmationImbalance: null,
+      unknownShare: "0.2", cumulativeBefore: null, cumulativeAfter: null, trades: 10, duplicates: 1,
+      complete: false, reasons: ["UNKNOWN_AGGRESSOR"], capabilityUsable: true }],
+    liquidity: [{ instrumentId: "okx:spot:BTC-USDC", sourceId: "fixture-book", channel: "books", sequence: 7,
+      observed: asOf, available: asOf, expires: asOf + 1000, access: "non_rpi", side: "buy",
+      requestedSize: "1000", sizeUnit: "quote", coveredBase: "0.005", coveredQuote: "300", uncovered: "700",
+      coveredVwap: "60000", vwap: null, costBps: null, feeBps: null, feeSource: null, totalCostBps: null,
+      spreadBps: "4", bandBps: "10", bidCovered: "500", askCovered: "600", bandComplete: false,
+      bandImbalance: null, reasons: ["INSUFFICIENT_DEPTH"], capabilityUsable: true }],
+  };
+  const rendered = renderToStaticMarkup(React.createElement(pulse.MicrostructurePanel, { frame }));
+  assert.match(rendered, /UNKNOWN_AGGRESSOR/);
+  assert.match(rendered, /reset test-reset · 1 gap/);
+  assert.ok(rendered.includes(`gaps ${asOf - 30_000}–${asOf - 20_000}`));
+  assert.match(rendered, /Confirmation/);
+  assert.match(rendered, /300 quote · 700 uncovered/);
+  assert.match(rendered, /PARTIAL DEPTH/);
+  assert.match(rendered, /Fee unavailable/);
+  assert.match(rendered, /total unavailable/);
+  assert.doesNotMatch(rendered, /USDC 60000/);
+});
+
+test("owner-produced combined fixture renders qualified daily and stored microstructure observations", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.m1-components.fixture.json");
+  assert.equal(frame.dailyInternals.length, frame.assets.length);
+  assert.equal(frame.microstructure?.replayClass, "snapshot_only");
+  assert.ok(frame.candleAnomalies, "owner frame carries confirmed hourly anomaly aggregates");
+  const daily = renderToStaticMarkup(React.createElement(pulse.DailyInternalsPanel, { frame }));
+  const micro = renderToStaticMarkup(React.createElement(pulse.MicrostructurePanel, { frame }));
+  const breadth = renderToStaticMarkup(React.createElement(pulse.BreadthContextPanel, { frame }));
+  const evidence = renderToStaticMarkup(React.createElement(pulse.EvidenceMatrixPanel, { frame, horizon: "15" }));
+  assert.match(daily, /Previous completed daily bars only/);
+  assert.match(daily, /SMA 200/);
+  assert.match(daily, /contiguous/);
+  assert.match(daily, /USDC 19\.9434/);
+  assert.match(daily, /-0\.06%\/day/);
+  assert.match(daily, /Crossed below/);
+  assert.match(daily, />No</);
+  assert.match(micro, /snapshot only/);
+  assert.match(micro, /Executed spot notional by aggressor side/);
+  assert.match(micro, /Unknown share/);
+  assert.match(micro, /USDC \+8\.58 → \+12\.9/);
+  assert.match(micro, /UNKNOWN_AGGRESSOR/);
+  assert.match(micro, /Visible-book walk for recorded order sizes/);
+  assert.match(micro, /tabindex="0" role="region" aria-labelledby="mp-flow-observations-caption"/);
+  assert.match(micro, /tabindex="0" role="region" aria-labelledby="mp-book-observations-caption"/);
+  assert.match(micro, /USDC 21\.614/);
+  assert.match(micro, /\+13\.33 bps/);
+  assert.match(micro, /total unavailable/);
+  assert.match(micro, /reset fixture-reset-1 · 0 gaps/);
+  assert.match(breadth, /hourly cohort internals/);
+  assert.match(breadth, /efficiency ratio 20 median/);
+  assert.match(breadth, /Advance-share change/);
+  assert.match(breadth, /Hourly candle anomaly tags/);
+  assert.match(breadth, /Current completed-hour quote turnover ≥2× the median of the prior 20 disjoint completed hours/);
+  assert.match(breadth, /lies strictly inside EMA20 ±1\.5 Wilder ATR20/);
+  assert.match(breadth, /95th percentile of the prior 720 hourly observations/);
+  assert.match(breadth, /tabindex="0" role="region" aria-labelledby="mp-hourly-internals-caption"/);
+  assert.match(breadth, /tabindex="0" role="region" aria-labelledby="mp-breadth-trajectory-caption"/);
+  assert.match(daily, /tabindex="0" role="region" aria-labelledby="mp-daily-internals-caption"/);
+  assert.match(evidence, /Price &amp; participation/);
+  assert.match(evidence, /count as one correlated family/);
+  assert.match(evidence, /Executed spot flow/);
+});
+
+test("stored flow history shows per-point totals and breaks across scope, reset, gaps and unavailable points", () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const time = 1_800_000_000_000;
+  const flow = (scopeHash, cumulativeDeltaQuote, reasonCodes = [], resetAtMs = time - 300_000) => ({
+    componentId: "a".repeat(64), quoteAsset: "USDC", scopeHash,
+    expectedInstruments: 5, observedInstruments: 5, completeInstruments: 5,
+    buyQuote: "120.5", sellQuote: "100", unknownQuote: "0",
+    cumulativeDeltaQuote, resetAt: resetAtMs, reasons: reasonCodes,
+  });
+  const history = [
+    { time: time - 120_000, snapshot_id: "1".repeat(64), source_kind: "observed", expected: 5, gapBefore: false, flowHistory: flow("b".repeat(64), "20.5") },
+    { time: time - 60_000, snapshot_id: "2".repeat(64), source_kind: "observed", expected: 5, gapBefore: false, flowHistory: flow("c".repeat(64), null, ["SCOPE_CHANGED"], time - 240_000) },
+    { time, snapshot_id: "3".repeat(64), source_kind: "reconstructed", expected: 5, gapBefore: true, flowHistory: null },
+  ];
+  const markup = renderToStaticMarkup(React.createElement(pulse.FlowHistoryPanel, { history, window: "24h", fault: null }));
+  assert.match(markup, /tabindex="0" role="region" aria-labelledby="mp-flow-history-caption"/);
+  assert.match(markup, /Stored aggregate executed spot flow for the selected window/);
+  assert.match(markup, /USDC 120\.5/);
+  assert.match(markup, /USDC \+20\.5/);
+  assert.match(markup, /Unavailable · SCOPE_CHANGED/);
+  assert.match(markup, /Break · CVD unavailable, scope changed, reset changed/);
+  assert.match(markup, /Break · stored history gap, flow unavailable/);
+  assert.match(markup, /Unavailable · no flow aggregate in this stored point/);
+  assert.match(markup, /totals are per stored point; they are never summed across gaps/);
+});
+
+test("combined owner preview uses stored per-point flow history and keeps its unknown-side gap", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.m1-components.fixture.json");
+  const history = stored.projectHistory(read("market-picture.m1-components.history.json"), frame);
+  const markup = renderToStaticMarkup(React.createElement(pulse.FlowHistoryPanel, { history, window: "1h", fault: null }));
+  assert.match(markup, /showing 3 of 3 retained points/);
+  assert.match(markup, /reset 1799999820000/);
+  assert.match(markup, /UNKNOWN_AGGRESSOR/);
+  assert.match(markup, /CVD unavailable/);
+  assert.match(markup, /totals are per stored point; they are never summed across gaps/);
+});
+
+test("book-cost history percentile remains visible when fee provenance is unavailable", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.m1-components.fixture.json");
+  const row = frame.microstructure.liquidity.find(item => item.feeBps == null && item.costBps != null);
+  assert.ok(row);
+  Object.assign(row, {
+    costPercentile7d: 0.75, costPercentileSampleCount: 9500,
+    costPercentileExpectedSamples: 10080, costPercentileReasons: [],
+    costPercentileReferenceDigest: "c".repeat(64),
+  });
+  const markup = renderToStaticMarkup(React.createElement(pulse.MicrostructurePanel, { frame }));
+  assert.match(markup, /75 percentile/);
+  assert.match(markup, /9500\/10080 samples/);
+  assert.match(markup, /ref cccccccccccc…/);
+  assert.match(markup, /Fee unavailable \/ total unavailable/);
+});
+
+test("complete order-size cost stays visible when only the wider band lacks depth", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.m1-components.fixture.json");
+  const row = frame.microstructure.liquidity.find(item => item.side === "buy" && Number(item.uncovered) === 0);
+  assert.ok(row);
+  row.reasons = ["BOOK_DEPTH_INSUFFICIENT"];
+  row.bandComplete = false;
+  row.bandImbalance = null;
+  const markup = renderToStaticMarkup(React.createElement(pulse.MicrostructurePanel, { frame }));
+  assert.match(markup, /USDC 21\.614/);
+  assert.match(markup, /\+13\.33 bps/);
+  assert.match(markup, /10 bps band · partial/);
+  assert.match(markup, /BOOK_DEPTH_INSUFFICIENT/);
+});
+
+test("microstructure freshness follows the view clock while frozen snapshots stay evaluated at decision time", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.m1-components.fixture.json");
+  const decisionTime = frame.available_at_ms;
+  for (const row of frame.microstructure.flows) row.expires = decisionTime + 5_000;
+  for (const row of frame.microstructure.liquidity) row.expires = decisionTime + 5_000;
+
+  const live = renderToStaticMarkup(React.createElement(pulse.MicrostructurePanel, { frame, asOf: decisionTime + 6_000 }));
+  assert.match(live, /assessed as of/);
+  assert.match(live, /EXPIRED/);
+  assert.match(live, /Confirmation<\/th><th>Cumulative delta/);
+  assert.match(live, /Unavailable/);
+  assert.doesNotMatch(live, /<td>USDC \+13\.33 bps<\/td>/);
+  const evidence = renderToStaticMarkup(React.createElement(pulse.EvidenceMatrixPanel, { frame, horizon: "15", asOf: decisionTime + 6_000 }));
+  assert.doesNotMatch(evidence, /OBSERVED · QUALIFIED/);
+  assert.match(evidence, /unexpired at 2027-01-15T08:00:07\.000Z/);
+  assert.match(evidence, /data-state="OBSERVED · EXPIRED"/);
+
+  const frozen = renderToStaticMarkup(React.createElement(pulse.MicrostructurePanel, { frame, asOf: decisionTime }));
+  assert.doesNotMatch(frozen, /EXPIRED/);
+  assert.match(frozen, /COMPLETE/);
+});
+
+test("breadth context renders owner trajectory metadata and preserves unavailable historical comparisons", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.240.fixture.json");
+  frame.breadthTrajectory = [{
+    horizon: 15, interval: 5, cutoff: 1800000000000, matched: 4, expected: 5, membership: "a".repeat(64),
+    level: metric(0.25, { unit: "index_minus1_to1" }),
+    change: metric(null, { unit: "index_points", status: "UNAVAILABLE", reasons: ["INSUFFICIENT_HISTORY"] }),
+    shareChange: metric(4.5, { unit: "percentage_points", definition: "breadth_advancing_share_change v1" }),
+    velocity: metric(null, { unit: "index_points_per_minute", status: "UNAVAILABLE", reasons: ["INSUFFICIENT_HISTORY"] }),
+    acceleration: metric(null, { unit: "index_points_per_minute_squared", status: "UNAVAILABLE", reasons: ["INSUFFICIENT_HISTORY"] }),
+  }];
+  frame.hourlyInternals = {
+    interval: 60, cutoff: 1800000000000, decisionAvailable: 1800000000100, expires: 1800000001000,
+    sourceKind: "observed", sourceDigest: "b".repeat(64), sourceCount: 4, expected: 5,
+    metrics: {
+      above_sma20_share: metric(0.8, { unit: "share_fraction", valid: 4, expected: 5, status: "PARTIAL", reasons: ["INSUFFICIENT_COVERAGE"] }),
+      sma20_slope_pct_per_hour_median: metric(0.215, { unit: "return_percent", definition: "sma20_slope_pct_per_hour_median v1" }),
+    },
+  };
+  const markup = renderToStaticMarkup(React.createElement(pulse.BreadthContextPanel, { frame }));
+  assert.match(markup, /Matched-universe pressure level and its change, velocity, and acceleration/);
+  assert.match(markup, /4\/5/);
+  assert.match(markup, /INSUFFICIENT_HISTORY/);
+  assert.match(markup, /Advance-share change/);
+  assert.match(markup, /\+4\.500 pp/);
+  assert.match(markup, /hourly cohort internals/);
+  assert.match(markup, /above sma20 share/);
+  assert.match(markup, /4\/5 · INSUFFICIENT_COVERAGE/);
+  assert.match(markup, /\+0\.215%\/hour/);
+  assert.doesNotMatch(markup, /\+0\.215 pp/);
+  assert.match(markup, /Price–breadth divergence.*Unavailable/);
+  assert.match(markup, /Return contribution unavailable/);
+});
+
+test("daily internals render confirmed-source coverage and explicit unavailable features", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.240.fixture.json");
+  const unavailable = renderToStaticMarkup(React.createElement(pulse.DailyInternalsPanel, { frame }));
+  assert.match(unavailable, /no owner-qualified daily-internals projection/i);
+  frame.dailyInternals = [{
+    instrumentId: "okx:spot:BTC-USDC", interval: "1d", cutoff: 1800000000000, decisionAvailable: 1800000001000,
+    source: null, sourceCoverageStatus: "UNAVAILABLE", sourceCoverage: { expectedBars: 401, validBars: 200, gaps: 0 }, contiguousBars: 200, sourceReasons: ["SOURCE_UNAVAILABLE"],
+    breaks: { high_break: { metricId: "daily_high_break_20d", definitionId: "current_daily_high_vs_prior_20d_highs", label: null, samples: 0, required: 21, metric: metric(null, { unit: "count", reasons: ["INSUFFICIENT_HISTORY"] }) } },
+    averages: { "200": { sma: { metricId: "daily_sma_200", definitionId: "daily_sma_200", label: null, samples: 200, required: 200, metric: metric(101.2345, { unit: "price_quote" }) } } },
+  }];
+  const rendered = renderToStaticMarkup(React.createElement(pulse.DailyInternalsPanel, { frame }));
+  assert.match(rendered, /Previous completed daily bars only/);
+  assert.match(rendered, /INSUFFICIENT_HISTORY/);
+  assert.match(rendered, /USDC 101\.2345/);
+  assert.match(rendered, /200\/401 bars · 200 contiguous · 0 gaps · UNAVAILABLE/);
 });
 
 test("a populated frame states a verdict and its rule", async () => {
@@ -219,9 +619,50 @@ test("a populated frame states a verdict and its rule", async () => {
   const markup = renderToStaticMarkup(React.createElement(pulse.MarketPulseHero, {
     frame, history: [], horizon: "15", window: "24h", setHorizon() {}, setWindow() {}, replay() {},
   }));
-  assert.match(markup, /Risk-on|Risk-off|Mixed/);
-  assert.match(markup, /How is this decided\?/);
+  assert.match(markup, /Unavailable · canonical history/);
+  assert.doesNotMatch(markup, /Risk-on|Risk-off|Mixed|How is this decided\?/);
   assert.match(markup, /Recording market history/, "without stored history the chart area says it is recording instead of failing");
+});
+
+test("relative-strength history is unavailable without an owner comparison reference", async () => {
+  const assets = load("features/market-picture/AssetPanels.tsx");
+  const frame = await fixtureFrame("market-picture.v1.json");
+  const markup = renderToStaticMarkup(React.createElement(assets.LeadersLaggardsPanel, {
+    frame, selected: null, select() {}, cohort: new Set(), benchmark: "BTC",
+  }));
+  assert.match(markup, /Relative strength change/);
+  assert.match(markup, /Unavailable · no qualified prior relative-strength reference/);
+  assert.match(markup, /24h relative strength · 1h pullback/);
+  assert.match(markup, /positive 24h arithmetic excess return and negative 1h asset return/);
+  const qualifiedFrame = {
+    ...frame,
+    comparisons: {
+      ...frame.comparisons,
+      "relative_strength/btc": metric(0.25, {
+        unit: "percentage_points", valid: 2, expected: 2,
+        definition: "relative_strength_change_btc v1",
+      }),
+    },
+  };
+  const qualifiedMarkup = renderToStaticMarkup(React.createElement(assets.LeadersLaggardsPanel, {
+    frame: qualifiedFrame, selected: null, select() {}, cohort: new Set(), benchmark: "BTC",
+  }));
+  assert.match(qualifiedMarkup, /Strengthening/);
+  assert.match(qualifiedMarkup, /Median matched-cohort change in 24h excess return/);
+  assert.match(qualifiedMarkup, /\+0\.25 pp over 1h/);
+});
+
+test("one-hour relative-rank movement renders owner ranks with explicit direction and baseline", async () => {
+  const assets = load("features/market-picture/AssetPanels.tsx");
+  const frame = await fixtureFrame("market-picture.relative-ranks.1h.fixture.json");
+  const markup = renderToStaticMarkup(React.createElement(assets.LeadersLaggardsPanel, {
+    frame, selected: null, select() {}, cohort: new Set(), benchmark: "BTC",
+  }));
+  assert.match(markup, /1h relative-rank movement/);
+  assert.match(markup, /2\/2 common instruments/);
+  assert.match(markup, /positive means rank improvement/);
+  assert.match(markup, /Improving[\s\S]*ETH[\s\S]*↑ 1 place/);
+  assert.match(markup, /Weakening[\s\S]*BTC[\s\S]*↓ 1 place/);
 });
 
 test("the single page has no section tab bar and no taker-flow or 52-week tiles", () => {
@@ -256,6 +697,24 @@ test("the hold band keeps a state until the score is back inside it, and Mixed n
   assert.equal(nextVerdictState("risk-off", -0.2), "risk-off");
   assert.equal(nextVerdictState("risk-off", -0.05), "mixed");
   assert.equal(nextVerdictState("risk-on", -0.3), "risk-off", "crossing straight through still flips");
+});
+
+test("canonical replay refuses a complete clock grid when required historical pressures are absent", async () => {
+  const { canonicalVerdictHistoryFault } = await import("../src/features/market-picture/pulse.mjs");
+  const until = 21_600_000;
+  const horizons = ["1", "5", "15", "60", "240", "1440"];
+  const history = Array.from({ length: 360 }, (_, i) => ({
+    time: until - (360 - i) * 60_000,
+    breadth: Object.fromEntries(horizons.map((h) => [h, { pressure: null }])),
+  }));
+  assert.match(canonicalVerdictHistoryFault(history, "60", until), /lacks historical pressure/);
+  history.forEach((point) => {
+    point.breadth["60"].pressure = 0;
+    point.breadth["15"].pressure = 0;
+  });
+  assert.equal(canonicalVerdictHistoryFault(history, "60", until), null);
+  history[100].breadth["60"].pressure = null;
+  assert.match(canonicalVerdictHistoryFault(history, "60", until), /lacks historical pressure/);
 });
 
 test("a score drifting around the entry threshold does not flap the verdict", () => {
@@ -324,7 +783,65 @@ test("the hero opens on the 1h horizon with a visible smoothing toggle", async (
   assert.match(markup, /Pressure smoothing/);
   assert.match(markup, /15m mean/);
   assert.match(markup, /15-minute rolling mean, raw grey/);
-  assert.match(markup, /How is this decided\?/);
+  assert.match(markup, /Unavailable · canonical history/);
+});
+
+test("the breadth chart exposes a keyboard-operable data-table disclosure", async () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const frame = await fixtureFrame("market-picture.240.fixture.json");
+  const history = [flat(0, 3), flat(1, -3), flat(3, 0, { gapBefore: true })];
+  const markup = renderToStaticMarkup(React.createElement(pulse.MarketPulseHero, {
+    frame, history, horizon: "60", window: "6h", setHorizon() {}, setWindow() {}, replay() {},
+  }));
+  assert.match(markup, /<details class="mp-pulse-data">/);
+  assert.match(markup, /<summary>Accessible breadth data table/);
+  assert.doesNotMatch(markup, /id="mp-pulse-data-table"/, "table rows stay unmounted until disclosure opens");
+});
+
+test("breadth table rows preserve plotted zeros, nulls, raw pressure and explicit gap sentinels", () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const sample = (minute, pressure, positive, negative, gapBefore = false) => ({
+    ...flat(minute, pressure, { gapBefore }),
+    breadth: Object.fromEntries(HORIZONS.map((h) => [h, { positive, negative, flat: 0, pressure }])),
+  });
+  const history = [
+    sample(0, null, null, null),
+    sample(1, -3, 0.25, 0.75),
+    sample(3, 0, 0.5, 0.5, true),
+    sample(4, null, null, null),
+  ];
+  const projection = pulseSeries(history, "6h", "60");
+  const smoothRows = pulse.pulseDataRows(
+    projection.samples, projection.smoothed, projection.advancing, projection.declining, projection.pressure,
+  );
+  const rawRows = pulse.pulseDataRows(
+    projection.samples, projection.pressure, projection.advancing, projection.declining,
+  );
+  assert.equal(smoothRows.length, projection.smoothed.length);
+  assert.deepEqual(smoothRows.map((row) => row.gap), [false, false, true, false, false]);
+  assert.deepEqual([smoothRows[0].pressure, smoothRows[0].rawPressure, smoothRows[0].advancing], [null, null, null]);
+  assert.deepEqual([smoothRows[1].pressure, smoothRows[1].rawPressure, smoothRows[1].advancing, smoothRows[1].declining], [-3, -3, 25, 75]);
+  assert.deepEqual([smoothRows[2].pressure, smoothRows[2].rawPressure, smoothRows[2].advancing, smoothRows[2].declining], [null, null, null, null]);
+  assert.deepEqual([smoothRows[3].pressure, smoothRows[3].rawPressure], [0, 0], "a real zero stays zero");
+  assert.deepEqual([rawRows[4].pressure, rawRows[4].rawPressure], [null, null], "raw mode does not fill a missing raw point");
+});
+
+test("opened breadth table discloses chart context and renders every plotted point", () => {
+  const pulse = load("features/market-picture/MarketPulse.tsx");
+  const history = [flat(0, 3), flat(1, -3), flat(3, 0, { gapBefore: true })];
+  const projection = pulseSeries(history, "6h", "60");
+  const markup = renderToStaticMarkup(React.createElement(pulse.PulseDataTable, {
+    pulse: projection,
+    horizon: "60",
+    window: "6h",
+    pressureSeries: { id: "pressure", label: "Breadth pressure · 15m mean", color: "violet", points: projection.smoothed },
+    rawPressureSeries: { id: "pressure-raw", label: "Breadth pressure · raw", color: "grey", points: projection.pressure },
+  }));
+  assert.match(markup, /1h breadth · requested 6h · Requested 6h · available 3m · 1-minute buckets · Breadth pressure · 15m mean selected · raw pressure also shown/);
+  assert.match(markup, /Raw pressure \(−3…\+3\)/);
+  assert.match(markup, /Coverage gap before <time dateTime="2026-10-01T00:03:00\.000Z">2026-10-01T00:03:00\.000Z<\/time>/);
+  assert.match(markup, /2026-10-01T00:00:00\.000Z/);
+  assert.equal((markup.match(/<tr\b/g) ?? []).length, projection.smoothed.length + 1, "header plus one row per chart point");
 });
 
 // ---- Relative volume and volume-burst honesty ----------------------------------------------------
@@ -377,11 +894,12 @@ test("the hourly generation shows a Relative volume (1h) tile and the legacy one
   assert.match(shown, /Relative volume \(1h\)/);
   assert.match(shown, /last 60 min vs prior 24h hourly mean/);
   assert.match(shown, /1\.37/);
-  // The owner's null with a reason code (zero baseline, low coverage) draws no tile and prints no placeholder word.
+  // Withheld relative volume draws no tile; independent source-family readings can be unavailable.
   const withheld = tilesFor(pulse, {
     ...current, summary: { ...current.summary, relative_volume_1h: metric(null, { unit: "ratio", reasons: ["ZERO_BASELINE"], definition: "median_relative_volume_1h v1.0.0" }) },
   });
-  assert.doesNotMatch(withheld, /Relative volume|navailable/);
+  assert.doesNotMatch(withheld, /Relative volume/);
+  assert.match(withheld, /Derivatives stress/, "independent source state remains visible");
   const legacy = await fixtureFrame("market-picture.240.fixture.json");
   assert.ok("relative_volume_24h" in legacy.summary && !("relative_volume_1h" in legacy.summary));
   const hidden = tilesFor(pulse, withValue(legacy, "relative_volume_24h", "median_relative_volume_24h v1.0.0", 0.003));
@@ -423,6 +941,46 @@ test("the asset inspector labels hourly relative volume and any withheld reason 
   }));
   assert.ok("rvol_24h" in legacy.assets[0].indicators);
   assert.match(old, /rvol 24h/);
+});
+
+test("asset drawer reuses the selected frame daily and flow/book observations without fabricating full cost", async () => {
+  const views = load("features/market-picture/DetailViews.tsx");
+  const frame = await fixtureFrame("market-picture.m1-components.fixture.json");
+  const asset = frame.assets.find(row => row.instrument_id === "okx:spot:BTC-USDC");
+  const bookOnly = frame.microstructure.liquidity.find(row => row.side === "buy" && Number(row.uncovered) === 0);
+  bookOnly.reasons = ["BOOK_DEPTH_INSUFFICIENT"];
+  bookOnly.bandComplete = false;
+  bookOnly.bandImbalance = null;
+  const markup = renderToStaticMarkup(React.createElement(views.AssetInspector, {
+    asset, frame, watched: false, toggleWatch() {}, note: "", saveNote() {}, openNativeTools() {},
+  }));
+  assert.match(markup, /Daily internals/);
+  assert.match(markup, /SMA 200 sma/);
+  assert.match(markup, /USDC 22\.7774/);
+  assert.match(markup, /SMA 20 above close/);
+  assert.match(markup, />No</);
+  assert.match(markup, /\+0\.16%\/day/);
+  assert.match(markup, /No cross/);
+  assert.match(markup, /Executed flow &amp; displayed book/);
+  assert.match(markup, /BTC|BTC-USDC/);
+  assert.match(markup, /PARTIAL DEPTH/);
+  assert.match(markup, /USDC 21\.614 · \+13\.33 bps/);
+  assert.match(markup, /10 bps band · partial/);
+  assert.match(markup, /Fee unavailable \/ total unavailable/);
+  assert.match(markup, /fee absence does not hide a complete book-only estimate/);
+  assert.match(markup, /tabindex="0" role="region" aria-labelledby="mp-drawer-flow-caption"/);
+  assert.match(markup, /tabindex="0" role="region" aria-labelledby="mp-drawer-book-caption"/);
+  assert.match(markup, /no typed derivatives, liquidation, or options observation/);
+
+  for (const row of frame.microstructure.flows) row.expires = frame.available_at_ms + 5_000;
+  for (const row of frame.microstructure.liquidity) row.expires = frame.available_at_ms + 5_000;
+  const stale = renderToStaticMarkup(React.createElement(views.AssetInspector, {
+    asset, frame, asOf: frame.available_at_ms + 6_000,
+    watched: false, toggleWatch() {}, note: "", saveNote() {}, openNativeTools() {},
+  }));
+  assert.match(stale, /EXPIRED/);
+  assert.match(stale, /Unavailable · expired/);
+  assert.match(stale, /USDC 12\.95 \/ 8\.63 \/ 0/);
 });
 
 // ---- Correlation history ------------------------------------------------------------------------

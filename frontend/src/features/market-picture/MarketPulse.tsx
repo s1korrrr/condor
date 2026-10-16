@@ -27,6 +27,8 @@ import {
 } from "./presentation";
 import { Metric, Panel } from "./Primitives";
 import { selectMetricCohort, type MetricCohortRequest } from "./metric-cohort.mjs";
+import { HistoryRangeSelector } from "./HistoryRangeSelector";
+import { historyRangeTimes, normalizeHistoryRange, selectHistoryPoints, type HistoryRange } from "./history-range.mjs";
 
 /** Coverage changes within a partial universe are just as material as a full/partial flip. */
 function coverageChangePoints(history: HistoryPoint[]): HistoryPoint[] {
@@ -237,12 +239,14 @@ function PulseDataTable({
   window,
   pressureSeries,
   rawPressureSeries,
+  rangeLabel,
 }: {
   pulse: ReturnType<typeof pulseSeries>;
   horizon: Horizon;
   window: string;
   pressureSeries: ChartSeries;
   rawPressureSeries?: ChartSeries;
+  rangeLabel?: string;
 }) {
   const rows = useMemo(
     () => pulseDataRows(
@@ -263,6 +267,7 @@ function PulseDataTable({
         <caption id="mp-pulse-data-caption">
           {horizonLabel(horizon)} breadth · requested {window} · {pulse.label} · {pulse.bucketMinutes}-minute buckets · {pressureSeries.label} selected
           {rawPressureSeries ? " · raw pressure also shown" : ""}
+          {rangeLabel ? ` · ${rangeLabel}` : ""}
         </caption>
         <thead>
           <tr>
@@ -320,14 +325,45 @@ export function MarketPulseHero({
 }) {
   const [smooth, setSmooth] = useState(true);
   const [dataTableOpen, setDataTableOpen] = useState(false);
+  const [rangeSelection, setRangeSelection] = useState<{
+    history: HistoryPoint[]; horizon: Horizon; window: string; range: HistoryRange;
+  } | null>(null);
+  // Indexes only apply to the exact retained history and H/W that supplied them.
+  const selectedRange = rangeSelection?.history === history && rangeSelection.horizon === horizon && rangeSelection.window === window
+    ? rangeSelection.range : null;
+  if (rangeSelection && selectedRange === null) {
+    // Clear the old binding so returning to an earlier H/W cannot revive it.
+    // The conditional update settles on the next render and releases old history.
+    setRangeSelection(null);
+  }
   const pulse = useMemo(() => pulseSeries(history, window, horizon), [history, window, horizon]);
+  const rangeTimes = useMemo(() => historyRangeTimes([
+    { points: pulse.advancing }, { points: pulse.declining },
+    { points: pulse.pressure }, { points: pulse.smoothed },
+  ]), [pulse]);
+  const normalizedRange = normalizeHistoryRange(rangeTimes, selectedRange);
+  const rangeStart = normalizedRange ? rangeTimes[normalizedRange.start] : null;
+  const rangeEnd = normalizedRange ? rangeTimes[normalizedRange.end] : null;
+  const rangeLabel = rangeStart !== null && rangeEnd !== null
+    ? `Chart view ${new Date(rangeStart).toISOString()} to ${new Date(rangeEnd).toISOString()} UTC`
+    : "Full retained chart view";
+  const chartPulse = useMemo(() => selectedRange ? {
+    ...pulse,
+    advancing: selectHistoryPoints(pulse.advancing, rangeTimes, selectedRange),
+    declining: selectHistoryPoints(pulse.declining, rangeTimes, selectedRange),
+    pressure: selectHistoryPoints(pulse.pressure, rangeTimes, selectedRange),
+    smoothed: selectHistoryPoints(pulse.smoothed, rangeTimes, selectedRange),
+    // Keep full sample metadata so a selected gap sentinel retains its identity
+    // even when the first post-gap observation falls outside the selected view.
+  } : pulse, [pulse, rangeTimes, selectedRange]);
   const lastSmoothed = useMemo(
     () => [...pulse.smoothed].reverse().find((p) => p.value !== null)?.value ?? null,
     [pulse],
   );
   const markers = useMemo(
-    () => coverageChangePoints(pulse.samples).map((p) => ({ time: p.time, label: "Coverage changed" })),
-    [pulse.samples],
+    () => selectHistoryPoints(coverageChangePoints(pulse.samples), rangeTimes, selectedRange)
+      .map((p) => ({ time: p.time, label: "Coverage changed" })),
+    [pulse.samples, rangeTimes, selectedRange],
   );
   const series = useMemo<ChartSeries[]>(
     () => [
@@ -336,7 +372,7 @@ export function MarketPulseHero({
             id: "pressure",
             label: `Breadth pressure · ${SMOOTHING_MINUTES}-min mean`,
             color: CHART.violet,
-            points: pulse.smoothed,
+            points: chartPulse.smoothed,
             area: true,
             signSplit: { positive: CHART.positive, negative: CHART.negative },
             fillOpacity: 0.7,
@@ -346,19 +382,19 @@ export function MarketPulseHero({
             id: "pressure",
             label: "Breadth pressure · raw",
             color: CHART.violet,
-            points: pulse.pressure,
+            points: chartPulse.pressure,
             area: true,
             signSplit: { positive: CHART.positive, negative: CHART.negative },
             fillOpacity: 0.7,
             format: (v: number) => signed(v),
           },
       ...(smooth
-        ? [{ id: "pressure-raw", label: "Breadth pressure · raw", color: CHART.muted, points: pulse.pressure, format: (v: number) => signed(v) } satisfies ChartSeries]
+        ? [{ id: "pressure-raw", label: "Breadth pressure · raw", color: CHART.muted, points: chartPulse.pressure, format: (v: number) => signed(v) } satisfies ChartSeries]
         : []),
-      { id: "advancing", label: "Advancing share · raw", color: CHART.blue, points: pulse.advancing, axis: "secondary", tooltipOnly: true, format: percent },
-      { id: "declining", label: "Declining share · raw", color: CHART.negative, points: pulse.declining, axis: "secondary", tooltipOnly: true, format: percent },
+      { id: "advancing", label: "Advancing share · raw", color: CHART.blue, points: chartPulse.advancing, axis: "secondary", tooltipOnly: true, format: percent },
+      { id: "declining", label: "Declining share · raw", color: CHART.negative, points: chartPulse.declining, axis: "secondary", tooltipOnly: true, format: percent },
     ],
-    [pulse, smooth],
+    [chartPulse, smooth],
   );
   const pressureSeries = series[0];
   const rawPressureSeries = smooth ? series.find((item) => item.id === "pressure-raw") : undefined;
@@ -410,7 +446,7 @@ export function MarketPulseHero({
               zeroLine
               leftFormat={(v) => signed(v, 1)}
               rightFormat={percent}
-              ariaLabel={`Advancing and declining share with breadth pressure over ${window}, ${horizonLabel(horizon)} horizon`}
+              ariaLabel={`Advancing and declining share with breadth pressure over ${window}, ${horizonLabel(horizon)} horizon · ${rangeLabel}`}
               emptyText="Recording market history. The chart fills as frames are stored."
             />
           ) : (
@@ -419,6 +455,12 @@ export function MarketPulseHero({
               <p>Recording market history. The chart fills as frames are stored.</p>
             </div>
           )}
+          <HistoryRangeSelector
+            times={rangeTimes}
+            range={selectedRange}
+            onChange={(range) => setRangeSelection(range ? { history, horizon, window, range } : null)}
+          />
+          <p className="mp-panel-detail">The range changes this chart and its table only. New history or a different horizon or window restores the full view.</p>
           <div className="mp-pulse-tools">
             <span className="mp-panel-detail" role="status">
               {pulse.label}
@@ -464,11 +506,12 @@ export function MarketPulseHero({
             <summary>Accessible breadth data table · {horizonLabel(horizon)} · {window}</summary>
             {dataTableOpen && hasHistory && (
               <PulseDataTable
-                pulse={pulse}
+                pulse={chartPulse}
                 horizon={horizon}
                 window={window}
                 pressureSeries={pressureSeries}
                 rawPressureSeries={rawPressureSeries}
+                rangeLabel={rangeLabel}
               />
             )}
           </details>

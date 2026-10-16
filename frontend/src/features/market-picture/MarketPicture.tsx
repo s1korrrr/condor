@@ -33,7 +33,8 @@ import {
   type HistoryPoint,
   type ViewSettings,
 } from "./presentation";
-import { BreadthContextPanel, DailyInternalsPanel, EvidenceMatrixPanel, FlowHistoryPanel, MarketPulseHero, MarketSnapshotTiles, MicrostructurePanel } from "./MarketPulse";
+import { BreadthContextPanel, DailyInternalsPanel, EvidenceMatrixPanel, FlowHistoryPanel, MarketPulseHero, MarketSnapshotTiles, MicrostructurePanel, type SummaryTile } from "./MarketPulse";
+import { SummaryEvidence, type SummarySelection } from "./SummaryEvidence";
 import {
   CorrelationMatrix,
   CorrelationsPanel,
@@ -68,7 +69,7 @@ const NativeTools = lazy(() =>
   })),
 );
 type DrawerName =
-  "asset" | "coverage" | "matrix" | "settings" | "tools" | "export" | null;
+  "asset" | "coverage" | "summary" | "matrix" | "settings" | "tools" | "export" | null;
 interface Preferences {
   universe: string | null;
   watchlist: string[];
@@ -160,6 +161,7 @@ export function MarketPictureSurface({
   const [search, setSearch] = useState(""),
     [drawer, setDrawer] = useState<DrawerName>(() => nativeViewSearch(location.search) ? "tools" : null);
   const [nativeSearch, setNativeSearch] = useState(() => nativeViewSearch(location.search));
+  const [summarySelection, setSummarySelection] = useState<SummarySelection | null>(null);
   const [cohort, setCohort] = useState<string[]>([]),
     [cohortLabel, setCohortLabel] = useState("");
   const [message, setMessage] = useState<string | null>(null),
@@ -225,6 +227,11 @@ export function MarketPictureSurface({
     highlight(predicateMembers(frame.assets, predicate), predicate.replaceAll("_", " "));
   }, [frame, highlight]);
   const openMatrix = useCallback(() => setDrawer("matrix"), []);
+  const inspectSummary = useCallback((tile: SummaryTile, samples: HistoryPoint[]) => {
+    if (!frame) return;
+    setSummarySelection({ tile, frame, samples, window: view.window });
+    setDrawer("summary");
+  }, [frame, view.window]);
   const savePreferences = (patch: Partial<Preferences>) => {
     const next = {
       ...scopedPreferences,
@@ -242,6 +249,7 @@ export function MarketPictureSurface({
   };
   const closeDrawer = () => {
     setDrawer(null);
+    setSummarySelection(null);
     if (resumeAfterTools) {
       source.toggleFreeze();
       setResumeAfterTools(false);
@@ -477,7 +485,7 @@ export function MarketPictureSurface({
         historical={source.frozen}
       />
       {frame && (
-        <MarketSnapshotTiles frame={frame} history={data?.history ?? EMPTY_HISTORY} window={view.window} />
+        <MarketSnapshotTiles frame={frame} history={data?.history ?? EMPTY_HISTORY} window={view.window} onInspect={inspectSummary} />
       )}
       {frame && <EvidenceMatrixPanel frame={frame} horizon={view.horizon} asOf={componentAsOf} />}
       {frame && <MicrostructurePanel frame={frame} asOf={componentAsOf} />}
@@ -551,6 +559,8 @@ export function MarketPictureSurface({
           title={
             drawer === "asset"
               ? `${selected?.symbol ?? "Asset"} · observation`
+              : drawer === "summary"
+                ? `${summarySelection?.tile.label ?? "Summary"} · evidence`
               : drawer === "coverage"
                 ? "Coverage, provenance & research"
                 : drawer === "matrix"
@@ -564,6 +574,7 @@ export function MarketPictureSurface({
           wide={drawer === "matrix" || drawer === "tools"}
           close={closeDrawer}
         >
+          {drawer === "summary" && summarySelection && <SummaryEvidence selection={summarySelection} />}
           {drawer === "asset" &&
             (selected && frame ? (
               <AssetInspector

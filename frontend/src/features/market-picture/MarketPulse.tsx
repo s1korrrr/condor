@@ -910,7 +910,7 @@ function DailyInternalsPanelView({ frame }: { frame: DisplayFrame }) {
 }
 export const DailyInternalsPanel = memo(DailyInternalsPanelView);
 
-interface Tile {
+export interface SummaryTile {
   key: string;
   label: string;
   value: string;
@@ -947,14 +947,16 @@ function MarketSnapshotTilesView({
   frame,
   history,
   window,
+  onInspect,
 }: {
   frame: DisplayFrame | null;
   history: HistoryPoint[];
   window: string;
+  onInspect?: (tile: SummaryTile, samples: HistoryPoint[]) => void;
 }) {
   const samples = useMemo(() => pulseSeries(history, window, "15").samples, [history, window]);
   if (!frame) return null;
-  const tiles = SNAPSHOT.flatMap<Tile>(([key, label, hint, kind]) => {
+  const tiles = SNAPSHOT.flatMap<SummaryTile>(([key, label, hint, kind]) => {
     const metric = frame.summary[key];
     if (!metric || metric.value == null) return [];
     // A single 1-minute bar against a longer mean reads far below 1x on thin books; see pulse.mjs.
@@ -1007,17 +1009,26 @@ function MarketSnapshotTilesView({
   });
   return (
     <TileGrid min={170} label="Market summary" className="mp-tiles">
-      {tiles.map((tile) => (
-        <article className="mp-tile" key={tile.key} title={tile.title}>
-          <h3>{tile.label}</h3>
+      {tiles.map((tile) => {
+        const observation = <>
           <strong>{tile.value}</strong>
           <small>{tile.hint}</small>
           {tile.delta && <small className={tile.deltaTone}>{tile.delta}</small>}
+        </>;
+        return (
+        <article className="mp-tile" key={tile.key} title={tile.title}>
+          <h3>{tile.label}</h3>
+          {onInspect ? <button type="button" className="mp-tile__inspect"
+            aria-label={`Inspect ${tile.label} evidence`} aria-haspopup="dialog"
+            onClick={() => onInspect(tile, samples)}>
+            {observation}<small className="mp-tile__action">View evidence</small>
+          </button> : observation}
           {tile.points.filter((p) => p.value != null).length >= 2 && (
             <SparkChart points={tile.points} height={34} format={tile.format} ariaLabel={`${tile.label} over ${window}`} color={CHART.blue} />
           )}
         </article>
-      ))}
+        );
+      })}
     </TileGrid>
   );
 }

@@ -902,7 +902,7 @@
   justify-content: space-between;
   gap: 15px;
   position: sticky;
-  top: -22px;
+  top: 0;
   z-index: 5;
   padding: 12px 0 15px;
   margin-top: -8px;

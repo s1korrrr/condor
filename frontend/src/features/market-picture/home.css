@@ -83,6 +83,12 @@
 .mp-tile strong { font-size: clamp(18px, 11cqi, 30px); line-height: 1.15; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .mp-tile small { font-size: 10px; color: var(--mp-muted); line-height: 1.35; overflow-wrap: anywhere; }
 .mp-tile small.mp-up { color: var(--mp-positive); } .mp-tile small.mp-down { color: var(--mp-negative); }
+.mp-page .mp-tile__inspect { display: grid; gap: 3px; width: 100%; min-height: 44px; padding: 3px 0; border: 0; background: transparent; text-align: left; color: var(--mp-text); }
+.mp-tile .mp-tile__action { color: var(--mp-accent); text-decoration: underline; text-underline-offset: 3px; }
+.mp-summary-evidence { display: grid; gap: 12px; min-width: 0; }
+.mp-summary-evidence h3 { font-size: 14px; }
+.mp-summary-evidence h4 { margin: 8px 0; font-size: 12px; }
+.mp-summary-evidence .mp-provenance-list { margin: 0; }
 
 /* Sections */
 .mp-sections { display: grid; gap: 10px; min-width: 0; }

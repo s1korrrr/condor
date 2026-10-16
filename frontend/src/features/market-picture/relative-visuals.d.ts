@@ -13,6 +13,8 @@ export interface RelativeStrengthProjection {
   expected: number;
   valid: number;
   omitted: number;
+  /** Frame-level timing reason when no point can qualify at the assessment time. */
+  reason: string | null;
   points: RelativeScatterPoint[];
 }
 
@@ -38,8 +40,11 @@ export interface RelativeRankProjection {
 export function projectRelativeStrength(
   assets: DisplayAsset[],
   benchmark: string,
+  frame: Pick<DisplayFrame, "cutoff_ms" | "available_at_ms" | "expires_at_ms">,
+  asOf: number,
 ): RelativeStrengthProjection;
 export function projectRelativeRankMovers(
-  frame: Pick<DisplayFrame, "assets" | "expected" | "cutoff_ms" | "relativeStrengthChanges">,
+  frame: Pick<DisplayFrame, "assets" | "expected" | "cutoff_ms" | "available_at_ms" | "expires_at_ms" | "relativeStrengthChanges">,
+  asOf: number,
   limitPerSide?: number,
 ): RelativeRankProjection;

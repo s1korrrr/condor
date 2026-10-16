@@ -1,7 +1,7 @@
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { formatDecimal, formatSigned } from '../format';
-import { CHART, projectTimeSeries, timeTick, valueAt, valueDomain, type ChartMarker, type ChartSeries, type SeriesPoint } from './series';
+import { CHART, niceTicks, projectTimeSeries, timeTick, valueAt, valueExtent, type ChartMarker, type ChartSeries, type SeriesPoint } from './series';
 import './kit.css';
 
 /**
@@ -23,16 +23,25 @@ function TooltipCard({ title, rows }: { title: string; rows: { key: string; labe
   </div>;
 }
 
+/** Rounded ticks and the axis extent they span; values outside never occur because ticks cover the data domain. */
+function rounded(domain: [number, number] | null, integer = false) {
+  const nice = domain && niceTicks(domain[0], domain[1], 5, integer);
+  return nice ? { ...nice, domain: [nice.ticks[0], nice.ticks[nice.ticks.length - 1]] as [number, number] } : null;
+}
+
 const toneClass = (value: number | null, signed: boolean) => !signed || value == null || value === 0 ? undefined : value > 0 ? 'q-positive' : 'q-negative';
 
 /** Hoverable multi-series time chart with left/right axes, gap-preserving lines and optional markers. */
-export function TimeSeriesChart({ series, height = 220, markers = [], highlight, domains, timeDomain, leftFormat = plain, rightFormat = plain, zeroLine = false, includeZero = false, signed = false, ariaLabel, emptyText = 'No observations in this window.' }: {
+export function TimeSeriesChart({ series, height = 220, markers = [], highlight, domains, timeDomain, leftFormat = plain, rightFormat = plain, leftTickFormat, zeroLine = false, includeZero = false, signed = false, ariaLabel, emptyText = 'No observations in this window.' }: {
   series: ChartSeries[]; height?: number; markers?: ChartMarker[]; highlight?: { time: number; value: number; label: string; color?: string } | null;
   /** Fixed value ranges per axis (for example breadth pressure -3..3 beside a 0..100% share), instead of the padded data range. */
   domains?: { left?: [number, number]; right?: [number, number] };
   /** Shared retained interval, including missing edge observations in aligned plots. */
   timeDomain?: [number, number];
-  leftFormat?: (value: number) => string; rightFormat?: (value: number) => string; zeroLine?: boolean; includeZero?: boolean; signed?: boolean;
+  leftFormat?: (value: number) => string; rightFormat?: (value: number) => string;
+  /** Left-axis labels from the rounded tick step, so one axis never mixes precisions; tooltips keep `leftFormat`. */
+  leftTickFormat?: (value: number, step: number, ticks: number[]) => string;
+  zeroLine?: boolean; includeZero?: boolean; signed?: boolean;
   ariaLabel: string; emptyText?: ReactNode;
 }) {
   const gradient = useId().replaceAll(':', '');
@@ -40,7 +49,9 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
   if (projection.invalid) return <p className="q-empty">{projection.invalid} History cannot be plotted.</p>;
   if (!projection.rows.length || !projection.domain) return <div className="q-chart-empty" style={{ minHeight: Math.min(height, 160) }}><p>{emptyText}</p></div>;
   const left = series.filter(item => item.axis !== 'secondary'), right = series.filter(item => item.axis === 'secondary');
-  const leftDomain = domains?.left ?? valueDomain(left, includeZero), rightDomain = domains?.right ?? valueDomain(right, includeZero);
+  // Data-derived axes widen to rounded ticks; caller-fixed domains (for example -3..3 pressure) stay exact.
+  const leftNice = domains?.left ? null : rounded(valueExtent(left, includeZero)), rightNice = domains?.right ? null : rounded(valueExtent(right, includeZero));
+  const leftDomain = domains?.left ?? leftNice?.domain ?? null, rightDomain = domains?.right ?? rightNice?.domain ?? null;
   const domain = timeDomain ?? projection.domain;
   const span = domain[1] - domain[0];
   const tick = timeTick(span);
@@ -53,8 +64,8 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
         </linearGradient>)}</defs>
         <CartesianGrid stroke={CHART.grid} strokeDasharray="3 5" vertical={false} />
         <XAxis dataKey="time" type="number" scale="time" domain={domain} interval={timeDomain ? 0 : undefined} ticks={timeDomain ? (span <= 120_000 ? [...domain] : [domain[0], domain[0] + span / 2, domain[1]]) : undefined} tickFormatter={tick} tick={{ fill: CHART.muted, fontSize: 10 }} stroke={CHART.grid} minTickGap={48} tickLine={false} />
-        <YAxis yAxisId="left" orientation="right" domain={leftDomain ?? ['auto', 'auto']} tickFormatter={value => leftFormat(value)} tick={{ fill: CHART.muted, fontSize: 10 }} stroke="transparent" width={64} hide={!left.length} />
-        {right.length > 0 && <YAxis yAxisId="right" orientation="left" domain={rightDomain ?? ['auto', 'auto']} tickFormatter={value => rightFormat(value)} tick={{ fill: right[0].color, fontSize: 10 }} stroke="transparent" width={52} />}
+        <YAxis yAxisId="left" orientation="right" domain={leftDomain ?? ['auto', 'auto']} ticks={leftNice?.ticks} interval={leftNice ? 0 : undefined} tickFormatter={value => leftTickFormat && leftNice ? leftTickFormat(value, leftNice.step, leftNice.ticks) : leftFormat(value)} tick={{ fill: CHART.muted, fontSize: 10 }} stroke="transparent" width={64} hide={!left.length} />
+        {right.length > 0 && <YAxis yAxisId="right" orientation="left" domain={rightDomain ?? ['auto', 'auto']} ticks={rightNice?.ticks} interval={rightNice ? 0 : undefined} tickFormatter={value => rightFormat(value)} tick={{ fill: right[0].color, fontSize: 10 }} stroke="transparent" width={52} />}
         {zeroLine && <ReferenceLine yAxisId="left" y={0} stroke={CHART.muted} strokeDasharray="2 3" />}
         {markers.filter(marker => inRange(marker.time)).map(marker => <ReferenceLine key={`${marker.label}-${marker.time}`} yAxisId="left" x={marker.time} stroke={marker.color ?? CHART.warning} strokeDasharray="2 4" />)}
         <Tooltip isAnimationActive={false} cursor={{ stroke: CHART.muted, strokeDasharray: '3 4' }} wrapperStyle={{ outline: 'none', zIndex: 5 }}
@@ -83,9 +94,11 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
 export type BarSpec = { id: string; label: string; color: string; signColors?: boolean };
 
 /** Hoverable category bars (days, bins) with an optional line on its own axis. Missing values stay empty. */
-export function BarsChart({ rows, bars, line, height = 160, format = formatSigned, signed = true, integer = false, unit, ariaLabel, emptyText = 'No values to plot.' }: {
+export function BarsChart({ rows, bars, line, height = 160, format = formatSigned, tickFormat, signed = true, integer = false, unit, ariaLabel, emptyText = 'No values to plot.' }: {
   rows: ({ label: string } & Record<string, number | string | null>)[]; bars: BarSpec[]; line?: { id: string; label: string; color: string } | null;
   height?: number; format?: (value: number) => string; unit?: string; ariaLabel: string; emptyText?: ReactNode;
+  /** Axis labels from the rounded tick step; tooltips keep `format`. */
+  tickFormat?: (value: number, step: number, ticks: number[]) => string;
   /** Counts: whole-number axis ticks only. */
   integer?: boolean;
   /** Signed values color gains and losses in the tooltip; counts are not signed. */
@@ -93,12 +106,16 @@ export function BarsChart({ rows, bars, line, height = 160, format = formatSigne
 }) {
   const keys = [...bars.map(bar => bar.id), ...(line ? [line.id] : [])];
   if (!rows.some(row => keys.some(key => typeof row[key] === 'number'))) return <p className="q-empty">{emptyText}</p>;
+  const barValues = rows.flatMap(row => bars.map(bar => row[bar.id]).filter((value): value is number => typeof value === 'number' && Number.isFinite(value)));
+  const barLow = Math.min(0, ...barValues), barHigh = Math.max(0, ...barValues);
+  // All-zero bars keep a 0..1 axis instead of inventing a negative band around zero.
+  const axis = barValues.length ? rounded([barLow, barHigh === barLow ? barLow + 1 : barHigh], integer) : null;
   return <figure className="q-chart" role="img" aria-label={ariaLabel} style={{ height }}>
     <ResponsiveContainer width="100%" height={height} minWidth={0}>
       <ComposedChart data={rows} margin={{ top: 6, right: 4, bottom: 0, left: 0 }} barGap={2} barCategoryGap="22%">
         <CartesianGrid stroke={CHART.grid} strokeDasharray="3 5" vertical={false} />
         <XAxis dataKey="label" tick={{ fill: CHART.muted, fontSize: 10 }} stroke={CHART.grid} tickLine={false} minTickGap={16} />
-        <YAxis yAxisId="left" orientation="right" domain={[(low: number) => Math.min(0, low), (high: number) => Math.max(0, high)]} tickFormatter={value => format(value)} tick={{ fill: CHART.muted, fontSize: 10 }} stroke="transparent" width={56} allowDecimals={!integer} />
+        <YAxis yAxisId="left" orientation="right" domain={axis?.domain ?? [(low: number) => Math.min(0, low), (high: number) => Math.max(0, high)]} ticks={axis?.ticks} interval={axis ? 0 : undefined} tickFormatter={value => tickFormat && axis ? tickFormat(value, axis.step, axis.ticks) : format(value)} tick={{ fill: CHART.muted, fontSize: 10 }} stroke="transparent" width={56} allowDecimals={!integer} />
         {line && <YAxis yAxisId="line" hide />}
         <ReferenceLine yAxisId="left" y={0} stroke={CHART.grid} />
         <Tooltip isAnimationActive={false} cursor={{ fill: 'color-mix(in srgb, var(--q-blue, #259aff) 10%, transparent)' }} wrapperStyle={{ outline: 'none', zIndex: 5 }}

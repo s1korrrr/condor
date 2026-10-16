@@ -108,6 +108,13 @@ export function valueAt(points: SeriesPoint[], time: number): SeriesPoint | null
   return found < 0 ? null : points[found];
 }
 
+/** Unpadded [min, max] of the drawn values (and zero when asked); rounded axes add their own headroom. */
+export function valueExtent(series: ChartSeries[], includeZero = false): [number, number] | null {
+  const values = series.flatMap(item => item.points.map(point => point.value).filter((value): value is number => value !== null));
+  if (includeZero) values.push(0);
+  return values.length ? [Math.min(...values), Math.max(...values)] : null;
+}
+
 /** Padded numeric domain for the values of the given series; flat lines get a visible band. */
 export function valueDomain(series: ChartSeries[], includeZero = false): [number, number] | null {
   const values = series.flatMap(item => item.points.map(point => point.value).filter((value): value is number => value !== null));
@@ -117,4 +124,74 @@ export function valueDomain(series: ChartSeries[], includeZero = false): [number
   // A flat series still gets a readable band: 1% of its level, or 0.01 around zero.
   const pad = high > low ? Math.max((high - low) * 0.08, Math.abs(high) * 0.0005) : Math.abs(high) * 0.01 || 0.01;
   return [low - pad, high + pad];
+}
+
+const cleanTick = (value: number) => {
+  const rounded = Number(value.toPrecision(12));
+  return rounded === 0 ? 0 : rounded;
+};
+
+/**
+ * Rounded axis ticks that cover [low, high] in steps of 1, 2, 2.5 or 5 × 10^n. Only the axis extent
+ * widens to the nearest tick; plotted values are never changed or clipped.
+ */
+export function niceTicks(low: number, high: number, count = 5, integer = false): { ticks: number[]; step: number } | null {
+  if (!Number.isFinite(low) || !Number.isFinite(high) || high < low) return null;
+  if (high === low) { const pad = Math.abs(high) * 0.01 || (integer ? 1 : 0.01); low -= pad; high += pad; }
+  const raw = (high - low) / Math.max(1, count - 1);
+  const power = 10 ** Math.floor(Math.log10(raw));
+  let step = [1, 2, 2.5, 5, 10].map(multiple => cleanTick(multiple * power)).find(candidate => candidate >= raw * (1 - 1e-9)) ?? 10 * power;
+  if (integer) step = Math.max(1, Math.ceil(step));
+  const first = Math.floor(low / step + 1e-9), last = Math.ceil(high / step - 1e-9);
+  const ticks: number[] = [];
+  for (let index = first; index <= last; index++) ticks.push(cleanTick(index * step));
+  return { ticks, step };
+}
+
+/** Decimal places that write every multiple of `step` exactly (2.5 → 1, 0.25 → 2). */
+function stepDecimals(step: number) {
+  for (let decimals = 0; decimals <= 12; decimals++) {
+    const scaled = step * 10 ** decimals;
+    if (Math.abs(scaled - Math.round(scaled)) < 1e-6) return decimals;
+  }
+  return 12;
+}
+
+const COMPACT = new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 });
+
+/**
+ * One label rule for a whole axis: the precision follows the tick step, so neighbouring ticks never
+ * mix forms. Steps below 0.001 use a compact exponent (+1e-4); exact values stay in tables.
+ */
+export function axisFormatter(step: number, signed = false) {
+  const prefix = (value: number) => signed && value > 0 ? '+' : '';
+  if (step > 0 && step < 1e-3) {
+    const exponent = Math.floor(Math.log10(step));
+    const decimals = stepDecimals(cleanTick(step / 10 ** exponent));
+    return (value: number) => value === 0 ? '0' : `${prefix(value)}${(value / 10 ** exponent).toFixed(decimals)}e${exponent}`;
+  }
+  const decimals = stepDecimals(step);
+  return (value: number) => {
+    if (value === 0) return decimals ? (0).toFixed(decimals) : '0';
+    if (Math.abs(value) >= 10_000) return `${prefix(value)}${COMPACT.format(value)}`;
+    return `${prefix(value)}${value.toFixed(decimals)}`;
+  };
+}
+
+const SUPERSCRIPT: Record<string, string> = { '-': '⁻', '0': '⁰', '1': '¹', '2': '²', '3': '³', '4': '⁴', '5': '⁵', '6': '⁶', '7': '⁷', '8': '⁸', '9': '⁹' };
+
+/**
+ * Axis labels with one shared multiplier for tiny steps: ticks read -3, -2, … and the unit heading
+ * carries ×10⁻⁴. The exponent follows the largest tick, so a narrow band near 0.00178 reads 1.76–1.80
+ * ×10⁻³. Only the label is divided; plotted and tabulated values stay exact.
+ */
+export function axisScale(step: number, signed = false, ticks: number[] = []): { multiplier: string | null; format: (value: number) => string } {
+  if (!(step > 0 && step < 1e-3)) return { multiplier: null, format: axisFormatter(step, signed) };
+  const largest = Math.max(0, ...ticks.map(Math.abs));
+  const exponent = Math.floor(Math.log10(largest > step ? largest : step));
+  const mantissa = axisFormatter(cleanTick(step / 10 ** exponent), signed);
+  return {
+    multiplier: `×10${String(exponent).split('').map(char => SUPERSCRIPT[char]).join('')}`,
+    format: value => mantissa(cleanTick(value / 10 ** exponent)),
+  };
 }

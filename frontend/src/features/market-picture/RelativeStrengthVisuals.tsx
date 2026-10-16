@@ -3,6 +3,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   ReferenceLine,
   ResponsiveContainer,
   Scatter,
@@ -11,8 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { CHART } from "@/features/quant-ops/kit/series";
-import { Empty } from "./Primitives";
+import { CHART, axisFormatter, niceTicks } from "@/features/quant-ops/kit/series";
 import {
   projectRelativeRankMovers,
   projectRelativeStrength,
@@ -21,8 +21,18 @@ import {
 } from "./relative-visuals.mjs";
 import type { DisplayFrame } from "./presentation";
 
-const number = (value: number, unit: string) => `${value > 0 ? "+" : ""}${value.toFixed(2)} ${unit}`;
-const axisTick = (value: number) => Number(value.toPrecision(3)).toString();
+const exact = (value: number) => `${value > 0 ? "+" : ""}${value}`;
+const number = (value: number, unit: string) => `${exact(value)} ${unit}`;
+/** Quadrant axis: always spans zero, rounded outward so every point stays inside. */
+function quadrantAxis(values: number[]) {
+  const nice = niceTicks(Math.min(0, ...values), Math.max(0, ...values));
+  if (!nice) return null;
+  const first = nice.ticks[0], last = nice.ticks[nice.ticks.length - 1], margin = (last - first) * 0.04;
+  // The margin beyond the outer ticks keeps edge points and their labels off the plot frame.
+  return { ticks: nice.ticks, domain: [first - margin, last + margin] as [number, number], format: axisFormatter(nice.step, true) };
+}
+// Symbols are drawn beside points only while they stay legible; the table always lists every point.
+const LABELLED_POINTS = 24;
 
 function RelativeTooltip({
   active,
@@ -60,31 +70,43 @@ function RankTooltip({
 export function RelativeStrengthVisuals({
   frame,
   benchmark,
+  asOf,
   select,
   selected,
 }: {
   frame: DisplayFrame;
+  /** The page's assessment clock; historical inspection passes its recorded time. */
+  asOf: number;
   benchmark: string;
   select: (id: string) => void;
   selected: string | null;
 }) {
-  const scatter = projectRelativeStrength(frame.assets, benchmark);
-  const rank = projectRelativeRankMovers(frame);
+  const scatter = projectRelativeStrength(frame.assets, benchmark, frame, asOf);
+  const rank = projectRelativeRankMovers(frame, asOf);
   const rankExtent = Math.max(1, ...rank.rows.map(row => Math.abs(row.delta)));
+  const rankTicks = niceTicks(-rankExtent, rankExtent, 5, true)?.ticks.filter(tick => Math.abs(tick) <= rankExtent);
   const otherPoints = scatter.points.filter((point) => !point.pullback);
   const pullbackPoints = scatter.points.filter((point) => point.pullback);
+  const xAxis = quadrantAxis(scatter.points.map(point => point.oneHourReturn));
+  const yAxis = quadrantAxis(scatter.points.map(point => point.relativeReturn));
+  const labelled = scatter.points.length <= LABELLED_POINTS;
+  const scatterShown = scatter.points.length > 0, rankShown = rank.available && rank.rows.length > 0;
+  // When only one view has data it takes the full row; the other stays as a compact status card.
+  const single = scatterShown !== rankShown;
+  const cardClass = (shown: boolean) => `mp-visual-card${single ? (shown ? " mp-visual-card--full" : " mp-visual-card--status") : ""}`;
+  const pointLabel = <LabelList dataKey="symbol" position="right" offset={7} fill={CHART.text} fontSize={10} />;
 
   return (
     <div className="mp-visual-grid">
-      <article className="mp-visual-card" aria-labelledby="mp-relative-map-title">
+      <article className={cardClass(scatterShown)} aria-labelledby="mp-relative-map-title">
         <header><h3 id="mp-relative-map-title">Absolute return vs relative strength</h3><span className="mp-kicker">Price participation</span></header>
         <p className="mp-panel-footnote">
           X: owner 1h asset return (%) · Y: owner 24h arithmetic excess return vs {scatter.benchmark} (pp).
           Diamonds mark the existing pullback predicate: positive excess return and negative 1h return.
-          {` ${scatter.valid}/${scatter.expected} qualified; ${scatter.omitted} missing or unavailable. Observed cutoff ${new Date(frame.cutoff_ms).toISOString()}.`}
+          {` ${scatter.valid}/${scatter.expected} qualified; ${scatter.omitted} missing, unavailable or not current. Observed cutoff ${new Date(frame.cutoff_ms).toISOString()}; assessed ${Number.isFinite(asOf) ? new Date(asOf).toISOString() : "at an invalid time"}.`}
         </p>
         {scatter.points.length ? <>
-          <div className="mp-visual-axis-labels"><span>X · 1h asset return (%)</span><span>Y · 24h excess return vs {scatter.benchmark} (pp)</span></div>
+          <div className="mp-visual-axis-labels" aria-hidden="true"><span>↑ 24h excess return vs {scatter.benchmark} (pp)</span><span>→ 1h asset return (%)</span></div>
           <div role="img" aria-label={`Scatter plot at observed cutoff ${new Date(frame.cutoff_ms).toISOString()}. Horizontal axis is one-hour asset return in percent. Vertical axis is twenty-four-hour arithmetic excess return versus ${scatter.benchmark} in percentage points. Vertical and horizontal zero lines divide positive and negative values. Diamonds identify existing pullback candidates.`} style={{ width: "100%", height: 290 }}>
             <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 1, height: 1 }}>
               <ScatterChart margin={{ top: 12, right: 18, bottom: 20, left: 12 }}>
@@ -93,8 +115,10 @@ export function RelativeStrengthVisuals({
                   type="number"
                   dataKey="oneHourReturn"
                   name="1h asset return"
-                  unit="%"
-                  tickFormatter={axisTick}
+                  domain={xAxis?.domain}
+                  ticks={xAxis?.ticks}
+                  interval={0}
+                  tickFormatter={xAxis?.format}
                   tick={{ fill: CHART.muted, fontSize: 10 }}
                   stroke={CHART.muted}
                 />
@@ -102,8 +126,10 @@ export function RelativeStrengthVisuals({
                   type="number"
                   dataKey="relativeReturn"
                   name={`24h excess return vs ${scatter.benchmark}`}
-                  unit=" pp"
-                  tickFormatter={axisTick}
+                  domain={yAxis?.domain}
+                  ticks={yAxis?.ticks}
+                  interval={0}
+                  tickFormatter={yAxis?.format}
                   tick={{ fill: CHART.muted, fontSize: 10 }}
                   stroke={CHART.muted}
                   width={48}
@@ -111,30 +137,30 @@ export function RelativeStrengthVisuals({
                 <ReferenceLine x={0} stroke={CHART.neutral} strokeDasharray="4 4" />
                 <ReferenceLine y={0} stroke={CHART.neutral} strokeDasharray="4 4" />
                 <Tooltip isAnimationActive={false} cursor={{ stroke: CHART.muted, strokeDasharray: "3 4" }} content={<RelativeTooltip />} />
-                <Scatter name="Other qualified instruments" data={otherPoints} fill={CHART.blue} shape="circle" isAnimationActive={false} />
-                <Scatter name="Pullback predicate" data={pullbackPoints} fill={CHART.warning} shape="diamond" isAnimationActive={false} />
+                <Scatter name="Other qualified instruments" data={otherPoints} fill={CHART.blue} shape="circle" isAnimationActive={false}>{labelled && pointLabel}</Scatter>
+                <Scatter name="Pullback predicate" data={pullbackPoints} fill={CHART.warning} shape="diamond" isAnimationActive={false}>{labelled && pointLabel}</Scatter>
               </ScatterChart>
             </ResponsiveContainer>
           </div>
           <details>
             <summary>Inspect {scatter.valid} plotted instruments</summary>
             <div className="mp-table-scroll" tabIndex={0} role="region" aria-label="Relative-strength scatter data">
-              <table className="mp-table">
-              <caption>Qualified scatter points at observed cutoff {new Date(frame.cutoff_ms).toISOString()}; select a symbol to open its existing instrument drawer.</caption>
-                <thead><tr><th scope="col">Instrument</th><th scope="col">1h return (%)</th><th scope="col">24h excess vs {scatter.benchmark} (pp)</th><th scope="col">Predicate</th></tr></thead>
+              <table className="mp-table mp-visual-table">
+              <caption>Qualified scatter points at observed cutoff {new Date(frame.cutoff_ms).toISOString()}; excess return is measured against {scatter.benchmark}. Values are exact owner values. Select a symbol to open its existing instrument drawer.</caption>
+                <thead><tr><th scope="col">Instrument</th><th scope="col">1h (%)</th><th scope="col">24h excess (pp)</th><th scope="col">Predicate</th></tr></thead>
                 <tbody>{scatter.points.map((point) => <tr key={point.instrumentId}>
                   <th scope="row"><button type="button" aria-pressed={selected === point.instrumentId} onClick={() => select(point.instrumentId)}>{point.symbol}</button></th>
-                  <td>{number(point.oneHourReturn, "%")}</td>
-                  <td>{number(point.relativeReturn, "pp")}</td>
-                  <td>{point.pullback ? "Pullback condition" : "Other qualified point"}</td>
+                  <td>{exact(point.oneHourReturn)}</td>
+                  <td>{exact(point.relativeReturn)}</td>
+                  <td>{point.pullback ? "Pullback" : "Other"}</td>
                 </tr>)}</tbody>
               </table>
             </div>
           </details>
-        </> : <Empty>No qualified 1h return and 24h {scatter.benchmark} excess-return pairs.</Empty>}
+        </> : <p className="mp-visual-status">{scatter.reason ? `No point qualifies: the frame is not current at this assessment time (${scatter.reason}).` : `No qualified 1h return and 24h ${scatter.benchmark} excess-return pairs.`}</p>}
       </article>
 
-      <article className="mp-visual-card" aria-labelledby="mp-relative-rank-chart-title">
+      <article className={cardClass(rankShown)} aria-labelledby="mp-relative-rank-chart-title">
         <header><h3 id="mp-relative-rank-chart-title">One-hour relative-rank movement</h3><span className="mp-kicker">Matched cohort</span></header>
         <p className="mp-panel-footnote">
           Owner rank changes in places; positive means improvement. {rank.available
@@ -142,17 +168,18 @@ export function RelativeStrengthVisuals({
             : rank.reason}{` Observed cutoff ${new Date(frame.cutoff_ms).toISOString()}.`}
         </p>
         {rank.available && rank.rows.length ? <>
-          <div className="mp-visual-axis-labels"><span>X · rank movement (places; positive improves)</span></div>
+          <div className="mp-visual-axis-labels" aria-hidden="true"><span>← weakened · rank movement (places) · improved →</span></div>
           <div role="img" aria-label={`Horizontal bar chart at observed cutoff ${new Date(frame.cutoff_ms).toISOString()}, of up to five improving and five weakening relative ranks, measured in places over one hour. Positive bars mean improvement. ${rank.displayed} shown of ${rank.totalImproving + rank.totalWeakening} movers; ${rank.unchanged} unchanged.`} style={{ width: "100%", height: Math.max(230, rank.rows.length * 27) }}>
             <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 1, height: 1 }}>
               <BarChart data={rank.rows} layout="vertical" margin={{ top: 8, right: 18, bottom: 8, left: 8 }}>
                 <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" />
-                <XAxis type="number" dataKey="delta" domain={[-rankExtent, rankExtent]} allowDecimals={false} tickFormatter={(value: number) => String(value)} tick={{ fill: CHART.muted, fontSize: 10 }} stroke={CHART.muted} />
+                <XAxis type="number" dataKey="delta" domain={[-rankExtent - 0.5, rankExtent + 0.5]} ticks={rankTicks} interval={0} allowDecimals={false} tickFormatter={(value: number) => String(value)} tick={{ fill: CHART.muted, fontSize: 10 }} stroke={CHART.muted} />
                 <YAxis type="category" dataKey="symbol" width={72} tick={{ fill: CHART.muted, fontSize: 10 }} stroke={CHART.muted} />
                 <ReferenceLine x={0} stroke={CHART.neutral} />
                 <Tooltip isAnimationActive={false} cursor={{ fill: CHART.grid, fillOpacity: 0.45 }} content={<RankTooltip />} />
                 <Bar dataKey="delta" name="Rank movement (places)" maxBarSize={28} isAnimationActive={false}>
                   {rank.rows.map((row) => <Cell key={row.instrumentId} fill={row.delta > 0 ? CHART.positive : CHART.negative} />)}
+                  <LabelList dataKey="delta" position="right" fill={CHART.text} fontSize={10} formatter={(value: unknown) => typeof value === "number" ? (value > 0 ? `+${value}` : String(value)) : ""} />
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
@@ -171,7 +198,7 @@ export function RelativeStrengthVisuals({
               </table>
             </div>
           </details>
-        </> : <Empty>{rank.available ? "No relative ranks moved during the one-hour comparison." : "Rank movement is unavailable until a complete matched one-hour owner baseline is present."}</Empty>}
+        </> : <p className="mp-visual-status">{rank.available ? "No relative ranks moved during the one-hour comparison." : "Rank movement is unavailable until a current, complete matched one-hour owner baseline is present."}</p>}
       </article>
     </div>
   );

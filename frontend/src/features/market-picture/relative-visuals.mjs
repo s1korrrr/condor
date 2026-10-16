@@ -1,22 +1,23 @@
 import { BENCHMARKS, relativePullbackCandidates } from "./model.mjs";
+import { frameReason, metricReason } from "./metric-cohort.mjs";
 
 const MAX_POINTS = 300;
 const MAX_RANK_ITEMS_PER_SIDE = 5;
 
-/** Project validated owner return fields into the scatter without recalculating returns. */
-export function projectRelativeStrength(assets, benchmark) {
+/**
+ * Project owner return fields into the scatter without recalculating returns. A point needs a frame
+ * and both metrics current at `asOf` (the page's assessment clock, also for historical inspection).
+ */
+export function projectRelativeStrength(assets, benchmark, frame, asOf) {
   const benchmarkKey = String(benchmark ?? "").toUpperCase();
   const members = Array.isArray(assets) ? assets : [];
-  if (!BENCHMARKS.includes(benchmarkKey) || members.length > MAX_POINTS) {
-    return { benchmark: benchmarkKey, expected: members.length, valid: 0, omitted: members.length, points: [] };
+  const reason = frameReason(frame, asOf);
+  if (!BENCHMARKS.includes(benchmarkKey) || members.length > MAX_POINTS || reason) {
+    return { benchmark: benchmarkKey, expected: members.length, valid: 0, omitted: members.length, reason, points: [] };
   }
 
-  const eligible = members.filter((asset) => {
-    const hourly = asset?.returns?.["60"];
-    const relative = asset?.relative?.[benchmarkKey];
-    return hourly?.status === "VALID" && relative?.status === "VALID" &&
-      Number.isFinite(hourly.value) && Number.isFinite(relative.value);
-  });
+  const eligible = members.filter((asset) =>
+    metricReason(asset?.returns?.["60"], asOf) === null && metricReason(asset?.relative?.[benchmarkKey], asOf) === null);
   const pullbacks = new Set(
     relativePullbackCandidates(eligible, benchmarkKey, eligible.length).candidates
       .map((asset) => asset.instrument_id),
@@ -33,12 +34,13 @@ export function projectRelativeStrength(assets, benchmark) {
     expected: members.length,
     valid: points.length,
     omitted: members.length - points.length,
+    reason: null,
     points,
   };
 }
 
-/** Return bounded, exact owner rank deltas only for the full current one-hour cohort. */
-export function projectRelativeRankMovers(frame, limitPerSide = MAX_RANK_ITEMS_PER_SIDE) {
+/** Return bounded, exact owner rank deltas only for the full one-hour cohort of a frame current at `asOf`. */
+export function projectRelativeRankMovers(frame, asOf, limitPerSide = MAX_RANK_ITEMS_PER_SIDE) {
   const assets = Array.isArray(frame?.assets) ? frame.assets : [];
   const expected = Number.isSafeInteger(frame?.expected) ? frame.expected : assets.length;
   const changes = frame?.relativeStrengthChanges;
@@ -54,6 +56,8 @@ export function projectRelativeRankMovers(frame, limitPerSide = MAX_RANK_ITEMS_P
     rows: [],
   });
   if (!changes) return unavailable("No owner rank comparison is attached.");
+  const timing = frameReason(frame, asOf);
+  if (timing) return unavailable(`The owner rank comparison is not current at this assessment time (${timing}).`);
   if (
     assets.length === 0 || assets.length !== expected || expected > MAX_POINTS ||
     changes.definitionId !== "relative_return" || changes.interval !== 3_600_000 ||

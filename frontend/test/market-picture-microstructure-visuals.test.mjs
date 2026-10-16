@@ -144,7 +144,8 @@ test('rendered future rows redact exact flow, cost, and coverage values and use 
 
   futureFrame.microstructure.flows = [flow({ buyQuote: '0', sellQuote: '0', unknownQuote: '0', trades: 1, available: futureAsOf - 1 })];
   const zeroHtml = renderToStaticMarkup(React.createElement(MicrostructureVisuals, { frame: futureFrame, asOf: futureAsOf, only: 'flow' }));
-  assert.match(zeroHtml, /Recorded amounts: buy 0, sell 0, unknown 0 USD/);
+  assert.match(zeroHtml, /Buy quote notional \(USD\)<b>0<\/b>.*Sell quote notional \(USD\)<b>0<\/b>.*Unknown aggressor quote notional \(USD\)<b>0<\/b>/, 'recorded zeros are written in the value strip, not left as missing bars');
+  assert.match(zeroHtml, /latest qualified window ending 2027-01-15T08:00:00.000Z · COMPLETE/);
 });
 
 test('malformed or over-covered requested sizes cannot create a cost bar or >100 percent coverage', () => {
@@ -160,4 +161,34 @@ test('malformed or over-covered requested sizes cannot create a cost bar or >100
   assert.deepEqual(projected.rows.map(row => row.coveragePercent), [null, null, null, null, 100]);
   assert.deepEqual(projected.rows.map(row => row.costBps), [null, null, null, null, 12.5]);
   assert.deepEqual(projected.rows.map(row => row.state), ['INVALID COVERAGE', 'INVALID COVERAGE', 'INVALID COVERAGE', 'INVALID COVERAGE', 'COVERED']);
+});
+
+test('rendered cost chart names rows without a full-size cost, and flow windows use compact UTC labels', () => {
+  const charts = [];
+  const { load } = frontendModules({
+    '@/features/quant-ops/kit/charts': { BarsChart: props => { charts.push(props); return React.createElement('output', null, JSON.stringify(props.rows)); } },
+  });
+  const { MicrostructureVisuals } = load('features/market-picture/MicrostructureVisuals.tsx');
+  const day = 86_400_000;
+  const visualFrame = {
+    cutoff_ms: asOf, available_at_ms: asOf - 10, expires_at_ms: asOf + 10_000, source_kind: 'synthetic', quote: 'USD',
+    microstructure: {
+      flows: [flow({ windowStart: asOf - day - 60_000, windowEnd: asOf - day }), flow()],
+      liquidity: [book(), book({ requestedSize: '3', coveredBase: '2', coveredQuote: '40', uncovered: '1', reasons: ['BOOK_DEPTH_INSUFFICIENT'] })],
+    },
+  };
+  const html = renderToStaticMarkup(React.createElement(MicrostructureVisuals, { frame: visualFrame, asOf }));
+  assert.match(html, /Not plotted as cost:<\/strong> buy · 3 base \(partial depth\)/, 'the partial-depth size is named, not a silent gap');
+  const [flowChart, costChart] = charts;
+  const end = new Date(asOf).toISOString();
+  assert.deepEqual(flowChart.rows.map(row => row.label), [`${new Date(asOf - day).toISOString().slice(5, 10)} ${new Date(asOf - day).toISOString().slice(11, 16)}Z`, `${end.slice(5, 10)} ${end.slice(11, 16)}Z`], 'windows crossing a UTC day keep their date');
+  assert.deepEqual(costChart.rows.map(row => row.cost), [12.5, null]);
+  assert.equal(costChart.tickFormat(5, 5), '5', 'axis labels follow the rounded tick step');
+
+  charts.length = 0;
+  visualFrame.microstructure.flows = [flow()];
+  visualFrame.microstructure.liquidity = [book()];
+  const fullHtml = renderToStaticMarkup(React.createElement(MicrostructureVisuals, { frame: visualFrame, asOf }));
+  assert.deepEqual(charts[0].rows.map(row => row.label), [`${end.slice(11, 16)}Z`], 'one UTC day shows the clock only');
+  assert.equal(fullHtml.includes('Not plotted as cost'), false, 'complete rows add no exclusion note');
 });

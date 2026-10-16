@@ -515,7 +515,7 @@ export function MarketPictureSurface({
       {frame && <FlowHistoryPanel history={data?.history ?? EMPTY_HISTORY} window={view.window} fault={data?.faults.history ?? null} />}
       {frame && <BreadthContextPanel frame={frame} />}
       {frame && <Panel id="mp-relative-strength" title="Relative strength & rank movement" detail="Price-derived comparisons · exact owner observations at the recorded cutoff">
-        <RelativeStrengthVisuals frame={frame} benchmark={view.benchmark} select={select} selected={view.selected} />
+        <RelativeStrengthVisuals frame={frame} benchmark={view.benchmark} asOf={componentAsOf} select={select} selected={view.selected} />
       </Panel>}
       {frame && <DailyInternalsPanel frame={frame} asOf={componentAsOf} onSelectMetric={selectMetric} />}
       {!frame && (

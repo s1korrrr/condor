@@ -26,3 +26,15 @@ export function selectMetricCohort(
   asOf: number,
   expectedDefinition?: string,
 ): MetricCohortSelection;
+
+/** Why a frame cannot supply current observations at `asOf`, or null when it can. */
+export function frameReason(
+  frame: Pick<DisplayFrame, "cutoff_ms" | "available_at_ms" | "expires_at_ms"> | null,
+  asOf: number,
+): string | null;
+/** Why one owner metric is not usable at `asOf` (value, status, availability, expiry), or null. */
+export function metricReason(
+  metric: { status?: string; value?: number | null; available?: number | null; expires?: number | null } | null | undefined,
+  asOf: number,
+  options?: { partial?: boolean },
+): string | null;

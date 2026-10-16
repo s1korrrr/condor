@@ -1,6 +1,6 @@
 import { useId, useMemo, useState } from "react";
 import { TimeSeriesChart } from "@/features/quant-ops/kit/charts";
-import { CHART, type ChartSeries } from "@/features/quant-ops/kit/series";
+import { CHART, axisScale, niceTicks, valueExtent, type ChartSeries } from "@/features/quant-ops/kit/series";
 import { HISTORY_COMPARISONS, historyComparisons, type HistoryComparison, type HistoryComparisonResult } from "./history-comparisons.mjs";
 import type { HistoryPoint, Horizon } from "./presentation";
 
@@ -17,15 +17,21 @@ function ComparisonPlot({ comparison, horizon, interval }: {
     ...item, color: colors[index], dash: patterns[index], format: value => String(value),
   })), [comparison]);
   const latest = comparison.rows.at(-1);
+  // Same extent and tick rule as the chart axis, so the heading names the multiplier its ticks use.
+  const scale = useMemo(() => {
+    const extent = valueExtent(series);
+    const nice = extent && niceTicks(extent[0], extent[1]);
+    return nice ? axisScale(nice.step, true, nice.ticks) : null;
+  }, [series]);
   return <>
-    <p className="mp-visual-unit">{comparison.unit} · {horizon}m return horizon · UTC</p>
+    <p className="mp-visual-unit">{scale?.multiplier ? <><b>{scale.multiplier}</b> </> : null}{comparison.unit} · {horizon}m return horizon · UTC</p>
     <div className="mp-visual-legend">{series.map(item => <span key={item.id}>
       <svg width="26" height="10" aria-hidden="true"><line x1="0" x2="26" y1="5" y2="5" stroke={item.color} strokeWidth="2" strokeDasharray={item.dash} /></svg>
       {item.label}<b>{latest?.values[item.id] == null ? "Unavailable" : signed(latest.values[item.id])}</b>
     </span>)}</div>
-    <TimeSeriesChart series={series} markers={comparison.markers} height={230} leftFormat={signed}
+    <TimeSeriesChart series={series} markers={comparison.markers} height={230} leftFormat={signed} leftTickFormat={(value, step, ticks) => axisScale(step, true, ticks).format(value)}
       timeDomain={comparison.rows.length > 1 ? [comparison.rows[0].time, comparison.rows.at(-1)!.time] : undefined}
-      zeroLine ariaLabel={`${comparison.label} · ${horizon}m horizon · ${interval}m change interval · ${comparison.unit}`}
+      zeroLine ariaLabel={`${comparison.label} · ${horizon}m horizon · ${interval}m change interval · ${scale?.multiplier ? `axis ticks ${scale.multiplier} ` : ""}${comparison.unit}`}
       emptyText={comparison.unavailable ?? "No retained comparison values."} />
     <p className="mp-panel-footnote">{latest ? `Latest retained point ${new Date(latest.time).toISOString()} · ${latest.coverage}` : "No retained points in this range."}</p>
     <details className="mp-pulse-data" onToggle={event => setTableOpen(event.currentTarget.open)}>

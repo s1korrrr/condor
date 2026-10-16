@@ -8,23 +8,29 @@ import { frontendModules } from "./helpers/frontend-module.mjs";
 const chartStub = (name) => function ChartStub({ children }) {
   return React.createElement("div", { "data-chart-component": name }, children);
 };
+const { niceTicks, axisFormatter } = frontendModules().load("features/quant-ops/kit/series.ts");
 const { load } = frontendModules({
   "./relative-visuals.mjs": { projectRelativeStrength, projectRelativeRankMovers },
-  "@/features/quant-ops/kit/series": { CHART: { blue: "blue", warning: "yellow", positive: "green", negative: "red", grid: "gray", muted: "gray", neutral: "gray" } },
+  "@/features/quant-ops/kit/series": { CHART: { blue: "blue", warning: "yellow", positive: "green", negative: "red", grid: "gray", muted: "gray", neutral: "gray", text: "white" }, niceTicks, axisFormatter },
   "./Primitives": { Empty: ({ children }) => React.createElement("p", null, children) },
-  recharts: Object.fromEntries(["Bar", "BarChart", "CartesianGrid", "Cell", "ReferenceLine", "ResponsiveContainer", "Scatter", "ScatterChart", "Tooltip", "XAxis", "YAxis"].map(name => [name, chartStub(name)])),
+  recharts: Object.fromEntries(["Bar", "BarChart", "CartesianGrid", "Cell", "LabelList", "ReferenceLine", "ResponsiveContainer", "Scatter", "ScatterChart", "Tooltip", "XAxis", "YAxis"].map(name => [name, chartStub(name)])),
 }, { "features/market-picture/RelativeStrengthVisuals.tsx": ["RelativeStrengthVisuals"] });
 
-function asset(id, { oneHour = 0, oneHourStatus = "VALID", relative = 0, relativeStatus = "VALID" } = {}) {
+// Owner metric timing: available before the 10_000_000 cutoff's assessment, expiring well after it.
+const timing = { available: 9_000_000, expires: 20_000_000 };
+const AS_OF = 10_000_500;
+const current = { cutoff_ms: 10_000_000, available_at_ms: 10_000_100, expires_at_ms: 20_000_000 };
+function asset(id, { oneHour = 0, oneHourStatus = "VALID", relative = 0, relativeStatus = "VALID", oneHourTiming = timing, relativeTiming = timing } = {}) {
   return {
     instrument_id: `venue:spot:${id}-USDC`, symbol: id,
-    returns: { "60": { status: oneHourStatus, value: oneHour } },
-    relative: { BTC: { status: relativeStatus, value: relative } },
+    returns: { "60": { status: oneHourStatus, value: oneHour, ...oneHourTiming } },
+    relative: { BTC: { status: relativeStatus, value: relative, ...relativeTiming } },
   };
 }
+const strength = (assets, benchmark, asOf = AS_OF, frame = current) => projectRelativeStrength(assets, benchmark, frame, asOf);
 
 test("relative scatter keeps genuine zeros, omits unavailable fields, and marks owner pullbacks", () => {
-  const result = projectRelativeStrength([
+  const result = strength([
     asset("ZERO", { oneHour: 0, relative: 0 }),
     asset("PULL", { oneHour: -1.25, relative: 2.5 }),
     asset("MISSING", { oneHour: null, relative: 1 }),
@@ -43,9 +49,9 @@ test("relative scatter keeps genuine zeros, omits unavailable fields, and marks 
 
 test("relative scatter uses the selected benchmark's validated owner excess-return field", () => {
   const row = asset("PAIR", { oneHour: -0.5, relative: 1.25 });
-  row.relative.ETH = { status: "VALID", value: -3.5 };
+  row.relative.ETH = { status: "VALID", value: -3.5, ...timing };
 
-  const result = projectRelativeStrength([row], "ETH");
+  const result = strength([row], "ETH");
   assert.equal(result.points[0].relativeReturn, -3.5);
   assert.equal(result.points[0].pullback, false);
 });
@@ -54,9 +60,9 @@ test("rank movers require an exact complete 1h owner cohort and retain bounded t
   const assets = Array.from({ length: 12 }, (_, index) => asset(`A${String(index).padStart(2, "0")}`));
   const rankDeltas = Object.fromEntries(assets.map((row, index) => [row.instrument_id, index < 6 ? 6 - index : index === 6 ? 0 : [-7, -5, -4, -3, -2][index - 7]]));
   const frame = {
+    ...current,
     assets,
     expected: assets.length,
-    cutoff_ms: 10_000_000,
     relativeStrengthChanges: {
       baselineSnapshotId: "a".repeat(64), baselineCutoff: 6_400_000,
       currentCutoff: 10_000_000, interval: 3_600_000,
@@ -65,7 +71,7 @@ test("rank movers require an exact complete 1h owner cohort and retain bounded t
     },
   };
 
-  const result = projectRelativeRankMovers(frame, 2);
+  const result = projectRelativeRankMovers(frame, AS_OF, 2);
   assert.equal(result.available, true);
   assert.equal(result.totalImproving, 6);
   assert.equal(result.totalWeakening, 5);
@@ -83,12 +89,12 @@ test("rank movement is unavailable for missing baseline or any partial/null rank
     cohortHash: "b".repeat(64),
     rankDeltas: Object.fromEntries(assets.map((row, index) => [row.instrument_id, index ? -1 : 1])),
   };
-  const frame = { assets, expected: 2, cutoff_ms: 10_000_000, relativeStrengthChanges: valid };
+  const frame = { ...current, assets, expected: 2, relativeStrengthChanges: valid };
 
-  assert.equal(projectRelativeRankMovers({ ...frame, relativeStrengthChanges: null }).available, false);
-  assert.equal(projectRelativeRankMovers({ ...frame, relativeStrengthChanges: { ...valid, valid: 1 } }).available, false);
-  assert.equal(projectRelativeRankMovers({ ...frame, relativeStrengthChanges: { ...valid, rankDeltas: { ...valid.rankDeltas, [assets[1].instrument_id]: null } } }).available, false);
-  assert.equal(projectRelativeRankMovers({ ...frame, relativeStrengthChanges: { ...valid, baselineSnapshotId: null } }).available, false);
+  assert.equal(projectRelativeRankMovers({ ...frame, relativeStrengthChanges: null }, AS_OF).available, false);
+  assert.equal(projectRelativeRankMovers({ ...frame, relativeStrengthChanges: { ...valid, valid: 1 } }, AS_OF).available, false);
+  assert.equal(projectRelativeRankMovers({ ...frame, relativeStrengthChanges: { ...valid, rankDeltas: { ...valid.rankDeltas, [assets[1].instrument_id]: null } } }, AS_OF).available, false);
+  assert.equal(projectRelativeRankMovers({ ...frame, relativeStrengthChanges: { ...valid, baselineSnapshotId: null } }, AS_OF).available, false);
 });
 
 function* walk(node) {
@@ -103,10 +109,10 @@ test("scatter and rank values have a keyboard-accessible table path into the exi
     asset("PULL", { oneHour: -1, relative: 2 }),
     asset("ZERO", { oneHour: 0, relative: 0 }),
   ];
-  const frame = { assets, expected: 2, cutoff_ms: 10_000_000, relativeStrengthChanges: null };
+  const frame = { ...current, assets, expected: 2, relativeStrengthChanges: null };
   const selected = [];
   const component = load("features/market-picture/RelativeStrengthVisuals.tsx").RelativeStrengthVisuals({
-    frame, benchmark: "BTC", selected: null, select: id => selected.push(id),
+    frame, benchmark: "BTC", asOf: AS_OF, selected: null, select: id => selected.push(id),
   });
   const buttons = [...walk(component)].filter(node => node.type === "button");
   assert.deepEqual(buttons.map(node => node.props.children), ["PULL", "ZERO"]);
@@ -115,7 +121,75 @@ test("scatter and rank values have a keyboard-accessible table path into the exi
   const html = renderToStaticMarkup(component);
   assert.match(html, /Horizontal axis is one-hour asset return in percent/);
   assert.match(html, /PULLBACK|pullback candidates/i);
-  assert.match(html, /1h return \(%\)/);
-  assert.match(html, /24h excess vs BTC \(pp\)/);
+  assert.match(html, /<th scope="col">1h \(%\)<\/th><th scope="col">24h excess \(pp\)<\/th>/);
+  assert.match(html, /measured against BTC\. Values are exact owner values/);
+  assert.match(html, /<td>-1<\/td><td>\+2<\/td><td>Pullback<\/td>/, 'the table keeps exact owner values');
+  assert.match(html, /mp-visual-card--full[\s\S]*mp-visual-card--status/, 'the populated scatter takes the row; unavailable rank movement is a compact status card');
   assert.match(html, /aria-pressed="false"/);
+});
+
+test("scatter axes are rounded quadrants and small sets name every point on the chart", () => {
+  const render = count => load("features/market-picture/RelativeStrengthVisuals.tsx").RelativeStrengthVisuals({
+    frame: { assets: Array.from({ length: count }, (_, index) => asset(`A${index}`, { oneHour: 0.83 - index * 0.01, relative: -8.08 + index * 0.1 })), expected: count, ...current, relativeStrengthChanges: null },
+    benchmark: "BTC", asOf: AS_OF, selected: null, select: () => {},
+  });
+  const nodes = [...walk(render(3))];
+  const [x, y] = ["oneHourReturn", "relativeReturn"].map(key => nodes.find(node => node.props?.dataKey === key && node.props.ticks));
+  assert.deepEqual(x.props.ticks, [0, 0.25, 0.5, 0.75, 1], "the x axis spans zero and the largest 1h return on rounded ticks");
+  assert.deepEqual(y.props.ticks, [-10, -7.5, -5, -2.5, 0]);
+  assert.ok(x.props.domain[0] < 0 && x.props.domain[1] > 1, "a margin beyond the outer ticks keeps edge points off the frame");
+  assert.equal(y.props.tickFormatter(-7.5), "-7.5");
+  assert.equal(nodes.filter(node => node.props?.dataKey === "symbol").length, 2, "both scatter layers label points by symbol");
+  assert.equal([...walk(render(25))].filter(node => node.props?.dataKey === "symbol").length, 0, "dense sets rely on the table instead of overlapping labels");
+});
+
+test("relative views qualify only observations current at the assessment time", () => {
+  const rows = [
+    asset("LIVE", { oneHour: 1, relative: 2 }),
+    asset("OLD-1H", { oneHour: 1, relative: 2, oneHourTiming: { available: 9_000_000, expires: 10_000_000 } }),
+    asset("OLD-RS", { oneHour: 1, relative: 2, relativeTiming: { available: 9_000_000, expires: 10_000_500 } }),
+    asset("EARLY", { oneHour: 1, relative: 2, oneHourTiming: { available: 10_000_600, expires: 20_000_000 } }),
+    asset("UNTIMED", { oneHour: 1, relative: 2, relativeTiming: {} }),
+  ];
+  const result = strength(rows, "BTC");
+  assert.deepEqual(result.points.map(point => point.symbol), ["LIVE"], "expired, not-yet-available and untimed metrics are omitted");
+  assert.equal(result.omitted, 4);
+  assert.equal(result.reason, null);
+
+  const expiredFrame = strength(rows, "BTC", 20_000_000);
+  assert.deepEqual(expiredFrame.points, [], "an expired frame qualifies no point");
+  assert.equal(expiredFrame.reason, "FRAME_EXPIRED");
+  assert.equal(strength(rows, "BTC", 10_000_050).reason, "FRAME_NOT_YET_AVAILABLE");
+  assert.equal(strength(rows, "BTC", Number.NaN).reason, "INVALID_AS_OF");
+  assert.equal(strength(rows, "BTC", 9_999_999, { ...current, available_at_ms: 9_999_000 }).reason, "FRAME_CUTOFF_NOT_YET_AVAILABLE");
+
+  const historical = strength([asset("THEN", { oneHour: 1, relative: 2, oneHourTiming: { available: 1_000, expires: 2_000 }, relativeTiming: { available: 1_000, expires: 2_000 } })],
+    "BTC", 1_500, { cutoff_ms: 1_000, available_at_ms: 1_100, expires_at_ms: 2_000 });
+  assert.deepEqual(historical.points.map(point => point.symbol), ["THEN"], "historical inspection assesses at its own recorded time");
+});
+
+test("rank movement needs a current frame at the assessment time", () => {
+  const assets = [asset("A"), asset("B")];
+  const frame = { ...current, assets, expected: 2, relativeStrengthChanges: {
+    baselineSnapshotId: "a".repeat(64), baselineCutoff: 6_400_000, currentCutoff: 10_000_000, interval: 3_600_000,
+    definitionId: "relative_return", expected: 2, valid: 2, cohortHash: "b".repeat(64),
+    rankDeltas: Object.fromEntries(assets.map((row, index) => [row.instrument_id, index ? -1 : 1])),
+  } };
+  assert.equal(projectRelativeRankMovers(frame, AS_OF).available, true);
+  const expired = projectRelativeRankMovers(frame, 20_000_000);
+  assert.equal(expired.available, false);
+  assert.match(expired.reason, /FRAME_EXPIRED/);
+  assert.deepEqual(expired.rows, []);
+  assert.equal(projectRelativeRankMovers(frame, 10_000_050).available, false, "not yet available");
+});
+
+test("rendered relative views explain a frame that is not current instead of plotting it", () => {
+  const component = load("features/market-picture/RelativeStrengthVisuals.tsx").RelativeStrengthVisuals({
+    frame: { ...current, assets: [asset("LIVE", { oneHour: 1, relative: 2 })], expected: 1, relativeStrengthChanges: null },
+    benchmark: "BTC", asOf: 20_000_000, selected: null, select: () => {},
+  });
+  const html = renderToStaticMarkup(component);
+  assert.match(html, /0\/1 qualified; 1 missing, unavailable or not current/);
+  assert.match(html, /not current at this assessment time \(FRAME_EXPIRED\)/);
+  assert.equal([...walk(component)].some(node => node.props?.["data-chart-component"] === "ScatterChart" || node.type?.name === "ChartStub"), false, "no chart is drawn");
 });

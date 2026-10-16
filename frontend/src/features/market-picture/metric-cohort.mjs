@@ -9,7 +9,8 @@ const DAILY_PERIODS = new Set(["20", "50", "200"]);
 const finite = value => typeof value === "number" && Number.isFinite(value);
 const metricUsable = metric => metric && finite(metric.value) &&
   (metric.status === "VALID" || metric.status === "PARTIAL");
-const frameReason = (frame, asOf) => {
+/** Why a frame cannot supply current observations at `asOf`, or null when it can. */
+export const frameReason = (frame, asOf) => {
   if (!finite(asOf)) return "INVALID_AS_OF";
   if (!frame || !finite(frame.cutoff_ms) || !finite(frame.available_at_ms) || !finite(frame.expires_at_ms))
     return "FRAME_TIMING_UNAVAILABLE";
@@ -18,7 +19,8 @@ const frameReason = (frame, asOf) => {
   if (frame.expires_at_ms <= asOf) return "FRAME_EXPIRED";
   return null;
 };
-const metricReason = (metric, asOf, { partial = false } = {}) => {
+/** Why one owner metric is not usable at `asOf` (value, status, availability, expiry), or null. */
+export const metricReason = (metric, asOf, { partial = false } = {}) => {
   if (!metric || !finite(metric.value)) return "METRIC_VALUE_UNAVAILABLE";
   if (metric.status !== "VALID" && !(partial && metric.status === "PARTIAL")) return "METRIC_NOT_VALID";
   if (!finite(metric.available) || !finite(metric.expires)) return "METRIC_TIMING_UNAVAILABLE";

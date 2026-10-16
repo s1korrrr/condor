@@ -62,3 +62,17 @@ test('the shared multiplier follows the largest tick, so a narrow band away from
   const symmetric=niceTicks(-2.49e-4,1.38e-4);
   assert.equal(axisScale(symmetric.step,true,symmetric.ticks).multiplier,'×10⁻⁴','a band around zero keeps the step exponent');
 });
+
+test('multi-day axes tick at UTC midnights, so date labels never repeat',()=>{
+  const {dayTicks}=load('features/quant-ops/kit/series.ts');
+  const start=Date.UTC(2026,9,1,0,0), day=86_400_000;
+  const five=dayTicks([start+5*3_600_000,start+119*3_600_000]);
+  assert.deepEqual(five,[1,2,3,4].map(index=>start+index*day),'one tick per UTC day inside the range');
+  assert.deepEqual(dayTicks([start,start+119*3_600_000]),[1,2,3,4].map(index=>start+index*day),'a midnight on the plot edge is left out so its label is not cut');
+  const month=dayTicks([start+5*3_600_000,start+30*day]);
+  assert.ok(month.length<=7&&month.length>=4,`${month.length} ticks`);
+  assert.ok(month.every(tick=>tick%day===0),'every tick is a UTC midnight');
+  assert.ok(month[0]>=start+5*3_600_000&&month.at(-1)<=start+30*day,'ticks stay inside the domain');
+  const stride=month[1]-month[0];
+  assert.ok(month.every((tick,index)=>index===0||tick-month[index-1]===stride),'one whole-day stride');
+});

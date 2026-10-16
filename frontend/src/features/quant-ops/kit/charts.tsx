@@ -1,7 +1,7 @@
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { formatDecimal, formatSigned } from '../format';
-import { CHART, niceTicks, projectTimeSeries, timeTick, valueAt, valueExtent, type ChartMarker, type ChartSeries, type SeriesPoint } from './series';
+import { CHART, dayTicks, niceTicks, projectTimeSeries, timeTick, valueAt, valueExtent, type ChartMarker, type ChartSeries, type SeriesPoint } from './series';
 import './kit.css';
 
 /**
@@ -55,6 +55,9 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
   const domain = timeDomain ?? projection.domain;
   const span = domain[1] - domain[0];
   const tick = timeTick(span);
+  // Date-only labels sit on UTC midnights so neighbouring ticks never repeat a date.
+  const days = !timeDomain && span > 2 * 86_400_000 ? dayTicks(domain) : [];
+  const timeTicks = timeDomain ? (span <= 120_000 ? [...domain] : [domain[0], domain[0] + span / 2, domain[1]]) : days.length >= 2 ? days : undefined;
   const inRange = (time: number) => time >= domain[0] && time <= domain[1];
   return <figure className="q-chart" role="img" aria-label={ariaLabel} style={{ height }}>
     <ResponsiveContainer width="100%" height={height} minWidth={0}>
@@ -63,7 +66,7 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
           <stop offset="0%" style={{ stopColor: item.color }} stopOpacity={item.fillOpacity ?? 0.28} /><stop offset="100%" style={{ stopColor: item.color }} stopOpacity={item.zeroBase ? (item.fillOpacity ?? 0.28) * 0.35 : 0} />
         </linearGradient>)}</defs>
         <CartesianGrid stroke={CHART.grid} strokeDasharray="3 5" vertical={false} />
-        <XAxis dataKey="time" type="number" scale="time" domain={domain} interval={timeDomain ? 0 : undefined} ticks={timeDomain ? (span <= 120_000 ? [...domain] : [domain[0], domain[0] + span / 2, domain[1]]) : undefined} tickFormatter={tick} tick={{ fill: CHART.muted, fontSize: 10 }} stroke={CHART.grid} minTickGap={48} tickLine={false} />
+        <XAxis dataKey="time" type="number" scale="time" domain={domain} interval={timeTicks ? 0 : undefined} ticks={timeTicks} tickFormatter={tick} tick={{ fill: CHART.muted, fontSize: 10 }} stroke={CHART.grid} minTickGap={48} tickLine={false} />
         <YAxis yAxisId="left" orientation="right" domain={leftDomain ?? ['auto', 'auto']} ticks={leftNice?.ticks} interval={leftNice ? 0 : undefined} tickFormatter={value => leftTickFormat && leftNice ? leftTickFormat(value, leftNice.step, leftNice.ticks) : leftFormat(value)} tick={{ fill: CHART.muted, fontSize: 10 }} stroke="transparent" width={64} hide={!left.length} />
         {right.length > 0 && <YAxis yAxisId="right" orientation="left" domain={rightDomain ?? ['auto', 'auto']} ticks={rightNice?.ticks} interval={rightNice ? 0 : undefined} tickFormatter={value => rightFormat(value)} tick={{ fill: right[0].color, fontSize: 10 }} stroke="transparent" width={52} />}
         {zeroLine && <ReferenceLine yAxisId="left" y={0} stroke={CHART.muted} strokeDasharray="2 3" />}

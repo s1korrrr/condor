@@ -106,3 +106,33 @@ export function projectRelativeRankMovers(frame, asOf, limitPerSide = MAX_RANK_I
     rows,
   };
 }
+
+/**
+ * Choose a side for each scatter label in plot pixels: right of the point, else left, else none.
+ * Pullback candidates go first, then points farthest from the origin. Labels never overlap each
+ * other or leave the plot; unlabelled points stay in the table and tooltip.
+ */
+export function placeScatterLabels(points, xDomain, yDomain, { width, height, charWidth = 6.2, lineHeight = 12, gap = 7 }) {
+  const placed = new Map();
+  const [x0, x1] = xDomain, [y0, y1] = yDomain;
+  if (!(x1 > x0) || !(y1 > y0) || !(width > 0) || !(height > 0)) return placed;
+  const px = (x) => ((x - x0) / (x1 - x0)) * width;
+  const py = (y) => (1 - (y - y0) / (y1 - y0)) * height;
+  const boxes = [];
+  const fits = (box) => box.left >= 0 && box.right <= width && box.top >= 0 && box.bottom <= height &&
+    boxes.every((other) => box.right <= other.left || box.left >= other.right || box.bottom <= other.top || box.top >= other.bottom);
+  const order = [...points].sort((a, b) => Number(b.pullback) - Number(a.pullback) ||
+    Math.hypot(px(b.oneHourReturn) - px(0), py(b.relativeReturn) - py(0)) - Math.hypot(px(a.oneHourReturn) - px(0), py(a.relativeReturn) - py(0)) ||
+    a.instrumentId.localeCompare(b.instrumentId));
+  for (const point of order) {
+    const x = px(point.oneHourReturn), y = py(point.relativeReturn), labelWidth = point.symbol.length * charWidth;
+    const vertical = { top: y - lineHeight / 2, bottom: y + lineHeight / 2 };
+    const right = { ...vertical, left: x + gap, right: x + gap + labelWidth };
+    const left = { ...vertical, left: x - gap - labelWidth, right: x - gap };
+    const side = fits(right) ? "right" : fits(left) ? "left" : null;
+    if (!side) continue;
+    boxes.push(side === "right" ? right : left);
+    placed.set(point.instrumentId, side);
+  }
+  return placed;
+}

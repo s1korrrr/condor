@@ -13,7 +13,9 @@ import {
   YAxis,
 } from "recharts";
 import { CHART, axisFormatter, niceTicks } from "@/features/quant-ops/kit/series";
+import { useState } from "react";
 import {
+  placeScatterLabels,
   projectRelativeRankMovers,
   projectRelativeStrength,
   type RelativeRankMover,
@@ -33,6 +35,8 @@ function quadrantAxis(values: number[]) {
 }
 // Symbols are drawn beside points only while they stay legible; the table always lists every point.
 const LABELLED_POINTS = 24;
+// Scatter plot frame inside its 290px container: chart margins plus the 48px y axis and ~30px x axis.
+const PLOT_INSET = { horizontal: 12 + 18 + 48, vertical: 12 + 20 + 30 };
 
 function RelativeTooltip({
   active,
@@ -66,6 +70,63 @@ function RankTooltip({
   return <div className="mp-chart-tooltip"><strong>{row.symbol}</strong><span>{movement} {Math.abs(row.delta) === 1 ? "place" : "places"} over 1h</span></div>;
 }
 
+type QuadrantAxis = NonNullable<ReturnType<typeof quadrantAxis>>;
+
+/** The scatter chart; it owns the measured plot width so labels can be placed without overlap. */
+function ScatterPlot({ benchmark, cutoff, xAxis, yAxis, other, pullbacks, labelCandidates }: {
+  benchmark: string; cutoff: number; xAxis: QuadrantAxis | null; yAxis: QuadrantAxis | null;
+  other: RelativeScatterPoint[]; pullbacks: RelativeScatterPoint[]; labelCandidates: RelativeScatterPoint[];
+}) {
+  const [plotWidth, setPlotWidth] = useState(0);
+  const labels = labelCandidates.length && xAxis && yAxis
+    ? placeScatterLabels(labelCandidates, xAxis.domain, yAxis.domain, { width: plotWidth - PLOT_INSET.horizontal, height: 290 - PLOT_INSET.vertical })
+    : new Map<string, "left" | "right">();
+  const pointLabel = (series: RelativeScatterPoint[]) => <LabelList dataKey="symbol" content={(props: { x?: number | string; y?: number | string; width?: number | string; height?: number | string; index?: number }) => {
+    const point = props.index == null ? undefined : series[props.index];
+    const side = point && labels.get(point.instrumentId);
+    if (!point || !side) return null;
+    const x = Number(props.x) + Number(props.width ?? 0) / 2, y = Number(props.y) + Number(props.height ?? 0) / 2;
+    return <text x={side === "right" ? x + 7 : x - 7} y={y} dy="0.35em" textAnchor={side === "right" ? "start" : "end"} fill={CHART.text} fontSize={10}>{point.symbol}</text>;
+  }} />;
+  return (
+    <div role="img" aria-label={`Scatter plot at observed cutoff ${new Date(cutoff).toISOString()}. Horizontal axis is one-hour asset return in percent. Vertical axis is twenty-four-hour arithmetic excess return versus ${benchmark} in percentage points. Vertical and horizontal zero lines divide positive and negative values. Diamonds identify existing pullback candidates.`} style={{ width: "100%", height: 290 }}>
+      <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 1, height: 1 }} onResize={width => setPlotWidth(width)}>
+        <ScatterChart margin={{ top: 12, right: 18, bottom: 20, left: 12 }}>
+          <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" />
+          <XAxis
+            type="number"
+            dataKey="oneHourReturn"
+            name="1h asset return"
+            domain={xAxis?.domain}
+            ticks={xAxis?.ticks}
+            interval={0}
+            tickFormatter={xAxis?.format}
+            tick={{ fill: CHART.muted, fontSize: 10 }}
+            stroke={CHART.muted}
+          />
+          <YAxis
+            type="number"
+            dataKey="relativeReturn"
+            name={`24h excess return vs ${benchmark}`}
+            domain={yAxis?.domain}
+            ticks={yAxis?.ticks}
+            interval={0}
+            tickFormatter={yAxis?.format}
+            tick={{ fill: CHART.muted, fontSize: 10 }}
+            stroke={CHART.muted}
+            width={48}
+          />
+          <ReferenceLine x={0} stroke={CHART.neutral} strokeDasharray="4 4" />
+          <ReferenceLine y={0} stroke={CHART.neutral} strokeDasharray="4 4" />
+          <Tooltip isAnimationActive={false} cursor={{ stroke: CHART.muted, strokeDasharray: "3 4" }} content={<RelativeTooltip />} />
+          <Scatter name="Other qualified instruments" data={other} fill={CHART.blue} shape="circle" isAnimationActive={false}>{labels.size > 0 && pointLabel(other)}</Scatter>
+          <Scatter name="Pullback predicate" data={pullbacks} fill={CHART.warning} shape="diamond" isAnimationActive={false}>{labels.size > 0 && pointLabel(pullbacks)}</Scatter>
+        </ScatterChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
 /** Owner-value relative return views; interaction remains available through native buttons. */
 export function RelativeStrengthVisuals({
   frame,
@@ -89,12 +150,10 @@ export function RelativeStrengthVisuals({
   const pullbackPoints = scatter.points.filter((point) => point.pullback);
   const xAxis = quadrantAxis(scatter.points.map(point => point.oneHourReturn));
   const yAxis = quadrantAxis(scatter.points.map(point => point.relativeReturn));
-  const labelled = scatter.points.length <= LABELLED_POINTS;
   const scatterShown = scatter.points.length > 0, rankShown = rank.available && rank.rows.length > 0;
   // When only one view has data it takes the full row; the other stays as a compact status card.
   const single = scatterShown !== rankShown;
   const cardClass = (shown: boolean) => `mp-visual-card${single ? (shown ? " mp-visual-card--full" : " mp-visual-card--status") : ""}`;
-  const pointLabel = <LabelList dataKey="symbol" position="right" offset={7} fill={CHART.text} fontSize={10} />;
 
   return (
     <div className="mp-visual-grid">
@@ -107,41 +166,8 @@ export function RelativeStrengthVisuals({
         </p>
         {scatter.points.length ? <>
           <div className="mp-visual-axis-labels" aria-hidden="true"><span>↑ 24h excess return vs {scatter.benchmark} (pp)</span><span>→ 1h asset return (%)</span></div>
-          <div role="img" aria-label={`Scatter plot at observed cutoff ${new Date(frame.cutoff_ms).toISOString()}. Horizontal axis is one-hour asset return in percent. Vertical axis is twenty-four-hour arithmetic excess return versus ${scatter.benchmark} in percentage points. Vertical and horizontal zero lines divide positive and negative values. Diamonds identify existing pullback candidates.`} style={{ width: "100%", height: 290 }}>
-            <ResponsiveContainer width="100%" height="100%" initialDimension={{ width: 1, height: 1 }}>
-              <ScatterChart margin={{ top: 12, right: 18, bottom: 20, left: 12 }}>
-                <CartesianGrid stroke={CHART.grid} strokeDasharray="3 3" />
-                <XAxis
-                  type="number"
-                  dataKey="oneHourReturn"
-                  name="1h asset return"
-                  domain={xAxis?.domain}
-                  ticks={xAxis?.ticks}
-                  interval={0}
-                  tickFormatter={xAxis?.format}
-                  tick={{ fill: CHART.muted, fontSize: 10 }}
-                  stroke={CHART.muted}
-                />
-                <YAxis
-                  type="number"
-                  dataKey="relativeReturn"
-                  name={`24h excess return vs ${scatter.benchmark}`}
-                  domain={yAxis?.domain}
-                  ticks={yAxis?.ticks}
-                  interval={0}
-                  tickFormatter={yAxis?.format}
-                  tick={{ fill: CHART.muted, fontSize: 10 }}
-                  stroke={CHART.muted}
-                  width={48}
-                />
-                <ReferenceLine x={0} stroke={CHART.neutral} strokeDasharray="4 4" />
-                <ReferenceLine y={0} stroke={CHART.neutral} strokeDasharray="4 4" />
-                <Tooltip isAnimationActive={false} cursor={{ stroke: CHART.muted, strokeDasharray: "3 4" }} content={<RelativeTooltip />} />
-                <Scatter name="Other qualified instruments" data={otherPoints} fill={CHART.blue} shape="circle" isAnimationActive={false}>{labelled && pointLabel}</Scatter>
-                <Scatter name="Pullback predicate" data={pullbackPoints} fill={CHART.warning} shape="diamond" isAnimationActive={false}>{labelled && pointLabel}</Scatter>
-              </ScatterChart>
-            </ResponsiveContainer>
-          </div>
+          <ScatterPlot benchmark={scatter.benchmark} cutoff={frame.cutoff_ms} xAxis={xAxis} yAxis={yAxis}
+            other={otherPoints} pullbacks={pullbackPoints} labelCandidates={scatter.points.length <= LABELLED_POINTS ? scatter.points : []} />
           <details>
             <summary>Inspect {scatter.valid} plotted instruments</summary>
             <div className="mp-table-scroll" tabIndex={0} role="region" aria-label="Relative-strength scatter data">

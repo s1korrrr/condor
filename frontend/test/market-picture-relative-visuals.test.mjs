@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { projectRelativeStrength, projectRelativeRankMovers } from "../src/features/market-picture/relative-visuals.mjs";
+import { placeScatterLabels, projectRelativeStrength, projectRelativeRankMovers } from "../src/features/market-picture/relative-visuals.mjs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { frontendModules } from "./helpers/frontend-module.mjs";
@@ -10,7 +10,7 @@ const chartStub = (name) => function ChartStub({ children }) {
 };
 const { niceTicks, axisFormatter } = frontendModules().load("features/quant-ops/kit/series.ts");
 const { load } = frontendModules({
-  "./relative-visuals.mjs": { projectRelativeStrength, projectRelativeRankMovers },
+  "./relative-visuals.mjs": { placeScatterLabels, projectRelativeStrength, projectRelativeRankMovers },
   "@/features/quant-ops/kit/series": { CHART: { blue: "blue", warning: "yellow", positive: "green", negative: "red", grid: "gray", muted: "gray", neutral: "gray", text: "white" }, niceTicks, axisFormatter },
   "./Primitives": { Empty: ({ children }) => React.createElement("p", null, children) },
   recharts: Object.fromEntries(["Bar", "BarChart", "CartesianGrid", "Cell", "LabelList", "ReferenceLine", "ResponsiveContainer", "Scatter", "ScatterChart", "Tooltip", "XAxis", "YAxis"].map(name => [name, chartStub(name)])),
@@ -133,14 +133,15 @@ test("scatter axes are rounded quadrants and small sets name every point on the 
     frame: { assets: Array.from({ length: count }, (_, index) => asset(`A${index}`, { oneHour: 0.83 - index * 0.01, relative: -8.08 + index * 0.1 })), expected: count, ...current, relativeStrengthChanges: null },
     benchmark: "BTC", asOf: AS_OF, selected: null, select: () => {},
   });
-  const nodes = [...walk(render(3))];
-  const [x, y] = ["oneHourReturn", "relativeReturn"].map(key => nodes.find(node => node.props?.dataKey === key && node.props.ticks));
-  assert.deepEqual(x.props.ticks, [0, 0.25, 0.5, 0.75, 1], "the x axis spans zero and the largest 1h return on rounded ticks");
-  assert.deepEqual(y.props.ticks, [-10, -7.5, -5, -2.5, 0]);
-  assert.ok(x.props.domain[0] < 0 && x.props.domain[1] > 1, "a margin beyond the outer ticks keeps edge points off the frame");
-  assert.equal(y.props.tickFormatter(-7.5), "-7.5");
-  assert.equal(nodes.filter(node => node.props?.dataKey === "symbol").length, 2, "both scatter layers label points by symbol");
-  assert.equal([...walk(render(25))].filter(node => node.props?.dataKey === "symbol").length, 0, "dense sets rely on the table instead of overlapping labels");
+  const plot = [...walk(render(3))].find(node => node.props?.labelCandidates);
+  const { xAxis: x, yAxis: y } = plot.props;
+  assert.deepEqual(x.ticks, [0, 0.25, 0.5, 0.75, 1], "the x axis spans zero and the largest 1h return on rounded ticks");
+  assert.deepEqual(y.ticks, [-10, -7.5, -5, -2.5, 0]);
+  assert.ok(x.domain[0] < 0 && x.domain[1] > 1, "a margin beyond the outer ticks keeps edge points off the frame");
+  assert.equal(y.format(-7.5), "-7.5");
+  assert.equal(plot.props.labelCandidates.length, 3, "small sets are offered for direct labels");
+  assert.equal([...walk(render(25))].find(node => node.props?.labelCandidates).props.labelCandidates.length, 0, "dense sets rely on the table instead of overlapping labels");
+  assert.match(renderToStaticMarkup(render(3)), /Horizontal axis is one-hour asset return/, "the plot renders through React with its own width state");
 });
 
 test("relative views qualify only observations current at the assessment time", () => {
@@ -192,4 +193,18 @@ test("rendered relative views explain a frame that is not current instead of plo
   assert.match(html, /0\/1 qualified; 1 missing, unavailable or not current/);
   assert.match(html, /not current at this assessment time \(FRAME_EXPIRED\)/);
   assert.equal([...walk(component)].some(node => node.props?.["data-chart-component"] === "ScatterChart" || node.type?.name === "ChartStub"), false, "no chart is drawn");
+});
+
+test("scatter labels flip away from the right edge and never overlap", () => {
+  const point = (id, x, y, pullback = false) => ({ instrumentId: id, symbol: id, oneHourReturn: x, relativeReturn: y, pullback });
+  const box = { width: 300, height: 200 };
+  const placed = placeScatterLabels([
+    point("EDGE", 0.99, 0), point("SAME-A", -0.5, 0.5), point("SAME-B", -0.5, 0.5), point("PULL", -0.5, 0.5, true), point("FREE", 0, -0.8),
+  ], [-1, 1], [-1, 1], box);
+  assert.equal(placed.get("EDGE"), "left", "a label that would leave the plot flips left");
+  assert.equal(placed.get("PULL"), "right", "pullback candidates are labelled first");
+  assert.equal(placed.get("SAME-A"), "left", "a coincident point takes the free side");
+  assert.equal(placed.has("SAME-B"), false, "a third coincident label is suppressed instead of overlapping");
+  assert.equal(placed.get("FREE"), "right");
+  assert.equal(placeScatterLabels([point("X", 0, 0)], [0, 0], [-1, 1], box).size, 0, "a degenerate domain places nothing");
 });

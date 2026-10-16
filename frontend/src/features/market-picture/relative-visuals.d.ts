@@ -48,3 +48,11 @@ export function projectRelativeRankMovers(
   asOf: number,
   limitPerSide?: number,
 ): RelativeRankProjection;
+
+/** Side for each scatter label in plot pixels; missing ids are left unlabelled to avoid overlap. */
+export function placeScatterLabels(
+  points: RelativeScatterPoint[],
+  xDomain: [number, number],
+  yDomain: [number, number],
+  plot: { width: number; height: number; charWidth?: number; lineHeight?: number; gap?: number },
+): Map<string, "left" | "right">;

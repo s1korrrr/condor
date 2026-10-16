@@ -195,3 +195,20 @@ export function axisScale(step: number, signed = false, ticks: number[] = []): {
     format: value => mantissa(cleanTick(value / 10 ** exponent)),
   };
 }
+
+const DAY_MS = 86_400_000;
+
+/**
+ * UTC-midnight ticks inside a multi-day domain at one whole-day stride (at most about seven labels).
+ * Ticks within 3% of either end are left out, so a centred date label is never cut by the plot edge.
+ */
+export function dayTicks([start, end]: [number, number], maxTicks = 7): number[] {
+  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return [];
+  const stride = Math.max(1, Math.ceil((end - start) / DAY_MS / maxTicks)) * DAY_MS;
+  const edge = (end - start) * 0.03;
+  const ticks: number[] = [];
+  for (let tick = Math.ceil(start / DAY_MS) * DAY_MS; tick <= end; tick += stride) {
+    if (tick - start >= edge && end - tick >= edge) ticks.push(tick);
+  }
+  return ticks;
+}

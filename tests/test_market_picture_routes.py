@@ -314,3 +314,59 @@ def test_cursor_principal_supports_server_labels_with_spaces_and_unicode(monkeyp
     value = calls[0][1]["headers"]["X-Market-Picture-Principal"]
     assert value.startswith("condor:") and value.endswith(":7")
     assert value.isascii() and not any(char.isspace() for char in value)
+
+
+def test_contract_violation_is_typed_logged_and_sanitized(monkeypatch, caplog):
+    import json
+    import logging
+
+    # A schema violation whose message would quote the instance, including the marker value.
+    body = json.dumps(
+        {"schema_version": "private-value", "secret_marker": "private-value"}
+    ).encode()
+    client, _ = client_for(monkeypatch, Upstream(200, body))
+    with caplog.at_level(logging.WARNING, logger=routes.__name__):
+        response = client.get("/api/v1/servers/v2/market-picture/latest")
+    assert response.status_code == 502
+    assert response.json() == {"detail": {"reasons": ["RESPONSE_CONTRACT_VIOLATION"]}}
+    assert "private-value" not in response.text
+    logged = " ".join(record.getMessage() for record in caplog.records)
+    assert "RESPONSE_CONTRACT_VIOLATION" in logged and "latest" in logged
+    assert "private-value" not in logged
+
+
+def test_transport_failure_is_typed_and_logged(monkeypatch, caplog):
+    import logging
+
+    class Broken:
+        async def __aenter__(self):
+            raise ConnectionError("connection refused")
+
+        async def __aexit__(self, *args):
+            return False
+
+    client, _ = client_for(monkeypatch, Broken())
+    with caplog.at_level(logging.WARNING, logger=routes.__name__):
+        response = client.get("/api/v1/servers/v2/market-picture/latest")
+    assert response.status_code == 502
+    assert response.json() == {"detail": {"reasons": ["SOURCE_UNAVAILABLE"]}}
+    assert any("ConnectionError" in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "MICROSTRUCTURE_UNAVAILABLE",
+        "SOURCE_WARMING",
+        "SNAPSHOT_UNAVAILABLE",
+        "HISTORY_TOO_FRAGMENTED",
+    ],
+)
+def test_owner_reason_codes_pass_through_typed(monkeypatch, reason):
+    import json
+
+    body = json.dumps({"detail": {"reasons": [reason]}}).encode()
+    client, _ = client_for(monkeypatch, Upstream(503, body))
+    response = client.get("/api/v1/servers/v2/market-picture/latest")
+    assert response.status_code == 503
+    assert response.json() == {"detail": {"reasons": [reason]}}

@@ -160,6 +160,16 @@ function reconciles(actual, expected) {
 function unique(values) {
   return values.length === new Set(values).size;
 }
+// The owner serves compact frames (pydantic exclude_none/exclude_defaults): fields equal to their
+// schema default are absent on the wire. Read them through the owner defaults, never as missing.
+const RELATIVE_STRENGTH_CHANGE_DEFAULTS = Object.freeze({
+  baseline_snapshot_id: null, baseline_cutoff_ms: null, interval_ms: 3_600_000,
+  definition_id: "relative_return", source_hash: null, cohort_hash: null, reason_codes: [],
+});
+const CANDLE_ANOMALY_METRIC_DEFAULTS = Object.freeze({ high_count: null, share_fraction: null, reason_codes: [] });
+function relativeStrengthChanges(value) {
+  return { ...RELATIVE_STRENGTH_CHANGE_DEFAULTS, ...object(value) };
+}
 function exactKeys(value, keys, optional = []) {
   const actual = Object.keys(object(value));
   const required = keys.filter(key => !optional.includes(key));
@@ -350,12 +360,13 @@ async function validateMicrostructureData(frame) {
         require(row[key] == null || (Number.isSafeInteger(row[key]) && row[key] >= 0 && row[key] <= frame.available_at_ms), "Capability receipt occurs after bundle decision time");
       require(row.collected_at_ms == null || row.probed_at_ms == null || row.collected_at_ms >= row.probed_at_ms, "Collection receipt predates probe");
       require(row.qualified_at_ms == null || row.collected_at_ms == null || row.qualified_at_ms >= row.collected_at_ms, "Qualification receipt predates collection");
-      require(Array.isArray(row.reasons) && row.reasons.length <= 32 && row.reasons.every(reason => /^[A-Z][A-Z0-9_]{0,63}$/.test(reason)) && row.reasons.join("|") === [...row.reasons].sort().join("|") && unique(row.reasons), "Invalid capability reasons");
+      const reasons = row.reasons === undefined ? [] : row.reasons; // omitted means the schema default; null is invalid
+      require(Array.isArray(reasons) && reasons.length <= 32 && reasons.every(reason => /^[A-Z][A-Z0-9_]{0,63}$/.test(reason)) && reasons.join("|") === [...reasons].sort().join("|") && unique(reasons), "Invalid capability reasons");
       require(row.qualification !== "not_probed" || (row.probe_receipt_hash == null && row.operational !== "healthy"), "Unprobed capability cannot claim a healthy probe");
       require(row.qualification === "not_probed" || row.qualification === "not_qualified" || row.probe_receipt_hash != null, "Capability qualification lacks probe receipt");
       require(!["collecting", "qualified"].includes(row.qualification) || (row.collection_receipt_hash != null && row.collected_at_ms != null), "Collection capability lacks receipt");
       require(row.qualification !== "qualified" || (row.qualification_receipt_hash != null && row.qualified_at_ms != null && row.qualification_contract_hash === row.source_contract_hash), "Qualified capability lacks contract-bound receipt");
-      require(row.qualification !== "not_qualified" || row.reasons.length > 0, "Unqualified capability needs evidence limits");
+      require(row.qualification !== "not_qualified" || reasons.length > 0, "Unqualified capability needs evidence limits");
     }
   }
   if (frame.microstructure != null) {
@@ -695,11 +706,7 @@ export async function validateFrame(frame, { allowFixture = false } = {}) {
     binding(row.metric_id, `participation_${row.predicate_id}`, "share_fraction",
       PARTICIPATION_DEFINITIONS[row.predicate_id]);
   if (frame.relative_strength_changes != null) {
-    const changes = {
-      baseline_snapshot_id: null, baseline_cutoff_ms: null, interval_ms: 3_600_000,
-      definition_id: "relative_return", source_hash: null, cohort_hash: null,
-      ...object(frame.relative_strength_changes),
-    };
+    const changes = relativeStrengthChanges(frame.relative_strength_changes);
     exactKeys(changes, ["baseline_snapshot_id", "baseline_cutoff_ms", "current_cutoff_ms", "interval_ms", "definition_id", "definition_hash", "source_hash", "cohort_hash", "expected_count", "valid_count", "reason_codes", "rank_deltas"]);
     require(changes.baseline_snapshot_id === null || HASH.test(changes.baseline_snapshot_id), "Invalid relative-strength baseline identity");
     require(changes.baseline_cutoff_ms === null || Number.isSafeInteger(changes.baseline_cutoff_ms), "Invalid relative-strength baseline cutoff");
@@ -772,7 +779,9 @@ export async function validateFrame(frame, { allowFixture = false } = {}) {
     for (const row of rows) {
       integer(row.cutoff_ms); integer(row.matched_count); integer(row.expected_count, 1);
       require(row.matched_count <= row.expected_count && row.expected_count === ids.length, "Invalid trajectory coverage");
-      require(row.matched_membership_hash === null || HASH.test(row.matched_membership_hash), "Invalid trajectory membership hash");
+      const trajectoryMembership = row.matched_membership_hash ?? null; // schema default
+      require(trajectoryMembership === null || HASH.test(trajectoryMembership), "Invalid trajectory membership hash");
+      require((row.matched_count === 0) === (trajectoryMembership === null), "Trajectory membership hash must exist exactly when instruments are matched");
       const referenceKeys = Object.keys(row.metric_refs).sort();
       require(referenceKeys.join("|") === [...Object.keys(trajectoryUnits), ...(row.metric_refs.share_change ? ["share_change"] : [])].sort().join("|"), "Invalid trajectory metric references");
       for (const [field, [unit, definitionId]] of Object.entries(trajectoryUnits))
@@ -787,7 +796,9 @@ export async function validateFrame(frame, { allowFixture = false } = {}) {
     for (const row of rows) {
       integer(row.cutoff_ms); integer(row.matched_count); integer(row.expected_count, 1);
       require(row.matched_count <= row.expected_count && row.expected_count === ids.length, "Invalid divergence coverage");
-      require(row.matched_membership_hash === null || HASH.test(row.matched_membership_hash), "Invalid divergence membership hash");
+      const divergenceMembership = row.matched_membership_hash ?? null; // schema default
+      require(divergenceMembership === null || HASH.test(divergenceMembership), "Invalid divergence membership hash");
+      require((row.matched_count === 0) === (divergenceMembership === null), "Divergence membership hash must exist exactly when instruments are matched");
       aggregateBinding(row.metric_ref, `breadth_divergence_btc_15_${row.interval_minutes}m`, "count", "breadth_price_divergence");
     }
   }
@@ -927,7 +938,7 @@ export async function validateFrame(frame, { allowFixture = false } = {}) {
     }
   }
   if (frame.candle_anomalies !== undefined && frame.candle_anomalies !== null) {
-    const anomalies = object(frame.candle_anomalies);
+    const anomalies = { expires_at_ms: null, ...object(frame.candle_anomalies) }; // schema default
     exactKeys(anomalies, ["interval_ms", "cutoff_ms", "decision_available_at_ms", "expires_at_ms", "source_kind", "source_hash", "source_count", "expected_count", "metrics"]);
     require(anomalies.interval_ms === 3_600_000 && anomalies.cutoff_ms === Math.floor(frame.cutoff_ms / 3_600_000) * 3_600_000, "Invalid hourly candle-anomaly cutoff");
     require(anomalies.decision_available_at_ms === frame.available_at_ms && anomalies.cutoff_ms <= anomalies.decision_available_at_ms, "Candle-anomaly decision time is invalid");
@@ -944,8 +955,8 @@ export async function validateFrame(frame, { allowFixture = false } = {}) {
     const metrics = object(anomalies.metrics);
     exactKeys(metrics, Object.keys(anomalyDefinitions));
     for (const [metricId, definitionHash] of Object.entries(anomalyDefinitions)) {
-      const metric = object(metrics[metricId]);
-      exactKeys(metric, ["definition_id", "definition_hash", "valid_count", "expected_count", "high_count", "share_fraction", "values", "reason_codes"], ["reason_codes"]);
+      const metric = { ...CANDLE_ANOMALY_METRIC_DEFAULTS, ...object(metrics[metricId]) };
+      exactKeys(metric, ["definition_id", "definition_hash", "valid_count", "expected_count", "high_count", "share_fraction", "values", "reason_codes"]);
       require(metric.definition_id === metricId && metric.definition_hash === definitionHash, "Candle-anomaly definition identity mismatch");
       integer(metric.valid_count); integer(metric.expected_count, 1);
       require(metric.expected_count === anomalies.expected_count && metric.valid_count <= metric.expected_count, "Candle-anomaly metric coverage mismatch");
@@ -1099,7 +1110,7 @@ function projectMicrostructureData(frame) {
       probeReceiptHash: row.probe_receipt_hash ?? null, probedAtMs: row.probed_at_ms ?? null,
       collectionReceiptHash: row.collection_receipt_hash ?? null, collectedAtMs: row.collected_at_ms ?? null,
       qualificationReceiptHash: row.qualification_receipt_hash ?? null,
-      qualificationContractHash: row.qualification_contract_hash ?? null, qualifiedAtMs: row.qualified_at_ms ?? null, reasons: row.reasons,
+      qualificationContractHash: row.qualification_contract_hash ?? null, qualifiedAtMs: row.qualified_at_ms ?? null, reasons: row.reasons ?? [],
     })),
     microstructure: frame.microstructure ? {
       componentId: frame.microstructure.component_id, sourceKind: frame.microstructure.source_kind,
@@ -1262,7 +1273,7 @@ export function projectFrame(frame) {
     }])),
     breadthTrajectory: (frame.breadth_trajectory ?? []).map(row => ({
       horizon: row.horizon_minutes, interval: row.interval_minutes, cutoff: row.cutoff_ms,
-      matched: row.matched_count, expected: row.expected_count, membership: row.matched_membership_hash,
+      matched: row.matched_count, expected: row.expected_count, membership: row.matched_membership_hash ?? null,
       level: aggregate(row.metric_refs.level), change: aggregate(row.metric_refs.change),
       velocity: aggregate(row.metric_refs.velocity), acceleration: aggregate(row.metric_refs.acceleration),
       ...(row.metric_refs.share_change ? { shareChange: aggregate(row.metric_refs.share_change) } : {}),
@@ -1295,7 +1306,7 @@ export function projectFrame(frame) {
         definitionHash: metric.definition_hash,
         valid: metric.valid_count,
         expected: metric.expected_count,
-        high: metric.high_count,
+        high: metric.high_count ?? CANDLE_ANOMALY_METRIC_DEFAULTS.high_count,
         share: metric.share_fraction == null ? null : Number(metric.share_fraction),
         values: Object.fromEntries(frame.assets.map((asset, index) => [asset.instrument_id, metric.values[index]])),
         reasons: metric.reason_codes ?? [],
@@ -1304,7 +1315,7 @@ export function projectFrame(frame) {
     breadthDivergence: (frame.breadth_divergence ?? []).map(row => ({
       benchmark: row.benchmark, horizon: row.horizon_minutes, interval: row.interval_minutes,
       cutoff: row.cutoff_ms, matched: row.matched_count, expected: row.expected_count,
-      membership: row.matched_membership_hash, metric: aggregate(row.metric_ref),
+      membership: row.matched_membership_hash ?? null, metric: aggregate(row.metric_ref),
     })),
     contributions: Object.fromEntries((frame.contribution_summaries ?? []).map(row => [String(row.horizon_minutes), {
       horizon: row.horizon_minutes, expected: row.expected_count, valid: row.valid_count,
@@ -1397,20 +1408,20 @@ export function projectFrame(frame) {
       baseline: frame.comparisons.baseline_count,
       membership: frame.comparisons.common_membership_hash,
     } : null,
-    relativeStrengthChanges: frame.relative_strength_changes ? {
-      baselineSnapshotId: frame.relative_strength_changes.baseline_snapshot_id ?? null,
-      baselineCutoff: frame.relative_strength_changes.baseline_cutoff_ms ?? null,
-      currentCutoff: frame.relative_strength_changes.current_cutoff_ms,
-      interval: frame.relative_strength_changes.interval_ms,
-      definitionId: frame.relative_strength_changes.definition_id,
-      definitionHash: frame.relative_strength_changes.definition_hash,
-      sourceHash: frame.relative_strength_changes.source_hash ?? null,
-      cohortHash: frame.relative_strength_changes.cohort_hash ?? null,
-      expected: frame.relative_strength_changes.expected_count,
-      valid: frame.relative_strength_changes.valid_count,
-      reasons: frame.relative_strength_changes.reason_codes,
-      rankDeltas: Object.fromEntries(frame.assets.map((asset, index) => [asset.instrument_id, frame.relative_strength_changes.rank_deltas[index]])),
-    } : null,
+    relativeStrengthChanges: frame.relative_strength_changes ? (changes => ({
+      baselineSnapshotId: changes.baseline_snapshot_id,
+      baselineCutoff: changes.baseline_cutoff_ms,
+      currentCutoff: changes.current_cutoff_ms,
+      interval: changes.interval_ms,
+      definitionId: changes.definition_id,
+      definitionHash: changes.definition_hash,
+      sourceHash: changes.source_hash,
+      cohortHash: changes.cohort_hash,
+      expected: changes.expected_count,
+      valid: changes.valid_count,
+      reasons: changes.reason_codes,
+      rankDeltas: Object.fromEntries(frame.assets.map((asset, index) => [asset.instrument_id, changes.rank_deltas[index]])),
+    }))(relativeStrengthChanges(frame.relative_strength_changes)) : null,
     distribution: Object.fromEntries(
       frame.distribution.map((d) => {
         const b = frame.breadth.find(

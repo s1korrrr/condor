@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -14,6 +15,8 @@ from condor.web.auth import get_current_user
 from condor.web.market_picture_contract import validate_response
 from condor.web.models import WebUser
 from config_manager import get_config_manager
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/servers/{name}/market-picture", tags=["market-picture"])
 TIMEOUT = 5.0
@@ -39,6 +42,21 @@ _REASONS = frozenset(
         "HASH_MISMATCH",
         "SOURCE_IDENTITY_MISMATCH",
         "INVALID_QUERY",
+        "RESPONSE_CONTRACT_VIOLATION",
+        # Typed owner codes (hummingbot-api market_picture routes); only codes pass, never text.
+        "SOURCE_WARMING",
+        "SNAPSHOT_UNAVAILABLE",
+        "INSTRUMENT_UNAVAILABLE",
+        "MICROSTRUCTURE_UNAVAILABLE",
+        "MICROSTRUCTURE_RESPONSE_TOO_LARGE",
+        "CORRELATIONS_UNAVAILABLE",
+        "HISTORY_TOO_FRAGMENTED",
+        "HISTORY_CAPACITY_EXCEEDED",
+        "STORE_INTEGRITY_ERROR",
+        "BENCHMARK_NOT_IN_UNIVERSE",
+        "INVALID_SNAPSHOT_ID",
+        "INVALID_HISTORY_QUERY",
+        "INVALID_CURSOR",
     }
 )
 
@@ -139,6 +157,15 @@ def _query(path: str, request: Request) -> list[tuple[str, str]]:
     return params
 
 
+def _typed_error(status: int, reason: str) -> Response:
+    return Response(
+        json.dumps({"detail": {"reasons": [reason]}}),
+        status_code=status,
+        media_type="application/json",
+        headers=_HEADERS,
+    )
+
+
 async def _body(upstream, limit: int) -> bytes:
     body = bytearray()
     async for chunk in upstream.content.iter_chunked(64 * 1024):
@@ -216,7 +243,22 @@ async def read_market_picture(
                         502, "Market Picture source returned a non-JSON response"
                     )
                 raw = await _body(upstream, MAX_BYTES)
-                payload = validate_response(path, raw)
+                try:
+                    payload = validate_response(path, raw)
+                except Exception as exc:
+                    # Observable and typed: name the path and failed check, never the payload.
+                    # Own checks raise static ValueError texts and KeyError field names; schema
+                    # errors quote the instance, so only their type is logged.
+                    detail = (
+                        str(exc)[:200] if type(exc) in (ValueError, KeyError) else ""
+                    )
+                    logger.warning(
+                        "Market Picture %s rejected: RESPONSE_CONTRACT_VIOLATION %s: %s",
+                        path,
+                        type(exc).__name__,
+                        detail,
+                    )
+                    return _typed_error(502, "RESPONSE_CONTRACT_VIOLATION")
                 requested_id = (
                     path.removeprefix("snapshots/")
                     if path.startswith("snapshots/")
@@ -247,7 +289,10 @@ async def read_market_picture(
         raise HTTPException(
             502, "Market Picture source exceeded the five-second deadline"
         ) from None
-    except Exception:
-        raise HTTPException(
-            502, "Market Picture source unavailable or invalid"
-        ) from None
+    except Exception as exc:
+        logger.warning(
+            "Market Picture %s unavailable: SOURCE_UNAVAILABLE %s",
+            path,
+            type(exc).__name__,
+        )
+        return _typed_error(502, "SOURCE_UNAVAILABLE")

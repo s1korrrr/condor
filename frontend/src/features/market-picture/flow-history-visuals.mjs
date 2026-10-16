@@ -18,7 +18,6 @@ export function flowHistoryVisuals(points, quoteAsset) {
     if (flow && previousFlow && flow.quoteAsset !== previousFlow.quoteAsset) reasons.push('quote changed');
     if (previous && point.source_kind !== previous.source_kind) reasons.push('source changed');
     if (previous && (point.membership !== previous.membership || point.definitionRegistryHash !== previous.definitionRegistryHash)) reasons.push('cohort or definition changed');
-    if (previous && point.time - previous.time !== 60_000) reasons.push('non-1m interval');
     const allSeries = [...Object.values(notional), cvd];
     if (index > 0 && reasons.length) {
       for (const series of allSeries) series.push({ time: point.time - 1, value: null });

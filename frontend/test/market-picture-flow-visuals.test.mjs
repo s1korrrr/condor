@@ -19,8 +19,8 @@ test('flow chart preserves zeros, unknown sides and owner CVD without accumulati
 });
 
 test('gap, reset, quote, source, scope and definition changes break historical lines', () => {
-  for(const change of ['gap','reset','quote','source','scope','definition','time']) {
-    const rows=[point(0),point(change==='time'?2:1)];
+  for(const change of ['gap','reset','quote','source','scope','definition']) {
+    const rows=[point(0),point(1)];
     if(change==='gap')rows[1].gapBefore=true;
     if(change==='reset')rows[1].flowHistory.resetAt=60000;
     if(change==='quote')rows[1].flowHistory.quoteAsset='USDT';
@@ -31,6 +31,14 @@ test('gap, reset, quote, source, scope and definition changes break historical l
     assert.ok(result.cvd.some(p=>p.value===null),change);
     assert.match(result.rows[1].continuity,/Break/);
   }
+});
+
+test('owner-sampled spacing without a gap flag keeps the stored lines continuous', () => {
+  // A 24h window is downsampled by the owner; only gap_before marks a real gap.
+  const result=flowHistoryVisuals([point(0),point(5),point(11)],'USDC');
+  assert.ok(result.cvd.every(p=>p.value!==null));
+  assert.deepEqual(result.breaks,[]);
+  assert.ok(result.rows.slice(1).every(row=>row.continuity==='Continuous with prior stored point'));
 });
 
 test('missing flow or CVD never becomes zero; quote selection keeps currency separate', () => {
@@ -49,6 +57,6 @@ test('continuity breaks after the first stored point become named chart markers'
   const { breaks } = flowHistoryVisuals([point(60_000, flow('1')), point(120_000, flow('2')), point(180_000, flow(null)), point(300_000, flow('3'))], 'USDC');
   assert.deepEqual(breaks, [
     { time: 180_000, label: 'CVD unavailable' },
-    { time: 300_000, label: 'previous CVD unavailable, non-1m interval' },
+    { time: 300_000, label: 'previous CVD unavailable' },
   ], 'the window start is not a break; each later break keeps its reasons');
 });

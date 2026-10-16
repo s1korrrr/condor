@@ -51,7 +51,7 @@ test('level, change, share change, velocity and acceleration retain separate uni
 });
 
 test('retained gaps and changed matched cohorts break lines without altering raw observations', () => {
-  const rows = [point(0), point(1), point(3)];
+  const rows = [point(0), point(1), point(3, { gapBefore: true })];
   rows[1].breadthTrajectory['15/15'].membership = 'different-match';
   const result = historyComparisons(rows, '15', '15', 'velocity');
   assert.deepEqual(result.series[0].points.map(p => p.value), [0.4, null, 0.4, null, 0.4]);
@@ -101,4 +101,16 @@ test('unsupported trajectory horizon is explicit and never silently selects anot
   assert.equal(result.series[0].points[0].value, null);
   assert.match(result.unavailable, /5m, 15m and 60m/);
   assert.equal(result.markers.length, 0);
+});
+
+test('owner-downsampled history stays continuous; only owner-flagged gaps break the lines', () => {
+  // A 24h window returns about one point per five minutes; spacing alone is not a gap.
+  const rows = [0, 5, 10, 16, 21].map(minute => point(minute));
+  const result = historyComparisons(rows, '15', '15', 'returns');
+  assert.equal(result.markers.filter(marker => !marker.label.includes('divergence')).length, 0);
+  assert.ok(result.series[0].points.every(p => p.value !== null), 'no gap sentinel splits sampled points');
+  assert.ok(result.rows.every(row => row.continuity === 'Same retained basis'));
+  rows[3].gapBefore = true;
+  const gapped = historyComparisons(rows, '15', '15', 'returns');
+  assert.equal(gapped.markers.filter(marker => marker.label === 'Retained gap').length, 1);
 });

@@ -38,9 +38,10 @@ export function historyComparisons(samples, horizon, interval, view, range = nul
       view === "returns" ? null : trajectory?.membership ?? null,
       view === "returns" ? [benchmark?.instrumentId, benchmark?.quoteAsset, benchmark?.definitionHash] : null,
     ]);
-    const gap = Boolean(previous && (point.gapBefore || point.time - previous.time > 60_000));
+    // The owner flags real gaps; downsampled windows are sampled at wider spacing without one.
+    const gap = Boolean(previous && point.gapBefore);
     const changed = Boolean(previous && basis !== previous.basis);
-    const continuity = gap ? "Retained gap / sampled interval" : changed ? "Source or cohort changed" : "Same retained basis";
+    const continuity = gap ? "Retained gap" : changed ? "Source or cohort changed" : "Same retained basis";
     previous = { time: point.time, basis };
     if (range && (point.time < range[0] || point.time > range[1])) continue;
     if (gap || changed) {

@@ -360,7 +360,7 @@ async function validateMicrostructureData(frame) {
         require(row[key] == null || (Number.isSafeInteger(row[key]) && row[key] >= 0 && row[key] <= frame.available_at_ms), "Capability receipt occurs after bundle decision time");
       require(row.collected_at_ms == null || row.probed_at_ms == null || row.collected_at_ms >= row.probed_at_ms, "Collection receipt predates probe");
       require(row.qualified_at_ms == null || row.collected_at_ms == null || row.qualified_at_ms >= row.collected_at_ms, "Qualification receipt predates collection");
-      const reasons = row.reasons ?? []; // schema default
+      const reasons = row.reasons === undefined ? [] : row.reasons; // omitted means the schema default; null is invalid
       require(Array.isArray(reasons) && reasons.length <= 32 && reasons.every(reason => /^[A-Z][A-Z0-9_]{0,63}$/.test(reason)) && reasons.join("|") === [...reasons].sort().join("|") && unique(reasons), "Invalid capability reasons");
       require(row.qualification !== "not_probed" || (row.probe_receipt_hash == null && row.operational !== "healthy"), "Unprobed capability cannot claim a healthy probe");
       require(row.qualification === "not_probed" || row.qualification === "not_qualified" || row.probe_receipt_hash != null, "Capability qualification lacks probe receipt");

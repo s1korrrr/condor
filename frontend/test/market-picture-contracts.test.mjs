@@ -616,3 +616,12 @@ test("a matched trajectory or divergence cohort keeps its membership hash even i
     await assert.rejects(validateFrame(await seal(raw), { allowFixture: true }), /membership hash must exist exactly when instruments are matched/, family);
   }
 });
+
+test("capability reasons may be omitted (schema default) but never null", async () => {
+  const raw = read("market-picture.m1-components.fixture.json");
+  const row = raw.source_capabilities[0];
+  delete row.reasons;
+  await validateFrame(await seal(raw), { allowFixture: true });
+  row.reasons = null;
+  await assert.rejects(validateFrame(await seal(raw), { allowFixture: true }), /Invalid capability reasons/);
+});

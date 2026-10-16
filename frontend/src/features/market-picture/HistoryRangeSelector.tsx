@@ -56,7 +56,7 @@ export function HistoryRangeSelector({
 
   return <fieldset className="mp-history-range">
     <legend>Chart time range</legend>
-    <p id={`${id}-instructions`}>Drag either handle or use its arrow keys; Home and End move to the bounds. Escape resets the full retained interval.</p>
+    <p id={`${id}-instructions`} className="sr-only">Drag either handle or use its arrow keys; Home and End move to the bounds. Escape resets the full retained interval.</p>
     <div className="mp-history-range__controls">
       <label>
         <span className="mp-history-range__label">Chart range start <span className="mp-history-range__bound">From <time dateTime={utcDateTime(times[start])}>{startTime}</time></span></span>

@@ -51,8 +51,17 @@ export function projectRelativeRankMovers(
 
 /** Side for each scatter label in plot pixels; missing ids are left unlabelled to avoid overlap. */
 export function placeScatterLabels(
-  points: RelativeScatterPoint[],
+  points: (RelativeScatterPoint & { label?: string })[],
   xDomain: [number, number],
   yDomain: [number, number],
   plot: { width: number; height: number; charWidth?: number; lineHeight?: number; gap?: number },
 ): Map<string, "left" | "right">;
+
+export interface RelativeScatterGroup extends RelativeScatterPoint {
+  /** Instruments sharing this exact pair. */
+  count: number;
+  /** Symbol, with "×n" when several instruments share the pair. */
+  label: string;
+}
+/** One representative per exact pair, pullbacks first, with the shared count. */
+export function groupCoincident(points: RelativeScatterPoint[]): RelativeScatterGroup[];

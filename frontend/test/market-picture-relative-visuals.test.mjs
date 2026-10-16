@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { placeScatterLabels, projectRelativeStrength, projectRelativeRankMovers } from "../src/features/market-picture/relative-visuals.mjs";
+import { groupCoincident, placeScatterLabels, projectRelativeStrength, projectRelativeRankMovers } from "../src/features/market-picture/relative-visuals.mjs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { frontendModules } from "./helpers/frontend-module.mjs";
@@ -10,7 +10,7 @@ const chartStub = (name) => function ChartStub({ children }) {
 };
 const { niceTicks, axisFormatter } = frontendModules().load("features/quant-ops/kit/series.ts");
 const { load } = frontendModules({
-  "./relative-visuals.mjs": { placeScatterLabels, projectRelativeStrength, projectRelativeRankMovers },
+  "./relative-visuals.mjs": { groupCoincident, placeScatterLabels, projectRelativeStrength, projectRelativeRankMovers },
   "@/features/quant-ops/kit/series": { CHART: { blue: "blue", warning: "yellow", positive: "green", negative: "red", grid: "gray", muted: "gray", neutral: "gray", text: "white" }, niceTicks, axisFormatter },
   "./Primitives": { Empty: ({ children }) => React.createElement("p", null, children) },
   recharts: Object.fromEntries(["Bar", "BarChart", "CartesianGrid", "Cell", "LabelList", "ReferenceLine", "ResponsiveContainer", "Scatter", "ScatterChart", "Tooltip", "XAxis", "YAxis"].map(name => [name, chartStub(name)])),
@@ -216,7 +216,27 @@ test("dense scatters still label pullbacks first, then the most extreme points, 
   }))].find(node => node.props?.labelCandidates);
   const ids = plot.props.labelCandidates.map(point => point.symbol);
   assert.equal(ids.length, 24, "one label budget");
-  assert.deepEqual(ids.slice(0, 2), ["P00", "P01"], "pullback candidates come first");
+  assert.equal(plot.props.labelCandidates[0].label, "P00 ×2", "the two pullbacks share one position and come first as one counted group");
   assert.ok(ids.includes("P39") && ids.includes("P02"), "the most extreme other points follow");
   assert.equal(plot.props.selected, "venue:spot:P30-USDC", "the plot receives the selected instrument for its ring");
+});
+
+test("coincident scatter points form one labelled group with an exact count", () => {
+  const { groupCoincident } = load("features/market-picture/relative-visuals.mjs");
+  const point = (id, x, y, pullback = false) => ({ instrumentId: id, symbol: id, oneHourReturn: x, relativeReturn: y, pullback });
+  const groups = groupCoincident([point("B", 1, 2), point("A", 1, 2), point("C", 1, 2, true), point("D", 0, 0)]);
+  assert.deepEqual(groups.map(group => [group.instrumentId, group.count, group.label]), [["C", 3, "C ×3"], ["D", 1, "D"]], "one representative per exact pair, pullbacks first, then by id");
+
+  const assets = [
+    ...Array.from({ length: 16 }, (_, index) => asset(`S${String(index).padStart(2, "0")}`, { oneHour: -0.5, relative: 3 })),
+    asset("LONE", { oneHour: -0.2, relative: 6 }),
+    ...Array.from({ length: 10 }, (_, index) => asset(`O${index}`, { oneHour: (index - 5) / 10, relative: -(index % 4) })),
+  ];
+  const plot = [...walk(load("features/market-picture/RelativeStrengthVisuals.tsx").RelativeStrengthVisuals({
+    frame: { ...current, assets, expected: assets.length, relativeStrengthChanges: null }, benchmark: "BTC", asOf: AS_OF, selected: null, select: () => {},
+  }))].find(node => node.props?.labelCandidates);
+  const labels = plot.props.labelCandidates.map(group => group.label);
+  assert.equal(labels[0], "S00 ×16", "a stack of identical pullbacks takes one slot and says how many it holds");
+  assert.ok(labels.includes("LONE"), "the other pullback is still labelled");
+  assert.equal(new Set(plot.props.labelCandidates.map(group => `${group.oneHourReturn}/${group.relativeReturn}`)).size, labels.length, "one candidate per position");
 });

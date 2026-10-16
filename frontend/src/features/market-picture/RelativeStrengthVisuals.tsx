@@ -16,10 +16,12 @@ import {
 import { CHART, axisFormatter, niceTicks } from "@/features/quant-ops/kit/series";
 import { useState } from "react";
 import {
+  groupCoincident,
   placeScatterLabels,
   projectRelativeRankMovers,
   projectRelativeStrength,
   type RelativeRankMover,
+  type RelativeScatterGroup,
   type RelativeScatterPoint,
 } from "./relative-visuals.mjs";
 import type { DisplayFrame } from "./presentation";
@@ -38,8 +40,8 @@ function quadrantAxis(values: number[]) {
 // points farthest from the origin. Placement still drops any that would overlap; the table lists all.
 const LABELLED_POINTS = 24;
 function labelBudget(points: RelativeScatterPoint[], xSpan: number, ySpan: number) {
-  const reach = (point: RelativeScatterPoint) => Math.hypot(point.oneHourReturn / (xSpan || 1), point.relativeReturn / (ySpan || 1));
-  return [...points].sort((a, b) => Number(b.pullback) - Number(a.pullback) || reach(b) - reach(a) || a.instrumentId.localeCompare(b.instrumentId))
+  const reach = (point: RelativeScatterGroup) => Math.hypot(point.oneHourReturn / (xSpan || 1), point.relativeReturn / (ySpan || 1));
+  return groupCoincident(points).sort((a, b) => Number(b.pullback) - Number(a.pullback) || reach(b) - reach(a) || a.instrumentId.localeCompare(b.instrumentId))
     .slice(0, LABELLED_POINTS);
 }
 // Scatter plot frame inside its 290px container: chart margins plus the 48px y axis and ~30px x axis.
@@ -82,7 +84,7 @@ type QuadrantAxis = NonNullable<ReturnType<typeof quadrantAxis>>;
 /** The scatter chart; it owns the measured plot width so labels can be placed without overlap. */
 function ScatterPlot({ benchmark, cutoff, xAxis, yAxis, other, pullbacks, labelCandidates, selected }: {
   benchmark: string; cutoff: number; xAxis: QuadrantAxis | null; yAxis: QuadrantAxis | null;
-  other: RelativeScatterPoint[]; pullbacks: RelativeScatterPoint[]; labelCandidates: RelativeScatterPoint[];
+  other: RelativeScatterPoint[]; pullbacks: RelativeScatterPoint[]; labelCandidates: RelativeScatterGroup[];
   /** The instrument open in the drawer; ringed on the plot. */
   selected: string | null;
 }) {
@@ -91,12 +93,14 @@ function ScatterPlot({ benchmark, cutoff, xAxis, yAxis, other, pullbacks, labelC
   const labels = labelCandidates.length && xAxis && yAxis
     ? placeScatterLabels(labelCandidates, xAxis.domain, yAxis.domain, { width: plotWidth - PLOT_INSET.horizontal, height: 290 - PLOT_INSET.vertical })
     : new Map<string, "left" | "right">();
+  const labelText = new Map(labelCandidates.map(group => [group.instrumentId, group.label]));
   const pointLabel = (series: RelativeScatterPoint[]) => <LabelList dataKey="symbol" content={(props: { x?: number | string; y?: number | string; width?: number | string; height?: number | string; index?: number }) => {
     const point = props.index == null ? undefined : series[props.index];
     const side = point && labels.get(point.instrumentId);
-    if (!point || !side) return null;
+    const text = point && labelText.get(point.instrumentId);
+    if (!point || !side || !text) return null;
     const x = Number(props.x) + Number(props.width ?? 0) / 2, y = Number(props.y) + Number(props.height ?? 0) / 2;
-    return <text x={side === "right" ? x + 7 : x - 7} y={y} dy="0.35em" textAnchor={side === "right" ? "start" : "end"} fill={CHART.text} fontSize={10}>{point.symbol}</text>;
+    return <text x={side === "right" ? x + 7 : x - 7} y={y} dy="0.35em" textAnchor={side === "right" ? "start" : "end"} fill={CHART.text} fontSize={10}>{text}</text>;
   }} />;
   return (
     <div role="img" aria-label={`Scatter plot at observed cutoff ${new Date(cutoff).toISOString()}. Horizontal axis is one-hour asset return in percent. Vertical axis is twenty-four-hour arithmetic excess return versus ${benchmark} in percentage points. Vertical and horizontal zero lines divide positive and negative values. Diamonds identify existing pullback candidates.`} style={{ width: "100%", height: 290 }}>
@@ -129,8 +133,8 @@ function ScatterPlot({ benchmark, cutoff, xAxis, yAxis, other, pullbacks, labelC
           <ReferenceLine x={0} stroke={CHART.neutral} strokeDasharray="4 4" />
           <ReferenceLine y={0} stroke={CHART.neutral} strokeDasharray="4 4" />
           <Tooltip isAnimationActive={false} cursor={{ stroke: CHART.muted, strokeDasharray: "3 4" }} content={<RelativeTooltip />} />
-          <Scatter name="Other qualified instruments" data={other} fill={CHART.blue} fillOpacity={0.75} stroke={CHART.surface} strokeWidth={0.6} shape="circle" isAnimationActive={false}>{labels.size > 0 && pointLabel(other)}</Scatter>
-          <Scatter name="Pullback predicate" data={pullbacks} fill={CHART.warning} fillOpacity={0.85} stroke={CHART.surface} strokeWidth={0.6} shape="diamond" isAnimationActive={false}>{labels.size > 0 && pointLabel(pullbacks)}</Scatter>
+          <Scatter name="Other qualified instruments" data={other} fill={CHART.blue} fillOpacity={0.5} stroke={CHART.surface} strokeWidth={0.6} shape="circle" isAnimationActive={false}>{labels.size > 0 && pointLabel(other)}</Scatter>
+          <Scatter name="Pullback predicate" data={pullbacks} fill={CHART.warning} fillOpacity={0.65} stroke={CHART.surface} strokeWidth={0.6} shape="diamond" isAnimationActive={false}>{labels.size > 0 && pointLabel(pullbacks)}</Scatter>
           {focus && <ReferenceDot x={focus.oneHourReturn} y={focus.relativeReturn} r={8} fill="none" stroke={CHART.text} strokeWidth={1.5} ifOverflow="hidden" />}
         </ScatterChart>
       </ResponsiveContainer>
@@ -172,7 +176,7 @@ export function RelativeStrengthVisuals({
         <header><h3 id="mp-relative-map-title">Absolute return vs relative strength</h3><span className="mp-kicker">Price participation</span></header>
         <p className="mp-panel-footnote">
           Owner 1h return against 24h arithmetic excess return; diamonds mark the pullback predicate (positive excess, negative 1h).
-          Labels name pullbacks first, then the most extreme points; overlapping marks show darker.
+          Labels name pullbacks first, then the most extreme points; "×n" counts instruments at one position and overlapping marks show darker.
           {` ${scatter.valid}/${scatter.expected} qualified; ${scatter.omitted} missing, unavailable or not current. Observed cutoff ${new Date(frame.cutoff_ms).toISOString()}; assessed ${Number.isFinite(asOf) ? new Date(asOf).toISOString() : "at an invalid time"}.`}
         </p>
         {scatter.points.length ? <>

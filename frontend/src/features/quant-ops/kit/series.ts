@@ -234,12 +234,20 @@ export function ratioPercentTick(value: number, step: number): string {
 
 /**
  * Rounded ticks and the axis extent they span. With `margin`, an extent that sits exactly on an outer
- * tick gets 3% headroom past it (no extra label), so a line on that value does not merge with the
- * frame; bars keep a flush zero baseline. Null when no rounded axis exists.
+ * tick gets headroom past it (the larger of 3% of the span and a quarter step; no extra label), so a
+ * line on that value does not merge with the frame; bars keep a flush zero baseline. Null when no
+ * rounded axis exists.
  */
 export function roundedAxis(extent: [number, number] | null, { integer = false, margin = false }: { integer?: boolean; margin?: boolean } = {}) {
   const nice = extent && niceTicks(extent[0], extent[1], 5, integer);
   if (!nice) return null;
-  const first = nice.ticks[0], last = nice.ticks[nice.ticks.length - 1], room = margin ? (last - first) * 0.03 : 0;
+  const first = nice.ticks[0], last = nice.ticks[nice.ticks.length - 1], room = margin ? Math.max((last - first) * 0.03, nice.step / 4) : 0;
   return { ...nice, domain: [extent[0] === first ? first - room : first, extent[1] === last ? last + room : last] as [number, number] };
+}
+
+/** Marker presentation: up to three markers carry on-plot labels; one within 1% of the right edge gets room. */
+export function markerLayout(markers: ChartMarker[], [start, end]: [number, number]) {
+  const labelled = markers.length > 0 && markers.length <= 3;
+  const edgeRoom = labelled && end > start && markers.some(marker => end - marker.time <= (end - start) * 0.01);
+  return { labelled, edgeRoom };
 }

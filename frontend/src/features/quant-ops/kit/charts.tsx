@@ -1,7 +1,7 @@
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
 import { formatDecimal, formatSigned } from '../format';
-import { CHART, dayTicks, projectTimeSeries, roundedAxis, timeTick, valueAt, valueExtent, type ChartMarker, type ChartSeries, type SeriesPoint } from './series';
+import { CHART, dayTicks, markerLayout, projectTimeSeries, roundedAxis, timeTick, valueAt, valueExtent, type ChartMarker, type ChartSeries, type SeriesPoint } from './series';
 import './kit.css';
 
 /**
@@ -56,9 +56,10 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
   const days = !timeDomain && span > 2 * 86_400_000 ? dayTicks(domain) : [];
   const timeTicks = timeDomain ? (span <= 120_000 ? [...domain] : [domain[0], domain[0] + span / 2, domain[1]]) : days.length >= 2 ? days : undefined;
   const inRange = (time: number) => time >= domain[0] && time <= domain[1];
+  const shownMarkers = markers.filter(marker => inRange(marker.time)), markerView = markerLayout(shownMarkers, domain);
   return <figure className="q-chart" role="img" aria-label={ariaLabel} style={{ height }}>
     <ResponsiveContainer width="100%" height={height} minWidth={0}>
-      <ComposedChart data={projection.rows} margin={{ top: 8, right: right.length ? 4 : 10, bottom: 0, left: timeDomain ? 10 : 0 }}>
+      <ComposedChart data={projection.rows} margin={{ top: 8, right: (right.length ? 4 : 10) + (markerView.edgeRoom ? 12 : 0), bottom: 0, left: timeDomain ? 10 : 0 }}>
         <defs>{[...new Map(projection.keys.map(entry => [entry.series.id, entry.series])).values()].filter(item => item.area).map(item => <linearGradient key={item.id} id={`${gradient}-${item.id}`} x1="0" y1={item.zeroBase && item.points.every(point => point.value === null || point.value <= 0) ? '1' : '0'} x2="0" y2={item.zeroBase && item.points.every(point => point.value === null || point.value <= 0) ? '0' : '1'}>
           <stop offset="0%" style={{ stopColor: item.color }} stopOpacity={item.fillOpacity ?? 0.28} /><stop offset="100%" style={{ stopColor: item.color }} stopOpacity={item.zeroBase ? (item.fillOpacity ?? 0.28) * 0.35 : 0} />
         </linearGradient>)}</defs>
@@ -67,7 +68,8 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
         <YAxis yAxisId="left" orientation="right" domain={leftDomain ?? ['auto', 'auto']} ticks={leftNice?.ticks} interval={leftNice ? 0 : undefined} tickFormatter={value => leftTickFormat && leftNice ? leftTickFormat(value, leftNice.step, leftNice.ticks) : leftFormat(value)} tick={{ fill: CHART.muted, fontSize: 10 }} stroke="transparent" width={64} hide={!left.length} />
         {right.length > 0 && <YAxis yAxisId="right" orientation="left" domain={rightDomain ?? ['auto', 'auto']} ticks={rightNice?.ticks} interval={rightNice ? 0 : undefined} tickFormatter={value => rightFormat(value)} tick={{ fill: right[0].color, fontSize: 10 }} stroke="transparent" width={52} />}
         {zeroLine && <ReferenceLine yAxisId="left" y={0} stroke={CHART.muted} strokeDasharray="2 3" />}
-        {markers.filter(marker => inRange(marker.time)).map(marker => <ReferenceLine key={`${marker.label}-${marker.time}`} yAxisId="left" x={marker.time} stroke={marker.color ?? CHART.warning} strokeDasharray="2 4" />)}
+        {shownMarkers.map(marker => <ReferenceLine key={`${marker.label}-${marker.time}`} yAxisId="left" x={marker.time} stroke={marker.color ?? CHART.warning} strokeDasharray="2 4"
+          label={markerView.labelled ? { value: marker.label, position: markerView.edgeRoom && domain[1] - marker.time <= (domain[1] - domain[0]) * 0.01 ? 'insideTopRight' : 'insideTopLeft', fontSize: 9, fill: CHART.muted } : undefined} />)}
         <Tooltip isAnimationActive={false} cursor={{ stroke: CHART.muted, strokeDasharray: '3 4' }} wrapperStyle={{ outline: 'none', zIndex: 5 }}
           content={({ active, label }) => {
             if (!active || typeof label !== 'number') return null;

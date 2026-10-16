@@ -142,9 +142,17 @@ test('time-series axes keep a small margin where data sits exactly on an outer t
   const {roundedAxis}=load('features/quant-ops/kit/series.ts');
   const zeroFloor=roundedAxis([0,40],{margin:true});
   assert.deepEqual(zeroFloor.ticks,[0,10,20,30,40]);
-  assert.ok(zeroFloor.domain[0]<0&&zeroFloor.domain[1]>40,'a recorded zero no longer lies on the x-axis baseline');
+  assert.deepEqual(zeroFloor.domain,[-2.5,42.5],'a recorded zero sits a quarter tick above the baseline (max of 3% span and step/4)');
   const inside=roundedAxis([1.16,4.422],{margin:true});
   assert.deepEqual(inside.domain,[1,5],'no margin when the data stays inside the outer ticks');
   assert.deepEqual(roundedAxis([0,40]).domain,[0,40],'bars keep their zero baseline flush');
   assert.equal(roundedAxis(null),null);
+});
+
+test('markers near the right edge get room and short marker sets are labelled on the plot',()=>{
+  const {markerLayout}=load('features/quant-ops/kit/series.ts');
+  assert.deepEqual(markerLayout([{time:100,label:'a'}],[0,100]),{labelled:true,edgeRoom:true});
+  assert.deepEqual(markerLayout([{time:50,label:'a'}],[0,100]),{labelled:true,edgeRoom:false});
+  assert.deepEqual(markerLayout([1,2,3,4].map(time=>({time,label:'x'})),[0,100]),{labelled:false,edgeRoom:false},'dense markers stay unlabelled to avoid clutter');
+  assert.deepEqual(markerLayout([],[0,100]),{labelled:false,edgeRoom:false});
 });

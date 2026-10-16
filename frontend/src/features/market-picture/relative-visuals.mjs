@@ -125,7 +125,7 @@ export function placeScatterLabels(points, xDomain, yDomain, { width, height, ch
     Math.hypot(px(b.oneHourReturn) - px(0), py(b.relativeReturn) - py(0)) - Math.hypot(px(a.oneHourReturn) - px(0), py(a.relativeReturn) - py(0)) ||
     a.instrumentId.localeCompare(b.instrumentId));
   for (const point of order) {
-    const x = px(point.oneHourReturn), y = py(point.relativeReturn), labelWidth = point.symbol.length * charWidth;
+    const x = px(point.oneHourReturn), y = py(point.relativeReturn), labelWidth = (point.label ?? point.symbol).length * charWidth;
     const vertical = { top: y - lineHeight / 2, bottom: y + lineHeight / 2 };
     const right = { ...vertical, left: x + gap, right: x + gap + labelWidth };
     const left = { ...vertical, left: x - gap - labelWidth, right: x - gap };
@@ -135,4 +135,22 @@ export function placeScatterLabels(points, xDomain, yDomain, { width, height, ch
     placed.set(point.instrumentId, side);
   }
   return placed;
+}
+
+/**
+ * One representative per exact (1h return, excess return) pair, pullback candidates first, then by
+ * instrument id. `count` and `label` ("SOL ×3") state how many instruments share that position.
+ */
+export function groupCoincident(points) {
+  const groups = new Map();
+  for (const point of points) {
+    const key = `${point.oneHourReturn}/${point.relativeReturn}`;
+    const members = groups.get(key) ?? [];
+    members.push(point);
+    groups.set(key, members);
+  }
+  return [...groups.values()].map((members) => {
+    const [representative] = [...members].sort((a, b) => Number(b.pullback) - Number(a.pullback) || a.instrumentId.localeCompare(b.instrumentId));
+    return { ...representative, count: members.length, label: members.length > 1 ? `${representative.symbol} ×${members.length}` : representative.symbol };
+  });
 }

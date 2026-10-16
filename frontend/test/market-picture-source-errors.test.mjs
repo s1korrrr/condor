@@ -14,4 +14,7 @@ test("market picture failures read like the other panels' typed states", () => {
   assert.equal(observationErrorMessage(403, []), "Unauthorized · Market Picture source unavailable (HTTP 403)");
   assert.equal(observationErrorMessage(500, ["not a code", 7]), "Error · Market Picture source unavailable (HTTP 500)");
   assert.equal(observationErrorMessage(503, ["NEW_OWNER_CODE"]), "Error · NEW_OWNER_CODE (NEW_OWNER_CODE)", "unknown codes stay visible");
+  assert.equal(observationErrorMessage(503, ["MICROSTRUCTURE_UNAVAILABLE"]),
+    "No data · Order-flow and book companion unavailable (MICROSTRUCTURE_UNAVAILABLE)");
+  assert.equal(observationErrorMessage(503, ["SOURCE_WARMING"]), "No data · Market Picture source warming up (SOURCE_WARMING)");
 });

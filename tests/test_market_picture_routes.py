@@ -351,3 +351,22 @@ def test_transport_failure_is_typed_and_logged(monkeypatch, caplog):
     assert response.status_code == 502
     assert response.json() == {"detail": {"reasons": ["SOURCE_UNAVAILABLE"]}}
     assert any("ConnectionError" in record.getMessage() for record in caplog.records)
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "MICROSTRUCTURE_UNAVAILABLE",
+        "SOURCE_WARMING",
+        "SNAPSHOT_UNAVAILABLE",
+        "HISTORY_TOO_FRAGMENTED",
+    ],
+)
+def test_owner_reason_codes_pass_through_typed(monkeypatch, reason):
+    import json
+
+    body = json.dumps({"detail": {"reasons": [reason]}}).encode()
+    client, _ = client_for(monkeypatch, Upstream(503, body))
+    response = client.get("/api/v1/servers/v2/market-picture/latest")
+    assert response.status_code == 503
+    assert response.json() == {"detail": {"reasons": [reason]}}

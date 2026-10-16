@@ -43,6 +43,20 @@ _REASONS = frozenset(
         "SOURCE_IDENTITY_MISMATCH",
         "INVALID_QUERY",
         "RESPONSE_CONTRACT_VIOLATION",
+        # Typed owner codes (hummingbot-api market_picture routes); only codes pass, never text.
+        "SOURCE_WARMING",
+        "SNAPSHOT_UNAVAILABLE",
+        "INSTRUMENT_UNAVAILABLE",
+        "MICROSTRUCTURE_UNAVAILABLE",
+        "MICROSTRUCTURE_RESPONSE_TOO_LARGE",
+        "CORRELATIONS_UNAVAILABLE",
+        "HISTORY_TOO_FRAGMENTED",
+        "HISTORY_CAPACITY_EXCEEDED",
+        "STORE_INTEGRITY_ERROR",
+        "BENCHMARK_NOT_IN_UNIVERSE",
+        "INVALID_SNAPSHOT_ID",
+        "INVALID_HISTORY_QUERY",
+        "INVALID_CURSOR",
     }
 )
 

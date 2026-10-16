@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import {frontendModules} from './helpers/frontend-module.mjs';
 
 const {load}=frontendModules();
-const {niceTicks,axisFormatter,valueExtent,axisScale}=load('features/quant-ops/kit/series.ts');
+const {niceTicks,axisFormatter,valueExtent,axisScale,ratioPercentTick}=load('features/quant-ops/kit/series.ts');
 
 test('axis ticks round outward to 1, 2, 2.5 or 5 steps and never clip the data',()=>{
   const benchmark=niceTicks(1.16,4.422);
@@ -75,4 +75,23 @@ test('multi-day axes tick at UTC midnights, so date labels never repeat',()=>{
   assert.ok(month[0]>=start+5*3_600_000&&month.at(-1)<=start+30*day,'ticks stay inside the domain');
   const stride=month[1]-month[0];
   assert.ok(month.every((tick,index)=>index===0||tick-month[index-1]===stride),'one whole-day stride');
+});
+
+test('ranges narrower than float precision terminate and stay readable',{timeout:2000},()=>{
+  for(const [low,high] of [[1000,1000.0000000000001],[1e15,1e15+0.125],[-5e300,-5e300],[0,Number.MIN_VALUE],[1e-300,2e-300]]){
+    const nice=niceTicks(low,high);
+    assert.ok(nice===null||(nice.ticks.length>=2&&nice.ticks.length<=50&&nice.ticks[0]<=low&&nice.ticks.at(-1)>=high),`[${low}, ${high}]`);
+    if(nice) assert.equal(new Set(nice.ticks).size,nice.ticks.length,'ticks are distinct');
+  }
+  const flat=niceTicks(1000,1000.0000000000001);
+  assert.ok(flat&&flat.step>=1,'a range flat relative to its magnitude gets the flat-series band');
+});
+
+test('drawdown percent ticks keep distinct labels for tiny ranges',()=>{
+  const {ticks,step}=niceTicks(-0.0005,0);
+  const labels=ticks.map(tick=>ratioPercentTick(tick,step));
+  assert.equal(new Set(labels).size,labels.length,`distinct labels: ${labels.join(', ')}`);
+  assert.deepEqual(labels,['-0.06%','-0.04%','-0.02%','0.00%'],'the old one-decimal formatter printed -0.1%, -0.0%, -0.0%, 0.0%');
+  assert.equal(ratioPercentTick(-0.01,0.005),'-1.0%');
+  assert.equal(ratioPercentTick(0,0.005),'0.0%');
 });

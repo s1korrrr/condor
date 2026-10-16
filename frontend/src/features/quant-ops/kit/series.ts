@@ -137,15 +137,20 @@ const cleanTick = (value: number) => {
  */
 export function niceTicks(low: number, high: number, count = 5, integer = false): { ticks: number[]; step: number } | null {
   if (!Number.isFinite(low) || !Number.isFinite(high) || high < low) return null;
-  if (high === low) { const pad = Math.abs(high) * 0.01 || (integer ? 1 : 0.01); low -= pad; high += pad; }
+  // A range flat relative to its own magnitude (beyond float precision) gets the flat-series band.
+  if (high - low <= Math.max(Math.abs(low), Math.abs(high)) * 1e-9) {
+    const pad = Math.abs(high) * 0.01 || (integer ? 1 : 0.01); low -= pad; high += pad;
+  }
   const raw = (high - low) / Math.max(1, count - 1);
   const power = 10 ** Math.floor(Math.log10(raw));
   let step = [1, 2, 2.5, 5, 10].map(multiple => cleanTick(multiple * power)).find(candidate => candidate >= raw * (1 - 1e-9)) ?? 10 * power;
   if (integer) step = Math.max(1, Math.ceil(step));
   const first = Math.floor(low / step + 1e-9), last = Math.ceil(high / step - 1e-9);
+  // Bounded, precision-safe iteration; null means no rounded axis (callers use the chart's own).
+  if (!(step > 0) || !Number.isSafeInteger(first) || !Number.isSafeInteger(last) || last - first > 50) return null;
   const ticks: number[] = [];
-  for (let index = first; index <= last; index++) ticks.push(cleanTick(index * step));
-  return { ticks, step };
+  for (let index = 0; index <= last - first; index++) ticks.push(cleanTick((first + index) * step));
+  return new Set(ticks).size === ticks.length && ticks.length >= 2 ? { ticks, step } : null;
 }
 
 /** Decimal places that write every multiple of `step` exactly (2.5 → 1, 0.25 → 2). */
@@ -211,4 +216,9 @@ export function dayTicks([start, end]: [number, number], maxTicks = 7): number[]
     if (tick - start >= edge && end - tick >= edge) ticks.push(tick);
   }
   return ticks;
+}
+
+/** Axis label for a ratio shown in percent (-0.0005 → -0.05%), at the precision of the tick step. */
+export function ratioPercentTick(value: number, step: number): string {
+  return `${axisFormatter(cleanTick(step * 100))(cleanTick(value * 100))}%`;
 }

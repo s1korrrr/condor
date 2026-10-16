@@ -932,6 +932,16 @@ const SNAPSHOT = [
   ["relative_volume_24h", "Relative volume", "Median · vs prior 24h baseline", "ratio"],
 ] as const;
 
+function summaryHistoryPoints(samples: HistoryPoint[], valueFor: (point: HistoryPoint) => number | null): SeriesPoint[] {
+  return samples.flatMap((point, index) => {
+    const observed = { time: point.time, value: valueFor(point) };
+    // Use the hero's null break convention without changing either observation.
+    return point.gapBefore && index > 0
+      ? [{ time: point.time - 1, value: null }, observed]
+      : [observed];
+  });
+}
+
 /** Compact market-wide tiles that sit under the hero. Tiles without a value are not drawn. */
 function MarketSnapshotTilesView({
   frame,
@@ -949,7 +959,7 @@ function MarketSnapshotTilesView({
     if (!metric || metric.value == null) return [];
     // A single 1-minute bar against a longer mean reads far below 1x on thin books; see pulse.mjs.
     if (key === "relative_volume_24h" && isSingleBarRelativeVolume(metric)) return [];
-    const points = samples.map((p) => ({ time: p.time, value: p.summary[key] ?? null }));
+    const points = summaryHistoryPoints(samples, (p) => p.summary[key] ?? null);
     const digits = kind === "ratio" && metric.value < 0.1 ? 3 : kind === "ratio" ? 2 : kind === "adx" ? 1 : 0;
     const count = key === "market_participation" ? Math.round(metric.value * metric.valid) : null;
     const delta = frame.comparisons[`summary/${key}`];
@@ -976,7 +986,10 @@ function MarketSnapshotTilesView({
       value: `${metricText(breaks[0], 0)} / ${metricText(breaks[1], 0)}`,
       hint: `Instruments breaking their 24h range · of ${frame.expected}`,
       title: `${metricTitle(breaks[0])} | ${metricTitle(breaks[1])}`,
-      points: samples.map((p) => ({ time: p.time, value: (p.summary.new_highs_24h ?? 0) - (p.summary.new_lows_24h ?? 0) })),
+      points: summaryHistoryPoints(samples, (p) => {
+        const high = p.summary.new_highs_24h, low = p.summary.new_lows_24h;
+        return high == null || low == null ? null : high - low;
+      }),
       format: (v: number) => `net ${signed(v, 0)}`,
       delta: null,
       deltaTone: "",

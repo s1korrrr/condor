@@ -185,3 +185,36 @@
 .mp-history-range input[type=range]:disabled { cursor: default; }
 .mp-history-range__bound { color: var(--mp-muted); font-size: 11px; overflow-wrap: anywhere; }
 .mp-history-range button { min-height: 44px; }
+
+/* Evidence plots use the same chart kit and visual hierarchy as Quant Ops. */
+.mp-history-comparisons { margin: 16px 14px 0; min-width: 0; }
+.mp-visual-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 14px; min-width: 0; margin: 12px 0; align-items: start; }
+.mp-visual-card { min-width: 0; padding: 14px; border: 1px solid var(--q-border); border-radius: 8px; background: var(--mp-panel); overflow-wrap: anywhere; }
+.mp-visual-card > header { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: baseline; gap: 6px 12px; margin-bottom: 8px; }
+.mp-visual-card h3 { margin: 0; font-size: 13px; font-weight: 650; color: var(--mp-text); }
+.mp-visual-card p { margin: 8px 0; font-size: 11px; line-height: 1.5; color: var(--mp-muted); }
+.mp-visual-card .mp-panel-footnote { padding: 0; }
+.mp-visual-unit { font-variant-numeric: tabular-nums; color: var(--mp-muted); font-size: 11px; }
+.mp-visual-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 8px 0 12px; min-width: 0; font-size: 11px; color: var(--mp-text); }
+.mp-visual-legend > span { display: inline-flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.mp-visual-legend svg { flex: none; }
+.mp-visual-legend b { font-variant-numeric: tabular-nums; font-weight: 600; }
+.mp-visual-controls { display: flex; flex-wrap: wrap; gap: 8px 12px; margin: 10px 0; min-width: 0; }
+.mp-visual-controls label { display: grid; gap: 4px; min-width: 0; max-width: 100%; font-size: 11px; color: var(--mp-muted); }
+.mp-page .mp-visual-controls select, .mp-drawer .mp-visual-controls select { min-height: 44px; max-width: 100%; width: 100%; font-size: 12px; text-overflow: ellipsis; }
+.mp-visual-card .mp-pulse-data { margin: 10px 0 0; }
+.mp-visual-card details > summary { cursor: pointer; color: var(--mp-accent); font-size: 11px; padding: 10px 0; min-height: 44px; }
+.mp-visual-card :is(select, button, summary):focus-visible { outline: 2px solid var(--mp-accent); outline-offset: 3px; }
+.mp-visual-card details li { font-size: 11px; line-height: 1.6; padding: 5px 0; }
+.mp-visual-card .mp-table-scroll { max-height: 300px; }
+.mp-relative-visuals { margin: 16px 0; }
+.mp-chart-tooltip { display: grid; gap: 5px; padding: 10px; max-width: 260px; background: var(--mp-panel); border: 1px solid var(--q-border); border-radius: 5px; color: var(--mp-text); font-size: 11px; }
+@media (max-width: 600px) {
+  .mp-visual-card { padding: 10px; }
+  .mp-visual-controls { display: grid; grid-template-columns: minmax(0, 1fr); }
+  .mp-visual-grid { gap: 10px; }
+}
+.mp-visual-legend { list-style: none; padding: 0; }
+.mp-visual-legend > li { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; }
+.mp-visual-legend i { display: inline-block; width: 10px; height: 10px; flex: none; border-radius: 2px; }
+.mp-visual-card h4 { margin: 14px 0 8px; font-size: 12px; font-weight: 600; color: var(--mp-text); }

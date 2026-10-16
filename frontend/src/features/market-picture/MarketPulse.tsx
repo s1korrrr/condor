@@ -30,6 +30,9 @@ import { Metric, Panel } from "./Primitives";
 import { selectMetricCohort, type MetricCohortRequest } from "./metric-cohort.mjs";
 import { HistoryRangeSelector } from "./HistoryRangeSelector";
 import { HistoryComparisons } from "./HistoryComparisons";
+import { MicrostructureVisuals } from "./MicrostructureVisuals";
+import { rowTimeState } from "./observation-state";
+import { flowHistoryVisuals } from "./flow-history-visuals.mjs";
 import { historyRangeTimes, normalizeHistoryRange, selectHistoryPoints, type HistoryRange } from "./history-range.mjs";
 
 /** Coverage changes within a partial universe are just as material as a full/partial flip. */
@@ -535,10 +538,10 @@ export function MarketPulseHero({
               />
             )}
           </details>
-          <HistoryComparisons samples={pulse.samples} horizon={horizon}
-            range={selectedRange && rangeStart !== null && rangeEnd !== null ? [rangeStart, rangeEnd] : null} />
         </div>
       </div>
+      <HistoryComparisons samples={pulse.samples} horizon={horizon}
+        range={selectedRange && rangeStart !== null && rangeEnd !== null ? [rangeStart, rangeEnd] : null} />
       <footer
         className="mp-panel-footnote"
         title="Breadth pressure = 3 × (advancing − declining) / valid population. Descriptive balance, not trade flow or probability."
@@ -686,12 +689,6 @@ function displayDecimal(value: string | null, digits = 4, signed = false) {
   return `${signed && number > 0 ? "+" : ""}${formatted}`;
 }
 
-function rowTimeState(frame: DisplayFrame, row: { available: number; expires: number }, asOf: number) {
-  if (asOf < Math.max(frame.available_at_ms, row.available)) return "FUTURE";
-  if (asOf >= Math.min(frame.expires_at_ms, row.expires)) return "EXPIRED";
-  return "CURRENT";
-}
-
 /** Owner-recorded spot-flow and displayed-book observations. Never estimates depth or actionability. */
 function MicrostructurePanelView({ frame, asOf = frame.available_at_ms, only, idPrefix = "mp" }: { frame: DisplayFrame; asOf?: number; only?: "flow" | "liquidity"; idPrefix?: string }) {
   const component = frame.microstructure;
@@ -705,6 +702,7 @@ function MicrostructurePanelView({ frame, asOf = frame.available_at_ms, only, id
   return (
     <Panel id={`${idPrefix}-microstructure`} title="Executed flow &amp; displayed liquidity" detail="Observed quantities from the owner component; price participation remains a separate correlated family">
       <p className="mp-panel-footnote">{component.sourceKind.toUpperCase()} · {component.replayClass.replaceAll("_", " ")} · assessed as of {new Date(asOf).toISOString()} · raw trades/books not retained · digest {component.componentId.slice(0, 12)}…</p>
+      <MicrostructureVisuals frame={frame} asOf={asOf} only={only} />
       {flows.length ? <div className="mp-table-scroll" tabIndex={0} role="region" aria-labelledby={`${idPrefix}-flow-observations-caption`}>
         <table className="mp-table mp-trajectory-table">
           <caption id={`${idPrefix}-flow-observations-caption`}>Executed spot notional by aggressor side · quote {frame.quote}</caption>
@@ -784,29 +782,47 @@ function FlowHistoryPanelView({
   history, window, fault,
 }: { history: HistoryPoint[]; window: string; fault: string | null }) {
   const { samples, label } = marketPulseWindow(history, window);
-  const points = samples.slice(-300);
+  const points: HistoryPoint[] = samples.slice(-300);
   const hasFlow = points.some(point => point.flowHistory != null);
-  const rows = points.map((point, index) => {
-    const flow = point.flowHistory;
-    const previous = index > 0 ? points[index - 1] : null;
-    const previousFlow = previous?.flowHistory ?? null;
-    const breakReasons: string[] = [];
-    if (index === 0) breakReasons.push("window start");
-    if (point.gapBefore) breakReasons.push("stored history gap");
-    if (!flow) breakReasons.push("flow unavailable");
-    else if (flow.cumulativeDeltaQuote == null) breakReasons.push("CVD unavailable");
-    if (previous && !previousFlow) breakReasons.push("previous flow unavailable");
-    else if (previousFlow && previousFlow.cumulativeDeltaQuote == null) breakReasons.push("previous CVD unavailable");
-    if (flow && previousFlow && flow.scopeHash !== previousFlow.scopeHash) breakReasons.push("scope changed");
-    if (flow && previousFlow && flow.resetAt !== previousFlow.resetAt) breakReasons.push("reset changed");
-    if (previous && point.time - previous.time !== 60_000) breakReasons.push("non-1m interval");
-    return { point, flow, continuity: breakReasons.length ? `Break · ${breakReasons.join(", ")}` : "Continuous with prior stored point" };
-  });
+  const [selectedQuote, setSelectedQuote] = useState("");
+  const quotes = [...new Set(points.flatMap(point => point.flowHistory ? [point.flowHistory.quoteAsset] : []))];
+  const quote = quotes.includes(selectedQuote) ? selectedQuote : quotes[0] ?? "";
+  const { rows, notional, cvd } = flowHistoryVisuals(points, quote);
+  const timeDomain: [number, number] | undefined = points.length > 1 ? [points[0].time, points.at(-1)!.time] : undefined;
+  const compact = (value: number) => new Intl.NumberFormat("en", { notation: "compact", maximumFractionDigits: 2 }).format(value);
+  const notionalSeries: ChartSeries[] = [
+    { id: "buy", label: "Buy", color: CHART.positive, points: notional.buy, unit: quote },
+    { id: "sell", label: "Sell", color: CHART.negative, dash: "6 4", points: notional.sell, unit: quote },
+    { id: "unknown", label: "Unknown side", color: CHART.warning, dash: "2 4", points: notional.unknown, unit: quote },
+  ];
   return (
     <Panel id="mp-flow-history" title="Stored executed-flow history" detail="Owner-recorded one-minute totals; no raw tape or client aggregation">
       <p className="mp-panel-footnote" role="status">
         {fault ? `History read degraded · ${fault} · retained values remain tied to their stored times.` : "Stored history read validated."} {label} · showing {points.length} of {samples.length} retained points. Buy, sell and unknown totals are per stored point; they are never summed across gaps.
       </p>
+      {hasFlow && <>
+        {quotes.length > 1 && <div className="mp-visual-controls"><label>Quote asset <select aria-label="Flow history quote asset" value={quote} onChange={event => setSelectedQuote(event.target.value)}>
+          {quotes.map(unit => <option key={unit} value={unit}>{unit}</option>)}
+        </select></label></div>}
+        <div className="mp-visual-grid">
+          <article className="mp-visual-card">
+            <header><h3>Executed notional over time</h3><span className="mp-kicker">Recorded trades</span></header>
+            <p className="mp-visual-unit">{quote} per stored minute · UTC</p>
+            <div className="mp-visual-legend">{notionalSeries.map(item => <span key={item.id}><svg width="26" height="10" aria-hidden="true"><line x1="0" x2="26" y1="5" y2="5" stroke={item.color} strokeWidth="2" strokeDasharray={item.dash} /></svg>{item.label}</span>)}</div>
+            <TimeSeriesChart series={notionalSeries} timeDomain={timeDomain} height={210} leftFormat={compact} includeZero ariaLabel={`Executed buy, sell and unknown notional per stored minute in ${quote}`} />
+            <p className="mp-panel-footnote">Unknown-side trades stay separate. Partial instrument coverage remains partial; exact coverage accompanies each point in the table below.</p>
+          </article>
+          <article className="mp-visual-card">
+            <header><h3>Cumulative delta</h3><span className="mp-kicker">Owner-recorded balance</span></header>
+            <p className="mp-visual-unit">{quote} · UTC · reset-aware</p>
+            <div className="mp-visual-legend"><span>Buy minus sell since the recorded reset</span></div>
+            <TimeSeriesChart series={[{id:"cvd", label:"Recorded cumulative delta", color:CHART.blue, points:cvd, unit:quote}]}
+              timeDomain={timeDomain} height={210} leftFormat={compact} zeroLine ariaLabel={`Owner-recorded cumulative delta in ${quote}; gaps, scope changes and resets interrupt the line`}
+              emptyText="No qualified owner cumulative delta is retained. Unknown sides and incomplete coverage cannot become a synthetic balance." />
+            <p className="mp-panel-footnote">Gaps, resets and changes of source, quote or scope break the line. The browser never accumulates the displayed trade totals. {cvd.at(-1)?.value == null ? "The latest retained point has no qualified cumulative delta." : ""}</p>
+          </article>
+        </div>
+      </>}
       {hasFlow ? <div className="mp-table-scroll" tabIndex={0} role="region" aria-labelledby="mp-flow-history-caption">
         <table className="mp-table mp-trajectory-table">
           <caption id="mp-flow-history-caption">Stored aggregate executed spot flow for the selected window · totals are per point</caption>

@@ -20,6 +20,8 @@ export type ChartSeries = {
   tooltipOnly?: boolean;
   /** Area gradient strength at the line; defaults to 0.28. */
   fillOpacity?: number;
+  /** Optional line pattern shared with visible legends for non-color identification. */
+  dash?: string;
 };
 export type ChartMarker = { time: number; label: string; color?: string };
 

@@ -55,7 +55,8 @@ import {
   Drawer,
   MarketEventFeed,
 } from "./DetailViews";
-import { Empty } from "./Primitives";
+import { Empty, Panel } from "./Primitives";
+import { RelativeStrengthVisuals } from "./RelativeStrengthVisuals";
 import "./market-picture.css";
 import "./home.css";
 
@@ -513,6 +514,9 @@ export function MarketPictureSurface({
       {frame && <MicrostructurePanel frame={frame} asOf={componentAsOf} />}
       {frame && <FlowHistoryPanel history={data?.history ?? EMPTY_HISTORY} window={view.window} fault={data?.faults.history ?? null} />}
       {frame && <BreadthContextPanel frame={frame} />}
+      {frame && <Panel id="mp-relative-strength" title="Relative strength & rank movement" detail="Price-derived comparisons · exact owner observations at the recorded cutoff">
+        <RelativeStrengthVisuals frame={frame} benchmark={view.benchmark} select={select} selected={view.selected} />
+      </Panel>}
       {frame && <DailyInternalsPanel frame={frame} asOf={componentAsOf} onSelectMetric={selectMetric} />}
       {!frame && (
         <div className="mp-loading" role="status" aria-busy={source.loading || undefined}>

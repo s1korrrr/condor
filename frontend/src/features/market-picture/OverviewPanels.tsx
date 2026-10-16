@@ -92,7 +92,7 @@ function MarketHeatmapPanelView({
         </select>
       </div>
       <div className="mp-heatmap-plot">
-        {!data.length ? (
+        {!visible.length ? (
           <Empty>No assets in this sector.</Empty>
         ) : showList ? (
           <div className="mp-heatmap-list">
@@ -108,6 +108,8 @@ function MarketHeatmapPanelView({
               </button>
             ))}
           </div>
+        ) : !data.length ? (
+          <Empty>No qualified 24h returns in this sector.</Empty>
         ) : (
           <ResponsiveContainer
             width="100%"

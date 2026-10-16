@@ -121,6 +121,7 @@ export interface DisplayContribution {
   startCohortAvailable: boolean;
   priorWeightsAvailable: boolean;
   equalReturn: DisplayMetric;
+  medianReturn: DisplayMetric;
   cappedReturn: DisplayMetric;
   equalTop5: DisplayMetric;
   cappedTop5: DisplayMetric;
@@ -285,12 +286,26 @@ export interface HistoryPoint {
   valid: number;
   expected: number;
   membership: string;
+  definitionRegistryHash: string;
   gapBefore: boolean;
   flowHistory: DisplayFlowHistory | null;
   normalizedBreadth: Record<string, { advances: number | null; declines: number | null; unchanged: number | null; pressure: number | null }>;
   breadthTrajectory: Record<string, {
     level: number | null; change: number | null; velocity: number | null; acceleration: number | null;
     shareChange: number | null; matched: number; expected: number; membership: string | null;
+  }>;
+  contributions?: Record<string, {
+    equalReturn: number | null; medianReturn: number | null; cappedReturn: number | null;
+    valid: number; expected: number; startCohortAvailable: boolean; priorWeightsAvailable: boolean;
+  }>;
+  benchmarkReturns?: {
+    instrumentId: string; quoteAsset: string; cutoff: number; definitionId: string; definitionHash: string;
+    values: Record<string, number | null>; reasons: Record<string, string[]>;
+  } | null;
+  breadthDivergence?: Record<string, {
+    value: number | null; matched: number; expected: number; membership: string | null;
+    provenance: { horizon: number; interval: number; benchmarkInstrumentId: string; quoteAsset: string;
+      definitionId: string; definitionHash: string; referenceWindowMinutes: number; windowStart: number; windowEnd: number } | null;
   }>;
   summary: Record<string, number | null>;
   breadth: Record<

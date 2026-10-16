@@ -802,6 +802,21 @@ export async function validateFrame(frame, { allowFixture = false } = {}) {
       aggregateBinding(row.capped_liquidity_return_ref, `cohort_capped_liquidity_return_${h}`, "return_percent", "cohort_capped_liquidity_return");
       aggregateBinding(row.top5_abs_equal_ref, `contribution_top5_abs_equal_${h}`, "share_fraction", "return_concentration_abs_top5_equal");
       aggregateBinding(row.top5_abs_capped_ref, `contribution_top5_abs_capped_${h}`, "share_fraction", "return_concentration_abs_top5_capped_liquidity");
+      if (row.median_return_ref != null) {
+        const breadthRow = frame.breadth.find(item => item.horizon_minutes === h);
+        const ref = row.median_return_ref;
+        require(row.start_cohort_available && row.valid_count === ids.length &&
+          frame.universe.effective_at_ms <= Math.max(0, frame.cutoff_ms - h * 60_000) &&
+          ref.metric_id === breadthRow.metric_refs.median_return.metric_id, "Median requires the complete frozen same-horizon cohort");
+        aggregateBinding(ref, `breadth_${h}_median_return`, "return_percent", "breadth_return_median");
+        const metric = aggregates[ref.metric_id];
+        require(metric.computation_status === "VALID" && metric.coverage_status === "COMPLETE" &&
+          metric.sample_count === ids.length && metric.required_samples === ids.length && metric.expected_denominator === ids.length &&
+          metric.horizon_minutes === h && metric.window_end_ms === frame.cutoff_ms && metric.window_start_ms === Math.max(0, frame.cutoff_ms - h * 60_000),
+        "Median lacks full same-horizon owner coverage");
+        const returns = series.find(item => item.metric_id === frame.asset_metric_refs[`return_${h}m`].metric_id);
+        require(returns.cells.every(cell => (cell.computation_status ?? "VALID") === "VALID" && cell.value !== null), "Median contains a missing member");
+      }
     }
   }
   if (frame.daily_internals !== undefined && frame.daily_internals.length) {
@@ -1296,6 +1311,7 @@ export function projectFrame(frame) {
       startCohortAvailable: row.start_cohort_available,
       priorWeightsAvailable: row.prior_liquidity_weights_available,
       equalReturn: aggregate(row.equal_weight_return_ref), cappedReturn: aggregate(row.capped_liquidity_return_ref),
+      medianReturn: aggregate(row.median_return_ref),
       equalTop5: aggregate(row.top5_abs_equal_ref), cappedTop5: aggregate(row.top5_abs_capped_ref),
     }])),
     ...projectMicrostructureData(frame),

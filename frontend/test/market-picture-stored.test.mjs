@@ -28,6 +28,7 @@ const point = (overrides) => ({
   source_kind: "observed",
   coverage: raw.coverage,
   membership_hash: frame.membershipHash,
+  definition_registry_hash: raw.definition_registry_hash,
   breadth: Object.fromEntries(
     ["1", "5", "15", "60", "240", "1440"].map((h) => [
       h,
@@ -62,6 +63,48 @@ test("owner history keeps normalized counts separate from legacy shares and carr
   assert.equal(points[0].flowHistory.cumulativeDeltaQuote, "10.811060122");
   assert.equal(points[2].flowHistory.cumulativeDeltaQuote, null);
   assert.ok(points[2].flowHistory.reasons.includes("UNKNOWN_AGGRESSOR"));
+});
+
+test("stored owner comparisons preserve benchmark timing, full-cohort median and divergence provenance", () => {
+  const p = point({
+    contribution_summaries: { '15': { equal_weight_return: '0', median_return: '-1', capped_liquidity_return: null,
+      top5_abs_equal: '1', top5_abs_capped: null, expected_count: 5, valid_count: 5,
+      start_cohort_available: true, prior_liquidity_weights_available: false } },
+    benchmark_returns: { instrument_id: 'okx:spot:BTC-USDC', quote_asset: 'USDC', cutoff_ms: frame.cutoff_ms,
+      definition_id: 'return_pct', definition_hash: 'e'.repeat(64),
+      values: Object.fromEntries(['1','5','15','60','240','1440'].map(h => [h, '2'])),
+      reason_codes: Object.fromEntries(['1','5','15','60','240','1440'].map(h => [h, []])) },
+    breadth_divergence: { '15': { value: '1', matched_count: 5, expected_count: 5, matched_membership_hash: 'b'.repeat(64),
+      benchmark_instrument_id: 'okx:spot:BTC-USDC', quote_asset: 'USDC', horizon_minutes: 15, interval_minutes: 15,
+      cutoff_ms: frame.cutoff_ms, definition_id: 'breadth_price_divergence', definition_hash: 'f'.repeat(64),
+      window_start_ms: frame.cutoff_ms - 86_400_000, window_end_ms: frame.cutoff_ms,
+      reference_window_minutes: 1440, raw_inputs_available: false } },
+  });
+  const [shown] = projectHistory(envelope([p]), frame);
+  assert.equal(shown.contributions['15'].medianReturn, -1);
+  assert.equal(shown.contributions['15'].equalReturn, 0);
+  assert.equal(shown.benchmarkReturns.values['15'], 2);
+  assert.equal(shown.breadthDivergence['15'].provenance.interval, 15);
+  const old = structuredClone(p);
+  delete old.contribution_summaries['15'].median_return;
+  delete old.benchmark_returns;
+  old.breadth_divergence = { '15': { value: '1', matched_count: 5, expected_count: 5, matched_membership_hash: 'b'.repeat(64) } };
+  const [legacy] = projectHistory(envelope([old]), frame);
+  assert.equal(legacy.contributions['15'].medianReturn, null);
+  assert.equal(legacy.benchmarkReturns, null);
+  assert.equal(legacy.breadthDivergence['15'].provenance, null);
+  for (const mutate of [
+    item => { item.benchmark_returns.cutoff_ms++; },
+    item => { item.benchmark_returns.values['15'] = null; },
+    item => { item.contribution_summaries['15'].valid_count--; },
+    item => { item.breadth_divergence['15'].window_start_ms++; },
+    item => { delete item.breadth_divergence['15'].definition_hash; },
+    item => { item.breadth_divergence['15'].matched_count = 0; },
+    item => { item.breadth_divergence['15'].matched_membership_hash = null; },
+  ]) {
+    const invalid = structuredClone(p); mutate(invalid);
+    assert.throws(() => projectHistory(envelope([invalid]), frame));
+  }
 });
 
 test("stored flow history preserves owner scope, coverage, reset and nullable CVD", () => {

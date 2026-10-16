@@ -642,6 +642,17 @@
         "top5_abs_capped_ref": {
           "$ref": "#/$defs/MetricRef"
         },
+        "median_return_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MetricRef"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
         "expected_count": {
           "maximum": 500,
           "minimum": 1,

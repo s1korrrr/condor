@@ -253,12 +253,84 @@
   },
   "history": {
     "$defs": {
+      "BenchmarkReturnsHistoryDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "instrument_id": {
+            "pattern": "^[a-z0-9_]{1,24}:spot:BTC-[A-Z0-9]{2,20}$",
+            "title": "Instrument Id",
+            "type": "string"
+          },
+          "quote_asset": {
+            "pattern": "^[A-Z0-9]{2,16}$",
+            "title": "Quote Asset",
+            "type": "string"
+          },
+          "cutoff_ms": {
+            "minimum": 0,
+            "title": "Cutoff Ms",
+            "type": "integer"
+          },
+          "definition_id": {
+            "const": "return_pct",
+            "title": "Definition Id",
+            "type": "string"
+          },
+          "definition_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Definition Hash",
+            "type": "string"
+          },
+          "values": {
+            "additionalProperties": {
+              "anyOf": [
+                {
+                  "maxLength": 160,
+                  "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ]
+            },
+            "title": "Values",
+            "type": "object"
+          },
+          "reason_codes": {
+            "additionalProperties": {
+              "items": {
+                "type": "string"
+              },
+              "maxItems": 16,
+              "type": "array"
+            },
+            "title": "Reason Codes",
+            "type": "object"
+          }
+        },
+        "required": [
+          "instrument_id",
+          "quote_asset",
+          "cutoff_ms",
+          "definition_id",
+          "definition_hash",
+          "values",
+          "reason_codes"
+        ],
+        "title": "BenchmarkReturnsHistoryDTO",
+        "type": "object"
+      },
       "BreadthDivergenceHistoryDTO": {
         "additionalProperties": false,
         "properties": {
           "value": {
             "anyOf": [
               {
+                "enum": [
+                  "0",
+                  "1"
+                ],
                 "type": "string"
               },
               {
@@ -268,14 +340,43 @@
             "title": "Value"
           },
           "matched_count": {
+            "maximum": 300,
+            "minimum": 0,
             "title": "Matched Count",
             "type": "integer"
           },
           "expected_count": {
+            "maximum": 300,
+            "minimum": 1,
             "title": "Expected Count",
             "type": "integer"
           },
           "matched_membership_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Matched Membership Hash"
+          },
+          "benchmark_instrument_id": {
+            "anyOf": [
+              {
+                "pattern": "^[a-z0-9_]{1,24}:spot:BTC-[A-Z0-9]{2,20}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Benchmark Instrument Id"
+          },
+          "quote_asset": {
             "anyOf": [
               {
                 "type": "string"
@@ -284,7 +385,112 @@
                 "type": "null"
               }
             ],
-            "title": "Matched Membership Hash"
+            "default": null,
+            "title": "Quote Asset"
+          },
+          "horizon_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Horizon Minutes"
+          },
+          "interval_minutes": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Interval Minutes"
+          },
+          "cutoff_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Cutoff Ms"
+          },
+          "definition_id": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Definition Id"
+          },
+          "definition_hash": {
+            "anyOf": [
+              {
+                "pattern": "^[0-9a-f]{64}$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Definition Hash"
+          },
+          "window_start_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Window Start Ms"
+          },
+          "window_end_ms": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Window End Ms"
+          },
+          "reference_window_minutes": {
+            "anyOf": [
+              {
+                "const": 1440,
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Reference Window Minutes"
+          },
+          "raw_inputs_available": {
+            "const": false,
+            "default": false,
+            "title": "Raw Inputs Available",
+            "type": "boolean"
           }
         },
         "required": [
@@ -444,6 +650,183 @@
         "title": "BreadthTrajectoryHistoryDTO",
         "type": "object"
       },
+      "CanonicalBreadthDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "pressure": {
+            "anyOf": [
+              {
+                "maxLength": 160,
+                "pattern": "^-?(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?$",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Pressure"
+          }
+        },
+        "required": [
+          "pressure"
+        ],
+        "title": "CanonicalBreadthDTO",
+        "type": "object"
+      },
+      "CanonicalCoverageDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "expected_instruments": {
+            "maximum": 300,
+            "minimum": 1,
+            "title": "Expected Instruments",
+            "type": "integer"
+          },
+          "valid_instruments": {
+            "maximum": 300,
+            "minimum": 0,
+            "title": "Valid Instruments",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "expected_instruments",
+          "valid_instruments"
+        ],
+        "title": "CanonicalCoverageDTO",
+        "type": "object"
+      },
+      "CanonicalHistoryDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "market-picture.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "projection": {
+            "const": "canonical_state",
+            "title": "Projection",
+            "type": "string"
+          },
+          "snapshot_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Snapshot Id",
+            "type": "string"
+          },
+          "stream_id": {
+            "maxLength": 128,
+            "minLength": 1,
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "window": {
+            "const": "6h",
+            "title": "Window",
+            "type": "string"
+          },
+          "resolution": {
+            "const": "1m",
+            "title": "Resolution",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/$defs/CanonicalHistoryPointDTO"
+            },
+            "maxItems": 361,
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "title": "Next Cursor",
+            "type": "null"
+          },
+          "read_at_ms": {
+            "minimum": 0,
+            "title": "Read At Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "projection",
+          "snapshot_id",
+          "stream_id",
+          "window",
+          "resolution",
+          "items",
+          "next_cursor",
+          "read_at_ms"
+        ],
+        "title": "CanonicalHistoryDTO",
+        "type": "object"
+      },
+      "CanonicalHistoryPointDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "snapshot_id": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Snapshot Id",
+            "type": "string"
+          },
+          "cutoff_ms": {
+            "minimum": 0,
+            "title": "Cutoff Ms",
+            "type": "integer"
+          },
+          "available_at_ms": {
+            "minimum": 0,
+            "title": "Available At Ms",
+            "type": "integer"
+          },
+          "source_kind": {
+            "enum": [
+              "observed",
+              "reconstructed"
+            ],
+            "title": "Source Kind",
+            "type": "string"
+          },
+          "membership_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Membership Hash",
+            "type": "string"
+          },
+          "definition_registry_hash": {
+            "pattern": "^[0-9a-f]{64}$",
+            "title": "Definition Registry Hash",
+            "type": "string"
+          },
+          "coverage": {
+            "$ref": "#/$defs/CanonicalCoverageDTO"
+          },
+          "breadth": {
+            "additionalProperties": {
+              "$ref": "#/$defs/CanonicalBreadthDTO"
+            },
+            "title": "Breadth",
+            "type": "object"
+          },
+          "gap_before": {
+            "title": "Gap Before",
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "snapshot_id",
+          "cutoff_ms",
+          "available_at_ms",
+          "source_kind",
+          "membership_hash",
+          "definition_registry_hash",
+          "coverage",
+          "breadth",
+          "gap_before"
+        ],
+        "title": "CanonicalHistoryPointDTO",
+        "type": "object"
+      },
       "ContributionHistoryDTO": {
         "additionalProperties": false,
         "properties": {
@@ -490,6 +873,18 @@
               }
             ],
             "title": "Top5 Abs Capped"
+          },
+          "median_return": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null,
+            "title": "Median Return"
           },
           "expected_count": {
             "title": "Expected Count",
@@ -677,6 +1072,75 @@
         "title": "HistoryCoverageDTO",
         "type": "object"
       },
+      "HistoryDTO": {
+        "additionalProperties": false,
+        "properties": {
+          "schema_version": {
+            "const": "market-picture.v1",
+            "title": "Schema Version",
+            "type": "string"
+          },
+          "snapshot_id": {
+            "title": "Snapshot Id",
+            "type": "string"
+          },
+          "stream_id": {
+            "title": "Stream Id",
+            "type": "string"
+          },
+          "window": {
+            "enum": [
+              "1h",
+              "6h",
+              "24h",
+              "7d"
+            ],
+            "title": "Window",
+            "type": "string"
+          },
+          "resolution": {
+            "const": "1m",
+            "title": "Resolution",
+            "type": "string"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/$defs/HistoryPointDTO"
+            },
+            "maxItems": 1500,
+            "title": "Items",
+            "type": "array"
+          },
+          "next_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Next Cursor"
+          },
+          "read_at_ms": {
+            "minimum": 0,
+            "title": "Read At Ms",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "schema_version",
+          "snapshot_id",
+          "stream_id",
+          "window",
+          "resolution",
+          "items",
+          "next_cursor",
+          "read_at_ms"
+        ],
+        "title": "HistoryDTO",
+        "type": "object"
+      },
       "HistoryPointDTO": {
         "additionalProperties": false,
         "properties": {
@@ -742,6 +1206,17 @@
             },
             "title": "Breadth Divergence",
             "type": "object"
+          },
+          "benchmark_returns": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/BenchmarkReturnsHistoryDTO"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "default": null
           },
           "contribution_summaries": {
             "additionalProperties": {
@@ -854,73 +1329,14 @@
         "type": "object"
       }
     },
-    "additionalProperties": false,
-    "properties": {
-      "schema_version": {
-        "const": "market-picture.v1",
-        "title": "Schema Version",
-        "type": "string"
+    "anyOf": [
+      {
+        "$ref": "#/$defs/HistoryDTO"
       },
-      "snapshot_id": {
-        "title": "Snapshot Id",
-        "type": "string"
-      },
-      "stream_id": {
-        "title": "Stream Id",
-        "type": "string"
-      },
-      "window": {
-        "enum": [
-          "1h",
-          "6h",
-          "24h",
-          "7d"
-        ],
-        "title": "Window",
-        "type": "string"
-      },
-      "resolution": {
-        "const": "1m",
-        "title": "Resolution",
-        "type": "string"
-      },
-      "items": {
-        "items": {
-          "$ref": "#/$defs/HistoryPointDTO"
-        },
-        "maxItems": 1500,
-        "title": "Items",
-        "type": "array"
-      },
-      "next_cursor": {
-        "anyOf": [
-          {
-            "type": "string"
-          },
-          {
-            "type": "null"
-          }
-        ],
-        "title": "Next Cursor"
-      },
-      "read_at_ms": {
-        "minimum": 0,
-        "title": "Read At Ms",
-        "type": "integer"
+      {
+        "$ref": "#/$defs/CanonicalHistoryDTO"
       }
-    },
-    "required": [
-      "schema_version",
-      "snapshot_id",
-      "stream_id",
-      "window",
-      "resolution",
-      "items",
-      "next_cursor",
-      "read_at_ms"
-    ],
-    "title": "HistoryDTO",
-    "type": "object"
+    ]
   },
   "assets": {
     "$defs": {

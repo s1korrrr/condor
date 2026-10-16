@@ -126,14 +126,23 @@ function frameWith({ pressure = {}, mean = {}, vol = 0.5, advancing = 3 } = {}) 
   };
 }
 
+function completeVerdictHistory(cutoff, pressure = 0) {
+  return Array.from({ length: 360 }, (_, i) => ({
+    time: cutoff - (360 - i) * 60_000,
+    gapBefore: false,
+    breadth: Object.fromEntries(HORIZONS.map((h) => [h, { pressure }])),
+  }));
+}
+
 test("positive verdicts require current data and historical inspection stays explicit", () => {
   const { VerdictCard } = load("features/market-picture/MarketPulse.tsx");
   const frame = {
     ...frameWith({ pressure: Object.fromEntries(HORIZONS.map(h => [h, 3])), mean: { 15: 5 } }),
     cutoff_ms: 100_000, available_at_ms: 101_000, expires_at_ms: 220_000,
   };
+  const stateHistory = completeVerdictHistory(frame.cutoff_ms, 3);
   const render = (asOf, historical = false) => renderToStaticMarkup(React.createElement(VerdictCard, {
-    frame, horizon: "15", history: [], smooth: false, asOf, historical,
+    frame, horizon: "15", history: stateHistory, smooth: false, asOf, historical,
   }));
   for (const [now, state] of [[100_999, "FUTURE"], [190_001, "LAGGING"], [220_000, "STALE"]]) {
     const html = render(now);
@@ -610,8 +619,8 @@ test("a populated frame states a verdict and its rule", async () => {
   const markup = renderToStaticMarkup(React.createElement(pulse.MarketPulseHero, {
     frame, history: [], horizon: "15", window: "24h", setHorizon() {}, setWindow() {}, replay() {},
   }));
-  assert.match(markup, /Risk-on|Risk-off|Mixed/);
-  assert.match(markup, /How is this decided\?/);
+  assert.match(markup, /Unavailable · canonical history/);
+  assert.doesNotMatch(markup, /Risk-on|Risk-off|Mixed|How is this decided\?/);
   assert.match(markup, /Recording market history/, "without stored history the chart area says it is recording instead of failing");
 });
 
@@ -690,6 +699,24 @@ test("the hold band keeps a state until the score is back inside it, and Mixed n
   assert.equal(nextVerdictState("risk-on", -0.3), "risk-off", "crossing straight through still flips");
 });
 
+test("canonical replay refuses a complete clock grid when required historical pressures are absent", async () => {
+  const { canonicalVerdictHistoryFault } = await import("../src/features/market-picture/pulse.mjs");
+  const until = 21_600_000;
+  const horizons = ["1", "5", "15", "60", "240", "1440"];
+  const history = Array.from({ length: 360 }, (_, i) => ({
+    time: until - (360 - i) * 60_000,
+    breadth: Object.fromEntries(horizons.map((h) => [h, { pressure: null }])),
+  }));
+  assert.match(canonicalVerdictHistoryFault(history, "60", until), /lacks historical pressure/);
+  history.forEach((point) => {
+    point.breadth["60"].pressure = 0;
+    point.breadth["15"].pressure = 0;
+  });
+  assert.equal(canonicalVerdictHistoryFault(history, "60", until), null);
+  history[100].breadth["60"].pressure = null;
+  assert.match(canonicalVerdictHistoryFault(history, "60", until), /lacks historical pressure/);
+});
+
 test("a score drifting around the entry threshold does not flap the verdict", () => {
   // Prior frames sit at +0.4 (pressure +1.2): risk-on is entered. The latest frame dips to +0.2.
   const history = Array.from({ length: 30 }, (_, i) => flat(i, 1.2));
@@ -756,7 +783,7 @@ test("the hero opens on the 1h horizon with a visible smoothing toggle", async (
   assert.match(markup, /Pressure smoothing/);
   assert.match(markup, /15m mean/);
   assert.match(markup, /15-minute rolling mean, raw grey/);
-  assert.match(markup, /How is this decided\?/);
+  assert.match(markup, /Unavailable · canonical history/);
 });
 
 test("the breadth chart exposes a keyboard-operable data-table disclosure", async () => {

@@ -10,7 +10,8 @@ import hashlib
 import json
 import math
 import re
-from decimal import Decimal
+from decimal import Decimal, localcontext
+from fractions import Fraction
 from functools import lru_cache
 from pathlib import Path
 
@@ -18,6 +19,8 @@ from jsonschema import Draft202012Validator
 
 MAX_BYTES = 2 * 1024 * 1024
 HORIZONS = [1, 5, 15, 60, 240, 1440]
+CANONICAL_HISTORY_HORIZONS = tuple(str(horizon) for horizon in HORIZONS)
+CANONICAL_HISTORY_POINTS = 361
 RELATIVE_RETURN_DEFINITION_HASH = (
     "54936e39a1c8ba50b1226d16efd45aa683165fe82a958e9b577f2856849f3259"
 )
@@ -761,6 +764,72 @@ def _decimal(value) -> float:
     return number
 
 
+def _validate_canonical_history(payload: dict) -> None:
+    """Validate canonical replay rows without treating incomplete history as an error.
+
+    Completeness is decision-frame-specific and belongs to the browser consumer. This
+    gateway checks typed provenance and numeric bounds, while preserving owner gaps/nulls.
+    """
+    rows = payload["items"]
+    if len(rows) > CANONICAL_HISTORY_POINTS:
+        raise ValueError("canonical history exceeds its bounded row count")
+    previous = -1
+    snapshots = set()
+    for row in rows:
+        cutoff, available = row["cutoff_ms"], row["available_at_ms"]
+        if cutoff <= previous or available < cutoff:
+            raise ValueError("canonical history clocks are not ordered")
+        previous = cutoff
+        if row["snapshot_id"] in snapshots:
+            raise ValueError("canonical history repeats a source snapshot")
+        snapshots.add(row["snapshot_id"])
+        coverage = row["coverage"]
+        valid, expected = (
+            coverage["valid_instruments"],
+            coverage["expected_instruments"],
+        )
+        if not 1 <= expected <= 300 or not 0 <= valid <= expected:
+            raise ValueError("canonical history coverage is invalid")
+        if set(row["breadth"]) != set(CANONICAL_HISTORY_HORIZONS):
+            raise ValueError("canonical history horizons are incomplete")
+        for values in row["breadth"].values():
+            pressure = values["pressure"]
+            if pressure is not None and not Decimal(-3) <= Decimal(pressure) <= Decimal(
+                3
+            ):
+                raise ValueError("canonical history pressure exceeds its owner scale")
+
+
+def _exact_member_median(values, instrument_ids):
+    """Return the exact full-cohort median, or None when any member is absent."""
+    if set(values) != set(instrument_ids) or not instrument_ids:
+        return None
+    try:
+        parsed = [
+            Decimal(str(values[instrument_id])) for instrument_id in instrument_ids
+        ]
+    except (ArithmeticError, TypeError, ValueError):
+        return None
+    if any(not value.is_finite() for value in parsed):
+        return None
+    parsed.sort()
+    middle = len(parsed) // 2
+    if len(parsed) % 2:
+        return parsed[middle]
+    midpoint = (Fraction(parsed[middle - 1]) + Fraction(parsed[middle])) / 2
+    with localcontext() as context:
+        context.prec = max(
+            28,
+            len(str(abs(midpoint.numerator))) + len(str(midpoint.denominator)) + 4,
+        )
+        return Decimal(midpoint.numerator) / Decimal(midpoint.denominator)
+
+
+def _cohort_window_start_ms(cutoff_ms: int, horizon_minutes: int) -> int:
+    """Match the owner frame's non-negative return-window boundary."""
+    return max(0, cutoff_ms - horizon_minutes * 60_000)
+
+
 def _reconciles(actual: Decimal, expected: Decimal) -> bool:
     return abs(actual - expected) <= max(abs(actual), abs(expected)) * Decimal("1e-24")
 
@@ -1042,6 +1111,11 @@ def validate_frame(frame, *, allow_fixture=False):
                 "top5_abs_capped_ref",
             )
         ),
+        *(
+            row["median_return_ref"]
+            for row in frame.get("contribution_summaries", [])
+            if row.get("median_return_ref") is not None
+        ),
     ]
     if any(ref["metric_id"] not in metrics for ref in refs):
         raise ValueError("unresolved aggregate reference")
@@ -1200,8 +1274,11 @@ def validate_frame(frame, *, allow_fixture=False):
             raise ValueError("breadth divergence rows are incomplete or reordered")
         for row in divergences:
             if (
-                row["expected_count"] != len(ids)
-                or row["matched_count"] > row["expected_count"]
+                not 1 <= row["expected_count"] <= 300
+                or row["expected_count"] != len(ids)
+                or not 0 <= row["matched_count"] <= row["expected_count"]
+                or (row["matched_count"] == 0)
+                != (row["matched_membership_hash"] is None)
             ):
                 raise ValueError("divergence cohort differs from universe")
             require_aggregate(
@@ -1210,12 +1287,23 @@ def validate_frame(frame, *, allow_fixture=False):
                 "count",
                 "breadth_price_divergence",
             )
+            value = metrics[row["metric_ref"]["metric_id"]]["value"]
+            if value not in (None, "0", "1"):
+                raise ValueError(
+                    "breadth divergence flag must be zero, one, or unavailable"
+                )
+            if value is not None and row["matched_count"] == 0:
+                raise ValueError(
+                    "observed divergence requires a positive matched cohort"
+                )
     contributions = frame.get("contribution_summaries", [])
     if contributions:
+        breadth_by_horizon = {row["horizon_minutes"]: row for row in frame["breadth"]}
         if [row["horizon_minutes"] for row in contributions] != [5, 15, 60, 1440]:
             raise ValueError("contribution horizons are incomplete or reordered")
         for row in contributions:
             horizon = row["horizon_minutes"]
+            window_start_ms = _cohort_window_start_ms(frame["cutoff_ms"], horizon)
             if (
                 row["expected_count"] != len(ids)
                 or row["valid_count"] > row["expected_count"]
@@ -1245,6 +1333,55 @@ def validate_frame(frame, *, allow_fixture=False):
                 "share_fraction",
                 "return_concentration_abs_top5_capped_liquidity",
             )
+            median_ref = row.get("median_return_ref")
+            if median_ref is None:
+                continue
+            breadth = breadth_by_horizon[horizon]
+            if (
+                not row["start_cohort_available"]
+                or row["valid_count"] != row["expected_count"]
+                or row["expected_count"] != len(ids)
+                or frame["universe"]["effective_at_ms"] > window_start_ms
+                or breadth["valid_count"] != breadth["expected_count"]
+                or breadth["expected_count"] != row["expected_count"]
+                or median_ref["metric_id"]
+                != breadth["metric_refs"]["median_return"]["metric_id"]
+            ):
+                raise ValueError(
+                    "cohort median must reuse the same-horizon full-cohort breadth median"
+                )
+            metric = metrics[median_ref["metric_id"]]
+            if (
+                metric["definition"]["definition_id"] != "breadth_return_median"
+                or metric["unit"] != "return_percent"
+                or metric["computation_status"] != "VALID"
+                or metric["coverage_status"] != "COMPLETE"
+                or metric["sample_count"] != row["expected_count"]
+                or metric["required_samples"] != row["expected_count"]
+                or metric["expected_denominator"] != row["expected_count"]
+                or metric["horizon_minutes"] != horizon
+                or metric["window_start_ms"] != window_start_ms
+                or metric["window_end_ms"] != frame["cutoff_ms"]
+            ):
+                raise ValueError(
+                    "cohort median does not prove complete same-horizon owner coverage"
+                )
+            return_series = by_id[
+                frame["asset_metric_refs"][f"return_{horizon}m"]["metric_id"]
+            ]
+            member_values = {
+                cell["instrument_id"]: (
+                    cell.get("value")
+                    if cell.get("computation_status", "VALID") == "VALID"
+                    else None
+                )
+                for cell in return_series["cells"]
+            }
+            median = _exact_member_median(member_values, ids)
+            if median is None or Decimal(metric["value"]) != median:
+                raise ValueError(
+                    "cohort median aggregate differs from exact frozen member returns"
+                )
     daily_rows = frame.get("daily_internals", [])
     if daily_rows:
         if [row["instrument_id"] for row in daily_rows] != ids:
@@ -1433,6 +1570,9 @@ def validate_response(path: str, raw: bytes):
     if family == "microstructure":
         _validate_microstructure_response(payload)
     if family == "history":
+        if payload.get("projection") == "canonical_state":
+            _validate_canonical_history(payload)
+            return payload
         previous = -1
         for row in payload["items"]:
             if (
@@ -1464,6 +1604,27 @@ def validate_response(path: str, raw: bytes):
                 raise ValueError("history coverage is invalid")
             if set(row["breadth"]) != {str(h) for h in HORIZONS}:
                 raise ValueError("history horizons are incomplete")
+            # Stored history is a separate public boundary from frame validation.
+            # Preserve points from older generations that omit this field, but
+            # validate every divergence row when the owner supplied one.
+            for divergence in row.get("breadth_divergence", {}).values():
+                matched, expected = (
+                    divergence["matched_count"],
+                    divergence["expected_count"],
+                )
+                cohort_hash = divergence["matched_membership_hash"]
+                value = divergence["value"]
+                if (
+                    type(expected) is not int
+                    or type(matched) is not int
+                    or not 1 <= expected <= 300
+                    or not 0 <= matched <= expected
+                    or (matched == 0) != (cohort_hash is None)
+                    or (cohort_hash is not None and not _HASH.fullmatch(cohort_hash))
+                    or value not in (None, "0", "1")
+                    or (value is not None and matched == 0)
+                ):
+                    raise ValueError("history divergence cohort or flag is invalid")
             for values in row["breadth"].values():
                 for key, value in values.items():
                     if value is not None:

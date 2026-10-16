@@ -495,6 +495,8 @@ export function MarketPictureSurface({
       <MarketPulseHero
         frame={frame}
         history={data?.history ?? EMPTY_HISTORY}
+        canonicalHistory={data?.canonicalHistory ?? null}
+        canonicalHistoryFault={data?.canonicalHistoryFault ?? null}
         horizon={view.horizon}
         window={view.window}
         setHorizon={setHorizon}

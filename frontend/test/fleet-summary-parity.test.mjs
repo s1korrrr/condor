@@ -54,6 +54,7 @@ function wireHistory(spec, frame) {
         source_kind: "observed",
         coverage: { valid_instruments: 2, expected_instruments: 2 },
         membership_hash: "cd".repeat(32),
+        definition_registry_hash: frame.raw.definition_registry_hash,
         gap_before: seg.gap_first === true && k === seg.from_min,
         summary: {},
         breadth: Object.fromEntries(HORIZONS.map((h) => [h, { positive: null, negative: null, flat: null, pressure: ["15", "60", "240", "1440"].includes(h) ? pressure : null }])),
@@ -175,7 +176,7 @@ test("the documented example's verdict is what the browser computes from the sam
     const cutoff = CUT - k * MINUTE;
     items.push({
       cutoff_ms: cutoff, available_at_ms: cutoff + 1000, snapshot_id: "ab".repeat(32), source_kind: "observed",
-      coverage: { valid_instruments: 2, expected_instruments: 2 }, membership_hash: "cd".repeat(32), gap_before: false, summary: {},
+      coverage: { valid_instruments: 2, expected_instruments: 2 }, membership_hash: "cd".repeat(32), definition_registry_hash: frame.raw.definition_registry_hash, gap_before: false, summary: {},
       breadth: Object.fromEntries(HORIZONS.map((h) => [h, { positive: null, negative: null, flat: null, pressure: "-0.4" }])),
     });
   }

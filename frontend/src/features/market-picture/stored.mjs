@@ -66,7 +66,7 @@ export function projectHistory(body, frame) {
     const coverage = record(row.coverage);
     const valid = integer(coverage.valid_instruments),
       expected = integer(coverage.expected_instruments);
-    check(valid <= expected && HASH.test(row.membership_hash));
+    check(valid <= expected && HASH.test(row.membership_hash) && HASH.test(row.definition_registry_hash));
     const summaryKeys = Object.keys(record(row.summary ?? {}));
     check(
       !(summaryKeys.includes("relative_volume_24h") && summaryKeys.includes("relative_volume_1h")),
@@ -110,10 +110,66 @@ export function projectHistory(body, frame) {
         breadthTrajectory[key] = {
           level: number(trajectory.level, -1, 1), change: number(trajectory.change, -2, 2),
           velocity: number(trajectory.velocity), acceleration: number(trajectory.acceleration),
-          shareChange: number(trajectory.share_change, -100, 100),
+          shareChange: number(trajectory.share_change ?? null, -100, 100),
           matched, expected: expectedMatched, membership,
         };
       }
+    }
+    const contributions = {};
+    for (const [horizon, input] of Object.entries(record(row.contribution_summaries ?? {}))) {
+      check(["5", "15", "60", "1440"].includes(horizon), "Invalid retained contribution horizon.");
+      const item = record(input), count = integer(item.valid_count), cohortSize = integer(item.expected_count);
+      check(count <= cohortSize && cohortSize > 0 && cohortSize <= 300 &&
+        typeof item.start_cohort_available === "boolean" && typeof item.prior_liquidity_weights_available === "boolean",
+      "Invalid retained contribution coverage.");
+      const equalReturn = number(item.equal_weight_return), medianReturn = number(item.median_return ?? null),
+        cappedReturn = number(item.capped_liquidity_return);
+      check([equalReturn, medianReturn, cappedReturn].every(value => value === null) ||
+        (item.start_cohort_available && count === cohortSize), "Retained returns require the complete frozen cohort.");
+      check(cappedReturn === null || item.prior_liquidity_weights_available, "Capped returns require prior weights.");
+      contributions[horizon] = { equalReturn, medianReturn, cappedReturn, valid: count, expected: cohortSize,
+        startCohortAvailable: item.start_cohort_available, priorWeightsAvailable: item.prior_liquidity_weights_available };
+    }
+    let benchmarkReturns = null;
+    if (row.benchmark_returns != null) {
+      const item = record(row.benchmark_returns), instrumentId = text(item.instrument_id), quoteAsset = text(item.quote_asset, 16);
+      check(/^[^:]+:spot:BTC-[A-Z0-9]{2,16}$/.test(instrumentId) && instrumentId.endsWith(`-${quoteAsset}`) &&
+        item.cutoff_ms === cutoff && item.definition_id === "return_pct" && HASH.test(item.definition_hash),
+      "Retained benchmark identity, timing or definition is invalid.");
+      const values = record(item.values), ownerReasons = record(item.reason_codes);
+      check(Object.keys(values).length === 6 && Object.keys(ownerReasons).length === 6 &&
+        HORIZONS.every(h => h in values && h in ownerReasons), "Retained benchmark horizons are incomplete.");
+      const parsed = {}, parsedReasons = {};
+      for (const h of HORIZONS) {
+        parsed[h] = number(values[h]);
+        parsedReasons[h] = reasons(ownerReasons[h]);
+        check((parsed[h] === null) === (parsedReasons[h].length > 0), "Retained benchmark null needs its owner reason.");
+      }
+      benchmarkReturns = { instrumentId, quoteAsset, cutoff, definitionId: item.definition_id,
+        definitionHash: item.definition_hash, values: parsed, reasons: parsedReasons };
+    }
+    const breadthDivergence = {};
+    for (const [interval, input] of Object.entries(record(row.breadth_divergence ?? {}))) {
+      check(["5", "15", "60"].includes(interval), "Invalid retained divergence interval.");
+      const item = record(input), value = number(item.value, 0, 1), matched = integer(item.matched_count), cohortSize = integer(item.expected_count);
+      check((value === null || Number.isInteger(value)) && matched <= cohortSize && cohortSize <= 300 &&
+        (item.matched_membership_hash === null || HASH.test(item.matched_membership_hash)), "Invalid retained divergence cohort.");
+      check(value === null || (matched > 0 && HASH.test(item.matched_membership_hash)),
+        "Retained divergence value requires an identified matched cohort.");
+      const keys = ["benchmark_instrument_id", "quote_asset", "horizon_minutes", "interval_minutes", "cutoff_ms", "definition_id",
+        "definition_hash", "window_start_ms", "window_end_ms", "reference_window_minutes"];
+      let provenance = null;
+      if (keys.some(key => item[key] != null)) {
+        check(keys.every(key => item[key] != null) && item.horizon_minutes === 15 && String(item.interval_minutes) === interval &&
+          item.cutoff_ms === cutoff && item.window_end_ms === cutoff && item.window_start_ms === Math.max(0, cutoff - 86_400_000) &&
+          item.definition_id === "breadth_price_divergence" && HASH.test(item.definition_hash) && item.reference_window_minutes === 1440 &&
+          item.raw_inputs_available === false && /^[^:]+:spot:BTC-[A-Z0-9]{2,16}$/.test(item.benchmark_instrument_id) &&
+          item.benchmark_instrument_id.endsWith(`-${item.quote_asset}`), "Retained divergence provenance is incomplete or inconsistent.");
+        provenance = { horizon: 15, interval: Number(interval), benchmarkInstrumentId: item.benchmark_instrument_id,
+          quoteAsset: item.quote_asset, definitionId: item.definition_id, definitionHash: item.definition_hash,
+          referenceWindowMinutes: 1440, windowStart: item.window_start_ms, windowEnd: item.window_end_ms };
+      }
+      breadthDivergence[interval] = { value, matched, expected: cohortSize, membership: item.matched_membership_hash, provenance };
     }
     let flowHistory = null;
     if (row.flow_history != null) {
@@ -158,10 +214,14 @@ export function projectHistory(body, frame) {
       valid,
       expected,
       membership: row.membership_hash,
+      definitionRegistryHash: row.definition_registry_hash,
       gapBefore: row.gap_before === true,
       flowHistory,
       normalizedBreadth,
       breadthTrajectory,
+      breadthDivergence,
+      benchmarkReturns,
+      contributions,
       summary: Object.fromEntries(
         Object.entries(record(row.summary ?? {})).map(([key, value]) => [
           key,

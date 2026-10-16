@@ -18,6 +18,7 @@ from config_manager import get_config_manager
 router = APIRouter(prefix="/servers/{name}/market-picture", tags=["market-picture"])
 TIMEOUT = 5.0
 MAX_BYTES = 2 * 1024 * 1024
+CANONICAL_HISTORY_POINTS = 361
 _HASH = re.compile(r"^[0-9a-f]{64}$")
 _TAG = re.compile(r'^"[0-9a-f]{64}"$')
 _INSTRUMENT = re.compile(r"^okx:spot:[A-Z0-9]{1,30}-[A-Z0-9]{1,12}$")
@@ -72,6 +73,7 @@ def _query(path: str, request: Request) -> list[tuple[str, str]]:
             "limit",
             "cursor",
             "snapshot_id",
+            "projection",
         },
         "assets": common | {"snapshot_id"},
         "correlations": common
@@ -120,6 +122,20 @@ def _query(path: str, request: Request) -> list[tuple[str, str]]:
                 or not lower <= int(value) <= upper
             ):
                 raise HTTPException(400, "Invalid relationship page")
+    if "projection" in dict(params):
+        query = dict(params)
+        if (
+            path != "history"
+            or query.get("projection") != "canonical_state"
+            or query.get("snapshot_id") is None
+            or query.get("window") != "6h"
+            or query.get("resolution") != "1m"
+            or int(query.get("limit", "0")) < CANONICAL_HISTORY_POINTS
+            or "cursor" in query
+            or "start_ms" in query
+            or "end_ms" in query
+        ):
+            raise HTTPException(400, "Invalid canonical history projection scope")
     return params
 
 

@@ -7,6 +7,7 @@ import { useElementWidth } from "@/features/quant-ops/kit/useElementWidth";
 import { ageState, HORIZONS, HORIZON_LABELS, marketPulseWindow } from "./model.mjs";
 import {
   breadthLadder,
+  canonicalVerdictHistoryFault,
   horizonLabel,
   isSingleBarRelativeVolume,
   marketVerdict,
@@ -28,6 +29,7 @@ import {
 import { Metric, Panel } from "./Primitives";
 import { selectMetricCohort, type MetricCohortRequest } from "./metric-cohort.mjs";
 import { HistoryRangeSelector } from "./HistoryRangeSelector";
+import { HistoryComparisons } from "./HistoryComparisons";
 import { historyRangeTimes, normalizeHistoryRange, selectHistoryPoints, type HistoryRange } from "./history-range.mjs";
 
 /** Coverage changes within a partial universe are just as material as a full/partial flip. */
@@ -70,20 +72,23 @@ function VerdictCard({
   frame,
   horizon,
   history,
+  historyFault,
   smooth,
   asOf = frame?.available_at_ms ?? Date.now(),
   historical = false,
 }: {
   frame: DisplayFrame | null;
   horizon: Horizon;
-  history: HistoryPoint[];
+  history: HistoryPoint[] | null;
+  historyFault?: string | null;
   smooth: boolean;
   asOf?: number;
   historical?: boolean;
 }) {
+  const historyUnavailable = historyFault ?? (history ? canonicalVerdictHistoryFault(history, horizon, frame?.cutoff_ms ?? NaN) : "Canonical six-hour history is unavailable.");
   const verdict = useMemo(
-    () => marketVerdict(frame, horizon, { history, smooth }),
-    [frame, horizon, history, smooth],
+    () => history && !historyUnavailable ? marketVerdict(frame, horizon, { history, smooth }) : null,
+    [frame, horizon, history, historyUnavailable, smooth],
   );
   const freshness = ageState(frame, asOf, false).freshness;
   if (frame && freshness !== "FRESH")
@@ -93,6 +98,17 @@ function VerdictCard({
         <strong className="mp-verdict__word">Unavailable · {freshness}</strong>
         <p className="mp-panel-footnote">
           This observation cannot support a current verdict. Recorded values keep their original observation time and expiry.
+        </p>
+      </div>
+    );
+  if (frame && historyUnavailable)
+    return (
+      <div className="mp-verdict" data-state="unavailable">
+        <span className="mp-kicker">Market state · {horizonLabel(horizon)}</span>
+        <strong className="mp-verdict__word">Unavailable · canonical history</strong>
+        <p className="mp-panel-footnote">
+          The fixed six-hour one-minute history is incomplete or unavailable. The selected chart window is not used as a substitute.
+          {historyUnavailable ? ` ${historyUnavailable}` : ""}
         </p>
       </div>
     );
@@ -303,6 +319,8 @@ function PulseDataTable({
 export function MarketPulseHero({
   frame,
   history,
+  canonicalHistory = null,
+  canonicalHistoryFault = null,
   horizon,
   window,
   setHorizon,
@@ -314,6 +332,8 @@ export function MarketPulseHero({
 }: {
   frame: DisplayFrame | null;
   history: HistoryPoint[];
+  canonicalHistory?: HistoryPoint[] | null;
+  canonicalHistoryFault?: string | null;
   horizon: Horizon;
   window: string;
   setHorizon: (h: Horizon) => void;
@@ -417,7 +437,7 @@ export function MarketPulseHero({
       </header>
       <div className="mp-hero__body">
         <aside className="mp-hero__side">
-          <VerdictCard frame={frame} horizon={horizon} history={history} smooth={smooth} asOf={asOf} historical={historical} />
+          <VerdictCard frame={frame} horizon={horizon} history={canonicalHistory} historyFault={canonicalHistoryFault} smooth={smooth} asOf={asOf} historical={historical} />
           <BreadthLadder frame={frame} horizon={horizon} setHorizon={setHorizon} />
         </aside>
         <div className="mp-hero__chart" ref={ref}>
@@ -460,7 +480,7 @@ export function MarketPulseHero({
             range={selectedRange}
             onChange={(range) => setRangeSelection(range ? { history, horizon, window, range } : null)}
           />
-          <p className="mp-panel-detail">The range changes this chart and its table only. New history or a different horizon or window restores the full view.</p>
+          <p className="mp-panel-detail">The range changes the breadth and historical comparison charts and their tables. New history or a different horizon or window restores the full view.</p>
           <div className="mp-pulse-tools">
             <span className="mp-panel-detail" role="status">
               {pulse.label}
@@ -515,6 +535,8 @@ export function MarketPulseHero({
               />
             )}
           </details>
+          <HistoryComparisons samples={pulse.samples} horizon={horizon}
+            range={selectedRange && rangeStart !== null && rangeEnd !== null ? [rangeStart, rangeEnd] : null} />
         </div>
       </div>
       <footer
@@ -916,10 +938,11 @@ function BreadthContextPanelView({ frame }: { frame: DisplayFrame }) {
       {contributions.length ? <div className="mp-table-scroll" tabIndex={0} role="region" aria-labelledby="mp-return-contribution-caption">
         <table className="mp-table mp-trajectory-table">
           <caption id="mp-return-contribution-caption">Full start-cohort returns and absolute top-five contribution concentration</caption>
-          <thead><tr><th>Horizon</th><th>Equal-weight return</th><th>Liquidity-capped return</th><th>Top-five share · equal</th><th>Top-five share · capped</th><th>Cohort</th></tr></thead>
+          <thead><tr><th>Horizon</th><th>Equal-weight return</th><th>Full-cohort median</th><th>Liquidity-capped return</th><th>Top-five share · equal</th><th>Top-five share · capped</th><th>Cohort</th></tr></thead>
           <tbody>{contributions.map(row => <tr key={row.horizon}>
             <th scope="row">{row.horizon}m</th>
             <td title={metricTitle(row.equalReturn)}>{metricText(row.equalReturn, 2, true)}</td>
+            <td title={metricTitle(row.medianReturn)}>{metricText(row.medianReturn, 2, true)}</td>
             <td title={metricTitle(row.cappedReturn)}>{metricText(row.cappedReturn, 2, true)}</td>
             <td title={metricTitle(row.equalTop5)}>{metricText(row.equalTop5, 1)}</td>
             <td title={metricTitle(row.cappedTop5)}>{metricText(row.cappedTop5, 1)}</td>

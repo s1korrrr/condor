@@ -41,7 +41,7 @@ const { load } = frontendModules({
   "./contract.mjs": contract,
   "./stored.mjs": stored,
   "@/lib/api": { api: {} },
-}, { "features/market-picture/MarketPulse.tsx": ["PulseDataTable", "pulseDataRows"] });
+}, { "features/market-picture/MarketPulse.tsx": ["PulseDataTable", "pulseDataRows", "VerdictCard"] });
 const read = (file) =>
   JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/${file}`, import.meta.url), "utf8"));
 const metric = (value, extra = {}) => ({ value, original: String(value), unit: "x", status: value == null ? "UNAVAILABLE" : "VALID", reasons: [], valid: 5, expected: 5, available: 1, expires: 2, definition: "d v1", ...extra });
@@ -125,6 +125,43 @@ function frameWith({ pressure = {}, mean = {}, vol = 0.5, advancing = 3 } = {}) 
     breadth: Object.fromEntries(HORIZONS.map((h) => [h, { advancing, declining: 5 - advancing, unchanged: 0, valid: 5, expected: 5, positive: metric(advancing / 5), negative: metric((5 - advancing) / 5), flat: metric(0) }])),
   };
 }
+
+test("positive verdicts require current data and historical inspection stays explicit", () => {
+  const { VerdictCard } = load("features/market-picture/MarketPulse.tsx");
+  const frame = {
+    ...frameWith({ pressure: Object.fromEntries(HORIZONS.map(h => [h, 3])), mean: { 15: 5 } }),
+    cutoff_ms: 100_000, available_at_ms: 101_000, expires_at_ms: 220_000,
+  };
+  const render = (asOf, historical = false) => renderToStaticMarkup(React.createElement(VerdictCard, {
+    frame, horizon: "15", history: [], smooth: false, asOf, historical,
+  }));
+  for (const [now, state] of [[100_999, "FUTURE"], [190_001, "LAGGING"], [220_000, "STALE"]]) {
+    const html = render(now);
+    assert.match(html, new RegExp(`Unavailable · ${state}`));
+    assert.doesNotMatch(html, /data-state="risk-on"|mp-score__fill|Market state: Risk-on/);
+  }
+  assert.match(render(101_000), /data-state="risk-on"/);
+  const historical = render(101_000, true);
+  assert.match(historical, /Recorded market state: Risk-on/);
+  assert.match(historical, /data-state="historical"/);
+  assert.doesNotMatch(historical, /data-state="risk-on"/);
+  assert.match(render(100_999, true), /Unavailable · FUTURE/);
+});
+
+test("stale or lagging breadth cannot produce positive conditional readings", () => {
+  const { EvidenceMatrixPanel } = load("features/market-picture/MarketPulse.tsx");
+  const frame = {
+    ...frameWith({ pressure: Object.fromEntries(HORIZONS.map(h => [h, 3])), advancing: 5 }),
+    cutoff_ms: 100_000, available_at_ms: 101_000, expires_at_ms: 220_000,
+    sourceCapabilities: [],
+  };
+  for (const [asOf, state] of [[190_001, "LAGGING"], [220_000, "STALE"]]) {
+    const html = renderToStaticMarkup(React.createElement(EvidenceMatrixPanel, { frame, horizon: "15", asOf }));
+    assert.match(html, new RegExp(`data-state="${state}"`));
+    assert.match(html, /Deterministic reading unavailable/);
+    assert.match(html, /Continuation conditions are unavailable/);
+  }
+});
 
 test("verdict averages the three disclosed components and applies the published thresholds", () => {
   const strong = marketVerdict(frameWith({ pressure: Object.fromEntries(HORIZONS.map((h) => [h, 3])), mean: { 15: 5 } }), "15");

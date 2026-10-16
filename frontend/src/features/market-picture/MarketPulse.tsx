@@ -4,7 +4,7 @@ import { SparkChart } from "@/features/quant-ops/kit/charts";
 import { TileGrid } from "@/features/quant-ops/kit/grid";
 import { CHART, type ChartSeries, type SeriesPoint } from "@/features/quant-ops/kit/series";
 import { useElementWidth } from "@/features/quant-ops/kit/useElementWidth";
-import { HORIZONS, HORIZON_LABELS, marketPulseWindow } from "./model.mjs";
+import { ageState, HORIZONS, HORIZON_LABELS, marketPulseWindow } from "./model.mjs";
 import {
   breadthLadder,
   horizonLabel,
@@ -68,16 +68,31 @@ function VerdictCard({
   horizon,
   history,
   smooth,
+  asOf = frame?.available_at_ms ?? Date.now(),
+  historical = false,
 }: {
   frame: DisplayFrame | null;
   horizon: Horizon;
   history: HistoryPoint[];
   smooth: boolean;
+  asOf?: number;
+  historical?: boolean;
 }) {
   const verdict = useMemo(
     () => marketVerdict(frame, horizon, { history, smooth }),
     [frame, horizon, history, smooth],
   );
+  const freshness = ageState(frame, asOf, false).freshness;
+  if (frame && freshness !== "FRESH")
+    return (
+      <div className="mp-verdict" data-state="unavailable">
+        <span className="mp-kicker">Market state · {horizonLabel(horizon)}</span>
+        <strong className="mp-verdict__word">Unavailable · {freshness}</strong>
+        <p className="mp-panel-footnote">
+          This observation cannot support a current verdict. Recorded values keep their original observation time and expiry.
+        </p>
+      </div>
+    );
   if (!frame || !verdict)
     return (
       <div className="mp-verdict" data-state="loading" aria-busy="true">
@@ -88,11 +103,11 @@ function VerdictCard({
     );
   const mean = frame.distribution[horizon]?.mean;
   return (
-    <div className="mp-verdict" data-state={verdict.state} title={verdict.rule}>
+    <div className="mp-verdict" data-state={historical ? "historical" : verdict.state} title={verdict.rule}>
       <span className="mp-kicker">
-        Market state · {horizonLabel(horizon)} · {frame.expected} instruments
+        {historical ? "Recorded market state" : "Market state"} · {horizonLabel(horizon)} · {frame.expected} instruments
       </span>
-      <strong className="mp-verdict__word" aria-label={`Market state: ${verdict.label}`}>
+      <strong className="mp-verdict__word" aria-label={`${historical ? "Recorded market state" : "Market state"}: ${verdict.label}`}>
         <span aria-hidden="true">{verdict.state === "risk-on" ? "▲" : verdict.state === "risk-off" ? "▼" : "◆"}</span>
         {verdict.label}
       </strong>
@@ -104,6 +119,7 @@ function VerdictCard({
           <span>Risk-on</span>
         </span>
         <small className="mp-verdict__basis" role="status">
+          {historical && `Recorded as of ${new Date(asOf).toISOString()} · `}
           {verdict.smoothed
             ? `Breadth components: ${verdict.smoothingMinutes}-min mean of ${verdict.smoothedFrames} frames · latest-frame score ${signed(verdict.instantScore)}`
             : "Latest frame only"}
@@ -286,6 +302,8 @@ export function MarketPulseHero({
   setHorizon,
   setWindow,
   replay,
+  asOf,
+  historical = false,
 }: {
   frame: DisplayFrame | null;
   history: HistoryPoint[];
@@ -294,6 +312,8 @@ export function MarketPulseHero({
   setHorizon: (h: Horizon) => void;
   setWindow: (w: string) => void;
   replay: (id: string) => void;
+  asOf?: number;
+  historical?: boolean;
 }) {
   const [smooth, setSmooth] = useState(true);
   const [dataTableOpen, setDataTableOpen] = useState(false);
@@ -358,7 +378,7 @@ export function MarketPulseHero({
       </header>
       <div className="mp-hero__body">
         <aside className="mp-hero__side">
-          <VerdictCard frame={frame} horizon={horizon} history={history} smooth={smooth} />
+          <VerdictCard frame={frame} horizon={horizon} history={history} smooth={smooth} asOf={asOf} historical={historical} />
           <BreadthLadder frame={frame} horizon={horizon} setHorizon={setHorizon} />
         </aside>
         <div className="mp-hero__chart" ref={ref}>
@@ -470,8 +490,8 @@ export function EvidenceMatrixPanel({
 }) {
   const breadth = frame.breadth[horizon];
   const pressure = frame.pressure[horizon];
-  const frameAvailable = frame.available_at_ms <= asOf;
-  const validBreadth = frameAvailable && breadth?.positive.status === "VALID" && pressure?.status === "VALID";
+  const freshness = ageState(frame, asOf, false).freshness;
+  const validBreadth = freshness === "FRESH" && breadth?.positive.status === "VALID" && pressure?.status === "VALID";
   const completeBreadth = validBreadth && breadth.positive.valid === breadth.positive.expected &&
     pressure.valid === pressure.expected;
   const pressureValue = validBreadth ? pressure?.value : null;
@@ -512,7 +532,7 @@ export function EvidenceMatrixPanel({
   const familyRows = [
     {
       family: "Price & participation",
-      state: !frameAvailable ? "FUTURE" : !validBreadth ? "UNAVAILABLE" : completeBreadth ? "OBSERVED" : "PARTIAL",
+      state: freshness !== "FRESH" ? freshness : !validBreadth ? "UNAVAILABLE" : completeBreadth ? "OBSERVED" : "PARTIAL",
       evidence: validBreadth
         ? `${metricText(breadth.positive, 0)} advancing · pressure ${metricText(pressure, 2, true)} · ${horizonLabel(horizon)}`
         : "Breadth or pressure is unavailable for this horizon.",

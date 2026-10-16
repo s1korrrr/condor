@@ -197,8 +197,8 @@ export function MarketPictureSurface({
     frame = data?.frame ?? null;
   const observationNow = useObservationClock(fixture?.frame.available_at_ms);
   const componentAsOf = observationAsOf(frame, observationNow, source.frozen);
-  const health = marketPictureHealth(data?.faults, source.error, ageState(frame, Date.now(), source.frozen).freshness);
-  const state = ageState(frame, Date.now(), source.frozen);
+  const state = ageState(frame, observationNow, source.frozen);
+  const health = marketPictureHealth(data?.faults, source.error, state.freshness);
   const selected =
     frame?.assets.find((a) => a.instrument_id === view.selected) ?? null;
   const preferencesKey = `condor.market-picture.v1:${encodeURIComponent(userId)}:${encodeURIComponent(server ?? "none")}:${encodeURIComponent(frame?.universeId ?? "pending")}`;
@@ -458,6 +458,13 @@ export function MarketPictureSurface({
           )}
         </div>
       )}
+      {frame && (source.frozen || state.freshness !== "FRESH") && (
+        <div className="mp-notice" role="status">
+          {source.frozen
+            ? `Historical inspection · recorded values are assessed at ${new Date(componentAsOf).toISOString()}. Source age continues; this is not a current market verdict.`
+            : `${state.freshness} observation · values below are retained for inspection with their original timestamps. A current market verdict is unavailable.`}
+        </div>
+      )}
       <MarketPulseHero
         frame={frame}
         history={data?.history ?? EMPTY_HISTORY}
@@ -466,6 +473,8 @@ export function MarketPictureSurface({
         setHorizon={setHorizon}
         setWindow={setWindow}
         replay={source.replay}
+        asOf={componentAsOf}
+        historical={source.frozen}
       />
       {frame && (
         <MarketSnapshotTiles frame={frame} history={data?.history ?? EMPTY_HISTORY} window={view.window} />
@@ -740,9 +749,11 @@ function SourceStatus({frame, frozen, loading, server, degraded, fixtureTime}: {
             {label}
             <span aria-hidden="true">●</span>
           </strong>
-          <time>
-            {new Date(now).toISOString().replace("T", " ").slice(0, 19)} UTC
-          </time>
+          {frame ? (
+            <time dateTime={new Date(frame.cutoff_ms).toISOString()} title="Last successful observation cutoff">
+              Observed {new Date(frame.cutoff_ms).toISOString().replace("T", " ").slice(0, 19)} UTC
+            </time>
+          ) : <span>Observation unavailable</span>}
           <small>
             {frame
               ? `${frame.expected} symbols · ${frame.quote} spot · ${Math.floor((state.ageMs ?? 0) / 1000)}s old`

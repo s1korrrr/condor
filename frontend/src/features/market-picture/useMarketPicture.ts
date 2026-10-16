@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { acceptFrame, pollDelay } from "./model.mjs";
+import { acceptFrame, pollDelay, requireFrameAvailable } from "./model.mjs";
 import { fetchBundle, type FrameBundle } from "./source";
 
 /** One scheduler owns the page. Dependent reads are pinned to the selected frame. */
@@ -44,6 +44,7 @@ export function useMarketPicture(
           frozenId,
         );
         if (stopped || request.signal.aborted) return;
+        requireFrameAvailable(candidate.frame, Date.now());
         if (frozenId) setFrozen(candidate);
         else {
           acceptFrame(current.current?.frame ?? null, candidate.frame);
@@ -106,6 +107,7 @@ export function useMarketPicture(
           snapshotId,
         );
         if (!controller.signal.aborted) {
+          requireFrameAvailable(selected.frame, Date.now());
           setFrozen(selected);
           setError(null);
         }

@@ -4,6 +4,12 @@ import { frontendModules } from './helpers/frontend-module.mjs';
 import { marketPictureHealth, marketSourceLabel } from '../src/features/market-picture/health.mjs';
 
 const snapshot = 'a'.repeat(64);
+test('non-current observations never produce a healthy footer', () => {
+  for (const freshness of ['FUTURE', 'STALE', 'LAGGING', 'UNKNOWN']) {
+    assert.equal(marketPictureHealth({}, null, freshness).footerTone, 'warning', freshness);
+  }
+  assert.equal(marketPictureHealth({}, null, 'FRESH').footerTone, 'healthy');
+});
 function sourceHarness(responses) {
   const calls = [];
   const api = {getMarketPicture: async (...args) => { calls.push(args); return responses.shift(); }};

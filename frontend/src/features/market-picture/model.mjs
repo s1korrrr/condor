@@ -29,6 +29,12 @@ export function acceptFrame(previous, incoming) {
   return incoming;
 }
 
+/** Neither polling nor replay may publish an observation before it was available. */
+export function requireFrameAvailable(frame, now) {
+  if (frame.available_at_ms > now)
+    throw new Error(`Market Picture future frame unavailable until ${new Date(frame.available_at_ms).toISOString()}.`);
+}
+
 export function ageState(frame, now, frozen) {
   if (!frame) return { mode: "UNAVAILABLE", freshness: "STALE", ageMs: null };
   return {

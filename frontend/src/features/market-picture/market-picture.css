@@ -159,6 +159,7 @@
   order: -1;
   font-size: 10px;
 }
+.mp-source-state strong[data-freshness="FUTURE"],
 .mp-source-state strong[data-freshness="STALE"],
 .mp-source-state strong[data-freshness="LAGGING"],
 .mp-source-state strong[data-freshness="DEGRADED"] {

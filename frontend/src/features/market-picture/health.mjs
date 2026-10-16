@@ -9,7 +9,7 @@ export function marketPictureHealth(faults = {}, sourceError = null, freshness =
     degraded,
     components,
     freshness: degraded && freshness === "FRESH" ? "DEGRADED" : freshness,
-    footerTone: degraded ? "warning" : "healthy",
+    footerTone: degraded || freshness !== "FRESH" ? "warning" : "healthy",
     componentNotice,
     notice: [componentNotice, sourceError].filter(Boolean).join(" · ") || null,
   };

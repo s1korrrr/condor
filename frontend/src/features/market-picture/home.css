@@ -30,6 +30,8 @@
 .mp-verdict[data-state=risk-on] .mp-verdict__word { color: var(--mp-positive); text-shadow: 0 0 24px #00d9a055; }
 .mp-verdict[data-state=risk-off] .mp-verdict__word { color: var(--mp-negative); text-shadow: 0 0 24px #ff536a55; }
 .mp-verdict[data-state=mixed] .mp-verdict__word { color: var(--mp-warning); }
+.mp-verdict[data-state=unavailable] .mp-verdict__word { color: var(--mp-warning); font-size: 22px; line-height: 1.3; }
+.mp-verdict[data-state=historical] .mp-verdict__word { color: var(--mp-muted); }
 .mp-verdict__meter { display: grid; gap: 4px; }
 .mp-verdict__ends { display: flex; justify-content: space-between; font-size: 10px; color: var(--mp-muted); }
 .mp-verdict__ends b { color: var(--mp-text); font-size: 12px; }
@@ -44,6 +46,7 @@
 .mp-score__fill { position: absolute; top: 0; bottom: 0; border-radius: 99px; }
 .mp-score__fill[data-side=on] { background: var(--mp-positive); }
 .mp-score__fill[data-side=off] { background: var(--mp-negative); }
+.mp-verdict[data-state=historical] .mp-score__fill { background: var(--mp-muted); }
 .mp-score__zero { position: absolute; left: 50%; top: -1px; bottom: -1px; width: 1px; background: #91a6b9aa; }
 .mp-score__mark { position: absolute; top: 2px; bottom: 2px; width: 1px; background: #91a6b955; }
 

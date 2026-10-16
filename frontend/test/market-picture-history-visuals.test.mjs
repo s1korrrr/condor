@@ -4,16 +4,43 @@ import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
-test('benchmark and breadth plots are visible together with separate units and noncolor line keys', () => {
+const base = Date.parse('2026-10-01T00:00:00Z');
+const sample = (minute, { returns = null, trajectory = null } = {}) => ({
+  time: base + minute * 60_000, snapshot_id: `s${minute}`, source_kind: 'observed', valid: 5, expected: 5, membership: 'm', definitionRegistryHash: 'd', gapBefore: false,
+  breadth: {}, summary: {}, normalizedBreadth: {}, flowHistory: null,
+  contributions: returns == null ? {} : { '15': { equalReturn: returns, medianReturn: returns / 2, cappedReturn: null, valid: 5, expected: 5, startCohortAvailable: true, priorWeightsAvailable: false } },
+  benchmarkReturns: returns == null ? null : { instrumentId: 'okx:spot:BTC-USDC', quoteAsset: 'USDC', cutoff: base, definitionId: 'r', definitionHash: 'h', values: { '15': returns * 2 }, reasons: {} },
+  breadthTrajectory: trajectory == null ? {} : { '15/15': { level: 0.4, change: trajectory, velocity: null, acceleration: null, shareChange: null, matched: 5, expected: 5, membership: 'a'.repeat(64) } },
+});
+
+test('the comparison panel renders nothing until the owner retains values', () => {
   const { load } = frontendModules();
   const { HistoryComparisons } = load('features/market-picture/HistoryComparisons.tsx');
-  const html = renderToStaticMarkup(React.createElement(HistoryComparisons, { samples: [], horizon: '15', range: null }));
-  assert.match(html, /Benchmark &amp; cohort returns/);
-  assert.match(html, /Breadth trajectory/);
-  assert.match(html, /Pressure change/);
-  assert.match(html, /stroke-dasharray="6 4"/);
-  assert.match(html, /Historical change interval/);
-  assert.match(html, /No qualified owner observations/);
+  const props = { window: '24h', horizon: '15', zoom: null, onZoom: () => {} };
+  assert.equal(renderToStaticMarkup(React.createElement(HistoryComparisons, { ...props, history: [] })), '');
+  assert.equal(renderToStaticMarkup(React.createElement(HistoryComparisons, { ...props, history: [sample(0), sample(1)] })), '');
+});
+
+test('returns plot alone, with noncolor keys, until trajectory values exist', () => {
+  const { load } = frontendModules();
+  const { HistoryComparisons } = load('features/market-picture/HistoryComparisons.tsx');
+  const props = { window: '24h', horizon: '15', zoom: null, onZoom: () => {} };
+  const returnsOnly = renderToStaticMarkup(React.createElement(HistoryComparisons, { ...props, history: [sample(0), sample(1, { returns: 0.5 }), sample(2, { returns: 0.25 })] }));
+  assert.match(returnsOnly, /Benchmark &amp; cohort returns/);
+  assert.match(returnsOnly, /stroke-dasharray="6 4"/);
+  assert.match(returnsOnly, /not retained: Prior-liquidity-capped return/, 'a series without values is named, not drawn');
+  assert.doesNotMatch(returnsOnly, /Historical change interval/);
+  const both = renderToStaticMarkup(React.createElement(HistoryComparisons, { ...props, history: [sample(0, { returns: 0.5, trajectory: 0.2 }), sample(1, { returns: 0.25, trajectory: -0.1 })] }));
+  assert.match(both, /Breadth trajectory/);
+  assert.match(both, /Pressure change/);
+  assert.match(both, /Historical change interval/);
+});
+
+test('the time axis fits the rows that carry values, not the empty retained edge', async () => {
+  const { valuedDomain, historyComparisons } = await import('../src/features/market-picture/history-comparisons.mjs');
+  const rows = historyComparisons([sample(0), sample(1), sample(5, { returns: 1 }), sample(9, { returns: 2 }), sample(10)], '15', '15', 'returns');
+  assert.deepEqual(valuedDomain(rows), [base + 5 * 60_000, base + 9 * 60_000]);
+  assert.equal(valuedDomain(historyComparisons([sample(0)], '15', '15', 'returns')), undefined);
 });
 
 test('line pattern survives gap segmentation in the shared chart projection', () => {

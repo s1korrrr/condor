@@ -393,6 +393,12 @@ const PREDICATES = [
   ["high_volatility", "High vol", "> 80% annualized", "var(--mp-warning)"],
 ] as const;
 
+const HOURLY_SHARES = [
+  ["above_sma20_share", "Above SMA20 · 1h", "var(--mp-accent)"],
+  ["above_sma50_share", "Above SMA50 · 1h", "var(--mp-accent)"],
+  ["above_sma200_share", "Above SMA200 · 1h", "var(--mp-accent)"],
+] as const;
+
 /** Share of the universe satisfying each observed predicate; a ring per predicate. */
 function ParticipationPanelView({
   frame,
@@ -424,17 +430,33 @@ function ParticipationPanelView({
       />,
     ];
   });
+  // Owner hourly cohort shares: no per-asset membership is published, so these rings do not filter.
+  for (const [key, label, color] of HOURLY_SHARES) {
+    const metric = frame?.hourlyInternals?.metrics[key];
+    if (!metric || metric.value == null || metric.unit !== "share_fraction") continue;
+    rings.push(
+      <RingGauge
+        key={key}
+        ratio={metric.value}
+        label={label}
+        valueText={metricText(metric, 0)}
+        note={`${metric.valid}/${metric.expected} valid${metric.reasons.length ? ` · ${metric.reasons.join(", ")}` : ""} · completed hour`}
+        tip={`Share of ${metric.valid} instruments whose last completed hourly close is above the ${label.replace("Above ", "")} · ${metric.definition}`}
+        color={color}
+      />,
+    );
+  }
   if (!rings.length) return null;
   return (
     <Panel
       id="mp-participation"
       title="Market participation"
-      detail="Share of instruments · 1m observations"
+      detail="Share of instruments · 1m observations and completed hourly bars"
       className="mp-participation"
     >
       <TileGrid min={132} label="Participation predicates">{rings}</TileGrid>
       <footer className="mp-panel-footnote">
-        Predicates overlap. Each share uses its own qualified denominator. Select one to filter the instrument table to its qualified members.
+        Predicates overlap. Each share uses its own qualified denominator. Select one to filter the instrument table to its qualified members. Blue SMA rings read completed hourly bars and do not filter.
       </footer>
     </Panel>
   );

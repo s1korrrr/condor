@@ -1,5 +1,6 @@
 import { memo, useEffect, useMemo, useState } from "react";
-import { BarsChart } from "@/features/quant-ops/kit/charts";
+import { BarsChart, SparkChart } from "@/features/quant-ops/kit/charts";
+import { assetColor } from "@/features/quant-ops/format";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
 import { CHART } from "@/features/quant-ops/kit/series";
 import { BENCHMARKS, rankAssets, rankCoverageLabel, relativePullbackCandidates } from "./model.mjs";
@@ -21,7 +22,7 @@ import {
 } from "./presentation";
 import { api } from "@/lib/api";
 import { boundedJson, projectCorrelations } from "./source";
-import { Metric, Panel, Sparkline } from "./Primitives";
+import { Metric, Panel } from "./Primitives";
 import type { MetricCohortSelection } from "./metric-cohort.mjs";
 import { instrumentExportMetadata, instrumentRows } from "./instrument-view";
 
@@ -240,21 +241,6 @@ function LeadersLaggardsPanelView({ frame, select, selected, cohort, benchmark }
     .filter((row): row is { a: DisplayAsset; v: number } => row.v !== null)
     .sort((x, y) => y.v - x.v);
   const pullbacks = relativePullbackCandidates(assets, benchmark);
-  const relativeChange = frame?.comparisons[`relative_strength/${benchmark.toLowerCase()}`];
-  const relativeTrend = relativeChange?.status === "VALID" && relativeChange.value != null
-    ? relativeChange.value > 0 ? "Strengthening" : relativeChange.value < 0 ? "Weakening" : "Unchanged"
-    : "Unavailable";
-  const comparisonContext = frame?.comparisonContext;
-  const rankChanges = frame?.relativeStrengthChanges ?? null;
-  const rankChangesQualified = rankChanges !== null && rankChanges.valid === rankChanges.expected &&
-    rankChanges.expected > 0 && rankChanges.cohortHash !== null;
-  const rankMovers = rankChangesQualified
-    ? assets.map(asset => ({ asset, delta: rankChanges.rankDeltas[asset.instrument_id] }))
-      .filter((row): row is { asset: DisplayAsset; delta: number } => row.delta !== null && row.delta !== undefined && row.delta !== 0)
-      .sort((a, b) => b.delta - a.delta || a.asset.instrument_id.localeCompare(b.asset.instrument_id))
-    : [];
-  const improvingRank = rankMovers.filter(row => row.delta > 0).slice(0, 5);
-  const weakeningRank = rankMovers.filter(row => row.delta < 0).sort((a, b) => a.delta - b.delta || a.asset.instrument_id.localeCompare(b.asset.instrument_id)).slice(0, 5);
   const unit = sort === "relative" ? " pp" : "%";
   const label = sort === "relative" ? `vs ${benchmark} (pp)` : `${horizonLabel(sort)} return`;
   return (
@@ -277,8 +263,9 @@ function LeadersLaggardsPanelView({ frame, select, selected, cohort, benchmark }
         <BarsChart
           rows={ordered.map(({ a, v }) => ({ label: a.symbol, value: v }))}
           bars={[{ id: "value", label, color: CHART.positive, signColors: true }]}
-          height={230}
+          height={200}
           format={(v) => `${v > 0 ? "+" : ""}${v.toFixed(2)}${unit}`}
+          tickFormat={(v, step) => `${v > 0 ? "+" : ""}${v.toFixed(step < 1 ? 1 : 0)}${unit}`}
           ariaLabel={`Instruments ranked by ${label}`}
         />
       </div>
@@ -302,50 +289,14 @@ function LeadersLaggardsPanelView({ frame, select, selected, cohort, benchmark }
       </div>
       <div className="mp-relative-context">
         <div>
-          <span className="mp-kicker">Relative strength change</span>
-          <strong>{relativeTrend}</strong>
-          <small title={relativeChange?.definition ?? "No prior compatible comparison reference is attached."}>
-            {relativeChange?.status === "VALID" && relativeChange.value != null
-              ? `Median matched-cohort change in 24h excess return · ${numberText(relativeChange.value, 2, true)} pp over 1h · ${comparisonContext?.common ?? relativeChange.valid}/${comparisonContext?.current ?? relativeChange.expected} matched · baseline ${comparisonContext?.baselineCutoff == null ? "unavailable" : new Date(comparisonContext.baselineCutoff).toISOString()}`
-              : "Unavailable · no qualified prior relative-strength reference"}
-          </small>
+          <span className="mp-kicker">Pullback candidates · positive 24h excess vs {benchmark}, negative 1h</span>
+          <small>{pullbacks.candidates.length} of {pullbacks.qualified} qualified{pullbacks.qualified < pullbacks.expected ? ` (${pullbacks.expected} admitted)` : ""}</small>
         </div>
-        <div>
-          <span className="mp-kicker">24h relative strength · 1h pullback</span>
-          <small>{pullbacks.candidates.length} candidates · {pullbacks.qualified}/{pullbacks.expected} have both qualified owner metrics</small>
-        </div>
-        <div className="mp-relative-rank-changes">
-          <span className="mp-kicker">1h relative-rank movement</span>
-          <small title={rankChanges ? `Definition ${rankChanges.definitionHash} · source ${rankChanges.sourceHash ?? "unavailable"} · cohort ${rankChanges.cohortHash ?? "unavailable"}` : "No owner-produced rank-change projection is attached."}>
-            {rankChangesQualified
-              ? `${rankChanges.valid}/${rankChanges.expected} common instruments · baseline ${rankChanges.baselineCutoff == null ? "unavailable" : new Date(rankChanges.baselineCutoff).toISOString()} · positive means rank improvement`
-              : `Unavailable · ${rankChanges?.reasons.join(", ") || "no qualified exact 1h rank comparison"}`}
-          </small>
-          {rankChangesQualified ? <div className="mp-rank-movement-columns">
-            <div aria-label="Improving relative ranks">
-              <b>Improving</b>
-              {improvingRank.length ? improvingRank.map(({ asset, delta }) => (
-                <button key={asset.instrument_id} onClick={() => select(asset.instrument_id)} aria-pressed={selected === asset.instrument_id}>
-                  {asset.symbol}<strong>↑ {delta} {Math.abs(delta) === 1 ? "place" : "places"}</strong>
-                </button>
-              )) : <small>No improving ranks.</small>}
-            </div>
-            <div aria-label="Weakening relative ranks">
-              <b>Weakening</b>
-              {weakeningRank.length ? weakeningRank.map(({ asset, delta }) => (
-                <button key={asset.instrument_id} onClick={() => select(asset.instrument_id)} aria-pressed={selected === asset.instrument_id}>
-                  {asset.symbol}<strong>↓ {Math.abs(delta)} {Math.abs(delta) === 1 ? "place" : "places"}</strong>
-                </button>
-              )) : <small>No weakening ranks.</small>}
-            </div>
-          </div> : null}
-        </div>
-        {pullbacks.candidates.length ? pullbacks.candidates.map((asset) => (
+        {pullbacks.candidates.map((asset) => (
           <button key={asset.instrument_id} aria-pressed={selected === asset.instrument_id} onClick={() => select(asset.instrument_id)}>
             {asset.symbol}<b>{signedPercent(asset.relative[benchmark].value!, 2)} vs {benchmark}</b><small>1h {signedPercent(asset.returns["60"].value!, 2)}</small>
           </button>
-        )) : <span className="mp-muted">No qualified current pullback candidates.</span>}
-        <p className="mp-panel-footnote">Predicate: positive 24h arithmetic excess return and negative 1h asset return. Pullbacks use qualified same-frame owner metrics; strengthening or weakening uses the matched one-hour comparison reference and remains unavailable when its baseline is missing.</p>
+        ))}
       </div>
     </Panel>
   );
@@ -400,21 +351,36 @@ function CorrelationsPanelView({
         ))}
       </div>
       <div className="mp-table-scroll">
-        <table className="mp-table">
-          <caption className="sr-only">Pearson correlation of aligned hourly log returns over {readout.window}. Sparkline contains historical estimates.</caption>
-          <thead><tr><th>Symbol</th><th>Corr ({benchmark})</th><th>30D trend</th></tr></thead>
+        <table className="mp-table mp-corr-list">
+          <caption className="sr-only">Pearson correlation of aligned hourly log returns over {readout.window} against {benchmark}. The bar spans −1 to +1; the trend shows the stored daily history of the coefficient.</caption>
+          <thead><tr><th scope="col">Symbol</th><th scope="col">Correlation with {benchmark} · −1…+1</th><th scope="col">Daily history</th><th scope="col">Paired hours</th></tr></thead>
           <tbody>
-            {rows.map((c) => (
-              <tr key={c.instrument_id} data-selected={selected === c.instrument_id || undefined}>
-                <th scope="row">
-                  <button onClick={() => select(c.instrument_id)}>
-                    {frame?.assets.find((a) => a.instrument_id === c.instrument_id)?.symbol ?? c.instrument_id.split(":").at(-1)}
-                  </button>
-                </th>
-                <td title={`${c.samples}/${c.expected} paired hours (${correlationWindowLabel(c.expected)} window${c.definition ? ` · ${c.definition}` : ""}) · ${c.reasons.join(", ")} · ${new Date(c.cutoff).toISOString()}`}>{numberText(c.value, 2)}</td>
-                <td><Sparkline values={c.trend.map((p) => p.value)} color={c.value !== null && c.value < 0 ? "var(--mp-negative)" : undefined} label={`Daily history of ${readout.window} correlation`} /></td>
-              </tr>
-            ))}
+            {rows.map((c) => {
+              const symbol = frame?.assets.find((a) => a.instrument_id === c.instrument_id)?.symbol ?? c.instrument_id.split(":").at(-1)!;
+              const value = c.value!;
+              const trend = c.trend.filter((point) => Number.isFinite(point.time));
+              return (
+                <tr key={c.instrument_id} data-selected={selected === c.instrument_id || undefined}>
+                  <th scope="row">
+                    <button onClick={() => select(c.instrument_id)}><i className="mp-swatch" style={{ background: assetColor(symbol) }} />{symbol}</button>
+                  </th>
+                  <td title={`${c.samples}/${c.expected} paired hours (${correlationWindowLabel(c.expected)} window${c.definition ? ` · ${c.definition}` : ""})${c.reasons.length ? ` · ${c.reasons.join(", ")}` : ""} · cutoff ${new Date(c.cutoff).toISOString()}`}>
+                    <div className="mp-corr-cell">
+                      <span className="mp-corr-bar" data-sign={value < 0 ? "negative" : "positive"} aria-hidden="true">
+                        <i style={value < 0 ? { right: "50%", width: `${Math.min(1, -value) * 50}%` } : { left: "50%", width: `${Math.min(1, value) * 50}%` }} />
+                      </span>
+                      <b className="mp-corr-value">{numberText(c.value, 2, true)}</b>
+                    </div>
+                  </td>
+                  <td className="mp-corr-trend">
+                    {trend.filter((point) => point.value != null).length >= 2
+                      ? <SparkChart points={trend} height={28} color={value < 0 ? CHART.warning : CHART.blue} format={(v) => numberText(v, 2, true)} ariaLabel={`${symbol} daily ${readout.window} correlation history`} />
+                      : <small className="mp-muted">building</small>}
+                  </td>
+                  <td className="mp-muted">{c.samples}/{c.expected}</td>
+                </tr>
+              );
+            })}
           </tbody>
         </table>
       </div>

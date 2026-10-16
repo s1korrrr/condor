@@ -1,5 +1,8 @@
 // Isolated development entry; never imported by the production application.
 import { createRoot } from "react-dom/client";
+import { LateTimeline } from "./breadth-timeline.late.preview";
+import "../src/features/market-picture/market-picture.css";
+import "../src/features/market-picture/home.css";
 import { BrowserRouter } from "react-router-dom";
 import { MarketPictureSurface } from "../src/features/market-picture/MarketPicture";
 import {
@@ -53,7 +56,8 @@ const events: DisplayEvent[] = populated ? frame.assets.slice(0,12).map((asset,i
   observed:frame.cutoff_ms-index*60000, available:frame.available_at_ms-index*60000,
   status:'original', reconstructed:true, snapshot_id:frame.snapshot_id, horizon_minutes:null, value:'Synthetic presentation event',
 })) : [];
-createRoot(document.getElementById("root")!).render(
+if (params.has("late")) createRoot(document.getElementById("root")!).render(<LateTimeline samples={(real?.history ?? history) as HistoryPoint[]} />);
+else createRoot(document.getElementById("root")!).render(
   <BrowserRouter>
     <MarketPictureSurface
       server="Isolated fixture preview"

@@ -297,8 +297,9 @@ export function derivedRegime(asset) {
   if (flag("high_volatility") === 1) tags.push("High volatility");
   if (flag("elevated_rvol") === 1) tags.push("Volume burst");
   let label;
-  if (trend === "Uptrend") label = "Trend up";
-  else if (trend === "Downtrend") label = "Trend down";
+  // Same words as the instrument table's trend pill, so one instrument never has two vocabularies.
+  if (trend === "Uptrend") label = "Uptrend";
+  else if (trend === "Downtrend") label = "Downtrend";
   else if (trend === "Trending") label = "Trending";
   else if (flag("high_volatility") === 1) label = "Volatile range";
   else if (flag("compression") === 1) label = "Compression";

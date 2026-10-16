@@ -44,14 +44,21 @@ for (const file of files) {
     const frame = projectFrame(await validateFrame(JSON.parse(fs.readFileSync(new URL(file, dir), "utf8")), { allowFixture: true }));
     const pulse = load("features/market-picture/MarketPulse.tsx");
     const asOf = frame.available_at_ms;
+    const rendered = {};
     for (const [name, props] of [
       ["EvidenceMatrixPanel", { frame, horizon: "15", asOf }],
       ["MicrostructurePanel", { frame, asOf }],
       ["BreadthContextPanel", { frame }],
       ["DailyInternalsPanel", { frame, asOf }],
-    ]) {
-      const html = renderToStaticMarkup(React.createElement(pulse[name], props));
-      assert.ok(html.length > 0, `${name} rendered`);
+    ]) rendered[name] = renderToStaticMarkup(React.createElement(pulse[name], props));
+    // A panel with no qualified value renders nothing; the availability line must then name it.
+    const availability = renderToStaticMarkup(React.createElement(pulse.AvailabilityLine, { frame, asOf, horizon: "15" }));
+    assert.ok(rendered.EvidenceMatrixPanel.length > 0, "evidence families always render");
+    if (!rendered.MicrostructurePanel) {
+      assert.equal(frame.microstructure, null, "an attached microstructure component is never hidden");
+      assert.match(availability, /Executed spot flow|Displayed liquidity/);
     }
+    if (!rendered.DailyInternalsPanel) assert.match(availability, /Daily range &amp; SMAs/);
+    if (!rendered.BreadthContextPanel) assert.ok(availability.length > 0, "hidden internals leave a visible availability line");
   });
 }

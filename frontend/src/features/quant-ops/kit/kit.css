@@ -119,3 +119,4 @@
   .q-tile-cell .q-kpi-foot { flex-direction: column; align-items: stretch; }
   .q-tile-cell .q-kpi-foot .q-spark { flex-basis: auto; max-width: none; }
 }
+.q-chart--zoomable { cursor: crosshair; user-select: none; -webkit-user-select: none; }

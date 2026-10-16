@@ -607,3 +607,12 @@ test("a candle-anomaly panel with no valid source may omit its null expiry and c
   assert.equal(projected.expires, null);
   assert.ok(Object.values(projected.metrics).every(metric => metric.high === null && metric.share === null));
 });
+
+test("a matched trajectory or divergence cohort keeps its membership hash even in compact frames", async () => {
+  for (const family of ["breadth_trajectory", "breadth_divergence"]) {
+    const raw = read("market-picture.m1-components.fixture.json");
+    const row = raw[family].find(item => item.matched_count > 0);
+    delete row.matched_membership_hash;
+    await assert.rejects(validateFrame(await seal(raw), { allowFixture: true }), /membership hash must exist exactly when instruments are matched/, family);
+  }
+});

@@ -1258,6 +1258,8 @@ def validate_frame(frame, *, allow_fixture=False):
             if (
                 row["expected_count"] != len(ids)
                 or row["matched_count"] > row["expected_count"]
+                or (row["matched_count"] == 0)
+                != (row.get("matched_membership_hash") is None)
             ):
                 raise ValueError("trajectory cohort differs from universe")
             for field, (unit, definition_id) in units.items():

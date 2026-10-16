@@ -781,6 +781,7 @@ export async function validateFrame(frame, { allowFixture = false } = {}) {
       require(row.matched_count <= row.expected_count && row.expected_count === ids.length, "Invalid trajectory coverage");
       const trajectoryMembership = row.matched_membership_hash ?? null; // schema default
       require(trajectoryMembership === null || HASH.test(trajectoryMembership), "Invalid trajectory membership hash");
+      require((row.matched_count === 0) === (trajectoryMembership === null), "Trajectory membership hash must exist exactly when instruments are matched");
       const referenceKeys = Object.keys(row.metric_refs).sort();
       require(referenceKeys.join("|") === [...Object.keys(trajectoryUnits), ...(row.metric_refs.share_change ? ["share_change"] : [])].sort().join("|"), "Invalid trajectory metric references");
       for (const [field, [unit, definitionId]] of Object.entries(trajectoryUnits))
@@ -797,6 +798,7 @@ export async function validateFrame(frame, { allowFixture = false } = {}) {
       require(row.matched_count <= row.expected_count && row.expected_count === ids.length, "Invalid divergence coverage");
       const divergenceMembership = row.matched_membership_hash ?? null; // schema default
       require(divergenceMembership === null || HASH.test(divergenceMembership), "Invalid divergence membership hash");
+      require((row.matched_count === 0) === (divergenceMembership === null), "Divergence membership hash must exist exactly when instruments are matched");
       aggregateBinding(row.metric_ref, `breadth_divergence_btc_15_${row.interval_minutes}m`, "count", "breadth_price_divergence");
     }
   }
@@ -1108,7 +1110,7 @@ function projectMicrostructureData(frame) {
       probeReceiptHash: row.probe_receipt_hash ?? null, probedAtMs: row.probed_at_ms ?? null,
       collectionReceiptHash: row.collection_receipt_hash ?? null, collectedAtMs: row.collected_at_ms ?? null,
       qualificationReceiptHash: row.qualification_receipt_hash ?? null,
-      qualificationContractHash: row.qualification_contract_hash ?? null, qualifiedAtMs: row.qualified_at_ms ?? null, reasons: row.reasons,
+      qualificationContractHash: row.qualification_contract_hash ?? null, qualifiedAtMs: row.qualified_at_ms ?? null, reasons: row.reasons ?? [],
     })),
     microstructure: frame.microstructure ? {
       componentId: frame.microstructure.component_id, sourceKind: frame.microstructure.source_kind,

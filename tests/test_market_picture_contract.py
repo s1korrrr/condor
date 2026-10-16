@@ -1173,3 +1173,12 @@ def test_candle_anomaly_panel_without_sources_may_omit_null_expiry_and_counts():
     panel["source_count"] = 0
     panel.pop("expires_at_ms", None)
     _validate_candle_anomalies(seal(frame))
+
+
+@pytest.mark.parametrize("family", ["breadth_trajectory", "breadth_divergence"])
+def test_matched_cohort_requires_its_membership_hash_even_when_compacted(family):
+    frame = fixture("market-picture.m1-components.fixture.json")
+    row = next(row for row in frame[family] if row["matched_count"] > 0)
+    row.pop("matched_membership_hash")
+    with pytest.raises(ValueError, match="cohort differs from universe"):
+        validate_frame(seal(frame), allow_fixture=True)

@@ -1,7 +1,18 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { projectFrame, validateFrame } from "../src/features/market-picture/contract.mjs";
+import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import * as contract from "../src/features/market-picture/contract.mjs";
+import * as model from "../src/features/market-picture/model.mjs";
+import * as pulseModule from "../src/features/market-picture/pulse.mjs";
+import * as stored from "../src/features/market-picture/stored.mjs";
+import { frontendModules } from "./helpers/frontend-module.mjs";
+
+const { projectFrame, validateFrame } = contract;
+const { load } = frontendModules({
+  "./model.mjs": model, "./pulse.mjs": pulseModule, "./contract.mjs": contract, "./stored.mjs": stored, "@/lib/api": { api: {} },
+});
 
 // The owner serves compact frames: null and default-valued fields are absent on the wire
 // (see tests/fixtures/owner-compact/README.md). The browser must accept exactly those bytes.
@@ -27,3 +38,20 @@ test("an unavailable anomaly's omitted counts project as unavailable, not as zer
   assert.equal(metric.high, null);
   assert.equal(metric.share, null);
 });
+
+for (const file of files) {
+  test(`every Market panel renders an owner-compacted frame: ${file}`, async () => {
+    const frame = projectFrame(await validateFrame(JSON.parse(fs.readFileSync(new URL(file, dir), "utf8")), { allowFixture: true }));
+    const pulse = load("features/market-picture/MarketPulse.tsx");
+    const asOf = frame.available_at_ms;
+    for (const [name, props] of [
+      ["EvidenceMatrixPanel", { frame, horizon: "15", asOf }],
+      ["MicrostructurePanel", { frame, asOf }],
+      ["BreadthContextPanel", { frame }],
+      ["DailyInternalsPanel", { frame, asOf }],
+    ]) {
+      const html = renderToStaticMarkup(React.createElement(pulse[name], props));
+      assert.ok(html.length > 0, `${name} rendered`);
+    }
+  });
+}

@@ -1,5 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import { frontendModules } from './helpers/frontend-module.mjs';
 import { marketPictureHealth, marketSourceLabel } from '../src/features/market-picture/health.mjs';
 import { canonicalVerdictHistoryFault, marketVerdict } from '../src/features/market-picture/pulse.mjs';
@@ -246,4 +247,15 @@ test('same frame and horizon keep one verdict across dense and sparse chart wind
   const canonicalSparse=marketVerdict(frame,'15',{history:sparseBundle.canonicalHistory,smooth:true});
   assert.equal(canonicalDense.state,canonicalSparse.state);
   assert.equal(canonicalDense.score,canonicalSparse.score);
+});
+
+test('partial component faults are projected as degraded operator state', () => {
+  // Merged from fork/main (#39): the page now derives this state through marketPictureHealth,
+  // whose behaviour the tests above cover; the wiring and the DEGRADED style must stay in place.
+  const page=fs.readFileSync(new URL('../src/features/market-picture/MarketPicture.tsx',import.meta.url),'utf8');
+  const css=fs.readFileSync(new URL('../src/features/market-picture/market-picture.css',import.meta.url),'utf8');
+  assert.match(page,/marketPictureHealth\(data\?\.faults, source\.error, state\.freshness\)/);
+  assert.match(page,/degraded=\{health\.degraded\}/);
+  assert.match(page,/health\.footerTone === "warning" \? "mp-warning" : "mp-up"/);
+  assert.match(css,/data-freshness="DEGRADED"/);
 });

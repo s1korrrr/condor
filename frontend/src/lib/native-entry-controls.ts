@@ -54,6 +54,12 @@ export function entryObservation(value:unknown,bot:string,now:number,receivedAt:
     && new Set(rows.map(row=>row.controller_id)).size===rows.length;
   return {valid,allowed:valid && payload.command_allowed===true,rows:valid?rows:[]};
 }
+export function entryRowLabel(row:Record<string,unknown>) {
+  const state=row.entry_paused?'Paused':'Not paused';
+  // The owner keeps the last reason after a resume or restore (e.g. 'restored'); it explains only an active pause.
+  const reason=row.entry_paused===true && typeof row.pause_reason==='string' && row.pause_reason?` · ${row.pause_reason}`:'';
+  return `${String(row.controller_id)}: ${state}${reason}`;
+}
 export function entryCommandObserved(value:unknown,bot:string,now:number,receivedAt:number,command:EntryCommand) {
   const view=entryObservation(value,bot,now,receivedAt);
   return view.valid && view.rows.every(row=>row.last_command_id===command.id && row.entry_paused===(command.action==='pause')

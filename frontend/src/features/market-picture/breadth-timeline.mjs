@@ -71,17 +71,20 @@ export function momentumRetained(samples) {
 function meanMomentum(points, horizon, interval) {
   const fields = ["change", "velocity", "acceleration", "shareChange", "level"];
   const sums = Object.fromEntries(fields.map((field) => [field, [0, 0]]));
-  let matched = null, expected = null;
+  let weakest = null;
   for (const point of points) {
     const row = point?.breadthTrajectory?.[`${horizon}/${interval}`];
     if (!row || !finite(row.change)) continue;
     for (const field of fields) if (finite(row[field])) { sums[field][0] += row[field]; sums[field][1] += 1; }
-    // The weakest matched cohort in the bucket is the one disclosed.
-    matched = matched == null ? row.matched : Math.min(matched, row.matched);
-    expected = expected == null ? row.expected : Math.max(expected, row.expected);
+    // Disclose one real frame's cohort: the weakest coverage ratio, then the smaller matched count,
+    // then the earliest frame. Counts are never combined across frames.
+    const ratio = row.expected > 0 ? row.matched / row.expected : 0;
+    if (!weakest || ratio < weakest.ratio || (ratio === weakest.ratio && row.matched < weakest.matched))
+      weakest = { ratio, matched: row.matched, expected: row.expected };
   }
   if (!sums.change[1]) return null;
-  return { ...Object.fromEntries(fields.map((field) => [field, sums[field][1] ? sums[field][0] / sums[field][1] : null])), matched, expected };
+  return { ...Object.fromEntries(fields.map((field) => [field, sums[field][1] ? sums[field][0] / sums[field][1] : null])),
+    matched: weakest.matched, expected: weakest.expected };
 }
 
 /** Intervals with an observed divergence among the bucket's frames; null when no frame qualifies. */

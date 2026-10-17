@@ -12,7 +12,7 @@ export interface MomentumCell {
   acceleration: number | null;
   shareChange: number | null;
   level: number | null;
-  /** Smallest matched cohort among the averaged frames, and its frozen expected size. */
+  /** Matched and expected counts of the averaged frame with the weakest coverage (one real cohort). */
   matched: number | null;
   expected: number | null;
 }

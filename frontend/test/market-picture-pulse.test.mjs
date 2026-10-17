@@ -78,3 +78,16 @@ test("timeline momentum follows the owner trajectory, never averages across a ga
   // The minute without its own frame repeats the previous frame (sampling spacing, labelled carried).
   assert.deepEqual(fine.columns.filter((c) => c.carried).map((c) => c.momentum["5"].change), [-0.4]);
 });
+
+test("a momentum bucket discloses one real frame's cohort, never a mixed matched/expected pair", async () => {
+  const { breadthTimeline } = await import("../src/features/market-picture/breadth-timeline.mjs");
+  const base = Date.parse("2026-10-17T00:00:00Z");
+  const row = (matched, expected) => ({ "15/5": { level: 0, change: 0.4, velocity: 0.08, acceleration: 0, shareChange: 0, matched, expected, membership: "a".repeat(64) } });
+  // A universe change inside one bucket: complete 4/4, then complete 5/5.
+  const samples = [{ time: base, breadthTrajectory: row(4, 4) }, { time: base + 30_000, breadthTrajectory: row(5, 5) }];
+  const cell = breadthTimeline(samples, ["15"], { maxColumns: 1, trajectoryHorizon: "15" }).columns[0].momentum["5"];
+  assert.ok([[4, 4], [5, 5]].some(([m, e]) => cell.matched === m && cell.expected === e), `got ${cell.matched}/${cell.expected}`);
+  assert.equal(cell.matched === cell.expected, true, "complete frames are never shown as partial");
+  const partial = breadthTimeline([{ time: base, breadthTrajectory: row(5, 5) }, { time: base + 30_000, breadthTrajectory: row(3, 5) }], ["15"], { maxColumns: 1 }).columns[0].momentum["5"];
+  assert.deepEqual([partial.matched, partial.expected], [3, 5]);
+});

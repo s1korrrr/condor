@@ -182,17 +182,17 @@ test('an incomplete canonical six-hour timeline is unavailable even when chart h
   assert.match(result.canonicalHistoryFault,/coverage|gap|complete/i);
 });
 
-test('canonical history rejects future receipts, gaps and cohort or definition changes without poisoning chart data', async () => {
+test('canonical history rejects future receipts, unflagged holes and cohort or definition changes without poisoning chart data', async () => {
   const chartPoints=[{time:canonicalCutoff-1_000,chartOnly:true}];
   const mutations=[
     ['future row receipt',row=>{row.available_at_ms=canonicalCutoff+1;}],
-    ['stored gap',row=>{row.gap_before=true;}],
+    ['unflagged hole',row=>{row.cutoff_ms-=60_000;row.available_at_ms-=60_000;}],
     ['membership change',row=>{row.membership_hash='d'.repeat(64);}],
     ['definition change',row=>{row.definition_registry_hash='d'.repeat(64);}],
   ];
   for (const [label,mutate] of mutations) {
     const body=canonicalBody();
-    mutate(body.items[0]);
+    mutate(label==='unflagged hole' ? body.items[200] : body.items[0]);
     const h=sourceHarness([response(plainFrame()),response({items:chartPoints}),response({items:[]}),response({items:[],next_cursor:null})],response(body));
     const result=await h.fetchBundle('v2','24h','BTC',new AbortController().signal);
     assert.deepEqual(result.history,chartPoints,label);
@@ -200,6 +200,57 @@ test('canonical history rejects future receipts, gaps and cohort or definition c
     assert.ok(result.faults.canonical_history,label);
     assert.deepEqual(Object.keys(result.faults),['canonical_history'],label);
   }
+});
+
+test('owner-flagged gaps keep the canonical history, and the replay restarts after the newest one', async () => {
+  // Live frames are occasionally not published (a slow cycle expires); the owner flags the next point.
+  const points=canonicalPoints(200).map(point=>point.time===canonicalCutoff-(360-201)*60_000?{...point,gapBefore:true}:point);
+  const chartPoints=[{time:canonicalCutoff-1_000,chartOnly:true}];
+  const h=sourceHarness([response(plainFrame()),response({items:chartPoints}),response({items:[]}),response({items:[],next_cursor:null})],response(canonicalBody(points)));
+  const result=await h.fetchBundle('v2','24h','BTC',new AbortController().signal);
+  assert.equal(result.canonicalHistoryFault,null);
+  assert.equal(result.canonicalHistory.length,359);
+  const frame={cutoff_ms:canonicalCutoff,pressure:Object.fromEntries(['1','5','15','60','240','1440'].map(h=>[h,{value:0}])),distribution:{},summary:{}};
+  assert.equal(canonicalVerdictHistoryFault(result.canonicalHistory,'60',canonicalCutoff),null);
+  const verdict=marketVerdict(frame,'60',{history:result.canonicalHistory});
+  assert.equal(verdict.replayResetAt,canonicalCutoff-(360-201)*60_000);
+  assert.equal(verdict.replaySince,verdict.replayResetAt);
+  const intact=marketVerdict(frame,'60',{history:canonicalPoints()});
+  assert.equal(intact.replayResetAt,null);
+  assert.equal(intact.replaySince,canonicalCutoff-360*60_000);
+});
+
+test('a hole right before the current frame resets the held state and is not smoothed across', () => {
+  const pressure=value=>Object.fromEntries(['1','5','15','60','240','1440'].map(h=>[h,{pressure:value}]));
+  // Five hours of strong advancing breadth, then nothing stored for the last ten minutes.
+  const history=canonicalPoints().filter(point=>point.time<canonicalCutoff-10*60_000).map(point=>({...point,breadth:pressure(2.4)}));
+  const frame={cutoff_ms:canonicalCutoff,pressure:Object.fromEntries(['1','5','15','60','240','1440'].map(h=>[h,{value:0.6}])),distribution:{},summary:{}};
+  const verdict=marketVerdict(frame,'60',{history});
+  assert.equal(verdict.replayResetAt,canonicalCutoff);
+  assert.equal(verdict.smoothedFrames,1);
+  // Score 0.2 is inside the entry band: without the reset the earlier Risk-on would be held.
+  assert.equal(verdict.state,'mixed');
+  const contiguous=[...history,...canonicalPoints().filter(point=>point.time>=canonicalCutoff-10*60_000).map(point=>({...point,breadth:pressure(0.6)}))];
+  assert.equal(marketVerdict(frame,'60',{history:contiguous,smooth:false}).state,'risk-on');
+});
+
+test('minutes missing before the first stored point start the replay there and are disclosed', async () => {
+  // The owner flags gaps only between stored points of the window, so a late first point is unflaggable.
+  const pressure=value=>Object.fromEntries(['1','5','15','60','240','1440'].map(h=>[h,{pressure:value}]));
+  const complete=canonicalPoints().map((point,i)=>({...point,breadth:pressure(i===0?2.4:0.6)}));
+  const late=complete.slice(1);
+  const chartPoints=[{time:canonicalCutoff-1_000,chartOnly:true}];
+  const h=sourceHarness([response(plainFrame()),response({items:chartPoints}),response({items:[]}),response({items:[],next_cursor:null})],response(canonicalBody(late)));
+  const result=await h.fetchBundle('v2','24h','BTC',new AbortController().signal);
+  assert.equal(result.canonicalHistoryFault,null);
+  const frame={cutoff_ms:canonicalCutoff,pressure:Object.fromEntries(['1','5','15','60','240','1440'].map(h=>[h,{value:0.6}])),distribution:{},summary:{}};
+  const full=marketVerdict(frame,'60',{history:complete,smooth:false});
+  assert.equal(full.replayResetKind,null);
+  const shortened=marketVerdict(frame,'60',{history:result.canonicalHistory,smooth:false});
+  assert.equal(shortened.replayResetKind,'start');
+  assert.equal(shortened.replaySince,canonicalCutoff-359*60_000);
+  assert.equal(full.state,'risk-on');
+  assert.equal(shortened.state,'mixed','the held state is not invented for minutes that were not stored');
 });
 
 test('the canonical projection remains independent when the chart itself is set to six hours', async () => {

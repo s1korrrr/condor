@@ -131,3 +131,27 @@ test("history panels the page leaves out are named from the same retention rules
   assert.equal(faulted.has("flow_history"), false, "a read fault is shown by the flow panel itself");
   assert.equal(faulted.get("returns_history").reason, "read degraded");
 });
+
+test("divergence is shown only while its owner metric is current, and is named otherwise", async () => {
+  const base = await readFrame("m1-components");
+  const t = base.available_at_ms;
+  const metric = (value, available, expires) => ({ value, original: value == null ? null : String(value), unit: "count", status: value == null ? "UNAVAILABLE" : "VALID",
+    reasons: value == null ? ["INSUFFICIENT_HISTORY"] : [], valid: 1, expected: 1, available, expires, definition: "breadth_price_divergence" });
+  const frame = { ...base,
+    breadthTrajectory: [{ horizon: 15, interval: 15, cutoff: base.cutoff_ms, matched: 5, expected: 5, membership: "a".repeat(64),
+      level: metric(0.2, t, t + 60_000), change: metric(0.4, t, t + 60_000), velocity: null, acceleration: null, shareChange: null }],
+    breadthDivergence: [{ benchmark: "btc", horizon: 15, interval: 15, cutoff: base.cutoff_ms, matched: 5, expected: 5, membership: "a".repeat(64),
+      metric: metric(0, t, t + 1_000) }] };
+  const { availabilityItems, currentDivergence } = load("features/market-picture/availability.ts");
+  assert.deepEqual(currentDivergence(frame, t), { observed: [], time: base.cutoff_ms });
+  assert.equal(new Map(availabilityItems(frame, t, "60").map(item => [item.key, item])).has("trajectory"), false);
+  // One second later the divergence metric has expired while the frame is still current.
+  assert.equal(currentDivergence(frame, t + 2_000), null);
+  const later = new Map(availabilityItems(frame, t + 2_000, "60").map(item => [item.key, item]));
+  assert.equal(later.get("trajectory").label, "Price–breadth divergence");
+  assert.equal(later.get("trajectory").reason, "not current");
+  // Level-only history (changes still warming) leaves the hero strip out, so it is named.
+  const samples = [{ time: base.cutoff_ms, breadthTrajectory: { "15/15": { level: 0.2, change: null, velocity: null, acceleration: null, shareChange: null, matched: 5, expected: 5, membership: null } } }];
+  const warming = new Map(availabilityItems(frame, t, "60", "BTC", { samples, fault: null }).map(item => [item.key, item]));
+  assert.equal(warming.get("trajectory_history")?.label, "Breadth momentum history");
+});

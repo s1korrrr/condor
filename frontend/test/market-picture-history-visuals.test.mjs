@@ -21,7 +21,7 @@ test('the comparison panel renders nothing until the owner retains values', () =
   assert.equal(renderToStaticMarkup(React.createElement(HistoryComparisons, { ...props, history: [sample(0), sample(1)] })), '');
 });
 
-test('returns plot alone, with noncolor keys, until trajectory values exist', () => {
+test('the returns panel plots returns only; breadth momentum lives in the hero timeline', () => {
   const { load } = frontendModules();
   const { HistoryComparisons } = load('features/market-picture/HistoryComparisons.tsx');
   const props = { window: '24h', horizon: '15', zoom: null, onZoom: () => {} };
@@ -31,9 +31,9 @@ test('returns plot alone, with noncolor keys, until trajectory values exist', ()
   assert.match(returnsOnly, /not retained: Prior-liquidity-capped return/, 'a series without values is named, not drawn');
   assert.doesNotMatch(returnsOnly, /Historical change interval/);
   const both = renderToStaticMarkup(React.createElement(HistoryComparisons, { ...props, history: [sample(0, { returns: 0.5, trajectory: 0.2 }), sample(1, { returns: 0.25, trajectory: -0.1 })] }));
-  assert.match(both, /Breadth trajectory/);
-  assert.match(both, /Pressure change/);
-  assert.match(both, /Historical change interval/);
+  assert.doesNotMatch(both, /Breadth trajectory/);
+  assert.doesNotMatch(both, /Historical change interval/);
+  assert.match(both, /Rolling returns/);
 });
 
 test('the time axis fits the rows that carry values, not the empty retained edge', async () => {

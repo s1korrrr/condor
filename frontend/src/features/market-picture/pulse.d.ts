@@ -23,6 +23,13 @@ export interface Verdict {
   smoothingMinutes: number;
   /** The state is kept by the hold band rather than by the entry threshold. */
   held: boolean;
+  /** First stored point the held state was replayed from (null without history). */
+  replaySince: number | null;
+  /** Time of the stored gap that reset the held state inside the six-hour window, or null. */
+  replayResetAt: number | null;
+  /** "gap": a stored gap inside the window; "start": no stored frame before the first one in the window;
+   * "current": no stored frame right before the current one. */
+  replayResetKind: "gap" | "start" | "current" | null;
   horizon: Horizon;
   components: VerdictComponent[];
   rule: string;

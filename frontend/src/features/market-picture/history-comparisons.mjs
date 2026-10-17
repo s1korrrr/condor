@@ -1,3 +1,5 @@
+import { qualifiedDivergence } from "./breadth-timeline.mjs";
+
 /** Draw retained owner measurements, without recomputing returns or derivatives. */
 export const HISTORY_COMPARISONS = {
   returns: { label: "Benchmark & cohort returns", unit: "%" },
@@ -22,12 +24,7 @@ export function historyComparisons(samples, horizon, interval, view, range = nul
     const trajectory = point.breadthTrajectory?.[`${horizon}/${interval}`];
     const contribution = point.contributions?.[horizon];
     const benchmark = point.benchmarkReturns;
-    const divergence = point.breadthDivergence?.[interval];
-    const divergenceProvenance = divergence?.provenance;
-    const qualifiedDivergence = horizon === "15" && divergenceProvenance?.horizon === 15 &&
-      String(divergenceProvenance.interval) === interval && [0, 1].includes(divergence.value) &&
-      divergence.matched > 0 && divergence.matched <= divergence.expected &&
-      /^[0-9a-f]{64}$/.test(divergence.membership);
+    const flag = horizon === "15" ? qualifiedDivergence(point, interval) : null;
     const values = view === "returns" ? {
       benchmark: numeric(benchmark?.values[horizon]),
       equal: numeric(contribution?.equalReturn), median: numeric(contribution?.medianReturn),
@@ -52,7 +49,7 @@ export function historyComparisons(samples, horizon, interval, view, range = nul
       markers.push({ time: point.time, label: continuity });
     }
     for (const item of series) item.points.push({ time: point.time, value: values[item.id] });
-    if (qualifiedDivergence && divergence.value === 1) {
+    if (flag === 1) {
       markers.push({ time: point.time, label: `Price–breadth divergence · BTC · 15m / ${interval}m` });
     }
     rows.push({
@@ -61,7 +58,7 @@ export function historyComparisons(samples, horizon, interval, view, range = nul
         ? contribution ? `${contribution.valid}/${contribution.expected} · ${contribution.startCohortAvailable ? "frozen start cohort" : "start cohort unavailable"}` : "Cohort unavailable"
         : trajectory ? `${trajectory.matched}/${trajectory.expected} · matched cohort` : "Matched cohort unavailable",
       divergence: horizon !== "15" ? "Uses 15m horizon"
-        : qualifiedDivergence ? divergence.value === 1 ? "Observed" : "Not observed"
+        : flag !== null ? flag === 1 ? "Observed" : "Not observed"
           : "Unavailable · retained provenance missing or inputs incomplete",
       benchmark: benchmark ? `${benchmark.instrumentId} · ${benchmark.quoteAsset} · ${benchmark.definitionId} · ${benchmark.definitionHash}` : "Benchmark unavailable",
     });

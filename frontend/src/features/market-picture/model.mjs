@@ -162,12 +162,14 @@ const durationLabel = (ms) => {
 /** Restrict the pulse to its selected horizon and disclose retained coverage. */
 export function marketPulseWindow(history, window) {
   const requestedMs = window === "6h" ? 6 * 60 * 60_000 : window === "7d" ? 7 * 24 * 60 * 60_000 : 24 * 60 * 60_000;
-  if (!history.length) return { samples: [], label: `Requested ${window} · no retained observations` };
+  if (!history.length) return { samples: [], label: `Last ${window} · no retained observations` };
   const end = history[history.length - 1].time;
   const samples = history.filter((point) => point.time >= end - requestedMs);
-  if (samples.length === 1) return { samples, label: `Requested ${window} · single retained observation` };
+  if (samples.length === 1) return { samples, label: `Last ${window} · single retained observation` };
   const availableMs = Math.max(0, samples[samples.length - 1].time - samples[0].time);
-  return { samples, label: `Requested ${window} · available ${durationLabel(availableMs)}` };
+  // Downsampled history starts one sampling step inside the window; 97% reads as the full window.
+  if (availableMs >= requestedMs * 0.97) return { samples, label: `Last ${window}` };
+  return { samples, label: `Last ${window} · ${durationLabel(availableMs)} retained` };
 }
 
 export function csvCell(value) {

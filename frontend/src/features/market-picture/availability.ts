@@ -3,16 +3,24 @@ import { horizonLabel } from "./pulse.mjs";
 import { dailyFeatureText, metricTitle, type DisplayFrame, type DisplayMetric, type Horizon } from "./presentation";
 import type { MetricCohortRequest } from "./metric-cohort.mjs";
 import { historyComparisons } from "./history-comparisons.mjs";
+import { momentumRetained } from "./breadth-timeline.mjs";
 import type { HistoryPoint } from "./presentation";
 
-const TRAJECTORY_KEYS = ["level", "change", "velocity", "acceleration", "shareChange"] as const;
 /** Shared retention rules: a history panel is drawn exactly when its rule holds, and named here otherwise. */
 export function returnsHistoryRetained(samples: HistoryPoint[], horizon: string) {
   return historyComparisons(samples, horizon, "15", "returns").series.some(item => item.points.some(point => point.value !== null));
 }
-export function trajectoryHistoryRetained(samples: HistoryPoint[]) {
-  return samples.some(point => (Object.values(point.breadthTrajectory ?? {}) as HistoryPoint["breadthTrajectory"][string][])
-    .some(row => TRAJECTORY_KEYS.some(key => row[key] != null)));
+/**
+ * Current BTC price–breadth divergence (15m horizon): owner rows with a 0/1 value and a matched
+ * cohort whose metric timing is CURRENT at `asOf`. Null when none qualifies; the hero chip and the
+ * availability line share this rule.
+ */
+export function currentDivergence(frame: DisplayFrame, asOf: number): { observed: number[]; time: number } | null {
+  const rows = frame.breadthDivergence.filter(row => row.horizon === 15 && (row.metric.value === 0 || row.metric.value === 1) &&
+    row.matched > 0 && row.metric.available != null && row.metric.expires != null &&
+    rowTimeState(frame, { available: row.metric.available, expires: row.metric.expires }, asOf) === "CURRENT");
+  if (!rows.length) return null;
+  return { observed: rows.filter(row => row.metric.value === 1).map(row => row.interval).sort((a, b) => a - b), time: frame.cutoff_ms };
 }
 /** The flow-history panel reads the newest 300 stored points of the window. */
 export const FLOW_HISTORY_POINTS = 300;
@@ -115,13 +123,16 @@ export function availabilityItems(frame: DisplayFrame, asOf: number, horizon: Ho
   const trajectoryValues = frame.breadthTrajectory.flatMap(row => [row.level, row.change, row.velocity, row.acceleration, row.shareChange].filter(Boolean)) as DisplayMetric[];
   // An absent projection counts as missing, exactly like a projection whose values are all unavailable.
   const trajectoryMissing = trajectoryValues.every(metric => metric.value == null);
-  // A trajectory-bearing frame without any qualified divergence row cannot show the divergence reading.
-  const divergenceMissing = frame.breadthDivergence.every(row => row.metric.value == null);
+  // A frame without a qualified, current divergence row cannot show the divergence reading.
+  const divergenceMissing = currentDivergence(frame, asOf) === null;
+  const divergenceNotCurrent = divergenceMissing && frame.breadthDivergence.some(row => row.metric.value != null);
   if (trajectoryMissing || divergenceMissing)
     items.push({ key: "trajectory", label: trajectoryMissing && divergenceMissing ? "Breadth trajectory & divergence" : trajectoryMissing ? "Breadth trajectory" : "Price–breadth divergence",
-      reason: reasonWords([...trajectoryValues, ...frame.breadthDivergence.map(row => row.metric)].flatMap(metric => metric.reasons)),
+      reason: !trajectoryMissing && divergenceNotCurrent ? "not current"
+        : reasonWords([...trajectoryValues, ...frame.breadthDivergence.map(row => row.metric)].flatMap(metric => metric.reasons)),
       detail: [trajectoryMissing ? (frame.breadthTrajectory.length ? `No matched trajectory value in ${frame.breadthTrajectory.length} horizon/interval pairs` : "No owner trajectory projection is attached") : "",
-        divergenceMissing ? "No qualified BTC price–breadth divergence comparison" : ""].filter(Boolean).join(" · ") });
+        divergenceMissing ? divergenceNotCurrent ? "The BTC price–breadth divergence value is outside its availability window at this time"
+          : "No qualified BTC price–breadth divergence comparison" : ""].filter(Boolean).join(" · ") });
   const contribution = frame.contributions?.[horizon];
   const equalReturn = contribution?.equalReturn;
   const returnFuture = equalReturn?.available != null && equalReturn.expires != null &&
@@ -137,8 +148,9 @@ export function availabilityItems(frame: DisplayFrame, asOf: number, horizon: Ho
     if (!returnsHistoryRetained(history.samples, horizon))
       items.push({ key: "returns_history", label: "Benchmark & cohort returns history", reason: history.fault ? "read degraded" : "not retained",
         detail: `No retained BTC or full-cohort ${horizonLabel(horizon)} return in this window${history.fault ? ` · ${history.fault}` : ""}.` });
-    if (!trajectoryMissing && !trajectoryHistoryRetained(history.samples))
-      items.push({ key: "trajectory_history", label: "Breadth trajectory history", reason: "not retained", detail: "No retained matched trajectory value in this window." });
+    // Same rule as the hero momentum strip, so the strip is either drawn or named here.
+    if (!trajectoryMissing && !momentumRetained(history.samples))
+      items.push({ key: "trajectory_history", label: "Breadth momentum history", reason: "not retained", detail: "No retained matched pressure change in this window." });
     if (!flowHistoryRetained(history.samples) && !history.fault)
       items.push({ key: "flow_history", label: "Stored executed-flow history", reason: "not retained",
         detail: `No stored executed-flow aggregate in the newest ${FLOW_HISTORY_POINTS} points of this window. Current flow, if qualified, is not retained history.` });

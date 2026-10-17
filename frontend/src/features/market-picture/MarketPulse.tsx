@@ -25,7 +25,8 @@ import {
 import { Metric, Panel } from "./Primitives";
 import { selectMetricCohort, type MetricCohortRequest } from "./metric-cohort.mjs";
 import { BreadthTimeline } from "./BreadthTimeline";
-import { availabilityItems, DAILY_COLUMNS, FLOW_HISTORY_POINTS, flowHistoryRetained, dailyColumnQualified, sourceFamilyReadings, type SourceFamilyReading } from "./availability";
+import { MOMENTUM_INTERVALS, momentumHorizon, momentumRetained, qualifiedDivergence } from "./breadth-timeline.mjs";
+import { availabilityItems, currentDivergence, DAILY_COLUMNS, FLOW_HISTORY_POINTS, flowHistoryRetained, dailyColumnQualified, sourceFamilyReadings, type SourceFamilyReading } from "./availability";
 import { MicrostructureVisuals } from "./MicrostructureVisuals";
 import { rowTimeState } from "./observation-state";
 import { flowHistoryVisuals } from "./flow-history-visuals.mjs";
@@ -93,8 +94,8 @@ function VerdictCard({
       <div className="mp-verdict" data-state="unavailable">
         <span className="mp-kicker">Market state · {horizonLabel(horizon)}</span>
         <strong className="mp-verdict__word mp-verdict__word--pending">Waiting for 6h history</strong>
-        <p className="mp-panel-footnote" title="The verdict reads a fixed six-hour, one-minute history under one membership and definition. The chart window is never used as a substitute.">
-          The verdict needs six continuous hours of one-minute frames under one definition. {historyUnavailable}
+        <p className="mp-panel-footnote" title="The verdict replays the stored one-minute frames of the last six hours under one membership and definition. The chart window is never used as a substitute.">
+          The verdict replays stored one-minute frames from the last six hours under one definition. {historyUnavailable}
         </p>
       </div>
     );
@@ -106,7 +107,6 @@ function VerdictCard({
         <span className="mp-skeleton" style={{ height: 12 }} />
       </div>
     );
-  const mean = frame.distribution[horizon]?.mean;
   return (
     <div className="mp-verdict" data-state={historical ? "historical" : verdict.state} title={verdict.rule}>
       <span className="mp-kicker">
@@ -126,27 +126,31 @@ function VerdictCard({
         <small className="mp-verdict__basis" role="status">
           {historical && `Recorded as of ${new Date(asOf).toISOString()} · `}
           {verdict.smoothed
-            ? `Breadth components: ${verdict.smoothingMinutes}-min mean of ${verdict.smoothedFrames} frames · latest-frame score ${signed(verdict.instantScore)}`
+            ? `${verdict.smoothingMinutes}-min mean of ${verdict.smoothedFrames} frames · latest frame ${signed(verdict.instantScore)}`
             : "Latest frame only"}
           {verdict.held
             ? ` · ${verdict.label} held until the score is inside ±${VERDICT_HOLD.toFixed(2)}`
             : ""}
         </small>
-      </div>
-      <p className="mp-verdict__counts">
-        <span className="mp-up">{verdict.advancing ?? "—"} advancing</span>
-        <span className="mp-down">{verdict.declining ?? "—"} declining</span>
-        <span className="mp-neutral">{verdict.unchanged ?? "—"} unchanged</span>
-        {mean?.value != null && (
-          <span title={metricTitle(mean)}>mean {metricText(mean, 2, true)}</span>
+        {verdict.replaySince != null && (
+          <small className="mp-verdict__replay" data-short={verdict.replayResetAt != null || undefined}>
+            {verdict.replayResetKind === "current"
+              ? "Held state starts at this frame · frames just before it were not stored"
+              : verdict.replayResetKind === "gap"
+                ? `Replayed from ${hhmm(verdict.replaySince)} UTC · stored gap at ${hhmm(verdict.replayResetAt!)} reset the held state to Mixed`
+                : verdict.replayResetKind === "start"
+                  ? `Replayed from ${hhmm(verdict.replaySince)} UTC · no stored frames before it in the six-hour window`
+                  : `Replayed from stored frames since ${hhmm(verdict.replaySince)} UTC`}
+          </small>
         )}
-      </p>
+      </div>
       <ul className="mp-verdict__parts" aria-label="Verdict components">
         {verdict.components.map((c) => (
           <li key={c.id} title={c.detail}>
             <span>{c.label}</span>
+            <b className={c.score > 0 ? "mp-up" : c.score < 0 ? "mp-down" : undefined}>{signed(c.score)}</b>
             <ScoreBar score={c.score} />
-            <small>{c.detail}</small>
+            <small className="sr-only">{c.detail}</small>
           </li>
         ))}
       </ul>
@@ -158,23 +162,41 @@ function VerdictCard({
   );
 }
 
-type PulseRow = { time: number; valid: number; expected: number; gapBefore: boolean; pressure: Array<number | null> };
+const hhmm = (time: number) => new Date(time).toISOString().slice(11, 16);
+
+type PulseRow = {
+  time: number; valid: number; expected: number; gapBefore: boolean; pressure: Array<number | null>;
+  momentum: Array<{ change: number | null; matched: number; expected: number } | null>; divergence: string;
+};
 
 /** Accessible table of the retained observations in view; the newest 300 rows, newest first. */
-function PulseDataTable({ samples, label }: { samples: HistoryPoint[]; label: string }) {
-  const rows = useMemo<PulseRow[]>(() => samples.slice(-300).reverse().map(point => ({
-    time: point.time, valid: point.valid, expected: point.expected, gapBefore: point.gapBefore,
-    pressure: HORIZONS.map(h => point.breadth?.[h]?.pressure ?? null),
-  })), [samples]);
+function PulseDataTable({ samples, label, horizon }: { samples: HistoryPoint[]; label: string; horizon: Horizon }) {
+  const momentum = useMemo(() => momentumRetained(samples), [samples]);
+  const trajectoryHorizon = momentumHorizon(horizon);
+  const rows = useMemo<PulseRow[]>(() => samples.slice(-300).reverse().map(point => {
+    const flags = MOMENTUM_INTERVALS.map(interval => [interval, qualifiedDivergence(point, interval)] as const).filter(([, value]) => value !== null);
+    return {
+      time: point.time, valid: point.valid, expected: point.expected, gapBefore: point.gapBefore,
+      pressure: HORIZONS.map(h => point.breadth?.[h]?.pressure ?? null),
+      momentum: MOMENTUM_INTERVALS.map(interval => point.breadthTrajectory?.[`${trajectoryHorizon}/${interval}`] ?? null),
+      divergence: !flags.length ? "—" : flags.some(([, value]) => value === 1)
+        ? `observed · ${flags.filter(([, value]) => value === 1).map(([interval]) => `Δ${interval}m`).join(", ")}` : "not observed",
+    };
+  }), [samples, trajectoryHorizon]);
   return (
     <div className="mp-table-scroll mp-pulse-data__scroll" tabIndex={0} role="region" aria-labelledby="mp-pulse-data-caption">
       <table className="mp-table" id="mp-pulse-data-table">
-        <caption id="mp-pulse-data-caption">Breadth pressure (−3…+3) by horizon · {label} · newest first{samples.length > rows.length ? ` · newest ${rows.length} of ${samples.length}` : ""}</caption>
-        <thead><tr><th scope="col">UTC time</th><th scope="col">Coverage</th>{HORIZON_LABELS.map(h => <th key={h} scope="col">{h}</th>)}</tr></thead>
+        <caption id="mp-pulse-data-caption">Breadth pressure (−3…+3) by horizon{momentum ? ` · matched momentum at ${horizonLabel(trajectoryHorizon)}` : ""} · {label} · newest first{samples.length > rows.length ? ` · newest ${rows.length} of ${samples.length}` : ""}</caption>
+        <thead><tr><th scope="col">UTC time</th><th scope="col">Coverage</th>{HORIZON_LABELS.map(h => <th key={h} scope="col">{h}</th>)}
+          {momentum && <>{MOMENTUM_INTERVALS.map(interval => <th key={interval} scope="col" title={`Matched pressure change over ${interval}m at the ${horizonLabel(trajectoryHorizon)} horizon (−2…+2)`}>Δ{interval}m · {horizonLabel(trajectoryHorizon)}</th>)}
+            <th scope="col">BTC divergence</th></>}</tr></thead>
         <tbody>{rows.map(row => <tr key={row.time}>
           <th scope="row"><time dateTime={new Date(row.time).toISOString()}>{new Date(row.time).toISOString().slice(0, 16).replace("T", " ")}</time>{row.gapBefore ? " · after gap" : ""}</th>
           <td>{row.valid}/{row.expected}</td>
           {row.pressure.map((value, index) => <td key={index} className={value == null || value === 0 ? undefined : value > 0 ? "mp-up" : "mp-down"}>{value == null ? "—" : signed(value)}</td>)}
+          {momentum && <>{row.momentum.map((cell, index) => <td key={`m${index}`} className={cell?.change == null || cell.change === 0 ? undefined : cell.change > 0 ? "mp-up" : "mp-down"}>
+            {cell?.change == null ? "—" : `${signed(cell.change)}${cell.matched < cell.expected ? ` · ${cell.matched}/${cell.expected}` : ""}`}</td>)}
+            <td>{row.divergence}</td></>}
         </tr>)}</tbody>
       </table>
     </div>
@@ -221,6 +243,9 @@ export function MarketPulseHero({
   const { samples, label } = useMemo(() => marketPulseWindow(history, window), [history, window]);
   const visible = useMemo(() => zoom ? samples.filter(point => point.time >= zoom[0] && point.time <= zoom[1]) : samples, [samples, zoom]);
   const breadth = frame?.breadth[horizon];
+  const showMomentum = useMemo(() => momentumRetained(samples), [samples]);
+  // Current BTC divergence: shown only while a qualified owner value is current (same rule as the availability line).
+  const divergence = useMemo(() => frame ? currentDivergence(frame, asOf ?? frame.available_at_ms) : null, [frame, asOf]);
   return (
     <section id="mp-pulse" className="mp-hero" aria-labelledby="mp-pulse-title">
       <header className="mp-hero__head">
@@ -251,17 +276,23 @@ export function MarketPulseHero({
           <div className="mp-hero__counts" role="group" aria-label={`${horizonLabel(horizon)} breadth now · select to filter instruments`}>
             <span className="mp-kicker">{horizonLabel(horizon)} breadth{frame && Number.isFinite(frame.cutoff_ms) ? ` · frame ${new Date(frame.cutoff_ms).toISOString().slice(11, 16)} UTC` : ""}</span>
             <button type="button" className="mp-up" disabled={!onSelectMetric || !frame} aria-label={`Filter instruments: ${horizonLabel(horizon)} advancing`} onClick={() => onSelectMetric?.({ kind: "breadth", horizon, side: "advancing" })}>
-              <b>▲ {breadth?.advancing ?? "—"}</b> advancing <Metric metric={breadth?.positive} digits={0} />
+              <b>▲ {breadth?.advancing ?? "—"}</b><span>advancing <Metric metric={breadth?.positive} digits={0} /></span>
             </button>
             <button type="button" className="mp-down" disabled={!onSelectMetric || !frame} aria-label={`Filter instruments: ${horizonLabel(horizon)} declining`} onClick={() => onSelectMetric?.({ kind: "breadth", horizon, side: "declining" })}>
-              <b>▼ {breadth?.declining ?? "—"}</b> declining <Metric metric={breadth?.negative} digits={0} />
+              <b>▼ {breadth?.declining ?? "—"}</b><span>declining <Metric metric={breadth?.negative} digits={0} /></span>
             </button>
             <button type="button" disabled={!onSelectMetric || !frame} aria-label={`Filter instruments: ${horizonLabel(horizon)} unchanged`} onClick={() => onSelectMetric?.({ kind: "breadth", horizon, side: "unchanged" })}>
-              <b>◆ {breadth?.unchanged ?? "—"}</b> unchanged
+              <b>◆ {breadth?.unchanged ?? "—"}</b><span>unchanged</span>
             </button>
             <span className="mp-hero__pressure" title="Breadth pressure = 3 × (advancing − declining) ÷ valid instruments">
               Pressure <Metric metric={frame?.pressure[horizon]} digits={2} signed /> <small>of −3…+3</small>
             </span>
+            {divergence && <span className="mp-tag mp-hero__divergence" data-on={divergence.observed.length ? true : undefined}
+              title="BTC confirmed close beyond its prior 24h range while matched 15m breadth change opposes it. Descriptive, not predictive.">
+              BTC vs 15m breadth · {divergence.observed.length
+                ? <b>diverging ({divergence.observed.map(interval => `Δ${interval}m`).join(", ")})</b>
+                : `not diverging at ${hhmm(divergence.time)}`}
+            </span>}
           </div>
         </aside>
         <div className="mp-hero__chart">
@@ -269,6 +300,7 @@ export function MarketPulseHero({
           <div className="mp-pulse-tools">
             <span className="mp-panel-detail" role="status">
               {label} · colour = breadth pressure per horizon (green advancing, red declining) · bars = {horizonLabel(horizon)} advancing and declining share
+              {showMomentum ? " · Δ rows = matched breadth change (momentum) · BTC÷ ticks = price–breadth divergence" : ""}
             </span>
             {zoom
               ? <button type="button" className="mp-zoom-chip" onClick={() => onZoom(null)} aria-label={`Reset zoom ${zoomText(zoom)}`}>Zoom {zoomText(zoom)} <b>×</b></button>
@@ -276,7 +308,7 @@ export function MarketPulseHero({
           </div>
           <details className="mp-pulse-data" onToggle={(event) => setDataTableOpen(event.currentTarget.open)}>
             <summary>Breadth data table · {visible.length} retained observations</summary>
-            {dataTableOpen && <PulseDataTable samples={visible} label={label} />}
+            {dataTableOpen && <PulseDataTable samples={visible} label={label} horizon={horizon} />}
           </details>
         </div>
       </div>
@@ -593,8 +625,7 @@ function BreadthContextPanelView({ frame, select }: { frame: DisplayFrame; selec
     return [{ key, label, definition, metric, tagged }];
   }) : [];
   const trajectory = frame.breadthTrajectory.filter(row => [row.level, row.change, row.velocity, row.acceleration, row.shareChange].some(metric => metric?.value != null));
-  const diverged = frame.breadthDivergence.find(row => row.interval === 15 && row.metric.value != null);
-  if (!returnBars.length && !breadthRows.length && !hourly.length && !anomalies.length && !trajectory.length && !diverged) return null;
+  if (!returnBars.length && !breadthRows.length && !hourly.length && !anomalies.length && !trajectory.length) return null;
   const pct = (value: number) => `${value > 0 ? "+" : ""}${value.toFixed(2)}%`;
   return (
     <Panel id="mp-breadth-context" title="Market internals" detail={`Owner-computed cohort measures · ${frame.valid}/${frame.expected} instruments`}>
@@ -602,12 +633,12 @@ function BreadthContextPanelView({ frame, select }: { frame: DisplayFrame; selec
         {returnBars.length > 0 && <article className="mp-visual-card">
           <header><h3>Cohort returns by horizon</h3><span className="mp-kicker">Full start cohort</span></header>
           <div className="mp-visual-legend">{returnBars.map(bar => <span key={bar.id}><i className="mp-swatch" style={{ background: bar.color }} />{bar.label}</span>)}</div>
-          <BarsChart rows={returnRows} bars={returnBars} height={170} format={pct} tickFormat={(value, step, ticks) => axisScale(step, true, ticks).format(value)} unit="" ariaLabel="Equal-weight and median start-cohort returns by horizon, percent" />
+          <BarsChart rows={returnRows} bars={returnBars} height={230} format={pct} tickFormat={(value, step, ticks) => axisScale(step, true, ticks).format(value)} unit="" ariaLabel="Equal-weight and median start-cohort returns by horizon, percent" />
         </article>}
         {breadthRows.length > 0 && <article className="mp-visual-card">
           <header><h3>One-basis-point breadth</h3><span className="mp-kicker">Each instrument one vote</span></header>
           <p className="mp-visual-unit">Pressure −1…+1 · (advances − declines) ÷ valid, moves under 1 bp count as unchanged</p>
-          <BarsChart rows={breadthRows} bars={[{ id: "pressure", label: "Pressure", color: CHART.positive, signColors: true }]} height={170} format={value => `${value > 0 ? "+" : ""}${value.toFixed(2)}`} ariaLabel="One-basis-point breadth pressure by horizon" />
+          <BarsChart rows={breadthRows} bars={[{ id: "pressure", label: "Pressure", color: CHART.positive, signColors: true }]} height={230} format={value => `${value > 0 ? "+" : ""}${value.toFixed(2)}`} ariaLabel="One-basis-point breadth pressure by horizon" />
         </article>}
         {(hourly.length > 0 || anomalies.length > 0) && <article className="mp-visual-card">
           <header><h3>Hourly internals</h3><span className="mp-kicker">Completed hour {frame.hourlyInternals ? new Date(frame.hourlyInternals.cutoff).toISOString().slice(11, 16) : ""} UTC</span></header>
@@ -625,7 +656,6 @@ function BreadthContextPanelView({ frame, select }: { frame: DisplayFrame; selec
           </span>)}</div>}
         </article>}
       </div>
-      {diverged && <p className="mp-panel-footnote"><b>Price–breadth divergence</b> · {diverged.metric.value === 1 ? "observed" : "not observed"} for BTC over 15m / {diverged.interval}m matched breadth change. Descriptive, not predictive.</p>}
       <details className="mp-pulse-data">
         <summary>Owner rows · contributions, breadth{trajectory.length ? ", trajectory" : ""}{frame.hourlyInternals ? ", hourly internals" : ""}</summary>
         <>

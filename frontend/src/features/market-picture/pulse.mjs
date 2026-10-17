@@ -24,7 +24,8 @@ export const VERDICT_RULE =
   "(median 24h realized volatility × √(minutes ÷ 525 600)), clamped to ±2σ, ÷ 2. " +
   "With smoothing on, components (1) and (2) use their mean over the trailing 15 minutes of stored frames and the return component stays the latest frame; with it off, every component is the latest frame. " +
   "Score ≥ +0.25 enters Risk-on and ≤ −0.25 enters Risk-off; a state is held until the score is back inside ±0.10, " +
-  "and anything else is Mixed. The held state is replayed from the last six hours of stored breadth. " +
+  "and anything else is Mixed. The held state is replayed from the last six hours of stored breadth; " +
+  "a stored gap resets it to Mixed and the replay restarts after the gap. " +
   "Descriptive breadth balance of the observed universe, not a trade signal.";
 
 const signedScore = (value) => `${value > 0 ? "+" : ""}${value.toFixed(2)}`;
@@ -109,6 +110,7 @@ export function rollingMean(samples, valueOf, minutes = SMOOTHING_MINUTES) {
  */
 function replayState(history, horizon, until, smooth) {
   const points = history.filter((p) => p.time < until && p.time >= until - STATE_LOOKBACK_MS);
+  const current = history.find((p) => p.time === until);
   const scored = points.map((p) => {
     const components = breadthComponents(
       (h) => (finite(p.breadth?.[h]?.pressure) ? p.breadth[h].pressure : null),
@@ -118,11 +120,32 @@ function replayState(history, horizon, until, smooth) {
   });
   const basis = smooth ? rollingMean(scored, (p) => p.score) : scored.map((p) => p.score);
   let state = "mixed";
+  let since = points[0]?.time ?? null;
+  let resetAt = null, resetKind = null;
+  // The owner flags a gap only between stored points of the window, so minutes missing before the
+  // first stored point are unflaggable: the replay starts there (Mixed) and says so.
+  if (since !== null && since > until - STATE_LOOKBACK_MS) {
+    resetAt = since;
+    resetKind = "start";
+  }
   scored.forEach((p, i) => {
-    if (p.gapBefore) state = "mixed";
+    if (p.gapBefore && i > 0) {
+      state = "mixed";
+      since = p.time;
+      resetAt = p.time;
+      resetKind = "gap";
+    }
     if (basis[i] !== null) state = nextVerdictState(state, basis[i]);
   });
-  return { state, scored };
+  // A hole between the newest stored point and the current frame also breaks the replay.
+  const last = points.at(-1)?.time;
+  if (last !== undefined && (current?.gapBefore || (!current && last !== until - 60_000))) {
+    state = "mixed";
+    since = until;
+    resetAt = until;
+    resetKind = "current";
+  }
+  return { state, scored, since, resetAt, resetKind };
 }
 
 /** Stored points inside the trailing smoothing window before `until`, newest first, stopping at a break. */
@@ -143,8 +166,8 @@ export function canonicalVerdictHistoryFault(history, horizon, until) {
   if (!Array.isArray(history) || !Number.isSafeInteger(until))
     return "Canonical six-hour history is unavailable.";
   const points = history.filter((point) => point.time < until);
-  if (points.length !== STATE_LOOKBACK_MS / 60_000)
-    return `Canonical replay needs ${STATE_LOOKBACK_MS / 60_000} complete one-minute points.`;
+  if (!points.length)
+    return `Canonical replay needs at least one stored one-minute point in the last ${STATE_LOOKBACK_MS / 3_600_000} hours.`;
   const required = String(horizon);
   for (const point of points) {
     const selected = point.breadth?.[required]?.pressure;
@@ -184,11 +207,14 @@ export function marketVerdict(frame, horizon, context = {}) {
   const hasHistory = Array.isArray(context.history);
   const smooth = context.smooth !== false && hasHistory;
   const until = Number.isFinite(frame.cutoff_ms) ? frame.cutoff_ms : Infinity;
-  const replay = hasHistory ? replayState(context.history, horizon, until, smooth) : { state: "mixed", scored: [] };
+  const replay = hasHistory
+    ? replayState(context.history, horizon, until, smooth)
+    : { state: "mixed", scored: [], since: null, resetAt: null, resetKind: null };
   let shown = components;
   let smoothedFrames = 1;
   if (smooth) {
-    const window = trailingWindow(replay.scored, until);
+    // Frames before a hole that ends at the current frame are not averaged into it.
+    const window = replay.resetAt === until ? [] : trailingWindow(replay.scored, until);
     smoothedFrames = window.length + 1;
     if (window.length)
       shown = components.map((c) => {
@@ -216,6 +242,10 @@ export function marketVerdict(frame, horizon, context = {}) {
     smoothedFrames,
     smoothingMinutes: SMOOTHING_MINUTES,
     held: state !== entered,
+    /** First stored point the held state was replayed from, and the stored gap that reset it (null when none). */
+    replaySince: replay.since,
+    replayResetAt: replay.resetAt,
+    replayResetKind: replay.resetKind,
     horizon,
     components: shown,
     rule: VERDICT_RULE,

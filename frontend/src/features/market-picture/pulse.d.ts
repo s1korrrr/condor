@@ -27,6 +27,9 @@ export interface Verdict {
   replaySince: number | null;
   /** Time of the stored gap that reset the held state inside the six-hour window, or null. */
   replayResetAt: number | null;
+  /** "gap": a stored gap inside the window; "start": no stored frame before the first one in the window;
+   * "current": no stored frame right before the current one. */
+  replayResetKind: "gap" | "start" | "current" | null;
   horizon: Horizon;
   components: VerdictComponent[];
   rule: string;

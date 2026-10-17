@@ -26,7 +26,7 @@ import { Metric, Panel } from "./Primitives";
 import { selectMetricCohort, type MetricCohortRequest } from "./metric-cohort.mjs";
 import { BreadthTimeline } from "./BreadthTimeline";
 import { MOMENTUM_INTERVALS, momentumHorizon, momentumRetained, qualifiedDivergence } from "./breadth-timeline.mjs";
-import { availabilityItems, DAILY_COLUMNS, FLOW_HISTORY_POINTS, flowHistoryRetained, dailyColumnQualified, sourceFamilyReadings, type SourceFamilyReading } from "./availability";
+import { availabilityItems, currentDivergence, DAILY_COLUMNS, FLOW_HISTORY_POINTS, flowHistoryRetained, dailyColumnQualified, sourceFamilyReadings, type SourceFamilyReading } from "./availability";
 import { MicrostructureVisuals } from "./MicrostructureVisuals";
 import { rowTimeState } from "./observation-state";
 import { flowHistoryVisuals } from "./flow-history-visuals.mjs";
@@ -134,11 +134,13 @@ function VerdictCard({
         </small>
         {verdict.replaySince != null && (
           <small className="mp-verdict__replay" data-short={verdict.replayResetAt != null || undefined}>
-            {verdict.replayResetAt != null
-              ? verdict.replayResetAt === frame.cutoff_ms
-                ? `Held state starts at this frame · frames just before it were not stored`
-                : `Replayed from ${hhmm(verdict.replaySince)} UTC · stored gap at ${hhmm(verdict.replayResetAt)} reset the held state to Mixed`
-              : `Replayed from stored frames since ${hhmm(verdict.replaySince)} UTC`}
+            {verdict.replayResetKind === "current"
+              ? "Held state starts at this frame · frames just before it were not stored"
+              : verdict.replayResetKind === "gap"
+                ? `Replayed from ${hhmm(verdict.replaySince)} UTC · stored gap at ${hhmm(verdict.replayResetAt!)} reset the held state to Mixed`
+                : verdict.replayResetKind === "start"
+                  ? `Replayed from ${hhmm(verdict.replaySince)} UTC · no stored frames before it in the six-hour window`
+                  : `Replayed from stored frames since ${hhmm(verdict.replaySince)} UTC`}
           </small>
         )}
       </div>
@@ -242,12 +244,8 @@ export function MarketPulseHero({
   const visible = useMemo(() => zoom ? samples.filter(point => point.time >= zoom[0] && point.time <= zoom[1]) : samples, [samples, zoom]);
   const breadth = frame?.breadth[horizon];
   const showMomentum = useMemo(() => momentumRetained(samples), [samples]);
-  // Current BTC divergence: shown once the frame carries a qualified owner value.
-  const divergence = useMemo(() => {
-    const rows = (frame?.breadthDivergence ?? []).filter(row => row.horizon === 15 && (row.metric.value === 0 || row.metric.value === 1) && row.matched > 0);
-    if (!rows.length) return null;
-    return { observed: rows.filter(row => row.metric.value === 1).map(row => row.interval).sort((a, b) => a - b), time: frame!.cutoff_ms };
-  }, [frame]);
+  // Current BTC divergence: shown only while a qualified owner value is current (same rule as the availability line).
+  const divergence = useMemo(() => frame ? currentDivergence(frame, asOf ?? frame.available_at_ms) : null, [frame, asOf]);
   return (
     <section id="mp-pulse" className="mp-hero" aria-labelledby="mp-pulse-title">
       <header className="mp-hero__head">

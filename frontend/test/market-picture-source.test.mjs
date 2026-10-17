@@ -234,6 +234,25 @@ test('a hole right before the current frame resets the held state and is not smo
   assert.equal(marketVerdict(frame,'60',{history:contiguous,smooth:false}).state,'risk-on');
 });
 
+test('minutes missing before the first stored point start the replay there and are disclosed', async () => {
+  // The owner flags gaps only between stored points of the window, so a late first point is unflaggable.
+  const pressure=value=>Object.fromEntries(['1','5','15','60','240','1440'].map(h=>[h,{pressure:value}]));
+  const complete=canonicalPoints().map((point,i)=>({...point,breadth:pressure(i===0?2.4:0.6)}));
+  const late=complete.slice(1);
+  const chartPoints=[{time:canonicalCutoff-1_000,chartOnly:true}];
+  const h=sourceHarness([response(plainFrame()),response({items:chartPoints}),response({items:[]}),response({items:[],next_cursor:null})],response(canonicalBody(late)));
+  const result=await h.fetchBundle('v2','24h','BTC',new AbortController().signal);
+  assert.equal(result.canonicalHistoryFault,null);
+  const frame={cutoff_ms:canonicalCutoff,pressure:Object.fromEntries(['1','5','15','60','240','1440'].map(h=>[h,{value:0.6}])),distribution:{},summary:{}};
+  const full=marketVerdict(frame,'60',{history:complete,smooth:false});
+  assert.equal(full.replayResetKind,null);
+  const shortened=marketVerdict(frame,'60',{history:result.canonicalHistory,smooth:false});
+  assert.equal(shortened.replayResetKind,'start');
+  assert.equal(shortened.replaySince,canonicalCutoff-359*60_000);
+  assert.equal(full.state,'risk-on');
+  assert.equal(shortened.state,'mixed','the held state is not invented for minutes that were not stored');
+});
+
 test('the canonical projection remains independent when the chart itself is set to six hours', async () => {
   const chartPoint={time:canonicalCutoff-30_000,chartOnly:true};
   const h=sourceHarness([response(plainFrame()),response({items:[chartPoint]}),response({items:[]}),response({items:[],next_cursor:null})]);

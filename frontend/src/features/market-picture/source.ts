@@ -54,7 +54,9 @@ function canonicalHistoryFault(history: HistoryPoint[], frame: DisplayFrame): st
   if (!SNAPSHOT_ID.test(expectedMembership ?? "") || !DEFINITION_REGISTRY_HASH.test(String(expectedDefinitions ?? "")))
     return "Canonical history cannot verify the current membership and definition basis.";
   // Missing minutes are accepted only where the owner flagged the retained gap on the next
-  // point; the replay resets the held state there. Unflagged holes stay a fault.
+  // point; the replay resets the held state there. Unflagged holes stay a fault. The owner flags
+  // gaps between stored points of the window only, so a late first point cannot carry a flag:
+  // the replay then starts at it and the verdict discloses that start.
   const flaggedAfterHole = (point: HistoryPoint | undefined, previousTime: number) =>
     point !== undefined && (point.time === previousTime + HISTORY_STEP_MS || point.gapBefore);
   for (let index = 0; index < predecessor.length; index++) {

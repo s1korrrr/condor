@@ -121,12 +121,19 @@ function replayState(history, horizon, until, smooth) {
   const basis = smooth ? rollingMean(scored, (p) => p.score) : scored.map((p) => p.score);
   let state = "mixed";
   let since = points[0]?.time ?? null;
-  let resetAt = null;
+  let resetAt = null, resetKind = null;
+  // The owner flags a gap only between stored points of the window, so minutes missing before the
+  // first stored point are unflaggable: the replay starts there (Mixed) and says so.
+  if (since !== null && since > until - STATE_LOOKBACK_MS) {
+    resetAt = since;
+    resetKind = "start";
+  }
   scored.forEach((p, i) => {
     if (p.gapBefore && i > 0) {
       state = "mixed";
       since = p.time;
       resetAt = p.time;
+      resetKind = "gap";
     }
     if (basis[i] !== null) state = nextVerdictState(state, basis[i]);
   });
@@ -136,8 +143,9 @@ function replayState(history, horizon, until, smooth) {
     state = "mixed";
     since = until;
     resetAt = until;
+    resetKind = "current";
   }
-  return { state, scored, since, resetAt };
+  return { state, scored, since, resetAt, resetKind };
 }
 
 /** Stored points inside the trailing smoothing window before `until`, newest first, stopping at a break. */
@@ -201,7 +209,7 @@ export function marketVerdict(frame, horizon, context = {}) {
   const until = Number.isFinite(frame.cutoff_ms) ? frame.cutoff_ms : Infinity;
   const replay = hasHistory
     ? replayState(context.history, horizon, until, smooth)
-    : { state: "mixed", scored: [], since: null, resetAt: null };
+    : { state: "mixed", scored: [], since: null, resetAt: null, resetKind: null };
   let shown = components;
   let smoothedFrames = 1;
   if (smooth) {
@@ -237,6 +245,7 @@ export function marketVerdict(frame, horizon, context = {}) {
     /** First stored point the held state was replayed from, and the stored gap that reset it (null when none). */
     replaySince: replay.since,
     replayResetAt: replay.resetAt,
+    replayResetKind: replay.resetKind,
     horizon,
     components: shown,
     rule: VERDICT_RULE,

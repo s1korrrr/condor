@@ -44,6 +44,60 @@ export function shareBalance(cell) {
   return `${percent(cell.positive)} up · ${percent(cell.negative)} down${cell.flat ? ` · ${percent(cell.flat)} flat` : ""}`;
 }
 
+/** Owner trajectory exists only for these return horizons; rows are its change intervals. */
+export const TRAJECTORY_HORIZONS = ["5", "15", "60"];
+export const MOMENTUM_INTERVALS = ["5", "15", "60"];
+/** The hero horizon when the owner defines a trajectory for it, otherwise 15m. */
+export const momentumHorizon = (horizon) => (TRAJECTORY_HORIZONS.includes(String(horizon)) ? String(horizon) : "15");
+
+/**
+ * Retained BTC price–breadth divergence flag at H=15m for one change interval: 1 observed, 0 not
+ * observed, null when the owner row is missing or its provenance does not qualify.
+ */
+export function qualifiedDivergence(point, interval) {
+  const row = point?.breadthDivergence?.[interval];
+  const provenance = row?.provenance;
+  const qualified = provenance?.horizon === 15 && String(provenance.interval) === String(interval) &&
+    [0, 1].includes(row.value) && row.matched > 0 && row.matched <= row.expected && /^[0-9a-f]{64}$/.test(row.membership ?? "");
+  return qualified ? row.value : null;
+}
+
+/** Any stored point in `samples` carries a matched trajectory change. */
+export function momentumRetained(samples) {
+  return (samples ?? []).some((point) => Object.values(point?.breadthTrajectory ?? {}).some((row) => finite(row?.change)));
+}
+
+/** Mean trajectory fields over the bucket's own frames for one change interval; null without a change. */
+function meanMomentum(points, horizon, interval) {
+  const fields = ["change", "velocity", "acceleration", "shareChange", "level"];
+  const sums = Object.fromEntries(fields.map((field) => [field, [0, 0]]));
+  let matched = null, expected = null;
+  for (const point of points) {
+    const row = point?.breadthTrajectory?.[`${horizon}/${interval}`];
+    if (!row || !finite(row.change)) continue;
+    for (const field of fields) if (finite(row[field])) { sums[field][0] += row[field]; sums[field][1] += 1; }
+    // The weakest matched cohort in the bucket is the one disclosed.
+    matched = matched == null ? row.matched : Math.min(matched, row.matched);
+    expected = expected == null ? row.expected : Math.max(expected, row.expected);
+  }
+  if (!sums.change[1]) return null;
+  return { ...Object.fromEntries(fields.map((field) => [field, sums[field][1] ? sums[field][0] / sums[field][1] : null])), matched, expected };
+}
+
+/** Intervals with an observed divergence among the bucket's frames; null when no frame qualifies. */
+function divergenceCell(points) {
+  const observed = [];
+  let qualified = false;
+  for (const point of points)
+    for (const interval of MOMENTUM_INTERVALS) {
+      const value = qualifiedDivergence(point, interval);
+      if (value === null) continue;
+      qualified = true;
+      if (value === 1 && !observed.includes(interval)) observed.push(interval);
+    }
+  return qualified ? { observed } : null;
+}
+
 /** Mean of each breadth field over the bucket's own frames; a field with no finite value stays null. */
 function meanCell(points, horizon) {
   const fields = ["pressure", "positive", "negative", "flat"];
@@ -63,7 +117,7 @@ function meanCell(points, horizon) {
  * @param options.range optional [from, to] visible UTC range (zoom)
  * @param options.maxColumns column budget for the bucket choice
  */
-export function breadthTimeline(samples, horizons, { range = null, maxColumns = 160 } = {}) {
+export function breadthTimeline(samples, horizons, { range = null, maxColumns = 160, trajectoryHorizon = "15" } = {}) {
   const ordered = (samples ?? []).filter((point) => finite(point?.time));
   if (!ordered.length) return { columns: [], start: null, end: null, bucketMinutes: null };
   const first = ordered[0].time, last = ordered.at(-1).time;
@@ -75,8 +129,10 @@ export function breadthTimeline(samples, horizons, { range = null, maxColumns = 
   const firstBucket = Math.floor(from / size), lastBucket = Math.floor(to / size);
   const columns = [];
   // A carried column repeats one recorded frame (never a bucket mean), with that frame's time and counts.
+  const momentumOf = (points) => Object.fromEntries(MOMENTUM_INTERVALS.map((interval) => [interval, meanMomentum(points, trajectoryHorizon, interval)]));
   const frameColumn = (point) => ({ time: point.time, snapshot: point.snapshot_id ?? null, valid: point.valid ?? null, expected: point.expected ?? null,
-    cells: Object.fromEntries(horizons.map((horizon) => [horizon, meanCell([point], horizon)])) });
+    cells: Object.fromEntries(horizons.map((horizon) => [horizon, meanCell([point], horizon)])),
+    momentum: momentumOf([point]), divergence: divergenceCell([point]) });
   let cursor = 0;
   // Only frames inside [from, to] are averaged; the latest earlier frame may only be carried.
   while (cursor < ordered.length && ordered[cursor].time < from) cursor++;
@@ -115,6 +171,7 @@ export function breadthTimeline(samples, horizons, { range = null, maxColumns = 
     const shown = newest ? {
       time: newest.time, snapshot: newest.snapshot_id ?? null, valid: newest.valid ?? null, expected: newest.expected ?? null,
       cells: Object.fromEntries(horizons.map((horizon) => [horizon, meanCell(segment, horizon)])),
+      momentum: momentumOf(segment), divergence: divergenceCell(segment),
     } : bridged ? carried : null;
     columns.push({
       start: bucketStart,
@@ -130,6 +187,8 @@ export function breadthTimeline(samples, horizons, { range = null, maxColumns = 
       valid: shown?.valid ?? null,
       expected: shown?.expected ?? null,
       cells: shown ? shown.cells : Object.fromEntries(horizons.map((horizon) => [horizon, null])),
+      momentum: shown ? shown.momentum : Object.fromEntries(MOMENTUM_INTERVALS.map((interval) => [interval, null])),
+      divergence: shown ? shown.divergence : null,
     });
     carried = newest ? frameColumn(newest) : shown;
   }

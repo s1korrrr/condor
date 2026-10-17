@@ -815,7 +815,7 @@ test("breadth table rows preserve zeros, nulls and gap flags for every horizon, 
     breadth: Object.fromEntries(HORIZONS.map((h) => [h, { positive: null, negative: null, flat: 0, pressure }])),
   });
   const history = [sample(0, null), sample(1, -3), sample(3, 0, true)];
-  const markup = renderToStaticMarkup(React.createElement(pulse.PulseDataTable, { samples: history, label: "Requested 6h · available 3m" }));
+  const markup = renderToStaticMarkup(React.createElement(pulse.PulseDataTable, { samples: history, label: "Last 6h · 3m retained" }));
   const rows = markup.split("<tr>").slice(2);
   assert.equal(rows.length, 3, "one row per retained observation");
   assert.match(rows[0], /2026-10-01 00:03.*after gap/, "newest first, with its owner gap flag");
@@ -827,8 +827,8 @@ test("breadth table rows preserve zeros, nulls and gap flags for every horizon, 
 test("opened breadth table discloses its window and bounds long histories to the newest rows", () => {
   const pulse = load("features/market-picture/MarketPulse.tsx");
   const history = Array.from({ length: 320 }, (_, i) => flat(i, i % 2 ? 3 : -3));
-  const markup = renderToStaticMarkup(React.createElement(pulse.PulseDataTable, { samples: history, label: "Requested 6h · available 5h 19m" }));
-  assert.match(markup, /Breadth pressure \(−3…\+3\) by horizon · Requested 6h · available 5h 19m · newest first · newest 300 of 320/);
+  const markup = renderToStaticMarkup(React.createElement(pulse.PulseDataTable, { samples: history, label: "Last 6h · 5h retained" }));
+  assert.match(markup, /Breadth pressure \(−3…\+3\) by horizon · Last 6h · 5h retained · newest first · newest 300 of 320/);
   assert.equal((markup.match(/<tr\b/g) ?? []).length, 301, "header plus the newest 300 observations");
 });
 

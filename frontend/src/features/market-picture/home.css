@@ -39,7 +39,9 @@
 .mp-verdict__ends b { color: var(--mp-text); font-size: 12px; }
 .mp-verdict__counts { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 12px; font-weight: 600; }
 .mp-verdict__parts { list-style: none; margin: 0; padding: 0; display: grid; gap: 7px; }
-.mp-verdict__parts li { display: grid; gap: 3px; font-size: 11px; }
+.mp-verdict__parts li { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: baseline; gap: 3px 8px; font-size: 11px; cursor: help; }
+.mp-verdict__parts li > :nth-child(3) { grid-column: 1 / -1; }
+.mp-verdict__parts li > b { font-size: 11px; font-variant-numeric: tabular-nums; }
 .mp-verdict__parts li > span:first-child { color: var(--mp-text); }
 .mp-verdict__parts small { color: var(--mp-muted); font-size: 10px; line-height: 1.35; }
 .mp-verdict__rule summary { cursor: pointer; font-size: 10px; color: var(--mp-accent); }
@@ -267,14 +269,23 @@
 .mp-timeline__cursor { fill: color-mix(in srgb, var(--mp-text) 7%, transparent); stroke: color-mix(in srgb, var(--mp-text) 55%, transparent); pointer-events: none; }
 .mp-timeline__pin { fill: none; stroke: var(--mp-accent); stroke-width: 1.5; pointer-events: none; }
 .mp-timeline__tip { position: fixed; z-index: 2000; pointer-events: none; }
+.mp-timeline__kicker { fill: var(--mp-muted); font-size: 9.5px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; }
+.mp-timeline__label--small { font-size: 9.5px; }
+.mp-timeline__readout--small { font-size: 10.5px; }
+.mp-timeline__partial { fill: var(--mp-warning); font-size: 9.5px; font-weight: 500; }
+.mp-timeline__lane { fill: color-mix(in srgb, var(--mp-muted) 35%, transparent); }
+.mp-timeline__diverged { fill: var(--mp-warning); }
+.mp-timeline__counts[data-on] { fill: var(--mp-warning); font-weight: 650; }
+.mp-timeline__tip .q-tooltip .q-warning { color: var(--mp-warning); }
 .mp-timeline__tip .q-tooltip { min-width: 200px; }
 .mp-timeline__pinned { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; margin-top: 6px; padding: 6px 10px; border: 1px solid color-mix(in srgb, var(--mp-accent) 45%, transparent); border-radius: 6px; background: color-mix(in srgb, var(--mp-accent) 7%, transparent); font-size: 11px; }
 .mp-timeline__pinned span { flex: 1 1 260px; }
 .mp-timeline--empty { display: grid; gap: 8px; text-align: center; color: var(--mp-muted); font-size: 11px; padding: 8px 0; }
-.mp-hero__counts { display: grid; gap: 4px; }
-.mp-page .mp-hero__counts button { display: flex; align-items: baseline; gap: 6px; justify-content: flex-start; padding: 6px 10px; font-size: 12px; background: color-mix(in srgb, var(--mp-raised) 60%, transparent); }
-.mp-page .mp-hero__counts button b { min-width: 34px; font-size: 14px; }
-.mp-page .mp-hero__counts button .mp-number { margin-left: auto; color: var(--mp-muted); font-weight: 600; }
+.mp-hero__counts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 4px; }
+.mp-hero__counts > .mp-kicker, .mp-hero__counts > .mp-hero__pressure, .mp-hero__counts > .mp-hero__divergence { grid-column: 1 / -1; }
+.mp-page .mp-hero__counts button { display: grid; justify-items: start; gap: 1px; padding: 6px 8px; font-size: 10.5px; background: color-mix(in srgb, var(--mp-raised) 60%, transparent); }
+.mp-page .mp-hero__counts button b { font-size: 15px; }
+.mp-page .mp-hero__counts button .mp-number { color: var(--mp-muted); font-weight: 600; }
 .mp-hero__pressure { display: flex; align-items: baseline; gap: 6px; padding: 4px 10px 0; font-size: 12px; color: var(--mp-muted); }
 .mp-hero__pressure .mp-number { color: var(--mp-pressure); font-size: 15px; font-weight: 700; }
 .mp-hero__pressure small { font-size: 10px; }
@@ -318,7 +329,7 @@
 .mp-evidence-group[data-state=OBSERVED] b { color: var(--mp-positive); }
 .mp-tile__freshness[data-fresh] { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 @media (max-width: 1100px) { .mp-hero__chart { order: -1; } }
-.mp-internals { align-items: start; }
+.mp-internals { align-items: stretch; }
 .mp-hero__controls { align-items: center; gap: 6px 10px; }
 .mp-hero__controls .mp-kicker { font-size: 9px; margin-left: 6px; }
 .mp-tile .mp-tile__action { opacity: 0; transition: opacity .15s; }
@@ -328,3 +339,21 @@
 @media (max-width: 640px) { .mp-availability { grid-template-columns: minmax(0, 1fr); } }
 .mp-timeline__tick--end text { fill: var(--mp-text); }
 .mp-timeline__gap line { stroke: var(--mp-text); stroke-width: 1.5; stroke-dasharray: 3 2; opacity: .55; }
+
+/* Verdict replay disclosure: the held state's memory is short after a stored gap. */
+.mp-verdict__replay { display: block; margin-top: 4px; color: var(--mp-muted); font-size: 10.5px; line-height: 1.35; }
+.mp-verdict__replay[data-short]::before { content: ""; display: inline-block; width: 6px; height: 6px; margin-right: 6px; border-radius: 50%; background: var(--mp-warning); vertical-align: 1px; }
+.mp-hero__divergence { align-self: flex-start; margin-top: 4px; font-size: 10.5px; }
+.mp-hero__divergence[data-on] { color: var(--mp-warning); border-color: color-mix(in srgb, var(--mp-warning) 55%, transparent); }
+
+/* Phone: each control keeps its label on its own row, the segment fills the rest. */
+@media (max-width: 640px) {
+  .mp-hero__controls { display: grid; grid-template-columns: auto minmax(0, 1fr); align-items: center; gap: 6px 8px; }
+  .mp-hero__controls .mp-kicker { margin-left: 0; }
+  .mp-hero__controls .mp-segment { display: flex; }
+  .mp-hero__controls .mp-segment button { flex: 1 1 0; min-width: 0; }
+}
+
+/* Market internals: cards in a row share one height; charts sit at the card foot. */
+#mp-breadth-context .mp-visual-card { display: flex; flex-direction: column; }
+#mp-breadth-context .mp-visual-card > :last-child:not(header) { margin-top: auto; }

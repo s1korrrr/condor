@@ -4,13 +4,47 @@ import { TooltipCard } from "@/features/quant-ops/kit/charts";
 import { tooltipPlacement } from "@/features/quant-ops/kit/heat-strip";
 import { useElementWidth } from "@/features/quant-ops/kit/useElementWidth";
 import { HORIZONS, HORIZON_LABELS } from "./model.mjs";
-import { breadthTimeline, pressureTone, shareBalance as balance, timelineTicks, type TimelineCell, type TimelineColumn } from "./breadth-timeline.mjs";
+import {
+  MOMENTUM_INTERVALS, breadthTimeline, momentumHorizon, momentumRetained, pressureTone, qualifiedDivergence, shareBalance as balance, timelineTicks,
+  type MomentumCell, type TimelineCell, type TimelineColumn,
+} from "./breadth-timeline.mjs";
 import type { HistoryPoint, Horizon } from "./presentation";
 
 const ROW = 20, ROW_GAP = 3, TOP = 18, RIBBON_GAP = 14, RIBBON = 76, AXIS = 20;
 const HEAT = HORIZONS.length * (ROW + ROW_GAP) - ROW_GAP;
 const RIBBON_TOP = TOP + HEAT + RIBBON_GAP, RIBBON_MID = RIBBON_TOP + RIBBON / 2;
-const HEIGHT = RIBBON_TOP + RIBBON + AXIS;
+const RIBBON_BOTTOM = RIBBON_TOP + RIBBON;
+// Momentum strip: one row per change interval, then the BTC divergence marker lane.
+const MOMENTUM_GAP = 28, MOMENTUM_ROW_GAP = 3, LANE_GAP = 6, LANE = 8;
+
+const intervalLabel = (interval: string) => `Δ${interval}m`;
+const speed = (velocity: number | null) => velocity == null ? "" : Math.abs(velocity) >= 0.05 ? "fast" : Math.abs(velocity) >= 0.02 ? "steady" : "slow";
+const glyph = (change: number) => change >= 1.2 ? "▲▲" : change >= 0.2 ? "▲" : change <= -1.2 ? "▼▼" : change <= -0.2 ? "▼" : "◆";
+
+/** Binned diverging fill for a matched pressure change on −2…+2; quantized because the cohort is. */
+function momentumFill(cell: MomentumCell | null) {
+  if (cell?.change == null) return null;
+  const size = Math.abs(cell.change);
+  if (size < 0.2) return "color-mix(in srgb, var(--mp-unchanged) 45%, var(--mp-panel))";
+  const strength = size < 0.6 ? 30 : size < 1 ? 48 : size < 1.4 ? 66 : size < 1.8 ? 84 : 100;
+  return `color-mix(in srgb, var(--mp-${cell.change > 0 ? "positive" : "negative"}) ${strength}%, var(--mp-panel))`;
+}
+
+function momentumNote(cell: MomentumCell | null) {
+  if (cell?.change == null) return "not retained";
+  return [
+    speed(cell.velocity),
+    cell.velocity != null ? `velocity ${signed(cell.velocity, 3)}/min` : null,
+    cell.acceleration != null ? `accel. ${signed(cell.acceleration, 4)}/min²` : null,
+    cell.shareChange != null ? `share ${signed(cell.shareChange, 0)} pp` : null,
+    cell.matched != null ? `${cell.matched}/${cell.expected} matched` : null,
+  ].filter(Boolean).join(" · ");
+}
+
+function divergenceText(divergence: { observed: string[] } | null) {
+  if (!divergence) return "unavailable";
+  return divergence.observed.length ? `observed · ${divergence.observed.map(intervalLabel).join(", ")}` : "not observed";
+}
 
 const signed = (value: number, digits = 2) => `${value > 0 ? "+" : ""}${value.toFixed(digits)}`;
 const pct = (value: number | null) => value == null ? "—" : `${Math.round(value * 100)}%`;
@@ -35,10 +69,16 @@ function when(column: TimelineColumn, withDate: boolean) {
   return `${utc(column.time, withDate)} UTC`;
 }
 
-function describe(column: TimelineColumn, horizon: string, withDate: boolean) {
+function describe(column: TimelineColumn, horizon: string, withDate: boolean, momentum: boolean) {
   if (column.time == null) return `${utc(column.start, withDate)} UTC · retained gap, no observation`;
   const cell = column.cells[horizon];
-  return `${when(column, withDate)} · ${label(horizon)} pressure ${cell?.pressure == null ? "unavailable" : signed(cell.pressure)} · ${balance(cell)}`;
+  const moves = momentum
+    ? ` · momentum ${MOMENTUM_INTERVALS.map((interval) => {
+      const change = column.momentum[interval]?.change;
+      return `${intervalLabel(interval)} ${change == null ? "—" : signed(change, 1)}`;
+    }).join(", ")} · BTC divergence ${divergenceText(column.divergence)}`
+    : "";
+  return `${when(column, withDate)} · ${label(horizon)} pressure ${cell?.pressure == null ? "unavailable" : signed(cell.pressure)} · ${balance(cell)}${moves}`;
 }
 
 /**
@@ -58,14 +98,35 @@ export function BreadthTimeline({ samples, horizon, setHorizon, zoom, onZoom, re
   const labelW = 34, readoutW = narrow ? 52 : 92;
   const plotW = Math.max(0, width - labelW - readoutW);
   const maxColumns = plotW > 0 ? Math.max(24, Math.min(180, Math.floor(plotW / 6))) : 160;
-  const timeline = useMemo(() => breadthTimeline(samples, HORIZONS, { range: zoom, maxColumns }), [samples, zoom, maxColumns]);
+  const trajectoryHorizon = momentumHorizon(horizon);
+  const timeline = useMemo(() => breadthTimeline(samples, HORIZONS, { range: zoom, maxColumns, trajectoryHorizon }),
+    [samples, zoom, maxColumns, trajectoryHorizon]);
+  // The strip appears once the owner retains any matched trajectory in this window; until then the
+  // availability line names it, so no empty rows are drawn.
+  const showMomentum = useMemo(() => momentumRetained(samples), [samples]);
+  const momentumRow = narrow ? 12 : 14;
+  const momentumTop = RIBBON_BOTTOM + MOMENTUM_GAP;
+  const momentumHeight = MOMENTUM_INTERVALS.length * (momentumRow + MOMENTUM_ROW_GAP) - MOMENTUM_ROW_GAP;
+  const laneTop = momentumTop + momentumHeight + LANE_GAP;
+  const bottom = showMomentum ? laneTop + LANE : RIBBON_BOTTOM;
+  const height = bottom + AXIS;
   // The readout is the newest frame in view (not a bucket mean), so it matches the counts beside the chart.
   // The readout is the newest recorded frame inside the visible range, labelled with its own time.
   const latest = useMemo(() => {
     const [start, end] = zoom ?? [-Infinity, Infinity];
     const newest = [...samples].reverse().find((point) => point.time <= end && point.time >= start);
-    return { time: newest?.time ?? null, cells: Object.fromEntries(HORIZONS.map((h) => [h, newest?.breadth?.[h] ? { ...newest.breadth[h], valid: newest.valid } : null])) };
-  }, [samples, zoom]);
+    const momentum = Object.fromEntries(MOMENTUM_INTERVALS.map((interval) => {
+      const row = newest?.breadthTrajectory?.[`${trajectoryHorizon}/${interval}`];
+      return [interval, row && row.change != null ? row : null];
+    }));
+    const qualified = MOMENTUM_INTERVALS.map((interval) => [interval, qualifiedDivergence(newest, interval)] as const).filter(([, value]) => value !== null);
+    return {
+      time: newest?.time ?? null,
+      cells: Object.fromEntries(HORIZONS.map((h) => [h, newest?.breadth?.[h] ? { ...newest.breadth[h], valid: newest.valid } : null])),
+      momentum,
+      divergence: qualified.length ? { observed: qualified.filter(([, value]) => value === 1).map(([interval]) => interval) } : null,
+    };
+  }, [samples, zoom, trajectoryHorizon]);
   const columns = timeline.columns;
   const colW = columns.length ? plotW / columns.length : 0;
   const span = timeline.start != null && timeline.end != null ? timeline.end - timeline.start : 0;
@@ -163,13 +224,13 @@ export function BreadthTimeline({ samples, horizon, setHorizon, zoom, onZoom, re
     if (!box && svgRef.current) {
       const rect = svgRef.current.getBoundingClientRect();
       const left = rect.left + labelW + shown.col * colW;
-      box = { left, right: left + colW, top: rect.top + TOP, bottom: rect.top + TOP + HEAT };
+      box = { left, right: left + colW, top: rect.top + TOP, bottom: rect.top + bottom };
     }
     if (!box) return;
     const size = tip.getBoundingClientRect();
     const place = tooltipPlacement(box, { width: size.width, height: size.height }, { width: window.innerWidth, height: window.innerHeight }, 12);
     setTipPos({ left: place.left, top: place.top });
-  }, [shown, colW]);
+  }, [shown, colW, bottom]);
 
   // The measured wrapper stays mounted in the empty state, so the width is known when history arrives.
   if (!columns.length) return <div className="mp-timeline mp-timeline--empty" ref={ref} role="status">
@@ -190,9 +251,9 @@ export function BreadthTimeline({ samples, horizon, setHorizon, zoom, onZoom, re
 
   return <div className="mp-timeline" ref={ref}>
     <div className="mp-timeline__frame" tabIndex={0} role="group" onKeyDown={key}
-      aria-label={`Breadth pressure by horizon over time, ${columns.length} columns of ${timeline.bucketMinutes} minutes. Left and right arrows move in time, up and down change horizon, Enter pins a column. Shift with left or right selects a range and Enter zooms to it; minus resets the zoom. Escape clears.`}
+      aria-label={`Breadth pressure by horizon over time${showMomentum ? `, with ${label(trajectoryHorizon)} matched breadth momentum and BTC divergence` : ""}, ${columns.length} columns of ${timeline.bucketMinutes} minutes. Left and right arrows move in time, up and down change horizon, Enter pins a column. Shift with left or right selects a range and Enter zooms to it; minus resets the zoom. Escape clears.`}
       aria-describedby={liveId} onBlur={() => setActive(null)}>
-      {width > 0 && <svg ref={svgRef} width={width} height={HEIGHT} className="mp-timeline__svg" aria-hidden="true">
+      {width > 0 && <svg ref={svgRef} width={width} height={height} className="mp-timeline__svg" aria-hidden="true">
         {HORIZONS.map((h, row) => {
           const y = TOP + row * (ROW + ROW_GAP);
           const isSelected = h === horizon;
@@ -230,29 +291,70 @@ export function BreadthTimeline({ samples, horizon, setHorizon, zoom, onZoom, re
         <text x={labelW + plotW + 8} y={RIBBON_TOP + 10} className="mp-timeline__readout" data-tone="up">{pct(latestSelected?.positive ?? null)}</text>
         <text x={labelW + plotW + 8} y={RIBBON_TOP + RIBBON - 4} className="mp-timeline__readout" data-tone="down">{pct(latestSelected?.negative ?? null)}</text>
         {!narrow && <text x={labelW + plotW + 8} y={RIBBON_MID} dy="0.35em" className="mp-timeline__counts">{label(horizon)} share</text>}
+        {showMomentum && <g className="mp-timeline__momentum">
+          <text x={labelW} y={momentumTop - 7} className="mp-timeline__kicker">
+            {narrow ? `Momentum · ${label(trajectoryHorizon)}` : `Momentum · ${label(trajectoryHorizon)} horizon · matched pressure change over the last 5, 15 and 60 minutes${trajectoryHorizon === horizon ? "" : ` (no owner trajectory for ${label(horizon)})`}`}
+          </text>
+          {(() => {
+            const matched = MOMENTUM_INTERVALS.map((interval) => latest.momentum[interval]).find(Boolean);
+            return matched && !narrow ? <text x={labelW + plotW + 8} y={momentumTop - 7} className="mp-timeline__counts">matched {matched.matched}/{matched.expected}</text> : null;
+          })()}
+          {MOMENTUM_INTERVALS.map((interval, row) => {
+            const y = momentumTop + row * (momentumRow + MOMENTUM_ROW_GAP);
+            const value = latest.momentum[interval];
+            return <g key={interval}>
+              <rect x={labelW} y={y} width={plotW} height={momentumRow} rx={3} className="mp-timeline__track" />
+              {columns.map((column, col) => {
+                const cell = column.momentum[interval];
+                const color = momentumFill(cell);
+                const partial = cell?.matched != null && cell.expected != null && cell.matched < cell.expected;
+                return color ? <rect key={col} x={labelW + col * colW} y={y} width={cellW} height={momentumRow} fill={color}
+                  opacity={(column.carried ? 0.82 : 1) * (partial ? 0.6 : 1)} /> : null;
+              })}
+              <text x={labelW - 8} y={y + momentumRow / 2} dy="0.35em" textAnchor="end" className="mp-timeline__label mp-timeline__label--small">{intervalLabel(interval)}</text>
+              <text x={labelW + plotW + 8} y={y + momentumRow / 2} dy="0.35em" className="mp-timeline__readout mp-timeline__readout--small"
+                data-tone={value?.change == null ? undefined : value.change >= 0.2 ? "up" : value.change <= -0.2 ? "down" : "flat"}>
+                {value?.change == null ? "—" : `${signed(value.change, 1)} ${glyph(value.change)}`}
+                {!narrow && value && value.matched < value.expected && <tspan className="mp-timeline__partial" dx={5}>{value.matched}/{value.expected}</tspan>}
+              </text>
+            </g>;
+          })}
+          {!columns.some((column) => MOMENTUM_INTERVALS.some((interval) => column.momentum[interval]?.change != null)) &&
+            <text x={labelW + plotW / 2} y={momentumTop + momentumHeight / 2} dy="0.35em" textAnchor="middle" className="mp-timeline__counts">No matched trajectory retained in this range</text>}
+          <text x={labelW - 8} y={laneTop + LANE / 2} dy="0.35em" textAnchor="end" className="mp-timeline__label mp-timeline__label--small">BTC÷<title>BTC price–breadth divergence · 15m horizon</title></text>
+          {columns.map((column, col) => column.divergence
+            ? <rect key={col} x={labelW + col * colW} y={laneTop + LANE / 2 - 1} width={cellW} height={2} className="mp-timeline__lane" />
+            : null)}
+          {columns.map((column, col) => column.divergence?.observed.length
+            ? <rect key={`d${col}`} x={labelW + col * colW + Math.max(0, cellW / 2 - 1)} y={laneTop} width={2} height={LANE} className="mp-timeline__diverged" />
+            : null)}
+          <text x={labelW + plotW + 8} y={laneTop + LANE / 2} dy="0.35em" className="mp-timeline__counts" data-on={latest.divergence?.observed.length ? true : undefined}>
+            {narrow ? (latest.divergence?.observed.length ? "BTC÷" : "") : `BTC ${latest.divergence ? latest.divergence.observed.length ? "diverging" : "no divergence" : "—"}`}
+          </text>
+        </g>}
         {columns.map((column, col) => column.gapBefore
           ? <g key={`g${col}`} className="mp-timeline__gap"><title>Retained gap before this column</title>
-            <line x1={labelW + col * colW - 0.5} x2={labelW + col * colW - 0.5} y1={TOP - 2} y2={RIBBON_TOP + RIBBON + 2} /></g>
+            <line x1={labelW + col * colW - 0.5} x2={labelW + col * colW - 0.5} y1={TOP - 2} y2={bottom + 2} /></g>
           : null)}
         {columns.map((column, col) => column.coverageChanged
           ? <g key={`m${col}`} className="mp-timeline__marker"><title>Coverage or membership changed</title>
-            <line x1={labelW + col * colW} x2={labelW + col * colW} y1={TOP - 4} y2={RIBBON_TOP + RIBBON} />
+            <line x1={labelW + col * colW} x2={labelW + col * colW} y1={TOP - 4} y2={bottom} />
             <path d={`M${labelW + col * colW - 4} ${TOP - 7}h8l-4 5z`} /></g>
           : null)}
         {ticks.map((time) => <g key={time} className="mp-timeline__tick">
-          <line x1={x(time)} x2={x(time)} y1={RIBBON_TOP + RIBBON + 1} y2={RIBBON_TOP + RIBBON + 5} />
-          <text x={x(time)} y={HEIGHT - 4} textAnchor="middle">{new Date(time).getUTCHours() === 0 && new Date(time).getUTCMinutes() === 0 && withDate
+          <line x1={x(time)} x2={x(time)} y1={bottom + 1} y2={bottom + 5} />
+          <text x={x(time)} y={height - 4} textAnchor="middle">{new Date(time).getUTCHours() === 0 && new Date(time).getUTCMinutes() === 0 && withDate
             ? new Date(time).toLocaleDateString("en-GB", { timeZone: "UTC", month: "short", day: "numeric" })
             : utc(time, false)}</text>
         </g>)}
         {endTick != null && <g className="mp-timeline__tick mp-timeline__tick--end">
-          <line x1={x(endTick)} x2={x(endTick)} y1={RIBBON_TOP + RIBBON + 1} y2={RIBBON_TOP + RIBBON + 5} />
-          <text x={Math.min(x(endTick), labelW + plotW)} y={HEIGHT - 4} textAnchor="end">{utc(endTick, false)}</text>
+          <line x1={x(endTick)} x2={x(endTick)} y1={bottom + 1} y2={bottom + 5} />
+          <text x={Math.min(x(endTick), labelW + plotW)} y={height - 4} textAnchor="end">{utc(endTick, false)}</text>
         </g>}
-        {drag && <rect x={labelW + Math.min(drag.from, drag.to) * colW} y={TOP - 2} width={(Math.abs(drag.to - drag.from) + 1) * colW} height={RIBBON_TOP + RIBBON - TOP + 4} className="mp-timeline__brush" />}
-        {pinnedColumn && <rect x={labelW + pin! * colW - 1} y={TOP - 3} width={cellW + 2} height={RIBBON_TOP + RIBBON - TOP + 6} rx={2} className="mp-timeline__pin" />}
-        {shown && !drag && <rect x={labelW + shown.col * colW - 1} y={TOP - 3} width={cellW + 2} height={RIBBON_TOP + RIBBON - TOP + 6} rx={2} className="mp-timeline__cursor" />}
-        <rect x={labelW} y={TOP} width={Math.max(0, plotW)} height={RIBBON_TOP + RIBBON - TOP} fill="transparent" className="mp-timeline__hit"
+        {drag && <rect x={labelW + Math.min(drag.from, drag.to) * colW} y={TOP - 2} width={(Math.abs(drag.to - drag.from) + 1) * colW} height={bottom - TOP + 4} className="mp-timeline__brush" />}
+        {pinnedColumn && <rect x={labelW + pin! * colW - 1} y={TOP - 3} width={cellW + 2} height={bottom - TOP + 6} rx={2} className="mp-timeline__pin" />}
+        {shown && !drag && <rect x={labelW + shown.col * colW - 1} y={TOP - 3} width={cellW + 2} height={bottom - TOP + 6} rx={2} className="mp-timeline__cursor" />}
+        <rect x={labelW} y={TOP} width={Math.max(0, plotW)} height={bottom - TOP} fill="transparent" className="mp-timeline__hit"
           style={{ pointerEvents: "all" }}
           onPointerDown={(event) => { event.currentTarget.setPointerCapture(event.pointerId); const at = locate(event); setDrag({ from: at.col, to: at.col }); setActive(at); }}
           onPointerMove={(event) => { const at = locate(event); setActive(at); if (drag) setDrag({ ...drag, to: at.col }); }}
@@ -261,9 +363,9 @@ export function BreadthTimeline({ samples, horizon, setHorizon, zoom, onZoom, re
           onPointerLeave={(event) => { if (event.pointerType !== "touch" && !drag) { setActive(null); anchor.current = null; } }} />
       </svg>}
     </div>
-    <span id={liveId} className="sr-only" role="status" aria-live="polite">{tipColumn ? describe(tipColumn, horizon, withDate) : ""}</span>
+    <span id={liveId} className="sr-only" role="status" aria-live="polite">{tipColumn ? describe(tipColumn, horizon, withDate, showMomentum) : ""}</span>
     {pinnedColumn && <div className="mp-timeline__pinned" role="status">
-      <span><b>Pinned</b> {pinnedColumn.time == null ? `${utc(pinnedColumn.start, withDate)} UTC · retained gap` : describe(pinnedColumn, horizon, withDate)}
+      <span><b>Pinned</b> {pinnedColumn.time == null ? `${utc(pinnedColumn.start, withDate)} UTC · retained gap` : describe(pinnedColumn, horizon, withDate, showMomentum)}
         {pinnedColumn.valid != null && ` · ${pinnedColumn.valid}/${pinnedColumn.expected} instruments`}</span>
       {replay && pinnedColumn.snapshot && <button type="button" className="mp-text-button" onClick={() => replay(pinnedColumn.snapshot!)}>Open recorded frame</button>}
       <button type="button" className="mp-text-button" onClick={() => setPinnedTime(null)}>Unpin</button>
@@ -273,7 +375,7 @@ export function BreadthTimeline({ samples, horizon, setHorizon, zoom, onZoom, re
         ? <TooltipCard title={`${utc(tipColumn.start, true)} UTC`} rows={[{ key: "gap", label: "Retained gap", color: "var(--mp-unchanged)", value: "no observation" }]} />
         : <TooltipCard
           title={`${when(tipColumn, true)} · ${tipColumn.valid}/${tipColumn.expected} instruments`}
-          rows={HORIZONS.map((h) => {
+          rows={[...HORIZONS.map((h) => {
             const cell = tipColumn.cells[h];
             return {
               key: h,
@@ -283,7 +385,25 @@ export function BreadthTimeline({ samples, horizon, setHorizon, zoom, onZoom, re
               tone: cell?.pressure == null || cell.pressure === 0 ? undefined : cell.pressure > 0 ? "q-positive" : "q-negative",
               note: shown?.row === HORIZONS.indexOf(h) || h === horizon ? balance(cell) : undefined,
             };
-          })} />}
+          }), ...(showMomentum ? [...MOMENTUM_INTERVALS.map((interval) => {
+            const cell = tipColumn.momentum[interval];
+            return {
+              key: `m${interval}`,
+              label: `${intervalLabel(interval)} · ${label(trajectoryHorizon)}`,
+              color: momentumFill(cell) ?? "var(--mp-raised)",
+              value: cell?.change == null ? "—" : signed(cell.change, 1),
+              tone: cell?.change == null || Math.abs(cell.change) < 0.2 ? undefined : cell.change > 0 ? "q-positive" : "q-negative",
+              note: momentumNote(cell),
+            };
+          }), {
+            key: "divergence",
+            label: "BTC divergence",
+            color: tipColumn.divergence?.observed.length ? "var(--mp-warning)" : "var(--mp-raised)",
+            value: tipColumn.divergence ? tipColumn.divergence.observed.length ? "observed" : "not observed" : "—",
+            tone: tipColumn.divergence?.observed.length ? "q-warning" : undefined,
+            note: !tipColumn.divergence ? "unavailable · provenance missing or inputs incomplete"
+              : tipColumn.divergence.observed.length ? `${tipColumn.divergence.observed.map(intervalLabel).join(", ")} · 15m horizon` : undefined,
+          }] : [])]} />}
     </div>, document.body)}
   </div>;
 }

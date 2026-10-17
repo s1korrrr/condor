@@ -47,19 +47,22 @@ function canonicalHistoryFault(history: HistoryPoint[], frame: DisplayFrame): st
   const predecessor = history.filter((point) => point.time < cutoff);
   if (history.some((point) => point.time < cutoff - STATE_HISTORY_WINDOW_MS || point.time > cutoff))
     return "Canonical history contains a point outside the pinned six-hour window.";
-  if (predecessor.length !== STATE_HISTORY_POINTS)
-    return `Canonical history is incomplete (${predecessor.length} of ${STATE_HISTORY_POINTS} one-minute points).`;
+  if (!predecessor.length)
+    return `Canonical history is incomplete (0 of ${STATE_HISTORY_POINTS} one-minute points).`;
   const expectedMembership = frame.membershipHash;
   const expectedDefinitions = frame.raw.definition_registry_hash;
   if (!SNAPSHOT_ID.test(expectedMembership ?? "") || !DEFINITION_REGISTRY_HASH.test(String(expectedDefinitions ?? "")))
     return "Canonical history cannot verify the current membership and definition basis.";
-  for (let index = 0; index < STATE_HISTORY_POINTS; index++) {
+  // Missing minutes are accepted only where the owner flagged the retained gap on the next
+  // point; the replay resets the held state there. Unflagged holes stay a fault.
+  const flaggedAfterHole = (point: HistoryPoint | undefined, previousTime: number) =>
+    point !== undefined && (point.time === previousTime + HISTORY_STEP_MS || point.gapBefore);
+  for (let index = 0; index < predecessor.length; index++) {
     const point = predecessor[index];
-    const expectedTime = cutoff - STATE_HISTORY_WINDOW_MS + index * HISTORY_STEP_MS;
-    if (point.time !== expectedTime)
+    if (point.time % HISTORY_STEP_MS !== 0 || (index > 0 && point.time <= predecessor[index - 1].time))
       return "Canonical history has a missing, duplicate, or unordered one-minute point.";
-    if (point.gapBefore)
-      return "Canonical history contains a stored coverage gap.";
+    if (index > 0 && !flaggedAfterHole(point, predecessor[index - 1].time))
+      return "Canonical history skips a one-minute point without an owner gap flag.";
     if (!SNAPSHOT_ID.test(point.snapshot_id ?? ""))
       return "Canonical history is missing a retained snapshot identity.";
     if (point.membership !== expectedMembership || point.definitionRegistryHash !== expectedDefinitions)
@@ -68,6 +71,8 @@ function canonicalHistoryFault(history: HistoryPoint[], frame: DisplayFrame): st
   const atCutoff = history.filter((point) => point.time === cutoff);
   // A retained same-cutoff history revision is allowed to have its own snapshot ID. The
   // replay filters it out (`time < cutoff`); only the selected frame supplies the current row.
+  if (atCutoff.length === 1 && !flaggedAfterHole(atCutoff[0], predecessor[predecessor.length - 1].time))
+    return "Canonical history skips a one-minute point without an owner gap flag.";
   if (
     atCutoff.length > 1 ||
     atCutoff.some((point) =>

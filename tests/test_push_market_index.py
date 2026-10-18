@@ -473,6 +473,7 @@ def test_reads_membership_then_every_pair_like_the_app(reporting):
     assert head["value"] == "109.00" and head["change_pct"] == "9.00"
     assert (head["pairs"], head["expected"], head["stale"]) == (3, 3, False)
     assert head["as_of_ms"] == (T0 + 9 * 60) * 1000
+    assert head["source_age_at_ms"] == int(reporting.clock[0] * 1000)
 
 
 def test_membership_is_cached_for_an_hour(reporting):

@@ -1,6 +1,7 @@
 {
   "v": 1,
   "generated_at_ms": 1800000030000,
+  "stale_after_ms": 600000,
   "day_pnl": "4.50",
   "pnl_unit": "USDC",
   "day_partial": true,
@@ -8,6 +9,7 @@
   "equity_unit": "USDC",
   "market_label": "Mixed",
   "market_state": "mixed",
+  "market_valid_until_ms": 1800000090000,
   "bots_running": 2,
   "bots_total": 2,
   "incidents_state": "critical",

@@ -1452,6 +1452,7 @@ def glance(full: dict) -> dict:
                 "held": verdict["held"],
                 "freshness": market["frame"]["freshness"],
                 "cutoff_ms": market["frame"]["cutoff_ms"],
+                "expires_at_ms": market["frame"]["expires_at_ms"],
             }
         ),
         "bots": [

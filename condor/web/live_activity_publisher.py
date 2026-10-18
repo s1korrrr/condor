@@ -43,6 +43,15 @@ def configured_interval() -> int:
         return LiveActivityConfig().interval_seconds
 
 
+def configured_stale_after() -> int:
+    """The same configured global lifetime used by the sender and local content route."""
+    raw = os.environ.get(ENV_LIVE_ACTIVITY)
+    try:
+        return parse_live_activity(json.loads(raw) if raw else {}).stale_after_seconds
+    except (ValueError, PushConfigError):
+        return LiveActivityConfig().stale_after_seconds
+
+
 def publisher_settings() -> tuple[Registry, LiveActivityConfig] | None:
     """The registry and the section when publishing is configured and enabled, else None."""
     raw, path = os.environ.get(ENV_LIVE_ACTIVITY), os.environ.get(ENV_REGISTRY)
@@ -92,6 +101,7 @@ async def publish_once(
     *,
     market_index: MarketIndexFor,
     index_budget_seconds: float = INDEX_BUDGET_MAX_SECONDS,
+    stale_after_seconds: int = 600,
     clock: Callable[[], float] = time.time,
 ) -> int:
     """Build and store the content for every (owner, server) with an active token, at most
@@ -127,7 +137,10 @@ async def publish_once(
     try:
         for user_id, server in kept:
             try:
-                state = la.content_state(await glance_for(server, user_id))
+                state = la.content_state(
+                    await glance_for(server, user_id),
+                    stale_after_seconds=stale_after_seconds,
+                )
             except LookupError:
                 failed += 1
                 logger.warning(
@@ -215,6 +228,7 @@ async def run_publisher(
                 glance_for,
                 market_index=market_index,
                 index_budget_seconds=index_budget(config),
+                stale_after_seconds=config.stale_after_seconds,
                 clock=clock,
             )
         except asyncio.CancelledError:

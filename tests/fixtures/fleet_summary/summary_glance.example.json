@@ -104,7 +104,8 @@
   "horizon_label": "1h",
   "held": false,
   "freshness": "fresh",
-  "cutoff_ms": 1800000000000
+    "cutoff_ms": 1800000000000,
+    "expires_at_ms": 1800000120000
  },
  "bots": [
   {

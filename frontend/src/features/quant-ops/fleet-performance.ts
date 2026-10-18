@@ -175,12 +175,13 @@ export function fleetWindow(histories: BotHistory[], bots: string[], from: numbe
 
 export type FleetPoint = { time: number; value: number | null };
 
-/** Histories in the most common quote (ties: first seen). Quotes never mix in sums, series or risk statistics. */
-export function sameQuote(histories: BotHistory[]): BotHistory[] {
-  const counts = new Map<string, number>();
-  for (const history of histories) if (history.samples.length && history.quote) counts.set(history.quote, (counts.get(history.quote) ?? 0) + 1);
-  const quote = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-  return quote ? histories.filter(history => history.quote === quote) : histories;
+/** The window owns contributor and quote admission for every chart of its change. */
+function windowHistories(histories: BotHistory[], from: number, to: number, selected?: FleetWindow): BotHistory[] {
+  const window = selected ?? fleetWindow(histories, histories.map(history => history.bot), from, to, to);
+  return window.bots.flatMap(bot => {
+    const history = histories.find(history => history.bot === bot.bot && history.quote === window.quote);
+    return history ? [history] : [];
+  });
 }
 
 /**
@@ -189,10 +190,10 @@ export function sameQuote(histories: BotHistory[]): BotHistory[] {
  * carried forward between its samples. Samples are snapped to `stepSeconds` buckets so bots that report
  * at different seconds line up; the newest sample in a bucket wins.
  */
-export function fleetSeries(histories: BotHistory[], from: number, to: number, stepSeconds = 60): FleetPoint[] {
+export function fleetSeries(histories: BotHistory[], from: number, to: number, stepSeconds = 60, selected?: FleetWindow): FleetPoint[] {
   const step = Math.max(1, stepSeconds) * 1000;
   const perBot: Map<number, { contribution: number; time: number }>[] = [];
-  for (const history of sameQuote(histories)) {
+  for (const history of windowHistories(histories, from, to, selected)) {
     const inside = history.samples.filter(sample => sample.time >= from && sample.time <= to);
     if (!inside.length) continue;
     const buckets = new Map<number, { contribution: number; time: number }>();
@@ -216,8 +217,8 @@ export function fleetSeries(histories: BotHistory[], from: number, to: number, s
 }
 
 /** Owner changes inside the window, for chart markers. */
-export function restartTimes(histories: BotHistory[], from: number, to: number): number[] {
-  return histories.flatMap(history => history.samples.flatMap((sample, index) => index > 0 && history.samples[index - 1].owner !== sample.owner && sample.time >= from && sample.time <= to ? [sample.time] : [])).sort((a, b) => a - b);
+export function restartTimes(histories: BotHistory[], from: number, to: number, selected?: FleetWindow): number[] {
+  return windowHistories(histories, from, to, selected).flatMap(history => history.samples.flatMap((sample, index) => index > 0 && history.samples[index - 1].owner !== sample.owner && history.samples[index - 1].time >= from && sample.time >= from && sample.time <= to ? [sample.time] : [])).sort((a, b) => a - b);
 }
 
 export type FleetDay = { day: string; net: number; realized: number; unrealized: number; bots: number; cumulative: number; today: boolean };
@@ -228,9 +229,9 @@ const DAY_MS = 86_400_000;
  * Fleet PnL per UTC day from every bot's same-run steps. A step between two samples belongs to the day of the
  * later sample, so a day keeps the movement across midnight and the bars add up to the window change.
  */
-export function fleetDailyBars(histories: BotHistory[], now: number, from = -Infinity): FleetDay[] {
+export function fleetDailyBars(histories: BotHistory[], now: number, from = -Infinity, selected?: FleetWindow): FleetDay[] {
   const days = new Map<number, { net: number; realized: number; unrealized: number; bots: Set<string> }>();
-  for (const history of sameQuote(histories)) {
+  for (const history of windowHistories(histories, from, now, selected)) {
     for (let index = 1; index < history.samples.length; index += 1) {
       const a = history.samples[index - 1], b = history.samples[index];
       // Both samples inside the window, as in `botWindow`, so the bars add up to the window change.

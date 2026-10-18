@@ -61,6 +61,7 @@
  "pnl": {
   "unit": "USDC",
   "day": {
+   "unit": "USDC",
    "total": "4.5",
    "partial": true,
    "counted": 2,
@@ -69,6 +70,7 @@
    "uncovered_ms": 104220000
   },
   "week": {
+   "unit": "USDC",
    "total": "4.5",
    "partial": true,
    "counted": 2,
@@ -77,6 +79,7 @@
    "uncovered_ms": 104220000
   },
   "month": {
+   "unit": "USDC",
    "total": "4.5",
    "partial": true,
    "counted": 2,
@@ -85,6 +88,7 @@
    "uncovered_ms": 104220000
   },
   "all": {
+   "unit": "USDC",
    "total": "4.5",
    "partial": true,
    "counted": 2,

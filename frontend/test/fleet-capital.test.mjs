@@ -118,7 +118,7 @@ test('strategy rows give every bot a row, split the fleet total and share owned 
 
 const tileInput = (over = {}) => ({
   rangeLabel: '7D', unit: 'USDT', range: window(), daily: window({ total: 1.5 }), weekly: window({ total: 3 }), monthly: window({ total: 3, partial: true, since: NOW - 3 * 86_400_000, fullBots: 0, bots: [{ bot: 'a', stale: false, full: false, firstAt: NOW - 3 * 86_400_000, lastAt: NOW }] }),
-  series: [{ time: 1, value: 0 }, { time: 2, value: 3 }, { time: 3, value: 1 }], bars: [], walletChange: { amount: -20, percent: -0.002 }, meanWallet: 10_000, drawdown: -0.01, cycles: null, now: NOW, ...over,
+  series: [{ time: 1, value: 0 }, { time: 2, value: 3 }, { time: 3, value: 1 }], bars: [], riskQuote: 'USDT', walletChange: { amount: -20, percent: -0.002 }, meanWallet: 10_000, drawdown: -0.01, cycles: null, now: NOW, ...over,
 });
 const ids = result => result.tiles.map(tile => tile.id);
 

@@ -178,6 +178,27 @@ test('series, daily bars and risk bars never add a bot in another quote currency
   assert.equal(fleet.fleetDailyBars([usdc, usdt], NOW, NOW - 86_400_000).reduce((total, day) => total + day.net, 0), 20);
 });
 
+test('one-sample or out-of-window histories cannot choose the charts currency', () => {
+  const usdc = history('a', [[60, 0], [0, 10]]);
+  for (const rows of [[[30, 0]], [[120, 0], [90, 100]]]) {
+    const histories = [usdc, history('b', rows, '1D', { quote: 'USDT' }), history('c', rows, '1D', { quote: 'USDT' })];
+    const from = NOW - 60 * MIN;
+    const window = fleet.fleetWindow(histories, ['a', 'b', 'c'], from, NOW, NOW);
+    assert.equal(window.quote, 'USDC');
+    assert.equal(window.total, 10);
+    assert.equal(window.counted, 1);
+    assert.equal(fleet.fleetSeries(histories, from, NOW).at(-1)?.value, 10);
+    assert.equal(fleet.fleetDailyBars(histories, NOW, from).reduce((total, day) => total + day.net, 0), 10);
+    assert.deepEqual(fleet.restartTimes(histories, from, NOW), []);
+  }
+});
+
+test('restart markers exclude another quotes owner changes', () => {
+  const a = history('a', [[60, 0], [0, 10]]);
+  const b = history('b', [[60, 0], [30, 2], [0, 4, undefined, 'boot-b']], '1D', { quote: 'USDT' });
+  assert.deepEqual(fleet.restartTimes([a, b], NOW - 60 * MIN, NOW), []);
+});
+
 test('daily bars add up to the window change: a step that starts before the window is not counted', () => {
   const only = history('v2', [[25 * 60, 0], [0, 10]]);
   const window = fleet.fleetWindow([only], ['v2'], NOW - 86_400_000, NOW, NOW);

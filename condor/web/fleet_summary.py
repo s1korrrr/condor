@@ -1404,6 +1404,7 @@ def glance(full: dict) -> dict:
                     name: {
                         k: pnl[name][k]
                         for k in (
+                            "unit",
                             "total",
                             "partial",
                             "counted",

@@ -643,7 +643,15 @@ async def test_glance_is_a_consistent_compact_projection(store):
     for name in ("day", "week", "month", "all"):
         assert glance["pnl"][name] == {
             k: full["pnl"][name][k]
-            for k in ("total", "partial", "counted", "expected", "stale", "uncovered_ms")
+            for k in (
+                "unit",
+                "total",
+                "partial",
+                "counted",
+                "expected",
+                "stale",
+                "uncovered_ms",
+            )
         }
     verdict = full["market"]["verdict"]
     assert (
@@ -655,6 +663,19 @@ async def test_glance_is_a_consistent_compact_projection(store):
     ]
     assert glance["incidents"] == {"state": "critical", "open": 2, "critical": 1}
     assert [b["bot"] for b in glance["bots"]] == [b["bot"] for b in full["bots"]]
+
+
+@sync
+async def test_compact_periods_keep_their_own_currency(store):
+    full = await build(store, "full")
+    # Different windows may admit different majority quotes. The legacy global
+    # unit describes the first available window, not every period's money.
+    full["pnl"]["unit"] = full["pnl"]["day"]["unit"] = "USDC"
+    full["pnl"]["week"]["unit"] = full["pnl"]["month"]["unit"] = "USDT"
+    compact = fs.glance(full)
+    for period in ("day", "week", "month", "all"):
+        assert compact["pnl"][period]["unit"] == full["pnl"][period]["unit"]
+        assert compact["pnl"][period]["total"] == full["pnl"][period]["total"]
 
 
 @sync

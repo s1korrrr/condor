@@ -373,8 +373,9 @@ async def test_every_bot_ok_and_empty_is_an_honest_empty_success():
 
 
 @sync
-async def test_no_registry_and_no_bots_status_is_missing_no_registry():
-    body = await page(Readers({}, registry=None))
+@pytest.mark.parametrize("registry", [None, []])
+async def test_no_registry_and_no_bots_status_is_missing_no_registry(registry):
+    body = await page(Readers({}, registry=registry))
     assert (
         body["status"] == "missing"
         and body["reason"] == fs.NO_REGISTRY
@@ -383,10 +384,31 @@ async def test_no_registry_and_no_bots_status_is_missing_no_registry():
 
 
 @sync
-async def test_registry_falls_back_to_the_bots_status_and_says_so():
+@pytest.mark.parametrize("scope", ["live", "paper"])
+async def test_registered_fill_sources_do_not_depend_on_bulk_bot_status(scope):
+    class RegisteredReaders(Readers):
+        async def bots_status(self, server):
+            raise AssertionError(
+                "Registered fill reads must not wait for bulk bot status"
+            )
+
+    readers = (
+        RegisteredReaders()
+        if scope == "live"
+        else RegisteredReaders({"ok_rsi_paper": []}, registry=["ok_rsi_paper"])
+    )
+    body = ff.build_page(await window(readers, scope=scope))
+    assert body["notes"] == []
+    assert {call[0] for call in readers.calls} == set(readers.registry)
+    assert {bot["bot"] for bot in body["bots"]} == set(readers.registry)
+
+
+@sync
+@pytest.mark.parametrize("registry", [None, []])
+async def test_registry_falls_back_to_the_bots_status_and_says_so(registry):
     status = {"data": {"ok_rsi": {"status": "running", "performance": {}}}}
     body = await page(
-        Readers({"ok_rsi": default_rows()["ok_rsi"]}, registry=None, status=status)
+        Readers({"ok_rsi": default_rows()["ok_rsi"]}, registry=registry, status=status)
     )
     assert [b["bot"] for b in body["bots"]] == ["ok_rsi"]
     assert body["notes"] == [{"reason": fs.REGISTRY_FROM_STATUS}]

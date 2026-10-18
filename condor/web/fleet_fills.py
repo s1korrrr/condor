@@ -272,20 +272,22 @@ async def read_window(
     The two are never merged."""
     if scope not in SCOPES:
         raise FeedQueryError("scope must be live or paper")
-    status_raw = await readers.bots_status(server)
-    page = build_bots_page(status_raw) if status_raw is not None else None
-    status_names = [
-        b["bot_name"] for b in (page or {}).get("bots", []) if b.get("bot_name")
-    ]
     registry = readers.registered_bots(server)
     notes: list[dict] = []
     if registry:
         bots = list(dict.fromkeys(registry))
-    elif status_names:
-        bots = list(dict.fromkeys(status_names))
-        notes.append({"reason": REGISTRY_FROM_STATUS})
     else:
-        bots = []
+        # Status is only a discovery fallback. A bulk status refresh must not
+        # delay fills from already registered, independently readable owners.
+        status_raw = await readers.bots_status(server)
+        page = build_bots_page(status_raw) if status_raw is not None else None
+        bots = list(
+            dict.fromkeys(
+                b["bot_name"] for b in (page or {}).get("bots", []) if b.get("bot_name")
+            )
+        )
+        if bots:
+            notes.append({"reason": REGISTRY_FROM_STATUS})
     if scope == "paper":
         bots = [b for b in bots if is_paper(b)]
     live = [b for b in bots if not is_paper(b)] if scope == "live" else bots

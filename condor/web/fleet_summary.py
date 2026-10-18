@@ -801,19 +801,37 @@ def _bot_cards(
         else:
             gap("executors", cycles_reason or summary_reason or runtime_reason or INVALID)
 
-        report_at = None
-        if q is not None and q["observed_ms"] is not None:
-            report_at = q["observed_ms"]
-        elif rt is not None:
-            report_at = rt["observed_ms"]
-        elif status and status.get("performance_received_at"):
-            report_at = int(round(float(status["performance_received_at"]) * 1000))
-        report_current = bool(q and q["current"]) or bool(rt and rt["current"]) or bool(
+        performance_current = bool(
             status
             and status.get("performance_received_at")
             and status.get("performance_stale_after_seconds")
             and now_ms / 1000 - float(status["performance_received_at"])
             < float(status["performance_stale_after_seconds"])
+        )
+        observations = [
+            (q["observed_ms"], q["current"]) if q is not None else (None, False),
+            (rt["observed_ms"], rt["current"]) if rt is not None else (None, False),
+            (
+                (
+                    int(round(float(status["performance_received_at"]) * 1000)),
+                    performance_current,
+                )
+                if status and status.get("performance_received_at")
+                else (None, False)
+            ),
+        ]
+        # The age and current flag must describe the same source. Prefer a
+        # current owner observation before retaining an older source's clock.
+        report_at, report_current = next(
+            (
+                (stamp, current)
+                for stamp, current in observations
+                if stamp is not None and current
+            ),
+            next(
+                ((stamp, False) for stamp, _ in observations if stamp is not None),
+                (None, False),
+            ),
         )
         if report_at is None:
             gap("report_at_ms", summary_reason or runtime_reason or SOURCE_UNAVAILABLE)
@@ -1042,8 +1060,13 @@ async def build_fleet_summary(
         (bot, path, {})
         for bot in bots
         for path in ("quant-summary", "quant-cycles", "bootstrap")
+        if view == "full" or path != "quant-cycles" or not is_paper(bot)
     ]
-    owner_jobs += [(bot, "fills", {"limit": str(OWNER_FILL_LIMIT)}) for bot in bots]
+    owner_jobs += [
+        (bot, "fills", {"limit": str(OWNER_FILL_LIMIT)})
+        for bot in bots
+        if view == "full" or not is_paper(bot)
+    ]
     incident_bot = live[0] if live else None
     if is_admin and incident_bot:
         owner_jobs.append((incident_bot, "operations", {}))
@@ -1157,6 +1180,7 @@ async def build_fleet_summary(
     cycles = {
         bot: project_quant_cycles(owner[(bot, "quant-cycles")].payload, bot)
         for bot in bots
+        if (bot, "quant-cycles") in owner
     }
     runtime = {
         bot: project_runtime_view(owner[(bot, "bootstrap")].payload, bot, now_ms)
@@ -1165,6 +1189,7 @@ async def build_fleet_summary(
     totals = {
         bot: project_fill_totals(owner[(bot, "fills")].payload, bot, OWNER_FILL_LIMIT)
         for bot in bots
+        if (bot, "fills") in owner
     }
     owner_reasons: dict[tuple[str, str], str] = {}
     projections = {
@@ -1271,7 +1296,7 @@ async def build_fleet_summary(
 
     # paper fills: a separate, labelled list (full view only), never merged into ``fills``
     paper_fills: Optional[list[dict]] = None
-    if paper_bots:
+    if paper_bots and view == "full":
         paper_merged = [
             {**fill, "simulated": True}
             for bot in paper_bots
@@ -1328,6 +1353,19 @@ async def build_fleet_summary(
         "pnl": pnl,
         "market": market,
         "bots": cards,
+        "bot_counts": {
+            "live_running": sum(
+                not c["paper"]
+                and isinstance(c["status"], str)
+                and c["status"].lower() == "running"
+                for c in cards
+            ),
+            "live_total": sum(not c["paper"] for c in cards),
+            "paper_total": sum(c["paper"] for c in cards),
+            "live_stale_reports": sum(
+                not c["paper"] and c["report_stale"] for c in cards
+            ),
+        },
         "fills": fills,
         "incidents": incidents,
     }
@@ -1365,7 +1403,14 @@ def glance(full: dict) -> dict:
                 **{
                     name: {
                         k: pnl[name][k]
-                        for k in ("total", "partial", "counted", "expected", "stale", "uncovered_ms")
+                        for k in (
+                            "total",
+                            "partial",
+                            "counted",
+                            "expected",
+                            "stale",
+                            "uncovered_ms",
+                        )
                     }
                     for name in ("day", "week", "month", "all")
                 },
@@ -1397,12 +1442,13 @@ def glance(full: dict) -> dict:
             for c in full["bots"][:GLANCE_MAX_BOTS]
         ],
         "bots_total": len(full["bots"]),
+        "bot_counts": full["bot_counts"],
         "fills": (
             None
             if full["fills"] is None
             else [
                 {k: f[k] for k in ("bot", "pair", "side", "volume", "time_ms")}
-                for f in full["fills"]
+                for f in full["fills"][: RECENT_FILLS["glance"]]
             ]
         ),
         "incidents": (

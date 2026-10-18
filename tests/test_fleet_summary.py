@@ -265,6 +265,7 @@ class FakeReaders:
             self.with_wallet,
         ) = (store, registry, status, market, owners, wallet)
         self.calls = []
+        self.performance_calls = []
 
     def registered_bots(self, server):
         return list(self.registry) if self.registry is not None else None
@@ -273,6 +274,7 @@ class FakeReaders:
         return bots_status() if self.status else None
 
     def performance(self, server, bot, range_, now_s):
+        self.performance_calls.append((bot, range_))
         return self.store.read(server, bot, range_, now_s)
 
     def wallet(self, server, bot, range_, now_s):
@@ -656,6 +658,22 @@ async def test_glance_is_a_consistent_compact_projection(store):
 
 
 @sync
+async def test_aggregate_running_count_matches_case_insensitive_client_status(store):
+    class Readers(FakeReaders):
+        async def bots_status(self, server):
+            page = bots_status()
+            for row in page["data"].values():
+                row["status"] = "Running"
+            return page
+
+    full = await fs.build_fleet_summary(
+        SERVER, "full", Readers(store), NOW_MS, is_admin=True, user_id=7
+    )
+    assert full["bot_counts"]["live_running"] == 2
+    assert fs.glance(full)["bot_counts"] == full["bot_counts"]
+
+
+@sync
 async def test_glance_stays_under_the_watch_budget_even_with_many_bots(store):
     names = [f"bot_v2_{n:02d}" for n in range(38)] + ["ok_rsi", "ok_rsi_paper"]
     seed(store, names[:12])
@@ -666,6 +684,8 @@ async def test_glance_stays_under_the_watch_budget_even_with_many_bots(store):
     size = len(fs.canonical_json(body))
     assert size < 8192, size
     assert len(body["bots"]) == fs.GLANCE_MAX_BOTS and body["bots_total"] == 40
+    assert body["bot_counts"]["live_total"] == 39
+    assert body["bot_counts"]["paper_total"] == 1
     assert (
         len(body["missing"]) == fs.GLANCE_MAX_MISSING
         and body["missing_total"] > fs.GLANCE_MAX_MISSING
@@ -737,16 +757,19 @@ def test_names_and_generations():
 
 
 class Config:
+    def __init__(self, *, admin=True):
+        self.admin = admin
+
     def has_server_access(self, user_id, name):
         return name == SERVER and user_id == 7
 
     def is_admin(self, user_id):
-        return user_id == 7
+        return user_id == 7 and self.admin
 
 
-def client_for(monkeypatch, store, *, authenticated=True):
-    monkeypatch.setattr(routes, "get_config_manager", lambda: Config())
-    monkeypatch.setattr(routes, "READERS", FakeReaders(store))
+def client_for(monkeypatch, store, *, authenticated=True, admin=True, readers=None):
+    monkeypatch.setattr(routes, "get_config_manager", lambda: Config(admin=admin))
+    monkeypatch.setattr(routes, "READERS", readers or FakeReaders(store))
     monkeypatch.setattr(routes, "CACHE_TTL_SECONDS", 0)
     monkeypatch.setattr(routes.time, "time", lambda: NOW_S)
     routes._cache.clear()
@@ -828,6 +851,138 @@ def test_route_micro_cache_serves_a_burst_from_one_computation(monkeypatch, stor
     calls = len(readers.calls)
     second = client.get(f"/api/v1/servers/{SERVER}/fleet/summary?view=glance")
     assert first.content == second.content and len(readers.calls) == calls and calls > 0
+
+
+def test_warm_full_cache_serves_the_v1_glance_projection(monkeypatch, store):
+    readers = FakeReaders(store)
+    client = client_for(monkeypatch, store, readers=readers)
+    monkeypatch.setattr(routes, "CACHE_TTL_SECONDS", 60)
+    routes._cache.clear()
+
+    full = client.get(f"/api/v1/servers/{SERVER}/fleet/summary?view=full")
+    calls = (list(readers.calls), list(readers.performance_calls))
+    glance = client.get(f"/api/v1/servers/{SERVER}/fleet/summary?view=glance")
+
+    assert full.status_code == glance.status_code == 200
+    assert glance.json() == fs.glance(full.json())
+    assert len(glance.json()["fills"]) == fs.RECENT_FILLS["glance"]
+    assert (readers.calls, readers.performance_calls) == calls
+
+
+@sync
+async def test_live_activity_glance_for_uses_the_selected_read_set(monkeypatch, store):
+    readers = FakeReaders(store)
+    client_for(monkeypatch, store, readers=readers)
+    expected = await build(store, "glance")
+    routes._cache.clear()
+    readers.calls.clear()
+    readers.performance_calls.clear()
+
+    body = await routes.glance_for(SERVER, 7)
+
+    assert body == expected
+    assert ("ok_rsi_paper", "quant-cycles") not in readers.calls
+    assert ("ok_rsi_paper", "fills") not in readers.calls
+    assert ("ok_rsi", "quant-cycles") in readers.calls
+    assert ("ok_rsi", "fills") in readers.calls
+    assert ("ok_rsi_paper", "1D") in readers.performance_calls
+
+
+@sync
+async def test_summary_deadline_includes_waiting_for_the_shared_cache_lock(
+    monkeypatch, store
+):
+    readers = FakeReaders(store)
+    client_for(monkeypatch, store, readers=readers)
+    monkeypatch.setattr(routes, "TOTAL_TIMEOUT", 0.01)
+    key = (SERVER, True)
+    lock = asyncio.Lock()
+    monkeypatch.setattr(routes, "_locks", {key: lock})
+    await lock.acquire()
+    asyncio.get_running_loop().call_later(0.1, lock.release)
+
+    with pytest.raises(TimeoutError):
+        await routes.cached_summary(
+            SERVER, admin=True, user_id=7, view="glance"
+        )
+
+    assert readers.calls == []
+    assert key not in routes._cache
+
+
+@pytest.mark.parametrize(
+    ("admin", "owners", "market"),
+    [(True, True, True), (False, False, False)],
+)
+def test_route_glance_matches_full_projection_without_paper_detail_reads(
+    monkeypatch, store, admin, owners, market
+):
+    readers = FakeReaders(store, owners=owners, market=market)
+    client = client_for(monkeypatch, store, admin=admin, readers=readers)
+    expected_full = asyncio.run(
+        fs.build_fleet_summary(
+            SERVER, "full", readers, NOW_MS, is_admin=admin, user_id=7
+        )
+    )
+    expected_glance = fs.glance(expected_full)
+    if expected_glance["fills"] is not None:
+        assert len(expected_glance["fills"]) <= fs.RECENT_FILLS["glance"]
+
+    projected = []
+    project_quant_cycles = fs.project_quant_cycles
+    project_fill_totals = fs.project_fill_totals
+    project_fills = fs.project_fills
+
+    def track_projection(name, project):
+        def tracked(payload, bot, *args):
+            projected.append((name, bot))
+            return project(payload, bot, *args)
+
+        return tracked
+
+    monkeypatch.setattr(
+        fs,
+        "project_quant_cycles",
+        track_projection("quant-cycles", project_quant_cycles),
+    )
+    monkeypatch.setattr(
+        fs, "project_fill_totals", track_projection("fill-totals", project_fill_totals)
+    )
+    monkeypatch.setattr(fs, "project_fills", track_projection("fills", project_fills))
+
+    routes._cache.clear()
+    readers.calls.clear()
+    readers.performance_calls.clear()
+    full_response = client.get(f"/api/v1/servers/{SERVER}/fleet/summary?view=full")
+    assert full_response.status_code == 200
+    assert full_response.json() == expected_full
+    assert ("ok_rsi_paper", "quant-cycles") in readers.calls
+    assert ("ok_rsi_paper", "fills") in readers.calls
+    assert ("quant-cycles", "ok_rsi_paper") in projected
+    assert ("fill-totals", "ok_rsi_paper") in projected
+    assert ("fills", "ok_rsi_paper") in projected
+
+    routes._cache.clear()
+    readers.calls.clear()
+    readers.performance_calls.clear()
+    projected.clear()
+    response = client.get(f"/api/v1/servers/{SERVER}/fleet/summary?view=glance")
+
+    assert response.status_code == 200
+    assert response.json() == expected_glance
+    assert ("ok_rsi", "quant-cycles") in readers.calls
+    assert ("ok_rsi", "fills") in readers.calls
+    assert ("ok_rsi_paper", "quant-summary") in readers.calls
+    assert ("ok_rsi_paper", "bootstrap") in readers.calls
+    assert ("ok_rsi_paper", "quant-cycles") not in readers.calls
+    assert ("ok_rsi_paper", "fills") not in readers.calls
+    assert all(bot != "ok_rsi_paper" for _, bot in projected)
+    assert ("ok_rsi_paper", "1D") in readers.performance_calls
+    assert ("ok_rsi", "1D") in readers.performance_calls
+    assert ("ok_rsi", "ALL") in readers.performance_calls
+    assert ("ok_rsi", "operations") in readers.calls if admin else (
+        "ok_rsi", "operations"
+    ) not in readers.calls
 
 
 @sync

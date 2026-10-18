@@ -1,3 +1,5 @@
+import json
+import sqlite3
 import time
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
@@ -184,6 +186,130 @@ def test_read_does_not_create_storage(tmp_path):
     assert store.read("server", "main", "ALL")["coverage_start"] is None
     assert store.read("server", "main", "1M")["bucket_seconds"] == 1800
     assert not store.path.exists()
+
+
+@pytest.mark.parametrize("wallet", [False, True])
+@pytest.mark.parametrize("period", ["1D", "1W", "1M", "ALL"])
+@pytest.mark.parametrize("paper", [False, True])
+def test_history_is_bounded_by_the_requested_observation_clock(
+    tmp_path, wallet, period, paper
+):
+    store = PerformanceHistory(tmp_path / "as-of.db")
+    bot = "meridian_v4_paper" if paper else "main"
+    if wallet:
+        record = store.record_paper_wallet if paper else store.record_wallet
+        for stamp in (1000, 1060, 1120):
+            record(
+                "server",
+                {
+                    bot: {
+                        "timestamp": stamp,
+                        "currency": "USDC",
+                        "value_quote": "1",
+                        "source_id": "owner",
+                        "balances": [{"asset": "USDC", "total": "1", "value": "1"}],
+                        "simulated": paper,
+                    }
+                },
+                now=stamp,
+            )
+    else:
+        table = "paper_points" if paper else "points"
+        with store._connect() as conn:
+            conn.executemany(
+                f"INSERT INTO {table} VALUES (?,?,?,?,?,?,?,?,?)",
+                [
+                    (
+                        "server",
+                        bot,
+                        stamp,
+                        "owner",
+                        "segment",
+                        "USDC",
+                        str(index),
+                        "0",
+                        str(index),
+                    )
+                    for index, stamp in enumerate((1000, 1060, 1120))
+                ],
+            )
+    read = store.read_wallet if wallet else store.read
+    result = read("server", bot, period, now=1060)
+    assert result["coverage_start"] == 1000
+    assert max(point["timestamp"] for point in result["points"]) == 1060
+    assert all(point["timestamp"] <= 1060 for point in result["points"])
+    if wallet:
+        assert result["latest"]["timestamp"] == 1060
+    before_first = read("server", bot, period, now=900)
+    assert before_first["coverage_start"] is None
+    assert before_first["points"] == []
+    if wallet:
+        assert before_first["latest"] is None
+
+
+@pytest.mark.parametrize("paper", [False, True])
+@pytest.mark.parametrize("wallet", [False, True])
+def test_readers_keep_committed_history_while_writer_is_open(
+    tmp_path, monkeypatch, paper, wallet
+):
+    store = PerformanceHistory(tmp_path / "concurrent-history.db")
+    bot = "meridian_v4_paper" if paper else "main"
+    table = ("paper_" if paper else "") + ("wallet_points" if wallet else "points")
+    with store._connect() as conn:
+        if wallet:
+            balances = json.dumps([{"asset": "USDC", "total": "1", "value": "1"}])
+            conn.execute(
+                f"INSERT INTO {table} VALUES (?,?,?,?,?,?,?)",
+                ("server", bot, 1000, "USDC", "1", "owner", balances),
+            )
+        else:
+            conn.execute(
+                f"INSERT INTO {table} VALUES (?,?,?,?,?,?,?,?,?)",
+                ("server", bot, 1000, "owner", "segment", "USDC", "0.1", "0.2", "0.3"),
+            )
+    connect = sqlite3.connect
+    writer = connect(store.path)
+    try:
+        writer.execute("BEGIN EXCLUSIVE")
+        writer.execute(f"UPDATE {table} SET timestamp=1001")
+
+        def short_reader(*args, **kwargs):
+            if kwargs.get("uri"):
+                kwargs["timeout"] = 0.1
+            return connect(*args, **kwargs)
+
+        monkeypatch.setattr(sqlite3, "connect", short_reader)
+        read = store.read_wallet if wallet else store.read
+        result = read("server", bot, "1D", now=1060)
+        assert len(result["points"]) == 1
+        assert result["points"][0]["timestamp"] == 1000
+    finally:
+        writer.rollback()
+        writer.close()
+
+
+def test_writer_commits_during_old_reader_and_new_reader_sees_committed_sample(
+    tmp_path,
+):
+    store = PerformanceHistory(tmp_path / "history.db")
+    store.record("server", [packet()], now=1000)
+    reader = sqlite3.connect(f"file:{store.path.resolve()}?mode=ro", uri=True)
+    pool = ThreadPoolExecutor(max_workers=1)
+    try:
+        reader.execute("BEGIN")
+        assert reader.execute("SELECT MAX(timestamp) FROM points").fetchone()[0] == 1000
+        # A read transaction stays on its snapshot; it must not block a commit
+        # or a later read transaction at the owner's schema lookup.
+        pool.submit(store.record, "server", [packet(1060)], 1060).result(timeout=5)
+        assert reader.execute("SELECT MAX(timestamp) FROM points").fetchone()[0] == 1000
+        assert (
+            store.read("server", "main", "1D", now=1060)["points"][-1]["timestamp"]
+            == 1060
+        )
+    finally:
+        reader.rollback()
+        reader.close()
+        pool.shutdown(wait=True)
 
 
 def test_concurrent_first_use_and_wallet_reads_do_not_lose_samples(tmp_path):

@@ -8,6 +8,7 @@ import time
 from contextlib import closing, contextmanager
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from threading import Lock
 from uuid import uuid4
 
 from condor.fetchers.bots import extract_bots_list, _native_observation_times
@@ -123,16 +124,38 @@ def project(bot, now):
 class PerformanceHistory:
     def __init__(self, path=Path("data/native-performance.sqlite3")):
         self.path = Path(path)
+        self._initialized = False
+        self._initialization_lock = Lock()
 
     @contextmanager
     def _connect(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        # The API's background writer and concurrent dashboard reads share
-        # this file. Reserve the write transaction before schema inspection so
-        # concurrent first use cannot both observe a missing migration column.
+        # Keep each writer transaction separate from one-time schema migration.
         conn = sqlite3.connect(self.path, timeout=15)
         conn.row_factory = sqlite3.Row
         try:
+            self._initialize(conn)
+            conn.execute("BEGIN IMMEDIATE")
+            yield conn
+            conn.commit()
+        except BaseException:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def _initialize(self, conn):
+        with self._initialization_lock:
+            if self._initialized:
+                return
+            # The local observer has concurrent dashboard readers and a writer.
+            # WAL lets readers retain committed snapshots while writes commit.
+            mode = conn.execute("PRAGMA journal_mode=WAL").fetchone()[0]
+            if mode != "wal":
+                raise RuntimeError(
+                    f"Performance history requires SQLite WAL mode; got {mode}"
+                )
             conn.execute("BEGIN IMMEDIATE")
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS points (server TEXT, bot TEXT, timestamp REAL, identity TEXT, segment TEXT, quote TEXT, realized_pnl_quote TEXT, unrealized_pnl_quote TEXT, total_pnl_quote TEXT, PRIMARY KEY(server,bot,timestamp))"
@@ -168,14 +191,8 @@ class PerformanceHistory:
                 "CREATE TABLE IF NOT EXISTS paper_wallet_cursors (server TEXT, bot TEXT, timestamp REAL, sampled REAL, valid INTEGER, PRIMARY KEY(server,bot))"
             )
             conn.execute("CREATE INDEX IF NOT EXISTS paper_wallet_points_timestamp ON paper_wallet_points(timestamp)")
-            yield conn
             conn.commit()
-        except BaseException:
-            if conn.in_transaction:
-                conn.rollback()
-            raise
-        finally:
-            conn.close()
+            self._initialized = True
 
     @staticmethod
     def _store_wallet(conn, points, cursors, server, samples, now):
@@ -257,20 +274,35 @@ class PerformanceHistory:
             if table not in tables:
                 return result
             start = conn.execute(
-                f"SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=?", (server, bot)
+                f"SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp<=?",
+                (server, bot, now),
             ).fetchone()[0]
             # Longer windows return the last sample of each bucket so day-end statistics keep full coverage.
             bucket = WALLET_BUCKETS[period]
             rows = conn.execute(
-                f"SELECT timestamp,currency,value_quote,source_id,balances_json FROM {table} WHERE server=? AND bot=? AND timestamp>=? "
-                f"AND timestamp IN (SELECT MAX(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND " + ADMITTED_VALUE + " GROUP BY CAST(timestamp/? AS INTEGER)) "
+                f"SELECT timestamp,currency,value_quote,source_id,balances_json FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND timestamp<=? "
+                f"AND timestamp IN (SELECT MAX(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND timestamp<=? AND "
+                + ADMITTED_VALUE
+                + " GROUP BY CAST(timestamp/? AS INTEGER)) "
                 "ORDER BY timestamp DESC LIMIT 10001",
-                (server, bot, now - RANGES[period], server, bot, now - RANGES[period], bucket),
+                (
+                    server,
+                    bot,
+                    now - RANGES[period],
+                    now,
+                    server,
+                    bot,
+                    now - RANGES[period],
+                    now,
+                    bucket,
+                ),
             ).fetchall()
             # The newest sample regardless of window, with its balances: the last-known wallet when the owner is stale.
             latest_row = conn.execute(
-                f"SELECT timestamp,currency,value_quote,source_id,balances_json FROM {table} WHERE server=? AND bot=? AND " + ADMITTED_VALUE + " ORDER BY timestamp DESC LIMIT 1",
-                (server, bot),
+                f"SELECT timestamp,currency,value_quote,source_id,balances_json FROM {table} WHERE server=? AND bot=? AND timestamp<=? AND "
+                + ADMITTED_VALUE
+                + " ORDER BY timestamp DESC LIMIT 1",
+                (server, bot, now),
             ).fetchone()
         latest = None
         if latest_row is not None:
@@ -417,25 +449,39 @@ class PerformanceHistory:
             if table not in tables:
                 return result
             start = conn.execute(
-                f"SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=?",
-                (server, bot),
+                f"SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp<=?",
+                (server, bot, now),
             ).fetchone()[0]
             bucket = PERFORMANCE_BUCKETS[period]
             columns = "timestamp,identity,segment,quote,realized_pnl_quote,unrealized_pnl_quote,total_pnl_quote"
             since = now - RANGES[period]
             if bucket is None:
                 rows = conn.execute(
-                    f"SELECT {columns} FROM {table} WHERE server=? AND bot=? AND timestamp>=? ORDER BY timestamp DESC LIMIT 10001",
-                    (server, bot, since),
+                    f"SELECT {columns} FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND timestamp<=? ORDER BY timestamp DESC LIMIT 10001",
+                    (server, bot, since, now),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    f"SELECT {columns} FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND ("
-                    f"timestamp IN (SELECT MAX(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? "
+                    f"SELECT {columns} FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND timestamp<=? AND ("
+                    f"timestamp IN (SELECT MAX(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND timestamp<=? "
                     "GROUP BY segment, CAST(timestamp/? AS INTEGER)) "
-                    f"OR timestamp IN (SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? GROUP BY segment)"
+                    f"OR timestamp IN (SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND timestamp<=? GROUP BY segment)"
                     ") ORDER BY timestamp DESC LIMIT 10001",
-                    (server, bot, since, server, bot, since, bucket, server, bot, since),
+                    (
+                        server,
+                        bot,
+                        since,
+                        now,
+                        server,
+                        bot,
+                        since,
+                        now,
+                        bucket,
+                        server,
+                        bot,
+                        since,
+                        now,
+                    ),
                 ).fetchall()
         result.update(
             coverage_start=start,

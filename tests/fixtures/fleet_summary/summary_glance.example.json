@@ -132,6 +132,12 @@
   }
  ],
  "bots_total": 3,
+ "bot_counts": {
+  "live_running": 2,
+  "live_total": 2,
+  "paper_total": 1,
+  "live_stale_reports": 1
+ },
  "fills": [
   {
    "bot": "rsi_modular_v2",

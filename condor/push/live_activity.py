@@ -139,17 +139,40 @@ def content_state(glance: Mapping[str, Any]) -> dict[str, Any]:
         cards = [b for b in bots if isinstance(b, Mapping)]
         live = [b for b in cards if b.get("paper") is not True]
         paper = len(cards) - len(live)
-        listed_total = _count(glance.get("bots_total"))
-        state["bots_running"] = sum(
-            1
+        listed_running = sum(
+            isinstance(b.get("status"), str) and b["status"].lower() == "running"
             for b in live
-            if isinstance(b.get("status"), str) and b["status"].lower() == "running"
         )
-        state["bots_total"] = (
-            max(listed_total - paper, len(live))
-            if listed_total is not None
-            else len(live)
-        )
+        listed_stale = sum(b.get("report_stale") is True for b in live)
+        listed_total = _count(glance.get("bots_total"))
+        counts = glance.get("bot_counts")
+        if isinstance(counts, Mapping):
+            running, total, paper_total, stale_reports = (
+                _count(counts.get(key))
+                for key in (
+                    "live_running",
+                    "live_total",
+                    "paper_total",
+                    "live_stale_reports",
+                )
+            )
+            if (
+                None not in (running, total, paper_total, stale_reports)
+                and listed_total is not None
+                and len(live) <= total <= listed_total
+                and paper <= paper_total
+                and total + paper_total == listed_total
+                and listed_running <= running <= listed_running + total - len(live)
+                and listed_stale <= stale_reports <= listed_stale + total - len(live)
+            ):
+                state["bots_running"], state["bots_total"] = running, total
+        elif "bot_counts" not in glance and (
+            listed_total is not None and listed_total == len(cards)
+        ):
+            # A legacy complete list is sufficient; a capped list cannot prove
+            # either the fleet running count or its omitted paper population.
+            state["bots_running"] = listed_running
+            state["bots_total"] = len(live)
 
     incidents = glance.get("incidents")
     if isinstance(incidents, Mapping):

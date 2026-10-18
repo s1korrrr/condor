@@ -106,7 +106,7 @@ class Readers(Protocol):
 # ── small parsing helpers ──
 
 
-def _instant_ms(value: Any) -> Optional[int]:
+def _instant_ms(value: Any, now_ms: Optional[float] = None) -> Optional[int]:
     """ISO-8601 with an explicit offset -> epoch ms. Naive stamps are ambiguous and rejected."""
     if not isinstance(value, str):
         return None
@@ -116,7 +116,15 @@ def _instant_ms(value: Any) -> Optional[int]:
         return None
     if parsed.tzinfo is None:
         return None
-    return int(round(parsed.astimezone(timezone.utc).timestamp() * 1000))
+    try:
+        instant = int(round(parsed.astimezone(timezone.utc).timestamp() * 1000))
+    except (OverflowError, ValueError, OSError):
+        return None
+    return (
+        instant
+        if instant >= 0 and (now_ms is None or instant <= now_ms + 5_000)
+        else None
+    )
 
 
 def _num(value: Any) -> Optional[float]:
@@ -126,7 +134,10 @@ def _num(value: Any) -> Optional[float]:
         r"[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?", value, re.IGNORECASE
     ):
         return None
-    number = float(value)
+    try:
+        number = float(value)
+    except (OverflowError, ValueError):
+        return None
     return number if math.isfinite(number) else None
 
 
@@ -207,7 +218,7 @@ def project_quant_summary(payload: Any, bot: str, now_ms: float) -> Optional[dic
         pair = row.get("pair")
         if isinstance(pair, str) and re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", pair):
             units = _num(row.get("units"))
-            pairs.append({"pair": pair, "held": units is not None and units > 0})
+            pairs.append({"pair": pair, "held": None if units is None else units > 0})
     counts = _obj(data.get("cycle_counts") if admitted else known.get("cycle_counts"))
     return {
         "observed_ms": (
@@ -296,7 +307,7 @@ def receipt_value(fill: dict, field: str, *, positive: bool) -> tuple[Optional[s
     return fleet_pnl.decimal_text(number), "exact" if verdict == "exact_decimal" else "legacy_6dp"
 
 
-def project_fills(payload: Any, bot: str) -> list[dict]:
+def project_fills(payload: Any, bot: str, now_ms: Optional[float] = None) -> list[dict]:
     """Native fills for one bot. Exact receipt strings are preferred over float projections."""
     rows = _obj(payload).get("rows")
     out = []
@@ -327,7 +338,7 @@ def project_fills(payload: Any, bot: str) -> list[dict]:
                     "gross_volume_quote",
                 ),
                 "fee": receipt_value(fill, "fee_quote", positive=False)[0],
-                "time_ms": _instant_ms(fill.get("timestamp")),
+                "time_ms": _instant_ms(fill.get("timestamp"), now_ms),
             }
         )
     return out
@@ -575,16 +586,18 @@ def _wallet_section(
     A paper bot's or a simulated wallet read is never the fleet wallet, even if one is passed in.
     """
     best: Optional[tuple[float, str, dict]] = None
+    invalid_time = False
     for bot, payload in reads.items():
         if payload is None or is_paper(bot) or _obj(payload).get("simulated") is True:
             continue
         latest = _obj(_obj(payload).get("latest"))
         stamp = _num(latest.get("timestamp"))
         value = _dec(latest.get("value_quote"))
+        if stamp is None or stamp <= 0 or stamp > (now_ms + 5_000) / 1000:
+            invalid_time = invalid_time or "timestamp" in latest
+            continue
         if (
-            stamp is None
-            or stamp <= 0
-            or value is None
+            value is None
             or value < 0
             or not isinstance(latest.get("currency"), str)
             or not latest["currency"]
@@ -594,15 +607,12 @@ def _wallet_section(
         if best is None or stamp > best[0]:
             best = (stamp, bot, latest)
     if best is None:
-        reason = (
-            NO_REGISTRY
-            if not reads
-            else (
-                SOURCE_UNAVAILABLE
-                if all(p is None for p in reads.values())
-                else NO_SAMPLES
-            )
-        )
+        if not reads:
+            reason = NO_REGISTRY
+        elif all(p is None for p in reads.values()):
+            reason = SOURCE_UNAVAILABLE
+        else:
+            reason = INVALID if invalid_time else NO_SAMPLES
         missing.append({"section": "wallet", "reason": reason})
         return None, _section("missing", None, STALE_AFTER_MS["wallet"], reason)
     stamp, bot, latest = best
@@ -771,7 +781,11 @@ def _bot_cards(
                 "registered": rt["registered"],
                 "current": rt["current"],
             }
-        elif q is not None and (q["pairs"] or q["admitted"]):
+        elif (
+            q is not None
+            and (q["pairs"] or q["admitted"])
+            and all(p["held"] is not None for p in q["pairs"])
+        ):
             positions = {
                 "held": sum(1 for p in q["pairs"] if p["held"]),
                 "registered": len(q["pairs"]),
@@ -785,7 +799,7 @@ def _bot_cards(
                     if rt is not None
                     else summary_reason
                     or (
-                        OWNER_NOT_CURRENT
+                        (INVALID if q["admitted"] else OWNER_NOT_CURRENT)
                         if q is not None
                         else runtime_reason or INVALID
                     )
@@ -801,22 +815,32 @@ def _bot_cards(
         else:
             gap("executors", cycles_reason or summary_reason or runtime_reason or INVALID)
 
+        performance_at = (
+            _num(status.get("performance_received_at")) if status else None
+        )
+        if (
+            performance_at is not None
+            and (performance_at <= 0 or performance_at > (now_ms + 5_000) / 1000)
+        ):
+            performance_at = None
+        performance_limit = (
+            _num(status.get("performance_stale_after_seconds")) if status else None
+        )
         performance_current = bool(
-            status
-            and status.get("performance_received_at")
-            and status.get("performance_stale_after_seconds")
-            and now_ms / 1000 - float(status["performance_received_at"])
-            < float(status["performance_stale_after_seconds"])
+            performance_at is not None
+            and performance_limit is not None
+            and performance_limit > 0
+            and now_ms / 1000 - performance_at < performance_limit
         )
         observations = [
             (q["observed_ms"], q["current"]) if q is not None else (None, False),
             (rt["observed_ms"], rt["current"]) if rt is not None else (None, False),
             (
                 (
-                    int(round(float(status["performance_received_at"]) * 1000)),
+                    int(round(performance_at * 1000)),
                     performance_current,
                 )
-                if status and status.get("performance_received_at")
+                if performance_at is not None
                 else (None, False)
             ),
         ]
@@ -1271,7 +1295,7 @@ async def build_fleet_summary(
                 }
             )
         else:
-            merged.extend(project_fills(read.payload, bot))
+            merged.extend(project_fills(read.payload, bot, now_ms))
     if fill_reads and any(read.payload is not None for _, read in fill_reads):
         merged.sort(
             key=lambda f: (f["time_ms"] is not None, f["time_ms"] or 0), reverse=True
@@ -1301,7 +1325,7 @@ async def build_fleet_summary(
             {**fill, "simulated": True}
             for bot in paper_bots
             if owner[(bot, "fills")].payload is not None
-            for fill in project_fills(owner[(bot, "fills")].payload, bot)
+            for fill in project_fills(owner[(bot, "fills")].payload, bot, now_ms)
         ]
         paper_merged.sort(
             key=lambda f: (f["time_ms"] is not None, f["time_ms"] or 0), reverse=True

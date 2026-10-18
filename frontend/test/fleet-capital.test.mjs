@@ -118,7 +118,7 @@ test('strategy rows give every bot a row, split the fleet total and share owned 
 
 const tileInput = (over = {}) => ({
   rangeLabel: '7D', unit: 'USDT', range: window(), daily: window({ total: 1.5 }), weekly: window({ total: 3 }), monthly: window({ total: 3, partial: true, since: NOW - 3 * 86_400_000, fullBots: 0, bots: [{ bot: 'a', stale: false, full: false, firstAt: NOW - 3 * 86_400_000, lastAt: NOW }] }),
-  series: [{ time: 1, value: 0 }, { time: 2, value: 3 }, { time: 3, value: 1 }], bars: [], riskQuote: 'USDT', walletChange: { amount: -20, percent: -0.002 }, meanWallet: 10_000, drawdown: -0.01, cycles: null, now: NOW, ...over,
+  series: [{ time: 1, value: 0 }, { time: 2, value: 3 }, { time: 3, value: 1 }], bars: [], riskWindow: window({ quote: 'USDT' }), riskQuote: 'USDT', riskBasisQuote: 'USDT', riskBasis: 10_000, riskHorizon: 'trailing 30D', walletChange: { amount: -20, percent: -0.002 }, meanWallet: 10_000, drawdown: -0.01, cycles: null, now: NOW, ...over,
 });
 const ids = result => result.tiles.map(tile => tile.id);
 
@@ -137,7 +137,7 @@ test('tiles exist only when computed: windows, wallet change and PnL drawdown sh
   assert.match(monthly.note, /^since 2026-09-28 12:00 UTC \(history starts here\) · 1 of 1 bot$/);
   assert.equal(dd.value, '-2');
   assert.match(dd.note, /flow independent/);
-  assert.match(result.footnote, /appear after 14 days of fleet PnL.*VaR and expected shortfall after 60.*0 so far/);
+  assert.match(result.footnote, /appear after 14 days of fleet PnL.*Select 90D, YTD, ALL or Custom.*0 so far/);
   assert.equal(JSON.stringify(result).includes('navailable'), false, 'no tile or note says Unavailable');
   assert.equal(JSON.stringify(result).includes('ollecting'), false, 'no tile says Collecting');
 });
@@ -161,13 +161,36 @@ test('risk tiles appear after the minimum days of completed fleet PnL and the fo
   for (const id of ['C18-sharpe', 'C18-sortino', 'C18-vol']) assert.ok(ids(result).includes(id), id);
   const sharpe = result.tiles.find(tile => tile.id === 'C18-sharpe');
   assert.ok(Number(sharpe.value) > 0);
-  assert.match(sharpe.note, /Daily fleet PnL ÷ mean wallet · 20 days/);
+  assert.match(sharpe.note, /Qualified daily fleet PnL ÷ observed mean wallet over the qualified-day span within trailing 30D · 20 days/);
+  assert.match(sharpe.note, /zero daily benchmark.*annualised √365.*not cash-flow-adjusted investment returns/);
+  assert.match(result.tiles.find(tile => tile.id === 'C18-sortino').note, /zero downside target.*annualised √365/);
   assert.equal(result.risk.days, 20, 'today is not part of a daily statistic');
   assert.doesNotMatch(result.footnote, /Sharpe/);
-  assert.match(result.footnote, /VaR and expected shortfall after 60 \(20 so far\)/);
-  const long = capital.fleetTiles(tileInput({ bars: Array.from({ length: 60 }, (_, i) => day(i % 28, i % 2 ? 12 : -4)) }));
+  assert.match(result.footnote, /Select 90D, YTD, ALL or Custom.*60 qualified days.*20 so far/);
+  const long = capital.fleetTiles(tileInput({ bars: Array.from({ length: 60 }, (_, i) => day(i % 28, i % 2 ? 12 : -4)), riskHorizon: 'ALL window' }));
   assert.equal(long.footnote, null);
   assert.ok(long.risk.var95 > 0);
+});
+
+test('risk uses the matched wallet basis and identifies an incomplete admitted cohort', () => {
+  const bars = Array.from({ length: 16 }, (_, index) => ({ day: `2026-09-${String(index + 1).padStart(2, '0')}`, net: index % 2 ? 10 : -5, realized: 0, unrealized: 0, bots: 1, cumulative: 0, today: false }));
+  const partial = window({ quote: 'USDT', expected: 2, missing: [{ bot: 'b', reason: 'No saved samples' }] });
+  const result = capital.fleetTiles(tileInput({ bars, range: partial, riskWindow: partial, riskBasis: 1000, meanWallet: 10_000 }));
+  assert.ok(Math.abs(result.risk.volatilityDaily - perf.fleetRisk(bars.map(bar => bar.net / 1000)).volatilityDaily) < 1e-12);
+  assert.equal(result.tiles.find(tile => tile.id === 'C18-vol').state.kind, 'incomplete');
+  assert.equal(result.tiles.find(tile => tile.id === 'C02').state.kind, 'incomplete');
+  assert.equal(result.tiles.find(tile => tile.id === 'C18-pnldd').state.kind, 'incomplete');
+  assert.match(result.footnote ?? '', /long|ALL|60/i);
+});
+
+test('overflowing daily risk moments explain unavailable statistics rather than promising more sample days', () => {
+  const bars = Array.from({ length: 20 }, (_, index) => ({ day: `2026-09-${String(index + 1).padStart(2, '0')}`,
+    net: index % 2 ? 1e200 : -1e200, realized: 0, unrealized: 0, bots: 1, cumulative: 0, today: false }));
+  const result = capital.fleetTiles(tileInput({ bars, riskBasis: 1_000 }));
+  assert.equal(result.risk.days, 20);
+  assert.equal(result.tiles.some(tile => tile.id === 'C18-vol'), false);
+  assert.match(result.footnote, /unrepresentable/i);
+  assert.doesNotMatch(result.footnote, /appear after 14 days/i);
 });
 
 test('cycle tiles show with their sample size and lifetime basis, and turnover needs a matching unit and a wallet', () => {
@@ -188,7 +211,7 @@ test('cycle tiles show with their sample size and lifetime basis, and turnover n
   assert.equal(ids(other).includes('C18-pf'), false);
   const noWallet = capital.fleetTiles(tileInput({ cycles: fleetCycles, meanWallet: null }));
   assert.equal(ids(noWallet).includes('C18-turnover'), false);
-  assert.match(noWallet.footnote, /needs a wallet valuation/);
+  assert.doesNotMatch(noWallet.footnote, /needs a wallet valuation/, 'risk uses its own observed wallet basis, independent of selected-range turnover');
 });
 
 test('merged fills carry their bot, newest first; rails keep only limited ones, tightest first', () => {

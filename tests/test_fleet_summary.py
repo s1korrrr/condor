@@ -48,6 +48,32 @@ def iso(ms):
     )
 
 
+def account_analytics(
+    observed_ms=NOW_MS - 30_000, *, amount="1000", complete=True, unpriced=()
+):
+    return {
+        "schema_version": 1,
+        "quote_currency": "USDT",
+        "scope": {
+            "account": "master_account",
+            "connector": "okx",
+            "market": "spot",
+            "identity": "account-revision-1",
+        },
+        "capture_mode": "observation-driven",
+        "current": {
+            "observed_at": iso(observed_ms),
+            "priced_total": amount,
+            "valuation_complete": complete,
+            "unpriced_assets": list(unpriced),
+            "holdings": [],
+        },
+        "history": None,
+        "changes": [],
+        "performance": {"available": False, "reason": "Cash flows not reconciled"},
+    }
+
+
 def seed(store, bots=("ok_rsi", "rsi_modular_v2")):
     rows = {
         "ok_rsi": [(1439, 1, 0.5), (600, 2, 1), (1, 4, 2)],
@@ -273,6 +299,13 @@ class FakeReaders:
     async def bots_status(self, server):
         return bots_status() if self.status else None
 
+    async def account(self, server, user_id):
+        return (
+            fs.OwnerRead(account_analytics())
+            if self.with_wallet
+            else fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)
+        )
+
     def performance(self, server, bot, range_, now_s):
         self.performance_calls.append((bot, range_))
         return self.store.read(server, bot, range_, now_s)
@@ -337,10 +370,19 @@ async def test_full_summary_golden_numbers(store):
 
     assert body["wallet"] == {
         "equity": "1000",
-        "unit": "USDC",
+        "unit": "USDT",
         "observed_at_ms": NOW_MS - 30_000,
-        "source_bot": "ok_rsi",
+        "source_bot": None,
+        "source": "native_account_portfolio",
+        "account_scope": {
+            "account": "master_account",
+            "connector": "okx",
+            "market": "spot",
+            "identity": "account-revision-1",
+        },
         "valuation_complete": True,
+        "unpriced_assets": [],
+        "unpriced_count": 0,
         "stale": False,
     }
 

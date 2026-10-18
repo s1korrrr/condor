@@ -51,10 +51,19 @@
  ],
  "wallet": {
   "equity": "1000",
-  "unit": "USDC",
+  "unit": "USDT",
   "observed_at_ms": 1800000000000,
-  "source_bot": "ok_rsi",
+  "source_bot": null,
+  "source": "native_account_portfolio",
+  "account_scope": {
+   "account": "master_account",
+   "connector": "okx",
+   "market": "spot",
+   "identity": "account-revision-1"
+  },
   "valuation_complete": true,
+  "unpriced_assets": [],
+  "unpriced_count": 0,
   "stale": false
  },
  "pnl": {

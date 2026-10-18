@@ -50,6 +50,17 @@ test('null sections stay null: absent data is not turned into a value', () => {
   assert.equal(client.sectionAgeMs(parsed.sections.wallet, 1_800_000_030_000), null);
 });
 
+test('native account wallet must retain scope and subtotal coverage', () => {
+  const body = structuredClone(example('full'));
+  body.wallet.valuation_complete = false;
+  body.wallet.unpriced_assets = ['PLN'];
+  body.wallet.unpriced_count = 1;
+  body.sections.wallet.status = 'partial';
+  assert.equal(client.parseFleetSummary(body, 'full').wallet.unpriced_count, 1);
+  body.wallet.account_scope.identity = '';
+  assert.throws(() => client.parseFleetSummary(body, 'full'), /wallet/);
+});
+
 test('section age and staleness are computed by the client from observed_at_ms', () => {
   const full = example('full');
   const now = full.generated_at_ms;

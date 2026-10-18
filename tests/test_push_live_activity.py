@@ -105,7 +105,9 @@ def test_content_state_of_the_builder_glance_is_the_shared_fixture():
         "pnl_unit": "USDC",
         "day_partial": True,
         "equity": "1000.00",
-        "equity_unit": "USDC",
+        "equity_unit": "USDT",
+        "equity_valuation_complete": True,
+        "equity_source": "native_account_portfolio",
         "market_label": "Mixed",
         "market_state": "mixed",
         "market_valid_until_ms": 1800000090000,
@@ -121,6 +123,63 @@ def test_content_state_of_the_builder_glance_is_the_shared_fixture():
         },
         "stale": False,
     }
+
+
+def test_account_subtotal_and_legacy_activity_keep_distinct_provenance():
+    glance = copy.deepcopy(GLANCE)
+    glance["wallet"]["equity"] = "900"
+    glance["wallet"]["valuation_complete"] = False
+    glance["wallet"]["unpriced_assets"] = ["PLN"]
+    glance["wallet"]["unpriced_count"] = 1
+    glance["sections"]["wallet"]["status"] = "partial"
+    state = la.content_state(glance)
+    assert state["equity"] == "900.00"
+    assert state["equity_valuation_complete"] is False
+    assert state["equity_source"] == "native_account_portfolio"
+    legacy = copy.deepcopy(glance)
+    for key in ("source", "account_scope", "valuation_complete"):
+        legacy["wallet"].pop(key, None)
+    older = la.content_state(legacy)
+    assert older["equity"] == "900.00"
+    assert "equity_valuation_complete" not in older
+    assert "equity_source" not in older
+    malformed = copy.deepcopy(glance)
+    malformed["wallet"]["account_scope"]["identity"] = ""
+    assert "equity_source" not in la.content_state(malformed)
+    malformed["wallet"]["account_scope"]["identity"] = "   "
+    assert "equity_source" not in la.content_state(malformed)
+    inconsistent = copy.deepcopy(glance)
+    inconsistent["sections"]["wallet"]["status"] = "ok"
+    assert "equity_valuation_complete" not in la.content_state(inconsistent)
+
+
+def test_aged_account_subtotal_keeps_value_but_marks_activity_stale():
+    glance = copy.deepcopy(GLANCE)
+    glance["wallet"]["valuation_complete"] = False
+    glance["wallet"]["unpriced_assets"] = ["PLN"]
+    glance["wallet"]["unpriced_count"] = 1
+    glance["wallet"]["stale"] = True
+    glance["sections"]["wallet"]["status"] = "partial"
+    state = la.content_state(glance)
+    assert state["equity"] == "1000.00"
+    assert state["equity_valuation_complete"] is False
+    assert state["stale"] is True
+
+
+def test_valid_full_scale_money_does_not_abort_activity_projection():
+    value = "9" * 38
+    assert la.money(value) == value + ".00"
+    assert (
+        la.money("1e127") == "1" + "0" * 127
+    )  # Exact integer fits the mobile 128-character wire bound.
+    assert la.money("-1e126") == "-1" + "0" * 126
+    assert la.money("-1e127") is None
+    assert la.money("1e1000000") is None
+    glance = copy.deepcopy(GLANCE)
+    glance["wallet"]["equity"] = "1e127"
+    state = la.content_state(glance)
+    assert state["equity"] == "1" + "0" * 127
+    assert state["equity_source"] == "native_account_portfolio"
 
 
 @pytest.mark.parametrize(

@@ -13,8 +13,8 @@ Rules that make the payload trustworthy:
 * every section carries its own ``observed_at_ms`` and ``stale`` flag in ``sections``;
 * decimals that are money (PnL, equity, fees) are strings; scores are JSON numbers; times are
   epoch milliseconds, so a client computes ages itself and the body only changes when data does;
-* storage is reused, never duplicated: performance and wallet history come from
-  ``PerformanceHistory``, bot lifecycle from the bots status cache, the verdict from the stored
+* storage is reused, never duplicated: performance history comes from
+  ``PerformanceHistory``, account valuation from the native portfolio reader, bot lifecycle from the bots status cache, the verdict from the stored
   Market Picture frame and history, per-bot owner counters from the registered reporting sources.
 
 ``build_fleet_summary`` is pure given its ``readers``; ``routes/fleet_summary.py`` wires the
@@ -31,7 +31,7 @@ import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
-from typing import Any, Optional, Protocol
+from typing import Any, Callable, Optional, Protocol
 
 from condor.fetchers.bots import build_bots_page
 from condor.fleet_identity import display_name, generation, is_paper
@@ -98,7 +98,7 @@ class Readers(Protocol):
     def registered_bots(self, server: str) -> Optional[list[str]]: ...
     async def bots_status(self, server: str) -> Any: ...
     def performance(self, server: str, bot: str, range_: str, now_s: float) -> dict: ...
-    def wallet(self, server: str, bot: str, range_: str, now_s: float) -> dict: ...
+    async def account(self, server: str, user_id: Any) -> OwnerRead: ...
     async def market(self, server: str, user_id: Any) -> MarketRead: ...
     async def owner(self, bot: str, path: str, params: dict) -> OwnerRead: ...
 
@@ -580,59 +580,63 @@ def _section(
 
 
 def _wallet_section(
-    reads: dict[str, Optional[dict]], now_ms: float, missing: list
+    read: OwnerRead, now_ms: float, missing: list
 ) -> tuple[Optional[dict], dict]:
-    """Newest complete wallet valuation among the live bots' reporting wallet observers.
-
-    ``reads`` maps each live bot to its wallet read, or ``None`` when the read itself failed.
-    A paper bot's or a simulated wallet read is never the fleet wallet, even if one is passed in.
-    """
-    best: Optional[tuple[float, str, dict]] = None
-    invalid_time = False
-    for bot, payload in reads.items():
-        if payload is None or is_paper(bot) or _obj(payload).get("simulated") is True:
-            continue
-        latest = _obj(_obj(payload).get("latest"))
-        stamp = _num(latest.get("timestamp"))
-        value = _dec(latest.get("value_quote"))
-        if stamp is None or stamp <= 0 or stamp > (now_ms + 5_000) / 1000:
-            invalid_time = invalid_time or "timestamp" in latest
-            continue
-        if (
-            value is None
-            or value < 0
-            or not isinstance(latest.get("currency"), str)
-            or not latest["currency"]
-            or latest.get("valuation_complete") is not True
-        ):
-            continue
-        if best is None or stamp > best[0]:
-            best = (stamp, bot, latest)
-    if best is None:
-        if not reads:
-            reason = NO_REGISTRY
-        elif all(p is None for p in reads.values()):
-            reason = SOURCE_UNAVAILABLE
-        else:
-            reason = INVALID if invalid_time else NO_SAMPLES
+    """Project the native account owner's valuation, including its incomplete coverage."""
+    payload = _obj(read.payload)
+    scope = _obj(payload.get("scope"))
+    current = _obj(payload.get("current"))
+    observed = _instant_ms(current.get("observed_at"), now_ms)
+    value = _dec(current.get("priced_total"))
+    encoded = fleet_pnl.decimal_text(value)
+    assets = current.get("unpriced_assets")
+    complete = current.get("valuation_complete")
+    valid = (
+        payload.get("schema_version") == 1
+        and payload.get("quote_currency") == "USDT"
+        and payload.get("capture_mode") == "observation-driven"
+        and scope.get("account") == "master_account"
+        and scope.get("connector") == "okx"
+        and scope.get("market") == "spot"
+        and isinstance(scope.get("identity"), str)
+        and bool(scope["identity"].strip())
+        and len(scope["identity"]) <= 80
+        and observed is not None
+        and value is not None
+        and value >= 0
+        and encoded is not None
+        and type(complete) is bool
+        and isinstance(assets, list)
+        and all(isinstance(asset, str) and 0 < len(asset) <= 80 for asset in assets)
+        and complete == (len(assets) == 0)
+    )
+    if not valid:
+        reason = read.reason or (
+            NOT_CONFIGURED if payload.get("scope") is None else INVALID
+        )
         missing.append({"section": "wallet", "reason": reason})
         return None, _section("missing", None, STALE_AFTER_MS["wallet"], reason)
-    stamp, bot, latest = best
-    observed = stamp * 1000
     stale = now_ms - observed > STALE_AFTER_MS["wallet"]
     wallet = {
-        "equity": fleet_pnl.decimal_text(_dec(latest["value_quote"])),
-        "unit": latest["currency"],
-        "observed_at_ms": int(round(observed)),
-        "source_bot": bot,
-        "valuation_complete": True,
+        "equity": encoded,
+        "unit": "USDT",
+        "observed_at_ms": observed,
+        "source_bot": None,
+        "source": "native_account_portfolio",
+        "account_scope": scope,
+        "valuation_complete": complete,
+        "unpriced_assets": assets[:GLANCE_MAX_BOTS],
+        "unpriced_count": len(assets),
         "stale": stale,
     }
+    reason = PARTIAL_COVERAGE if not complete else OWNER_NOT_CURRENT if stale else None
+    if not complete:
+        missing.append({"section": "wallet", "reason": PARTIAL_COVERAGE})
     return wallet, _section(
-        "stale" if stale else "ok",
+        "partial" if not complete else "stale" if stale else "ok",
         observed,
         STALE_AFTER_MS["wallet"],
-        OWNER_NOT_CURRENT if stale else None,
+        reason,
     )
 
 
@@ -1013,17 +1017,12 @@ def _sync_reads(
     live: list[str],
     now_ms: float,
     paper: tuple[str, ...] = (),
-) -> tuple[
-    dict[str, list[fleet_pnl.BotHistory]],
-    dict[str, Optional[dict]],
-    list[fleet_pnl.BotHistory],
-]:
-    """Live histories and wallets for the fleet numbers; paper bots' own 1D histories for their cards only."""
+) -> tuple[dict[str, list[fleet_pnl.BotHistory]], list[fleet_pnl.BotHistory]]:
+    """Live PnL histories and paper bots' own 1D histories for their cards only."""
     clock = now_ms + 5_000
     histories: dict[str, list[fleet_pnl.BotHistory]] = {
         r: [] for r in ("1D", "1W", "1M", "ALL")
     }
-    wallets: dict[str, Optional[dict]] = {}
     for bot in live:
         for range_ in histories:
             try:
@@ -1036,20 +1035,19 @@ def _sync_reads(
             histories[range_].append(
                 fleet_pnl.parse_bot_history(payload, bot, range_, clock, failed)
             )
-        try:
-            wallets[bot] = readers.wallet(server, bot, "1D", now_ms / 1000)
-        except Exception:
-            wallets[bot] = None
     paper_histories: list[fleet_pnl.BotHistory] = []
     for bot in paper:
         try:
-            payload, failed = readers.performance(server, bot, "1D", now_ms / 1000), False
+            payload, failed = (
+                readers.performance(server, bot, "1D", now_ms / 1000),
+                False,
+            )
         except Exception:
             payload, failed = None, True
         paper_histories.append(
             fleet_pnl.parse_bot_history(payload, bot, "1D", clock, failed)
         )
-    return histories, wallets, paper_histories
+    return histories, paper_histories
 
 
 async def build_fleet_summary(
@@ -1060,6 +1058,7 @@ async def build_fleet_summary(
     *,
     is_admin: bool,
     user_id: Any = None,
+    clock_ms: Callable[[], float] | None = None,
 ) -> dict:
     """Compute the whole payload. ``view='glance'`` is the compact projection of the same computation."""
     if view not in VIEWS:
@@ -1086,6 +1085,10 @@ async def build_fleet_summary(
             {"section": "bots", "field": "status", "reason": SOURCE_UNAVAILABLE}
         )
 
+    # The blocking status read may consume seconds. Keep history reads bounded at
+    # their actual start, and qualify all returned sources at publication time.
+    read_now_ms = clock_ms() if clock_ms is not None else now_ms
+
     # Independent reads run together; each fails into its own reason code.
     owner_jobs: list[tuple[str, str, dict]] = [
         (bot, path, {})
@@ -1103,24 +1106,32 @@ async def build_fleet_summary(
         owner_jobs.append((incident_bot, "operations", {}))
     paper_bots = tuple(b for b in bots if is_paper(b))
     sync_task = asyncio.to_thread(
-        _sync_reads, readers, server, live, now_ms, paper_bots
+        _sync_reads, readers, server, live, read_now_ms, paper_bots
     )
     market_task = readers.market(server, user_id)
+    account_task = readers.account(server, user_id)
     results = await asyncio.gather(
         sync_task,
         market_task,
+        account_task,
         *[_safe_owner(readers, bot, path, params) for bot, path, params in owner_jobs],
         return_exceptions=True,
     )
-    sync_result, market_result, owner_results = results[0], results[1], results[2:]
+    sync_result, market_result, account_result, owner_results = (
+        results[0],
+        results[1],
+        results[2],
+        results[3:],
+    )
+    now_ms = clock_ms() if clock_ms is not None else now_ms
     if isinstance(sync_result, BaseException):
-        histories, wallets = {r: [] for r in ("1D", "1W", "1M", "ALL")}, {}
+        histories = {r: [] for r in ("1D", "1W", "1M", "ALL")}
         paper_histories = [
             fleet_pnl.BotHistory(bot, "1D", reason=fleet_pnl.HISTORY_READ_FAILED)
             for bot in paper_bots
         ]
     else:
-        histories, wallets, paper_histories = sync_result
+        histories, paper_histories = sync_result
     market_read = (
         market_result
         if isinstance(market_result, MarketRead)
@@ -1135,7 +1146,15 @@ async def build_fleet_summary(
         )
 
     # wallet
-    wallet, sections["wallet"] = _wallet_section(wallets, now_ms, missing)
+    wallet, sections["wallet"] = _wallet_section(
+        (
+            account_result
+            if isinstance(account_result, OwnerRead)
+            else OwnerRead(None, SOURCE_UNAVAILABLE)
+        ),
+        now_ms,
+        missing,
+    )
 
     # fleet PnL
     windows = fleet_pnl.compute_windows(histories, live, now_ms) if live else {}

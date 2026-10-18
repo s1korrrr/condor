@@ -4,21 +4,21 @@ import asyncio
 import copy
 
 import pytest
+from test_fleet_summary import (
+    NOW_MS,
+    SERVER,
+    FakeReaders,
+    account_analytics,
+    bots_status,
+    card,
+    client_for,
+    iso,
+    seed,
+)
 
 from condor.performance_history import PerformanceHistory
 from condor.web import fleet_summary as fs
-from condor.web.fleet_fills import normalize_fill
-from condor.web.fleet_fills import build_page, read_window
-from test_fleet_summary import (
-    FakeReaders,
-    NOW_MS,
-    SERVER,
-    card,
-    bots_status,
-    client_for,
-    seed,
-    iso,
-)
+from condor.web.fleet_fills import build_page, normalize_fill, read_window
 
 
 @pytest.mark.parametrize("value", [10**400, -(10**400), True, "NaN", "Infinity"])
@@ -41,44 +41,37 @@ def test_out_of_range_utc_fill_keeps_identity_with_missing_time(timestamp):
 
 
 def wallet(timestamp):
-    return {
-        "latest": {
-            "timestamp": timestamp,
-            "value_quote": "100",
-            "currency": "USDC",
-            "valuation_complete": True,
-        }
-    }
+    payload = account_analytics()
+    payload["current"]["observed_at"] = timestamp
+    return fs.OwnerRead(payload)
 
 
 @pytest.mark.parametrize("lead", [5.001, 3600, 1e308])
 def test_future_wallet_is_not_current(lead):
     missing = []
-    value, section = fs._wallet_section(
-        {"ok_rsi": wallet(NOW_MS / 1000 + lead)}, NOW_MS, missing
-    )
+    from test_fleet_summary import iso
+
+    stamp = iso(NOW_MS + lead * 1000) if lead < 1e100 else "9999-12-31T23:59:59Z"
+    value, section = fs._wallet_section(wallet(stamp), NOW_MS, missing)
     assert value is None
     assert section["status"] == "missing"
     assert section["reason"] == fs.INVALID
     assert missing == [{"section": "wallet", "reason": fs.INVALID}]
 
 
-def test_wallet_admits_small_skew_and_falls_back_from_invalid_newer_source():
-    value, section = fs._wallet_section(
-        {"ok_rsi": wallet(NOW_MS / 1000 + 5)}, NOW_MS, []
-    )
+def test_account_wallet_admits_small_skew_but_never_falls_back_to_bot_read():
+    from test_fleet_summary import iso
+
+    value, section = fs._wallet_section(wallet(iso(NOW_MS + 5_000)), NOW_MS, [])
     assert value["observed_at_ms"] == NOW_MS + 5000
     assert section["status"] == "ok"
     value, section = fs._wallet_section(
-        {
-            "ok_rsi": wallet(NOW_MS / 1000 + 3600),
-            "rsi_modular_v2": wallet(NOW_MS / 1000 - 10),
-        },
+        wallet(iso(NOW_MS + 3600_000)),
         NOW_MS,
         [],
     )
-    assert value["source_bot"] == "rsi_modular_v2"
-    assert section["status"] == "ok"
+    assert value is None
+    assert section["status"] == "missing"
 
 
 @pytest.mark.parametrize("view", ["full", "glance"])

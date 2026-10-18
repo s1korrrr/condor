@@ -17,7 +17,13 @@ export type SectionMeta = { status: SectionStatus; observed_at_ms: number | null
 /** `reason` is an upper-case code (see the contract's reason-code table); `section`-level entries carry no `field`. */
 export type MissingItem = { section: SectionName; field?: string; bot?: string; reason: string };
 
-export type Wallet = { equity: string; unit: string; observed_at_ms: number; source_bot: string; valuation_complete: true; stale: boolean };
+export type Wallet = {
+  equity: string; unit: string; observed_at_ms: number; source_bot: string | null;
+  valuation_complete: boolean; stale: boolean;
+  source?: 'native_account_portfolio';
+  account_scope?: { account: 'master_account'; connector: 'okx'; market: 'spot'; identity: string };
+  unpriced_assets?: string[]; unpriced_count?: number;
+};
 
 export type WindowMissing = { bot: string; reason: string; samples?: number; quote?: string | null };
 export type WindowBot = {
@@ -111,6 +117,16 @@ export function parseFleetSummary(payload: unknown, view: FleetSummaryView): Fle
   // A section the server says is present must have its headline number in the documented type.
   const wallet = payload.wallet;
   if (wallet !== null && (!object(wallet) || !decimal(wallet.equity) || typeof wallet.unit !== 'string' || !integer(wallet.observed_at_ms))) throw new FleetSummaryError('Fleet summary wallet is invalid.');
+  if (object(wallet) && wallet.source === 'native_account_portfolio') {
+    const scope = wallet.account_scope;
+    if (wallet.source_bot !== null || wallet.unit !== 'USDT' || typeof wallet.valuation_complete !== 'boolean'
+      || !object(scope) || scope.account !== 'master_account' || scope.connector !== 'okx' || scope.market !== 'spot'
+      || typeof scope.identity !== 'string' || scope.identity.trim().length < 1 || scope.identity.length > 80
+      || !Array.isArray(wallet.unpriced_assets) || wallet.unpriced_assets.length > 16
+      || !wallet.unpriced_assets.every(asset => typeof asset === 'string' && asset.length > 0 && asset.length <= 80)
+      || !integer(wallet.unpriced_count) || wallet.unpriced_count < wallet.unpriced_assets.length
+      || wallet.valuation_complete !== (wallet.unpriced_count === 0)) throw new FleetSummaryError('Fleet summary wallet account scope is invalid.');
+  }
   const pnl = payload.pnl;
   if (pnl !== null) {
     if (!object(pnl)) throw new FleetSummaryError('Fleet summary PnL is invalid.');

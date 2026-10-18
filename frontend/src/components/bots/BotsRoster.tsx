@@ -162,9 +162,10 @@ export function RosterObservation({ payload, bot, now, lifecycleStatus = null, s
         {stats && <ul className="q-diag" style={{ marginTop: 8 }}>
           <li><span>Fill ratio</span><strong>{stats.fillRatio == null ? '—' : `${(stats.fillRatio * 100).toFixed(1)}%`}{!stats.orderSampleSufficient && <small> · n&lt;{stats.minSample}</small>}</strong></li>
           <li><span>Cancel / reject</span><strong>{stats.cancelRate == null ? '—' : `${(stats.cancelRate * 100).toFixed(1)}%`} / {stats.rejectRate == null ? '—' : `${(stats.rejectRate * 100).toFixed(1)}%`}</strong></li>
-          <li><span>Median decision→first fill</span><strong>{stats.latencyMedianSeconds == null ? '—' : `${stats.latencyMedianSeconds.toFixed(1)}s`} <small>n={stats.latencySamples}</small></strong></li>
+          <li><span>Median decision→recorded fill</span><strong>{stats.latencyMedianSeconds == null ? '—' : `${stats.latencyMedianSeconds.toFixed(1)}s`} <small>n={stats.latencySamples}</small></strong></li>
           <li><span>Maker / taker</span><strong>{stats.makerCount ?? '—'} / {stats.takerCount ?? '—'}{stats.liquidityUnclassifiedCount ? <small title="Plain limit orders may rest or cross; only post-only and market orders prove liquidity."> · {stats.liquidityUnclassifiedCount} unclassified</small> : null}</strong></li>
         </ul>}
+        {stats && <p className="q-empty">Owner-recorded fill time includes owner observation delay; exchange execution time is unavailable.</p>}
       </PanelFrame>
       <PanelFrame panelId="B22" title="Bot diagnostics" scopeLabel="Each row has its own freshness">
         <ul className="q-diag">
@@ -288,7 +289,7 @@ const BOT_LIFECYCLE = ['running', 'starting', 'stopping', 'stopped', 'exited'];
 const percentText = (ratio: number | null | undefined) => ratio == null ? '—' : `${(ratio * 100).toFixed(1)}%`;
 
 /** Fleet tiles need every registered bot, including one whose reads have not landed: it contributes its lifecycle status only. */
-export function pendingFleetInput(source: TradingVisualsSource, status: string | null): FleetBotInput {
+function pendingFleetInput(source: TradingVisualsSource, status: string | null): FleetBotInput {
   return { bot: source.bot, name: displayBotName(source.bot), status, view: null, quant: null, cycles: null, execution: null, health: null };
 }
 
@@ -384,10 +385,11 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
           { id: 'win', header: 'Win rate %', kind: 'number', value: source => { const stats = readsByBot[`${source.server}:${source.bot}`]?.cycles?.stats; return stats ? winRateValue(stats) : null; }, cell: source => { const cycles = readsByBot[`${source.server}:${source.bot}`]?.cycles; return cycles ? `${winRateText(cycles.stats)} · ${cycles.stats.wins}W/${cycles.stats.losses}L` : '—'; }, size: 120 },
           { id: 'fill', header: 'Fill ratio %', kind: 'number', value: source => { const ratio = statsFor(source)?.fillRatio; return ratio == null ? null : Number((ratio * 100).toFixed(1)); }, cell: source => percentText(statsFor(source)?.fillRatio), size: 90 },
           { id: 'fees', header: 'Fees', kind: 'number', value: source => statsFor(source)?.fees ?? null, cell: source => { const stats = statsFor(source); return stats?.fees == null ? '—' : `${formatDecimal(stats.fees, 4)}${stats.volume ? ` · ${((stats.fees / stats.volume) * 10_000).toFixed(1)} bps` : ''}`; }, size: 130 },
-          { id: 'latency', header: 'Latency (s)', kind: 'number', value: source => readsByBot[`${source.server}:${source.bot}`]?.execution?.latencyMedianSeconds ?? null, cell: source => { const value = readsByBot[`${source.server}:${source.bot}`]?.execution?.latencyMedianSeconds; return value == null ? '—' : `${value.toFixed(1)}s`; }, size: 80 },
+          { id: 'latency', header: 'Decision→recorded (s)', kind: 'number', value: source => readsByBot[`${source.server}:${source.bot}`]?.execution?.latencyMedianSeconds ?? null, cell: source => { const value = readsByBot[`${source.server}:${source.bot}`]?.execution?.latencyMedianSeconds; return value == null ? '—' : `${value.toFixed(1)}s`; }, title: () => 'Owner-recorded fill time includes owner observation delay; exchange execution time is unavailable.', size: 150 },
           { id: 'heartbeat', header: 'Last report', kind: 'number', value: source => { const age = statsFor(source)?.heartbeatAgeSeconds; return age == null ? null : Math.round(age); }, cell: source => { const age = statsFor(source)?.heartbeatAgeSeconds; return age == null ? '—' : `${durationLabel(age)} ago`; }, size: 100 },
           { id: 'pnl', header: 'PnL (Capital has detail)', kind: 'number', value: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return reads ? netFor(reads).value : null; }, cell: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return !reads || netFor(reads).value == null ? '—' : `${formatSigned(netFor(reads).value)} ${reads.controller.quote ?? ''}${reads.controller.simulated ? ' · paper (simulated)' : ''}`; }, className: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; const toneName = metricTone(reads ? netFor(reads).value : null); return toneName ? `q-${toneName}` : undefined; }, size: 150 },
         ]} />
+      <p className="q-empty">Fill times are owner-recorded; exchange execution time is unavailable. Decision→recorded fill includes owner observation delay.</p>
     </PanelFrame>
     {liveBotIds.length > 0 && server && <FleetFillsPanel server={server} bots={liveBotIds} />}
     {paperBotIds.length > 0 && server && <FleetFillsPanel server={server} bots={paperBotIds} scope="paper" />}

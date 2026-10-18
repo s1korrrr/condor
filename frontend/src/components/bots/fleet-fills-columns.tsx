@@ -9,7 +9,7 @@ const NOT_REPORTED = 'The owner did not report this value.';
 
 /** One row per fill, every bot. Raw values (exact decimal strings) sort, filter and export; `cell` only formats. */
 export const fleetFillColumns: TableColumn<FleetFillItem>[] = [
-  { id: 'time', header: 'Time (UTC)', value: row => fleetFillTime(row.time_ms), cell: row => fleetFillTime(row.time_ms) ?? '—', title: row => row.time_ms === null ? 'The owner stamp has no timezone offset, so no time is guessed.' : undefined, size: 150 },
+  { id: 'time', header: 'Recorded (UTC)', value: row => fleetFillTime(row.time_ms), cell: row => fleetFillTime(row.time_ms) ?? '—', title: row => row.time_ms === null ? 'The owner stamp has no timezone offset, so no time is guessed. Exchange execution time is unavailable.' : 'Owner-recorded time; exchange execution time is unavailable.', size: 150 },
   { id: 'bot', header: 'Bot', value: row => `${row.generation ?? ''} ${fleetFillBotName(row)}`.trim(), size: 190,
     cell: row => <>{row.generation && <span className="q-pill" title={`Bot generation ${row.generation}`}>{row.generation}</span>} {fleetFillBotName(row)}{row.paper ? <> <span className="q-pill" data-tone="blocked" title="Paper bot: a simulated fill, never part of live fills or Capital.">PAPER</span></> : row.simulated && <> <span className="q-pill" data-tone="blocked" title="The owner flagged this fill as simulated.">sim</span></>}</> },
   { id: 'side', header: 'Side', value: row => row.side?.toUpperCase(), cell: row => row.side?.toUpperCase() ?? '—', className: row => row.side === 'buy' ? 'q-positive' : row.side === 'sell' ? 'q-negative' : undefined, title: row => row.side === null ? NOT_REPORTED : undefined, size: 70 },

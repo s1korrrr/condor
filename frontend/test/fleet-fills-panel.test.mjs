@@ -52,7 +52,8 @@ test('an ok feed renders every bot with its generation badge, a fresh glyph and 
   const html = render(view);
   assert.match(html, /data-panel-id="B40"/);
   assert.match(html, /data-state="fresh"/);
-  for (const header of ['Time (UTC)', 'Bot', 'Side', 'Pair', 'Amount', 'Price', 'Volume', 'Fee', 'Receipt', 'PnL']) assert.match(html, new RegExp(`<span>${header.replace(/[()]/g, '\\$&')}</span>`));
+  for (const header of ['Recorded (UTC)', 'Bot', 'Side', 'Pair', 'Amount', 'Price', 'Volume', 'Fee', 'Receipt', 'PnL']) assert.match(html, new RegExp(`<span>${header.replace(/[()]/g, '\\$&')}</span>`));
+  assert.match(html, /Time and ordering use owner-recorded fills; exchange execution time is unavailable\./);
   for (const badge of ['V1', 'V2', 'V3']) assert.match(html, new RegExp(`<span class="q-pill"[^>]*>${badge}</span>`));
   assert.match(html, /<\/span> meridian_v3<\/td>/, 'the generation is its own badge, not repeated in the name');
   assert.doesNotMatch(html, /V1 · ok_rsi|V1 V1/);

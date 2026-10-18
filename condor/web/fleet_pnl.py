@@ -26,7 +26,7 @@ from __future__ import annotations
 import math
 import re
 from dataclasses import dataclass, field
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal, DecimalException, Inexact, InvalidOperation, localcontext
 from typing import Any, Optional
 
 from condor.fleet_identity import is_paper
@@ -37,6 +37,13 @@ WINDOWS = (("day", "1D"), ("week", "1W"), ("month", "1M"))
 WINDOW_SPAN_MS = {name: RANGE_SPAN_MS[range_] for name, range_ in WINDOWS}
 SAMPLE_GAP_MS = 90_000
 QUOTE = re.compile(r"^[A-Z0-9]+$")
+ASCII_DECIMAL = re.compile(
+    r"[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?\Z"
+)
+# A bounded wire representation keeps one admitted amount within the 8 KiB glance budget.
+MAX_DECIMAL_INPUT_CHARS = 256
+MAX_DECIMAL_TEXT_CHARS = 128
+MAX_DECIMAL_SIGNIFICANT_DIGITS = 38
 
 # Reason codes. Human text lives in the contract document, never in the payload.
 NO_SAMPLES = "NO_SAMPLES"
@@ -48,13 +55,50 @@ NOT_READ = "NOT_READ"
 
 
 def _amount(value: Any) -> Optional[Decimal]:
-    if not isinstance(value, str) or not value.strip():
+    if (
+        not isinstance(value, str)
+        or len(value) > MAX_DECIMAL_INPUT_CHARS
+        or not ASCII_DECIMAL.fullmatch(value)
+    ):
         return None
+    # A zero coefficient has no scale. Parsing its arbitrarily long exponent is
+    # unnecessary and can exceed Decimal's implementation exponent range.
+    coefficient = re.split(r"[eE]", value, maxsplit=1)[0]
+    if not any(digit in "123456789" for digit in coefficient):
+        return Decimal(0)
     try:
         number = Decimal(value)
     except InvalidOperation:
         return None
-    return number if number.is_finite() else None
+    return number if decimal_text(number) is not None else None
+
+
+def exact_sum(values: list[Decimal]) -> Optional[Decimal]:
+    """Add admitted decimals without default-context rounding; reject an unencodable result."""
+    if not values:
+        return Decimal(0)
+    # A temporary sign reversal of an admitted positive 128-digit operand can use
+    # 129 characters. Only the emitted result must fit the signed wire budget.
+    if any(decimal_text(value.copy_abs()) is None for value in values):
+        return None
+    nonzero = [value for value in values if value]
+    if not nonzero:
+        return Decimal(0)
+    # Decimal zero can carry an arbitrary exponent without affecting the sum.
+    low = min(value.as_tuple().exponent for value in nonzero)
+    high = max(value.adjusted() for value in nonzero)
+    try:
+        with localcontext() as context:
+            context.prec = max(28, high - low + 3 + len(str(len(values))))
+            context.traps[Inexact] = True
+            result = sum(values, Decimal(0))
+    except (DecimalException, ValueError):
+        return None
+    return result if decimal_text(result) is not None else None
+
+
+def exact_difference(later: Decimal, earlier: Decimal) -> Optional[Decimal]:
+    return exact_sum([later, earlier.copy_negate()])
 
 
 def _is_backfill(point: dict) -> bool:
@@ -145,7 +189,13 @@ def parse_bot_history(
             or total is None
             or realized is None
             or unrealized is None
-            or abs(total - realized - unrealized) > Decimal("0.000001")
+            or (
+                residual := exact_sum(
+                    [total, realized.copy_negate(), unrealized.copy_negate()]
+                )
+            )
+            is None
+            or residual.copy_abs() > Decimal("0.000001")
             or not isinstance(point.get("identity"), str)
             or not point["identity"]
             or not isinstance(point.get("segment"), str)
@@ -178,17 +228,22 @@ def parse_bot_history(
     )
 
 
-def _run_deltas(samples: list[Sample]) -> tuple[Decimal, Decimal, Decimal, int]:
-    total = realized = unrealized = Decimal(0)
+def _run_deltas(
+    samples: list[Sample],
+) -> Optional[tuple[Decimal, Decimal, Decimal, int]]:
+    totals = [Decimal(0), Decimal(0), Decimal(0)]
     restarts = 0
     for a, b in zip(samples, samples[1:]):
         if a.owner != b.owner:
             restarts += 1
             continue
-        total += b.total - a.total
-        realized += b.realized - a.realized
-        unrealized += b.unrealized - a.unrealized
-    return total, realized, unrealized, restarts
+        for index, key in enumerate(("total", "realized", "unrealized")):
+            delta = exact_difference(getattr(b, key), getattr(a, key))
+            updated = exact_sum([totals[index], delta]) if delta is not None else None
+            if updated is None:
+                return None
+            totals[index] = updated
+    return totals[0], totals[1], totals[2], restarts
 
 
 @dataclass
@@ -206,6 +261,7 @@ class BotWindow:
     stale: bool
     # Time between consecutive samples inside the window beyond the read's spacing: summed across, not observed.
     uncovered_ms: float = 0.0
+    numeric_invalid: bool = False
 
 
 def bot_window(
@@ -233,6 +289,7 @@ def bot_window(
             for earlier, later in zip(inside, inside[1:])
             if later.time - earlier.time > history.gap_ms
         ),
+        numeric_invalid=len(inside) >= 2 and deltas is None,
     )
 
 
@@ -283,7 +340,13 @@ def fleet_window(
         window = bot_window(history, from_ms, to_ms, now_ms)
         if window.change is None:
             missing.append(
-                {"bot": bot, "reason": NEEDS_TWO_SAMPLES, "samples": window.samples}
+                {
+                    "bot": bot,
+                    "reason": (
+                        HISTORY_INVALID if window.numeric_invalid else NEEDS_TWO_SAMPLES
+                    ),
+                    "samples": window.samples,
+                }
             )
             continue
         windows.append(window)
@@ -310,21 +373,25 @@ def fleet_window(
     order = {bot: index for index, bot in enumerate(bots)}
     missing.sort(key=lambda item: order.get(item["bot"], 0))
 
-    def total(key: str) -> Optional[Decimal]:
-        if not counted:
-            return None
-        result = Decimal(0)
-        for window in counted:
-            result += getattr(window, key) or Decimal(0)
-        return result
+    totals = [
+        exact_sum([getattr(window, key) for window in counted]) if counted else None
+        for key in ("change", "realized", "unrealized")
+    ]
+    if counted and any(total is None for total in totals):
+        missing.extend(
+            {"bot": window.bot, "reason": HISTORY_INVALID} for window in counted
+        )
+        missing.sort(key=lambda item: order.get(item["bot"], 0))
+        counted = []
+        totals = [None, None, None]
 
     return FleetWindow(
         from_ms=from_ms,
         to_ms=to_ms,
         quote=quote,
-        total=total("change"),
-        realized=total("realized"),
-        unrealized=total("unrealized"),
+        total=totals[0],
+        realized=totals[1],
+        unrealized=totals[2],
         bots=counted,
         counted=len(counted),
         expected=len(bots),
@@ -343,7 +410,31 @@ def fleet_window(
 
 def decimal_text(value: Optional[Decimal]) -> Optional[str]:
     """Plain decimal string: no exponent, no trailing zeros, no negative zero."""
-    if value is None:
+    if value is None or not value.is_finite():
+        return None
+    if not value:
+        return "0"
+    digits, exponent = value.as_tuple().digits, value.as_tuple().exponent
+    trailing = 0
+    while trailing < len(digits) - 1 and digits[-1 - trailing] == 0:
+        trailing += 1
+    significant = len(digits) - trailing
+    if significant > MAX_DECIMAL_SIGNIFICANT_DIGITS:
+        return None
+    exponent += trailing
+    point = significant + exponent
+    width = (1 if value.is_signed() else 0) + (
+        point
+        if point >= significant
+        else significant + 1 if point > 0 else 2 - point + significant
+    )
+    if width > MAX_DECIMAL_TEXT_CHARS:
+        return None
+    try:
+        converted = float(value)
+    except (OverflowError, ValueError):
+        return None
+    if not math.isfinite(converted) or converted == 0:
         return None
     text = format(value, "f")
     if "." in text:

@@ -4,6 +4,7 @@ import { frontendModules } from './helpers/frontend-module.mjs';
 
 const { load } = frontendModules();
 const fleet = load('features/quant-ops/fleet-performance.ts');
+const performance = load('features/quant-ops/performance-history.ts');
 
 const NOW = Date.parse('2026-10-01T12:00:00Z');
 const MIN = 60_000;
@@ -29,6 +30,101 @@ test('parsing keeps only valid native samples and names a failed or empty read',
   assert.equal(fleet.parseBotHistory(null, 'v2', '1D', NOW, true).reason, 'Performance history read failed.');
   assert.match(fleet.parseBotHistory(payload('v2', '1D', []), 'v2', '1D', NOW).reason, /Recording begins/);
   assert.match(fleet.parseBotHistory(payload('other', '1D', [[1, 1]]), 'v2', '1D', NOW).reason, /identity is invalid/);
+});
+
+function numericPayload(first, second) {
+  return { source: 'native_mqtt_observer', bot_name: 'v2', range: '1D', truncated: false, points: [first, second].map((value, index) => ({
+    timestamp: (NOW - (1 - index) * MIN) / 1000, total_pnl_quote: value, realized_pnl_quote: value,
+    unrealized_pnl_quote: '0', quote: 'USDC', identity: 'boot-a', segment: 'seg-1',
+  })) };
+}
+
+test('browser rejects malformed, underflowed and overflowing owner decimals without fabricating PnL', () => {
+  for (const value of ['1_000', ' 1 ', '1\n', '1\r', '1\r\n', '0x10', '１２', '١', '1e1000000', '1e-1000000']) {
+    const result = fleet.parseBotHistory(numericPayload('0', value), 'v2', '1D', NOW + 5_000);
+    assert.equal(result.samples.length, 0, value);
+    assert.match(result.reason, /invalid|unrepresentable/i);
+  }
+  for (const [first, second] of [['-1e308', '1e308'], ['1e30', '1000000000000000000000000000001']]) {
+    const result = fleet.parseBotHistory(numericPayload(first, second), 'v2', '1D', NOW + 5_000);
+    assert.equal(result.samples.length, 0, `${first} to ${second}`);
+    assert.match(result.reason, /invalid|unrepresentable/i);
+  }
+  assert.equal(performance.historyAmount('9'.repeat(38))?.key != null, true);
+  assert.equal(performance.historyAmount('9'.repeat(39)), null);
+  assert.equal(performance.historyAmount('9'.repeat(38) + '0'.repeat(90))?.key != null, true);
+  assert.equal(performance.historyAmount('1e127')?.key != null, true);
+  assert.equal(fleet.parseBotHistory(numericPayload('0.1', '0.2'), 'v2', '1D', NOW + 5_000).samples.length, 2);
+  assert.equal(fleet.parseBotHistory(numericPayload('0e-' + '9'.repeat(240), '0.1'), 'v2', '1D', NOW + 5_000).samples.length, 2);
+  const bridged = numericPayload('1e30', '1000000000000000000000000000001');
+  bridged.points[0].segment = 'backfill-v2';
+  bridged.points[1].identity = 'boot-b';
+  assert.equal(fleet.parseBotHistory(bridged, 'v2', '1D', NOW + 5_000).samples.length, 0);
+});
+
+test('public history admission compares the owner balance tolerance exactly', () => {
+  for (const sign of ['', '-']) {
+    const payload = numericPayload('0', `${sign}0.000001${'0'.repeat(35)}1`);
+    payload.points[1].realized_pnl_quote = '0';
+    assert.equal(performance.projectPerformanceHistory(payload, 'v2', NOW + 5_000, '1D').points.length, 0);
+  }
+  const boundary = numericPayload('0', '0.000001');
+  boundary.points[1].realized_pnl_quote = '0';
+  assert.equal(performance.projectPerformanceHistory(boundary, 'v2', NOW + 5_000, '1D').points.length, 2);
+  const ordinary = numericPayload('0', '0.3');
+  ordinary.points[1].realized_pnl_quote = '0.1';
+  ordinary.points[1].unrealized_pnl_quote = '0.2';
+  assert.equal(performance.projectPerformanceHistory(ordinary, 'v2', NOW + 5_000, '1D').points.length, 2);
+});
+
+test('browser marks an overflowing combined fleet result unavailable rather than Infinity', () => {
+  const huge = bot => ({ bot, range: '1D', quote: 'USDC', reason: null, gapMs: 90_000,
+    bucketSeconds: null, truncated: false, samples: [
+      { time: NOW - MIN, total: 0, realized: 0, unrealized: 0, owner: 0 },
+      { time: NOW, total: 1e308, realized: 1e308, unrealized: 0, owner: 0 },
+    ] });
+  const histories = [huge('v2'), huge('v3')];
+  const window = fleet.fleetWindow(histories, ['v2', 'v3'], NOW - MIN, NOW, NOW);
+  assert.equal(window.total, null);
+  assert.equal(window.counted, 0);
+  assert.equal(window.missing.length, 2);
+  assert.deepEqual(fleet.fleetSeries(histories, NOW - MIN, NOW), []);
+  assert.deepEqual(fleet.fleetDailyBars(histories, NOW, NOW - MIN), []);
+  const small = { ...huge('small'), samples: [
+    { time: NOW - MIN, total: 0, realized: 0, unrealized: 0, owner: 0 },
+    { time: NOW, total: 1, realized: 1, unrealized: 0, owner: 0 },
+  ] };
+  const rounded = fleet.fleetWindow([{ ...huge('large'), samples: [
+    { time: NOW - MIN, total: 0, realized: 0, unrealized: 0, owner: 0 },
+    { time: NOW, total: 1e30, realized: 1e30, unrealized: 0, owner: 0 },
+  ] }, small], ['large', 'small'], NOW - MIN, NOW, NOW);
+  assert.equal(rounded.total, null);
+  assert.equal(rounded.counted, 0);
+  const reversed = fleet.fleetWindow([small, { ...huge('large'), samples: [
+    { time: NOW - MIN, total: 0, realized: 0, unrealized: 0, owner: 0 },
+    { time: NOW, total: 1e30, realized: 1e30, unrealized: 0, owner: 0 },
+  ] }], ['small', 'large'], NOW - MIN, NOW, NOW);
+  assert.equal(reversed.total, null);
+  assert.equal(reversed.counted, 0);
+  const cohort = { quote: 'USDC', bots: [{ bot: 'small' }, { bot: 'large' }] };
+  assert.deepEqual(fleet.fleetSeries([small, { ...huge('large'), samples: [
+    { time: NOW - MIN, total: 0, realized: 0, unrealized: 0, owner: 0 },
+    { time: NOW, total: 1e30, realized: 1e30, unrealized: 0, owner: 0 },
+  ] }], NOW - MIN, NOW, 60, cohort), []);
+  assert.deepEqual(fleet.fleetDailyBars([small, { ...huge('large'), samples: [
+    { time: NOW - MIN, total: 0, realized: 0, unrealized: 0, owner: 0 },
+    { time: NOW, total: 1e30, realized: 1e30, unrealized: 0, owner: 0 },
+  ] }], NOW, NOW - MIN, cohort), []);
+  const run = { ...huge('run'), samples: [
+    { time: NOW - 2 * MIN, total: 0, realized: 0, unrealized: 0, owner: 0 },
+    { time: NOW - MIN, total: 1, realized: 1, unrealized: 0, owner: 0 },
+    { time: NOW, total: 1e30, realized: 1e30, unrealized: 0, owner: 0 },
+  ] };
+  assert.equal(fleet.botWindow(run, NOW - 2 * MIN, NOW, NOW).change, null);
+  const direct = numericPayload('1', '1e30');
+  const projected = performance.projectPerformanceHistory(direct, 'v2', NOW + 5_000, '1D');
+  assert.equal(projected.points.length, 2);
+  assert.equal(projected.change, null);
 });
 
 test('fleet window sums per-bot native changes and is independent of deposits', () => {

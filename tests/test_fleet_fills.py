@@ -241,6 +241,19 @@ async def test_exact_receipts_win_over_float_projections_and_stay_exact_strings(
 
 
 @sync
+async def test_present_unrepresentable_exact_volume_does_not_fall_back_to_legacy_float():
+    row = v2_row(1, T0, value_quote_exact="9" * 129)
+    body = await page(Readers({"rsi_modular_v2": [row]}, registry=["rsi_modular_v2"]))
+    assert body["items"][0]["volume"] is None
+    assert "volume" in body["items"][0]["missing"]
+    assert fs.project_fills({"rows": [row]}, "rsi_modular_v2")[0]["volume"] is None
+    row["value_quote_exact"] = None
+    assert (
+        await page(Readers({"rsi_modular_v2": [row]}, registry=["rsi_modular_v2"]))
+    )["items"][0]["volume"] == "21.00525"
+
+
+@sync
 async def test_exact_strings_the_owner_refused_are_not_restored_as_exact():
     # Reporting keeps raw exact strings for provenance but withholds them (null values, `unavailable`
     # precision) when the receipt source is not admitted. The feed must keep that verdict.

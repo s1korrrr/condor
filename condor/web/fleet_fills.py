@@ -108,11 +108,17 @@ def normalize_side(value: Any) -> Optional[str]:
 
 
 def _decimal(row: dict, *keys: str, positive: bool = False) -> Optional[str]:
-    """The first key that parses as a finite decimal. Exact receipt strings are listed before float projections."""
+    """The first present decimal; an invalid exact value cannot promote a lower-priority projection."""
     for key in keys:
-        number = _dec(row.get(key))
-        if number is not None and (not positive or number > 0):
-            return fleet_pnl.decimal_text(number)
+        value = row.get(key)
+        if value is None:
+            continue
+        number = _dec(value)
+        return (
+            fleet_pnl.decimal_text(number)
+            if number is not None and (not positive or number > 0)
+            else None
+        )
     return None
 
 

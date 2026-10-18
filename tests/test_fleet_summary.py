@@ -716,6 +716,76 @@ async def test_glance_stays_under_the_watch_budget_even_with_many_bots(store):
     assert len(fs.canonical_json(healthy)) < 4096 and healthy["bots_total"] == 3
 
 
+def test_numeric_summary_admission_and_exact_fee_controller_sums():
+    for bad in ("1_000", " 1", "١", "1e1000000", "1e-1000000"):
+        assert fs._dec(bad) is None
+    assert fs._dec("0.1") == fleet_pnl.Decimal("0.1")
+    huge = "1" + "0" * 30
+    page = {
+        "controllers": [
+            {"bot_name": "bot", "global_pnl_quote": huge, "trading_pair": "ETH-USDC"},
+            {"bot_name": "bot", "global_pnl_quote": "1", "trading_pair": "BTC-USDC"},
+        ]
+    }
+    exact = fleet_pnl.Decimal(huge[:-1] + "1")
+    assert fs._controller_net(page, "bot") == (exact, "USDC")
+    page["controllers"][0]["global_pnl_quote"] = "9" * 128
+    assert fs._controller_net(page, "bot") is None
+    fills = {
+        "rows": [
+            {
+                "bot_name": "bot",
+                "fill_id": f"fill-{index}",
+                "pair": "ETH-USDC",
+                "exact_trade_fee_in_quote": fee,
+                "receipt_precision": {"fee_quote": "exact_decimal"},
+            }
+            for index, fee in enumerate((huge, "1"))
+        ]
+    }
+    assert fs.project_fill_totals(fills, "bot", 500)["fees"] == exact
+    fills["rows"][0]["exact_trade_fee_in_quote"] = "9" * 128
+    assert fs.project_fill_totals(fills, "bot", 500)["fees"] is None
+
+
+def test_verified_empty_controller_inventory_is_zero_but_missing_inventory_is_unknown():
+    observed = {
+        "runtime_status": {
+            "bot_name": "bot",
+            "updated_at": iso(NOW_MS - 1_000),
+            "controllers": [{"pair": "ETH-USDC", "controller_id": "c"}],
+            "active_executors": [],
+            "lifecycle_executors": [],
+            "positions_held": [],
+        },
+        "monitoring": {"bot_name": "bot", "stale_threshold_seconds": 30},
+    }
+    assert fs.project_runtime_view(observed, "bot", NOW_MS)["held"] == 0
+    del observed["runtime_status"]["positions_held"]
+    assert fs.project_runtime_view(observed, "bot", NOW_MS)["held"] is None
+
+
+@sync
+async def test_max_admitted_amount_width_still_fits_sixteen_bot_glance(store):
+    full = await build(store, "full")
+    amount = "9" * 38 + "0" * 90
+    assert len(amount) == fleet_pnl.MAX_DECIMAL_TEXT_CHARS
+    assert fleet_pnl.decimal_text(fs._dec(amount)) == amount
+    full["bots"] = [copy.deepcopy(full["bots"][0]) for _ in range(fs.GLANCE_MAX_BOTS)]
+    for index, bot in enumerate(full["bots"]):
+        bot["bot"] = f"bot-{index:02d}"
+        bot["display_name"] = f"bot-{index:02d}"
+        bot["pnl_day"] = {"change": amount}
+    for period in ("day", "week", "month", "all"):
+        full["pnl"][period]["total"] = amount
+    full["wallet"]["equity"] = amount
+    for fill in full["fills"][: fs.RECENT_FILLS["glance"]]:
+        fill["volume"] = amount
+    compact = fs.glance(full)
+    assert len(compact["bots"]) == 16
+    assert len(fs.canonical_json(compact)) < 8192
+
+
 @sync
 async def test_etag_tracks_data_not_the_clock(store):
     first, again = await build(store), await build(store, now_ms=NOW_MS + 1000)

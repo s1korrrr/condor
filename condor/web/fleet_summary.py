@@ -30,7 +30,7 @@ import math
 import re
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 from typing import Any, Optional, Protocol
 
 from condor.fetchers.bots import build_bots_page
@@ -152,11 +152,11 @@ def _nonneg_int(value: Any) -> Optional[int]:
 def _dec(value: Any) -> Optional[Decimal]:
     if isinstance(value, bool) or value is None:
         return None
-    try:
-        number = Decimal(str(value))
-    except InvalidOperation:
+    if not isinstance(value, (str, int, float, Decimal)):
         return None
-    return number if number.is_finite() else None
+    if isinstance(value, int) and value.bit_length() > 1024:
+        return None
+    return fleet_pnl._amount(str(value))
 
 
 def _obj(value: Any) -> dict:
@@ -320,8 +320,10 @@ def project_fills(payload: Any, bot: str, now_ms: Optional[float] = None) -> lis
         def pick(*keys: str) -> Optional[str]:
             for key in keys:
                 value = fill.get(key)
-                if _dec(value) is not None:
-                    return fleet_pnl.decimal_text(_dec(value))
+                if value is None:
+                    continue
+                number = _dec(value)
+                return fleet_pnl.decimal_text(number) if number is not None else None
             return None
 
         out.append(
@@ -353,8 +355,8 @@ def _text(value: Any) -> Optional[str]:
 
 
 def _nonneg_dec(value: Any) -> Optional[Decimal]:
-    number = _num(value)
-    return Decimal(str(value)) if number is not None and number >= 0 else None
+    number = _dec(value)
+    return number if number is not None and number >= 0 else None
 
 
 def _quantity(controller: dict, controllers: list, positions, lifecycle) -> Optional[Decimal]:
@@ -408,7 +410,7 @@ def _quantity(controller: dict, controllers: list, positions, lifecycle) -> Opti
         row.get("remaining_position_amount_base") for row in active
     ]
     values = [_nonneg_dec(part) for part in parts]
-    return None if any(v is None for v in values) else sum(values, Decimal(0))
+    return None if any(v is None for v in values) else fleet_pnl.exact_sum(values)
 
 
 def project_runtime_view(payload: Any, bot: str, now_ms: float) -> Optional[dict]:
@@ -500,7 +502,7 @@ def project_fill_totals(payload: Any, bot: str, limit: int) -> Optional[dict]:
     fees = [_dec(row["fee"]) for row in rows]
     return {
         "count": len(rows),
-        "fees": None if any(f is None for f in fees) else sum(fees, Decimal(0)),
+        "fees": None if any(f is None for f in fees) else fleet_pnl.exact_sum(fees),
         "quote": quotes.pop() if len(quotes) == 1 else None,
         "saturated": isinstance(raw, list) and len(raw) >= limit,
     }
@@ -713,20 +715,25 @@ def _controller_net(
     rows = [c for c in (page or {}).get("controllers", []) if c.get("bot_name") == bot]
     if not rows:
         return None
-    total = Decimal(0)
+    values = []
     quotes = set()
     for row in rows:
         value = _dec(row.get("global_pnl_quote"))
         if value is None:
             return None
-        total += value
+        values.append(value)
         pair = row.get("trading_pair")
         quotes.add(
             pair.split("-")[1]
             if isinstance(pair, str) and pair.count("-") == 1
             else None
         )
-    return total, (quotes.pop() if len(quotes) == 1 else None)
+    total = fleet_pnl.exact_sum(values)
+    return (
+        (total, quotes.pop() if len(quotes) == 1 else None)
+        if total is not None
+        else None
+    )
 
 
 def _bot_cards(

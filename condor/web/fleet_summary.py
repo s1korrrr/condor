@@ -1042,8 +1042,13 @@ async def build_fleet_summary(
         (bot, path, {})
         for bot in bots
         for path in ("quant-summary", "quant-cycles", "bootstrap")
+        if view == "full" or path != "quant-cycles" or not is_paper(bot)
     ]
-    owner_jobs += [(bot, "fills", {"limit": str(OWNER_FILL_LIMIT)}) for bot in bots]
+    owner_jobs += [
+        (bot, "fills", {"limit": str(OWNER_FILL_LIMIT)})
+        for bot in bots
+        if view == "full" or not is_paper(bot)
+    ]
     incident_bot = live[0] if live else None
     if is_admin and incident_bot:
         owner_jobs.append((incident_bot, "operations", {}))
@@ -1157,6 +1162,7 @@ async def build_fleet_summary(
     cycles = {
         bot: project_quant_cycles(owner[(bot, "quant-cycles")].payload, bot)
         for bot in bots
+        if (bot, "quant-cycles") in owner
     }
     runtime = {
         bot: project_runtime_view(owner[(bot, "bootstrap")].payload, bot, now_ms)
@@ -1165,6 +1171,7 @@ async def build_fleet_summary(
     totals = {
         bot: project_fill_totals(owner[(bot, "fills")].payload, bot, OWNER_FILL_LIMIT)
         for bot in bots
+        if (bot, "fills") in owner
     }
     owner_reasons: dict[tuple[str, str], str] = {}
     projections = {
@@ -1271,7 +1278,7 @@ async def build_fleet_summary(
 
     # paper fills: a separate, labelled list (full view only), never merged into ``fills``
     paper_fills: Optional[list[dict]] = None
-    if paper_bots:
+    if paper_bots and view == "full":
         paper_merged = [
             {**fill, "simulated": True}
             for bot in paper_bots
@@ -1402,7 +1409,7 @@ def glance(full: dict) -> dict:
             if full["fills"] is None
             else [
                 {k: f[k] for k in ("bot", "pair", "side", "volume", "time_ms")}
-                for f in full["fills"]
+                for f in full["fills"][: RECENT_FILLS["glance"]]
             ]
         ),
         "incidents": (

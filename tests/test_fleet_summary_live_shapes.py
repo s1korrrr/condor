@@ -341,21 +341,36 @@ def test_the_proxy_and_the_summary_share_one_credential_helper(monkeypatch):
     assert isinstance(trading_visuals.source_auth(SOURCES["ok_rsi"]), httpx.BasicAuth)
 
 
-# ── one computation serves both views ──
+# ── selected-view cache reuse ──
 
 
-def test_glance_and_full_share_one_computation_inside_the_cache_window(monkeypatch, store):
+def test_glance_cache_never_satisfies_full_but_full_cache_serves_glance(
+    monkeypatch, store
+):
     client = client_for(monkeypatch, store)
     monkeypatch.setattr(routes, "CACHE_TTL_SECONDS", 60)
     readers = routes.READERS
     glance = client.get(f"/api/v1/servers/{SERVER}/fleet/summary?view=glance")
-    calls = len(readers.calls)
+    glance_calls = len(readers.calls)
     full = client.get(f"/api/v1/servers/{SERVER}/fleet/summary")
-    assert glance.status_code == full.status_code == 200 and calls > 0
-    assert len(readers.calls) == calls  # the full view did not read the owners again
+    assert glance.status_code == full.status_code == 200 and glance_calls > 0
+    assert len(readers.calls) > glance_calls
+    assert ("ok_rsi_paper", "quant-cycles") in readers.calls
+    assert ("ok_rsi_paper", "fills") in readers.calls
+    assert "paper_fills" in full.json()
     assert glance.json()["market"] is not None and full.json()["market"] is not None
     assert glance.json()["generated_at_ms"] == full.json()["generated_at_ms"]
     assert glance.headers["ETag"] != full.headers["ETag"]
+
+    routes._cache.clear()
+    readers.calls.clear()
+    full = client.get(f"/api/v1/servers/{SERVER}/fleet/summary?view=full")
+    full_calls = len(readers.calls)
+    glance = client.get(f"/api/v1/servers/{SERVER}/fleet/summary?view=glance")
+    assert glance.status_code == full.status_code == 200
+    assert glance.json() == fs.glance(full.json())
+    assert len(glance.json()["fills"]) == fs.RECENT_FILLS["glance"]
+    assert len(readers.calls) == full_calls
 
 
 

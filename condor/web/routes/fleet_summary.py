@@ -41,9 +41,10 @@ HEADERS = {
 ALLOWED_QUERY = {"view", "schema"}
 HISTORY_WINDOW = "6h"  # the verdict replays the last six hours of stored breadth
 
-# One computation per (server, admin) serves both views: the glance is a projection of the full body, and
-# the market frame and every owner read behind it are shared inside the cache window.
-_cache: dict[tuple[str, bool], tuple[float, dict]] = {}
+# A full result can serve either view. A glance-only result can serve only a glance; it
+# must never be returned as a full payload. The shared per-key lock keeps source reads
+# coherent and coalesces concurrent requests while the views are populated.
+_cache: dict[tuple[str, bool], dict[str, tuple[float, dict]]] = {}
 _locks: dict[tuple[str, bool], asyncio.Lock] = {}
 
 
@@ -159,25 +160,47 @@ def _tag_matches(header: Optional[str], tag: str) -> bool:
     )
 
 
-async def cached_summary(name: str, *, admin: bool, user_id: Any) -> dict:
-    """The full summary for one server, through the shared micro-cache. Raises TimeoutError."""
+async def cached_summary(
+    name: str, *, admin: bool, user_id: Any, view: str = "full"
+) -> dict:
+    """Build or read one view through the shared micro-cache. Raises TimeoutError."""
+    if view not in summary.VIEWS:
+        raise ValueError(f"unknown view {view!r}")
     key = (name, admin)
-    async with _locks.setdefault(key, asyncio.Lock()):
-        hit = _cache.get(key)
-        if hit is None or hit[0] <= time.monotonic():
-            async with asyncio.timeout(TOTAL_TIMEOUT):
-                full = await summary.build_fleet_summary(
-                    name,
-                    "full",
-                    READERS,
-                    time.time() * 1000,
-                    is_admin=admin,
-                    user_id=user_id,
-                )
-            hit = (time.monotonic() + CACHE_TTL_SECONDS, full)
+    async with asyncio.timeout(TOTAL_TIMEOUT):
+        async with _locks.setdefault(key, asyncio.Lock()):
+            now = time.monotonic()
+            entry = _cache.get(key, {})
+            full_hit = entry.get("full")
+            if full_hit is not None and full_hit[0] <= now:
+                full_hit = None
+            view_hit = entry.get(view)
+            if view_hit is not None and view_hit[0] <= now:
+                view_hit = None
+
+            if view == "full" and full_hit is not None:
+                return full_hit[1]
+            if view == "glance":
+                if full_hit is not None:
+                    return summary.glance(full_hit[1])
+                if view_hit is not None:
+                    return view_hit[1]
+
+            body = await summary.build_fleet_summary(
+                name,
+                view,
+                READERS,
+                time.time() * 1000,
+                is_admin=admin,
+                user_id=user_id,
+            )
             if CACHE_TTL_SECONDS > 0:
-                _cache[key] = hit
-    return hit[1]
+                expires = time.monotonic() + CACHE_TTL_SECONDS
+                entry = _cache.setdefault(key, {})
+                entry[view] = (expires, body)
+                if view == "full":
+                    entry["glance"] = (expires, summary.glance(body))
+            return body
 
 
 async def glance_for(name: str, user_id: Any) -> dict:
@@ -187,8 +210,9 @@ async def glance_for(name: str, user_id: Any) -> dict:
     cm = get_config_manager()
     if not cm.has_server_access(user_id, name):
         raise LookupError("server not found")
-    full = await cached_summary(name, admin=bool(cm.is_admin(user_id)), user_id=user_id)
-    return summary.glance(full)
+    return await cached_summary(
+        name, admin=bool(cm.is_admin(user_id)), user_id=user_id, view="glance"
+    )
 
 
 @router.get("/servers/{name}/fleet/summary")
@@ -213,14 +237,16 @@ async def fleet_summary(
             detail=f"Unsupported schema; this server speaks {summary.SCHEMA_VERSION}",
         )
     try:
-        full = await cached_summary(
-            name, admin=bool(cm.is_admin(user.id)), user_id=user.id
+        body = await cached_summary(
+            name,
+            admin=bool(cm.is_admin(user.id)),
+            user_id=user.id,
+            view=view,
         )
     except TimeoutError:
         raise HTTPException(
             status_code=504, detail="Fleet summary exceeded its deadline"
         ) from None
-    body = full if view == "full" else summary.glance(full)
     tag = summary.etag_for(body)
     headers = {**HEADERS, "ETag": tag, "X-Fleet-Summary-Schema": summary.SCHEMA_VERSION}
     if _tag_matches(request.headers.get("If-None-Match"), tag):

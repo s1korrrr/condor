@@ -637,9 +637,9 @@ def _content_client(monkeypatch, tmp_path, *, user_id=1, allow=True, index=None)
     client, _ = _client(monkeypatch, tmp_path, user_id=user_id, allow=allow)
     calls = []
 
-    async def cached_summary(name, *, admin, user_id):
-        calls.append((name, admin, user_id))
-        return FULL
+    async def cached_summary(name, *, admin, user_id, view="full"):
+        calls.append((name, admin, user_id, view))
+        return FULL if view == "full" else summary_routes.summary.glance(FULL)
 
     async def never(server):
         raise AssertionError("the content route must not build the Market index")
@@ -669,7 +669,7 @@ def test_content_route_serves_the_content_state_of_the_cached_glance(
     # The glance of the builder's full example is the glance example; its content state is
     # the shared fixture the app decodes.
     assert response.json() == SHARED_CONTENT  # no Market index published: omitted
-    assert calls == [(SERVER, True, 1)]
+    assert calls == [(SERVER, True, 1, "glance")]
 
 
 def test_content_route_adds_the_servers_market_index(monkeypatch, tmp_path):
@@ -736,7 +736,7 @@ def test_content_route_reports_a_summary_deadline(monkeypatch, tmp_path):
 
     client, _ = _client(monkeypatch, tmp_path)
 
-    async def slow(name, *, admin, user_id):
+    async def slow(name, *, admin, user_id, view="full"):
         raise TimeoutError
 
     monkeypatch.setattr(summary_routes, "get_config_manager", lambda: Servers())

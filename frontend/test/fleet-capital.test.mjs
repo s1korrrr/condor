@@ -118,7 +118,7 @@ test('strategy rows give every bot a row, split the fleet total and share owned 
 
 const tileInput = (over = {}) => ({
   rangeLabel: '7D', unit: 'USDT', range: window(), daily: window({ total: 1.5 }), weekly: window({ total: 3 }), monthly: window({ total: 3, partial: true, since: NOW - 3 * 86_400_000, fullBots: 0, bots: [{ bot: 'a', stale: false, full: false, firstAt: NOW - 3 * 86_400_000, lastAt: NOW }] }),
-  series: [{ time: 1, value: 0 }, { time: 2, value: 3 }, { time: 3, value: 1 }], bars: [], riskWindow: window({ quote: 'USDT' }), riskQuote: 'USDT', riskBasisQuote: 'USDT', riskBasis: 10_000, riskHorizon: 'trailing 30D', walletChange: { amount: -20, percent: -0.002 }, meanWallet: 10_000, drawdown: -0.01, cycles: null, now: NOW, ...over,
+  series: [{ time: 1, value: 0 }, { time: 2, value: 3 }, { time: 3, value: 1 }], bars: [], riskWindow: window({ quote: 'USDT' }), riskQuote: 'USDT', riskBasisQuote: 'USDT', riskBasis: 10_000, riskHorizon: 'trailing 30D', walletChange: { amount: -20, percent: -0.002 }, drawdown: -0.01, cycles: null, now: NOW, ...over,
 });
 const ids = result => result.tiles.map(tile => tile.id);
 
@@ -175,7 +175,7 @@ test('risk tiles appear after the minimum days of completed fleet PnL and the fo
 test('risk uses the matched wallet basis and identifies an incomplete admitted cohort', () => {
   const bars = Array.from({ length: 16 }, (_, index) => ({ day: `2026-09-${String(index + 1).padStart(2, '0')}`, net: index % 2 ? 10 : -5, realized: 0, unrealized: 0, bots: 1, cumulative: 0, today: false }));
   const partial = window({ quote: 'USDT', expected: 2, missing: [{ bot: 'b', reason: 'No saved samples' }] });
-  const result = capital.fleetTiles(tileInput({ bars, range: partial, riskWindow: partial, riskBasis: 1000, meanWallet: 10_000 }));
+  const result = capital.fleetTiles(tileInput({ bars, range: partial, riskWindow: partial, riskBasis: 1000 }));
   assert.ok(Math.abs(result.risk.volatilityDaily - perf.fleetRisk(bars.map(bar => bar.net / 1000)).volatilityDaily) < 1e-12);
   assert.equal(result.tiles.find(tile => tile.id === 'C18-vol').state.kind, 'incomplete');
   assert.equal(result.tiles.find(tile => tile.id === 'C02').state.kind, 'incomplete');
@@ -193,7 +193,7 @@ test('overflowing daily risk moments explain unavailable statistics rather than 
   assert.doesNotMatch(result.footnote, /appear after 14 days/i);
 });
 
-test('cycle tiles show with their sample size and lifetime basis, and turnover needs a matching unit and a wallet', () => {
+test('cycle tiles retain lifetime volume and sample coverage without inventing turnover', () => {
   const fleetCycles = { quote: 'USDT', bots: 2, of: 3, scored: 6, wins: 3, losses: 3, winRate: 0.5, grossWin: 6, grossLoss: 4, profitFactor: 1.5, fees: 2, feeBots: 2, grossVolume: 400, volumeBots: 2, fillCount: 12, openLots: 3, oldestSeconds: 10, countBots: 2, quoteScored: 6, volumeFillCount: 12, fillBots: 2, gaps: { counts: ['c'], quote: ['c'], fees: ['c'], volume: ['c'], fills: ['c'] } };
   const result = capital.fleetTiles(tileInput({ cycles: fleetCycles }));
   const byId = Object.fromEntries(result.tiles.map(tile => [tile.id, tile]));
@@ -203,15 +203,13 @@ test('cycle tiles show with their sample size and lifetime basis, and turnover n
   assert.equal(byId['C18-fees'].value, '2');
   assert.match(byId['C18-fees'].note, /lifetime · 2 of 3 bots/);
   assert.equal(byId['C18-volume'].value, '400');
-  assert.equal(byId['C18-turnover'].value, String(400 / 10_000));
-  assert.equal(byId['C18-turnover'].unit, 'x');
-  assert.match(byId['C18-turnover'].note, /Lifetime gross volume ÷ mean wallet over 7D/);
+  assert.equal(byId['C18-volume'].unit, 'USDT');
+  assert.equal(byId['C18-volume'].state.kind, 'incomplete');
+  assert.match(byId['C18-volume'].note, /12 fills · lifetime · 2 of 3 bots/);
+  assert.equal(ids(result).includes('C18-turnover'), false, 'lifetime volume has no matching account-capital interval, even with a same-currency wallet');
   const other = capital.fleetTiles(tileInput({ cycles: { ...fleetCycles, quote: 'USDC', profitFactor: null } }));
-  assert.equal(ids(other).includes('C18-turnover'), false, 'USDC volume is not divided by a USDT wallet');
+  assert.equal(ids(other).includes('C18-turnover'), false);
   assert.equal(ids(other).includes('C18-pf'), false);
-  const noWallet = capital.fleetTiles(tileInput({ cycles: fleetCycles, meanWallet: null }));
-  assert.equal(ids(noWallet).includes('C18-turnover'), false);
-  assert.doesNotMatch(noWallet.footnote, /needs a wallet valuation/, 'risk uses its own observed wallet basis, independent of selected-range turnover');
 });
 
 test('merged fills carry their bot, newest first; rails keep only limited ones, tightest first', () => {

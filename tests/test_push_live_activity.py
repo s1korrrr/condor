@@ -189,10 +189,75 @@ def test_a_glance_without_sections_is_stale():
 
 def test_bots_count_running_live_bots_against_the_live_total():
     glance = copy.deepcopy(GLANCE)
+    glance.pop("bot_counts", None)  # Backwards-compatible uncapped payload.
     glance["bots"][1]["status"] = "stopped"
-    glance["bots_total"] = 20  # the glance lists at most 16 cards
     state = la.content_state(glance)
-    assert (state["bots_running"], state["bots_total"]) == (1, 19)
+    assert (state["bots_running"], state["bots_total"]) == (1, 2)
+
+
+def test_capped_glance_uses_whole_fleet_counts_and_legacy_unknown_stays_unknown():
+    glance = copy.deepcopy(GLANCE)
+    glance["bots_total"] = 25
+    glance["bot_counts"] = {
+        "live_running": 20,
+        "live_total": 20,
+        "paper_total": 5,
+        "live_stale_reports": 2,
+    }
+    state = la.content_state(glance)
+    assert (state["bots_running"], state["bots_total"]) == (20, 20)
+    del glance["bot_counts"]
+    legacy = la.content_state(glance)
+    assert "bots_running" not in legacy and "bots_total" not in legacy
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        {"live_running": True},
+        {"live_running": -1},
+        {"live_running": 21},
+        {"live_total": 19},
+        {"paper_total": None},
+        {"live_stale_reports": 21},
+    ],
+)
+def test_invalid_aggregate_counts_never_fall_back_to_a_truncated_slice(change):
+    glance = copy.deepcopy(GLANCE)
+    glance["bots_total"] = 25
+    glance["bot_counts"] = {
+        "live_running": 20,
+        "live_total": 20,
+        "paper_total": 5,
+        "live_stale_reports": 2,
+        **change,
+    }
+    state = la.content_state(glance)
+    assert "bots_running" not in state and "bots_total" not in state
+
+
+@pytest.mark.parametrize("change", [{"live_running": 0}, {"live_stale_reports": 0}])
+def test_aggregate_counts_cannot_contradict_the_visible_cards(change):
+    glance = copy.deepcopy(GLANCE)
+    glance["bots_total"] = 25
+    glance["bot_counts"] = {
+        "live_running": 20,
+        "live_total": 20,
+        "paper_total": 5,
+        "live_stale_reports": 2,
+        **change,
+    }
+    assert all("bots_" not in key for key in la.content_state(glance))
+
+
+@pytest.mark.parametrize("total", [None, True, -1, "25"])
+def test_legacy_glance_without_a_valid_registered_total_cannot_claim_counts(total):
+    glance = copy.deepcopy(GLANCE)
+    glance.pop("bot_counts", None)
+    glance["bots_total"] = total
+    assert all("bots_" not in key for key in la.content_state(glance))
+    del glance["bots_total"]
+    assert all("bots_" not in key for key in la.content_state(glance))
 
 
 def test_an_incomplete_last_fill_is_omitted_rather_than_half_filled():

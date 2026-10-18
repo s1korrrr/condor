@@ -8,6 +8,7 @@ import time
 from contextlib import closing, contextmanager
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
+from threading import Lock
 from uuid import uuid4
 
 from condor.fetchers.bots import extract_bots_list, _native_observation_times
@@ -123,16 +124,38 @@ def project(bot, now):
 class PerformanceHistory:
     def __init__(self, path=Path("data/native-performance.sqlite3")):
         self.path = Path(path)
+        self._initialized = False
+        self._initialization_lock = Lock()
 
     @contextmanager
     def _connect(self):
         self.path.parent.mkdir(parents=True, exist_ok=True)
-        # The API's background writer and concurrent dashboard reads share
-        # this file. Reserve the write transaction before schema inspection so
-        # concurrent first use cannot both observe a missing migration column.
+        # Keep each writer transaction separate from one-time schema migration.
         conn = sqlite3.connect(self.path, timeout=15)
         conn.row_factory = sqlite3.Row
         try:
+            self._initialize(conn)
+            conn.execute("BEGIN IMMEDIATE")
+            yield conn
+            conn.commit()
+        except BaseException:
+            if conn.in_transaction:
+                conn.rollback()
+            raise
+        finally:
+            conn.close()
+
+    def _initialize(self, conn):
+        with self._initialization_lock:
+            if self._initialized:
+                return
+            # The local observer has concurrent dashboard readers and a writer.
+            # WAL lets readers retain committed snapshots while writes commit.
+            mode = conn.execute("PRAGMA journal_mode=WAL").fetchone()[0]
+            if mode != "wal":
+                raise RuntimeError(
+                    f"Performance history requires SQLite WAL mode; got {mode}"
+                )
             conn.execute("BEGIN IMMEDIATE")
             conn.execute(
                 "CREATE TABLE IF NOT EXISTS points (server TEXT, bot TEXT, timestamp REAL, identity TEXT, segment TEXT, quote TEXT, realized_pnl_quote TEXT, unrealized_pnl_quote TEXT, total_pnl_quote TEXT, PRIMARY KEY(server,bot,timestamp))"
@@ -168,14 +191,8 @@ class PerformanceHistory:
                 "CREATE TABLE IF NOT EXISTS paper_wallet_cursors (server TEXT, bot TEXT, timestamp REAL, sampled REAL, valid INTEGER, PRIMARY KEY(server,bot))"
             )
             conn.execute("CREATE INDEX IF NOT EXISTS paper_wallet_points_timestamp ON paper_wallet_points(timestamp)")
-            yield conn
             conn.commit()
-        except BaseException:
-            if conn.in_transaction:
-                conn.rollback()
-            raise
-        finally:
-            conn.close()
+            self._initialized = True
 
     @staticmethod
     def _store_wallet(conn, points, cursors, server, samples, now):

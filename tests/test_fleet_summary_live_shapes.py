@@ -170,6 +170,22 @@ async def build_live(store, view="full", **kwargs):
 
 
 @sync
+async def test_report_clock_comes_from_the_source_that_establishes_currentness(store):
+    class Readers(LiveShapeReaders):
+        async def owner(self, bot, path, params):
+            if bot == "meridian_v3" and path == "quant-summary":
+                return fs.OwnerRead(quant_summary(bot, NOW_MS - 240_000))
+            return await super().owner(bot, path, params)
+
+    body = await fs.build_fleet_summary(
+        SERVER, "full", Readers(store), NOW_MS, is_admin=True, user_id=7
+    )
+    v3 = card(body, "meridian_v3")
+    assert v3["report_stale"] is False
+    assert v3["report_at_ms"] == NOW_MS - 4_000
+
+
+@sync
 async def test_v1_without_quant_endpoints_is_filled_from_runtime_and_fill_ledger(store):
     body = await build_live(store)
     v1 = card(body, "ok_rsi")
@@ -371,7 +387,6 @@ def test_glance_cache_never_satisfies_full_but_full_cache_serves_glance(
     assert glance.json() == fs.glance(full.json())
     assert len(glance.json()["fills"]) == fs.RECENT_FILLS["glance"]
     assert len(readers.calls) == full_calls
-
 
 
 def _v3_fixture(name):

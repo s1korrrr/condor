@@ -658,6 +658,22 @@ async def test_glance_is_a_consistent_compact_projection(store):
 
 
 @sync
+async def test_aggregate_running_count_matches_case_insensitive_client_status(store):
+    class Readers(FakeReaders):
+        async def bots_status(self, server):
+            page = bots_status()
+            for row in page["data"].values():
+                row["status"] = "Running"
+            return page
+
+    full = await fs.build_fleet_summary(
+        SERVER, "full", Readers(store), NOW_MS, is_admin=True, user_id=7
+    )
+    assert full["bot_counts"]["live_running"] == 2
+    assert fs.glance(full)["bot_counts"] == full["bot_counts"]
+
+
+@sync
 async def test_glance_stays_under_the_watch_budget_even_with_many_bots(store):
     names = [f"bot_v2_{n:02d}" for n in range(38)] + ["ok_rsi", "ok_rsi_paper"]
     seed(store, names[:12])
@@ -668,6 +684,8 @@ async def test_glance_stays_under_the_watch_budget_even_with_many_bots(store):
     size = len(fs.canonical_json(body))
     assert size < 8192, size
     assert len(body["bots"]) == fs.GLANCE_MAX_BOTS and body["bots_total"] == 40
+    assert body["bot_counts"]["live_total"] == 39
+    assert body["bot_counts"]["paper_total"] == 1
     assert (
         len(body["missing"]) == fs.GLANCE_MAX_MISSING
         and body["missing_total"] > fs.GLANCE_MAX_MISSING

@@ -188,6 +188,65 @@ def test_read_does_not_create_storage(tmp_path):
     assert not store.path.exists()
 
 
+@pytest.mark.parametrize("wallet", [False, True])
+@pytest.mark.parametrize("period", ["1D", "1W", "1M", "ALL"])
+@pytest.mark.parametrize("paper", [False, True])
+def test_history_is_bounded_by_the_requested_observation_clock(
+    tmp_path, wallet, period, paper
+):
+    store = PerformanceHistory(tmp_path / "as-of.db")
+    bot = "meridian_v4_paper" if paper else "main"
+    if wallet:
+        record = store.record_paper_wallet if paper else store.record_wallet
+        for stamp in (1000, 1060, 1120):
+            record(
+                "server",
+                {
+                    bot: {
+                        "timestamp": stamp,
+                        "currency": "USDC",
+                        "value_quote": "1",
+                        "source_id": "owner",
+                        "balances": [{"asset": "USDC", "total": "1", "value": "1"}],
+                        "simulated": paper,
+                    }
+                },
+                now=stamp,
+            )
+    else:
+        table = "paper_points" if paper else "points"
+        with store._connect() as conn:
+            conn.executemany(
+                f"INSERT INTO {table} VALUES (?,?,?,?,?,?,?,?,?)",
+                [
+                    (
+                        "server",
+                        bot,
+                        stamp,
+                        "owner",
+                        "segment",
+                        "USDC",
+                        str(index),
+                        "0",
+                        str(index),
+                    )
+                    for index, stamp in enumerate((1000, 1060, 1120))
+                ],
+            )
+    read = store.read_wallet if wallet else store.read
+    result = read("server", bot, period, now=1060)
+    assert result["coverage_start"] == 1000
+    assert max(point["timestamp"] for point in result["points"]) == 1060
+    assert all(point["timestamp"] <= 1060 for point in result["points"])
+    if wallet:
+        assert result["latest"]["timestamp"] == 1060
+    before_first = read("server", bot, period, now=900)
+    assert before_first["coverage_start"] is None
+    assert before_first["points"] == []
+    if wallet:
+        assert before_first["latest"] is None
+
+
 @pytest.mark.parametrize("paper", [False, True])
 @pytest.mark.parametrize("wallet", [False, True])
 def test_readers_keep_committed_history_while_writer_is_open(

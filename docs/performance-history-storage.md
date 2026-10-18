@@ -16,6 +16,12 @@ to enable WAL raises an error. SQLite's normal durability and automatic
 checkpoint behavior remain enabled. Concurrent readers see committed snapshots;
 they must not prevent a writer from committing or block a later reader.
 
+Each history read uses its requested observation clock as an inclusive upper
+bound. Coverage, bucket selection and the newest wallet sample use that same
+bound. A later observer write must not enter an earlier summary or cause its
+valid history to be rejected as future data. Live and paper histories follow
+the same rule in separate tables.
+
 For an existing deployment, stop the Condor service before migration, preserve
 the original database, and use SQLite's backup API inside the owning Docker VM
 to copy into the new volume. Check integrity, table counts and sample bounds

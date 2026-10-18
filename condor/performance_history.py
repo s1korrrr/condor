@@ -274,20 +274,35 @@ class PerformanceHistory:
             if table not in tables:
                 return result
             start = conn.execute(
-                f"SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=?", (server, bot)
+                f"SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp<=?",
+                (server, bot, now),
             ).fetchone()[0]
             # Longer windows return the last sample of each bucket so day-end statistics keep full coverage.
             bucket = WALLET_BUCKETS[period]
             rows = conn.execute(
-                f"SELECT timestamp,currency,value_quote,source_id,balances_json FROM {table} WHERE server=? AND bot=? AND timestamp>=? "
-                f"AND timestamp IN (SELECT MAX(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND " + ADMITTED_VALUE + " GROUP BY CAST(timestamp/? AS INTEGER)) "
+                f"SELECT timestamp,currency,value_quote,source_id,balances_json FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND timestamp<=? "
+                f"AND timestamp IN (SELECT MAX(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND timestamp<=? AND "
+                + ADMITTED_VALUE
+                + " GROUP BY CAST(timestamp/? AS INTEGER)) "
                 "ORDER BY timestamp DESC LIMIT 10001",
-                (server, bot, now - RANGES[period], server, bot, now - RANGES[period], bucket),
+                (
+                    server,
+                    bot,
+                    now - RANGES[period],
+                    now,
+                    server,
+                    bot,
+                    now - RANGES[period],
+                    now,
+                    bucket,
+                ),
             ).fetchall()
             # The newest sample regardless of window, with its balances: the last-known wallet when the owner is stale.
             latest_row = conn.execute(
-                f"SELECT timestamp,currency,value_quote,source_id,balances_json FROM {table} WHERE server=? AND bot=? AND " + ADMITTED_VALUE + " ORDER BY timestamp DESC LIMIT 1",
-                (server, bot),
+                f"SELECT timestamp,currency,value_quote,source_id,balances_json FROM {table} WHERE server=? AND bot=? AND timestamp<=? AND "
+                + ADMITTED_VALUE
+                + " ORDER BY timestamp DESC LIMIT 1",
+                (server, bot, now),
             ).fetchone()
         latest = None
         if latest_row is not None:
@@ -434,25 +449,39 @@ class PerformanceHistory:
             if table not in tables:
                 return result
             start = conn.execute(
-                f"SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=?",
-                (server, bot),
+                f"SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp<=?",
+                (server, bot, now),
             ).fetchone()[0]
             bucket = PERFORMANCE_BUCKETS[period]
             columns = "timestamp,identity,segment,quote,realized_pnl_quote,unrealized_pnl_quote,total_pnl_quote"
             since = now - RANGES[period]
             if bucket is None:
                 rows = conn.execute(
-                    f"SELECT {columns} FROM {table} WHERE server=? AND bot=? AND timestamp>=? ORDER BY timestamp DESC LIMIT 10001",
-                    (server, bot, since),
+                    f"SELECT {columns} FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND timestamp<=? ORDER BY timestamp DESC LIMIT 10001",
+                    (server, bot, since, now),
                 ).fetchall()
             else:
                 rows = conn.execute(
-                    f"SELECT {columns} FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND ("
-                    f"timestamp IN (SELECT MAX(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? "
+                    f"SELECT {columns} FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND timestamp<=? AND ("
+                    f"timestamp IN (SELECT MAX(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND timestamp<=? "
                     "GROUP BY segment, CAST(timestamp/? AS INTEGER)) "
-                    f"OR timestamp IN (SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? GROUP BY segment)"
+                    f"OR timestamp IN (SELECT MIN(timestamp) FROM {table} WHERE server=? AND bot=? AND timestamp>=? AND timestamp<=? GROUP BY segment)"
                     ") ORDER BY timestamp DESC LIMIT 10001",
-                    (server, bot, since, server, bot, since, bucket, server, bot, since),
+                    (
+                        server,
+                        bot,
+                        since,
+                        now,
+                        server,
+                        bot,
+                        since,
+                        now,
+                        bucket,
+                        server,
+                        bot,
+                        since,
+                        now,
+                    ),
                 ).fetchall()
         result.update(
             coverage_start=start,

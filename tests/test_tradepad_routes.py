@@ -211,10 +211,23 @@ def test_viewer_page_without_store(monkeypatch):
     assert page.status_code == 503 and "not configured" in page.text
 
 
-def test_app_registers_the_page_before_the_spa_fallback():
-    from condor.web.app import create_app
+def test_app_registers_the_page_before_the_spa_fallback(tmp_path, monkeypatch):
+    from condor.web import app as web_app
 
-    paths = [getattr(route, "path", "") for route in create_app().routes]
-    assert "/api/v1/tradepad/catalog" in paths and "/tradepad" in paths
-    if "/{full_path:path}" in paths:
-        assert paths.index("/tradepad") < paths.index("/{full_path:path}")
+    dist = tmp_path / "frontend" / "dist"
+    (dist / "assets").mkdir(parents=True)
+    (dist / "index.html").write_text("DASHBOARD_SHELL_FIXTURE")
+    monkeypatch.setattr(web_app, "__file__", str(tmp_path / "condor" / "web" / "app.py"))
+    monkeypatch.delenv("CONDOR_TRADEPAD_DIR", raising=False)
+
+    app = web_app.create_app()
+    assert str(app.url_path_for("tradepad_catalog")) == "/api/v1/tradepad/catalog"
+    assert str(app.url_path_for("tradepad_page")) in {"/tradepad", "/tradepad/"}
+    api = TestClient(app)
+    assert api.get("/other-page").text == "DASHBOARD_SHELL_FIXTURE"
+    for path in ("/tradepad", "/tradepad/"):
+        page = api.get(path)
+        assert page.status_code == 503 and "Tradepad" in page.text
+        assert "default-src 'none'" in page.headers["content-security-policy"]
+    catalog = api.get("/api/v1/tradepad/catalog")
+    assert catalog.status_code == 401 and catalog.headers["content-type"] == "application/json"

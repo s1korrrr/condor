@@ -168,7 +168,12 @@ export function useFleetControllerPnl(server: string | null, bots: string[], now
     queryFn: async ({ signal }) => {
       const response = await authFetch(`/api/v1/servers/${encodeURIComponent(server!)}/bots`, { signal: AbortSignal.any([signal, AbortSignal.timeout(9000)]), cache: 'no-store', redirect: 'error' });
       if (!response.ok) throw new Error(`Controller performance request failed (${response.status})`);
-      return response.json() as Promise<unknown>;
+      const payload: unknown = await response.json();
+      // The server reports an unreachable native owner as a successful HTTP response with an offline envelope.
+      if (payload && typeof payload === 'object' && 'server_online' in payload && payload.server_online === false) {
+        throw new Error('Current controller reports are unavailable');
+      }
+      return payload;
     },
     refetchInterval: 10_000, retry: false,
   });

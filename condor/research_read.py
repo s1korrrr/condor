@@ -714,13 +714,28 @@ async def read_research_document(parameters):
                 await close_resources()
 
     try:
-        request = client.build_request(
-            "GET",
-            ORIGIN + "/document",
-            params=parameters,
-            headers={"Accept-Encoding": "identity"},
-        )
-        response = await client.send(request, stream=True)
+        # Admission retries share one budget for opening the document. Delivery
+        # remains streamed and retains its own declared-length checks below.
+        async with asyncio.timeout(LONG_READ_DEADLINE_SECONDS):
+            for attempt in range(NATIVE_BUSY_MAX_ATTEMPTS):
+                request = client.build_request(
+                    "GET",
+                    ORIGIN + "/document",
+                    params=parameters,
+                    headers={"Accept-Encoding": "identity"},
+                )
+                response = await client.send(request, stream=True)
+                if not await _native_reader_busy(response):
+                    break
+                await response.aclose()
+                response = None
+                if attempt + 1 == NATIVE_BUSY_MAX_ATTEMPTS:
+                    raise HTTPException(
+                        503,
+                        NATIVE_BUSY_ERROR,
+                        headers={"Retry-After": "1"},
+                    )
+                await asyncio.sleep(1)
         if response.status_code in {400, 403, 404, 409, 413}:
             raise HTTPException(
                 response.status_code,
@@ -771,7 +786,12 @@ async def read_research_document(parameters):
         )
         handed_off = True
         return result
-    except (HTTPException, httpx.HTTPError, ValueError, TimeoutError) as error:
+    except (TimeoutError, httpx.TimeoutException):
+        raise HTTPException(
+            504,
+            f"Research OS did not answer within the {LONG_READ_DEADLINE_SECONDS:g} s read deadline",
+        ) from None
+    except (HTTPException, httpx.HTTPError, ValueError) as error:
         if isinstance(error, HTTPException):
             raise
         raise HTTPException(

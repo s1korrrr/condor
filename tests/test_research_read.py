@@ -169,6 +169,46 @@ def _native_busy_response():
     )
 
 
+def _fast_native_retry_sleep(monkeypatch):
+    from condor import research_read
+
+    actual_sleep = asyncio.sleep
+    waits = []
+
+    async def sleep(seconds):
+        if seconds == 1:
+            waits.append(seconds)
+            await actual_sleep(0)
+        else:
+            await actual_sleep(seconds)
+
+    monkeypatch.setattr(research_read.asyncio, "sleep", sleep)
+    return waits
+
+
+def test_research_ordinary_read_survives_four_exact_native_busy_responses(monkeypatch):
+    waits = _fast_native_retry_sleep(monkeypatch)
+    responses = []
+    payload = {"items": [], "total": 0, "limit": 30, "offset": 0}
+
+    def handler(req):
+        assert req.url.path == "/api/knowledge/queue"
+        assert not responses or responses[-1].is_closed
+        if len(responses) < 4:
+            response = _native_busy_response()
+            responses.append(response)
+            return response
+        return httpx.Response(200, json=payload)
+
+    result = client(monkeypatch, handler=handler).get(
+        "/api/v1/research/queue?server=native-ok-rsi"
+    )
+    assert result.status_code == 200
+    assert result.json()["data"] == payload
+    assert len(responses) == 4 and all(response.is_closed for response in responses)
+    assert waits == [1] * 4
+
+
 def test_research_retries_exact_native_busy_after_closing_response(monkeypatch):
     prior = []
     network = {
@@ -250,6 +290,9 @@ def test_research_does_not_retry_other_or_malformed_503(monkeypatch, response):
 
 
 def test_research_native_busy_retries_are_finite_and_sanitized(monkeypatch):
+    from condor import research_read
+
+    waits = _fast_native_retry_sleep(monkeypatch)
     calls = 0
 
     def handler(req):
@@ -263,7 +306,11 @@ def test_research_native_busy_retries_are_finite_and_sanitized(monkeypatch):
     assert result.status_code == 503
     assert result.headers["Retry-After"] == "1"
     assert result.json()["detail"] == "Research reader is busy; retry the request"
-    assert calls == 3
+    assert calls == research_read.NATIVE_BUSY_MAX_ATTEMPTS
+    assert research_read.NATIVE_BUSY_MAX_ATTEMPTS == 1 + int(
+        research_read.LONG_READ_DEADLINE_SECONDS
+    )
+    assert waits == [1] * (calls - 1)
 
 
 @pytest.mark.parametrize(
@@ -418,11 +465,12 @@ def test_research_document_retries_exact_native_busy_and_closes_prior_stream(
 
     busy_responses = []
     upstream_clients = []
+    waits = _fast_native_retry_sleep(monkeypatch)
 
     def handler(req):
         assert req.url.path == "/api/knowledge/document"
         assert req.headers["accept-encoding"] == "identity"
-        if not busy_responses:
+        if len(busy_responses) < 4:
             response = _native_busy_response()
             busy_responses.append(response)
             return response
@@ -445,7 +493,10 @@ def test_research_document_retries_exact_native_busy_and_closes_prior_stream(
     assert result.status_code == 200
     assert result.content == b"complete source"
     assert result.headers["content-length"] == "15"
-    assert len(busy_responses) == 1 and busy_responses[0].is_closed
+    assert len(busy_responses) == 4 and all(
+        response.is_closed for response in busy_responses
+    )
+    assert waits == [1] * 4
     assert len(upstream_clients) == 1 and upstream_clients[0].is_closed
 
 
@@ -500,6 +551,7 @@ def test_research_document_busy_exhaustion_is_finite_and_closes_resources(monkey
 
     responses = []
     upstream_clients = []
+    waits = _fast_native_retry_sleep(monkeypatch)
 
     def handler(req):
         if responses:
@@ -520,7 +572,9 @@ def test_research_document_busy_exhaustion_is_finite_and_closes_resources(monkey
     assert result.status_code == 503
     assert result.headers["Retry-After"] == "1"
     assert result.json()["detail"] == "Research reader is busy; retry the request"
-    assert len(responses) == 3 and all(response.is_closed for response in responses)
+    assert len(responses) == research_read.NATIVE_BUSY_MAX_ATTEMPTS
+    assert all(response.is_closed for response in responses)
+    assert waits == [1] * (len(responses) - 1)
     assert len(upstream_clients) == 1 and upstream_clients[0].is_closed
 
 

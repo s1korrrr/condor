@@ -207,6 +207,116 @@ def test_invalid_reads_are_rejected_whole(mutate):
     assert parsed.samples == [] and parsed.reason == fleet_pnl.HISTORY_INVALID
 
 
+def _numeric_history(first, second):
+    payload = json.loads(json.dumps(FIXTURE["reads"]["ok_rsi"]["1D"]))
+    payload["points"] = payload["points"][:2]
+    for point, text in zip(payload["points"], (first, second)):
+        point["total_pnl_quote"] = text
+        point["realized_pnl_quote"] = text
+        point["unrealized_pnl_quote"] = "0"
+    return payload
+
+
+@pytest.mark.parametrize(
+    "bad",
+    [
+        "1_000",
+        " 1 ",
+        "1\n",
+        "1\r",
+        "1\r\n",
+        "0x10",
+        "１２",
+        "١",
+        "1e1000000",
+        "1e-1000000",
+    ],
+)
+def test_numeric_history_rejects_non_ascii_or_unrepresentable_amounts(bad):
+    parsed = fleet_pnl.parse_bot_history(
+        _numeric_history("0", bad), "ok_rsi", "1D", NOW_MS + 5000
+    )
+    assert parsed.samples == [] and parsed.reason == fleet_pnl.HISTORY_INVALID
+
+
+def test_numeric_history_rejects_context_overflow_without_throwing():
+    payload = _numeric_history("0", "1e1000000")
+    payload["points"][1]["realized_pnl_quote"] = "0"
+    parsed = fleet_pnl.parse_bot_history(payload, "ok_rsi", "1D", NOW_MS + 5000)
+    assert parsed.samples == [] and parsed.reason == fleet_pnl.HISTORY_INVALID
+
+
+def test_owner_amounts_and_derived_results_share_mobile_significant_digit_limit():
+    assert fleet_pnl._amount("9" * 38) is not None
+    assert fleet_pnl._amount("9" * 39) is None
+    assert fleet_pnl._amount("1e127") is not None
+    assert fleet_pnl._amount("9" * 38 + "0" * 90) is not None
+    assert fleet_pnl.exact_sum([Decimal("9" * 38), Decimal("2")]) is None
+    parsed = fleet_pnl.parse_bot_history(
+        _numeric_history("0", "9" * 39), "ok_rsi", "1D", NOW_MS + 5000
+    )
+    assert parsed.samples == [] and parsed.reason == fleet_pnl.HISTORY_INVALID
+
+
+def test_exact_server_deltas_and_fleet_sum_do_not_round_away_small_peer():
+    first = fleet_pnl.parse_bot_history(
+        _numeric_history("1e30", "1000000000000000000000000000001"),
+        "ok_rsi",
+        "1D",
+        NOW_MS + 5000,
+    )
+    second = fleet_pnl.parse_bot_history(
+        _numeric_history("0", "1e30"),
+        "ok_rsi",
+        "1D",
+        NOW_MS + 5000,
+    )
+    second.bot = "peer"
+    window = fleet_pnl.fleet_window(
+        [first, second], ["ok_rsi", "peer"], 0, NOW_MS, NOW_MS
+    )
+    assert window.total == Decimal("1000000000000000000000000000001")
+    assert fleet_pnl.decimal_text(window.total) == "1000000000000000000000000000001"
+
+
+def test_numeric_window_rejects_unrepresentable_derived_delta_with_reason():
+    parsed = fleet_pnl.parse_bot_history(
+        _numeric_history("-" + "9" * 38 + "0" * 89, "9" * 38 + "0" * 90), "ok_rsi", "1D", NOW_MS + 5000
+    )
+    window = fleet_pnl.fleet_window([parsed], ["ok_rsi"], 0, NOW_MS, NOW_MS)
+    assert window.total is None and window.counted == 0
+    assert window.missing == [
+        {"bot": "ok_rsi", "reason": fleet_pnl.HISTORY_INVALID, "samples": 2}
+    ]
+
+
+def test_extreme_zero_exponent_does_not_expand_arithmetic_context():
+    zero = fleet_pnl._amount("0e-" + "9" * 240)
+    assert zero is not None and fleet_pnl.decimal_text(zero) == "0"
+    assert fleet_pnl.exact_sum([zero, Decimal("1")]) == 1
+
+
+def test_boundary_width_equal_components_can_cancel_without_false_rejection():
+    parsed = fleet_pnl.parse_bot_history(
+        _numeric_history("9" * 38 + "0" * 90, "9" * 38 + "0" * 90), "ok_rsi", "1D", NOW_MS + 5000
+    )
+    assert len(parsed.samples) == 2
+    assert fleet_pnl.fleet_window([parsed], ["ok_rsi"], 0, NOW_MS, NOW_MS).total == 0
+
+
+@pytest.mark.parametrize("sign", ("", "-"))
+def test_balance_tolerance_uses_exact_decimal_beyond_default_context(sign):
+    payload = _numeric_history(
+        "0", f"{sign}0.000001{'0' * 35}1"
+    )
+    payload["points"][1]["realized_pnl_quote"] = "0"
+    invalid = fleet_pnl.parse_bot_history(payload, "ok_rsi", "1D", NOW_MS + 5000)
+    assert invalid.samples == [] and invalid.reason == fleet_pnl.HISTORY_INVALID
+    payload["points"][1]["total_pnl_quote"] = f"{sign}0.000001"
+    valid = fleet_pnl.parse_bot_history(payload, "ok_rsi", "1D", NOW_MS + 5000)
+    assert len(valid.samples) == 2
+
+
 def test_failed_missing_and_empty_reads_carry_their_own_code():
     assert (
         fleet_pnl.parse_bot_history(None, "b", "1D", NOW_MS, failed=True).reason

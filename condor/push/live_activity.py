@@ -30,7 +30,7 @@ import logging
 import time
 import uuid
 from collections import Counter
-from decimal import ROUND_HALF_UP, Decimal, InvalidOperation
+from decimal import ROUND_HALF_UP, Decimal, InvalidOperation, localcontext
 from typing import TYPE_CHECKING, Any, Callable, Mapping
 
 from condor.push.apns import MAX_PAYLOAD_BYTES, ApnsClient, ApnsOutcome, ApnsRequest
@@ -68,7 +68,12 @@ _STALE_SECTION_STATES = frozenset({"stale", "missing"})
 
 def money(value: Any) -> str | None:
     """A decimal string rounded half-up to 2 places, or None when it is not a finite decimal."""
-    if isinstance(value, bool) or not isinstance(value, (str, int)):
+
+    if (
+        isinstance(value, bool)
+        or not isinstance(value, (str, int))
+        or (isinstance(value, str) and len(value) > 256)
+    ):
         return None
     try:
         number = Decimal(value)
@@ -76,7 +81,19 @@ def money(value: Any) -> str | None:
         return None
     if not number.is_finite():
         return None
-    text = format(number.quantize(_CENT, rounding=ROUND_HALF_UP), "f")
+    digits, exponent = number.as_tuple().digits, number.as_tuple().exponent
+    if len(digits) > 128 or abs(exponent) > 128:
+        return None
+    try:
+        with localcontext() as context:
+            context.prec = max(28, len(digits) + max(exponent, 0) + 2)
+            text = format(number.quantize(_CENT, rounding=ROUND_HALF_UP), "f")
+    except InvalidOperation:
+        return None
+    if len(text) > 128:
+        text = text.rstrip("0").rstrip(".") if "." in text else text
+        if len(text) > 128:
+            return None
     return "0.00" if text == "-0.00" else text
 
 
@@ -99,12 +116,20 @@ def _section_unavailable(glance: Mapping[str, Any], name: str) -> bool:
     return status is None or status in _STALE_SECTION_STATES
 
 
-def content_state(glance: Mapping[str, Any]) -> dict[str, Any]:
+def content_state(
+    glance: Mapping[str, Any], *, stale_after_seconds: int = 600
+) -> dict[str, Any]:
     """The v1 content state for one fleet-summary glance. Absent means unknown, never zero."""
     generated = glance.get("generated_at_ms")
     if type(generated) is not int or generated <= 0:
         raise ValueError("glance has no generation time")
-    state: dict[str, Any] = {"v": CONTENT_VERSION, "generated_at_ms": generated}
+    if type(stale_after_seconds) is not int or not 120 <= stale_after_seconds <= 3600:
+        raise ValueError("invalid Live Activity stale interval")
+    state: dict[str, Any] = {
+        "v": CONTENT_VERSION,
+        "generated_at_ms": generated,
+        "stale_after_ms": stale_after_seconds * 1000,
+    }
 
     pnl = glance.get("pnl") if isinstance(glance.get("pnl"), Mapping) else {}
     day = pnl.get("day") if isinstance(pnl.get("day"), Mapping) else {}
@@ -119,15 +144,80 @@ def content_state(glance: Mapping[str, Any]) -> dict[str, Any]:
     wallet = glance.get("wallet") if isinstance(glance.get("wallet"), Mapping) else {}
     equity = money(wallet.get("equity"))
     if equity is not None:
-        state["equity"] = equity
-        if unit := _text(wallet.get("unit"), 16):
-            state["equity_unit"] = unit
+        # These additive qualifiers originate only from the fleet summary's admitted
+        # native account scope. Legacy bot-observed values retain no coverage claim.
+        scope = wallet.get("account_scope")
+        wallet_status = _section_status(glance, "wallet")
+        complete = wallet.get("valuation_complete")
+        unpriced = wallet.get("unpriced_count")
+        qualified_account = (
+            wallet.get("source") == "native_account_portfolio"
+            and wallet.get("source_bot") is None
+            and wallet.get("unit") == "USDT"
+            and isinstance(scope, Mapping)
+            and scope.get("account") == "master_account"
+            and scope.get("connector") == "okx"
+            and scope.get("market") == "spot"
+            and isinstance(scope.get("identity"), str)
+            and bool(scope["identity"].strip())
+            and len(scope["identity"]) <= 80
+            and type(complete) is bool
+            and _count(unpriced) is not None
+            and complete == (unpriced == 0)
+            and type(wallet.get("stale")) is bool
+            and wallet_status
+            == (
+                "partial"
+                if not complete
+                else "stale" if wallet.get("stale") is True else "ok"
+            )
+        )
+        if qualified_account:
+            state["equity" if complete else "account_value"] = equity
+            state["equity_source"] = "native_account_portfolio"
+            state["equity_valuation_complete"] = complete
+        elif (
+            wallet.get("source") != "native_account_portfolio" and complete is not False
+        ):
+            state["equity"] = equity
+        if "equity" in state or "account_value" in state:
+            if unit := _text(wallet.get("unit"), 16):
+                state["equity_unit"] = unit
 
     market = glance.get("market") if isinstance(glance.get("market"), Mapping) else {}
-    if label := _text(market.get("label"), 32):
-        state["market_label"] = label
-    if market_state := _text(market.get("state"), 32):
-        state["market_state"] = market_state
+    section = glance.get("sections")
+    market_section = section.get("market") if isinstance(section, Mapping) else None
+    cutoff = market.get("cutoff_ms")
+    expires = market.get("expires_at_ms")
+    observed = (
+        market_section.get("observed_at_ms")
+        if isinstance(market_section, Mapping)
+        else None
+    )
+    stale_after = (
+        market_section.get("stale_after_ms")
+        if isinstance(market_section, Mapping)
+        else None
+    )
+    valid_until = (
+        min(expires, cutoff + stale_after)
+        if all(type(value) is int for value in (cutoff, expires, observed, stale_after))
+        and cutoff == observed
+        and stale_after > 0
+        and cutoff <= generated + 5_000
+        else None
+    )
+    if (
+        not _section_unavailable(glance, "market")
+        and market.get("freshness") == "fresh"
+        and valid_until is not None
+        and valid_until > generated
+    ):
+        state["market_valid_until_ms"] = valid_until
+        if label := _text(market.get("label"), 32):
+            state["market_label"] = label
+        if market_state := _text(market.get("state"), 32):
+            state["market_state"] = market_state
 
     # Same reading as the app's Home tile: live (non-paper) bots, running = status "running".
     bots = glance.get("bots")
@@ -195,8 +285,10 @@ def content_state(glance: Mapping[str, Any]) -> dict[str, Any]:
                 "time_ms": stamp,
             }
 
-    state["stale"] = _section_unavailable(glance, "pnl") or _section_unavailable(
-        glance, "wallet"
+    state["stale"] = (
+        _section_unavailable(glance, "pnl")
+        or _section_unavailable(glance, "wallet")
+        or wallet.get("stale") is True
     )
     return state
 
@@ -269,15 +361,35 @@ def encode(payload: Mapping[str, Any]) -> bytes:
     return raw
 
 
+def _stale_date(
+    state: Mapping[str, Any], now: float, stale_after_seconds: float
+) -> int:
+    """Wake ActivityKit at the first source expiry, retaining the global clock."""
+    deadlines = [now + stale_after_seconds]
+    generated, global_age = state.get("generated_at_ms"), state.get("stale_after_ms")
+    if (
+        type(generated) is int
+        and type(global_age) is int
+        and generated > 0
+        and global_age > 0
+    ):
+        deadlines.append((generated + global_age) / 1000)
+    market_expiry = state.get("market_valid_until_ms")
+    if type(market_expiry) is int and market_expiry > 0:
+        deadlines.append(market_expiry / 1000)
+    return int(min(deadlines))
+
+
 def build_update_payload(
     state: Mapping[str, Any], *, now: float, stale_after_seconds: float
 ) -> dict[str, Any]:
+    stale_date = _stale_date(state, now, stale_after_seconds)
     return {
         "aps": {
             "timestamp": int(now),
             "event": "update",
             "content-state": dict(state),
-            "stale-date": int(now + stale_after_seconds),
+            "stale-date": stale_date,
         }
     }
 
@@ -286,12 +398,13 @@ def build_start_payload(
     state: Mapping[str, Any], *, server: str, now: float, stale_after_seconds: float
 ) -> dict[str, Any]:
     # No sound: the alert only labels the restarted activity.
+    stale_date = _stale_date(state, now, stale_after_seconds)
     return {
         "aps": {
             "timestamp": int(now),
             "event": "start",
             "content-state": dict(state),
-            "stale-date": int(now + stale_after_seconds),
+            "stale-date": stale_date,
             "attributes-type": ATTRIBUTES_TYPE,
             "attributes": {"server": server},
             "alert": dict(START_ALERT),

@@ -37,6 +37,9 @@ export type FleetFillItem = {
   fee: string | null;
   fee_unit: string | null;
   time_ms: number | null;
+  /** Attested venue time; independent of the recorded clock used for ordering. */
+  execution_timestamp_ms?: number | null;
+  execution_timestamp_source?: string | null;
   receipt: FleetFillReceipt;
   simulated: boolean;
   /** True on the paper feed (`scope=paper`): a simulated fill, never part of the live feed. */
@@ -108,7 +111,7 @@ const GENERATIONS: readonly string[] = ['V1', 'V2', 'V3', 'V4'];
 const generation = (value: unknown): FleetFillGeneration | null => typeof value === 'string' && GENERATIONS.includes(value) ? value as FleetFillGeneration : null;
 const RECEIPTS: readonly string[] = ['exact', 'legacy_6dp', 'unavailable'];
 
-function parseItem(raw: unknown): FleetFillItem {
+function parseItem(raw: unknown, generatedAtMs: number): FleetFillItem {
   if (!object(raw) || !text(raw.id) || !raw.id || !text(raw.bot) || !raw.bot || !text(raw.fill_id) || !raw.fill_id) throw new FleetFillsError('A fleet fill has no identity.');
   const id = raw.id;
   for (const field of ['amount', 'price', 'volume', 'fee', 'realized_pnl'] as const) {
@@ -120,6 +123,12 @@ function parseItem(raw: unknown): FleetFillItem {
   }
   if (!Array.isArray(raw.missing) || !raw.missing.every(text)) throw new FleetFillsError(`Fleet fill ${id} has an invalid missing list.`);
   const side = typeof raw.side === 'string' ? raw.side.toLowerCase() : null;
+  const executionTime = raw.execution_timestamp_ms;
+  const attested = raw.execution_timestamp_source === 'okx.fillTime' && raw.connector === 'okx'
+    && raw.simulated !== true && raw.paper !== true && integer(executionTime)
+    && executionTime > 0 && executionTime <= 253402300799999 && integer(raw.time_ms)
+    && raw.time_ms >= 0 && raw.time_ms <= 253402300799999
+    && executionTime <= raw.time_ms + 5000 && executionTime <= generatedAtMs + 5000;
   return {
     id, bot: raw.bot, display_name: text(raw.display_name) && raw.display_name ? raw.display_name : raw.bot, generation: generation(raw.generation),
     fill_id: raw.fill_id, order_id: (raw.order_id as string | null | undefined) ?? null, source_db_id: (raw.source_db_id as string | null | undefined) ?? null, connector: (raw.connector as string | null | undefined) ?? null,
@@ -128,6 +137,8 @@ function parseItem(raw: unknown): FleetFillItem {
     order_type: (raw.order_type as string | null | undefined) ?? null,
     amount: raw.amount as string | null, price: raw.price as string | null, volume: raw.volume as string | null, fee: raw.fee as string | null,
     fee_unit: (raw.fee_unit as string | null | undefined) ?? null, time_ms: raw.time_ms as number | null,
+    execution_timestamp_ms: attested ? executionTime : null,
+    execution_timestamp_source: attested ? 'okx.fillTime' : null,
     receipt: typeof raw.receipt === 'string' && RECEIPTS.includes(raw.receipt) ? raw.receipt as FleetFillReceipt : 'unrecognised',
     simulated: raw.simulated === true, paper: raw.paper === true, realized_pnl: raw.realized_pnl as string | null, missing: raw.missing as string[],
   };
@@ -172,7 +183,7 @@ export function parseFleetFills(payload: unknown): FleetFillsPage {
   return {
     schema_version: FLEET_FILLS_SCHEMA, server: payload.server, generated_at_ms: payload.generated_at_ms, status,
     reason: text(payload.reason) ? payload.reason : null, partial: status !== 'ok',
-    items: payload.items.map(parseItem), limit: payload.limit, has_more: payload.has_more, next_cursor: payload.next_cursor,
+    items: payload.items.map(item => parseItem(item, payload.generated_at_ms as number)), limit: payload.limit, has_more: payload.has_more, next_cursor: payload.next_cursor,
     matched: payload.matched, window: { horizon_ms: window.horizon_ms, truncated: window.truncated, owner_limit: window.owner_limit },
     bots: payload.bots.map(parseBot),
     notes: Array.isArray(payload.notes) ? payload.notes.filter(object).flatMap(note => text(note.reason) ? [{ reason: note.reason }] : []) : [],

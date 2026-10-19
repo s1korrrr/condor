@@ -50,6 +50,72 @@ test('null sections stay null: absent data is not turned into a value', () => {
   assert.equal(client.sectionAgeMs(parsed.sections.wallet, 1_800_000_030_000), null);
 });
 
+test('summary fills retain only locally qualified execution attestations in full and glance', () => {
+  for (const view of ['full', 'glance']) {
+    const body = structuredClone(example(view));
+    const raw = body.fills[0];
+    const recorded = raw.time_ms;
+    const volume = raw.volume;
+    raw.execution_timestamp_ms = recorded - 2000;
+    raw.execution_timestamp_source = 'okx.fillTime';
+    const valid = client.parseFleetSummary(body, view).fills[0];
+    assert.equal(valid.execution_timestamp_ms, recorded - 2000, view);
+    assert.equal(valid.execution_timestamp_source, 'okx.fillTime', view);
+    assert.equal(valid.time_ms, recorded, 'attestation never replaces the recorded clock');
+    assert.equal(valid.volume, volume, 'attestation never changes money');
+
+    for (const [timestamp, source] of [[true, 'okx.fillTime'], [0, 'okx.fillTime'],
+      [recorded + 5001, 'okx.fillTime'], [recorded - 2000, 'okx.uTime'],
+      [String(recorded), 'okx.fillTime'], [Number.MAX_SAFE_INTEGER, 'okx.fillTime'],
+      [body.generated_at_ms + 5001, 'okx.fillTime']]) {
+      raw.execution_timestamp_ms = timestamp;
+      raw.execution_timestamp_source = source;
+      const unknown = client.parseFleetSummary(body, view).fills[0];
+      assert.equal(unknown.execution_timestamp_ms, null, `${view}: ${String(timestamp)} / ${source}`);
+      assert.equal(unknown.execution_timestamp_source, null);
+      assert.equal(unknown.time_ms, recorded);
+      assert.equal(unknown.volume, volume);
+    }
+    raw.time_ms = null;
+    raw.execution_timestamp_ms = recorded - 2000;
+    raw.execution_timestamp_source = 'okx.fillTime';
+    assert.equal(client.parseFleetSummary(body, view).fills[0].execution_timestamp_ms, null, 'no recorded anchor');
+    raw.time_ms = body.generated_at_ms + 5000;
+    raw.execution_timestamp_ms = body.generated_at_ms + 5001;
+    assert.equal(client.parseFleetSummary(body, view).fills[0].execution_timestamp_ms, null, 'after publication tolerance');
+    raw.time_ms = recorded;
+    delete raw.execution_timestamp_ms;
+    delete raw.execution_timestamp_source;
+    const legacy = client.parseFleetSummary(body, view).fills[0];
+    assert.equal(legacy.execution_timestamp_ms, null, 'older v1 payload stays readable');
+    assert.equal(legacy.execution_timestamp_source, null);
+  }
+});
+
+test('glance keeps the quote unit of each PnL window', () => {
+  const body = structuredClone(example('glance'));
+  body.pnl.unit = 'USDT';
+  body.pnl.day.unit = 'USDC';
+  body.pnl.week.unit = null;
+  delete body.pnl.month.unit;
+  body.pnl.all.unit = 'USDT';
+  const glance = client.parseFleetSummary(body, 'glance');
+  assert.equal(glance.pnl.unit, 'USDT');
+  assert.deepEqual(['day', 'week', 'month', 'all'].map(name => glance.pnl[name].unit),
+    ['USDC', null, null, 'USDT'], 'a window never borrows the global quote or fabricates a missing unit');
+});
+
+test('native account wallet must retain scope and subtotal coverage', () => {
+  const body = structuredClone(example('full'));
+  body.wallet.valuation_complete = false;
+  body.wallet.unpriced_assets = ['PLN'];
+  body.wallet.unpriced_count = 1;
+  body.sections.wallet.status = 'partial';
+  assert.equal(client.parseFleetSummary(body, 'full').wallet.unpriced_count, 1);
+  body.wallet.account_scope.identity = '';
+  assert.throws(() => client.parseFleetSummary(body, 'full'), /wallet/);
+});
+
 test('section age and staleness are computed by the client from observed_at_ms', () => {
   const full = example('full');
   const now = full.generated_at_ms;
@@ -62,4 +128,23 @@ test('section age and staleness are computed by the client from observed_at_ms',
 test('request path encodes the server and selects the view', () => {
   assert.equal(client.fleetSummaryPath('my server'), '/api/v1/servers/my%20server/fleet/summary');
   assert.equal(client.fleetSummaryPath('v2', 'glance'), '/api/v1/servers/v2/fleet/summary?view=glance');
+});
+
+test('the actual fleet hook opts into native-account wallet claims for both views', async () => {
+  const calls = [];
+  const { load: hookLoad } = frontendModules({
+    '@tanstack/react-query': { useQuery: options => options },
+    '@/lib/auth-token': { authFetch: async (path, init) => {
+      calls.push({ path, init });
+      return new Response(JSON.stringify(example(path.includes('view=glance') ? 'glance' : 'full')), { status: 200 });
+    } },
+  });
+  const hook = hookLoad('features/quant-ops/use-fleet-summary.ts').useFleetSummary;
+  for (const view of ['full', 'glance']) {
+    const query = hook('v2', view);
+    const result = await query.queryFn({ signal: new AbortController().signal });
+    assert.equal(result.view, view);
+  }
+  assert.equal(calls.length, 2);
+  for (const { init } of calls) assert.equal(new Headers(init.headers).get('X-RSIBOT-Wallet-Claims'), 'native-account-v1');
 });

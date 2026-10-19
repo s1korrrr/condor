@@ -51,10 +51,19 @@
  ],
  "wallet": {
   "equity": "1000",
-  "unit": "USDC",
+  "unit": "USDT",
   "observed_at_ms": 1800000000000,
-  "source_bot": "ok_rsi",
+  "source_bot": null,
+  "source": "native_account_portfolio",
+  "account_scope": {
+   "account": "master_account",
+   "connector": "okx",
+   "market": "spot",
+   "identity": "account-revision-1"
+  },
   "valuation_complete": true,
+  "unpriced_assets": [],
+  "unpriced_count": 0,
   "stale": false
  },
  "pnl": {
@@ -449,7 +458,9 @@
    "price": "2000.5",
    "volume": "200.05",
    "fee": "0.2",
-   "time_ms": 1799999910000
+   "time_ms": 1799999910000,
+   "execution_timestamp_ms": null,
+   "execution_timestamp_source": null
   },
   {
    "bot": "rsi_modular_v2",
@@ -460,7 +471,9 @@
    "price": "60000",
    "volume": "600",
    "fee": "0.6",
-   "time_ms": 1799999850000
+   "time_ms": 1799999850000,
+   "execution_timestamp_ms": null,
+   "execution_timestamp_source": null
   },
   {
    "bot": "ok_rsi",
@@ -471,7 +484,9 @@
    "price": "2000.5",
    "volume": "200.05",
    "fee": "0.2",
-   "time_ms": 1799999610000
+   "time_ms": 1799999610000,
+   "execution_timestamp_ms": null,
+   "execution_timestamp_source": null
   },
   {
    "bot": "ok_rsi",
@@ -482,7 +497,9 @@
    "price": "60000",
    "volume": "600",
    "fee": "0.6",
-   "time_ms": 1799999550000
+   "time_ms": 1799999550000,
+   "execution_timestamp_ms": null,
+   "execution_timestamp_source": null
   }
  ],
  "incidents": {
@@ -505,6 +522,8 @@
    "volume": "200.05",
    "fee": "0.2",
    "time_ms": 1799999910000,
+   "execution_timestamp_ms": null,
+   "execution_timestamp_source": null,
    "simulated": true
   },
   {
@@ -517,6 +536,8 @@
    "volume": "600",
    "fee": "0.6",
    "time_ms": 1799999850000,
+   "execution_timestamp_ms": null,
+   "execution_timestamp_source": null,
    "simulated": true
   }
  ]

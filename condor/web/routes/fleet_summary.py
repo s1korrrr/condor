@@ -22,6 +22,7 @@ from condor.web import fleet_summary as summary
 from condor.web.auth import get_current_user
 from condor.web.market_picture_contract import validate_response
 from condor.web.models import WebUser
+from condor.web.portfolio_contract import Analytics
 from condor.web.routes import market_picture, trading_visuals
 from config_manager import get_config_manager
 
@@ -36,8 +37,10 @@ CACHE_TTL_SECONDS = (
 HEADERS = {
     "Cache-Control": "private, no-cache",
     "X-Content-Type-Options": "nosniff",
-    "Vary": "Authorization",
+    "Vary": "Authorization, X-RSIBOT-Wallet-Claims",
 }
+WALLET_CLAIMS_HEADER = "X-RSIBOT-Wallet-Claims"
+NATIVE_ACCOUNT_CLAIMS = "native-account-v1"
 ALLOWED_QUERY = {"view", "schema"}
 HISTORY_WINDOW = "6h"  # the verdict replays the last six hours of stored breadth
 
@@ -73,8 +76,21 @@ class LiveReaders:
     def performance(self, server: str, bot: str, range_: str, now_s: float) -> dict:
         return history.read(server, bot, range_, now_s)
 
-    def wallet(self, server: str, bot: str, range_: str, now_s: float) -> dict:
-        return history.read_wallet(server, bot, range_, now_s)
+    async def account(self, server: str, user_id: Any) -> summary.OwnerRead:
+        cm = get_config_manager()
+        if not cm.has_server_access(user_id, server):
+            return summary.OwnerRead(None, summary.FORBIDDEN)
+        try:
+            async with asyncio.timeout(OWNER_TIMEOUT):
+                client = await cm.get_client(server)
+                payload = await client.portfolio._get(
+                    "portfolio/analytics", params={"range": "1D", "refresh": "false"}
+                )
+            return summary.OwnerRead(
+                Analytics.model_validate(payload).model_dump(by_alias=True)
+            )
+        except Exception:
+            return summary.OwnerRead(None, summary.SOURCE_UNAVAILABLE)
 
     async def market(self, server: str, user_id: Any) -> summary.MarketRead:
         cm = get_config_manager()
@@ -160,6 +176,18 @@ def _tag_matches(header: Optional[str], tag: str) -> bool:
     )
 
 
+def _http_wallet_projection(body: dict, native_claims: bool) -> dict:
+    """Keep the canonical cache; old clients must never label a subtotal Equity."""
+    wallet = body.get("wallet")
+    if (
+        not native_claims
+        and isinstance(wallet, dict)
+        and wallet.get("valuation_complete") is False
+    ):
+        return {**body, "wallet": None}
+    return body
+
+
 async def cached_summary(
     name: str, *, admin: bool, user_id: Any, view: str = "full"
 ) -> dict:
@@ -193,6 +221,7 @@ async def cached_summary(
                 time.time() * 1000,
                 is_admin=admin,
                 user_id=user_id,
+                clock_ms=lambda: time.time() * 1000,
             )
             if CACHE_TTL_SECONDS > 0:
                 expires = time.monotonic() + CACHE_TTL_SECONDS
@@ -247,6 +276,9 @@ async def fleet_summary(
         raise HTTPException(
             status_code=504, detail="Fleet summary exceeded its deadline"
         ) from None
+    body = _http_wallet_projection(
+        body, request.headers.get(WALLET_CLAIMS_HEADER) == NATIVE_ACCOUNT_CLAIMS
+    )
     tag = summary.etag_for(body)
     headers = {**HEADERS, "ETag": tag, "X-Fleet-Summary-Schema": summary.SCHEMA_VERSION}
     if _tag_matches(request.headers.get("If-None-Match"), tag):

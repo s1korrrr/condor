@@ -3,7 +3,7 @@ import { useQueries, useQuery } from '@tanstack/react-query';
 import { authFetch } from '@/lib/auth-token';
 import { projectControllerPnl, type ControllerPnlView } from '@/features/bots/controller-pnl';
 import { projectFills, projectQuantBotSummary, projectQuantCycles, type FillRow, type QuantBotSummary, type QuantCycles } from '@/features/bots/quant-roster';
-import { botWindow, fleetDailyBars, fleetSeries, fleetWindow, parseBotHistory, restartTimes, sameQuote, type BotHistory, type BotSample, type BotWindow, type FleetDay, type FleetPoint, type FleetWindow, type HistoryRange } from './fleet-performance';
+import { fleetDailyBars, fleetSeries, fleetWindow, parseBotHistory, qualifiedFleetDailyBars, restartTimes, type BotHistory, type BotSample, type FleetDay, type FleetPoint, type FleetWindow, type HistoryRange } from './fleet-performance';
 
 /**
  * Fan-out reads for every registered bot. They use `useQueries`, so the bot list can change length
@@ -40,14 +40,16 @@ export type FleetPerformance = {
   monthly: FleetWindow;
   /** The selected page range. */
   range: FleetWindow;
-  /** Fleet PnL per UTC day over the last 30 days (or the whole saved history for ALL), whatever the page range, for risk statistics. */
+  /** Own admitted cohort and interval for completed-day risk; it may differ from the selected page window. */
+  riskWindow: FleetWindow;
+  /** Only completed UTC days whose full observed span is covered by every bot in riskWindow. */
   riskBars: FleetDay[];
+  /** Currency of the admitted risk-bar cohort, independent of the account wallet currency. */
+  riskQuote: string | null;
   /** Cumulative fleet PnL since the page range opened. */
   series: FleetPoint[];
   restarts: number[];
   bars: FleetDay[];
-  /** Per-bot change over the page range, one row per registered bot that has history. */
-  perBot: BotWindow[];
   /** Newest saved sample per bot (from the 24h read) with its quote, for "net now" when the live controller read is not current. */
   latest: Record<string, (BotSample & { quote: string | null }) | null>;
   /** Bots whose reads failed outright (network or HTTP error), with the reason. */
@@ -93,17 +95,22 @@ export function useFleetPerformance(input: {
     const pageHistories = forRange(pageRange);
     const from = window ? Date.parse(window.start) : pageRange === 'ALL' ? pageHistories.reduce((first, history) => history.samples.length ? Math.min(first, history.samples[0].time) : first, Infinity) : now - SPAN[pageRange];
     const to = window ? Math.min(now, Date.parse(window.end)) : now;
-    const rangeWindow = fleetWindow(pageHistories, bots, from, to, clock);
+    const endExclusive = window != null;
+    const rangeWindow = fleetWindow(pageHistories, bots, from, to, clock, endExclusive);
+    const monthly = spanWindow('1M');
+    const riskWindow = pageRange === 'ALL' ? rangeWindow : monthly;
+    const riskHistories = pageRange === 'ALL' ? pageHistories : forRange('1M');
     const step = Math.max(60, ...pageHistories.map(history => history.bucketSeconds ?? 0));
     return {
       pending: queries.some(query => query.isPending) && queries.every(query => query.data === undefined),
       bots, histories: pageHistories,
-      daily: spanWindow('1D'), weekly: spanWindow('1W'), monthly: spanWindow('1M'), range: rangeWindow,
-      series: fleetSeries(pageHistories, from, to, step),
-      restarts: restartTimes(sameQuote(pageHistories), from, to),
-      bars: fleetDailyBars(pageHistories, to, from),
-      riskBars: pageRange === 'ALL' ? fleetDailyBars(pageHistories, to, from) : fleetDailyBars(forRange('1M'), now, now - SPAN['1M']),
-      perBot: pageHistories.map(history => botWindow(history, from, to, clock)).filter(row => row.samples > 0),
+      daily: spanWindow('1D'), weekly: spanWindow('1W'), monthly, range: rangeWindow,
+      series: fleetSeries(pageHistories, from, to, step, rangeWindow, endExclusive),
+      restarts: restartTimes(pageHistories, from, to, rangeWindow, endExclusive),
+      bars: fleetDailyBars(pageHistories, to, from, rangeWindow, endExclusive),
+      riskWindow,
+      riskBars: qualifiedFleetDailyBars(riskHistories, riskWindow.to, riskWindow.from, riskWindow),
+      riskQuote: riskWindow.quote,
       latest: Object.fromEntries(bots.map(bot => {
         const day = histories.get(`${bot}/1D`);
         const sample = day?.samples.at(-1);

@@ -52,15 +52,25 @@
  "missing_total": 1,
  "wallet": {
   "equity": "1000",
-  "unit": "USDC",
+  "unit": "USDT",
   "observed_at_ms": 1800000000000,
-  "source_bot": "ok_rsi",
+  "source_bot": null,
+  "source": "native_account_portfolio",
+  "account_scope": {
+   "account": "master_account",
+   "connector": "okx",
+   "market": "spot",
+   "identity": "account-revision-1"
+  },
   "valuation_complete": true,
+  "unpriced_assets": [],
+  "unpriced_count": 0,
   "stale": false
  },
  "pnl": {
   "unit": "USDC",
   "day": {
+   "unit": "USDC",
    "total": "4.5",
    "partial": true,
    "counted": 2,
@@ -69,6 +79,7 @@
    "uncovered_ms": 104220000
   },
   "week": {
+   "unit": "USDC",
    "total": "4.5",
    "partial": true,
    "counted": 2,
@@ -77,6 +88,7 @@
    "uncovered_ms": 104220000
   },
   "month": {
+   "unit": "USDC",
    "total": "4.5",
    "partial": true,
    "counted": 2,
@@ -85,6 +97,7 @@
    "uncovered_ms": 104220000
   },
   "all": {
+   "unit": "USDC",
    "total": "4.5",
    "partial": true,
    "counted": 2,
@@ -100,7 +113,8 @@
   "horizon_label": "1h",
   "held": false,
   "freshness": "fresh",
-  "cutoff_ms": 1800000000000
+  "cutoff_ms": 1800000000000,
+  "expires_at_ms": 1800000120000
  },
  "bots": [
   {
@@ -144,21 +158,27 @@
    "pair": "ETH-USDC",
    "side": "BUY",
    "volume": "200.05",
-   "time_ms": 1799999910000
+   "time_ms": 1799999910000,
+   "execution_timestamp_ms": null,
+   "execution_timestamp_source": null
   },
   {
    "bot": "rsi_modular_v2",
    "pair": "BTC-USDC",
    "side": "SELL",
    "volume": "600",
-   "time_ms": 1799999850000
+   "time_ms": 1799999850000,
+   "execution_timestamp_ms": null,
+   "execution_timestamp_source": null
   },
   {
    "bot": "ok_rsi",
    "pair": "ETH-USDC",
    "side": "BUY",
    "volume": "200.05",
-   "time_ms": 1799999610000
+   "time_ms": 1799999610000,
+   "execution_timestamp_ms": null,
+   "execution_timestamp_source": null
   }
  ],
  "incidents": {

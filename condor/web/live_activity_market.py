@@ -218,7 +218,14 @@ async def build_market_index(
     headline = mi.headline(mi.build(inputs, expected, now_date), now_date)
     if headline is None:
         raise MarketIndexUnavailable("the index has no point")
-    return headline
+    # The independently cached fleet glance has its own generation clock. Preserve the exact
+    # time at which headline() measured source_age_ms so Activity clients can age this index
+    # through a newer or older glance without resetting or double-counting source time.
+    return (
+        {**headline, "source_age_at_ms": int(built_at * 1000)}
+        if "source_age_ms" in headline
+        else headline
+    )
 
 
 def remember_index(server: str, headline: dict[str, Any], *, now: float) -> None:
@@ -233,7 +240,9 @@ def _aged(headline: dict[str, Any], published_at: float, now: float) -> dict[str
     if isinstance(age_ms, bool) or not isinstance(age_ms, int):
         old = True
     else:
-        age = age_ms / 1000 + max(0.0, now - published_at)
+        measured_at_ms = headline.get("source_age_at_ms")
+        anchor = measured_at_ms / 1000 if type(measured_at_ms) is int else published_at
+        age = age_ms / 1000 + max(0.0, now - anchor)
         old = age > mi.HEADLINE_STALE_AFTER_SECONDS
     return {**headline, "stale": bool(headline["stale"] or old)}
 

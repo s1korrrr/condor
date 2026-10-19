@@ -28,6 +28,20 @@ const render = (view, extra = {}) => renderToStaticMarkup(React.createElement(Fl
   view, filters: noFilters, botOptions: [{ bot: 'ok_rsi', label: 'V1 ok_rsi' }, { bot: 'meridian_v3', label: 'V3 meridian_v3' }], pairDraft: '',
   onToggleBot() {}, onSide() {}, onPairDraft() {}, onReset() {}, onLoadMore() {}, ...extra,
 }));
+
+test('an attested execution renders in its own column without moving recorded time or amount', () => {
+  const body = example('page_first');
+  const raw = body.items[0];
+  Object.assign(raw, { execution_timestamp_ms: raw.time_ms - 2000, execution_timestamp_source: 'okx.fillTime' });
+  const parsed = lib.parseFleetFills(body);
+  const html = render(model.projectFleetFills({ pages: [parsed] }));
+  assert.ok(html.includes(model.fleetFillTime(raw.time_ms)));
+  assert.ok(html.includes(model.fleetFillTime(raw.time_ms - 2000)));
+  assert.match(html, /Attested by OKX fillTime/);
+  assert.equal(parsed.items[0].amount, raw.amount);
+  assert.equal(fleetFillColumns.find(column => column.id === 'time').value(parsed.items[0]),
+    model.fleetFillTime(raw.time_ms));
+});
 /** A missing-status document derived from the partial example: every reader down. Only the status fields change. */
 function allDown() {
   const body = structuredClone(example('page_partial'));
@@ -52,7 +66,9 @@ test('an ok feed renders every bot with its generation badge, a fresh glyph and 
   const html = render(view);
   assert.match(html, /data-panel-id="B40"/);
   assert.match(html, /data-state="fresh"/);
-  for (const header of ['Time (UTC)', 'Bot', 'Side', 'Pair', 'Amount', 'Price', 'Volume', 'Fee', 'Receipt', 'PnL']) assert.match(html, new RegExp(`<span>${header.replace(/[()]/g, '\\$&')}</span>`));
+  for (const header of ['Recorded (UTC)', 'Bot', 'Side', 'Pair', 'Amount', 'Price', 'Volume', 'Fee', 'Receipt', 'PnL']) assert.match(html, new RegExp(`<span>${header.replace(/[()]/g, '\\$&')}</span>`));
+  assert.match(html, /Time and ordering use owner-recorded fills\. Exchange execution time is shown separately when attested; historical rows can be unavailable\./);
+  assert.match(html, /Exchange executed \(UTC\)/);
   for (const badge of ['V1', 'V2', 'V3']) assert.match(html, new RegExp(`<span class="q-pill"[^>]*>${badge}</span>`));
   assert.match(html, /<\/span> meridian_v3<\/td>/, 'the generation is its own badge, not repeated in the name');
   assert.doesNotMatch(html, /V1 · ok_rsi|V1 V1/);
@@ -68,7 +84,7 @@ test('rows keep the server order and ids as row identity; the table sorts, filte
   const view = model.projectFleetFills({ pages: [page('page_first')] });
   const column = id => fleetFillColumns.find(item => item.id === id);
   const row = view.rows[0];
-  assert.deepEqual(fleetFillColumns.map(item => item.id), ['time', 'bot', 'side', 'pair', 'amount', 'price', 'volume', 'fee', 'receipt', 'pnl']);
+  assert.deepEqual(fleetFillColumns.map(item => item.id), ['time', 'execution-time', 'bot', 'side', 'pair', 'amount', 'price', 'volume', 'fee', 'receipt', 'pnl']);
   assert.equal(column('amount').value(row), row.amount, 'raw exact string for sort, filter and CSV');
   assert.equal(column('bot').value(row), 'V3 meridian_v3');
   assert.equal(column('pnl').value(row), null);

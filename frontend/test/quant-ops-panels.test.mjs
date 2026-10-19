@@ -77,7 +77,7 @@ test('Capital page with no data renders only shell panels and never prints Unava
   assert.match(html,/Waiting for a wallet valuation/);
   assert.match(html,/N\/A on spot/,'liquidation risk is explicitly N\/A on the spot lane');
 });
-test('Capital draws fleet tiles, strategy table, allocation, rails and fills from computed data and prints no Unavailable',()=>{
+test('Capital draws fleet tiles, strategy table, allocation, rails and fills from computed data without unavailable metrics',()=>{
   const t=(minutes)=>new Date(Date.now()-(30-minutes)*60000).toISOString();
   const history=[100,110,99,120,108].map((value,index)=>({observed_at:t(index),priced_total:String(value),valuation_complete:true,unpriced_assets:[]}));
   const current=fleetWallet();
@@ -108,7 +108,9 @@ test('Capital draws fleet tiles, strategy table, allocation, rails and fills fro
     holdingsUnrealized:{BTC:'+0.25 USDC'},
   })));
   for(const id of ['C01','C04','C05','C17','C26','C25','C09','C10','C28','C06','C19','C20','C07','C08','C21','C29','C11','C12','C13','C22','C15','C24','C18']) assert.match(html,new RegExp(`data-panel-id="${id}"`),id);
-  assert.doesNotMatch(html,/Unavailable|unavailable/);
+  const recordedTimeNote = 'Owner-recorded fill time; exchange execution time is unavailable.';
+  assert.ok(html.includes(recordedTimeNote));
+  assert.doesNotMatch(html.replace(recordedTimeNote, ''), /Unavailable|unavailable/);
   assert.match(html,/class="q-negative">-10\.00%</,'worst drawdown heads the C19 panel; the chart marks it on hover');
   assert.match(html,/Fleet cumulative net PnL/);
   assert.match(html,/since 2026-10-01 07:21 UTC \(history starts here\)/);

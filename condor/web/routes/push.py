@@ -216,7 +216,10 @@ async def live_activity_content(
         raise HTTPException(404, "Server not found") from None
     except TimeoutError:
         raise HTTPException(504, "Fleet summary exceeded its deadline") from None
-    state = la.content_state(glance)
+    state = la.content_state(
+        glance,
+        stale_after_seconds=live_activity_publisher.configured_stale_after(),
+    )
     # The Market index the publisher last built for this server, when published within two
     # intervals (``stale`` recomputed for its age); never built here.
     index = live_activity_market.published_index(

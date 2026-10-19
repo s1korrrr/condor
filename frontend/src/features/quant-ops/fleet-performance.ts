@@ -1,4 +1,4 @@
-import { projectPerformanceHistory } from './performance-history';
+import { checkedDifference, historyAmount, projectPerformanceHistory } from './performance-history';
 
 /**
  * Fleet-wide bot performance from saved native PnL history. Pure and unit-tested; the React hook that
@@ -34,6 +34,12 @@ export type BotHistory = {
 
 type RawRow = { timestamp: number; realized_pnl_quote: string; unrealized_pnl_quote: string };
 
+const checkedAdd = (left: number, right: number): number | null => {
+  const result = left + right;
+  return Number.isFinite(result) && (left === 0 || result !== right) && (right === 0 || result !== left) ? result : null;
+};
+const checkedDelta = checkedDifference;
+
 /** Validate one Condor performance-history payload and keep numeric samples with their owner run. */
 export function parseBotHistory(payload: unknown, bot: string, range: HistoryRange, now: number, failed = false): BotHistory {
   if (failed) return { bot, range, quote: null, samples: [], gapMs: 90_000, bucketSeconds: null, truncated: false, reason: 'Performance history read failed.' };
@@ -44,19 +50,23 @@ export function parseBotHistory(payload: unknown, bot: string, range: HistoryRan
   for (const point of view.points) {
     if (point.value == null) continue;
     const row = byTime.get(point.time);
-    const realized = row ? Number(row.realized_pnl_quote) : NaN, unrealized = row ? Number(row.unrealized_pnl_quote) : NaN;
-    if (Number.isFinite(realized) && Number.isFinite(unrealized)) samples.push({ time: point.time, total: point.value, realized, unrealized, owner: point.owner });
+    const realized = historyAmount(row?.realized_pnl_quote)?.number, unrealized = historyAmount(row?.unrealized_pnl_quote)?.number;
+    if (realized != null && unrealized != null) samples.push({ time: point.time, total: point.value, realized, unrealized, owner: point.owner });
   }
   return { bot, range, quote: view.quote, samples, gapMs: view.gapMs, bucketSeconds: view.bucketSeconds, truncated: view.truncated, reason: view.reason };
 }
 
 /** Changes are taken only inside one owner run. Deltas never span a restart. */
-function runDeltas(samples: BotSample[]): { total: number; realized: number; unrealized: number; restarts: number } {
+function runDeltas(samples: BotSample[]): { total: number; realized: number; unrealized: number; restarts: number } | null {
   let total = 0, realized = 0, unrealized = 0, restarts = 0;
   for (let index = 1; index < samples.length; index += 1) {
     const a = samples[index - 1], b = samples[index];
     if (a.owner !== b.owner) { restarts += 1; continue; }
-    total += b.total - a.total; realized += b.realized - a.realized; unrealized += b.unrealized - a.unrealized;
+    const deltas = [checkedDelta(b.total, a.total), checkedDelta(b.realized, a.realized), checkedDelta(b.unrealized, a.unrealized)];
+    if (deltas.some(delta => delta == null)) return null;
+    const next = [checkedAdd(total, deltas[0]!), checkedAdd(realized, deltas[1]!), checkedAdd(unrealized, deltas[2]!)];
+    if (next.some(value => value == null)) return null;
+    [total, realized, unrealized] = next as number[];
   }
   return { total, realized, unrealized, restarts };
 }
@@ -77,17 +87,19 @@ export type BotWindow = {
   full: boolean;
   /** Newest sample is older than the read's spacing plus 90s at `now`. */
   stale: boolean;
+  numericInvalid?: boolean;
 };
 
-/** One bot's change over [from, to]. `change` is null until two samples exist inside the window. */
-export function botWindow(history: BotHistory, from: number, to: number, now: number): BotWindow {
-  const inside = history.samples.filter(sample => sample.time >= from && sample.time <= to);
+/** Named as-of windows include their final observation; supplied historical bounds are half-open. */
+export function botWindow(history: BotHistory, from: number, to: number, now: number, endExclusive = false): BotWindow {
+  const inside = history.samples.filter(sample => sample.time >= from && (endExclusive ? sample.time < to : sample.time <= to));
   const first = inside[0] ?? null, last = inside.at(-1) ?? null;
   const deltas = inside.length >= 2 ? runDeltas(inside) : null;
   return {
     bot: history.bot, quote: history.quote,
     change: deltas?.total ?? null, realized: deltas?.realized ?? null, unrealized: deltas?.unrealized ?? null,
     firstAt: first?.time ?? null, lastAt: last?.time ?? null, samples: inside.length, restarts: deltas?.restarts ?? 0,
+    numericInvalid: inside.length >= 2 && deltas == null,
     uncoveredMs: inside.slice(1).reduce((total, sample, index) => {
       const spacing = sample.time - inside[index].time;
       return spacing > history.gapMs ? total + spacing : total;
@@ -140,16 +152,16 @@ export function coverageLabel(window: Pick<FleetWindow, 'counted' | 'expected' |
   return window.missing.length ? `${base} · missing: ${window.missing.map(item => item.bot).join(', ')}` : base;
 }
 
-/** Sum of per-bot changes over [from, to]. Quotes never mix: the most common quote wins, others are named missing. */
-export function fleetWindow(histories: BotHistory[], bots: string[], from: number, to: number, now: number): FleetWindow {
+/** Sum per-bot changes; supplied historical bounds use [from, to). Quotes never mix. */
+export function fleetWindow(histories: BotHistory[], bots: string[], from: number, to: number, now: number, endExclusive = false): FleetWindow {
   const missing: { bot: string; reason: string }[] = [];
   const windows: BotWindow[] = [];
   for (const bot of bots) {
     const history = histories.find(item => item.bot === bot);
     if (!history) { missing.push({ bot, reason: 'No performance history read for this bot.' }); continue; }
     if (!history.samples.length) { missing.push({ bot, reason: history.reason ?? 'No saved performance samples.' }); continue; }
-    const window = botWindow(history, from, to, now);
-    if (window.change == null) { missing.push({ bot, reason: `Needs two samples inside the window (has ${window.samples}).` }); continue; }
+    const window = botWindow(history, from, to, now, endExclusive);
+    if (window.change == null) { missing.push({ bot, reason: window.numericInvalid ? 'Performance history contains unrepresentable numeric changes.' : `Needs two samples inside the window (has ${window.samples}).` }); continue; }
     windows.push(window);
   }
   const quotes = new Map<string, number>();
@@ -160,10 +172,24 @@ export function fleetWindow(histories: BotHistory[], bots: string[], from: numbe
     missing.push({ bot: window.bot, reason: `Quote ${window.quote ?? 'unknown'} differs from ${quote}; not summed.` });
     return false;
   });
-  const sum = (key: 'change' | 'realized' | 'unrealized') => counted.length ? counted.reduce((total, window) => total + (window[key] ?? 0), 0) : null;
+  const sum = (key: 'change' | 'realized' | 'unrealized') => {
+    if (!counted.length) return null;
+    let total = 0;
+    for (const window of counted) {
+      const next = checkedAdd(total, window[key]!);
+      if (next == null) return null;
+      total = next;
+    }
+    return total;
+  };
+  const totals = [sum('change'), sum('realized'), sum('unrealized')];
+  if (counted.length && totals.some(value => value == null)) {
+    missing.push(...counted.map(window => ({ bot: window.bot, reason: 'Fleet sum is unrepresentable.' })));
+    counted.length = 0;
+  }
   const order = new Map(bots.map((bot, index) => [bot, index]));
   return {
-    from, to, quote, total: sum('change'), realized: sum('realized'), unrealized: sum('unrealized'),
+    from, to, quote, total: counted.length ? totals[0] : null, realized: counted.length ? totals[1] : null, unrealized: counted.length ? totals[2] : null,
     bots: counted, counted: counted.length, expected: bots.length, missing: missing.sort((a, b) => (order.get(a.bot) ?? 0) - (order.get(b.bot) ?? 0)),
     since: counted.length ? Math.min(...counted.map(window => window.firstAt!)) : null,
     partial: counted.some(window => !window.full),
@@ -175,12 +201,13 @@ export function fleetWindow(histories: BotHistory[], bots: string[], from: numbe
 
 export type FleetPoint = { time: number; value: number | null };
 
-/** Histories in the most common quote (ties: first seen). Quotes never mix in sums, series or risk statistics. */
-export function sameQuote(histories: BotHistory[]): BotHistory[] {
-  const counts = new Map<string, number>();
-  for (const history of histories) if (history.samples.length && history.quote) counts.set(history.quote, (counts.get(history.quote) ?? 0) + 1);
-  const quote = [...counts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
-  return quote ? histories.filter(history => history.quote === quote) : histories;
+/** The window owns contributor and quote admission for every chart of its change. */
+function windowHistories(histories: BotHistory[], from: number, to: number, selected?: FleetWindow, endExclusive = false): BotHistory[] {
+  const window = selected ?? fleetWindow(histories, histories.map(history => history.bot), from, to, to, endExclusive);
+  return window.bots.flatMap(bot => {
+    const history = histories.find(history => history.bot === bot.bot && history.quote === window.quote);
+    return history ? [history] : [];
+  });
 }
 
 /**
@@ -189,35 +216,48 @@ export function sameQuote(histories: BotHistory[]): BotHistory[] {
  * carried forward between its samples. Samples are snapped to `stepSeconds` buckets so bots that report
  * at different seconds line up; the newest sample in a bucket wins.
  */
-export function fleetSeries(histories: BotHistory[], from: number, to: number, stepSeconds = 60): FleetPoint[] {
+export function fleetSeries(histories: BotHistory[], from: number, to: number, stepSeconds = 60, selected?: FleetWindow, endExclusive = false): FleetPoint[] {
   const step = Math.max(1, stepSeconds) * 1000;
   const perBot: Map<number, { contribution: number; time: number }>[] = [];
-  for (const history of sameQuote(histories)) {
-    const inside = history.samples.filter(sample => sample.time >= from && sample.time <= to);
+  for (const history of windowHistories(histories, from, to, selected, endExclusive)) {
+    const inside = history.samples.filter(sample => sample.time >= from && (endExclusive ? sample.time < to : sample.time <= to));
     if (!inside.length) continue;
     const buckets = new Map<number, { contribution: number; time: number }>();
     let contribution = 0;
-    inside.forEach((sample, index) => {
-      if (index > 0 && inside[index - 1].owner === sample.owner) contribution += sample.total - inside[index - 1].total;
+    for (const [index, sample] of inside.entries()) {
+      if (index > 0 && inside[index - 1].owner === sample.owner) {
+        const delta = checkedDelta(sample.total, inside[index - 1].total);
+        const next = delta == null ? null : checkedAdd(contribution, delta);
+        if (next == null) return [];
+        contribution = next;
+      }
       buckets.set(Math.floor(sample.time / step), { contribution, time: sample.time });
-    });
+    }
     perBot.push(buckets);
   }
   const keys = [...new Set(perBot.flatMap(buckets => [...buckets.keys()]))].sort((a, b) => a - b);
   const current = perBot.map(() => 0);
-  return keys.map(key => {
+  const points: FleetPoint[] = [];
+  for (const key of keys) {
     let time = 0;
     perBot.forEach((buckets, index) => {
       const hit = buckets.get(key);
       if (hit) { current[index] = hit.contribution; time = Math.max(time, hit.time); }
     });
-    return { time: time || key * step, value: current.reduce((total, value) => total + value, 0) };
-  });
+    let value = 0;
+    for (const part of current) {
+      const next = checkedAdd(value, part);
+      if (next == null) return [];
+      value = next;
+    }
+    points.push({ time: time || key * step, value });
+  }
+  return points;
 }
 
 /** Owner changes inside the window, for chart markers. */
-export function restartTimes(histories: BotHistory[], from: number, to: number): number[] {
-  return histories.flatMap(history => history.samples.flatMap((sample, index) => index > 0 && history.samples[index - 1].owner !== sample.owner && sample.time >= from && sample.time <= to ? [sample.time] : [])).sort((a, b) => a - b);
+export function restartTimes(histories: BotHistory[], from: number, to: number, selected?: FleetWindow, endExclusive = false): number[] {
+  return windowHistories(histories, from, to, selected, endExclusive).flatMap(history => history.samples.flatMap((sample, index) => index > 0 && history.samples[index - 1].owner !== sample.owner && history.samples[index - 1].time >= from && sample.time >= from && (endExclusive ? sample.time < to : sample.time <= to) ? [sample.time] : [])).sort((a, b) => a - b);
 }
 
 export type FleetDay = { day: string; net: number; realized: number; unrealized: number; bots: number; cumulative: number; today: boolean };
@@ -228,25 +268,82 @@ const DAY_MS = 86_400_000;
  * Fleet PnL per UTC day from every bot's same-run steps. A step between two samples belongs to the day of the
  * later sample, so a day keeps the movement across midnight and the bars add up to the window change.
  */
-export function fleetDailyBars(histories: BotHistory[], now: number, from = -Infinity): FleetDay[] {
+export function fleetDailyBars(histories: BotHistory[], now: number, from = -Infinity, selected?: FleetWindow, endExclusive = false): FleetDay[] {
   const days = new Map<number, { net: number; realized: number; unrealized: number; bots: Set<string> }>();
-  for (const history of sameQuote(histories)) {
+  for (const history of windowHistories(histories, from, now, selected, endExclusive)) {
     for (let index = 1; index < history.samples.length; index += 1) {
       const a = history.samples[index - 1], b = history.samples[index];
       // Both samples inside the window, as in `botWindow`, so the bars add up to the window change.
-      if (a.owner !== b.owner || a.time < from || b.time > now) continue;
+      if (a.owner !== b.owner || a.time < from || (endExclusive ? b.time >= now : b.time > now)) continue;
       const day = Math.floor(b.time / DAY_MS) * DAY_MS;
       const row = days.get(day) ?? { net: 0, realized: 0, unrealized: 0, bots: new Set<string>() };
-      row.net += b.total - a.total; row.realized += b.realized - a.realized; row.unrealized += b.unrealized - a.unrealized; row.bots.add(history.bot);
+      const deltas = [checkedDelta(b.total, a.total), checkedDelta(b.realized, a.realized), checkedDelta(b.unrealized, a.unrealized)];
+      if (deltas.some(value => value == null)) return [];
+      const next = [checkedAdd(row.net, deltas[0]!), checkedAdd(row.realized, deltas[1]!), checkedAdd(row.unrealized, deltas[2]!)];
+      if (next.some(value => value == null)) return [];
+      [row.net, row.realized, row.unrealized] = next as number[];
+      row.bots.add(history.bot);
       days.set(day, row);
     }
   }
   let cumulative = 0;
   const today = Math.floor(now / DAY_MS) * DAY_MS;
-  return [...days.entries()].sort(([a], [b]) => a - b).map(([day, row]) => {
-    cumulative += row.net;
-    return { day: new Date(day).toISOString().slice(0, 10), net: row.net, realized: row.realized, unrealized: row.unrealized, bots: row.bots.size, cumulative, today: day === today };
+  const bars: FleetDay[] = [];
+  for (const [day, row] of [...days.entries()].sort(([a], [b]) => a - b)) {
+    const next = checkedAdd(cumulative, row.net);
+    if (next == null) return [];
+    cumulative = next;
+    bars.push({ day: new Date(day).toISOString().slice(0, 10), net: row.net, realized: row.realized, unrealized: row.unrealized, bots: row.bots.size, cumulative, today: day === today });
+  }
+  return bars;
+}
+
+/** Daily risk bars require every admitted bot to cover both UTC edges without a gap or owner change. */
+export function qualifiedFleetDailyBars(histories: BotHistory[], to: number, from: number, selected: FleetWindow): FleetDay[] {
+  const admitted = selected.bots.map(bot => histories.find(history => history.bot === bot.bot && history.quote === selected.quote));
+  if (!admitted.length || admitted.some(history => !history) || !Number.isFinite(from) || !Number.isFinite(to)) return [];
+  const byBotDay = admitted.map(history => {
+    const days = new Map<number, BotSample[]>();
+    for (const sample of history!.samples) {
+      if (sample.time < from || sample.time >= to) continue;
+      const day = Math.floor(sample.time / DAY_MS) * DAY_MS;
+      const rows = days.get(day) ?? [];
+      rows.push(sample);
+      days.set(day, rows);
+    }
+    return days;
   });
+  const days: FleetDay[] = [];
+  let cumulative = 0;
+  for (let start = Math.ceil(from / DAY_MS) * DAY_MS; start + DAY_MS <= to; start += DAY_MS) {
+    let net = 0, realized = 0, unrealized = 0, complete = true;
+    for (let index = 0; index < admitted.length; index += 1) {
+      const history = admitted[index]!;
+      const samples = byBotDay[index].get(start) ?? [];
+      // The previous UTC day's last observation is this day's close-to-close baseline. Include the
+      // step into midnight once; an exact midnight sample is the baseline only when no prior close exists.
+      const prior = byBotDay[index].get(start - DAY_MS)?.at(-1);
+      const first = prior && start - prior.time <= history.gapMs ? prior : samples[0]?.time === start ? samples[0] : null;
+      const last = samples.at(-1);
+      const observed = first && first.time < start ? [first, ...samples] : samples;
+      if (!first || !last || first === last || start - first.time > history.gapMs || start + DAY_MS - last.time > history.gapMs ||
+          observed.some((sample, rowIndex) => rowIndex > 0 && (sample.owner !== observed[rowIndex - 1].owner || sample.time - observed[rowIndex - 1].time > history.gapMs))) {
+        complete = false;
+        break;
+      }
+      const deltas = [checkedDelta(last.total, first.total), checkedDelta(last.realized, first.realized), checkedDelta(last.unrealized, first.unrealized)];
+      if (deltas.some(value => value == null)) { complete = false; break; }
+      const next = [checkedAdd(net, deltas[0]!), checkedAdd(realized, deltas[1]!), checkedAdd(unrealized, deltas[2]!)];
+      if (next.some(value => value == null)) { complete = false; break; }
+      [net, realized, unrealized] = next as number[];
+    }
+    if (!complete) continue;
+    const next = checkedAdd(cumulative, net);
+    if (next == null) return [];
+    cumulative = next;
+    days.push({ day: new Date(start).toISOString().slice(0, 10), net, realized, unrealized, bots: admitted.length, cumulative, today: false });
+  }
+  return days;
 }
 
 /** Largest peak-to-trough fall of the fleet PnL curve, in quote units. The curve starts at 0. */
@@ -266,7 +363,7 @@ export const TAIL_MIN_DAYS = 60;
 
 export type FleetRisk = {
   days: number;
-  meanDaily: number;
+  meanDaily: number | null;
   volatilityDaily: number | null;
   /** Annualised with sqrt(365): crypto trades every day. */
   sharpe: number | null;
@@ -276,6 +373,8 @@ export type FleetRisk = {
   /** Statistic availability against the minimum sample sizes; callers render only what is non-null. */
   minDays: number;
   tailMinDays: number;
+  /** Finite owner returns whose aggregate statistic cannot be represented without overflow. */
+  invalidReason: string | null;
 };
 
 /**
@@ -284,27 +383,47 @@ export type FleetRisk = {
  */
 export function fleetRisk(dailyReturns: number[]): FleetRisk {
   const n = dailyReturns.length;
-  const mean = n ? dailyReturns.reduce((sum, value) => sum + value, 0) / n : 0;
-  const variance = n > 1 ? dailyReturns.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (n - 1) : null;
-  const volatility = variance == null ? null : Math.sqrt(variance);
+  const finiteInput = dailyReturns.every(Number.isFinite);
+  // An incremental mean preserves an exactly constant series and avoids overflowing its raw sum.
+  let mean: number | null = finiteInput ? 0 : null;
+  for (let index = 0; mean != null && index < n; index += 1) {
+    const delta = dailyReturns[index] - mean;
+    const next = mean + delta / (index + 1);
+    mean = Number.isFinite(delta) && Number.isFinite(next) ? next : null;
+  }
+  const varianceSum = mean != null && n > 1
+    ? dailyReturns.reduce((total, value) => total + (value - mean) ** 2, 0) : NaN;
+  const variance = Number.isFinite(varianceSum) && n > 1 ? varianceSum / (n - 1) : null;
+  const volatility = variance != null && Number.isFinite(variance) ? Math.sqrt(variance) : null;
   const enough = n >= RISK_MIN_DAYS && volatility != null;
-  const downside = n ? Math.sqrt(dailyReturns.reduce((sum, value) => sum + Math.min(0, value) ** 2, 0) / n) : 0;
-  const sorted = [...dailyReturns].sort((a, b) => a - b);
+  const downsideSum = finiteInput ? dailyReturns.reduce((total, value) => total + Math.min(0, value) ** 2, 0) : NaN;
+  const downside = Number.isFinite(downsideSum) && n > 0 ? Math.sqrt(downsideSum / n) : null;
+  const sorted = finiteInput ? [...dailyReturns].sort((a, b) => a - b) : [];
   const cut = Math.max(1, Math.floor(n * 0.05));
   const tail = n >= TAIL_MIN_DAYS;
+  const sharpeValue = enough && volatility > 0 && mean != null ? (mean / volatility) * Math.sqrt(365) : null;
+  const sortinoValue = n >= RISK_MIN_DAYS && downside != null && downside > 0 && mean != null ? (mean / downside) * Math.sqrt(365) : null;
+  const varValue = tail && sorted.length ? -sorted[cut - 1] : null;
+  const tailSum = tail && sorted.length ? sorted.slice(0, cut).reduce((total, value) => total + value, 0) : NaN;
+  const shortfallValue = Number.isFinite(tailSum) ? -(tailSum / cut) : null;
+  const unrepresentable = !finiteInput || mean == null ||
+    (n >= RISK_MIN_DAYS && (volatility == null || downside == null || (sharpeValue != null && !Number.isFinite(sharpeValue)) || (sortinoValue != null && !Number.isFinite(sortinoValue)))) ||
+    (tail && (varValue == null || !Number.isFinite(varValue) || shortfallValue == null || !Number.isFinite(shortfallValue)));
   return {
     days: n, meanDaily: mean,
     volatilityDaily: enough ? volatility : null,
-    sharpe: enough && volatility! > 0 ? (mean / volatility!) * Math.sqrt(365) : null,
-    sortino: enough && downside > 0 ? (mean / downside) * Math.sqrt(365) : null,
-    var95: tail ? -sorted[cut - 1] : null,
-    expectedShortfall95: tail ? -(sorted.slice(0, cut).reduce((sum, value) => sum + value, 0) / cut) : null,
+    sharpe: sharpeValue != null && Number.isFinite(sharpeValue) ? sharpeValue : null,
+    sortino: sortinoValue != null && Number.isFinite(sortinoValue) ? sortinoValue : null,
+    var95: varValue != null && Number.isFinite(varValue) ? varValue : null,
+    expectedShortfall95: shortfallValue != null && Number.isFinite(shortfallValue) ? shortfallValue : null,
     minDays: RISK_MIN_DAYS, tailMinDays: TAIL_MIN_DAYS,
+    invalidReason: unrepresentable ? 'Daily risk statistic is unrepresentable at this observed wallet basis.' : null,
   };
 }
 
 /** Completed UTC days only, divided by one equity basis. Today is still moving and never enters a statistic. */
 export function dailyReturns(days: FleetDay[], equity: number | null): number[] {
   if (equity == null || !Number.isFinite(equity) || equity <= 0) return [];
-  return days.filter(day => !day.today).map(day => day.net / equity);
+  const returns = days.filter(day => !day.today).map(day => day.net / equity);
+  return returns.every(Number.isFinite) ? returns : [];
 }

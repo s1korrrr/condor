@@ -25,6 +25,7 @@ GLANCE = json.loads(
     (FIXTURES / "fleet_summary" / "summary_glance.example.json").read_text()
 )
 SHARED_CONTENT = FIXTURES / "live_activity_content_v1.json"
+PARTIAL_CONTENT = FIXTURES / "live_activity_content_v1_partial.json"
 ACTIVITY = "8a1d3c55-7c2e-4f0b-9a57-2f3e0c7b1d42"
 UPDATE_TOKEN = "d4" * 40
 UPDATE_TOKEN_2 = "e5" * 40
@@ -100,13 +101,17 @@ def test_content_state_of_the_builder_glance_is_the_shared_fixture():
     assert state == {
         "v": 1,
         "generated_at_ms": 1800000030000,
+        "stale_after_ms": 600000,
         "day_pnl": "4.50",
         "pnl_unit": "USDC",
         "day_partial": True,
         "equity": "1000.00",
-        "equity_unit": "USDC",
+        "equity_unit": "USDT",
+        "equity_valuation_complete": True,
+        "equity_source": "native_account_portfolio",
         "market_label": "Mixed",
         "market_state": "mixed",
+        "market_valid_until_ms": 1800000090000,
         "bots_running": 2,  # the paper bot is not a live bot, as on the app's Home tile
         "bots_total": 2,
         "incidents_state": "critical",
@@ -119,6 +124,71 @@ def test_content_state_of_the_builder_glance_is_the_shared_fixture():
         },
         "stale": False,
     }
+
+
+def test_account_subtotal_and_legacy_activity_keep_distinct_provenance():
+    glance = copy.deepcopy(GLANCE)
+    glance["wallet"]["equity"] = "900"
+    glance["wallet"]["valuation_complete"] = False
+    glance["wallet"]["unpriced_assets"] = ["PLN"]
+    glance["wallet"]["unpriced_count"] = 1
+    glance["sections"]["wallet"]["status"] = "partial"
+    state = la.content_state(glance)
+    assert state == json.loads(PARTIAL_CONTENT.read_text())
+    assert state["account_value"] == "900.00"
+    assert "equity" not in state
+    assert state["equity_unit"] == "USDT"
+    assert state["equity_valuation_complete"] is False
+    assert state["equity_source"] == "native_account_portfolio"
+    legacy = copy.deepcopy(glance)
+    for key in ("source", "account_scope", "valuation_complete"):
+        legacy["wallet"].pop(key, None)
+    older = la.content_state(legacy)
+    assert older["equity"] == "900.00"
+    assert "account_value" not in older
+    assert "equity_valuation_complete" not in older
+    assert "equity_source" not in older
+    malformed = copy.deepcopy(glance)
+    malformed["wallet"]["account_scope"]["identity"] = ""
+    assert "equity_source" not in la.content_state(malformed)
+    assert "equity" not in la.content_state(malformed)
+    assert "account_value" not in la.content_state(malformed)
+    malformed["wallet"]["account_scope"]["identity"] = "   "
+    assert "equity_source" not in la.content_state(malformed)
+    inconsistent = copy.deepcopy(glance)
+    inconsistent["sections"]["wallet"]["status"] = "ok"
+    assert "equity_valuation_complete" not in la.content_state(inconsistent)
+    assert "equity" not in la.content_state(inconsistent)
+
+
+def test_aged_account_subtotal_keeps_value_but_marks_activity_stale():
+    glance = copy.deepcopy(GLANCE)
+    glance["wallet"]["valuation_complete"] = False
+    glance["wallet"]["unpriced_assets"] = ["PLN"]
+    glance["wallet"]["unpriced_count"] = 1
+    glance["wallet"]["stale"] = True
+    glance["sections"]["wallet"]["status"] = "partial"
+    state = la.content_state(glance)
+    assert state["account_value"] == "1000.00"
+    assert "equity" not in state
+    assert state["equity_valuation_complete"] is False
+    assert state["stale"] is True
+
+
+def test_valid_full_scale_money_does_not_abort_activity_projection():
+    value = "9" * 38
+    assert la.money(value) == value + ".00"
+    assert (
+        la.money("1e127") == "1" + "0" * 127
+    )  # Exact integer fits the mobile 128-character wire bound.
+    assert la.money("-1e126") == "-1" + "0" * 126
+    assert la.money("-1e127") is None
+    assert la.money("1e1000000") is None
+    glance = copy.deepcopy(GLANCE)
+    glance["wallet"]["equity"] = "1e127"
+    state = la.content_state(glance)
+    assert state["equity"] == "1" + "0" * 127
+    assert state["equity_source"] == "native_account_portfolio"
 
 
 @pytest.mark.parametrize(
@@ -151,7 +221,7 @@ def test_unknown_values_are_absent_never_zero():
     glance["sections"]["wallet"]["status"] = "missing"
     glance["sections"]["bots"]["status"] = "missing"
     state = la.content_state(glance)
-    assert state == {"v": 1, "generated_at_ms": 1800000030000, "stale": True}
+    assert state == {"v": 1, "generated_at_ms": 1800000030000, "stale_after_ms": 600000, "stale": True}
 
 
 def test_a_day_without_a_total_omits_its_unit_and_partial_flag():
@@ -178,6 +248,57 @@ def test_stale_follows_the_pnl_and_wallet_sections(section, status, stale):
     glance = copy.deepcopy(GLANCE)
     glance["sections"][section]["status"] = status
     assert la.content_state(glance)["stale"] is stale
+
+
+@pytest.mark.parametrize(
+    "status,reason,freshness",
+    [
+        ("stale", "FRAME_FUTURE", "future"),
+        ("stale", "FRAME_STALE", "stale"),
+        ("partial", "FRAME_LAGGING", "lagging"),
+        ("missing", "NO_COMPONENTS", "fresh"),
+    ],
+)
+def test_stale_market_verdict_is_not_published_as_current(status, reason, freshness):
+    glance = copy.deepcopy(GLANCE)
+    glance["sections"]["market"].update(status=status, reason=reason)
+    glance["market"]["freshness"] = freshness
+    state = la.content_state(glance)
+    assert state["stale"] is False  # PnL and wallet are independently current.
+    assert "market_label" not in state and "market_state" not in state
+    wire = json.loads(
+        la.encode(
+            la.build_update_payload(state, now=1_800_000_040, stale_after_seconds=600)
+        )
+    )
+    assert "market_label" not in wire["aps"]["content-state"]
+    assert la.content_state(GLANCE)["market_label"] == "Mixed"
+
+
+def test_market_verdict_carries_exact_expiry_and_wakes_the_activity_before_global_stale():
+    glance = copy.deepcopy(GLANCE)
+    # The frame can expire before the section's cutoff + 90 s; use the earlier real bound.
+    glance["market"]["expires_at_ms"] = 1_800_000_070_000
+    state = la.content_state(glance, stale_after_seconds=600)
+    assert state["market_label"] == "Mixed"
+    assert state["market_valid_until_ms"] == 1_800_000_070_000
+    assert state["stale_after_ms"] == 600_000
+    payload = la.build_update_payload(state, now=1_800_000_040, stale_after_seconds=600)
+    assert payload["aps"]["stale-date"] == 1_800_000_070
+    assert payload["aps"]["content-state"]["stale"] is False
+
+    glance["market"]["expires_at_ms"] = 1_800_000_070_500
+    fractional = la.content_state(glance)
+    assert fractional["market_valid_until_ms"] == 1_800_000_070_500
+    # APNs carries integer seconds. The client suppresses the verdict on the native stale signal.
+    assert la.build_update_payload(fractional, now=1_800_000_040, stale_after_seconds=600)["aps"]["stale-date"] == 1_800_000_070
+
+    glance["market"]["expires_at_ms"] = 1_800_000_120_000
+    assert la.content_state(glance)["market_valid_until_ms"] == 1_800_000_090_000
+    del glance["market"]["expires_at_ms"]
+    legacy = la.content_state(glance)
+    assert "market_label" not in legacy and "market_valid_until_ms" not in legacy
+    assert legacy["stale"] is False
 
 
 def test_a_glance_without_sections_is_stale():
@@ -852,12 +973,16 @@ def test_an_update_push_carries_the_contract_headers_and_body(tmp_path):
         assert headers["apns-priority"] == "5"
         assert headers["apns-expiration"] == str(now + 600)
         body = json.loads(request["body"])
-        expected = {**la.content_state(GLANCE), "generated_at_ms": now * 1000}
+        current_glance = copy.deepcopy(GLANCE)
+        current_glance["generated_at_ms"] = now * 1000
+        expected = la.content_state(current_glance)
         assert body == {
             "aps": {
                 "timestamp": now,
                 "event": "update",
                 "content-state": expected,
+                # This legacy worker fixture's transport clock precedes the future synthetic
+                # glance, so its own bounded deadline is earlier than either source deadline.
                 "stale-date": now + 600,
             }
         }
@@ -1300,7 +1425,14 @@ def test_a_failed_market_index_is_omitted_counted_and_logged_once(tmp_path, capl
 
 def test_content_with_a_full_48_point_spark_stays_under_the_limit():
     spark = [round(98.5 + n * 0.0731, 2) for n in range(48)]
-    index = {**INDEX, "spark": spark, "value": "101.99", "change_pct": "1.99"}
+    index = {
+        **INDEX,
+        "spark": spark,
+        "value": "101.99",
+        "change_pct": "1.99",
+        "source_age_ms": 70_000,
+        "source_age_at_ms": 1_800_000_040_000,
+    }
     state = {**la.content_state(GLANCE), "market_index": index}
     update = la.encode(
         la.build_update_payload(state, now=1_800_000_040, stale_after_seconds=600)
@@ -1316,6 +1448,10 @@ def test_content_with_a_full_48_point_spark_stays_under_the_limit():
     assert (
         len(json.loads(update)["aps"]["content-state"]["market_index"]["spark"]) == 48
     )
+    assert (
+        json.loads(start)["aps"]["content-state"]["market_index"]["source_age_at_ms"]
+        == 1_800_000_040_000
+    )
 
 
 def test_the_worker_sends_the_market_index_it_reads(tmp_path):
@@ -1324,11 +1460,16 @@ def test_the_worker_sends_the_market_index_it_reads(tmp_path):
         register(r)
         r.glance = copy.deepcopy(GLANCE)
         r.publishing = False
-        state = {**la.content_state(GLANCE), "market_index": INDEX}
+        anchored = {
+            **INDEX,
+            "source_age_ms": 70_000,
+            "source_age_at_ms": 1_800_000_040_000,
+        }
+        state = {**la.content_state(GLANCE), "market_index": anchored}
         la.publish_content(r.registry, 1, SERVER, state, built_at=r.clock() + 5)
         r.cycle()
         body = json.loads(live(r)[0]["body"])
-        assert body["aps"]["content-state"]["market_index"] == INDEX
+        assert body["aps"]["content-state"]["market_index"] == anchored
     finally:
         r.close()
 
@@ -1414,7 +1555,12 @@ def test_a_failed_pass_keeps_the_last_good_index_for_180_s_then_omits_it(tmp_pat
 
     async def as_of_a_minute_ago(server):
         # Built with a 200 s source age (e.g. a slow reporting source).
-        return {**INDEX, "as_of_ms": int((t0 - 60) * 1000), "source_age_ms": 200_000}
+        return {
+            **INDEX,
+            "as_of_ms": int((t0 - 60) * 1000),
+            "source_age_ms": 200_000,
+            "source_age_at_ms": int(t0 * 1000),
+        }
 
     def publish(market_index):
         run(
@@ -1432,6 +1578,7 @@ def test_a_failed_pass_keeps_the_last_good_index_for_180_s_then_omits_it(tmp_pat
         **INDEX,
         "as_of_ms": int((t0 - 60) * 1000),
         "source_age_ms": 200_000,
+        "source_age_at_ms": int(t0 * 1000),
         "stale": False,
     }
     clock[0] = t0 + 110  # 310 s: above the headline rule
@@ -1439,3 +1586,27 @@ def test_a_failed_pass_keeps_the_last_good_index_for_180_s_then_omits_it(tmp_pat
     clock[0] = t0 + 120  # as-of 180 s old: no longer reused
     assert "market_index" not in publish(indexes)
     assert registry.get_meta(la.PUBLISHER_META_KEY)["index_failed"] == 1
+
+
+def test_index_stale_recheck_uses_measurement_clock_not_registry_write_clock():
+    from condor.web import live_activity_market as market
+
+    t0 = 1_800_000_000.0
+    index = {
+        **INDEX,
+        "source_age_ms": 280_000,
+        "source_age_at_ms": int((t0 - 5) * 1000),
+        "as_of_ms": int((t0 - 60) * 1000),
+    }
+    market.remember_index(SERVER, index, now=t0)
+    try:
+        assert (
+            market.published_index(SERVER, now=t0 + 15, max_age_seconds=60)["stale"]
+            is False
+        )
+        assert (
+            market.published_index(SERVER, now=t0 + 16, max_age_seconds=60)["stale"]
+            is True
+        )
+    finally:
+        market._published.pop(SERVER, None)

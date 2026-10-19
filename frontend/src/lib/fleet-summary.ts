@@ -8,6 +8,7 @@
  */
 
 export const FLEET_SUMMARY_SCHEMA = 'fleet-summary.v1';
+export const FLEET_WALLET_CLAIMS = { 'X-RSIBOT-Wallet-Claims': 'native-account-v1' } as const;
 
 export type FleetSummaryView = 'full' | 'glance';
 export type SectionName = 'wallet' | 'pnl' | 'market' | 'bots' | 'fills' | 'incidents';
@@ -17,7 +18,13 @@ export type SectionMeta = { status: SectionStatus; observed_at_ms: number | null
 /** `reason` is an upper-case code (see the contract's reason-code table); `section`-level entries carry no `field`. */
 export type MissingItem = { section: SectionName; field?: string; bot?: string; reason: string };
 
-export type Wallet = { equity: string; unit: string; observed_at_ms: number; source_bot: string; valuation_complete: true; stale: boolean };
+export type Wallet = {
+  equity: string; unit: string; observed_at_ms: number; source_bot: string | null;
+  valuation_complete: boolean; stale: boolean;
+  source?: 'native_account_portfolio';
+  account_scope?: { account: 'master_account'; connector: 'okx'; market: 'spot'; identity: string };
+  unpriced_assets?: string[]; unpriced_count?: number;
+};
 
 export type WindowMissing = { bot: string; reason: string; samples?: number; quote?: string | null };
 export type WindowBot = {
@@ -58,7 +65,12 @@ export type BotCard = {
   trades: { lifetime: number | null; opened_24h: number | null; closed_24h: number | null } | null;
   missing: { field: string; reason: string }[];
 };
-export type Fill = { bot: string; fill_id: string; pair: string | null; side: string | null; amount: string | null; price: string | null; volume: string | null; fee: string | null; time_ms: number | null };
+export type Fill = {
+  bot: string; fill_id: string; pair: string | null; side: string | null;
+  amount: string | null; price: string | null; volume: string | null; fee: string | null; time_ms: number | null;
+  /** Attested venue time, independent of the recorded clock used for ordering. */
+  execution_timestamp_ms: number | null; execution_timestamp_source: 'okx.fillTime' | null;
+};
 export type Incidents = { state: 'healthy' | 'degraded' | 'critical' | 'unknown'; open: number; critical: number; warning: number; monitor: 'healthy' | 'degraded' | null; generated_at_ms: number; observed_at_ms: number };
 
 export type FleetSummary = {
@@ -67,7 +79,7 @@ export type FleetSummary = {
   wallet: Wallet | null; pnl: Pnl | null; market: Market | null; bots: BotCard[]; fills: Fill[] | null; incidents: Incidents | null;
 };
 
-export type GlanceWindow = Pick<PnlWindow, 'total' | 'partial' | 'counted' | 'expected' | 'stale'>;
+export type GlanceWindow = Pick<PnlWindow, 'unit' | 'total' | 'partial' | 'counted' | 'expected' | 'stale'>;
 /** The Watch view: headline numbers only, under 8 KB. `bots` is capped; `bots_total` / `missing_total` say what was cut. */
 export type FleetGlance = {
   schema_version: typeof FLEET_SUMMARY_SCHEMA; view: 'glance'; server: string; generated_at_ms: number;
@@ -77,7 +89,7 @@ export type FleetGlance = {
   market: { state: VerdictState; label: string; score: number; horizon_label: string; held: boolean; freshness: Market['frame']['freshness']; cutoff_ms: number } | null;
   bots: { bot: string; display_name: string; generation: BotCard['generation']; paper: boolean; status: string | null; report_stale: boolean; pnl_day: string | null }[];
   bots_total: number;
-  fills: Pick<Fill, 'bot' | 'pair' | 'side' | 'volume' | 'time_ms'>[] | null;
+  fills: Pick<Fill, 'bot' | 'pair' | 'side' | 'volume' | 'time_ms' | 'execution_timestamp_ms' | 'execution_timestamp_source'>[] | null;
   incidents: Pick<Incidents, 'state' | 'open' | 'critical'> | null;
 };
 
@@ -86,6 +98,25 @@ const STATUSES = ['ok', 'stale', 'partial', 'missing'];
 const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === 'object' && !Array.isArray(value);
 const integer = (value: unknown): value is number => typeof value === 'number' && Number.isSafeInteger(value);
 const decimal = (value: unknown): value is string => typeof value === 'string' && /^-?\d+(\.\d+)?$/.test(value);
+const MAX_WIRE_TIME_MS = 253402300799999;
+
+function qualifiedSummaryFill(raw: unknown, generatedAtMs: number): Record<string, unknown> {
+  if (!object(raw)) throw new FleetSummaryError('Fleet summary fill is invalid.');
+  const executed = raw.execution_timestamp_ms;
+  const recorded = raw.time_ms;
+  // The summary producer emits an attestation only for OKX live receipts from the native owner,
+  // then compacts away connector/paper fields. Keep it only when its remaining wire proof
+  // is coherent; a malformed additive field never changes the recorded clock or any money.
+  const attested = raw.execution_timestamp_source === 'okx.fillTime'
+    && integer(executed) && executed > 0 && executed <= MAX_WIRE_TIME_MS
+    && integer(recorded) && recorded >= 0 && recorded <= MAX_WIRE_TIME_MS
+    && executed <= recorded + 5000 && executed <= generatedAtMs + 5000;
+  return {
+    ...raw,
+    execution_timestamp_ms: attested ? executed : null,
+    execution_timestamp_source: attested ? 'okx.fillTime' : null,
+  };
+}
 
 export class FleetSummaryError extends Error {}
 
@@ -108,9 +139,20 @@ export function parseFleetSummary(payload: unknown, view: FleetSummaryView): Fle
   })) throw new FleetSummaryError('Fleet summary sections are invalid.');
   if (!Array.isArray(payload.missing) || !payload.missing.every(item => object(item) && SECTIONS.includes(item.section as SectionName) && typeof item.reason === 'string')) throw new FleetSummaryError('Fleet summary missing list is invalid.');
   if (!Array.isArray(payload.bots)) throw new FleetSummaryError('Fleet summary bots are invalid.');
+  if (payload.fills !== null && !Array.isArray(payload.fills)) throw new FleetSummaryError('Fleet summary fills are invalid.');
   // A section the server says is present must have its headline number in the documented type.
   const wallet = payload.wallet;
   if (wallet !== null && (!object(wallet) || !decimal(wallet.equity) || typeof wallet.unit !== 'string' || !integer(wallet.observed_at_ms))) throw new FleetSummaryError('Fleet summary wallet is invalid.');
+  if (object(wallet) && wallet.source === 'native_account_portfolio') {
+    const scope = wallet.account_scope;
+    if (wallet.source_bot !== null || wallet.unit !== 'USDT' || typeof wallet.valuation_complete !== 'boolean'
+      || !object(scope) || scope.account !== 'master_account' || scope.connector !== 'okx' || scope.market !== 'spot'
+      || typeof scope.identity !== 'string' || scope.identity.trim().length < 1 || scope.identity.length > 80
+      || !Array.isArray(wallet.unpriced_assets) || wallet.unpriced_assets.length > 16
+      || !wallet.unpriced_assets.every(asset => typeof asset === 'string' && asset.length > 0 && asset.length <= 80)
+      || !integer(wallet.unpriced_count) || wallet.unpriced_count < wallet.unpriced_assets.length
+      || wallet.valuation_complete !== (wallet.unpriced_count === 0)) throw new FleetSummaryError('Fleet summary wallet account scope is invalid.');
+  }
   const pnl = payload.pnl;
   if (pnl !== null) {
     if (!object(pnl)) throw new FleetSummaryError('Fleet summary PnL is invalid.');
@@ -119,7 +161,15 @@ export function parseFleetSummary(payload: unknown, view: FleetSummaryView): Fle
       if (!object(window) || !(window.total === null || decimal(window.total)) || !integer(window.counted) || !integer(window.expected) || typeof window.partial !== 'boolean') throw new FleetSummaryError(`Fleet summary PnL window ${name} is invalid.`);
     }
   }
-  return payload as unknown as FleetSummary | FleetGlance;
+  const fills = payload.fills === null ? null : payload.fills.map(fill => qualifiedSummaryFill(fill, payload.generated_at_ms as number));
+  if (view === 'glance' && object(pnl)) {
+    const windows = Object.fromEntries((['day', 'week', 'month', 'all'] as const).map(name => {
+      const window = pnl[name] as Record<string, unknown>;
+      return [name, { ...window, unit: typeof window.unit === 'string' ? window.unit : null }];
+    }));
+    return { ...payload, fills, pnl: { ...pnl, ...windows } } as unknown as FleetGlance;
+  }
+  return { ...payload, fills } as unknown as FleetSummary;
 }
 
 export function fleetSummaryPath(server: string, view: FleetSummaryView = 'full'): string {

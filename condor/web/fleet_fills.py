@@ -46,6 +46,7 @@ from condor.web.fleet_summary import (
     _instant_ms,
     _obj,
     display_name,
+    execution_time_fields,
     generation,
     is_paper,
     receipt_value,
@@ -108,15 +109,23 @@ def normalize_side(value: Any) -> Optional[str]:
 
 
 def _decimal(row: dict, *keys: str, positive: bool = False) -> Optional[str]:
-    """The first key that parses as a finite decimal. Exact receipt strings are listed before float projections."""
+    """The first present decimal; an invalid exact value cannot promote a lower-priority projection."""
     for key in keys:
-        number = _dec(row.get(key))
-        if number is not None and (not positive or number > 0):
-            return fleet_pnl.decimal_text(number)
+        value = row.get(key)
+        if value is None:
+            continue
+        number = _dec(value)
+        return (
+            fleet_pnl.decimal_text(number)
+            if number is not None and (not positive or number > 0)
+            else None
+        )
     return None
 
 
-def normalize_fill(row: Any, bot: str) -> tuple[Optional[dict], Optional[str]]:
+def normalize_fill(
+    row: Any, bot: str, now_ms: Optional[float] = None
+) -> tuple[Optional[dict], Optional[str]]:
     """``(item, None)`` or ``(None, reject_reason)``. Never raises for a malformed row."""
     fill = _obj(row)
     if not fill:
@@ -158,7 +167,8 @@ def normalize_fill(row: Any, bot: str) -> tuple[Optional[dict], Optional[str]]:
         ),
         "fee": receipt_value(fill, "fee_quote", positive=False)[0],
         "fee_unit": quote,
-        "time_ms": _instant_ms(fill.get("timestamp")),
+        "time_ms": _instant_ms(fill.get("timestamp"), now_ms),
+        **execution_time_fields(fill, now_ms, paper=is_paper(bot)),
         "receipt": receipt,
         "simulated": fill.get("simulated") is True,
         # Owner fill rows carry no per-fill realised PnL, and a ledger window cannot support an average-cost
@@ -176,7 +186,7 @@ def normalize_fill(row: Any, bot: str) -> tuple[Optional[dict], Optional[str]]:
 
 
 def normalize_owner_rows(
-    payload: Any, bot: str, limit: int = OWNER_FILL_LIMIT
+    payload: Any, bot: str, limit: int = OWNER_FILL_LIMIT, now_ms: Optional[float] = None
 ) -> BotRead:
     """Rows of one owner ``fills`` response. A payload that is not ``{rows: [...]}`` is ``INVALID``."""
     rows = _obj(payload).get("rows")
@@ -185,7 +195,7 @@ def normalize_owner_rows(
     out = BotRead(bot, "ok", rows_read=len(rows), saturated=len(rows) >= limit)
     seen: set[str] = set()
     for row in rows:
-        item, reason = normalize_fill(row, bot)
+        item, reason = normalize_fill(row, bot, now_ms)
         if item is None:
             out.rejected[reason] = out.rejected.get(reason, 0) + 1
         elif item["id"] in seen:
@@ -299,7 +309,7 @@ async def read_window(
             return BotRead(bot, "unavailable", SOURCE_UNAVAILABLE)
         if read.payload is None:
             return BotRead(bot, "unavailable", read.reason or SOURCE_UNAVAILABLE)
-        return normalize_owner_rows(read.payload, bot, limit)
+        return normalize_owner_rows(read.payload, bot, limit, now_ms)
 
     reads = dict(zip(live, await asyncio.gather(*(one(bot) for bot in live))))
     reads_in_order = [

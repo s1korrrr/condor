@@ -199,12 +199,12 @@ def test_the_fleet_wallet_never_takes_a_paper_or_simulated_read():
         }
     }
     wallet, _ = fleet_summary._wallet_section(
-        {PAPER: paper_read, LIVE: live_read}, NOW * 1000, []
+        fleet_summary.OwnerRead({PAPER: paper_read, LIVE: live_read}), NOW * 1000, []
     )
-    assert wallet["source_bot"] == LIVE and wallet["equity"] == "20239.31"
+    assert wallet is None, "bot observers are not a full-account valuation"
     missing = []
     wallet, _ = fleet_summary._wallet_section(
-        {"rsi_modular_v2": paper_read}, NOW * 1000, missing
+        fleet_summary.OwnerRead({"rsi_modular_v2": paper_read}), NOW * 1000, missing
     )
     assert wallet is None and missing, "a simulated read is not a fleet wallet"
 

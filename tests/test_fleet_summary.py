@@ -48,6 +48,32 @@ def iso(ms):
     )
 
 
+def account_analytics(
+    observed_ms=NOW_MS - 30_000, *, amount="1000", complete=True, unpriced=()
+):
+    return {
+        "schema_version": 1,
+        "quote_currency": "USDT",
+        "scope": {
+            "account": "master_account",
+            "connector": "okx",
+            "market": "spot",
+            "identity": "account-revision-1",
+        },
+        "capture_mode": "observation-driven",
+        "current": {
+            "observed_at": iso(observed_ms),
+            "priced_total": amount,
+            "valuation_complete": complete,
+            "unpriced_assets": list(unpriced),
+            "holdings": [],
+        },
+        "history": None,
+        "changes": [],
+        "performance": {"available": False, "reason": "Cash flows not reconciled"},
+    }
+
+
 def seed(store, bots=("ok_rsi", "rsi_modular_v2")):
     rows = {
         "ok_rsi": [(1439, 1, 0.5), (600, 2, 1), (1, 4, 2)],
@@ -273,6 +299,13 @@ class FakeReaders:
     async def bots_status(self, server):
         return bots_status() if self.status else None
 
+    async def account(self, server, user_id):
+        return (
+            fs.OwnerRead(account_analytics())
+            if self.with_wallet
+            else fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)
+        )
+
     def performance(self, server, bot, range_, now_s):
         self.performance_calls.append((bot, range_))
         return self.store.read(server, bot, range_, now_s)
@@ -337,10 +370,19 @@ async def test_full_summary_golden_numbers(store):
 
     assert body["wallet"] == {
         "equity": "1000",
-        "unit": "USDC",
+        "unit": "USDT",
         "observed_at_ms": NOW_MS - 30_000,
-        "source_bot": "ok_rsi",
+        "source_bot": None,
+        "source": "native_account_portfolio",
+        "account_scope": {
+            "account": "master_account",
+            "connector": "okx",
+            "market": "spot",
+            "identity": "account-revision-1",
+        },
         "valuation_complete": True,
+        "unpriced_assets": [],
+        "unpriced_count": 0,
         "stale": False,
     }
 
@@ -565,6 +607,27 @@ async def test_paper_numbers_never_enter_the_fleet_pnl_wallet_or_fills(store):
 
 
 @sync
+async def test_paper_summary_clears_exchange_time_even_when_owner_omits_simulation_flags(store, monkeypatch):
+    original = fills
+
+    def attested(bot, base):
+        payload = original(bot, base)
+        for row in payload["rows"]:
+            row.update(connector_name="okx", execution_timestamp_ms=fs._instant_ms(row["timestamp"])-2000,
+                       execution_timestamp_source="okx.fillTime")
+        return payload
+
+    monkeypatch.setitem(globals(), "fills", attested)
+    body = await build(store)
+    assert any(row["execution_timestamp_source"] == "okx.fillTime" for row in body["fills"])
+    assert body["paper_fills"]
+    for row in body["paper_fills"]:
+        assert row["simulated"] is True
+        assert row["execution_timestamp_ms"] is None
+        assert row["execution_timestamp_source"] is None
+
+
+@sync
 async def test_staleness_is_flagged_not_hidden(store):
     body = await build(store, now_ms=NOW_MS + 10 * 60_000)
     assert (
@@ -643,7 +706,15 @@ async def test_glance_is_a_consistent_compact_projection(store):
     for name in ("day", "week", "month", "all"):
         assert glance["pnl"][name] == {
             k: full["pnl"][name][k]
-            for k in ("total", "partial", "counted", "expected", "stale", "uncovered_ms")
+            for k in (
+                "unit",
+                "total",
+                "partial",
+                "counted",
+                "expected",
+                "stale",
+                "uncovered_ms",
+            )
         }
     verdict = full["market"]["verdict"]
     assert (
@@ -655,6 +726,19 @@ async def test_glance_is_a_consistent_compact_projection(store):
     ]
     assert glance["incidents"] == {"state": "critical", "open": 2, "critical": 1}
     assert [b["bot"] for b in glance["bots"]] == [b["bot"] for b in full["bots"]]
+
+
+@sync
+async def test_compact_periods_keep_their_own_currency(store):
+    full = await build(store, "full")
+    # Different windows may admit different majority quotes. The legacy global
+    # unit describes the first available window, not every period's money.
+    full["pnl"]["unit"] = full["pnl"]["day"]["unit"] = "USDC"
+    full["pnl"]["week"]["unit"] = full["pnl"]["month"]["unit"] = "USDT"
+    compact = fs.glance(full)
+    for period in ("day", "week", "month", "all"):
+        assert compact["pnl"][period]["unit"] == full["pnl"][period]["unit"]
+        assert compact["pnl"][period]["total"] == full["pnl"][period]["total"]
 
 
 @sync
@@ -693,6 +777,76 @@ async def test_glance_stays_under_the_watch_budget_even_with_many_bots(store):
     # With the Watch-sized fleet and everything healthy the payload is far below the budget.
     healthy = await build(store, "glance")
     assert len(fs.canonical_json(healthy)) < 4096 and healthy["bots_total"] == 3
+
+
+def test_numeric_summary_admission_and_exact_fee_controller_sums():
+    for bad in ("1_000", " 1", "١", "1e1000000", "1e-1000000"):
+        assert fs._dec(bad) is None
+    assert fs._dec("0.1") == fleet_pnl.Decimal("0.1")
+    huge = "1" + "0" * 30
+    page = {
+        "controllers": [
+            {"bot_name": "bot", "global_pnl_quote": huge, "trading_pair": "ETH-USDC"},
+            {"bot_name": "bot", "global_pnl_quote": "1", "trading_pair": "BTC-USDC"},
+        ]
+    }
+    exact = fleet_pnl.Decimal(huge[:-1] + "1")
+    assert fs._controller_net(page, "bot") == (exact, "USDC")
+    page["controllers"][0]["global_pnl_quote"] = "9" * 128
+    assert fs._controller_net(page, "bot") is None
+    fills = {
+        "rows": [
+            {
+                "bot_name": "bot",
+                "fill_id": f"fill-{index}",
+                "pair": "ETH-USDC",
+                "exact_trade_fee_in_quote": fee,
+                "receipt_precision": {"fee_quote": "exact_decimal"},
+            }
+            for index, fee in enumerate((huge, "1"))
+        ]
+    }
+    assert fs.project_fill_totals(fills, "bot", 500)["fees"] == exact
+    fills["rows"][0]["exact_trade_fee_in_quote"] = "9" * 128
+    assert fs.project_fill_totals(fills, "bot", 500)["fees"] is None
+
+
+def test_verified_empty_controller_inventory_is_zero_but_missing_inventory_is_unknown():
+    observed = {
+        "runtime_status": {
+            "bot_name": "bot",
+            "updated_at": iso(NOW_MS - 1_000),
+            "controllers": [{"pair": "ETH-USDC", "controller_id": "c"}],
+            "active_executors": [],
+            "lifecycle_executors": [],
+            "positions_held": [],
+        },
+        "monitoring": {"bot_name": "bot", "stale_threshold_seconds": 30},
+    }
+    assert fs.project_runtime_view(observed, "bot", NOW_MS)["held"] == 0
+    del observed["runtime_status"]["positions_held"]
+    assert fs.project_runtime_view(observed, "bot", NOW_MS)["held"] is None
+
+
+@sync
+async def test_max_admitted_amount_width_still_fits_sixteen_bot_glance(store):
+    full = await build(store, "full")
+    amount = "9" * 38 + "0" * 90
+    assert len(amount) == fleet_pnl.MAX_DECIMAL_TEXT_CHARS
+    assert fleet_pnl.decimal_text(fs._dec(amount)) == amount
+    full["bots"] = [copy.deepcopy(full["bots"][0]) for _ in range(fs.GLANCE_MAX_BOTS)]
+    for index, bot in enumerate(full["bots"]):
+        bot["bot"] = f"bot-{index:02d}"
+        bot["display_name"] = f"bot-{index:02d}"
+        bot["pnl_day"] = {"change": amount}
+    for period in ("day", "week", "month", "all"):
+        full["pnl"][period]["total"] = amount
+    full["wallet"]["equity"] = amount
+    for fill in full["fills"][: fs.RECENT_FILLS["glance"]]:
+        fill["volume"] = amount
+    compact = fs.glance(full)
+    assert len(compact["bots"]) == 16
+    assert len(fs.canonical_json(compact)) < 8192
 
 
 @sync

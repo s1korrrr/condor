@@ -4,6 +4,7 @@ import { frontendModules } from './helpers/frontend-module.mjs';
 
 const { load } = frontendModules();
 const fleet = load('features/quant-ops/fleet-performance.ts');
+const performance = load('features/quant-ops/performance-history.ts');
 
 const NOW = Date.parse('2026-10-01T12:00:00Z');
 const MIN = 60_000;
@@ -29,6 +30,101 @@ test('parsing keeps only valid native samples and names a failed or empty read',
   assert.equal(fleet.parseBotHistory(null, 'v2', '1D', NOW, true).reason, 'Performance history read failed.');
   assert.match(fleet.parseBotHistory(payload('v2', '1D', []), 'v2', '1D', NOW).reason, /Recording begins/);
   assert.match(fleet.parseBotHistory(payload('other', '1D', [[1, 1]]), 'v2', '1D', NOW).reason, /identity is invalid/);
+});
+
+function numericPayload(first, second) {
+  return { source: 'native_mqtt_observer', bot_name: 'v2', range: '1D', truncated: false, points: [first, second].map((value, index) => ({
+    timestamp: (NOW - (1 - index) * MIN) / 1000, total_pnl_quote: value, realized_pnl_quote: value,
+    unrealized_pnl_quote: '0', quote: 'USDC', identity: 'boot-a', segment: 'seg-1',
+  })) };
+}
+
+test('browser rejects malformed, underflowed and overflowing owner decimals without fabricating PnL', () => {
+  for (const value of ['1_000', ' 1 ', '1\n', '1\r', '1\r\n', '0x10', '１２', '١', '1e1000000', '1e-1000000']) {
+    const result = fleet.parseBotHistory(numericPayload('0', value), 'v2', '1D', NOW + 5_000);
+    assert.equal(result.samples.length, 0, value);
+    assert.match(result.reason, /invalid|unrepresentable/i);
+  }
+  for (const [first, second] of [['-1e308', '1e308'], ['1e30', '1000000000000000000000000000001']]) {
+    const result = fleet.parseBotHistory(numericPayload(first, second), 'v2', '1D', NOW + 5_000);
+    assert.equal(result.samples.length, 0, `${first} to ${second}`);
+    assert.match(result.reason, /invalid|unrepresentable/i);
+  }
+  assert.equal(performance.historyAmount('9'.repeat(38))?.key != null, true);
+  assert.equal(performance.historyAmount('9'.repeat(39)), null);
+  assert.equal(performance.historyAmount('9'.repeat(38) + '0'.repeat(90))?.key != null, true);
+  assert.equal(performance.historyAmount('1e127')?.key != null, true);
+  assert.equal(fleet.parseBotHistory(numericPayload('0.1', '0.2'), 'v2', '1D', NOW + 5_000).samples.length, 2);
+  assert.equal(fleet.parseBotHistory(numericPayload('0e-' + '9'.repeat(240), '0.1'), 'v2', '1D', NOW + 5_000).samples.length, 2);
+  const bridged = numericPayload('1e30', '1000000000000000000000000000001');
+  bridged.points[0].segment = 'backfill-v2';
+  bridged.points[1].identity = 'boot-b';
+  assert.equal(fleet.parseBotHistory(bridged, 'v2', '1D', NOW + 5_000).samples.length, 0);
+});
+
+test('public history admission compares the owner balance tolerance exactly', () => {
+  for (const sign of ['', '-']) {
+    const payload = numericPayload('0', `${sign}0.000001${'0'.repeat(35)}1`);
+    payload.points[1].realized_pnl_quote = '0';
+    assert.equal(performance.projectPerformanceHistory(payload, 'v2', NOW + 5_000, '1D').points.length, 0);
+  }
+  const boundary = numericPayload('0', '0.000001');
+  boundary.points[1].realized_pnl_quote = '0';
+  assert.equal(performance.projectPerformanceHistory(boundary, 'v2', NOW + 5_000, '1D').points.length, 2);
+  const ordinary = numericPayload('0', '0.3');
+  ordinary.points[1].realized_pnl_quote = '0.1';
+  ordinary.points[1].unrealized_pnl_quote = '0.2';
+  assert.equal(performance.projectPerformanceHistory(ordinary, 'v2', NOW + 5_000, '1D').points.length, 2);
+});
+
+test('browser marks an overflowing combined fleet result unavailable rather than Infinity', () => {
+  const huge = bot => ({ bot, range: '1D', quote: 'USDC', reason: null, gapMs: 90_000,
+    bucketSeconds: null, truncated: false, samples: [
+      { time: NOW - MIN, total: 0, realized: 0, unrealized: 0, owner: 0 },
+      { time: NOW, total: 1e308, realized: 1e308, unrealized: 0, owner: 0 },
+    ] });
+  const histories = [huge('v2'), huge('v3')];
+  const window = fleet.fleetWindow(histories, ['v2', 'v3'], NOW - MIN, NOW, NOW);
+  assert.equal(window.total, null);
+  assert.equal(window.counted, 0);
+  assert.equal(window.missing.length, 2);
+  assert.deepEqual(fleet.fleetSeries(histories, NOW - MIN, NOW), []);
+  assert.deepEqual(fleet.fleetDailyBars(histories, NOW, NOW - MIN), []);
+  const small = { ...huge('small'), samples: [
+    { time: NOW - MIN, total: 0, realized: 0, unrealized: 0, owner: 0 },
+    { time: NOW, total: 1, realized: 1, unrealized: 0, owner: 0 },
+  ] };
+  const rounded = fleet.fleetWindow([{ ...huge('large'), samples: [
+    { time: NOW - MIN, total: 0, realized: 0, unrealized: 0, owner: 0 },
+    { time: NOW, total: 1e30, realized: 1e30, unrealized: 0, owner: 0 },
+  ] }, small], ['large', 'small'], NOW - MIN, NOW, NOW);
+  assert.equal(rounded.total, null);
+  assert.equal(rounded.counted, 0);
+  const reversed = fleet.fleetWindow([small, { ...huge('large'), samples: [
+    { time: NOW - MIN, total: 0, realized: 0, unrealized: 0, owner: 0 },
+    { time: NOW, total: 1e30, realized: 1e30, unrealized: 0, owner: 0 },
+  ] }], ['small', 'large'], NOW - MIN, NOW, NOW);
+  assert.equal(reversed.total, null);
+  assert.equal(reversed.counted, 0);
+  const cohort = { quote: 'USDC', bots: [{ bot: 'small' }, { bot: 'large' }] };
+  assert.deepEqual(fleet.fleetSeries([small, { ...huge('large'), samples: [
+    { time: NOW - MIN, total: 0, realized: 0, unrealized: 0, owner: 0 },
+    { time: NOW, total: 1e30, realized: 1e30, unrealized: 0, owner: 0 },
+  ] }], NOW - MIN, NOW, 60, cohort), []);
+  assert.deepEqual(fleet.fleetDailyBars([small, { ...huge('large'), samples: [
+    { time: NOW - MIN, total: 0, realized: 0, unrealized: 0, owner: 0 },
+    { time: NOW, total: 1e30, realized: 1e30, unrealized: 0, owner: 0 },
+  ] }], NOW, NOW - MIN, cohort), []);
+  const run = { ...huge('run'), samples: [
+    { time: NOW - 2 * MIN, total: 0, realized: 0, unrealized: 0, owner: 0 },
+    { time: NOW - MIN, total: 1, realized: 1, unrealized: 0, owner: 0 },
+    { time: NOW, total: 1e30, realized: 1e30, unrealized: 0, owner: 0 },
+  ] };
+  assert.equal(fleet.botWindow(run, NOW - 2 * MIN, NOW, NOW).change, null);
+  const direct = numericPayload('1', '1e30');
+  const projected = performance.projectPerformanceHistory(direct, 'v2', NOW + 5_000, '1D');
+  assert.equal(projected.points.length, 2);
+  assert.equal(projected.change, null);
 });
 
 test('fleet window sums per-bot native changes and is independent of deposits', () => {
@@ -163,11 +259,29 @@ test('risk statistics stay null until the stated minimum of days and only then c
   assert.ok(Math.abs(enough.sharpe - (mean / sd) * Math.sqrt(365)) < 1e-9);
 });
 
+test('finite but unrepresentable daily-return moments never become infinite or fabricated risk statistics', () => {
+  const risk = fleet.fleetRisk(Array.from({ length: 20 }, (_, index) => index % 2 ? 1e197 : -1e197));
+  assert.equal(risk.days, 20);
+  assert.equal(risk.volatilityDaily, null);
+  assert.equal(risk.sharpe, null);
+  assert.equal(risk.sortino, null);
+  assert.match(risk.invalidReason, /unrepresentable/i);
+  assert.doesNotMatch(JSON.stringify(risk), /Infinity|NaN/);
+  const flat = fleet.fleetRisk(Array(20).fill(0.01));
+  assert.equal(flat.volatilityDaily, 0);
+  assert.equal(flat.sharpe, null, 'a zero denominator is undefined, not an overflow');
+  assert.equal(flat.invalidReason, null);
+  const empty = fleet.fleetRisk([]);
+  assert.equal(empty.days, 0);
+  assert.equal(empty.invalidReason, null);
+});
+
 test('daily returns use completed days only and need a positive equity basis', () => {
   const days = [{ day: 'a', net: 10, today: false }, { day: 'b', net: -5, today: false }, { day: 'c', net: 99, today: true }];
   assert.deepEqual(fleet.dailyReturns(days, 1000), [0.01, -0.005]);
   assert.deepEqual(fleet.dailyReturns(days, null), []);
   assert.deepEqual(fleet.dailyReturns(days, 0), []);
+  assert.deepEqual(fleet.dailyReturns([{ ...days[0], net: Infinity }], 1000), [], 'overflow is not a daily return');
 });
 
 test('series, daily bars and risk bars never add a bot in another quote currency', () => {
@@ -176,6 +290,27 @@ test('series, daily bars and risk bars never add a bot in another quote currency
   const series = fleet.fleetSeries([usdc, usdt], NOW - 86_400_000, NOW);
   assert.equal(series.at(-1).value, 20);
   assert.equal(fleet.fleetDailyBars([usdc, usdt], NOW, NOW - 86_400_000).reduce((total, day) => total + day.net, 0), 20);
+});
+
+test('one-sample or out-of-window histories cannot choose the charts currency', () => {
+  const usdc = history('a', [[60, 0], [0, 10]]);
+  for (const rows of [[[30, 0]], [[120, 0], [90, 100]]]) {
+    const histories = [usdc, history('b', rows, '1D', { quote: 'USDT' }), history('c', rows, '1D', { quote: 'USDT' })];
+    const from = NOW - 60 * MIN;
+    const window = fleet.fleetWindow(histories, ['a', 'b', 'c'], from, NOW, NOW);
+    assert.equal(window.quote, 'USDC');
+    assert.equal(window.total, 10);
+    assert.equal(window.counted, 1);
+    assert.equal(fleet.fleetSeries(histories, from, NOW).at(-1)?.value, 10);
+    assert.equal(fleet.fleetDailyBars(histories, NOW, from).reduce((total, day) => total + day.net, 0), 10);
+    assert.deepEqual(fleet.restartTimes(histories, from, NOW), []);
+  }
+});
+
+test('restart markers exclude another quotes owner changes', () => {
+  const a = history('a', [[60, 0], [0, 10]]);
+  const b = history('b', [[60, 0], [30, 2], [0, 4, undefined, 'boot-b']], '1D', { quote: 'USDT' });
+  assert.deepEqual(fleet.restartTimes([a, b], NOW - 60 * MIN, NOW), []);
 });
 
 test('daily bars add up to the window change: a step that starts before the window is not counted', () => {
@@ -192,6 +327,53 @@ test('daily bars for a closed window stop at its end', () => {
   const bars = fleet.fleetDailyBars([h], to, from);
   assert.ok(bars.length <= 11);
   assert.ok(bars.every(day => Date.parse(day.day) <= to));
+});
+
+test('custom UTC end is excluded from fleet totals, curve, bars and restart markers', () => {
+  const from = NOW - 2 * MIN, to = NOW - MIN;
+  const v2 = history('v2', [[2, 0], [1.5, 2], [1, 9, undefined, 'boot-b']]);
+  const window = fleet.fleetWindow([v2], ['v2'], from, to, NOW, true);
+  assert.equal(window.total, 2);
+  assert.equal(fleet.fleetSeries([v2], from, to, 1, window, true).at(-1).value, 2);
+  assert.equal(fleet.fleetDailyBars([v2], to, from, window, true).reduce((sum, bar) => sum + bar.net, 0), 2);
+  assert.deepEqual(fleet.restartTimes([v2], from, to, window, true), []);
+  assert.equal(fleet.fleetWindow([v2], ['v2'], from, to, NOW).bots[0].restarts, 1, 'named as-of window keeps its final owner observation');
+});
+
+test('daily risk admits only complete observed UTC days for every selected bot', () => {
+  const day = 86_400_000;
+  const end = Date.parse('2026-10-18T00:00:00Z');
+  const dense = Array.from({ length: 48 }, (_, index) => ({
+    time: end - day + index * 30 * MIN, total: index, realized: index, unrealized: 0, owner: 0,
+  }));
+  const base = { range: '1M', quote: 'USDT', gapMs: 31.5 * MIN, bucketSeconds: 1800, truncated: false, reason: null };
+  const good = { ...base, bot: 'a', samples: dense };
+  const sparse = { ...base, bot: 'b', samples: [dense[0], dense[1]] };
+  const full = fleet.fleetWindow([good], ['a'], end - day, end, end);
+  assert.equal(fleet.qualifiedFleetDailyBars([good], end, end - day, full).length, 1);
+  const partial = fleet.fleetWindow([good, sparse], ['a', 'b'], end - day, end, end);
+  assert.deepEqual(fleet.qualifiedFleetDailyBars([good, sparse], end, end - day, partial), []);
+  const restart = { ...good, samples: dense.map((sample, index) => ({ ...sample, owner: index < 24 ? 0 : 1 })) };
+  assert.deepEqual(fleet.qualifiedFleetDailyBars([restart], end, end - day, fleet.fleetWindow([restart], ['a'], end - day, end, end)), []);
+  const overflow = { ...good, samples: dense.map((sample, index) => ({ ...sample, total: index ? 1e308 : -1e308, realized: index ? 1e308 : -1e308 })) };
+  assert.deepEqual(fleet.qualifiedFleetDailyBars([overflow], end, end - day, fleet.fleetWindow([overflow], ['a'], end - day, end, end)), []);
+});
+
+test('qualified daily PnL includes the midnight step once with bucketed close-to-close baselines', () => {
+  const day = 86_400_000, start = Date.parse('2026-10-16T00:00:00Z');
+  const samples = Array.from({ length: 98 }, (_, index) => ({
+    time: start - 30 * MIN + index * 30 * MIN,
+    total: index, realized: index, unrealized: 0, owner: 0,
+  }));
+  // The last point is exactly the half-open end and cannot enter the second completed day.
+  samples[97].total = samples[97].realized = 1_000;
+  const history = { bot: 'a', range: '1M', quote: 'USDT', samples, gapMs: 31.5 * MIN,
+    bucketSeconds: 1800, truncated: false, reason: null };
+  const end = start + 2 * day, from = start - 30 * MIN;
+  const selected = fleet.fleetWindow([history], ['a'], from, end, end, true);
+  const bars = fleet.qualifiedFleetDailyBars([history], end, from, selected);
+  assert.deepEqual(bars.map(bar => bar.net), [48, 48]);
+  assert.deepEqual(bars.map(bar => bar.cumulative), [48, 96]);
 });
 
 test('a recording hole inside one owner run is summed across but reported, never presented as covered', () => {

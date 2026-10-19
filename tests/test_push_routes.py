@@ -1,5 +1,6 @@
 """Authenticated device registry routes, behind the private read-only boundary."""
 
+import copy
 import json
 from pathlib import Path
 
@@ -631,7 +632,9 @@ SHARED_CONTENT = json.loads(
 )
 
 
-def _content_client(monkeypatch, tmp_path, *, user_id=1, allow=True, index=None):
+def _content_client(
+    monkeypatch, tmp_path, *, user_id=1, allow=True, index=None, full=FULL
+):
     from condor.web.routes import fleet_summary as summary_routes
 
     client, _ = _client(monkeypatch, tmp_path, user_id=user_id, allow=allow)
@@ -639,7 +642,7 @@ def _content_client(monkeypatch, tmp_path, *, user_id=1, allow=True, index=None)
 
     async def cached_summary(name, *, admin, user_id, view="full"):
         calls.append((name, admin, user_id, view))
-        return FULL if view == "full" else summary_routes.summary.glance(FULL)
+        return full if view == "full" else summary_routes.summary.glance(full)
 
     async def never(server):
         raise AssertionError("the content route must not build the Market index")
@@ -672,6 +675,22 @@ def test_content_route_serves_the_content_state_of_the_cached_glance(
     assert calls == [(SERVER, True, 1, "glance")]
 
 
+def test_content_route_omits_stale_market_verdict_without_hiding_current_peers(
+    monkeypatch, tmp_path
+):
+    full = copy.deepcopy(FULL)
+    full["sections"]["market"].update(status="stale", reason="FRAME_STALE")
+    full["market"]["frame"]["freshness"] = "stale"
+    client, _ = _content_client(monkeypatch, tmp_path, full=full)
+    body = client.get(
+        "/api/v1/push/live-activities/content", params={"server": SERVER}, headers=H
+    ).json()
+    assert body["stale"] is False
+    assert body["day_pnl"] == SHARED_CONTENT["day_pnl"]
+    assert body["equity"] == SHARED_CONTENT["equity"]
+    assert "market_label" not in body and "market_state" not in body
+
+
 def test_content_route_adds_the_servers_market_index(monkeypatch, tmp_path):
     index = {
         "value": "101.23",
@@ -682,6 +701,7 @@ def test_content_route_adds_the_servers_market_index(monkeypatch, tmp_path):
         "expected": 15,
         "as_of_ms": int((NOW - 90) * 1000),
         "source_age_ms": 200_000,
+        "source_age_at_ms": int((NOW - 30) * 1000),
     }
     monkeypatch.setenv(
         "CONDOR_PUSH_LIVE_ACTIVITY", '{"enabled": true, "interval_seconds": 90}'

@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import httpx
@@ -158,6 +159,151 @@ def test_research_malformed_or_oversized_never_becomes_success(monkeypatch, resp
     )
     assert result.status_code == 502
     assert "private" not in result.text and "source file" not in result.text
+
+
+def _native_busy_response():
+    return httpx.Response(
+        503,
+        json={"error": "Research reader is busy; retry the request"},
+        headers={"Retry-After": "1"},
+    )
+
+
+def test_research_retries_exact_native_busy_after_closing_response(monkeypatch):
+    prior = []
+    network = {
+        "revision": "rev",
+        "node_fields": ["id", "kind", "title", "family", "lane"],
+        "nodes": [],
+        "edge_fields": ["source", "target", "relation", "basis"],
+        "edges": [],
+        "total_nodes": 0,
+        "total_edges": 0,
+        "unresolved_edges": 0,
+        "stats": {key: [] for key in ("kinds", "relations", "families", "lanes")},
+    }
+
+    def handler(req):
+        assert not prior or prior[-1].is_closed
+        if not prior:
+            response = _native_busy_response()
+            prior.append(response)
+            return response
+        return httpx.Response(200, json=network)
+
+    result = client(monkeypatch, handler=handler).get(
+        "/api/v1/research/network?server=native-ok-rsi"
+    )
+    assert result.status_code == 200
+    assert result.json()["data"] == network
+    assert len(prior) == 1 and prior[0].is_closed
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(
+            503, json={"error": "other failure"}, headers={"Retry-After": "1"}
+        ),
+        httpx.Response(
+            503, json={"error": "Research reader is busy; retry the request"}
+        ),
+        httpx.Response(
+            503,
+            json={
+                "error": "Research reader is busy; retry the request",
+                "private": "path",
+            },
+            headers={"Retry-After": "1"},
+        ),
+        httpx.Response(
+            503,
+            content=b'{"error":"other","error":"Research reader is busy; retry the request"}',
+            headers={"Content-Type": "application/json", "Retry-After": "1"},
+        ),
+        httpx.Response(
+            503,
+            text="Research reader is busy; retry the request",
+            headers={"Retry-After": "1"},
+        ),
+        httpx.Response(
+            503,
+            content=b"x" * 1024,
+            headers={"Content-Type": "application/json", "Retry-After": "1"},
+        ),
+    ],
+)
+def test_research_does_not_retry_other_or_malformed_503(monkeypatch, response):
+    calls = 0
+
+    def handler(req):
+        nonlocal calls
+        calls += 1
+        return response
+
+    result = client(monkeypatch, handler=handler).get(
+        "/api/v1/research/nodes?server=native-ok-rsi"
+    )
+    assert result.status_code == 502
+    assert calls == 1
+    assert "private" not in result.text
+
+
+def test_research_native_busy_retries_are_finite_and_sanitized(monkeypatch):
+    calls = 0
+
+    def handler(req):
+        nonlocal calls
+        calls += 1
+        return _native_busy_response()
+
+    result = client(monkeypatch, handler=handler).get(
+        "/api/v1/research/nodes?server=native-ok-rsi"
+    )
+    assert result.status_code == 503
+    assert result.headers["Retry-After"] == "1"
+    assert result.json()["detail"] == "Research reader is busy; retry the request"
+    assert calls == 3
+
+
+def test_research_native_busy_keeps_whole_request_deadline(monkeypatch):
+    from condor import research_read
+
+    monkeypatch.setattr(research_read, "READ_DEADLINE_SECONDS", 0.05)
+    result = client(monkeypatch, handler=lambda req: _native_busy_response()).get(
+        "/api/v1/research/nodes?server=native-ok-rsi"
+    )
+    assert result.status_code == 504
+
+
+def test_research_native_busy_retry_is_cancellable(monkeypatch):
+    from condor import research_read
+
+    calls = 0
+    first_seen = asyncio.Event()
+
+    def handler(req):
+        nonlocal calls
+        calls += 1
+        first_seen.set()
+        return _native_busy_response()
+
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(
+        research_read, "_client", lambda: httpx.AsyncClient(transport=transport)
+    )
+
+    async def cancel_wait():
+        task = asyncio.create_task(
+            research_read.read_research("nodes", {}, "native-ok-rsi")
+        )
+        await asyncio.wait_for(first_seen.wait(), 1)
+        assert calls == 1 and not task.done()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(cancel_wait())
 
 
 def test_research_offline_error_is_sanitized(monkeypatch):

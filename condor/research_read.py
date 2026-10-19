@@ -20,6 +20,9 @@ ORIGIN = "http://127.0.0.1:8873/api/knowledge"
 READ_DEADLINE_SECONDS = 15
 LONG_READ_DEADLINE_SECONDS = 45
 LONG_READ_ENDPOINTS = {"network", "archive", "archive-record", "archive-overview"}
+NATIVE_BUSY_ERROR = "Research reader is busy; retry the request"
+NATIVE_BUSY_MAX_BYTES = 256
+NATIVE_BUSY_MAX_ATTEMPTS = 3
 MAX_BYTES = 1024 * 1024
 DETAIL_MAX_BYTES = 4 * MAX_BYTES
 NETWORK_MAX_BYTES = (
@@ -487,6 +490,32 @@ def _valid_network(data):
     )
 
 
+async def _native_reader_busy(response: httpx.Response) -> bool:
+    if (
+        response.status_code != 503
+        or response.headers.get("retry-after") != "1"
+        or response.headers.get("content-type", "").split(";", 1)[0].strip()
+        != "application/json"
+    ):
+        return False
+    declared = response.headers.get("content-length", "")
+    if not declared.isdecimal() or int(declared) > NATIVE_BUSY_MAX_BYTES:
+        return False
+    payload = bytearray()
+    async for chunk in response.aiter_bytes(chunk_size=NATIVE_BUSY_MAX_BYTES):
+        if len(payload) + len(chunk) > NATIVE_BUSY_MAX_BYTES:
+            return False
+        payload.extend(chunk)
+    if len(payload) != int(declared):
+        return False
+    try:
+        # A duplicate or extra key is not the native admission response.
+        fields = json.loads(payload, object_pairs_hook=lambda pairs: pairs)
+    except (UnicodeError, ValueError, TypeError):
+        return False
+    return fields == [("error", NATIVE_BUSY_ERROR)]
+
+
 async def read_research(endpoint, parameters, server):
     upstream_parameters = dict(parameters)
     if endpoint in {"nodes", "node", "graph"}:
@@ -499,65 +528,89 @@ async def read_research(endpoint, parameters, server):
     try:
         async with asyncio.timeout(deadline):
             async with _client() as client:
-                async with client.stream(
-                    "GET", ORIGIN + "/" + endpoint, params=upstream_parameters
-                ) as response:
-                    if response.status_code in {403, 404, 409, 413} and endpoint in {
-                        "archive",
-                        "archive-record",
-                        "archive-overview",
-                    }:
-                        raise HTTPException(
-                            response.status_code,
-                            "Research archive or source revision is unavailable",
-                        )
-                    if response.status_code == 404 and endpoint in {
-                        "node",
-                        "graph",
-                        "comparisons",
-                    }:
-                        raise HTTPException(404, "Research node not found")
-                    if response.status_code != 200:
-                        raise HTTPException(
-                            502, "Research OS read service is unavailable"
-                        )
-                    if (
-                        response.headers.get("content-type", "").split(";")[0].strip()
-                        != "application/json"
-                    ):
-                        raise ValueError("Expected JSON")
-                    payload = bytearray()
-                    async for chunk in response.aiter_bytes(chunk_size=65536):
-                        payload.extend(chunk)
-                        maximum = (
-                            NETWORK_MAX_BYTES
-                            if endpoint == "network"
-                            else (
-                                ARCHIVE_RECORD_MAX_BYTES
-                                if endpoint == "archive-record"
-                                else PAGED_MAX_BYTES.get(
-                                    endpoint,
-                                    (
-                                        DETAIL_MAX_BYTES
-                                        if endpoint in {"graph", "node"}
-                                        else MAX_BYTES
-                                    ),
+                for attempt in range(NATIVE_BUSY_MAX_ATTEMPTS):
+                    busy = False
+                    async with client.stream(
+                        "GET", ORIGIN + "/" + endpoint, params=upstream_parameters
+                    ) as response:
+                        if await _native_reader_busy(response):
+                            if attempt + 1 == NATIVE_BUSY_MAX_ATTEMPTS:
+                                raise HTTPException(
+                                    503,
+                                    NATIVE_BUSY_ERROR,
+                                    headers={"Retry-After": "1"},
                                 )
+                            busy = True
+                        elif response.status_code in {
+                            403,
+                            404,
+                            409,
+                            413,
+                        } and endpoint in {
+                            "archive",
+                            "archive-record",
+                            "archive-overview",
+                        }:
+                            raise HTTPException(
+                                response.status_code,
+                                "Research archive or source revision is unavailable",
                             )
-                        )
-                        if len(payload) > maximum:
-                            if endpoint in PAGED_MAX_BYTES:
-                                raise HTTPException(
-                                    413,
-                                    f"Complete research {endpoint} response exceeds the explicit "
-                                    f"{maximum}-byte read limit; no records were silently sampled",
+                        elif response.status_code == 404 and endpoint in {
+                            "node",
+                            "graph",
+                            "comparisons",
+                        }:
+                            raise HTTPException(404, "Research node not found")
+                        elif response.status_code != 200:
+                            raise HTTPException(
+                                502, "Research OS read service is unavailable"
+                            )
+                        else:
+                            if (
+                                response.headers.get("content-type", "")
+                                .split(";")[0]
+                                .strip()
+                                != "application/json"
+                            ):
+                                raise ValueError("Expected JSON")
+                            payload = bytearray()
+                            async for chunk in response.aiter_bytes(chunk_size=65536):
+                                payload.extend(chunk)
+                                maximum = (
+                                    NETWORK_MAX_BYTES
+                                    if endpoint == "network"
+                                    else (
+                                        ARCHIVE_RECORD_MAX_BYTES
+                                        if endpoint == "archive-record"
+                                        else PAGED_MAX_BYTES.get(
+                                            endpoint,
+                                            (
+                                                DETAIL_MAX_BYTES
+                                                if endpoint in {"graph", "node"}
+                                                else MAX_BYTES
+                                            ),
+                                        )
+                                    )
                                 )
-                            if endpoint in {"network", "archive-record"}:
-                                raise HTTPException(
-                                    413,
-                                    "Complete research response exceeds the explicit 64 MiB read limit; no records were silently sampled",
-                                )
-                            raise ValueError("Research response exceeds allowed size")
+                                if len(payload) > maximum:
+                                    if endpoint in PAGED_MAX_BYTES:
+                                        raise HTTPException(
+                                            413,
+                                            f"Complete research {endpoint} response exceeds the explicit "
+                                            f"{maximum}-byte read limit; no records were silently sampled",
+                                        )
+                                    if endpoint in {"network", "archive-record"}:
+                                        raise HTTPException(
+                                            413,
+                                            "Complete research response exceeds the explicit 64 MiB read limit; no records were silently sampled",
+                                        )
+                                    raise ValueError(
+                                        "Research response exceeds allowed size"
+                                    )
+                    if not busy:
+                        break
+                    # The upstream stream has closed before waiting or retrying.
+                    await asyncio.sleep(1)
         data = json.loads(
             payload,
             parse_constant=lambda value: (_ for _ in ()).throw(

@@ -1,3 +1,4 @@
+import asyncio
 import json
 
 import httpx
@@ -158,6 +159,440 @@ def test_research_malformed_or_oversized_never_becomes_success(monkeypatch, resp
     )
     assert result.status_code == 502
     assert "private" not in result.text and "source file" not in result.text
+
+
+def _native_busy_response():
+    return httpx.Response(
+        503,
+        json={"error": "Research reader is busy; retry the request"},
+        headers={"Retry-After": "1"},
+    )
+
+
+def _fast_native_retry_sleep(monkeypatch):
+    from condor import research_read
+
+    actual_sleep = asyncio.sleep
+    waits = []
+
+    async def sleep(seconds):
+        if seconds == 1:
+            waits.append(seconds)
+            await actual_sleep(0)
+        else:
+            await actual_sleep(seconds)
+
+    monkeypatch.setattr(research_read.asyncio, "sleep", sleep)
+    return waits
+
+
+def test_research_ordinary_read_survives_four_exact_native_busy_responses(monkeypatch):
+    waits = _fast_native_retry_sleep(monkeypatch)
+    responses = []
+    payload = {"items": [], "total": 0, "limit": 30, "offset": 0}
+
+    def handler(req):
+        assert req.url.path == "/api/knowledge/queue"
+        assert not responses or responses[-1].is_closed
+        if len(responses) < 4:
+            response = _native_busy_response()
+            responses.append(response)
+            return response
+        return httpx.Response(200, json=payload)
+
+    result = client(monkeypatch, handler=handler).get(
+        "/api/v1/research/queue?server=native-ok-rsi"
+    )
+    assert result.status_code == 200
+    assert result.json()["data"] == payload
+    assert len(responses) == 4 and all(response.is_closed for response in responses)
+    assert waits == [1] * 4
+
+
+def test_research_retries_exact_native_busy_after_closing_response(monkeypatch):
+    prior = []
+    network = {
+        "revision": "rev",
+        "node_fields": ["id", "kind", "title", "family", "lane"],
+        "nodes": [],
+        "edge_fields": ["source", "target", "relation", "basis"],
+        "edges": [],
+        "total_nodes": 0,
+        "total_edges": 0,
+        "unresolved_edges": 0,
+        "stats": {key: [] for key in ("kinds", "relations", "families", "lanes")},
+    }
+
+    def handler(req):
+        assert not prior or prior[-1].is_closed
+        if not prior:
+            response = _native_busy_response()
+            prior.append(response)
+            return response
+        return httpx.Response(200, json=network)
+
+    result = client(monkeypatch, handler=handler).get(
+        "/api/v1/research/network?server=native-ok-rsi"
+    )
+    assert result.status_code == 200
+    assert result.json()["data"] == network
+    assert len(prior) == 1 and prior[0].is_closed
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(
+            503, json={"error": "other failure"}, headers={"Retry-After": "1"}
+        ),
+        httpx.Response(
+            503, json={"error": "Research reader is busy; retry the request"}
+        ),
+        httpx.Response(
+            503,
+            json={
+                "error": "Research reader is busy; retry the request",
+                "private": "path",
+            },
+            headers={"Retry-After": "1"},
+        ),
+        httpx.Response(
+            503,
+            content=b'{"error":"other","error":"Research reader is busy; retry the request"}',
+            headers={"Content-Type": "application/json", "Retry-After": "1"},
+        ),
+        httpx.Response(
+            503,
+            text="Research reader is busy; retry the request",
+            headers={"Retry-After": "1"},
+        ),
+        httpx.Response(
+            503,
+            content=b"x" * 1024,
+            headers={"Content-Type": "application/json", "Retry-After": "1"},
+        ),
+    ],
+)
+def test_research_does_not_retry_other_or_malformed_503(monkeypatch, response):
+    calls = 0
+
+    def handler(req):
+        nonlocal calls
+        calls += 1
+        return response
+
+    result = client(monkeypatch, handler=handler).get(
+        "/api/v1/research/nodes?server=native-ok-rsi"
+    )
+    assert result.status_code == 502
+    assert calls == 1
+    assert "private" not in result.text
+
+
+def test_research_native_busy_retries_are_finite_and_sanitized(monkeypatch):
+    from condor import research_read
+
+    waits = _fast_native_retry_sleep(monkeypatch)
+    calls = 0
+
+    def handler(req):
+        nonlocal calls
+        calls += 1
+        return _native_busy_response()
+
+    result = client(monkeypatch, handler=handler).get(
+        "/api/v1/research/nodes?server=native-ok-rsi"
+    )
+    assert result.status_code == 503
+    assert result.headers["Retry-After"] == "1"
+    assert result.json()["detail"] == "Research reader is busy; retry the request"
+    assert calls == research_read.NATIVE_BUSY_MAX_ATTEMPTS
+    assert research_read.NATIVE_BUSY_MAX_ATTEMPTS == 1 + int(
+        research_read.LONG_READ_DEADLINE_SECONDS
+    )
+    assert waits == [1] * (calls - 1)
+
+
+@pytest.mark.parametrize(
+    "endpoint,deadline_name",
+    [("nodes", "READ_DEADLINE_SECONDS"), ("network", "LONG_READ_DEADLINE_SECONDS")],
+)
+def test_research_native_busy_keeps_whole_request_deadline(
+    monkeypatch, endpoint, deadline_name
+):
+    from condor import research_read
+
+    monkeypatch.setattr(research_read, deadline_name, 0.05)
+    result = client(monkeypatch, handler=lambda req: _native_busy_response()).get(
+        f"/api/v1/research/{endpoint}?server=native-ok-rsi"
+    )
+    assert result.status_code == 504
+
+
+@pytest.mark.parametrize("phase", ["decode", "validate", "project"])
+@pytest.mark.parametrize(
+    "endpoint,deadline",
+    [("nodes", 15), ("archive-overview", 45)],
+)
+def test_research_cpu_stages_share_the_transport_deadline(
+    monkeypatch, phase, endpoint, deadline
+):
+    from condor import research_read
+
+    elapsed = [0.0]
+    monkeypatch.setattr(research_read, "monotonic", lambda: elapsed[0], raising=False)
+
+    def handler(req):
+        # Transport consumes most of the same endpoint request budget.
+        elapsed[0] = deadline - 1.0
+        body = (
+            {"items": [], "total": 0, "limit": 30, "offset": 0}
+            if endpoint == "nodes"
+            else {
+                "revision": "r",
+                "counts": {},
+                "coverage": {},
+                "preservation": {},
+                "provenance": {},
+                "facets": {},
+                "documents": [],
+            }
+        )
+        return httpx.Response(200, json=body)
+
+    if phase == "decode":
+
+        class TimedJson:
+            def loads(self, *args, **kwargs):
+                decoded = json.loads(*args, **kwargs)
+                elapsed[0] = deadline + 1.0
+                return decoded
+
+            def dumps(self, *args, **kwargs):
+                return json.dumps(*args, **kwargs)
+
+        monkeypatch.setattr(research_read, "json", TimedJson())
+    else:
+        target = "_valid_shape" if phase == "validate" else "_project"
+        original = getattr(research_read, target)
+
+        def timed(*args, **kwargs):
+            result = original(*args, **kwargs)
+            elapsed[0] = deadline + 1.0
+            return result
+
+        monkeypatch.setattr(research_read, target, timed)
+
+    result = client(monkeypatch, handler=handler).get(
+        f"/api/v1/research/{endpoint}?server=native-ok-rsi"
+    )
+    assert result.status_code == 504
+    assert f"{deadline} s read deadline" in result.json()["detail"]
+
+
+def test_research_cpu_stages_within_whole_deadline_keep_valid_observation(monkeypatch):
+    from condor import research_read
+
+    elapsed = [0.0]
+    monkeypatch.setattr(research_read, "monotonic", lambda: elapsed[0], raising=False)
+
+    def handler(req):
+        elapsed[0] = 14.0
+        return httpx.Response(
+            200, json={"items": [], "total": 0, "limit": 30, "offset": 0}
+        )
+
+    original = research_read._project
+
+    def project(*args, **kwargs):
+        result = original(*args, **kwargs)
+        elapsed[0] = 14.5
+        return result
+
+    monkeypatch.setattr(research_read, "_project", project)
+    result = client(monkeypatch, handler=handler).get(
+        "/api/v1/research/nodes?server=native-ok-rsi"
+    )
+    assert result.status_code == 200
+    assert result.json()["data"] == {
+        "items": [],
+        "total": 0,
+        "limit": 30,
+        "offset": 0,
+    }
+
+
+def test_research_native_busy_retry_is_cancellable(monkeypatch):
+    from condor import research_read
+
+    calls = 0
+    first_seen = asyncio.Event()
+
+    def handler(req):
+        nonlocal calls
+        calls += 1
+        first_seen.set()
+        return _native_busy_response()
+
+    transport = httpx.MockTransport(handler)
+    monkeypatch.setattr(
+        research_read, "_client", lambda: httpx.AsyncClient(transport=transport)
+    )
+
+    async def cancel_wait():
+        task = asyncio.create_task(
+            research_read.read_research("nodes", {}, "native-ok-rsi")
+        )
+        await asyncio.wait_for(first_seen.wait(), 1)
+        assert calls == 1 and not task.done()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+
+    asyncio.run(cancel_wait())
+
+
+def _document_url():
+    return (
+        "/api/v1/research/document?server=native-ok-rsi&scope=node&id=a&ref=" + "a" * 64
+    )
+
+
+def test_research_document_retries_exact_native_busy_and_closes_prior_stream(
+    monkeypatch,
+):
+    from condor import research_read
+
+    busy_responses = []
+    upstream_clients = []
+    waits = _fast_native_retry_sleep(monkeypatch)
+
+    def handler(req):
+        assert req.url.path == "/api/knowledge/document"
+        assert req.headers["accept-encoding"] == "identity"
+        if len(busy_responses) < 4:
+            response = _native_busy_response()
+            busy_responses.append(response)
+            return response
+        assert busy_responses[-1].is_closed
+        return httpx.Response(
+            200,
+            content=b"complete source",
+            headers={"Content-Type": "text/plain", "Content-Length": "15"},
+        )
+
+    route_client = client(monkeypatch, handler=handler)
+
+    def make_client():
+        upstream = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        upstream_clients.append(upstream)
+        return upstream
+
+    monkeypatch.setattr(research_read, "_client", make_client)
+    result = route_client.get(_document_url())
+    assert result.status_code == 200
+    assert result.content == b"complete source"
+    assert result.headers["content-length"] == "15"
+    assert len(busy_responses) == 4 and all(
+        response.is_closed for response in busy_responses
+    )
+    assert waits == [1] * 4
+    assert len(upstream_clients) == 1 and upstream_clients[0].is_closed
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        httpx.Response(
+            503, json={"error": "other failure"}, headers={"Retry-After": "1"}
+        ),
+        httpx.Response(
+            503, json={"error": "Research reader is busy; retry the request"}
+        ),
+        httpx.Response(
+            503,
+            json={
+                "error": "Research reader is busy; retry the request",
+                "private": "path",
+            },
+            headers={"Retry-After": "1"},
+        ),
+        httpx.Response(
+            503,
+            content=b'{"error":"other","error":"Research reader is busy; retry the request"}',
+            headers={"Content-Type": "application/json", "Retry-After": "1"},
+        ),
+        httpx.Response(
+            503,
+            content=b"x" * 1024,
+            headers={"Content-Type": "application/json", "Retry-After": "1"},
+        ),
+    ],
+)
+def test_research_document_does_not_retry_unrelated_or_malformed_503(
+    monkeypatch, response
+):
+    calls = 0
+
+    def handler(req):
+        nonlocal calls
+        calls += 1
+        return response
+
+    result = client(monkeypatch, handler=handler).get(_document_url())
+    assert result.status_code == 502
+    assert calls == 1
+    assert response.is_closed
+    assert "private" not in result.text
+
+
+def test_research_document_busy_exhaustion_is_finite_and_closes_resources(monkeypatch):
+    from condor import research_read
+
+    responses = []
+    upstream_clients = []
+    waits = _fast_native_retry_sleep(monkeypatch)
+
+    def handler(req):
+        if responses:
+            assert responses[-1].is_closed
+        response = _native_busy_response()
+        responses.append(response)
+        return response
+
+    route_client = client(monkeypatch, handler=handler)
+
+    def make_client():
+        upstream = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        upstream_clients.append(upstream)
+        return upstream
+
+    monkeypatch.setattr(research_read, "_client", make_client)
+    result = route_client.get(_document_url())
+    assert result.status_code == 503
+    assert result.headers["Retry-After"] == "1"
+    assert result.json()["detail"] == "Research reader is busy; retry the request"
+    assert len(responses) == research_read.NATIVE_BUSY_MAX_ATTEMPTS
+    assert all(response.is_closed for response in responses)
+    assert waits == [1] * (len(responses) - 1)
+    assert len(upstream_clients) == 1 and upstream_clients[0].is_closed
+
+
+def test_research_document_busy_retries_share_one_open_deadline(monkeypatch):
+    from condor import research_read
+
+    calls = 0
+
+    def handler(req):
+        nonlocal calls
+        calls += 1
+        return _native_busy_response()
+
+    monkeypatch.setattr(research_read, "LONG_READ_DEADLINE_SECONDS", 0.05)
+    result = client(monkeypatch, handler=handler).get(_document_url())
+    assert result.status_code == 504
+    assert calls == 1
+    assert "private" not in result.text
 
 
 def test_research_offline_error_is_sanitized(monkeypatch):

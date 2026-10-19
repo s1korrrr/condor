@@ -90,8 +90,8 @@ test('a grouped column sorts inside each group and never flips the group order',
   const rows=[{id:'a',group:1,value:5},{id:'b',group:0,value:1},{id:'c',group:1,value:9},{id:'d',group:0,value:7},{id:'e',group:0,value:null}];
   const columns=[{id:'id',header:'Id',rowHeader:true,value:row=>row.id},{id:'value',header:'Value',kind:'number',value:row=>row.value,sortGroup:row=>row.group}];
   const order=desc=>[...renderToStaticMarkup(React.createElement(DataTable,{label:'T',rows,columns,rowId:row=>row.id,initialSort:{id:'value',desc}})).matchAll(/<th scope="row"[^>]*>(\w)</g)].map(match=>match[1]);
-  assert.deepEqual(order(true),['d','b','c','a','e'],'descending: group 0 first, larger values first, missing values last');
-  assert.deepEqual(order(false),['b','d','a','c','e'],'ascending keeps group 0 first');
+  assert.deepEqual(order(true),['d','b','e','c','a'],'descending: group 0 stays first, its missing value stays last within the group');
+  assert.deepEqual(order(false),['b','d','e','a','c'],'ascending keeps group 0 first with its missing value last');
 });
 
 test('selection adds a checkbox column whose header covers every filtered row',()=>{

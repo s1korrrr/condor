@@ -11,13 +11,13 @@ function makeTableHarness(filters = [], search = '') {
   let stateIndex = 0;
   const react = {
     useMemo: factory => factory(),
+    useEffect: () => {},
+    useRef: current => ({ current }),
     useState(initial) {
       const index = stateIndex++;
       const value = index === 1 ? filters : index === 2 ? search : initial;
       return [value, () => {}];
     },
-    // The harness calls the component once, like a server render: effects (the onRowsChange report) do not run.
-    useLayoutEffect: () => {},
   };
   const tanstack = {
     ...core,
@@ -119,4 +119,19 @@ test('CSV export without metadata keeps the existing header and row bytes', asyn
   assert.equal(csv, 'Asset,Amount\ngamma,4\nalpha,3');
   assert.equal(capture.clicks, 1);
   assert.deepEqual(capture.revoked, ['blob:quant-kit-export']);
+});
+
+test('CSV export binds row-specific basis and capital provenance and protects formula-like values', async t => {
+  const { csv } = await exportTable(t, {
+    rows: [
+      { id: 'wallet-row', asset: 'alpha', amount: 3, basis: 'wallet', capital: 1000 },
+      { id: 'cash-row', asset: 'beta', amount: 8, basis: 'peak_cash', capital: null },
+    ],
+    metadata: { return_basis: row => row.basis, capital_usdc: row => row.capital, note: row => `=fixture:${row.id}` },
+  });
+  assert.match(csv, /^Asset,Amount,return_basis,capital_usdc,note,table_search,/);
+  assert.match(csv, /\nbeta,8,peak_cash,,\'=fixture:cash-row,/);
+  assert.match(csv, /\nalpha,3,wallet,1000,\'=fixture:wallet-row,/);
+  assert.match(csv, /,2,cash-row\n/);
+  assert.match(csv, /,2,wallet-row$/);
 });

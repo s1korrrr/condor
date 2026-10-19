@@ -1,4 +1,4 @@
-import { useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, sortingFns, useReactTable, type ColumnDef, type ColumnFiltersState, type FilterFn, type SortingFn, type SortingState } from '@tanstack/react-table';
 import { numericFilterMatch, searchMatch } from './table-filter';
 import { cleanFloat } from '../decimal-display';
@@ -32,7 +32,7 @@ export type TableColumn<T> = {
    * Sort groups for this column. Rows sort inside their group and the groups keep this ascending order in both
    * directions, so values that must not be ranked together (returns on different bases) are never interleaved.
    */
-  sortGroup?: (row: T) => number | string;
+  sortGroup?: (row: T) => string | number;
 };
 
 /** Checkbox selection: `selected` holds row ids; `onSelect` gets the ids to add or remove (the header box covers every filtered row). */
@@ -44,6 +44,14 @@ export type TableSelection<T> = {
 };
 
 const SELECT_COLUMN = '__select';
+
+function compareSortGroup(left: string | number, right: string | number): number {
+  if (left === right) return 0;
+  if (typeof left === 'number' && Number.isFinite(left) && typeof right === 'number' && Number.isFinite(right)) {
+    return left < right ? -1 : 1;
+  }
+  return String(left).localeCompare(String(right));
+}
 
 const textFilter: FilterFn<unknown> = (row, columnId, filter) => String(row.getValue(columnId) ?? '').toLowerCase().includes(String(filter).trim().toLowerCase());
 const numberFilter: FilterFn<unknown> = (row, columnId, filter) => numericFilterMatch(row.getValue(columnId), String(filter));
@@ -73,8 +81,8 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
   emptyText?: ReactNode;
   /** CSV file name; the export holds raw values of the filtered, sorted rows. */
   exportName?: string;
-  /** Constant per-export provenance appended as columns without changing the table view. */
-  exportMetadata?: Record<string, string | number | null>;
+  /** Per-export provenance appended as columns without changing the table view. Values may depend on each row. */
+  exportMetadata?: Record<string, string | number | null | ((row: T) => string | number | null)>;
   /** Scroll height; the header row stays visible while the body scrolls. */
   maxHeight?: number;
   /** Optional `data-state` per row (for example a highlighted or stale row). */
@@ -94,6 +102,7 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
   const [search, setSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const effectiveSearch = searchable ? search : '';
   const selectable = selection !== undefined;
   const definitions = useMemo<ColumnDef<T>[]>(() => [
     ...(selectable ? [{ id: SELECT_COLUMN, header: '', size: 36, minSize: 36, enableSorting: false, enableResizing: false, enableColumnFilter: false } satisfies ColumnDef<T>] : []),
@@ -103,30 +112,35 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
         return x !== null && y !== null ? x - y : x !== null ? 1 : y !== null ? -1 : 0;
       } : sortingFns.alphanumeric;
       const group = column.sortGroup;
-      // TanStack negates the result for a descending sort; pre-negate the group step so groups never flip.
-      const desc = sorting.find(item => item.id === column.id)?.desc === true;
       return {
         id: column.id,
         header: column.header,
         // Missing values are undefined so `sortUndefined: 'last'` keeps them last in either direction.
-        accessorFn: row => column.value(row) ?? undefined,
+        accessorFn: row => {
+          const value = column.value(row);
+          return group && value == null ? null : value ?? undefined;
+        },
         size: column.size ?? (column.kind === 'number' ? 120 : 150),
         minSize: column.minSize ?? 64,
         sortingFn: group ? (a, b, id) => {
-          const x = group(a.original), y = group(b.original);
-          return x === y ? compare(a, b, id) : (x < y ? -1 : 1) * (desc ? -1 : 1);
+          const groupOrder = compareSortGroup(group(a.original), group(b.original));
+          const descending = sorting.find(item => item.id === id)?.desc ?? false;
+          if (groupOrder !== 0) return descending ? -groupOrder : groupOrder;
+          const x = a.getValue(id), y = b.getValue(id);
+          if (x == null || y == null) return x == null && y == null ? 0 : x == null ? (descending ? -1 : 1) : (descending ? 1 : -1);
+          return compare(a, b, id);
         } : compare,
-        sortUndefined: 'last',
+        sortUndefined: group ? false : 'last',
         filterFn: (column.kind === 'number' ? numberFilter : textFilter) as FilterFn<T>,
         meta: column,
       };
     }),
   ], [columns, selectable, sorting]);
   // Search runs before the table so it can match displayed text as well as raw values.
-  const searched = useMemo(() => search.trim() ? rows.filter(row => searchMatch(columns.flatMap(column => {
+  const searched = useMemo(() => effectiveSearch.trim() ? rows.filter(row => searchMatch(columns.flatMap(column => {
     const shown = column.cell?.(row);
     return [column.value(row), typeof shown === 'string' || typeof shown === 'number' ? shown : null];
-  }), search)) : rows, [rows, columns, search]);
+  }), effectiveSearch)) : rows, [rows, columns, effectiveSearch]);
   const table = useReactTable({
     data: searched, columns: definitions, getRowId: rowId,
     state: { sorting, columnFilters: filters },
@@ -135,15 +149,26 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
     enableColumnResizing: true, columnResizeMode: 'onChange',
   });
   const sortedRows = table.getRowModel().rows;
+  const onRowsChangeRef = useRef(onRowsChange);
+  const reportedRows = useRef<T[] | null>(null);
+  const hasRowsChange = typeof onRowsChange === 'function';
+  useEffect(() => {
+    onRowsChangeRef.current = onRowsChange;
+    if (!onRowsChange) reportedRows.current = null;
+  }, [onRowsChange]);
+  useEffect(() => {
+    const callback = onRowsChangeRef.current;
+    if (!callback) return;
+    const nextRows = sortedRows.map(row => row.original);
+    const previous = reportedRows.current;
+    if (previous?.length === nextRows.length && previous.every((row, index) => row === nextRows[index])) return;
+    reportedRows.current = nextRows;
+    callback(nextRows);
+  }, [sortedRows, hasRowsChange]);
   const visible = pinned ? [...sortedRows.filter(row => pinned(row.original)), ...sortedRows.filter(row => !pinned(row.original))] : sortedRows;
   const pinnedCount = pinned ? visible.filter(row => pinned(row.original)).length : 0;
   const shown = expanded ? visible : visible.slice(0, Math.max(pageSize, pinnedCount));
-  const filtered = search.trim() !== '' || filters.length > 0;
-  const visibleIds = visible.map(row => row.id).join('\n');
-  // Layout effect: the page's summary follows the table in the same frame, never one paint behind.
-  useLayoutEffect(() => {
-    onRowsChange?.(visible.map(row => row.original));
-  }, [visibleIds, rows, onRowsChange]); // eslint-disable-line react-hooks/exhaustive-deps
+  const filtered = effectiveSearch.trim() !== '' || filters.length > 0;
   const selectedVisible = selection ? visible.filter(row => selection.selected.has(row.id)).length : 0;
   const allSelected = visible.length > 0 && selectedVisible === visible.length;
   const initialSorting = initialSort ? `${initialSort.id}:${initialSort.desc ? 'desc' : 'asc'}` : '';
@@ -156,8 +181,8 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
     const header = [...columns.map(column => column.header), ...metadata.map(([key]) => key), ...exportStateHeaders].map(csvCell).join(',');
     const body = visible.map(row => [
       ...columns.map(column => column.value(row.original)),
-      ...metadata.map(([, value]) => value),
-      ...(exportMetadata === undefined ? [] : [search, JSON.stringify(filters), JSON.stringify(sorting), visible.length, row.id]),
+      ...metadata.map(([, value]) => typeof value === 'function' ? value(row.original) : value),
+      ...(exportMetadata === undefined ? [] : [effectiveSearch, JSON.stringify(filters), JSON.stringify(sorting), visible.length, row.id]),
     ].map(csvCell).join(','));
     const url = URL.createObjectURL(new Blob([[header, ...body].join('\n')], { type: 'text/csv' }));
     const link = document.createElement('a');

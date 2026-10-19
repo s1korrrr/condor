@@ -33,9 +33,15 @@ so it is unit-tested in `test/quant-kit.test.mjs` without a browser.
    the latest sample with an "as of" time when the cursor is between samples.
    Never interpolate or draw a missing value as zero.
 5. **Tables are DataTables.** Sortable headers, per-column filters (numbers
-   accept `>`, `<`, `>=`, `<=`, `=`, `a..b`), global search, drag-to-resize
-   columns (double-click resets), sticky headers and CSV export of the raw
-   values. Sort and filter on raw values; format in `cell`.
+   accept `>`, `<`, `>=`, `<=`, `=`, `a..b`), global search (optional per
+   table), drag-to-resize columns (double-click resets), sticky headers and
+   CSV export of the raw filtered and sorted values. Optional controlled row
+   selection uses stable `rowId` values and does not narrow CSV exports.
+   `sortGroup` keeps related values together in a fixed group order, even when
+   the value sort is descending. `onRowsChange` reports all sorted and filtered
+   rows before pinning and pagination, after render. Sort and filter on raw
+   values; format in `cell`. `exportMetadata` appends constant or row-specific
+   provenance without changing the visible columns or the exported row scope.
 6. **Truth states stay visible.** Every tile and panel keeps its `PanelState`
    glyph. Unavailable, stale and collecting values are labelled, never zero.
 7. **Colors come from tokens.** Use `CHART` / `--q-*` tokens and `assetColor`

@@ -109,7 +109,7 @@ function qualifiedSummaryFill(raw: unknown, generatedAtMs: number): Record<strin
   // is coherent; a malformed additive field never changes the recorded clock or any money.
   const attested = raw.execution_timestamp_source === 'okx.fillTime'
     && integer(executed) && executed > 0 && executed <= MAX_WIRE_TIME_MS
-    && integer(recorded) && recorded >= 0 && recorded <= MAX_WIRE_TIME_MS
+    && integer(recorded) && recorded > 0 && recorded <= MAX_WIRE_TIME_MS
     && executed <= recorded + 5000 && executed <= generatedAtMs + 5000;
   return {
     ...raw,

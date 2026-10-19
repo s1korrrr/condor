@@ -20,6 +20,22 @@ test('the server\'s documented full and glance examples satisfy the typed client
   assert.ok(new TextEncoder().encode(JSON.stringify(example('glance'))).length < 8192);
 });
 
+test('full and glance require positive recorded time for execution attestation', () => {
+  for (const view of ['full', 'glance']) {
+    for (const recorded of [0, 1]) {
+      const body = example(view);
+      const raw = body.fills[0];
+      Object.assign(raw, { time_ms: recorded, execution_timestamp_ms: 1, execution_timestamp_source: 'okx.fillTime' });
+      const row = client.parseFleetSummary(body, view).fills[0];
+      assert.equal(row.time_ms, recorded);
+      assert.equal(row.execution_timestamp_ms, recorded === 0 ? null : 1);
+      assert.equal(row.execution_timestamp_source, recorded === 0 ? null : 'okx.fillTime');
+      assert.equal(row.amount, raw.amount);
+      assert.equal(row.volume, raw.volume);
+    }
+  }
+});
+
 test('a different major schema or view is refused, never guessed', () => {
   assert.throws(() => client.parseFleetSummary({ ...example('full'), schema_version: 'fleet-summary.v2' }, 'full'), /Unsupported fleet summary schema/);
   assert.throws(() => client.parseFleetSummary(example('glance'), 'full'), /does not match/);

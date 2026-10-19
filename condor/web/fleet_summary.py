@@ -319,7 +319,7 @@ def execution_time_fields(fill: dict, now_ms: Optional[float] = None, *, paper: 
         and fill.get("execution_mode") != "paper"
         and type(executed) is int
         and 0 < executed <= 253402300799999
-        and recorded is not None
+        and recorded is not None and recorded > 0
         and executed <= recorded + 5000
         and (now_ms is None or executed <= now_ms + 5000)
     )

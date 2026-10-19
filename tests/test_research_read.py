@@ -282,6 +282,99 @@ def test_research_native_busy_keeps_whole_request_deadline(
     assert result.status_code == 504
 
 
+@pytest.mark.parametrize("phase", ["decode", "validate", "project"])
+@pytest.mark.parametrize(
+    "endpoint,deadline",
+    [("nodes", 15), ("archive-overview", 45)],
+)
+def test_research_cpu_stages_share_the_transport_deadline(
+    monkeypatch, phase, endpoint, deadline
+):
+    from condor import research_read
+
+    elapsed = [0.0]
+    monkeypatch.setattr(research_read, "monotonic", lambda: elapsed[0], raising=False)
+
+    def handler(req):
+        # Transport consumes most of the same endpoint request budget.
+        elapsed[0] = deadline - 1.0
+        body = (
+            {"items": [], "total": 0, "limit": 30, "offset": 0}
+            if endpoint == "nodes"
+            else {
+                "revision": "r",
+                "counts": {},
+                "coverage": {},
+                "preservation": {},
+                "provenance": {},
+                "facets": {},
+                "documents": [],
+            }
+        )
+        return httpx.Response(200, json=body)
+
+    if phase == "decode":
+
+        class TimedJson:
+            def loads(self, *args, **kwargs):
+                decoded = json.loads(*args, **kwargs)
+                elapsed[0] = deadline + 1.0
+                return decoded
+
+            def dumps(self, *args, **kwargs):
+                return json.dumps(*args, **kwargs)
+
+        monkeypatch.setattr(research_read, "json", TimedJson())
+    else:
+        target = "_valid_shape" if phase == "validate" else "_project"
+        original = getattr(research_read, target)
+
+        def timed(*args, **kwargs):
+            result = original(*args, **kwargs)
+            elapsed[0] = deadline + 1.0
+            return result
+
+        monkeypatch.setattr(research_read, target, timed)
+
+    result = client(monkeypatch, handler=handler).get(
+        f"/api/v1/research/{endpoint}?server=native-ok-rsi"
+    )
+    assert result.status_code == 504
+    assert f"{deadline} s read deadline" in result.json()["detail"]
+
+
+def test_research_cpu_stages_within_whole_deadline_keep_valid_observation(monkeypatch):
+    from condor import research_read
+
+    elapsed = [0.0]
+    monkeypatch.setattr(research_read, "monotonic", lambda: elapsed[0], raising=False)
+
+    def handler(req):
+        elapsed[0] = 14.0
+        return httpx.Response(
+            200, json={"items": [], "total": 0, "limit": 30, "offset": 0}
+        )
+
+    original = research_read._project
+
+    def project(*args, **kwargs):
+        result = original(*args, **kwargs)
+        elapsed[0] = 14.5
+        return result
+
+    monkeypatch.setattr(research_read, "_project", project)
+    result = client(monkeypatch, handler=handler).get(
+        "/api/v1/research/nodes?server=native-ok-rsi"
+    )
+    assert result.status_code == 200
+    assert result.json()["data"] == {
+        "items": [],
+        "total": 0,
+        "limit": 30,
+        "offset": 0,
+    }
+
+
 def test_research_native_busy_retry_is_cancellable(monkeypatch):
     from condor import research_read
 

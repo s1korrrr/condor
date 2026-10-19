@@ -8,6 +8,7 @@ import json
 import math
 import re
 from datetime import datetime, timezone
+from time import monotonic
 
 import anyio
 import httpx
@@ -525,6 +526,14 @@ async def read_research(endpoint, parameters, server):
         if endpoint in LONG_READ_ENDPOINTS
         else READ_DEADLINE_SECONDS
     )
+    expires_at = monotonic() + deadline
+
+    def check_deadline():
+        # The asyncio timeout cannot interrupt synchronous JSON and projection
+        # work. Check their elapsed time before accepting a successful read.
+        if monotonic() >= expires_at:
+            raise TimeoutError
+
     try:
         async with asyncio.timeout(deadline):
             async with _client() as client:
@@ -611,13 +620,17 @@ async def read_research(endpoint, parameters, server):
                         break
                     # The upstream stream has closed before waiting or retrying.
                     await asyncio.sleep(1)
+        check_deadline()
         data = json.loads(
             payload,
             parse_constant=lambda value: (_ for _ in ()).throw(
                 ValueError("Nonfinite JSON")
             ),
         )
-        if not _valid_shape(endpoint, data, parameters):
+        check_deadline()
+        valid_shape = _valid_shape(endpoint, data, parameters)
+        check_deadline()
+        if not valid_shape:
             raise ValueError("Invalid knowledge read model")
         if endpoint == "graph":
             # The native graph includes full evidence records. The graph needs
@@ -629,12 +642,17 @@ async def read_research(endpoint, parameters, server):
                     for node in data["nodes"]
                 ],
             )
+            check_deadline()
         projected = _project(data)
-        if endpoint == "network" and not _valid_network(projected):
-            raise ValueError(
-                "Research identity cannot be preserved by privacy projection"
-            )
-        return {
+        check_deadline()
+        if endpoint == "network":
+            valid_network = _valid_network(projected)
+            check_deadline()
+            if not valid_network:
+                raise ValueError(
+                    "Research identity cannot be preserved by privacy projection"
+                )
+        result = {
             "data": projected,
             "source": {
                 "owner": "research_os",
@@ -645,6 +663,8 @@ async def read_research(endpoint, parameters, server):
                 "freshness_note": "Fetch time is transport observation only. Research indexing freshness is the owner overview.freshness.",
             },
         }
+        check_deadline()
+        return result
     except HTTPException:
         raise
     except (TimeoutError, httpx.TimeoutException):

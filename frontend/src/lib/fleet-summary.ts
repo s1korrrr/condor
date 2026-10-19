@@ -8,6 +8,7 @@
  */
 
 export const FLEET_SUMMARY_SCHEMA = 'fleet-summary.v1';
+export const FLEET_WALLET_CLAIMS = { 'X-RSIBOT-Wallet-Claims': 'native-account-v1' } as const;
 
 export type FleetSummaryView = 'full' | 'glance';
 export type SectionName = 'wallet' | 'pnl' | 'market' | 'bots' | 'fills' | 'incidents';

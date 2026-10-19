@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { authFetch } from '@/lib/auth-token';
-import { fleetSummaryPath, parseFleetSummary, type FleetGlance, type FleetSummary } from '@/lib/fleet-summary';
+import { FLEET_WALLET_CLAIMS, fleetSummaryPath, parseFleetSummary, type FleetGlance, type FleetSummary } from '@/lib/fleet-summary';
 
 /**
  * The server's fleet summary for one server, polled every 15s (the server caches a computation for 5s, so a dashboard,
@@ -13,7 +13,7 @@ export function useFleetSummary(server: string | null, view: 'full' | 'glance' =
     queryKey: ['fleet-summary', server, view],
     enabled: Boolean(server),
     queryFn: async ({ signal }) => {
-      const response = await authFetch(fleetSummaryPath(server!, view), { signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]), cache: 'no-store' });
+      const response = await authFetch(fleetSummaryPath(server!, view), { signal: AbortSignal.any([signal, AbortSignal.timeout(15_000)]), cache: 'no-store', headers: FLEET_WALLET_CLAIMS });
       if (!response.ok) throw Object.assign(new Error(`Fleet summary request failed (${response.status})`), { status: response.status });
       return view === 'full' ? parseFleetSummary(await response.json(), 'full') : parseFleetSummary(await response.json(), 'glance');
     },

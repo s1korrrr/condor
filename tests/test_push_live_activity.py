@@ -25,6 +25,7 @@ GLANCE = json.loads(
     (FIXTURES / "fleet_summary" / "summary_glance.example.json").read_text()
 )
 SHARED_CONTENT = FIXTURES / "live_activity_content_v1.json"
+PARTIAL_CONTENT = FIXTURES / "live_activity_content_v1_partial.json"
 ACTIVITY = "8a1d3c55-7c2e-4f0b-9a57-2f3e0c7b1d42"
 UPDATE_TOKEN = "d4" * 40
 UPDATE_TOKEN_2 = "e5" * 40
@@ -133,7 +134,10 @@ def test_account_subtotal_and_legacy_activity_keep_distinct_provenance():
     glance["wallet"]["unpriced_count"] = 1
     glance["sections"]["wallet"]["status"] = "partial"
     state = la.content_state(glance)
-    assert state["equity"] == "900.00"
+    assert state == json.loads(PARTIAL_CONTENT.read_text())
+    assert state["account_value"] == "900.00"
+    assert "equity" not in state
+    assert state["equity_unit"] == "USDT"
     assert state["equity_valuation_complete"] is False
     assert state["equity_source"] == "native_account_portfolio"
     legacy = copy.deepcopy(glance)
@@ -141,16 +145,20 @@ def test_account_subtotal_and_legacy_activity_keep_distinct_provenance():
         legacy["wallet"].pop(key, None)
     older = la.content_state(legacy)
     assert older["equity"] == "900.00"
+    assert "account_value" not in older
     assert "equity_valuation_complete" not in older
     assert "equity_source" not in older
     malformed = copy.deepcopy(glance)
     malformed["wallet"]["account_scope"]["identity"] = ""
     assert "equity_source" not in la.content_state(malformed)
+    assert "equity" not in la.content_state(malformed)
+    assert "account_value" not in la.content_state(malformed)
     malformed["wallet"]["account_scope"]["identity"] = "   "
     assert "equity_source" not in la.content_state(malformed)
     inconsistent = copy.deepcopy(glance)
     inconsistent["sections"]["wallet"]["status"] = "ok"
     assert "equity_valuation_complete" not in la.content_state(inconsistent)
+    assert "equity" not in la.content_state(inconsistent)
 
 
 def test_aged_account_subtotal_keeps_value_but_marks_activity_stale():
@@ -161,7 +169,8 @@ def test_aged_account_subtotal_keeps_value_but_marks_activity_stale():
     glance["wallet"]["stale"] = True
     glance["sections"]["wallet"]["status"] = "partial"
     state = la.content_state(glance)
-    assert state["equity"] == "1000.00"
+    assert state["account_value"] == "1000.00"
+    assert "equity" not in state
     assert state["equity_valuation_complete"] is False
     assert state["stale"] is True
 

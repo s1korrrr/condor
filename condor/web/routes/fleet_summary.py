@@ -37,8 +37,10 @@ CACHE_TTL_SECONDS = (
 HEADERS = {
     "Cache-Control": "private, no-cache",
     "X-Content-Type-Options": "nosniff",
-    "Vary": "Authorization",
+    "Vary": "Authorization, X-RSIBOT-Wallet-Claims",
 }
+WALLET_CLAIMS_HEADER = "X-RSIBOT-Wallet-Claims"
+NATIVE_ACCOUNT_CLAIMS = "native-account-v1"
 ALLOWED_QUERY = {"view", "schema"}
 HISTORY_WINDOW = "6h"  # the verdict replays the last six hours of stored breadth
 
@@ -174,6 +176,18 @@ def _tag_matches(header: Optional[str], tag: str) -> bool:
     )
 
 
+def _http_wallet_projection(body: dict, native_claims: bool) -> dict:
+    """Keep the canonical cache; old clients must never label a subtotal Equity."""
+    wallet = body.get("wallet")
+    if (
+        not native_claims
+        and isinstance(wallet, dict)
+        and wallet.get("valuation_complete") is False
+    ):
+        return {**body, "wallet": None}
+    return body
+
+
 async def cached_summary(
     name: str, *, admin: bool, user_id: Any, view: str = "full"
 ) -> dict:
@@ -262,6 +276,9 @@ async def fleet_summary(
         raise HTTPException(
             status_code=504, detail="Fleet summary exceeded its deadline"
         ) from None
+    body = _http_wallet_projection(
+        body, request.headers.get(WALLET_CLAIMS_HEADER) == NATIVE_ACCOUNT_CLAIMS
+    )
     tag = summary.etag_for(body)
     headers = {**HEADERS, "ETag": tag, "X-Fleet-Summary-Schema": summary.SCHEMA_VERSION}
     if _tag_matches(request.headers.get("If-None-Match"), tag):

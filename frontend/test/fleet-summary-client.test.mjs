@@ -74,3 +74,22 @@ test('request path encodes the server and selects the view', () => {
   assert.equal(client.fleetSummaryPath('my server'), '/api/v1/servers/my%20server/fleet/summary');
   assert.equal(client.fleetSummaryPath('v2', 'glance'), '/api/v1/servers/v2/fleet/summary?view=glance');
 });
+
+test('the actual fleet hook opts into native-account wallet claims for both views', async () => {
+  const calls = [];
+  const { load: hookLoad } = frontendModules({
+    '@tanstack/react-query': { useQuery: options => options },
+    '@/lib/auth-token': { authFetch: async (path, init) => {
+      calls.push({ path, init });
+      return new Response(JSON.stringify(example(path.includes('view=glance') ? 'glance' : 'full')), { status: 200 });
+    } },
+  });
+  const hook = hookLoad('features/quant-ops/use-fleet-summary.ts').useFleetSummary;
+  for (const view of ['full', 'glance']) {
+    const query = hook('v2', view);
+    const result = await query.queryFn({ signal: new AbortController().signal });
+    assert.equal(result.view, view);
+  }
+  assert.equal(calls.length, 2);
+  for (const { init } of calls) assert.equal(new Headers(init.headers).get('X-RSIBOT-Wallet-Claims'), 'native-account-v1');
+});

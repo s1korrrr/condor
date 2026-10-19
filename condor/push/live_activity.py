@@ -144,16 +144,13 @@ def content_state(
     wallet = glance.get("wallet") if isinstance(glance.get("wallet"), Mapping) else {}
     equity = money(wallet.get("equity"))
     if equity is not None:
-        state["equity"] = equity
-        if unit := _text(wallet.get("unit"), 16):
-            state["equity_unit"] = unit
         # These additive qualifiers originate only from the fleet summary's admitted
         # native account scope. Legacy bot-observed values retain no coverage claim.
         scope = wallet.get("account_scope")
         wallet_status = _section_status(glance, "wallet")
         complete = wallet.get("valuation_complete")
         unpriced = wallet.get("unpriced_count")
-        if (
+        qualified_account = (
             wallet.get("source") == "native_account_portfolio"
             and wallet.get("source_bot") is None
             and wallet.get("unit") == "USDT"
@@ -174,9 +171,18 @@ def content_state(
                 if not complete
                 else "stale" if wallet.get("stale") is True else "ok"
             )
-        ):
+        )
+        if qualified_account:
+            state["equity" if complete else "account_value"] = equity
             state["equity_source"] = "native_account_portfolio"
             state["equity_valuation_complete"] = complete
+        elif (
+            wallet.get("source") != "native_account_portfolio" and complete is not False
+        ):
+            state["equity"] = equity
+        if "equity" in state or "account_value" in state:
+            if unit := _text(wallet.get("unit"), 16):
+                state["equity_unit"] = unit
 
     market = glance.get("market") if isinstance(glance.get("market"), Mapping) else {}
     section = glance.get("sections")

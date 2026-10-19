@@ -208,13 +208,91 @@ def test_actual_account_reader_uses_same_native_adapter_and_access_guard(monkeyp
     assert calls == [("portfolio/analytics", {"range": "1D", "refresh": "false"})]
 
 
-def test_http_full_and_glance_hold_partial_account_scope(monkeypatch, store):
+def test_http_legacy_withholds_partial_wallet_until_explicit_native_claims(
+    monkeypatch, store
+):
     client = client_for(monkeypatch, store, readers=AccountReaders(store))
     for view in ("full", "glance"):
-        response = client.get(f"/api/v1/servers/{SERVER}/fleet/summary?view={view}")
-        assert response.status_code == 200
-        body = response.json()
+        path = f"/api/v1/servers/{SERVER}/fleet/summary?view={view}"
+        legacy = client.get(path)
+        assert legacy.status_code == 200
+        assert legacy.json()["wallet"] is None
+        assert legacy.json()["sections"]["wallet"]["status"] == "partial"
+        assert "X-RSIBOT-Wallet-Claims" in legacy.headers["Vary"]
+        opted = client.get(
+            path, headers={"X-RSIBOT-Wallet-Claims": "native-account-v1"}
+        )
+        assert opted.status_code == 200
+        body = opted.json()
         assert body["wallet"]["source"] == "native_account_portfolio"
         assert body["wallet"]["valuation_complete"] is False
         assert body["wallet"]["source_bot"] is None
-        assert body["sections"]["wallet"]["status"] == "partial"
+        assert body["sections"]["wallet"] == legacy.json()["sections"]["wallet"]
+        assert body["pnl"] == legacy.json()["pnl"]
+        assert opted.headers["ETag"] != legacy.headers["ETag"]
+        assert (
+            client.get(
+                path, headers={"If-None-Match": legacy.headers["ETag"]}
+            ).status_code
+            == 304
+        )
+        assert (
+            client.get(
+                path,
+                headers={
+                    "If-None-Match": opted.headers["ETag"],
+                    "X-RSIBOT-Wallet-Claims": "native-account-v1",
+                },
+            ).status_code
+            == 304
+        )
+        assert (
+            client.get(
+                path,
+                headers={
+                    "If-None-Match": legacy.headers["ETag"],
+                    "X-RSIBOT-Wallet-Claims": "native-account-v1",
+                },
+            ).status_code
+            == 200
+        )
+        assert (
+            client.get(
+                path, headers={"If-None-Match": opted.headers["ETag"]}
+            ).status_code
+            == 200
+        )
+
+
+def test_http_complete_wallet_remains_visible_to_legacy_clients(monkeypatch, store):
+    complete = account_current(total="1000", complete=True, unpriced=())
+    client = client_for(monkeypatch, store, readers=AccountReaders(store, complete))
+    for view in ("full", "glance"):
+        path = f"/api/v1/servers/{SERVER}/fleet/summary?view={view}"
+        response = client.get(path)
+        assert response.status_code == 200
+        assert response.json()["wallet"]["equity"] == "1000"
+        assert response.json()["wallet"]["valuation_complete"] is True
+
+
+def test_http_legacy_projection_does_not_mutate_canonical_micro_cache(
+    monkeypatch, store
+):
+    readers = AccountReaders(store)
+    client = client_for(monkeypatch, store, readers=readers)
+    monkeypatch.setattr(routes, "CACHE_TTL_SECONDS", 60)
+    path = f"/api/v1/servers/{SERVER}/fleet/summary"
+    legacy = client.get(path)
+    assert legacy.status_code == 200 and legacy.json()["wallet"] is None
+    owner_calls = list(readers.calls)
+    opted = client.get(path, headers={"X-RSIBOT-Wallet-Claims": "native-account-v1"})
+    assert opted.status_code == 200
+    assert opted.json()["wallet"]["equity"] == "900"
+    assert readers.calls == owner_calls
+    assert routes._cache[(SERVER, True)]["full"][1]["wallet"]["equity"] == "900"
+    glance = client.get(
+        path + "?view=glance",
+        headers={"X-RSIBOT-Wallet-Claims": "native-account-v1"},
+    )
+    assert glance.json()["wallet"]["equity"] == "900"
+    assert readers.calls == owner_calls

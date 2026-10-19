@@ -26,6 +26,7 @@ const Overview = lazy(() => import("@/pages/Overview").then(module => ({default:
 const Research = lazy(() => import("@/pages/Research").then(module => ({default:module.Research})));
 const TradingVisuals = lazy(() => import("@/pages/TradingVisuals").then(module => ({ default: module.TradingVisuals })));
 const Screener = lazy(() => import("@/pages/Screener").then(module => ({ default: module.Screener })));
+const Tradepad = lazy(() => import("@/pages/Tradepad").then(module => ({ default: module.Tradepad })));
 
 function Home() {
   const {access,isLoading}=useServerCapabilities();
@@ -133,6 +134,8 @@ export default function App() {
                 <Route path="/capital" element={<Suspense fallback={<p role="status">Loading capital…</p>}><Overview/></Suspense>} />
                 <Route path="/overview" element={<LegacyOverview/>} />
                 <Route path="/research" element={<Suspense fallback={<p role="status">Loading research…</p>}><Research/></Suspense>} />
+                {/* Backtest catalog and viewer. The raw viewer itself is served by the backend at /tradepad. */}
+                <Route path="/backtests" element={<Suspense fallback={<p role="status">Loading Tradepad…</p>}><Tradepad/></Suspense>} />
                 <Route path="/screener" element={<LegacyScreener/>} />
                 <Route path="/tools" element={<WorkspaceTools/>} />
                 <Route path="/portfolio" element={<PortfolioRoute />} />

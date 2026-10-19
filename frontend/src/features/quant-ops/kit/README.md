@@ -41,6 +41,17 @@ so it is unit-tested in `test/quant-kit.test.mjs` without a browser.
 7. **Colors come from tokens.** Use `CHART` / `--q-*` tokens and `assetColor`
    for assets, so a symbol keeps its color on every page.
 
+## Table options added for Tradepad
+
+- `selection` adds a leading checkbox column. The page owns the selected ids (`selected`) and receives the ids to add
+  or remove (`onSelect`); the header box selects or clears every filtered row. Selected rows carry `data-selected`.
+- `sortGroup` on a column keeps groups in a fixed order in both sort directions and sorts rows inside each group, so
+  values that must not be ranked together (returns on different bases) are never interleaved.
+- `onRowsChange` receives the filtered, sorted rows whenever they change, so tiles beside the table summarize exactly
+  what the table shows, column filters included.
+- `searchable={false}` hides the table search on a page that has its own search; column filters stay.
+- `rowState` may return `muted` for rows that lack full evidence (for example metrics-only backtests).
+
 ## Time-series options added for the Market home
 
 - `signSplit` on a series draws one signed value green above zero and red below it (breadth pressure,

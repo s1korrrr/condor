@@ -16,6 +16,8 @@ function makeTableHarness(filters = [], search = '') {
       const value = index === 1 ? filters : index === 2 ? search : initial;
       return [value, () => {}];
     },
+    // The harness calls the component once, like a server render: effects (the onRowsChange report) do not run.
+    useLayoutEffect: () => {},
   };
   const tanstack = {
     ...core,

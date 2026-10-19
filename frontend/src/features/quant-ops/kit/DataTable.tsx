@@ -1,5 +1,5 @@
-import { useMemo, useState, type ReactNode } from 'react';
-import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, useReactTable, type ColumnDef, type ColumnFiltersState, type FilterFn, type SortingState } from '@tanstack/react-table';
+import { useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, sortingFns, useReactTable, type ColumnDef, type ColumnFiltersState, type FilterFn, type SortingFn, type SortingState } from '@tanstack/react-table';
 import { numericFilterMatch, searchMatch } from './table-filter';
 import { cleanFloat } from '../decimal-display';
 import './kit.css';
@@ -28,7 +28,22 @@ export type TableColumn<T> = {
   className?: (row: T) => string | undefined;
   /** Long prose cells wrap; every other cell stays on one line and shows its full value on hover. */
   wrap?: boolean;
+  /**
+   * Sort groups for this column. Rows sort inside their group and the groups keep this ascending order in both
+   * directions, so values that must not be ranked together (returns on different bases) are never interleaved.
+   */
+  sortGroup?: (row: T) => number | string;
 };
+
+/** Checkbox selection: `selected` holds row ids; `onSelect` gets the ids to add or remove (the header box covers every filtered row). */
+export type TableSelection<T> = {
+  selected: ReadonlySet<string>;
+  onSelect: (ids: string[], selected: boolean) => void;
+  /** Accessible name of a row's checkbox, for example the strategy name. */
+  label?: (row: T) => string;
+};
+
+const SELECT_COLUMN = '__select';
 
 const textFilter: FilterFn<unknown> = (row, columnId, filter) => String(row.getValue(columnId) ?? '').toLowerCase().includes(String(filter).trim().toLowerCase());
 const numberFilter: FilterFn<unknown> = (row, columnId, filter) => numericFilterMatch(row.getValue(columnId), String(filter));
@@ -47,7 +62,7 @@ const csvCell = (value: unknown) => {
 };
 const RESIZE_STEP = 16;
 
-export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSize = 12, emptyText = 'No rows.', exportName, exportMetadata, maxHeight = 480, rowState, pinned, dense = false }: {
+export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSize = 12, emptyText = 'No rows.', exportName, exportMetadata, maxHeight = 480, rowState, pinned, dense = false, selection, onRowsChange, searchable = true }: {
   rows: T[];
   columns: TableColumn<T>[];
   rowId: (row: T, index: number) => string;
@@ -67,27 +82,46 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
   /** Rows kept at the top in any sort and never hidden behind "Show all" (for example a selected asset). */
   pinned?: (row: T) => boolean;
   dense?: boolean;
+  /** Adds a leading checkbox column; selected rows carry `data-selected`. */
+  selection?: TableSelection<T>;
+  /** Called with the filtered, sorted rows whenever they change, so a page can summarize exactly what the table shows. */
+  onRowsChange?: (rows: T[]) => void;
+  /** The global search box; a page with its own search turns it off. Column filters stay available. */
+  searchable?: boolean;
 }) {
   const [sorting, setSorting] = useState<SortingState>(initialSort ? [{ id: initialSort.id, desc: initialSort.desc ?? false }] : []);
   const [filters, setFilters] = useState<ColumnFiltersState>([]);
   const [search, setSearch] = useState('');
   const [showFilters, setShowFilters] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const definitions = useMemo<ColumnDef<T>[]>(() => columns.map(column => ({
-    id: column.id,
-    header: column.header,
-    // Missing values are undefined so `sortUndefined: 'last'` keeps them last in either direction.
-    accessorFn: row => column.value(row) ?? undefined,
-    size: column.size ?? (column.kind === 'number' ? 120 : 150),
-    minSize: column.minSize ?? 64,
-    sortingFn: column.kind === 'number' ? (a, b, id) => {
-      const x = numeric(a.getValue(id)), y = numeric(b.getValue(id));
-      return x !== null && y !== null ? x - y : x !== null ? 1 : y !== null ? -1 : 0;
-    } : 'alphanumeric',
-    sortUndefined: 'last',
-    filterFn: (column.kind === 'number' ? numberFilter : textFilter) as FilterFn<T>,
-    meta: column,
-  })), [columns]);
+  const selectable = selection !== undefined;
+  const definitions = useMemo<ColumnDef<T>[]>(() => [
+    ...(selectable ? [{ id: SELECT_COLUMN, header: '', size: 36, minSize: 36, enableSorting: false, enableResizing: false, enableColumnFilter: false } satisfies ColumnDef<T>] : []),
+    ...columns.map((column): ColumnDef<T> => {
+      const compare: SortingFn<T> = column.kind === 'number' ? (a, b, id) => {
+        const x = numeric(a.getValue(id)), y = numeric(b.getValue(id));
+        return x !== null && y !== null ? x - y : x !== null ? 1 : y !== null ? -1 : 0;
+      } : sortingFns.alphanumeric;
+      const group = column.sortGroup;
+      // TanStack negates the result for a descending sort; pre-negate the group step so groups never flip.
+      const desc = sorting.find(item => item.id === column.id)?.desc === true;
+      return {
+        id: column.id,
+        header: column.header,
+        // Missing values are undefined so `sortUndefined: 'last'` keeps them last in either direction.
+        accessorFn: row => column.value(row) ?? undefined,
+        size: column.size ?? (column.kind === 'number' ? 120 : 150),
+        minSize: column.minSize ?? 64,
+        sortingFn: group ? (a, b, id) => {
+          const x = group(a.original), y = group(b.original);
+          return x === y ? compare(a, b, id) : (x < y ? -1 : 1) * (desc ? -1 : 1);
+        } : compare,
+        sortUndefined: 'last',
+        filterFn: (column.kind === 'number' ? numberFilter : textFilter) as FilterFn<T>,
+        meta: column,
+      };
+    }),
+  ], [columns, selectable, sorting]);
   // Search runs before the table so it can match displayed text as well as raw values.
   const searched = useMemo(() => search.trim() ? rows.filter(row => searchMatch(columns.flatMap(column => {
     const shown = column.cell?.(row);
@@ -105,6 +139,13 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
   const pinnedCount = pinned ? visible.filter(row => pinned(row.original)).length : 0;
   const shown = expanded ? visible : visible.slice(0, Math.max(pageSize, pinnedCount));
   const filtered = search.trim() !== '' || filters.length > 0;
+  const visibleIds = visible.map(row => row.id).join('\n');
+  // Layout effect: the page's summary follows the table in the same frame, never one paint behind.
+  useLayoutEffect(() => {
+    onRowsChange?.(visible.map(row => row.original));
+  }, [visibleIds, rows, onRowsChange]); // eslint-disable-line react-hooks/exhaustive-deps
+  const selectedVisible = selection ? visible.filter(row => selection.selected.has(row.id)).length : 0;
+  const allSelected = visible.length > 0 && selectedVisible === visible.length;
   const initialSorting = initialSort ? `${initialSort.id}:${initialSort.desc ? 'desc' : 'asc'}` : '';
   const changed = filtered || sorting.map(item => `${item.id}:${item.desc ? 'desc' : 'asc'}`).join(',') !== initialSorting || Object.keys(table.getState().columnSizing).length > 0;
   const exportCsv = () => {
@@ -125,7 +166,7 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
   };
   return <div className={`q-dt${dense ? ' q-dt--dense' : ''}`}>
     <div className="q-dt__bar">
-      <input className="q-dt__search" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search rows…" aria-label={`Search ${label}`} />
+      {searchable && <input className="q-dt__search" type="search" value={search} onChange={event => setSearch(event.target.value)} placeholder="Search rows…" aria-label={`Search ${label}`} />}
       <button type="button" className="q-chip" aria-pressed={showFilters} onClick={() => setShowFilters(value => !value)} title="Per-column filters. Number columns accept >, <, >=, <=, = and a..b.">Filters{filters.length ? ` · ${filters.length}` : ''}</button>
       {changed && <button type="button" className="q-chip" onClick={() => { setSearch(''); setFilters([]); setSorting(initialSort ? [{ id: initialSort.id, desc: initialSort.desc ?? false }] : []); table.resetColumnSizing(); }}>Reset</button>}
       <span className="q-dt__count">{filtered ? `${visible.length} of ${rows.length}` : rows.length} row{rows.length === 1 ? '' : 's'}</span>
@@ -137,6 +178,12 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
         <thead>
           {table.getHeaderGroups().map(group => <tr key={group.id}>
             {group.headers.map(header => {
+              if (header.column.id === SELECT_COLUMN) return <th key={header.id} scope="col" className="q-dt__select">
+                <input type="checkbox" checked={allSelected} disabled={!visible.length} data-mixed={selectedVisible > 0 && !allSelected ? 'true' : undefined}
+                  ref={element => { if (element) element.indeterminate = selectedVisible > 0 && !allSelected; }}
+                  aria-label={allSelected ? `Clear the selection of ${visible.length} rows` : `Select all ${visible.length} rows`}
+                  onChange={() => selection?.onSelect(visible.map(row => row.id), !allSelected)} />
+              </th>;
               const meta = header.column.columnDef.meta as TableColumn<T>;
               const sorted = header.column.getIsSorted();
               const resizeBy = (delta: number) => table.setColumnSizing(sizes => ({ ...sizes, [header.column.id]: Math.max(meta.minSize ?? 64, header.column.getSize() + delta) }));
@@ -154,8 +201,12 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
           </tr>)}
         </thead>
         <tbody>
-          {shown.map(row => <tr key={row.id} data-state={rowState?.(row.original)}>
+          {shown.map(row => <tr key={row.id} data-state={rowState?.(row.original)} data-selected={selection?.selected.has(row.id) || undefined}>
             {row.getVisibleCells().map(cell => {
+              if (cell.column.id === SELECT_COLUMN) return <td key={cell.id} className="q-dt__select">
+                <input type="checkbox" checked={selection?.selected.has(row.id) ?? false} aria-label={`Select ${selection?.label?.(row.original) ?? row.id}`}
+                  onChange={event => selection?.onSelect([row.id], event.target.checked)} />
+              </td>;
               const meta = cell.column.columnDef.meta as TableColumn<T>;
               const content = meta.cell ? meta.cell(row.original) : String(cell.getValue() ?? '—');
               const raw = cell.getValue();
@@ -163,7 +214,7 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
               return meta.rowHeader ? <th key={cell.id} scope="row" {...props}>{content}</th> : <td key={cell.id} {...props}>{content}</td>;
             })}
           </tr>)}
-          {!visible.length && <tr><td className="q-dt__empty" colSpan={columns.length}>{rows.length ? 'No rows match the search or filters.' : emptyText}</td></tr>}
+          {!visible.length && <tr><td className="q-dt__empty" colSpan={columns.length + (selectable ? 1 : 0)}>{rows.length ? 'No rows match the search or filters.' : emptyText}</td></tr>}
         </tbody>
       </table>
     </div>

@@ -22,7 +22,9 @@ LONG_READ_DEADLINE_SECONDS = 45
 LONG_READ_ENDPOINTS = {"network", "archive", "archive-record", "archive-overview"}
 NATIVE_BUSY_ERROR = "Research reader is busy; retry the request"
 NATIVE_BUSY_MAX_BYTES = 256
-NATIVE_BUSY_MAX_ATTEMPTS = 3
+# Retry-After is exactly one second. The deadline remains the effective limit;
+# this cap only prevents an earlier attempt-count cutoff during a long read.
+NATIVE_BUSY_MAX_ATTEMPTS = math.ceil(LONG_READ_DEADLINE_SECONDS) + 1
 MAX_BYTES = 1024 * 1024
 DETAIL_MAX_BYTES = 4 * MAX_BYTES
 NETWORK_MAX_BYTES = (

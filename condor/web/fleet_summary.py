@@ -307,6 +307,28 @@ def receipt_value(fill: dict, field: str, *, positive: bool) -> tuple[Optional[s
     return fleet_pnl.decimal_text(number), "exact" if verdict == "exact_decimal" else "legacy_6dp"
 
 
+def execution_time_fields(fill: dict, now_ms: Optional[float] = None, *, paper: bool = False) -> dict:
+    """Preserve an attested execution clock separately from the existing recorded clock."""
+    executed = fill.get("execution_timestamp_ms")
+    recorded = _instant_ms(fill.get("timestamp"), now_ms)
+    admitted = (
+        not paper
+        and fill.get("execution_timestamp_source") == "okx.fillTime"
+        and fill.get("connector_name") == "okx"
+        and fill.get("simulated") is not True
+        and fill.get("execution_mode") != "paper"
+        and type(executed) is int
+        and 0 < executed <= 253402300799999
+        and recorded is not None
+        and executed <= recorded + 5000
+        and (now_ms is None or executed <= now_ms + 5000)
+    )
+    return {
+        "execution_timestamp_ms": executed if admitted else None,
+        "execution_timestamp_source": "okx.fillTime" if admitted else None,
+    }
+
+
 def project_fills(payload: Any, bot: str, now_ms: Optional[float] = None) -> list[dict]:
     """Native fills for one bot. Exact receipt strings are preferred over float projections."""
     rows = _obj(payload).get("rows")
@@ -341,6 +363,7 @@ def project_fills(payload: Any, bot: str, now_ms: Optional[float] = None) -> lis
                 ),
                 "fee": receipt_value(fill, "fee_quote", positive=False)[0],
                 "time_ms": _instant_ms(fill.get("timestamp"), now_ms),
+                **execution_time_fields(fill, now_ms, paper=is_paper(bot)),
             }
         )
     return out
@@ -1499,7 +1522,11 @@ def glance(full: dict) -> dict:
             None
             if full["fills"] is None
             else [
-                {k: f[k] for k in ("bot", "pair", "side", "volume", "time_ms")}
+                {
+                    **{k: f[k] for k in ("bot", "pair", "side", "volume", "time_ms")},
+                    "execution_timestamp_ms": f.get("execution_timestamp_ms"),
+                    "execution_timestamp_source": f.get("execution_timestamp_source"),
+                }
                 for f in full["fills"][: RECENT_FILLS["glance"]]
             ]
         ),

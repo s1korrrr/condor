@@ -448,7 +448,7 @@ async def test_paper_bots_are_listed_as_excluded_and_never_read():
 @sync
 async def test_the_paper_scope_is_a_separate_labelled_feed_of_paper_bots_only():
     readers = Readers(
-        default_rows() | {"ok_rsi_paper": [v1_row(9, T0, bot_name="ok_rsi_paper")], "meridian_v4_paper": fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)},
+        default_rows() | {"ok_rsi_paper": [v1_row(9, T0, bot_name="ok_rsi_paper", execution_timestamp_ms=T0-2000, execution_timestamp_source="okx.fillTime")], "meridian_v4_paper": fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)},
         registry=BOTS + ["ok_rsi_paper", "meridian_v4_paper"],
     )
     live = ff.build_page(await window(readers))
@@ -459,6 +459,7 @@ async def test_the_paper_scope_is_a_separate_labelled_feed_of_paper_bots_only():
     assert [b["bot"] for b in paper["bots"]] == ["ok_rsi_paper", "meridian_v4_paper"]
     assert all(b["paper"] for b in paper["bots"])
     assert paper["items"] and all(i["bot"] == "ok_rsi_paper" and i["paper"] is True for i in paper["items"])
+    assert all(i["execution_timestamp_ms"] is None and i["execution_timestamp_source"] is None for i in paper["items"])
     assert (paper["status"], paper["reason"]) == ("partial", fs.PARTIAL_COVERAGE)
     assert all(i["bot"] in BOTS and "paper" not in i for i in live["items"]), "the live feed never carries paper rows"
     none = ff.build_page(await window(Readers(), scope="paper"))

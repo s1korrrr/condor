@@ -8,6 +8,26 @@ const client = load('lib/fleet-fills.ts');
 // The server's own example documents: real builder output, kept current by condor/tests/test_fleet_fills.py.
 const example = name => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/fleet_fills/${name}.example.json`, import.meta.url), 'utf8'));
 
+test('execution time is additive and cannot change the recorded clock or money', () => {
+  const body = example('page_first');
+  const raw = body.items[0];
+  Object.assign(raw, { execution_timestamp_ms: raw.time_ms - 2000, execution_timestamp_source: 'okx.fillTime' });
+  const row = client.parseFleetFills(body).items[0];
+  assert.equal(row.execution_timestamp_ms, raw.time_ms - 2000);
+  assert.equal(row.execution_timestamp_source, 'okx.fillTime');
+  assert.equal(row.time_ms, raw.time_ms);
+  assert.equal(row.amount, raw.amount);
+  for (const [value, source] of [[true, 'okx.fillTime'], [0, 'okx.fillTime'],
+    [raw.time_ms + 5001, 'okx.fillTime'], [raw.time_ms - 2000, 'okx.uTime'],
+    [String(raw.time_ms), 'okx.fillTime'], [Number.MAX_SAFE_INTEGER, 'okx.fillTime']]) {
+    Object.assign(raw, { execution_timestamp_ms: value, execution_timestamp_source: source });
+    const invalid = client.parseFleetFills(body).items[0];
+    assert.equal(invalid.execution_timestamp_ms, null);
+    assert.equal(invalid.execution_timestamp_source, null);
+    assert.equal(invalid.amount, raw.amount);
+  }
+});
+
 test('the server\'s documented example pages satisfy the typed client', () => {
   const first = client.parseFleetFills(example('page_first'));
   assert.equal(first.schema_version, 'fleet-fills.v1');

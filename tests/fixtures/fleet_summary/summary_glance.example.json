@@ -158,21 +158,27 @@
    "pair": "ETH-USDC",
    "side": "BUY",
    "volume": "200.05",
-   "time_ms": 1799999910000
+   "time_ms": 1799999910000,
+   "execution_timestamp_ms": null,
+   "execution_timestamp_source": null
   },
   {
    "bot": "rsi_modular_v2",
    "pair": "BTC-USDC",
    "side": "SELL",
    "volume": "600",
-   "time_ms": 1799999850000
+   "time_ms": 1799999850000,
+   "execution_timestamp_ms": null,
+   "execution_timestamp_source": null
   },
   {
    "bot": "ok_rsi",
    "pair": "ETH-USDC",
    "side": "BUY",
    "volume": "200.05",
-   "time_ms": 1799999610000
+   "time_ms": 1799999610000,
+   "execution_timestamp_ms": null,
+   "execution_timestamp_source": null
   }
  ],
  "incidents": {

@@ -607,6 +607,27 @@ async def test_paper_numbers_never_enter_the_fleet_pnl_wallet_or_fills(store):
 
 
 @sync
+async def test_paper_summary_clears_exchange_time_even_when_owner_omits_simulation_flags(store, monkeypatch):
+    original = fills
+
+    def attested(bot, base):
+        payload = original(bot, base)
+        for row in payload["rows"]:
+            row.update(connector_name="okx", execution_timestamp_ms=fs._instant_ms(row["timestamp"])-2000,
+                       execution_timestamp_source="okx.fillTime")
+        return payload
+
+    monkeypatch.setitem(globals(), "fills", attested)
+    body = await build(store)
+    assert any(row["execution_timestamp_source"] == "okx.fillTime" for row in body["fills"])
+    assert body["paper_fills"]
+    for row in body["paper_fills"]:
+        assert row["simulated"] is True
+        assert row["execution_timestamp_ms"] is None
+        assert row["execution_timestamp_source"] is None
+
+
+@sync
 async def test_staleness_is_flagged_not_hidden(store):
     body = await build(store, now_ms=NOW_MS + 10 * 60_000)
     assert (

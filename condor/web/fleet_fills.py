@@ -46,6 +46,7 @@ from condor.web.fleet_summary import (
     _instant_ms,
     _obj,
     display_name,
+    execution_time_fields,
     generation,
     is_paper,
     receipt_value,
@@ -167,6 +168,7 @@ def normalize_fill(
         "fee": receipt_value(fill, "fee_quote", positive=False)[0],
         "fee_unit": quote,
         "time_ms": _instant_ms(fill.get("timestamp"), now_ms),
+        **execution_time_fields(fill, now_ms, paper=is_paper(bot)),
         "receipt": receipt,
         "simulated": fill.get("simulated") is True,
         # Owner fill rows carry no per-fill realised PnL, and a ledger window cannot support an average-cost

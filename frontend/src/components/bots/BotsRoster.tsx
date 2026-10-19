@@ -6,7 +6,7 @@ import { authFetch } from '@/lib/auth-token';
 import { transientReadFailure } from '@/lib/read-continuity';
 import { useServer } from '@/hooks/useServer';
 import { useServers } from '@/hooks/useServers';
-import { displayBotName, parseTradingVisualsSources, sourcesForServer, type TradingVisualsSource } from '@/features/trading-visuals/sources';
+import { displayBotName, isPaperBot, parseTradingVisualsSources, sourcesForServer, type TradingVisualsSource } from '@/features/trading-visuals/sources';
 import { withQuantInventory, buildBotPositionView, mixedOperationalLabel, openPairCount, type BotPairPosition } from '@/features/bots/position-view';
 import { projectExecutionStats, projectFills, projectLifecycleDecisions, projectQuantBotSummary, projectQuantCycles, projectQuantExecution, projectRecordedDecisions, type ExecutionStats, type LifecycleDecision, type QuantBotSummary, type QuantCycles } from '@/features/bots/quant-roster';
 import { formatDecimal, formatSigned, metricTone } from '@/features/quant-ops/format';
@@ -293,6 +293,43 @@ function pendingFleetInput(source: TradingVisualsSource, status: string | null):
   return { bot: source.bot, name: displayBotName(source.bot), status, view: null, quant: null, cycles: null, execution: null, health: null };
 }
 
+function performanceFleetState(fleet: OwnerReads[], scopedCount: number): { state: PanelState; summary: string } {
+  if (fleet.length !== scopedCount || scopedCount === 0) return {
+    state: { kind: 'collecting', sample: { have: fleet.length, need: scopedCount || 1 }, reason: 'Bots read' },
+    summary: `${fleet.length} / ${scopedCount} bots read`,
+  };
+  const { live, paper } = splitPaper(fleet);
+  const liveCurrent = live.every(reads => Object.values(botSourceFreshness(reads)).every(Boolean));
+  const paperCurrent = paper.every(reads => reads.status === 'reporting_only'
+    && reads.view !== null && !reads.view.stale
+    && reads.quant?.freshness === 'current' && reads.quant.admitted && reads.quant.executionMode === 'paper');
+  if (!liveCurrent || !paperCurrent) {
+    const issues = [
+      !liveCurrent ? 'Live lifecycle, performance, or quant source stale or not reporting' : null,
+      !paperCurrent ? 'Paper reporting runtime or qualified quant source stale or not reporting; paper native lifecycle unverified' : null,
+    ].filter((issue): issue is string => issue !== null);
+    return { state: { kind: 'stale', reason: issues.join('; ') }, summary: issues.join('; ') };
+  }
+  if (paper.length) return {
+    state: { kind: 'incomplete', reason: 'Live sources and paper reporting observations are current. Paper native controller performance and lifecycle are not available from this source.' },
+    summary: `${live.length ? 'Live lifecycle, performance, and quant sources current; ' : ''}paper reporting runtime and quant current; paper native controller performance and lifecycle unverified`,
+  };
+  return { state: { kind: 'fresh' }, summary: 'Lifecycle, performance, and quant sources current' };
+}
+
+export function BotPerformanceFrame({ fleet, scopedCount, children }: { fleet: OwnerReads[]; scopedCount: number; children: ReactNode }) {
+  const { state } = performanceFleetState(fleet, scopedCount);
+  const paperScope = splitPaper(fleet).paper.length ? ' · live lifecycle and paper reporting freshness assessed separately; paper native controller performance and lifecycle unverified' : '';
+  return <PanelFrame panelId="B29" title="Bot performance" scopeLabel={`One row per registered bot · operations and execution quality${paperScope} · PnL in Capital`} state={state}>{children}</PanelFrame>;
+}
+
+export function BotPnlCell({ reads }: { reads: OwnerReads | undefined }) {
+  if (!reads) return <>—</>;
+  const net = botNet(reads.controller.total);
+  if (net.value == null) return isPaperBot(reads.bot) ? <span title={reads.controller.reason ?? 'Paper simulated runtime PnL unavailable'}>Paper PnL unavailable</span> : <>—</>;
+  return <>{formatSigned(net.value)} {reads.controller.quote ?? ''}{reads.controller.simulated ? ' · paper (simulated)' : ''}</>;
+}
+
 export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPageResponse; renderControls?: (bot: string) => ReactNode; renderLogs: (bot: string) => ReactNode }) {
   const { server } = useServer();
   const servers = useServers();
@@ -337,7 +374,7 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
   const staleOwners = fleet.filter(reads => reads.quant != null && reads.quant.freshness !== 'current').map(reads => ({ name: displayBotName(reads.bot), observedAt: reads.quant!.observedAt ?? null }));
   const rowsState = (count: number, emptyReason: string): PanelState => rowsPanelState(count, emptyReason, staleOwners);
   const events = fleet.flatMap(reads => reads.decisions.map(row => ({ ...row, bot: reads.bot }))).sort((a, b) => b.occurredAt.localeCompare(a.occurredAt)).slice(0, 40);
-  const allFresh = fleet.every(reads => Object.values(botSourceFreshness(reads)).every(Boolean));
+  const performance = performanceFleetState(fleet, scoped.length);
   const botIds = scoped.map(source => source.bot);
   // Live and paper fills are two separate feeds; a paper bot is never a chip of the live one.
   const { live: liveSources, paper: paperSources } = splitPaper(scoped);
@@ -371,7 +408,7 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
     {scoped.length > 0 && !complete && <p className="q-empty" role="status">Reading owner observations: {fleet.length} of {scoped.length} bots read. Tiles cover the bots read so far.</p>}
     <FleetStrip sources={grid ? filtered : []} readsByBot={readsByBot} page={page} now={now} />
     {scoped.length > 0 && <StrategyChartsSlot bots={botIds} server={server ?? null} />}
-    <PanelFrame panelId="B29" title="Bot performance" scopeLabel="One row per registered bot · operations and execution quality · PnL in Capital" state={complete ? (allFresh ? { kind: 'fresh' } : { kind: 'stale', reason: 'Lifecycle, performance, and quant freshness are assessed independently; at least one source is stale.' }) : { kind: 'collecting', sample: { have: fleet.length, need: scoped.length || 1 }, reason: 'Bots read' }}>
+    <BotPerformanceFrame fleet={fleet} scopedCount={scoped.length}>
       <DataTable label="Bot performance" rowId={source => `${source.server}:${source.bot}`} rows={filtered} initialSort={{ id: 'bot', desc: false }} exportName="bot-performance.csv" emptyText="No registered bot matches the filter."
         columns={[
           { id: 'bot', header: 'Bot', rowHeader: true, value: source => displayBotName(source.bot), size: 150 },
@@ -387,10 +424,10 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
           { id: 'fees', header: 'Fees', kind: 'number', value: source => statsFor(source)?.fees ?? null, cell: source => { const stats = statsFor(source); return stats?.fees == null ? '—' : `${formatDecimal(stats.fees, 4)}${stats.volume ? ` · ${((stats.fees / stats.volume) * 10_000).toFixed(1)} bps` : ''}`; }, size: 130 },
           { id: 'latency', header: 'Decision→recorded (s)', kind: 'number', value: source => readsByBot[`${source.server}:${source.bot}`]?.execution?.latencyMedianSeconds ?? null, cell: source => { const value = readsByBot[`${source.server}:${source.bot}`]?.execution?.latencyMedianSeconds; return value == null ? '—' : `${value.toFixed(1)}s`; }, title: () => 'Decision→recorded fill includes owner observation delay; it is not exchange execution latency.', size: 150 },
           { id: 'heartbeat', header: 'Last report', kind: 'number', value: source => { const age = statsFor(source)?.heartbeatAgeSeconds; return age == null ? null : Math.round(age); }, cell: source => { const age = statsFor(source)?.heartbeatAgeSeconds; return age == null ? '—' : `${durationLabel(age)} ago`; }, size: 100 },
-          { id: 'pnl', header: 'PnL (Capital has detail)', kind: 'number', value: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return reads ? netFor(reads).value : null; }, cell: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return !reads || netFor(reads).value == null ? '—' : `${formatSigned(netFor(reads).value)} ${reads.controller.quote ?? ''}${reads.controller.simulated ? ' · paper (simulated)' : ''}`; }, className: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; const toneName = metricTone(reads ? netFor(reads).value : null); return toneName ? `q-${toneName}` : undefined; }, size: 150 },
+          { id: 'pnl', header: 'PnL (Capital has detail)', kind: 'number', value: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return reads ? netFor(reads).value : null; }, cell: source => <BotPnlCell reads={readsByBot[`${source.server}:${source.bot}`]} />, className: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; const toneName = metricTone(reads ? netFor(reads).value : null); return toneName ? `q-${toneName}` : undefined; }, size: 150 },
         ]} />
       <p className="q-empty">Decision→recorded fill includes owner observation delay. Attested exchange execution times are shown separately in Fleet fills.</p>
-    </PanelFrame>
+    </BotPerformanceFrame>
     {liveBotIds.length > 0 && server && <FleetFillsPanel server={server} bots={liveBotIds} />}
     {paperBotIds.length > 0 && server && <FleetFillsPanel server={server} bots={paperBotIds} scope="paper" />}
     {draft && <BotDraftWizard bots={scoped.map(item => item.bot)} onClose={() => setDraft(false)} />}
@@ -466,6 +503,6 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
           { id: 'reasons', header: 'Reasons', value: row => row.reasonCodes.join(', ') || '—', size: 200, wrap: true },
         ]} />
     </PanelFrame>
-    <footer className="q-footer" data-panel-id="S06"><span className="q-footer-state" data-state={complete ? (fleet.every(reads => Object.values(botSourceFreshness(reads)).every(Boolean)) ? 'fresh' : 'stale') : 'collecting'}>{complete ? (fleet.every(reads => Object.values(botSourceFreshness(reads)).every(Boolean)) ? 'Lifecycle, performance, and quant sources current' : 'Lifecycle, performance, or quant source stale or not reporting') : `${fleet.length} / ${scoped.length} bots read`}</span><span>{server ?? 'Server not selected'} · UTC</span><span><Link to="/capital">Open Capital</Link></span></footer>
+    <footer className="q-footer" data-panel-id="S06"><span className="q-footer-state" data-state={performance.state.kind}>{performance.summary}</span><span>{server ?? 'Server not selected'} · UTC</span><span><Link to="/capital">Open Capital</Link></span></footer>
   </div>;
 }

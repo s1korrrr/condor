@@ -6,7 +6,7 @@ import {createRequire} from 'node:module';
 import {frontendModules} from './helpers/frontend-module.mjs';
 const {QueryClient,QueryClientProvider}=createRequire(import.meta.url)('@tanstack/react-query');
 const {load}=frontendModules({'react-router-dom':{Link:({to,children,...rest})=>React.createElement('a',{href:to,...rest},children),useSearchParams:()=>[new URLSearchParams()],useLocation:()=>({hash:''})},'@/hooks/useServer':{useServer:()=>({server:'native'})}});
-const {RosterObservation,BotsRoster}=load('components/bots/BotsRoster.tsx');
+const {RosterObservation,BotsRoster,BotPerformanceFrame,BotPnlCell}=load('components/bots/BotsRoster.tsx');
 const {botSourceFreshness,quoteUnavailableReason,historyComparison}=load('features/bots/bot-net.ts');
 const now=Date.parse('2026-09-15T10:00:00Z');
 function snapshot(){return {runtime_status:{bot_name:'rsi_modular_v2',updated_at:new Date(now-1000).toISOString(),controllers:[{controller_id:'eth',pair:'ETH-USDC',price_quote:2500,state:'HOLDING',custom_info:{episode:{enabled:true,base:'0.04',cost:'99',cost_known:true},trailing_policy:{floor:2490,peak:2520}}},{controller_id:'btc',pair:'BTC-USDC',price_quote:70000,state:'FLAT',custom_info:{}}],positions_held:[],active_executors:[],active_orders:[],active_orders_status:{complete:true}},monitoring:{bot_name:'rsi_modular_v2',stale_threshold_seconds:30}};}
@@ -90,6 +90,31 @@ test('fresh quant data cannot make unavailable lifecycle or performance look fre
  assert.deepEqual(botSourceFreshness({...base,controller:{reason:'expired',total:null,observedAt:null}}),{lifecycle:true,performance:false,quant:true});
  assert.deepEqual(botSourceFreshness({...base,controller:{reason:'No current controllers reported.',total:null,observedAt:now}}),{lifecycle:true,performance:true,quant:true});
  assert.deepEqual(botSourceFreshness({...base,quant:null}),{lifecycle:true,performance:true,quant:false});
+});
+
+test('bot performance frame distinguishes current paper reporting from verified live lifecycle',()=>{
+ const live=bot=>({bot,status:'running',controller:{reason:null,observedAt:now,total:12},quant:{freshness:'current'}});
+ // The actual native_paper_reporting adapter has reporting_only status, no native performance timestamp or controller rows.
+ const paper=bot=>({bot,status:'reporting_only',view:{stale:false},controller:{reason:'Waiting for the paper runtime observation.',observedAt:null,total:null,simulated:true},quant:{freshness:'current',admitted:true,executionMode:'paper'}});
+ const fleet=[live('ok_rsi'),live('rsi_modular_v2'),live('meridian_v3'),paper('meridian_v4_paper'),paper('meridian_v4_d2h_paper')];
+ const render=rows=>renderToStaticMarkup(React.createElement(BotPerformanceFrame,{fleet:rows,scopedCount:5},React.createElement('p',null,'Observed performance')));
+ const current=render(fleet);
+ assert.match(current,/<section[^>]*data-panel-id="B29"[^>]*data-state="incomplete"/);
+ assert.match(current,/paper reporting/);
+ assert.match(current,/paper native controller performance and lifecycle unverified/);
+ assert.match(current,/paper native controller performance/);
+ assert.match(renderToStaticMarkup(React.createElement(BotPnlCell,{reads:fleet[4]})),/Paper PnL unavailable/);
+ assert.match(renderToStaticMarkup(React.createElement(BotPnlCell,{reads:{...fleet[4],controller:{reason:null,observedAt:now,total:11,quote:'USDT',simulated:true}}})),/11.*USDT.*paper \(simulated\)/);
+ assert.match(render([fleet[0],{...fleet[1],status:'stale'},...fleet.slice(2)]),/<section[^>]*data-panel-id="B29"[^>]*data-state="stale"/);
+ assert.match(render([...fleet.slice(0,4),{...fleet[4],quant:{freshness:'stale'}}]),/<section[^>]*data-panel-id="B29"[^>]*data-state="stale"/);
+ assert.match(render([...fleet.slice(0,4),{...fleet[4],view:{stale:true}}]),/<section[^>]*data-panel-id="B29"[^>]*data-state="stale"/);
+ assert.match(render([...fleet.slice(0,4),{...fleet[4],quant:{freshness:'current',admitted:false,executionMode:'paper'}}]),/<section[^>]*data-panel-id="B29"[^>]*data-state="stale"/);
+ assert.match(render([...fleet.slice(0,4),{...fleet[4],status:'running'}]),/<section[^>]*data-panel-id="B29"[^>]*data-state="stale"/,'paper cannot acquire verified lifecycle from a live status');
+ const bothStale=render([{...fleet[0],status:'stale'},...fleet.slice(1,4),{...fleet[4],quant:{freshness:'stale'}}]);
+ assert.match(bothStale,/Live lifecycle, performance, or quant source stale/);
+ assert.match(bothStale,/Paper reporting runtime or qualified quant source stale/);
+ assert.match(render(fleet.slice(0,4)),/<section[^>]*data-panel-id="B29"[^>]*data-state="collecting"/);
+ assert.match(render(fleet.slice(0,3)),/<section[^>]*data-panel-id="B29"[^>]*data-state="collecting"/);
 });
 
 test('missing quote evidence and conflicting quote currencies have distinct reasons',()=>{

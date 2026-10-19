@@ -45,6 +45,7 @@ from condor.web.routes import (
     servers,
     sessions,
     settings,
+    tradepad,
     trading_visuals,
     transcribe,
     ws,
@@ -157,6 +158,10 @@ def create_app() -> FastAPI:
     app.include_router(transcribe.router, prefix="/api/v1")
     app.include_router(trading_visuals.router, prefix="/api/v1")
     app.include_router(push.router, prefix="/api/v1")
+    app.include_router(tradepad.router, prefix="/api/v1")
+    # The hosted Tradepad viewer page; registered before the SPA fallback below so
+    # ``/tradepad`` is never answered with the dashboard shell.
+    app.include_router(tradepad.page_router)
 
     # Report bodies are NOT mounted here. They used to be served by an
     # unauthenticated ``/reports/{filename:path}`` route, which made every

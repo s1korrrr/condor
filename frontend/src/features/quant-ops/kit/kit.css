@@ -96,6 +96,14 @@
 .q-dt tbody tr:hover > * { background: color-mix(in srgb, var(--q-blue, var(--color-primary, #259aff)) 7%, transparent); }
 .q-dt tbody tr[data-state=highlight] > * { background: color-mix(in srgb, var(--q-blue, var(--color-primary, #259aff)) 14%, transparent); }
 .q-dt tbody tr[data-state=stale] > * { opacity: .72; }
+/* Rows without full evidence (for example metrics-only backtests) stay readable but recede. */
+.q-dt tbody tr[data-state=muted] > * { opacity: .58; }
+.q-dt tbody tr[data-selected=true] > * { background: color-mix(in srgb, var(--q-blue, var(--color-primary, #259aff)) 12%, transparent); }
+.q-dt tbody tr[data-selected=true] > :first-child { box-shadow: inset 2px 0 0 var(--q-blue, var(--color-primary, #259aff)); }
+.q-dt :is(th, td).q-dt__select { width: 36px; padding: 0; text-align: center; vertical-align: middle; }
+.q-dt .q-dt__select input { width: 15px; height: 15px; margin: 0; cursor: pointer; accent-color: var(--q-blue, var(--color-primary, #259aff)); }
+.q-dt .q-dt__select input:disabled { cursor: not-allowed; }
+.q-dt thead th.q-dt__select { vertical-align: middle; height: 31px; }
 .q-dt tbody tr:last-child > * { border-bottom: 0; }
 .q-dt .q-dt__sort { all: unset; box-sizing: border-box; display: flex; width: 100%; gap: 6px; align-items: center; justify-content: space-between; padding: 7px 10px 7px 8px; cursor: pointer; color: var(--q-muted, var(--color-text-muted, #a4bacb)); font-size: 11px; font-weight: 500; }
 .q-dt [data-kind=number] .q-dt__sort { flex-direction: row-reverse; }

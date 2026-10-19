@@ -11,6 +11,7 @@ import {
   Wallet,
   Zap,
   ChartNoAxesCombined,
+  ChartCandlestick,
   Network,
   ScanSearch,
 } from "lucide-react";
@@ -34,6 +35,8 @@ const NAV_ITEMS = [
   { to: "/operations", icon: Activity, label: "Operations" },
   { to: "/capital", icon: ChartNoAxesCombined, label: "Capital" },
   { to: "/research", icon: Network, label: "Research" },
+  // Backtest catalog and viewer; `/tradepad` itself is the backend-served viewer page.
+  { to: "/backtests", icon: ChartCandlestick, label: "Tradepad" },
   { to: "/", icon: Brain, label: "Agents" },
   { to: "/screener", icon: ScanSearch, label: "Market Picture" },
   { to: "/portfolio", icon: Wallet, label: "Portfolio" },
@@ -73,9 +76,9 @@ function AppShellBody() {
   const MARKET_ITEM = { to: "/", icon: ScanSearch, label: "Market" } as const;
   const nativeItems = [
     ...(access.marketScreener || access.marketPicture ? [MARKET_ITEM] : []),
-    ...['/capital', '/bots', '/operations', '/research'].map(to => NAV_ITEMS.find(item => item.to === to)!),
+    ...['/capital', '/bots', '/operations', '/research', '/backtests'].map(to => NAV_ITEMS.find(item => item.to === to)!),
   ];
-  const independentRoutes=['/capital','/operations','/research'];
+  const independentRoutes=['/capital','/operations','/research','/backtests'];
   const navigationItems=readContinuity ? nativeItems : !access.online ? NAV_ITEMS.filter(item=>independentRoutes.includes(item.to))
     : access.native ? nativeItems : NAV_ITEMS;
 
@@ -105,7 +108,7 @@ function AppShellBody() {
   // The chat is the landing page and needs no exchange keys, so the blocking
   // overlay would otherwise be the first thing every unconfigured user hits —
   // on the one surface that can talk them through connecting.
-  const exemptRoutes = ["/operations", "/routines", "/settings", "/trading-visuals", "/capital", "/overview", "/research", "/tools"];
+  const exemptRoutes = ["/operations", "/routines", "/settings", "/trading-visuals", "/capital", "/overview", "/research", "/backtests", "/tools"];
   const showKeysOverlay =
     server && !access.native && access.accounts && !capabilityReason && !keysLoading && !hasKeys && !isChatWorkspace &&
     !exemptRoutes.some((r) => pathname.startsWith(r));
@@ -123,8 +126,9 @@ function AppShellBody() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [navigate, access.online, access.full]);
 
-  // Prefetch core data (executors, bots) and subscribe to WS channels early
-  usePrefetchData(!matchPath("/research", pathname));
+  // Prefetch core data (executors, bots) and subscribe to WS channels early.
+  // Research and the backtest catalog read no trading data, so they skip it.
+  usePrefetchData(!matchPath("/research", pathname) && !matchPath("/backtests", pathname));
 
   return (
     <div className={`condor-shell flex h-dvh flex-col ${access.native?'condor-native':''}`}>

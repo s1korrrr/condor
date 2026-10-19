@@ -115,11 +115,15 @@ test('controlled row checkboxes call selection while CSV still exports every fil
   }));
 
   const checkboxes = [...walk(tree)].filter(node => node.type === 'input' && node.props.type === 'checkbox');
-  assert.equal(checkboxes.length, 4);
+  assert.equal(checkboxes.length, 5, 'the filtered view has one header checkbox and four row checkboxes');
   assert.equal(selected.has('w-missing'), true, 'a row hidden by a native filter remains selected in caller state');
-  checkboxes.find(node => node.props['aria-label'] === 'Select wallet: w-high').props.onChange({ currentTarget: { checked: true } });
+  checkboxes.find(node => node.props['aria-label'] === 'Select wallet: w-high').props.onChange({ target: { checked: true } });
   assert.deepEqual(selectedCalls, [[['w-high'], true]]);
   assert.equal(selected.has('w-missing'), true, 'toggling a visible row does not clear hidden selections');
+  checkboxes.find(node => node.type === 'input' && node.props['aria-label'] === 'Select all 4 rows')
+    .props.onChange();
+  assert.deepEqual(selectedCalls[1], [['w-high', 'w-low', 'c-high', 'd-high'], true],
+    'the header control selects the complete filtered result, including rows beyond the page');
 
   const previousDocument = globalThis.document;
   const previousURL = globalThis.URL;

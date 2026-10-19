@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import React from 'react';
+import * as jsxRuntime from 'react/jsx-runtime';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {frontendModules} from './helpers/frontend-module.mjs';
 
@@ -83,6 +84,34 @@ test('a pinned row leads every sort and is never hidden behind Show all',()=>{
   assert.deepEqual(order,['r0','r14','r13','r12','r11'],'the smallest value is pinned first, the rest follow the sort');
   assert.match(html,/Show all 15 rows/);
   assert.match(html,/role="separator" tabindex="0"/,'column resize is keyboard reachable');
+});
+
+test('a grouped column sorts inside each group and never flips the group order',()=>{
+  const rows=[{id:'a',group:1,value:5},{id:'b',group:0,value:1},{id:'c',group:1,value:9},{id:'d',group:0,value:7},{id:'e',group:0,value:null}];
+  const columns=[{id:'id',header:'Id',rowHeader:true,value:row=>row.id},{id:'value',header:'Value',kind:'number',value:row=>row.value,sortGroup:row=>row.group}];
+  const order=desc=>[...renderToStaticMarkup(React.createElement(DataTable,{label:'T',rows,columns,rowId:row=>row.id,initialSort:{id:'value',desc}})).matchAll(/<th scope="row"[^>]*>(\w)</g)].map(match=>match[1]);
+  assert.deepEqual(order(true),['d','b','c','a','e'],'descending: group 0 first, larger values first, missing values last');
+  assert.deepEqual(order(false),['b','d','a','c','e'],'ascending keeps group 0 first');
+});
+
+test('selection adds a checkbox column whose header covers every filtered row',()=>{
+  const inputs=[];
+  const capture=name=>(type,props,...rest)=>{if(type==='input'&&props.type==='checkbox')inputs.push(props);return jsxRuntime[name](type,props,...rest);};
+  const {DataTable:Table}=frontendModules({'react/jsx-runtime':{...jsxRuntime,jsx:capture('jsx'),jsxs:capture('jsxs')}}).load('features/quant-ops/kit/DataTable.tsx');
+  const calls=[];
+  const rows=['a','b','c'].map(id=>({id}));
+  const html=renderToStaticMarkup(React.createElement(Table,{label:'T',rows,rowId:row=>row.id,searchable:false,columns:[{id:'id',header:'Id',value:row=>row.id}],
+    selection:{selected:new Set(['b','gone']),onSelect:(ids,selected)=>calls.push([ids,selected]),label:row=>`row ${row.id}`}}));
+  assert.ok(!html.includes('q-dt__search'),'a page with its own search hides the table search');
+  assert.match(html,/data-mixed="true" aria-label="Select all 3 rows"/);
+  assert.match(html,/<tr data-selected="true"><td class="q-dt__select"><input type="checkbox" aria-label="Select row b" checked=""\/>/);
+  assert.equal([...html.matchAll(/type="checkbox"/g)].length,4);
+  inputs[0].onChange();
+  inputs[1].onChange({target:{checked:true}});
+  assert.deepEqual(calls,[[['a','b','c'],true],[['a'],true]]);
+  const empty=renderToStaticMarkup(React.createElement(DataTable,{label:'T',rows:[],rowId:row=>row.id,columns:[{id:'id',header:'Id',value:row=>row.id}],selection:{selected:new Set(),onSelect(){}}}));
+  assert.match(empty,/colSpan="2"|colspan="2"/,'the empty row spans the selection column too');
+  assert.match(empty,/disabled=""/);
 });
 
 test('charts with an unsupported value range say so instead of handing Recharts an unusable axis',()=>{

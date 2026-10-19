@@ -127,7 +127,7 @@ function parseItem(raw: unknown, generatedAtMs: number): FleetFillItem {
   const attested = raw.execution_timestamp_source === 'okx.fillTime' && raw.connector === 'okx'
     && raw.simulated !== true && raw.paper !== true && integer(executionTime)
     && executionTime > 0 && executionTime <= 253402300799999 && integer(raw.time_ms)
-    && raw.time_ms >= 0 && raw.time_ms <= 253402300799999
+    && raw.time_ms > 0 && raw.time_ms <= 253402300799999
     && executionTime <= raw.time_ms + 5000 && executionTime <= generatedAtMs + 5000;
   return {
     id, bot: raw.bot, display_name: text(raw.display_name) && raw.display_name ? raw.display_name : raw.bot, generation: generation(raw.generation),

@@ -66,6 +66,22 @@ def test_clock_admission_checks_owner_recorded_clock_and_response_clock():
         assert fill["execution_timestamp_ms"] is None
 
 
+@pytest.mark.parametrize("timestamp,recorded,expected", [
+    ("1970-01-01T00:00:00Z", 0, None),
+    ("1970-01-01T00:00:00.001Z", 1, 1),
+])
+def test_attestation_requires_positive_recorded_time_and_preserves_financial_receipt(
+    timestamp, recorded, expected
+):
+    for fill in projections(row(timestamp=timestamp, execution_timestamp_ms=1)):
+        assert fill["time_ms"] == recorded
+        assert fill["execution_timestamp_ms"] == expected
+        assert fill["execution_timestamp_source"] == ("okx.fillTime" if expected else None)
+        assert (fill["amount"], fill["price"], fill["volume"], fill["fee"]) == (
+            "1", "100", "100", "0.1",
+        )
+
+
 def test_legacy_reader_keeps_missing_execution_clock_unknown():
     legacy = row()
     legacy.pop("execution_timestamp_ms")

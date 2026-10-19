@@ -28,6 +28,21 @@ test('execution time is additive and cannot change the recorded clock or money',
   }
 });
 
+test('execution attestation requires positive recorded time and preserves the receipt', () => {
+  for (const recorded of [0, 1]) {
+    const body = example('page_first');
+    const raw = body.items[0];
+    Object.assign(raw, { time_ms: recorded, execution_timestamp_ms: 1, execution_timestamp_source: 'okx.fillTime' });
+    const row = client.parseFleetFills(body).items[0];
+    assert.equal(row.time_ms, recorded);
+    assert.equal(row.execution_timestamp_ms, recorded === 0 ? null : 1);
+    assert.equal(row.execution_timestamp_source, recorded === 0 ? null : 'okx.fillTime');
+    assert.equal(row.amount, raw.amount);
+    assert.equal(row.price, raw.price);
+    assert.equal(row.id, raw.id);
+  }
+});
+
 test('the server\'s documented example pages satisfy the typed client', () => {
   const first = client.parseFleetFills(example('page_first'));
   assert.equal(first.schema_version, 'fleet-fills.v1');

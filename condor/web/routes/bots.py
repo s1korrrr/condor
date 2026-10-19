@@ -265,12 +265,9 @@ async def list_bots(name: str, user: WebUser = Depends(get_current_user)):
     if not cm.has_server_access(user.id, name):
         raise HTTPException(status_code=403, detail="No access")
 
-    from condor.server_data_service import ServerDataType, get_server_data_service
-
     try:
-        result = await get_server_data_service().get_or_fetch(
-            name, ServerDataType.BOTS_STATUS
-        )
+        client = await cm.get_client(name)
+        result = await client.bot_orchestration.get_active_bots_status()
     except Exception as e:
         logger.warning("Failed to fetch bots from '%s': %s", name, e)
         return BotsPageResponse(
@@ -284,14 +281,19 @@ async def list_bots(name: str, user: WebUser = Depends(get_current_user)):
             error_hint="Unable to reach server",
         )
 
-    # Get client for enrichment calls
-    try:
-        client = await cm.get_client(name)
-    except Exception:
-        client = None
-
     bots_list = extract_bots_list(result)
     logger.info("Server '%s': found %d bot(s)", name, len(bots_list))
+
+    # Native owner packets already carry controller identity, live economics,
+    # and observation times. Optional full-API config/run/DB reads must not
+    # hold their current status past the frontend's freshness deadline.
+    if bots_list and all(
+        bot.get("source") in {"native_mqtt", "native_paper_reporting"}
+        for bot in bots_list
+    ):
+        page = build_bots_page(result)
+        overlay_stopping_state(name, page["controllers"], page["bots"])
+        return BotsPageResponse(**page)
 
     # Pre-fetch controller configs, bot runs, AND latest controller performance concurrently
     unavailable_configs = {

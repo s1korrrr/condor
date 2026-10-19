@@ -266,12 +266,18 @@ def test_research_native_busy_retries_are_finite_and_sanitized(monkeypatch):
     assert calls == 3
 
 
-def test_research_native_busy_keeps_whole_request_deadline(monkeypatch):
+@pytest.mark.parametrize(
+    "endpoint,deadline_name",
+    [("nodes", "READ_DEADLINE_SECONDS"), ("network", "LONG_READ_DEADLINE_SECONDS")],
+)
+def test_research_native_busy_keeps_whole_request_deadline(
+    monkeypatch, endpoint, deadline_name
+):
     from condor import research_read
 
-    monkeypatch.setattr(research_read, "READ_DEADLINE_SECONDS", 0.05)
+    monkeypatch.setattr(research_read, deadline_name, 0.05)
     result = client(monkeypatch, handler=lambda req: _native_busy_response()).get(
-        "/api/v1/research/nodes?server=native-ok-rsi"
+        f"/api/v1/research/{endpoint}?server=native-ok-rsi"
     )
     assert result.status_code == 504
 

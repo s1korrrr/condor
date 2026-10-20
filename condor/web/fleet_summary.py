@@ -79,6 +79,7 @@ PARTIAL_COVERAGE = "PARTIAL_COVERAGE"
 FIELDS_MISSING = "FIELDS_MISSING"
 GLANCE_MAX_BOTS = 16
 GLANCE_MAX_MISSING = 16
+INCIDENT_DETAIL_LIMIT = 20
 
 @dataclass
 class OwnerRead:
@@ -562,6 +563,38 @@ def project_incidents(payload: Any, now_ms: float) -> Optional[dict]:
     )
     open_rows = [r for r in rows if r["state"] == "open"]
     critical = sum(1 for r in open_rows if r["severity"] == "critical")
+    detail_rows: list[dict] = []
+    incomplete_detail = False
+    seen_ids: set[str] = set()
+    for row in rows:
+        item, valid, clipped = _project_incident_item(row, now_ms)
+        if not valid or item is None or item["id"] in seen_ids:
+            incomplete_detail = True
+            continue
+        incomplete_detail = incomplete_detail or clipped
+        seen_ids.add(item["id"])
+        detail_rows.append(item)
+
+    def detail_order(item: dict) -> tuple[int, int, int, str]:
+        is_open = item["state"] == "open"
+        if is_open:
+            latest = item["last_seen_at_ms"]
+            if latest is None:
+                latest = item["first_seen_at_ms"]
+        else:
+            latest = item["resolved_at_ms"]
+            if latest is None:
+                latest = item["last_seen_at_ms"]
+        return (
+            0 if is_open else 1,
+            0 if is_open and item["severity"] == "critical" else 1,
+            -(latest or 0),
+            item["id"],
+        )
+
+    detail_rows.sort(key=detail_order)
+    items_truncated = incomplete_detail or len(detail_rows) > INCIDENT_DETAIL_LIMIT
+    detail_rows = detail_rows[:INCIDENT_DETAIL_LIMIT]
     if not fresh:
         state = "unknown"
     elif critical:
@@ -582,7 +615,82 @@ def project_incidents(payload: Any, now_ms: float) -> Optional[dict]:
         ),
         "generated_at_ms": generated,
         "observed_at_ms": generated,
+        "items": detail_rows,
+        "items_truncated": items_truncated,
     }
+
+
+def _incident_text(value: Any, limit: int) -> tuple[Optional[str], bool, bool]:
+    """Return bounded printable owner text, validity, and whether it was clipped."""
+    if value is None:
+        return None, True, False
+    if not isinstance(value, str):
+        return None, False, False
+    cleaned = " ".join(
+        "".join(char if char.isprintable() else " " for char in value).split()
+    )
+    if not cleaned:
+        return None, True, False
+    if len(cleaned) > limit:
+        return cleaned[: limit - 1].rstrip() + "…", True, True
+    return cleaned, True, False
+
+
+def _project_incident_item(
+    row: dict, now_ms: float
+) -> tuple[Optional[dict], bool, bool]:
+    """Bound one detail row; counts remain authoritative even when details are partial."""
+    incident_id, id_valid, id_clipped = _incident_text(row.get("id"), 120)
+    if (
+        incident_id is None
+        or not id_valid
+        or id_clipped
+        or incident_id != row.get("id")
+    ):
+        return None, False, False
+    fields: dict[str, Optional[str]] = {}
+    clipped = False
+    for name, limit in (
+        ("service", 40),
+        ("code", 80),
+        ("title", 120),
+        ("detail", 300),
+    ):
+        fields[name], valid, field_clipped = _incident_text(row.get(name), limit)
+        if not valid:
+            return None, False, False
+        clipped = clipped or field_clipped
+    times: dict[str, Optional[int]] = {}
+    for source, target in (
+        ("first_seen_at", "first_seen_at_ms"),
+        ("last_seen_at", "last_seen_at_ms"),
+        ("resolved_at", "resolved_at_ms"),
+    ):
+        raw = row.get(source)
+        if raw is None:
+            times[target] = None
+        else:
+            parsed = _instant_ms(raw, now_ms)
+            if parsed is None:
+                return None, False, False
+            times[target] = parsed
+    first = times["first_seen_at_ms"]
+    last = times["last_seen_at_ms"]
+    resolved = times["resolved_at_ms"]
+    if (
+        (first is not None and last is not None and last < first)
+        or (first is not None and resolved is not None and resolved < first)
+        or (last is not None and resolved is not None and resolved < last)
+        or (row["state"] == "open" and resolved is not None)
+    ):
+        return None, False, False
+    return {
+        "id": incident_id,
+        **fields,
+        "severity": row["severity"],
+        "state": row["state"],
+        **times,
+    }, True, clipped
 
 
 # ── assembly ──
@@ -614,9 +722,26 @@ def _wallet_section(
     encoded = fleet_pnl.decimal_text(value)
     assets = current.get("unpriced_assets")
     complete = current.get("valuation_complete")
+    unit = payload.get("quote_currency")
+    basis = payload.get("valuation_basis")
+    usdt_holdings = current.get("holdings")
+    legacy_usdt_policy_valid = (
+        unit == "USDT"
+        and basis is None
+        and current.get("dust_threshold_usd") is None
+        and not current.get("excluded_dust_assets")
+        and isinstance(usdt_holdings, list)
+        and not any(
+            _obj(row).get("excluded_from_valuation") is True
+            for row in usdt_holdings
+        )
+    )
+    usdc_policy_valid = False
+    if unit == "USDC":
+        usdc_policy_valid = _usdc_materiality_valid(payload, current)
     valid = (
         payload.get("schema_version") == 1
-        and payload.get("quote_currency") == "USDT"
+        and (legacy_usdt_policy_valid or unit == "USDC" and usdc_policy_valid)
         and payload.get("capture_mode") == "observation-driven"
         and scope.get("account") == "master_account"
         and scope.get("connector") == "okx"
@@ -642,7 +767,7 @@ def _wallet_section(
     stale = now_ms - observed > STALE_AFTER_MS["wallet"]
     wallet = {
         "equity": encoded,
-        "unit": "USDT",
+        "unit": unit,
         "observed_at_ms": observed,
         "source_bot": None,
         "source": "native_account_portfolio",
@@ -652,6 +777,19 @@ def _wallet_section(
         "unpriced_count": len(assets),
         "stale": stale,
     }
+    if unit == "USDC":
+        wallet.update(
+            {
+                "valuation_basis": basis,
+                "dust_threshold_usd": fleet_pnl.decimal_text(
+                    _dec(current["dust_threshold_usd"])
+                ),
+                "excluded_dust_assets": current["excluded_dust_assets"][
+                    :GLANCE_MAX_BOTS
+                ],
+                "excluded_dust_count": len(current["excluded_dust_assets"]),
+            }
+        )
     reason = PARTIAL_COVERAGE if not complete else OWNER_NOT_CURRENT if stale else None
     if not complete:
         missing.append({"section": "wallet", "reason": PARTIAL_COVERAGE})
@@ -660,6 +798,85 @@ def _wallet_section(
         observed,
         STALE_AFTER_MS["wallet"],
         reason,
+    )
+
+
+def _usdc_materiality_valid(payload: dict, current: dict) -> bool:
+    """Require owner evidence that USDC valuation excludes only verified sub-dollar assets."""
+    threshold = _dec(current.get("dust_threshold_usd"))
+    excluded_raw = current.get("excluded_dust_assets")
+    unpriced_raw = current.get("unpriced_assets")
+    holdings = current.get("holdings")
+    if (
+        payload.get("valuation_basis") != "native_account_usdc_material_v1"
+        or threshold != Decimal("1")
+        or not isinstance(excluded_raw, list)
+        or len(excluded_raw) > 10_000
+        or not isinstance(unpriced_raw, list)
+        or len(unpriced_raw) > 10_000
+        or not isinstance(holdings, list)
+        or len(holdings) > 10_000
+    ):
+        return False
+    if not all(
+        isinstance(token, str) and 0 < len(token) <= 80
+        for token in excluded_raw + unpriced_raw
+    ):
+        return False
+    if len(set(excluded_raw)) != len(excluded_raw) or len(set(unpriced_raw)) != len(unpriced_raw):
+        return False
+    if type(current.get("valuation_complete")) is not bool:
+        return False
+    if current["valuation_complete"] != (len(unpriced_raw) == 0):
+        return False
+
+    seen: set[str] = set()
+    excluded: set[str] = set()
+    expected_unpriced: set[str] = set()
+    for row in holdings:
+        if not isinstance(row, dict):
+            return False
+        token = row.get("token")
+        if not isinstance(token, str) or not 0 < len(token) <= 80 or token in seen:
+            return False
+        seen.add(token)
+        if row.get("quote_currency") != "USDC":
+            return False
+        total = _nonneg_dec(row.get("total"))
+        value = _nonneg_dec(row.get("value")) if row.get("value") is not None else None
+        price = _nonneg_dec(row.get("price")) if row.get("price") is not None else None
+        usd = _nonneg_dec(row.get("usd_equivalent")) if row.get("usd_equivalent") is not None else None
+        source = row.get("usd_equivalent_source")
+        marked = row.get("excluded_from_valuation")
+        if (
+            total is None
+            or (row.get("value") is not None and value is None)
+            or (row.get("price") is not None and price is None)
+            or (row.get("usd_equivalent") is not None and usd is None)
+            or (total == 0 and usd is not None and usd != 0)
+            or source not in (None, "okx_account_balance_eqUsd")
+            or (source is not None and usd is None)
+            or type(marked) is not bool
+        ):
+            return False
+        verified_usd = usd is not None and source == "okx_account_balance_eqUsd"
+        if verified_usd and usd < threshold and marked is not True:
+            return False
+        if marked:
+            if (
+                not verified_usd
+                or usd >= threshold
+                or row.get("price") is not None
+                or row.get("value") is not None
+            ):
+                return False
+            excluded.add(token)
+        elif total > 0 and (price is None or value is None):
+            expected_unpriced.add(token)
+    return (
+        excluded == set(excluded_raw)
+        and expected_unpriced == set(unpriced_raw)
+        and not excluded.intersection(unpriced_raw)
     )
 
 

@@ -509,7 +509,46 @@
   "warning": 1,
   "monitor": "healthy",
   "generated_at_ms": 1800000025000,
-  "observed_at_ms": 1800000025000
+  "observed_at_ms": 1800000025000,
+  "items": [
+   {
+    "id": "1",
+    "service": null,
+    "code": null,
+    "title": null,
+    "detail": null,
+    "severity": "critical",
+    "state": "open",
+    "first_seen_at_ms": null,
+    "last_seen_at_ms": null,
+    "resolved_at_ms": null
+   },
+   {
+    "id": "2",
+    "service": null,
+    "code": null,
+    "title": null,
+    "detail": null,
+    "severity": "warning",
+    "state": "open",
+    "first_seen_at_ms": null,
+    "last_seen_at_ms": null,
+    "resolved_at_ms": null
+   },
+   {
+    "id": "3",
+    "service": null,
+    "code": null,
+    "title": null,
+    "detail": null,
+    "severity": "warning",
+    "state": "resolved",
+    "first_seen_at_ms": null,
+    "last_seen_at_ms": null,
+    "resolved_at_ms": null
+   }
+  ],
+  "items_truncated": false
  },
  "paper_fills": [
   {

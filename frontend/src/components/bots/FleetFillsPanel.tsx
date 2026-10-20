@@ -42,7 +42,7 @@ export function FleetFillsView({ view, filters, botOptions, pairDraft, onToggleB
     {view.notices.map(notice => <p key={notice} className="q-notice" role="status">{notice}</p>)}
     {view.missing
       ? <p className="q-empty" role="status" data-fleet-fills="unavailable">{view.emptyText}</p>
-      : <DataTable<FleetFillItem> label={paper ? 'Paper fills' : 'Fleet fills'} rowId={row => row.id} rows={view.rows} columns={fleetFillColumns} initialSort={{ id: 'time', desc: true }} pageSize={Number.MAX_SAFE_INTEGER} maxHeight={440} dense exportName={paper ? 'paper-fills.csv' : 'fleet-fills.csv'} emptyText={view.emptyText} />}
+      : <DataTable<FleetFillItem> label={paper ? 'Paper fills' : 'Fleet fills'} rowId={row => row.id} rows={view.rows} columns={fleetFillColumns} initialSort={{ id: 'time', desc: true }} pageSize={Number.MAX_SAFE_INTEGER} maxHeight={440} dense exportName={paper ? 'paper-fills.csv' : 'fleet-fills.csv'} exportMetadata={{ pnl_unit: row => row.realized_pnl === null ? null : row.quote }} emptyText={view.emptyText} />}
     <p className="q-muted q-footnote" role="note">Time and ordering use owner-recorded fills. Exchange execution time is shown separately when attested; historical rows can be unavailable.</p>
     {(view.hasMore || loadingMore) && <div className="q-chip-row"><button type="button" className="q-chip" disabled={loadingMore} onClick={onLoadMore}>{loadingMore ? 'Loading older fills…' : 'Load more fills'}</button></div>}
     {view.footnote && <p className="q-muted q-footnote" role="note">{view.footnote}</p>}

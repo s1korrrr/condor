@@ -1,15 +1,24 @@
 export type PortfolioRange = '1D' | '1W' | '1M' | '3M' | 'ALL';
+export type PortfolioQuoteCurrency = 'USDT' | 'USDC';
+export type PortfolioValuationBasis = 'native_account_usdc_material_v1';
 export interface Holding {
   token: string; total: string; available: string | null; locked: string | null;
-  price: string | null; value: string | null; quote_currency: 'USDT';
+  price: string | null; value: string | null; quote_currency: PortfolioQuoteCurrency;
   valuation_source: string | null; price_observed_at: string | null;
+  usd_equivalent?: string | null; usd_equivalent_source?: 'okx_account_balance_eqUsd' | null;
+  excluded_from_valuation?: boolean;
 }
 export interface HistoryPoint {
   observed_at: string; priced_total: string; valuation_complete: boolean; unpriced_assets: string[];
 }
-export interface CurrentPortfolio extends HistoryPoint { holdings: Holding[] }
+export interface CurrentPortfolio extends HistoryPoint {
+  holdings: Holding[];
+  dust_threshold_usd?: string | null;
+  excluded_dust_assets?: string[] | null;
+}
 export interface PortfolioAnalytics {
-  schema_version: 1; quote_currency: 'USDT';
+  schema_version: 1; quote_currency: PortfolioQuoteCurrency;
+  valuation_basis?: PortfolioValuationBasis | null;
   scope: {account: string; connector: string; market: 'spot'; identity: string} | null;
   capture_mode: 'observation-driven'; current: CurrentPortfolio | null;
   history: {points: HistoryPoint[]; first_observed_at: string | null; range_start: string; range_end: string; truncated: boolean; gaps: {from: string; to: string; seconds: number}[]} | null;
@@ -17,16 +26,31 @@ export interface PortfolioAnalytics {
   performance: {available: false; reason: string};
 }
 const number = (value: string | null) => value === null || value.trim() === '' || !Number.isFinite(Number(value)) ? null : Number(value);
+function qualifiedDust(current: CurrentPortfolio, holding: Holding, valuationBasis?: PortfolioValuationBasis | null, quoteCurrency?: PortfolioQuoteCurrency | null) {
+  if (valuationBasis !== 'native_account_usdc_material_v1'
+    || quoteCurrency !== 'USDC'
+    || holding.quote_currency !== 'USDC'
+    || holding.excluded_from_valuation !== true
+    || holding.usd_equivalent_source !== 'okx_account_balance_eqUsd'
+    || holding.price !== null || holding.value !== null
+    || !Array.isArray(current.excluded_dust_assets)
+    || !current.excluded_dust_assets.includes(holding.token)) return false;
+  const threshold = number(current.dust_threshold_usd ?? null);
+  const usd = number(holding.usd_equivalent ?? null);
+  const total = Number(holding.total);
+  return threshold === 1 && total >= 0 && Number.isFinite(total) && (total !== 0 || usd === 0)
+    && usd !== null && usd >= 0 && usd < 1;
+}
 /** `maxAgeMs` widens the admission window for a last-known snapshot; callers must then label the result stale. */
-export function portfolioSummary(current: CurrentPortfolio | null, now: number, failed = false, maxAgeMs = 30000) {
+export function portfolioSummary(current: CurrentPortfolio | null, now: number, failed = false, maxAgeMs = 30000, valuationBasis?: PortfolioValuationBasis | null, quoteCurrency?: PortfolioQuoteCurrency | null) {
   const age = current ? now - Date.parse(current.observed_at) : NaN;
   const fresh = !failed && Number.isFinite(age) && age >= 0 && age < maxAgeMs;
-  const holdings = fresh ? current!.holdings : [];
+  const holdings = fresh ? current!.holdings.filter(holding => !qualifiedDust(current!, holding, valuationBasis, quoteCurrency)) : [];
   const priced = holdings.filter(h => number(h.value) !== null && number(h.price) !== null);
   const pricedTotal = fresh ? number(current!.priced_total) : null;
   const unpricedCount = holdings.filter(h => Number(h.total) > 0 && (number(h.value) === null || number(h.price) === null)).length;
   const complete = fresh && current!.valuation_complete && unpricedCount === 0;
-  return {current: fresh, complete, pricedTotal,
+  return {current: fresh, complete, pricedTotal, holdings,
     availableValue: fresh && priced.every(h => h.available !== null) ? priced.reduce((s,h) => s + Number(h.available) * Number(h.price), 0) : null,
     lockedValue: fresh && priced.every(h => h.locked !== null) ? priced.reduce((s,h) => s + Number(h.locked) * Number(h.price), 0) : null,
     unpricedCount,
@@ -62,6 +86,6 @@ function csvCell(value: string | null) {
   const safe=/^[=+@\t\r]/.test(text) || /^-(?!\d)/.test(text) ? `'${text}` : text;
   return `"${safe.replaceAll('"','""')}"`;
 }
-export function holdingsCsv(rows: Holding[]) {
-  return ['Asset,Total,Available,Locked,Price (USDT),Value (USDT),Price observed at,Source',...rows.map(h=>[h.token,h.total,h.available,h.locked,h.price,h.value,h.price_observed_at,h.valuation_source].map(csvCell).join(','))].join('\r\n');
+export function holdingsCsv(rows: Holding[], quoteCurrency: PortfolioQuoteCurrency = rows[0]?.quote_currency ?? 'USDT') {
+  return [`Asset,Total,Available,Locked,Price (${quoteCurrency}),Value (${quoteCurrency}),Price observed at,Source`,...rows.map(h=>[h.token,h.total,h.available,h.locked,h.price,h.value,h.price_observed_at,h.valuation_source].map(csvCell).join(','))].join('\r\n');
 }

@@ -161,6 +161,39 @@ def test_account_subtotal_and_legacy_activity_keep_distinct_provenance():
     assert "equity" not in la.content_state(inconsistent)
 
 
+def test_usdc_activity_requires_materiality_basis_and_forwards_its_policy():
+    glance = copy.deepcopy(GLANCE)
+    wallet = glance["wallet"]
+    wallet.update(
+        equity="250",
+        unit="USDC",
+        valuation_basis="native_account_usdc_material_v1",
+        dust_threshold_usd="1",
+        excluded_dust_assets=["PLN"],
+        excluded_dust_count=1,
+        valuation_complete=True,
+        unpriced_assets=[],
+        unpriced_count=0,
+    )
+    glance["sections"]["wallet"]["status"] = "ok"
+    state = la.content_state(glance)
+    assert state["equity"] == "250.00"
+    assert "account_value" not in state
+    assert state["equity_unit"] == "USDC"
+    assert state["equity_valuation_complete"] is True
+    assert state["equity_valuation_basis"] == "native_account_usdc_material_v1"
+    assert state["equity_dust_threshold_usd"] == "1"
+
+    for key, value in (
+        ("valuation_basis", None),
+        ("dust_threshold_usd", "0.99"),
+    ):
+        malformed = copy.deepcopy(glance)
+        malformed["wallet"][key] = value
+        assert "equity" not in la.content_state(malformed)
+        assert "account_value" not in la.content_state(malformed)
+
+
 def test_aged_account_subtotal_keeps_value_but_marks_activity_stale():
     glance = copy.deepcopy(GLANCE)
     glance["wallet"]["valuation_complete"] = False

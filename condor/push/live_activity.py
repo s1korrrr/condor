@@ -33,7 +33,12 @@ from collections import Counter
 from decimal import ROUND_HALF_UP, Decimal, InvalidOperation, localcontext
 from typing import TYPE_CHECKING, Any, Callable, Mapping
 
-from condor.push.apns import MAX_PAYLOAD_BYTES, ApnsClient, ApnsOutcome, ApnsRequest
+from condor.push.apns import (
+    MAX_PAYLOAD_BYTES,
+    ApnsClient,
+    ApnsRequest,
+    retry_delay_seconds,
+)
 
 if TYPE_CHECKING:
     from condor.push.config import PushConfig
@@ -448,10 +453,6 @@ def _activity_start(token: "LiveActivityToken") -> float:
     return token.created_at if started is None else started
 
 
-def _retry_wait(outcome: ApnsOutcome, ceiling: float) -> float:
-    return min(ceiling, max(MIN_RETRY_SECONDS, outcome.retry_after or 0.0))
-
-
 class LiveActivitySender:
     """Sends due Live Activity updates and restarts with its own APNs client."""
 
@@ -710,13 +711,13 @@ class LiveActivitySender:
                 if not is_start:
                     state["tokens"].pop(token.id, None)
             elif outcome.kind == "auth":
-                rejected_at = self._clock()
+                rejected_at = max(now, self._clock())
                 self.deliverer.pause_for_auth(rejected_at)
                 entry["retry_at"] = rejected_at + MIN_RETRY_SECONDS
                 logger.warning("live activity paused: APNs rejected the credentials")
             elif outcome.kind == "retry":
-                wait = _retry_wait(outcome, float(UNCHANGED_RESEND_SECONDS))
-                entry["retry_at"] = now + wait
+                wait = retry_delay_seconds(outcome, MIN_RETRY_SECONDS)
+                entry["retry_at"] = max(now, self._clock()) + wait
                 logger.warning(
                     "live activity %s will retry status=%s reason=%s in=%ss",
                     token.kind,

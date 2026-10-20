@@ -3,6 +3,7 @@
 import asyncio
 import base64
 import json
+from email.utils import formatdate
 
 import pytest
 from cryptography.hazmat.primitives import hashes
@@ -506,6 +507,24 @@ def test_throttling_server_errors_and_transport_failures_are_retryable(key_path)
     assert client.consecutive_failures == 4 and client.last_error
 
 
+def test_retry_after_parses_http_dates_and_keeps_large_finite_delays(key_path):
+    client, apple, clock = _client(key_path)
+    apple.script = [
+        (429, {"reason": "TooManyRequests"}, {"retry-after": "7200"}),
+        (
+            429,
+            {"reason": "TooManyRequests"},
+            {"retry-after": formatdate(clock() + 7200, usegmt=True)},
+        ),
+        (429, {"reason": "TooManyRequests"}, {"retry-after": "nan"}),
+    ]
+
+    numeric, dated, malformed = [run(client.send(_req())) for _ in range(3)]
+    assert numeric.retry_after == 7200.0
+    assert dated.retry_after == 7200.0
+    assert malformed.retry_after is None
+
+
 def test_missing_http2_library_degrades_instead_of_crashing(key_path):
     class NoH2:
         async def post(self, **kw):
@@ -783,9 +802,9 @@ def test_transient_failures_back_off_then_succeed(rig):
     rig.enqueue()
     assert dict(rig.deliver()) == {"retry": 1}
     assert rig.deliver() == {}  # not due yet
-    rig.clock.advance(14)
+    rig.clock.advance(899)
     assert rig.deliver() == {}
-    rig.clock.advance(2)
+    rig.clock.advance(1)
     assert dict(rig.deliver()) == {"sent": 1}
     assert rig.outbox.deliveries_for("e1")[0]["attempts"] == 2
 
@@ -912,6 +931,90 @@ def test_rejected_credentials_pause_sending_instead_of_hammering_apple(rig):
         dict(rig.deliver())["sent"] == 2
     )  # recovered: both go out, nothing was lost or counted against the budget
     assert all(row["attempts"] <= 1 for row in rig.outbox.deliveries_for("e1"))
+
+
+def test_forbidden_is_terminal_and_does_not_pause_other_deliveries(rig):
+    device = rig.device()
+    rig.enqueue()
+    rig.apple.script = [(403, {"reason": "Forbidden"}, {})]
+
+    assert dict(rig.deliver()) == {"failed": 1}
+    assert rig.deliverer.auth_paused(rig.clock()) is False
+    assert rig.outbox.deliveries_for("e1")[0]["state"] == "failed"
+
+    sends = len(rig.apple.requests)
+    rig.clock.advance(60)
+    assert rig.deliver() == {}
+    assert len(rig.apple.requests) == sends
+    assert rig.registry.get_device(device.device_id).active is True
+
+
+def test_server_error_alert_retry_waits_at_least_fifteen_minutes(rig):
+    rig.device()
+    rig.enqueue()
+    rig.apple.script = [(503, {"reason": "ServiceUnavailable"}, {})]
+
+    assert dict(rig.deliver()) == {"retry": 1}
+    rig.outbox.close()
+    rig.outbox = Outbox(rig.config.outbox_path)
+    rig.deliverer = Deliverer(
+        rig.outbox, rig.registry, rig.client, rig.config, clock=rig.clock
+    )
+    sends = len(rig.apple.requests)
+    rig.clock.advance(899)
+    assert rig.deliver() == {}
+    assert len(rig.apple.requests) == sends
+    rig.clock.advance(1)
+    assert dict(rig.deliver()) == {"sent": 1}
+
+
+def test_retry_after_beyond_one_hour_is_honored_by_alert_delivery(rig):
+    rig.device()
+    rig.enqueue()
+    rig.apple.script = [(429, {"reason": "TooManyRequests"}, {"retry-after": "7200"})]
+
+    assert dict(rig.deliver()) == {"retry": 1}
+    sends = len(rig.apple.requests)
+    rig.clock.advance(7199)
+    assert rig.deliver() == {}
+    assert len(rig.apple.requests) == sends
+    rig.clock.advance(1)
+    assert dict(rig.deliver()) == {"sent": 1}
+
+
+def test_retry_after_wait_starts_when_slow_alert_response_arrives(rig):
+    rig.device()
+    rig.enqueue()
+    rig.apple.script = [(429, {"reason": "TooManyRequests"}, {"retry-after": "3600"})]
+    original_post = rig.apple.post
+
+    async def delayed_post(**kwargs):
+        response = await original_post(**kwargs)
+        rig.clock.advance(20)
+        return response
+
+    rig.apple.post = delayed_post
+    assert dict(rig.deliver()) == {"retry": 1}
+    sends = len(rig.apple.requests)
+    rig.clock.advance(3599)
+    assert rig.deliver() == {}
+    assert len(rig.apple.requests) == sends
+    rig.clock.advance(1)
+    assert dict(rig.deliver()) == {"sent": 1}
+
+
+def test_transport_retry_keeps_the_existing_alert_backoff(rig):
+    rig.device()
+    rig.enqueue()
+    rig.apple.script = [asyncio.TimeoutError()]
+
+    assert dict(rig.deliver()) == {"retry": 1}
+    sends = len(rig.apple.requests)
+    rig.clock.advance(14)
+    assert rig.deliver() == {}
+    assert len(rig.apple.requests) == sends
+    rig.clock.advance(1)
+    assert dict(rig.deliver()) == {"sent": 1}
 
 
 def test_environment_and_bundle_must_be_enabled_for_this_server(tmp_path, key_path):

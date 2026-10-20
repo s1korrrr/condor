@@ -1309,15 +1309,55 @@ def test_outcomes_stay_out_of_alert_health_and_show_in_the_heartbeat(tmp_path):
         r.close()
 
 
-def test_a_transient_failure_retries_after_a_minute(tmp_path):
+def test_server_error_live_activity_retry_waits_fifteen_minutes(tmp_path):
     r = live_rig(tmp_path)
     try:
         register(r)
         r.apple.script = [(503, {"reason": "ServiceUnavailable"}, None)]
         r.cycle()
-        r.cycle(30)
+        r.cycle(899)
         assert len(live(r)) == 1
-        r.cycle(40)
+        r.cycle(1)
+        assert len(live(r)) == 2
+    finally:
+        r.close()
+
+
+def test_retry_after_is_not_shortened_by_live_activity_pacing(tmp_path):
+    r = live_rig(tmp_path)
+    try:
+        register(r)
+        r.apple.script = [(429, {"reason": "TooManyRequests"}, {"retry-after": "3600"})]
+        r.cycle()
+        assert len(live(r)) == 1
+        r.cycle(300)
+        assert len(live(r)) == 1
+        r.cycle(3299)
+        assert len(live(r)) == 1
+        r.cycle(1)
+        assert len(live(r)) == 2
+    finally:
+        r.close()
+
+
+def test_live_activity_retry_after_wait_starts_when_slow_response_arrives(tmp_path):
+    r = live_rig(tmp_path)
+    try:
+        register(r)
+        r.apple.script = [(429, {"reason": "TooManyRequests"}, {"retry-after": "3600"})]
+        original_post = r.apple.post
+
+        async def delayed_post(**kwargs):
+            response = await original_post(**kwargs)
+            r.clock.advance(20)
+            return response
+
+        r.apple.post = delayed_post
+        r.cycle()
+        assert len(live(r)) == 1
+        r.cycle(3599)
+        assert len(live(r)) == 1
+        r.cycle(1)
         assert len(live(r)) == 2
     finally:
         r.close()

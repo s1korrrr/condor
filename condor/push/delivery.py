@@ -13,7 +13,7 @@ import time
 from collections import Counter
 from typing import Callable
 
-from condor.push.apns import ApnsClient, ApnsOutcome, build_request
+from condor.push.apns import ApnsClient, ApnsOutcome, build_request, retry_delay_seconds
 from condor.push.config import PushConfig
 from condor.push.store import (
     MAX_ATTEMPTS,
@@ -128,6 +128,7 @@ class Deliverer:
         self, row: DeliveryRow, device: Device, outcome: ApnsOutcome, now: float
     ) -> str:
         event_id, device_id = row.event.id, row.device_id
+        outcome_at = max(now, self._clock())
         label = f"{outcome.status or 'transport'} {outcome.reason or ''}".strip()
         if outcome.kind == "sent":
             self.outbox.mark(event_id, device_id, "sent", now, apns_id=outcome.apns_id)
@@ -148,18 +149,18 @@ class Deliverer:
                 "pending",
                 now,
                 error=label,
-                retry_at=now + backoff_seconds(row.attempts + 1),
+                retry_at=outcome_at + backoff_seconds(row.attempts + 1),
             )
             return "retry"
         if outcome.kind == "auth":
-            self.pause_for_auth(now)
+            self.pause_for_auth(outcome_at)
             self.outbox.mark(
                 event_id,
                 device_id,
                 "pending",
                 now,
                 error=label,
-                retry_at=now + AUTH_PAUSE_SECONDS,
+                retry_at=outcome_at + AUTH_PAUSE_SECONDS,
                 attempt=False,
             )
             return "auth"
@@ -167,9 +168,10 @@ class Deliverer:
             if row.attempts + 1 >= MAX_ATTEMPTS:
                 self.outbox.mark(event_id, device_id, "failed", now, error=label)
                 return "failed"
-            delay = max(backoff_seconds(row.attempts + 1), outcome.retry_after or 0.0)
+            delay = retry_delay_seconds(outcome, backoff_seconds(row.attempts + 1))
+            retry_at = outcome_at + delay
             self.outbox.mark(
-                event_id, device_id, "pending", now, error=label, retry_at=now + delay
+                event_id, device_id, "pending", now, error=label, retry_at=retry_at
             )
             return "retry"
         self.outbox.mark(

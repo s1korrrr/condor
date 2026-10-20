@@ -17,7 +17,7 @@ import uuid
 from collections import Counter
 from typing import TYPE_CHECKING, Any, Callable
 
-from condor.push.apns import ApnsClient, ApnsRequest
+from condor.push.apns import ApnsClient, ApnsRequest, retry_delay_seconds
 
 if TYPE_CHECKING:
     from condor.push.config import PushConfig
@@ -171,18 +171,15 @@ class RefreshSender:
                 )
                 state.pop(device.device_id, None)
             elif outcome.kind == "auth":
-                rejected_at = self._clock()
+                rejected_at = max(now, self._clock())
                 self.deliverer.pause_for_auth(rejected_at)
                 entry["retry_at"] = rejected_at + MIN_RETRY_SECONDS
                 logger.warning(
                     "background refresh paused: APNs rejected the credentials"
                 )
             elif outcome.kind == "retry":
-                wait = min(
-                    float(cfg.interval_seconds),
-                    max(MIN_RETRY_SECONDS, outcome.retry_after or 0.0),
-                )
-                entry["retry_at"] = now + wait
+                wait = retry_delay_seconds(outcome, MIN_RETRY_SECONDS)
+                entry["retry_at"] = max(now, self._clock()) + wait
                 logger.warning(
                     "background refresh will retry status=%s reason=%s in=%ss",
                     outcome.status,

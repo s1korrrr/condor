@@ -14,11 +14,14 @@ from __future__ import annotations
 import asyncio
 import base64
 import json
+import math
 import os
 import stat
 import time
 import uuid
 from dataclasses import dataclass
+from datetime import timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from typing import Any, Callable, Mapping, Protocol
 
@@ -33,6 +36,7 @@ ENDPOINTS = {
     "sandbox": "https://api.sandbox.push.apple.com",
 }
 MAX_PAYLOAD_BYTES = 4096
+APNS_5XX_RETRY_FLOOR_SECONDS = 900.0
 TOKEN_TTL_SECONDS = 45 * 60  # Apple rejects tokens older than 60 minutes
 TOKEN_MIN_REFRESH_SECONDS = (
     20 * 60
@@ -374,6 +378,36 @@ class ApnsOutcome:
         return self.kind == "sent"
 
 
+def retry_delay_seconds(outcome: ApnsOutcome, baseline_seconds: float) -> float:
+    """Return a retry delay that respects APNs' 5XX wait and Retry-After advice."""
+    delay = max(float(baseline_seconds), outcome.retry_after or 0.0)
+    if outcome.status is not None and 500 <= outcome.status < 600:
+        delay = max(delay, APNS_5XX_RETRY_FLOOR_SECONDS)
+    return delay
+
+
+def _parse_retry_after(value: str | None, *, now: float) -> float | None:
+    """Parse HTTP delay-seconds or HTTP-date; malformed and non-finite values are absent."""
+    if not value:
+        return None
+    value = value.strip()
+    if value.isascii() and value.isdigit():
+        try:
+            delay = float(int(value))
+        except (ValueError, OverflowError):
+            return None
+    else:
+        try:
+            retry_at = parsedate_to_datetime(value)
+            if retry_at.tzinfo is None:
+                retry_at = retry_at.replace(tzinfo=timezone.utc)
+            delay = retry_at.timestamp() - now
+        except (IndexError, OSError, OverflowError, TypeError, ValueError):
+            return None
+    delay = max(0.0, delay)
+    return delay if math.isfinite(delay) else None
+
+
 _DEAD_400 = frozenset({"BadDeviceToken"})
 _CONFIG_400 = frozenset(
     {
@@ -391,6 +425,8 @@ def classify(status: int, reason: str | None) -> str:
         return "sent"
     if status == 410 or (status == 400 and reason in _DEAD_400):
         return "dead"
+    if status == 403 and reason == "Forbidden":
+        return "rejected"
     if status == 403:
         return "auth"
     if status == 429 or status >= 500:
@@ -470,13 +506,9 @@ class ApnsClient:
         if kind == "auth" and reason == "ExpiredProviderToken" and not refreshed:
             if self.tokens.refresh_after_rejection() is not None:
                 return await self._attempt(request, refreshed=True)
-        retry_after = None
-        raw_retry = response.headers.get("retry-after")
-        if raw_retry:
-            try:
-                retry_after = max(0.0, min(float(raw_retry), 3600.0))
-            except ValueError:
-                retry_after = None
+        retry_after = _parse_retry_after(
+            response.headers.get("retry-after"), now=self._clock()
+        )
         stamp = None
         if response.status == 410 and response.body:
             try:

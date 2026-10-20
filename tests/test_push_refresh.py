@@ -1,6 +1,7 @@
 """Silent data-refresh pushes: a paced background push that makes the iPhone refresh and relay
 the fleet to its Watch and widgets. Nothing is shown; nothing is sent unless enabled."""
 
+import asyncio
 import json
 
 import pytest
@@ -143,19 +144,74 @@ def test_rejected_credentials_pause_refresh_without_stopping_the_cycle(tmp_path)
         r.close()
 
 
-def test_a_transient_failure_retries_soon_instead_of_waiting_a_whole_interval(tmp_path):
-    r = Rig(tmp_path, extra={"refresh": {"enabled": True, "interval_seconds": 900}})
+def test_server_error_refresh_retry_waits_fifteen_minutes(tmp_path):
+    r = Rig(tmp_path, extra={"refresh": {"enabled": True, "interval_seconds": 300}})
     try:
         r.devices()
         r.apple.script = [(503, {"reason": "ServiceUnavailable"}, None)]
         r.cycle()
         assert len(background(r)) == 1
-        r.cycle(30)
-        assert len(background(r)) == 1  # waits at least a minute
-        r.cycle(40)
-        assert len(background(r)) == 2  # retried well before the 15-minute interval
-        r.cycle(60)
-        assert len(background(r)) == 2  # delivered: back to the normal pace
+        r.cycle(899)
+        assert len(background(r)) == 1
+        r.cycle(1)
+        assert len(background(r)) == 2
+        r.cycle(299)
+        assert len(background(r)) == 2
+    finally:
+        r.close()
+
+
+def test_retry_after_is_not_shortened_by_refresh_interval(tmp_path):
+    r = Rig(tmp_path, extra={"refresh": {"enabled": True, "interval_seconds": 300}})
+    try:
+        r.devices()
+        r.apple.script = [(429, {"reason": "TooManyRequests"}, {"retry-after": "3600"})]
+        r.cycle()
+        assert len(background(r)) == 1
+        r.cycle(300)
+        assert len(background(r)) == 1
+        r.cycle(3299)
+        assert len(background(r)) == 1
+        r.cycle(1)
+        assert len(background(r)) == 2
+    finally:
+        r.close()
+
+
+def test_refresh_retry_after_wait_starts_when_slow_response_arrives(tmp_path):
+    r = Rig(tmp_path, extra={"refresh": {"enabled": True, "interval_seconds": 300}})
+    try:
+        r.devices()
+        r.apple.script = [(429, {"reason": "TooManyRequests"}, {"retry-after": "3600"})]
+        original_post = r.apple.post
+
+        async def delayed_post(**kwargs):
+            response = await original_post(**kwargs)
+            r.clock.advance(20)
+            return response
+
+        r.apple.post = delayed_post
+        r.cycle()
+        assert len(background(r)) == 1
+        r.cycle(3599)
+        assert len(background(r)) == 1
+        r.cycle(1)
+        assert len(background(r)) == 2
+    finally:
+        r.close()
+
+
+def test_transport_failure_keeps_the_existing_short_retry_baseline(tmp_path):
+    r = Rig(tmp_path, extra={"refresh": {"enabled": True, "interval_seconds": 300}})
+    try:
+        r.devices()
+        r.apple.script = [asyncio.TimeoutError()]
+        r.cycle()
+        assert len(background(r)) == 1
+        r.cycle(59)
+        assert len(background(r)) == 1
+        r.cycle(1)
+        assert len(background(r)) == 2
     finally:
         r.close()
 

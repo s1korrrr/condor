@@ -1044,7 +1044,7 @@ async def test_live_activity_glance_for_uses_the_selected_read_set(monkeypatch, 
 
 @sync
 async def test_summary_deadline_includes_waiting_for_the_shared_cache_lock(
-    monkeypatch, store
+    monkeypatch, store, caplog
 ):
     readers = FakeReaders(store)
     client_for(monkeypatch, store, readers=readers)
@@ -1062,6 +1062,103 @@ async def test_summary_deadline_includes_waiting_for_the_shared_cache_lock(
 
     assert readers.calls == []
     assert key not in routes._cache
+    timeout_record = next(
+        record
+        for record in caplog.records
+        if record.getMessage().startswith("event=fleet_summary_timeout")
+    )
+    assert '"cache.lock_wait"' in timeout_record.getMessage()
+
+
+@sync
+async def test_summary_timeout_reports_active_source_phase_without_identifiers(
+    monkeypatch, store, caplog
+):
+    readers = FakeReaders(store)
+
+    async def stalled_status(server):
+        await asyncio.Event().wait()
+
+    readers.bots_status = stalled_status
+    client_for(monkeypatch, store, readers=readers)
+    monkeypatch.setattr(routes, "READERS", readers)
+    monkeypatch.setattr(routes, "TOTAL_TIMEOUT", 0.01)
+    routes._cache.clear()
+
+    with pytest.raises(TimeoutError):
+        await routes.cached_summary(SERVER, admin=True, user_id=7, view="glance")
+
+    timeout_record = next(
+        record
+        for record in caplog.records
+        if record.getMessage().startswith("event=fleet_summary_timeout")
+    )
+    message = timeout_record.getMessage()
+    assert '"status_read"' in message
+    assert '"summary.build"' in message
+    assert "ok_rsi" not in message and "user_id" not in message
+
+
+@pytest.mark.parametrize("phase_name", ["market.latest", "owner.quant-summary"])
+@sync
+async def test_summary_timeout_trace_identifies_remote_read_group(
+    monkeypatch, store, caplog, phase_name
+):
+    readers = FakeReaders(store)
+    stalled = asyncio.Event()
+
+    if phase_name == "market.latest":
+
+        async def stalled_market(server, user_id):
+            async with fs.phase_span("market.latest"):
+                await stalled.wait()
+
+        readers.market = stalled_market
+    else:
+
+        async def stalled_owner(bot, path, params):
+            if path == "quant-summary":
+                await stalled.wait()
+            return fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)
+
+        readers.owner = stalled_owner
+
+    client_for(monkeypatch, store, readers=readers)
+    monkeypatch.setattr(routes, "READERS", readers)
+    monkeypatch.setattr(routes, "TOTAL_TIMEOUT", 0.01)
+
+    with pytest.raises(TimeoutError):
+        await routes.cached_summary(SERVER, admin=True, user_id=7, view="glance")
+
+    timeout_record = next(
+        record
+        for record in caplog.records
+        if record.getMessage().startswith("event=fleet_summary_timeout")
+    )
+    assert f'"{phase_name}"' in timeout_record.getMessage()
+
+
+@sync
+async def test_inner_source_timeout_is_not_mislabeled_as_total_deadline(
+    monkeypatch, store, caplog
+):
+    client_for(monkeypatch, store)
+    monkeypatch.setattr(routes, "TOTAL_TIMEOUT", 5)
+
+    async def source_timeout(*args, **kwargs):
+        raise TimeoutError("private upstream details")
+
+    monkeypatch.setattr(fs, "build_fleet_summary", source_timeout)
+    with pytest.raises(TimeoutError):
+        await routes.cached_summary(SERVER, admin=True, user_id=7, view="glance")
+
+    timeout_record = next(
+        record
+        for record in caplog.records
+        if record.getMessage().startswith("event=fleet_summary_timeout")
+    )
+    assert "kind=source_timeout" in timeout_record.getMessage()
+    assert "private upstream details" not in timeout_record.getMessage()
 
 
 @pytest.mark.parametrize(

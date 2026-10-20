@@ -10,6 +10,8 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import json
+import logging
 import time
 from typing import Any, Optional
 
@@ -27,6 +29,7 @@ from condor.web.routes import market_picture, trading_visuals
 from config_manager import get_config_manager
 
 router = APIRouter(tags=["fleet"])
+logger = logging.getLogger(__name__)
 
 OWNER_TIMEOUT = 6.0  # a bootstrap observation is the largest read (about 0.7 MB for a busy V1 bot)
 MARKET_TIMEOUT = 4.0
@@ -49,6 +52,55 @@ HISTORY_WINDOW = "6h"  # the verdict replays the last six hours of stored breadt
 # coherent and coalesces concurrent requests while the views are populated.
 _cache: dict[tuple[str, bool], dict[str, tuple[float, dict]]] = {}
 _locks: dict[tuple[str, bool], asyncio.Lock] = {}
+
+
+class _SummaryPhaseRecorder:
+    """Small request-local timing summary; phase keys never contain bot or user IDs."""
+
+    def __init__(self) -> None:
+        self._next_token = 0
+        self._active: dict[int, tuple[str, float]] = {}
+        self._completed: dict[str, dict[str, float | int]] = {}
+
+    def phase_started(self, name: str, started: float) -> int:
+        self._next_token += 1
+        self._active[self._next_token] = (name, started)
+        return self._next_token
+
+    def phase_finished(self, token: int, outcome: str, elapsed: float) -> None:
+        active = self._active.pop(token, None)
+        if active is None:
+            return
+        name, _ = active
+        row = self._completed.setdefault(
+            name,
+            {
+                "count": 0,
+                "complete": 0,
+                "unavailable": 0,
+                "cancelled": 0,
+                "error": 0,
+                "total_ms": 0,
+                "max_ms": 0,
+            },
+        )
+        elapsed_ms = max(0, round(elapsed * 1000))
+        row["count"] += 1
+        row[outcome] += 1
+        row["total_ms"] += elapsed_ms
+        row["max_ms"] = max(row["max_ms"], elapsed_ms)
+
+    def snapshot(self) -> dict[str, Any]:
+        now = time.monotonic()
+        return {
+            "active": [
+                {"phase": name, "elapsed_ms": max(0, round((now - started) * 1000))}
+                for name, started in sorted(self._active.values())
+            ],
+            "completed": {
+                name: dict(values) for name, values in sorted(self._completed.items())
+            },
+        }
 
 
 class LiveReaders:
@@ -111,23 +163,25 @@ class LiveReaders:
 
         try:
             async with asyncio.timeout(MARKET_TIMEOUT * 2):
-                client = await cm.get_client(server)
-                transport = client.bot_orchestration
-                frame = await read(transport, "latest", {})
+                async with summary.phase_span("market.latest"):
+                    client = await cm.get_client(server)
+                    transport = client.bot_orchestration
+                    frame = await read(transport, "latest", {})
         except Exception:
             return summary.MarketRead(reason=summary.FRAME_UNAVAILABLE)
         try:
             async with asyncio.timeout(MARKET_TIMEOUT):
-                page = await read(
-                    transport,
-                    "history",
-                    {
-                        "snapshot_id": frame["snapshot_id"],
-                        "window": HISTORY_WINDOW,
-                        "limit": "1500",
-                        "resolution": "1m",
-                    },
-                )
+                async with summary.phase_span("market.history"):
+                    page = await read(
+                        transport,
+                        "history",
+                        {
+                            "snapshot_id": frame["snapshot_id"],
+                            "window": HISTORY_WINDOW,
+                            "limit": "1500",
+                            "resolution": "1m",
+                        },
+                    )
             if page.get("snapshot_id") != frame["snapshot_id"]:
                 raise ValueError("history is bound to a different frame")
             return summary.MarketRead(frame=frame, history=page["items"])
@@ -195,41 +249,72 @@ async def cached_summary(
     if view not in summary.VIEWS:
         raise ValueError(f"unknown view {view!r}")
     key = (name, admin)
-    async with asyncio.timeout(TOTAL_TIMEOUT):
-        async with _locks.setdefault(key, asyncio.Lock()):
-            now = time.monotonic()
-            entry = _cache.get(key, {})
-            full_hit = entry.get("full")
-            if full_hit is not None and full_hit[0] <= now:
-                full_hit = None
-            view_hit = entry.get(view)
-            if view_hit is not None and view_hit[0] <= now:
-                view_hit = None
+    trace = _SummaryPhaseRecorder()
+    started = time.monotonic()
+    acquired = False
+    cache_status = "pending"
+    deadline = asyncio.timeout(TOTAL_TIMEOUT)
+    with summary.capture_phase_recorder(trace):
+        try:
+            async with deadline:
+                lock = _locks.setdefault(key, asyncio.Lock())
+                async with summary.phase_span("cache.lock_wait"):
+                    await lock.acquire()
+                acquired = True
+                try:
+                    now = time.monotonic()
+                    entry = _cache.get(key, {})
+                    full_hit = entry.get("full")
+                    if full_hit is not None and full_hit[0] <= now:
+                        full_hit = None
+                    view_hit = entry.get(view)
+                    if view_hit is not None and view_hit[0] <= now:
+                        view_hit = None
 
-            if view == "full" and full_hit is not None:
-                return full_hit[1]
-            if view == "glance":
-                if full_hit is not None:
-                    return summary.glance(full_hit[1])
-                if view_hit is not None:
-                    return view_hit[1]
+                    if view == "full" and full_hit is not None:
+                        cache_status = "full_hit"
+                        return full_hit[1]
+                    if view == "glance":
+                        if full_hit is not None:
+                            cache_status = "full_hit_projected"
+                            return summary.glance(full_hit[1])
+                        if view_hit is not None:
+                            cache_status = "view_hit"
+                            return view_hit[1]
 
-            body = await summary.build_fleet_summary(
-                name,
+                    cache_status = "miss"
+                    async with summary.phase_span("summary.build"):
+                        body = await summary.build_fleet_summary(
+                            name,
+                            view,
+                            READERS,
+                            time.time() * 1000,
+                            is_admin=admin,
+                            user_id=user_id,
+                            clock_ms=lambda: time.time() * 1000,
+                        )
+                    if CACHE_TTL_SECONDS > 0:
+                        expires = time.monotonic() + CACHE_TTL_SECONDS
+                        entry = _cache.setdefault(key, {})
+                        entry[view] = (expires, body)
+                        if view == "full":
+                            entry["glance"] = (expires, summary.glance(body))
+                    return body
+                finally:
+                    if acquired:
+                        lock.release()
+        except TimeoutError:
+            kind = "deadline" if deadline.expired() else "source_timeout"
+            logger.warning(
+                "event=fleet_summary_timeout kind=%s deadline_ms=%d elapsed_ms=%d view=%s cache=%s phases=%s",
+                kind,
+                round(TOTAL_TIMEOUT * 1000),
+                round((time.monotonic() - started) * 1000),
                 view,
-                READERS,
-                time.time() * 1000,
-                is_admin=admin,
-                user_id=user_id,
-                clock_ms=lambda: time.time() * 1000,
+                cache_status,
+                json.dumps(trace.snapshot(), sort_keys=True, separators=(",", ":")),
             )
-            if CACHE_TTL_SECONDS > 0:
-                expires = time.monotonic() + CACHE_TTL_SECONDS
-                entry = _cache.setdefault(key, {})
-                entry[view] = (expires, body)
-                if view == "full":
-                    entry["glance"] = (expires, summary.glance(body))
-            return body
+            raise
 
 
 async def glance_for(name: str, user_id: Any) -> dict:

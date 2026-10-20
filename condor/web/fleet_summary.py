@@ -24,10 +24,13 @@ live readers and HTTP.
 from __future__ import annotations
 
 import asyncio
+import contextvars
 import hashlib
 import json
 import math
 import re
+import time
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from decimal import Decimal
@@ -79,6 +82,49 @@ PARTIAL_COVERAGE = "PARTIAL_COVERAGE"
 FIELDS_MISSING = "FIELDS_MISSING"
 GLANCE_MAX_BOTS = 16
 GLANCE_MAX_MISSING = 16
+
+class PhaseRecorder(Protocol):
+    def phase_started(self, name: str, started: float) -> int: ...
+
+    def phase_finished(self, token: int, outcome: str, elapsed: float) -> None: ...
+
+
+_phase_recorder: contextvars.ContextVar[PhaseRecorder | None] = contextvars.ContextVar(
+    "fleet_summary_phase_recorder", default=None
+)
+
+
+@contextmanager
+def capture_phase_recorder(recorder: PhaseRecorder):
+    """Install a request-local phase recorder for summary work and nested readers."""
+    token = _phase_recorder.set(recorder)
+    try:
+        yield
+    finally:
+        _phase_recorder.reset(token)
+
+
+@asynccontextmanager
+async def phase_span(name: str):
+    """Record elapsed time and cancellation for one fixed, non-sensitive phase name."""
+    recorder = _phase_recorder.get()
+    if recorder is None:
+        yield {"outcome": "complete"}
+        return
+    started = time.monotonic()
+    token = recorder.phase_started(name, started)
+    result = {"outcome": "complete"}
+    try:
+        yield result
+    except asyncio.CancelledError:
+        recorder.phase_finished(token, "cancelled", time.monotonic() - started)
+        raise
+    except BaseException:
+        recorder.phase_finished(token, "error", time.monotonic() - started)
+        raise
+    else:
+        recorder.phase_finished(token, result["outcome"], time.monotonic() - started)
+
 
 @dataclass
 class OwnerRead:
@@ -1089,7 +1135,10 @@ async def build_fleet_summary(
     missing: list[dict] = []
     sections: dict[str, dict] = {}
 
-    status_raw = await readers.bots_status(server)
+    async with phase_span("status_read") as phase:
+        status_raw = await readers.bots_status(server)
+        if status_raw is None:
+            phase["outcome"] = "unavailable"
     page = build_bots_page(status_raw) if status_raw is not None else None
     status_names = [
         b["bot_name"] for b in (page or {}).get("bots", []) if b.get("bot_name")
@@ -1128,16 +1177,39 @@ async def build_fleet_summary(
     if is_admin and incident_bot:
         owner_jobs.append((incident_bot, "operations", {}))
     paper_bots = tuple(b for b in bots if is_paper(b))
-    sync_task = asyncio.to_thread(
-        _sync_reads, readers, server, live, read_now_ms, paper_bots
-    )
-    market_task = readers.market(server, user_id)
-    account_task = readers.account(server, user_id)
+
+    async def read_local_history():
+        async with phase_span("local_history"):
+            return await asyncio.to_thread(
+                _sync_reads, readers, server, live, read_now_ms, paper_bots
+            )
+
+    async def read_market():
+        async with phase_span("market_read") as phase:
+            result = await readers.market(server, user_id)
+            if result.frame is None:
+                phase["outcome"] = "unavailable"
+            return result
+
+    async def read_account():
+        async with phase_span("account_read") as phase:
+            result = await readers.account(server, user_id)
+            if result.reason is not None:
+                phase["outcome"] = "unavailable"
+            return result
+
+    async def read_owner(bot: str, path: str, params: dict):
+        async with phase_span(f"owner.{path}") as phase:
+            result = await _safe_owner(readers, bot, path, params)
+            if result.reason is not None:
+                phase["outcome"] = "unavailable"
+            return result
+
     results = await asyncio.gather(
-        sync_task,
-        market_task,
-        account_task,
-        *[_safe_owner(readers, bot, path, params) for bot, path, params in owner_jobs],
+        read_local_history(),
+        read_market(),
+        read_account(),
+        *[read_owner(bot, path, params) for bot, path, params in owner_jobs],
         return_exceptions=True,
     )
     sync_result, market_result, account_result, owner_results = (

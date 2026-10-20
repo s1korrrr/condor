@@ -1135,31 +1135,32 @@ async def build_fleet_summary(
     missing: list[dict] = []
     sections: dict[str, dict] = {}
 
-    async with phase_span("status_read") as phase:
-        status_raw = await readers.bots_status(server)
-        if status_raw is None:
-            phase["outcome"] = "unavailable"
-    page = build_bots_page(status_raw) if status_raw is not None else None
-    status_names = [
-        b["bot_name"] for b in (page or {}).get("bots", []) if b.get("bot_name")
-    ]
+    async def read_status():
+        async with phase_span("status_read") as phase:
+            value = await readers.bots_status(server)
+            if value is None:
+                phase["outcome"] = "unavailable"
+            return value
+
     registry = readers.registered_bots(server)
+    status_raw = None
     if registry:
         bots = list(dict.fromkeys(registry))
-    elif status_names:
-        bots = list(dict.fromkeys(status_names))
-        missing.append({"section": "bots", "reason": REGISTRY_FROM_STATUS})
     else:
-        bots = []
+        # Only roster discovery depends on status. With registered owner sources,
+        # status and owner reads are independent and must share one read window.
+        status_raw = await read_status()
+        page = build_bots_page(status_raw) if status_raw is not None else None
+        bots = list(dict.fromkeys(
+            b["bot_name"] for b in (page or {}).get("bots", []) if b.get("bot_name")
+        ))
+        if bots:
+            missing.append({"section": "bots", "reason": REGISTRY_FROM_STATUS})
     live = [b for b in bots if not is_paper(b)]
-    if page is None:
-        missing.append(
-            {"section": "bots", "field": "status", "reason": SOURCE_UNAVAILABLE}
-        )
-
-    # The blocking status read may consume seconds. Keep history reads bounded at
-    # their actual start, and qualify all returned sources at publication time.
     read_now_ms = clock_ms() if clock_ms is not None else now_ms
+
+    async def resolve_status():
+        return await read_status() if registry else status_raw
 
     # Independent reads run together; each fails into its own reason code.
     owner_jobs: list[tuple[str, str, dict]] = [
@@ -1206,18 +1207,21 @@ async def build_fleet_summary(
             return result
 
     results = await asyncio.gather(
+        resolve_status(),
         read_local_history(),
         read_market(),
         read_account(),
         *[read_owner(bot, path, params) for bot, path, params in owner_jobs],
         return_exceptions=True,
     )
-    sync_result, market_result, account_result, owner_results = (
-        results[0],
-        results[1],
-        results[2],
-        results[3:],
+    status_raw, sync_result, market_result, account_result, owner_results = (
+        results[0], results[1], results[2], results[3], results[4:]
     )
+    if isinstance(status_raw, BaseException):
+        status_raw = None
+    page = build_bots_page(status_raw) if status_raw is not None else None
+    if page is None:
+        missing.append({"section": "bots", "field": "status", "reason": SOURCE_UNAVAILABLE})
     now_ms = clock_ms() if clock_ms is not None else now_ms
     if isinstance(sync_result, BaseException):
         histories = {r: [] for r in ("1D", "1W", "1M", "ALL")}

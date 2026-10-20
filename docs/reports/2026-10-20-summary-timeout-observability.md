@@ -49,3 +49,28 @@ Revert this source change or restore the qualified predecessor image to roll
 back diagnostics. Do not replace runtime databases or change strategy settings
 as part of that rollback. Runtime deployment and sustained live recovery are
 separate gates from these local checks.
+
+The first live observation window found further timeouts after diagnostics
+were deployed. The traces showed a 5.2–7.4 second status read running before
+independent owner reads, plus glance lock waits up to 8.5 seconds behind full
+builds. The 12-second deadline correctly rejected these requests; later
+successful requests did not establish sustained recovery.
+
+The follow-up runs status concurrently with owner/account/market/history
+reads when the registered roster is present. Status still discovers the roster
+when registration is unavailable. Final source freshness remains evaluated at
+publication. Cache builds coalesce per view, so a full build cannot consume a
+glance request's deadline in lock wait. Each server/access key admits at most
+one full and one glance build. A completed current full cache still serves its
+canonical glance projection. No deadline, TTL, stale-source admission, payload
+fields or trading behavior changes.
+
+Two controlled concurrency regressions failed before this repair. They now
+pass, together with a concurrent same-view coalescing regression. The local
+boundary command was `PYTHONPATH=.:tests python -m pytest -q
+ tests/test_fleet_summary.py tests/test_fleet_summary_live_shapes.py
+ tests/test_fleet_input_boundaries.py tests/test_execution_time_receipts.py
+ tests/test_fleet_account_wallet.py tests/test_push_live_activity.py`:
+231 passed on Python 3.12.10. The first broader invocation omitted `tests` from
+PYTHONPATH and stopped during collection; this was corrected before validation.
+Exact-image qualification and sustained live observation remain separate gates.

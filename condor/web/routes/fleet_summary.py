@@ -48,10 +48,11 @@ ALLOWED_QUERY = {"view", "schema"}
 HISTORY_WINDOW = "6h"  # the verdict replays the last six hours of stored breadth
 
 # A full result can serve either view. A glance-only result can serve only a glance; it
-# must never be returned as a full payload. The shared per-key lock keeps source reads
-# coherent and coalesces concurrent requests while the views are populated.
+# must never be returned as a full payload. Each view coalesces its own builds:
+# a slow full read must not consume a glance request's deadline in lock wait.
+# At most one full and one glance computation run for a server/principal key.
 _cache: dict[tuple[str, bool], dict[str, tuple[float, dict]]] = {}
-_locks: dict[tuple[str, bool], asyncio.Lock] = {}
+_locks: dict[tuple[str, bool, str], asyncio.Lock] = {}
 
 
 class _SummaryPhaseRecorder:
@@ -257,7 +258,7 @@ async def cached_summary(
     with summary.capture_phase_recorder(trace):
         try:
             async with deadline:
-                lock = _locks.setdefault(key, asyncio.Lock())
+                lock = _locks.setdefault((*key, view), asyncio.Lock())
                 async with summary.phase_span("cache.lock_wait"):
                     await lock.acquire()
                 acquired = True

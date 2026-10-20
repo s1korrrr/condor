@@ -1043,7 +1043,7 @@ async def test_live_activity_glance_for_uses_the_selected_read_set(monkeypatch, 
 
 
 @sync
-async def test_summary_deadline_includes_waiting_for_the_shared_cache_lock(
+async def test_summary_deadline_includes_waiting_for_the_same_view_cache_lock(
     monkeypatch, store, caplog
 ):
     readers = FakeReaders(store)
@@ -1051,7 +1051,7 @@ async def test_summary_deadline_includes_waiting_for_the_shared_cache_lock(
     monkeypatch.setattr(routes, "TOTAL_TIMEOUT", 0.01)
     key = (SERVER, True)
     lock = asyncio.Lock()
-    monkeypatch.setattr(routes, "_locks", {key: lock})
+    monkeypatch.setattr(routes, "_locks", {(*key, "glance"): lock})
     await lock.acquire()
     asyncio.get_running_loop().call_later(0.1, lock.release)
 
@@ -1284,3 +1284,82 @@ async def test_an_older_gap_leaves_the_current_day_complete(tmp_path):
         pnl = (await build(store, view))["pnl"]
         assert pnl["day"]["uncovered_ms"] == 0 and not pnl["day"]["partial"], view
         assert all(pnl[name]["uncovered_ms"] > 0 for name in ("week", "month", "all")), view
+
+
+@sync
+async def test_registered_roster_allows_status_and_owner_reads_to_overlap(store):
+    expected = await build(store, "glance")
+    readers = FakeReaders(store)
+    owner_started = asyncio.Event()
+    original_owner = readers.owner
+    original_status = readers.bots_status
+
+    async def status_waits_for_independent_owner(server):
+        await asyncio.wait_for(owner_started.wait(), timeout=0.05)
+        return await original_status(server)
+
+    async def observed_owner(bot, path, params):
+        owner_started.set()
+        return await original_owner(bot, path, params)
+
+    readers.bots_status = status_waits_for_independent_owner
+    readers.owner = observed_owner
+    result = await fs.build_fleet_summary(
+        SERVER, 'glance', readers, NOW_MS, is_admin=True, user_id=7
+    )
+    assert owner_started.is_set()
+    assert result == expected
+    assert len(result['bots']) == len(BOTS)
+
+
+@sync
+async def test_cold_glance_does_not_wait_behind_full_summary_build(monkeypatch, store):
+    client_for(monkeypatch, store)
+    monkeypatch.setattr(routes, 'TOTAL_TIMEOUT', 0.1)
+    full_started = asyncio.Event()
+    release_full = asyncio.Event()
+    calls = []
+    original_build = fs.build_fleet_summary
+
+    async def controlled_build(server, view, *args, **kwargs):
+        calls.append(view)
+        if view == 'full':
+            full_started.set()
+            await release_full.wait()
+        return await original_build(server, view, *args, **kwargs)
+
+    monkeypatch.setattr(fs, 'build_fleet_summary', controlled_build)
+    full = asyncio.create_task(routes.cached_summary(SERVER, admin=True, user_id=7, view='full'))
+    try:
+        await full_started.wait()
+        glance = await routes.cached_summary(SERVER, admin=True, user_id=7, view='glance')
+        assert glance['view'] == 'glance'
+        assert not full.done()
+        assert calls == ['full', 'glance']
+    finally:
+        release_full.set()
+        await asyncio.gather(full, return_exceptions=True)
+
+
+@sync
+async def test_concurrent_same_view_misses_coalesce_after_partition(monkeypatch, store):
+    client_for(monkeypatch, store)
+    monkeypatch.setattr(routes, 'CACHE_TTL_SECONDS', 60)
+    entered, release = asyncio.Event(), asyncio.Event()
+    builds = []
+    original_build = fs.build_fleet_summary
+
+    async def controlled_build(server, view, *args, **kwargs):
+        builds.append(view)
+        entered.set()
+        await release.wait()
+        return await original_build(server, view, *args, **kwargs)
+
+    monkeypatch.setattr(fs, 'build_fleet_summary', controlled_build)
+    first = asyncio.create_task(routes.cached_summary(SERVER, admin=True, user_id=7, view='glance'))
+    await entered.wait()
+    second = asyncio.create_task(routes.cached_summary(SERVER, admin=True, user_id=7, view='glance'))
+    release.set()
+    a, b = await asyncio.gather(first, second)
+    assert a == b
+    assert builds == ['glance']

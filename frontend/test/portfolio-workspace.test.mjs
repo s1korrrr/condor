@@ -34,3 +34,43 @@ test('zero inventory without a market price does not make the account partially 
  const s=portfolioSummary({...current,holdings:[holding,{...holding,token:'OLD',total:'0',available:'0',locked:'0',price:null,value:null}]},now);
  assert.equal(s.complete,true);assert.equal(s.unpricedCount,0);assert.equal(s.allocation[0].weight,100);
 });
+
+test('USDC material valuation omits only explicitly excluded dust from totals and holdings',()=>{
+ const usdc={...holding,token:'USDC',total:'250',available:'200',locked:'50',price:'1',value:'250',quote_currency:'USDC'};
+ const dust={...holding,token:'PLN',total:'0.00253',available:'0.00253',locked:'0',price:null,value:null,quote_currency:'USDC',usd_equivalent:'0.0006',usd_equivalent_source:'okx_account_balance_eqUsd',excluded_from_valuation:true};
+ const s=portfolioSummary({...current,priced_total:'250',valuation_complete:true,unpriced_assets:[],dust_threshold_usd:'1.0',excluded_dust_assets:['PLN'],holdings:[usdc,dust]},now,false,30000,'native_account_usdc_material_v1','USDC');
+ assert.equal(s.complete,true);assert.equal(s.pricedTotal,250);assert.equal(s.availableValue,200);assert.equal(s.lockedValue,50);assert.equal(s.unpricedCount,0);
+ assert.deepEqual(s.holdings.map(h=>h.token),['USDC']);
+});
+
+test('qualified policy may omit a zero-balance row only with verified zero-dollar evidence',()=>{
+ const usdc={...holding,token:'USDC',quote_currency:'USDC'};
+ const empty={...holding,token:'OLD',total:'0',available:'0',locked:'0',price:null,value:null,quote_currency:'USDC',usd_equivalent:'0',usd_equivalent_source:'okx_account_balance_eqUsd',excluded_from_valuation:true};
+ const currentUsdc={...current,priced_total:'20',valuation_complete:true,unpriced_assets:[],dust_threshold_usd:'1',excluded_dust_assets:['OLD'],holdings:[usdc,empty]};
+ const summary=portfolioSummary(currentUsdc,now,false,30000,'native_account_usdc_material_v1','USDC');
+ assert.deepEqual(summary.holdings.map(h=>h.token),['USDC']);
+ const inconsistent={...currentUsdc,holdings:[usdc,{...empty,usd_equivalent:'0.01'}]};
+ assert.deepEqual(portfolioSummary(inconsistent,now,false,30000,'native_account_usdc_material_v1','USDC').holdings.map(h=>h.token),['USDC','OLD']);
+ assert.deepEqual(portfolioSummary(currentUsdc,now,false,30000,'native_account_usdc_material_v1','USDT').holdings.map(h=>h.token),['USDC','OLD']);
+});
+
+test('a bare exclusion flag never hides legacy USDT or unqualified USDC inventory',()=>{
+ const flagged={...holding,token:'PLN',total:'0.00253',price:null,value:null,usd_equivalent:'0.0006',usd_equivalent_source:'okx_account_balance_eqUsd',excluded_from_valuation:true};
+ const legacy=portfolioSummary({...current,holdings:[flagged]},now);
+ assert.deepEqual(legacy.holdings.map(h=>h.token),['PLN']);
+ const usdc={...current,holdings:[{...flagged,quote_currency:'USDC'}]};
+ for(const [basis,quote] of [[undefined,'USDC'],['native_account_usdc_material_v1',undefined]]) {
+  const unqualified=portfolioSummary(usdc,now,false,30000,basis,quote);
+  assert.deepEqual(unqualified.holdings.map(h=>h.token),['PLN']);
+ }
+ const contradictory={...usdc,dust_threshold_usd:'1',excluded_dust_assets:['OTHER']};
+ assert.deepEqual(portfolioSummary(contradictory,now,false,30000,'native_account_usdc_material_v1','USDC').holdings.map(h=>h.token),['PLN']);
+});
+
+test('exact-one-dollar and unclassified assets remain visible and incomplete',()=>{
+ const usdc={...holding,token:'USDC',quote_currency:'USDC'};
+ const exact={...holding,token:'EXACT',total:'1',price:null,value:null,quote_currency:'USDC',usd_equivalent:'1',usd_equivalent_source:'okx_account_balance_eqUsd',excluded_from_valuation:false};
+ const unknown={...holding,token:'UNKNOWN',total:'1',price:null,value:null,quote_currency:'USDC',usd_equivalent:null,usd_equivalent_source:null,excluded_from_valuation:false};
+ const s=portfolioSummary({...current,valuation_complete:false,unpriced_assets:['EXACT','UNKNOWN'],holdings:[usdc,exact,unknown]},now);
+ assert.equal(s.complete,false);assert.equal(s.unpricedCount,2);assert.deepEqual(s.holdings.map(h=>h.token),['USDC','EXACT','UNKNOWN']);
+});

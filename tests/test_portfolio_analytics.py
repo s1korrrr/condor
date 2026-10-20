@@ -34,6 +34,122 @@ def test_analytics_read_preserves_scope_and_filters_unknown_fields(monkeypatch):
     assert upstream.call_args.args==('portfolio/analytics',)
 
 
+def test_usdc_material_valuation_wire_is_preserved(monkeypatch):
+    data = payload()
+    data.update(
+        quote_currency='USDC',
+        valuation_basis='native_account_usdc_material_v1',
+        current={
+            'observed_at': '2026-09-10T00:00:00Z',
+            'priced_total': '250',
+            'valuation_complete': True,
+            'unpriced_assets': [],
+            'dust_threshold_usd': '1.0',
+            'excluded_dust_assets': ['PLN'],
+            'holdings': [
+                {
+                    'token': 'USDC', 'total': '250', 'available': '250', 'locked': '0',
+                    'price': '1', 'value': '250', 'quote_currency': 'USDC',
+                    'valuation_source': 'quote_currency', 'price_observed_at': '2026-09-10T00:00:00Z',
+                    'usd_equivalent': '250', 'usd_equivalent_source': 'okx_account_balance_eqUsd',
+                    'excluded_from_valuation': False,
+                },
+                {
+                    'token': 'PLN', 'total': '0.00253', 'available': '0.00253', 'locked': '0',
+                    'price': None, 'value': None, 'quote_currency': 'USDC',
+                    'valuation_source': None, 'price_observed_at': None,
+                    'usd_equivalent': '0.0006', 'usd_equivalent_source': 'okx_account_balance_eqUsd',
+                    'excluded_from_valuation': True,
+                },
+            ],
+        },
+    )
+    client_, _, _ = client(monkeypatch, data)
+    response = client_.get('/api/v1/servers/local/portfolio/analytics')
+    assert response.status_code == 200
+    body = response.json()
+    assert body['valuation_basis'] == 'native_account_usdc_material_v1'
+    assert body['quote_currency'] == 'USDC'
+    assert body['current']['dust_threshold_usd'] == '1.0'
+    assert body['current']['excluded_dust_assets'] == ['PLN']
+    assert body['current']['holdings'][1]['excluded_from_valuation'] is True
+    assert body['current']['holdings'][1]['total'] == '0.00253'
+
+
+def test_usdc_material_valuation_accepts_zero_balance_dust(monkeypatch):
+    data = payload()
+    data.update(quote_currency='USDC', valuation_basis='native_account_usdc_material_v1')
+    data['current'] = {
+        'observed_at': '2026-09-10T00:00:00Z', 'priced_total': '250',
+        'valuation_complete': True, 'unpriced_assets': [], 'dust_threshold_usd': '1.0',
+        'excluded_dust_assets': ['OLD'],
+        'holdings': [
+            {
+                'token': 'USDC', 'total': '250', 'available': '250', 'locked': '0',
+                'price': '1', 'value': '250', 'quote_currency': 'USDC',
+                'valuation_source': 'quote_currency', 'price_observed_at': '2026-09-10T00:00:00Z',
+                'usd_equivalent': '250', 'usd_equivalent_source': 'okx_account_balance_eqUsd',
+                'excluded_from_valuation': False,
+            },
+            {
+                'token': 'OLD', 'total': '0', 'available': '0', 'locked': '0',
+                'price': None, 'value': None, 'quote_currency': 'USDC',
+                'valuation_source': None, 'price_observed_at': None,
+                'usd_equivalent': '0', 'usd_equivalent_source': 'okx_account_balance_eqUsd',
+                'excluded_from_valuation': True,
+            },
+        ],
+    }
+    client_, _, _ = client(monkeypatch, data)
+    assert client_.get('/api/v1/servers/local/portfolio/analytics').status_code == 200
+
+
+@pytest.mark.parametrize(('total', 'usd'), [('-0.01', '0'), ('0', '0.01')])
+def test_usdc_material_valuation_rejects_contradictory_zero_or_negative_balance(monkeypatch, total, usd):
+    data = payload()
+    data.update(quote_currency='USDC', valuation_basis='native_account_usdc_material_v1')
+    data['current'] = {
+        'observed_at': '2026-09-10T00:00:00Z', 'priced_total': '250',
+        'valuation_complete': True, 'unpriced_assets': [], 'dust_threshold_usd': '1.0',
+        'excluded_dust_assets': ['OLD'],
+        'holdings': [{
+            'token': 'OLD', 'total': total, 'available': total, 'locked': '0',
+            'price': None, 'value': None, 'quote_currency': 'USDC',
+            'valuation_source': None, 'price_observed_at': None,
+            'usd_equivalent': usd, 'usd_equivalent_source': 'okx_account_balance_eqUsd',
+            'excluded_from_valuation': True,
+        }],
+    }
+    client_, _, _ = client(monkeypatch, data)
+    assert client_.get('/api/v1/servers/local/portfolio/analytics').status_code == 502
+
+
+def test_unqualified_usdc_valuation_is_rejected(monkeypatch):
+    data = payload()
+    data.update(quote_currency='USDC')
+    client_, _, _ = client(monkeypatch, data)
+    assert client_.get('/api/v1/servers/local/portfolio/analytics').status_code == 502
+
+
+def test_legacy_usdt_cannot_claim_materiality_exclusion(monkeypatch):
+    data = payload()
+    data['current'] = {
+        'observed_at': '2026-09-10T00:00:00Z',
+        'priced_total': '250',
+        'valuation_complete': True,
+        'unpriced_assets': [],
+        'holdings': [{
+            'token': 'PLN', 'total': '0.00253', 'available': '0.00253', 'locked': '0',
+            'price': None, 'value': None, 'quote_currency': 'USDT',
+            'valuation_source': None, 'price_observed_at': None,
+            'usd_equivalent': '0.0006', 'usd_equivalent_source': 'okx_account_balance_eqUsd',
+            'excluded_from_valuation': True,
+        }],
+    }
+    client_, _, _ = client(monkeypatch, data)
+    assert client_.get('/api/v1/servers/local/portfolio/analytics').status_code == 502
+
+
 def test_denied_scope_and_invalid_range_do_not_call_owner(monkeypatch):
     c,cm,upstream=client(monkeypatch)
     cm.has_server_access=lambda *_:False

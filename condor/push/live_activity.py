@@ -155,10 +155,26 @@ def content_state(
         wallet_status = _section_status(glance, "wallet")
         complete = wallet.get("valuation_complete")
         unpriced = wallet.get("unpriced_count")
+        unit = wallet.get("unit")
+        basis = wallet.get("valuation_basis")
+        dust_assets = wallet.get("excluded_dust_assets")
+        dust_count = wallet.get("excluded_dust_count")
+        valuation_basis_valid = (
+            unit == "USDT" and basis is None
+        ) or (
+            unit == "USDC"
+            and basis == "native_account_usdc_material_v1"
+            and wallet.get("dust_threshold_usd") == "1"
+            and isinstance(dust_assets, list)
+            and len(dust_assets) <= 16
+            and all(isinstance(asset, str) and 0 < len(asset) <= 80 for asset in dust_assets)
+            and _count(dust_count) is not None
+            and dust_count >= len(dust_assets)
+        )
         qualified_account = (
             wallet.get("source") == "native_account_portfolio"
             and wallet.get("source_bot") is None
-            and wallet.get("unit") == "USDT"
+            and valuation_basis_valid
             and isinstance(scope, Mapping)
             and scope.get("account") == "master_account"
             and scope.get("connector") == "okx"
@@ -181,6 +197,9 @@ def content_state(
             state["equity" if complete else "account_value"] = equity
             state["equity_source"] = "native_account_portfolio"
             state["equity_valuation_complete"] = complete
+            if unit == "USDC":
+                state["equity_valuation_basis"] = basis
+                state["equity_dust_threshold_usd"] = wallet["dust_threshold_usd"]
         elif (
             wallet.get("source") != "native_account_portfolio" and complete is not False
         ):

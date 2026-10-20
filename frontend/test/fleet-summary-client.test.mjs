@@ -132,6 +132,31 @@ test('native account wallet must retain scope and subtotal coverage', () => {
   assert.throws(() => client.parseFleetSummary(body, 'full'), /wallet/);
 });
 
+test('USDC native account wallet requires and preserves the materiality policy in both views', () => {
+  for (const view of ['full', 'glance']) {
+    const body = structuredClone(example(view));
+    Object.assign(body.wallet, {
+      unit: 'USDC', valuation_complete: true, unpriced_assets: [], unpriced_count: 0,
+      valuation_basis: 'native_account_usdc_material_v1', dust_threshold_usd: '1',
+      excluded_dust_assets: ['PLN'], excluded_dust_count: 1,
+    });
+    const wallet = client.parseFleetSummary(body, view).wallet;
+    assert.equal(wallet.unit, 'USDC');
+    assert.equal(wallet.valuation_basis, 'native_account_usdc_material_v1');
+    assert.equal(wallet.dust_threshold_usd, '1');
+    assert.deepEqual(wallet.excluded_dust_assets, ['PLN']);
+    assert.equal(wallet.excluded_dust_count, 1);
+    delete body.wallet.valuation_basis;
+    assert.throws(() => client.parseFleetSummary(body, view), /wallet/);
+    body.wallet.valuation_basis = 'native_account_usdc_material_v1';
+    body.wallet.dust_threshold_usd = '0.99';
+    assert.throws(() => client.parseFleetSummary(body, view), /wallet/);
+    body.wallet.dust_threshold_usd = '1';
+    body.wallet.excluded_dust_count = 2;
+    assert.throws(() => client.parseFleetSummary(body, view), /wallet/);
+  }
+});
+
 test('section age and staleness are computed by the client from observed_at_ms', () => {
   const full = example('full');
   const now = full.generated_at_ms;

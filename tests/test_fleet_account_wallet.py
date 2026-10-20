@@ -5,9 +5,10 @@ import copy
 from datetime import datetime, timezone
 
 import pytest
-from test_fleet_summary import NOW_MS, SERVER, FakeReaders, client_for, store, sync
+from test_fleet_summary import NOW_MS, SERVER, FakeReaders, client_for, iso, store, sync
 
 from condor.web import fleet_summary as fs
+from condor.push import live_activity as live_activity
 from condor.web.routes import fleet_summary as routes
 
 
@@ -35,6 +36,33 @@ def account_current(*, total="900", complete=False, unpriced=("PLN",), age_ms=10
         "changes": [],
         "performance": {"available": False, "reason": "Cash flows not reconciled"},
     }
+
+
+def usdc_account(*, dust_value="0.0006", dust_source="okx_account_balance_eqUsd", excluded=True, threshold="1", dust_total="0.00253"):
+    data = account_current(total="250", complete=True, unpriced=())
+    data["quote_currency"] = "USDC"
+    data["valuation_basis"] = "native_account_usdc_material_v1"
+    data["current"].update(
+        dust_threshold_usd=threshold,
+        excluded_dust_assets=["PLN"],
+        holdings=[
+            {
+                "token": "USDC", "total": "250", "available": "250", "locked": "0",
+                "price": "1", "value": "250", "quote_currency": "USDC",
+                "valuation_source": "quote_currency", "price_observed_at": iso(NOW_MS - 1000),
+                "usd_equivalent": "250", "usd_equivalent_source": "okx_account_balance_eqUsd",
+                "excluded_from_valuation": False,
+            },
+            {
+                "token": "PLN", "total": dust_total, "available": dust_total, "locked": "0",
+                "price": None, "value": None, "quote_currency": "USDC",
+                "valuation_source": None, "price_observed_at": None,
+                "usd_equivalent": dust_value, "usd_equivalent_source": dust_source,
+                "excluded_from_valuation": excluded,
+            },
+        ],
+    )
+    return data
 
 
 class AccountReaders(FakeReaders):
@@ -167,6 +195,91 @@ def test_partial_account_staleness_is_independent_of_coverage():
     assert wallet["valuation_complete"] is False and wallet["stale"] is True
     assert section["status"] == "partial" and section["reason"] == fs.PARTIAL_COVERAGE
     assert section["observed_at_ms"] == NOW_MS - 200_000
+
+
+def test_usdc_valuation_excludes_verified_subdollar_asset_without_partial_status(store):
+    data = usdc_account(threshold="1.0")
+    body = asyncio.run(
+        fs.build_fleet_summary(
+            SERVER, "glance", AccountReaders(store, data), NOW_MS,
+            is_admin=True, user_id=7,
+        )
+    )
+    assert body["wallet"]["equity"] == "250"
+    assert body["wallet"]["unit"] == "USDC"
+    assert body["wallet"]["valuation_basis"] == "native_account_usdc_material_v1"
+    assert body["wallet"]["dust_threshold_usd"] == "1"
+    assert body["wallet"]["excluded_dust_assets"] == ["PLN"]
+    assert body["wallet"]["excluded_dust_count"] == 1
+    assert body["wallet"]["valuation_complete"] is True
+    assert body["wallet"]["unpriced_assets"] == []
+    assert body["sections"]["wallet"]["status"] == "ok"
+    assert not any(item["section"] == "wallet" for item in body["missing"])
+    activity = live_activity.content_state(body)
+    assert activity["equity_unit"] == "USDC"
+    assert activity["equity_valuation_basis"] == "native_account_usdc_material_v1"
+    assert activity["equity_dust_threshold_usd"] == "1"
+
+
+def test_usdc_exact_dollar_and_unclassified_assets_remain_incomplete(store):
+    data = usdc_account()
+    data["current"]["unpriced_assets"] = ["EXACT", "UNKNOWN"]
+    data["current"]["valuation_complete"] = False
+    data["current"]["holdings"].extend(
+        [
+            {
+                "token": "EXACT", "total": "2", "available": "2", "locked": "0",
+                "price": None, "value": None, "quote_currency": "USDC",
+                "valuation_source": None, "price_observed_at": None,
+                "usd_equivalent": "1", "usd_equivalent_source": "okx_account_balance_eqUsd",
+                "excluded_from_valuation": False,
+            },
+            {
+                "token": "UNKNOWN", "total": "2", "available": "2", "locked": "0",
+                "price": None, "value": None, "quote_currency": "USDC",
+                "valuation_source": None, "price_observed_at": None,
+                "usd_equivalent": None, "usd_equivalent_source": None,
+                "excluded_from_valuation": False,
+            },
+        ]
+    )
+    wallet, section = fs._wallet_section(fs.OwnerRead(data), NOW_MS, [])
+    assert wallet["unit"] == "USDC"
+    assert wallet["valuation_complete"] is False
+    assert wallet["unpriced_assets"] == ["EXACT", "UNKNOWN"]
+    assert section["status"] == "partial"
+
+
+@pytest.mark.parametrize(
+    "kwargs",
+    [
+        {"dust_value": "1", "excluded": True},
+        {"dust_value": "0.5", "excluded": False},
+        {"dust_value": "0.5", "dust_source": None, "excluded": True},
+    ],
+)
+def test_usdc_policy_rejects_unverified_or_non_dust_exclusions(kwargs):
+    wallet, section = fs._wallet_section(
+        fs.OwnerRead(usdc_account(**kwargs)), NOW_MS, []
+    )
+    assert wallet is None
+    assert section["status"] == "missing"
+
+
+def test_zero_balance_with_verified_zero_value_is_dust_and_keeps_usdc_valuation_complete(store):
+    data = usdc_account(dust_value="0", dust_total="0", threshold="1.0")
+    body = asyncio.run(
+        fs.build_fleet_summary(
+            SERVER, "glance", AccountReaders(store, data), NOW_MS,
+            is_admin=True, user_id=7,
+        )
+    )
+    assert body["wallet"]["valuation_complete"] is True
+    assert body["wallet"]["dust_threshold_usd"] == "1"
+    assert body["wallet"]["excluded_dust_assets"] == ["PLN"]
+    activity = live_activity.content_state(body)
+    assert activity["equity_valuation_basis"] == "native_account_usdc_material_v1"
+    assert activity["equity_dust_threshold_usd"] == "1"
 
 
 def test_many_unpriced_assets_report_count_without_expanding_glance():

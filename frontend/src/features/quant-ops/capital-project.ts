@@ -1,4 +1,4 @@
-import type { CurrentPortfolio, HistoryPoint, Holding } from '@/features/portfolio/model';
+import type { CurrentPortfolio, HistoryPoint, Holding, PortfolioValuationBasis } from '@/features/portfolio/model';
 import { portfolioSummary } from '@/features/portfolio/model';
 import { cleanFloat } from './decimal-display';
 
@@ -59,8 +59,8 @@ function availableUsdc(current: CurrentPortfolio | null, fresh: boolean): string
   return typeof value === 'string' && /^\d+(\.\d+)?$/.test(value) && Number.isFinite(Number(value)) ? value : null;
 }
 
-function valuedCashAndNonCash(holdings: Holding[], unit: string): {cash: number; nonCash: number} | null {
-  if (unit !== 'USDT') return null;
+function valuedCashAndNonCash(holdings: Holding[], unit: 'USDT' | 'USDC' | null): {cash: number; nonCash: number} | null {
+  if (unit === null) return null;
   let cash = 0, nonCash = 0;
   for (const row of holdings) {
     const value = n(row.value);
@@ -72,7 +72,7 @@ function valuedCashAndNonCash(holdings: Holding[], unit: string): {cash: number;
 }
 
 export type CapitalModel = {
-  equity: { value: string | null; complete: boolean; unpriced: number; unit: string };
+  equity: { value: string | null; complete: boolean; unpriced: number; unit: 'USDT' | 'USDC' | null };
   periodPnl: { value: string | null; reason: string };
   todayPnl: { value: string | null; reason: string };
   availableQuote: { value: string | null; unit: string };
@@ -155,14 +155,18 @@ export function projectCapitalModel(input: {
   failed?: boolean;
   accountPerformanceAvailable?: boolean;
   dashboard?: CapitalDashboardOverlay | null;
-  unit?: string;
+  unit?: 'USDT' | 'USDC' | null;
+  valuationBasis?: PortfolioValuationBasis | null;
   /** Admission window for the current snapshot. Widen only for a last-known snapshot that the page labels stale. */
   maxAgeMs?: number;
 }): CapitalModel {
-  const summary = portfolioSummary(input.current, input.now, input.failed, input.maxAgeMs);
-  const holdings = summary.current && input.current ? input.current.holdings : [];
+  const summary = portfolioSummary(input.current, input.now, input.failed, input.maxAgeMs, input.valuationBasis, input.unit);
+  const holdings = summary.current ? summary.holdings : [];
+  const observedQuotes = new Set(holdings.map(holding => holding.quote_currency));
+  const unit = input.unit ?? (observedQuotes.size === 1 ? holdings[0]?.quote_currency ?? null : null);
+  const quoteConsistent = unit !== null && holdings.every(holding => holding.quote_currency === unit);
   const cash = availableUsdc(input.current, summary.current);
-  const values = summary.complete ? valuedCashAndNonCash(holdings, input.unit ?? 'USDT') : null;
+  const values = summary.complete && quoteConsistent ? valuedCashAndNonCash(holdings, unit) : null;
   const cashValue = values?.cash ?? null;
   const equity = summary.pricedTotal;
   const deployed = values?.nonCash ?? null;
@@ -170,7 +174,7 @@ export function projectCapitalModel(input: {
   const riskAdmitted = dash?.risk_statistics_available === true;
   const dashNum = (value: string | null | undefined) => value == null || !Number.isFinite(Number(value)) ? null : Number(value);
   return {
-    equity: { value: equity == null ? null : input.current?.priced_total ?? null, complete: summary.complete, unpriced: summary.unpricedCount, unit: input.unit ?? 'USDT' },
+    equity: { value: equity == null || !quoteConsistent ? null : input.current?.priced_total ?? null, complete: summary.complete && quoteConsistent, unpriced: summary.unpricedCount, unit: quoteConsistent ? unit : null },
     periodPnl: {
       value: dash?.period_pnl?.value ?? null,
       reason: dash?.period_pnl?.reason_code === 'FLOW_COVERAGE_INCOMPLETE' || !dash?.period_pnl?.value

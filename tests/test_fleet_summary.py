@@ -337,7 +337,7 @@ class FakeReaders:
                 fills(bot, NOW_MS - (7 * 60_000 if bot == "ok_rsi" else 2 * 60_000))
             )
         if path == "operations":
-            return fs.OwnerRead(INCIDENTS)
+            return fs.OwnerRead(getattr(self, "incident_payload", INCIDENTS))
         raise AssertionError(path)
 
 
@@ -572,6 +572,138 @@ async def test_incidents_are_admin_only(store):
     assert not [
         call for call in readers.calls if call[1] == "operations"
     ], "a non-admin never triggers the operations read"
+
+
+@sync
+async def test_full_incident_projection_details_are_bounded_and_glance_stays_compact(
+    store,
+):
+    payload = copy.deepcopy(INCIDENTS)
+    payload["incident_store"]["incidents"] = [
+        {"id": "disk", "service": "host", "code": "host_storage_degraded", "severity": "warning", "state": "open",
+         "title": "Storage degraded", "detail": "3.84 GiB available", "first_seen_at": iso(NOW_MS - 30000),
+         "last_seen_at": iso(NOW_MS - 5000)},
+        {"id": "recovery", "severity": "warning", "state": "resolved", "title": "Previous warning",
+         "first_seen_at": iso(NOW_MS - 60000), "last_seen_at": iso(NOW_MS - 50000), "resolved_at": iso(NOW_MS - 40000)},
+    ]
+    readers = FakeReaders(store)
+    readers.incident_payload = payload
+    full = await fs.build_fleet_summary(SERVER, "full", readers, NOW_MS, is_admin=True, user_id=7)
+    assert full["incidents"]["open"] == 1
+    assert full["incidents"]["items"] == [
+        {"id": "disk", "service": "host", "code": "host_storage_degraded", "severity": "warning", "state": "open",
+         "title": "Storage degraded", "detail": "3.84 GiB available", "first_seen_at_ms": NOW_MS - 30000,
+         "last_seen_at_ms": NOW_MS - 5000, "resolved_at_ms": None},
+        {"id": "recovery", "service": None, "code": None, "severity": "warning", "state": "resolved",
+         "title": "Previous warning", "detail": None, "first_seen_at_ms": NOW_MS - 60000,
+         "last_seen_at_ms": NOW_MS - 50000, "resolved_at_ms": NOW_MS - 40000},
+    ]
+    assert full["incidents"]["items_truncated"] is False
+    glance = await fs.build_fleet_summary(SERVER, "glance", readers, NOW_MS, is_admin=True, user_id=7)
+    assert glance["incidents"] == {"state": "degraded", "open": 1, "critical": 0}
+    assert "items" not in glance["incidents"]
+
+
+@sync
+async def test_incident_details_reject_malformed_rows_and_prioritize_open_then_recent(
+    store,
+):
+    payload = copy.deepcopy(INCIDENTS)
+    payload["incident_store"]["incidents"] = [
+        {"id": f"resolved-{n}", "severity": "warning", "state": "resolved", "first_seen_at": iso(NOW_MS - 100000 + n),
+         "last_seen_at": iso(NOW_MS - 10000 + n), "resolved_at": iso(NOW_MS - 5000 + n)}
+        for n in range(25)
+    ] + [
+        {"id": "active", "severity": "critical", "state": "open", "first_seen_at": iso(NOW_MS - 100000),
+         "last_seen_at": iso(NOW_MS - 1000)},
+        {"id": "bad-clock", "severity": "warning", "state": "resolved", "first_seen_at": "not-a-time"},
+    ]
+    projected = fs.project_incidents(payload, NOW_MS)
+    assert len(projected["items"]) == 20
+    assert projected["items"][0]["id"] == "active"
+    assert projected["items"][1]["id"] == "resolved-24"
+    assert projected["items_truncated"] is True
+
+
+@sync
+async def test_resolved_incident_history_sorts_by_recency_across_severities(store):
+    payload = copy.deepcopy(INCIDENTS)
+    payload["incident_store"]["incidents"] = [
+        {
+            "id": "old-critical-resolved",
+            "severity": "critical",
+            "state": "resolved",
+            "first_seen_at": iso(NOW_MS - 100_000),
+            "last_seen_at": iso(NOW_MS - 50_000),
+            "resolved_at": iso(NOW_MS - 40_000),
+        },
+        {
+            "id": "recent-warning-resolved",
+            "severity": "warning",
+            "state": "resolved",
+            "first_seen_at": iso(NOW_MS - 10_000),
+            "last_seen_at": iso(NOW_MS - 2_000),
+            "resolved_at": iso(NOW_MS - 1_000),
+        },
+        {
+            "id": "recent-warning-open",
+            "severity": "warning",
+            "state": "open",
+            "first_seen_at": iso(NOW_MS - 5_000),
+            "last_seen_at": iso(NOW_MS - 500),
+        },
+        {
+            "id": "older-critical-open",
+            "severity": "critical",
+            "state": "open",
+            "first_seen_at": iso(NOW_MS - 20_000),
+            "last_seen_at": iso(NOW_MS - 10_000),
+        },
+    ]
+    projected = fs.project_incidents(payload, NOW_MS)
+    assert [item["id"] for item in projected["items"]] == [
+        "older-critical-open",
+        "recent-warning-open",
+        "recent-warning-resolved",
+        "old-critical-resolved",
+    ]
+
+
+@sync
+async def test_incident_detail_timestamps_keep_missing_values_and_reject_contradictions(
+    store,
+):
+    payload = copy.deepcopy(INCIDENTS)
+    payload["incident_store"]["incidents"] = [
+        {"id": "unknown-clock", "severity": "warning", "state": "open"},
+        {"id": "reversed", "severity": "warning", "state": "open",
+         "first_seen_at": iso(NOW_MS - 1000), "last_seen_at": iso(NOW_MS - 2000)},
+        {"id": "resolved-too-early", "severity": "warning", "state": "resolved",
+         "first_seen_at": iso(NOW_MS - 10000), "last_seen_at": iso(NOW_MS - 5000),
+         "resolved_at": iso(NOW_MS - 6000)},
+        {"id": "future", "severity": "warning", "state": "open",
+         "first_seen_at": iso(NOW_MS + 10000)},
+    ]
+    projected = fs.project_incidents(payload, NOW_MS)
+    assert [item["id"] for item in projected["items"]] == ["unknown-clock"]
+    assert projected["items"][0]["first_seen_at_ms"] is None
+    assert projected["items"][0]["last_seen_at_ms"] is None
+    assert projected["items_truncated"] is True
+
+
+@sync
+async def test_long_incident_text_is_clipped_without_losing_the_incident(store):
+    payload = copy.deepcopy(INCIDENTS)
+    payload["incident_store"]["incidents"] = [
+        {"id": "large-detail", "severity": "warning", "state": "open",
+         "title": "T" * 121, "detail": "D" * 301}
+    ]
+    projected = fs.project_incidents(payload, NOW_MS)
+    assert projected["open"] == 1
+    assert len(projected["items"]) == 1
+    assert projected["items"][0]["title"] == "T" * 119 + "…"
+    assert projected["items"][0]["detail"] == "D" * 299 + "…"
+    assert projected["items_truncated"] is True
 
 
 @sync

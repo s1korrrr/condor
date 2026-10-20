@@ -66,7 +66,7 @@ test('an ok feed renders every bot with its generation badge, a fresh glyph and 
   const html = render(view);
   assert.match(html, /data-panel-id="B40"/);
   assert.match(html, /data-state="fresh"/);
-  for (const header of ['Recorded (UTC)', 'Bot', 'Side', 'Pair', 'Amount', 'Price', 'Volume', 'Fee', 'Receipt', 'PnL']) assert.match(html, new RegExp(`<span>${header.replace(/[()]/g, '\\$&')}</span>`));
+  for (const header of ['Recorded (UTC)', 'Bot', 'Side', 'Pair', 'Amount', 'Price', 'Volume', 'PnL', 'Fee', 'Receipt']) assert.match(html, new RegExp(`<span>${header.replace(/[()]/g, '\\$&')}</span>`));
   assert.match(html, /Time and ordering use owner-recorded fills\. Exchange execution time is shown separately when attested; historical rows can be unavailable\./);
   assert.match(html, /Exchange executed \(UTC\)/);
   for (const badge of ['V1', 'V2', 'V3']) assert.match(html, new RegExp(`<span class="q-pill"[^>]*>${badge}</span>`));
@@ -84,7 +84,7 @@ test('rows keep the server order and ids as row identity; the table sorts, filte
   const view = model.projectFleetFills({ pages: [page('page_first')] });
   const column = id => fleetFillColumns.find(item => item.id === id);
   const row = view.rows[0];
-  assert.deepEqual(fleetFillColumns.map(item => item.id), ['time', 'execution-time', 'bot', 'side', 'pair', 'amount', 'price', 'volume', 'fee', 'receipt', 'pnl']);
+  assert.deepEqual(fleetFillColumns.map(item => item.id), ['time', 'execution-time', 'bot', 'side', 'pair', 'amount', 'price', 'volume', 'pnl', 'fee', 'receipt']);
   assert.equal(column('amount').value(row), row.amount, 'raw exact string for sort, filter and CSV');
   assert.equal(column('bot').value(row), 'V3 meridian_v3');
   assert.equal(column('pnl').value(row), null);
@@ -93,6 +93,23 @@ test('rows keep the server order and ids as row identity; the table sorts, filte
   assert.equal(column('fee').value({ ...row, fee: null }), null);
   assert.match(column('pnl').title(row), /no per-fill realised PnL/);
   assert.match(column('receipt').title({ ...row, receipt: 'legacy_6dp' }), /not promoted to exact/);
+});
+
+test('PnL is shown before fees and carries only the fill quote currency when reported', () => {
+  const body = example('page_first');
+  Object.assign(body.items[0], { realized_pnl: '-0.125', quote: 'USDC' });
+  for (const [id, realized_pnl, quote] of [
+    ['zero', '0', 'USDC'], ['unit-unknown', '0.125', null], ['pnl-unknown', null, 'USDT'],
+  ]) body.items.push({ ...body.items[0], id, fill_id: id, realized_pnl, quote });
+  const view = model.projectFleetFills({ pages: [lib.parseFleetFills(body)] });
+  const html = render(view);
+  const pnl = fleetFillColumns.find(column => column.id === 'pnl');
+  assert.equal(pnl.value(view.rows[0]), '-0.125', 'sorting/export keeps the exact owner decimal');
+  assert.match(html, /-0\.125 USDC/);
+  assert.equal(pnl.cell(view.rows.find(row => row.id === 'zero')), '0.00 USDC');
+  assert.equal(pnl.cell(view.rows.find(row => row.id === 'unit-unknown')), '+0.125');
+  assert.equal(pnl.cell(view.rows.find(row => row.id === 'pnl-unknown')), '—');
+  assert.ok(fleetFillColumns.findIndex(column => column.id === 'pnl') < fleetFillColumns.findIndex(column => column.id === 'fee'));
 });
 
 test('a partial feed shows the rows and a visible notice naming each unavailable bot and its reason', () => {

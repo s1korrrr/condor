@@ -20,7 +20,8 @@ completed observation retains its source timestamps and receives ordered, indepe
 paper-performance and paper-wallet write attempts; an error in one category is logged and does
 not skip the others. Failed writes are not claimed durable and no journal or retry queue is added.
 
-Both shutdown callers stop admission, drain accepted SDS work and then close API clients.
+The web lifespan drains SDS when it owns the service and has no remaining subscriptions.
+Main teardown always stops and drains SDS before closing API clients.
 Owned task references and shielded waiters follow the Python 3.12
 [task cancellation guidance](https://docs.python.org/3.12/library/asyncio-task.html#shielding-from-cancellation).
 This protects orderly client lifetime; it does not guarantee persistence after a forced kill.
@@ -89,8 +90,25 @@ teardown. No trading, capital, timeout/TTL, database schema, registry or credent
 
 ## Adoption and recovery
 
-No image from this source has been adopted. A new image must prove source and dependency
-identity, preserve the integrated dashboard artifact and runtime/mount configuration, and pass
-an offline image boundary check. Default-branch merge and guarded deployment require separate
-explicit authority. The retained reporting predecessors remain the runtime rollback; source
-recovery is a task-branch revert. Native bots and stored data must remain unchanged.
+An owner-coherent image based on the previous corrected Condor image `9311546d` also replaces
+four older sender modules with source already merged in PR #63:
+`condor/push/apns.py`, `delivery.py`, `live_activity.py` and `refresh.py`. Those source changes
+include terminal Forbidden handling, HTTP-date Retry-After parsing, the fifteen-minute 5xx
+retry floor and retry deadlines measured after the response. They are present in this report's
+owner baseline and full source tests, but differ from that older Condor image. Together with
+SDS, Tradepad, web lifespan, summary assembly and main teardown, there are nine changed Python
+runtime paths relative to `9311546d`. The image is not a status-only byte patch. Its qualification
+must explicitly cover the inherited sender paths as well as the status/history boundary; a
+later deployment approval must include this full declared image scope.
+
+Prototype `sha256:a536942a3f472d8c05673a767d41332f8b8a5329c3eb40e5d07d10455f68a88f`,
+bound to implementation commit `243033386484f04c4e5cb9d5bf3971201d326505`, passed offline
+identity checks: all 327 runtime Python files match the owner, dependencies/runtime configuration
+and all 50 integrated dashboard files are unchanged, and 77 status/history/Tradepad tests pass
+using production imports from the image. Those 77 tests do not cover sender retry behavior.
+The final publication-bound image and its actual-image status and sender checks are recorded
+separately in the root rollout qualification; verify that packet before adoption.
+
+No image from this repair has been adopted. Default-branch merge and guarded deployment require
+separate explicit authority. The retained reporting predecessors remain the runtime rollback;
+source recovery is a task-branch revert. Native bots and stored data must remain unchanged.

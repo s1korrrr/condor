@@ -1,5 +1,11 @@
 # Fleet summary timeout diagnostics
 
+Update, 2026-10-21: the history concurrency described below is superseded by the
+[status/history repair](2026-10-21-status-observation-and-tradepad-integrity.md).
+Status still overlaps independent owner, account and market reads. Local history
+and its read clock now wait for status settlement so its committed first point
+or segment gap is visible. The earlier test and image observations remain history.
+
 Summary timeouts now report the phase that consumed the request deadline. The
 existing 12-second total deadline, bounded glance readers, cache behaviour and
 HTTP 504 response remain in effect. Dashboard and Live Activity content use

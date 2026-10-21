@@ -17,7 +17,7 @@ Architecture:
 import asyncio
 import logging
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import Enum
 from functools import partial
 from typing import Any, Callable, Dict, FrozenSet, List, Optional, Tuple
@@ -261,7 +261,11 @@ class ServerDataService:
         self._poll_task: Optional[asyncio.Task] = None
         # In-flight fetches per key (single-flight coalescing)
         self._inflight: Dict[CacheKey, asyncio.Task] = {}
+        # One active wallet/paper observation and at most one unstarted demand per server.
+        self._wallet_tasks: Dict[str, asyncio.Task] = {}
+        self._wallet_pending: set[str] = set()
         self._running = False
+        self._closing = False
         self._last_cleanup = time.time()
         # Sync listeners (e.g. WebSocketManager broadcasts)
         self._listeners: List[Callable] = []
@@ -309,6 +313,8 @@ class ServerDataService:
         If interval is 0 or not provided, the default for the data type is used.
         Callback signature: async callback(key: CacheKey, old_value, new_value)
         """
+        if self._closing:
+            raise RuntimeError("ServerDataService is stopping")
         if interval <= 0:
             interval = _DEFAULTS[data_type].interval
 
@@ -498,6 +504,14 @@ class ServerDataService:
     def start(self) -> None:
         if self._running:
             return
+        if (
+            (self._poll_task and not self._poll_task.done())
+            or self._inflight
+            or self._wallet_tasks
+            or self._wallet_pending
+        ):
+            raise RuntimeError("ServerDataService must drain before restart")
+        self._closing = False
         self._running = True
         self._poll_task = asyncio.create_task(self._poll_loop())
         logger.info("ServerDataService started")
@@ -637,10 +651,96 @@ class ServerDataService:
         return _on_connectors_change
 
     def stop(self) -> None:
+        self._closing = True
         self._running = False
         if self._poll_task and not self._poll_task.done():
             self._poll_task.cancel()
             logger.info("ServerDataService stopped")
+
+    async def wait_closed(self) -> None:
+        """Drain accepted native fetches and wallet observations before clients close."""
+        cancelled = False
+        while True:
+            tasks = [
+                task
+                for task in (
+                    self._poll_task,
+                    *self._inflight.values(),
+                    *self._wallet_tasks.values(),
+                )
+                if task is not None and not task.done()
+            ]
+            if not tasks:
+                break
+            try:
+                await asyncio.gather(
+                    *(asyncio.shield(task) for task in tasks), return_exceptions=True
+                )
+            except asyncio.CancelledError:
+                # A shutting-down caller must not cancel work the SDS already accepted.
+                cancelled = True
+        if cancelled:
+            raise asyncio.CancelledError
+
+    def _request_wallet_observation(self, server: str) -> None:
+        task = self._wallet_tasks.get(server)
+        if task is not None and not task.done():
+            self._wallet_pending.add(server)
+            return
+        self._wallet_tasks[server] = asyncio.create_task(
+            self._run_wallet_observations(server)
+        )
+
+    async def _run_wallet_observations(self, server: str) -> None:
+        try:
+            while True:
+                self._wallet_pending.discard(server)
+                try:
+                    await self._record_wallet_observation(server)
+                except Exception:
+                    logger.exception(
+                        "Wallet and paper observation task failed for %s", server
+                    )
+                if server not in self._wallet_pending:
+                    return
+        finally:
+            if self._wallet_tasks.get(server) is asyncio.current_task():
+                self._wallet_tasks.pop(server, None)
+
+    async def _record_wallet_observation(self, server: str) -> None:
+        from condor import paper_performance, wallet_observation
+        from condor.performance_history import history
+
+        try:
+            bodies = await wallet_observation.observe_runtime(server)
+        except Exception:
+            logger.exception(
+                "Wallet and paper runtime observation failed for %s", server
+            )
+            return
+
+        try:
+            samples = wallet_observation.wallet_samples(bodies)
+            if samples:
+                await asyncio.to_thread(history.record_wallet, server, samples)
+        except Exception:
+            logger.exception("Wallet observation persistence failed for %s", server)
+
+        try:
+            paper = paper_performance.paper_samples(bodies, time.time())
+            if paper:
+                await asyncio.to_thread(history.record_paper, server, paper)
+        except Exception:
+            logger.exception("Paper performance persistence failed for %s", server)
+
+        try:
+            paper_wallets = wallet_observation.paper_wallet_samples(bodies)
+            if paper_wallets:
+                await asyncio.to_thread(
+                    history.record_paper_wallet, server, paper_wallets
+                )
+        except Exception:
+            logger.exception("Paper wallet persistence failed for %s", server)
 
     # ------ Poll loop ------
 
@@ -712,11 +812,17 @@ class ServerDataService:
         starting a duplicate backend request. The in-flight entry is cleared
         when the fetch settles, so a failure never poisons subsequent fetches.
         """
+        if self._closing:
+            raise RuntimeError("ServerDataService is stopping")
         task = self._inflight.get(key)
         if task is None:
             task = asyncio.ensure_future(self._do_fetch_and_cache(key))
             self._inflight[key] = task
-            task.add_done_callback(lambda _t, k=key: self._inflight.pop(k, None))
+            task.add_done_callback(
+                lambda done, k=key: self._inflight.pop(k, None)
+                if self._inflight.get(k) is done
+                else None
+            )
         # A waiter that is cancelled (client disconnect) must not cancel the shared fetch: the other coalesced
         # readers and the tick's history persistence still need its result.
         return await asyncio.shield(task)
@@ -734,6 +840,7 @@ class ServerDataService:
         try:
             client = await self._get_client(key.server)
             result = await spec.fetch_func(client, **key.params_dict)
+            fetched_at = time.time()
         except Exception as e:
             logger.debug(
                 "SDS fetch failed %s:%s: %s", key.server, key.data_type.value, e
@@ -742,10 +849,14 @@ class ServerDataService:
 
             if key.data_type == ServerDataType.BOTS_STATUS:
                 from condor.performance_history import history
+
                 try:
                     await asyncio.to_thread(history.record, key.server, [])
                 except Exception:
-                    logger.exception("Native performance history gap persistence failed for %s", key.server)
+                    logger.exception(
+                        "Native performance history gap persistence failed for %s",
+                        key.server,
+                    )
 
             # Record error on cache entry
             entry = self._cache.get(key)
@@ -769,26 +880,16 @@ class ServerDataService:
 
         if key.data_type == ServerDataType.BOTS_STATUS:
             from condor.performance_history import history
+
             try:
                 await asyncio.to_thread(history.record, key.server, result)
             except Exception:
-                logger.exception("Native performance history persistence failed for %s", key.server)
-            # Same tick, same durable store, one runtime-status read per reporting source: the shared-wallet
-            # valuation, and the simulated PnL and simulated wallet of paper bots (stored apart from live rows).
-            from condor import paper_performance, wallet_observation
-            try:
-                bodies = await wallet_observation.observe_runtime(key.server)
-                samples = wallet_observation.wallet_samples(bodies)
-                if samples:
-                    await asyncio.to_thread(history.record_wallet, key.server, samples)
-                paper = paper_performance.paper_samples(bodies, time.time())
-                if paper:
-                    await asyncio.to_thread(history.record_paper, key.server, paper)
-                paper_wallets = wallet_observation.paper_wallet_samples(bodies)
-                if paper_wallets:
-                    await asyncio.to_thread(history.record_paper_wallet, key.server, paper_wallets)
-            except Exception:
-                logger.exception("Wallet and paper observation persistence failed for %s", key.server)
+                logger.exception(
+                    "Native performance history persistence failed for %s", key.server
+                )
+            # Reporting sources are sampled in their own bounded lane. A slow runtime read
+            # cannot hold the native status cache or a coalesced status reader.
+            self._request_wallet_observation(key.server)
 
         old_entry = self._cache.get(key)
         old_value = old_entry.value if old_entry else None
@@ -796,7 +897,7 @@ class ServerDataService:
         self._cache[key] = CacheEntry(
             key=key,
             value=result,
-            fetched_at=time.time(),
+            fetched_at=fetched_at,
         )
 
         self._notify_listeners(key, result)

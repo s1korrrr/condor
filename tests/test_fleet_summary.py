@@ -5,6 +5,8 @@ import copy
 import functools
 import json
 import os
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -1442,6 +1444,110 @@ async def test_registered_roster_allows_status_and_owner_reads_to_overlap(store)
     assert owner_started.is_set()
     assert result == expected
     assert len(result['bots']) == len(BOTS)
+
+
+@sync
+async def test_history_waits_for_status_settlement_before_first_point_and_gap(tmp_path):
+    store = PerformanceHistory(tmp_path / "status-history-order.sqlite3")
+    status_started = asyncio.Event()
+    release_status = asyncio.Event()
+    history_started = threading.Event()
+
+    class SettlingReaders(FakeReaders):
+        async def bots_status(self, server):
+            status_started.set()
+            await release_status.wait()
+            with store._connect() as conn:
+                conn.executemany(
+                    "INSERT INTO points VALUES (?,?,?,?,?,?,?,?,?)",
+                    [
+                        (SERVER, "ok_rsi", NOW_S - 600, "boot", "before-gap", "USDC", "1", "0", "1"),
+                        (SERVER, "ok_rsi", NOW_S - 30, "boot", "after-gap", "USDC", "2", "0", "2"),
+                    ],
+                )
+            return bots_status()
+
+        def performance(self, server, bot, range_, now_s):
+            history_started.set()
+            return super().performance(server, bot, range_, now_s)
+
+    readers = SettlingReaders(store, registry=["ok_rsi"])
+    task = asyncio.create_task(
+        fs.build_fleet_summary(SERVER, "full", readers, NOW_MS, is_admin=True, user_id=7)
+    )
+    try:
+        await asyncio.wait_for(status_started.wait(), 2)
+        assert not await asyncio.to_thread(history_started.wait, 0.2), (
+            "history cannot read before native status and its durable history settle"
+        )
+    finally:
+        release_status.set()
+    body = await asyncio.wait_for(task, 2)
+    assert history_started.is_set()
+    assert body["pnl"]["day"]["counted"] == 1
+    assert body["pnl"]["day"]["gaps"], "the persisted segment gap must reach the same response"
+
+
+@sync
+async def test_native_status_history_reaches_summary_while_wallet_observation_is_held(
+    tmp_path, monkeypatch
+):
+    from unittest.mock import AsyncMock
+
+    from condor import performance_history, wallet_observation
+    from condor.server_data_service import ServerDataService, ServerDataType
+    from test_performance_history import packet
+
+    store = PerformanceHistory(tmp_path / "native-to-summary.sqlite3")
+    now = int(time.time())
+    old = packet(now - 600)
+    old["bot_name"] = "ok_rsi"
+    store.record(SERVER, [old], now=now - 600)
+    store.record(SERVER, [], now=now - 590)
+    current = packet(now - 1)
+    current["bot_name"] = "ok_rsi"
+    monkeypatch.setattr(performance_history, "history", store)
+
+    wallet_started = asyncio.Event()
+    release_wallet = asyncio.Event()
+
+    async def held_wallet(_server):
+        wallet_started.set()
+        await release_wallet.wait()
+        return {}
+
+    monkeypatch.setattr(wallet_observation, "observe_runtime", held_wallet)
+    service = ServerDataService()
+    monkeypatch.setattr(service, "_get_client", AsyncMock(return_value=object()))
+    native_fetch = AsyncMock(return_value=[current])
+    service.register_fetch(ServerDataType.BOTS_STATUS, native_fetch)
+
+    class NativeReaders(FakeReaders):
+        async def bots_status(self, server):
+            return await service.get_or_fetch(server, ServerDataType.BOTS_STATUS)
+
+    readers = NativeReaders(store, registry=["ok_rsi"])
+    try:
+        summary = asyncio.create_task(
+            fs.build_fleet_summary(
+                SERVER, "full", readers, now * 1000, is_admin=True, user_id=7
+            )
+        )
+        await asyncio.wait_for(wallet_started.wait(), 3)
+        body = await asyncio.wait_for(summary, 3)
+        native_fetch.assert_awaited_once()
+        assert service.get(SERVER, ServerDataType.BOTS_STATUS) == [current]
+        assert not release_wallet.is_set(), "the reporting writer is still blocked"
+        points = store.read(SERVER, "ok_rsi", "1D", now)["points"]
+        assert len(points) == 2 and points[0]["segment"] != points[1]["segment"]
+        assert body["pnl"]["day"]["counted"] == 1
+        assert body["pnl"]["day"]["gaps"], (
+            "the same response must see the native first point and committed gap"
+        )
+    finally:
+        release_wallet.set()
+        service.stop()
+        await asyncio.wait_for(service.wait_closed(), 3)
 
 
 @sync

@@ -1374,10 +1374,11 @@ async def build_fleet_summary(
         if bots:
             missing.append({"section": "bots", "reason": REGISTRY_FROM_STATUS})
     live = [b for b in bots if not is_paper(b)]
-    read_now_ms = clock_ms() if clock_ms is not None else now_ms
 
     async def resolve_status():
         return await read_status() if registry else status_raw
+
+    status_task = asyncio.create_task(resolve_status())
 
     # Independent reads run together; each fails into its own reason code.
     owner_jobs: list[tuple[str, str, dict]] = [
@@ -1397,6 +1398,13 @@ async def build_fleet_summary(
     paper_bots = tuple(b for b in bots if is_paper(b))
 
     async def read_local_history():
+        # Native status may append a point or mark a recording gap. Read that
+        # committed history after status settles, while other sources proceed.
+        try:
+            await asyncio.shield(status_task)
+        except Exception:
+            pass  # An unavailable status still allows last-known history reads.
+        read_now_ms = clock_ms() if clock_ms is not None else now_ms
         async with phase_span("local_history"):
             return await asyncio.to_thread(
                 _sync_reads, readers, server, live, read_now_ms, paper_bots
@@ -1424,7 +1432,7 @@ async def build_fleet_summary(
             return result
 
     results = await asyncio.gather(
-        resolve_status(),
+        status_task,
         read_local_history(),
         read_market(),
         read_account(),

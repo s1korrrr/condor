@@ -94,6 +94,7 @@ async def _performance_observer_lifespan(app: FastAPI):
         # Never stop a pre-existing owner, or consumers added during this lifespan.
         if started_here and not service.has_subscriptions:
             service.stop()
+            await service.wait_closed()
 
 
 def create_app() -> FastAPI:

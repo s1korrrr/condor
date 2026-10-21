@@ -5,6 +5,8 @@ import copy
 import functools
 import json
 import os
+import threading
+import time
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -1175,15 +1177,15 @@ async def test_live_activity_glance_for_uses_the_selected_read_set(monkeypatch, 
 
 
 @sync
-async def test_summary_deadline_includes_waiting_for_the_shared_cache_lock(
-    monkeypatch, store
+async def test_summary_deadline_includes_waiting_for_the_same_view_cache_lock(
+    monkeypatch, store, caplog
 ):
     readers = FakeReaders(store)
     client_for(monkeypatch, store, readers=readers)
     monkeypatch.setattr(routes, "TOTAL_TIMEOUT", 0.01)
     key = (SERVER, True)
     lock = asyncio.Lock()
-    monkeypatch.setattr(routes, "_locks", {key: lock})
+    monkeypatch.setattr(routes, "_locks", {(*key, "glance"): lock})
     await lock.acquire()
     asyncio.get_running_loop().call_later(0.1, lock.release)
 
@@ -1194,6 +1196,103 @@ async def test_summary_deadline_includes_waiting_for_the_shared_cache_lock(
 
     assert readers.calls == []
     assert key not in routes._cache
+    timeout_record = next(
+        record
+        for record in caplog.records
+        if record.getMessage().startswith("event=fleet_summary_timeout")
+    )
+    assert '"cache.lock_wait"' in timeout_record.getMessage()
+
+
+@sync
+async def test_summary_timeout_reports_active_source_phase_without_identifiers(
+    monkeypatch, store, caplog
+):
+    readers = FakeReaders(store)
+
+    async def stalled_status(server):
+        await asyncio.Event().wait()
+
+    readers.bots_status = stalled_status
+    client_for(monkeypatch, store, readers=readers)
+    monkeypatch.setattr(routes, "READERS", readers)
+    monkeypatch.setattr(routes, "TOTAL_TIMEOUT", 0.01)
+    routes._cache.clear()
+
+    with pytest.raises(TimeoutError):
+        await routes.cached_summary(SERVER, admin=True, user_id=7, view="glance")
+
+    timeout_record = next(
+        record
+        for record in caplog.records
+        if record.getMessage().startswith("event=fleet_summary_timeout")
+    )
+    message = timeout_record.getMessage()
+    assert '"status_read"' in message
+    assert '"summary.build"' in message
+    assert "ok_rsi" not in message and "user_id" not in message
+
+
+@pytest.mark.parametrize("phase_name", ["market.latest", "owner.quant-summary"])
+@sync
+async def test_summary_timeout_trace_identifies_remote_read_group(
+    monkeypatch, store, caplog, phase_name
+):
+    readers = FakeReaders(store)
+    stalled = asyncio.Event()
+
+    if phase_name == "market.latest":
+
+        async def stalled_market(server, user_id):
+            async with fs.phase_span("market.latest"):
+                await stalled.wait()
+
+        readers.market = stalled_market
+    else:
+
+        async def stalled_owner(bot, path, params):
+            if path == "quant-summary":
+                await stalled.wait()
+            return fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)
+
+        readers.owner = stalled_owner
+
+    client_for(monkeypatch, store, readers=readers)
+    monkeypatch.setattr(routes, "READERS", readers)
+    monkeypatch.setattr(routes, "TOTAL_TIMEOUT", 0.01)
+
+    with pytest.raises(TimeoutError):
+        await routes.cached_summary(SERVER, admin=True, user_id=7, view="glance")
+
+    timeout_record = next(
+        record
+        for record in caplog.records
+        if record.getMessage().startswith("event=fleet_summary_timeout")
+    )
+    assert f'"{phase_name}"' in timeout_record.getMessage()
+
+
+@sync
+async def test_inner_source_timeout_is_not_mislabeled_as_total_deadline(
+    monkeypatch, store, caplog
+):
+    client_for(monkeypatch, store)
+    monkeypatch.setattr(routes, "TOTAL_TIMEOUT", 5)
+
+    async def source_timeout(*args, **kwargs):
+        raise TimeoutError("private upstream details")
+
+    monkeypatch.setattr(fs, "build_fleet_summary", source_timeout)
+    with pytest.raises(TimeoutError):
+        await routes.cached_summary(SERVER, admin=True, user_id=7, view="glance")
+
+    timeout_record = next(
+        record
+        for record in caplog.records
+        if record.getMessage().startswith("event=fleet_summary_timeout")
+    )
+    assert "kind=source_timeout" in timeout_record.getMessage()
+    assert "private upstream details" not in timeout_record.getMessage()
 
 
 @pytest.mark.parametrize(
@@ -1319,3 +1418,186 @@ async def test_an_older_gap_leaves_the_current_day_complete(tmp_path):
         pnl = (await build(store, view))["pnl"]
         assert pnl["day"]["uncovered_ms"] == 0 and not pnl["day"]["partial"], view
         assert all(pnl[name]["uncovered_ms"] > 0 for name in ("week", "month", "all")), view
+
+
+@sync
+async def test_registered_roster_allows_status_and_owner_reads_to_overlap(store):
+    expected = await build(store, "glance")
+    readers = FakeReaders(store)
+    owner_started = asyncio.Event()
+    original_owner = readers.owner
+    original_status = readers.bots_status
+
+    async def status_waits_for_independent_owner(server):
+        await asyncio.wait_for(owner_started.wait(), timeout=0.05)
+        return await original_status(server)
+
+    async def observed_owner(bot, path, params):
+        owner_started.set()
+        return await original_owner(bot, path, params)
+
+    readers.bots_status = status_waits_for_independent_owner
+    readers.owner = observed_owner
+    result = await fs.build_fleet_summary(
+        SERVER, 'glance', readers, NOW_MS, is_admin=True, user_id=7
+    )
+    assert owner_started.is_set()
+    assert result == expected
+    assert len(result['bots']) == len(BOTS)
+
+
+@sync
+async def test_history_waits_for_status_settlement_before_first_point_and_gap(tmp_path):
+    store = PerformanceHistory(tmp_path / "status-history-order.sqlite3")
+    status_started = asyncio.Event()
+    release_status = asyncio.Event()
+    history_started = threading.Event()
+
+    class SettlingReaders(FakeReaders):
+        async def bots_status(self, server):
+            status_started.set()
+            await release_status.wait()
+            with store._connect() as conn:
+                conn.executemany(
+                    "INSERT INTO points VALUES (?,?,?,?,?,?,?,?,?)",
+                    [
+                        (SERVER, "ok_rsi", NOW_S - 600, "boot", "before-gap", "USDC", "1", "0", "1"),
+                        (SERVER, "ok_rsi", NOW_S - 30, "boot", "after-gap", "USDC", "2", "0", "2"),
+                    ],
+                )
+            return bots_status()
+
+        def performance(self, server, bot, range_, now_s):
+            history_started.set()
+            return super().performance(server, bot, range_, now_s)
+
+    readers = SettlingReaders(store, registry=["ok_rsi"])
+    task = asyncio.create_task(
+        fs.build_fleet_summary(SERVER, "full", readers, NOW_MS, is_admin=True, user_id=7)
+    )
+    try:
+        await asyncio.wait_for(status_started.wait(), 2)
+        assert not await asyncio.to_thread(history_started.wait, 0.2), (
+            "history cannot read before native status and its durable history settle"
+        )
+    finally:
+        release_status.set()
+    body = await asyncio.wait_for(task, 2)
+    assert history_started.is_set()
+    assert body["pnl"]["day"]["counted"] == 1
+    assert body["pnl"]["day"]["gaps"], "the persisted segment gap must reach the same response"
+
+
+@sync
+async def test_native_status_history_reaches_summary_while_wallet_observation_is_held(
+    tmp_path, monkeypatch
+):
+    from unittest.mock import AsyncMock
+
+    from condor import performance_history, wallet_observation
+    from condor.server_data_service import ServerDataService, ServerDataType
+    from test_performance_history import packet
+
+    store = PerformanceHistory(tmp_path / "native-to-summary.sqlite3")
+    now = int(time.time())
+    old = packet(now - 600)
+    old["bot_name"] = "ok_rsi"
+    store.record(SERVER, [old], now=now - 600)
+    store.record(SERVER, [], now=now - 590)
+    current = packet(now - 1)
+    current["bot_name"] = "ok_rsi"
+    monkeypatch.setattr(performance_history, "history", store)
+
+    wallet_started = asyncio.Event()
+    release_wallet = asyncio.Event()
+
+    async def held_wallet(_server):
+        wallet_started.set()
+        await release_wallet.wait()
+        return {}
+
+    monkeypatch.setattr(wallet_observation, "observe_runtime", held_wallet)
+    service = ServerDataService()
+    monkeypatch.setattr(service, "_get_client", AsyncMock(return_value=object()))
+    native_fetch = AsyncMock(return_value=[current])
+    service.register_fetch(ServerDataType.BOTS_STATUS, native_fetch)
+
+    class NativeReaders(FakeReaders):
+        async def bots_status(self, server):
+            return await service.get_or_fetch(server, ServerDataType.BOTS_STATUS)
+
+    readers = NativeReaders(store, registry=["ok_rsi"])
+    try:
+        summary = asyncio.create_task(
+            fs.build_fleet_summary(
+                SERVER, "full", readers, now * 1000, is_admin=True, user_id=7
+            )
+        )
+        await asyncio.wait_for(wallet_started.wait(), 3)
+        body = await asyncio.wait_for(summary, 3)
+        native_fetch.assert_awaited_once()
+        assert service.get(SERVER, ServerDataType.BOTS_STATUS) == [current]
+        assert not release_wallet.is_set(), "the reporting writer is still blocked"
+        points = store.read(SERVER, "ok_rsi", "1D", now)["points"]
+        assert len(points) == 2 and points[0]["segment"] != points[1]["segment"]
+        assert body["pnl"]["day"]["counted"] == 1
+        assert body["pnl"]["day"]["gaps"], (
+            "the same response must see the native first point and committed gap"
+        )
+    finally:
+        release_wallet.set()
+        service.stop()
+        await asyncio.wait_for(service.wait_closed(), 3)
+
+
+@sync
+async def test_cold_glance_does_not_wait_behind_full_summary_build(monkeypatch, store):
+    client_for(monkeypatch, store)
+    monkeypatch.setattr(routes, 'TOTAL_TIMEOUT', 0.1)
+    full_started = asyncio.Event()
+    release_full = asyncio.Event()
+    calls = []
+    original_build = fs.build_fleet_summary
+
+    async def controlled_build(server, view, *args, **kwargs):
+        calls.append(view)
+        if view == 'full':
+            full_started.set()
+            await release_full.wait()
+        return await original_build(server, view, *args, **kwargs)
+
+    monkeypatch.setattr(fs, 'build_fleet_summary', controlled_build)
+    full = asyncio.create_task(routes.cached_summary(SERVER, admin=True, user_id=7, view='full'))
+    try:
+        await full_started.wait()
+        glance = await routes.cached_summary(SERVER, admin=True, user_id=7, view='glance')
+        assert glance['view'] == 'glance'
+        assert not full.done()
+        assert calls == ['full', 'glance']
+    finally:
+        release_full.set()
+        await asyncio.gather(full, return_exceptions=True)
+
+
+@sync
+async def test_concurrent_same_view_misses_coalesce_after_partition(monkeypatch, store):
+    client_for(monkeypatch, store)
+    monkeypatch.setattr(routes, 'CACHE_TTL_SECONDS', 60)
+    entered, release = asyncio.Event(), asyncio.Event()
+    builds = []
+    original_build = fs.build_fleet_summary
+
+    async def controlled_build(server, view, *args, **kwargs):
+        builds.append(view)
+        entered.set()
+        await release.wait()
+        return await original_build(server, view, *args, **kwargs)
+
+    monkeypatch.setattr(fs, 'build_fleet_summary', controlled_build)
+    first = asyncio.create_task(routes.cached_summary(SERVER, admin=True, user_id=7, view='glance'))
+    await entered.wait()
+    second = asyncio.create_task(routes.cached_summary(SERVER, admin=True, user_id=7, view='glance'))
+    release.set()
+    a, b = await asyncio.gather(first, second)
+    assert a == b
+    assert builds == ['glance']

@@ -364,6 +364,8 @@ async def test_background_fetch_records_and_failure_marks_gap(monkeypatch):
     fetch.side_effect = RuntimeError("offline")
     await sds._do_fetch_and_cache(key)
     observer.record.assert_called_with("server", [])
+    sds.stop()
+    await sds.wait_closed()
 
 
 @pytest.mark.asyncio
@@ -414,6 +416,7 @@ async def test_headless_lifespan_observes_only_bots_and_preserves_shared_owner(
         assert bool(sds._subscriptions) is added_consumer
     finally:
         sds.stop()
+        await sds.wait_closed()
 
 
 def test_route_authorization_and_range(monkeypatch, tmp_path):

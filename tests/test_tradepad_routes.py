@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 from pathlib import Path
 
 import pytest
@@ -51,7 +52,6 @@ def publish(root: Path, bundle_id, data=BUNDLE, **extra):
 @pytest.fixture
 def root(tmp_path, monkeypatch):
     monkeypatch.setenv("CONDOR_TRADEPAD_DIR", str(tmp_path))
-    store._HASHES.clear()
     return tmp_path
 
 
@@ -112,6 +112,26 @@ def test_bundle_bytes_are_served_only_while_they_match_the_meta(root):
     (directory / "bundle.json").write_bytes(BUNDLE + b" ")
     with pytest.raises(store.TradepadIntegrityError, match="size"):
         store.bundle_file(root, "one")
+
+
+def test_same_size_rewrite_with_restored_mtime_cannot_reuse_a_verified_digest(root):
+    directory = publish(root, "one")
+    path = directory / "bundle.json"
+    first = store.bundle_file(root, "one")
+    original = path.stat()
+    tampered = BUNDLE.replace(b"v2", b"v3")
+    assert len(tampered) == original.st_size and tampered != BUNDLE
+    path.write_bytes(tampered)
+    os.utime(path, ns=(original.st_atime_ns, original.st_mtime_ns))
+    changed = path.stat()
+    assert (changed.st_mtime_ns, changed.st_size) == (
+        original.st_mtime_ns,
+        original.st_size,
+    )
+
+    with pytest.raises(store.TradepadIntegrityError, match="sha256"):
+        store.bundle_file(root, "one")
+    assert first.sha256 == hashlib.sha256(BUNDLE).hexdigest()
 
 
 @pytest.mark.parametrize("bundle_id", ["missing", "../etc", "UPPER", "a/b", ""])

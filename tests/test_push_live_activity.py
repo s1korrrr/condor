@@ -900,7 +900,10 @@ def test_the_web_lifespan_starts_and_stops_the_publisher(monkeypatch):
             pass
 
         def stop(self):
-            pass
+            events.append(("service-stop", None))
+
+        async def wait_closed(self):
+            events.append(("service-drained", None))
 
         async def subscribe(self, *args):
             pass
@@ -934,7 +937,7 @@ def test_the_web_lifespan_starts_and_stops_the_publisher(monkeypatch):
             ]
 
     run(lifespan())
-    assert events[-1] == ("stop", "task")
+    assert events[-3:] == [("stop", "task"), ("service-stop", None), ("service-drained", None)]
 
 
 # --------------------------------------------------------------------------- sender

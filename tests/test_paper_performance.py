@@ -262,6 +262,8 @@ async def test_the_status_tick_records_wallets_and_paper_pnl_from_one_runtime_re
     monkeypatch.setattr(sds, "_get_client", AsyncMock(return_value=object()))
     sds.register_fetch(ServerDataType.BOTS_STATUS, AsyncMock(return_value=[]))
     await sds._do_fetch_and_cache(CacheKey.make("v2", ServerDataType.BOTS_STATUS))
+    sds.stop()
+    await sds.wait_closed()
     reads.assert_awaited_once_with("v2")
     (server, samples), _ = observer.record_paper.call_args
     assert (

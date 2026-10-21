@@ -19,7 +19,6 @@ import json
 import math
 import os
 import re
-import threading
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -151,24 +150,13 @@ def catalog(root: Path) -> dict[str, Any]:
     return {"bundles": metas, "errors": errors}
 
 
-_HASHES: dict[tuple[str, int, int], str] = {}
-_HASHES_LOCK = threading.Lock()
-
-
-def _sha256(path: Path, stat: os.stat_result) -> str:
-    key = (str(path), stat.st_mtime_ns, stat.st_size)
-    with _HASHES_LOCK:
-        known = _HASHES.get(key)
-    if known is not None:
-        return known
+def _sha256(path: Path) -> str:
+    """Hash the current bytes; file metadata cannot prove byte identity."""
     digest = hashlib.sha256()
     with path.open("rb") as handle:
         for chunk in iter(lambda: handle.read(1024 * 1024), b""):
             digest.update(chunk)
-    value = digest.hexdigest()
-    with _HASHES_LOCK:
-        _HASHES[key] = value
-    return value
+    return digest.hexdigest()
 
 
 def _bundle_dir(root: Path, bundle_id: str) -> Path:
@@ -195,7 +183,7 @@ def bundle_file(root: Path, bundle_id: str) -> VerifiedFile:
         raise TradepadIntegrityError(
             "bundle.json size does not match its published meta"
         )
-    digest = _sha256(path, stat)
+    digest = _sha256(path)
     if digest != meta["bundle_sha256"]:
         raise TradepadIntegrityError(
             "bundle.json bytes do not match their published sha256"

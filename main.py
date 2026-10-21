@@ -635,7 +635,9 @@ async def teardown(application: Application) -> None:
     # Stop ServerDataService
     from condor.server_data_service import get_server_data_service
 
-    get_server_data_service().stop()
+    service = get_server_data_service()
+    service.stop()
+    await service.wait_closed()
 
     # Close cached Hummingbot API clients (ConfigManager)
     from config_manager import get_config_manager

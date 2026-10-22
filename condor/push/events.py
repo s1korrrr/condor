@@ -79,14 +79,7 @@ ALERT_CLASSES: dict[str, AlertClass] = {
         AlertClass(
             "health",
             "Bot health",
-            "A bot is offline, stopped, or its status went stale.",
-            True,
-            "RSIBOT_HEALTH",
-        ),
-        AlertClass(
-            "trading",
-            "Trading blocked",
-            "A bot cannot buy or sell a pair, and when it can again.",
+            "A bot is offline, stopped, its status went stale, or it cannot buy or sell a pair.",
             True,
             "RSIBOT_HEALTH",
         ),
@@ -819,6 +812,8 @@ class TradingThresholds:
     confirm_seconds: float = 60.0
     funds_confirm_seconds: float = 900.0
     recover_seconds: float = 120.0
+    # A report older than this is a gap: it neither opens nor clears anything.
+    max_age_seconds: float = 300.0
 
 
 FUNDS_REASONS = frozenset({"balance_low", "base_balance_low"})
@@ -851,27 +846,25 @@ def evaluate_trading(
     alerting count; deliberate strategy waits never do. A missing, unreadable or stale report is
     a gap, not evidence: no condition opens or clears on it (health alerts cover a stale owner).
     """
-    runtime = _runtime(runtime_payload) if runtime_ok else None
-    capability = runtime.get("trading_capability") if runtime is not None else None
-    if (
-        not isinstance(capability, Mapping)
-        or capability.get("schema_version") != 1
-        or capability.get("evidence") != "fresh"
-        or not isinstance(capability.get("restrictions"), list)
-    ):
+    if not capability_reported(runtime_payload if runtime_ok else None, now=now,
+                               max_age_seconds=thresholds.max_age_seconds):
         return (), {}
+    capability = _runtime(runtime_payload)["trading_capability"]
     current: dict[str, Mapping[str, Any]] = {}
     for item in capability["restrictions"]:
-        if (
+        if not (
             isinstance(item, Mapping)
-            and item.get("alert") is True
             and item.get("side") in trading_words.SIDES
             and item.get("state") in ("restricted", "blocked")
             and isinstance(item.get("reason_code"), str)
             and re.fullmatch(r"[a-z0-9_]{1,64}", item["reason_code"])
             and (item.get("pair") is None or (isinstance(item.get("pair"), str)
                                               and re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", item["pair"])))
+            and type(item.get("alert")) is bool
         ):
+            # One unreadable row makes the whole report a gap: dropping it would read as recovery.
+            return (), {}
+        if item["alert"]:
             current[_trading_key(src, item)] = item
     prefix = f"{src.key[:16]}{TRADING_KEY}"
     keys = set(current) | {key for key in conditions if key.startswith(prefix)}
@@ -912,7 +905,8 @@ def evaluate_trading(
         events.append(
             AlertEvent(
                 id=("trading:" if opened else "trading-ok:") + digest(src.key, key, since),
-                cls="trading",
+                # The health class: workers that predate this detector can still deliver it.
+                cls="health",
                 severity=("critical" if side in ("sell", "both") else "warning") if opened else "info",
                 title=clean_text(
                     f"{src.tag} · {subject} {'blocked' if opened else 'back'}", 100
@@ -930,11 +924,29 @@ def evaluate_trading(
     return tuple(events), changes
 
 
-def capability_reported(runtime_payload: Any) -> bool:
-    """True when the owner's status carries a fresh trading capability this worker can act on."""
+def capability_reported(runtime_payload: Any, *, now: float, max_age_seconds: float) -> bool:
+    """True when the owner's status carries a fresh, well-formed trading capability.
+
+    The owner's own ``evidence`` word is not enough: the report must also be young by this
+    worker's clock, so a frozen status can neither open nor clear a condition.
+    """
     runtime = _runtime(runtime_payload)
     capability = runtime.get("trading_capability") if runtime is not None else None
-    return isinstance(capability, Mapping) and capability.get("schema_version") == 1 and capability.get("evidence") == "fresh"
+    if (
+        not isinstance(capability, Mapping)
+        or capability.get("schema_version") != 1
+        or capability.get("evidence") != "fresh"
+        or not isinstance(capability.get("restrictions"), list)
+    ):
+        return False
+    updated = _epoch(runtime.get("updated_at"))
+    observed = _epoch(capability.get("observed_at"))
+    return (
+        updated is not None
+        and observed is not None
+        and -5 <= now - updated <= max_age_seconds
+        and -5 <= now - observed <= max_age_seconds
+    )
 
 
 # Host incidents the trading-capability detector owns while capability is reported, so the same
@@ -994,12 +1006,11 @@ def detect_incidents(
         if incident.get("state") == "open":
             if seen(opened_key) or seen(skip_key):
                 continue
-            if (
-                first < started
-                or severity_rank(severity) < floor
-                or any(incident_id.endswith(suffix) for suffix in owned_suffixes)
-            ):
+            if first < started or severity_rank(severity) < floor:
                 keys.append(skip_key)
+                continue
+            if any(incident_id.endswith(suffix) for suffix in owned_suffixes):
+                # Owned for now, not forever: no key, so it is reconsidered if ownership lapses.
                 continue
             keys.append(opened_key)
             detail = clean_text(incident.get("detail"), 200)

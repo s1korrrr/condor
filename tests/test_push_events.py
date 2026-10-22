@@ -842,7 +842,11 @@ def test_clean_text_strips_controls_and_bounds_length():
 
 # --------------------------------------------------------------------------- trading capability
 
-TRADING = ev.TradingThresholds(confirm_seconds=60, funds_confirm_seconds=900, recover_seconds=120)
+from datetime import datetime as _dt, timezone as _tz
+
+TRADING = ev.TradingThresholds(confirm_seconds=60, funds_confirm_seconds=900, recover_seconds=120,
+                               max_age_seconds=300)
+T0 = 1_792_675_000.0
 ETH_ISSUE = {
     "pair": "ETH-USDC",
     "side": "buy",
@@ -854,12 +858,17 @@ ETH_ISSUE = {
 }
 
 
-def _capability_payload(restrictions, *, evidence="fresh"):
+def _iso(epoch):
+    return _dt.fromtimestamp(epoch, _tz.utc).isoformat()
+
+
+def _capability_payload(restrictions, *, at, evidence="fresh"):
     return {
         "runtime_status": {
-            "updated_at": "2026-10-22T13:18:18+00:00",
+            "updated_at": _iso(at),
             "trading_capability": {
                 "schema_version": 1,
+                "observed_at": _iso(at),
                 "evidence": evidence,
                 "buy": "restricted" if restrictions else "can_trade",
                 "sell": "can_trade",
@@ -870,10 +879,16 @@ def _capability_payload(restrictions, *, evidence="fresh"):
 
 
 def _run_trading(steps, src=V1):
-    """Feed (time, payload, runtime_ok) observations through evaluate_trading, persisting conditions."""
+    """Feed (seconds after T0, payload-or-builder, runtime_ok) through evaluate_trading, persisting conditions.
+
+    A list as the payload means "a fresh report with these restrictions at that moment".
+    """
     conditions: dict = {}
     out = []
-    for now, payload, ok in steps:
+    for t, payload, ok in steps:
+        now = T0 + t
+        if isinstance(payload, list):
+            payload = _capability_payload(payload, at=now)
         events, changes = ev.evaluate_trading(
             src, now=now, thresholds=TRADING, runtime_payload=payload, runtime_ok=ok,
             conditions=conditions,
@@ -889,44 +904,71 @@ def _run_trading(steps, src=V1):
 
 def test_v1_eth_admission_issue_alerts_once_after_confirmation_and_once_on_recovery():
     """Live V1, 2026-10-22: the latched ETH admission error produced no push event before this."""
-    blocked = _capability_payload([ETH_ISSUE])
-    clear = _capability_payload([])
     out, conditions = _run_trading(
-        [(0, blocked, True), (30, blocked, True), (60, blocked, True), (90, blocked, True),
-         (120, clear, True), (200, clear, True), (260, clear, True)]
+        [(0, [ETH_ISSUE], True), (30, [ETH_ISSUE], True), (60, [ETH_ISSUE], True), (90, [ETH_ISSUE], True),
+         (120, [], True), (200, [], True), (260, [], True)]
     )
     assert [len(e) for e in out] == [0, 0, 1, 0, 0, 0, 1]
     opened, resolved = out[2][0], out[6][0]
-    assert opened.cls == "trading" and opened.severity == "warning"
+    assert opened.cls == "health" and opened.kind == "trading_blocked" and opened.severity == "warning"
     assert opened.title == "V1 · ETH-USDC buying blocked"
     assert opened.body == "ETH-USDC buying restricted: buy decision could not be stored."
     assert opened.deep_link == "rsibot://bot/ok_rsi/health"
-    assert resolved.severity == "info" and resolved.title == "V1 · ETH-USDC buying back"
+    assert resolved.kind == "trading_resolved" and resolved.severity == "info"
+    assert resolved.title == "V1 · ETH-USDC buying back"
     assert resolved.collapse_key == opened.collapse_key
     assert conditions == {}
 
 
+def test_trading_events_use_a_class_that_older_workers_can_deliver():
+    """Review 2026-10-22: an unknown class in the outbox makes the rollback worker's due() raise."""
+    out, _ = _run_trading([(0, [ETH_ISSUE], True), (60, [ETH_ISSUE], True)])
+    assert out[1][0].cls in {"fill_entry", "fill_exit", "bag", "risk", "health", "incident", "summary", "market", "test"}
+    assert "trading" not in ev.ALERT_CLASSES
+
+
 def test_gaps_never_open_or_clear_a_trading_condition():
-    blocked = _capability_payload([ETH_ISSUE])
     out, conditions = _run_trading(
-        [(0, blocked, True), (60, blocked, True),
-         (100, None, False), (300, _capability_payload([], evidence="stale"), True),
+        [(0, [ETH_ISSUE], True), (60, [ETH_ISSUE], True),
+         (100, None, False),
+         (300, _capability_payload([], at=T0 + 300, evidence="stale"), True),
          (500, {"runtime_status": {"updated_at": "x"}}, True)]
     )
     assert [len(e) for e in out] == [0, 1, 0, 0, 0]
     assert len(conditions) == 1 and next(iter(conditions.values())).open
 
 
+def test_a_frozen_report_neither_opens_nor_clears():
+    """Review 2026-10-22: identical timestamp-frozen reports opened at T+3600 and cleared conditions."""
+    frozen_blocked = _capability_payload([ETH_ISSUE], at=T0)
+    out, conditions = _run_trading([(0, frozen_blocked, True), (3600, frozen_blocked, True)])
+    # Fresh at T0 starts a pending condition; the frozen copy an hour later must not confirm it.
+    assert not any(out) and not any(c.open for c in conditions.values())
+    frozen_clear = _capability_payload([], at=T0 + 60)
+    out, conditions = _run_trading(
+        [(0, [ETH_ISSUE], True), (60, [ETH_ISSUE], True), (900, frozen_clear, True), (1100, frozen_clear, True)])
+    assert [len(e) for e in out] == [0, 1, 0, 0]
+    assert next(iter(conditions.values())).open
+
+
+def test_a_malformed_row_is_a_gap_not_a_recovery():
+    """Review 2026-10-22: a malformed copy of an open restriction resolved it."""
+    broken = dict(ETH_ISSUE, pair="broken")
+    out, conditions = _run_trading(
+        [(0, [ETH_ISSUE], True), (60, [ETH_ISSUE], True), (90, [broken], True), (210, [broken], True)])
+    assert [len(e) for e in out] == [0, 1, 0, 0]
+    assert next(iter(conditions.values())).open
+
+
 def test_policy_restrictions_and_expected_waits_never_page():
     quiet = dict(ETH_ISSUE, reason_code="trade_mode_sell_only", alert=False)
-    out, conditions = _run_trading([(t, _capability_payload([quiet]), True) for t in range(0, 4000, 30)])
+    out, conditions = _run_trading([(t, [quiet], True) for t in range(0, 4000, 30)])
     assert not any(out) and conditions == {}
 
 
 def test_low_balance_must_persist_fifteen_minutes_and_sell_side_is_critical():
     funds = dict(ETH_ISSUE, side="sell", reason_code="base_balance_low", detail=None)
-    payload = _capability_payload([funds])
-    out, _ = _run_trading([(t, payload, True) for t in range(0, 1000, 60)])
+    out, _ = _run_trading([(t, [funds], True) for t in range(0, 1000, 60)])
     opened = [e for events in out for e in events]
     assert len(opened) == 1 and list(out[15]) == opened  # opened at t=900
     assert opened[0].severity == "critical"
@@ -936,7 +978,7 @@ def test_low_balance_must_persist_fifteen_minutes_and_sell_side_is_critical():
 def test_unknown_reason_carries_the_owner_detail_and_bot_wide_scope_reads_plainly():
     odd = {"pair": None, "side": "both", "state": "blocked", "reason_code": "symbol_runtime_fault",
            "detail": "BTC-USDC runtime fault", "alert": True}
-    out, _ = _run_trading([(0, _capability_payload([odd]), True), (60, _capability_payload([odd]), True)])
+    out, _ = _run_trading([(0, [odd], True), (60, [odd], True)])
     [event] = out[1]
     assert event.title == "V1 · Trading blocked"
     assert event.body == "Trading blocked: symbol runtime fault. BTC-USDC runtime fault"
@@ -946,11 +988,12 @@ def test_unknown_reason_carries_the_owner_detail_and_bot_wide_scope_reads_plainl
 def test_malformed_restrictions_are_ignored_not_alerted():
     bad = [dict(ETH_ISSUE, pair="eth"), dict(ETH_ISSUE, side="up"), dict(ETH_ISSUE, reason_code="Bad Code"),
            dict(ETH_ISSUE, alert="yes"), "text"]
-    out, conditions = _run_trading([(0, _capability_payload(bad), True), (90, _capability_payload(bad), True)])
-    assert not any(out) and conditions == {}
+    for row in bad:
+        out, conditions = _run_trading([(0, [row], True), (90, [row], True)])
+        assert not any(out) and conditions == {}
 
 
-def test_admission_incidents_are_owned_by_trading_only_when_requested():
+def test_admission_incidents_are_owned_by_trading_only_while_capability_is_reported():
     store = {
         "state": "available",
         "incidents": [
@@ -964,18 +1007,16 @@ def test_admission_incidents_are_owned_by_trading_only_when_requested():
     owned = ev.detect_incidents(store, started=0, seen=seen.__contains__,
                                 owned_suffixes=ev.TRADING_OWNED_INCIDENT_SUFFIXES)
     assert [e.title for e in owned.events] == ["execution-main · Down"]
-    assert "inc-skip:execution-main/buy_admission_issue" in owned.seen
-    legacy = ev.detect_incidents(store, started=0, seen=set().__contains__)
-    assert len(legacy.events) == 2
+    assert not any("buy_admission_issue" in key for key in owned.seen), "ownership must not be permanent"
+    seen.update(owned.seen)
+    lapsed = ev.detect_incidents(store, started=0, seen=seen.__contains__)
+    assert [e.title for e in lapsed.events] == ["execution-main · BUY admission"]
 
 
-def test_capability_reported_requires_a_fresh_versioned_body():
-    assert ev.capability_reported(_capability_payload([]))
-    assert not ev.capability_reported(_capability_payload([], evidence="stale"))
-    assert not ev.capability_reported({"runtime_status": {}})
-    assert not ev.capability_reported(None)
-
-
-def test_trading_is_a_default_on_alert_class():
-    assert ev.ALERT_CLASSES["trading"].default_enabled
-    assert ev.default_classes()["trading"] is True
+def test_capability_reported_requires_a_fresh_young_versioned_body():
+    now = T0 + 10
+    assert ev.capability_reported(_capability_payload([], at=T0), now=now, max_age_seconds=300)
+    assert not ev.capability_reported(_capability_payload([], at=T0, evidence="stale"), now=now, max_age_seconds=300)
+    assert not ev.capability_reported(_capability_payload([], at=T0 - 600), now=now, max_age_seconds=300)
+    assert not ev.capability_reported({"runtime_status": {}}, now=now, max_age_seconds=300)
+    assert not ev.capability_reported(None, now=now, max_age_seconds=300)

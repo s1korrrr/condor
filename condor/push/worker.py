@@ -471,7 +471,14 @@ class PushWorker:
         # capability; otherwise the host incident stays the one alert for that cause.
         owned = (
             ev.TRADING_OWNED_INCIDENT_SUFFIXES
-            if live and all(r.runtime_ok and ev.capability_reported(r.runtime) for r in live)
+            if live
+            and all(
+                r.runtime_ok
+                and ev.capability_reported(
+                    r.runtime, now=now, max_age_seconds=self.config.trading_thresholds.max_age_seconds
+                )
+                for r in live
+            )
             else ()
         )
         for _, reads in infos:

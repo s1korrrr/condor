@@ -1045,6 +1045,16 @@ def test_alerting_restrictions_survive_the_bound():
     assert trading["restrictions"][0]["reason_code"] == "price_unavailable"
 
 
+def test_glance_word_names_only_real_inability():
+    quiet = {"alert": False, "state": "restricted"}
+    loud = {"alert": True, "state": "restricted"}
+    blocked = {"alert": True, "state": "blocked"}
+    assert fs.trading_word({"buy": "restricted", "sell": "can_trade", "restrictions": [quiet]}) == "ok"
+    assert fs.trading_word({"buy": "restricted", "sell": "can_trade", "restrictions": [loud]}) == "restricted"
+    assert fs.trading_word({"buy": "blocked", "sell": "blocked", "restrictions": [quiet, blocked]}) == "blocked"
+    assert fs.trading_word({"buy": "unverified", "sell": "unverified", "restrictions": []}) == "unverified"
+
+
 @sync
 async def test_max_admitted_amount_width_still_fits_sixteen_bot_glance(store):
     full = await build(store, "full")

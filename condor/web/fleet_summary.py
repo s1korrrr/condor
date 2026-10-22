@@ -543,11 +543,16 @@ def project_trading(value: Any, current: bool) -> Optional[dict]:
 
 
 def trading_word(trading: dict) -> str:
-    """The worst of both sides: ``blocked`` > ``restricted`` > ``unverified`` > ``ok``."""
-    sides = (trading["buy"], trading["sell"])
-    for word in ("blocked", "restricted", "unverified"):
-        if word in sides:
-            return word
+    """One word for the glance: ``blocked``/``restricted`` only for a real inability (an alerting
+    restriction), else ``unverified`` when a side cannot be confirmed, else ``ok``. A policy limit
+    such as sell-only mode is not an inability and stays ``ok`` here."""
+    alerting = [row for row in trading["restrictions"] if row.get("alert")]
+    if any(row.get("state") == "blocked" for row in alerting):
+        return "blocked"
+    if alerting:
+        return "restricted"
+    if "unverified" in (trading["buy"], trading["sell"]):
+        return "unverified"
     return "ok"
 
 

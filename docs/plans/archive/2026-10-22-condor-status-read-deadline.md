@@ -95,6 +95,22 @@ image.
   one coalesced flight, and the queued request reuses the newly cached view.
   A separate cancellation regression confirms that caller cancellation releases
   the lock for a subsequent request.
+- Exact-image qualification used image
+  `sha256:1991bcfd19897f4a26125b12c8946d83042e502a6791d5f91d3a4717364c2c01`
+  with the deployed-compatible `2571dc0d` test module and fixtures, plus the
+  two reviewed regressions from this source commit. All 43 selected tests passed
+  in a read-only, network-disabled container limited to 1 CPU and 768 MiB. The
+  image's summary and SDS helper hashes match `2571dc0d`; its route hash is
+  `86083823c677bba23c5daa1f47d830a5cf306d5329cf1c76b15151e083f98a3d`, which
+  includes this timeout patch. The route hash at baseline `2571dc0d` was
+  `86e9d35a901d4d45b2ed719b4c3d0410700a6c32429908a1ee67f5e16052bf5a`.
+- A broader run of the current 50-test fork-main module against this older
+  candidate image produced 42 passes and 8 failures because the image predates
+  unrelated schema and history-settlement changes. That result is preserved as
+  a version-mismatch record; it is not counted as a failure of this route fix.
+- The exact-image QA packet records the test module, all 38 fixture hashes,
+  both added regression function hashes, runtime identities, argv, and logs at
+  `/Users/s1kor/.local/share/rsibot/releases/20261022-merge-research-mobile/condor-image/`.
 - The history concurrency behavior remains unchanged. On a status timeout the
   current summary reports status unavailable and reads the last durable history;
   the existing shared SDS fetch may still complete and persist later.
@@ -102,6 +118,6 @@ image.
   formatting elsewhere in both edited files. The formatting hook rewrote those
   unrelated regions, so they were restored. The focused test additions require
   no Black or isort changes.
-- Evidence ceiling: deterministic route tests and local source checks only.
-  No live request, deployed image qualification, service restart, or deployment
-  was performed by this task.
+- Evidence ceiling: deterministic route tests, exact-image offline qualification,
+  and local source checks. No live request, service restart, or deployment was
+  performed by this task.

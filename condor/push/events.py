@@ -850,22 +850,9 @@ def evaluate_trading(
                                max_age_seconds=thresholds.max_age_seconds):
         return (), {}
     capability = _runtime(runtime_payload)["trading_capability"]
-    current: dict[str, Mapping[str, Any]] = {}
-    for item in capability["restrictions"]:
-        if not (
-            isinstance(item, Mapping)
-            and item.get("side") in trading_words.SIDES
-            and item.get("state") in ("restricted", "blocked")
-            and isinstance(item.get("reason_code"), str)
-            and re.fullmatch(r"[a-z0-9_]{1,64}", item["reason_code"])
-            and (item.get("pair") is None or (isinstance(item.get("pair"), str)
-                                              and re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", item["pair"])))
-            and type(item.get("alert")) is bool
-        ):
-            # One unreadable row makes the whole report a gap: dropping it would read as recovery.
-            return (), {}
-        if item["alert"]:
-            current[_trading_key(src, item)] = item
+    current = {
+        _trading_key(src, item): item for item in capability["restrictions"] if item["alert"]
+    }
     prefix = f"{src.key[:16]}{TRADING_KEY}"
     keys = set(current) | {key for key in conditions if key.startswith(prefix)}
     events: list[AlertEvent] = []
@@ -924,8 +911,28 @@ def evaluate_trading(
     return tuple(events), changes
 
 
+def _valid_restriction(item: Any) -> bool:
+    """Type-strict: an unhashable or mistyped field is malformed, never an exception."""
+    if not isinstance(item, Mapping):
+        return False
+    side, state, code, pair = item.get("side"), item.get("state"), item.get("reason_code"), item.get("pair")
+    return (
+        isinstance(side, str)
+        and side in trading_words.SIDES
+        and isinstance(state, str)
+        and state in ("restricted", "blocked")
+        and isinstance(code, str)
+        and re.fullmatch(r"[a-z0-9_]{1,64}", code) is not None
+        and (pair is None or (isinstance(pair, str) and re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", pair) is not None))
+        and type(item.get("alert")) is bool
+    )
+
+
 def capability_reported(runtime_payload: Any, *, now: float, max_age_seconds: float) -> bool:
     """True when the owner's status carries a fresh, well-formed trading capability.
+
+    One unreadable row makes the whole report unusable: dropping it would read as recovery, and
+    claiming incident ownership on it would silence the fallback alert.
 
     The owner's own ``evidence`` word is not enough: the report must also be young by this
     worker's clock, so a frozen status can neither open nor clear a condition.
@@ -937,6 +944,8 @@ def capability_reported(runtime_payload: Any, *, now: float, max_age_seconds: fl
         or capability.get("schema_version") != 1
         or capability.get("evidence") != "fresh"
         or not isinstance(capability.get("restrictions"), list)
+        or len(capability["restrictions"]) > 500
+        or not all(_valid_restriction(item) for item in capability["restrictions"])
     ):
         return False
     updated = _epoch(runtime.get("updated_at"))

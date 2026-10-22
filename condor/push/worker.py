@@ -441,14 +441,19 @@ class PushWorker:
             status_payload=reads.native_status,
             conditions=conditions,
         )
-        trading_events, trading_changes = ev.evaluate_trading(
-            info,
-            now=now,
-            thresholds=self.config.trading_thresholds,
-            runtime_payload=reads.runtime,
-            runtime_ok=reads.runtime_ok,
-            conditions=conditions,
-        )
+        try:
+            trading_events, trading_changes = ev.evaluate_trading(
+                info,
+                now=now,
+                thresholds=self.config.trading_thresholds,
+                runtime_payload=reads.runtime,
+                runtime_ok=reads.runtime_ok,
+                conditions=conditions,
+            )
+        except Exception as exc:  # one bad report must not stop delivery for the whole fleet
+            logger.warning("push trading held source=%s reason=%s", info.tag, str(exc)[:80])
+            status["trading"] = "held: " + str(exc)[:80]
+            trading_events, trading_changes = (), {}
         # One commit: health and trading transitions and their notifications land together.
         events = (*events, *trading_events)
         changes = {**changes, **trading_changes}

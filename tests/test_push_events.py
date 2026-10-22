@@ -960,6 +960,22 @@ def test_a_malformed_row_is_a_gap_not_a_recovery():
     assert next(iter(conditions.values())).open
 
 
+def test_unhashable_or_mistyped_fields_are_a_gap_not_an_exception():
+    """Review round 2: side=[] raised TypeError and stopped the cycle before delivery."""
+    for bad in (dict(ETH_ISSUE, side=[], alert=False), dict(ETH_ISSUE, side={}), dict(ETH_ISSUE, state=[]),
+                dict(ETH_ISSUE, reason_code=7), dict(ETH_ISSUE, pair=["ETH-USDC"])):
+        out, conditions = _run_trading([(0, [ETH_ISSUE], True), (60, [ETH_ISSUE], True), (90, [bad], True),
+                                        (300, [bad], True)])
+        assert [len(e) for e in out] == [0, 1, 0, 0]
+        assert next(iter(conditions.values())).open
+
+
+def test_a_malformed_report_never_claims_incident_ownership():
+    """Review round 2: a rejected report still suppressed the fallback host incident."""
+    broken = _capability_payload([dict(ETH_ISSUE, pair="broken")], at=T0)
+    assert not ev.capability_reported(broken, now=T0 + 5, max_age_seconds=300)
+
+
 def test_policy_restrictions_and_expected_waits_never_page():
     quiet = dict(ETH_ISSUE, reason_code="trade_mode_sell_only", alert=False)
     out, conditions = _run_trading([(t, [quiet], True) for t in range(0, 4000, 30)])

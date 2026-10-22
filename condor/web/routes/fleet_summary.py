@@ -120,9 +120,10 @@ class LiveReaders:
         from condor.server_data_service import ServerDataType, get_server_data_service
 
         try:
-            return await get_server_data_service().get_or_fetch(
-                server, ServerDataType.BOTS_STATUS
-            )
+            async with asyncio.timeout(OWNER_TIMEOUT):
+                return await get_server_data_service().get_or_fetch(
+                    server, ServerDataType.BOTS_STATUS
+                )
         except Exception:
             return None
 

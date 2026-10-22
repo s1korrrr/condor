@@ -962,6 +962,89 @@ def test_verified_empty_controller_inventory_is_zero_but_missing_inventory_is_un
     assert fs.project_runtime_view(observed, "bot", NOW_MS)["held"] is None
 
 
+def _capability(**overrides):
+    body = {
+        "schema_version": 1,
+        "evidence": "fresh",
+        "coverage": "partial",
+        "buy": "restricted",
+        "sell": "can_trade",
+        "restrictions": [
+            {
+                "pair": "ETH-USDC",
+                "side": "buy",
+                "state": "restricted",
+                "reason_code": "entry_decision_unavailable",
+                "since": "2026-10-22T10:37:23.815105+00:00",
+                "detail": "database is locked",
+                "alert": True,
+            }
+        ],
+    }
+    body.update(overrides)
+    return body
+
+
+def _observed(capability, updated_ms=NOW_MS - 1_000):
+    return {
+        "runtime_status": {
+            "bot_name": "bot",
+            "updated_at": iso(updated_ms),
+            "controllers": [{"pair": "ETH-USDC", "controller_id": "c"}],
+            "active_executors": [],
+            "lifecycle_executors": [],
+            "positions_held": [],
+            "trading_capability": capability,
+        },
+        "monitoring": {"bot_name": "bot", "stale_threshold_seconds": 30},
+    }
+
+
+def test_runtime_view_carries_the_owner_trading_capability():
+    trading = fs.project_runtime_view(_observed(_capability()), "bot", NOW_MS)["trading"]
+    assert (trading["buy"], trading["sell"], trading["coverage"]) == ("restricted", "can_trade", "partial")
+    [item] = trading["restrictions"]
+    assert (item["pair"], item["side"], item["reason_code"], item["alert"]) == (
+        "ETH-USDC", "buy", "entry_decision_unavailable", True)
+    assert item["since_ms"] == fs._instant_ms("2026-10-22T10:37:23.815105+00:00")
+    assert (item["subject"], item["why"]) == ("ETH-USDC buying", "buy decision could not be stored")
+
+
+def test_old_or_unfresh_capability_never_reads_as_able_to_trade():
+    old = fs.project_runtime_view(_observed(_capability(buy="can_trade"), NOW_MS - 120_000), "bot", NOW_MS)
+    assert (old["trading"]["buy"], old["trading"]["sell"]) == ("unverified", "unverified")
+    assert old["trading"]["restrictions"][0]["reason_code"] == "entry_decision_unavailable"
+    unfresh = fs.project_runtime_view(_observed(_capability(evidence="stale")), "bot", NOW_MS)
+    assert unfresh["trading"]["buy"] == "unverified"
+
+
+def test_malformed_or_absent_capability_is_none_not_healthy():
+    assert fs.project_runtime_view(_observed(None), "bot", NOW_MS)["trading"] is None
+    for bad in (
+        _capability(buy="fine"),
+        _capability(restrictions=[{"pair": "eth", "side": "buy", "state": "restricted",
+                                   "reason_code": "x", "alert": True}]),
+        _capability(restrictions=[{"pair": None, "side": "up", "state": "restricted",
+                                   "reason_code": "x", "alert": True}]),
+        _capability(restrictions=[{"pair": None, "side": "buy", "state": "restricted",
+                                   "reason_code": "Bad Code", "alert": True}]),
+        _capability(restrictions="none"),
+    ):
+        assert fs.project_runtime_view(_observed(bad), "bot", NOW_MS)["trading"] is None
+
+
+def test_alerting_restrictions_survive_the_bound():
+    quiet = {"pair": None, "side": "buy", "state": "restricted", "reason_code": "trade_mode_sell_only",
+             "alert": False}
+    loud = {"pair": "BTC-USDC", "side": "sell", "state": "blocked", "reason_code": "price_unavailable",
+            "alert": True}
+    trading = fs.project_runtime_view(
+        _observed(_capability(restrictions=[quiet] * 30 + [loud])), "bot", NOW_MS)["trading"]
+    assert len(trading["restrictions"]) == fs.TRADING_MAX_RESTRICTIONS
+    assert trading["restrictions_total"] == 31
+    assert trading["restrictions"][0]["reason_code"] == "price_unavailable"
+
+
 @sync
 async def test_max_admitted_amount_width_still_fits_sixteen_bot_glance(store):
     full = await build(store, "full")
@@ -973,6 +1056,8 @@ async def test_max_admitted_amount_width_still_fits_sixteen_bot_glance(store):
         bot["bot"] = f"bot-{index:02d}"
         bot["display_name"] = f"bot-{index:02d}"
         bot["pnl_day"] = {"change": amount}
+        bot["trading"] = {"buy": "unverified", "sell": "unverified", "coverage": "partial",
+                          "restrictions": [{"alert": True}] * fs.TRADING_MAX_RESTRICTIONS}
     for period in ("day", "week", "month", "all"):
         full["pnl"][period]["total"] = amount
     full["wallet"]["equity"] = amount

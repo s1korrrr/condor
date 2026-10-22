@@ -13,7 +13,7 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 from urllib.parse import urlsplit
 
-from condor.push.events import DEFAULT_LABELS, HealthThresholds, clean_text
+from condor.push.events import DEFAULT_LABELS, HealthThresholds, TradingThresholds, clean_text
 
 ENVIRONMENTS = ("sandbox", "production")
 DEFAULT_STATE_DIR = "/state/push"
@@ -108,6 +108,7 @@ class PushConfig:
     labels: Mapping[str, str] = field(default_factory=lambda: dict(DEFAULT_LABELS))
     quote_currencies: Mapping[str, str] = field(default_factory=dict)
     thresholds: HealthThresholds = HealthThresholds()
+    trading_thresholds: TradingThresholds = TradingThresholds()
     incident_min_severity: str = "critical"
     summary: SummaryConfig = SummaryConfig()
     refresh: RefreshConfig = RefreshConfig()

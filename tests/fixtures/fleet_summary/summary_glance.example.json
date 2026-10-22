@@ -124,7 +124,8 @@
    "paper": false,
    "status": "running",
    "report_stale": false,
-   "pnl_day": "3"
+   "pnl_day": "3",
+   "trading": null
   },
   {
    "bot": "rsi_modular_v2",
@@ -133,7 +134,8 @@
    "paper": false,
    "status": "running",
    "report_stale": true,
-   "pnl_day": "1.5"
+   "pnl_day": "1.5",
+   "trading": null
   },
   {
    "bot": "ok_rsi_paper",
@@ -142,7 +144,8 @@
    "paper": true,
    "status": "running",
    "report_stale": false,
-   "pnl_day": "4"
+   "pnl_day": "4",
+   "trading": null
   }
  ],
  "bots_total": 3,

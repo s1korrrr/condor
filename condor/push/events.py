@@ -857,6 +857,8 @@ def evaluate_trading(
     keys = set(current) | {key for key in conditions if key.startswith(prefix)}
     events: list[AlertEvent] = []
     changes: dict[str, Condition | None] = {}
+    opened_rows: list[tuple[str, str | None, str, Mapping[str, Any] | None]] = []
+    resolved_rows: list[tuple[str, str | None, str]] = []
     for key in sorted(keys):
         item = current.get(key)
         scope = _trading_scope(key)
@@ -872,40 +874,71 @@ def evaluate_trading(
             changes[key] = state
         if transition is None:
             continue
-        opened = transition == "opened"
-        subject, why = trading_words.describe(side, pair, reason)
-        since = (state or conditions[key]).since
-        collapse = "trading:" + digest(src.key, key)
-        if opened:
-            blocked = item is not None and item.get("state") == "blocked"
-            # The owner's raw detail only explains a reason this worker has no words for.
-            detail = (
-                clean_text(item.get("detail"), 160)
-                if item is not None and not trading_words.known(reason)
-                else ""
-            )
-            body = f"{subject} {'blocked' if blocked else 'restricted'}: {why}."
-            if detail:
-                body += f" {detail}"
+        if transition == "opened":
+            opened_rows.append((side, pair, reason, item))
         else:
-            body = f"{subject} can resume: {why} cleared."
+            resolved_rows.append((side, pair, reason))
+    # One notification per bot per transition kind: one cause over several pairs or several
+    # reasons for one pair is one alert, not a burst. Pair-level detail stays in the summary.
+    collapse = "trading:" + digest(src.key)
+    if opened_rows:
+        pairs = sorted({(pair or "", side) for side, pair, _, _ in opened_rows})
+        lines: list[str] = []
+        for pair_key, side in pairs:
+            whys: list[str] = []
+            for row_side, row_pair, reason, item in opened_rows:
+                if (row_pair or "", row_side) != (pair_key, side):
+                    continue
+                why = trading_words.describe(side, row_pair, reason)[1]
+                if not trading_words.known(reason) and item is not None and item.get("detail"):
+                    why += f" ({clean_text(item.get('detail'), 80)})"
+                if why not in whys:
+                    whys.append(why)
+            subject = trading_words.describe(side, pair_key or None, "")[0]
+            lines.append(f"{subject}: {'; '.join(whys)}.")
+        blocked = any(item is not None and item.get("state") == "blocked" for *_, item in opened_rows)
+        word = "blocked" if blocked else "restricted"
+        title = (f"{trading_words.describe(pairs[0][1], pairs[0][0] or None, '')[0]} {word}"
+                 if len(pairs) == 1 else f"{trading_words.side_title(pairs)} {word}: "
+                 + ", ".join(trading_words.short_pair(pair) for pair, _ in pairs))
         events.append(
             AlertEvent(
-                id=("trading:" if opened else "trading-ok:") + digest(src.key, key, since),
+                id="trading:" + digest(src.key, sorted(map(str, opened_rows)), now),
                 # The health class: workers that predate this detector can still deliver it.
                 cls="health",
-                severity=("critical" if side in ("sell", "both") else "warning") if opened else "info",
-                title=clean_text(
-                    f"{src.tag} · {subject} {'blocked' if opened else 'back'}", 100
-                ),
-                body=clean_text(body, 300),
+                severity="critical" if any(side in ("sell", "both") for side, *_ in opened_rows) else "warning",
+                title=clean_text(f"{src.tag} · {title}", 100),
+                body=clean_text(" ".join(lines), 300),
                 deep_link=link("health", src.bot_id),
                 collapse_key=collapse,
                 thread_id=_thread(src.bot_id, "fleet"),
                 occurred_at=now,
                 bot=src.bot_id,
                 bot_tag=src.tag,
-                kind="trading_blocked" if opened else "trading_resolved",
+                kind="trading_blocked",
+            )
+        )
+    if resolved_rows:
+        pairs = sorted({(pair or "", side) for side, pair, _ in resolved_rows})
+        if len(pairs) == 1:
+            subject = trading_words.describe(pairs[0][1], pairs[0][0] or None, "")[0]
+        else:
+            subject = trading_words.side_title(pairs) + " " + ", ".join(
+                trading_words.short_pair(pair) for pair, _ in pairs)
+        events.append(
+            AlertEvent(
+                id="trading-ok:" + digest(src.key, sorted(map(str, resolved_rows)), now),
+                cls="health",
+                severity="info",
+                title=clean_text(f"{src.tag} · {subject} available again", 100),
+                body=clean_text(f"{subject} is available again.", 300),
+                deep_link=link("health", src.bot_id),
+                collapse_key=collapse,
+                thread_id=_thread(src.bot_id, "fleet"),
+                occurred_at=now,
+                bot=src.bot_id,
+                bot_tag=src.tag,
+                kind="trading_resolved",
             )
         )
     return tuple(events), changes

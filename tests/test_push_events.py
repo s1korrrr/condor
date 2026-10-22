@@ -911,11 +911,12 @@ def test_v1_eth_admission_issue_alerts_once_after_confirmation_and_once_on_recov
     assert [len(e) for e in out] == [0, 0, 1, 0, 0, 0, 1]
     opened, resolved = out[2][0], out[6][0]
     assert opened.cls == "health" and opened.kind == "trading_blocked" and opened.severity == "warning"
-    assert opened.title == "V1 · ETH-USDC buying blocked"
-    assert opened.body == "ETH-USDC buying restricted: buy decision could not be stored."
+    assert opened.title == "V1 · ETH-USDC buying restricted"
+    assert opened.body == "ETH-USDC buying: buy decision could not be stored."
     assert opened.deep_link == "rsibot://bot/ok_rsi/health"
     assert resolved.kind == "trading_resolved" and resolved.severity == "info"
-    assert resolved.title == "V1 · ETH-USDC buying back"
+    assert resolved.title == "V1 · ETH-USDC buying available again"
+    assert resolved.body == "ETH-USDC buying is available again."
     assert resolved.collapse_key == opened.collapse_key
     assert conditions == {}
 
@@ -925,6 +926,25 @@ def test_trading_events_use_a_class_that_older_workers_can_deliver():
     out, _ = _run_trading([(0, [ETH_ISSUE], True), (60, [ETH_ISSUE], True)])
     assert out[1][0].cls in {"fill_entry", "fill_exit", "bag", "risk", "health", "incident", "summary", "market", "test"}
     assert "trading" not in ev.ALERT_CLASSES
+
+
+def test_one_cause_across_pairs_is_one_notification_per_transition():
+    """Live V2, 2026-10-22: two reasons on each of SOL and XRP produced four notifications."""
+    rows = [
+        dict(ETH_ISSUE, pair=pair, reason_code=code, detail=detail)
+        for pair in ("SOL-USDC", "XRP-USDC")
+        for code, detail in (("native_buy_create_refused", "controller_permission_changed"),
+                             ("native_funding_reconciliation_required", "Candidate funding allocation exhausted"))
+    ]
+    out, conditions = _run_trading([(0, rows, True), (60, rows, True), (90, [], True), (210, [], True)])
+    assert [len(e) for e in out] == [0, 1, 0, 1]
+    [opened], [resolved] = out[1], out[3]
+    assert opened.title == "V1 · Buying restricted: SOL, XRP"
+    assert opened.body == ("SOL-USDC buying: buy order refused; not enough USDC allocated. "
+                           "XRP-USDC buying: buy order refused; not enough USDC allocated.")
+    assert resolved.title == "V1 · Buying SOL, XRP available again"
+    assert opened.collapse_key == resolved.collapse_key
+    assert len(conditions) == 0
 
 
 def test_gaps_never_open_or_clear_a_trading_condition():
@@ -988,7 +1008,7 @@ def test_low_balance_must_persist_fifteen_minutes_and_sell_side_is_critical():
     opened = [e for events in out for e in events]
     assert len(opened) == 1 and list(out[15]) == opened  # opened at t=900
     assert opened[0].severity == "critical"
-    assert opened[0].body == "ETH-USDC selling restricted: not enough of the coin to sell."
+    assert opened[0].body == "ETH-USDC selling: not enough of the coin to sell."
 
 
 def test_unknown_reason_carries_the_owner_detail_and_bot_wide_scope_reads_plainly():
@@ -997,7 +1017,7 @@ def test_unknown_reason_carries_the_owner_detail_and_bot_wide_scope_reads_plainl
     out, _ = _run_trading([(0, [odd], True), (60, [odd], True)])
     [event] = out[1]
     assert event.title == "V1 · Trading blocked"
-    assert event.body == "Trading blocked: symbol runtime fault. BTC-USDC runtime fault"
+    assert event.body == "Trading: symbol fault."
     assert event.severity == "critical"
 
 

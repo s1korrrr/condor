@@ -368,6 +368,7 @@ def test_reads_are_get_only_to_fixed_routes_with_bounded_limits(rig):
     paths = {p for _, p in rig.reader.calls}
     assert any(p.endswith("limit=1000") for p in paths if "fills" in p)
     assert any(p.endswith("limit=500") for p in paths if "executors" in p)
+    assert all("view=monitor" in p for p in paths if "runtime-status" in p)
     assert all(
         p.startswith(("/trading-visuals/", "/bot-orchestration/"))
         and "/start" not in p

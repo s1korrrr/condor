@@ -70,6 +70,17 @@ def with_limit(path: str, limit: int) -> str:
     return urlunsplit(("", "", parts.path, urlencode(query), ""))
 
 
+def with_monitor_view(path: str) -> str:
+    """Keep risk/identity observations below the reader cap as paper history grows.
+
+    Reporting keeps full native histories on its default detail endpoint.
+    """
+    parts = urlsplit(path)
+    query = [(k, v) for k, v in parse_qsl(parts.query) if k != "view"]
+    query.append(("view", "monitor"))
+    return urlunsplit(("", "", parts.path, urlencode(query), ""))
+
+
 class NativeFleetReader:
     """GET-only reads over the fleet worker's own validated client."""
 
@@ -262,7 +273,7 @@ class PushWorker:
         name = source.native_bot_name
         async with semaphore:
             try:
-                payload = await self.reader.get(source, source.endpoints["status"])
+                payload = await self.reader.get(source, with_monitor_view(source.endpoints["status"]))
                 _validate_owner_identity(payload, source)
                 reads.runtime, reads.runtime_ok = payload, True
             except (NativeReadError, ValueError) as exc:

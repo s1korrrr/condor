@@ -36,6 +36,7 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Callable, Optional, Protocol
 
+from condor import trading_words
 from condor.fetchers.bots import build_bots_page
 from condor.fleet_identity import display_name, generation, is_paper
 from condor.web import fleet_pnl
@@ -483,6 +484,78 @@ def _quantity(controller: dict, controllers: list, positions, lifecycle) -> Opti
     return None if any(v is None for v in values) else fleet_pnl.exact_sum(values)
 
 
+TRADING_STATES = ("can_trade", "restricted", "blocked", "unverified")
+TRADING_SIDES = ("buy", "sell", "both")
+TRADING_MAX_RESTRICTIONS = 20
+
+
+def project_trading(value: Any, current: bool) -> Optional[dict]:
+    """The reporting owner's per-pair, per-side trading capability, re-validated and bounded.
+
+    ``None`` when the owner published none (older reporting, paper twins) or its shape is wrong. An
+    observation that is no longer current keeps its restrictions as last known, but neither side may
+    read as able to trade: both become ``unverified``.
+    """
+    root = _obj(value)
+    if root.get("schema_version") != 1 or root.get("buy") not in TRADING_STATES or root.get("sell") not in TRADING_STATES:
+        return None
+    raw = root.get("restrictions")
+    if not isinstance(raw, list) or len(raw) > 500:
+        return None
+    rows = []
+    for item in raw:
+        item = _obj(item)
+        pair = item.get("pair")
+        code = item.get("reason_code")
+        if (
+            item.get("side") not in TRADING_SIDES
+            or item.get("state") not in ("restricted", "blocked")
+            or not (pair is None or (isinstance(pair, str) and re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", pair)))
+            or not (isinstance(code, str) and re.fullmatch(r"[a-z0-9_]{1,64}", code))
+            or type(item.get("alert")) is not bool
+        ):
+            return None
+        detail = item.get("detail")
+        subject, why = trading_words.describe(item["side"], pair, code)
+        rows.append(
+            {
+                "subject": subject,
+                "why": why,
+                "pair": pair,
+                "side": item["side"],
+                "state": item["state"],
+                "reason_code": code,
+                "since_ms": _instant_ms(item.get("since")),
+                "detail": detail[:200] if isinstance(detail, str) else None,
+                "alert": item["alert"],
+            }
+        )
+    # Alerting restrictions first, so the bound never hides a real inability behind a policy note.
+    rows.sort(key=lambda r: (not r["alert"], r["state"] != "blocked"))
+    fresh = current and root.get("evidence") == "fresh"
+    return {
+        "buy": root["buy"] if fresh else "unverified",
+        "sell": root["sell"] if fresh else "unverified",
+        "coverage": "partial" if root.get("coverage") != "complete" else "complete",
+        "restrictions": rows[:TRADING_MAX_RESTRICTIONS],
+        "restrictions_total": len(rows),
+    }
+
+
+def trading_word(trading: dict) -> str:
+    """One word for the glance: ``blocked``/``restricted`` only for a real inability (an alerting
+    restriction), else ``unverified`` when a side cannot be confirmed, else ``ok``. A policy limit
+    such as sell-only mode is not an inability and stays ``ok`` here."""
+    alerting = [row for row in trading["restrictions"] if row.get("alert")]
+    if any(row.get("state") == "blocked" for row in alerting):
+        return "blocked"
+    if alerting:
+        return "restricted"
+    if "unverified" in (trading["buy"], trading["sell"]):
+        return "unverified"
+    return "ok"
+
+
 def project_runtime_view(payload: Any, bot: str, now_ms: float) -> Optional[dict]:
     """The owner's own runtime observation (``bootstrap``) as the Bots page reads it: pairs held, active executors.
 
@@ -541,9 +614,11 @@ def project_runtime_view(payload: Any, bot: str, now_ms: float) -> Optional[dict
     ):
         return None
     quantities = [_quantity(row, controllers, positions, lifecycle) for row in controllers]
+    current = now_ms - observed < min(threshold, RUNTIME_STALE_CAP_S) * 1000
     return {
         "observed_ms": observed,
-        "current": now_ms - observed < min(threshold, RUNTIME_STALE_CAP_S) * 1000,
+        "current": current,
+        "trading": project_trading(runtime.get("trading_capability"), current),
         "registered": len(controllers),
         "held": (
             None
@@ -1284,6 +1359,8 @@ def _bot_cards(
                 "net_now": net_now,
                 "fees": fees,
                 "trades": trades,
+                # Process status says the bot runs; this says whether it can buy and sell.
+                "trading": rt.get("trading") if rt is not None else None,
                 "missing": gaps,
             }
         )
@@ -1814,6 +1891,8 @@ def glance(full: dict) -> dict:
                 "status": c["status"],
                 "report_stale": c["report_stale"],
                 "pnl_day": None if c["pnl_day"] is None else c["pnl_day"]["change"],
+                # One word keeps the Watch glance under its 8 KiB budget; the full view has the detail.
+                "trading": None if c.get("trading") is None else trading_word(c["trading"]),
             }
             for c in full["bots"][:GLANCE_MAX_BOTS]
         ],

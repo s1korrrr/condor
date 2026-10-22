@@ -23,6 +23,7 @@ from decimal import Decimal
 from typing import Any, Callable, Iterable, Mapping, Sequence
 
 from condor import fleet_telegram_views as views
+from condor import trading_words
 from condor.fleet_identity import PAPER_TOKEN, is_paper
 from condor.fleet_trade_alerts import economics, fill_key, identity
 
@@ -49,43 +50,43 @@ ALERT_CLASSES: dict[str, AlertClass] = {
     for c in (
         AlertClass(
             "fill_entry",
-            "Entry fills",
-            "A buy fill confirmed by the native owner.",
+            "Buy fills",
+            "A buy filled on the exchange.",
             True,
             "RSIBOT_FILL",
         ),
         AlertClass(
             "fill_exit",
-            "Exit fills",
-            "A sell fill confirmed by the native owner.",
+            "Sell fills",
+            "A sell filled on the exchange.",
             True,
             "RSIBOT_FILL",
         ),
         AlertClass(
             "bag",
-            "Bags and trailing",
+            "Holdings and trailing stops",
             "A new held bag, or a trailing stop that armed.",
             True,
             "RSIBOT_BAG",
         ),
         AlertClass(
             "risk",
-            "Risk rails",
-            "The daily-loss rail paused entries.",
+            "Daily-loss pause",
+            "The daily-loss limit paused new buys.",
             True,
             "RSIBOT_RISK",
         ),
         AlertClass(
             "health",
             "Bot health",
-            "An owner is offline, its lifecycle is invalid, or its status or data went stale.",
+            "A bot is offline, stopped, its status went stale, or it cannot buy or sell a pair.",
             True,
             "RSIBOT_HEALTH",
         ),
         AlertClass(
             "incident",
-            "Stack incidents",
-            "A container incident opened or recovered in the host monitor.",
+            "Service incidents",
+            "A service incident opened or recovered.",
             True,
             "RSIBOT_INCIDENT",
         ),
@@ -98,8 +99,8 @@ ALERT_CLASSES: dict[str, AlertClass] = {
         ),
         AlertClass(
             "market",
-            "Market verdict",
-            "The market verdict flipped between Risk-on and Risk-off.",
+            "Market outlook",
+            "The market outlook flipped between Risk-on and Risk-off.",
             False,
             "RSIBOT_MARKET",
         ),
@@ -801,6 +802,215 @@ def evaluate_health(
     return tuple(events), changes
 
 
+# --------------------------------------------------------------------------- trading capability
+
+
+@dataclass(frozen=True)
+class TradingThresholds:
+    # Two fresh owner reports (about 30 s apart) confirm a hard fault; balance limits must
+    # outlast normal order churn before they page. Recovery needs two minutes of clear reports.
+    confirm_seconds: float = 60.0
+    funds_confirm_seconds: float = 900.0
+    recover_seconds: float = 120.0
+    # A report older than this is a gap: it neither opens nor clears anything.
+    max_age_seconds: float = 300.0
+
+
+FUNDS_REASONS = frozenset({"balance_low", "base_balance_low"})
+TRADING_KEY = ":trade:"
+def _trading_key(src: SourceInfo, item: Mapping[str, Any]) -> str:
+    return f"{src.key[:16]}{TRADING_KEY}{item['side']}:{item['pair'] or '*'}:{item['reason_code']}"
+
+
+def _trading_scope(key: str) -> tuple[str, str | None, str] | None:
+    """(side, pair, reason) back out of a condition key, for the recovery notice."""
+    try:
+        side, pair, reason = key.split(TRADING_KEY, 1)[1].split(":", 2)
+    except (IndexError, ValueError):
+        return None
+    return side, None if pair == "*" else pair, reason
+
+
+def evaluate_trading(
+    src: SourceInfo,
+    *,
+    now: float,
+    thresholds: TradingThresholds,
+    runtime_payload: Any,
+    runtime_ok: bool,
+    conditions: Mapping[str, Condition],
+) -> tuple[tuple[AlertEvent, ...], dict[str, Condition | None]]:
+    """A bot that cannot buy or sell a pair: one alert when confirmed, one when it clears.
+
+    Reads the reporting owner's ``trading_capability``. Only restrictions the owner marks as
+    alerting count; deliberate strategy waits never do. A missing, unreadable or stale report is
+    a gap, not evidence: no condition opens or clears on it (health alerts cover a stale owner).
+    """
+    if not capability_reported(runtime_payload if runtime_ok else None, now=now,
+                               max_age_seconds=thresholds.max_age_seconds):
+        return (), {}
+    capability = _runtime(runtime_payload)["trading_capability"]
+    current = {
+        _trading_key(src, item): item for item in capability["restrictions"] if item["alert"]
+    }
+    prefix = f"{src.key[:16]}{TRADING_KEY}"
+    keys = set(current) | {key for key in conditions if key.startswith(prefix)}
+    events: list[AlertEvent] = []
+    changes: dict[str, Condition | None] = {}
+    opened_rows: list[tuple[str, str | None, str]] = []
+    resolved_rows: list[tuple[str, str | None, str]] = []
+    for key in sorted(keys):
+        item = current.get(key)
+        scope = _trading_scope(key)
+        if scope is None:
+            continue
+        side, pair, reason = scope
+        confirm = thresholds.funds_confirm_seconds if reason in FUNDS_REASONS else thresholds.confirm_seconds
+        state, transition = step_condition(
+            conditions.get(key), key, item is not None, now,
+            confirm_seconds=confirm, recover_seconds=thresholds.recover_seconds,
+        )
+        if state != conditions.get(key):
+            changes[key] = state
+        if transition is None:
+            continue
+        if transition == "opened":
+            opened_rows.append((side, pair, reason))
+        else:
+            resolved_rows.append((side, pair, reason))
+    if not opened_rows and not resolved_rows:
+        return tuple(events), changes
+    # One notification per bot per cycle, describing the bot's state after this cycle: while any
+    # restriction stays open the alert lists all of them (a partial recovery never reads as
+    # "available again"); "available again" is sent only when nothing remains. One collapse key
+    # per bot, so the latest state replaces the previous one on the device.
+    merged = {**conditions, **changes}
+    remaining = sorted(
+        key for key, value in merged.items()
+        if key.startswith(prefix) and value is not None and value.open
+    )
+    collapse = "trading:" + digest(src.key)
+    if remaining:
+        rows = []
+        for key in remaining:
+            scope = _trading_scope(key)
+            if scope is not None:
+                rows.append((*scope, current.get(key)))
+        groups: dict[tuple[str, str], list[str]] = {}
+        for side, pair, reason, item in rows:
+            why = trading_words.describe(side, pair, reason)[1]
+            if not trading_words.known(reason) and item is not None and item.get("detail"):
+                why += f" ({clean_text(item.get('detail'), 80)})"
+            whys = groups.setdefault((pair or "", side), [])
+            if why not in whys:
+                whys.append(why)
+        lines = [
+            f"{trading_words.describe(side, pair or None, '')[0]}: {'; '.join(whys)}."
+            for (pair, side), whys in sorted(groups.items())
+        ]
+        blocked = any(item is not None and item.get("state") == "blocked" for *_, item in rows)
+        word = "blocked" if blocked else "restricted"
+        pairs = sorted(groups)
+        if len(pairs) == 1:
+            title = f"{trading_words.describe(pairs[0][1], pairs[0][0] or None, '')[0]} {word}"
+        else:
+            names = sorted({trading_words.short_pair(pair) for pair, _ in pairs})
+            title = f"{trading_words.side_title(pairs)} {word}: " + ", ".join(names)
+        events.append(
+            AlertEvent(
+                id="trading:" + digest(src.key, remaining, now),
+                # The health class: workers that predate this detector can still deliver it.
+                cls="health",
+                severity="critical" if any(side in ("sell", "both") for side, *_ in rows) else "warning",
+                title=clean_text(f"{src.tag} · {title}", 100),
+                body=clean_text(" ".join(lines), 300),
+                deep_link=link("health", src.bot_id),
+                collapse_key=collapse,
+                thread_id=_thread(src.bot_id, "fleet"),
+                occurred_at=now,
+                bot=src.bot_id,
+                bot_tag=src.tag,
+                kind="trading_blocked",
+            )
+        )
+    else:
+        pairs = sorted({(pair or "", side) for side, pair, _ in resolved_rows})
+        if len(pairs) == 1:
+            subject = trading_words.describe(pairs[0][1], pairs[0][0] or None, "")[0]
+        else:
+            names = sorted({trading_words.short_pair(pair) for pair, _ in pairs})
+            subject = trading_words.side_title(pairs) + " " + ", ".join(names)
+        events.append(
+            AlertEvent(
+                id="trading-ok:" + digest(src.key, sorted(map(str, resolved_rows)), now),
+                cls="health",
+                severity="info",
+                title=clean_text(f"{src.tag} · {subject} available again", 100),
+                body=clean_text(f"{subject} is available again.", 300),
+                deep_link=link("health", src.bot_id),
+                collapse_key=collapse,
+                thread_id=_thread(src.bot_id, "fleet"),
+                occurred_at=now,
+                bot=src.bot_id,
+                bot_tag=src.tag,
+                kind="trading_resolved",
+            )
+        )
+    return tuple(events), changes
+
+
+def _valid_restriction(item: Any) -> bool:
+    """Type-strict: an unhashable or mistyped field is malformed, never an exception."""
+    if not isinstance(item, Mapping):
+        return False
+    side, state, code, pair = item.get("side"), item.get("state"), item.get("reason_code"), item.get("pair")
+    return (
+        isinstance(side, str)
+        and side in trading_words.SIDES
+        and isinstance(state, str)
+        and state in ("restricted", "blocked")
+        and isinstance(code, str)
+        and re.fullmatch(r"[a-z0-9_]{1,64}", code) is not None
+        and (pair is None or (isinstance(pair, str) and re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", pair) is not None))
+        and type(item.get("alert")) is bool
+    )
+
+
+def capability_reported(runtime_payload: Any, *, now: float, max_age_seconds: float) -> bool:
+    """True when the owner's status carries a fresh, well-formed trading capability.
+
+    One unreadable row makes the whole report unusable: dropping it would read as recovery, and
+    claiming incident ownership on it would silence the fallback alert.
+
+    The owner's own ``evidence`` word is not enough: the report must also be young by this
+    worker's clock, so a frozen status can neither open nor clear a condition.
+    """
+    runtime = _runtime(runtime_payload)
+    capability = runtime.get("trading_capability") if runtime is not None else None
+    if (
+        not isinstance(capability, Mapping)
+        or capability.get("schema_version") != 1
+        or capability.get("evidence") != "fresh"
+        or not isinstance(capability.get("restrictions"), list)
+        or len(capability["restrictions"]) > 500
+        or not all(_valid_restriction(item) for item in capability["restrictions"])
+    ):
+        return False
+    updated = _epoch(runtime.get("updated_at"))
+    observed = _epoch(capability.get("observed_at"))
+    return (
+        updated is not None
+        and observed is not None
+        and -5 <= now - updated <= max_age_seconds
+        and -5 <= now - observed <= max_age_seconds
+    )
+
+
+# Host incidents the trading-capability detector owns while capability is reported, so the same
+# cause is not announced twice. They stay visible in Operations and the Alerts tab.
+TRADING_OWNED_INCIDENT_SUFFIXES = ("buy_admission_issue",)
+
+
 # --------------------------------------------------------------------------- incidents
 
 
@@ -811,6 +1021,7 @@ def detect_incidents(
     seen: Seen,
     min_severity: str = "critical",
     labels: Mapping[str, str] | None = None,
+    owned_suffixes: Sequence[str] = (),
 ) -> Detection:
     """Open (and later recovered) host-monitor incidents.
 
@@ -854,6 +1065,9 @@ def detect_incidents(
                 continue
             if first < started or severity_rank(severity) < floor:
                 keys.append(skip_key)
+                continue
+            if any(incident_id.endswith(suffix) for suffix in owned_suffixes):
+                # Owned for now, not forever: no key, so it is reconsidered if ownership lapses.
                 continue
             keys.append(opened_key)
             detail = clean_text(incident.get("detail"), 200)

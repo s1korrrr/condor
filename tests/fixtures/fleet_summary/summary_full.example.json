@@ -360,6 +360,7 @@
     "opened_24h": 2,
     "closed_24h": 1
    },
+   "trading": null,
    "missing": []
   },
   {
@@ -394,6 +395,7 @@
     "opened_24h": 2,
     "closed_24h": 1
    },
+   "trading": null,
    "missing": [
     {
      "field": "positions",
@@ -439,6 +441,7 @@
     "opened_24h": 2,
     "closed_24h": 1
    },
+   "trading": null,
    "missing": []
   }
  ],

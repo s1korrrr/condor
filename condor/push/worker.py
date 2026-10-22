@@ -441,6 +441,22 @@ class PushWorker:
             status_payload=reads.native_status,
             conditions=conditions,
         )
+        try:
+            trading_events, trading_changes = ev.evaluate_trading(
+                info,
+                now=now,
+                thresholds=self.config.trading_thresholds,
+                runtime_payload=reads.runtime,
+                runtime_ok=reads.runtime_ok,
+                conditions=conditions,
+            )
+        except Exception as exc:  # one bad report must not stop delivery for the whole fleet
+            logger.warning("push trading held source=%s reason=%s", info.tag, str(exc)[:80])
+            status["trading"] = "held: " + str(exc)[:80]
+            trading_events, trading_changes = (), {}
+        # One commit: health and trading transitions and their notifications land together.
+        events = (*events, *trading_events)
+        changes = {**changes, **trading_changes}
         if events or changes:
             self.outbox.commit(
                 info.key, events=events, devices=devices, conditions=changes, now=now
@@ -455,6 +471,21 @@ class PushWorker:
     ) -> None:
         started = self.outbox.started("stack")
         assert started is not None
+        live = [reads for info, reads in infos if not info.paper]
+        # The trading detector owns admission incidents only while every live bot reports a fresh
+        # capability; otherwise the host incident stays the one alert for that cause.
+        owned = (
+            ev.TRADING_OWNED_INCIDENT_SUFFIXES
+            if live
+            and all(
+                r.runtime_ok
+                and ev.capability_reported(
+                    r.runtime, now=now, max_age_seconds=self.config.trading_thresholds.max_age_seconds
+                )
+                for r in live
+            )
+            else ()
+        )
         for _, reads in infos:
             store = (
                 reads.operations.get("incident_store")
@@ -466,6 +497,7 @@ class PushWorker:
                 started=started,
                 seen=self.outbox.seen_checker("stack"),
                 min_severity=self.config.incident_min_severity,
+                owned_suffixes=owned,
             )
             if detection.events or detection.seen:
                 self.outbox.commit(

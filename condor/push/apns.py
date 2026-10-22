@@ -190,6 +190,8 @@ def build_payload(
         "id": event.id,
         "class": event.cls,
         "kind": event.kind,
+        # The event's own severity; interruption-level is only a delivery priority.
+        "severity": event.severity,
         "link": event.deep_link,
         "ts": int(event.occurred_at),
     }

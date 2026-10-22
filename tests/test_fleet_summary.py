@@ -1233,6 +1233,114 @@ async def test_summary_timeout_reports_active_source_phase_without_identifiers(
     assert "ok_rsi" not in message and "user_id" not in message
 
 
+@sync
+async def test_stalled_status_read_is_bounded_and_waiting_summary_recovers(
+    monkeypatch, store
+):
+    from condor import server_data_service
+
+    started = asyncio.Event()
+    release_fetch = asyncio.Event()
+
+    class StatusService:
+        def __init__(self):
+            self.fetch_task = None
+            self.fetch_count = 0
+
+        async def fetch(self):
+            self.fetch_count += 1
+            started.set()
+            await release_fetch.wait()
+            return bots_status()
+
+        async def get_or_fetch(self, server, data_type):
+            if self.fetch_task is None:
+                self.fetch_task = asyncio.create_task(self.fetch())
+            return await asyncio.shield(self.fetch_task)
+
+    service = StatusService()
+    monkeypatch.setattr(server_data_service, "get_server_data_service", lambda: service)
+    monkeypatch.setattr(routes, "OWNER_TIMEOUT", 0.02)
+    monkeypatch.setattr(routes, "TOTAL_TIMEOUT", 0.3)
+    readers = FakeReaders(store)
+
+    async def bounded_status(server):
+        return await routes.LiveReaders.bots_status(readers, server)
+
+    readers.bots_status = bounded_status
+    client_for(monkeypatch, store, readers=readers)
+    monkeypatch.setattr(routes, "CACHE_TTL_SECONDS", 5)
+
+    first = asyncio.create_task(
+        routes.cached_summary(SERVER, admin=True, user_id=7, view="glance")
+    )
+    await asyncio.wait_for(started.wait(), 0.1)
+    second = asyncio.create_task(
+        routes.cached_summary(SERVER, admin=True, user_id=7, view="glance")
+    )
+    await asyncio.sleep(0)
+    assert not second.done(), "the second request must wait behind the active build"
+
+    try:
+        first_body, second_body = await asyncio.gather(first, second)
+    finally:
+        release_fetch.set()
+        if service.fetch_task is not None:
+            await service.fetch_task
+        routes._locks.clear()
+    assert first_body["bots"][0]["status"] is None
+    assert second_body["bots"][0]["status"] is None
+    assert service.fetch_count == 1, "the shared SDS fetch remains coalesced"
+    assert second_body == first_body, "the waiting request reuses the completed view"
+    assert readers.calls, "owner reads must finish while status is unavailable"
+
+
+@sync
+async def test_cancelled_summary_releases_same_view_lock_for_next_request(
+    monkeypatch, store
+):
+    from condor import server_data_service
+
+    started = asyncio.Event()
+    status_calls = 0
+
+    class StatusService:
+        async def get_or_fetch(self, server, data_type):
+            nonlocal status_calls
+            status_calls += 1
+            if status_calls == 1:
+                started.set()
+                await asyncio.Event().wait()
+            return bots_status()
+
+    monkeypatch.setattr(
+        server_data_service, "get_server_data_service", lambda: StatusService()
+    )
+    monkeypatch.setattr(routes, "OWNER_TIMEOUT", 0.2)
+    monkeypatch.setattr(routes, "TOTAL_TIMEOUT", 0.5)
+    readers = FakeReaders(store)
+
+    async def bounded_status(server):
+        return await routes.LiveReaders.bots_status(readers, server)
+
+    readers.bots_status = bounded_status
+    client_for(monkeypatch, store, readers=readers)
+    first = asyncio.create_task(
+        routes.cached_summary(SERVER, admin=True, user_id=7, view="glance")
+    )
+    await asyncio.wait_for(started.wait(), 0.1)
+    first.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await first
+
+    next_body = await asyncio.wait_for(
+        routes.cached_summary(SERVER, admin=True, user_id=7, view="glance"), 0.2
+    )
+    assert next_body["bots"][0]["status"] == "running"
+    assert status_calls == 2
+    routes._locks.clear()
+
+
 @pytest.mark.parametrize("phase_name", ["market.latest", "owner.quant-summary"])
 @sync
 async def test_summary_timeout_trace_identifies_remote_read_group(

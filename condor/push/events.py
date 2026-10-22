@@ -857,7 +857,7 @@ def evaluate_trading(
     keys = set(current) | {key for key in conditions if key.startswith(prefix)}
     events: list[AlertEvent] = []
     changes: dict[str, Condition | None] = {}
-    opened_rows: list[tuple[str, str | None, str, Mapping[str, Any] | None]] = []
+    opened_rows: list[tuple[str, str | None, str]] = []
     resolved_rows: list[tuple[str, str | None, str]] = []
     for key in sorted(keys):
         item = current.get(key)
@@ -875,38 +875,53 @@ def evaluate_trading(
         if transition is None:
             continue
         if transition == "opened":
-            opened_rows.append((side, pair, reason, item))
+            opened_rows.append((side, pair, reason))
         else:
             resolved_rows.append((side, pair, reason))
-    # One notification per bot per transition kind: one cause over several pairs or several
-    # reasons for one pair is one alert, not a burst. Pair-level detail stays in the summary.
+    if not opened_rows and not resolved_rows:
+        return tuple(events), changes
+    # One notification per bot per cycle, describing the bot's state after this cycle: while any
+    # restriction stays open the alert lists all of them (a partial recovery never reads as
+    # "available again"); "available again" is sent only when nothing remains. One collapse key
+    # per bot, so the latest state replaces the previous one on the device.
+    merged = {**conditions, **changes}
+    remaining = sorted(
+        key for key, value in merged.items()
+        if key.startswith(prefix) and value is not None and value.open
+    )
     collapse = "trading:" + digest(src.key)
-    if opened_rows:
-        pairs = sorted({(pair or "", side) for side, pair, _, _ in opened_rows})
-        lines: list[str] = []
-        for pair_key, side in pairs:
-            whys: list[str] = []
-            for row_side, row_pair, reason, item in opened_rows:
-                if (row_pair or "", row_side) != (pair_key, side):
-                    continue
-                why = trading_words.describe(side, row_pair, reason)[1]
-                if not trading_words.known(reason) and item is not None and item.get("detail"):
-                    why += f" ({clean_text(item.get('detail'), 80)})"
-                if why not in whys:
-                    whys.append(why)
-            subject = trading_words.describe(side, pair_key or None, "")[0]
-            lines.append(f"{subject}: {'; '.join(whys)}.")
-        blocked = any(item is not None and item.get("state") == "blocked" for *_, item in opened_rows)
+    if remaining:
+        rows = []
+        for key in remaining:
+            scope = _trading_scope(key)
+            if scope is not None:
+                rows.append((*scope, current.get(key)))
+        groups: dict[tuple[str, str], list[str]] = {}
+        for side, pair, reason, item in rows:
+            why = trading_words.describe(side, pair, reason)[1]
+            if not trading_words.known(reason) and item is not None and item.get("detail"):
+                why += f" ({clean_text(item.get('detail'), 80)})"
+            whys = groups.setdefault((pair or "", side), [])
+            if why not in whys:
+                whys.append(why)
+        lines = [
+            f"{trading_words.describe(side, pair or None, '')[0]}: {'; '.join(whys)}."
+            for (pair, side), whys in sorted(groups.items())
+        ]
+        blocked = any(item is not None and item.get("state") == "blocked" for *_, item in rows)
         word = "blocked" if blocked else "restricted"
-        title = (f"{trading_words.describe(pairs[0][1], pairs[0][0] or None, '')[0]} {word}"
-                 if len(pairs) == 1 else f"{trading_words.side_title(pairs)} {word}: "
-                 + ", ".join(trading_words.short_pair(pair) for pair, _ in pairs))
+        pairs = sorted(groups)
+        if len(pairs) == 1:
+            title = f"{trading_words.describe(pairs[0][1], pairs[0][0] or None, '')[0]} {word}"
+        else:
+            names = sorted({trading_words.short_pair(pair) for pair, _ in pairs})
+            title = f"{trading_words.side_title(pairs)} {word}: " + ", ".join(names)
         events.append(
             AlertEvent(
-                id="trading:" + digest(src.key, sorted(map(str, opened_rows)), now),
+                id="trading:" + digest(src.key, remaining, now),
                 # The health class: workers that predate this detector can still deliver it.
                 cls="health",
-                severity="critical" if any(side in ("sell", "both") for side, *_ in opened_rows) else "warning",
+                severity="critical" if any(side in ("sell", "both") for side, *_ in rows) else "warning",
                 title=clean_text(f"{src.tag} · {title}", 100),
                 body=clean_text(" ".join(lines), 300),
                 deep_link=link("health", src.bot_id),
@@ -918,13 +933,13 @@ def evaluate_trading(
                 kind="trading_blocked",
             )
         )
-    if resolved_rows:
+    else:
         pairs = sorted({(pair or "", side) for side, pair, _ in resolved_rows})
         if len(pairs) == 1:
             subject = trading_words.describe(pairs[0][1], pairs[0][0] or None, "")[0]
         else:
-            subject = trading_words.side_title(pairs) + " " + ", ".join(
-                trading_words.short_pair(pair) for pair, _ in pairs)
+            names = sorted({trading_words.short_pair(pair) for pair, _ in pairs})
+            subject = trading_words.side_title(pairs) + " " + ", ".join(names)
         events.append(
             AlertEvent(
                 id="trading-ok:" + digest(src.key, sorted(map(str, resolved_rows)), now),

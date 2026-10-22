@@ -947,6 +947,68 @@ def test_one_cause_across_pairs_is_one_notification_per_transition():
     assert len(conditions) == 0
 
 
+def _row(pair, code="native_funding_reconciliation_required", side="buy", **extra):
+    return dict(ETH_ISSUE, pair=pair, side=side, reason_code=code, detail=None, **extra)
+
+
+def test_partial_recovery_reports_what_is_still_blocked_never_available_again():
+    """Review round 4: SOL clearing while XRP stayed open sent 'SOL available again' over XRP's block."""
+    sol, xrp = _row("SOL-USDC"), _row("XRP-USDC")
+    out, conditions = _run_trading([(0, [sol, xrp], True), (60, [sol, xrp], True),
+                                    (90, [xrp], True), (210, [xrp], True)])
+    assert [len(e) for e in out] == [0, 1, 0, 1]
+    [update] = out[3]
+    assert update.kind == "trading_blocked" and "available again" not in update.title
+    assert update.title == "V1 · XRP-USDC buying restricted"
+    assert update.body == "XRP-USDC buying: not enough USDC allocated."
+    assert update.collapse_key == out[1][0].collapse_key
+
+
+def test_one_reason_clearing_on_a_pair_with_another_open_is_not_availability():
+    both = [_row("SOL-USDC", "native_buy_create_refused"), _row("SOL-USDC")]
+    out, _ = _run_trading([(0, both, True), (60, both, True), (90, both[1:], True), (210, both[1:], True)])
+    [update] = out[3]
+    assert update.kind == "trading_blocked"
+    assert update.body == "SOL-USDC buying: not enough USDC allocated."
+
+
+def test_a_recovery_and_a_new_block_in_one_cycle_are_one_critical_summary():
+    sol, xrp_sell = _row("SOL-USDC"), _row("XRP-USDC", "inventory_unavailable", side="sell")
+    # SOL clears from 90 (recovers at 210); XRP's sell restriction appears at 150 (confirms at 210).
+    out, _ = _run_trading([(0, [sol], True), (60, [sol], True), (90, [], True),
+                           (150, [xrp_sell], True), (210, [xrp_sell], True)])
+    assert [len(e) for e in out] == [0, 1, 0, 0, 1]
+    [final] = out[4]
+    assert final.kind == "trading_blocked" and final.severity == "critical"
+    assert final.title == "V1 · XRP-USDC selling restricted"
+
+
+def test_a_new_buy_warning_keeps_an_open_sell_block_in_the_summary():
+    xrp_sell = _row("XRP-USDC", "manual_kill_switch", side="sell", state="blocked")
+    sol = _row("SOL-USDC")
+    out, _ = _run_trading([(0, [xrp_sell], True), (60, [xrp_sell], True),
+                           (90, [xrp_sell, sol], True), (150, [xrp_sell, sol], True)])
+    [summary] = out[3]
+    assert summary.severity == "critical"
+    assert summary.title == "V1 · Trading blocked: SOL, XRP"
+    assert summary.body == "SOL-USDC buying: not enough USDC allocated. XRP-USDC selling: kill switch on."
+
+
+def test_a_pair_restricted_on_both_sides_is_named_once():
+    rows = [_row("SOL-USDC"), _row("SOL-USDC", "base_balance_low", side="sell")]
+    out, _ = _run_trading([(0, rows, True), (900, rows, True)])
+    [event] = out[1]
+    assert event.title == "V1 · Trading restricted: SOL"
+
+
+def test_an_unknown_reason_carries_the_owner_detail():
+    odd = _row("BTC-USDC", "brand_new_code")
+    odd["detail"] = "engine said so"
+    out, _ = _run_trading([(0, [odd], True), (60, [odd], True)])
+    [event] = out[1]
+    assert event.body == "BTC-USDC buying: brand new code (engine said so)."
+
+
 def test_gaps_never_open_or_clear_a_trading_condition():
     out, conditions = _run_trading(
         [(0, [ETH_ISSUE], True), (60, [ETH_ISSUE], True),

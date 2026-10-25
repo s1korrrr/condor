@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
 from typing import Any
 
 from .strategy import Strategy, _parse_frontmatter
@@ -161,38 +162,58 @@ def _should_remain_open(position: dict, policy: ShutdownPolicy) -> bool:
     return not _is_perp(_position_connector(position))
 
 
-async def _get_running_executors(engine: Any, client: Any) -> list[dict]:
-    """This session's running executors -- fresh if possible, else last snapshot.
+@dataclass(frozen=True)
+class _ExecutorInventory:
+    rows: list[dict]
+    complete: bool
 
-    Re-runs the core providers so the winddown acts on current truth; on any
-    failure it falls back to ``engine._last_skill_data`` (already scoped to this
-    session's ``agent_id`` by the last tick).
-    """
+
+async def _get_running_executors(engine: Any, client: Any) -> _ExecutorInventory:
+    """Keep confirmed stop targets separate from overall inventory completeness."""
+    ledger = getattr(engine, "ledger", None)
+    ownership_complete = ledger is None or getattr(engine, "_adoption_done", True)
+    kwargs = {"agent_id": engine.agent_id}
+    if ledger is not None:
+        kwargs["bot_names"] = ledger.bases()
     try:
         results = await engine.provider_registry.run_core_providers(
-            client, engine.config, agent_id=engine.agent_id
+            client, engine.config, **kwargs
         )
         ex_result = results.get("executors")
-        if ex_result is not None and "executors" in getattr(ex_result, "data", {}):
-            return list(ex_result.data["executors"])
+        data = getattr(ex_result, "data", {})
+        rows = data.get("executors")
+        if isinstance(rows, list) and all(isinstance(row, dict) for row in rows):
+            return _ExecutorInventory(
+                rows,
+                ownership_complete and data.get("current_book_status") == "available",
+            )
     except Exception:
-        log.exception("shutdown: executor refresh failed; using last snapshot")
-    return list((engine._last_skill_data or {}).get("executors", []))
+        log.exception("shutdown: current executor enumeration unavailable")
+    # Known prior IDs remain valid stop targets, but cannot prove completeness.
+    previous = (engine._last_skill_data or {}).get("executors")
+    rows = (
+        previous
+        if isinstance(previous, list) and all(isinstance(row, dict) for row in previous)
+        else []
+    )
+    return _ExecutorInventory(rows, False)
 
 
-async def _fetch_positions(client: Any, agent_id: str) -> list[dict]:
-    """Positions summary scoped to this session (``controller_id``)."""
+async def _fetch_positions(client: Any, agent_id: str) -> list[dict] | None:
+    """Positions scoped to this session; failed/malformed reads stay unknown."""
     try:
         result = await client.executors.get_positions_summary(
             controller_id=agent_id or None
         )
     except Exception:
         log.exception("shutdown: failed to fetch positions summary")
-        return []
-    positions = result.get("positions", result) if isinstance(result, dict) else result
-    if not isinstance(positions, list):
-        positions = [positions] if positions else []
-    return [p for p in positions if isinstance(p, dict)]
+        return None
+    positions = result.get("positions") if isinstance(result, dict) else result
+    if not isinstance(positions, list) or not all(
+        isinstance(p, dict) for p in positions
+    ):
+        return None
+    return positions
 
 
 async def _deterministic_baseline(
@@ -207,8 +228,14 @@ async def _deterministic_baseline(
 
     running = await _get_running_executors(engine, client)
     stopped = 0
-    failures: list[str] = []
-    for ex in running:
+    failures: list[str] = (
+        []
+        if running.complete
+        else [
+            "Current executor inventory unavailable; only confirmed stop targets could be attempted"
+        ]
+    )
+    for ex in running.rows:
         ex_id = ex.get("id") or ex.get("executor_id")
         if not ex_id:
             continue
@@ -228,7 +255,7 @@ async def _deterministic_baseline(
 
 async def _verify_and_retry(
     engine: Any, client: Any, policy: ShutdownPolicy
-) -> list[dict]:
+) -> list[dict] | None:
     """Re-query positions; retry the deterministic close once; return residuals.
 
     Never trusts the LLM: computes which positions *should* be gone under the
@@ -236,6 +263,8 @@ async def _verify_and_retry(
     closed and re-checks. Returns the list of positions still stranded.
     """
     positions = await _fetch_positions(client, engine.agent_id)
+    if positions is None:
+        return None
     stranded = [p for p in positions if not _should_remain_open(p, policy)]
     if not stranded:
         return []
@@ -243,7 +272,7 @@ async def _verify_and_retry(
     from condor.fetchers.executors import stop_executor
 
     running = await _get_running_executors(engine, client)
-    for ex in running:
+    for ex in running.rows:
         if _keep_position(ex, policy):
             continue
         ex_id = ex.get("id") or ex.get("executor_id")
@@ -255,13 +284,17 @@ async def _verify_and_retry(
             log.exception("shutdown: retry stop failed for %s", ex_id)
 
     positions = await _fetch_positions(client, engine.agent_id)
-    return [p for p in positions if not _should_remain_open(p, policy)]
+    return (
+        None
+        if positions is None
+        else [p for p in positions if not _should_remain_open(p, policy)]
+    )
 
 
 def _build_llm_context(
     policy: ShutdownPolicy,
-    running: list[dict],
-    positions: list[dict],
+    running: list[dict] | None,
+    positions: list[dict] | None,
     failures: list[str],
 ) -> str:
     """Post-baseline state handed to the LLM cleanup pass."""
@@ -270,19 +303,26 @@ def _build_llm_context(
         f"Policy: on_kill_switch={policy.on_kill_switch}, "
         f"cancel_open_orders={policy.cancel_open_orders}.",
         "",
-        f"Executors still running after the baseline stop ({len(running)}):",
+        f"Executors still running after the baseline stop ({len(running) if running is not None else 'unavailable'}):",
     ]
     lines += [
         f"  - {ex.get('id') or ex.get('executor_id') or '?'} "
         f"{ex.get('connector', '?')} {ex.get('pair', '')}".rstrip()
-        for ex in running
-    ] or ["  (none)"]
-    lines += ["", f"Open positions after the baseline stop ({len(positions)}):"]
+        for ex in running or []
+    ] or (
+        ["  (unavailable; inventory may remain)"] if running is None else ["  (none)"]
+    )
+    lines += [
+        "",
+        f"Open positions after the baseline stop ({len(positions) if positions is not None else 'unavailable'}):",
+    ]
     lines += [
         f"  - {_describe_position(p)} pnl="
         f"{p.get('unrealized_pnl_quote', p.get('unrealized_pnl', '?'))}"
-        for p in positions
-    ] or ["  (none)"]
+        for p in positions or []
+    ] or (
+        ["  (unavailable; inventory may remain)"] if positions is None else ["  (none)"]
+    )
     if failures:
         lines += ["", f"Deterministic winddown errors ({len(failures)}):"]
         lines += [f"  - {f}" for f in failures]
@@ -311,7 +351,9 @@ async def _run_llm_cleanup(
 
         running = await _get_running_executors(engine, client)
         positions = await _fetch_positions(client, engine.agent_id)
-        context = _build_llm_context(policy, running, positions, failures)
+        context = _build_llm_context(
+            policy, running.rows if running.complete else None, positions, failures
+        )
         async with asyncio.timeout(300):
             await _run_agent_to_completion(
                 slug=agent.slug,
@@ -387,6 +429,7 @@ async def run_shutdown(engine: Any, reason: str) -> None:
 
     stranded = await _verify_and_retry(engine, client, policy)
 
+    unknown = stranded is None or bool(failures)
     if stranded:
         details = ", ".join(_describe_position(p) for p in stranded) or "unknown"
         msg = (
@@ -395,6 +438,11 @@ async def run_shutdown(engine: Any, reason: str) -> None:
             f"Close them manually!"
         )
         log.error(msg)
+    elif unknown:
+        msg = (
+            f"🚨 Agent {agent_id}: emergency shutdown is UNVERIFIED — inventory is unavailable "
+            "or winddown failed. Positions may remain OPEN; reconcile with the execution owner."
+        )
     else:
         msg = (
             f"✅ Agent {agent_id}: emergency shutdown complete — wound down per "
@@ -405,10 +453,14 @@ async def run_shutdown(engine: Any, reason: str) -> None:
     await engine._notify(msg)
 
     if engine.journal:
-        verified = "flat" if not stranded else f"{len(stranded)} stranded"
+        verified = (
+            "unknown"
+            if unknown
+            else ("flat" if not stranded else f"{len(stranded)} stranded")
+        )
         engine.journal.append_action(
             engine.journal.tick_count + 1,
-            "shutdown_done",
+            "shutdown_unverified" if unknown else "shutdown_done",
             f"stopped={stopped}, failures={len(failures)}, verify={verified}",
         )
         engine.journal.record_tick("shutdown: " + reason)

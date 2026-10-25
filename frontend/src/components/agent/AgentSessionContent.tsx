@@ -93,15 +93,30 @@ export function SessionKpis({
 }) {
   const total = perf?.total_pnl ?? 0;
   const closes = closeSummary(perf);
-  const trades = perf?.trade_count ?? 0;
-  const volume = perf?.volume ?? 0;
-  const feesKnown = perf?.fees_known !== false;
+  const trades = perf?.trade_count;
+  const volume = perf?.volume;
+  const feesKnown = perf != null && perf.fees_known !== false && perf.fees != null;
+  const bookUnavailable =
+    perf == null ||
+    perf.current_book_status === "unavailable" ||
+    perf.current_book_status === "partial" ||
+    perf.total_pnl == null ||
+    perf.unrealized_pnl == null ||
+    perf.open_count == null;
 
   // A round-trip count of zero next to real volume is the strict close-type
   // filter refusing to read a directional controller's risk stop as a trade.
   // Show the closes that did happen rather than a bare "0" the numbers contradict.
   const tradeValue =
-    trades > 0 ? String(trades) : closes.total > 0 ? String(closes.total) : volume > 0 ? "—" : "0";
+    trades == null
+      ? "—"
+      : trades > 0
+        ? String(trades)
+        : closes.total > 0
+          ? String(closes.total)
+          : (volume ?? 0) > 0
+            ? "—"
+            : "0";
   const tradeSub = trades === 0 && closes.total > 0 ? closes.label : undefined;
 
   const status = summary?.status || "";
@@ -124,6 +139,12 @@ export function SessionKpis({
           </span>
         </div>
       )}
+      {bookUnavailable && (
+        <div className="flex items-start gap-2 rounded-lg border border-amber-500/40 bg-amber-500/5 px-4 py-2.5 text-xs text-amber-300">
+          <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+          <span><strong>Current inventory unavailable.</strong> Active runtime membership or its position metrics could not be fully reconciled. Unrealized PnL and open count are not shown as zero.</span>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-3 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-2.5">
         {summary && (
@@ -136,19 +157,19 @@ export function SessionKpis({
         )}
         <Kpi
           label="Total PnL"
-          value={formatCurrencyPnl(total)}
-          className={total >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]"}
+          value={bookUnavailable ? "—" : formatCurrencyPnl(total)}
+          className={bookUnavailable ? "text-[var(--color-text-muted)]" : total >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]"}
         />
-        <Kpi label="Realized" value={formatCurrencyPnl(perf?.realized_pnl ?? 0)} />
-        <Kpi label="Unrealized" value={formatCurrencyPnl(perf?.unrealized_pnl ?? 0)} />
-        <Kpi label="Volume" value={formatCompactUsd(volume)} />
+        <Kpi label="Realized" value={perf?.realized_pnl == null ? "—" : formatCurrencyPnl(perf.realized_pnl)} />
+        <Kpi label="Unrealized" value={bookUnavailable ? "—" : formatCurrencyPnl(perf?.unrealized_pnl ?? 0)} />
+        <Kpi label="Volume" value={volume == null ? "—" : formatCompactUsd(volume)} />
         <Kpi
           label="Fees"
-          value={feesKnown ? formatCompactUsd(perf?.fees ?? 0) : "—"}
+          value={feesKnown && perf?.fees != null ? formatCompactUsd(perf.fees) : "—"}
           sub={feesKnown ? undefined : "not reported"}
         />
         <Kpi label="Closes" value={tradeValue} sub={tradeSub} />
-        <Kpi label="Open" value={String(perf?.open_count ?? 0)} />
+        <Kpi label="Open" value={bookUnavailable ? "—" : String(perf?.open_count ?? 0)} />
         {summary && summary.lastTick > 0 && <Kpi label="Ticks" value={`#${summary.lastTick}`} />}
         {/* The session's own live report. It has always existed — rebuilt every
             tick under a stable id — but was only reachable through the routines
@@ -255,14 +276,14 @@ export function SessionBots({ perf }: { perf?: AgentPerformance | null }) {
                               <span className="ml-1.5 text-[10px] text-[var(--color-text-muted)]">{c.trading_pair}</span>
                             )}
                           </td>
-                          <td className={`px-3 py-1.5 text-right font-mono ${(c.realized_pnl_quote ?? 0) >= 0 ? "text-[var(--color-text-muted)]" : "text-[var(--color-red)]"}`}>
-                            {formatCurrencyPnl(c.realized_pnl_quote ?? 0)}
+                          <td className={`px-3 py-1.5 text-right font-mono ${c.realized_pnl_quote == null ? "text-[var(--color-text-muted)]" : c.realized_pnl_quote >= 0 ? "text-[var(--color-text-muted)]" : "text-[var(--color-red)]"}`}>
+                            {c.realized_pnl_quote == null ? "—" : formatCurrencyPnl(c.realized_pnl_quote)}
                           </td>
                           <td className="px-3 py-1.5 text-right font-mono text-[var(--color-text-muted)]">
-                            {formatCurrencyPnl(c.unrealized_pnl_quote ?? 0)}
+                            {c.unrealized_pnl_quote == null ? "—" : formatCurrencyPnl(c.unrealized_pnl_quote)}
                           </td>
                           <td className="px-3 py-1.5 text-right font-mono text-[var(--color-text-muted)]">
-                            {formatCompactUsd(c.volume_traded ?? 0)}
+                            {c.volume_traded == null ? "—" : formatCompactUsd(c.volume_traded)}
                           </td>
                           <td className="px-3 py-1.5 text-right font-mono text-[var(--color-text-muted)]">
                             {cTotal === 0 ? "—" : cTotal}
@@ -463,7 +484,7 @@ export function SessionExecutors({
   botMode?: boolean;
 }) {
   // REST data (fallback + historical executors)
-  const { data: sessionDetail } = useQuery({
+  const { data: sessionDetail, isError: sessionDetailError } = useQuery({
     queryKey: ["strategy-session-executors", slug, sslug, sessionNum],
     queryFn: () => api.getStrategySessionExecutors(slug, sslug, sessionNum),
     refetchInterval: 10000,
@@ -496,6 +517,10 @@ export function SessionExecutors({
     }
     return merged;
   }, [sessionDetail?.executors, wsExecutors, isLiveSession]);
+  const bookUnavailable =
+    sessionDetailError ||
+    sessionDetail?.performance.current_book_status !== "available" ||
+    sessionDetail?.executors == null;
 
   // Currency conversion
   const quoteCurrencies = useMemo(
@@ -596,7 +621,7 @@ export function SessionExecutors({
 
   const allSelected = selectedIds.size === executorInfos.length && executorInfos.length > 0;
 
-  if (!sessionDetail) {
+  if (!sessionDetail && !sessionDetailError) {
     return (
       <div className="flex h-32 items-center justify-center">
         <div className="h-5 w-5 animate-spin rounded-full border-2 border-[var(--color-border)] border-t-[var(--color-primary)]" />
@@ -609,7 +634,9 @@ export function SessionExecutors({
   if (executorInfos.length === 0) {
     return (
       <p className="rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3 text-xs leading-relaxed text-[var(--color-text-muted)]">
-        {botMode
+        {bookUnavailable
+          ? "Current executor and position inventory is unavailable. This empty response does not show that the account is flat; retry the owner data read before assessing exposure."
+          : botMode
           ? "No open positions right now. This session trades through bots, whose per-trade rows stay inside each bot instance's own database and never reach the executor table — the realized figures above come from the controllers' performance history instead."
           : "No executors for this session."}
       </p>
@@ -639,11 +666,11 @@ export function SessionExecutors({
               </thead>
               <tbody>
                 {positions.map((p, i) => {
-                  const upnl = p.unrealized_pnl_quote ?? p.unrealized_pnl ?? 0;
+                  const upnl = p.unrealized_pnl_quote ?? p.unrealized_pnl;
                   const side = p.position_side || p.side || "—";
-                  const amount = p.net_amount_base ?? p.amount ?? 0;
-                  const entry = p.buy_breakeven_price ?? p.entry_price ?? 0;
-                  const current = p.current_price ?? 0;
+                  const amount = p.net_amount_base ?? p.amount;
+                  const entry = p.buy_breakeven_price ?? p.entry_price;
+                  const current = p.current_price;
                   return (
                     <tr key={`${p.trading_pair}-${i}`} className="border-b border-[var(--color-border)]/30">
                       <td className="py-2 pr-3 font-mono text-[var(--color-text)]">
@@ -654,11 +681,11 @@ export function SessionExecutors({
                           {side.toUpperCase()}
                         </span>
                       </td>
-                      <td className="py-2 pr-3 text-right font-mono text-[var(--color-text)]">{Math.abs(amount).toFixed(4)}</td>
-                      <td className="py-2 pr-3 text-right font-mono text-[var(--color-text-muted)]">${entry.toFixed(2)}</td>
-                      <td className="py-2 pr-3 text-right font-mono text-[var(--color-text)]">${current.toFixed(2)}</td>
-                      <td className={`py-2 pr-3 text-right font-mono ${upnl >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]"}`}>
-                        {formatCurrencyPnl(upnl)}
+                      <td className="py-2 pr-3 text-right font-mono text-[var(--color-text)]">{amount == null ? "—" : Math.abs(amount).toFixed(4)}</td>
+                      <td className="py-2 pr-3 text-right font-mono text-[var(--color-text-muted)]">{entry == null ? "—" : `$${entry.toFixed(2)}`}</td>
+                      <td className="py-2 pr-3 text-right font-mono text-[var(--color-text)]">{current == null ? "—" : `$${current.toFixed(2)}`}</td>
+                      <td className={`py-2 pr-3 text-right font-mono ${upnl == null ? "text-[var(--color-text-muted)]" : upnl >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]"}`}>
+                        {upnl == null ? "—" : formatCurrencyPnl(upnl)}
                       </td>
                       <td className="py-2 text-right font-mono text-[var(--color-text-muted)]">{p.leverage ? `${p.leverage}x` : "—"}</td>
                     </tr>

@@ -29,8 +29,14 @@ class ExecutorsProvider(BaseProvider):
         if not agent_id:
             return ProviderResult(
                 name=self.name,
-                data={"executors": [], "total_pnl": 0, "total_volume": 0},
-                summary="Active Executors: no agent_id provided",
+                data={
+                    "executors": None,
+                    "total_pnl": None,
+                    "total_volume": 0,
+                    "total_exposure": None,
+                    "current_book_status": "unavailable",
+                },
+                summary="Active Executors: current inventory unavailable (no agent_id)",
             )
 
         # The ledger's bases are what this session actually owns — several, if it
@@ -48,18 +54,37 @@ class ExecutorsProvider(BaseProvider):
         except Exception as e:
             return ProviderResult(
                 name=self.name,
-                data={"error": str(e)},
+                data={
+                    "error": str(e),
+                    "executors": None,
+                    "total_exposure": None,
+                    "current_book_status": "unavailable",
+                },
                 summary=f"Active Executors: failed to fetch ({e})",
             )
 
-        running = [e for e in perf.executors if e["status"] == "RUNNING"]
+        book_available = perf.current_book_status == "available"
+        running = (
+            [e for e in (perf.executors or []) if e["status"] == "RUNNING"]
+            if book_available
+            else []
+        )
         lines = [
             (
-                f"Active Executors ({len(running)}) [agent: {agent_id}]:"
-                if running
-                else f"Active Executors: none running (agent: {agent_id})"
+                f"Active Executors: unavailable (agent: {agent_id})"
+                if not book_available
+                else (
+                    f"Active Executors ({len(running)}) [agent: {agent_id}]:"
+                    if running
+                    else f"Active Executors: none running (agent: {agent_id})"
+                )
             )
         ]
+        if not book_available:
+            lines.append(
+                "  ⚠️ Current position inventory is unavailable; exposure is unknown. "
+                "Do not treat an empty executor list as a flat account."
+            )
         for r in running:
             side = r.get("side") or ""
             lines.append(
@@ -67,12 +92,19 @@ class ExecutorsProvider(BaseProvider):
             )
         if perf.bot_names:
             lines.append(f"  Bots operated: {', '.join(perf.bot_names)}")
-        lines.append(
-            f"  Realized: ${perf.realized_pnl:+.2f} | "
-            f"Unrealized: ${perf.unrealized_pnl:+.2f} | "
-            f"Total PnL: ${perf.total_pnl:+.2f} | "
-            f"Volume: ${perf.volume:,.0f}"
-        )
+        if book_available:
+            lines.append(
+                f"  Realized: ${perf.realized_pnl:+.2f} | "
+                f"Unrealized: ${perf.unrealized_pnl:+.2f} | "
+                f"Total PnL: ${perf.total_pnl:+.2f} | "
+                f"Volume: ${perf.volume:,.0f}"
+            )
+        else:
+            lines.append(
+                f"  Realized: ${perf.realized_pnl:+.2f} | "
+                f"Unrealized: UNKNOWN | Total PnL: UNKNOWN | "
+                f"Volume: ${perf.volume:,.0f}"
+            )
         # Say so rather than letting a missing bot read as a flat one. The figures
         # above are then a floor, and an agent told a floor can go look; an agent
         # told "$0.00" has no reason to.
@@ -84,20 +116,22 @@ class ExecutorsProvider(BaseProvider):
                 "concluding this session is break-even."
             )
 
-        total_exposure = sum(r.get("amount", 0) for r in running)
+        total_exposure = (
+            sum(r.get("amount", 0) for r in running) if book_available else None
+        )
 
         return ProviderResult(
             name=self.name,
             data={
-                "executors": running,
-                "all_executors": perf.executors,
-                "total_pnl": perf.total_pnl,
+                "executors": running if book_available else None,
+                "all_executors": perf.executors if book_available else None,
+                "total_pnl": perf.total_pnl if book_available else None,
                 "realized_pnl": perf.realized_pnl,
-                "unrealized_pnl": perf.unrealized_pnl,
+                "unrealized_pnl": perf.unrealized_pnl if book_available else None,
                 "total_volume": perf.volume,
                 "total_fees": perf.fees,
                 "total_exposure": total_exposure,
-                "open_count": perf.open_count,
+                "open_count": perf.open_count if book_available else None,
                 "closed_count": perf.closed_count,
                 "win_rate": perf.win_rate,
                 # Provenance travels with the figures. Everything downstream —
@@ -110,6 +144,7 @@ class ExecutorsProvider(BaseProvider):
                 "controllers": perf.controllers,
                 "close_type_counts": perf.close_type_counts,
                 "fees_known": perf.fees_known,
+                "current_book_status": perf.current_book_status,
             },
             summary="\n".join(lines),
         )

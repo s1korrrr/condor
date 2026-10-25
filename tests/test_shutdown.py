@@ -198,7 +198,14 @@ def _fake_engine(running_executors, positions_sequence, monkeypatch, tmp_path):
 
     class _Registry:
         async def run_core_providers(self, client, config, agent_id=""):
-            return {"executors": SimpleNamespace(data={"executors": running_executors})}
+            return {
+                "executors": SimpleNamespace(
+                    data={
+                        "executors": running_executors,
+                        "current_book_status": "available",
+                    }
+                )
+            }
 
     client = _FakeClient(positions_sequence)
     notifications = []
@@ -217,7 +224,10 @@ def _fake_engine(running_executors, positions_sequence, monkeypatch, tmp_path):
         provider_registry=_Registry(),
         # Executor-mode session: no bot, so no ownership window to release.
         ledger=None,
-        _last_skill_data={"executors": running_executors},
+        _last_skill_data={
+            "executors": running_executors,
+            "current_book_status": "available",
+        },
         _get_client=_get_client,
         _notify=_notify,
     )
@@ -419,3 +429,84 @@ def test_llm_cleanup_failure_does_not_block_winddown(tmp_path, monkeypatch):
     assert dict(client.executors.stop_calls) == {"e1": False}
     assert any("complete" in n for n in notes)
     assert not any("🚨" in n for n in notes)
+
+
+def test_unknown_executor_inventory_alerts_without_aborting_verification(
+    tmp_path, monkeypatch
+):
+    engine, client, notes = _fake_engine(None, [[]], monkeypatch, tmp_path)
+    asyncio.run(run_shutdown(engine, "unknown inventory"))
+    assert client.executors.stop_calls == []
+    assert any("🚨" in note and "unavailable" in note for note in notes)
+    assert not any("shutdown complete" in note for note in notes)
+    assert any(
+        action == "shutdown_unverified" and "verify=unknown" in reason
+        for action, reason in engine.journal.actions
+    )
+
+
+def test_pending_adoption_cannot_verify_shutdown_from_a_known_subset(
+    tmp_path, monkeypatch
+):
+    engine, client, notes = _fake_engine(
+        [{"id": "confirmed-alpha", "connector": "binance_perpetual"}],
+        [[]],
+        monkeypatch,
+        tmp_path,
+    )
+    engine.ledger = SimpleNamespace(bases=lambda: ["verified-alpha"])
+    engine._adoption_done = False
+
+    async def provider(*_args, **_kwargs):
+        return {
+            "executors": SimpleNamespace(
+                data={
+                    "executors": [
+                        {"id": "confirmed-alpha", "connector": "binance_perpetual"}
+                    ],
+                    "current_book_status": "available",
+                }
+            )
+        }
+
+    engine.provider_registry.run_core_providers = provider
+    asyncio.run(run_shutdown(engine, "pending beta"))
+    assert client.executors.stop_calls == [("confirmed-alpha", False)]
+    assert any("🚨" in note and "unavailable" in note for note in notes)
+    assert not any("shutdown complete" in note for note in notes)
+
+
+def test_failed_position_read_is_unknown_after_known_stops(tmp_path, monkeypatch):
+    engine, client, notes = _fake_engine(
+        [{"id": "confirmed", "connector": "binance_perpetual"}],
+        [[]],
+        monkeypatch,
+        tmp_path,
+    )
+
+    async def unavailable(**_kwargs):
+        raise ConnectionError("fixture owner unavailable")
+
+    client.executors.get_positions_summary = unavailable
+    asyncio.run(run_shutdown(engine, "owner failure"))
+    assert client.executors.stop_calls == [("confirmed", False)]
+    assert any("🚨" in note and "unavailable" in note for note in notes)
+    assert not any("shutdown complete" in note for note in notes)
+
+
+def test_cleanup_context_does_not_label_unknown_inventory_none():
+    text = shutdown_module._build_llm_context(ShutdownPolicy(), None, None, [])
+    assert "unavailable" in text.lower()
+    assert "(none)" not in text
+
+
+def test_shutdown_requires_explicit_executor_availability(tmp_path, monkeypatch):
+    engine, client, notes = _fake_engine([], [[]], monkeypatch, tmp_path)
+
+    async def malformed(*_args, **_kwargs):
+        return {"executors": SimpleNamespace(data={"executors": []})}
+
+    engine.provider_registry.run_core_providers = malformed
+    asyncio.run(run_shutdown(engine, "missing source status"))
+    assert any("🚨" in note and "UNVERIFIED" in note for note in notes)
+    assert not any("shutdown complete" in note for note in notes)

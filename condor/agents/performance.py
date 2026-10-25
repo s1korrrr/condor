@@ -23,8 +23,8 @@ log = logging.getLogger(__name__)
 class AgentPerformance:
     agent_id: str
     realized_pnl: float = 0.0
-    unrealized_pnl: float = 0.0
-    total_pnl: float = 0.0
+    unrealized_pnl: float | None = 0.0
+    total_pnl: float | None = 0.0
     volume: float = 0.0
     fees: float = 0.0
     trade_count: int = 0
@@ -33,9 +33,9 @@ class AgentPerformance:
     # outcome; a bot-mode agent's trades come from the controller snapshot, which
     # says how many positions closed but not how any of them ended.
     win_rate: float | None = None
-    open_count: int = 0
+    open_count: int | None = 0
     closed_count: int = 0
-    executors: list[dict[str, Any]] = field(default_factory=list)
+    executors: list[dict[str, Any]] | None = field(default_factory=list)
     # Controller-mode attribution: each bot the agent operates has its aggregate
     # PnL merged into the totals above, and its resolved instance name surfaced
     # here for transparency. A session can own several bots ([[FEAT-018]]), so this
@@ -65,6 +65,9 @@ class AgentPerformance:
     # render alike: a session whose bot has vanished reporting "$0.00" reads as
     # "traded flat" when it means "cannot see the bot".
     unresolved_bases: list[str] = field(default_factory=list)
+    # Runtime-owned bot inventory is unknown when the active-runtime registry or
+    # matching current metrics cannot be read. Consumers must not render zero.
+    current_book_status: str = "available"
 
     @property
     def bot_name(self) -> str:
@@ -380,6 +383,7 @@ async def fetch_agent_performance_batch(
     # Safety cap, expressed in rows: the walker counts what it accumulated, not
     # how many times it looped, and its own terminal guards end a stalled walk.
     MAX_PAGES = 200  # → 10,000 executors per agent
+    executor_read_failures: set[str] = set()
 
     async def _fetch_rows(aid: str) -> list[dict]:
         rows: list[dict] = []
@@ -395,6 +399,7 @@ async def fetch_agent_performance_batch(
                         rows.append(_executor_row(ex))
         except Exception as e:
             log.warning("search_executors(%s) failed: %s", aid, e)
+            executor_read_failures.add(aid)
             if failed_ids is not None:
                 failed_ids.add(aid)
         return rows
@@ -417,6 +422,7 @@ async def fetch_agent_performance_batch(
             fetch_all_bot_performance,
             fetch_archived_instances,
             fetch_base_histories,
+            fetch_current_bot_performance,
             partition_instances,
             resolve_bots,
             slice_history,
@@ -427,6 +433,15 @@ async def fetch_agent_performance_batch(
         except Exception as e:
             log.warning("fetch_all_bot_performance failed: %s", e)
             all_bot_perf = {}
+        all_wanted_bases = sorted({base for names in wanted.values() for base in names})
+        try:
+            current_perf, book_status_by_base = await fetch_current_bot_performance(
+                client, all_wanted_bases
+            )
+        except Exception as e:
+            log.warning("active bot performance failed: %s", e)
+            current_perf = {}
+            book_status_by_base = {base: "unavailable" for base in all_wanted_bases}
         # Stopped instances still hold the realized PnL they earned, and a session
         # that stopped its bot before the rollup ran would otherwise report $0.
         archived = await fetch_archived_instances(client)
@@ -435,7 +450,15 @@ async def fetch_agent_performance_batch(
             # Resolved per agent over ALL its bases at once, so an owned parent
             # never resolves to a tagged sibling's instance and no bot is merged
             # into the same agent twice.
-            live = resolve_bots(all_bot_perf, bases)
+            live = {base: current_perf[base] for base in bases if base in current_perf}
+            book_status = (
+                "unavailable"
+                if any(book_status_by_base.get(base) != "available" for base in bases)
+                else "available"
+            )
+            historical = resolve_bots(all_bot_perf, bases)
+            if book_status != "available":
+                out[aid].current_book_status = book_status
             instances = partition_instances(all_bot_perf, bases, archived)
             start = float((since or {}).get(aid, 0.0) or 0.0)
             windows: dict[str, tuple[float, float, float, float]] = {}
@@ -457,17 +480,60 @@ async def fetch_agent_performance_batch(
                 bot = live.get(base)
                 # An unresolved base (never deployed, or no snapshot yet) still
                 # names the bot the agent operates, as the single-bot path did.
-                out[aid].bot_names.append(bot.get("bot_name", base) if bot else base)
+                if bot:
+                    # bot_names is consumed as a runtime-membership badge by the
+                    # UI. A configured base or historical instance name must not
+                    # be promoted to running when the active endpoint has none.
+                    out[aid].bot_names.append(bot.get("bot_name", base))
                 # Everything ever deployed under the base, stopped instances
                 # included — the session operated them all, and the two this one
                 # wound down are exactly where its realized PnL came from.
                 out[aid].bot_instances.extend(instances.get(base) or [])
                 if bot:
-                    _merge_bot_perf(out[aid], bot, windows.get(base))
+                    # Preserve lifetime realized/volume attribution from the
+                    # whole performance history while taking open rows and
+                    # unrealized PnL only from exact active runtime instances.
+                    source = dict(historical.get(base) or bot)
+                    source.update(
+                        {
+                            key: bot.get(key)
+                            for key in (
+                                "bot_name",
+                                "unrealized_pnl_quote",
+                                "controllers",
+                            )
+                        }
+                    )
+                    source["positions_summary"] = [
+                        row
+                        for controller in source.get("controllers", [])
+                        for row in controller.get("positions_summary", [])
+                        if isinstance(row, dict)
+                    ]
+                    window = windows.get(base)
+                    if window is not None and window[3] == 0.0:
+                        # The session fee slice is absent, so use current open
+                        # position fees as the existing bounded fallback.
+                        source["cum_fees_quote"] = bot.get("cum_fees_quote", 0.0)
+                    _merge_bot_perf(out[aid], source, window)
                 elif base in windows:
                     # Stopped: no live snapshot to merge, but the window over its
                     # archived history is exactly what this session realized on it.
                     _merge_stopped_bot_perf(out[aid], windows[base])
+                elif base in historical:
+                    # With no session start, keep the existing lifetime realized
+                    # and volume totals. Strip all current-book fields because the
+                    # registry could not establish them or reported no live owner.
+                    prior = historical[base]
+                    _merge_stopped_bot_perf(
+                        out[aid],
+                        (
+                            float(prior.get("realized_pnl_quote", 0) or 0),
+                            float(prior.get("volume_traded", 0) or 0),
+                            float(prior.get("closed_trades", 0) or 0),
+                            float(prior.get("cum_fees_quote", 0) or 0),
+                        ),
+                    )
                 if not instances.get(base):
                     out[aid].unresolved_bases.append(base)
             if out[aid].unresolved_bases:
@@ -477,4 +543,21 @@ async def fetch_agent_performance_batch(
                     aid,
                     ", ".join(out[aid].unresolved_bases),
                 )
+            if book_status != "available":
+                out[aid].unrealized_pnl = None
+                out[aid].total_pnl = None
+                out[aid].open_count = None
+                out[aid].executors = None
+
+    # A failed executor read is unknown even when the optional cache-invalidation
+    # set was not requested by this caller (for example the live provider).
+    # Keep a valid empty API result available; only the caught read failure marks
+    # that agent unavailable, without affecting other agents in the same batch.
+    for aid in executor_read_failures:
+        if aid in out:
+            out[aid].current_book_status = "unavailable"
+            out[aid].unrealized_pnl = None
+            out[aid].total_pnl = None
+            out[aid].open_count = None
+            out[aid].executors = None
     return out

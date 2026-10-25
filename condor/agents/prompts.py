@@ -10,6 +10,7 @@ from __future__ import annotations
 from typing import Any
 
 from .agent import Agent
+from .risk import current_book_labels
 from .strategy import Strategy
 
 # Two live base prompts, one per execution surface. A session either spawns
@@ -432,10 +433,10 @@ def build_tick_prompt(
     )
     risk_lines = [
         "[RISK STATE]",
-        f"Position Size: ${rs.get('total_exposure', 0):.2f} / ${rs.get('max_position_size', 500):.2f} limit",
-        f"Open Executors: {rs.get('executor_count', 0)} / {rs.get('max_open_executors', 5)} limit",
+        f"Position Size: {current_book_labels(rs)[0]} / ${rs.get('max_position_size', 500):.2f} limit",
+        f"Open Executors: {current_book_labels(rs)[1]} / {rs.get('max_open_executors', 5)} limit",
         f"Drawdown: {dd_display}",
-        f"Status: {'BLOCKED - ' + rs.get('block_reason', '') if rs.get('is_blocked') else 'ACTIVE'}",
+        f"Status: {current_book_labels(rs)[2]}",
     ]
     sections.append("\n".join(risk_lines))
 

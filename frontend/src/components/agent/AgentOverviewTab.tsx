@@ -98,8 +98,8 @@ export function InstanceCard({ instance }: { instance: import("@/lib/api").Runni
         </div>
         <div className="flex items-center gap-3 text-xs text-[var(--color-text-muted)]">
           <span>Ticks: {instance.tick_count}</span>
-          <span className={instance.daily_pnl >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]"}>
-            PnL: {formatCurrencyPnl(instance.daily_pnl)}
+          <span className={instance.current_book_status === "unavailable" || instance.current_book_status === "partial" || instance.daily_pnl == null ? "text-[var(--color-text-muted)]" : instance.daily_pnl >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]"}>
+            PnL: {instance.current_book_status === "unavailable" || instance.current_book_status === "partial" || instance.daily_pnl == null ? "—" : formatCurrencyPnl(instance.daily_pnl)}
           </span>
         </div>
       </div>
@@ -175,7 +175,8 @@ export function PerformancePanel({
   const unrealized = Number(totals.unrealized_pnl ?? 0);
   const volume = Number(totals.volume ?? 0);
   const fees = Number(totals.fees ?? 0);
-  const openPos = Number(totals.open_positions ?? 0);
+  const bookUnavailable = totals.current_book_status === "unavailable" || totals.current_book_status === "partial";
+  const openPos = totals.open_positions;
   const pnlColor = totalPnl >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]";
 
   // Only sessions whose closes carry an outcome can be averaged. A bot-mode
@@ -208,8 +209,8 @@ export function PerformancePanel({
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-4 lg:grid-cols-8">
           <div>
             <span className="block text-[10px] uppercase tracking-wider text-[var(--color-text-muted)]">Total PnL</span>
-            <span className={`text-lg font-mono font-semibold ${pnlColor}`}>
-              {formatCurrencyPnl(totalPnl)}
+            <span className={`text-lg font-mono font-semibold ${bookUnavailable ? "text-[var(--color-text-muted)]" : pnlColor}`}>
+              {bookUnavailable ? "—" : formatCurrencyPnl(totalPnl)}
             </span>
           </div>
           <div>
@@ -218,7 +219,7 @@ export function PerformancePanel({
           </div>
           <div>
             <span className="block text-[10px] uppercase tracking-wider text-[var(--color-text-muted)]">Unrealized</span>
-            <span className="text-lg font-mono text-[var(--color-text)]">{formatCurrencyPnl(unrealized)}</span>
+            <span className="text-lg font-mono text-[var(--color-text)]">{bookUnavailable ? "—" : formatCurrencyPnl(unrealized)}</span>
           </div>
           <div>
             <span className="block text-[10px] uppercase tracking-wider text-[var(--color-text-muted)]">Volume</span>
@@ -250,7 +251,7 @@ export function PerformancePanel({
           </div>
           <div>
             <span className="block text-[10px] uppercase tracking-wider text-[var(--color-text-muted)]">Open</span>
-            <span className="text-lg font-mono text-[var(--color-text)]">{openPos}</span>
+            <span className="text-lg font-mono text-[var(--color-text)]">{bookUnavailable || openPos == null ? "—" : openPos}</span>
           </div>
         </div>
       </div>
@@ -295,7 +296,9 @@ export function PerformancePanel({
                   .slice()
                   .sort((a, b) => (b.kind === a.kind ? b.session_num - a.session_num : a.kind === "experiment" ? 1 : -1))
                   .map((s) => {
-                    const pnlCol = s.total_pnl >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]";
+                    const rowBookUnavailable = s.current_book_status === "unavailable" || s.current_book_status === "partial";
+                    const rowUnknown = rowBookUnavailable || s.total_pnl == null || s.unrealized_pnl == null || s.open_count == null;
+                    const pnlCol = rowUnknown ? "text-[var(--color-text-muted)]" : s.total_pnl! >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]";
                     const isExperiment = s.kind === "experiment";
                     return (
                       <tr
@@ -318,17 +321,17 @@ export function PerformancePanel({
                           {s.status || "—"}
                         </td>
                         <td className={`px-2 py-1.5 text-right ${pnlCol}`}>
-                          {formatCurrencyPnl(s.total_pnl)}
+                          {rowUnknown ? "—" : formatCurrencyPnl(s.total_pnl!)}
                         </td>
                         <td className="px-2 py-1.5 text-right text-[var(--color-text-muted)]">{formatCurrencyPnl(s.realized_pnl)}</td>
-                        <td className="px-2 py-1.5 text-right text-[var(--color-text-muted)]">{formatCurrencyPnl(s.unrealized_pnl)}</td>
+                        <td className="px-2 py-1.5 text-right text-[var(--color-text-muted)]">{rowUnknown ? "—" : formatCurrencyPnl(s.unrealized_pnl!)}</td>
                         <td className="px-2 py-1.5 text-right text-[var(--color-text-muted)]">
                           {formatCurrencyVolume(s.volume)}
                         </td>
                         <td className="px-2 py-1.5 text-right text-[var(--color-text-muted)]">
                           {s.trade_count === 0 && s.volume > 0 ? "—" : s.trade_count}
                         </td>
-                        <td className="px-2 py-1.5 text-right text-[var(--color-text-muted)]">{s.open_count}</td>
+                        <td className="px-2 py-1.5 text-right text-[var(--color-text-muted)]">{rowUnknown ? "—" : s.open_count}</td>
                         {onSessionClick && (
                           <td className="px-2 py-1.5 text-[var(--color-text-muted)]">
                             <ChevronRight className="h-3.5 w-3.5" />

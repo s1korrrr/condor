@@ -8,6 +8,7 @@ safe tool calls and blocks dangerous ones that violate risk limits.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING, Any
 
@@ -15,6 +16,42 @@ if TYPE_CHECKING:
     from .ownership import BotLedger
 
 log = logging.getLogger(__name__)
+
+
+def _finite_risk_number(value: Any) -> float | None:
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
+        return None
+    try:
+        number = float(value)
+    except OverflowError:
+        return None
+    return number if math.isfinite(number) else None
+
+
+def current_book_labels(state: dict[str, Any]) -> tuple[str, str, str]:
+    """Display unknown risk observations without inventing monetary zeroes."""
+    available = state.get("current_book_status", "available") == "available"
+    exposure = _finite_risk_number(state.get("total_exposure"))
+    count = state.get("executor_count")
+    exposure_known = available and exposure is not None and exposure >= 0
+    count_known = (
+        available
+        and isinstance(count, int)
+        and not isinstance(count, bool)
+        and count >= 0
+    )
+    position = f"${exposure:.2f}" if exposure_known else "unavailable"
+    executors = str(count) if count_known else "unavailable"
+    status = (
+        "BLOCKED - " + state.get("block_reason", "")
+        if state.get("is_blocked")
+        else (
+            "ACTIVE"
+            if exposure_known and count_known
+            else "NEW EXPOSURE BLOCKED - current inventory unavailable"
+        )
+    )
+    return position, executors, status
 
 
 @dataclass
@@ -33,8 +70,9 @@ class RiskLimits:
 
 @dataclass
 class RiskState:
-    total_exposure: float = 0.0
-    executor_count: int = 0
+    total_exposure: float | None = 0.0
+    executor_count: int | None = 0
+    current_book_status: str = "available"
     drawdown_pct: float = 0.0
     is_blocked: bool = False
     block_reason: str = ""
@@ -43,10 +81,30 @@ class RiskState:
     should_shutdown: bool = False
     shutdown_reason: str = ""
 
+    def apply_current_book(self, observation: dict[str, Any]) -> None:
+        """Update current exposure without turning missing inventory into a tick-wide pause.
+
+        Existing drawdown/kill restrictions stay intact. The permission boundary rejects
+        new exposure when this observation is unknown; stop/cancel operations remain usable.
+        """
+        status = observation.get("current_book_status", "unavailable")
+        rows = observation.get("executors")
+        exposure = _finite_risk_number(observation.get("total_exposure"))
+        valid = (
+            status == "available"
+            and isinstance(rows, list)
+            and exposure is not None
+            and exposure >= 0
+        )
+        self.current_book_status = "available" if valid else "unavailable"
+        self.executor_count = len(rows) if valid else None
+        self.total_exposure = float(exposure) if valid else None
+
     def to_dict(self) -> dict[str, Any]:
         return {
             "total_exposure": self.total_exposure,
             "executor_count": self.executor_count,
+            "current_book_status": self.current_book_status,
             "drawdown_pct": self.drawdown_pct,
             "is_blocked": self.is_blocked,
             "block_reason": self.block_reason,
@@ -147,7 +205,15 @@ class RiskEngine:
         if action != "create":
             return True, ""
 
+        if current_state.current_book_status != "available":
+            return (
+                False,
+                "Current position inventory is unavailable; new exposure is blocked",
+            )
+
         # Check executor count
+        if current_state.executor_count is None:
+            return False, "Current executor count is unavailable"
         if current_state.executor_count >= self.limits.max_open_executors:
             return (
                 False,
@@ -160,6 +226,8 @@ class RiskEngine:
             config.get("total_amount_quote", 0) or config.get("amount", 0) or 0
         )
 
+        if current_state.total_exposure is None:
+            return False, "Current exposure is unavailable"
         if current_state.total_exposure + amount > self.limits.max_position_size_quote:
             return False, (
                 f"Would exceed position limit: ${current_state.total_exposure + amount:.2f} > "
@@ -173,7 +241,9 @@ class RiskEngine:
 
         return True, ""
 
-    def check_bot_action(self, tool_call: dict) -> tuple[bool, str]:
+    def check_bot_action(
+        self, tool_call: dict, current_state: RiskState | None = None
+    ) -> tuple[bool, str]:
         """Check a manage_bots call against risk limits.
 
         A bot's capital lives in saved controller configs on the API server,
@@ -192,6 +262,16 @@ class RiskEngine:
         if input_data is None:
             return False, "Tool arguments could not be read"
         action = input_data.get("action", "")
+
+        if (
+            action in {"deploy", "update_config"}
+            and current_state is not None
+            and current_state.current_book_status != "available"
+        ):
+            return (
+                False,
+                "Current position inventory is unavailable; new exposure is blocked",
+            )
 
         if action == "deploy":
             cap = input_data.get("max_global_drawdown_quote")
@@ -331,7 +411,7 @@ def auto_approve_with_risk_check(
                             ledger.note_violation(bot_name, action)
                             return {"outcome": {"outcome": "cancelled"}}
 
-                allowed, reason = risk_engine.check_bot_action(tool_call)
+                allowed, reason = risk_engine.check_bot_action(tool_call, risk_state)
                 if not allowed:
                     log.warning("Risk engine blocked tool call: %s", reason)
                     return {"outcome": {"outcome": "cancelled"}}

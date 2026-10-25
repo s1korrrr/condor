@@ -45,6 +45,7 @@ def _snapshot(bot_name, controller_id, realized, unrealized, volume):
             "realized_pnl_quote": realized,
             "unrealized_pnl_quote": unrealized,
             "volume_traded": volume,
+            "positions_summary": [],
         },
     }
 
@@ -58,11 +59,41 @@ SNAPSHOTS = [
 
 
 class _FakeBotOrchestration:
-    def __init__(self, snapshots):
+    def __init__(self, snapshots, active_instances=None, active_status=None):
         self._snapshots = snapshots
+        self._active_instances = active_instances
+        self._active_status = active_status
 
     async def get_latest_controller_performance(self, bot_name=None):
         return {"data": self._snapshots}
+
+    async def get_active_bots_status(self):
+        if self._active_status is not None:
+            return self._active_status
+        names = self._active_instances
+        if names is None:
+            names = {
+                row.get("bot_name") for row in self._snapshots if row.get("bot_name")
+            }
+        rows = []
+        for name in sorted(names):
+            controllers = {}
+            for snap in self._snapshots:
+                if snap.get("bot_name") == name:
+                    controller_id = snap.get("controller_id", "controller")
+                    controllers[controller_id] = {
+                        "status": snap.get("status", "running"),
+                        "controller_id": controller_id,
+                        "performance": snap.get("performance", {}),
+                    }
+            rows.append(
+                {
+                    "bot_name": name,
+                    "status": "running",
+                    "performance": controllers,
+                }
+            )
+        return {"data": rows}
 
 
 class _FakeExecutors:
@@ -75,10 +106,14 @@ class _FakeExecutors:
 
 
 class _FakeClient:
-    def __init__(self, rows_by_id=None, snapshots=None):
+    def __init__(
+        self, rows_by_id=None, snapshots=None, active_instances=None, active_status=None
+    ):
         self.executors = _FakeExecutors(rows_by_id or {})
         self.bot_orchestration = _FakeBotOrchestration(
-            SNAPSHOTS if snapshots is None else snapshots
+            SNAPSHOTS if snapshots is None else snapshots,
+            active_instances,
+            active_status,
         )
 
 
@@ -377,6 +412,61 @@ def test_merge_is_disjoint_addition():
     assert all(r["id"] == "e1" for r in merged.executors)
 
 
+def test_executor_search_failure_stays_unknown_through_provider_and_risk_state():
+    from condor.agents.providers.executors import ExecutorsProvider
+    from condor.agents.risk import RiskState
+
+    class BrokenExecutors:
+        async def search_executors(self, **_kwargs):
+            raise RuntimeError("owner executor endpoint offline")
+
+    client = SimpleNamespace(
+        executors=BrokenExecutors(), base_url="executor-error-test"
+    )
+    perf = asyncio.run(fetch_agent_performance(client, "direct-agent", bot_names=[]))
+    assert perf.current_book_status == "unavailable"
+    assert perf.executors is None
+    assert perf.open_count is None
+    assert perf.total_pnl is None
+
+    result = asyncio.run(
+        ExecutorsProvider().execute(client, {}, agent_id="direct-agent", bot_names=[])
+    )
+    assert result.data["current_book_status"] == "unavailable"
+    assert result.data["executors"] is None
+    assert result.data["total_exposure"] is None
+    state = RiskState()
+    state.apply_current_book(result.data)
+    assert state.current_book_status == "unavailable"
+    assert state.total_exposure is None
+    assert state.executor_count is None
+
+
+def test_valid_empty_executor_search_is_known_zero():
+    client = _FakeClient(rows_by_id={})
+    perf = asyncio.run(fetch_agent_performance(client, "direct-agent", bot_names=[]))
+    assert perf.current_book_status == "available"
+    assert perf.executors == []
+    assert perf.open_count == 0
+    assert perf.total_pnl == 0
+
+
+def test_executor_search_failure_is_scoped_to_the_failed_agent():
+    class MixedExecutors:
+        async def search_executors(self, controller_ids, **_kwargs):
+            if controller_ids == ["offline"]:
+                raise RuntimeError("one agent owner endpoint offline")
+            return {"executors": []}
+
+    client = SimpleNamespace(executors=MixedExecutors())
+    results = asyncio.run(fetch_agent_performance_batch(client, ["offline", "healthy"]))
+    assert results["offline"].current_book_status == "unavailable"
+    assert results["offline"].executors is None
+    assert results["healthy"].current_book_status == "available"
+    assert results["healthy"].executors == []
+    assert results["healthy"].total_pnl == 0
+
+
 def test_merge_appends_bot_positions_as_rows():
     # Bot-mode agent: its own agent_id table is empty; the bot holds one open
     # position that must surface as an executor row with open_count bumped.
@@ -494,7 +584,7 @@ def test_no_snapshot_leaves_executor_totals_unchanged():
     no_bot = asyncio.run(fetch_agent_performance(client, agent_id))
     # bot_name set but no matching snapshot → totals identical to executor-only.
     ghost = asyncio.run(fetch_agent_performance(client, agent_id, bot_names=["ghost"]))
-    assert ghost.bot_name == "ghost"
+    assert ghost.bot_name == ""  # configured base is not active runtime membership
     assert ghost.unrealized_pnl == no_bot.unrealized_pnl == 2.0
     assert ghost.total_pnl == no_bot.total_pnl
     assert ghost.controllers == []
@@ -508,6 +598,370 @@ def test_batch_merges_only_named_agents():
     assert out[a1].realized_pnl == 7.0
     assert out[a2].bot_name == ""  # not named → untouched, executor-only
     assert out[a2].realized_pnl == 0.0
+
+
+def test_current_book_uses_exact_active_runtime_membership():
+    old = _snapshot("stable-20261001-000000", "old-controller", 900.0, 90.0, 9000.0)
+    current = _snapshot("stable-20261025-000000", "new-controller", 2.0, 0.5, 20.0)
+    client = _FakeClient(
+        rows_by_id={},
+        snapshots=[old, current],
+        active_instances={"stable-20261025-000000"},
+    )
+
+    perf = asyncio.run(fetch_agent_performance(client, "agent_1", bot_names=["stable"]))
+
+    assert perf.current_book_status == "available"
+    assert perf.bot_names == ["stable-20261025-000000"]
+    assert perf.unrealized_pnl == 0.5
+    # The legacy realized total still includes the session's snapshot accounting.
+    assert perf.realized_pnl == 902.0
+
+
+def test_same_bot_name_uses_active_endpoint_metrics_not_stale_cached_snapshot():
+    from condor.agents.performance import fetch_agent_performance
+
+    stale_database_snapshot = _snapshot("stable", "old-controller", 90.0, 90.0, 900.0)
+    active_payload = {
+        "data": [
+            {
+                "bot_name": "stable",
+                "status": "running",
+                "performance": {
+                    "current-controller": {
+                        "status": "running",
+                        "controller_id": "current-controller",
+                        "performance": {
+                            "realized_pnl_quote": 0.0,
+                            "unrealized_pnl_quote": 0.0,
+                            "volume_traded": 0.0,
+                            "positions_summary": [],
+                        },
+                    }
+                },
+            }
+        ]
+    }
+    client = _FakeClient(
+        rows_by_id={},
+        snapshots=[stale_database_snapshot],
+        active_status=active_payload,
+    )
+
+    perf = asyncio.run(fetch_agent_performance(client, "agent_1", bot_names=["stable"]))
+    assert perf.current_book_status == "available"
+    assert perf.unrealized_pnl == 0.0
+    assert perf.open_count == 0
+    # Existing historical realized attribution still reads the historical store.
+    assert perf.realized_pnl == 90.0
+
+
+def test_stopped_exact_base_keeps_history_without_running_runtime_badge():
+    from condor.agents.performance import fetch_agent_performance
+
+    historical = _snapshot("stable", "old-controller", 9.0, 90.0, 900.0)
+    client = _FakeClient(
+        rows_by_id={},
+        snapshots=[historical],
+        active_status={"data": []},
+    )
+    perf = asyncio.run(fetch_agent_performance(client, "agent_1", bot_names=["stable"]))
+
+    assert perf.bot_names == []
+    assert "stable" in perf.bot_instances
+    assert perf.realized_pnl == 9.0
+
+
+def test_stopped_runtime_positions_do_not_make_current_active_metrics_unavailable():
+    from condor.fetchers.bot_performance import fetch_current_bot_performance
+
+    active = {
+        "bot_name": "stable-new",
+        "status": "running",
+        "performance": {
+            "current": {
+                "status": "running",
+                "performance": {
+                    "realized_pnl_quote": 0,
+                    "unrealized_pnl_quote": 0,
+                    "volume_traded": 0,
+                    "positions_summary": [
+                        {
+                            "connector_name": "okx",
+                            "trading_pair": "BNB-USDC",
+                            "amount": 0.5,
+                            "entry_price": 100,
+                            "unrealized_pnl_quote": 0,
+                        }
+                    ],
+                },
+            }
+        },
+    }
+    stopped = {
+        "bot_name": "stable-old",
+        "status": "stopped",
+        "performance": {
+            "old-controller": {
+                "status": "running",
+                "performance": {
+                    "unrealized_pnl_quote": 22,
+                    "positions_summary": [
+                        {"amount": 0.01, "entry_price": 100, "unrealized_pnl_quote": 0}
+                        for _ in range(22)
+                    ],
+                },
+            }
+        },
+    }
+    client = _FakeClient(
+        rows_by_id={}, snapshots=[], active_status={"data": [active, stopped]}
+    )
+    resolved, status = asyncio.run(fetch_current_bot_performance(client, ["stable"]))
+
+    assert status == {"stable": "available"}
+    assert resolved["stable"]["unrealized_pnl_quote"] == 0
+    assert resolved["stable"]["controllers"][0]["positions_summary"][0]["amount"] == 0.5
+
+
+def test_duplicate_current_position_identity_is_unavailable():
+    from condor.fetchers.bot_performance import fetch_current_bot_performance
+
+    position = {
+        "connector_name": "okx",
+        "trading_pair": "BNB-USDC",
+        "position_side": "LONG",
+        "amount": 0.5,
+        "entry_price": 100,
+        "unrealized_pnl_quote": 0,
+    }
+    details = {
+        "unrealized_pnl_quote": 0,
+        "positions_summary": [position, dict(position)],
+    }
+    payload = {
+        "data": [
+            {
+                "bot_name": "stable",
+                "status": "running",
+                "performance": {"c": {"status": "running", "performance": details}},
+            }
+        ]
+    }
+    client = _FakeClient(rows_by_id={}, snapshots=[], active_status=payload)
+    resolved, status = asyncio.run(fetch_current_bot_performance(client, ["stable"]))
+    assert resolved == {}
+    assert status == {"stable": "unavailable"}
+
+
+def test_current_metrics_require_a_nonempty_instrument_pair():
+    from condor.fetchers.bot_performance import fetch_current_bot_performance
+
+    payload = {
+        "data": [
+            {
+                "bot_name": "stable",
+                "status": "running",
+                "performance": {
+                    "c": {
+                        "status": "running",
+                        "performance": {
+                            "unrealized_pnl_quote": 0,
+                            "positions_summary": [
+                                {
+                                    "connector_name": "okx",
+                                    "amount": 1,
+                                    "entry_price": 100,
+                                    "unrealized_pnl_quote": 0,
+                                }
+                            ],
+                        },
+                    }
+                },
+            }
+        ]
+    }
+    client = _FakeClient(rows_by_id={}, snapshots=[], active_status=payload)
+    resolved, status = asyncio.run(fetch_current_bot_performance(client, ["stable"]))
+    assert resolved == {}
+    assert status == {"stable": "unavailable"}
+
+
+def test_unknown_runtime_registry_does_not_claim_empty_current_book():
+    client = _FakeClient(
+        rows_by_id={}, snapshots=[_snapshot("stable-20261025-000000", "c", 2, 3, 4)]
+    )
+
+    async def malformed_registry():
+        return None
+
+    client.bot_orchestration.get_active_bots_status = malformed_registry
+
+    # A malformed registry is surfaced as unavailable, never as a flat book.
+    perf = asyncio.run(fetch_agent_performance(client, "agent_1", bot_names=["stable"]))
+    assert perf.current_book_status == "unavailable"
+    assert perf.open_count is None
+
+
+def test_active_runtime_without_current_metrics_is_unavailable():
+    snapshot = {
+        "bot_name": "stable-20261025-000000",
+        "controller_id": "c",
+        "performance": {"realized_pnl_quote": 2.0, "volume_traded": 4.0},
+    }
+    client = _FakeClient(
+        rows_by_id={}, snapshots=[snapshot], active_instances={"stable-20261025-000000"}
+    )
+    perf = asyncio.run(fetch_agent_performance(client, "agent_1", bot_names=["stable"]))
+    assert perf.current_book_status == "unavailable"
+
+
+def test_native_retained_runtime_registry_makes_agent_book_unavailable():
+    client = _FakeClient(
+        rows_by_id={},
+        snapshots=[_snapshot("stable-20261025-000000", "c", 2.0, 3.0, 4.0)],
+    )
+
+    async def stale_native_registry():
+        return {
+            "data": [
+                {
+                    "bot_name": "stable-20261025-000000",
+                    "status": "running",
+                    "source": "native_mqtt",
+                    "performance_current": False,
+                    "identity_verified": True,
+                }
+            ]
+        }
+
+    client.bot_orchestration.get_active_bots_status = stale_native_registry
+    perf = asyncio.run(fetch_agent_performance(client, "agent_1", bot_names=["stable"]))
+    assert perf.current_book_status == "unavailable"
+
+
+def test_active_runtime_membership_uses_longest_owned_base():
+    from condor.fetchers.bot_performance import fetch_current_bot_performance
+
+    client = _FakeClient(
+        rows_by_id={},
+        snapshots=[
+            _snapshot("desk-ema-20261025-000000", "parent", 1.0, 10.0, 100.0),
+            _snapshot("desk-ema-btc-20261025-000000", "btc", 2.0, 20.0, 200.0),
+        ],
+        active_instances={
+            "desk-ema-20261025-000000",
+            "desk-ema-btc-20261025-000000",
+        },
+    )
+    resolved, status = asyncio.run(
+        fetch_current_bot_performance(client, ["desk-ema", "desk-ema-btc"])
+    )
+
+    assert status == {"desk-ema": "available", "desk-ema-btc": "available"}
+    assert resolved["desk-ema"]["unrealized_pnl_quote"] == 10.0
+    assert resolved["desk-ema-btc"]["unrealized_pnl_quote"] == 20.0
+
+
+def test_duplicate_runtime_identity_with_third_row_is_unavailable_not_key_error():
+    from condor.fetchers.bot_performance import fetch_current_bot_performance
+
+    rows = [
+        {
+            "bot_name": "stable",
+            "status": "running",
+            "performance": {
+                "c": {
+                    "status": "running",
+                    "performance": {
+                        "unrealized_pnl_quote": 0,
+                        "positions_summary": [],
+                    },
+                }
+            },
+        }
+        for _ in range(3)
+    ]
+    client = _FakeClient(rows_by_id={}, snapshots=[], active_status={"data": rows})
+    resolved, status = asyncio.run(fetch_current_bot_performance(client, ["stable"]))
+
+    assert resolved == {}
+    assert status == {"stable": "unavailable"}
+
+
+def test_current_active_unrealized_excludes_stopped_controller():
+    from condor.fetchers.bot_performance import fetch_current_bot_performance
+
+    payload = {
+        "data": [
+            {
+                "bot_name": "stable",
+                "status": "running",
+                "performance": {
+                    "running": {
+                        "status": "running",
+                        "performance": {
+                            "realized_pnl_quote": 0,
+                            "unrealized_pnl_quote": 2.0,
+                            "volume_traded": 0,
+                            "positions_summary": [],
+                        },
+                    },
+                    "stopped": {
+                        "status": "stopped",
+                        "performance": {
+                            "realized_pnl_quote": 9.0,
+                            "unrealized_pnl_quote": 90.0,
+                            "volume_traded": 100,
+                            "positions_summary": [],
+                        },
+                    },
+                },
+            }
+        ]
+    }
+    client = _FakeClient(rows_by_id={}, snapshots=[], active_status=payload)
+    resolved, status = asyncio.run(fetch_current_bot_performance(client, ["stable"]))
+
+    assert status == {"stable": "available"}
+    assert resolved["stable"]["unrealized_pnl_quote"] == 2.0
+
+
+@pytest.mark.parametrize(
+    "details",
+    [
+        {"unrealized_pnl_quote": True, "positions_summary": []},
+        {
+            "unrealized_pnl_quote": 0,
+            "positions_summary": [
+                {"amount": True, "entry_price": 1, "unrealized_pnl_quote": 0}
+            ],
+        },
+        {
+            "unrealized_pnl_quote": 0,
+            "positions_summary": [
+                {"amount": 1e308, "entry_price": 1e308, "unrealized_pnl_quote": 0}
+            ],
+        },
+    ],
+)
+def test_current_book_rejects_malformed_or_overflowing_controller_economics(details):
+    from condor.fetchers.bot_performance import fetch_current_bot_performance
+
+    payload = {
+        "data": [
+            {
+                "bot_name": "stable",
+                "status": "running",
+                "performance": {"c": {"status": "running", "performance": details}},
+            }
+        ]
+    }
+    client = _FakeClient(rows_by_id={}, snapshots=[], active_status=payload)
+    resolved, status = asyncio.run(fetch_current_bot_performance(client, ["stable"]))
+
+    assert resolved == {}
+    assert status == {"stable": "unavailable"}
 
 
 # ── Config field ──
@@ -860,6 +1314,26 @@ def test_adopted_bot_pnl_is_sliced_to_the_sessions_window():
         async def get_latest_controller_performance(self):
             return snapshot
 
+        async def get_active_bots_status(self):
+            return {
+                "data": [
+                    {
+                        "bot_name": inst,
+                        "status": "running",
+                        "performance": {
+                            "c1": {
+                                "status": "running",
+                                "controller_id": "c1",
+                                "performance": {
+                                    "unrealized_pnl_quote": 7.0,
+                                    "positions_summary": [],
+                                },
+                            }
+                        },
+                    }
+                ]
+            }
+
         async def get_controller_performance_history(self, bot_name, interval, limit):
             return {"data": history}
 
@@ -1101,6 +1575,9 @@ def test_a_stopped_bots_realized_pnl_reaches_the_agent():
         async def get_latest_controller_performance(self, bot_name=None):
             return {"data": []}  # nothing running
 
+        async def get_active_bots_status(self):
+            return {"data": []}
+
         async def get_controller_performance_history(
             self, bot_name, interval, limit=None, cursor=None
         ):
@@ -1162,7 +1639,7 @@ def test_a_base_with_no_instance_anywhere_is_flagged_not_zeroed():
     )
 
     assert perf.unresolved_bases == ["vanished_bot"]
-    assert perf.total_pnl == 0.0  # zero, but the caller now knows it is unknown
+    assert perf.total_pnl is None
 
 
 def test_the_provider_says_when_a_bots_pnl_is_missing():

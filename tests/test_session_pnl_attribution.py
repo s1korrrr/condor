@@ -77,6 +77,24 @@ class _FakeClient:
     async def get_latest_controller_performance(self):
         return self._snapshots
 
+    async def get_active_bots_status(self):
+        names = {row.get("bot_name") for row in self._snapshots if row.get("bot_name")}
+        bots = []
+        for name in sorted(names):
+            controllers = {}
+            for row in self._snapshots:
+                if row.get("bot_name") == name:
+                    controller_id = row.get("controller_id", "controller")
+                    controllers[controller_id] = {
+                        "status": row.get("status", "running").lower(),
+                        "controller_id": controller_id,
+                        "performance": row.get("performance", {}),
+                    }
+            bots.append(
+                {"bot_name": name, "status": "running", "performance": controllers}
+            )
+        return {"data": bots}
+
     async def get_controller_performance_history(self, bot_name, interval, limit):
         self.history_calls.append(bot_name)
         return {"data": self._history.get(bot_name, [])}
@@ -345,7 +363,12 @@ def test_session_detail_and_rollup_report_the_same_trade_count(monkeypatch, tmp_
 
     inst = "ns-bot-20260701-000000"
     positions = [
-        {"trading_pair": pair, "amount": 1.0, "breakeven_price": 60.0}
+        {
+            "trading_pair": pair,
+            "amount": 1.0,
+            "breakeven_price": 60.0,
+            "unrealized_pnl_quote": 0.0,
+        }
         for pair in ("BTC-USD", "ETH-USD")
     ]
     closes = {

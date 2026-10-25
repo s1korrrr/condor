@@ -6,6 +6,8 @@ running on the same sample payload, so these tests pin byte-identical
 behavior for both the REST and WS paths.
 """
 
+import time
+
 from condor.fetchers.bots import build_bots_page, extract_bots_list
 from condor.web.models import BotsPageResponse
 
@@ -223,9 +225,15 @@ def test_rest_response_matches_pre_refactor_golden():
     expected = {
         **GOLDEN_REST,
         "bots": [
-            {**bot, "controller_count_current": None, "performance_received_at": None,
-             "performance_stale_after_seconds": None, "status_received_at": None,
-             "status_stale_after_seconds": None} for bot in GOLDEN_REST["bots"]
+            {
+                **bot,
+                "controller_count_current": None,
+                "performance_received_at": None,
+                "performance_stale_after_seconds": None,
+                "status_received_at": None,
+                "status_stale_after_seconds": None,
+            }
+            for bot in GOLDEN_REST["bots"]
         ],
     }
     assert BotsPageResponse(**page).model_dump() == expected
@@ -429,6 +437,9 @@ def test_native_observed_identity_survives_missing_volume_and_partial_fleet():
                     "source": "native_mqtt",
                     "status": "running",
                     "performance_current": True,
+                    "identity_verified": True,
+                    "received_at": time.time(),
+                    "stale_after_seconds": 30,
                     "performance": {
                         f"ctrl-{i}": {
                             "status": "running",

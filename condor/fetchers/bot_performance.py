@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import math
 import time
 from collections import Counter
 from functools import partial
@@ -124,6 +125,7 @@ def _aggregate_by_bot(snapshots: list[dict]) -> dict[str, dict]:
                 "num_controllers": 0,
                 "timestamp": "",
                 "controllers": [],
+                "current_book_status": "available",
             }
         realized = float(perf.get("realized_pnl_quote", 0) or 0)
         unrealized = float(perf.get("unrealized_pnl_quote", 0) or 0)
@@ -131,6 +133,22 @@ def _aggregate_by_bot(snapshots: list[dict]) -> dict[str, dict]:
         positions = [
             p for p in (perf.get("positions_summary") or []) if isinstance(p, dict)
         ]
+        raw_positions = perf.get("positions_summary")
+        if (
+            not isinstance(raw_positions, list)
+            or len(positions) != len(raw_positions)
+            or "unrealized_pnl_quote" not in perf
+            or any(
+                not any(k in p for k in ("net_amount_base", "amount"))
+                or not any(
+                    k in p
+                    for k in ("buy_breakeven_price", "entry_price", "breakeven_price")
+                )
+                or not any(k in p for k in ("unrealized_pnl_quote", "unrealized_pnl"))
+                for p in positions
+            )
+        ):
+            agg[bn]["current_book_status"] = "unavailable"
         fees = sum(float(p.get("cum_fees_quote", 0) or 0) for p in positions)
         closes = count_trade_closes(perf)
         close_types = {
@@ -177,6 +195,61 @@ def _aggregate_by_bot(snapshots: list[dict]) -> dict[str, dict]:
     for bot in agg.values():
         bot["close_type_counts"] = dict(bot["close_type_counts"])
     return agg
+
+
+def _finite_metric(value: Any) -> bool:
+    if value is None or isinstance(value, bool):
+        return False
+    try:
+        return math.isfinite(float(value))
+    except (TypeError, ValueError, OverflowError):
+        return False
+
+
+def _current_controller_metrics_valid(details: dict) -> bool:
+    """Current inventory is known only when all displayed economics are finite."""
+    if not _finite_metric(details.get("unrealized_pnl_quote")):
+        return False
+    positions = details.get("positions_summary")
+    if not isinstance(positions, list):
+        return False
+    seen_identities = set()
+    for position in positions:
+        if not isinstance(position, dict):
+            return False
+        trading_pair = position.get("trading_pair")
+        if not isinstance(trading_pair, str) or not trading_pair.strip():
+            return False
+        amount = position.get("net_amount_base", position.get("amount"))
+        entry = position.get(
+            "buy_breakeven_price",
+            position.get("entry_price", position.get("breakeven_price")),
+        )
+        unrealized = position.get(
+            "unrealized_pnl_quote", position.get("unrealized_pnl")
+        )
+        if not all(_finite_metric(value) for value in (amount, entry, unrealized)):
+            return False
+        try:
+            if not math.isfinite(float(amount) * float(entry)):
+                return False
+        except (TypeError, ValueError, OverflowError):
+            return False
+        explicit_id = position.get("position_id", position.get("executor_id"))
+        identity = (
+            ("id", str(explicit_id))
+            if explicit_id not in (None, "")
+            else (
+                "market",
+                str(position.get("connector_name", position.get("connector", ""))),
+                str(position.get("trading_pair", "")),
+                str(position.get("position_side", position.get("side", ""))).lower(),
+            )
+        )
+        if identity in seen_identities:
+            return False
+        seen_identities.add(identity)
+    return True
 
 
 # ── Whole-server snapshot cache ──
@@ -360,6 +433,151 @@ def resolve_bots(all_bot_perf: dict[str, dict], bases: list[str]) -> dict[str, d
         ordered = [all_bot_perf[head]] + [all_bot_perf[i] for i in live if i != head]
         out[base] = _merge_instance_aggregates(ordered)
     return out
+
+
+async def fetch_current_bot_performance(
+    client: Any, bases: list[str]
+) -> tuple[dict[str, dict], dict[str, str]]:
+    """Project current book metrics from the active runtime endpoint itself.
+
+    Historical controller snapshots are not joined by bot name: a restart may
+    reuse a stable name while the cached snapshot still belongs to its old
+    generation. The active endpoint supplies both membership and current metrics.
+    """
+    owner_bases = {base for base in bases if base}
+
+    def unavailable_all():
+        return {}, {base: "unavailable" for base in owner_bases}
+
+    result = await client.bot_orchestration.get_active_bots_status()
+    if isinstance(result, dict):
+        if result.get("status") == "error" or "data" not in result:
+            return unavailable_all()
+        data = result["data"]
+        if isinstance(data, dict):
+            bots = [
+                dict(value, bot_name=name)
+                for name, value in data.items()
+                if isinstance(value, dict)
+            ]
+            if len(bots) != len(data):
+                return unavailable_all()
+        elif isinstance(data, list):
+            bots = [value for value in data if isinstance(value, dict)]
+            if len(bots) != len(data):
+                return unavailable_all()
+        else:
+            return unavailable_all()
+    elif isinstance(result, list):
+        bots = [value for value in result if isinstance(value, dict)]
+        if len(bots) != len(result):
+            return unavailable_all()
+    else:
+        return unavailable_all()
+
+    longest_first = sorted(owner_bases, key=len, reverse=True)
+    by_base: dict[str, list[dict]] = {base: [] for base in owner_bases}
+    seen: set[str] = set()
+    invalid_bases: set[str] = set()
+    book_status = {base: "available" for base in owner_bases}
+    for bot in bots:
+        name = bot.get("bot_name")
+        bot_status = str(bot.get("status") or "").lower()
+        if bot_status == "reporting_only":
+            continue
+        if not isinstance(name, str) or not name:
+            return unavailable_all()
+        base = next(
+            (
+                candidate
+                for candidate in longest_first
+                if name == candidate or name.startswith(f"{candidate}-")
+            ),
+            None,
+        )
+        if base is None:
+            continue
+        if name in seen:
+            by_base[base] = []
+            invalid_bases.add(base)
+            book_status[base] = "unavailable"
+            continue
+        seen.add(name)
+        if bot_status == "running":
+            if base in invalid_bases:
+                continue
+            from condor.fetchers.bots import native_performance_is_current
+
+            if bot.get("source") == "native_mqtt" and not native_performance_is_current(
+                bot
+            ):
+                book_status[base] = "unavailable"
+                continue
+            performance = bot.get("performance")
+            if not isinstance(performance, dict) or not performance:
+                book_status[base] = "unavailable"
+                continue
+            snapshots = []
+            for controller_id, controller in performance.items():
+                if not isinstance(controller, dict):
+                    book_status[base] = "unavailable"
+                    continue
+                controller_status = str(controller.get("status") or "").lower()
+                details = controller.get("performance")
+                if controller_status in {
+                    "stopped",
+                    "terminated",
+                    "completed",
+                    "failed",
+                }:
+                    # Retained rows from a stopped controller are historical
+                    # observations; they do not make the current controller book
+                    # unavailable. Account inventory is reconciled separately.
+                    continue
+                if controller_status != "running" or not isinstance(details, dict):
+                    book_status[base] = "unavailable"
+                    continue
+                positions = details.get("positions_summary")
+                if (
+                    not isinstance(positions, list)
+                    or "unrealized_pnl_quote" not in details
+                ):
+                    book_status[base] = "unavailable"
+                    continue
+                if not _current_controller_metrics_valid(details):
+                    book_status[base] = "unavailable"
+                    continue
+                snapshots.append(
+                    {
+                        "bot_name": name,
+                        "controller_id": controller.get("controller_id", controller_id),
+                        "controller_name": controller.get(
+                            "controller_name", controller_id
+                        ),
+                        "status": controller_status,
+                        "timestamp": bot.get("received_at", bot.get("timestamp", "")),
+                        "performance": details,
+                    }
+                )
+            if snapshots and book_status[base] == "available":
+                aggregate = _aggregate_by_bot(snapshots)[name]
+                if aggregate["current_book_status"] != "available":
+                    book_status[base] = "unavailable"
+                else:
+                    by_base[base].append(aggregate)
+            elif book_status[base] == "available":
+                # A live runtime with no current controller metrics is unknown.
+                book_status[base] = "unavailable"
+        elif bot_status in {"stopped", "terminated", "completed", "failed"}:
+            continue
+        else:
+            book_status[base] = "unavailable"
+
+    resolved = {}
+    for base, instances in by_base.items():
+        if instances:
+            resolved[base] = _merge_instance_aggregates(instances)
+    return resolved, book_status
 
 
 # Archived-bot discovery. The listing is a set of sqlite paths, one per stopped
@@ -761,16 +979,32 @@ def bot_executor_rows(aggregate: dict) -> list[dict[str, Any]]:
         status = str(ctrl.get("status", "") or "").upper()
         for pos in ctrl.get("positions_summary", []):
             pair = pos.get("trading_pair", "")
+            connector = pos.get("connector_name", ctrl.get("connector", ""))
+            side = normalize_executor_side(pos.get("side"))
+            position_identity = pos.get("position_id", pos.get("executor_id"))
+            position_identity = (
+                str(position_identity)
+                if position_identity not in (None, "")
+                else f"{connector}:{pair}:{side.lower()}"
+            )
             entry = float(pos.get("breakeven_price", 0) or 0)
             amount = float(pos.get("amount", 0) or 0)
             unrealized = float(pos.get("unrealized_pnl_quote", 0) or 0)
             rows.append(
                 {
-                    "id": f"{controller_id}:{pair}" if pair else controller_id,
+                    "id": ":".join(
+                        str(part)
+                        for part in (
+                            ctrl.get("bot_name", aggregate.get("bot_name", "")),
+                            controller_id,
+                            position_identity,
+                        )
+                        if part
+                    ),
                     "type": "controller",
-                    "connector": pos.get("connector_name", ctrl.get("connector", "")),
+                    "connector": connector,
                     "pair": pair,
-                    "side": normalize_executor_side(pos.get("side")),
+                    "side": side,
                     "status": status,
                     "close_type": "",
                     # Row PnL is the live (unrealized) mark of the open position;

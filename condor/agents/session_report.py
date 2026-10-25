@@ -94,17 +94,39 @@ class SessionReport:
 
     @staticmethod
     def _kpis(b: Any, info: dict[str, Any]) -> None:
-        total_pnl = float(info.get("daily_pnl", 0.0) or 0.0)
+        book_available = info.get("current_book_status", "available") == "available"
+        raw_total = info.get("daily_pnl")
+        raw_unrealized = info.get("unrealized_pnl")
+        total_pnl = (
+            float(raw_total) if book_available and raw_total is not None else None
+        )
         b.kpi("Status", str(info.get("status", "unknown")).title())
         b.kpi(
             "Total PnL",
-            f"${total_pnl:,.2f}",
-            trend="up" if total_pnl > 0 else "down" if total_pnl < 0 else "neutral",
+            f"${total_pnl:,.2f}" if total_pnl is not None else "—",
+            trend=(
+                ("up" if total_pnl > 0 else "down" if total_pnl < 0 else "neutral")
+                if total_pnl is not None
+                else "neutral"
+            ),
         )
         b.kpi("Realized", f"${float(info.get('realized_pnl', 0.0) or 0.0):,.2f}")
-        b.kpi("Unrealized", f"${float(info.get('unrealized_pnl', 0.0) or 0.0):,.2f}")
+        unrealized = (
+            float(raw_unrealized)
+            if book_available and raw_unrealized is not None
+            else None
+        )
+        b.kpi("Unrealized", f"${unrealized:,.2f}" if unrealized is not None else "—")
         b.kpi("Volume", f"${float(info.get('total_volume', 0.0) or 0.0):,.0f}")
-        b.kpi("Open Executors", str(info.get("open_executors", 0)))
+        open_executors = info.get("open_executors")
+        b.kpi(
+            "Open Executors",
+            (
+                str(open_executors)
+                if book_available and open_executors is not None
+                else "—"
+            ),
+        )
         b.kpi("Ticks", str(info.get("tick_count", 0)))
 
     @staticmethod

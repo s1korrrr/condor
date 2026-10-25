@@ -165,7 +165,7 @@ export function CreateExecutor() {
   useCondorWebSocket(wsChannels, server);
 
   // Main controller data (executors + positions filtered by connector/pair)
-  const { executors: mainExecutors, overlays: mainOverlays, positions: mainPositions, isLoadingPositions } =
+  const { executors: mainExecutors, overlays: mainOverlays, positions: mainPositions, isLoadingPositions, positionsStatus } =
     useMainControllerData(server, connector, pair);
 
   const rulesData = useTradingRules(server ?? "", connector);
@@ -478,6 +478,7 @@ export function CreateExecutor() {
               executors={mainExecutors}
               positions={mainPositions}
               isLoadingPositions={isLoadingPositions}
+              positionsStatus={positionsStatus}
               connector={connector}
               pair={pair}
               isSpot={isSpot}

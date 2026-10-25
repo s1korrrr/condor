@@ -18,6 +18,7 @@ interface TradeBottomPaneProps {
   executors: ExecutorInfo[];
   positions: ConsolidatedPosition[];
   isLoadingPositions: boolean;
+  positionsStatus: "available" | "partial" | "unavailable";
   connector: string;
   pair: string;
   isSpot: boolean;
@@ -27,8 +28,8 @@ interface TradeBottomPaneProps {
 
 const STORAGE_KEY = "condor_trade_bottom_pane";
 
-function formatPrice(price: number): string {
-  if (price === 0) return "—";
+function formatPrice(price: number | null): string {
+  if (price == null || price === 0) return "—";
   if (Math.abs(price) >= 1000) return price.toFixed(2);
   if (Math.abs(price) >= 1) return price.toFixed(4);
   return price.toPrecision(6);
@@ -233,6 +234,7 @@ export function TradeBottomPane({
   executors,
   positions,
   isLoadingPositions,
+  positionsStatus,
   connector,
   pair,
   isSpot,
@@ -403,7 +405,9 @@ export function TradeBottomPane({
               <span className="text-[var(--color-green)]"> ({activeExecutors.length} active)</span>
             )}
             {" · "}
-            {positions.length} position{positions.length !== 1 ? "s" : ""}
+            {positionsStatus === "available"
+              ? `${positions.length} position${positions.length !== 1 ? "s" : ""}`
+              : `Positions ${positionsStatus}`}
           </span>
           {executors.length > 0 && (
             <>
@@ -460,7 +464,7 @@ export function TradeBottomPane({
                   : "text-[var(--color-text-muted)] hover:text-[var(--color-text)]"
               }`}
             >
-              Positions ({positions.length})
+              Positions ({positionsStatus === "available" ? positions.length : positionsStatus})
               {isLoadingPositions && <Loader2 className="ml-1 inline h-3 w-3 animate-spin" />}
             </button>
           </div>
@@ -604,10 +608,18 @@ export function TradeBottomPane({
               <div className="space-y-1 p-2">
                 {positions.length === 0 ? (
                   <p className="py-3 text-center text-[var(--color-text-muted)]">
-                    No positions for this pair
+                    {positionsStatus === "unavailable"
+                      ? "Position data unavailable"
+                      : positionsStatus === "partial"
+                        ? "Position data is incomplete"
+                        : "No positions for this pair"}
                   </p>
                 ) : (
-                  positions.map((pos, i) => {
+                  <>
+                  {positionsStatus === "partial" && (
+                    <p className="px-1 py-1 text-center text-[var(--color-text-muted)]">Position data is incomplete</p>
+                  )}
+                  {positions.map((pos, i) => {
                     const side = pos.position_side?.toLowerCase();
                     const isBuy = side === "long" || side === "buy";
                     const isFlat = side === "flat";
@@ -630,9 +642,9 @@ export function TradeBottomPane({
                               {pos.position_side?.toUpperCase() ?? "—"}
                             </span>
                             <div className="text-[11px]">
-                              <span className="text-[var(--color-text)]">{Math.abs(pos.amount).toFixed(4)}</span>
+                              <span className="text-[var(--color-text)]">{pos.amount == null ? "—" : Math.abs(pos.amount).toFixed(4)}</span>
                               <span className="ml-1 text-[var(--color-text-muted)]">
-                                (${(pos.notional_value ?? Math.abs(pos.amount) * pos.entry_price).toFixed(2)})
+                                ({pos.notional_value == null ? "—" : `$${pos.notional_value.toFixed(2)}`})
                               </span>
                               <span className="ml-1.5 text-[var(--color-text-muted)]">@ {formatPrice(pos.entry_price)}</span>
                             </div>
@@ -646,8 +658,8 @@ export function TradeBottomPane({
                             {pos.leverage > 1 && (
                               <span className="text-[10px] text-[var(--color-text-muted)]">{pos.leverage}x</span>
                             )}
-                            <span className={`font-mono font-medium ${pos.unrealized_pnl >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]"}`}>
-                              {fmtPnl(pos.unrealized_pnl)}
+                            <span className={`font-mono font-medium ${pos.unrealized_pnl == null ? "text-[var(--color-text-muted)]" : pos.unrealized_pnl >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]"}`}>
+                              {pos.unrealized_pnl == null ? "—" : fmtPnl(pos.unrealized_pnl)}
                             </span>
                             <button
                               onClick={() => setConfirmClearPos(pos)}
@@ -665,12 +677,12 @@ export function TradeBottomPane({
                         </div>
                         <div className="mt-1 flex items-center gap-3 text-[10px] text-[var(--color-text-muted)]">
                           <span>
-                            Realized: <span className={`font-mono ${pos.realized_pnl >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]"}`}>
-                              {fmtPnl(pos.realized_pnl)}
+                            Realized: <span className={`font-mono ${pos.realized_pnl == null ? "text-[var(--color-text-muted)]" : pos.realized_pnl >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]"}`}>
+                              {pos.realized_pnl == null ? "—" : fmtPnl(pos.realized_pnl)}
                             </span>
                           </span>
                           <span>
-                            Fees: <span className="font-mono">${Math.abs(pos.cum_fees).toFixed(2)}</span>
+                            Fees: <span className="font-mono">{pos.cum_fees == null ? "—" : `$${Math.abs(pos.cum_fees).toFixed(2)}`}</span>
                           </span>
                           {pos.executor_count > 0 && (
                             <span>{pos.executor_count} executor{pos.executor_count !== 1 ? "s" : ""}</span>
@@ -678,7 +690,8 @@ export function TradeBottomPane({
                         </div>
                       </div>
                     );
-                  })
+                  })}
+                  </>
                 )}
               </div>
             )}

@@ -9,6 +9,8 @@ behavior at the tool call.
 import asyncio
 import json
 
+import pytest
+
 from condor.agents.ownership import (
     BotLedger,
     bot_namespace,
@@ -414,35 +416,39 @@ def test_experiment_engine_ledger_writes_no_file(tmp_path, monkeypatch):
 
 
 def test_engine_adopts_a_live_bot_in_its_namespace(tmp_path, monkeypatch):
-    from condor.fetchers import bot_performance
+    from types import SimpleNamespace
 
     engine = _engine(tmp_path, monkeypatch, {"bot_name": NS})
 
-    async def _fake_perf(client):
+    async def active():
         return {
-            f"{NS}-btc-20260731-101500": {"bot_name": f"{NS}-btc-20260731-101500"},
-            "someone-elses-bot-20260731-101500": {"bot_name": "someone-elses-bot"},
+            "data": {
+                f"{NS}-btc-20260731-101500": {"status": "running"},
+                "someone-elses-bot-20260731-101500": {"status": "running"},
+            }
         }
 
-    monkeypatch.setattr(bot_performance, "fetch_all_bot_performance", _fake_perf)
-    asyncio.run(engine._adopt_running_bots(object()))
-
+    client = SimpleNamespace(
+        bot_orchestration=SimpleNamespace(get_active_bots_status=active)
+    )
+    asyncio.run(engine._adopt_running_bots(client))
     assert engine.ledger.bases() == [f"{NS}-btc"]
     assert engine.ledger.owned()[0].origin == "adopted"
     assert engine._adoption_done
 
 
 def test_engine_adoption_failure_is_non_fatal_and_retried(tmp_path, monkeypatch):
-    from condor.fetchers import bot_performance
+    from types import SimpleNamespace
 
     engine = _engine(tmp_path, monkeypatch, {"bot_name": NS})
 
-    async def _boom(client):
+    async def unavailable():
         raise RuntimeError("api down")
 
-    monkeypatch.setattr(bot_performance, "fetch_all_bot_performance", _boom)
-    asyncio.run(engine._adopt_running_bots(object()))
-
+    client = SimpleNamespace(
+        bot_orchestration=SimpleNamespace(get_active_bots_status=unavailable)
+    )
+    asyncio.run(engine._adopt_running_bots(client))
     assert engine.ledger.bases() == []
     assert not engine._adoption_done  # next tick tries again
 
@@ -514,3 +520,126 @@ def test_prior_session_bases_reads_the_whole_lineage(tmp_path):
     # Deploy suffixes are stripped, so a restart recognises the base it left running.
     assert prior_session_bases(sessions) == {"ema_trend_loop", "other_bot"}
     assert prior_session_bases(tmp_path / "nope") == set()
+
+
+def test_adoption_uses_active_membership_instead_of_historical_performance(
+    tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from condor.fetchers import bot_performance
+
+    engine = _engine(tmp_path, monkeypatch, {"bot_name": NS})
+    current = f"{NS}-current-20261025-120000"
+    old = f"{NS}-old-20261024-120000"
+
+    async def history(_client):
+        return {current: {"bot_name": current}, old: {"bot_name": old}}
+
+    async def active():
+        return {"data": {current: {"status": "running", "performance": {}}}}
+
+    monkeypatch.setattr(bot_performance, "fetch_all_bot_performance", history)
+    client = SimpleNamespace(
+        bot_orchestration=SimpleNamespace(get_active_bots_status=active)
+    )
+    asyncio.run(engine._adopt_running_bots(client))
+    assert engine.ledger.bases() == [f"{NS}-current"]
+
+
+def test_adoption_can_discover_a_live_runtime_without_performance_history(
+    tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from condor.fetchers import bot_performance
+
+    engine = _engine(tmp_path, monkeypatch, {"bot_name": NS})
+    current = f"{NS}-current-20261025-120000"
+
+    async def history(_client):
+        return {}
+
+    async def active():
+        return {"data": {current: {"status": "running", "performance": {}}}}
+
+    monkeypatch.setattr(bot_performance, "fetch_all_bot_performance", history)
+    client = SimpleNamespace(
+        bot_orchestration=SimpleNamespace(get_active_bots_status=active)
+    )
+    asyncio.run(engine._adopt_running_bots(client))
+    assert engine.ledger.bases() == [f"{NS}-current"]
+
+
+def test_unknown_active_registry_defers_adoption_even_with_historical_rows(
+    tmp_path, monkeypatch
+):
+    from types import SimpleNamespace
+
+    from condor.fetchers import bot_performance
+
+    engine = _engine(tmp_path, monkeypatch, {"bot_name": NS})
+
+    async def history(_client):
+        return {f"{NS}-old-20261024-120000": {}}
+
+    async def unavailable():
+        raise ConnectionError("fixture runtime endpoint unavailable")
+
+    monkeypatch.setattr(bot_performance, "fetch_all_bot_performance", history)
+    client = SimpleNamespace(
+        bot_orchestration=SimpleNamespace(get_active_bots_status=unavailable)
+    )
+    asyncio.run(engine._adopt_running_bots(client))
+    assert engine.ledger.bases() == [] and not engine._adoption_done
+
+
+@pytest.mark.parametrize(
+    "row",
+    [
+        {"status": "stopped"},
+        {"status": "reporting_only"},
+        {"status": "starting"},
+        {"status": "running", "source": "native_mqtt", "identity_verified": False},
+    ],
+)
+def test_adoption_never_revives_noncurrent_runtime(tmp_path, monkeypatch, row):
+    from types import SimpleNamespace
+
+    engine = _engine(tmp_path, monkeypatch, {"bot_name": NS})
+
+    async def active():
+        return {"data": {f"{NS}-btc": row}}
+
+    client = SimpleNamespace(
+        bot_orchestration=SimpleNamespace(get_active_bots_status=active)
+    )
+    asyncio.run(engine._adopt_running_bots(client))
+    assert engine.ledger.bases() == []
+    assert engine._adoption_done is (row["status"] in {"stopped", "reporting_only"})
+
+
+@pytest.mark.parametrize(
+    "response",
+    [
+        None,
+        {"status": "error"},
+        {"data": [None]},
+        {"data": [{"bot_name": f"{NS}-btc", "status": "running"}] * 2},
+    ],
+)
+def test_adoption_retries_malformed_or_ambiguous_registry(
+    tmp_path, monkeypatch, response
+):
+    from types import SimpleNamespace
+
+    engine = _engine(tmp_path, monkeypatch, {"bot_name": NS})
+
+    async def active():
+        return response
+
+    client = SimpleNamespace(
+        bot_orchestration=SimpleNamespace(get_active_bots_status=active)
+    )
+    asyncio.run(engine._adopt_running_bots(client))
+    assert engine.ledger.bases() == [] and not engine._adoption_done

@@ -60,10 +60,10 @@ def _report(frequency_sec=60):
     return SessionReport("brigado", "grid", 3, frequency_sec=frequency_sec)
 
 
-def _update(report, session_dir, *, journal=None, executors=None):
+def _update(report, session_dir, *, info=None, journal=None, executors=None):
     return asyncio.run(
         report.update(
-            info=INFO,
+            info=INFO if info is None else info,
             journal=journal if journal is not None else _FakeJournal(),
             session_dir=session_dir,
             executors=executors,
@@ -129,6 +129,22 @@ def test_kpis_come_from_engine_data(reports_dir, session_dir):
     assert "$4.50" in html  # unrealized
     assert "$42,000" in html  # volume
     assert "Running" in html
+
+
+def test_kpis_keep_unknown_current_inventory_out_of_zero_values(
+    reports_dir, session_dir
+):
+    unknown = dict(
+        INFO,
+        daily_pnl=None,
+        unrealized_pnl=None,
+        open_executors=None,
+        current_book_status="unavailable",
+    )
+    html = _html(_update(_report(), session_dir, info=unknown))
+    assert "Total PnL" in html and "Unrealized" in html and "Open Executors" in html
+    assert "—" in html
+    assert "$8.00" in html  # known realized PnL remains visible
 
 
 def test_narrative_renders_the_canvas_and_its_age(reports_dir, session_dir):

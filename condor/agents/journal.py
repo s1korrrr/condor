@@ -26,6 +26,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .risk import current_book_labels
+
 log = logging.getLogger(__name__)
 
 _DATA_ROOT = Path(__file__).parent.parent.parent / "agents"
@@ -251,10 +253,10 @@ def save_experiment_snapshot(
         else "disabled"
     )
     risk_lines = [
-        f"- Position Size: ${risk_state.get('total_exposure', 0):.2f} / ${risk_state.get('max_position_size', 500):.2f} limit",
-        f"- Open Executors: {risk_state.get('executor_count', 0)} / {risk_state.get('max_open_executors', 5)} limit",
+        f"- Position Size: {current_book_labels(risk_state)[0]} / ${risk_state.get('max_position_size', 500):.2f} limit",
+        f"- Open Executors: {current_book_labels(risk_state)[1]} / {risk_state.get('max_open_executors', 5)} limit",
         f"- Drawdown: {dd_display}",
-        f"- Status: {'BLOCKED - ' + risk_state.get('block_reason', '') if risk_state.get('is_blocked') else 'ACTIVE'}",
+        f"- Status: {current_book_labels(risk_state)[2]}",
     ]
 
     # Format tool calls
@@ -584,10 +586,10 @@ class JournalManager:
             else "disabled"
         )
         risk_lines = [
-            f"- Position Size: ${risk_state.get('total_exposure', 0):.2f} / ${risk_state.get('max_position_size', 500):.2f} limit",
-            f"- Open Executors: {risk_state.get('executor_count', 0)} / {risk_state.get('max_open_executors', 5)} limit",
+            f"- Position Size: {current_book_labels(risk_state)[0]} / ${risk_state.get('max_position_size', 500):.2f} limit",
+            f"- Open Executors: {current_book_labels(risk_state)[1]} / {risk_state.get('max_open_executors', 5)} limit",
             f"- Drawdown: {dd_display}",
-            f"- Status: {'BLOCKED - ' + risk_state.get('block_reason', '') if risk_state.get('is_blocked') else 'ACTIVE'}",
+            f"- Status: {current_book_labels(risk_state)[2]}",
         ]
 
         # Format tool calls
@@ -728,13 +730,20 @@ class JournalManager:
     # ------------------------------------------------------------------
 
     def write_summary(
-        self, tick: int, status: str, pnl: float, open_count: int, last_action: str
+        self,
+        tick: int,
+        status: str,
+        pnl: float | None,
+        open_count: int | None,
+        last_action: str,
     ) -> None:
         """Update the Summary section."""
         now = datetime.now(timezone.utc).strftime("%H:%M UTC")
+        pnl_text = f"${pnl:+.2f}" if pnl is not None else "unavailable"
+        count_text = str(open_count) if open_count is not None else "unavailable"
         summary = (
             f"Last tick: #{tick} at {now}\n"
-            f"Status: {status} | PnL: ${pnl:+.2f} | Open: {open_count} executors\n"
+            f"Status: {status} | PnL: {pnl_text} | Open: {count_text} executors\n"
             f"Last action: {last_action[:100]}"
         )
         self._replace_section("Summary", summary)

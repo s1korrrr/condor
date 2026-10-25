@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { useQuery, keepPreviousData } from "@tanstack/react-query";
 
-import { api, type ExecutorInfo } from "@/lib/api";
+import { api, type ConsolidatedPositionsResponse, type ExecutorInfo } from "@/lib/api";
 import { computeMultiOverlays } from "@/lib/executor-overlays";
 
 export function useMainControllerData(
@@ -31,7 +31,7 @@ export function useMainControllerData(
   const overlays = useMemo(() => computeMultiOverlays(executors), [executors]);
 
   // Fetch consolidated positions
-  const { data: positionsData, isLoading: isLoadingPositions } = useQuery({
+  const { data: positionsData, isLoading: isLoadingPositions, isError: positionsQueryError } = useQuery<ConsolidatedPositionsResponse>({
     queryKey: ["consolidated-positions", server],
     queryFn: () => api.getConsolidatedPositions(server!),
     enabled: !!server,
@@ -41,7 +41,7 @@ export function useMainControllerData(
   });
 
   const positions = useMemo(() => {
-    if (!positionsData) return [];
+    if (!positionsData || positionsQueryError) return [];
     const all = [
       ...(positionsData.executor_positions ?? []),
       ...(positionsData.bot_positions ?? []),
@@ -53,7 +53,17 @@ export function useMainControllerData(
         p.connector_name === connector &&
         p.trading_pair === pair,
     );
-  }, [positionsData, connector, pair]);
+  }, [positionsData, positionsQueryError, connector, pair]);
 
-  return { executors, overlays, positions, isLoadingPositions };
+  const positionsStatus: "available" | "partial" | "unavailable" = positionsQueryError || !positionsData
+    ? "unavailable"
+    : positionsData.executor_positions_status === "unavailable" || positionsData.bot_positions_status === "unavailable"
+      ? "unavailable"
+      : positionsData.executor_positions_status === "partial" || positionsData.bot_positions_status === "partial"
+        ? "partial"
+        : positionsData.executor_positions_status === "available" && positionsData.bot_positions_status === "available"
+          ? "available"
+          : "unavailable";
+
+  return { executors, overlays, positions, isLoadingPositions, positionsStatus };
 }

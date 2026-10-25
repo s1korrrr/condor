@@ -39,7 +39,7 @@ from typing import Any, Callable, Optional, Protocol
 from condor import trading_words
 from condor.fetchers.bots import build_bots_page
 from condor.fleet_identity import display_name, generation, is_paper
-from condor.web import fleet_pnl
+from condor.web import fleet_pnl, holdings
 from condor.web.market_verdict import (
     DEFAULT_HORIZON,
     frame_from_raw,
@@ -259,14 +259,6 @@ def project_quant_summary(payload: Any, bot: str, now_ms: float) -> Optional[dic
         owner_admitted = state != "UNKNOWN"
     admitted = fresh and owner_admitted
     known = {} if fresh else _obj(data.get("last_known"))
-    pairs_raw = data.get("pairs") if admitted else known.get("pairs")
-    pairs = []
-    for item in pairs_raw if isinstance(pairs_raw, list) else []:
-        row = _obj(item)
-        pair = row.get("pair")
-        if isinstance(pair, str) and re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", pair):
-            units = _num(row.get("units"))
-            pairs.append({"pair": pair, "held": None if units is None else units > 0})
     counts = _obj(data.get("cycle_counts") if admitted else known.get("cycle_counts"))
     return {
         "observed_ms": (
@@ -274,7 +266,6 @@ def project_quant_summary(payload: Any, bot: str, now_ms: float) -> Optional[dic
         ),
         "current": current,
         "admitted": admitted,
-        "pairs": pairs,
         "open_cycles": _nonneg_int(counts.get("open")),
     }
 
@@ -430,60 +421,6 @@ def _nonneg_dec(value: Any) -> Optional[Decimal]:
     return number if number is not None and number >= 0 else None
 
 
-def _quantity(controller: dict, controllers: list, positions, lifecycle) -> Optional[Decimal]:
-    """Base units a controller's pair holds, or ``None`` when the observation cannot say.
-
-    Mirrors the inventory rules of ``buildBotPositionView``: a controller episode bag, else the owner's
-    held positions plus the remaining size of its (all buy, all position) active executors.
-    """
-    pair = _text(controller.get("pair"))
-    ident = _text(controller.get("controller_id"))
-    single = sum(1 for row in controllers if row.get("pair") == pair) == 1
-    if controller.get("observation_status") == "unavailable":
-        return None
-    episode = _obj(_obj(controller.get("custom_info")).get("episode"))
-    if episode.get("enabled") is True:
-        return _nonneg_dec(episode.get("base"))
-    if positions is None:
-        return None
-    ambiguous = not single and (
-        not ident
-        or any(
-            row.get("pair") == pair and not _text(row.get("controller_id"))
-            for row in [*positions, *lifecycle]
-        )
-    )
-    if ambiguous:
-        return None
-
-    def matches(row: dict) -> bool:
-        if row.get("pair") != pair:
-            return False
-        return (
-            row.get("controller_id") == ident
-            if ident and row.get("controller_id")
-            else single
-        )
-
-    held = [row for row in positions if matches(row)]
-    active = [row for row in lifecycle if matches(row)]
-    ids = [_text(row.get("executor_id")) for row in active]
-    if not (
-        all(
-            row.get("side") == "buy" and row.get("executor_type") == "position"
-            for row in active
-        )
-        and all(ids)
-        and len(set(ids)) == len(ids)
-    ):
-        return None
-    parts = [row.get("amount_base") for row in held] + [
-        row.get("remaining_position_amount_base") for row in active
-    ]
-    values = [_nonneg_dec(part) for part in parts]
-    return None if any(v is None for v in values) else fleet_pnl.exact_sum(values)
-
-
 TRADING_STATES = ("can_trade", "restricted", "blocked", "unverified")
 TRADING_SIDES = ("buy", "sell", "both")
 TRADING_MAX_RESTRICTIONS = 20
@@ -557,11 +494,11 @@ def trading_word(trading: dict) -> str:
 
 
 def project_runtime_view(payload: Any, bot: str, now_ms: float) -> Optional[dict]:
-    """The owner's own runtime observation (``bootstrap``) as the Bots page reads it: pairs held, active executors.
+    """The owner's own runtime observation (``bootstrap``): active executors and trading capability.
 
     Only an identity-bound, well-formed observation is admitted (``None`` otherwise). An old one is returned
-    with ``current: False``: staleness is a state, corruption is not. ``held`` is ``None`` when any pair's
-    inventory is unknown (e.g. a native runtime report that carries no per-pair inventory): never a guess.
+    with ``current: False``: staleness is a state, corruption is not. Inventory is not read here; it comes
+    from the one holdings projection (``condor.web.holdings``).
     """
     root = _obj(payload)
     runtime, monitoring = _obj(root.get("runtime_status")), _obj(root.get("monitoring"))
@@ -578,7 +515,6 @@ def project_runtime_view(payload: Any, bot: str, now_ms: float) -> Optional[dict
         return None
     controllers = _rows(runtime.get("controllers"))
     active = _rows(runtime.get("active_executors"))
-    positions = _rows(runtime.get("positions_held"))
     lifecycle = (
         active
         if "lifecycle_executors" not in runtime
@@ -613,18 +549,11 @@ def project_runtime_view(payload: Any, bot: str, now_ms: float) -> Optional[dict
         for row in controllers
     ):
         return None
-    quantities = [_quantity(row, controllers, positions, lifecycle) for row in controllers]
     current = now_ms - observed < min(threshold, RUNTIME_STALE_CAP_S) * 1000
     return {
         "observed_ms": observed,
         "current": current,
         "trading": project_trading(runtime.get("trading_capability"), current),
-        "registered": len(controllers),
-        "held": (
-            None
-            if any(q is None for q in quantities)
-            else sum(1 for q in quantities if q > 0)
-        ),
         "executors": len(active),
     }
 
@@ -1108,6 +1037,7 @@ def _bot_cards(
     owner_reasons: dict[tuple[str, str], str],
     cycles: dict[str, Optional[dict]],
     runtime: dict[str, Optional[dict]],
+    inventory: dict[str, dict],
     totals: dict[str, Optional[dict]],
     day: fleet_pnl.FleetWindow,
     latest_samples: dict[str, Optional[tuple[fleet_pnl.Sample, str]]],
@@ -1143,38 +1073,32 @@ def _bot_cards(
         if status is None:
             gap("status", SOURCE_UNAVAILABLE)
 
-        # Inventory and executors: the owner's runtime observation first (what the Bots page reads), then the
-        # quant projections. A bot whose reporting publishes neither stays null, with the reason.
+        # Inventory: the one holdings projection every client renders (the owner's quant view).
         positions = executors = None
         executors_basis = None
-        if rt is not None and rt["held"] is not None:
+        held = inventory.get(bot)
+        if held is not None and held["held_pair_count"] is not None:
             positions = {
-                "held": rt["held"],
-                "registered": rt["registered"],
-                "current": rt["current"],
-            }
-        elif (
-            q is not None
-            and (q["pairs"] or q["admitted"])
-            and all(p["held"] is not None for p in q["pairs"])
-        ):
-            positions = {
-                "held": sum(1 for p in q["pairs"] if p["held"]),
-                "registered": len(q["pairs"]),
-                "current": q["admitted"],
+                "held": held["held_pair_count"],
+                "registered": held["registered_pair_count"],
+                "current": held["state"] == holdings.CURRENT,
             }
         else:
             gap(
                 "positions",
-                (
-                    SOURCE_UNAVAILABLE  # the runtime report carries no per-pair inventory
-                    if rt is not None
-                    else summary_reason
-                    or (
-                        (INVALID if q["admitted"] else OWNER_NOT_CURRENT)
-                        if q is not None
-                        else runtime_reason or INVALID
-                    )
+                summary_reason
+                or (
+                    INVALID
+                    if held is None
+                    else INVALID
+                    if holdings.PAIR_FIELD_INVALID in held["incomplete_reasons"]
+                    else PARTIAL_COVERAGE
+                    if held["state"] != holdings.UNAVAILABLE
+                    else OWNER_NOT_CURRENT
+                    if held["reason"] == holdings.RUNTIME_NOT_CURRENT
+                    else INVALID
+                    if held["reason"] in holdings.MALFORMED
+                    else SOURCE_UNAVAILABLE
                 ),
             )
         open_cycles = c["counts"].get("open") if c is not None else None
@@ -1637,6 +1561,14 @@ async def build_fleet_summary(
         bot: project_runtime_view(owner[(bot, "bootstrap")].payload, bot, now_ms)
         for bot in bots
     }
+    inventory = {
+        bot: (
+            holdings.project_bot(read.payload, bot, now_ms)
+            if (read := owner[(bot, "quant-summary")]).payload is not None
+            else holdings.unavailable_bot(bot, read.reason or SOURCE_UNAVAILABLE)
+        )
+        for bot in bots
+    }
     totals = {
         bot: project_fill_totals(owner[(bot, "fills")].payload, bot, OWNER_FILL_LIMIT)
         for bot in bots
@@ -1679,6 +1611,7 @@ async def build_fleet_summary(
             owner_reasons,
             cycles,
             runtime,
+            inventory,
             totals,
             day_window,
             latest_samples,

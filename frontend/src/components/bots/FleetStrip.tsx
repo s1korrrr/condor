@@ -10,6 +10,8 @@ import type { OwnerReads } from './BotsRoster';
 import { winRateText } from '@/features/bots/bot-net';
 import { durationLabel, projectBotStats, type FleetBotInput } from '@/features/bots/fleet-tiles';
 import { botChartsHref } from '@/features/bots/chart-links';
+import { inventoryStateLabel, inventoryValueText, projectBotInventory } from '@/features/bots/position-view';
+import { holdingsPair } from '@/lib/fleet-holdings';
 import './fleet-strip.css';
 
 const tone = (value: string | null | undefined) => (value ?? 'unknown').toLowerCase().split(/[\s:]/)[0];
@@ -17,14 +19,19 @@ const label = (value: string | null | undefined) => value?.replaceAll('_', ' ') 
 const toneClass = (value: number | string | null | undefined) => metricTone(value) ? `q-${metricTone(value)}` : undefined;
 
 export function fleetInput(reads: OwnerReads, name = displayBotName(reads.bot)): FleetBotInput {
-  return { bot: reads.bot, name, status: reads.status, view: reads.view, quant: reads.quant, cycles: reads.cycles, execution: reads.execution, health: reads.health, fillTotals: reads.fillTotals ?? null };
+  return { bot: reads.bot, name, status: reads.status, view: reads.view, holdings: reads.holdings, quant: reads.quant, cycles: reads.cycles, execution: reads.execution, health: reads.health, fillTotals: reads.fillTotals ?? null };
 }
 
 /** One compact card per registered bot: identity, lifecycle, operational counters and a small PnL chip (full PnL stays in Capital). */
 function FleetBotCard({ source, reads, status, color, now }: { source: TradingVisualsSource; reads: OwnerReads | undefined; status: string | null; color: string; now: number }) {
   const quant = reads?.quant ?? null;
   const stats = reads ? projectBotStats(fleetInput(reads), now) : null;
-  const pairs = quant?.pairs.length ? quant.pairs : (reads?.view?.pairs ?? []).map(row => ({ controllerId: row.controllerId, pair: row.pair, state: row.phase ?? 'UNKNOWN', planMode: null, planNext: row.planNext, nextCondition: row.reason, unrealized: row.bagPnl === null ? null : String(row.bagPnl) }));
+  const inventory = projectBotInventory(reads?.holdings ?? null, now, reads?.holdingsIssue ?? null);
+  // Pair chips: owner plan fields from the quant summary (or the bootstrap rows); open-position PnL only from fleet holdings.
+  const unrealized = (controllerId: string | null, pair: string) => inventory.entry ? holdingsPair(inventory.entry, controllerId, pair)?.unrealized_pnl_quote ?? null : null;
+  const pairs = (quant?.pairs.length ? quant.pairs.map(row => ({ controllerId: row.controllerId, pair: row.pair, state: row.state, planMode: row.planMode, planNext: row.planNext, nextCondition: row.nextCondition }))
+    : (reads?.view?.pairs ?? []).map(row => ({ controllerId: row.controllerId, pair: row.pair, state: row.phase ?? 'UNKNOWN', planMode: null, planNext: row.planNext, nextCondition: row.reason })))
+    .map(row => ({ ...row, unrealized: unrealized(row.controllerId, row.pair) }));
   const freshness: PanelState = !reads ? { kind: 'collecting', reason: 'Reading owner observations' } : !reads.view ? { kind: 'incomplete', reason: 'Runtime observation has not been read yet' } : quant?.freshness === 'current' && !reads.view.stale ? { kind: 'fresh', observedAt: quant.observedAt } : { kind: 'stale', observedAt: quant?.observedAt ?? null, reason: 'Owner observation is not current; last-known values shown.' };
   const net = reads?.controller.total ?? null;
   const cycles = reads?.cycles ?? null;
@@ -37,7 +44,7 @@ function FleetBotCard({ source, reads, status, color, now }: { source: TradingVi
   const add = (present: boolean, title: string, value: () => ReactNode) => { if (present) cells.push({ title, value: value() }); };
   if (stats) {
     add(stats.executors != null, 'Executors', () => stats.executors);
-    add(stats.held != null, 'Positions', () => `${stats.held} / ${stats.registered}`);
+    add(stats.held != null, 'Positions', () => `${stats.held} / ${stats.registered}${stats.inventoryState === 'current' ? '' : ' · last known'}`);
     add(stats.orders != null, 'Working orders', () => stats.orders);
     add(stats.pendingEntries != null, 'Entries pending', () => `${stats.pendingEntries}${stats.unfilledEntries ? ` · ${stats.unfilledEntries} unfilled` : ''}`);
     add(stats.fills != null, 'Trades', () => `${stats.fills}${stats.opened24h ? ` · 24h ${stats.opened24h}` : ''}`);
@@ -69,6 +76,7 @@ function FleetBotCard({ source, reads, status, color, now }: { source: TradingVi
     </div>
     <dl className="fs-stats">
       {cells.map(cell => <div key={cell.title}><dt>{cell.title}</dt><dd>{cell.value}</dd></div>)}
+      {reads && <div data-state={inventory.state}><dt title={`Fleet holdings · ${inventoryStateLabel(inventory)}`}>Holdings</dt><dd>{inventory.state === 'unavailable' ? <span title={inventoryStateLabel(inventory)}>Unavailable · {(inventory.reason ?? '').replaceAll('_', ' ')}</span> : <>{inventoryValueText(inventory, value => `${formatDecimal(value)} ${inventory.quote ?? ''}`.trim())}{inventory.state === 'stale' && <small> · last known</small>}{inventory.paper && <> <span className="q-pill" data-tone="blocked" title="Simulated paper holdings: never counted as capital.">paper</span></>}</>}</dd></div>}
       <div><dt title="Controller-report PnL; full PnL history is in Capital">PnL (controller)</dt><dd><span className={toneClass(net)}>{net == null ? '—' : `${formatSigned(net)} ${reads?.controller.quote ?? ''}`}</span>{net != null && reads?.controller.simulated && <> <span className="q-pill" data-tone="blocked" title="Simulated paper PnL: never counted as capital.">paper</span></>}</dd></div>
     </dl>
     {pairs.length > 0 && <ul className="fs-pairs" aria-label="Pairs">

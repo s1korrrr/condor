@@ -1,3 +1,5 @@
+import { holdingsAgeMs, holdingsFreshness, holdingsPair, holdingsValue, type BotHoldings, type HoldingsBot, type HoldingsPair, type HoldingsState, type HoldingsValue } from '@/lib/fleet-holdings';
+
 type Row = Record<string, unknown>;
 export const object = (value: unknown): Row => value && typeof value === 'object' && !Array.isArray(value) ? value as Row : {};
 export function numeric(value: unknown): number | null {
@@ -8,40 +10,80 @@ const nonnegative = (value: unknown) => { const n = numeric(value); return n !==
 const positive = (value: unknown) => { const n = numeric(value); return n !== null && n > 0 ? n : null; };
 const rows = (value: unknown) => Array.isArray(value) ? value.map(object) : null;
 const text = (value: unknown) => typeof value === 'string' && value.trim() && value !== 'n/a' ? value : null;
-function sum(values: (number | null)[]) { return values.every(value => value !== null) ? values.reduce<number>((total, value) => total + value!, 0) : null; }
-// Preserve the owner-reported decimal units; convert only the final display value to Number.
-function quantitySum(values: unknown[]): string | null {
-  const parts = values.map(value => {
-    if (nonnegative(value) === null) return null;
-    const match = String(value).match(/^\+?(\d*)(?:\.(\d*))?(?:e([+-]?\d+))?$/i);
-    if (!match) return null;
-    const scale = (match[2]?.length ?? 0) - Number(match[3] ?? 0);
-    if (Math.abs(scale) > 100) return null;
-    return { units: BigInt((match[1] || '0') + (match[2] || '')), scale };
-  });
-  if (parts.some(part => part === null)) return null;
-  const scale = Math.max(0, ...parts.map(part => part!.scale));
-  const units = parts.reduce((total, part) => total + part!.units * 10n ** BigInt(scale - part!.scale), 0n);
-  const digits = units.toString().padStart(scale + 1, '0');
-  return scale ? `${digits.slice(0, -scale)}.${digits.slice(-scale)}`.replace(/\.?0+$/, '') : digits;
+/** Display conversion of a server decimal string; the exact text stays in `quantity` and on the holdings pair. */
+const display = (value: string | null | undefined) => value == null ? null : numeric(value);
+
+/**
+ * One bot's inventory as the dashboard renders it: the server's `fleet-holdings.v1` entry with the contract's client
+ * rules applied at `now`. This is the only inventory source on the Bots page; nothing here sums units or prices.
+ * Without an admitted entry every inventory field is null (unavailable), never zero.
+ */
+export type BotInventory = {
+  state: HoldingsState;
+  /** Server reason code when unavailable, or why the dashboard has no entry for the bot. */
+  reason: string | null;
+  ageMs: number | null; observedAtMs: number | null;
+  paper: boolean | null; quote: string | null;
+  heldPairCount: number | null; registeredPairCount: number | null;
+  inventoryComplete: boolean; valueComplete: boolean; incompleteReasons: string[];
+  value: HoldingsValue; unrealized: string | null; entryCost: string | null;
+  entry: HoldingsBot | null;
+};
+
+export function projectBotInventory(holdings: BotHoldings | null, now: number, issue: string | null = null): BotInventory {
+  if (!holdings) return {
+    state: 'unavailable', reason: issue ?? 'Fleet holdings not read', ageMs: null, observedAtMs: null, paper: null, quote: null,
+    heldPairCount: null, registeredPairCount: null, inventoryComplete: false, valueComplete: false, incompleteReasons: [],
+    value: { kind: 'none', amount: null }, unrealized: null, entryCost: null, entry: null,
+  };
+  const { entry } = holdings;
+  const state = holdingsFreshness(holdings, now);
+  return {
+    state, reason: entry.reason, ageMs: holdingsAgeMs(holdings, now), observedAtMs: entry.observed_at_ms, paper: entry.paper, quote: entry.quote_asset,
+    heldPairCount: entry.held_pair_count, registeredPairCount: entry.registered_pair_count,
+    inventoryComplete: entry.inventory_complete, valueComplete: entry.value_complete, incompleteReasons: entry.incomplete_reasons,
+    value: holdingsValue(entry), unrealized: entry.totals?.unrealized_pnl_quote ?? null, entryCost: entry.totals?.entry_cost_quote ?? null,
+    entry: state === 'unavailable' ? null : entry,
+  };
 }
+
+/** Human label of an inventory state, for notices and diagnostics. */
+export function inventoryStateLabel(inventory: BotInventory): string {
+  if (inventory.state === 'unavailable') return `Unavailable · ${(inventory.reason ?? 'no admitted observation').replaceAll('_', ' ')}`;
+  const age = inventory.ageMs === null ? '' : ` · ${Math.round(inventory.ageMs / 1000)}s old`;
+  const partial = inventory.inventoryComplete ? '' : ` · partial (${inventory.incompleteReasons.join(', ').replaceAll('_', ' ') || 'incomplete'})`;
+  return `${inventory.state === 'current' ? 'Current' : 'Last known'}${age}${partial}`;
+}
+
+/** The contract's totals rule as text: exact total, "≥ known" for a partial book, or a dash. */
+export function inventoryValueText(inventory: BotInventory, format: (amount: string) => string): string {
+  if (inventory.value.kind === 'none') return '—';
+  return `${inventory.value.kind === 'at_least' ? '≥ ' : ''}${format(inventory.value.amount)}`;
+}
+
 export type BotPairPosition = {
-  id: string; controllerId: string | null; uniquePair: boolean; pair: string; baseAsset: string; quote: string; price: number | null; base: number | null;
-  markValue: number | null; breakeven: number | null; bagPnl: number | null; inventorySource: string;
+  id: string; controllerId: string | null; uniquePair: boolean; pair: string; baseAsset: string; quote: string;
+  /** Inventory from the holdings pair with the same (controller, pair); null when absent. Display numbers only. */
+  holding: HoldingsPair | null;
+  quantity: string | null; base: number | null; price: number | null; markValue: number | null;
+  breakeven: number | null; bagPnl: number | null; entryCost: number | null;
+  /** Server small-holding grouping flag. */
+  small: boolean;
+  inventorySource: string;
   phase: string | null; reason: string | null; hold: string | null; riskClear: boolean | null;
-  /** Row built by the API from the owner's symbol list (`native_owner_symbols`): no inventory of its own. */
+  /** Row built by the API from the owner's symbol list (`native_owner_symbols`): no per-pair runtime report of its own. */
   projected: boolean;
   profitPrice: number | null; floor: number | null; peak: number | null; plannedReduction: number | null;
-  quantity: string | null; inventoryEntries: Row[]; targetBase: number | null; planNext: string | null; executors: Row[]; pendingSells: Row[] | null; pendingSellsTruncated: boolean;
+  inventoryEntries: Row[]; targetBase: number | null; planNext: string | null; executors: Row[]; pendingSells: Row[] | null; pendingSellsTruncated: boolean;
 };
-/** Unknown pair inventory prevents an exact bot position count. */
-export function openPairCount(pairs: { quantity: string | null }[]): number | null {
-  const amounts = pairs.map(row => nonnegative(row.quantity));
-  return amounts.some(value => value === null) ? null : amounts.filter(value => value! > 0).length;
-}
-/** With `allowStale`, an old (but well-formed, same-owner) observation is returned marked `stale` instead of thrown away.
- * Missing timestamps, clock skew and identity mismatches still throw: staleness is a state, corruption is not. */
-export function buildBotPositionView(payload: unknown, bot: string, now: number, options: { allowStale?: boolean } = {}) {
+
+/**
+ * The owner bootstrap supplies identity, lifecycle, plans, gates, executors, pending sells and orders. Inventory (units,
+ * mark, marked value, breakeven, cost, open-position PnL, small grouping) comes only from `options.holdings`.
+ * With `allowStale`, an old (but well-formed, same-owner) observation is returned marked `stale` instead of thrown away.
+ * Missing timestamps, clock skew and identity mismatches still throw: staleness is a state, corruption is not.
+ */
+export function buildBotPositionView(payload: unknown, bot: string, now: number, options: { allowStale?: boolean; holdings?: BotHoldings | null; holdingsIssue?: string | null } = {}) {
   const root = object(payload), runtime = object(root.runtime_status), monitoring = object(root.monitoring);
   const observedAt = text(runtime.updated_at), timestamp = observedAt ? Date.parse(observedAt) : NaN;
   const threshold = positive(monitoring.stale_threshold_seconds);
@@ -62,6 +104,7 @@ export function buildBotPositionView(payload: unknown, bot: string, now: number,
     const scoped = new Set(controllers.map(row => `${row.controller_id}:${row.pair}`));
     if (!projected || scoped.size !== controllers.length) throw new Error('Controller identity is duplicated in this observation.');
   }
+  const inventory = projectBotInventory(options.holdings ?? null, now, options.holdingsIssue ?? null);
   const pairs: BotPairPosition[] = controllers.map((controller, index) => {
     const pair = text(controller.pair);
     if (!pair || !/^[A-Z0-9]+-[A-Z0-9]+$/.test(pair)) throw new Error('Controller pair identity is invalid.');
@@ -69,55 +112,40 @@ export function buildBotPositionView(payload: unknown, bot: string, now: number,
     const id = text(controller.controller_id), single = controllers.filter(row => row.pair === pair).length === 1;
     const matches = (row: Row) => row.pair === pair && (id && row.controller_id ? row.controller_id === id : single);
     const failedObservation = controller.observation_status === 'unavailable';
-    const ambiguousInventory = !single && (!id || [...(positions ?? []), ...lifecycle].some(row => row.pair === pair && !text(row.controller_id)));
-    const held = failedObservation || ambiguousInventory ? undefined : positions?.filter(matches), active = lifecycle.filter(matches);
+    const projected = controller.pair_projection_source === 'native_owner_symbols';
+    const held = failedObservation ? undefined : positions?.filter(matches), active = lifecycle.filter(matches);
     const info = failedObservation ? {} : object(controller.custom_info), episode = object(info.episode), trail = object(info.trailing_policy);
     const hasEpisode = !failedObservation && episode.enabled === true;
-    const executorIds = active.map(row => text(row.executor_id));
-    const completeActive = active.every(row => row.side === 'buy' && row.executor_type === 'position') && executorIds.every(Boolean) && new Set(executorIds).size === executorIds.length;
-    const quantity = hasEpisode ? nonnegative(episode.base) === null ? null : String(episode.base) : held && completeActive ? quantitySum([...held.map(row => row.amount_base), ...active.map(row => row.remaining_position_amount_base)]) : null;
-    const base = quantity === null ? null : nonnegative(quantity);
-    const price = positive(controller.price_quote), cost = hasEpisode && episode.cost_known === true ? nonnegative(episode.cost) : null;
-    const markValue = base !== null && price !== null ? base * price : null;
-    const basisCost = !active.length && held?.length ? sum(held.map(row => { const amount = nonnegative(row.amount_base), basis = positive(row.breakeven_price); return amount !== null && basis !== null ? amount * basis : null; })) : null;
-    const breakeven = base !== null && base > 0 ? hasEpisode ? cost === null ? null : cost / base : basisCost === null ? null : basisCost / base : null;
-    const bagPnl = hasEpisode ? cost !== null && markValue !== null ? markValue - cost : null : base !== null && (held?.length || active.length) ? sum([...(held ?? []).map(row => numeric(row.unrealized_pnl_quote)), ...active.map(row => numeric(row.net_pnl_quote))]) : null;
-    const phase = text(episode.phase) ?? text(controller.state), targetBase = hasEpisode ? nonnegative(episode.target_base) : null;
+    // Join on the exact owner identity (controller, pair), and only when this observation lists it once: two rows
+    // sharing one identity would otherwise show the same holdings twice.
+    const uniqueIdentity = controllers.filter(row => text(row.controller_id) === id && row.pair === pair).length === 1;
+    const holding = inventory.entry && uniqueIdentity ? holdingsPair(inventory.entry, id, pair) : null;
+    const base = display(holding?.units);
+    const ownerPhase = text(episode.phase) ?? text(controller.state);
+    // A symbol-only row has no per-pair runtime state; the holdings pair carries the owner pair state.
+    const phase = projected ? holding?.state ?? ownerPhase : ownerPhase, targetBase = hasEpisode ? nonnegative(episode.target_base) : null;
     // This is an inventory objective. The execution owner still sizes, quantizes and gates each order.
     const plannedReduction = hasEpisode && ['DISTRIBUTE', 'EXIT'].includes(phase ?? '') && base !== null && targetBase !== null && targetBase <= base ? base - targetBase : null;
-    return { id: controller.pair_projection_source === 'native_owner_symbols' ? `${id}:${pair}` : id ?? `${pair}:${index}`, controllerId: id, uniquePair: single, pair, baseAsset, quote, price, base, markValue, breakeven, bagPnl,
-      projected: controller.pair_projection_source === 'native_owner_symbols',
-      inventorySource: controller.pair_projection_source === 'native_owner_symbols' ? 'Per-pair inventory unavailable in native runtime report' : failedObservation ? 'Controller observation unavailable' : hasEpisode ? 'Controller episode bag' : 'Managed bot inventory · executor + retained', phase,
-      reason: controller.pair_projection_source === 'native_owner_symbols' ? 'Per-pair accounting unavailable in native runtime report' : failedObservation ? 'Controller observation unavailable' : text(episode.reason) ?? text(controller.gate), hold: text(episode.hold_reason), riskClear: typeof episode.exit_risk_clear === 'boolean' ? episode.exit_risk_clear : null,
-      quantity, inventoryEntries: hasEpisode ? [] : held ?? [],
+    const inventorySource = holding ? `Fleet holdings · reporting owner${holding.mark_source ? ` · mark ${holding.mark_source.replaceAll('_', ' ')}` : ''}`
+      : inventory.state === 'unavailable' ? `Inventory unavailable · ${(inventory.reason ?? 'no admitted observation').replaceAll('_', ' ')}`
+      : 'Inventory unavailable · pair not in fleet holdings';
+    const ownerReason = projected ? 'Per-pair accounting unavailable in native runtime report' : failedObservation ? 'Controller observation unavailable' : text(episode.reason) ?? text(controller.gate);
+    return { id: projected ? `${id}:${pair}` : id ?? `${pair}:${index}`, controllerId: id, uniquePair: single, pair, baseAsset, quote,
+      holding, quantity: holding?.units ?? null, base, price: display(holding?.mark_price), markValue: display(holding?.marked_value_quote),
+      breakeven: display(holding?.breakeven_price), bagPnl: display(holding?.unrealized_pnl_quote), entryCost: display(holding?.entry_cost_quote),
+      small: holding?.small === true, inventorySource, projected, phase,
+      reason: projected && holding ? text(controller.plan_next) : ownerReason, hold: text(episode.hold_reason), riskClear: typeof episode.exit_risk_clear === 'boolean' ? episode.exit_risk_clear : null,
+      inventoryEntries: hasEpisode ? [] : held ?? [],
       profitPrice: positive(episode.minimum_profit_price), floor: positive(trail.floor), peak: positive(trail.peak), plannedReduction, targetBase,
       planNext: text(controller.plan_next), executors: active, pendingSells: rows(info.pending_sell_requests)?.map(request => ({ ...request, request_state: request.termination_requested === true ? 'Cancellation requested' : positive(request.expires_at) !== null && now >= positive(request.expires_at)! * 1000 ? 'Expiry reached; awaiting owner' : request.termination_requested === false ? 'Pending owner request' : 'Request state unavailable' })) ?? null, pendingSellsTruncated: info.pending_sell_requests_truncated === true };
   });
   const count = nonnegative(runtime.active_orders_count);
   const orders = rows(runtime.active_orders), ordersStatus = object(runtime.active_orders_status);
   const completeOrderList = orders !== null && ordersStatus.complete === true;
-  return { observedAt: observedAt!, stale, ageSeconds: Math.max(0, Math.floor((now - timestamp) / 1000)), pairs,
+  return { observedAt: observedAt!, stale, ageSeconds: Math.max(0, Math.floor((now - timestamp) / 1000)), pairs, inventory,
     activeOrderCount: completeOrderList ? orders.length : count !== null && Number.isInteger(count) ? count : null,
     orderCountLabel: completeOrderList ? "Active orders" : "Active limit orders",
     activeExecutorCount: executors.length, orders, ordersStatus };
-}
-
-/**
- * A symbol-only row (the API projects a multi-pair owner's symbol list; the native report has no per-pair
- * inventory) takes units, mark, marked value, open-position PnL and state from the admitted reporting quant
- * summary for the same pair, which reads them from held positions and running executors. Owner-reported rows,
- * and every row while the summary is not admitted, are returned unchanged.
- */
-export function withQuantInventory<V extends { pairs: BotPairPosition[] }>(view: V, pairs: { pair: string; controllerId: string | null; state: string; units: string | null; mark: string | null; markedValue: string | null; unrealized: string | null }[], admitted: boolean): V {
-  if (!admitted) return view;
-  const number = (value: string | null) => { const parsed = value === null ? NaN : Number(value); return Number.isFinite(parsed) ? parsed : null; };
-  return { ...view, pairs: view.pairs.map(row => {
-    const source = row.projected ? pairs.find(item => item.pair === row.pair && (!item.controllerId || item.controllerId === row.controllerId)) : undefined;
-    if (!source || source.units === null) return row;
-    return { ...row, quantity: source.units, base: number(source.units), price: number(source.mark), markValue: number(source.markedValue),
-      bagPnl: number(source.unrealized), phase: source.state, inventorySource: 'Reporting projection · held positions + running executors',
-      reason: row.planNext ?? null };
-  }) };
 }
 
 /** Pair-state mix for a multi-asset bot. One pair never labels the rest. */
@@ -132,12 +160,12 @@ export function mixedOperationalLabel(pairs: { phase: string | null }[]): string
   return `MIXED: ${[...counts.entries()].map(([state, n]) => `${n} ${state.toLowerCase()}`).join(' / ')}`;
 }
 
-/** Display-only grouping; never infer a venue minimum or suppress active execution. */
+/**
+ * Display-only grouping by the server's `small` flag, the one rule every client uses. The server never flags a pair
+ * with running executors, pending sell requests or an active owner state, so grouping never hides active execution.
+ */
 export function partitionBotInventory(pairs: BotPairPosition[]) {
   const small: BotPairPosition[] = [], primary: BotPairPosition[] = [];
-  for (const row of pairs) {
-    const quiet = row.executors.length === 0 && !row.pendingSells?.length && !row.plannedReduction;
-    (quiet && row.markValue !== null && row.markValue >= 0 && row.markValue < 1 ? small : primary).push(row);
-  }
+  for (const row of pairs) (row.small ? small : primary).push(row);
   return { primary, small };
 }

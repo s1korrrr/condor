@@ -1,6 +1,7 @@
 import type { PanelState } from '@/features/quant-ops/panel-state';
 import { formatDecimal } from '@/features/quant-ops/format';
-import { openPairCount, type buildBotPositionView } from './position-view';
+import { projectBotInventory, type buildBotPositionView } from './position-view';
+import type { BotHoldings, HoldingsState } from '@/lib/fleet-holdings';
 import type { ExecutionStats, QuantBotSummary, QuantCycles } from './quant-roster';
 import { stackRestarts, type FleetHealth } from './fleet-health';
 import { paperNote, splitPaper } from './fleet-inventory';
@@ -12,11 +13,13 @@ import { paperNote, splitPaper } from './fleet-inventory';
  * printed as "Unavailable". When only some bots have a source the tile says how many it covers.
  */
 
-type View = Pick<ReturnType<typeof buildBotPositionView>, 'pairs' | 'orders' | 'ordersStatus' | 'activeOrderCount' | 'activeExecutorCount' | 'stale' | 'ageSeconds' | 'observedAt'>;
+type View = Pick<ReturnType<typeof buildBotPositionView>, 'orders' | 'ordersStatus' | 'activeOrderCount' | 'activeExecutorCount' | 'stale' | 'ageSeconds' | 'observedAt'>;
 
 export type FleetBotInput = {
   bot: string; name: string; status: string | null;
   view: View | null;
+  /** The bot's `fleet-holdings.v1` entry: the only source of held/registered pair counts. */
+  holdings?: BotHoldings | null;
   quant: Pick<QuantBotSummary, 'freshness' | 'observedAt' | 'pairs' | 'cycleCounts'> & Partial<Pick<QuantBotSummary, 'admitted'>> | null;
   cycles: QuantCycles | null;
   execution: ExecutionStats | null;
@@ -49,7 +52,8 @@ export function fillTotals(rows: readonly { fee: string | null; volume: string |
 export type BotStats = {
   bot: string; name: string; status: string | null;
   executors: number | null; executorsBasis: 'runtime' | 'lifecycle' | null;
-  held: number | null; registered: number;
+  /** Pairs holding units / registered pairs, from fleet holdings. Null held means unknown (unavailable or partial), never zero. */
+  held: number | null; registered: number | null; inventoryState: HoldingsState;
   orders: number | null;
   pendingEntries: number | null; unfilledEntries: number | null;
   fills: number | null; opened24h: number | null; closed24h: number | null;
@@ -92,12 +96,10 @@ export function projectBotStats(input: FleetBotInput, now: number): BotStats {
   const runtimeExecutors = view ? view.activeExecutorCount : null;
   const lifecycleExecutors = cycles?.counts.open ?? quant?.cycleCounts.open ?? null;
   const executors = runtimeExecutors ?? lifecycleExecutors;
-  // Runtime inventory first, then the quant summary, as the server fleet summary does. An unadmitted summary
-  // (fresh heartbeat, UNKNOWN state, no pairs) says nothing about inventory; it is not "0 of 0 pairs".
-  const viewHeld = view ? openPairCount(view.pairs) : null;
-  const quantInventory = quant !== null && (quant.pairs.length > 0 || quant.admitted === true);
-  const held = viewHeld ?? (quantInventory ? quant!.pairs.filter(pair => (finite(pair.units) ?? 0) > 0).length : null);
-  const registered = viewHeld !== null ? view!.pairs.length : quantInventory ? quant!.pairs.length : 0;
+  // Held counts are the server's: `held_pair_count` is null unless the inventory is complete, and an unavailable
+  // bot is not "0 of 0 pairs". The same projection feeds the fleet summary cards and the phone.
+  const inventory = projectBotInventory(input.holdings ?? null, now);
+  const held = inventory.heldPairCount, registered = inventory.registeredPairCount;
   const orders = view?.orders != null && view.ordersStatus.complete === true ? view.orders.length
     : view?.activeOrderCount ?? (quant && quant.pairs.length > 0 && quant.pairs.every(pair => pair.workingOrders !== null) ? quant.pairs.reduce((total, pair) => total + pair.workingOrders!, 0) : null);
   const rows = cycles?.cycles ?? [];
@@ -123,7 +125,7 @@ export function projectBotStats(input: FleetBotInput, now: number): BotStats {
   return {
     bot: input.bot, name: input.name, status: input.status,
     executors, executorsBasis: runtimeExecutors != null ? 'runtime' : lifecycleExecutors != null ? 'lifecycle' : null,
-    held, registered, orders,
+    held, registered, inventoryState: inventory.state, orders,
     pendingEntries: cycles ? cycles.counts.entry_pending ?? 0 : null,
     unfilledEntries: cycles ? cycles.counts.entry_unfilled ?? 0 : null,
     fills: stats?.fillCount ?? fillRows ?? ledger?.count ?? null, opened24h, closed24h,
@@ -209,10 +211,12 @@ export function projectFleetTiles(allInputs: readonly FleetBotInput[], now: numb
   const held = sum(bots.map(stats => stats.held));
   if (held !== null) {
     const readBots = bots.filter(stats => stats.held != null);
+    const staleBots = readBots.filter(stats => stats.inventoryState !== 'current');
     tiles.push({
-      id: 'B03', title: 'Open positions', value: `${held} / ${readBots.reduce((count, stats) => count + stats.registered, 0)}`,
-      basis: 'pairs holding units / registered pairs',
-      perBot: per(stats => stats.held == null ? null : `${stats.held}/${stats.registered}`), state: coverage(readBots.length, total, 'Inventory'),
+      id: 'B03', title: 'Open positions', value: `${held} / ${readBots.reduce((count, stats) => count + (stats.registered ?? 0), 0)}`,
+      basis: `pairs holding units / registered pairs · fleet holdings${staleBots.length ? ` · ${staleBots.length} last known` : ''}`,
+      perBot: per(stats => stats.held == null ? null : `${stats.held}/${stats.registered}${stats.inventoryState === 'current' ? '' : ' last known'}`),
+      state: staleBots.length ? { kind: 'stale', reason: `Holdings of ${staleBots.map(stats => stats.name).join(', ')} are not current; their counts are last known.` } : coverage(readBots.length, total, 'Inventory'),
     });
   }
 

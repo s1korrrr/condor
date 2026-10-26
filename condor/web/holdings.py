@@ -28,7 +28,8 @@ CLOCK_SKEW_MS = 5_000
 SMALL_VALUE_QUOTE = Decimal(1)
 PAIR = re.compile(r"[A-Z0-9]+-[A-Z0-9]+")
 ASSET = re.compile(r"[A-Z0-9]+")
-# Owner pair states with work in progress: never grouped as a small holding.
+# Owner pair states with work in progress: never grouped as a small holding. Episode phases the
+# owner does not map (DISTRIBUTE, EXIT) arrive as UNKNOWN and are excluded too.
 ACTIVE_STATES = frozenset({"BUILDING", "TRAILING", "EXITING", "UNKNOWN"})
 
 CURRENT, STALE, UNAVAILABLE = "current", "stale", "unavailable"
@@ -87,6 +88,15 @@ def _nonneg(value: Any) -> Optional[Decimal]:
 def _positive(value: Any) -> Optional[Decimal]:
     number = _dec(value)
     return number if number is not None and number > 0 else None
+
+
+def _count(value: Any) -> Optional[int]:
+    """An owner count; ``None`` (unknown) when absent or malformed, never zero by default."""
+    return (
+        value
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0
+        else None
+    )
 
 
 def _out(value: Optional[Decimal]) -> Optional[str]:
@@ -274,14 +284,8 @@ def _pair(row: dict, quote: str) -> Optional[tuple[dict, bool]]:
         row.get(key) is not None and value is None for key, value in parsed.items()
     ) or (row.get("mark_availability") == "available" and mark is None)
     state = row.get("state") if isinstance(row.get("state"), str) else "UNKNOWN"
-    executors = row.get("running_executors")
-    executors = (
-        executors
-        if isinstance(executors, int)
-        and not isinstance(executors, bool)
-        and executors >= 0
-        else None
-    )
+    executors = _count(row.get("running_executors"))
+    pending = _count(row.get("pending_sell_requests"))
     small = (
         units is not None
         and units > 0
@@ -289,6 +293,7 @@ def _pair(row: dict, quote: str) -> Optional[tuple[dict, bool]]:
         and marked < SMALL_VALUE_QUOTE
         and quote_asset == quote
         and executors == 0
+        and pending == 0
         and state not in ACTIVE_STATES
     )
     return {
@@ -307,6 +312,7 @@ def _pair(row: dict, quote: str) -> Optional[tuple[dict, bool]]:
         "realized_pnl_quote": _out(_dec(row.get("realized"))),
         "fees_quote": _out(_nonneg(row.get("fees"))),
         "running_executor_count": executors,
+        "pending_sell_count": pending,
         "small": small,
     }, invalid
 

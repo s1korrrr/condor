@@ -45,6 +45,7 @@ def pair(name, controller, **fields):
         "realized": None,
         "fees": None,
         "running_executors": 0,
+        "pending_sell_requests": 0,
     }
     row.update(fields)
     return row
@@ -228,6 +229,24 @@ def test_a_running_executor_is_never_grouped_as_a_small_holding():
         ],
     )
     assert by_pair(project(trailing, "ok_rsi"))["XRP-USDC"]["small"] is False
+    pending_sell = envelope(
+        "ok_rsi",
+        [
+            pair(
+                "XRP-USDC",
+                "x",
+                units="0.1",
+                mark="2.5",
+                mark_availability="available",
+                marked_value="0.25",
+                pending_sell_requests=1,
+            )
+        ],
+    )
+    assert by_pair(project(pending_sell, "ok_rsi"))["XRP-USDC"]["small"] is False
+    assert (
+        by_pair(project(pending_sell, "ok_rsi"))["XRP-USDC"]["pending_sell_count"] == 1
+    )
     older_owner = copy.deepcopy(tiny)
     older_owner["data"]["pairs"][0].pop("running_executors")
     older_owner["data"]["pairs"][0]["marked_value"] = "0.25"

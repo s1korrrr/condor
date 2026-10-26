@@ -4,17 +4,19 @@ import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {frontendModules} from './helpers/frontend-module.mjs';
 const {load}=frontendModules({'react-router-dom':{Link:({to,children,...rest})=>React.createElement('a',{href:to,...rest},children)}});
-test('small holdings are grouped without hiding active execution or unknown value',()=>{
+test('small holdings are grouped by the server flag only (the server never flags active work; see test_fleet_holdings.py)',()=>{
  const {partitionBotInventory}=load('features/bots/position-view.ts');
- const row={markValue:0.001,executors:[],pendingSells:[],plannedReduction:null};
- const result=partitionBotInventory([row,{...row,markValue:null},{...row,executors:[{}]},{...row,pendingSells:[{}]}]);
- assert.equal(result.small.length,1);assert.equal(result.primary.length,3);
+ const row={small:true,markValue:0.001,executors:[],pendingSells:[],plannedReduction:null};
+ const result=partitionBotInventory([row,{...row,small:false},{...row,small:false,markValue:null},{...row,small:false,markValue:0.5}]);
+ assert.deepEqual(result.small,[row]);assert.equal(result.primary.length,3,'a sub-1 value without the server flag is never grouped by the browser');
 });
-test('command desk groups tiny inventory, retains exact owner units and has one accounting notice',()=>{
+test('command desk groups tiny inventory, retains exact owner units and has one accounting notice',async()=>{
+ const {botHoldingsAt,holdingsEntry}=await import('./helpers/holdings.mjs');
  const {CommandDeskObservation}=load('components/bots/NativeBotCommandDesk.tsx');const now=Date.now();
  const payload={monitoring:{bot_name:'b',stale_threshold_seconds:30},runtime_status:{bot_name:'b',updated_at:new Date(now).toISOString(),active_orders_count:0,controllers:[{pair:'ETH-USDC',price_quote:2000,state:'WAIT'}],positions_held:[{pair:'ETH-USDC',amount_base:'0.000000000012345678',breakeven_price:1000}],active_executors:[]}};
- const html=renderToStaticMarkup(React.createElement(CommandDeskObservation,{payload,bot:'b',now,section:'positions',selected:null,onSelect:()=>{}}));
- assert.match(html,/Managed bot inventory/);assert.match(html,/Small &amp; zero inventory/);assert.match(html,/0.000000000012345678 ETH/);assert.doesNotMatch(html,/Bag holding/);
+ const holdings=botHoldingsAt(load('lib/fleet-holdings.ts'),holdingsEntry('b',[{pair:'ETH-USDC',state:'WAIT',units:'0.000000000012345678',mark_price:'2000',marked_value_quote:'0.000000024691356',small:true}],{held:1,value:'0.000000024691356'}),now);
+ const html=renderToStaticMarkup(React.createElement(CommandDeskObservation,{payload,bot:'b',now,section:'positions',selected:null,onSelect:()=>{},holdings}));
+ assert.match(html,/Fleet holdings · reporting owner/);assert.match(html,/Small holdings \(1\)/);assert.match(html,/0.000000000012345678 ETH/);assert.doesNotMatch(html,/Bag holding/);
  assert.match(html,/ETH-USDC position inspector/);
  assert.equal((html.match(/Source &amp; accounting details/g)||[]).length,1);
 });
@@ -70,5 +72,6 @@ test('deployment receipt errors hide previous versions and absence has one expla
 test('invalid episode quantities never expose a retained-lot quantity as the episode total',()=>{
  const {buildBotPositionView}=load('features/bots/position-view.ts');const now=Date.now();
  const payload={monitoring:{bot_name:'b',stale_threshold_seconds:30},runtime_status:{bot_name:'b',updated_at:new Date(now).toISOString(),controllers:[{pair:'ETH-USDC',custom_info:{episode:{enabled:true,base:'bad'}}}],positions_held:[{pair:'ETH-USDC',amount_base:'3'}],active_executors:[]}};
+ // Without fleet holdings neither the episode bag nor the retained lot is a quantity: the bootstrap is never summed.
  const row=buildBotPositionView(payload,'b',now).pairs[0];assert.equal(row.base,null);assert.equal(row.quantity,null);
 });

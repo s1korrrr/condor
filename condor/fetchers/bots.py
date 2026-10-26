@@ -2,6 +2,7 @@
 
 import logging
 import math
+import time
 from typing import Any, Optional
 
 from condor.fleet_identity import is_paper
@@ -109,6 +110,25 @@ def _native_observation_times(bot: dict) -> dict:
     }
 
 
+def native_performance_is_current(bot: dict, *, now: float | None = None) -> bool:
+    """Apply the source identity and observation freshness contract for native rows."""
+    if not (
+        isinstance(bot, dict)
+        and bot.get("source") == "native_mqtt"
+        and bot.get("performance_current") is True
+        and bot.get("identity_verified") is True
+        and str(bot.get("status") or "").lower() == "running"
+    ):
+        return False
+    times = _native_observation_times(bot)
+    received_at = times["performance_received_at"]
+    stale_after = times["performance_stale_after_seconds"]
+    if received_at is None or stale_after is None:
+        return False
+    age = (time.time() if now is None else now) - received_at
+    return 0 <= age < stale_after
+
+
 def build_bots_page(
     raw_status: Any,
     *,
@@ -153,10 +173,9 @@ def build_bots_page(
             and (not isinstance(performance, dict) or not performance)
         ):
             metrics_available = False
-        if (
-            bot_data.get("source") == "native_mqtt"
-            and bot_data.get("performance_current") is not True
-        ):
+        if bot_data.get(
+            "source"
+        ) == "native_mqtt" and not native_performance_is_current(bot_data):
             # Shared/retained/stale MQTT observations cannot establish current
             # controller identity. Never revive them through DB enrichment.
             performance = {}

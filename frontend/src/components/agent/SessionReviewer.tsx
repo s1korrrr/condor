@@ -254,7 +254,8 @@ export function SessionReviewer({
 
   // PnL for current session
   const pnl = sessionPerf?.total_pnl ?? 0;
-  const pnlColor = pnl >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]";
+  const bookUnavailable = sessionPerf?.current_book_status === "unavailable" || sessionPerf?.current_book_status === "partial";
+  const pnlColor = bookUnavailable ? "text-[var(--color-text-muted)]" : pnl >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]";
 
   // Visible sub-tabs depend on kind
   const visibleSubTabs = isExperiment
@@ -392,7 +393,7 @@ export function SessionReviewer({
             )}
             {!isExperiment && (
               <span className={`text-sm font-mono font-semibold ${pnlColor}`}>
-                {formatCurrencyPnl(pnl)}
+                {bookUnavailable || sessionPerf?.total_pnl == null ? "—" : formatCurrencyPnl(pnl)}
               </span>
             )}
           </div>

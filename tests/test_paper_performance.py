@@ -1,5 +1,6 @@
 """Paper bots: simulated PnL recorded from reporting, kept apart from every live number."""
 
+import time
 from datetime import datetime, timezone
 
 import pytest
@@ -196,10 +197,14 @@ def test_paper_wallet_reads_are_marked_simulated(tmp_path):
 
 def test_bots_page_totals_and_completeness_count_live_bots_only():
     def native(pnl, *, current=True):
+        # Live native status shape (2026-10-25): verified identity and a fresh observation time.
         return {
             "status": "running",
             "source": "native_mqtt",
             "performance_current": current,
+            "identity_verified": True,
+            "received_at": time.time(),
+            "stale_after_seconds": 30,
             "performance": {
                 "c": {
                     "status": "running",

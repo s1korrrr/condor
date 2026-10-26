@@ -217,13 +217,13 @@ export interface PositionHeld {
   trading_pair: string;
   position_side?: string;
   side?: string;
-  net_amount_base?: number;
-  amount?: number;
-  buy_breakeven_price?: number;
-  entry_price?: number;
-  current_price?: number;
-  unrealized_pnl_quote?: number;
-  unrealized_pnl?: number;
+  net_amount_base?: number | null;
+  amount?: number | null;
+  buy_breakeven_price?: number | null;
+  entry_price?: number | null;
+  current_price?: number | null;
+  unrealized_pnl_quote?: number | null;
+  unrealized_pnl?: number | null;
   leverage?: number;
   controller_id?: string;
 }
@@ -237,13 +237,15 @@ export interface ConsolidatedPosition {
   connector_name: string;
   trading_pair: string;
   position_side: string;
-  amount: number;
-  entry_price: number;
-  notional_value: number;
-  current_price: number;
-  unrealized_pnl: number;
-  realized_pnl: number;
-  cum_fees: number;
+  amount: number | null;
+  entry_price: number | null;
+  notional_value: number | null;
+  /** Entry notional is independent of current marked position value. */
+  cost_basis_value?: number | null;
+  current_price: number | null;
+  unrealized_pnl: number | null;
+  realized_pnl: number | null;
+  cum_fees: number | null;
   executor_count: number;
   leverage: number;
   controller_id: string;
@@ -252,8 +254,10 @@ export interface ConsolidatedPosition {
 }
 
 export interface ConsolidatedPositionsResponse {
-  executor_positions: ConsolidatedPosition[];
-  bot_positions: ConsolidatedPosition[];
+  executor_positions: ConsolidatedPosition[] | null;
+  bot_positions: ConsolidatedPosition[] | null;
+  executor_positions_status: "available" | "partial" | "unavailable";
+  bot_positions_status: "available" | "partial" | "unavailable";
 }
 
 export interface CandleData {
@@ -358,13 +362,13 @@ export interface RunningInstance {
   status: string;
   agent_key: string;
   tick_count: number;
-  daily_pnl: number;
+  daily_pnl: number | null;
   realized_pnl: number;
-  unrealized_pnl: number;
-  total_pnl: number;
+  unrealized_pnl: number | null;
+  total_pnl: number | null;
   volume: number;
   fees: number;
-  open_count: number;
+  open_count: number | null;
   closed_count: number;
   /** null = no closed executors to derive it from (bot-mode sessions), not 0%. */
   win_rate: number | null;
@@ -374,6 +378,7 @@ export interface RunningInstance {
   frequency_sec: number;
   execution_mode: "dry_run" | "run_once" | "loop";
   risk_limits: Record<string, unknown>;
+  current_book_status?: "available" | "unavailable" | "partial";
 }
 
 export interface StrategySummary {
@@ -385,10 +390,11 @@ export interface StrategySummary {
   session_count: number;
   experiment_count: number;
   tick_count: number;
-  daily_pnl: number;
-  total_pnl: number;
+  daily_pnl: number | null;
+  total_pnl: number | null;
   total_volume: number;
-  open_positions: number;
+  open_positions: number | null;
+  current_book_status?: "available" | "unavailable" | "partial";
   instances: RunningInstance[];
 }
 
@@ -417,10 +423,11 @@ export interface AgentSummary {
   session_count: number;
   experiment_count: number;
   tick_count: number;
-  daily_pnl: number;
-  total_pnl: number;
+  daily_pnl: number | null;
+  total_pnl: number | null;
   total_volume: number;
-  open_positions: number;
+  open_positions: number | null;
+  current_book_status?: "available" | "unavailable" | "partial";
   instances: RunningInstance[];
 }
 
@@ -451,16 +458,16 @@ export interface AgentPerformance {
   kind: "session" | "experiment";
   status: string;
   realized_pnl: number;
-  unrealized_pnl: number;
-  total_pnl: number;
+  unrealized_pnl: number | null;
+  total_pnl: number | null;
   volume: number;
   fees: number;
   trade_count: number;
   /** null = no closed executors to derive it from (bot-mode sessions), not 0%. */
   win_rate: number | null;
-  open_count: number;
+  open_count: number | null;
   closed_count: number;
-  executors: AgentExecutorRow[];
+  executors: AgentExecutorRow[] | null;
   // ── Bot-mode attribution ──
   // A session trading through bots has no rows in the agent_id-keyed executor
   // table: its executors live inside the bot instance's own database, and the
@@ -474,6 +481,8 @@ export interface AgentPerformance {
   /** Owned bases with no live and no archived instance: their PnL is unknown,
    *  not zero, so the totals are a floor. */
   unresolved_bases?: string[];
+  /** Whether active runtime inventory was read and matched to current instances. */
+  current_book_status?: "available" | "unavailable" | "partial";
   controllers?: AgentControllerRow[];
   /** Raw `CloseType.X -> n` across the operated bots. `trade_count` counts only
    *  round-trip closes and reads a directional controller's risk stop as churn,
@@ -496,10 +505,10 @@ export interface AgentControllerRow {
    *  instances — never render this as live truth. Derive liveness from whether
    *  `bot_name` appears in `AgentPerformance.bot_names`. */
   status: string;
-  realized_pnl_quote: number;
-  unrealized_pnl_quote: number;
-  volume_traded: number;
-  cum_fees_quote: number;
+  realized_pnl_quote: number | null;
+  unrealized_pnl_quote: number | null;
+  volume_traded: number | null;
+  cum_fees_quote: number | null;
   closed_trades: number;
   close_type_counts: Record<string, number>;
 }
@@ -515,7 +524,7 @@ export interface SessionCanvas {
 export interface AgentPerformanceResponse {
   slug: string;
   sessions: AgentPerformance[];
-  totals: Record<string, number>;
+  totals: Record<string, number | string | null>;
 }
 
 export interface SessionInfo {
@@ -1467,7 +1476,7 @@ export const api = {
 
   getStrategySessionExecutors: (slug: string, sslug: string, sessionNum: number) =>
     apiFetch<{
-      executors: AgentExecutorRow[];
+      executors: AgentExecutorRow[] | null;
       performance: AgentPerformance;
       // Realized-PnL curve sliced from the session's bot-ownership window. Derived
       // from the bots' own history, not from the journal's per-tick snapshots,

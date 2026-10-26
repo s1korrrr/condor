@@ -1,6 +1,7 @@
 """The bot page reads current owner status without waiting for history writes."""
 
 import asyncio
+import time
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
@@ -15,6 +16,8 @@ def _native_status(now: float):
             "source": "native_mqtt",
             "status": "running",
             "performance_current": True,
+            # Live native status publishes the verified source identity (2026-10-25).
+            "identity_verified": True,
             "received_at": now,
             "stale_after_seconds": 30,
             "heartbeat": {"received_at": now, "source_timestamp": now * 1_000_000},
@@ -83,7 +86,9 @@ async def test_native_page_uses_current_owner_performance_while_sds_is_blocked(
     from condor import server_data_service
     from condor.web.routes import bots
 
-    source = _native_status(1_000.0)
+    # A current observation by wall clock: native performance expires after stale_after_seconds.
+    now = float(int(time.time()))
+    source = _native_status(now)
     client = _client(source)
     get_client = _allow(monkeypatch, client)
 
@@ -113,7 +118,7 @@ async def test_native_page_uses_current_owner_performance_while_sds_is_blocked(
         "meridian_v3": True,
         "meridian_v4_paper": None,
     }
-    assert all(row.performance_received_at == 1_000 for row in page.bots[:3])
+    assert all(row.performance_received_at == now for row in page.bots[:3])
 
 
 @pytest.mark.asyncio

@@ -856,13 +856,13 @@ export function TradeChart({
     if (!positions?.length) return;
 
     for (const pos of positions) {
-      if (pos.entry_price <= 0) continue;
+      if (pos.entry_price == null || pos.amount == null || pos.entry_price <= 0) continue;
       const isLong = pos.position_side?.toUpperCase() === "LONG";
-      const pnl = pos.unrealized_pnl ?? 0;
+      const pnl = pos.unrealized_pnl;
       const _cvtPnl2 = convertPnlRef.current;
-      const pnlStr = _cvtPnl2 ? _cvtPnl2(pnl) : (Math.abs(pnl) >= 1000 ? `${pnl >= 0 ? "+" : ""}$${(pnl / 1000).toFixed(1)}K` : `${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`);
+      const pnlStr = pnl == null ? "PnL —" : _cvtPnl2 ? _cvtPnl2(pnl) : (Math.abs(pnl) >= 1000 ? `${pnl >= 0 ? "+" : ""}$${(pnl / 1000).toFixed(1)}K` : `${pnl >= 0 ? "+" : ""}$${pnl.toFixed(2)}`);
       const amt = Math.abs(pos.amount);
-      const color = pnlHexColor(pnl);
+      const color = pnl == null ? "#8b8b8b" : pnlHexColor(pnl);
       const label = `${isLong ? "LONG" : "SHORT"} ${amt.toFixed(4)} · ${pnlStr}`;
       const pl = series.createPriceLine({
         price: pos.entry_price,

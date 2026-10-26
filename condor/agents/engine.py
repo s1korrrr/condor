@@ -454,8 +454,26 @@ class TickEngine:
             ),
         )
 
-        # Extract structured data from providers for tracking
+        # An incomplete ownership scan can hide an additional owned runtime
+        # from the provider's scope. A known subset must not prove a flat book.
         executors_result = skill_results.get("executors")
+        if self.ledger is not None and not self._adoption_done and executors_result:
+            executors_result.data = {
+                **executors_result.data,
+                "current_book_status": "unavailable",
+                "executors": None,
+                "all_executors": None,
+                "open_count": None,
+                "total_exposure": None,
+                "total_pnl": None,
+                "unrealized_pnl": None,
+            }
+            executors_result.summary = (
+                "Current inventory unavailable: runtime ownership discovery is incomplete. "
+                "New exposure is blocked; use owner reads and stop/cancel tools to reconcile."
+            )
+
+        # Extract structured data from providers for tracking
         if executors_result:
             self._last_skill_data = executors_result.data
         positions_result = skill_results.get("positions")
@@ -476,12 +494,7 @@ class TickEngine:
 
         # 4. Get risk state (experiments pass None — returns clean state)
         risk_state = self.risk.get_state(self.journal or _NullTracker())
-        live_executors = self._last_skill_data.get("executors", [])
-        live_open_count = len(live_executors) if isinstance(live_executors, list) else 0
-        risk_state.executor_count = live_open_count
-        risk_state.total_exposure = float(
-            self._last_skill_data.get("total_exposure", 0.0) or 0.0
-        )
+        risk_state.apply_current_book(self._last_skill_data)
 
         # Hard kill-switch: escalate to an emergency winddown before the soft
         # pause below. Experiments never trade for real, so they never shut down.
@@ -537,7 +550,7 @@ class TickEngine:
         # we already hold, so deciding to nudge costs nothing.
         canvas_text = ""
         canvas_nudge = ""
-        if self._nudge is not None:
+        if self._nudge is not None and risk_state.current_book_status == "available":
             from . import canvas as canvas_mod
 
             try:
@@ -545,7 +558,7 @@ class TickEngine:
                 canvas_nudge = self._nudge.next(
                     tick=next_tick,
                     last_revised_tick=canvas_mod.last_revised_tick(self.session_dir),
-                    open_count=live_open_count,
+                    open_count=risk_state.executor_count,
                     total_pnl=float(self._last_skill_data.get("total_pnl", 0.0) or 0.0),
                     had_error=bool(self._last_error),
                 )
@@ -643,16 +656,19 @@ class TickEngine:
             self._journal_ownership_violations(tick_num)
             self._journal_mode_mismatch(tick_num)
 
-            skill_pnl = self._last_skill_data.get("total_pnl", 0.0)
-            skill_volume = self._last_skill_data.get("total_volume", 0.0)
-            skill_executors = len(self._last_skill_data.get("executors", []))
-            skill_exposure = self._last_skill_data.get("total_exposure", 0.0)
-            self.journal.record_snapshot(
-                total_pnl=skill_pnl,
-                total_volume=skill_volume,
-                open_count=skill_executors,
-                position_size=skill_exposure,
-            )
+            if risk_state.current_book_status == "available":
+                self.journal.record_snapshot(
+                    total_pnl=self._last_skill_data.get("total_pnl", 0.0),
+                    total_volume=self._last_skill_data.get("total_volume", 0.0),
+                    open_count=risk_state.executor_count,
+                    position_size=risk_state.total_exposure,
+                )
+            else:
+                self.journal.append_action(
+                    tick_num,
+                    "current_inventory_unavailable",
+                    "Current inventory is unavailable; financial snapshot not recorded",
+                )
 
             self.journal.save_full_snapshot(
                 tick=tick_num,
@@ -673,8 +689,12 @@ class TickEngine:
             self.journal.write_summary(
                 tick=tick_num,
                 status="Running",
-                pnl=skill_pnl,
-                open_count=skill_executors,
+                pnl=(
+                    self._last_skill_data.get("total_pnl")
+                    if risk_state.current_book_status == "available"
+                    else None
+                ),
+                open_count=risk_state.executor_count,
                 last_action=action_brief,
             )
 
@@ -720,10 +740,33 @@ class TickEngine:
         """
         if self._adoption_done or self.ledger is None:
             return
-        from condor.fetchers.bot_performance import fetch_all_bot_performance
+        from condor.fetchers.bots import native_performance_is_current
 
         try:
-            all_perf = await fetch_all_bot_performance(client)
+            result = await client.bot_orchestration.get_active_bots_status()
+            if isinstance(result, dict):
+                if result.get("status") == "error" or "data" not in result:
+                    raise ValueError("active runtime registry unavailable")
+                data = result["data"]
+            else:
+                data = result
+            if isinstance(data, dict):
+                bots = []
+                for name, row in data.items():
+                    if not isinstance(row, dict) or row.get("bot_name", name) != name:
+                        raise ValueError("invalid active runtime identity")
+                    bots.append(dict(row, bot_name=name))
+            elif isinstance(data, list):
+                bots = data
+            else:
+                raise ValueError("invalid active runtime registry")
+            names = [
+                row.get("bot_name") if isinstance(row, dict) else None for row in bots
+            ]
+            if any(not isinstance(name, str) or not name for name in names):
+                raise ValueError("missing active runtime identity")
+            if len(set(names)) != len(names):
+                raise ValueError("ambiguous active runtime identity")
         except Exception as e:
             log.warning("TickEngine %s: bot adoption deferred (%s)", self.agent_id, e)
             return
@@ -735,11 +778,32 @@ class TickEngine:
             inherited = prior_session_bases(self.session_dir.parent)
 
         now = time.time()
-        for instance_name in all_perf:
+        pending = False
+        for bot in bots:
+            instance_name = bot["bot_name"]
             base = strip_deploy_suffix(instance_name)
-            if self.ledger.owns(instance_name) or base in inherited:
-                self.ledger.adopt(instance_name, now)
-        self._adoption_done = True
+            if not (self.ledger.owns(instance_name) or base in inherited):
+                continue
+            status = str(bot.get("status") or "").lower()
+            if status in {
+                "stopped",
+                "exited",
+                "terminated",
+                "completed",
+                "failed",
+                "reporting_only",
+            }:
+                continue
+            if status != "running" or (
+                bot.get("source") == "native_mqtt"
+                and not native_performance_is_current(bot, now=now)
+            ):
+                pending = True
+                continue
+            # Runtime membership is sufficient; performance history can be
+            # absent for a newly started instance and never proves membership.
+            self.ledger.adopt(instance_name, now)
+        self._adoption_done = not pending
         if self.ledger.bases():
             log.info(
                 "TickEngine %s adopted bots: %s",
@@ -991,7 +1055,13 @@ class TickEngine:
             "unrealized_pnl": sd.get("unrealized_pnl", 0.0),
             "total_volume": sd.get("total_volume", summary.get("total_volume", 0)),
             "total_exposure": sd.get("total_exposure", summary["total_exposure"]),
-            "open_executors": len(sd.get("executors", [])) or summary["open_executors"],
+            "open_executors": (
+                len(sd["executors"])
+                if isinstance(sd.get("executors"), list)
+                and sd.get("current_book_status", "available") == "available"
+                else None
+            ),
+            "current_book_status": sd.get("current_book_status", "unavailable"),
             # What the PnL above is made of, and what it is missing. A session
             # operating bots earns through them, so naming them is the difference
             # between a number and an auditable one.

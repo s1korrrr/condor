@@ -20,9 +20,10 @@ interface EntitySummary {
   status: string;
   instances?: RunningInstance[];
   session_count: number;
-  daily_pnl?: number;
-  total_pnl?: number;
-  open_positions?: number;
+  daily_pnl?: number | null;
+  total_pnl?: number | null;
+  open_positions?: number | null;
+  current_book_status?: "available" | "unavailable" | "partial";
 }
 
 export function EntityCard({
@@ -39,6 +40,7 @@ export function EntityCard({
   onClick: () => void;
   onDelete: () => void;
 }) {
+  const bookUnavailable = entity.current_book_status === "unavailable" || entity.current_book_status === "partial";
   const totalPnl = entity.total_pnl ?? 0;
   const totalPnlColor = totalPnl >= 0 ? "text-[var(--color-green)]" : "text-[var(--color-red)]";
   const dayPnl = entity.daily_pnl ?? 0;
@@ -96,18 +98,18 @@ export function EntityCard({
           <div>
             <span className="block text-[10px] uppercase tracking-wider text-[var(--color-text-muted)]">Total PnL</span>
             <span className={`text-sm font-mono font-semibold ${totalPnlColor}`}>
-              {formatCurrencyPnl(totalPnl)}
+              {bookUnavailable || entity.total_pnl == null ? "—" : formatCurrencyPnl(totalPnl)}
             </span>
           </div>
           <div>
             <span className="block text-[10px] uppercase tracking-wider text-[var(--color-text-muted)]">Last Session</span>
             <span className={`text-sm font-mono ${dayPnlColor}`}>
-              {formatCurrencyPnl(dayPnl)}
+              {bookUnavailable || entity.daily_pnl == null ? "—" : formatCurrencyPnl(dayPnl)}
             </span>
           </div>
           <div>
             <span className="block text-[10px] uppercase tracking-wider text-[var(--color-text-muted)]">Open</span>
-            <span className="text-sm font-mono text-[var(--color-text)]">{entity.open_positions ?? 0}</span>
+            <span className="text-sm font-mono text-[var(--color-text)]">{bookUnavailable || entity.open_positions == null ? "—" : entity.open_positions}</span>
           </div>
           <div>
             <span className="block text-[10px] uppercase tracking-wider text-[var(--color-text-muted)]">Sessions</span>

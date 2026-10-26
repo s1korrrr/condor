@@ -1,16 +1,34 @@
+import time
+
 import pytest
 
 from condor.fetchers.bots import build_bots_page
 from condor.web.models import BotsPageResponse
 
 
-def test_native_source_deadlines_preserve_performance_and_lifecycle_provenance():
+def _current_native(**overrides):
+    return {
+        "source": "native_mqtt",
+        "status": "running",
+        "performance_current": True,
+        "identity_verified": True,
+        "received_at": time.time(),
+        "stale_after_seconds": 30.0,
+        **overrides,
+    }
+
+
+def test_native_source_deadlines_preserve_performance_and_lifecycle_provenance(
+    monkeypatch,
+):
+    monkeypatch.setattr("condor.fetchers.bots.time.time", lambda: 1010.0)
     raw = {
         "source": "native_mqtt",
         "status": "running",
         "performance_current": True,
         "received_at": 1000.0,
         "stale_after_seconds": 30.0,
+        "identity_verified": True,
         "performance": {
             "ctrl": {
                 "performance": dict(
@@ -65,6 +83,9 @@ def test_noncurrent_native_data_never_becomes_current_metrics(status):
                     "source": "native_mqtt",
                     "status": status,
                     "performance_current": False,
+                    "identity_verified": True,
+                    "received_at": time.time(),
+                    "stale_after_seconds": 30.0,
                     "performance": {
                         "wrong-controller": {"performance": {"realized_pnl_quote": 123}}
                     },
@@ -79,6 +100,40 @@ def test_noncurrent_native_data_never_becomes_current_metrics(status):
     serialized = BotsPageResponse(**page).model_dump()
     assert serialized["metrics_available"] is False
     assert serialized["total_pnl"] is None
+
+
+@pytest.mark.parametrize(
+    "qualification",
+    [
+        {"identity_verified": False},
+        {"performance_current": False},
+    ],
+)
+def test_native_qualification_fields_must_agree_with_identity_and_currentness(
+    qualification,
+):
+    page = build_bots_page(
+        {
+            "data": {
+                "ok_rsi": {
+                    **_current_native(**qualification),
+                    "performance": {
+                        "ctrl": {
+                            "performance": {
+                                "realized_pnl_quote": 10,
+                                "unrealized_pnl_quote": 1,
+                                "global_pnl_pct": 1,
+                                "volume_traded": 100,
+                            }
+                        }
+                    },
+                }
+            }
+        }
+    )
+    assert page["controllers"] == []
+    assert page["metrics_available"] is False
+    assert page["total_pnl"] is None
 
 
 @pytest.mark.parametrize(
@@ -108,9 +163,7 @@ def test_current_native_missing_economics_never_falls_back_to_db_or_zero(
         {
             "data": {
                 "ok_rsi": {
-                    "source": "native_mqtt",
-                    "status": "running",
-                    "performance_current": True,
+                    **_current_native(),
                     "performance": {"ctrl": {"performance": perf}},
                 }
             }
@@ -143,9 +196,7 @@ def test_current_native_genuine_zero_remains_valid_without_db_enrichment():
         {
             "data": {
                 "ok_rsi": {
-                    "source": "native_mqtt",
-                    "status": "running",
-                    "performance_current": True,
+                    **_current_native(),
                     "performance": {"ctrl": {"performance": perf}},
                 }
             }
@@ -166,9 +217,7 @@ def test_current_native_empty_performance_is_unavailable():
         {
             "data": {
                 "ok_rsi": {
-                    "source": "native_mqtt",
-                    "status": "running",
-                    "performance_current": True,
+                    **_current_native(),
                     "performance": {},
                 }
             }
@@ -184,9 +233,7 @@ def test_malformed_current_native_performance_is_unavailable(performance):
         {
             "data": {
                 "ok_rsi": {
-                    "source": "native_mqtt",
-                    "status": "running",
-                    "performance_current": True,
+                    **_current_native(),
                     "performance": performance,
                 }
             }

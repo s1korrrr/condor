@@ -55,7 +55,7 @@ export function HeatStrip({ cells, ariaLabel, renderTooltip, onSelect, height = 
   }, [shown]);
   useLayoutEffect(() => { reposition(); }, [reposition, renderTooltip, count]);
   useEffect(() => {
-    if (shown === null) { setPlace(null); return; }
+    if (shown === null) return;
     window.addEventListener('scroll', reposition, true); window.addEventListener('resize', reposition);
     // A touch has no pointerleave: a tap elsewhere dismisses the tooltip.
     const outside = (event: globalThis.PointerEvent) => { if (!stripRef.current?.contains(event.target as Node)) setActive(null); };

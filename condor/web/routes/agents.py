@@ -88,13 +88,13 @@ class RunningInstance(BaseModel):
     status: str
     agent_key: str = ""
     tick_count: int = 0
-    daily_pnl: float = 0.0
+    daily_pnl: float | None = 0.0
     realized_pnl: float = 0.0
-    unrealized_pnl: float = 0.0
-    total_pnl: float = 0.0
+    unrealized_pnl: float | None = 0.0
+    total_pnl: float | None = 0.0
     volume: float = 0.0
     fees: float = 0.0
-    open_count: int = 0
+    open_count: int | None = 0
     closed_count: int = 0
     win_rate: float | None = None
     server_name: str = ""
@@ -103,6 +103,7 @@ class RunningInstance(BaseModel):
     frequency_sec: int = 60
     execution_mode: str = "loop"
     risk_limits: dict[str, Any] = {}
+    current_book_status: str = "available"
 
 
 class StrategySummary(BaseModel):
@@ -114,10 +115,11 @@ class StrategySummary(BaseModel):
     session_count: int = 0
     experiment_count: int = 0
     tick_count: int = 0
-    daily_pnl: float = 0.0
-    total_pnl: float = 0.0
+    daily_pnl: float | None = 0.0
+    total_pnl: float | None = 0.0
     total_volume: float = 0.0
-    open_positions: int = 0
+    open_positions: int | None = 0
+    current_book_status: str = "available"
     instances: list[RunningInstance] = []
 
 
@@ -136,10 +138,11 @@ class AgentSummary(BaseModel):
     session_count: int = 0
     experiment_count: int = 0
     tick_count: int = 0
-    daily_pnl: float = 0.0
-    total_pnl: float = 0.0
+    daily_pnl: float | None = 0.0
+    total_pnl: float | None = 0.0
     total_volume: float = 0.0
-    open_positions: int = 0
+    open_positions: int | None = 0
+    current_book_status: str = "available"
     instances: list[RunningInstance] = []
 
 
@@ -149,17 +152,17 @@ class AgentPerformanceModel(BaseModel):
     kind: str = "session"  # session | experiment
     status: str = ""
     realized_pnl: float = 0.0
-    unrealized_pnl: float = 0.0
-    total_pnl: float = 0.0
+    unrealized_pnl: float | None = 0.0
+    total_pnl: float | None = 0.0
     volume: float = 0.0
     fees: float = 0.0
     trade_count: int = 0
     # None = no closed executor rows to derive it from; see AgentPerformance.
     # Rendering it as 0% would report a bot-mode session as all-losses.
     win_rate: float | None = None
-    open_count: int = 0
+    open_count: int | None = 0
     closed_count: int = 0
-    executors: list[dict[str, Any]] = []
+    executors: list[dict[str, Any]] | None = []
     # ── Bot-mode attribution ────────────────────────────────────────────────
     # A session trading through bots earns nothing under its own agent_id: its
     # executors live inside the bot instance's own database and never reach the
@@ -176,6 +179,7 @@ class AgentPerformanceModel(BaseModel):
     bot_names: list[str] = []
     bot_instances: list[str] = []
     unresolved_bases: list[str] = []
+    current_book_status: str = "available"
     controllers: list[dict[str, Any]] = []
     close_type_counts: dict[str, int] = {}
     fees_known: bool = True
@@ -546,7 +550,7 @@ async def _apply_bot_mode_pnl(
         fetch_all_bot_performance,
         fetch_archived_instances,
         fetch_base_histories,
-        resolve_bots,
+        fetch_current_bot_performance,
         slice_history,
     )
 
@@ -561,7 +565,7 @@ async def _apply_bot_mode_pnl(
         all_perf = await fetch_all_bot_performance(client)
     except Exception as e:
         log.warning("bot perf fetch for %s failed: %s", strategy_dir.name, e)
-        return
+        all_perf = {}
 
     now = time.time()
     # The oldest takeover across every base sets how far back the histories must
@@ -580,7 +584,23 @@ async def _apply_bot_mode_pnl(
         client, all_perf, bases, earliest, now, extra_names=archived
     )
 
-    live = resolve_bots(all_perf, bases)
+    try:
+        live, book_status_by_base = await fetch_current_bot_performance(client, bases)
+    except Exception as e:
+        log.warning("active bot performance for %s failed: %s", strategy_dir.name, e)
+        live = {}
+        book_status_by_base = {base: "unavailable" for base in bases}
+    book_status = (
+        "unavailable"
+        if any(book_status_by_base.get(base) != "available" for base in bases)
+        else "available"
+    )
+    if book_status != "available":
+        for _since, session, _until in (
+            owner for rows in owners.values() for owner in rows
+        ):
+            if _until <= 0:
+                session.current_book_status = book_status
     for base in bases:
         window_owners = owners[base]
         insts = histories_by_base.get(base, [])
@@ -728,6 +748,7 @@ async def _compute_strategy_performance(
                     open_count=perf.open_count,
                     closed_count=perf.closed_count,
                     executors=perf.executors,
+                    current_book_status=perf.current_book_status,
                 )
             )
 
@@ -741,14 +762,38 @@ async def _compute_strategy_performance(
     if client and real_sessions:
         await _apply_bot_mode_pnl(real_sessions, strategy_dir, default_config, client)
 
+    for session in real_sessions:
+        if session.current_book_status != "available":
+            session.unrealized_pnl = None
+            session.total_pnl = None
+            session.open_count = None
+            session.executors = None
+
     totals = {
-        "total_pnl": sum(s.total_pnl for s in real_sessions),
+        "total_pnl": (
+            sum(s.total_pnl or 0.0 for s in real_sessions)
+            if all(s.current_book_status == "available" for s in real_sessions)
+            else None
+        ),
         "realized_pnl": sum(s.realized_pnl for s in real_sessions),
-        "unrealized_pnl": sum(s.unrealized_pnl for s in real_sessions),
+        "unrealized_pnl": (
+            sum(s.unrealized_pnl or 0.0 for s in real_sessions)
+            if all(s.current_book_status == "available" for s in real_sessions)
+            else None
+        ),
         "volume": sum(s.volume for s in real_sessions),
         "fees": sum(s.fees for s in real_sessions),
-        "open_positions": sum(s.open_count for s in real_sessions),
+        "open_positions": (
+            sum(s.open_count or 0 for s in real_sessions)
+            if all(s.current_book_status == "available" for s in real_sessions)
+            else None
+        ),
         "trade_count": float(sum(s.trade_count for s in real_sessions)),
+        "current_book_status": (
+            "unavailable"
+            if any(s.current_book_status != "available" for s in real_sessions)
+            else "available"
+        ),
     }
 
     result = (sessions, totals)
@@ -764,13 +809,29 @@ def _instance_from_engine(engine, perf_by_id: dict) -> RunningInstance:
         session_num=info["session_num"],
         status=info["status"],
         tick_count=info["tick_count"],
-        daily_pnl=(p.total_pnl if p else info["daily_pnl"]),
+        daily_pnl=(
+            p.total_pnl
+            if p and p.current_book_status == "available"
+            else (None if p else info["daily_pnl"])
+        ),
         realized_pnl=p.realized_pnl if p else 0.0,
-        unrealized_pnl=p.unrealized_pnl if p else 0.0,
-        total_pnl=p.total_pnl if p else 0.0,
+        unrealized_pnl=(
+            p.unrealized_pnl
+            if p and p.current_book_status == "available"
+            else (None if p else 0.0)
+        ),
+        total_pnl=(
+            p.total_pnl
+            if p and p.current_book_status == "available"
+            else (None if p else 0.0)
+        ),
         volume=p.volume if p else 0.0,
         fees=p.fees if p else 0.0,
-        open_count=p.open_count if p else 0,
+        open_count=(
+            p.open_count
+            if p and p.current_book_status == "available"
+            else (None if p else 0)
+        ),
         closed_count=p.closed_count if p else 0,
         win_rate=p.win_rate if p else None,
         server_name=info.get("server_name", ""),
@@ -780,6 +841,7 @@ def _instance_from_engine(engine, perf_by_id: dict) -> RunningInstance:
         agent_key=info.get("agent_key", ""),
         execution_mode=info.get("execution_mode", "loop"),
         risk_limits=info.get("risk_limits", {}),
+        current_book_status=p.current_book_status if p else "available",
     )
 
 
@@ -817,7 +879,8 @@ async def _build_strategy_summary(strategy) -> StrategySummary:
             agent_id = disk_info["agent_id"]
             tick_count = disk_info["tick_count"]
 
-    latest_session_pnl = 0.0
+    current_book_status = str(totals.get("current_book_status", "available"))
+    latest_session_pnl: float | None = 0.0
     if sessions_perf:
         latest = max(
             (p for p in sessions_perf if p.kind == "session"),
@@ -825,7 +888,9 @@ async def _build_strategy_summary(strategy) -> StrategySummary:
             default=None,
         )
         if latest:
-            latest_session_pnl = latest.total_pnl
+            latest_session_pnl = (
+                latest.total_pnl if latest.current_book_status == "available" else None
+            )
 
     return StrategySummary(
         slug=strategy.slug,
@@ -837,9 +902,16 @@ async def _build_strategy_summary(strategy) -> StrategySummary:
         experiment_count=count_experiments(strategy_dir),
         tick_count=tick_count,
         daily_pnl=latest_session_pnl,
-        total_pnl=float(totals.get("total_pnl", 0.0)),
+        total_pnl=(
+            float(totals["total_pnl"]) if totals.get("total_pnl") is not None else None
+        ),
         total_volume=float(totals.get("volume", 0.0)),
-        open_positions=int(totals.get("open_positions", 0)),
+        open_positions=(
+            int(totals["open_positions"])
+            if totals.get("open_positions") is not None
+            else None
+        ),
+        current_book_status=current_book_status,
         instances=instances,
     )
 
@@ -890,6 +962,7 @@ async def list_agents(user: WebUser = Depends(get_current_user)):
 
 def _aggregate_strategy_perf(strategies: list[StrategySummary]) -> dict[str, Any]:
     """Roll up per-strategy performance into agent-level aggregates for summary cards."""
+    book_available = all(s.current_book_status == "available" for s in strategies)
     return {
         "status": (
             "running" if any(s.status == "running" for s in strategies) else "idle"
@@ -897,10 +970,17 @@ def _aggregate_strategy_perf(strategies: list[StrategySummary]) -> dict[str, Any
         "session_count": sum(s.session_count for s in strategies),
         "experiment_count": sum(s.experiment_count for s in strategies),
         "tick_count": sum(s.tick_count for s in strategies),
-        "daily_pnl": sum(s.daily_pnl for s in strategies),
-        "total_pnl": sum(s.total_pnl for s in strategies),
+        "daily_pnl": (
+            sum(s.daily_pnl or 0.0 for s in strategies) if book_available else None
+        ),
+        "total_pnl": (
+            sum(s.total_pnl or 0.0 for s in strategies) if book_available else None
+        ),
         "total_volume": sum(s.total_volume for s in strategies),
-        "open_positions": sum(s.open_positions for s in strategies),
+        "open_positions": (
+            sum(s.open_positions or 0 for s in strategies) if book_available else None
+        ),
+        "current_book_status": "available" if book_available else "unavailable",
         "instances": [inst for s in strategies for inst in s.instances],
     }
 
@@ -1626,7 +1706,13 @@ async def get_session_executors(
         return {
             "executors": [],
             "performance": AgentPerformanceModel(
-                agent_id=agent_id, session_num=session_num
+                agent_id=agent_id,
+                session_num=session_num,
+                unrealized_pnl=None,
+                total_pnl=None,
+                open_count=None,
+                executors=None,
+                current_book_status="unavailable",
             ).model_dump(),
             "pnl_series": [],
         }
@@ -1656,18 +1742,23 @@ async def get_session_executors(
         agent_id=agent_id,
         session_num=session_num,
         realized_pnl=perf.realized_pnl,
-        unrealized_pnl=perf.unrealized_pnl,
-        total_pnl=perf.total_pnl,
+        unrealized_pnl=(
+            perf.unrealized_pnl if perf.current_book_status == "available" else None
+        ),
+        total_pnl=(perf.total_pnl if perf.current_book_status == "available" else None),
         volume=perf.volume,
         fees=perf.fees,
         trade_count=perf.trade_count,
         win_rate=perf.win_rate,
-        open_count=perf.open_count,
+        open_count=(
+            perf.open_count if perf.current_book_status == "available" else None
+        ),
         closed_count=perf.closed_count,
-        executors=perf.executors,
+        executors=(perf.executors if perf.current_book_status == "available" else None),
         bot_names=perf.bot_names,
         bot_instances=perf.bot_instances,
         unresolved_bases=perf.unresolved_bases,
+        current_book_status=perf.current_book_status,
         controllers=perf.controllers,
         # Base-lifetime, not window-sliced: the payload counts closes per
         # controller with no timestamp to slice on. Equal to the session's own
@@ -1691,7 +1782,7 @@ async def get_session_executors(
         log.warning("pnl series for %s failed: %s", agent_id, e)
         pnl_series = []
     return {
-        "executors": perf.executors,
+        "executors": model.executors,
         "performance": model.model_dump(),
         "pnl_series": pnl_series,
     }

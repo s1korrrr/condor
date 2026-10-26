@@ -46,7 +46,10 @@ export function paperNote(count: number): string {
 }
 
 export function projectFleetAggregates(fleet: readonly InventoryReads[]): FleetAggregates {
-  const { live, paper } = splitPaper(fleet);
+  // The id token rule, plus the server's own paper label: a simulated lane never adds to live figures.
+  const byId = splitPaper(fleet);
+  const labelled = byId.live.filter(reads => reads.holdings?.entry.paper === true);
+  const live = byId.live.filter(reads => !labelled.includes(reads)), paper = [...byId.paper, ...labelled];
   const admitted = (reads: InventoryReads) => reads.holdings && reads.holdings.entry.state !== 'unavailable' ? reads.holdings.entry : null;
   const pairsOf = (reads: InventoryReads) => admitted(reads)?.pairs ?? [];
   const assets = [...new Set(live.flatMap(reads => pairsOf(reads).map(pair => pair.base_asset)))].sort();

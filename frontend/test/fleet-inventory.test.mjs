@@ -56,3 +56,13 @@ test('an unavailable or partly valued live bot leaves the fleet inventory total 
     assert.deepEqual(result.inventory.find(([asset]) => asset === 'BTC'), ['BTC', { positions: 1, units: 0.01, value: 650, oldest: null }]);
   }
 });
+
+test('a bot the server labels paper never adds to live inventory, even without a paper token in its id', () => {
+  const live = reads('rsi_modular_v2', [['BTC-USDT', '0.01', '650']]);
+  const simulated = reads('shadow_v4', [['BTC-USDT', '5', '325000']]);
+  simulated.holdings = botHoldingsAt(lib, { ...simulated.holdings.entry, paper: true }, NOW);
+  const result = projectFleetAggregates([live, simulated]);
+  assert.deepEqual(result.paper, ['shadow_v4']);
+  assert.equal(result.inventoryTotal, 650);
+  assert.ok(result.heatCells.every(cell => cell.row !== 'shadow_v4'));
+});

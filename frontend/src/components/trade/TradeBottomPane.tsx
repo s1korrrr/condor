@@ -616,8 +616,8 @@ export function TradeBottomPane({
                   </p>
                 ) : (
                   <>
-                  {positionsStatus === "partial" && (
-                    <p className="px-1 py-1 text-center text-[var(--color-text-muted)]">Position data is incomplete</p>
+                  {positionsStatus !== "available" && (
+                    <p className="px-1 py-1 text-center text-[var(--color-text-muted)]">Known positions only · Some position sources are unavailable or incomplete</p>
                   )}
                   {positions.map((pos, i) => {
                     const side = pos.position_side?.toLowerCase();

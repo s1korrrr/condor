@@ -30,6 +30,10 @@ from condor.fetchers.executors import normalize_executor_side
 
 logger = logging.getLogger(__name__)
 
+# Agent performance is polled every five seconds; don't let the owner registry
+# read hold a provider tick indefinitely.
+ACTIVE_BOTS_TIMEOUT = 5.0
+
 
 def extract_snapshots(result: Any) -> list[dict]:
     """Normalize a controller-performance API response into a list of snapshot dicts."""
@@ -449,19 +453,30 @@ async def fetch_current_bot_performance(
     def unavailable_all():
         return {}, {base: "unavailable" for base in owner_bases}
 
-    result = await client.bot_orchestration.get_active_bots_status()
+    try:
+        result = await asyncio.wait_for(
+            client.bot_orchestration.get_active_bots_status(),
+            timeout=ACTIVE_BOTS_TIMEOUT,
+        )
+    except Exception as exc:
+        logger.warning("Failed to read active bot registry: %s", exc)
+        return unavailable_all()
     if isinstance(result, dict):
         if result.get("status") == "error" or "data" not in result:
             return unavailable_all()
         data = result["data"]
         if isinstance(data, dict):
-            bots = [
-                dict(value, bot_name=name)
-                for name, value in data.items()
-                if isinstance(value, dict)
-            ]
-            if len(bots) != len(data):
-                return unavailable_all()
+            bots = []
+            for name, value in data.items():
+                if not isinstance(name, str) or not isinstance(value, dict):
+                    return unavailable_all()
+                embedded_name = value.get("bot_name")
+                if embedded_name is not None and embedded_name != name:
+                    return unavailable_all()
+                bot = dict(value)
+                if embedded_name is None:
+                    bot["bot_name"] = name
+                bots.append(bot)
         elif isinstance(data, list):
             bots = [value for value in data if isinstance(value, dict)]
             if len(bots) != len(data):

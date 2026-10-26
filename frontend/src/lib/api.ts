@@ -240,6 +240,8 @@ export interface ConsolidatedPosition {
   amount: number | null;
   entry_price: number | null;
   notional_value: number | null;
+  /** Entry notional is independent of current marked position value. */
+  cost_basis_value?: number | null;
   current_price: number | null;
   unrealized_pnl: number | null;
   realized_pnl: number | null;

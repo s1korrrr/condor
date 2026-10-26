@@ -8,17 +8,14 @@ import { StateGlyph } from '@/features/quant-ops/primitives';
 import type { PanelState } from '@/features/quant-ops/panel-state';
 import type { OwnerReads } from './BotsRoster';
 import { winRateText } from '@/features/bots/bot-net';
-import { durationLabel, projectBotStats, type FleetBotInput } from '@/features/bots/fleet-tiles';
+import { durationLabel, projectBotStats } from '@/features/bots/fleet-tiles';
 import { botChartsHref } from '@/features/bots/chart-links';
 import './fleet-strip.css';
+import { fleetInput } from './fleet-input';
 
 const tone = (value: string | null | undefined) => (value ?? 'unknown').toLowerCase().split(/[\s:]/)[0];
 const label = (value: string | null | undefined) => value?.replaceAll('_', ' ') || 'unknown';
 const toneClass = (value: number | string | null | undefined) => metricTone(value) ? `q-${metricTone(value)}` : undefined;
-
-export function fleetInput(reads: OwnerReads, name = displayBotName(reads.bot)): FleetBotInput {
-  return { bot: reads.bot, name, status: reads.status, view: reads.view, quant: reads.quant, cycles: reads.cycles, execution: reads.execution, health: reads.health, fillTotals: reads.fillTotals ?? null };
-}
 
 /** One compact card per registered bot: identity, lifecycle, operational counters and a small PnL chip (full PnL stays in Capital). */
 function FleetBotCard({ source, reads, status, color, now }: { source: TradingVisualsSource; reads: OwnerReads | undefined; status: string | null; color: string; now: number }) {

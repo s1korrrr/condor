@@ -261,12 +261,14 @@ test('broad saved history cannot qualify a long selected range using only its re
 test('Capital KPIs use observed wallet even when account credential reads are off',()=>{
   const model=projectCapitalModel({
     current:{observed_at:new Date().toISOString(),priced_total:'21182.86',valuation_complete:true,unpriced_assets:[],holdings:[
-      {token:'USDC',total:'2942.85',available:'2942.85',locked:'0',price:'1',value:'2942.85',quote_currency:'USDT',valuation_source:'native-runtime-status',price_observed_at:new Date().toISOString()},
+      {token:'USDC',total:'21182.86',available:'21182.86',locked:'0',price:'1',value:'21182.86',quote_currency:'USDC',valuation_source:'native-runtime-status',price_observed_at:new Date().toISOString()},
     ]},
     history:[],
     now:Date.now(),
     unit:'USDC',
   });
+  assert.equal(model.equity.complete,true);
+  assert.equal(model.equity.unit,'USDC');
   const html=renderToStaticMarkup(React.createElement(CapitalPage,capitalProps(model,{range:'1D',accountAllowed:false,footer:'rsibot-stack-v2'})));
   assert.match(html,/21,182\.86|21182/);
   assert.doesNotMatch(html,/Research read check failed/);

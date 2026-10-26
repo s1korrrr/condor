@@ -23,3 +23,9 @@ Emergency shutdown keeps two separate facts: confirmed stop targets and inventor
 Deterministic regression fixtures cover restart generations, stopped controllers, direct executor failures, partial/malformed data, duplicate identities, missing instruments and nonfinite economics. `tests/test_unknown_inventory_risk.py`, `tests/test_bot_ownership.py` and `tests/test_shutdown.py` cover unknown-book permission handling, adoption and emergency winddown. `frontend/test/inventory-availability.test.mjs` renders actual session components and distinguishes pending/unknown data from genuine zero.
 
 These checks do not establish deployed image identity, exchange account reconciliation, residual exit management or trading authority. Rollback is a revert of the software change; no persistent inventory migration is introduced.
+
+## Second-pass hardening (2026-10-26)
+
+A registry map key must agree with an embedded bot identity; a conflict cannot rename observations into another runtime. A running runtime with absent/empty performance remains unknown. Starting/stopping runtime and controller rows remain non-current observations. Current inventory and price reads share a five-second route deadline; a failed source cannot erase a successfully read independent source. Agent runtime discovery reads use the same bounded unknown outcome.
+
+`notional_value` is quantity times a valid current mark. `cost_basis_value` is quantity times entry basis. An absent/invalid mark leaves current notional unknown and source availability partial while retaining known inventory quantities. The position panel labels any displayed incomplete subset explicitly.

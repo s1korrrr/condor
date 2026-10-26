@@ -57,3 +57,27 @@ test('null executor read is unavailable rather than no open positions', () => {
   assert.doesNotMatch(output, /No open positions/);
   client.clear();
 });
+
+for (const status of ['partial', 'unavailable']) {
+  test(`known position subset retains an in-panel ${status} warning`, () => {
+    // Start the real component on its Positions tab; all render and query logic remains real.
+    const {load: loadPane} = frontendModules({
+      react: {...React, useState: initial => React.useState(initial === 'executors' ? 'positions' : initial)},
+      '@/hooks/useRates': {useRates: () => ({formatPnlValue: value => String(value), formatValue: value => String(value)})},
+    });
+    const {TradeBottomPane} = loadPane(process.env.INVENTORY_PANE_SOURCE ?? 'components/trade/TradeBottomPane.tsx');
+    const client = new QueryClient();
+    const output = text(renderToStaticMarkup(React.createElement(QueryClientProvider, {client},
+      React.createElement(TradeBottomPane, {
+        executors: [], positionsStatus: status, isLoadingPositions: false,
+        connector: 'okx', pair: 'BNB-USDC', isSpot: true,
+        positions: [{connector_name:'okx', trading_pair:'BNB-USDC', position_side:'buy', amount:0.5,
+          entry_price:100, current_price:120, notional_value:60, unrealized_pnl:10,
+          realized_pnl:0, cum_fees:0, leverage:1, source:'executor', source_name:'confirmed'}],
+      }))));
+    assert.match(output, /Known positions only/);
+    assert.match(output, /0\.5000/);
+    assert.doesNotMatch(output, /No positions for this pair/);
+    client.clear();
+  });
+}

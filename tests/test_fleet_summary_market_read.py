@@ -61,7 +61,7 @@ def test_market_history_reads_the_canonical_state_projection(monkeypatch):
     ]
 
 
-def test_a_bot_day_change_across_unrecorded_time_is_partial():
+def test_a_bot_day_carries_the_fleet_window_flags():
     from decimal import Decimal
 
     from condor.web import fleet_pnl
@@ -84,8 +84,11 @@ def test_a_bot_day_change_across_unrecorded_time_is_partial():
         base.update(changes)
         return fleet_pnl.BotWindow(**base)
 
-    assert bot_day_pnl(window())["partial"] is False
-    # Same rule as the fleet window: unrecorded time inside the day makes it incomplete.
-    assert bot_day_pnl(window(uncovered_ms=360_000))["partial"] is True
+    plain = bot_day_pnl(window())
+    assert plain["partial"] is False and plain["uncovered_ms"] == 0
+    # Same flags as the fleet window: `partial` only for a late history start; unrecorded
+    # time is carried separately (contract fields `partial` and `uncovered_ms`).
+    gapped = bot_day_pnl(window(uncovered_ms=360_000))
+    assert gapped["partial"] is False and gapped["uncovered_ms"] == 360_000
     assert bot_day_pnl(window(full=False))["partial"] is True
     assert bot_day_pnl(window(), simulated=True)["simulated"] is True

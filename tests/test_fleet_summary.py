@@ -445,13 +445,18 @@ async def test_full_summary_golden_numbers(store):
     assert (
         v2["report_stale"] is True
     )  # heartbeat 60s old: older than the 30s owner currency window
-    # The fixture's day window sums across unrecorded time (the fleet day above is partial),
-    # so the bot's own day change is qualified the same way.
+    # The fixture's day window sums across unrecorded time; like the fleet window, the bot's
+    # own day keeps `partial` for a late history start and carries the gap in `uncovered_ms`.
+    ok_day_gap = next(
+        b["uncovered_ms"] for b in body["pnl"]["day"]["bots"] if b["bot"] == "ok_rsi"
+    )
+    assert ok_day_gap > 0
     assert ok["pnl_day"] == {
         "change": "3",
         "unit": "USDC",
-        "partial": True,
+        "partial": False,
         "stale": False,
+        "uncovered_ms": ok_day_gap,
     }
     assert v2["pnl_day"]["partial"] is True
     assert ok["net_now"] == {"value": "3.5", "unit": "USDC", "source": "controller"}
@@ -464,6 +469,7 @@ async def test_full_summary_golden_numbers(store):
         "unit": "USDC",
         "partial": True,
         "stale": False,
+        "uncovered_ms": 3_540_000,
         "simulated": True,
     }
     assert paper["net_now"] == {

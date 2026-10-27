@@ -87,8 +87,8 @@ test('Capital draws fleet tiles, strategy table, allocation, rails and fills fro
   const rail={bot:'rsi_modular_v2',name:'max_daily_loss_quote',scope:'bot',limit:'50',used:'2.3',remaining:'47.7',utilization:0.046,unit:'USDC',state:'ok',observedAt:at,source:'runtime_status.daily_entry_risk'};
   const html=renderToStaticMarkup(React.createElement(CapitalPage,capitalProps(model,{
     stats:[
-      {id:'C02',label:'Fleet PnL · 7D',value:'12.5',unit:'USDC',state:{kind:'fresh'},note:'since 2026-10-01 07:21 UTC (history starts here) · 2 of 2 bots'},
-      {id:'C03',label:'Daily PnL',value:'4.25',unit:'USDC',state:{kind:'fresh'},note:'24h window · 2 of 2 bots'},
+      {id:'C02',label:'Fleet PnL · 90D',value:'12.5',unit:'USDC',state:{kind:'fresh'},note:'since 2026-10-01 07:21 UTC (history starts here) · 2 of 2 bots'},
+      {id:'C03',label:'Fleet PnL · 24h',value:'4.25',unit:'USDC',state:{kind:'fresh'},note:'24h window · 2 of 2 bots'},
     ],
     statsFootnote:'Sharpe, Sortino and volatility appear after 14 days of fleet PnL (3 so far).',
     wallet:{points:history,currency:'USDT',state:{kind:'fresh'},coverageStart:Date.now()/1000-3600},
@@ -114,7 +114,7 @@ test('Capital draws fleet tiles, strategy table, allocation, rails and fills fro
   assert.match(html,/class="q-negative">-10\.00%</,'worst drawdown heads the C19 panel; the chart marks it on hover');
   assert.match(html,/Fleet PnL change since range start/);
   assert.match(html,/since 2026-10-01 07:21 UTC \(history starts here\)/);
-  assert.match(html,/Fleet PnL · 7D/);
+  assert.match(html,/Fleet PnL · 90D/);
   assert.match(html,/Sharpe, Sortino and volatility appear after 14 days/);
   assert.match(html,/\+12\.00|\+12/);
   assert.match(html,/4\.6% of 50/);

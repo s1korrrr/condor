@@ -1102,13 +1102,15 @@ def _controller_net(
 
 
 def bot_day_pnl(window: fleet_pnl.BotWindow, *, simulated: bool = False) -> dict:
-    """A bot card's day change under the fleet window rules: a window that does not reach back
-    to its start, or that sums across unrecorded time, is partial (contract ``pnl_day``)."""
+    """A bot card's day change under the fleet window rules (contract ``pnl_day``): ``partial``
+    when its history starts after the window opens, and the unrecorded time it sums across in
+    ``uncovered_ms``, exactly as the fleet window carries both."""
     day = {
         "change": fleet_pnl.decimal_text(window.change),
         "unit": window.quote,
-        "partial": not window.full or window.uncovered_ms > 0,
+        "partial": not window.full,
         "stale": window.stale,
+        "uncovered_ms": round(window.uncovered_ms),
     }
     if simulated:
         day["simulated"] = True

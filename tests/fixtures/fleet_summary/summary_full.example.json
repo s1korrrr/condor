@@ -343,8 +343,9 @@
    "pnl_day": {
     "change": "3",
     "unit": "USDC",
-    "partial": true,
-    "stale": false
+    "partial": false,
+    "stale": false,
+    "uncovered_ms": 86280000
    },
    "net_now": {
     "value": "3.5",
@@ -379,7 +380,8 @@
     "change": "1.5",
     "unit": "USDC",
     "partial": true,
-    "stale": false
+    "stale": false,
+    "uncovered_ms": 17940000
    },
    "net_now": {
     "value": "1.5",
@@ -424,6 +426,7 @@
     "unit": "USDC",
     "partial": true,
     "stale": false,
+    "uncovered_ms": 3540000,
     "simulated": true
    },
    "net_now": {

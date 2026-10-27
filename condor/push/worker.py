@@ -471,21 +471,17 @@ class PushWorker:
     ) -> None:
         started = self.outbox.started("stack")
         assert started is not None
-        live = [reads for info, reads in infos if not info.paper]
-        # The trading detector owns admission incidents only while every live bot reports a fresh
-        # capability; otherwise the host incident stays the one alert for that cause.
-        owned = (
-            ev.TRADING_OWNED_INCIDENT_CODES
-            if live
-            and all(
-                r.runtime_ok
-                and ev.capability_reported(
-                    r.runtime, now=now, max_age_seconds=self.config.trading_thresholds.max_age_seconds
+        # The trading detector owns an admission incident only while that bot's fresh capability
+        # carries the matching restriction; otherwise the host incident stays the one alert for it.
+        owned: set[ev.TradingLink] = set()
+        for info, reads in infos:
+            # A source whose trading evaluation failed this cycle announces nothing, so it owns nothing.
+            held = str(self.source_status.get(info.tag, {}).get("trading", "")).startswith("held")
+            if reads.runtime_ok and not held:
+                owned |= ev.trading_owned_links(
+                    info, reads.runtime, now=now,
+                    max_age_seconds=self.config.trading_thresholds.max_age_seconds,
                 )
-                for r in live
-            )
-            else ()
-        )
         for _, reads in infos:
             store = (
                 reads.operations.get("incident_store")
@@ -497,7 +493,7 @@ class PushWorker:
                 started=started,
                 seen=self.outbox.seen_checker("stack"),
                 min_severity=self.config.incident_min_severity,
-                owned_codes=owned,
+                owned_links=owned,
             )
             if detection.events or detection.seen:
                 self.outbox.commit(

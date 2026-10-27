@@ -1,5 +1,6 @@
 """Pure push detectors: what is announced, once, and what is deliberately silent."""
 
+import dataclasses
 from decimal import Decimal
 
 import pytest
@@ -1091,28 +1092,53 @@ def test_malformed_restrictions_are_ignored_not_alerted():
         assert not any(out) and conditions == {}
 
 
-def test_admission_incidents_are_owned_by_trading_only_while_capability_is_reported():
+def test_admission_incidents_are_owned_by_trading_only_with_a_matching_restriction():
+    # The producer's real id shape (scripts/stack_v2_health.py `_incident`):
+    # f"{service}:{code}:{observed_at}:{sha24(episode)}"; the join is `bot` + `subject`, not the id.
+    admission = {
+        "id": "execution-main:buy_admission_issue:2026-10-22T10:40:00+00:00:0123456789abcdef01234567",
+        "code": "buy_admission_issue", "severity": "critical", "state": "open",
+        "first_seen_at": "2026-10-22T10:40:00+00:00", "service": "execution-main", "title": "BUY admission",
+        "bot": V1.bot_id,
+        "subject": {"controller_id": "ok_rsi_eth", "pair": "ETH-USDC", "reason_code": "native_buy_create_refused"},
+    }
     store = {
         "state": "available",
         "incidents": [
-            # The producer's real id shape (scripts/stack_v2_health.py `_incident`):
-            # f"{service}:{code}:{observed_at}:{sha24(episode)}", so ownership is decided by `code`.
-            {"id": "execution-main:buy_admission_issue:2026-10-22T10:40:00+00:00:0123456789abcdef01234567",
-             "code": "buy_admission_issue", "severity": "critical", "state": "open",
-             "first_seen_at": "2026-10-22T10:40:00+00:00", "service": "execution-main", "title": "BUY admission"},
+            admission,
             {"id": "execution-main:service_unavailable:2026-10-22T10:40:00+00:00",
              "code": "service_unavailable", "severity": "critical", "state": "open",
              "first_seen_at": "2026-10-22T10:40:00+00:00", "service": "execution-main", "title": "Down"},
         ],
     }
+    matching = dict(ETH_ISSUE, reason_code="native_buy_create_refused", source="native_buy_admission",
+                    controller_id="ok_rsi_eth", alert=True)
+    now = T0 + 10
+
+    def links(restrictions, src=V1):
+        return ev.trading_owned_links(src, _capability_payload(restrictions, at=T0), now=now, max_age_seconds=300)
+
     seen = set()
-    owned = ev.detect_incidents(store, started=0, seen=seen.__contains__,
-                                owned_codes=ev.TRADING_OWNED_INCIDENT_CODES)
+    owned = ev.detect_incidents(store, started=0, seen=seen.__contains__, owned_links=links([matching]))
     assert [e.title for e in owned.events] == ["execution-main · Down"]
     assert not any("buy_admission_issue" in key for key in owned.seen), "ownership must not be permanent"
     seen.update(owned.seen)
-    lapsed = ev.detect_incidents(store, started=0, seen=seen.__contains__)
-    assert [e.title for e in lapsed.events] == ["execution-main · BUY admission"]
+
+    # Review 2026-10-27: a fresh capability without the matching restriction (for example an owner
+    # report marked healthy that still lists the issue) must not silence the host incident.
+    for restrictions in ([], [dict(matching, controller_id="other")], [dict(matching, source="other")],
+                         [dict(matching, alert=False)], [dict(matching, reason_code="entry_decision_unavailable")]):
+        alone = ev.detect_incidents(store, started=0, seen=seen.__contains__, owned_links=links(restrictions))
+        assert [e.title for e in alone.events] == ["execution-main · BUY admission"], restrictions
+    # Another bot's matching restriction does not own this bot's incident; a stale report owns nothing.
+    other = dataclasses.replace(V1, bot_id="rsi_modular_v2")
+    assert links([matching], src=other) == {("rsi_modular_v2", "ok_rsi_eth", "ETH-USDC", "native_buy_create_refused")}
+    assert ev.detect_incidents(store, started=0, seen=seen.__contains__, owned_links=links([matching], src=other)).events
+    stale = ev.trading_owned_links(V1, _capability_payload([matching], at=T0 - 600), now=now, max_age_seconds=300)
+    assert stale == frozenset()
+    # An incident without its structured link is never owned.
+    unlinked = {"state": "available", "incidents": [{k: v for k, v in admission.items() if k != "subject"}]}
+    assert ev.detect_incidents(unlinked, started=0, seen=set().__contains__, owned_links=links([matching])).events
 
 
 def test_capability_reported_requires_a_fresh_young_versioned_body():

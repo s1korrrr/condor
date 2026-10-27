@@ -1006,10 +1006,51 @@ def capability_reported(runtime_payload: Any, *, now: float, max_age_seconds: fl
     )
 
 
-# Host incident codes the trading-capability detector owns while capability is reported, so the same
-# cause is not announced twice. They stay visible in Operations and the Alerts tab. Matched on the
-# incident's ``code``: the owner id is ``service:code:observed_at[:sha24(episode)]`` and carries a hash.
+# Host incident codes the trading-capability detector can own, so the same cause is not announced
+# twice. They stay visible in Operations and the Alerts tab. Matched on the incident's ``code`` (the
+# owner id is ``service:code:observed_at[:sha24(episode)]`` and carries a hash) and only together with
+# a current matching restriction (``trading_owned_links``).
 TRADING_OWNED_INCIDENT_CODES = frozenset({"buy_admission_issue"})
+
+# (bot, controller_id, pair, reason_code): an incident's structured link to one restriction.
+TradingLink = tuple[str, str, str, str]
+
+
+def trading_owned_links(
+    src: "SourceInfo", runtime_payload: Any, *, now: float, max_age_seconds: float
+) -> frozenset[TradingLink]:
+    """The admission faults this live bot's trading alert already announces.
+
+    The same rule as the fleet summary contract ("One fault, shown once") and the app's
+    ``TradingIncidentLink``: a fresh, well-formed capability with an alerting BUY restriction from
+    ``native_buy_admission`` that names its controller and pair. Anything less owns nothing, so the
+    host incident stays the alert for that cause.
+    """
+    if src.paper or not capability_reported(runtime_payload, now=now, max_age_seconds=max_age_seconds):
+        return frozenset()
+    links: set[TradingLink] = set()
+    for item in _runtime(runtime_payload)["trading_capability"]["restrictions"]:
+        controller, pair = item.get("controller_id"), item.get("pair")
+        if (
+            item["alert"]
+            and item["side"] == "buy"
+            and item.get("source") == "native_buy_admission"
+            and isinstance(controller, str)
+            and controller
+            and isinstance(pair, str)
+        ):
+            links.add((src.bot_id, controller, pair, item["reason_code"]))
+    return frozenset(links)
+
+
+def _incident_trading_link(incident: Mapping[str, Any]) -> TradingLink | None:
+    bot, subject = incident.get("bot"), incident.get("subject")
+    if not isinstance(bot, str) or not isinstance(subject, Mapping):
+        return None
+    parts = (subject.get("controller_id"), subject.get("pair"), subject.get("reason_code"))
+    if not all(isinstance(part, str) and part for part in parts):
+        return None
+    return (bot, *parts)  # type: ignore[return-value]
 
 
 # --------------------------------------------------------------------------- incidents
@@ -1022,7 +1063,7 @@ def detect_incidents(
     seen: Seen,
     min_severity: str = "critical",
     labels: Mapping[str, str] | None = None,
-    owned_codes: Collection[str] = (),
+    owned_links: Collection[TradingLink] = (),
 ) -> Detection:
     """Open (and later recovered) host-monitor incidents.
 
@@ -1067,7 +1108,10 @@ def detect_incidents(
             if first < started or severity_rank(severity) < floor:
                 keys.append(skip_key)
                 continue
-            if incident.get("code") in owned_codes:
+            if (
+                incident.get("code") in TRADING_OWNED_INCIDENT_CODES
+                and _incident_trading_link(incident) in owned_links
+            ):
                 # Owned for now, not forever: no key, so it is reconsidered if ownership lapses.
                 continue
             keys.append(opened_key)

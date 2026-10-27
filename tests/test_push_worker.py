@@ -504,6 +504,49 @@ def test_stack_incident_from_the_operations_read_pushes_once_across_sources_and_
     )
 
 
+def test_an_admission_incident_is_owned_only_by_a_matching_restriction_that_was_evaluated(
+    rig, monkeypatch
+):
+    """One fault, shown once: the trading alert owns the host incident only for the same bot,
+    controller, pair and reason, and only when that bot's trading evaluation ran this cycle."""
+    seen_at = datetime.fromtimestamp(rig.clock() + 1, timezone.utc).isoformat()
+    store = {
+        "state": "available",
+        "incidents": [
+            {
+                "id": "execution-v2-rsi:buy_admission_issue:" + seen_at + ":0123456789abcdef01234567",
+                "service": "execution-v2-rsi", "severity": "critical", "state": "open",
+                "code": "buy_admission_issue", "title": "Unresolved BUY admission fault",
+                "first_seen_at": seen_at, "last_seen_at": seen_at, "resolved_at": None,
+                "bot": "rsi_modular_v2",
+                "subject": {"controller_id": "modular_spot_v2_eth", "pair": "ETH-USDC",
+                            "reason_code": "native_buy_create_refused"},
+            }
+        ],
+    }
+    for bot in BOTS:
+        rig.reader.data[bot]["operations"] = {"incident_store": store}
+    runtime = rig.reader.runtime("rsi_modular_v2")
+    runtime["runtime_status"]["trading_capability"] = {
+        "schema_version": 1, "observed_at": rig.clock(), "evidence": "fresh",
+        "buy": "restricted", "sell": "can_trade",
+        "restrictions": [{"pair": "ETH-USDC", "side": "buy", "state": "restricted",
+                          "reason_code": "native_buy_create_refused", "alert": True,
+                          "source": "native_buy_admission", "controller_id": "modular_spot_v2_eth"}],
+    }
+    rig.reader.data["rsi_modular_v2"]["runtime"] = runtime
+    incidents = lambda: [p for p in rig.apple.payloads if p["rsibot"]["class"] == "incident"]  # noqa: E731
+    rig.cycle()
+    assert incidents() == []  # owned: the trading detector announces this fault
+
+    def broken(*_args, **_kwargs):
+        raise ValueError("bad report")
+
+    monkeypatch.setattr("condor.push.events.evaluate_trading", broken)
+    rig.cycle(30)
+    assert len(incidents()) == 2  # nothing announces it now, so the host incident is pushed
+
+
 # ------------------------------------------------------------------ test alert, summary, market
 
 

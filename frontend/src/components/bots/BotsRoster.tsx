@@ -15,7 +15,8 @@ import { formatDecimal, formatSigned, metricTone } from '@/features/quant-ops/fo
 import { Heatmap, Histogram, LifecycleCounts, MetricCard, PanelFrame, RailBar, StateGlyph } from '@/features/quant-ops/primitives';
 import { TileGrid } from '@/features/quant-ops/kit/grid';
 import { DataTable } from '@/features/quant-ops/kit/DataTable';
-import { FleetStrip, fleetInput } from './FleetStrip';
+import { FleetStrip } from './FleetStrip';
+import { fleetInput } from './fleet-input';
 import { StrategyChartsSlot } from './StrategyChartsSlot';
 import { FleetFillsPanel } from './FleetFillsPanel';
 import { botChartsHref } from '@/features/bots/chart-links';

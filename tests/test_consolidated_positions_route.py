@@ -1,5 +1,6 @@
 """The consolidated positions projection must distinguish live runtimes from history."""
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -41,13 +42,18 @@ def _app(
     bot_error=None,
     exec_error=None,
     price_response=None,
+    slow_source=None,
 ):
     async def active_bots():
+        if slow_source == "bots":
+            await asyncio.Future()
         if bot_error:
             raise bot_error
         return {"data": [CURRENT]} if bots is None else bots
 
     async def executor_positions():
+        if slow_source == "executors":
+            await asyncio.Future()
         if exec_error:
             raise exec_error
         return executors if executors is not None else {"positions": []}
@@ -62,6 +68,8 @@ def _app(
     client.executors.get_positions_summary = executor_positions
 
     async def get_prices(**kwargs):
+        if slow_source == "prices":
+            await asyncio.Future()
         return price_response
 
     client.market_data.get_prices = get_prices
@@ -130,8 +138,8 @@ def test_asgi_projection_excludes_stopped_generation_and_keeps_executor_inventor
     assert body["bot_positions"][0]["reporting_scope"] == "current_runtime"
     assert body["bot_positions"][0]["source_timestamp"] == CURRENT["received_at"]
     assert body["executor_positions"][0]["amount"] == 0.2
-    assert body["bot_positions_status"] == "available"
-    assert body["executor_positions_status"] == "available"
+    assert body["bot_positions_status"] == "partial"
+    assert body["executor_positions_status"] == "partial"
     assert len(body["non_current_bot_positions"]) == 22
     assert (
         body["non_current_bot_positions"][0]["reporting_scope"]
@@ -180,6 +188,17 @@ def test_malformed_and_partial_runtime_reads_do_not_claim_complete_empty(monkeyp
     assert partial["bot_positions"] == []
 
 
+def test_running_runtime_with_empty_performance_is_not_authoritative_empty(monkeypatch):
+    empty = {**CURRENT, "performance": {}}
+    body = (
+        _app(monkeypatch, bots={"data": [empty]})
+        .get("/api/v1/servers/v2/positions")
+        .json()
+    )
+    assert body["bot_positions_status"] == "partial"
+    assert body["bot_positions"] == []
+
+
 def test_executor_failure_remains_unknown_while_runtime_positions_survive(monkeypatch):
     body = (
         _app(monkeypatch, exec_error=RuntimeError("owner read failed"))
@@ -188,7 +207,7 @@ def test_executor_failure_remains_unknown_while_runtime_positions_survive(monkey
     )
     assert body["executor_positions_status"] == "unavailable"
     assert body["executor_positions"] is None
-    assert body["bot_positions_status"] == "available"
+    assert body["bot_positions_status"] == "partial"
     assert len(body["bot_positions"]) == 1
 
 
@@ -390,8 +409,139 @@ def test_distinct_position_sides_remain_separate(monkeypatch):
         .get("/api/v1/servers/v2/positions")
         .json()
     )
-    assert body["bot_positions_status"] == "available"
+    assert body["bot_positions_status"] == "partial"
     assert [row["position_side"] for row in body["bot_positions"]] == ["LONG", "SHORT"]
+
+
+def test_registry_key_conflict_is_not_rewritten_as_runtime_identity(monkeypatch):
+    conflicting = {**CURRENT, "bot_name": "foreign-runtime"}
+    body = (
+        _app(monkeypatch, bots={"data": {"stable-bot-new-generation": conflicting}})
+        .get("/api/v1/servers/v2/positions")
+        .json()
+    )
+    assert body["bot_positions_status"] == "partial"
+    assert body["bot_positions"] == []
+
+
+@pytest.mark.parametrize("status", ["starting", "stopping"])
+def test_transitional_runtime_positions_are_not_current_complete_metrics(
+    monkeypatch, status
+):
+    transitional = {**CURRENT, "status": status}
+    body = (
+        _app(monkeypatch, bots={"data": [transitional]})
+        .get("/api/v1/servers/v2/positions")
+        .json()
+    )
+    assert body["bot_positions_status"] == "partial"
+    assert body["bot_positions"] == []
+    assert (
+        body["non_current_bot_positions"][0]["reporting_scope"]
+        == "non_current_runtime_observation"
+    )
+
+
+def test_position_notional_uses_current_mark_and_unknown_mark_is_partial(monkeypatch):
+    position = {
+        "connector_name": "okx",
+        "trading_pair": "BNB-USDC",
+        "amount": 0.5,
+        "entry_price": 100,
+        "unrealized_pnl_quote": 0,
+    }
+    mark = (
+        _app(
+            monkeypatch,
+            bots={"data": []},
+            executors={"positions": [position]},
+            price_response={"prices": {"BNB-USDC": 120}},
+        )
+        .get("/api/v1/servers/v2/positions")
+        .json()
+    )
+    assert mark["executor_positions"][0]["notional_value"] == 60
+    assert mark["executor_positions"][0]["current_price"] == 120
+
+    missing = (
+        _app(
+            monkeypatch,
+            bots={"data": []},
+            executors={"positions": [position]},
+            price_response={"prices": {}},
+        )
+        .get("/api/v1/servers/v2/positions")
+        .json()
+    )
+    assert missing["executor_positions_status"] == "partial"
+    assert missing["executor_positions"][0]["notional_value"] is None
+
+
+@pytest.mark.parametrize("slow_source", ["executors", "bots", "prices"])
+def test_owner_and_price_reads_are_bounded_and_preserve_other_source(
+    monkeypatch, slow_source
+):
+    monkeypatch.setattr(route, "POSITION_READ_TIMEOUT", 0.01, raising=False)
+    position = {
+        "connector_name": "okx",
+        "trading_pair": "BNB-USDC",
+        "amount": 0.5,
+        "entry_price": 100,
+        "unrealized_pnl_quote": 0,
+    }
+    _app(
+        monkeypatch,
+        bots={"data": [CURRENT]},
+        executors={"positions": [position]},
+        price_response=(
+            None if slow_source == "prices" else {"prices": {"BNB-USDC": 120}}
+        ),
+        slow_source=slow_source,
+    )
+    body = asyncio.run(
+        asyncio.wait_for(
+            route.get_consolidated_positions("v2", WebUser(id=7, role="user")),
+            timeout=0.1,
+        )
+    )
+    if slow_source == "executors":
+        assert body["executor_positions"] is None
+        assert body["executor_positions_status"] == "unavailable"
+        assert len(body["bot_positions"]) == 1
+        assert body["bot_positions_status"] == "partial"
+    elif slow_source == "bots":
+        assert body["bot_positions"] is None
+        assert body["bot_positions_status"] == "unavailable"
+        assert len(body["executor_positions"]) == 1
+        assert body["executor_positions_status"] == "partial"
+    else:
+        assert body["executor_positions_status"] == "partial"
+        assert body["executor_positions"][0]["current_price"] is None
+
+
+@pytest.mark.parametrize("status", ["starting", "stopping"])
+def test_transitional_controller_positions_are_not_current_metrics(monkeypatch, status):
+    controller = {
+        **CURRENT,
+        "performance": {
+            "controller": {
+                "status": status,
+                "performance": {
+                    "positions_summary": CURRENT["performance"]["controller"][
+                        "performance"
+                    ]["positions_summary"]
+                },
+            }
+        },
+    }
+    body = (
+        _app(monkeypatch, bots={"data": [controller]})
+        .get("/api/v1/servers/v2/positions")
+        .json()
+    )
+    assert body["bot_positions_status"] == "partial"
+    assert body["bot_positions"] == []
+    assert len(body["non_current_bot_positions"]) == 1
 
 
 @pytest.mark.parametrize(
@@ -457,3 +607,31 @@ def test_finite_inputs_with_overflowing_notional_are_partial(monkeypatch):
     )
     assert body["bot_positions_status"] == "partial"
     assert body["bot_positions"][0]["notional_value"] is None
+
+
+@pytest.mark.parametrize("raw_mark", [float("nan"), float("inf"), -1, True])
+def test_invalid_raw_mark_keeps_known_quantity_and_cost_unknown_mark(
+    monkeypatch, raw_mark
+):
+    position = {
+        "connector_name": "okx",
+        "trading_pair": "BNB-USDC",
+        "amount": 0.5,
+        "entry_price": 100,
+        "current_price": raw_mark,
+        "unrealized_pnl_quote": 0,
+    }
+    body = (
+        _app(
+            monkeypatch,
+            bots={"data": []},
+            executors={"positions": [position]},
+            price_response={"prices": {}},
+        )
+        .get("/api/v1/servers/v2/positions")
+        .json()
+    )
+    assert body["executor_positions_status"] == "partial"
+    row = body["executor_positions"][0]
+    assert row["amount"] == 0.5 and row["cost_basis_value"] == 50
+    assert row["current_price"] is None and row["notional_value"] is None

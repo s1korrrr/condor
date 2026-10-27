@@ -889,6 +889,93 @@ def test_duplicate_runtime_identity_with_third_row_is_unavailable_not_key_error(
     assert status == {"stable": "unavailable"}
 
 
+def test_registry_key_conflict_is_unknown_not_overwritten_with_key_identity():
+    from condor.fetchers.bot_performance import fetch_current_bot_performance
+
+    payload = {
+        "data": {
+            "stable": {
+                "bot_name": "foreign-runtime",
+                "status": "running",
+                "performance": {
+                    "c": {
+                        "status": "running",
+                        "performance": {
+                            "unrealized_pnl_quote": 0,
+                            "positions_summary": [],
+                        },
+                    }
+                },
+            }
+        }
+    }
+    client = _FakeClient(rows_by_id={}, snapshots=[], active_status=payload)
+    resolved, status = asyncio.run(fetch_current_bot_performance(client, ["stable"]))
+    assert resolved == {}
+    assert status == {"stable": "unavailable"}
+
+
+@pytest.mark.parametrize("runtime_status", ["starting", "stopping"])
+def test_transitional_runtime_metrics_do_not_qualify_current_book(runtime_status):
+    from condor.fetchers.bot_performance import fetch_current_bot_performance
+
+    payload = {
+        "data": [
+            {
+                "bot_name": "stable",
+                "status": runtime_status,
+                "performance": {
+                    "c": {
+                        "status": "running",
+                        "performance": {
+                            "unrealized_pnl_quote": 0,
+                            "positions_summary": [],
+                        },
+                    }
+                },
+            }
+        ]
+    }
+    client = _FakeClient(rows_by_id={}, snapshots=[], active_status=payload)
+    resolved, status = asyncio.run(fetch_current_bot_performance(client, ["stable"]))
+    assert resolved == {}
+    assert status == {"stable": "unavailable"}
+
+
+def test_active_runtime_empty_performance_is_unavailable():
+    from condor.fetchers.bot_performance import fetch_current_bot_performance
+
+    client = _FakeClient(
+        rows_by_id={},
+        snapshots=[],
+        active_status={
+            "data": [{"bot_name": "stable", "status": "running", "performance": {}}]
+        },
+    )
+    resolved, status = asyncio.run(fetch_current_bot_performance(client, ["stable"]))
+    assert resolved == {}
+    assert status == {"stable": "unavailable"}
+
+
+def test_active_runtime_registry_timeout_is_unavailable(monkeypatch):
+    import condor.fetchers.bot_performance as module
+
+    monkeypatch.setattr(module, "ACTIVE_BOTS_TIMEOUT", 0.01, raising=False)
+
+    class SlowOrchestration:
+        async def get_active_bots_status(self):
+            await asyncio.Future()
+
+    client = SimpleNamespace(bot_orchestration=SlowOrchestration())
+    resolved, status = asyncio.run(
+        asyncio.wait_for(
+            module.fetch_current_bot_performance(client, ["stable"]), timeout=0.1
+        )
+    )
+    assert resolved == {}
+    assert status == {"stable": "unavailable"}
+
+
 def test_current_active_unrealized_excludes_stopped_controller():
     from condor.fetchers.bot_performance import fetch_current_bot_performance
 

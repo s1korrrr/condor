@@ -1095,15 +1095,19 @@ def test_admission_incidents_are_owned_by_trading_only_while_capability_is_repor
     store = {
         "state": "available",
         "incidents": [
-            {"id": "execution-main/buy_admission_issue", "severity": "critical", "state": "open",
+            # The producer's real id shape (scripts/stack_v2_health.py `_incident`):
+            # f"{service}:{code}:{observed_at}:{sha24(episode)}", so ownership is decided by `code`.
+            {"id": "execution-main:buy_admission_issue:2026-10-22T10:40:00+00:00:0123456789abcdef01234567",
+             "code": "buy_admission_issue", "severity": "critical", "state": "open",
              "first_seen_at": "2026-10-22T10:40:00+00:00", "service": "execution-main", "title": "BUY admission"},
-            {"id": "execution-main/container_down", "severity": "critical", "state": "open",
+            {"id": "execution-main:service_unavailable:2026-10-22T10:40:00+00:00",
+             "code": "service_unavailable", "severity": "critical", "state": "open",
              "first_seen_at": "2026-10-22T10:40:00+00:00", "service": "execution-main", "title": "Down"},
         ],
     }
     seen = set()
     owned = ev.detect_incidents(store, started=0, seen=seen.__contains__,
-                                owned_suffixes=ev.TRADING_OWNED_INCIDENT_SUFFIXES)
+                                owned_codes=ev.TRADING_OWNED_INCIDENT_CODES)
     assert [e.title for e in owned.events] == ["execution-main · Down"]
     assert not any("buy_admission_issue" in key for key in owned.seen), "ownership must not be permanent"
     seen.update(owned.seen)

@@ -475,7 +475,7 @@ class PushWorker:
         # The trading detector owns admission incidents only while every live bot reports a fresh
         # capability; otherwise the host incident stays the one alert for that cause.
         owned = (
-            ev.TRADING_OWNED_INCIDENT_SUFFIXES
+            ev.TRADING_OWNED_INCIDENT_CODES
             if live
             and all(
                 r.runtime_ok
@@ -497,7 +497,7 @@ class PushWorker:
                 started=started,
                 seen=self.outbox.seen_checker("stack"),
                 min_severity=self.config.incident_min_severity,
-                owned_suffixes=owned,
+                owned_codes=owned,
             )
             if detection.events or detection.seen:
                 self.outbox.commit(

@@ -195,8 +195,10 @@ async def test_v1_without_quant_endpoints_is_filled_from_runtime_and_fill_ledger
     # No lifecycle projection: the 24h cycle counts are unknown, never zero.
     assert v1["trades"] == {"lifetime": 2, "opened_24h": None, "closed_24h": None}
     assert v1["report_at_ms"] == NOW_MS - 4_000 and v1["report_stale"] is False
-    assert [g for g in v1["missing"] if g["field"] != "pnl_day"] == []
-    assert not [m for m in body["missing"] if m.get("bot") == "ok_rsi" and m.get("section") == "bots" and m["field"] != "pnl_day"]
+    # The recorded runtime shape predates the owner's trading capability: that absence is named, not hidden.
+    assert [g for g in v1["missing"] if g["field"] != "pnl_day"] == [{"field": "trading", "reason": fs.INVALID}]
+    assert not [m for m in body["missing"] if m.get("bot") == "ok_rsi" and m.get("section") == "bots"
+                and m["field"] not in ("pnl_day", "trading")]
 
 
 @sync

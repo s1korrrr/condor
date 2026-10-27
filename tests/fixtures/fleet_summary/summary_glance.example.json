@@ -44,12 +44,24 @@
  "missing": [
   {
    "section": "bots",
+   "bot": "ok_rsi",
+   "field": "trading",
+   "reason": "SOURCE_UNAVAILABLE"
+  },
+  {
+   "section": "bots",
    "bot": "rsi_modular_v2",
    "field": "positions",
    "reason": "OWNER_NOT_CURRENT"
+  },
+  {
+   "section": "bots",
+   "bot": "rsi_modular_v2",
+   "field": "trading",
+   "reason": "SOURCE_UNAVAILABLE"
   }
  ],
- "missing_total": 1,
+ "missing_total": 3,
  "wallet": {
   "equity": "1000",
   "unit": "USDT",
@@ -65,7 +77,8 @@
   "valuation_complete": true,
   "unpriced_assets": [],
   "unpriced_count": 0,
-  "stale": false
+  "stale": false,
+  "held": false
  },
  "pnl": {
   "unit": "USDC",

@@ -12,13 +12,26 @@ import { durationLabel, projectBotStats } from '@/features/bots/fleet-tiles';
 import { botChartsHref } from '@/features/bots/chart-links';
 import './fleet-strip.css';
 import { fleetInput } from './fleet-input';
+import type { BotCard } from '@/lib/fleet-summary';
+import { botTradingView, type BotTradingView } from '@/features/bots/summary-card';
 
 const tone = (value: string | null | undefined) => (value ?? 'unknown').toLowerCase().split(/[\s:]/)[0];
 const label = (value: string | null | undefined) => value?.replaceAll('_', ' ') || 'unknown';
 const toneClass = (value: number | string | null | undefined) => metricTone(value) ? `q-${metricTone(value)}` : undefined;
+const TRADING_TONE: Record<BotTradingView['level'], string> = { ok: 'ok', unverified: 'unknown', restricted: 'neutral', blocked: 'blocked' };
+
+/** The fleet summary's per-bot cards, keyed by bot id, and when the server generated them. */
+export type FleetSummaryCards = { cards: Record<string, BotCard>; generatedAtMs: number };
+
+/** Trading capability in the app's words ("ETH-USDC buying restricted"). Shown only when the bot cannot fully trade or the claim expired. */
+export function TradingPill({ view }: { view: BotTradingView | null }) {
+  if (!view?.text) return null;
+  return <span className="q-pill" data-tone={TRADING_TONE[view.level]} data-trading={view.level} data-attention={view.attention ? 'true' : 'false'}
+    title={`${view.why ? `${view.why} · ` : ''}Trading capability from the fleet summary; process status is separate.`}>{view.text}</span>;
+}
 
 /** One compact card per registered bot: identity, lifecycle, operational counters and a small PnL chip (full PnL stays in Capital). */
-function FleetBotCard({ source, reads, status, color, now }: { source: TradingVisualsSource; reads: OwnerReads | undefined; status: string | null; color: string; now: number }) {
+function FleetBotCard({ source, reads, status, color, now, trading }: { source: TradingVisualsSource; reads: OwnerReads | undefined; status: string | null; color: string; now: number; trading: BotTradingView | null }) {
   const quant = reads?.quant ?? null;
   const stats = reads ? projectBotStats(fleetInput(reads), now) : null;
   const pairs = quant?.pairs.length ? quant.pairs : (reads?.view?.pairs ?? []).map(row => ({ controllerId: row.controllerId, pair: row.pair, state: row.phase ?? 'UNKNOWN', planMode: null, planNext: row.planNext, nextCondition: row.reason, unrealized: row.bagPnl === null ? null : String(row.bagPnl) }));
@@ -54,6 +67,7 @@ function FleetBotCard({ source, reads, status, color, now }: { source: TradingVi
       <div className="fs-head__state">
         <StateGlyph state={freshness} />
         <span className="q-pill" data-tone={tone(status)}>{label(status)}</span>
+        <TradingPill view={trading} />
       </div>
     </header>
     <div className="q-tags">
@@ -86,14 +100,16 @@ function FleetBotCard({ source, reads, status, color, now }: { source: TradingVi
 }
 
 /** One card per registered bot; N bots flow across the row. Bots are discovered from the source registry, never named here. */
-export function FleetStrip({ sources, readsByBot, page, now }: {
-  sources: TradingVisualsSource[]; readsByBot: Record<string, OwnerReads>; page?: BotsPageResponse; now: number;
+export function FleetStrip({ sources, readsByBot, page, now, summary }: {
+  sources: TradingVisualsSource[]; readsByBot: Record<string, OwnerReads>; page?: BotsPageResponse; now: number; summary?: FleetSummaryCards | null;
 }) {
   if (!sources.length) return null;
   return <section className="fs-grid" data-panel-id="B28" aria-label="Registered bots">
     {sources.map((source, index) => {
       const reads = readsByBot[`${source.server}:${source.bot}`];
+      const card = summary?.cards[source.bot];
       return <FleetBotCard key={`${source.server}:${source.bot}`} source={source} reads={reads} color={ASSET_COLORS[index % ASSET_COLORS.length]} now={now}
+        trading={card && summary ? botTradingView(card, now, summary.generatedAtMs) : null}
         status={reads?.status ?? page?.bots.find(item => item.bot_name === source.bot)?.status ?? null} />;
     })}
   </section>;

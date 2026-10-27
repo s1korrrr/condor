@@ -20,7 +20,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
-from typing import Any, Callable, Iterable, Mapping, Sequence
+from typing import Any, Callable, Collection, Iterable, Mapping, Sequence
 
 from condor import fleet_telegram_views as views
 from condor import trading_words
@@ -1006,9 +1006,10 @@ def capability_reported(runtime_payload: Any, *, now: float, max_age_seconds: fl
     )
 
 
-# Host incidents the trading-capability detector owns while capability is reported, so the same
-# cause is not announced twice. They stay visible in Operations and the Alerts tab.
-TRADING_OWNED_INCIDENT_SUFFIXES = ("buy_admission_issue",)
+# Host incident codes the trading-capability detector owns while capability is reported, so the same
+# cause is not announced twice. They stay visible in Operations and the Alerts tab. Matched on the
+# incident's ``code``: the owner id is ``service:code:observed_at[:sha24(episode)]`` and carries a hash.
+TRADING_OWNED_INCIDENT_CODES = frozenset({"buy_admission_issue"})
 
 
 # --------------------------------------------------------------------------- incidents
@@ -1021,7 +1022,7 @@ def detect_incidents(
     seen: Seen,
     min_severity: str = "critical",
     labels: Mapping[str, str] | None = None,
-    owned_suffixes: Sequence[str] = (),
+    owned_codes: Collection[str] = (),
 ) -> Detection:
     """Open (and later recovered) host-monitor incidents.
 
@@ -1066,7 +1067,7 @@ def detect_incidents(
             if first < started or severity_rank(severity) < floor:
                 keys.append(skip_key)
                 continue
-            if any(incident_id.endswith(suffix) for suffix in owned_suffixes):
+            if incident.get("code") in owned_codes:
                 # Owned for now, not forever: no key, so it is reconsidered if ownership lapses.
                 continue
             keys.append(opened_key)

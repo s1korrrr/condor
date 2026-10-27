@@ -89,7 +89,7 @@ function PortfolioAccount({server,embedded=false,section,onSectionChange,range:c
       {view==='holdings'?<>
         {summary.current&&<>
         <dl className={`${panel} grid grid-cols-2 gap-6 lg:grid-cols-4`}>
-          {metric(summary.complete?'Account value':'Priced assets value',formatValue(summary.pricedTotal),`${data.quote_currency} · last traded spot prices`)}
+          {metric(summary.complete?'Equity':'Valued assets',formatValue(summary.pricedTotal),`${data.quote_currency} · last traded spot prices`)}
           {metric('Available value',formatValue(summary.availableValue),summary.complete?`${data.quote_currency} · exchange available`:`${data.quote_currency} · priced assets only`)}
           {metric('Locked value',formatValue(summary.lockedValue),summary.complete?`${data.quote_currency} · total minus available`:`${data.quote_currency} · priced assets only`)}
           {metric('Valuation coverage',summary.current?`${holdings.length-summary.unpricedCount} / ${holdings.length}`:'Unavailable','Valued assets or zero inventory')}

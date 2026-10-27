@@ -182,6 +182,9 @@ class LiveReaders:
                             "window": HISTORY_WINDOW,
                             "limit": "1500",
                             "resolution": "1m",
+                            # The dashboard's Market Pulse replays this projection; a thinned
+                            # page would smooth and hold over different points.
+                            "projection": "canonical_state",
                         },
                     )
             if page.get("snapshot_id") != frame["snapshot_id"]:
@@ -219,6 +222,8 @@ class LiveReaders:
 
 
 READERS = LiveReaders()
+# Last good wallet and trading observations, so one slow or failed read does not blank them.
+LAST_KNOWN = summary.LastKnown()
 
 
 def _tag_matches(header: Optional[str], tag: str) -> bool:
@@ -294,6 +299,7 @@ async def cached_summary(
                             is_admin=admin,
                             user_id=user_id,
                             clock_ms=lambda: time.time() * 1000,
+                            last_known=LAST_KNOWN,
                         )
                     if CACHE_TTL_SECONDS > 0:
                         expires = time.monotonic() + CACHE_TTL_SECONDS

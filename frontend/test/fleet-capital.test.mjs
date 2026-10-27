@@ -123,17 +123,18 @@ const tileInput = (over = {}) => ({
 const ids = result => result.tiles.map(tile => tile.id);
 
 test('tiles exist only when computed: windows, wallet change and PnL drawdown show; risk and cycle tiles stay out', () => {
-  const result = capital.fleetTiles(tileInput());
+  // A non-fixed range keeps its own C02 tile; 1D/7D/30D are the fixed 24h/7d/30d tiles themselves.
+  const result = capital.fleetTiles(tileInput({ rangeLabel: '90D' }));
   assert.deepEqual(ids(result), ['C02', 'C02-wallet', 'C03', 'C18-weekly', 'C18-monthly', 'C18-maxdd', 'C18-pnldd']);
   const [period, wallet, daily, , monthly, , dd] = result.tiles;
   assert.equal(period.value, '5');
   assert.equal(period.unit, 'USDC');
-  assert.match(period.note, /7D window · 1 of 1 bot$/);
+  assert.match(period.note, /90D window · 1 of 1 bot$/);
   assert.equal(wallet.value, '-20');
   assert.equal(wallet.unit, 'USDT');
   assert.match(wallet.note, /Includes deposits and withdrawals/);
   assert.equal(daily.value, '1.5');
-  assert.match(daily.note, /^24h window · 1 of 1 bot$/);
+  assert.match(daily.note, /^trailing 24h window · 1 of 1 bot$/);
   assert.match(monthly.note, /^since 2026-09-28 12:00 UTC \(history starts here\) · 1 of 1 bot$/);
   assert.equal(dd.value, '-2');
   assert.match(dd.note, /flow independent/);
@@ -175,7 +176,7 @@ test('risk tiles appear after the minimum days of completed fleet PnL and the fo
 test('risk uses the matched wallet basis and identifies an incomplete admitted cohort', () => {
   const bars = Array.from({ length: 16 }, (_, index) => ({ day: `2026-09-${String(index + 1).padStart(2, '0')}`, net: index % 2 ? 10 : -5, realized: 0, unrealized: 0, bots: 1, cumulative: 0, today: false }));
   const partial = window({ quote: 'USDT', expected: 2, missing: [{ bot: 'b', reason: 'No saved samples' }] });
-  const result = capital.fleetTiles(tileInput({ bars, range: partial, riskWindow: partial, riskBasis: 1000 }));
+  const result = capital.fleetTiles(tileInput({ rangeLabel: '90D', bars, range: partial, riskWindow: partial, riskBasis: 1000 }));
   assert.ok(Math.abs(result.risk.volatilityDaily - perf.fleetRisk(bars.map(bar => bar.net / 1000)).volatilityDaily) < 1e-12);
   assert.equal(result.tiles.find(tile => tile.id === 'C18-vol').state.kind, 'incomplete');
   assert.equal(result.tiles.find(tile => tile.id === 'C02').state.kind, 'incomplete');

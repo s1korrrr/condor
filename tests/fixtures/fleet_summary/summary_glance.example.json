@@ -41,8 +41,21 @@
    "reason": null
   }
  },
- "missing": [],
- "missing_total": 0,
+ "missing": [
+  {
+   "section": "bots",
+   "bot": "ok_rsi",
+   "field": "trading",
+   "reason": "SOURCE_UNAVAILABLE"
+  },
+  {
+   "section": "bots",
+   "bot": "rsi_modular_v2",
+   "field": "trading",
+   "reason": "SOURCE_UNAVAILABLE"
+  }
+ ],
+ "missing_total": 2,
  "wallet": {
   "equity": "1000",
   "unit": "USDT",
@@ -58,7 +71,8 @@
   "valuation_complete": true,
   "unpriced_assets": [],
   "unpriced_count": 0,
-  "stale": false
+  "stale": false,
+  "held": false
  },
  "pnl": {
   "unit": "USDC",

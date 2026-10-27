@@ -387,6 +387,7 @@ async def test_full_summary_golden_numbers(store):
         "unpriced_assets": [],
         "unpriced_count": 0,
         "stale": False,
+        "held": False,
     }
 
     pnl = body["pnl"]
@@ -446,14 +447,23 @@ async def test_full_summary_golden_numbers(store):
     assert (
         v2["report_stale"] is True
     )  # heartbeat 60s old: older than the 30s owner currency window
+    # The fixture's day window sums across unrecorded time; like the fleet window, the bot's
+    # own day keeps `partial` for a late history start and carries the gap in `uncovered_ms`.
+    ok_day_gap = next(
+        b["uncovered_ms"] for b in body["pnl"]["day"]["bots"] if b["bot"] == "ok_rsi"
+    )
+    assert ok_day_gap > 0
     assert ok["pnl_day"] == {
         "change": "3",
         "unit": "USDC",
         "partial": False,
         "stale": False,
+        "uncovered_ms": ok_day_gap,
     }
     assert v2["pnl_day"]["partial"] is True
-    assert ok["net_now"] == {"value": "3.5", "unit": "USDC", "source": "controller"}
+    # The fixture status is not a current native observation, so (as in the dashboard's
+    # projectControllerPnl) the controller sum is not used; the newest saved sample stands in.
+    assert ok["net_now"] == {"value": "4", "unit": "USDC", "source": "history"}
     assert ok["fees"] == {"amount": "0.42", "unit": "USDC"}
     assert ok["trades"] == {"lifetime": 12, "opened_24h": 2, "closed_24h": 1}
     # A paper card carries its own simulated numbers; they never enter the fleet windows above.
@@ -463,12 +473,13 @@ async def test_full_summary_golden_numbers(store):
         "unit": "USDC",
         "partial": True,
         "stale": False,
+        "uncovered_ms": 3_540_000,
         "simulated": True,
     }
     assert paper["net_now"] == {
         "value": "9",
         "unit": "USDC",
-        "source": "controller",
+        "source": "history",
         "simulated": True,
     }
     assert all(m.get("bot") != "ok_rsi_paper" for m in body["missing"])
@@ -596,10 +607,10 @@ async def test_full_incident_projection_details_are_bounded_and_glance_stays_com
     assert full["incidents"]["items"] == [
         {"id": "disk", "service": "host", "code": "host_storage_degraded", "severity": "warning", "state": "open",
          "title": "Storage degraded", "detail": "3.84 GiB available", "first_seen_at_ms": NOW_MS - 30000,
-         "last_seen_at_ms": NOW_MS - 5000, "resolved_at_ms": None},
+         "last_seen_at_ms": NOW_MS - 5000, "resolved_at_ms": None, "bot": None, "subject": None},
         {"id": "recovery", "service": None, "code": None, "severity": "warning", "state": "resolved",
          "title": "Previous warning", "detail": None, "first_seen_at_ms": NOW_MS - 60000,
-         "last_seen_at_ms": NOW_MS - 50000, "resolved_at_ms": NOW_MS - 40000},
+         "last_seen_at_ms": NOW_MS - 50000, "resolved_at_ms": NOW_MS - 40000, "bot": None, "subject": None},
     ]
     assert full["incidents"]["items_truncated"] is False
     glance = await fs.build_fleet_summary(SERVER, "glance", readers, NOW_MS, is_admin=True, user_id=7)
@@ -713,10 +724,24 @@ async def test_long_incident_text_is_clipped_without_losing_the_incident(store):
 async def test_a_paper_bot_alone_does_not_make_the_bots_section_partial(tmp_path):
     empty = PerformanceHistory(tmp_path / "native-performance.sqlite3")
     seed(empty, ("ok_rsi",))  # the paper bot has no recorded history yet
-    body = await build(empty, registry=["ok_rsi", "ok_rsi_paper"])
+
+    class LiveRuntime(FakeReaders):
+        async def owner(self, bot, path, params):
+            if bot == "ok_rsi" and path == "bootstrap":  # the live bot's capability is published
+                body = _observed(_capability())
+                body["runtime_status"]["bot_name"] = body["monitoring"]["bot_name"] = bot
+                return fs.OwnerRead(body)
+            return await super().owner(bot, path, params)
+
+    body = await fs.build_fleet_summary(
+        SERVER, "full", LiveRuntime(empty, registry=["ok_rsi", "ok_rsi_paper"]), NOW_MS,
+        is_admin=True, user_id=7,
+    )
     paper = card(body, "ok_rsi_paper")
     assert paper["pnl_day"] is None
-    assert [m["reason"] for m in paper["missing"]] == [fleet_pnl.NO_SAMPLES]
+    # No history and no current native controller observation: both day change and net are unknown.
+    assert [(m["field"], m["reason"]) for m in paper["missing"]] == [
+        ("pnl_day", fleet_pnl.NO_SAMPLES), ("net_now", fleet_pnl.NO_SAMPLES)]
     assert all(m.get("bot") != "ok_rsi_paper" for m in body["missing"])
     assert body["sections"]["bots"]["status"] == "ok", body["sections"]["bots"]
     assert body["sections"]["bots"]["reason"] is None
@@ -919,16 +944,11 @@ def test_numeric_summary_admission_and_exact_fee_controller_sums():
         assert fs._dec(bad) is None
     assert fs._dec("0.1") == fleet_pnl.Decimal("0.1")
     huge = "1" + "0" * 30
-    page = {
-        "controllers": [
-            {"bot_name": "bot", "global_pnl_quote": huge, "trading_pair": "ETH-USDC"},
-            {"bot_name": "bot", "global_pnl_quote": "1", "trading_pair": "BTC-USDC"},
-        ]
-    }
+    # Controller net admits only finite JSON numbers (see test_fleet_summary_sync_fixes); exact
+    # decimal sums are still exercised through the owner fee ledger below.
     exact = fleet_pnl.Decimal(huge[:-1] + "1")
-    assert fs._controller_net(page, "bot") == (exact, "USDC")
-    page["controllers"][0]["global_pnl_quote"] = "9" * 128
-    assert fs._controller_net(page, "bot") is None
+    assert fleet_pnl.exact_sum([fs._dec(huge), fs._dec("1")]) == exact
+    assert fs._dec("9" * 128) is None
     fills = {
         "rows": [
             {

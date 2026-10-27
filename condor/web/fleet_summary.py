@@ -142,6 +142,24 @@ class MarketRead:
     history_reason: Optional[str] = None
 
 
+class LastKnown:
+    """Last good observations a later build may stand on when its own read fails.
+
+    Process memory only, owned by the caller (the route keeps one per process). A held value keeps its
+    own observation time, so clients age it exactly as they age a fresh one; it is never renewed.
+
+    * wallet: the last valid account valuation per server, used only when the account read failed
+      (``SOURCE_UNAVAILABLE``) and only while its own age is within the wallet ``stale_after_ms``.
+      Denied, unconfigured or invalid answers are real answers and are never masked.
+    * trading: the last valid capability per (server, bot), used when the owner runtime read failed or
+      was rejected, for at most ``TRADING_HOLD_MS`` after its own observation, both sides ``unverified``.
+    """
+
+    def __init__(self) -> None:
+        self.wallet: dict[str, Any] = {}
+        self.trading: dict[tuple[str, str], dict] = {}
+
+
 class Readers(Protocol):
     def registered_bots(self, server: str) -> Optional[list[str]]: ...
     async def bots_status(self, server: str) -> Any: ...
@@ -424,6 +442,19 @@ def _nonneg_dec(value: Any) -> Optional[Decimal]:
 TRADING_STATES = ("can_trade", "restricted", "blocked", "unverified")
 TRADING_SIDES = ("buy", "sell", "both")
 TRADING_MAX_RESTRICTIONS = 20
+# A failed owner read may stand on the last good capability this long (the same 5-minute bound as the
+# ``net_now`` history fallback). It is shown as last known: both sides ``unverified``, own ``observed_ms``.
+TRADING_HOLD_MS = 300_000
+PAIR_RE = re.compile(r"[A-Z0-9]+-[A-Z0-9]+")
+REASON_CODE_RE = re.compile(r"[a-z0-9_]{1,64}")
+SOURCE_RE = re.compile(r"[a-z][a-z0-9_]{0,39}")
+
+
+def _controller_id(value: Any) -> Optional[str]:
+    """An owner controller identity: printable, at most 100 characters, else ``None``."""
+    if not isinstance(value, str) or not value.strip() or len(value) > 100:
+        return None
+    return value if value.isprintable() else None
 
 
 def project_trading(value: Any, current: bool) -> Optional[dict]:
@@ -453,6 +484,7 @@ def project_trading(value: Any, current: bool) -> Optional[dict]:
         ):
             return None
         detail = item.get("detail")
+        source = item.get("source")
         subject, why = trading_words.describe(item["side"], pair, code)
         rows.append(
             {
@@ -465,6 +497,13 @@ def project_trading(value: Any, current: bool) -> Optional[dict]:
                 "since_ms": _instant_ms(item.get("since")),
                 "detail": detail[:200] if isinstance(detail, str) else None,
                 "alert": item["alert"],
+                # Join keys to the host incident of the same fault (incident ``bot`` + ``subject``).
+                "controller_id": _controller_id(item.get("controller_id")),
+                "source": (
+                    source
+                    if isinstance(source, str) and SOURCE_RE.fullmatch(source)
+                    else None
+                ),
             }
         )
     # Alerting restrictions first, so the bound never hides a real inability behind a policy note.
@@ -476,6 +515,20 @@ def project_trading(value: Any, current: bool) -> Optional[dict]:
         "coverage": "partial" if root.get("coverage") != "complete" else "complete",
         "restrictions": rows[:TRADING_MAX_RESTRICTIONS],
         "restrictions_total": len(rows),
+        "observed_ms": _instant_ms(root.get("observed_at")),
+        "held": False,
+        "reason": None,
+    }
+
+
+def held_trading(trading: dict, reason: str) -> dict:
+    """The last good capability standing in for a failed read: last known, never able to trade."""
+    return {
+        **trading,
+        "buy": "unverified",
+        "sell": "unverified",
+        "held": True,
+        "reason": reason,
     }
 
 
@@ -734,13 +787,51 @@ def _project_incident_item(
         or (row["state"] == "open" and resolved is not None)
     ):
         return None, False, False
+    bot, subject, link_valid = _incident_link(row)
     return {
         "id": incident_id,
         **fields,
         "severity": row["severity"],
         "state": row["state"],
         **times,
-    }, True, clipped
+        "bot": bot,
+        "subject": subject,
+    }, True, clipped or not link_valid
+
+
+def _incident_link(row: dict) -> tuple[Optional[str], Optional[dict], bool]:
+    """The owner's structured link to a trading restriction: ``bot`` and ``subject``.
+
+    ``subject`` is ``{controller_id, pair, reason_code}`` with the same normalised reason code as the
+    bot card's restriction, so a client can show one fault once. Absent fields stay ``None``; a
+    present but malformed link is dropped and reported as an incomplete detail.
+    """
+    raw_bot, raw_subject = row.get("bot"), row.get("subject")
+    bot = (
+        raw_bot
+        if isinstance(raw_bot, str) and re.fullmatch(r"[A-Za-z0-9_-]{1,64}", raw_bot)
+        else None
+    )
+    subject = None
+    if isinstance(raw_subject, dict):
+        controller, pair, code = (
+            raw_subject.get("controller_id"),
+            raw_subject.get("pair"),
+            raw_subject.get("reason_code"),
+        )
+        if (
+            _controller_id(controller) is not None
+            and isinstance(pair, str)
+            and len(pair) <= 80
+            and PAIR_RE.fullmatch(pair)
+            and isinstance(code, str)
+            and REASON_CODE_RE.fullmatch(code)
+        ):
+            subject = {"controller_id": controller, "pair": pair, "reason_code": code}
+    valid = (raw_bot is None or bot is not None) and (
+        raw_subject is None or subject is not None
+    )
+    return bot, subject, valid
 
 
 # ── assembly ──
@@ -999,35 +1090,212 @@ def _market_section(
     )
 
 
-def _controller_net(
-    page: Optional[dict], bot: str
-) -> Optional[tuple[Decimal, Optional[str]]]:
-    """Controller-report net PnL: the sum over the bot's controllers, only when every controller reports a total.
+CONTROLLER_PNL_TOLERANCE = Decimal("0.000001")
 
-    The unit is the common quote of the controllers' trading pairs, or ``None`` when it cannot be read.
-    """
-    rows = [c for c in (page or {}).get("controllers", []) if c.get("bot_name") == bot]
-    if not rows:
+
+def _native_fresh(observed: Any, threshold: Any, now_ms: float) -> bool:
+    """``expireNativeBotPage``'s freshness rule (``bot-monitoring.ts``): an observation in epoch seconds
+    is current while ``-5 s <= age < min(threshold, 30 s)``."""
+    if not all(
+        isinstance(value, (int, float))
+        and not isinstance(value, bool)
+        and math.isfinite(value)
+        and value > 0
+        for value in (observed, threshold)
+    ):
+        return False
+    age_ms = now_ms - observed * 1000
+    return -5_000 <= age_ms < min(threshold, RUNTIME_STALE_CAP_S) * 1000
+
+
+def _native_amount(value: Any) -> Optional[Decimal]:
+    """A finite JSON number, as the dashboard's ``finite()`` admits it; anything else is unknown."""
+    if isinstance(value, bool) or not isinstance(value, (int, float)):
         return None
-    values = []
-    quotes = set()
-    for row in rows:
-        value = _dec(row.get("global_pnl_quote"))
-        if value is None:
-            return None
-        values.append(value)
-        pair = row.get("trading_pair")
-        quotes.add(
-            pair.split("-")[1]
-            if isinstance(pair, str) and pair.count("-") == 1
-            else None
+    return _dec(value) if math.isfinite(value) else None
+
+
+def _controller_net(
+    page: Optional[dict], bot: str, now_ms: float
+) -> Optional[tuple[Decimal, str]]:
+    """Controller-report net PnL under the dashboard's ``projectControllerPnl`` rules (``controller-pnl.ts``).
+
+    ``None`` unless the bot has one current native observation (status and performance within
+    ``min(threshold, 30 s)``, ``controller_count_current``), exactly ``num_controllers`` controller rows
+    with unique identities, one quote per controller and across the bot, every total reported, and
+    every row's total reconciling with realized + unrealized within 1e-6. A multi-symbol controller's
+    aggregate counts once.
+    """
+    page = page or {}
+    bots, controllers = page.get("bots"), page.get("controllers")
+    if (
+        not isinstance(bots, list)
+        or not isinstance(controllers, list)
+        or any(
+            not isinstance(row, dict) or not isinstance(row.get("bot_name"), str)
+            for row in bots + controllers
         )
-    total = fleet_pnl.exact_sum(values)
-    return (
-        (total, quotes.pop() if len(quotes) == 1 else None)
-        if total is not None
-        else None
+    ):
+        return None
+    selected = [row for row in bots if row["bot_name"] == bot]
+    if len(selected) != 1:
+        return None
+    own, rows = selected[0], [row for row in controllers if row["bot_name"] == bot]
+    count = own.get("num_controllers")
+    current = (
+        own.get("controller_count_current") is True
+        and _native_fresh(
+            own.get("status_received_at"), own.get("status_stale_after_seconds"), now_ms
+        )
+        and _native_fresh(
+            own.get("performance_received_at"),
+            own.get("performance_stale_after_seconds"),
+            now_ms,
+        )
     )
+    if (
+        not current
+        or type(count) is not int
+        or count < 0
+        or len(rows) != count
+        or not rows
+    ):
+        return None
+    identities: set[str] = set()
+    quotes: set[str] = set()
+    totals: list[Decimal] = []
+    for row in rows:
+        identity = row.get("controller_id")
+        if (
+            not isinstance(identity, str)
+            or not identity.strip()
+            or identity in identities
+        ):
+            return None
+        pair = row.get("trading_pair")
+        pairs = [pair] if isinstance(pair, str) and PAIR_RE.fullmatch(pair) else []
+        symbols = _obj(row.get("custom_info")).get("symbols")
+        entries = list(symbols.items()) if isinstance(symbols, dict) else []
+        if len(entries) >= 2 or not pairs:
+            if len(entries) < 2 or any(
+                not PAIR_RE.fullmatch(name) or not isinstance(value, dict)
+                for name, value in entries
+            ):
+                return None
+            pairs = sorted(name for name, _ in entries)
+        row_quotes = {name.split("-")[1] for name in pairs}
+        if len(row_quotes) != 1:
+            return None
+        identities.add(identity)
+        quotes |= row_quotes
+        total, realized, unrealized = (
+            _native_amount(row.get(key))
+            for key in (
+                "global_pnl_quote",
+                "realized_pnl_quote",
+                "unrealized_pnl_quote",
+            )
+        )
+        if (
+            total is not None
+            and realized is not None
+            and unrealized is not None
+            and abs(total - realized - unrealized) > CONTROLLER_PNL_TOLERANCE
+        ):
+            return None
+        if total is None:
+            return None
+        totals.append(total)
+    if len(quotes) != 1:
+        return None
+    total = fleet_pnl.exact_sum(totals)
+    return None if total is None else (total, quotes.pop())
+
+
+def bot_day_pnl(window: fleet_pnl.BotWindow, *, simulated: bool = False) -> dict:
+    """A bot card's day change under the fleet window rules (contract ``pnl_day``): ``partial``
+    when its history starts after the window opens, and the unrecorded time it sums across in
+    ``uncovered_ms``, exactly as the fleet window carries both."""
+    day = {
+        "change": fleet_pnl.decimal_text(window.change),
+        "unit": window.quote,
+        "partial": not window.full,
+        "stale": window.stale,
+        "uncovered_ms": round(window.uncovered_ms),
+    }
+    if simulated:
+        day["simulated"] = True
+    return day
+
+
+def _held_wallet_section(
+    server: str,
+    read: OwnerRead,
+    now_ms: float,
+    missing: list,
+    last_known: Optional[LastKnown],
+) -> tuple[Optional[dict], dict]:
+    """The wallet from this build's account read, or, when that read failed, the last valid
+    observation while its own age is within the wallet ``stale_after_ms`` (marked ``held``).
+    """
+    own_missing: list = []
+    wallet, section = _wallet_section(read, now_ms, own_missing)
+    if last_known is not None:
+        if wallet is not None and read.reason is None:
+            last_known.wallet[server] = read.payload
+        elif (
+            wallet is None
+            and read.reason == SOURCE_UNAVAILABLE
+            and server in last_known.wallet
+        ):
+            held_missing: list = []
+            held, held_section = _wallet_section(
+                OwnerRead(last_known.wallet[server]), now_ms, held_missing
+            )
+            if (
+                held is not None
+                and now_ms - held["observed_at_ms"] <= STALE_AFTER_MS["wallet"]
+            ):
+                wallet, section, own_missing = (
+                    {**held, "held": True},
+                    held_section,
+                    held_missing,
+                )
+    missing.extend(own_missing)
+    if wallet is not None:
+        wallet.setdefault("held", False)
+    return wallet, section
+
+
+def _held_trading(
+    server: str,
+    bots: list[str],
+    runtime: dict[str, Optional[dict]],
+    owner: dict[tuple[str, str], OwnerRead],
+    now_ms: float,
+    last_known: Optional[LastKnown],
+) -> dict[str, Optional[dict]]:
+    """Each bot's capability from this build's owner runtime read, else its last good one (bounded)."""
+    result: dict[str, Optional[dict]] = {}
+    for bot in bots:
+        rt = runtime.get(bot)
+        capability = rt.get("trading") if rt is not None else None
+        if last_known is not None:
+            key = (server, bot)
+            if capability is not None:
+                if capability["observed_ms"] is not None:
+                    last_known.trading[key] = capability
+            elif key in last_known.trading:
+                held = last_known.trading[key]
+                if 0 <= now_ms - held["observed_ms"] <= TRADING_HOLD_MS:
+                    read = owner.get((bot, "bootstrap"))
+                    capability = held_trading(
+                        held, (read.reason if read else None) or INVALID
+                    )
+                else:
+                    del last_known.trading[key]
+        result[bot] = capability
+    return result
 
 
 def _bot_cards(
@@ -1044,6 +1312,7 @@ def _bot_cards(
     now_ms: float,
     missing: list,
     paper_day: Optional[dict[str, fleet_pnl.FleetWindow]] = None,
+    trading: Optional[dict[str, Optional[dict]]] = None,
 ) -> list[dict]:
     """One card per bot. A paper card carries its own simulated numbers (``simulated: true``); its gaps
     stay on the card and never enter the fleet ``missing`` list."""
@@ -1159,14 +1428,7 @@ def _bot_cards(
         day_window = day_by_bot.get(bot)
         pnl_day = None
         if day_window is not None:
-            pnl_day = {
-                "change": fleet_pnl.decimal_text(day_window.change),
-                "unit": day_window.quote,
-                "partial": not day_window.full,
-                "stale": day_window.stale,
-            }
-            if paper:
-                pnl_day["simulated"] = True
+            pnl_day = bot_day_pnl(day_window, simulated=paper)
         elif paper:
             own = paper_day.get(bot)
             gap(
@@ -1185,22 +1447,16 @@ def _bot_cards(
             )
 
         net_now = None
-        live = _controller_net(page, bot)
+        live = _controller_net(page, bot, now_ms)
         sample = latest_samples.get(bot)
         if live is not None:
-            unit = (
-                live[1]
-                or (day_window.quote if day_window else None)
-                or (sample[1] if sample else None)
-            )
-            if unit:
-                net_now = {
-                    "value": fleet_pnl.decimal_text(live[0]),
-                    "unit": unit,
-                    "source": "controller",
-                }
-                if paper:
-                    net_now["simulated"] = True
+            net_now = {
+                "value": fleet_pnl.decimal_text(live[0]),
+                "unit": live[1],
+                "source": "controller",
+            }
+            if paper:
+                net_now["simulated"] = True
         if (
             net_now is None
             and sample is not None
@@ -1266,6 +1522,14 @@ def _bot_cards(
         else:
             gap("trades", INVALID if ledger is not None else cycles_reason or INVALID)
 
+        if trading is not None:
+            capability = trading.get(bot)
+        else:
+            capability = rt.get("trading") if rt is not None else None
+        if capability is None and not paper:
+            # A live owner always publishes its capability; its absence is a failed or rejected read.
+            gap("trading", runtime_reason or INVALID)
+
         cards.append(
             {
                 "bot": bot,
@@ -1284,7 +1548,7 @@ def _bot_cards(
                 "fees": fees,
                 "trades": trades,
                 # Process status says the bot runs; this says whether it can buy and sell.
-                "trading": rt.get("trading") if rt is not None else None,
+                "trading": capability,
                 "missing": gaps,
             }
         )
@@ -1346,8 +1610,12 @@ async def build_fleet_summary(
     is_admin: bool,
     user_id: Any = None,
     clock_ms: Callable[[], float] | None = None,
+    last_known: Optional[LastKnown] = None,
 ) -> dict:
-    """Compute the whole payload. ``view='glance'`` is the compact projection of the same computation."""
+    """Compute the whole payload. ``view='glance'`` is the compact projection of the same computation.
+
+    ``last_known`` (optional) lets a failed account or owner runtime read stand on the last good
+    observation within its own age bound (see ``LastKnown``)."""
     if view not in VIEWS:
         raise ValueError(f"unknown view {view!r}")
     missing: list[dict] = []
@@ -1471,7 +1739,8 @@ async def build_fleet_summary(
         )
 
     # wallet
-    wallet, sections["wallet"] = _wallet_section(
+    wallet, sections["wallet"] = _held_wallet_section(
+        server,
         (
             account_result
             if isinstance(account_result, OwnerRead)
@@ -1479,6 +1748,7 @@ async def build_fleet_summary(
         ),
         now_ms,
         missing,
+        last_known,
     )
 
     # fleet PnL
@@ -1561,6 +1831,7 @@ async def build_fleet_summary(
         bot: project_runtime_view(owner[(bot, "bootstrap")].payload, bot, now_ms)
         for bot in bots
     }
+    trading = _held_trading(server, bots, runtime, owner, now_ms, last_known)
     inventory = {
         bot: (
             holdings.project_bot(read.payload, bot, now_ms)
@@ -1618,6 +1889,7 @@ async def build_fleet_summary(
             now_ms,
             missing,
             paper_day,
+            trading,
         )
         if bots
         else []

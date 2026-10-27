@@ -96,6 +96,7 @@ async def test_partial_account_cannot_be_promoted_from_complete_bot_wallet(store
         "unpriced_assets": ["PLN"],
         "unpriced_count": 1,
         "stale": False,
+        "held": False,
     }
     assert body["sections"]["wallet"]["status"] == "partial"
     assert {"section": "wallet", "reason": fs.PARTIAL_COVERAGE} in body["missing"]

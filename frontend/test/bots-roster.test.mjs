@@ -141,3 +141,16 @@ test('weekly comparison admits matching historical quotes and counts observation
  assert.equal(historyComparison([],true).drawable,false);
  assert.equal(historyComparison([{...series('USDC'),reason:'Window incomplete'}],true).complete,false);
 });
+
+test('the card 24h change is the fleet summary pnl_day with its notes, not a client recomputation',()=>{
+ const clientDay={points:[{time:now-86_000_000,value:1,owner:0},{time:now-1000,value:10,owner:0}],quote:'USDC',change:9,reason:null};
+ const html=renderToStaticMarkup(React.createElement(RosterObservation,{payload:snapshot(),bot:'rsi_modular_v2',now,day:clientDay,dayChange:{change:'3',unit:'USDC',note:'partial · 23h unrecorded',reason:null}}));
+ assert.match(html,/\+3\.00 USDC 24h · partial · 23h unrecorded/);
+ assert.doesNotMatch(html,/\+9\.00/,'the browser no longer derives its own 24h change');
+ const missing=renderToStaticMarkup(React.createElement(RosterObservation,{payload:snapshot(),bot:'rsi_modular_v2',now,day:clientDay,dayChange:{change:null,unit:null,note:null,reason:'Needs two samples in the window.'}}));
+ assert.match(missing,/24h change unavailable: Needs two samples in the window\./);
+ assert.doesNotMatch(missing,/\+9\.00|q-kpi-delta/);
+ const absent=renderToStaticMarkup(React.createElement(RosterObservation,{payload:snapshot(),bot:'rsi_modular_v2',now,day:clientDay}));
+ assert.match(absent,/24h change unavailable: fleet summary not read/);
+ assert.doesNotMatch(absent,/\+9\.00/);
+});

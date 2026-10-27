@@ -32,12 +32,18 @@ export type WindowMissing = { bot: string; reason: string; samples?: number; quo
 export type WindowBot = {
   bot: string; change: string | null; realized: string | null; unrealized: string | null;
   first_at_ms: number | null; last_at_ms: number | null; samples: number; restarts: number; full: boolean; stale: boolean;
+  /** Additive (2026-10-05): unrecorded time this bot's change sums across. Older servers omit it. */
+  uncovered_ms?: number;
 };
 /** One fleet PnL window. `total` is the SUM of per-bot changes (deposit independent); decimals are strings. */
 export type PnlWindow = {
   span_ms: number | null; unit: string | null; total: string | null; realized: string | null; unrealized: string | null;
   counted: number; expected: number; partial: boolean; since_ms: number | null; latest_at_ms: number | null; stale: boolean;
   missing: WindowMissing[]; bots?: WindowBot[];
+  /** Additive (2026-10-05): unrecorded time inside the window, summed over counted bots; > 0 makes the window incomplete. */
+  uncovered_ms?: number;
+  /** Full view only (additive): each counted bot whose samples are spaced wider than its read spacing. */
+  gaps?: { bot: string; uncovered_ms: number }[];
 };
 export type PnlWindowName = 'day' | 'week' | 'month' | 'all';
 export type Pnl = { unit: string | null } & Record<PnlWindowName, PnlWindow>;
@@ -60,11 +66,14 @@ export type BotCard = {
   report_at_ms: number | null; report_stale: boolean;
   positions: { held: number; registered: number; current: boolean } | null;
   executors: number | null; executors_basis: 'runtime_active_executors' | 'open_lifecycle_cycles' | null;
-  pnl_day: { change: string | null; unit: string | null; partial: boolean; stale: boolean } | null;
+  /** `uncovered_ms` is additive (2026-10-27): unrecorded time the day change sums across; older servers omit it. */
+  pnl_day: { change: string | null; unit: string | null; partial: boolean; stale: boolean; uncovered_ms?: number } | null;
   net_now: { value: string | null; unit: string; source: 'controller' | 'history' } | null;
   fees: Money | null;
   /** The 24h cycle counts are null for a bot whose reporting publishes no lifecycle projection (V1): unknown, not zero. */
   trades: { lifetime: number | null; opened_24h: number | null; closed_24h: number | null } | null;
+  /** Per-pair, per-side trading capability (full: object, glance: one word). Read it with `parseBotTrading`; absent on older servers. */
+  trading?: unknown;
   missing: { field: string; reason: string }[];
 };
 export type Fill = {
@@ -187,7 +196,8 @@ export function parseFleetSummary(payload: unknown, view: FleetSummaryView): Fle
 }
 
 export function fleetSummaryPath(server: string, view: FleetSummaryView = 'full'): string {
-  return `/api/v1/servers/${encodeURIComponent(server)}/fleet/summary${view === 'full' ? '' : `?view=${view}`}`;
+  // `schema` pins the major version: a server that can only answer another one returns 400 instead of a guess.
+  return `/api/v1/servers/${encodeURIComponent(server)}/fleet/summary?${view === 'full' ? '' : `view=${view}&`}schema=${FLEET_SUMMARY_SCHEMA}`;
 }
 
 /** Age of a section's observation at `now`, or null when the server has none. Ages are computed by the client, never sent. */

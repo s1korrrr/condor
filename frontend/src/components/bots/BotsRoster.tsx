@@ -15,7 +15,9 @@ import { formatDecimal, formatSigned, metricTone } from '@/features/quant-ops/fo
 import { Heatmap, Histogram, LifecycleCounts, MetricCard, PanelFrame, RailBar, StateGlyph } from '@/features/quant-ops/primitives';
 import { TileGrid } from '@/features/quant-ops/kit/grid';
 import { DataTable } from '@/features/quant-ops/kit/DataTable';
-import { FleetStrip } from './FleetStrip';
+import { FleetStrip, TradingPill, type FleetSummaryCards } from './FleetStrip';
+import { useFleetSummary } from '@/features/quant-ops/use-fleet-summary';
+import { botDayView, botTradingView, type BotDayView } from '@/features/bots/summary-card';
 import { fleetInput } from './fleet-input';
 import { StrategyChartsSlot } from './StrategyChartsSlot';
 import { FleetFillsPanel } from './FleetFillsPanel';
@@ -75,12 +77,14 @@ export type OwnerReads = {
 };
 
 /** All pair rows stay in page flow. Selecting a row never hides the rest. */
-export function RosterObservation({ payload, bot, now, lifecycleStatus = null, summary: summaryPayload, events, execution, cycles: cyclesPayload, day, week, controllerTotal = null, controllerQuote = null, summaryIssue, eventsIssue, executionIssue, holdings = null, holdingsIssue = null }: {
+export function RosterObservation({ payload, bot, now, lifecycleStatus = null, summary: summaryPayload, events, execution, cycles: cyclesPayload, day, week, dayChange, controllerTotal = null, controllerQuote = null, summaryIssue, eventsIssue, executionIssue, holdings = null, holdingsIssue = null }: {
   payload: unknown; bot: string; now: number; controllerTotal?: number | null; controllerQuote?: string | null;
   holdings?: BotHoldings | null; holdingsIssue?: string | null;
   lifecycleStatus?: string | null;
   summary?: unknown; events?: unknown; execution?: unknown; cycles?: unknown;
   day?: PnlSeries; week?: PnlSeries;
+  /** This bot's 24h change from the fleet summary (`pnl_day`); `undefined` until the summary is read. */
+  dayChange?: BotDayView | null;
   summaryIssue?: string | null; eventsIssue?: string | null; executionIssue?: string | null;
 }) {
   let view;
@@ -131,9 +135,9 @@ export function RosterObservation({ payload, bot, now, lifecycleStatus = null, s
         <span className="q-muted">Bot PnL · controller report · full history lives in <Link to={`/capital?bot=${encodeURIComponent(bot)}`}>Capital</Link></span>
         <p className={metricTone(controllerTotal) ? `q-${metricTone(controllerTotal)}` : undefined} style={{ fontSize: 18, fontWeight: 600 }}>
           {controllerTotal === null ? '—' : formatSigned(controllerTotal)} {controllerTotal === null ? '' : controllerQuote ?? ''}
-          {day?.change != null && <small className={`q-kpi-delta${metricTone(day.change) ? ` q-${metricTone(day.change)}` : ''}`} style={{ marginLeft: 8 }}>{formatSigned(day.change)} 24h</small>}
+          {dayChange?.change != null && <small className={`q-kpi-delta${metricTone(dayChange.change) ? ` q-${metricTone(dayChange.change)}` : ''}`} style={{ marginLeft: 8 }} title="24h change from the fleet summary, the same figure the app shows">{formatSigned(dayChange.change)}{dayChange.unit ? ` ${dayChange.unit}` : ''} 24h{dayChange.note ? ` · ${dayChange.note}` : ''}</small>}
         </p>
-        <p className="q-empty">{dayPoints.length >= 2 ? `${dayPoints.length} saved 24h observations` : day?.reason ?? 'Performance history requires a timestamped, comparable series.'}{dayPoints.length >= 2 && day?.reason ? ` · 24h change unavailable: ${day.reason}` : ''}</p>
+        <p className="q-empty">{dayPoints.length >= 2 ? `${dayPoints.length} saved 24h observations` : day?.reason ?? 'Performance history requires a timestamped, comparable series.'}{dayChange?.change != null ? '' : ` · 24h change unavailable: ${dayChange ? dayChange.reason ?? 'not in the fleet summary' : 'fleet summary not read'}`}</p>
         <details className="q-source-details"><summary>Accounting and observation details</summary><p className="q-empty">Controller report is the headline PnL source shared with Capital. Retained-position net diagnostic: {retainedValue === null ? 'Unavailable' : `${formatSigned(retainedValue)} ${retainedReport?.unit ?? ''}`}; this excludes completed executor history and is not controller lifecycle PnL. Fee basis: {retainedReport?.feeBasis ? retainedReport.feeBasis.replaceAll('_', ' ') : 'unavailable'}. Snapshot observed {retainedReport?.observedAt ?? quant?.observedAt ?? 'Unavailable'}. 7d change {week?.change == null ? 'needs an unbroken saved week' : `${formatSigned(week.change)} ${week.quote ?? ''}`}. Open-position marked PnL: {pairPnl === null ? 'Unknown basis' : amount(pairPnl, quote ?? '')}.</p></details>
       </div>
       <div data-panel-id="B18">
@@ -259,7 +263,7 @@ function OwnerReadsFeed({ source, page, onReads }: { source: TradingVisualsSourc
   return null;
 }
 
-function OwnerCard({ source, page, logs, controls, onReads }: { source: TradingVisualsSource; page?: BotsPageResponse; logs: ReactNode; controls?: ReactNode; onReads: (reads: OwnerReads) => void }) {
+function OwnerCard({ source, page, logs, controls, onReads, summary }: { source: TradingVisualsSource; page?: BotsPageResponse; logs: ReactNode; controls?: ReactNode; onReads: (reads: OwnerReads) => void; summary: FleetSummaryCards | null }) {
   const [now, setNow] = useState(Date.now);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const { reads, raw } = useOwnerReads(source, page, now);
@@ -267,6 +271,9 @@ function OwnerCard({ source, page, logs, controls, onReads }: { source: TradingV
   useEffect(() => { onReads(reads); }, [onReads, reads]);
   const pairs = reads.view?.pairs ?? [];
   const owner = page?.bots.find(item => item.bot_name === source.bot);
+  const card = summary?.cards[source.bot];
+  // A summary that does not list this bot gives no day change; a summary not yet read stays "not read".
+  const dayChange = summary ? card ? botDayView(card) : null : undefined;
   return <article className="q-card q-bot-card" aria-label={`${source.bot} roster card`}>
     <header className="q-bot-head" data-panel-id="B09">
       <div>
@@ -282,13 +289,14 @@ function OwnerCard({ source, page, logs, controls, onReads }: { source: TradingV
       </div>
       <div className="q-chip-row">
         <span className="q-muted">{owner?.status ? <><span className="q-pill" data-tone={tone(owner.status)}>{stateLabel(owner.status)}</span> status {owner.status_received_at ? new Date(owner.status_received_at * 1000).toISOString() : 'time unavailable'}</> : 'Lifecycle unavailable'}</span>
+        <TradingPill view={card && summary ? botTradingView(card, now, summary.generatedAtMs) : null} />
         {controls}
         <button type="button" disabled title="Pause entries needs a verified native entry-control route. Process stop is a different operation and is not used here." data-panel-id="B10">Pause entries</button>
         <button type="button" disabled title="Settings shows effective configuration only after an owner schema inspector is enabled. Writes stay off.">Settings</button>
       </div>
     </header>
     <StrategyChartsSlot bot={source.bot} server={source.server} />
-    {bootstrap.isPending ? <p className="q-empty" role="status">Reading the current bot inventory and order observation…</p> : bootstrap.isError ? <p className="q-empty" role="alert">{(bootstrap.error as Error & { status?: number }).status === 401 || (bootstrap.error as Error & { status?: number }).status === 403 ? `Owner read denied (${(bootstrap.error as Error & { status?: number }).status}).` : (bootstrap.error as Error).message} Cached inventory is withheld. <button type="button" onClick={() => void bootstrap.refetch()}>Check now</button></p> : <RosterObservation payload={bootstrap.data} lifecycleStatus={reads.status} summary={raw.summary?.payload} bot={source.bot} now={Math.max(now, bootstrap.dataUpdatedAt)} events={raw.events?.payload} execution={raw.execution?.payload} cycles={raw.cycles?.payload} day={reads.day} week={reads.week} controllerTotal={reads.controller.total} controllerQuote={reads.controller.quote} summaryIssue={raw.summary?.issue} eventsIssue={raw.events?.issue} executionIssue={raw.execution?.issue} holdings={reads.holdings} holdingsIssue={reads.holdingsIssue} />}
+    {bootstrap.isPending ? <p className="q-empty" role="status">Reading the current bot inventory and order observation…</p> : bootstrap.isError ? <p className="q-empty" role="alert">{(bootstrap.error as Error & { status?: number }).status === 401 || (bootstrap.error as Error & { status?: number }).status === 403 ? `Owner read denied (${(bootstrap.error as Error & { status?: number }).status}).` : (bootstrap.error as Error).message} Cached inventory is withheld. <button type="button" onClick={() => void bootstrap.refetch()}>Check now</button></p> : <RosterObservation payload={bootstrap.data} lifecycleStatus={reads.status} summary={raw.summary?.payload} bot={source.bot} now={Math.max(now, bootstrap.dataUpdatedAt)} events={raw.events?.payload} execution={raw.execution?.payload} cycles={raw.cycles?.payload} day={reads.day} week={reads.week} dayChange={dayChange} controllerTotal={reads.controller.total} controllerQuote={reads.controller.quote} summaryIssue={raw.summary?.issue} eventsIssue={raw.events?.issue} executionIssue={raw.execution?.issue} holdings={reads.holdings} holdingsIssue={reads.holdingsIssue} />}
     {logs && <details><summary>Recent owner logs</summary>{logs}</details>}
   </article>;
 }
@@ -354,6 +362,9 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
     if (current[key] && ownerReadsFingerprint(current[key]) === ownerReadsFingerprint(reads)) return current;
     return { ...current, [key]: reads };
   }), []);
+  // Day change and trading capability come from the server's fleet summary, the same source the app reads.
+  const fleetSummary = useFleetSummary(server ?? null, 'full');
+  const summaryCards = useMemo<FleetSummaryCards | null>(() => fleetSummary.data ? { cards: Object.fromEntries(fleetSummary.data.bots.map(card => [card.bot, card])), generatedAtMs: fleetSummary.data.generated_at_ms } : null, [fleetSummary.data]);
   const sources = useQuery({ queryKey: ['native-command-desk-sources'], queryFn: async ({ signal }) => parseTradingVisualsSources(await read('/api/v1/trading-visuals/sources', signal)), retry: false, refetchInterval: 30_000 });
   const visible = !sources.isError || transientReadFailure(sources.error) ? sources.data ?? [] : [];
   const scoped = sourcesForServer(visible, server, servers.data ?? []);
@@ -414,13 +425,13 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
     {sources.isPending && <p className="q-empty" role="status">Discovering authorized bot owners…</p>}
     {!sources.isPending && !filtered.length && <p className="q-empty" role="status">No authorized bot source is available for this selection.</p>}
     {scoped.length > 0 && !complete && <p className="q-empty" role="status">Reading owner observations: {fleet.length} of {scoped.length} bots read. Tiles cover the bots read so far.</p>}
-    <FleetStrip sources={grid ? filtered : []} readsByBot={readsByBot} page={page} now={now} />
+    <FleetStrip sources={grid ? filtered : []} readsByBot={readsByBot} page={page} now={now} summary={summaryCards} />
     {scoped.length > 0 && <StrategyChartsSlot bots={botIds} server={server ?? null} />}
     <BotPerformanceFrame fleet={fleet} scopedCount={scoped.length}>
       <DataTable label="Bot performance" rowId={source => `${source.server}:${source.bot}`} rows={filtered} initialSort={{ id: 'bot', desc: false }} exportName="bot-performance.csv" emptyText="No registered bot matches the filter."
         columns={[
           { id: 'bot', header: 'Bot', rowHeader: true, value: source => displayBotName(source.bot), size: 150 },
-          { id: 'status', header: 'Status', value: source => readsByBot[`${source.server}:${source.bot}`]?.status ?? null, size: 130, cell: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; return <><span className="q-pill" data-tone={tone(reads?.status ?? 'unknown')}>{stateLabel(reads?.status ?? null)}</span>{reads?.view?.stale && <small className="q-block">observation {ageLabel(reads.view.ageSeconds)} old</small>}</>; } },
+          { id: 'status', header: 'Status', value: source => readsByBot[`${source.server}:${source.bot}`]?.status ?? null, size: 130, cell: source => { const reads = readsByBot[`${source.server}:${source.bot}`]; const card = summaryCards?.cards[source.bot]; const trading = card && summaryCards ? botTradingView(card, now, summaryCards.generatedAtMs) : null; return <><span className="q-pill" data-tone={tone(reads?.status ?? 'unknown')}>{stateLabel(reads?.status ?? null)}</span>{reads?.view?.stale && <small className="q-block">observation {ageLabel(reads.view.ageSeconds)} old</small>}{trading?.text && <small className="q-block"><TradingPill view={trading} /></small>}</>; } },
           { id: 'controller', header: 'Controller', value: source => readsByBot[`${source.server}:${source.bot}`]?.quant?.controllerName ?? '—', size: 150 },
           { id: 'executors', header: 'Executors', kind: 'number', value: source => statsFor(source)?.executors ?? null, size: 90 },
           { id: 'positions', header: 'Positions', kind: 'number', value: source => statsFor(source)?.held ?? null, cell: source => { const stats = statsFor(source); return stats?.held == null ? '—' : `${stats.held} / ${stats.registered}`; }, size: 90 },
@@ -439,7 +450,7 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
     {liveBotIds.length > 0 && server && <FleetFillsPanel server={server} bots={liveBotIds} />}
     {paperBotIds.length > 0 && server && <FleetFillsPanel server={server} bots={paperBotIds} scope="paper" />}
     {draft && <BotDraftWizard bots={scoped.map(item => item.bot)} onClose={() => setDraft(false)} />}
-    {filtered.map(source => <OwnerCard key={`${source.server}:${source.bot}`} source={source} page={page} logs={renderLogs(source.bot)} controls={renderControls?.(source.bot)} onReads={onReads}/>)}
+    {filtered.map(source => <OwnerCard key={`${source.server}:${source.bot}`} source={source} page={page} logs={renderLogs(source.bot)} controls={renderControls?.(source.bot)} onReads={onReads} summary={summaryCards}/>)}
     {scoped.filter(source => !filtered.includes(source)).map(source => <OwnerReadsFeed key={`${source.server}:${source.bot}:feed`} source={source} page={page} onReads={onReads} />)}
     <div className="q-bot-cols">
       <PanelFrame panelId="B30" title="Position inventory by symbol" scopeLabel={`Bot-owned units and marked value · wallet remainder stays in Capital${liveScope}`} state={rowsState(inventoryRows.length, 'No bot reports nonzero owned units.')}>

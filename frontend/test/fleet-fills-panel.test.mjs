@@ -228,3 +228,20 @@ test('the hook polls every 30s, pages by cursor, keeps previous rows while a fil
   responder = async () => new Response(JSON.stringify({ ...example('page_first'), schema_version: 'fleet-fills.v2' }), { status: 200 });
   await assert.rejects(options.queryFn({ pageParam: null, signal: new AbortController().signal }), /Unsupported fleet fills schema/);
 });
+
+test('the hook rejects a page whose scope or server is not the one requested, as the app does', async () => {
+  const live = example('page_first');
+  responder = async () => new Response(JSON.stringify(live), { status: 200 });
+  const signal = new AbortController().signal;
+  // An older server ignores scope=paper and answers with the live feed (no scope): never shown as paper.
+  await assert.rejects(useFleetFills('v2', undefined, 50, 'paper').queryFn({ pageParam: null, signal }), /does not offer the paper fills feed/);
+  responder = async () => new Response(JSON.stringify({ ...live, scope: 'paper' }), { status: 200 });
+  await assert.rejects(useFleetFills('v2').queryFn({ pageParam: null, signal }), /does not offer this fills feed/);
+  assert.equal((await useFleetFills('v2', undefined, 50, 'paper').queryFn({ pageParam: null, signal })).scope, 'paper');
+  responder = async () => new Response(JSON.stringify({ ...live, scope: 'mixed' }), { status: 200 });
+  await assert.rejects(useFleetFills('v2').queryFn({ pageParam: null, signal }), /does not offer this fills feed/);
+  responder = async () => new Response(JSON.stringify({ ...live, scope: 'live' }), { status: 200 });
+  assert.equal((await useFleetFills('v2').queryFn({ pageParam: null, signal })).scope, 'live');
+  responder = async () => new Response(JSON.stringify({ ...live, server: 'other' }), { status: 200 });
+  await assert.rejects(useFleetFills('v2').queryFn({ pageParam: null, signal }), /server other/);
+});

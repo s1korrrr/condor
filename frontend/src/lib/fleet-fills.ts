@@ -187,8 +187,31 @@ export function parseFleetFills(payload: unknown): FleetFillsPage {
     matched: payload.matched, window: { horizon_ms: window.horizon_ms, truncated: window.truncated, owner_limit: window.owner_limit },
     bots: payload.bots.map(parseBot),
     notes: Array.isArray(payload.notes) ? payload.notes.filter(object).flatMap(note => text(note.reason) ? [{ reason: note.reason }] : []) : [],
-    scope: payload.scope === 'paper' ? 'paper' : 'live',
+    scope: pageScope(payload.scope),
   };
+}
+
+/** The feed a page holds: an absent `scope` is the live feed (older servers send none). Any other value is no known feed. */
+function pageScope(value: unknown): FleetFillsScope {
+  if (value === undefined || value === null || value === 'live') return 'live';
+  if (value === 'paper') return 'paper';
+  throw new FleetFillsError(FLEET_FILLS_SCOPE_NOT_OFFERED.live);
+}
+
+const FLEET_FILLS_SCOPE_NOT_OFFERED: Record<FleetFillsScope, string> = {
+  paper: 'This server does not offer the paper fills feed yet.',
+  live: 'This server does not offer this fills feed.',
+};
+
+/**
+ * A page answers the request only when it names the requested server and confirms the requested feed. An older
+ * server ignores `scope=paper` and returns live fills; that page is rejected, so live fills are never shown as
+ * paper (or the reverse). Same rule as the app's `FleetAPIClient.fleetFills`.
+ */
+export function confirmFleetFillsPage(page: FleetFillsPage, server: string, scope: FleetFillsScope): FleetFillsPage {
+  if (page.server !== server) throw new FleetFillsError(`Fleet fills answered for server ${page.server}, not ${server}.`);
+  if (page.scope !== scope) throw new FleetFillsError(FLEET_FILLS_SCOPE_NOT_OFFERED[scope]);
+  return page;
 }
 
 /** `/api/v1/servers/{server}/fleet/fills?…`; a bot filter repeats `bot=`, and empty filters are left out. */

@@ -166,9 +166,9 @@ test('section age and staleness are computed by the client from observed_at_ms',
   assert.equal(client.sectionIsStale(full.sections.bots, now), true, 'the server flagged it');
 });
 
-test('request path encodes the server and selects the view', () => {
-  assert.equal(client.fleetSummaryPath('my server'), '/api/v1/servers/my%20server/fleet/summary');
-  assert.equal(client.fleetSummaryPath('v2', 'glance'), '/api/v1/servers/v2/fleet/summary?view=glance');
+test('request path encodes the server, selects the view and pins the major schema', () => {
+  assert.equal(client.fleetSummaryPath('my server'), '/api/v1/servers/my%20server/fleet/summary?schema=fleet-summary.v1');
+  assert.equal(client.fleetSummaryPath('v2', 'glance'), '/api/v1/servers/v2/fleet/summary?view=glance&schema=fleet-summary.v1');
 });
 
 test('the actual fleet hook opts into native-account wallet claims for both views', async () => {

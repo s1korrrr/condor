@@ -41,7 +41,20 @@
    "reason": null
   }
  },
- "missing": [],
+ "missing": [
+  {
+   "section": "bots",
+   "bot": "ok_rsi",
+   "field": "trading",
+   "reason": "SOURCE_UNAVAILABLE"
+  },
+  {
+   "section": "bots",
+   "bot": "rsi_modular_v2",
+   "field": "trading",
+   "reason": "SOURCE_UNAVAILABLE"
+  }
+ ],
  "wallet": {
   "equity": "1000",
   "unit": "USDT",
@@ -57,7 +70,8 @@
   "valuation_complete": true,
   "unpriced_assets": [],
   "unpriced_count": 0,
-  "stale": false
+  "stale": false,
+  "held": false
  },
  "pnl": {
   "unit": "USDC",
@@ -337,12 +351,13 @@
     "change": "3",
     "unit": "USDC",
     "partial": false,
-    "stale": false
+    "stale": false,
+    "uncovered_ms": 86280000
    },
    "net_now": {
-    "value": "3.5",
+    "value": "4",
     "unit": "USDC",
-    "source": "controller"
+    "source": "history"
    },
    "fees": {
     "amount": "0.42",
@@ -354,7 +369,12 @@
     "closed_24h": 1
    },
    "trading": null,
-   "missing": []
+   "missing": [
+    {
+     "field": "trading",
+     "reason": "SOURCE_UNAVAILABLE"
+    }
+   ]
   },
   {
    "bot": "rsi_modular_v2",
@@ -376,12 +396,13 @@
     "change": "1.5",
     "unit": "USDC",
     "partial": true,
-    "stale": false
+    "stale": false,
+    "uncovered_ms": 17940000
    },
    "net_now": {
     "value": "1.5",
     "unit": "USDC",
-    "source": "controller"
+    "source": "history"
    },
    "fees": {
     "amount": "0.42",
@@ -393,7 +414,12 @@
     "closed_24h": 1
    },
    "trading": null,
-   "missing": []
+   "missing": [
+    {
+     "field": "trading",
+     "reason": "SOURCE_UNAVAILABLE"
+    }
+   ]
   },
   {
    "bot": "ok_rsi_paper",
@@ -416,12 +442,13 @@
     "unit": "USDC",
     "partial": true,
     "stale": false,
+    "uncovered_ms": 3540000,
     "simulated": true
    },
    "net_now": {
     "value": "9",
     "unit": "USDC",
-    "source": "controller",
+    "source": "history",
     "simulated": true
    },
    "fees": {
@@ -516,7 +543,9 @@
     "state": "open",
     "first_seen_at_ms": null,
     "last_seen_at_ms": null,
-    "resolved_at_ms": null
+    "resolved_at_ms": null,
+    "bot": null,
+    "subject": null
    },
    {
     "id": "2",
@@ -528,7 +557,9 @@
     "state": "open",
     "first_seen_at_ms": null,
     "last_seen_at_ms": null,
-    "resolved_at_ms": null
+    "resolved_at_ms": null,
+    "bot": null,
+    "subject": null
    },
    {
     "id": "3",
@@ -540,7 +571,9 @@
     "state": "resolved",
     "first_seen_at_ms": null,
     "last_seen_at_ms": null,
-    "resolved_at_ms": null
+    "resolved_at_ms": null,
+    "bot": null,
+    "subject": null
    }
   ],
   "items_truncated": false

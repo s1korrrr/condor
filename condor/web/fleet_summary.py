@@ -1101,6 +1101,20 @@ def _controller_net(
     )
 
 
+def bot_day_pnl(window: fleet_pnl.BotWindow, *, simulated: bool = False) -> dict:
+    """A bot card's day change under the fleet window rules: a window that does not reach back
+    to its start, or that sums across unrecorded time, is partial (contract ``pnl_day``)."""
+    day = {
+        "change": fleet_pnl.decimal_text(window.change),
+        "unit": window.quote,
+        "partial": not window.full or window.uncovered_ms > 0,
+        "stale": window.stale,
+    }
+    if simulated:
+        day["simulated"] = True
+    return day
+
+
 def _bot_cards(
     bots: list[str],
     page: Optional[dict],
@@ -1235,14 +1249,7 @@ def _bot_cards(
         day_window = day_by_bot.get(bot)
         pnl_day = None
         if day_window is not None:
-            pnl_day = {
-                "change": fleet_pnl.decimal_text(day_window.change),
-                "unit": day_window.quote,
-                "partial": not day_window.full,
-                "stale": day_window.stale,
-            }
-            if paper:
-                pnl_day["simulated"] = True
+            pnl_day = bot_day_pnl(day_window, simulated=paper)
         elif paper:
             own = paper_day.get(bot)
             gap(

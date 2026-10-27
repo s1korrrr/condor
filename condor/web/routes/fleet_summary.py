@@ -182,6 +182,9 @@ class LiveReaders:
                             "window": HISTORY_WINDOW,
                             "limit": "1500",
                             "resolution": "1m",
+                            # The dashboard's Market Pulse replays this projection; a thinned
+                            # page would smooth and hold over different points.
+                            "projection": "canonical_state",
                         },
                     )
             if page.get("snapshot_id") != frame["snapshot_id"]:

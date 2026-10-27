@@ -137,12 +137,14 @@ def _stored_pressure(point: dict, horizon: str) -> Optional[float]:
 
 def _replay_state(
     history: list[dict], horizon: str, until: float, smooth: bool
-) -> tuple[str, list[dict]]:
+) -> tuple[str, list[dict], bool]:
+    """The held state, the scored stored points and whether a hole ends at the current frame."""
     points = [
         p
         for p in history
         if p["time"] < until and p["time"] >= until - STATE_LOOKBACK_MS
     ]
+    current = next((p for p in history if p["time"] == until), None)
     scored = []
     for p in points:
         components = _breadth_components(lambda h, p=p: _stored_pressure(p, h), horizon)
@@ -164,7 +166,15 @@ def _replay_state(
             state = "mixed"
         if basis[index] is not None:
             state = next_verdict_state(state, basis[index])
-    return state, scored
+    # A hole between the newest stored point and the current frame also breaks the replay
+    # (pulse.mjs replayState): the held state restarts at this frame.
+    reset_at_current = bool(points) and (
+        (current is not None and current.get("gapBefore") is True)
+        or (current is None and points[-1]["time"] != until - 60_000)
+    )
+    if reset_at_current:
+        state = "mixed"
+    return state, scored, reset_at_current
 
 
 def _trailing_window(scored: list[dict], until: float) -> list[dict]:
@@ -221,15 +231,16 @@ def market_verdict(
     do_smooth = smooth and has_history
     cutoff = frame.get("cutoff_ms")
     until = cutoff if _finite(cutoff) else math.inf
-    state, scored = (
+    state, scored, reset_at_current = (
         _replay_state(history, horizon, until, do_smooth)
         if has_history
-        else ("mixed", [])
+        else ("mixed", [], False)
     )
     shown = components
     smoothed_frames = 1
     if do_smooth:
-        window = _trailing_window(scored, until)
+        # Frames before a hole that ends at the current frame are not averaged into it.
+        window = [] if reset_at_current else _trailing_window(scored, until)
         smoothed_frames = len(window) + 1
         if window:
             shown = []

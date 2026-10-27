@@ -112,7 +112,7 @@ test('Capital draws fleet tiles, strategy table, allocation, rails and fills fro
   assert.ok(html.includes(recordedTimeNote));
   assert.doesNotMatch(html.replace(recordedTimeNote, ''), /Unavailable|unavailable/);
   assert.match(html,/class="q-negative">-10\.00%</,'worst drawdown heads the C19 panel; the chart marks it on hover');
-  assert.match(html,/Fleet cumulative net PnL/);
+  assert.match(html,/Fleet PnL change since range start/);
   assert.match(html,/since 2026-10-01 07:21 UTC \(history starts here\)/);
   assert.match(html,/Fleet PnL · 7D/);
   assert.match(html,/Sharpe, Sortino and volatility appear after 14 days/);

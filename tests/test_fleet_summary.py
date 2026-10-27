@@ -445,10 +445,12 @@ async def test_full_summary_golden_numbers(store):
     assert (
         v2["report_stale"] is True
     )  # heartbeat 60s old: older than the 30s owner currency window
+    # The fixture's day window sums across unrecorded time (the fleet day above is partial),
+    # so the bot's own day change is qualified the same way.
     assert ok["pnl_day"] == {
         "change": "3",
         "unit": "USDC",
-        "partial": False,
+        "partial": True,
         "stale": False,
     }
     assert v2["pnl_day"]["partial"] is True

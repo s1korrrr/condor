@@ -39,10 +39,10 @@ function PositionChoices({ rows, selected, onSelect }: { rows: BotPairPosition[]
 function TripReceipt({ row, bot, trip }: { row: BotPairPosition; bot: string; trip?: FillTrip }) {
   const fills = botChartsHref(bot, row.pair, 'activity', 'fills');
   if (trip?.outcome === 'unknown_cost') {
-    return <div className="bot-desk__receipts"><h4>Buy/sell trip</h4><p>Acquisition cost is unknown. Realized PnL is unavailable{trip.pnlUnavailableReason ? ` (${trip.pnlUnavailableReason.replaceAll('_', ' ')})` : ''}.</p><Link to={fills}>Inspect recorded fills ↗</Link></div>;
+    return <div className="bot-desk__receipts"><h4>Buy/sell trip</h4><p>Acquisition cost is unknown. Replay PnL is unavailable{trip.pnlUnavailableReason ? ` (${trip.pnlUnavailableReason.replaceAll('_', ' ')})` : ''}.</p><Link to={fills}>Inspect recorded fills ↗</Link></div>;
   }
   if (trip && trip.remainingCostQuote !== null) {
-    return <div className="bot-desk__receipts"><h4>Buy/sell trip</h4><p>Fill-replay remaining cost {amount(trip.remainingCostQuote, row.quote)}. Bought {trip.buyAmountBase} {row.baseAsset}, sold {trip.sellAmountBase}, still in the bag {trip.remainingBase}. Realized {money(trip.realizedPnlQuote, row.quote)}.</p><Link to={fills}>Inspect recorded fills ↗</Link></div>;
+    return <div className="bot-desk__receipts"><h4>Buy/sell trip</h4><p>Fill-replay remaining cost {amount(trip.remainingCostQuote, row.quote)}. Bought {trip.buyAmountBase} {row.baseAsset}, sold {trip.sellAmountBase}, still in the bag {trip.remainingBase}. Replay PnL before fees {money(trip.realizedPnlQuote, row.quote)}.</p><Link to={fills}>Inspect recorded fills ↗</Link></div>;
   }
   return <div className="bot-desk__receipts"><h4>Purchase receipts</h4><p>Gross purchase spend for this current position is unavailable without complete fill attribution.</p><Link to={fills}>Inspect recorded fills ↗</Link></div>;
 }
@@ -58,7 +58,7 @@ function TripLedger({ trips, bot }: { trips: FillTrip[]; bot: string }) {
   return <div className="bot-desk__trips">
     {visible.length ? <table>
     <caption className="sr-only">Spot fill-replay trips</caption>
-    <thead><tr>{['Pair', 'Opened · UTC', 'Outcome', 'Buys', 'Sells', 'Remaining', 'Realized', 'Fees'].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead>
+    <thead><tr>{['Pair', 'Opened · UTC', 'Outcome', 'Buys', 'Sells', 'Remaining', 'Replay PnL · before fees', 'Fees'].map(label => <th key={label} scope="col">{label}</th>)}</tr></thead>
     <tbody>{visible.map(trip => <tr key={`${trip.sourceDbId}:${trip.pair}:${trip.openedAt}:${trip.fills[0]?.fillId ?? trip.outcome}`}>
       <td>{trip.pair}</td>
       <td>{openedUtc(trip.openedAt)}</td>
@@ -75,9 +75,9 @@ function TripLedger({ trips, bot }: { trips: FillTrip[]; bot: string }) {
     </details>}
     <details className="bot-desk__legs"><summary>Fill legs</summary>{visible.filter(trip => trip.fills.length).map(trip => <div key={`${trip.sourceDbId}:${trip.openedAt}:${trip.pair}:${trip.fills[0]?.fillId}`}>
     <h4>{trip.pair} · {tripOutcomeLabel[trip.outcome]}</h4>
-    <ul>{trip.fills.map(fill => <li key={fill.fillId}>{fill.side} {fill.amountBase} @ {amount(fill.priceQuote, trip.quote)}{fill.side === 'sell' ? ` · realized ${money(fill.realizedPnlQuote, trip.quote)}` : ''} · {fill.timestamp}</li>)}</ul>
+    <ul>{trip.fills.map(fill => <li key={fill.fillId}>{fill.side} {fill.amountBase} @ {amount(fill.priceQuote, trip.quote)}{fill.side === 'sell' ? ` · replay PnL ${money(fill.realizedPnlQuote, trip.quote)}` : ''} · {fill.timestamp}</li>)}</ul>
   </div>)}</details>
-  <p className="bot-desk__muted">Spot 1x fill-replay FIFO from recorded TradeFill receipts. A filled trip sold its bought inventory. Remaining units stay in the bag. Hold is an open POSITION_HOLD transfer, not a realized exit. Unknown cost (including wallet sales) omits PnL. Cancelled unfilled orders are listed separately. <Link to={`/trading-visuals?bot=${encodeURIComponent(bot)}&view=activity&record=fills`}>Recorded fills</Link></p>
+  <p className="bot-desk__muted">Spot 1x replay of recorded TradeFill receipts at a running average cost; replay PnL is before fees and is not the bot's per-trade net result (the app's trade result). A filled trip sold its bought inventory. Remaining units stay in the bag. Hold is an open POSITION_HOLD transfer, not a realized exit. Unknown cost (including wallet sales) omits PnL. Cancelled unfilled orders are listed separately. <Link to={`/trading-visuals?bot=${encodeURIComponent(bot)}&view=activity&record=fills`}>Recorded fills</Link></p>
   </div>;
 }
 
@@ -122,7 +122,7 @@ export function CommandDeskObservation({ payload, bot, page, now, section, selec
     ]}/> : <p>No active orders in this owner observation.</p> : <p role="status">Complete exchange order detail is unavailable. A reported limit-order count excludes market orders.</p>}<p className="bot-desk__muted">Owner-issued requests and conditional exit plans are shown in position evidence; they are not assumed to be exchange orders.</p></section>}
     {section === 'controllers' && <section aria-label="Selected bot controllers"><h3>Controller observations</h3>{view.pairs.map(item => <details className="bot-desk__controller" key={item.id}><summary>{item.pair}<span>{stateLabel(item.phase)}</span></summary><PairPosition row={item} bot={bot} page={page} now={now}/></details>)}</section>}
     {section === 'trips' && <section aria-label="Buy and sell trips" className="bot-desk__orders"><h3>Buy/sell trips</h3>{tripsError ? <p role="alert">{tripsError}</p> : trips == null ? <p role="status">Reading recorded fill trips…</p> : <TripLedger trips={trips} bot={bot}/>}</section>}
-    <details className="bot-desk__coverage"><summary>Source &amp; accounting details</summary><p>Managed inventory combines open and closing executor net units and retained units. Episode bags are counted once. Current market value uses the observed price; it is not gross purchase spend. Open-position PnL is not lifetime strategy profit. Episode PnL is before exit costs. Trip PnL is spot fill-replay FIFO from recorded fills, not account equity. Missing quantities, prices and basis remain unavailable. Whole-account holdings and aggregate performance stay in <Link to="/capital">Capital</Link>.</p></details>
+    <details className="bot-desk__coverage"><summary>Source &amp; accounting details</summary><p>Managed inventory combines open and closing executor net units and retained units. Episode bags are counted once. Current market value uses the observed price; it is not gross purchase spend. Open-position PnL is not lifetime strategy profit. Episode PnL is before exit costs. Trip replay PnL uses a running average cost over recorded fills, before fees; it is not the bot's per-trade net result or account equity. Missing quantities, prices and basis remain unavailable. Whole-account holdings and aggregate performance stay in <Link to="/capital">Capital</Link>.</p></details>
   </>;
 }
 

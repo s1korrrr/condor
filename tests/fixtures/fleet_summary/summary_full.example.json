@@ -343,7 +343,7 @@
    "pnl_day": {
     "change": "3",
     "unit": "USDC",
-    "partial": false,
+    "partial": true,
     "stale": false
    },
    "net_now": {

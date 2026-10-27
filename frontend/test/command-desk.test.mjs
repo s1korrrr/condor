@@ -118,3 +118,11 @@ test('native command transport has a bounded wait without converting timeout to 
   assert.equal(deadline,65000);
  } finally {AbortSignal.timeout=originalTimeout;}
 });
+test('trip PnL is named as an average-cost replay before fees, never as FIFO or the bot trade result',()=>{
+ const trip={sourceDbId:'db',pair:'ETH-USDC',openedAt:'2026-09-15T09:00:00Z',outcome:'filled',buyAmountBase:'0.1',sellAmountBase:'0.1',remainingBase:'0',realizedPnlQuote:1.5,quote:'USDC',feesQuote:0.2,fills:[{fillId:'f1',side:'buy',amountBase:'0.1',priceQuote:2400,realizedPnlQuote:null,timestamp:'2026-09-15T09:00:00Z'},{fillId:'f2',side:'sell',amountBase:'0.1',priceQuote:2415,realizedPnlQuote:1.5,timestamp:'2026-09-15T09:30:00Z'}]};
+ const html=render({section:'trips',trips:[trip]});
+ assert.doesNotMatch(html,/FIFO/);
+ assert.match(html,/Replay PnL · before fees/);
+ assert.match(html,/average cost/);
+ assert.doesNotMatch(html,/>Realized</);
+});

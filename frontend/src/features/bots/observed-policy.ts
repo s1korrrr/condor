@@ -2,8 +2,9 @@ import type {BotsPageResponse} from '@/lib/api';
 import {expireNativeBotPage} from '@/lib/bot-monitoring';
 import {object,numeric,type BotPairPosition} from './position-view';
 
-/** MQTT policy is a separate observation; never use it to manufacture inventory or trailing prices. */
-export function currentControllerPolicy(page:BotsPageResponse|undefined,bot:string,row:BotPairPosition,now:number) {
+/** MQTT policy is a separate observation; never use it to manufacture inventory or trailing prices.
+ * It needs only the row's owner identity, never its inventory fields. */
+export function currentControllerPolicy(page:BotsPageResponse|undefined,bot:string,row:Pick<BotPairPosition,'pair'|'controllerId'|'uniquePair'>,now:number) {
   const current=expireNativeBotPage(page,true,now);
   const owner=current?.bots.find(item=>item.bot_name===bot && item.controller_count_current===true);
   const matches=current?.controllers.filter(item=>item.bot_name===bot && item.trading_pair===row.pair) ?? [];

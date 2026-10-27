@@ -41,14 +41,7 @@
    "reason": null
   }
  },
- "missing": [
-  {
-   "section": "bots",
-   "bot": "rsi_modular_v2",
-   "field": "positions",
-   "reason": "OWNER_NOT_CURRENT"
-  }
- ],
+ "missing": [],
  "wallet": {
   "equity": "1000",
   "unit": "USDT",
@@ -372,7 +365,11 @@
    "controllers": 1,
    "report_at_ms": 1799999970000,
    "report_stale": true,
-   "positions": null,
+   "positions": {
+    "held": 2,
+    "registered": 3,
+    "current": false
+   },
    "executors": 1,
    "executors_basis": "open_lifecycle_cycles",
    "pnl_day": {
@@ -396,12 +393,7 @@
     "closed_24h": 1
    },
    "trading": null,
-   "missing": [
-    {
-     "field": "positions",
-     "reason": "OWNER_NOT_CURRENT"
-    }
-   ]
+   "missing": []
   },
   {
    "bot": "ok_rsi_paper",

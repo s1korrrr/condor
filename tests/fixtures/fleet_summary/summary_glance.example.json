@@ -41,15 +41,8 @@
    "reason": null
   }
  },
- "missing": [
-  {
-   "section": "bots",
-   "bot": "rsi_modular_v2",
-   "field": "positions",
-   "reason": "OWNER_NOT_CURRENT"
-  }
- ],
- "missing_total": 1,
+ "missing": [],
+ "missing_total": 0,
  "wallet": {
   "equity": "1000",
   "unit": "USDT",

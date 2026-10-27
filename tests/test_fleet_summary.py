@@ -132,7 +132,8 @@ def quant_summary(bot, heartbeat_ms, pairs=None, open_cycles=2):
         "schema_version": "rsibot.quant_ops.v1",
         "execution_authorized": False,
         "generated_at": iso(NOW_MS - 1000),
-        "scope": {"bot_key": bot, "execution_mode": "live"},
+        # Live owners always publish their verified quote currency (read 2026-10-25).
+        "scope": {"bot_key": bot, "execution_mode": "live", "quote_currency": "USDC"},
         "data": {
             "bot_id": bot,
             "heartbeat": iso(heartbeat_ms),
@@ -945,21 +946,69 @@ def test_numeric_summary_admission_and_exact_fee_controller_sums():
     assert fs.project_fill_totals(fills, "bot", 500)["fees"] is None
 
 
-def test_verified_empty_controller_inventory_is_zero_but_missing_inventory_is_unknown():
-    observed = {
-        "runtime_status": {
-            "bot_name": "bot",
-            "updated_at": iso(NOW_MS - 1_000),
-            "controllers": [{"pair": "ETH-USDC", "controller_id": "c"}],
-            "active_executors": [],
-            "lifecycle_executors": [],
-            "positions_held": [],
+@sync
+async def test_card_inventory_is_the_holdings_projection_zero_when_verified_empty_unknown_when_missing(
+    store,
+):
+    """Bot cards render ``fleet-holdings.v1`` (the owner's quant view); the bootstrap is not an inventory source."""
+
+    class Readers(FakeReaders):
+        def __init__(self, store, pairs):
+            super().__init__(store)
+            self.pairs = pairs
+
+        async def owner(self, bot, path, params):
+            if path == "quant-summary" and bot == "ok_rsi":
+                return fs.OwnerRead(
+                    quant_summary(bot, NOW_MS - 5_000, pairs=self.pairs)
+                )
+            if path == "bootstrap":
+                # A runtime report that would claim a held pair must not change the inventory count.
+                return fs.OwnerRead(
+                    {
+                        "runtime_status": {
+                            "bot_name": bot,
+                            "updated_at": iso(NOW_MS - 1_000),
+                            "controllers": [{"pair": "ETH-USDC", "controller_id": "c"}],
+                            "active_executors": [],
+                            "lifecycle_executors": [],
+                            "positions_held": [
+                                {
+                                    "pair": "ETH-USDC",
+                                    "controller_id": "c",
+                                    "amount_base": 5,
+                                }
+                            ],
+                        },
+                        "monitoring": {"bot_name": bot, "stale_threshold_seconds": 30},
+                    }
+                )
+            return await super().owner(bot, path, params)
+
+    async def ok_rsi(pairs):
+        body = await fs.build_fleet_summary(
+            SERVER, "full", Readers(store, pairs), NOW_MS, is_admin=True, user_id=7
+        )
+        return card(body, "ok_rsi")
+
+    empty = await ok_rsi([{"pair": "ETH-USDC", "units": "0"}])
+    assert empty["positions"] == {"held": 0, "registered": 1, "current": True}
+    unknown = await ok_rsi([{"pair": "ETH-USDC", "units": None}])
+    assert unknown["positions"] is None
+    assert {"field": "positions", "reason": fs.PARTIAL_COVERAGE} in unknown["missing"]
+    assert "held" not in fs.project_runtime_view(
+        {
+            "runtime_status": {
+                "bot_name": "b",
+                "updated_at": iso(NOW_MS),
+                "controllers": [],
+                "active_executors": [],
+            },
+            "monitoring": {"bot_name": "b", "stale_threshold_seconds": 30},
         },
-        "monitoring": {"bot_name": "bot", "stale_threshold_seconds": 30},
-    }
-    assert fs.project_runtime_view(observed, "bot", NOW_MS)["held"] == 0
-    del observed["runtime_status"]["positions_held"]
-    assert fs.project_runtime_view(observed, "bot", NOW_MS)["held"] is None
+        "b",
+        NOW_MS,
+    )
 
 
 def _capability(**overrides):

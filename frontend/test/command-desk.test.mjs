@@ -6,16 +6,28 @@ import {createRequire} from 'node:module';
 const queryLibrary=createRequire(import.meta.url)('@tanstack/react-query');
 const {QueryClient, QueryClientProvider}=queryLibrary;
 import {frontendModules} from './helpers/frontend-module.mjs';
+import {botHoldingsAt,holdingsEntry} from './helpers/holdings.mjs';
 const {load}=frontendModules({'react-router-dom':{Link:({to,children,...rest})=>React.createElement('a',{href:to,...rest},children)}});
 const {CommandDeskObservation}=load('components/bots/NativeBotCommandDesk.tsx');
+const lib=load('lib/fleet-holdings.ts');
 const now=Date.parse('2026-09-15T10:00:00Z');
+// The bot's fleet holdings: 0.04 ETH marked at 2500 (100 USDC) with a 99 USDC entry cost, and a flat BTC pair.
+const holdings=botHoldingsAt(lib,holdingsEntry('ok_rsi',[
+ {controller_id:'eth',pair:'ETH-USDC',units:'0.04',mark_price:'2500',marked_value_quote:'100',entry_cost_quote:'99',breakeven_price:'2475',unrealized_pnl_quote:'1'},
+ {controller_id:'btc',pair:'BTC-USDC',state:'FLAT',units:'0',marked_value_quote:'0'},
+],{held:1,value:'100',unrealized:'1',entryCost:'99'}),now);
 function snapshot(){return {runtime_status:{bot_name:'ok_rsi',updated_at:new Date(now-1000).toISOString(),controllers:[{controller_id:'eth',pair:'ETH-USDC',price_quote:2500,state:'DISTRIBUTE',custom_info:{episode:{enabled:true,base:'0.04',cost:'99',cost_known:true},trailing_policy:{floor:2490,peak:2520}}},{controller_id:'btc',pair:'BTC-USDC',price_quote:70000,custom_info:{}}],positions_held:[],active_executors:[],active_orders:[],active_orders_status:{complete:true}},monitoring:{bot_name:'ok_rsi',stale_threshold_seconds:30}};}
-const render=(props={})=>renderToStaticMarkup(React.createElement(CommandDeskObservation,{payload:snapshot(),bot:'ok_rsi',now,section:'positions',selected:null,onSelect:()=>{},...props}));
+const render=(props={})=>renderToStaticMarkup(React.createElement(CommandDeskObservation,{payload:snapshot(),bot:'ok_rsi',now,section:'positions',selected:null,onSelect:()=>{},holdings,...props}));
 test('command desk selects an actual position and distinguishes mark, net units, cost and purchase receipts',()=>{
  const html=render();
  assert.match(html,/ETH-USDC position inspector/);assert.match(html,/100 USDC/);assert.match(html,/0.04 ETH/);assert.match(html,/99 USDC/);
  assert.match(html,/Gross purchase spend.*unavailable/);assert.match(html,/bot=ok_rsi&amp;pair=ETH-USDC&amp;view=activity&amp;record=fills/);
  assert.doesNotMatch(html,/BTC-USDC position inspector/);
+});
+test('without fleet holdings the desk withholds units, value and cost instead of deriving them',()=>{
+ const html=render({holdings:null,holdingsIssue:'Fleet holdings request failed (503)'});
+ assert.match(html,/ETH-USDC position inspector/);assert.match(html,/Fleet holdings request failed \(503\)/);
+ assert.doesNotMatch(html,/100 USDC|0\.04 ETH|99 USDC/,'the bootstrap episode bag and controller price never value the position');
 });
 test('selected controller identity does not fall back to another position or owner',()=>{
  assert.match(render({selected:'btc'}),/BTC-USDC position inspector/);

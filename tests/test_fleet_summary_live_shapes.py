@@ -2,11 +2,13 @@
 
 The first version of the summary was written against fakes of the quant endpoints. A live stack differs:
 
-* a V1 bot (``ok_rsi``) publishes bootstrap, fills and positions only: no ``quant-summary`` / ``quant-cycles``;
+* a V1 bot (``ok_rsi``) publishes bootstrap, fills, positions and ``quant-summary`` (admitted for all three live bots
+  on 2026-10-25), but no ``quant-cycles``;
 * a V3 bot publishes quant projections whose scope is unverified (``operational_label`` ``UNKNOWN``, no pairs, quote
   ``unknown``, no fees) and a runtime report with one controller row per pair that carries no per-pair inventory;
-* every bot has a ``bootstrap`` runtime observation (controllers, held positions, active executors) that the Bots
-  page reads for inventory and executors.
+* every bot has a ``bootstrap`` runtime observation (controllers, held positions, active executors). Cards read it
+  for executors and trading capability only; inventory is the one ``fleet-holdings.v1`` projection of the owner's
+  quant view.
 
 Each case below states the number a reader should see and the honest null it should not invent.
 """
@@ -20,6 +22,7 @@ import httpx
 from fastapi import HTTPException
 
 from condor.web import fleet_summary as fs
+from condor.web import holdings
 from condor.web.routes import fleet_summary as routes
 from condor.web.routes import trading_visuals
 
@@ -153,8 +156,12 @@ class LiveShapeReaders(FakeReaders):
             if self.ledger_rows is not None:
                 payload["rows"] = payload["rows"][: self.ledger_rows]
             return fs.OwnerRead(payload)
-        if bot == "ok_rsi" and path in ("quant-summary", "quant-cycles"):
-            return fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)  # V1 publishes no quant endpoints
+        if bot == "ok_rsi" and path == "quant-summary":
+            return fs.OwnerRead(quant_summary(bot, NOW_MS - 4_000, pairs=[
+                {"pair": "BNB-USDC", "units": "0.7"}, {"pair": "ETH-USDC", "units": "0.2"}, {"pair": "SOL-USDC", "units": "0"},
+            ]))
+        if bot == "ok_rsi" and path == "quant-cycles":
+            return fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)  # V1 publishes no lifecycle projection
         if bot == "meridian_v3" and path == "quant-summary":
             return fs.OwnerRead(v3_summary())
         if bot == "meridian_v3" and path == "quant-cycles":
@@ -186,7 +193,7 @@ async def test_report_clock_comes_from_the_source_that_establishes_currentness(s
 
 
 @sync
-async def test_v1_without_quant_endpoints_is_filled_from_runtime_and_fill_ledger(store):
+async def test_v1_inventory_from_the_owner_quant_view_and_counts_from_runtime_and_fill_ledger(store):
     body = await build_live(store)
     v1 = card(body, "ok_rsi")
     assert v1["positions"] == {"held": 2, "registered": 3, "current": True}
@@ -202,7 +209,7 @@ async def test_v1_without_quant_endpoints_is_filled_from_runtime_and_fill_ledger
 @sync
 async def test_v3_with_unverified_quant_keeps_unknown_inventory_null_but_counts_executors_and_fees(store):
     v3 = card(await build_live(store), "meridian_v3")
-    # Per-pair inventory is not in the native runtime report: held is unknown, not zero.
+    # The owner's quant view is not admitted (no coverage, UNKNOWN label): held is unknown, not zero.
     assert v3["positions"] is None
     assert {"field": "positions", "reason": fs.SOURCE_UNAVAILABLE} in v3["missing"]
     assert (v3["executors"], v3["executors_basis"]) == (3, "runtime_active_executors")
@@ -213,9 +220,11 @@ async def test_v3_with_unverified_quant_keeps_unknown_inventory_null_but_counts_
 
 
 @sync
-async def test_episode_bag_and_flat_pairs_count_held_inventory(store):
+async def test_held_inventory_is_the_owner_quant_view_not_a_bootstrap_rederivation(store):
+    # The bootstrap carries an episode bag (ETH 1.5) and a flat BTC controller; the owner's quant view
+    # (ETH 1.2, BTC 0, SOL 3, 60 s old) is the inventory. Episode bags are the owner's rule to count.
     v2 = card(await build_live(store), "rsi_modular_v2")
-    assert v2["positions"] == {"held": 1, "registered": 2, "current": True}
+    assert v2["positions"] == {"held": 2, "registered": 3, "current": False}
     assert v2["fees"] == {"amount": "0.42", "unit": "USDC"}  # cycles stay the first source
 
 
@@ -251,8 +260,11 @@ async def test_a_runtime_observation_of_another_bot_is_not_admitted(store):
         SERVER, "full", Mixed(store), NOW_MS, is_admin=True, user_id=7
     )
     v1 = card(body, "ok_rsi")
-    assert v1["positions"] is None and v1["executors"] is None
-    assert {g["field"] for g in v1["missing"]} >= {"positions", "executors"}
+    # The runtime report is rejected: executors fall back to the owner's open cycles, and inventory still
+    # follows the owner's own quant view. Nothing is taken from the other bot's observation.
+    assert (v1["executors"], v1["executors_basis"]) == (2, "open_lifecycle_cycles")
+    assert v1["positions"] == {"held": 2, "registered": 3, "current": True}
+    assert v1["trading"] is None
 
 
 @sync
@@ -401,13 +413,21 @@ def test_owner_coverage_not_the_unknown_label_admits_a_current_v3_summary():
     admitted = _v3_fixture("quant_summary_meridian_v3_admitted.json")
     assert admitted["data"]["operational_label"] == "UNKNOWN"
     clock = fs._instant_ms(admitted["generated_at"]) + 1_000
-    view = fs.project_quant_summary(admitted, "meridian_v3", clock)
-    assert view["admitted"] is True
-    assert [p["pair"] for p in view["pairs"]] == ["BNB-USDC", "BTC-USDC", "ETH-USDC", "SOL-USDC", "XRP-USDC"]
-    assert all(p["held"] for p in view["pairs"])
-    assert view["open_cycles"] == 10
-    stale = fs.project_quant_summary(admitted, "meridian_v3", clock + 120_000)
-    assert stale["admitted"] is False and stale["pairs"] == []
+    assert fs.project_quant_summary(admitted, "meridian_v3", clock)["admitted"] is True
+    assert fs.project_quant_summary(admitted, "meridian_v3", clock)["open_cycles"] == 10
+    view = holdings.project_bot(admitted, "meridian_v3", clock)
+    assert view["state"] == "current"
+    assert [p["pair"] for p in view["pairs"]] == [
+        "BNB-USDC",
+        "BTC-USDC",
+        "ETH-USDC",
+        "SOL-USDC",
+        "XRP-USDC",
+    ]
+    assert view["held_pair_count"] == 5
+    # Two minutes later the same observation is last known, labelled stale: never current, never dropped.
+    stale = holdings.project_bot(admitted, "meridian_v3", clock + 120_000)
+    assert stale["state"] == "stale" and stale["held_pair_count"] == 5
 
 
 def test_an_owner_declared_unverified_scope_stays_unadmitted():
@@ -418,4 +438,6 @@ def test_an_owner_declared_unverified_scope_stays_unadmitted():
     forged["data"]["pairs"] = [{"pair": "ETH-USDC", "units": "1"}]
     for payload in (unverified, forged):
         view = fs.project_quant_summary(payload, "meridian_v3", clock)
-        assert view["current"] is True and view["admitted"] is False and view["pairs"] == []
+        assert view["current"] is True and view["admitted"] is False
+        inventory = holdings.project_bot(payload, "meridian_v3", clock)
+        assert inventory["state"] == "unavailable" and inventory["pairs"] == []

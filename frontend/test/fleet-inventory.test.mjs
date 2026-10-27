@@ -2,12 +2,20 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
+import { botHoldingsAt, holdingsEntry, unavailableEntry } from './helpers/holdings.mjs';
+
 const { load } = frontendModules();
 const { projectFleetAggregates, splitPaper, paperNote } = load('features/bots/fleet-inventory.ts');
+const lib = load('lib/fleet-holdings.ts');
+const NOW = 1_800_000_000_000;
 
-const reads = (bot, pairs, funnel = [{ stage: 'orders_created', count: 4 }], lots = []) => ({
+// Inventory comes only from each bot's fleet-holdings entry; `value` is the hand-written book total.
+const reads = (bot, pairs, funnel = [{ stage: 'orders_created', count: 4 }], lots = [], value = 'complete') => ({
   bot,
-  quant: { pairs: pairs.map(([pair, units, markedValue]) => ({ pair, units, markedValue })) },
+  holdings: botHoldingsAt(lib, holdingsEntry(bot, pairs.map(([pair, units, marked]) => ({ pair, units, marked_value_quote: marked })), {
+    held: pairs.filter(([, units]) => units !== null && Number(units) > 0).length,
+    value: value === 'complete' ? pairs.reduce((total, [, , marked]) => total + Number(marked ?? 0), 0).toString() : value,
+  }), NOW),
   cycles: { inventoryAge: { lots } },
   execution: { funnel },
 });
@@ -34,4 +42,27 @@ test('the paper rule is the shared token rule and the note names the count', () 
   assert.equal(paperNote(0), '');
   assert.equal(paperNote(1), '+1 paper bot, not counted');
   assert.equal(paperNote(2), '+2 paper bots, not counted');
+});
+
+test('an unavailable or partly valued live bot leaves the fleet inventory total unknown, never a partial sum', () => {
+  const live = reads('rsi_modular_v2', [['BTC-USDT', '0.01', '650']]);
+  const offline = { bot: 'ok_rsi', holdings: botHoldingsAt(lib, unavailableEntry('ok_rsi'), NOW), cycles: null, execution: null };
+  const unread = { bot: 'meridian_v3', holdings: null, cycles: null, execution: null };
+  const unpriced = reads('meridian_v3', [['ETH-USDT', '1', null]], undefined, [], null);
+  assert.equal(projectFleetAggregates([live]).inventoryTotal, 650);
+  for (const other of [offline, unread, unpriced]) {
+    const result = projectFleetAggregates([live, other]);
+    assert.equal(result.inventoryTotal, null, other.bot);
+    assert.deepEqual(result.inventory.find(([asset]) => asset === 'BTC'), ['BTC', { positions: 1, units: 0.01, value: 650, oldest: null }]);
+  }
+});
+
+test('a bot the server labels paper never adds to live inventory, even without a paper token in its id', () => {
+  const live = reads('rsi_modular_v2', [['BTC-USDT', '0.01', '650']]);
+  const simulated = reads('shadow_v4', [['BTC-USDT', '5', '325000']]);
+  simulated.holdings = botHoldingsAt(lib, { ...simulated.holdings.entry, paper: true }, NOW);
+  const result = projectFleetAggregates([live, simulated]);
+  assert.deepEqual(result.paper, ['shadow_v4']);
+  assert.equal(result.inventoryTotal, 650);
+  assert.ok(result.heatCells.every(cell => cell.row !== 'shadow_v4'));
 });

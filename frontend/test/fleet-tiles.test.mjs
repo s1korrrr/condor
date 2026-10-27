@@ -1,12 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { frontendModules } from './helpers/frontend-module.mjs';
+import { botHoldingsAt, holdingsEntry, unavailableEntry } from './helpers/holdings.mjs';
 
 const { load } = frontendModules();
+const lib = load('lib/fleet-holdings.ts');
 const { projectFleetTiles, projectBotStats, tileNote, durationLabel, fillTotals } = load('features/bots/fleet-tiles.ts');
 const { projectFleetHealth, stackRestarts } = load('features/bots/fleet-health.ts');
 const now = Date.parse('2026-10-01T12:00:00Z');
 const ago = seconds => new Date(now - seconds * 1000).toISOString();
+// Fleet holdings with hand-written units; `held` is the server's held_pair_count for those units.
+const holdingsOf = (name, units, held, over = {}) => botHoldingsAt(lib, holdingsEntry(name, units.map((value, index) => ({ pair: `P${index}-USDC`, units: value, marked_value_quote: value })), { held, value: null, known: '0', ...over }), now);
 
 const funnel = (created, filled, canceled = 0, rejected = 0) => [{ stage: 'orders_created', count: created }, { stage: 'orders_filled', count: filled }, { stage: 'orders_canceled', count: canceled }, { stage: 'orders_rejected', count: rejected }];
 const cycle = (over = {}) => ({ cycleId: 'c', pair: 'BTC-USDC', controllerId: 'btc', side: 'buy', outcome: 'closed_scored', result: 'win', openedAt: ago(7200), firstFillAt: ago(7000), closedAt: ago(3600), holdingSeconds: 3400, netPnl: '1', fees: '0.1', grossVolume: '100', fillCount: 2, closeType: null, closeReason: null, ...over });
@@ -15,7 +19,8 @@ const health = (restart = 0, bootId = 'fa3b7a25-4557', state = 'healthy') => ({ 
 function bot(name, over = {}) {
   return {
     bot: name, name: name.toUpperCase(), status: 'running',
-    view: { pairs: [{ quantity: '1' }, { quantity: '0' }, { quantity: '2' }], orders: [{}, {}], ordersStatus: { complete: true }, activeOrderCount: 2, activeExecutorCount: 3, stale: false, ageSeconds: 1, observedAt: ago(1) },
+    view: { orders: [{}, {}], ordersStatus: { complete: true }, activeOrderCount: 2, activeExecutorCount: 3, stale: false, ageSeconds: 1, observedAt: ago(1) },
+    holdings: holdingsOf(name, ['1', '0', '2'], 2),
     quant: { freshness: 'current', observedAt: ago(4), pairs: [{ units: '1', workingOrders: 1 }], cycleCounts: { open: 9 } },
     cycles: { quote: 'USDC', counts: { open: 2, closed_scored: 6, entry_pending: 1, entry_unfilled: 2 },
       cycles: [cycle(), cycle({ cycleId: 'old', firstFillAt: ago(100000), openedAt: ago(100100), closedAt: ago(95000), fillCount: 3 }), cycle({ cycleId: 'open', closedAt: null, outcome: 'open', fillCount: 1 })],
@@ -54,7 +59,8 @@ test('one bot: every counter is computed from its own reads and no tile says Una
 
 test('two bots: counters add, ratios pool by counts, per-bot values stay in the footnote', () => {
   const second = bot('meridian', {
-    view: { pairs: [{ quantity: '0' }, { quantity: '0.5' }], orders: [{}], ordersStatus: { complete: true }, activeOrderCount: 1, activeExecutorCount: 1, stale: false, ageSeconds: 1, observedAt: ago(1) },
+    view: { orders: [{}], ordersStatus: { complete: true }, activeOrderCount: 1, activeExecutorCount: 1, stale: false, ageSeconds: 1, observedAt: ago(1) },
+    holdings: holdingsOf('meridian', ['0', '0.5'], 1),
     cycles: { quote: 'USDC', counts: { open: 1, entry_pending: 0, entry_unfilled: 1 }, cycles: [], stats: { scored: 2, minSample: 5, wins: 1, losses: 1, breakeven: 0, winRate: 0.5, averageHoldingSeconds: 7200, fees: '0.5', grossVolume: '500', fillCount: 4 }, inventoryAge: { availability: 'available', oldestSeconds: 7200, lots: [{ ageSeconds: 7200 }] } },
     execution: { fillRatio: 0.5, makerCount: 0, takerCount: 2, orderSampleSufficient: false, funnel: funnel(2, 1, 1) },
     quant: { freshness: 'current', observedAt: ago(9), pairs: [], cycleCounts: { open: 1 } },
@@ -80,7 +86,7 @@ test('two bots: counters add, ratios pool by counts, per-bot values stay in the 
 });
 
 test('three bots, one with a failed read: it still counts as registered and the tiles say how many bots they cover', () => {
-  const failed = { bot: 'ok_rsi', name: 'ok_rsi', status: 'running', view: null, quant: null, cycles: null, execution: null, health: null };
+  const failed = { bot: 'ok_rsi', name: 'ok_rsi', status: 'running', view: null, holdings: null, quant: null, cycles: null, execution: null, health: null };
   const tiles = byId(projectFleetTiles([bot('rsi'), bot('meridian'), failed], now));
   noUnavailable(Object.values(tiles));
   assert.equal(tiles.B01.value, '3 / 3');
@@ -198,16 +204,33 @@ test('legacy rounded fee receipts are counted and named, not presented as exact'
   assert.match(tile.basis, /1 legacy rounded fee receipt/);
 });
 
-test('an unadmitted owner summary is not an empty inventory', () => {
-  const unadmitted = bot('v3', { view: null, quant: { freshness: 'current', admitted: false, observedAt: ago(4), pairs: [], cycleCounts: { open: null } } });
+test('unavailable or partial fleet holdings are not an empty inventory', () => {
+  const unadmitted = bot('v3', { view: null, holdings: botHoldingsAt(lib, unavailableEntry('v3', 'OWNER_NOT_READY'), now), quant: { freshness: 'current', admitted: false, observedAt: ago(4), pairs: [], cycleCounts: { open: null } } });
   const stats = projectBotStats(unadmitted, now);
   assert.equal(stats.held, null, 'zero of zero pairs is not a read');
+  assert.equal(projectBotStats(bot('v3', { holdings: null }), now).held, null, 'unread holdings are unknown');
+  const partial = bot('v3', { holdings: holdingsOf('v3', ['1', null], null, { reasons: ['PAIR_QUANTITY_UNKNOWN'] }) });
+  assert.equal(projectBotStats(partial, now).held, null, 'a partial book has no held count');
+  assert.equal(projectBotStats(bot('v3', { holdings: null, quant: { freshness: 'current', admitted: true, observedAt: ago(4), pairs: [{ units: '3', workingOrders: 0 }], cycleCounts: { open: 0 } } }), now).held, null, 'the quant summary never stands in for fleet holdings');
   const tile = byId(projectFleetTiles([bot('v1'), bot('v2'), unadmitted], now)).B03;
   assert.equal(tile.value, '4 / 6');
   assert.equal(tile.state.kind, 'incomplete');
   assert.match(tile.state.reason, /2 of 3 bots/);
-  const admittedEmpty = bot('v4', { view: null, quant: { freshness: 'current', admitted: true, observedAt: ago(4), pairs: [{ units: '0', workingOrders: 0 }], cycleCounts: { open: 0 } } });
+  const admittedEmpty = bot('v4', { view: null, holdings: holdingsOf('v4', ['0'], 0) });
   assert.equal(projectBotStats(admittedEmpty, now).held, 0, 'an admitted flat owner is a real zero');
+  assert.equal(projectBotStats(admittedEmpty, now).registered, 1);
+});
+
+test('held counts from stale fleet holdings are last known and the tile says so', () => {
+  const old = bot('v2', { holdings: botHoldingsAt(lib, holdingsEntry('v2', [{ pair: 'BNB-USDC', units: '4', marked_value_quote: '2400' }], { held: 1, value: '2400', state: 'stale' }), now, 45_000) });
+  assert.equal(projectBotStats(old, now).inventoryState, 'stale');
+  const tile = byId(projectFleetTiles([bot('v1'), old], now)).B03;
+  assert.equal(tile.value, '3 / 4');
+  assert.equal(tile.state.kind, 'stale');
+  assert.match(tile.basis, /1 last known/);
+  // Current per the server, but aged past 30 s by the client age rule: shown as last known, never as current.
+  const aged = bot('v2', { holdings: botHoldingsAt(lib, holdingsEntry('v2', [{ pair: 'BNB-USDC', units: '4', marked_value_quote: '2400' }], { held: 1, value: '2400' }), now, 30_000) });
+  assert.equal(projectBotStats(aged, now).inventoryState, 'stale');
 });
 
 test('a heartbeat that has not been read yet is collecting, not stale; a read old heartbeat is stale', () => {

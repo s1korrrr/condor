@@ -51,17 +51,11 @@
   {
    "section": "bots",
    "bot": "rsi_modular_v2",
-   "field": "positions",
-   "reason": "OWNER_NOT_CURRENT"
-  },
-  {
-   "section": "bots",
-   "bot": "rsi_modular_v2",
    "field": "trading",
    "reason": "SOURCE_UNAVAILABLE"
   }
  ],
- "missing_total": 3,
+ "missing_total": 2,
  "wallet": {
   "equity": "1000",
   "unit": "USDT",

@@ -51,12 +51,6 @@
   {
    "section": "bots",
    "bot": "rsi_modular_v2",
-   "field": "positions",
-   "reason": "OWNER_NOT_CURRENT"
-  },
-  {
-   "section": "bots",
-   "bot": "rsi_modular_v2",
    "field": "trading",
    "reason": "SOURCE_UNAVAILABLE"
   }
@@ -391,7 +385,11 @@
    "controllers": 1,
    "report_at_ms": 1799999970000,
    "report_stale": true,
-   "positions": null,
+   "positions": {
+    "held": 2,
+    "registered": 3,
+    "current": false
+   },
    "executors": 1,
    "executors_basis": "open_lifecycle_cycles",
    "pnl_day": {
@@ -417,10 +415,6 @@
    },
    "trading": null,
    "missing": [
-    {
-     "field": "positions",
-     "reason": "OWNER_NOT_CURRENT"
-    },
     {
      "field": "trading",
      "reason": "SOURCE_UNAVAILABLE"

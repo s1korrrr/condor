@@ -6,7 +6,9 @@ import { authFetch } from '@/lib/auth-token';
 import { transientReadFailure } from '@/lib/read-continuity';
 import { useServer } from '@/hooks/useServer';
 import { parseTradingVisualsSources, type TradingVisualsSource } from '@/features/trading-visuals/sources';
-import { buildBotPositionView, partitionBotInventory, numeric, type BotPairPosition } from '@/features/bots/position-view';
+import { buildBotPositionView, inventoryStateLabel, inventoryValueText, partitionBotInventory, numeric, type BotPairPosition } from '@/features/bots/position-view';
+import { botHoldings, type BotHoldings } from '@/lib/fleet-holdings';
+import { holdingsIssue as holdingsReadIssue, useFleetHoldings } from '@/features/quant-ops/use-fleet-holdings';
 import { loadBotFillTrips, openTripForPair, tripOutcomeLabel, type FillTrip } from '@/features/bots/fill-trips';
 import { PairPosition, PriceLevels, ObservationTable } from './NativeBotPositions';
 import './command-desk.css';
@@ -88,7 +90,7 @@ function PositionInspector({ row, bot, page, now, trip }: { row: BotPairPosition
       <div><dt>Current market value</dt><dd>{amount(row.markValue, row.quote)}</dd></div>
       <div><dt>Managed net units</dt><dd>{row.quantity === null ? 'Unavailable' : `${row.quantity} ${row.baseAsset}`}</dd></div>
       <div><dt>Open-position PnL</dt><dd>{amount(row.bagPnl, row.quote)}</dd></div>
-      <div><dt>Tracked inventory cost</dt><dd>{amount(row.base !== null && row.breakeven !== null ? row.base * row.breakeven : null, row.quote)}</dd></div>
+      <div><dt>Tracked inventory cost</dt><dd>{amount(row.entryCost, row.quote)}</dd></div>
     </dl>
     <PriceLevels row={row}/>
     <div className="bot-desk__next"><h4>Next decision</h4><p>{row.planNext || row.reason || row.hold ? stateLabel(row.planNext || row.reason || row.hold) : 'The owner has not reported its next condition.'}</p><small>A controller condition is not a working exchange order.</small></div>
@@ -98,22 +100,27 @@ function PositionInspector({ row, bot, page, now, trip }: { row: BotPairPosition
 }
 
 /** Projection failures remove current values, but keep the owner and workspace mounted. */
-export function CommandDeskObservation({ payload, bot, page, now, section, selected, onSelect, trips, tripsError }: {
+export function CommandDeskObservation({ payload, bot, page, now, section, selected, onSelect, trips, tripsError, holdings = null, holdingsIssue = null }: {
   payload: unknown; bot: string; page?: BotsPageResponse; now: number; section: Section; selected: string | null; onSelect: (id: string) => void;
   trips?: FillTrip[] | null; tripsError?: string | null;
+  /** This bot's `fleet-holdings.v1` entry: the only inventory source. Null renders inventory as unavailable. */
+  holdings?: BotHoldings | null; holdingsIssue?: string | null;
 }) {
   let view;
-  try { view = buildBotPositionView(payload, bot, now); }
+  try { view = buildBotPositionView(payload, bot, now, { holdings, holdingsIssue }); }
   catch (error) { return <p className="bot-desk__notice" role="status">{error instanceof Error ? error.message : 'Bot state could not be read.'}</p>; }
   const { primary, small } = partitionBotInventory(view.pairs);
   const row = selected ? view.pairs.find(item => item.id === selected) : primary[0] ?? small[0];
   const completeOrders = view.orders !== null && view.ordersStatus.complete === true;
   const trip = row && trips ? openTripForPair(trips, row.pair) : undefined;
+  const { inventory } = view;
+  const inventoryQuote = inventory.quote ?? '';
   return <>
-    <div className="bot-desk__observation"><span>{view.orderCountLabel} <strong>{amount(view.activeOrderCount)}</strong></span><span>Active executors <strong>{amount(view.activeExecutorCount)}</strong></span><small>Observed {new Date(view.observedAt).toLocaleTimeString('en-GB', { timeZone: 'UTC' })} UTC</small></div>
+    <div className="bot-desk__observation"><span>{view.orderCountLabel} <strong>{amount(view.activeOrderCount)}</strong></span><span>Active executors <strong>{amount(view.activeExecutorCount)}</strong></span><span data-state={inventory.state}>Held pairs <strong>{inventory.heldPairCount === null ? '—' : `${inventory.heldPairCount} / ${inventory.registeredPairCount ?? '—'}`}</strong></span><span data-state={inventory.state}>Holdings value <strong>{inventoryValueText(inventory, value => amount(value, inventoryQuote))}</strong></span>{inventory.paper && <span className="bot-desk__status">Paper · simulated</span>}<small>Observed {new Date(view.observedAt).toLocaleTimeString('en-GB', { timeZone: 'UTC' })} UTC</small></div>
+    {inventory.state !== 'current' && <p className="bot-desk__notice" role="status" data-state={inventory.state}>Inventory {inventoryStateLabel(inventory)}.{inventory.state === 'stale' ? ' Values below are the last known holdings, not current.' : ' Units, values and PnL are withheld.'}</p>}
     {section === 'positions' && <div className="bot-desk__position-workspace"><div>
       <PositionChoices rows={primary} selected={row?.id} onSelect={onSelect}/>
-      {!!small.length && <details className="bot-desk__small" open={Boolean(row && small.includes(row))}><summary>Small &amp; zero inventory ({small.length})</summary><p>Below 1 unit of quote value with no active executor or reported pending sell. Not a venue minimum.</p><PositionChoices rows={small} selected={row?.id} onSelect={onSelect}/></details>}
+      {!!small.length && <details className="bot-desk__small" open={Boolean(row && small.includes(row))}><summary>Small holdings ({small.length})</summary><p>Grouped by the fleet holdings: units below 1 unit of quote value, no running executor, and no active owner work. Display only; not a venue minimum or an exit decision.</p><PositionChoices rows={small} selected={row?.id} onSelect={onSelect}/></details>}
       {!view.pairs.length && <p className="bot-desk__notice">No controller positions are included in this observation.</p>}
       {selected && !row && <p role="status" className="bot-desk__notice">The selected position is no longer reported. Select a current position.</p>}
     </div>{row && <PositionInspector key={row.id} row={row} bot={bot} page={page} now={now} trip={trip}/>}</div>}
@@ -122,7 +129,7 @@ export function CommandDeskObservation({ payload, bot, page, now, section, selec
     ]}/> : <p>No active orders in this owner observation.</p> : <p role="status">Complete exchange order detail is unavailable. A reported limit-order count excludes market orders.</p>}<p className="bot-desk__muted">Owner-issued requests and conditional exit plans are shown in position evidence; they are not assumed to be exchange orders.</p></section>}
     {section === 'controllers' && <section aria-label="Selected bot controllers"><h3>Controller observations</h3>{view.pairs.map(item => <details className="bot-desk__controller" key={item.id}><summary>{item.pair}<span>{stateLabel(item.phase)}</span></summary><PairPosition row={item} bot={bot} page={page} now={now}/></details>)}</section>}
     {section === 'trips' && <section aria-label="Buy and sell trips" className="bot-desk__orders"><h3>Buy/sell trips</h3>{tripsError ? <p role="alert">{tripsError}</p> : trips == null ? <p role="status">Reading recorded fill trips…</p> : <TripLedger trips={trips} bot={bot}/>}</section>}
-    <details className="bot-desk__coverage"><summary>Source &amp; accounting details</summary><p>Managed inventory combines open and closing executor net units and retained units. Episode bags are counted once. Current market value uses the observed price; it is not gross purchase spend. Open-position PnL is not lifetime strategy profit. Episode PnL is before exit costs. Trip replay PnL uses a running average cost over recorded fills, before fees; it is not the bot's per-trade net result or account equity. Missing quantities, prices and basis remain unavailable. Whole-account holdings and aggregate performance stay in <Link to="/capital">Capital</Link>.</p></details>
+    <details className="bot-desk__coverage"><summary>Source &amp; accounting details</summary><p>Units, mark, current market value, cost, breakeven and open-position PnL are the reporting owner's fleet holdings (one projection shared with the fleet summary and the phone). Current market value is not gross purchase spend. Open-position PnL is not lifetime strategy profit. Episode PnL is before exit costs. Trip replay PnL uses a running average cost over recorded fills, before fees; it is not the bot's per-trade net result or account equity. Missing quantities, prices and basis remain unavailable. Whole-account holdings and aggregate performance stay in <Link to="/capital">Capital</Link>.</p></details>
   </>;
 }
 
@@ -133,12 +140,13 @@ function OwnerWorkspace({ source, page, controls, logs }: { source: TradingVisua
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const query = useQuery({ queryKey: ['native-position-observation', source.server, source.bot], queryFn: ({ signal }) => read(`/api/v1/trading-visuals/bootstrap?bot=${encodeURIComponent(source.bot)}`, signal), refetchInterval: 10_000, retry: false });
   const tripsQuery = useQuery({ queryKey: ['native-fill-trips', source.server, source.bot], queryFn: ({ signal }) => loadBotFillTrips(source.bot, read, signal), refetchInterval: 30_000, retry: false });
+  const holdingsQuery = useFleetHoldings(source.server);
   const owner = page?.bots.find(item => item.bot_name === source.bot);
   const tabs = { positions: 'Positions', orders: 'Working orders', trips: 'Buy/sell trips', controllers: 'Controller details' } as const;
   return <section className="bot-desk__workspace" aria-label={`${source.bot} command desk`}>
     <header className="bot-desk__owner-header"><div><h2>{ownerName(source.bot)}</h2><p>{source.bot} · {source.server}</p></div><div className="bot-desk__owner-actions"><span className="bot-desk__status">{owner?.status ? stateLabel(owner.status) : 'Lifecycle unavailable'}</span>{controls}</div></header>
     <nav className="bot-desk__tabs" aria-label="Selected bot workspace">{(Object.keys(tabs) as Section[]).map(item => <button type="button" key={item} aria-pressed={section === item} onClick={() => setSection(item)}>{tabs[item]}</button>)}</nav>
-    {query.isPending ? <p className="bot-desk__notice" role="status">Reading bot positions and orders…</p> : query.isError ? <p className="bot-desk__notice" role="alert">{query.error.message} Retrying in the background. <button type="button" onClick={() => void query.refetch()}>Check now</button></p> : <CommandDeskObservation payload={query.data} bot={source.bot} page={page} now={Math.max(now, query.dataUpdatedAt)} section={section} selected={selected} onSelect={setSelected} trips={tripsQuery.isPending ? null : tripsQuery.data} tripsError={tripsQuery.isError ? tripsQuery.error.message : null}/>}
+    {query.isPending ? <p className="bot-desk__notice" role="status">Reading bot positions and orders…</p> : query.isError ? <p className="bot-desk__notice" role="alert">{query.error.message} Retrying in the background. <button type="button" onClick={() => void query.refetch()}>Check now</button></p> : <CommandDeskObservation payload={query.data} bot={source.bot} page={page} now={Math.max(now, query.dataUpdatedAt)} section={section} selected={selected} onSelect={setSelected} trips={tripsQuery.isPending ? null : tripsQuery.data} tripsError={tripsQuery.isError ? tripsQuery.error.message : null} holdings={botHoldings(holdingsQuery.data, source.bot)} holdingsIssue={holdingsReadIssue(holdingsQuery, source.bot)}/>}
     {logs && <details className="bot-desk__logs"><summary>Recent owner logs</summary>{logs}</details>}
   </section>;
 }

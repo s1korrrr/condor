@@ -7,7 +7,9 @@ import { transientReadFailure } from '@/lib/read-continuity';
 import { useServer } from '@/hooks/useServer';
 import { useServers } from '@/hooks/useServers';
 import { displayBotName, isPaperBot, parseTradingVisualsSources, sourcesForServer, type TradingVisualsSource } from '@/features/trading-visuals/sources';
-import { withQuantInventory, buildBotPositionView, mixedOperationalLabel, openPairCount, type BotPairPosition } from '@/features/bots/position-view';
+import { buildBotPositionView, inventoryStateLabel, inventoryValueText, mixedOperationalLabel, type BotPairPosition } from '@/features/bots/position-view';
+import { botHoldings, type BotHoldings } from '@/lib/fleet-holdings';
+import { holdingsIssue as holdingsReadIssue, useFleetHoldings } from '@/features/quant-ops/use-fleet-holdings';
 import { projectExecutionStats, projectFills, projectLifecycleDecisions, projectQuantBotSummary, projectQuantCycles, projectQuantExecution, projectRecordedDecisions, type ExecutionStats, type LifecycleDecision, type QuantBotSummary, type QuantCycles } from '@/features/bots/quant-roster';
 import { formatDecimal, formatSigned, metricTone } from '@/features/quant-ops/format';
 import { Heatmap, Histogram, LifecycleCounts, MetricCard, PanelFrame, RailBar, StateGlyph } from '@/features/quant-ops/primitives';
@@ -64,6 +66,8 @@ function dcaLabel(row: BotPairPosition, reportedLevel?: string | null) {
 
 export type OwnerReads = {
   bot: string; server: string; status: string | null; view: ReturnType<typeof buildBotPositionView> | null;
+  /** This bot's `fleet-holdings.v1` entry (the only inventory source) and, without one, why. */
+  holdings: BotHoldings | null; holdingsIssue: string | null;
   controller: ReturnType<typeof projectBotPnl>;
   quant: QuantBotSummary | null; cycles: QuantCycles | null; execution: ExecutionStats | null; decisions: LifecycleDecision[];
   /** Stack heartbeat and service restarts from the operations read; null until that read lands. */
@@ -73,8 +77,9 @@ export type OwnerReads = {
 };
 
 /** All pair rows stay in page flow. Selecting a row never hides the rest. */
-export function RosterObservation({ payload, bot, now, lifecycleStatus = null, summary: summaryPayload, events, execution, cycles: cyclesPayload, day, week, dayChange, controllerTotal = null, controllerQuote = null, summaryIssue, eventsIssue, executionIssue }: {
+export function RosterObservation({ payload, bot, now, lifecycleStatus = null, summary: summaryPayload, events, execution, cycles: cyclesPayload, day, week, dayChange, controllerTotal = null, controllerQuote = null, summaryIssue, eventsIssue, executionIssue, holdings = null, holdingsIssue = null }: {
   payload: unknown; bot: string; now: number; controllerTotal?: number | null; controllerQuote?: string | null;
+  holdings?: BotHoldings | null; holdingsIssue?: string | null;
   lifecycleStatus?: string | null;
   summary?: unknown; events?: unknown; execution?: unknown; cycles?: unknown;
   day?: PnlSeries; week?: PnlSeries;
@@ -83,10 +88,10 @@ export function RosterObservation({ payload, bot, now, lifecycleStatus = null, s
   summaryIssue?: string | null; eventsIssue?: string | null; executionIssue?: string | null;
 }) {
   let view;
-  try { view = buildBotPositionView(payload, bot, now, { allowStale: true }); }
+  try { view = buildBotPositionView(payload, bot, now, { allowStale: true, holdings, holdingsIssue }); }
   catch (error) { return <p className="q-empty" role="status">{error instanceof Error ? error.message : 'Bot state could not be read.'}</p>; }
   const quant = projectQuantBotSummary(summaryPayload, bot, now);
-  view = withQuantInventory(view, quant?.pairs ?? [], quant?.admitted ?? false);
+  const { inventory } = view;
   const journal = projectRecordedDecisions(events, bot, now) ?? [];
   const lifecycle = projectLifecycleDecisions(events, bot, now) ?? [];
   const histogram = projectQuantExecution(execution, bot);
@@ -94,18 +99,16 @@ export function RosterObservation({ payload, bot, now, lifecycleStatus = null, s
   const cycles = projectQuantCycles(cyclesPayload, bot);
   const completeOrders = view.orders !== null && view.ordersStatus.complete === true;
   const quantPair = (row: BotPairPosition) => quant?.pairs.find(pair => pair.pair === row.pair && (pair.controllerId === row.controllerId || !pair.controllerId)) ?? null;
-  const pairQuotes = new Set<string>(view.pairs.map(row => row.quote));
-  const quote: string | null = pairQuotes.size === 1 ? [...pairQuotes][0] ?? null : null;
-  const owned = view.pairs.length > 0 && quote !== null && view.pairs.every(row => row.markValue !== null) ? view.pairs.reduce((total, row) => total + row.markValue!, 0) : null;
+  const quote = inventory.quote;
   const regimes = [...new Set((quant?.pairs ?? []).map(row => row.regime).filter(Boolean))] as string[];
-  const openPairs = openPairCount(view.pairs);
+  const openPairs = inventory.heldPairCount;
   const entryPairs = (quant?.pairs ?? []).filter(row => row.planMode === 'ENTRIES').length;
   const exitPairs = (quant?.pairs ?? []).filter(row => row.planMode === 'EXITS').length;
   const nextConditions = [...new Set<string>(view.pairs.flatMap((row: BotPairPosition) => typeof row.planNext === 'string' && row.planNext.length > 0 ? [row.planNext] : []))];
   const nextCondition: string = nextConditions.length > 1 ? 'MIXED · see per-pair conditions' : nextConditions[0] ?? 'No owner condition recorded; see per-pair rows.';
   const retainedReport = quant?.retainedPositionNetPnl;
   const retainedValue = retainedReport?.value ?? retainedReport?.lastKnown ?? null;
-  const pairPnl = quote !== null && view.pairs.length > 0 && view.pairs.every(row => row.bagPnl !== null) ? view.pairs.reduce((total, row) => total + row.bagPnl!, 0) : null;
+  const pairPnl = inventory.unrealized;
   const dayPoints = (day?.points ?? []).map(point => point.value).filter((value): value is number => value != null);
   const trailing = view.pairs.flatMap(row => row.executors.map(executor => ({ pair: row.pair, activation: Number(executor.distance_to_trailing_activation_pct), trigger: Number(executor.distance_to_trailing_trigger_pct), state: typeof executor.trailing_state === 'string' ? executor.trailing_state : null })).filter(item => Number.isFinite(item.activation) || Number.isFinite(item.trigger)));
   const nearest = trailing.filter(item => Number.isFinite(item.activation)).sort((a, b) => a.activation - b.activation)[0] ?? null;
@@ -113,13 +116,15 @@ export function RosterObservation({ payload, bot, now, lifecycleStatus = null, s
   const cycleState: PanelState = !cycles ? { kind: 'unavailable', reason: 'Cycle projection not readable.' } : cycles.stats.scored < cycles.stats.minSample ? { kind: 'collecting', sample: { have: cycles.stats.scored, need: cycles.stats.minSample }, reason: 'Scored closed cycles' } : { kind: 'fresh' };
   const decisionRows = journal.length ? journal.map(row => ({ key: `${row.ownerBootId}:${row.decisionId}`, at: row.occurredAt, action: row.action, id: `${row.decisionId.slice(0, 12)} · ${row.controllerId} · boot ${row.ownerBootId.slice(0, 8)}`, pair: row.pair, reasons: [...row.reasonCodes, ...row.gateResults.map(gate => [gate.name, gate.result].filter(Boolean).join(': ')).filter(Boolean)].join(' · '), links: row.linkage === 'owner' ? `Order IDs ${row.orderIds.join(', ') || '—'} · fill IDs ${row.fillIds.join(', ') || '—'}` : 'Unlinked · no owner order/fill IDs', outcome: null as string | null }))
     : lifecycle.map(row => ({ key: row.decisionId, at: row.occurredAt, action: row.action, id: `executor ${row.executorId.slice(0, 10)}…`, pair: row.pair, reasons: [...row.reasonCodes, row.decisionPrice ? `decision price ${row.decisionPrice}` : '', row.netPnl ? `net ${formatSigned(row.netPnl)}` : ''].filter(Boolean).join(' · '), links: row.linkage === 'owner' ? `${row.orderIds.length} order ID${row.orderIds.length === 1 ? '' : 's'} · ${row.fillIds.length ? `fill IDs ${row.fillIds.join(', ')}` : 'no fill'}` : 'Unlinked · no owner order IDs', outcome: row.outcome }));
+  const inventoryBanner = inventory.state !== 'current' ? <p className="q-notice" role="status" data-state={inventory.state}><StateGlyph state={inventory.state === 'stale' ? { kind: 'stale', observedAt: inventory.observedAtMs === null ? null : new Date(inventory.observedAtMs).toISOString(), reason: 'Fleet holdings are not current' } : { kind: 'unavailable', reason: inventory.reason ?? 'Fleet holdings unavailable' }} /> Inventory {inventoryStateLabel(inventory)}.{inventory.state === 'stale' ? ' Units, values and PnL below are the last known holdings.' : ' Units, values and PnL are withheld.'}</p> : null;
   const staleBanner = view.stale ? <p className="q-notice" role="status" data-state="stale"><StateGlyph state={{ kind: 'stale', observedAt: view.observedAt, reason: 'Owner observation is not current' }} /> Owner observation is not current: last published {stamp(view.observedAt)} · {ageLabel(view.ageSeconds)} ago. Every value on this card is that last observation; nothing below is live.</p> : null;
-  return <div className="q-bot-card" data-state={view.stale ? 'stale' : 'fresh'}>
+  return <div className="q-bot-card" data-state={view.stale || inventory.state === 'stale' ? 'stale' : 'fresh'}>
     {staleBanner}
+    {inventoryBanner}
     <div className="q-state-ribbon" data-panel-id="B11">
       <div><span>Signal regime</span><strong>{regimes.length ? <span className="q-pill" data-tone={tone(regimes.length > 1 ? 'mixed' : regimes[0])}>{regimes.length > 1 ? `MIXED · ${regimes.join(' / ')}` : regimes[0]}</span> : 'Not reported'}{quant?.lastKnown && <small className="q-block">last known</small>}</strong></div>
       <div><span>State</span><strong><span className="q-pill" data-tone={tone(mixedOperationalLabel(view.pairs))}>{mixedOperationalLabel(view.pairs)}</span></strong></div>
-      <div data-panel-id="B12"><span>Reported inventory value</span><strong>{amount(quant?.ownedValue.value ?? owned, quote)}</strong><small className="q-block">{openPairs === null ? 'Open pair count unavailable' : `${openPairs} open pair${openPairs === 1 ? '' : 's'}`} · marked PnL {pairPnl === null ? 'Unknown basis' : amount(pairPnl, quote ?? '')}</small></div>
+      <div data-panel-id="B12" data-state={inventory.state}><span>Reported inventory value</span><strong>{inventoryValueText(inventory, value => amount(value, quote))}</strong><small className="q-block">{openPairs === null ? 'Open pair count unavailable' : `${openPairs} open pair${openPairs === 1 ? '' : 's'}`} · marked PnL {pairPnl === null ? 'Unknown basis' : amount(pairPnl, quote ?? '')}</small></div>
       <div data-panel-id="B13"><span>DCA plan</span><strong>{quant?.pairs.length ? `${entryPairs} entering · ${exitPairs} exiting` : 'No plan reported'}</strong><small className="q-block">{quant?.pairs.length ? 'Per-pair target, anchor and next step in the ladder below' : 'Owner plan fields absent from this observation'}</small></div>
       <div data-panel-id="B14"><span>Inventory age</span><strong>{cycles?.inventoryAge.availability === 'available' ? `${ageLabel(cycles.inventoryAge.oldestSeconds)} oldest` : cycles ? 'No open lots' : 'Not readable'}</strong><small className="q-block">{cycles?.inventoryAge.availability === 'available' ? `value-weighted ${ageLabel(cycles.inventoryAge.weightedSeconds)} · ${cycles.inventoryAge.lots.length} lot${cycles.inventoryAge.lots.length === 1 ? '' : 's'} · from native fill times` : cycles?.inventoryAge.reason ?? 'Cycle projection not readable'}</small></div>
       <div data-panel-id="B15"><span>Trailing arm distance</span><strong>{nearest ? `${nearest.pair} ${(nearest.activation * 100).toFixed(2)}%` : trailing.length ? 'Armed' : 'No trailing executor'}</strong><small className="q-block">{nearest ? `to trailing activation · ${nearest.state ?? 'state unavailable'}` : 'Profit capture needs a marked intracycle path; the owner records only the trailing state.'}</small></div>
@@ -181,14 +186,14 @@ export function RosterObservation({ payload, bot, now, lifecycleStatus = null, s
           <li><span>Execution mode</span><strong>{quant?.executionMode ?? 'Unavailable'}</strong></li>
           <li><span>Ownership evidence</span><strong>{quant?.ownershipBasis ?? 'Unavailable'}</strong></li>
           <li><span>Working orders</span><strong>{completeOrders ? String(view.orders!.length) : 'Incomplete'}</strong></li>
-          <li><span>Inventory</span><strong>{view.stale ? `Last known · ${ageLabel(view.ageSeconds)} ago` : view.pairs.some(row => row.quantity === null) ? 'Partial' : 'Reported'}</strong></li>
+          <li><span>Inventory</span><strong>{inventoryStateLabel(inventory)}{inventory.paper ? ' · paper (simulated)' : ''}</strong></li>
           <li><span>Risk rails</span><strong>{quant?.riskRails.availability === 'available' ? `${quant.riskRails.rails.filter(rail => rail.limit !== null).length} published · ${quant.riskRails.rails.filter(rail => rail.state === 'absent').length} absent` : 'None published'}</strong></li>
           <li><span>Wallet valuation</span><strong>{quant?.wallet?.availability === 'available' ? `${quant.wallet.currency} declared` : quant?.wallet?.reason?.replaceAll('_', ' ').toLowerCase() ?? 'Unavailable'}</strong></li>
         </ul>
         {quant?.riskRails.rails.map(rail => <RailBar key={rail.name} name={rail.name} used={rail.used} limit={rail.limit} unit={rail.unit} state={rail.state} utilization={rail.utilization} />)}
       </PanelFrame>
     </div>
-    <div data-panel-id="B12-pairs">
+    <div data-panel-id="B12-pairs" data-state={inventory.state}>
       <h3 className="q-table-title">Per-pair inventory · {displayBotName(bot)}</h3>
       <DataTable<BotPairPosition> label={`Per-pair inventory · ${displayBotName(bot)}`} rowId={row => row.id} rows={view.pairs} initialSort={{ id: 'value', desc: true }} pageSize={20} exportName={`${bot}-pairs.csv`}
         emptyText="No controller positions are included in this observation."
@@ -212,7 +217,7 @@ export function RosterObservation({ payload, bot, now, lifecycleStatus = null, s
       <h3>Working exchange orders</h3>
       {completeOrders ? view.orders!.length ? <ul>{view.orders!.map((order, index) => <li key={String(order.order_id ?? index)}>{String(order.pair ?? '')} {String(order.side ?? '')} {amount(order.remaining_amount_base ?? order.amount_base)}</li>)}</ul> : <p className="q-empty">No active orders in this owner observation.</p> : <p role="status" className="q-empty">Complete exchange order detail is unavailable. A reported limit-order count excludes market orders.</p>}
     </section>
-    <details><summary>Source and accounting details</summary><p className="q-empty">Managed inventory combines open and closing executor net units and retained units. Tiny inventory stays in the pair table. Whole-account holdings stay in <Link to="/capital">Capital</Link>.</p></details>
+    <details><summary>Source and accounting details</summary><p className="q-empty">Units, mark, marked value, entry and open-position PnL are the reporting owner's fleet holdings, the one inventory projection shared with the fleet summary and the phone. Small holdings stay in the pair table. Whole-account holdings stay in <Link to="/capital">Capital</Link>.</p></details>
   </div>;
 }
 
@@ -228,13 +233,15 @@ function useOwnerReads(source: TradingVisualsSource, page: BotsPageResponse | un
   const cycles = useQuery({ queryKey: ['native-quant-cycles', source.server, source.bot], queryFn: ({ signal }) => readOptional(`/api/v1/trading-visuals/quant-cycles?bot=${encoded}`, signal), refetchInterval: 30_000, retry: false });
   const day = useQuery({ queryKey: ['native-pnl-history', source.server, source.bot, '1D'], queryFn: ({ signal }) => readOptional(`/api/v1/servers/${encodeURIComponent(source.server)}/bots/${encoded}/performance-history?range=1D`, signal), refetchInterval: 30_000, retry: false });
   const week = useQuery({ queryKey: ['native-pnl-history', source.server, source.bot, '1W'], queryFn: ({ signal }) => readOptional(`/api/v1/servers/${encodeURIComponent(source.server)}/bots/${encoded}/performance-history?range=1W`, signal), refetchInterval: 60_000, retry: false });
+  const holdingsQuery = useFleetHoldings(source.server);
+  const holdings = botHoldings(holdingsQuery.data, source.bot), holdingsIssue = holdingsReadIssue(holdingsQuery, source.bot);
   const fills = useQuery({ queryKey: ['native-fill-ledger', source.server, source.bot], queryFn: ({ signal }) => readOptional(`/api/v1/trading-visuals/fills?bot=${encoded}&limit=${FILL_LEDGER_LIMIT}`, signal), refetchInterval: 60_000, retry: false });
   const operations = useQuery({ queryKey: ['native-operations', source.server, source.bot], queryFn: ({ signal }) => readOptional(`/api/v1/trading-visuals/operations?bot=${encoded}`, signal), refetchInterval: 15_000, retry: false });
   const owner = page?.bots.find(item => item.bot_name === source.bot);
   let view: OwnerReads['view'] = null;
-  try { if (bootstrap.data) view = buildBotPositionView(bootstrap.data, source.bot, Math.max(now, bootstrap.dataUpdatedAt), { allowStale: true }); } catch { view = null; }
+  try { if (bootstrap.data) view = buildBotPositionView(bootstrap.data, source.bot, Math.max(now, bootstrap.dataUpdatedAt), { allowStale: true, holdings, holdingsIssue }); } catch { view = null; }
   const reads: OwnerReads = {
-    bot: source.bot, server: source.server, status: owner?.status ?? null, view,
+    bot: source.bot, server: source.server, status: owner?.status ?? null, view, holdings, holdingsIssue,
     controller: projectBotPnl(page, bootstrap.data, source.bot, now),
     quant: projectQuantBotSummary(summary.data?.payload, source.bot, Math.max(now, summary.dataUpdatedAt)),
     cycles: projectQuantCycles(cycles.data?.payload, source.bot),
@@ -289,7 +296,7 @@ function OwnerCard({ source, page, logs, controls, onReads, summary }: { source:
       </div>
     </header>
     <StrategyChartsSlot bot={source.bot} server={source.server} />
-    {bootstrap.isPending ? <p className="q-empty" role="status">Reading the current bot inventory and order observation…</p> : bootstrap.isError ? <p className="q-empty" role="alert">{(bootstrap.error as Error & { status?: number }).status === 401 || (bootstrap.error as Error & { status?: number }).status === 403 ? `Owner read denied (${(bootstrap.error as Error & { status?: number }).status}).` : (bootstrap.error as Error).message} Cached inventory is withheld. <button type="button" onClick={() => void bootstrap.refetch()}>Check now</button></p> : <RosterObservation payload={bootstrap.data} lifecycleStatus={reads.status} summary={raw.summary?.payload} bot={source.bot} now={Math.max(now, bootstrap.dataUpdatedAt)} events={raw.events?.payload} execution={raw.execution?.payload} cycles={raw.cycles?.payload} day={reads.day} week={reads.week} dayChange={dayChange} controllerTotal={reads.controller.total} controllerQuote={reads.controller.quote} summaryIssue={raw.summary?.issue} eventsIssue={raw.events?.issue} executionIssue={raw.execution?.issue} />}
+    {bootstrap.isPending ? <p className="q-empty" role="status">Reading the current bot inventory and order observation…</p> : bootstrap.isError ? <p className="q-empty" role="alert">{(bootstrap.error as Error & { status?: number }).status === 401 || (bootstrap.error as Error & { status?: number }).status === 403 ? `Owner read denied (${(bootstrap.error as Error & { status?: number }).status}).` : (bootstrap.error as Error).message} Cached inventory is withheld. <button type="button" onClick={() => void bootstrap.refetch()}>Check now</button></p> : <RosterObservation payload={bootstrap.data} lifecycleStatus={reads.status} summary={raw.summary?.payload} bot={source.bot} now={Math.max(now, bootstrap.dataUpdatedAt)} events={raw.events?.payload} execution={raw.execution?.payload} cycles={raw.cycles?.payload} day={reads.day} week={reads.week} dayChange={dayChange} controllerTotal={reads.controller.total} controllerQuote={reads.controller.quote} summaryIssue={raw.summary?.issue} eventsIssue={raw.events?.issue} executionIssue={raw.execution?.issue} holdings={reads.holdings} holdingsIssue={reads.holdingsIssue} />}
     {logs && <details><summary>Recent owner logs</summary>{logs}</details>}
   </article>;
 }
@@ -299,7 +306,7 @@ const percentText = (ratio: number | null | undefined) => ratio == null ? '—' 
 
 /** Fleet tiles need every registered bot, including one whose reads have not landed: it contributes its lifecycle status only. */
 function pendingFleetInput(source: TradingVisualsSource, status: string | null): FleetBotInput {
-  return { bot: source.bot, name: displayBotName(source.bot), status, view: null, quant: null, cycles: null, execution: null, health: null };
+  return { bot: source.bot, name: displayBotName(source.bot), status, view: null, holdings: null, quant: null, cycles: null, execution: null, health: null };
 }
 
 function performanceFleetState(fleet: OwnerReads[], scopedCount: number): { state: PanelState; summary: string } {

@@ -315,11 +315,10 @@ def _float(value) -> float | None:
 
 def _side(value) -> str | None:
     # TradeType serializes by value (1 BUY, 2 SELL) or by name.
-    return (
-        {1: "BUY", 2: "SELL", "BUY": "BUY", "SELL": "SELL"}.get(value)
-        if not isinstance(value, bool)
-        else None
-    )
+    # Only a scalar side is looked up; a malformed (unhashable) value is unavailable.
+    if isinstance(value, bool) or not isinstance(value, (int, str)):
+        return None
+    return {1: "BUY", 2: "SELL", "BUY": "BUY", "SELL": "SELL"}.get(value)
 
 
 def _custom_info(row: dict) -> dict:

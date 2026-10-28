@@ -109,7 +109,11 @@ def _open_pinned(path: Path) -> int:
     a FIFO from blocking open.
     """
     cloexec = getattr(os, "O_CLOEXEC", 0)
-    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | cloexec
+    # O_PATH (Linux) pins a directory that is searchable but not listable, as a
+    # read-only bind mount's parents may be; elsewhere fall back to O_RDONLY.
+    directory_flags = (
+        getattr(os, "O_PATH", os.O_RDONLY) | os.O_DIRECTORY | os.O_NOFOLLOW | cloexec
+    )
     try:
         parent = os.open("/", directory_flags)
     except OSError:
@@ -137,6 +141,10 @@ def _open_pinned(path: Path) -> int:
         os.close(parent)
 
 
+# The status file carries counters and epoch times; 19 digits covers any int64.
+MAX_INT_DIGITS = 19
+
+
 def _parse(raw: bytes) -> Any:
     def pairs(items):
         result = {}
@@ -149,9 +157,27 @@ def _parse(raw: bytes) -> Any:
     def constant(_name):
         raise ValueError("nonfinite JSON")
 
+    # Every number must be representable: a literal exponent such as 1e999 parses to
+    # an infinite float, and an integer of hundreds of digits overflows float
+    # conversion later. Both make the whole status malformed, never a fresh value.
+    def finite_float(text):
+        number = float(text)
+        if not math.isfinite(number):
+            raise ValueError("nonfinite JSON number")
+        return number
+
+    def bounded_int(text):
+        if len(text.lstrip("-")) > MAX_INT_DIGITS:
+            raise ValueError("JSON integer out of range")
+        return int(text)
+
     try:
         return json.loads(
-            raw.decode("utf-8"), object_pairs_hook=pairs, parse_constant=constant
+            raw.decode("utf-8"),
+            object_pairs_hook=pairs,
+            parse_constant=constant,
+            parse_float=finite_float,
+            parse_int=bounded_int,
         )
     except (UnicodeDecodeError, ValueError):
         raise PaperStatusError("PAPER_STATUS_MALFORMED") from None

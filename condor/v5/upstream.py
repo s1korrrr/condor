@@ -89,10 +89,13 @@ class V5Upstream:
     async def observation(self, path: str) -> dict[str, Any]:
         allowed = {
             "/v1/context",
+            "/v1/source/status",
             "/v1/identity",
             "/v1/advice/status",
             "/v1/advice/history",
             "/v1/advice/latest",
+            "/v1/advice/latest?task_id=market_context",
+            "/v1/advice/latest?task_id=source_quality",
             "/v1/tasks",
         }
         if path not in allowed:
@@ -111,6 +114,11 @@ class V5Upstream:
 
     async def task_profiles(self) -> dict[str, Any]:
         return await self.observation("/v1/tasks")
+
+    async def latest_task_report(self, task_id: str) -> dict[str, Any]:
+        if task_id not in {"market_context", "source_quality"}:
+            raise UpstreamError("task_not_allowed", http_status=403)
+        return await self.observation(f"/v1/advice/latest?task_id={task_id}")
 
     async def request_report(self, task_id: str, snapshot_id: str) -> dict[str, Any]:
         if task_id not in {"market_context", "source_quality"}:

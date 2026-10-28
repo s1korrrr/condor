@@ -4,7 +4,7 @@ from pathlib import Path
 
 from fastapi.testclient import TestClient
 
-from condor.v5.app import create_app
+from condor.v5.app import _safe_feed_refresh, _safe_task_latest, create_app
 from condor.v5.config import ConfigurationError, Settings
 from condor.v5.state import WorkspaceState
 
@@ -13,6 +13,48 @@ TOKEN = "d" * 48
 READ_TOKEN = "r" * 48
 REQUEST_TOKEN = "q" * 48
 ORIGIN = "https://v5.example.test"
+
+
+def test_latest_task_projection_rejects_cross_task_and_unqualified_costs():
+    wrong_task = {
+        "status": "CURRENT_REPORT",
+        "record": {
+            "input": {"task_id": "source_quality"},
+            "result": {"task_id": "market_context", "actual_usd": "0.01"},
+        },
+    }
+    projected = _safe_task_latest("market_context", wrong_task)
+    assert projected["status"] == "TASK_IDENTITY_MISMATCH"
+    assert projected["record"] is None
+
+    bad_cost = {
+        "status": "CURRENT_REPORT",
+        "record": {
+            "input": {"task_id": "market_context", "snapshot_id": "s"},
+            "result": {"task_id": "market_context", "actual_usd": "-1", "effect": "ORDER"},
+        },
+    }
+    projected = _safe_task_latest("market_context", bad_cost)
+    assert "actual_usd" not in projected["record"]["result"]
+    assert projected["record"]["result"]["effect"] == "NONE"
+
+
+def test_feed_refresh_projection_is_schema_bounded_and_rejects_bad_timestamps():
+    projected = _safe_feed_refresh({
+        "schema_version": "v5-feed-refresh-status.v1",
+        "state": "HEALTHY",
+        "last_attempt_at_ms": True,
+        "last_success_at_ms": 123,
+        "feed_freshness": "FRESH",
+        "feed_fresh_until_ms": -1,
+        "private": "must-not-leak",
+    })
+    assert projected["state"] == "HEALTHY"
+    assert "last_attempt_at_ms" not in projected
+    assert projected["last_success_at_ms"] == 123
+    assert "feed_fresh_until_ms" not in projected
+    assert "private" not in projected
+    assert _safe_feed_refresh({"schema_version": "wrong"})["state"] == "UNKNOWN"
 
 
 class FakeUpstream:
@@ -25,12 +67,14 @@ class FakeUpstream:
                 "model": "claude-sonnet",
                 "enabled": True,
                 "reason": None,
+                "credential_status": "READY",
             },
             {
                 "task_id": "source_quality",
                 "model": "claude-sonnet",
                 "enabled": False,
                 "reason": "profile_not_enabled",
+                "credential_status": "API_KEY_REQUIRED",
             },
         ]
         self.report = {
@@ -52,6 +96,18 @@ class FakeUpstream:
             "snapshot_id": "snapshot-1",
             "available_at_ms": 100,
         }
+        self.feed_refresh = {
+            "schema_version": "v5-feed-refresh-status.v1",
+            "state": "HEALTHY",
+            "last_attempt_at_ms": 300,
+            "last_success_at_ms": 299,
+            "last_success_cutoff_ms": 250,
+            "observed_at_ms": 301,
+            "feed_fresh_until_ms": 370,
+            "feed_freshness": "FRESH",
+            "refresher_status": "CURRENT",
+            "provider_token": "must-not-leak",
+        }
         self.fail_source = False
         self.refuse = False
 
@@ -61,6 +117,8 @@ class FakeUpstream:
             raise RuntimeError("sensitive host token must not leak")
         if path == "/v1/context":
             return self.context
+        if path == "/v1/source/status":
+            return self.feed_refresh
         if path == "/v1/identity":
             return {"upstream_revision": "api-test-sha"}
         if path == "/v1/advice/status":
@@ -80,7 +138,46 @@ class FakeUpstream:
         raise AssertionError(path)
 
     async def task_profiles(self):
-        return {"tasks": self.task_rows, "budget": {"calls_today": 1}}
+        return {
+            "tasks": self.task_rows,
+            "budget": {"calls_today": 1},
+            "budget_policy": {
+                "pilot_usd": "150.00",
+                "daily_usd": "5.00",
+                "authorized_ceiling_usd": "200.00",
+                "remaining_pilot_usd": "149.99",
+                "provider_balance_usd": "999999",
+            },
+            "scheduler": {
+                "enabled": True,
+                "last_status": "COMPLETED",
+                "last_attempt_ms": 123456,
+                "task_id": "market_context",
+                "secret": "must-not-leak",
+            },
+        }
+
+    async def latest_task_report(self, task_id):
+        return {
+            "status": "CURRENT_REPORT",
+            "effect": "NONE",
+            "record": {
+                "request_id": f"req-{task_id}",
+                "input": {"task_id": task_id, "snapshot_id": "snap-1"},
+                "result": {
+                    "task_id": task_id,
+                    "status": "ACCEPTED",
+                    "model": "claude-sonnet",
+                    "requested_at_ms": 100,
+                    "received_at_ms": 101,
+                    "expires_at_ms": 200,
+                    "actual_usd": "0.004200",
+                    "advice": {"assessment": "CAUTION", "summary": "Task-bound summary"},
+                    "effect": "NONE",
+                    "provider_key": "must-not-leak",
+                },
+            },
+        }
 
     async def request_report(self, task_id, snapshot_id):
         self.report_calls.append((task_id, snapshot_id))
@@ -183,8 +280,19 @@ def test_workspace_is_scoped_to_v5_roots_and_sanitizes_upstream(tmp_path):
             "upstream_revision": "api-test-sha",
         }
         assert workspace["context"] == api.context
+        assert workspace["source_refresh"]["last_success_cutoff_ms"] == 250
+        assert "provider_token" not in workspace["source_refresh"]
         assert workspace["source_error"] is None
         assert workspace["advisor"]["task_profiles"][0]["task_id"] == "market_context"
+        assert workspace["advisor"]["task_profiles"][0]["credential_status"] == "READY"
+        assert workspace["advisor"]["budget_policy"]["authorized_ceiling_usd"] == "200.00"
+        assert "provider_balance_usd" not in workspace["advisor"]["budget_policy"]
+        assert workspace["advisor"]["scheduler"]["task_id"] == "market_context"
+        assert "secret" not in workspace["advisor"]["scheduler"]
+        task_report = workspace["advisor"]["latest_by_task"]["market_context"]
+        assert task_report["record"]["result"]["task_id"] == "market_context"
+        assert task_report["record"]["result"]["actual_usd"] == "0.004200"
+        assert "provider_key" not in task_report["record"]["result"]
         assert "provider_key" not in workspace["advisor"]
         assert [agent["id"] for agent in workspace["agents"]] == [
             "market_analyst",

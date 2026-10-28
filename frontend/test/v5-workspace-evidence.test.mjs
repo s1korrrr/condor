@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { formatUsdAmount, marketFeatures, parseNonNegativeDecimal, qualifiedFeatureValue, timestampAgeMs } from "../src/v5/evidence.ts";
+import { feedFreshness, formatUsdAmount, marketFeatures, parseNonNegativeDecimal, qualifiedFeatureValue, timestampAgeMs } from "../src/v5/evidence.ts";
 
 const evidence = JSON.parse(readFileSync(new URL("./fixtures/v5-multi-venue-evidence-projection.json", import.meta.url), "utf8"));
 
@@ -46,6 +46,14 @@ test("market evidence timestamps expose exact snapshot age and future or missing
   assert.equal(timestampAgeMs(evidence.available_at_ms, evidence.available_at_ms - 1), null);
   assert.equal(timestampAgeMs(null, evidence.available_at_ms), null);
   assert.equal(evidence.available_at_ms - evidence.cutoff_ms, 105_679);
+});
+
+test("feed freshness fails closed for missing or future owner timestamps", () => {
+  const now = evidence.available_at_ms + 100_000;
+  assert.equal(feedFreshness(evidence.available_at_ms, now), "CURRENT");
+  assert.equal(feedFreshness(evidence.available_at_ms, evidence.available_at_ms + 180_001), "STALE");
+  assert.equal(feedFreshness(null, now), "UNKNOWN");
+  assert.equal(feedFreshness(now + 1, now), "UNKNOWN");
 });
 
 test("dollar strings are parsed strictly and invalid or negative values remain unavailable", () => {

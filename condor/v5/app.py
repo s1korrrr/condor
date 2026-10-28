@@ -33,6 +33,123 @@ SESSION_ID_RE = re.compile(r"^[a-f0-9]{32}$")
 MAX_JSON_BODY_BYTES = 16_384
 MAX_TICKS_PER_LOOP = 96
 MIN_LOOP_FREQUENCY_SEC = 900
+ADVISOR_TASK_IDS = ("market_context", "source_quality")
+_USD_STRING = re.compile(r"^(?:0|[1-9]\d*)(?:\.\d+)?$")
+
+
+def _safe_policy_metadata(payload: Any) -> tuple[dict[str, str], dict[str, Any]]:
+    if not isinstance(payload, dict):
+        return {}, {}
+    raw_budget = payload.get("budget_policy")
+    budget: dict[str, str] = {}
+    if isinstance(raw_budget, dict):
+        for key in (
+            "pilot_usd",
+            "daily_usd",
+            "authorized_ceiling_usd",
+            "remaining_pilot_usd",
+        ):
+            value = raw_budget.get(key)
+            if isinstance(value, str) and len(value) <= 64 and _USD_STRING.fullmatch(value):
+                budget[key] = value
+    raw_scheduler = payload.get("scheduler")
+    scheduler: dict[str, Any] = {}
+    if isinstance(raw_scheduler, dict):
+        if isinstance(raw_scheduler.get("enabled"), bool):
+            scheduler["enabled"] = raw_scheduler["enabled"]
+        for key in ("last_status", "task_id"):
+            value = raw_scheduler.get(key)
+            if isinstance(value, str) and len(value) <= 128:
+                if key != "task_id" or value in ADVISOR_TASK_IDS:
+                    scheduler[key] = value
+        value = raw_scheduler.get("last_attempt_ms")
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            scheduler["last_attempt_ms"] = value
+    return budget, scheduler
+
+
+def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
+    """Project only a report whose request and result both name this task."""
+    status = payload.get("status") if isinstance(payload, dict) else None
+    result: dict[str, Any] = {
+        "task_id": task_id,
+        "status": status[:64] if isinstance(status, str) else "UNAVAILABLE",
+        "effect": "NONE",
+        "record": None,
+    }
+    record = payload.get("record") if isinstance(payload, dict) else None
+    if not isinstance(record, dict):
+        return result
+    request_input = record.get("input")
+    report = record.get("result")
+    if (
+        not isinstance(request_input, dict)
+        or request_input.get("task_id") != task_id
+        or not isinstance(report, dict)
+        or report.get("task_id") != task_id
+    ):
+        result["status"] = "TASK_IDENTITY_MISMATCH"
+        return result
+
+    safe_report: dict[str, Any] = {"task_id": task_id, "effect": "NONE"}
+    for key in ("status", "model", "reason"):
+        value = report.get(key)
+        if isinstance(value, str) and len(value) <= 256:
+            safe_report[key] = value
+    for key in ("requested_at_ms", "received_at_ms", "expires_at_ms"):
+        value = report.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            safe_report[key] = value
+    actual_usd = report.get("actual_usd")
+    if actual_usd is None or (
+        isinstance(actual_usd, str)
+        and len(actual_usd) <= 64
+        and _USD_STRING.fullmatch(actual_usd)
+    ):
+        safe_report["actual_usd"] = actual_usd
+    advice = report.get("advice")
+    if isinstance(advice, dict):
+        safe_advice: dict[str, Any] = {}
+        for key in ("assessment", "summary"):
+            value = advice.get(key)
+            if isinstance(value, str):
+                safe_advice[key] = value[:1_000]
+        for key, limit, length in (("reason_codes", 8, 64), ("evidence_refs", 32, 128)):
+            values = advice.get(key)
+            if isinstance(values, list):
+                safe_advice[key] = [str(item)[:length] for item in values[:limit]]
+        safe_report["advice"] = safe_advice
+    request_id = record.get("request_id")
+    safe_record: dict[str, Any] = {"result": safe_report}
+    if isinstance(request_id, str) and len(request_id) <= 128:
+        safe_record["request_id"] = request_id
+    snapshot_id = request_input.get("snapshot_id")
+    if isinstance(snapshot_id, str) and len(snapshot_id) <= 128:
+        safe_record["snapshot_id"] = snapshot_id
+    result["record"] = safe_record
+    return result
+
+
+def _safe_feed_refresh(payload: Any) -> dict[str, Any]:
+    if not isinstance(payload, dict) or payload.get("schema_version") != "v5-feed-refresh-status.v1":
+        return {"schema_version": "v5-feed-refresh-status.v1", "state": "UNKNOWN"}
+    result: dict[str, Any] = {"schema_version": "v5-feed-refresh-status.v1"}
+    if payload.get("state") in {"HEALTHY", "FAILED", "RUNNING", "NOT_READY", "UNKNOWN"}:
+        result["state"] = payload["state"]
+    else:
+        result["state"] = "UNKNOWN"
+    for key in ("last_attempt_at_ms", "last_success_at_ms", "last_success_cutoff_ms", "observed_at_ms", "feed_fresh_until_ms"):
+        value = payload.get(key)
+        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+            result[key] = value
+    for key, allowed in (("feed_freshness", {"FRESH", "UNAVAILABLE"}), ("refresher_status", {"CURRENT", "STALE"})):
+        value = payload.get(key)
+        if value in allowed:
+            result[key] = value
+    error = payload.get("error")
+    if isinstance(error, str) and len(error) <= 128:
+        result["error"] = error
+    return result
 
 
 class RequestBodyLimit:
@@ -264,6 +381,9 @@ def create_app(
             profile["enabled"] = row.get("enabled") is True
             if isinstance(row.get("reason"), str):
                 profile["reason"] = row["reason"][:200]
+            credential_status = row.get("credential_status")
+            if credential_status in {"READY", "API_KEY_REQUIRED"}:
+                profile["credential_status"] = credential_status
             result.append(profile)
         return result
 
@@ -317,6 +437,7 @@ def create_app(
     ):
         paths = {
             "context": "/v1/context",
+            "source_refresh": "/v1/source/status",
             "identity": "/v1/identity",
             "advisor": "/v1/advice/status",
             "history": "/v1/advice/history",
@@ -326,6 +447,7 @@ def create_app(
         results = await asyncio.gather(
             *(get_json(paths[name]) for name in names),
             api.task_profiles(),
+            *(api.latest_task_report(task_id) for task_id in ADVISOR_TASK_IDS),
             return_exceptions=True,
         )
         source: dict[str, Any] = {}
@@ -336,8 +458,8 @@ def create_app(
                     f"{name}:{result.code if isinstance(result, UpstreamError) else 'unavailable'}"
                 )
             else:
-                source[name] = result
-        task_result = results[-1]
+                source[name] = _safe_feed_refresh(result) if name == "source_refresh" else result
+        task_result = results[len(names)]
         if isinstance(task_result, BaseException):
             errors.append(
                 f"task_profiles:{task_result.code if isinstance(task_result, UpstreamError) else 'unavailable'}"
@@ -345,6 +467,17 @@ def create_app(
             rows = []
         else:
             rows = task_rows(task_result)
+            source["budget_policy"], source["scheduler"] = _safe_policy_metadata(task_result)
+        latest_by_task: dict[str, dict[str, Any]] = {}
+        for task_id, report_result in zip(ADVISOR_TASK_IDS, results[len(names) + 1 :]):
+            if isinstance(report_result, BaseException):
+                errors.append(
+                    f"latest_{task_id}:{report_result.code if isinstance(report_result, UpstreamError) else 'unavailable'}"
+                )
+                latest_by_task[task_id] = _safe_task_latest(task_id, None)
+            else:
+                latest_by_task[task_id] = _safe_task_latest(task_id, report_result)
+        source["latest_by_task"] = latest_by_task
         return source, rows, errors
 
     @app.get("/api/v5/workspace", dependencies=[Depends(require_auth)])
@@ -386,10 +519,14 @@ def create_app(
                 ),
             },
             "context": context,
+            "source_refresh": source.get("source_refresh", {"schema_version": "v5-feed-refresh-status.v1", "state": "UNKNOWN"}),
             "advisor": {
                 **status,
                 "task_profiles": rows,
                 "latest": source.get("latest"),
+                "latest_by_task": source.get("latest_by_task", {}),
+                "budget_policy": source.get("budget_policy", {}),
+                "scheduler": source.get("scheduler", {}),
                 "history_count": len(history) if isinstance(history, list) else 0,
             },
             "agents": [
@@ -791,6 +928,9 @@ def create_app(
                 if key in advisor
             },
             "task_profiles": rows,
+            "budget_policy": source.get("budget_policy", {}),
+            "scheduler": source.get("scheduler", {}),
+            "source_refresh": source.get("source_refresh", {"schema_version": "v5-feed-refresh-status.v1", "state": "UNKNOWN"}),
             "effective_policy": {
                 "allowed_tools": sorted(
                     {

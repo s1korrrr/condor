@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { v5Api } from "./api";
-import type { MarketEvidence, V5Agent, V5Session, V5SessionDetail, V5Workspace } from "./contracts";
+import type { MarketEvidence, V5Agent, V5Session, V5SessionDetail, V5TaskReport, V5Workspace } from "./contracts";
 import { formatUsdAmount, marketFeatures, qualifiedFeatureValue, timestampAgeMs } from "./evidence";
 import { boundedLoopParameters, canRequestReport } from "./policy";
 
@@ -83,6 +83,7 @@ export function OverviewPage() {
         {data.sessions.length ? <SessionRows sessions={data.sessions.slice(0, 4)} /> : <p className="v5-muted">No sessions have been recorded.</p>}
       </div>
     </section>
+    <TaskLatestReports reports={data.advisor.latest_by_task} agents={data.agents} />
   </>;
 }
 
@@ -109,11 +110,33 @@ function AdvisorPanel({ profile }: { profile: V5Workspace["advisor"] }) {
     <div className="v5-advisor-summary"><span>Provider state</span><strong>{profile.enabled ? "Enabled" : "Disabled"}</strong></div>
     <div className="v5-advisor-summary"><span>Configured model</span><strong>{profile.model ?? "Unavailable"}</strong></div>
     <div className="v5-advisor-budget"><div><span>Calls today</span><strong>{profile.calls_today == null ? "Unavailable" : profile.calls_today}</strong></div><div><span>Spent</span><strong>{money(profile.spent_usd)}</strong></div><div><span>Reserved</span><strong>{money(profile.reserved_usd)}</strong></div></div>
+    <div className="v5-advisor-summary"><span>Shared pilot cap remaining</span><strong>{money(profile.budget_policy?.remaining_pilot_usd ?? null)}</strong></div>
+    <div className="v5-advisor-summary"><span>Authorized ceiling</span><strong>{money(profile.budget_policy?.authorized_ceiling_usd ?? null)}</strong></div>
     <Link className="v5-text-link" to="/settings">View task profiles <ChevronRight size={15} /></Link>
   </div>;
 }
 
-function money(value: number | string | null) {
+const taskNames: Record<string, string> = { market_context: "Market analyst", source_quality: "Source auditor" };
+
+function TaskLatestReports({ reports, agents, taskId }: { reports?: Record<string, V5TaskReport>; agents: V5Agent[]; taskId?: string | null }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 30_000); return () => window.clearInterval(timer); }, []);
+  const tasks = taskId ? [taskId] : Object.keys(taskNames);
+  return <section className="v5-panel v5-task-reports"><div className="v5-section-heading"><div><h2>Latest task reports</h2><p>Advisor records are matched by the request and result task IDs.</p></div><Sparkles size={16} /></div>
+    <div className="v5-task-report-list">{tasks.map((id) => {
+      const report = reports?.[id];
+      const record = report?.record;
+      const result = record?.result;
+      const agent = agents.find((row) => row.task_id === id);
+      const expired = result?.expires_at_ms != null && result.expires_at_ms <= now;
+      return <article className="v5-task-report" key={id}><div className="v5-section-heading"><div><h3>{taskNames[id] ?? id}</h3><p>Task <code>{id}</code> · {agent?.name ?? "No matching agent"}</p></div><Status state={report?.status === "CURRENT_REPORT" && !expired ? "completed" : report?.status === "HISTORICAL_REPORT" || expired ? "unknown" : "blocked"} label={expired ? "EXPIRED" : report?.status ?? "UNAVAILABLE"} /></div>
+        {result ? <><div className="v5-task-report-meta"><DataValue label="Assessment" value={result.advice?.assessment} /><DataValue label="Model" value={result.model} /><DataValue label="Cost" value={result.actual_usd == null ? "Unavailable" : money(result.actual_usd)} /><DataValue label="Requested" value={formatTime(result.requested_at_ms)} /><DataValue label="Received" value={formatTime(result.received_at_ms)} /><DataValue label="Expires" value={formatTime(result.expires_at_ms)} /></div><p className="v5-task-report-summary">{result.advice?.summary || result.reason || "The owner returned no report summary."}</p>{agent && <Link className="v5-text-link" to={`/agents/${encodeURIComponent(agent.id)}`}>Open agent <ChevronRight size={14} /></Link>}</> : <p className="v5-muted">{report?.status === "SOURCE_UNAVAILABLE" ? "The advisor source is unavailable." : "No report is available for this task."}</p>}
+      </article>;
+    })}</div>
+  </section>;
+}
+
+function money(value: number | string | null | undefined) {
   return formatUsdAmount(value);
 }
 
@@ -265,6 +288,7 @@ export function AgentDetailPage() {
       <div className="v5-safe-action"><button className="v5-button" onClick={() => report.mutate()} disabled={!canRequest || report.isPending}><FileText size={16} />{report.isPending ? "Requesting report…" : "Request report"}</button><span>{canRequest ? `Bounded to ${effectiveModel} and this agent’s configured task profile.` : unavailableReason(agent, workspace.data?.advisor.enabled, profile?.enabled, !!effectiveModel)}</span></div>
       <div className="v5-safe-action"><button className="v5-button" onClick={() => startLoop.mutate()} disabled={!canStartLoop || startLoop.isPending}><Play size={16} />{startLoop.isPending ? "Starting report loop…" : "Start report loop"}</button><span>{agent.loops[0] ? `${agent.loops[0].name}: ≥ ${duration(boundedLoopParameters(agent.loops[0].frequency_sec, agent.loops[0].max_ticks)?.frequency_sec ?? 900)}, ≤ ${boundedLoopParameters(agent.loops[0].frequency_sec, agent.loops[0].max_ticks)?.max_ticks ?? 1} ticks` : "No report loop is configured."}</span></div>
     </section>
+    {agent.task_id && <TaskLatestReports reports={workspace.data?.advisor.latest_by_task} agents={[agent]} taskId={agent.task_id} />}
     <div className="v5-agent-layout">
       <section className="v5-panel v5-agent-content-panel">
         <div className="v5-tabs" role="tablist" aria-label="Agent details">{tabs.map((key) => <button key={key} role="tab" aria-selected={tab === key} className={tab === key ? "is-selected" : ""} onClick={() => setTab(key)}>{key === "playbook" ? "Playbook" : key === "skills" ? `Skills (${agent.skills.length})` : key === "tools" ? "Tools & policy" : "Notes"}</button>)}</div>
@@ -322,11 +346,16 @@ function NotesEditor({ initial, onSave, saving }: { initial: string; onSave: (va
 
 export function MarketPage() {
   const query = useWorkspace();
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 10_000); return () => window.clearInterval(timer); }, []);
   if (query.isPending) return <Loading label="Loading market evidence" />;
-  if (query.isError) return <QueryError query={query} retry={() => void query.refetch()} />;
+  if (query.isError && !query.data) return <QueryError query={query} retry={() => void query.refetch()} />;
   const evidence = query.data.context;
   const hasQuality = !!evidence?.quality && Object.keys(evidence.quality).length > 0;
+  const refresh = query.data.source_refresh;
+  const freshness = refresh?.feed_freshness === "FRESH" && refresh.feed_fresh_until_ms != null && now <= refresh.feed_fresh_until_ms ? "CURRENT" : refresh?.feed_freshness === "UNAVAILABLE" || refresh?.feed_freshness === "FRESH" ? "STALE" : "UNKNOWN";
   return <><PageHeading title="Market evidence" description="Source status, coverage, timestamps, units, and market type stay explicit." actions={<button className="v5-button" onClick={() => void query.refetch()}><RotateCw size={15} />Refresh evidence</button>} />
+    <section className="v5-market-refresh" aria-label="Feed refresh status"><div><strong>Feed status</strong><Status state={freshness === "CURRENT" ? "ready" : freshness === "STALE" ? "blocked" : "unknown"} label={`${refresh?.state ?? "UNKNOWN"} · ${freshness}`} /></div><span>Last refresh attempt: {formatTime(refresh?.last_attempt_at_ms)}</span><span>Last successful publication: {formatTime(refresh?.last_success_at_ms)}</span><span>Published cutoff: {formatTime(refresh?.last_success_cutoff_ms)}</span><span>Dashboard last successful read: {query.dataUpdatedAt ? formatTime(query.dataUpdatedAt) : "Unavailable"}</span>{refresh?.error && <span role="alert">Feed refresh issue: {refresh.error}</span>}{query.error && <span role="alert">Dashboard refresh failed: showing last successful response · {query.error.message}</span>}</section>
     {query.data.source_error && <div className="v5-source-warning"><AlertTriangle size={16} />{query.data.source_error}</div>}
     {!evidence ? <div className="v5-panel v5-market-page-empty"><EvidenceSummary evidence={null} /><p>{query.data.identity.baseline_binding ? "A baseline is reported as bound, but no market source evidence was returned." : "Baseline and market context are both unavailable. No comparison or market conclusion can be drawn."}</p></div> : <div className="v5-market-page"><section className="v5-panel"><div className="v5-section-heading"><div><h2>Source record</h2><p>Values are displayed from the owner response without conversion.</p></div><Status state={hasQuality ? "ready" : "unknown"} label={hasQuality ? "Quality details present" : "Quality unavailable"} /></div><EvidenceSummary evidence={evidence} /></section><section className="v5-market-limits"><ShieldAlert size={17} /><div><strong>Interpretation limits</strong><p>Native position state is unavailable in this reports-only workspace. V5 does not infer composite scores, strategy baselines, or performance from market context. Missing fields remain unavailable.</p></div></section></div>}
   </>;
@@ -388,10 +417,10 @@ export function SettingsPage() {
   const tasks = settings.task_profiles ?? settings.budget.task_profiles ?? [];
   return <><PageHeading title="Workspace settings" description="Read-only configuration and current owner-reported readiness." actions={<button className="v5-button" onClick={() => void query.refetch()}><RotateCw size={15} />Refresh settings</button>} />
     <div className="v5-settings-grid"><section className="v5-panel"><div className="v5-section-heading"><div><h2>Runtime identity</h2><p>Server-supplied workspace binding</p></div></div><div className="v5-settings-list"><DataValue label="Workspace" value={settings.identity.name} /><DataValue label="Host" value={settings.identity.host} /><DataValue label="Mode" value={settings.identity.mode} /><DataValue label="Execution" value={settings.identity.execution_enabled ? "Enabled" : "Disabled"} /><DataValue label="Baseline binding" value={settings.identity.baseline_binding} /><DataValue label="Upstream revision" value={settings.identity.upstream_revision} /></div></section>
-      <section className="v5-panel"><div className="v5-section-heading"><div><h2>Model budget</h2><p>Usage reported by the advisor service</p></div><Sparkles size={16} /></div><div className="v5-budget-grid"><DataValue label="Advisor enabled" value={settings.budget.enabled ? "Yes" : "No"} /><DataValue label="Configured model" value={settings.budget.model} /><DataValue label="Calls today" value={settings.budget.calls_today} /><DataValue label="Spent" value={money(settings.budget.spent_usd)} /><DataValue label="Reserved" value={money(settings.budget.reserved_usd)} /></div><div className="v5-no-secret"><LockKeyhole size={15} /><span>Provider credentials are not exposed or editable in this dashboard.</span></div></section>
+      <section className="v5-panel"><div className="v5-section-heading"><div><h2>Model budget</h2><p>Usage reported by the advisor service</p></div><Sparkles size={16} /></div><div className="v5-budget-grid"><DataValue label="Advisor enabled" value={settings.budget.enabled ? "Yes" : "No"} /><DataValue label="Configured model" value={settings.budget.model} /><DataValue label="Calls today" value={settings.budget.calls_today} /><DataValue label="Spent" value={money(settings.budget.spent_usd)} /><DataValue label="Reserved" value={money(settings.budget.reserved_usd)} /><DataValue label="Pilot cap" value={money(settings.budget_policy?.pilot_usd)} /><DataValue label="Daily cap" value={money(settings.budget_policy?.daily_usd)} /><DataValue label="Remaining pilot cap" value={money(settings.budget_policy?.remaining_pilot_usd)} /><DataValue label="Authorized ceiling" value={money(settings.budget_policy?.authorized_ceiling_usd)} /><DataValue label="Provider billing balance" value="Unavailable" /></div><div className="v5-no-secret"><LockKeyhole size={15} /><span>Provider credentials are not exposed or editable in this dashboard.</span></div><p className="v5-muted">Set ANTHROPIC_API_KEY in <code>/home/rsi/dev/rsibot/.workspace/runs/v5-agent-workspace-20261028/secrets/anthropic.env</code> on Razer. Do not enter it in this browser or commit it.</p><p className="v5-muted">Automatic advisor polling: {settings.scheduler?.enabled == null ? "Unavailable" : settings.scheduler.enabled ? "Enabled" : "Disabled"} · Last attempt: {formatTime(settings.scheduler?.last_attempt_ms)} · {settings.scheduler?.last_status ?? "No status"}</p></section>
     </div>
     <section className="v5-panel v5-task-profiles"><div className="v5-section-heading"><div><h2>Task profiles</h2><p>Model selection follows the configured task profile.</p></div></div>
-      {tasks.length ? <div className="v5-profile-table"><div className="v5-profile-row v5-profile-head"><span>Task</span><span>Model</span><span>Enabled</span><span>Owner reason</span></div>{tasks.map((task, index) => <div className="v5-profile-row" key={task.task_id ?? `task-${index}`}><strong>{task.task_id ?? "Unavailable"}</strong><span>{task.model || "Unavailable"}</span><Status state={task.enabled ? "ready" : "blocked"} label={task.enabled ? "Enabled" : "Disabled"} /><span>{task.reason || "No reason supplied"}</span></div>)}</div> : <EmptyState title="No task profiles returned" body="The advisor service did not provide task-specific models. No model or usage values are inferred." />}
+      {tasks.length ? <div className="v5-profile-table"><div className="v5-profile-row v5-profile-head"><span>Task</span><span>Model</span><span>Enabled</span><span>Credential</span><span>Owner reason</span></div>{tasks.map((task, index) => <div className="v5-profile-row" key={task.task_id ?? `task-${index}`}><strong>{task.task_id ?? "Unavailable"}</strong><span>{task.model || "Unavailable"}</span><Status state={task.enabled ? "ready" : "blocked"} label={task.enabled ? "Enabled" : "Disabled"} /><span>{task.credential_status ?? "Unavailable"}</span><span>{task.reason || "No reason supplied"}</span></div>)}</div> : <EmptyState title="No task profiles returned" body="The advisor service did not provide task-specific models. No model or usage values are inferred." />}
     </section>
     <section className="v5-settings-note"><ShieldAlert size={17} /><div><strong>Budget and provider settings are read-only here</strong><p>Configure access and spend limits in the Razer service. RSI V5 does not collect API keys or save model credentials in the browser.</p></div></section>
   </>;

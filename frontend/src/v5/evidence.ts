@@ -55,3 +55,9 @@ export function timestampAgeMs(timestamp: unknown, nowMs: number): number | null
   if (!Number.isFinite(nowMs) || nowMs < timestamp) return null;
   return nowMs - timestamp;
 }
+
+export function feedFreshness(timestamp: unknown, nowMs: number, staleAfterMs = 180_000): "CURRENT" | "STALE" | "UNKNOWN" {
+  const age = timestampAgeMs(timestamp, nowMs);
+  if (age == null) return "UNKNOWN";
+  return age <= staleAfterMs ? "CURRENT" : "STALE";
+}

@@ -23,6 +23,17 @@ test("V5 entry reuses the actual dashboard pages under an isolated cookie profil
   for (const component of ["@/pages/Bots", "@/pages/Research", "@workspace-monitoring"]) assert.ok(app.includes(component));
   const market = await readFile(new URL("../src/v5/V5MarketHome.tsx", import.meta.url), "utf8");
   assert.match(market, /@\/features\/market-picture\/MarketPicture/);
+  assert.match(market, /location\.pathname === "\/"/);
+  assert.ok(market.indexOf("V5 multi-venue context") < market.indexOf("Condor Market Picture"));
+  const pages = await readFile(new URL("../src/v5/V5Pages.tsx", import.meta.url), "utf8");
+  assert.match(pages, /latest_by_task/);
+  assert.match(pages, /result\.actual_usd/);
+  assert.match(pages, /result\.expires_at_ms/);
+  assert.match(pages, /last_success_at_ms/);
+  assert.match(pages, /remaining_pilot_usd/);
+  assert.match(pages, /authorized_ceiling_usd/);
+  assert.match(pages, /Provider billing balance/);
+  assert.match(pages, /secrets\/anthropic\.env/);
   assert.match(config, /@workspace-monitoring/);
   assert.match(config, /V5_WORKSPACE_ROOT/);
   assert.match(auth, /credentials:\s*"include"/);

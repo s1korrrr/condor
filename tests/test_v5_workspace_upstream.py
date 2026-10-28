@@ -122,6 +122,20 @@ async def test_request_cannot_choose_arbitrary_task_or_snapshot(tmp_path):
 
 
 @pytest.mark.asyncio
+async def test_latest_task_report_uses_only_fixed_task_scoped_read_paths(tmp_path):
+    requests.clear()
+    upstream = V5Upstream(make_settings(tmp_path), session_factory=Session)
+    await upstream.latest_task_report("market_context")
+    assert requests[0][0:2] == (
+        "GET",
+        "https://context-api.example.test/v1/advice/latest?task_id=market_context",
+    )
+    with pytest.raises(UpstreamError, match="task_not_allowed"):
+        await upstream.latest_task_report("decision_reviewer")
+    assert len(requests) == 1
+
+
+@pytest.mark.asyncio
 async def test_valid_report_after_ten_second_provider_budget_fits_twelve_second_http_cap(
     tmp_path,
 ):

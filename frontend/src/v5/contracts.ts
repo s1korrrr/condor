@@ -69,6 +69,56 @@ export interface AdvisorTaskProfile {
   model: string | null;
   enabled: boolean;
   reason: string;
+  credential_status?: "READY" | "API_KEY_REQUIRED";
+}
+
+export interface V5TaskReport {
+  task_id: string;
+  status: string;
+  effect: "NONE";
+  record: null | {
+    request_id?: string;
+    snapshot_id?: string;
+    result: {
+      task_id: string;
+      effect: "NONE";
+      status?: string;
+      model?: string;
+      reason?: string;
+      requested_at_ms?: number;
+      received_at_ms?: number;
+      expires_at_ms?: number;
+      actual_usd?: string | null;
+      advice?: { assessment?: string; summary?: string; reason_codes?: string[]; evidence_refs?: string[] };
+    };
+  };
+}
+
+export interface V5BudgetPolicy {
+  pilot_usd?: string;
+  daily_usd?: string;
+  authorized_ceiling_usd?: string;
+  remaining_pilot_usd?: string;
+}
+
+export interface V5Scheduler {
+  enabled?: boolean;
+  last_status?: string;
+  last_attempt_ms?: number;
+  task_id?: string;
+}
+
+export interface V5FeedRefresh {
+  schema_version: "v5-feed-refresh-status.v1";
+  state: "HEALTHY" | "FAILED" | "RUNNING" | "NOT_READY" | "UNKNOWN";
+  last_attempt_at_ms?: number;
+  last_success_at_ms?: number;
+  last_success_cutoff_ms?: number;
+  observed_at_ms?: number;
+  feed_fresh_until_ms?: number;
+  feed_freshness?: "FRESH" | "UNAVAILABLE";
+  refresher_status?: "CURRENT" | "STALE";
+  error?: string;
 }
 
 export interface V5Workspace {
@@ -82,6 +132,7 @@ export interface V5Workspace {
     upstream_revision?: string | null;
   };
   context: MarketEvidence | null;
+  source_refresh?: V5FeedRefresh;
   advisor: {
     enabled: boolean;
     model: string | null;
@@ -89,6 +140,9 @@ export interface V5Workspace {
     spent_usd: number | string | null;
     reserved_usd: number | string | null;
     task_profiles: AdvisorTaskProfile[];
+    latest_by_task?: Record<string, V5TaskReport>;
+    budget_policy?: V5BudgetPolicy;
+    scheduler?: V5Scheduler;
   };
   agents: V5Agent[];
   sessions: V5Session[];
@@ -111,6 +165,8 @@ export interface V5Settings {
   identity: V5Workspace["identity"];
   budget: V5Workspace["advisor"];
   task_profiles?: AdvisorTaskProfile[];
+  budget_policy?: V5BudgetPolicy;
+  scheduler?: V5Scheduler;
   tool_readiness?: Record<string, unknown>;
   source_readiness?: Record<string, unknown>;
   [key: string]: unknown;

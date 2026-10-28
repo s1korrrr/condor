@@ -117,6 +117,10 @@ def read_compatibility_path(raw_path: str) -> object:
         # The parser expects a `sources` array. V5 has no native bot owner bound.
         return {"sources": []}
 
+    if path == "/api/v1/operations" or path.startswith("/api/v1/operations/"):
+        raise _unbound("native operations")
+    if path.startswith("/api/v1/trading-visuals/"):
+        raise _unbound("native observations")
     if path == "/api/v1/research" or path.startswith("/api/v1/research/"):
         raise _unbound("Research OS")
     if (

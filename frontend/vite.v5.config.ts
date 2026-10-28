@@ -20,8 +20,15 @@ function v5ReadTransportAlias(): Plugin {
     enforce: "pre",
     resolveId(source, importer) {
       if (source === "@/lib/auth-token" || source === "@/lib/auth-token.ts") return adapter;
+      if (source === path.resolve(frontendRoot, "src/lib/auth-token.ts") || source === path.resolve(frontendRoot, "src/lib/auth-token")) return adapter;
       if (source === "./auth-token" && importer && /\/frontend\/src\/lib\/(?:api|auth)\.ts$/.test(importer)) return adapter;
       return null;
+    },
+    generateBundle() {
+      const forbidden = path.resolve(frontendRoot, "src/lib/auth-token.ts");
+      if ([...this.getModuleIds()].some(id => id.split("?")[0] === forbidden)) {
+        throw new Error("V5 build admitted the ordinary bearer-token transport");
+      }
     },
   };
 }
@@ -40,11 +47,12 @@ export default defineConfig({
   css: { postcss: { plugins: [scopeReportingCss(reportingCss)] } },
   resolve: {
     dedupe: ["react", "react-dom", "react-router-dom", "@tanstack/react-query", "@tanstack/query-core", "recharts", "lucide-react", "lightweight-charts"],
-    alias: {
-      "@": path.resolve(frontendRoot, "src"),
-      "@workspace-monitoring": monitoringEntry,
-      "@reporting": reportingRoot,
-    },
+    alias: [
+      { find: /^@\/lib\/auth-token(?:\.ts)?$/, replacement: path.resolve(frontendRoot, "src/v5/auth-token.ts") },
+      { find: "@", replacement: path.resolve(frontendRoot, "src") },
+      { find: "@workspace-monitoring", replacement: monitoringEntry },
+      { find: "@reporting", replacement: reportingRoot },
+    ],
   },
   build: {
     chunkSizeWarningLimit: 600,

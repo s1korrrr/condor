@@ -826,6 +826,13 @@ def create_app(
             "V5 workspace frontend has not been built.", status_code=503
         )
 
+    @app.get("/condor_old.jpeg")
+    async def dashboard_logo():
+        image = static_root / "condor_old.jpeg"
+        if not image.is_file() or image.is_symlink():
+            raise HTTPException(404)
+        return FileResponse(image, media_type="image/jpeg")
+
     for ui_path in (
         "/capital",
         "/bots",

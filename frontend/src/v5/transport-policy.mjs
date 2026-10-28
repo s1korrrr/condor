@@ -1,6 +1,6 @@
 const SAFE_READ_PREFIXES = [
   "/api/v1/servers", "/api/v1/trading-visuals", "/api/v1/research", "/api/v1/tradepad",
-  "/api/v1/market-picture", "/api/v1/settings", "/api/v1/reports",
+  "/api/v1/market-picture", "/api/v1/settings", "/api/v1/reports", "/api/v1/operations",
 ];
 
 export function validateV5ReadRequest(path, method = "GET", hasBody = false, origin = "https://v5.invalid") {

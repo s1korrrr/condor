@@ -251,10 +251,14 @@ def test_full_dashboard_deep_links_serve_only_known_ui_paths(tmp_path):
     dist = tmp_path / "dist"
     dist.mkdir()
     (dist / "v5.html").write_text("<html>full V5 dashboard</html>")
+    (dist / "condor_old.jpeg").write_bytes(b"test-logo")
     app = create_app(
         settings=make_settings(tmp_path), upstream=NoNetworkUpstream(), static_dir=dist
     )
     with TestClient(app) as client:
+        logo = client.get("/condor_old.jpeg")
+        assert logo.status_code == 200 and logo.content == b"test-logo"
+        assert logo.headers["content-type"] == "image/jpeg"
         for path in (
             "/capital",
             "/bots",

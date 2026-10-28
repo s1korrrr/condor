@@ -346,7 +346,7 @@ export function BotPnlCell({ reads }: { reads: OwnerReads | undefined }) {
   return <>{formatSigned(net.value)} {reads.controller.quote ?? ''}{reads.controller.simulated ? ' · paper (simulated)' : ''}</>;
 }
 
-export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPageResponse; renderControls?: (bot: string) => ReactNode; renderLogs: (bot: string) => ReactNode }) {
+export function BotsRoster({ page, renderControls, renderLogs, allowDrafts = true, ownerUnavailableReason }: { allowDrafts?: boolean; ownerUnavailableReason?: string; page?: BotsPageResponse; renderControls?: (bot: string) => ReactNode; renderLogs: (bot: string) => ReactNode }) {
   const { server } = useServer();
   const servers = useServers();
   const [search, setSearch] = useState('');
@@ -401,7 +401,7 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
   return <div className={`bot-roster${compact ? ' bot-roster--compact' : ''}`} data-quant-ops="bots">
     <header className="q-page-head">
       <div>
-        <p className="q-muted" data-panel-id="S01">Bots · {scoped.length} registered</p>
+        <p className="q-muted" data-panel-id="S01">{ownerUnavailableReason ? "Bots · native owner unbound" : <>Bots · {scoped.length} registered</>}</p>
         <h1>Bots</h1>
         <p className="q-kicker" data-panel-id="S02">Operations across the whole bot set: executors, positions, orders, trades, fees and execution quality. Money PnL and wallet history live in Capital.</p>
       </div>
@@ -415,7 +415,7 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
         {(search || lifecycle !== 'all') && <button type="button" className="q-chip" onClick={() => { setSearch(''); setLifecycle('all'); }}>Reset</button>}
         <button type="button" className="q-chip" aria-pressed={grid} onClick={() => setGrid(value => !value)} title="Grid shows the bot cards; list shows only the performance table." data-panel-id="S07">{grid ? 'Grid' : 'List'}</button>
         <button type="button" className="q-chip" aria-pressed={compact} onClick={() => setCompact(value => !value)} title="Changes local display density only." data-panel-id="B07">{compact ? 'Comfortable density' : 'Compact density'}</button>
-        <button type="button" className="q-chip" onClick={() => setDraft(true)} title="New Bot prepares a local draft with execution_authorized=false. Live launch is a separate sealed deployment." data-panel-id="B08">+ New Bot</button>
+        {allowDrafts && <button type="button" className="q-chip" onClick={() => setDraft(true)} title="New Bot prepares a local draft with execution_authorized=false. Live launch is a separate sealed deployment." data-panel-id="B08">+ New Bot</button>}
       </div>
     </header>
     <TileGrid label="Fleet bot statistics" min={170} max={7} panelId="B-fleet-tiles">
@@ -423,7 +423,7 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
     </TileGrid>
     {sources.isError && <p role="alert" className="q-notice">{sources.error.message} <button type="button" onClick={() => void sources.refetch()}>Check now</button></p>}
     {sources.isPending && <p className="q-empty" role="status">Discovering authorized bot owners…</p>}
-    {!sources.isPending && !filtered.length && <p className="q-empty" role="status">No authorized bot source is available for this selection.</p>}
+    {!sources.isPending && !filtered.length && <p className="q-empty" role="status">{ownerUnavailableReason ?? "No authorized bot source is available for this selection."}</p>}
     {scoped.length > 0 && !complete && <p className="q-empty" role="status">Reading owner observations: {fleet.length} of {scoped.length} bots read. Tiles cover the bots read so far.</p>}
     <FleetStrip sources={grid ? filtered : []} readsByBot={readsByBot} page={page} now={now} summary={summaryCards} />
     {scoped.length > 0 && <StrategyChartsSlot bots={botIds} server={server ?? null} />}
@@ -449,7 +449,7 @@ export function BotsRoster({ page, renderControls, renderLogs }: { page?: BotsPa
     </BotPerformanceFrame>
     {liveBotIds.length > 0 && server && <FleetFillsPanel server={server} bots={liveBotIds} />}
     {paperBotIds.length > 0 && server && <FleetFillsPanel server={server} bots={paperBotIds} scope="paper" />}
-    {draft && <BotDraftWizard bots={scoped.map(item => item.bot)} onClose={() => setDraft(false)} />}
+    {allowDrafts && draft && <BotDraftWizard bots={scoped.map(item => item.bot)} onClose={() => setDraft(false)} />}
     {filtered.map(source => <OwnerCard key={`${source.server}:${source.bot}`} source={source} page={page} logs={renderLogs(source.bot)} controls={renderControls?.(source.bot)} onReads={onReads} summary={summaryCards}/>)}
     {scoped.filter(source => !filtered.includes(source)).map(source => <OwnerReadsFeed key={`${source.server}:${source.bot}:feed`} source={source} page={page} onReads={onReads} />)}
     <div className="q-bot-cols">

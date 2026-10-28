@@ -1,0 +1,25 @@
+:root {
+  color-scheme: dark;
+  --v5-bg: var(--color-bg, #080c18);
+  --v5-bg-raised: var(--color-surface, #0f1525);
+  --v5-surface: var(--color-surface, #0f1525);
+  --v5-surface-high: var(--color-surface-hover, #161e34);
+  --v5-surface-hover: var(--color-surface-hover, #161e34);
+  --v5-border: var(--color-border, #1c2541);
+  --v5-border-strong: var(--color-border-hover, #2a3558);
+  --v5-text: var(--color-text, #e8e6e3);
+  --v5-text-soft: var(--color-text, #e8e6e3);
+  --v5-muted: var(--color-text-muted, #7b8ba4);
+  --v5-dim: var(--color-text-muted, #7b8ba4);
+  --v5-gold: var(--color-primary, #d4a845);
+  --v5-gold-soft: var(--color-primary-hover, #e6be5a);
+  --v5-teal: var(--color-green, #22c55e);
+  --v5-red: var(--color-red, #ef4444);
+  --v5-blue: #83add5;
+  --v5-radius-sm: 7px;
+  --v5-radius-md: 11px;
+  --v5-radius-lg: 15px;
+  --v5-shadow: 0 18px 45px rgb(0 0 0 / 18%);
+  --v5-font-ui: inherit;
+  --v5-font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}

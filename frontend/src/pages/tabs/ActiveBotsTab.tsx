@@ -611,7 +611,7 @@ function BotsSection({ bots, server, onStopInitiated, onStopSettled }: { bots: B
 
 // ── Main Page ──
 
-export function ActiveBotsTab() {
+export function ActiveBotsTab({ allowDrafts = true, ownerUnavailableReason }: { allowDrafts?: boolean; ownerUnavailableReason?: string } = {}) {
   const { server } = useServer();
   const { access } = useServerCapabilities();
   const polling = botPollingPolicy(access.native);
@@ -773,7 +773,7 @@ export function ActiveBotsTab() {
   if (!server) {
     return <NoServerCard message="Select a server from the sidebar to view active bots." />;
   }
-  if (access.native) return <BotsRoster page={error ? undefined : data}
+  if (access.native) return <BotsRoster allowDrafts={allowDrafts} ownerUnavailableReason={ownerUnavailableReason} page={error ? undefined : data}
     renderControls={botName=><div key={`${server}:${botName}`}><NativeBotControls server={server} botName={botName}/><NativeEntryControls server={server} botName={botName}/></div>}
     renderLogs={botName=>{const bot=bots.find(item=>item.bot_name===botName);return bot ? <LogsSection logs={[
       ...(bot.error_logs ?? []).map(log=>({...log,log_category:'error' as const})),

@@ -1,0 +1,164 @@
+{
+  "aggregation_policy_hash": "307e9fd1317bdaf1505452f4497cfd50927b51748f7c6d3276254668c04ab657",
+  "available_at_ms": 1793177385679,
+  "baseline_binding_hash": null,
+  "cutoff_ms": 1793177280000,
+  "feature_registry_hash": "7c67ad9f57308bb5a26e16dbca69e309ed98375cbb4f0725c04443cf3a3fb0dd",
+  "feature_registry_id": "multi-venue-context.v1",
+  "features": {
+    "baseline.composite_score": {
+      "status": "UNAVAILABLE",
+      "unit": "score_unavailable_unbound",
+      "value": null
+    },
+    "derivatives.matched_assets": {
+      "status": "QUALIFIED",
+      "unit": "asset_count",
+      "value": 5.0
+    },
+    "derivatives.matched_return_median_pct.1m": {
+      "status": "QUALIFIED",
+      "unit": "percent",
+      "value": 0.02152605622201736
+    },
+    "derivatives.spot_perp_return_divergence_pct.1m": {
+      "status": "QUALIFIED",
+      "unit": "percentage_points",
+      "value": 0.0037751110945202365
+    },
+    "derivatives.venue_coverage_fraction": {
+      "status": "QUALIFIED",
+      "unit": "fraction_0_1",
+      "value": 1.0
+    },
+    "derivatives.venue_dispersion_range_median_pct.1m": {
+      "status": "QUALIFIED",
+      "unit": "percentage_points",
+      "value": 0.01276331882717574
+    },
+    "derivatives.venues_expected": {
+      "status": "QUALIFIED",
+      "unit": "venue_asset_count",
+      "value": 30.0
+    },
+    "derivatives.venues_valid": {
+      "status": "QUALIFIED",
+      "unit": "venue_asset_count",
+      "value": 30.0
+    },
+    "spot.advancers": {
+      "status": "QUALIFIED",
+      "unit": "asset_count",
+      "value": 4.0
+    },
+    "spot.asset_coverage_fraction": {
+      "status": "QUALIFIED",
+      "unit": "fraction_0_1",
+      "value": 1.0
+    },
+    "spot.assets_expected": {
+      "status": "QUALIFIED",
+      "unit": "asset_count",
+      "value": 5.0
+    },
+    "spot.assets_valid": {
+      "status": "QUALIFIED",
+      "unit": "asset_count",
+      "value": 5.0
+    },
+    "spot.decliners": {
+      "status": "QUALIFIED",
+      "unit": "asset_count",
+      "value": 0.0
+    },
+    "spot.pressure_missingness_lower": {
+      "status": "QUALIFIED",
+      "unit": "normalized_pressure_minus1_to_1",
+      "value": 0.8
+    },
+    "spot.pressure_missingness_upper": {
+      "status": "QUALIFIED",
+      "unit": "normalized_pressure_minus1_to_1",
+      "value": 0.8
+    },
+    "spot.pressure_original_1m": {
+      "status": "QUALIFIED",
+      "unit": "pressure_minus3_to_3",
+      "value": 2.4
+    },
+    "spot.return_median_pct.1m": {
+      "status": "QUALIFIED",
+      "unit": "percent",
+      "value": 0.017594568957077773
+    },
+    "spot.unchanged": {
+      "status": "QUALIFIED",
+      "unit": "asset_count",
+      "value": 1.0
+    },
+    "spot.venue_coverage_fraction": {
+      "status": "QUALIFIED",
+      "unit": "fraction_0_1",
+      "value": 1.0
+    },
+    "spot.venue_dispersion_range_median_pct.1m": {
+      "status": "QUALIFIED",
+      "unit": "percentage_points",
+      "value": 0.01851542007531226
+    },
+    "spot.venues_expected": {
+      "status": "QUALIFIED",
+      "unit": "venue_asset_count",
+      "value": 30.0
+    },
+    "spot.venues_valid": {
+      "status": "QUALIFIED",
+      "unit": "venue_asset_count",
+      "value": 30.0
+    }
+  },
+  "lineage": {
+    "aggregation_policy": "asset-median-by-venue-equal-asset.v1",
+    "availability_deadline_ms": 1793177385679,
+    "source_schema": "multi-venue-input.v1",
+    "target_bar_end_ms": 1793177280000
+  },
+  "mapping_hash": "cb0afba45a1faeb73df2e026e7f85e4c7ba974eceff3d190f7b967670fdcc0e8",
+  "quality": {
+    "matched_spot_perpetual_assets": 5,
+    "perpetual_assets_valid": 5,
+    "perpetual_venue_coverage_fraction": 1.0,
+    "perpetual_venue_observations": 30,
+    "perpetual_venue_pairs_expected": 30,
+    "quote_cohort_by_market": {
+      "perpetual": [
+        "USDT"
+      ],
+      "spot": [
+        "USDT"
+      ]
+    },
+    "quote_conversion": "none",
+    "spot_assets_expected": 5,
+    "spot_assets_omitted": 0,
+    "spot_assets_valid": 5,
+    "spot_venue_coverage_fraction": 1.0,
+    "spot_venue_observations": 30,
+    "spot_venue_pairs_expected": 30,
+    "target_row_states": {
+      "final": 135,
+      "missing": 1
+    },
+    "target_rows_seen": 136,
+    "universe_revision": "candle-store-listed-v1:1792686156865",
+    "volume_features": "unavailable_not_inferred"
+  },
+  "schema_version": "market-evidence.v1",
+  "snapshot_id": "cc527f3e82baabbab6efcad82f5d8f915a737309885b03d46f7adcd2e0e99201",
+  "source_input_hash": "ca3ee9527b5d81d7be62d619ebb7d851899a831be4e515e29a053ad369c13af8",
+  "source_snapshot_ids": [
+    "cc527f3e82baabbab6efcad82f5d8f915a737309885b03d46f7adcd2e0e99201"
+  ],
+  "strategy_assessment_eligible": false,
+  "universe_hash": "3d32ab028cb0e79851f022d26babc3814210bc2f5cd36e4f73a57752f4527c13"
+}

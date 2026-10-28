@@ -74,21 +74,21 @@ async def _read_all(server: str) -> dict:
 async def cached_holdings(server: str) -> dict:
     """Holdings through the shared cache, served without waiting on a rebuild when it can be.
 
-    Within its cache life a body is served as built. Past it, the last completed body is served for up
-    to ``STALE_SERVE_SECONDS`` after it was generated, re-judged at the request's clock
-    (``holdings.aged``), while exactly one background rebuild runs. Only with nothing completed in that
+    Every response is re-judged at the request's clock (``holdings.aged``), cache hits included. Past
+    its cache life, the last completed body is served for up to ``STALE_SERVE_SECONDS`` after it was
+    generated while exactly one background rebuild runs. Only with nothing completed in that
     window does a request wait for a build, and then a 504 is possible at the deadline.
     """
     hit = _cache.get(server)
     if hit is not None:
         expires, body = hit
-        if expires > time.monotonic():
-            return body
         now_ms = time.time() * 1000
+        if expires > time.monotonic():
+            return holdings.aged(body, now_ms)
         if 0 <= now_ms - body["generated_at_ms"] <= STALE_SERVE_SECONDS * 1000:
             _refresh(server)
             return holdings.aged(body, now_ms)
-    return await _build(server)
+    return holdings.aged(await _build(server), time.time() * 1000)
 
 
 def _refresh(server: str) -> None:

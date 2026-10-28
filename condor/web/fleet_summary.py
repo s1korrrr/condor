@@ -455,6 +455,8 @@ TRADING_MAX_RESTRICTIONS = 20
 # ``net_now`` history fallback). It is shown as last known: both sides ``unverified``, own ``observed_ms``.
 TRADING_HOLD_MS = 300_000
 HISTORY_HOLD_MS = 300_000
+# A card's ``net_now`` may come from the newest stored sample while it is at most this old.
+NET_HISTORY_MS = 300_000
 # A day window's newest sample is stale past its read spacing plus 90 s (``fleet_pnl.bot_window``).
 DAY_SAMPLE_STALE_MS = fleet_pnl.gap_ms(None) + fleet_pnl.SAMPLE_GAP_MS
 PAIR_RE = re.compile(r"[A-Z0-9]+-[A-Z0-9]+")
@@ -736,6 +738,18 @@ def project_incidents(payload: Any, now_ms: float) -> Optional[dict]:
         "items": detail_rows,
         "items_truncated": items_truncated,
     }
+
+
+def incident_fresh_until(payload: Any) -> Optional[int]:
+    """When ``project_incidents`` stops calling the store fresh: both the store generation and the
+    monitor's last cycle must be within ``STALE_AFTER_MS['incidents']``; the older one ends it.
+    """
+    store = _obj(_obj(payload).get("incident_store"))
+    generated = _instant_ms(store.get("generated_at"))
+    last_cycle = _instant_ms(_obj(store.get("monitor")).get("last_cycle_at"))
+    if generated is None or last_cycle is None:
+        return None
+    return min(generated, last_cycle) + STALE_AFTER_MS["incidents"]
 
 
 def _incident_text(value: Any, limit: int) -> tuple[Optional[str], bool, bool]:
@@ -1123,6 +1137,31 @@ def _native_fresh(observed: Any, threshold: Any, now_ms: float) -> bool:
     return -5_000 <= age_ms < min(threshold, RUNTIME_STALE_CAP_S) * 1000
 
 
+def _controller_current_until(page: Optional[dict], bot: str) -> Optional[float]:
+    """When ``_controller_net``'s currency ends: both native observations stop being fresh at
+    ``observed + min(threshold, 30 s)`` (``_native_fresh``); the earlier one ends it."""
+    rows = [
+        row
+        for row in (page or {}).get("bots", [])
+        if isinstance(row, dict) and row.get("bot_name") == bot
+    ]
+    if len(rows) != 1:
+        return None
+    ends = []
+    for observed_key, threshold_key in (
+        ("status_received_at", "status_stale_after_seconds"),
+        ("performance_received_at", "performance_stale_after_seconds"),
+    ):
+        observed, threshold = rows[0].get(observed_key), rows[0].get(threshold_key)
+        if not all(
+            isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
+            for v in (observed, threshold)
+        ):
+            return None
+        ends.append(observed * 1000 + min(threshold, RUNTIME_STALE_CAP_S) * 1000)
+    return min(ends)
+
+
 def _native_amount(value: Any) -> Optional[Decimal]:
     """A finite JSON number, as the dashboard's ``finite()`` admits it; anything else is unknown."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -1506,18 +1545,18 @@ def _bot_cards(
             }
             if paper:
                 net_now["simulated"] = True
-        if (
-            net_now is None
-            and sample is not None
-            and now_ms - sample[0].time <= 300_000
-        ):
-            net_now = {
+        # The newest stored sample stands in for the controller report while it is within 5 minutes.
+        history_net = None
+        if sample is not None and now_ms - sample[0].time <= NET_HISTORY_MS:
+            history_net = {
                 "value": fleet_pnl.decimal_text(sample[0].total),
                 "unit": sample[1],
                 "source": "history",
             }
             if paper:
-                net_now["simulated"] = True
+                history_net["simulated"] = True
+        if net_now is None and history_net is not None:
+            net_now = dict(history_net)
         if net_now is None:
             gap("net_now", fleet_pnl.NO_SAMPLES)
 
@@ -1594,13 +1633,30 @@ def _bot_cards(
                     and day_window.last_at is not None
                     else None
                 ),
+                # Recorded while either side still makes a verified claim.
                 "trading_until_ms": (
                     rt["current_until_ms"]
                     if capability is not None
                     and rt is not None
-                    and "unverified" not in (capability["buy"], capability["sell"])
+                    and (
+                        capability["buy"] != "unverified"
+                        or capability["sell"] != "unverified"
+                    )
                     else None
                 ),
+                "net_now": {
+                    "controller_until_ms": (
+                        _controller_current_until(page, bot)
+                        if live is not None
+                        else None
+                    ),
+                    "history": history_net,
+                    "history_until_ms": (
+                        sample[0].time + NET_HISTORY_MS
+                        if history_net is not None
+                        else None
+                    ),
+                },
             }
 
         cards.append(
@@ -2174,7 +2230,14 @@ async def build_fleet_summary(
     if view == "full":
         body["paper_fills"] = paper_fills
     if full_shape:
-        body["_aging"] = {"cards": card_aging}
+        body["_aging"] = {
+            "cards": card_aging,
+            "incidents_until_ms": (
+                incident_fresh_until(owner[(incident_bot, "operations")].payload)
+                if incidents is not None and incidents["state"] != "unknown"
+                else None
+            ),
+        }
         return body
     return glance(body) if view == "glance" else body
 
@@ -2205,12 +2268,26 @@ def aged(body: dict, now_ms: float) -> dict:
 
     Values are unchanged: each keeps its own observation time and ``generated_at_ms`` stays the build
     time, so a client ages them exactly as it would a fresh body. Every current claim is re-judged by
-    the rule the build applies, and only ever ages: a stale flag never becomes current. Sections that
-    the build judges by an owner verdict rather than by age (fills, incidents) are left as built.
+    the rule the build applies, and only ever ages: a stale flag never becomes current. A card's
+    ``net_now`` falls back from the controller report to the stored sample, then to unknown
+    (``NO_SAMPLES``), as the build chooses them. Fills carry no currency claim and are left as built.
     """
     out = copy.deepcopy(body)
-    cards_aging = (out.pop("_aging", None) or {}).get("cards", {})
+    aging = out.pop("_aging", None) or {}
+    cards_aging = aging.get("cards", {})
     sections = out["sections"]
+
+    incidents = out.get("incidents")
+    incidents_until = aging.get("incidents_until_ms")
+    if (
+        incidents is not None
+        and incidents["state"] != "unknown"
+        and incidents_until is not None
+        and now_ms > incidents_until
+    ):
+        # As project_incidents and the build judge a store or monitor cycle past its bound.
+        incidents["state"] = "unknown"
+        sections["incidents"].update(status="stale", reason=OWNER_NOT_CURRENT)
 
     wallet = out.get("wallet")
     if (
@@ -2283,6 +2360,26 @@ def aged(body: dict, now_ms: float) -> dict:
             # As project_trading judges a capability that is no longer current.
             trading.update(buy="unverified", sell="unverified")
 
+        net, net_rule = card.get("net_now"), expiry.get("net_now") or {}
+        if net is not None and net_rule:
+            if net["source"] == "controller":
+                until = net_rule.get("controller_until_ms")
+                if until is not None and now_ms >= until:
+                    history = net_rule.get("history")
+                    history_until = net_rule.get("history_until_ms")
+                    net = (
+                        dict(history)
+                        if history is not None and now_ms <= history_until
+                        else None
+                    )
+            elif net["source"] == "history":
+                until = net_rule.get("history_until_ms")
+                if until is not None and now_ms > until:
+                    net = None
+            card["net_now"] = net
+            if net is None:
+                _card_gap(out, card, "net_now", fleet_pnl.NO_SAMPLES)
+
     live = [c for c in out.get("bots", []) if not c["paper"]]
     if "bot_counts" in out:
         out["bot_counts"]["live_stale_reports"] = sum(c["report_stale"] for c in live)
@@ -2290,15 +2387,49 @@ def aged(body: dict, now_ms: float) -> dict:
     if bots_section is not None and bots_section["status"] != "missing":
         if any(c["report_stale"] for c in live):
             bots_section.update(status="stale", reason=OWNER_NOT_CURRENT)
+        elif bots_section["status"] == "ok" and any(c.get("missing") for c in live):
+            bots_section.update(status="partial", reason=FIELDS_MISSING)
     return out
 
 
-def served(body: dict, view: str, now_ms: Optional[float] = None) -> dict:
-    """The payload a cached full-shape body serves for ``view``: aged to ``now_ms`` when given."""
-    if now_ms is not None:
-        body = aged(body, now_ms)
-    else:
-        body = {k: v for k, v in body.items() if k != "_aging"}
+# The order ``_bot_cards`` lists a card's gaps in, so an aged gap sits where a fresh build puts it.
+_CARD_GAP_ORDER = (
+    "status",
+    "positions",
+    "executors",
+    "report_at_ms",
+    "pnl_day",
+    "net_now",
+    "fees",
+    "trades",
+    "trading",
+)
+
+
+def _card_gap(body: dict, card: dict, field: str, reason: str) -> None:
+    gap = {"field": field, "reason": reason}
+    rank = _CARD_GAP_ORDER.index(field)
+    index = next(
+        (
+            i
+            for i, row in enumerate(card["missing"])
+            if row["field"] in _CARD_GAP_ORDER
+            and _CARD_GAP_ORDER.index(row["field"]) > rank
+        ),
+        len(card["missing"]),
+    )
+    card["missing"].insert(index, gap)
+    if not card["paper"]:  # a paper card's gaps stay on the card
+        body["missing"].append(
+            {"section": "bots", "bot": card["bot"], "field": field, "reason": reason}
+        )
+
+
+def served(body: dict, view: str, now_ms: float) -> dict:
+    """The payload a cached full-shape body serves for ``view`` at ``now_ms``. Every response is aged,
+    including a cache hit a moment after its build: at its own generation time aging changes nothing.
+    """
+    body = aged(body, now_ms)
     return glance(body) if view == "glance" else body
 
 

@@ -13,6 +13,7 @@ Regressions from 2026-10-28 (rsibot-stack-v2), after the summary stopped 504ing:
 """
 
 import asyncio
+import copy
 import random
 import threading
 import time
@@ -27,11 +28,17 @@ from condor.web import holdings
 from condor.web.routes import fleet_holdings as holdings_route
 from condor.web.routes import fleet_summary as routes
 from test_fleet_summary import (  # noqa: F401  (store is a pytest fixture)
+    INCIDENTS,
     NOW_MS,
+    NOW_S,
     SERVER,
     FakeReaders,
+    _capability,
+    _observed,
+    account_analytics,
     card,
     client_for,
+    iso,
     store,
     sync,
 )
@@ -92,11 +99,14 @@ def test_run_deltas_cost_follows_owner_runs_not_sample_pairs(monkeypatch):
 
     monkeypatch.setattr(fleet_pnl, "exact_sum", counted)
     samples = random_samples(random.Random(7), 3000)
-    runs = 1 + sum(a.owner != b.owner for a, b in zip(samples, samples[1:]))
+    starts = [0] + [
+        n for n in range(1, len(samples)) if samples[n].owner != samples[n - 1].owner
+    ]
+    lengths = [b - a for a, b in zip(starts, [*starts[1:], len(samples)])]
+    paired_runs = sum(1 for length in lengths if length >= 2)
     assert fleet_pnl._run_deltas(samples) is not None
-    assert (
-        len(calls) == 6 * runs
-    ), "one difference and one running sum per run and field"
+    # One difference and one running sum per multi-sample run and field, not per sample pair.
+    assert len(calls) == 6 * paired_runs
 
 
 def test_an_unrepresentable_run_delta_is_still_rejected():
@@ -246,8 +256,8 @@ async def test_a_body_served_at_its_generation_time_is_unchanged(store):
         user_id=7,
         full_shape=True,
     )
-    plain = fs.served(body, "full")
-    assert "_aging" not in plain
+    plain = {k: v for k, v in body.items() if k != "_aging"}
+    assert "_aging" not in fs.served(body, "full", NOW_MS)
     assert fs.served(body, "full", NOW_MS) == plain
     assert fs.served(body, "glance", NOW_MS) == fs.glance(plain)
 
@@ -263,7 +273,7 @@ async def test_a_late_body_ages_every_current_claim_by_its_own_rule(store):
         user_id=7,
         full_shape=True,
     )
-    fresh = fs.served(body, "full")
+    fresh = fs.served(body, "full", NOW_MS)
     assert (
         fresh["sections"]["wallet"]["status"] == "ok"
         and fresh["wallet"]["stale"] is False
@@ -492,3 +502,212 @@ async def test_runtime_owners_are_read_at_once_each_on_its_own_bound(monkeypatch
     elapsed = time.monotonic() - started
     assert bodies == {bot: {"bot": bot} for bot in sources}
     assert elapsed < 0.9, f"four 0.3 s reads took {elapsed:.2f} s"
+
+
+# ── review findings (GPT-6.1-Sol, 2026-10-28) ──
+
+
+def boundary_samples(rng, count):
+    """Admitted samples whose digits span the representability boundary."""
+    owner, samples = 0, []
+    while len(samples) < count:
+        if rng.random() < 0.1:
+            owner += 1
+        values = []
+        for _ in range(2):
+            magnitude = Decimal(rng.randint(1, 10 ** rng.randint(1, 38)))
+            values.append(magnitude.scaleb(rng.randint(-60, 40)) * rng.choice((1, -1)))
+        total = fleet_pnl.exact_sum(values)
+        if total is None or any(
+            fleet_pnl.decimal_text(v) is None for v in (*values, total)
+        ):
+            continue
+        samples.append(
+            fleet_pnl.Sample(
+                len(samples) * 60_000.0, total, values[0], values[1], owner
+            )
+        )
+    return samples
+
+
+def test_run_deltas_keep_the_per_pair_admission_at_the_digit_boundary():
+    tiny, one = Decimal("1e-39"), Decimal(1)
+    samples = [
+        fleet_pnl.Sample(t * 60_000.0, value, value, Decimal(0), 0)
+        for t, value in enumerate((tiny, one, tiny))
+    ]
+    # 1 - 1e-39 needs 39 significant digits: the per-pair sum rejects it, so the window is invalid.
+    assert reference_run_deltas(samples) is None
+    assert fleet_pnl._run_deltas(samples) is None
+
+
+@pytest.mark.parametrize("seed", range(60))
+def test_run_deltas_equal_the_per_pair_sum_near_the_boundary(seed):
+    rng = random.Random(1000 + seed)
+    samples = boundary_samples(rng, rng.randint(2, 12))
+    assert fleet_pnl._run_deltas(samples) == reference_run_deltas(samples)
+
+
+@sync
+async def test_a_cache_hit_is_aged_at_the_request_clock(monkeypatch, store):
+    class OldWallet(FakeReaders):
+        async def account(self, server, user_id):
+            return fs.OwnerRead(account_analytics(observed_ms=NOW_MS - 119_000))
+
+    client_for(monkeypatch, store, readers=OldWallet(store))
+    monkeypatch.setattr(routes, "CACHE_TTL_SECONDS", 60)
+    monkeypatch.setattr(routes, "LAST_KNOWN", fs.LastKnown())
+    monkeypatch.setattr(routes, "_refreshes", {})
+    monkeypatch.setattr(routes, "_locks", {})
+    first = await routes.cached_summary(SERVER, admin=True, user_id=7, view="full")
+    assert first["wallet"]["stale"] is False
+    monkeypatch.setattr(routes.time, "time", lambda: NOW_S + 2)
+    hit = await routes.cached_summary(SERVER, admin=True, user_id=7, view="full")
+    assert hit["generated_at_ms"] == first["generated_at_ms"], "served from the cache"
+    assert hit["wallet"]["stale"] is True
+    assert hit["sections"]["wallet"]["status"] == "stale"
+    glance = await routes.cached_summary(SERVER, admin=True, user_id=7, view="glance")
+    assert glance["wallet"]["stale"] is True
+
+
+@sync
+async def test_a_holdings_cache_hit_is_aged_at_the_request_clock(monkeypatch):
+    row = {
+        "bot": "a",
+        "state": holdings.CURRENT,
+        "observed_at_ms": NOW_MS - 29_000,
+        "stale_after_ms": 30_000,
+    }
+    body = {
+        "schema": "fleet-holdings.v1",
+        "server": "main",
+        "generated_at_ms": NOW_MS,
+        "bots": [row],
+    }
+    monkeypatch.setattr(
+        holdings_route, "_cache", {"main": (time.monotonic() + 60, body)}
+    )
+    monkeypatch.setattr(holdings_route.time, "time", lambda: NOW_S + 2)
+    served = await holdings_route.cached_holdings("main")
+    assert served["bots"][0]["state"] == holdings.STALE
+    assert row["state"] == holdings.CURRENT, "the cached body is not changed"
+
+
+@sync
+async def test_incident_freshness_expires_with_the_older_of_store_and_monitor(store):
+    payload = copy.deepcopy(INCIDENTS)
+    payload["incident_store"].update(
+        generated_at=iso(NOW_MS - 1_000),
+        monitor={"state": "healthy", "last_cycle_at": iso(NOW_MS - 89_000)},
+        incidents=[],
+    )
+    readers = FakeReaders(store)
+    readers.incident_payload = payload
+    body = await fs.build_fleet_summary(
+        SERVER, "full", readers, NOW_MS, is_admin=True, user_id=7, full_shape=True
+    )
+    assert body["incidents"]["state"] == "healthy"
+    assert fs.aged(body, NOW_MS + 1_000)["incidents"]["state"] == "healthy"
+    later = fs.aged(body, NOW_MS + 10_000)
+    assert fs.project_incidents(payload, NOW_MS + 10_000)["state"] == "unknown"
+    assert later["incidents"]["state"] == "unknown"
+    assert later["sections"]["incidents"]["status"] == "stale"
+    assert later["sections"]["incidents"]["reason"] == fs.OWNER_NOT_CURRENT
+    glance = fs.served(body, "glance", NOW_MS + 10_000)
+    assert glance["incidents"]["state"] == "unknown"
+
+
+@sync
+async def test_a_half_verified_capability_still_expires(store):
+    capability = _capability(buy="can_trade", sell="unverified")
+
+    class Runtime(FakeReaders):
+        async def owner(self, bot, path, params):
+            if bot == "ok_rsi" and path == "bootstrap":
+                observed = _observed(capability)
+                observed["runtime_status"]["bot_name"] = bot
+                observed["monitoring"]["bot_name"] = bot
+                return fs.OwnerRead(observed)
+            return await super().owner(bot, path, params)
+
+    body = await fs.build_fleet_summary(
+        SERVER,
+        "full",
+        Runtime(store),
+        NOW_MS,
+        is_admin=True,
+        user_id=7,
+        full_shape=True,
+    )
+    assert card(body, "ok_rsi")["trading"]["buy"] == "can_trade"
+    fresh = fs.project_runtime_view(_observed(capability), "bot", NOW_MS + 31_000)
+    assert (fresh["trading"]["buy"], fresh["trading"]["sell"]) == ("unverified",) * 2
+    late = card(fs.aged(body, NOW_MS + 31_000), "ok_rsi")["trading"]
+    assert (late["buy"], late["sell"]) == ("unverified", "unverified")
+
+
+@sync
+async def test_net_now_falls_back_and_expires_by_each_source_own_bound(
+    monkeypatch, store
+):
+    observed_s = (NOW_MS - 29_000) / 1000
+    page = {
+        "bots": [
+            {
+                "bot_name": "ok_rsi",
+                "status": "running",
+                "num_controllers": 1,
+                "controller_count_current": True,
+                "status_received_at": observed_s,
+                "status_stale_after_seconds": 30,
+                "performance_received_at": observed_s,
+                "performance_stale_after_seconds": 30,
+            }
+        ],
+        "controllers": [
+            {
+                "bot_name": "ok_rsi",
+                "controller_id": "c",
+                "trading_pair": "ETH-USDC",
+                "global_pnl_quote": 1.25,
+                "realized_pnl_quote": 1.0,
+                "unrealized_pnl_quote": 0.25,
+            }
+        ],
+    }
+    monkeypatch.setattr(fs, "build_bots_page", lambda raw: copy.deepcopy(page))
+    body = await fs.build_fleet_summary(
+        SERVER,
+        "full",
+        FakeReaders(store),
+        NOW_MS,
+        is_admin=True,
+        user_id=7,
+        full_shape=True,
+    )
+    assert card(body, "ok_rsi")["net_now"] == {
+        "value": "1.25",
+        "unit": "USDC",
+        "source": "controller",
+    }
+    assert fs._controller_net(page, "ok_rsi", NOW_MS + 10_000) is None
+
+    # The newest stored sample (one minute old at build) stands in, as a fresh build chooses it.
+    fallback = card(fs.aged(body, NOW_MS + 10_000), "ok_rsi")
+    assert fallback["net_now"] == {"value": "4", "unit": "USDC", "source": "history"}
+    last_valid = card(fs.aged(body, NOW_MS - 60_000 + 300_000), "ok_rsi")
+    assert last_valid["net_now"]["source"] == "history"
+
+    # Past five minutes from that sample nothing current remains: unknown, named as a fresh build would.
+    gone = fs.aged(body, NOW_MS - 60_000 + 300_001)
+    gone_card = card(gone, "ok_rsi")
+    assert gone_card["net_now"] is None
+    assert {"field": "net_now", "reason": fleet_pnl.NO_SAMPLES} in gone_card["missing"]
+    fields = [gap["field"] for gap in gone_card["missing"]]
+    assert fields == sorted(fields, key=fs._CARD_GAP_ORDER.index)
+    assert {
+        "section": "bots",
+        "bot": "ok_rsi",
+        "field": "net_now",
+        "reason": fleet_pnl.NO_SAMPLES,
+    } in gone["missing"]

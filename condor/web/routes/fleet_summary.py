@@ -333,9 +333,9 @@ async def cached_summary(
 ) -> dict:
     """One view through the shared cache. Raises TimeoutError only when nothing completed can serve.
 
-    A body within its cache life is served as built. Past it, the newest completed body is served for
-    up to ``STALE_SERVE_SECONDS`` after it was generated, re-judged at the request's clock
-    (``fleet_summary.aged``: values keep their own times, current claims only age), while exactly one
+    Every response is re-judged at the request's clock (``fleet_summary.aged``: values keep their own
+    times, current claims only age), cache hits included. Past its cache life, the newest completed
+    body is served for up to ``STALE_SERVE_SECONDS`` after it was generated while exactly one
     background rebuild runs. Only with nothing completed in that window does a request wait for a build.
     """
     if view not in summary.VIEWS:
@@ -344,9 +344,9 @@ async def cached_summary(
     done = _completed(key, view, time.monotonic())
     if done is not None:
         fresh, body = done
-        if fresh:
-            return summary.served(body, view)
         now_ms = time.time() * 1000
+        if fresh:
+            return summary.served(body, view, now_ms)
         if 0 <= now_ms - body["generated_at_ms"] <= STALE_SERVE_SECONDS * 1000:
             _refresh(key, view, user_id)
             return summary.served(body, view, now_ms)
@@ -396,7 +396,7 @@ async def _build(
                     done = _completed(key, view, time.monotonic())
                     if done is not None and done[0]:
                         cache_status = "hit"
-                        return summary.served(done[1], view)
+                        return summary.served(done[1], view, time.time() * 1000)
 
                     if cache_status != "refresh":
                         cache_status = "miss"
@@ -416,7 +416,7 @@ async def _build(
                     if CACHE_TTL_SECONDS > 0:
                         expires = time.monotonic() + CACHE_TTL_SECONDS
                         _cache.setdefault(key, {})[view] = (expires, body)
-                    return summary.served(body, view)
+                    return summary.served(body, view, time.time() * 1000)
                 finally:
                     if acquired:
                         lock.release()

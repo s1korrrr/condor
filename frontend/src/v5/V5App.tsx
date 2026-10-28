@@ -41,7 +41,7 @@ function LoginPage() {
             {busy ? "Signing in…" : "Sign in"}
           </button>
         </form>
-        <small>Your token is sent to the V5 service and is not saved in this browser.</small>
+        <small>Sign-in uses a secure HttpOnly cookie that expires after 24 hours.</small>
       </section>
     </main>
   );

@@ -388,6 +388,23 @@ def project_bot(payload: Any, bot: str, now_ms: float) -> dict:
     }
 
 
+def aged(body: dict, now_ms: float) -> dict:
+    """A completed holdings body re-judged at ``now_ms``: a ``current`` row whose own observation is
+    past ``stale_after_ms`` becomes ``stale``, exactly as ``admit`` judges the same pairs once they
+    have aged. Nothing else changes, and nothing becomes current."""
+    rows = []
+    for row in body["bots"]:
+        observed = row.get("observed_at_ms")
+        if (
+            row["state"] == CURRENT
+            and observed is not None
+            and now_ms - observed >= row["stale_after_ms"]
+        ):
+            row = {**row, "state": STALE}
+        rows.append(row)
+    return {**body, "bots": rows}
+
+
 def build_holdings(server: str, reads: dict[str, Any], now_ms: float) -> dict:
     """The route body. ``reads`` maps each registered bot to its quant-summary payload, or to a reason code."""
     return {

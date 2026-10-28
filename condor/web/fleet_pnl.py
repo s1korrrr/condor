@@ -73,13 +73,17 @@ def _amount(value: Any) -> Optional[Decimal]:
     return number if decimal_text(number) is not None else None
 
 
-def exact_sum(values: list[Decimal]) -> Optional[Decimal]:
-    """Add admitted decimals without default-context rounding; reject an unencodable result."""
+def exact_sum(values: list[Decimal], *, admitted: bool = False) -> Optional[Decimal]:
+    """Add admitted decimals without default-context rounding; reject an unencodable result.
+
+    ``admitted=True`` declares every operand already passed ``_amount`` (or is a sign reversal of one),
+    so only the result is checked; the operand check is skipped, not weakened.
+    """
     if not values:
         return Decimal(0)
     # A temporary sign reversal of an admitted positive 128-digit operand can use
     # 129 characters. Only the emitted result must fit the signed wire budget.
-    if any(decimal_text(value.copy_abs()) is None for value in values):
+    if not admitted and any(decimal_text(value.copy_abs()) is None for value in values):
         return None
     nonzero = [value for value in values if value]
     if not nonzero:
@@ -191,7 +195,9 @@ def parse_bot_history(
             or unrealized is None
             or (
                 residual := exact_sum(
-                    [total, realized.copy_negate(), unrealized.copy_negate()]
+                    # all three passed ``_amount`` just above
+                    [total, realized.copy_negate(), unrealized.copy_negate()],
+                    admitted=True,
                 )
             )
             is None
@@ -231,18 +237,30 @@ def parse_bot_history(
 def _run_deltas(
     samples: list[Sample],
 ) -> Optional[tuple[Decimal, Decimal, Decimal, int]]:
+    """Change across the samples, summed per owner run; an owner change (restart) is never bridged.
+
+    Inside one run the consecutive deltas telescope exactly (the arithmetic is exact, ``Inexact`` is
+    trapped), so a run contributes ``last - first``. One exact difference per run replaces one per
+    sample pair: the same result, without per-pair arithmetic that held the event loop for seconds
+    on month and all-time windows. Each run's delta and each running total stay checked for
+    encodability.
+    """
     totals = [Decimal(0), Decimal(0), Decimal(0)]
     restarts = 0
-    for a, b in zip(samples, samples[1:]):
-        if a.owner != b.owner:
-            restarts += 1
+    start = 0
+    for end in range(1, len(samples) + 1):
+        if end < len(samples) and samples[end].owner == samples[end - 1].owner:
             continue
+        first, last = samples[start], samples[end - 1]
         for index, key in enumerate(("total", "realized", "unrealized")):
-            delta = exact_difference(getattr(b, key), getattr(a, key))
+            delta = exact_difference(getattr(last, key), getattr(first, key))
             updated = exact_sum([totals[index], delta]) if delta is not None else None
             if updated is None:
                 return None
             totals[index] = updated
+        if end < len(samples):
+            restarts += 1
+        start = end
     return totals[0], totals[1], totals[2], restarts
 
 

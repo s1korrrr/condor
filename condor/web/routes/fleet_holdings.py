@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -22,11 +23,14 @@ from condor.web.routes import fleet_summary as summary_route
 from config_manager import get_config_manager
 
 router = APIRouter(tags=["fleet"])
+logger = logging.getLogger(__name__)
 
 TOTAL_TIMEOUT = 12.0
 CACHE_TTL_SECONDS = (
     5.0  # one owner read serves a burst of dashboard, phone and widget polls
 )
+# How long after generation a completed body serves while it rebuilds.
+STALE_SERVE_SECONDS = 60.0
 HEADERS = {
     "Cache-Control": "private, no-store",
     "X-Content-Type-Options": "nosniff",
@@ -36,6 +40,7 @@ ALLOWED_QUERY = {"bot", "schema"}
 
 _cache: dict[str, tuple[float, dict]] = {}
 _locks: dict[str, asyncio.Lock] = {}
+_refreshes: dict[str, asyncio.Task] = {}  # at most one background rebuild per server
 
 
 async def _read_all(server: str) -> dict:
@@ -67,6 +72,49 @@ async def _read_all(server: str) -> dict:
 
 
 async def cached_holdings(server: str) -> dict:
+    """Holdings through the shared cache, served without waiting on a rebuild when it can be.
+
+    Within its cache life a body is served as built. Past it, the last completed body is served for up
+    to ``STALE_SERVE_SECONDS`` after it was generated, re-judged at the request's clock
+    (``holdings.aged``), while exactly one background rebuild runs. Only with nothing completed in that
+    window does a request wait for a build, and then a 504 is possible at the deadline.
+    """
+    hit = _cache.get(server)
+    if hit is not None:
+        expires, body = hit
+        if expires > time.monotonic():
+            return body
+        now_ms = time.time() * 1000
+        if 0 <= now_ms - body["generated_at_ms"] <= STALE_SERVE_SECONDS * 1000:
+            _refresh(server)
+            return holdings.aged(body, now_ms)
+    return await _build(server)
+
+
+def _refresh(server: str) -> None:
+    task = _refreshes.get(server)
+    loop = asyncio.get_running_loop()
+    if task is not None and not task.done() and task.get_loop() is loop:
+        return
+
+    async def rebuild() -> None:
+        try:
+            await _build(server)
+        except HTTPException as exc:
+            # A deadline or an empty registry: the completed body keeps serving.
+            logger.warning(
+                "event=fleet_holdings_refresh_failed status=%d", exc.status_code
+            )
+        except Exception:
+            logger.exception("event=fleet_holdings_refresh_failed")
+        finally:
+            if _refreshes.get(server) is asyncio.current_task():
+                del _refreshes[server]
+
+    _refreshes[server] = asyncio.create_task(rebuild())
+
+
+async def _build(server: str) -> dict:
     async with _locks.setdefault(server, asyncio.Lock()):
         hit = _cache.get(server)
         if hit is None or hit[0] <= time.monotonic():

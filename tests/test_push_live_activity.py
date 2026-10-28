@@ -803,6 +803,7 @@ def test_publisher_pairs_are_bounded(tmp_path, caplog):
         "failed": 0,
         "dropped_pairs": 2,
         "index_failed": 0,
+        "index_unpaired": 0,
     }
 
 
@@ -1686,3 +1687,97 @@ def test_index_stale_recheck_uses_measurement_clock_not_registry_write_clock():
         )
     finally:
         market._published.pop(SERVER, None)
+
+
+# --------------------------------------------------------------------------- index/read pairing
+
+
+def _glance_read_at(read_at_ms, served_at_ms):
+    glance = copy.deepcopy(GLANCE)
+    glance["generated_at_ms"] = served_at_ms
+    glance["sources_read_at_ms"] = read_at_ms
+    return glance
+
+
+def test_a_delayed_index_never_erases_the_published_index(tmp_path):
+    """Reads finish at 12:00:50 and are served cached at 12:01:49; the index lands 21 s later, dated
+    by the 12:01:00 candle: 10 s after the reads, beyond the app's 5 s tolerance for them.
+    """
+    from condor.web import live_activity_publisher as publisher
+
+    registry, iphone, _ = _registry(tmp_path)
+    _register(registry, iphone.device_id)
+    read_ms = 1_800_000_050_000  # 12:00:50
+    previous = (
+        {  # the last pass's index: 11:59:00 candle, its source 60 s old when measured
+            **INDEX,
+            "as_of_ms": read_ms - 50_000,
+            "source_age_ms": 60_000,
+            "source_age_at_ms": read_ms,
+        }
+    )
+    current = {
+        **INDEX,
+        "as_of_ms": read_ms + 10_000,
+    }  # this pass's index: 12:01:00 candle
+    clock = [read_ms / 1000]
+
+    async def glances(server, user_id):
+        return _glance_read_at(read_ms, int(clock[0] * 1000))
+
+    def index_returning(index, delay_s=0.0):
+        async def build(server):
+            clock[0] += delay_s
+            return dict(index)
+
+        return build
+
+    def publish(index_builder):
+        run(
+            publisher.publish_once(
+                registry, glances, market_index=index_builder, clock=lambda: clock[0]
+            )
+        )
+        return registry.get_meta(la.content_key(1, SERVER))["content"]
+
+    first = publish(index_returning(previous))
+    assert first["market_index"]["as_of_ms"] == previous["as_of_ms"]
+
+    clock[0] = read_ms / 1000 + 59  # 12:01:49: the same cached reads are served
+    final = publish(index_returning(current, delay_s=21))
+    assert final["generated_at_ms"] == read_ms, "the data clock is not advanced"
+    assert (
+        final["market_index"]["as_of_ms"] == previous["as_of_ms"]
+    ), "the index is kept"
+    assert final["market_index"]["stale"] is False
+    assert registry.get_meta(la.PUBLISHER_META_KEY)["index_unpaired"] == 1
+
+
+def test_a_delayed_index_goes_with_newer_completed_reads(tmp_path):
+    from condor.web import live_activity_publisher as publisher
+
+    registry, iphone, _ = _registry(tmp_path)
+    _register(registry, iphone.device_id)
+    read_ms = 1_800_000_050_000
+    index = {**INDEX, "as_of_ms": read_ms + 10_000}
+    reads = [read_ms]
+
+    async def glances(server, user_id):
+        return _glance_read_at(reads[0], reads[0] + 59_000)
+
+    async def build(server):
+        reads[0] = read_ms + 20_000  # a rebuild completes while the index is built
+        return dict(index)
+
+    run(
+        publisher.publish_once(
+            registry,
+            glances,
+            market_index=build,
+            clock=lambda: (read_ms + 80_000) / 1000,
+        )
+    )
+    content = registry.get_meta(la.content_key(1, SERVER))["content"]
+    assert content["generated_at_ms"] == read_ms + 20_000
+    assert content["market_index"] == index, "the index, unchanged, with reads it fits"
+    assert registry.get_meta(la.PUBLISHER_META_KEY)["index_unpaired"] == 0

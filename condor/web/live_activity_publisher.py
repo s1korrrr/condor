@@ -95,6 +95,38 @@ def _reason(exc: BaseException) -> str:
     return str(exc)[:120] or exc.__class__.__name__
 
 
+async def _paired(
+    glance_for: GlanceFor,
+    server: str,
+    user_id: int,
+    state: dict,
+    index: dict,
+    stale_after_seconds: int,
+) -> dict | None:
+    """Content that carries ``index`` with reads it is consistent with, or None.
+
+    The index is built while the publisher waits, so it can be dated after the reads the pass started
+    with. It goes with those reads when the app admits the pair; otherwise with the current completed
+    reads, when they admit it. Neither clock is moved: no read is advanced and no index backdated.
+    """
+    content = la.with_market_index(state, index)
+    if "market_index" in content:
+        return content
+    try:
+        current = la.content_state(
+            await glance_for(server, user_id), stale_after_seconds=stale_after_seconds
+        )
+    except Exception as exc:  # noqa: BLE001 - the content already published stands
+        logger.warning(
+            "live activity index pairing for server %s failed error=%s",
+            server,
+            exc.__class__.__name__,
+        )
+        return None
+    content = la.with_market_index(current, index)
+    return content if "market_index" in content else None
+
+
 async def publish_once(
     registry: Registry,
     glance_for: GlanceFor,
@@ -110,8 +142,9 @@ async def publish_once(
     The summary never waits on the Market index: each server's index build starts first and
     runs concurrently (bounded by ``index_budget_seconds``) while the glance content is built
     and published as before, carrying the last good index while it is still reusable. When a
-    fresh index arrives, that server's owners are published again with it. A failed build
-    keeps the last good index for up to 180 s (``stale`` recomputed), then omits it.
+    fresh index arrives, that server's owners are published again with it, paired with reads it is
+    consistent with (``_paired``); when no such reads exist yet, the earlier publication stands. A
+    failed build keeps the last good index for up to 180 s (``stale`` recomputed), then omits it.
     """
     pairs = await asyncio.to_thread(registry.live_activity_owners)
     if not pairs:
@@ -173,21 +206,31 @@ async def publish_once(
         for task in tasks.values():
             task.cancel()
     index_failed: dict[str, str] = {}
+    unpaired = 0
     for server, result in zip(tasks, results):
         if isinstance(result, BaseException):
             index_failed[server] = _reason(result)
             continue
         market.remember_index(server, result, now=clock())
-        for (user_id, owner_server), state in published.items():
-            if owner_server == server:
-                await asyncio.to_thread(
-                    la.publish_content,
-                    registry,
-                    user_id,
-                    server,
-                    la.with_market_index(state, result),
-                    built_at=clock(),
-                )
+        for (user_id, owner_server), state in list(published.items()):
+            if owner_server != server:
+                continue
+            content = await _paired(
+                glance_for, server, user_id, state, result, stale_after_seconds
+            )
+            if content is None:
+                # Neither these reads nor the current ones admit the new index: the content published
+                # above (these reads with the last good, independently aged index) stands.
+                unpaired += 1
+                continue
+            await asyncio.to_thread(
+                la.publish_content,
+                registry,
+                user_id,
+                server,
+                content,
+                built_at=clock(),
+            )
     if index_failed:
         logger.warning(
             "live activity market index not refreshed for %d server(s): %s",
@@ -206,6 +249,7 @@ async def publish_once(
             "failed": failed,
             "dropped_pairs": dropped,
             "index_failed": len(index_failed),
+            "index_unpaired": unpaired,
         },
     )
     return written

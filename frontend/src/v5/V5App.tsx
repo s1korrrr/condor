@@ -8,7 +8,7 @@ import { V5ApiError, v5Api } from "./api";
 import { AgentsPage, AgentDetailPage, OverviewPage, SessionDetailPage, SessionsPage, SettingsPage } from "./V5Pages";
 import { V5MarketHome } from "./V5MarketHome";
 import { V5AppShell } from "./V5AppShell";
-import { confirmLogout } from "./session-policy.mjs";
+import { clearSessionCache, confirmLogout } from "./session-policy.mjs";
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 15_000 } } });
 const Capital = lazy(() => import("@workspace-monitoring").then(m => ({ default: function V5CapitalPage() { return <m.Overview accountPresentation={{ description: "V5 account owner is unbound; no account valuation is available.", unavailable: "Bind the V5 account owner to view capital. This V5 service cannot select the existing stack account.", valuationNote: "V5 owner valuation", registryUnavailable: "V5 native owner unbound · bot registration unavailable" }} />; } })));
@@ -50,7 +50,7 @@ function ProfileGate() {
 function V5Providers({ children }: { children: React.ReactNode }) {
   const [logoutError, setLogoutError] = useState(false);
   const user: User | null = null;
-  const auth: AuthState = useMemo(() => ({ user, token: null, recoveryReason: null, isAuthenticated: true, loginWithToken: async () => false, loginWithTailscale: async () => false, logout: () => { setLogoutError(false); void confirmLogout(v5Api.logout, () => { client.clear(); client.setQueryData(["v5-auth"], { authenticated: false }); }, () => setLogoutError(true)); } }), []);
+  const auth: AuthState = useMemo(() => ({ user, token: null, recoveryReason: null, isAuthenticated: true, loginWithToken: async () => false, loginWithTailscale: async () => false, logout: () => { setLogoutError(false); void confirmLogout(v5Api.logout, () => clearSessionCache(client), () => setLogoutError(true)); } }), []);
   return <AuthContext value={auth}><ServerContext value={{ server: "rsibot-v5", setServer: () => {} }}>{logoutError && <div role="alert" className="fixed right-4 top-16 z-50 rounded-md border border-[var(--color-red)] bg-[var(--color-surface)] p-4 text-sm">Sign out failed. Your session is still active; please retry.</div>}{children}</ServerContext></AuthContext>;
 }
 

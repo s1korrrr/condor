@@ -15,3 +15,17 @@ test('confirmed logout clears the authenticated UI once', async () => {
   assert.equal(cleared, 1);
   assert.equal(errors, 0);
 });
+
+test('logout updates the mounted auth observer while clearing owner data', async () => {
+  const { QueryClient, QueryObserver } = await import('@tanstack/query-core');
+  const { clearSessionCache } = await import('../src/v5/session-policy.mjs');
+  const client = new QueryClient();
+  client.setQueryData(['v5-auth'], {authenticated:true});
+  client.setQueryData(['v5-workspace'], {private:'cached owner data'});
+  const observer = new QueryObserver(client, {queryKey:['v5-auth'], enabled:false});
+  const stop = observer.subscribe(() => {});
+  clearSessionCache(client);
+  assert.equal(observer.getCurrentResult().data.authenticated, false);
+  assert.equal(client.getQueryData(['v5-workspace']), undefined);
+  stop(); client.clear();
+});

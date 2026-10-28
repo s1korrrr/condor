@@ -575,3 +575,19 @@ def test_loop_refuses_disabled_task_or_unavailable_source(tmp_path):
         )
         assert client.get("/api/v5/sessions").json() == {"sessions": []}
         assert api.report_calls == []
+
+
+def test_health_is_public_liveness_and_claims_no_source_readiness(tmp_path):
+    api = FakeUpstream()
+    api.fail_source = True
+    app = create_app(settings=settings(tmp_path), upstream=api)
+    with TestClient(app) as client:
+        result = client.get("/health")
+        assert result.status_code == 200
+        assert result.json() == {
+            "status": "RUNNING",
+            "readiness": "UNCHECKED",
+            "execution_enabled": False,
+            "authority": "reports-only",
+        }
+        assert api.observation_calls == []

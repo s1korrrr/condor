@@ -171,6 +171,15 @@ def create_app(
         if not supplied or not hmac.compare_digest(supplied, expected):
             raise HTTPException(401, detail={"code": "authentication_required"})
 
+    @app.get("/health")
+    async def health():
+        return {
+            "status": "RUNNING",
+            "readiness": "UNCHECKED",
+            "execution_enabled": False,
+            "authority": "reports-only",
+        }
+
     @app.get("/api/v5/auth")
     async def auth_status(request: Request):
         token = read_secret_file(config.dashboard_token_file)

@@ -73,13 +73,17 @@ def _amount(value: Any) -> Optional[Decimal]:
     return number if decimal_text(number) is not None else None
 
 
-def exact_sum(values: list[Decimal]) -> Optional[Decimal]:
-    """Add admitted decimals without default-context rounding; reject an unencodable result."""
+def exact_sum(values: list[Decimal], *, admitted: bool = False) -> Optional[Decimal]:
+    """Add admitted decimals without default-context rounding; reject an unencodable result.
+
+    ``admitted=True`` declares every operand already passed ``_amount`` (or is a sign reversal of one),
+    so only the result is checked; the operand check is skipped, not weakened.
+    """
     if not values:
         return Decimal(0)
     # A temporary sign reversal of an admitted positive 128-digit operand can use
     # 129 characters. Only the emitted result must fit the signed wire budget.
-    if any(decimal_text(value.copy_abs()) is None for value in values):
+    if not admitted and any(decimal_text(value.copy_abs()) is None for value in values):
         return None
     nonzero = [value for value in values if value]
     if not nonzero:
@@ -191,7 +195,9 @@ def parse_bot_history(
             or unrealized is None
             or (
                 residual := exact_sum(
-                    [total, realized.copy_negate(), unrealized.copy_negate()]
+                    # all three passed ``_amount`` just above
+                    [total, realized.copy_negate(), unrealized.copy_negate()],
+                    admitted=True,
                 )
             )
             is None
@@ -228,9 +234,10 @@ def parse_bot_history(
     )
 
 
-def _run_deltas(
+def _run_deltas_per_pair(
     samples: list[Sample],
 ) -> Optional[tuple[Decimal, Decimal, Decimal, int]]:
+    """The reference accumulation: every same-owner pair's delta, each delta and running total checked."""
     totals = [Decimal(0), Decimal(0), Decimal(0)]
     restarts = 0
     for a, b in zip(samples, samples[1:]):
@@ -244,6 +251,70 @@ def _run_deltas(
                 return None
             totals[index] = updated
     return totals[0], totals[1], totals[2], restarts
+
+
+def _intermediates_representable(samples: list[Sample], runs: int) -> bool:
+    """Whether every value the per-pair accumulation checks is provably representable.
+
+    Each pair delta and running total is an integer multiple of ``10**low`` (the lowest exponent of any
+    nonzero sample) with magnitude below ``2 * runs * 10**(high + 1)`` (``high`` the largest adjusted
+    exponent): a running total is a sum of at most ``runs`` differences of two samples. When that bound
+    fits ``decimal_text``'s digit and width budgets (and float range), no per-pair check can fail, so
+    one exact difference per owner run gives exactly the per-pair result.
+    """
+    low = high = None
+    for sample in samples:
+        for value in (sample.total, sample.realized, sample.unrealized):
+            if value:
+                exponent, adjusted = value.as_tuple().exponent, value.adjusted()
+                low = exponent if low is None or exponent < low else low
+                high = adjusted if high is None or adjusted > high else high
+    if low is None:
+        return True  # every sample is zero
+    top = high + 1 + len(str(2 * runs))  # |intermediate| < 10**top
+    width = 1 + max(top, top - low + 1, 2 - low)
+    return (
+        top - low <= MAX_DECIMAL_SIGNIFICANT_DIGITS
+        and width <= MAX_DECIMAL_TEXT_CHARS
+        and -300 <= low
+        and top <= 300
+    )
+
+
+def _run_deltas(
+    samples: list[Sample],
+) -> Optional[tuple[Decimal, Decimal, Decimal, int]]:
+    """Change across the samples, summed per owner run; an owner change (restart) is never bridged.
+
+    Admission is exactly the per-pair accumulation's (``_run_deltas_per_pair``). Inside one run the
+    consecutive deltas telescope exactly (the arithmetic is exact, ``Inexact`` is trapped), so when the
+    representability bound holds a run contributes one exact ``last - first``. That replaces per-pair
+    arithmetic that held the event loop for seconds on month and all-time windows. Near the digit or
+    width boundary the per-pair path runs instead, so an intermediate the old code rejected is still
+    rejected.
+    """
+    boundaries = [
+        end
+        for end in range(1, len(samples))
+        if samples[end].owner != samples[end - 1].owner
+    ]
+    if not _intermediates_representable(samples, len(boundaries) + 1):
+        return _run_deltas_per_pair(samples)
+    totals = [Decimal(0), Decimal(0), Decimal(0)]
+    start = 0
+    for end in [*boundaries, len(samples)]:
+        if end - start >= 2:
+            first, last = samples[start], samples[end - 1]
+            for index, key in enumerate(("total", "realized", "unrealized")):
+                delta = exact_difference(getattr(last, key), getattr(first, key))
+                updated = (
+                    exact_sum([totals[index], delta]) if delta is not None else None
+                )
+                if updated is None:
+                    return None
+                totals[index] = updated
+        start = end
+    return totals[0], totals[1], totals[2], len(boundaries)
 
 
 @dataclass

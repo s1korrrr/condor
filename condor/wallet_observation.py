@@ -27,7 +27,9 @@ from condor.fleet_identity import is_paper
 
 logger = logging.getLogger(__name__)
 
-READ_TIMEOUT = 8.0
+# Reporting rebuilds a snapshot in 1–12 s at its tail (3 s TTL, 2026-10-28); 8 s cut those honest reads.
+# The observer runs in its own lane, so a bound that covers the tail delays no request.
+READ_TIMEOUT = 15.0
 MAX_BYTES = 2 * 1024 * 1024
 CURRENCY = re.compile(r"^[A-Z0-9]{2,12}$")
 LIVE_SCOPE = "account_wallet"
@@ -154,7 +156,12 @@ async def _read(client: httpx.AsyncClient, source: dict[str, str], bot: str) -> 
     auth = None
     if source.get("username_env") and source.get("password_env"):
         auth = httpx.BasicAuth(os.environ.get(source["username_env"], ""), os.environ.get(source["password_env"], ""))
-    async with client.stream("GET", source["url"].rstrip("/") + "/runtime-status", params={"bot": bot}, auth=auth) as response:
+    # The monitor view is the owner's bounded monitoring transport: identity, summary, balances and
+    # controllers stay; executor, report and decision histories become counts. The default detail body
+    # carries those histories and grows past MAX_BYTES (a paper owner's reached 2.6 MB on 2026-10-28).
+    params = {"bot": bot, "view": "monitor"}
+    url = source["url"].rstrip("/") + "/runtime-status"
+    async with client.stream("GET", url, params=params, auth=auth) as response:
         if response.status_code != 200:
             raise ValueError(f"Reporting returned {response.status_code}")
         content = bytearray()
@@ -171,16 +178,47 @@ async def observe_runtime(server: str, sources: dict[str, dict[str, str]] | None
     scoped = {bot: source for bot, source in sources.items() if source.get("server") == server}
     if not scoped:
         return {}
-    bodies: dict[str, object | None] = {}
     async with httpx.AsyncClient(timeout=READ_TIMEOUT, follow_redirects=False, trust_env=False) as client:
-        for bot, source in scoped.items():
+
+        async def one(bot: str, source: dict[str, str]) -> object | None:
             try:
                 async with asyncio.timeout(READ_TIMEOUT + 2):
-                    bodies[bot] = await _read(client, source, bot)
+                    body = await _read(client, source, bot)
             except (ValueError, httpx.HTTPError, TimeoutError, json.JSONDecodeError) as exc:
-                logger.debug("Runtime status unavailable for %s/%s: %s", server, bot, exc)
-                bodies[bot] = None
-    return bodies
+                _note_read(server, bot, f"{type(exc).__name__}: {exc}")
+                return None
+            _note_read(server, bot, None)
+            return body
+
+        # Each bot is read at once and bounded on its own: one slow owner no longer spends the others'
+        # time, and the round ends within one read bound instead of the sum of them.
+        reads = await asyncio.gather(
+            *(one(bot, source) for bot, source in scoped.items())
+        )
+    return dict(zip(scoped, reads))
+
+
+# The last read failure logged per (server, bot): a failure is logged when it first appears or changes,
+# and its recovery once, so a runtime source that stops answering names its cause without flooding logs.
+_read_failures: dict[tuple[str, str], str] = {}
+
+
+def _note_read(server: str, bot: str, reason: str | None) -> None:
+    key = (server, bot)
+    previous = _read_failures.get(key)
+    if reason is None:
+        if previous is not None:
+            del _read_failures[key]
+            logger.info("event=runtime_status_recovered server=%s bot=%s", server, bot)
+        return
+    if reason != previous:
+        _read_failures[key] = reason
+        logger.warning(
+            "event=runtime_status_unavailable server=%s bot=%s reason=%r",
+            server,
+            bot,
+            reason,
+        )
 
 
 def _samples(bodies: dict[str, object | None], paper: bool) -> dict[str, dict | None]:

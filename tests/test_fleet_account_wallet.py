@@ -403,7 +403,12 @@ def test_http_legacy_projection_does_not_mutate_canonical_micro_cache(
     assert opted.status_code == 200
     assert opted.json()["wallet"]["equity"] == "900"
     assert readers.calls == owner_calls
-    assert routes._cache[(SERVER, True)]["full"][1]["wallet"]["equity"] == "900"
+    # The cache keeps the reads; their canonical projection still carries the full wallet.
+    cached_reads = routes._cache[(SERVER, True)]["full"][1]
+    canonical = routes.summary.project_fleet_summary(
+        cached_reads, cached_reads.read_at_ms
+    )
+    assert canonical["wallet"]["equity"] == "900"
     glance = client.get(
         path + "?view=glance",
         headers={"X-RSIBOT-Wallet-Claims": "native-account-v1"},

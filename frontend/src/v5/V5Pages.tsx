@@ -5,7 +5,7 @@ import ReactMarkdown from "react-markdown";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { v5Api } from "./api";
 import type { MarketEvidence, V5Agent, V5Session, V5SessionDetail, V5TaskReport, V5Workspace } from "./contracts";
-import { formatUsdAmount, marketFeatures, qualifiedFeatureValue, timestampAgeMs } from "./evidence";
+import { formatUsdAmount, marketFeatures, qualifiedFeatureValue, selectedCohortCoverage, strategyAssessmentLabel, timestampAgeMs } from "./evidence";
 import { boundedLoopParameters, canRequestReport } from "./policy";
 
 function useWorkspace() {
@@ -130,7 +130,7 @@ function TaskLatestReports({ reports, agents, taskId }: { reports?: Record<strin
       const agent = agents.find((row) => row.task_id === id);
       const expired = result?.expires_at_ms != null && result.expires_at_ms <= now;
       return <article className="v5-task-report" key={id}><div className="v5-section-heading"><div><h3>{taskNames[id] ?? id}</h3><p>Task <code>{id}</code> · {agent?.name ?? "No matching agent"}</p></div><Status state={report?.status === "CURRENT_REPORT" && !expired ? "completed" : report?.status === "HISTORICAL_REPORT" || expired ? "unknown" : "blocked"} label={expired ? "EXPIRED" : report?.status ?? "UNAVAILABLE"} /></div>
-        {result ? <><div className="v5-task-report-meta"><DataValue label="Assessment" value={result.advice?.assessment} /><DataValue label="Model" value={result.model} /><DataValue label="Cost" value={result.actual_usd == null ? "Unavailable" : money(result.actual_usd)} /><DataValue label="Requested" value={formatTime(result.requested_at_ms)} /><DataValue label="Received" value={formatTime(result.received_at_ms)} /><DataValue label="Expires" value={formatTime(result.expires_at_ms)} /></div><p className="v5-task-report-summary">{result.advice?.summary || result.reason || "The owner returned no report summary."}</p>{agent && <Link className="v5-text-link" to={`/agents/${encodeURIComponent(agent.id)}`}>Open agent <ChevronRight size={14} /></Link>}</> : <p className="v5-muted">{report?.status === "SOURCE_UNAVAILABLE" ? "The advisor source is unavailable." : "No report is available for this task."}</p>}
+        {result ? <><div className="v5-task-report-meta"><DataValue label="Assessment" value={result.advice?.assessment} /><DataValue label="Coverage basis" value={result.coverage_status === "COMPLETE_OBSERVED_COHORT" ? "Complete observed cohort" : result.coverage_status === "PARTIAL_OR_UNKNOWN" ? "PARTIAL SOURCE" : "Unavailable"} /><DataValue label="Model" value={result.model} /><DataValue label="Cost" value={result.actual_usd == null ? "Unavailable" : money(result.actual_usd)} /><DataValue label="Requested" value={formatTime(result.requested_at_ms)} /><DataValue label="Received" value={formatTime(result.received_at_ms)} /><DataValue label="Expires" value={formatTime(result.expires_at_ms)} /></div><p className="v5-task-report-summary">{result.advice?.summary || result.reason || "The owner returned no report summary."}</p>{agent && <Link className="v5-text-link" to={`/agents/${encodeURIComponent(agent.id)}`}>Open agent <ChevronRight size={14} /></Link>}</> : <p className="v5-muted">{report?.status === "SOURCE_UNAVAILABLE" ? "The advisor source is unavailable." : "No report is available for this task."}</p>}
       </article>;
     })}</div>
   </section>;
@@ -150,7 +150,7 @@ function EvidenceSummary({ evidence }: { evidence: MarketEvidence | null }) {
   const spotRows = marketFeatures(evidence, "spot.");
   const perpetualRows = marketFeatures(evidence, "derivatives.");
   const age = timestampAgeMs(evidence.available_at_ms, now);
-  const assessment = evidence.strategy_assessment_eligible === true ? "Eligible" : evidence.strategy_assessment_eligible === false ? "Not eligible" : "Unavailable";
+  const assessment = strategyAssessmentLabel(evidence);
   const baseline = evidence.baseline_binding_hash === null ? "Unbound" : evidence.baseline_binding_hash ?? "Unavailable";
   return <>
     <div className="v5-evidence-meta">
@@ -163,13 +163,23 @@ function EvidenceSummary({ evidence }: { evidence: MarketEvidence | null }) {
       <DataValue label="Strategy assessment" value={assessment} />
       <DataValue label="Native position state" value="Unavailable" />
     </div>
+    <CohortCoverageNotice evidence={evidence} />
     <div className="v5-market-split">
       <FeatureGroup label="Spot" prefix="spot." features={spotRows} evidence={evidence} />
       <FeatureGroup label="Perpetual · derivatives" prefix="derivatives." features={perpetualRows} evidence={evidence} />
     </div>
     <QualitySummary quality={evidence.quality} />
+    <p className="v5-qualified-note">QUALIFIED means a feature value is available for the observations used. It does not mean the selected asset and venue cohort is complete; check the coverage status above.</p>
     <EvidenceFields evidence={evidence} />
   </>;
+}
+
+function CohortCoverageNotice({ evidence }: { evidence: MarketEvidence }) {
+  const coverage = selectedCohortCoverage(evidence);
+  return <section className={`v5-cohort-coverage${coverage.complete ? " is-complete" : " is-partial"}`} aria-label="Selected market cohort coverage">
+    <div className="v5-cohort-coverage-heading"><div><strong>{coverage.complete ? "Complete observed cohort" : "PARTIAL SOURCE"}</strong><p>{coverage.complete ? "All selected spot assets and spot/perpetual venue pairs have qualified coverage." : "Selected asset or venue coverage is incomplete or unknown. Qualified feature values may describe only the observed subset."}</p></div><Status state={coverage.complete ? "ready" : "blocked"} label={coverage.complete ? "COMPLETE" : "PARTIAL / UNKNOWN"} /></div>
+    <div className="v5-cohort-coverage-grid">{coverage.dimensions.map((row) => <div className="v5-cohort-coverage-row" key={row.key}><span>{row.label}</span><strong>{row.valid == null || row.expected == null ? "Unavailable" : `${row.valid} / ${row.expected}`}</strong><small>{row.fraction == null ? "Coverage unknown" : `${(row.fraction * 100).toFixed(1)}%`}</small></div>)}</div>
+  </section>;
 }
 
 function formatAge(ms: number) {
@@ -191,7 +201,7 @@ function QualitySummary({ quality }: { quality: Record<string, unknown> | undefi
   const perpetualCoverage = quality.perpetual_venue_coverage_fraction;
   const quoteCohorts = quality.quote_cohort_by_market;
   return <section className="v5-quality-summary"><div className="v5-quality-title"><strong>Source quality & coverage</strong><span>owner-reported</span></div>
-    <div className="v5-quality-grid"><DataValue label="Spot venue coverage" value={spotCoverage} /><DataValue label="Perpetual venue coverage" value={perpetualCoverage} /><DataValue label="Rows seen" value={quality.target_rows_seen} /><DataValue label="Missing rows" value={recordField(quality.target_row_states, "missing")} /><DataValue label="Spot quote cohort" value={recordField(quoteCohorts, "spot")} /><DataValue label="Perpetual quote cohort" value={recordField(quoteCohorts, "perpetual")} /><DataValue label="Quote conversion" value={quality.quote_conversion} /><DataValue label="Volume features" value={quality.volume_features} /></div>
+    <div className="v5-quality-grid"><DataValue label="Spot venue coverage" value={spotCoverage} /><DataValue label="Perpetual venue coverage" value={perpetualCoverage} /><DataValue label="Source-wide rows seen" value={quality.target_rows_seen} /><DataValue label="Source-wide missing rows" value={recordField(quality.target_row_states, "missing")} /><DataValue label="Spot quote cohort" value={recordField(quoteCohorts, "spot")} /><DataValue label="Perpetual quote cohort" value={recordField(quoteCohorts, "perpetual")} /><DataValue label="Quote conversion" value={quality.quote_conversion} /><DataValue label="Volume features" value={quality.volume_features} /></div>
   </section>;
 }
 
@@ -351,13 +361,13 @@ export function MarketPage() {
   if (query.isPending) return <Loading label="Loading market evidence" />;
   if (query.isError && !query.data) return <QueryError query={query} retry={() => void query.refetch()} />;
   const evidence = query.data.context;
-  const hasQuality = !!evidence?.quality && Object.keys(evidence.quality).length > 0;
+  const cohortCoverage = evidence ? selectedCohortCoverage(evidence) : null;
   const refresh = query.data.source_refresh;
   const freshness = refresh?.feed_freshness === "FRESH" && refresh.feed_fresh_until_ms != null && now <= refresh.feed_fresh_until_ms ? "CURRENT" : refresh?.feed_freshness === "UNAVAILABLE" || refresh?.feed_freshness === "FRESH" ? "STALE" : "UNKNOWN";
   return <><PageHeading title="Market evidence" description="Source status, coverage, timestamps, units, and market type stay explicit." actions={<button className="v5-button" onClick={() => void query.refetch()}><RotateCw size={15} />Refresh evidence</button>} />
-    <section className="v5-market-refresh" aria-label="Feed refresh status"><div><strong>Feed status</strong><Status state={freshness === "CURRENT" ? "ready" : freshness === "STALE" ? "blocked" : "unknown"} label={`${refresh?.state ?? "UNKNOWN"} · ${freshness}`} /></div><span>Last refresh attempt: {formatTime(refresh?.last_attempt_at_ms)}</span><span>Last successful publication: {formatTime(refresh?.last_success_at_ms)}</span><span>Published cutoff: {formatTime(refresh?.last_success_cutoff_ms)}</span><span>Dashboard last successful read: {query.dataUpdatedAt ? formatTime(query.dataUpdatedAt) : "Unavailable"}</span>{refresh?.error && <span role="alert">Feed refresh issue: {refresh.error}</span>}{query.error && <span role="alert">Dashboard refresh failed: showing last successful response · {query.error.message}</span>}</section>
+    <section className="v5-market-refresh" aria-label="Feed refresh status"><div><strong>Feed status</strong><Status state={freshness === "CURRENT" ? "ready" : freshness === "STALE" ? "blocked" : "unknown"} label={`${refresh?.state ?? "UNKNOWN"} · ${freshness}`} /></div><span>Refresh health does not imply complete market coverage.</span><span>Last refresh attempt: {formatTime(refresh?.last_attempt_at_ms)}</span><span>Last successful publication: {formatTime(refresh?.last_success_at_ms)}</span><span>Published cutoff: {formatTime(refresh?.last_success_cutoff_ms)}</span><span>Dashboard last successful read: {query.dataUpdatedAt ? formatTime(query.dataUpdatedAt) : "Unavailable"}</span>{refresh?.error && <span role="alert">Feed refresh issue: {refresh.error}</span>}{query.error && <span role="alert">Dashboard refresh failed: showing last successful response · {query.error.message}</span>}</section>
     {query.data.source_error && <div className="v5-source-warning"><AlertTriangle size={16} />{query.data.source_error}</div>}
-    {!evidence ? <div className="v5-panel v5-market-page-empty"><EvidenceSummary evidence={null} /><p>{query.data.identity.baseline_binding ? "A baseline is reported as bound, but no market source evidence was returned." : "Baseline and market context are both unavailable. No comparison or market conclusion can be drawn."}</p></div> : <div className="v5-market-page"><section className="v5-panel"><div className="v5-section-heading"><div><h2>Source record</h2><p>Values are displayed from the owner response without conversion.</p></div><Status state={hasQuality ? "ready" : "unknown"} label={hasQuality ? "Quality details present" : "Quality unavailable"} /></div><EvidenceSummary evidence={evidence} /></section><section className="v5-market-limits"><ShieldAlert size={17} /><div><strong>Interpretation limits</strong><p>Native position state is unavailable in this reports-only workspace. V5 does not infer composite scores, strategy baselines, or performance from market context. Missing fields remain unavailable.</p></div></section></div>}
+    {!evidence ? <div className="v5-panel v5-market-page-empty"><EvidenceSummary evidence={null} /><p>{query.data.identity.baseline_binding ? "A baseline is reported as bound, but no market source evidence was returned." : "Baseline and market context are both unavailable. No comparison or market conclusion can be drawn."}</p></div> : <div className="v5-market-page"><section className="v5-panel"><div className="v5-section-heading"><div><h2>Source record</h2><p>Values are displayed from the owner response without conversion.</p></div><Status state={cohortCoverage?.complete ? "ready" : "blocked"} label={cohortCoverage?.complete ? "Complete observed cohort" : "PARTIAL SOURCE"} /></div><EvidenceSummary evidence={evidence} /></section><section className="v5-market-limits"><ShieldAlert size={17} /><div><strong>Interpretation limits</strong><p>Refresh health and feature validity do not certify full cohort coverage. Native position state is unavailable in this reports-only workspace. V5 does not infer composite scores, strategy baselines, or performance from market context. Missing fields remain unavailable.</p></div></section></div>}
   </>;
 }
 

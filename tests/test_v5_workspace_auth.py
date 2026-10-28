@@ -31,11 +31,12 @@ def test_latest_task_projection_rejects_cross_task_and_unqualified_costs():
         "status": "CURRENT_REPORT",
         "record": {
             "input": {"task_id": "market_context", "snapshot_id": "s"},
-            "result": {"task_id": "market_context", "actual_usd": "-1", "effect": "ORDER"},
+            "result": {"task_id": "market_context", "actual_usd": "-1", "coverage_status": "NORMAL", "effect": "ORDER"},
         },
     }
     projected = _safe_task_latest("market_context", bad_cost)
     assert "actual_usd" not in projected["record"]["result"]
+    assert "coverage_status" not in projected["record"]["result"]
     assert projected["record"]["result"]["effect"] == "NONE"
 
 
@@ -167,6 +168,7 @@ class FakeUpstream:
                 "result": {
                     "task_id": task_id,
                     "status": "ACCEPTED",
+                    "coverage_status": "PARTIAL_OR_UNKNOWN",
                     "model": "claude-sonnet",
                     "requested_at_ms": 100,
                     "received_at_ms": 101,
@@ -293,6 +295,7 @@ def test_workspace_is_scoped_to_v5_roots_and_sanitizes_upstream(tmp_path):
         task_report = workspace["advisor"]["latest_by_task"]["market_context"]
         assert task_report["record"]["result"]["task_id"] == "market_context"
         assert task_report["record"]["result"]["actual_usd"] == "0.004200"
+        assert task_report["record"]["result"]["coverage_status"] == "PARTIAL_OR_UNKNOWN"
         assert "provider_key" not in task_report["record"]["result"]
         assert "provider_key" not in workspace["advisor"]
         api.credential_status = "API_KEY_REQUIRED"

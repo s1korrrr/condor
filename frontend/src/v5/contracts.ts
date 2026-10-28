@@ -83,6 +83,7 @@ export interface V5TaskReport {
       task_id: string;
       effect: "NONE";
       status?: string;
+      coverage_status?: "COMPLETE_OBSERVED_COHORT" | "PARTIAL_OR_UNKNOWN";
       model?: string;
       reason?: string;
       requested_at_ms?: number;

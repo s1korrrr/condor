@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { feedFreshness, formatUsdAmount, marketFeatures, parseNonNegativeDecimal, qualifiedFeatureValue, timestampAgeMs } from "../src/v5/evidence.ts";
+import { feedFreshness, formatUsdAmount, marketFeatures, parseNonNegativeDecimal, qualifiedFeatureValue, selectedCohortCoverage, strategyAssessmentLabel, timestampAgeMs } from "../src/v5/evidence.ts";
 
 const evidence = JSON.parse(readFileSync(new URL("./fixtures/v5-multi-venue-evidence-projection.json", import.meta.url), "utf8"));
 
@@ -54,6 +54,41 @@ test("feed freshness fails closed for missing or future owner timestamps", () =>
   assert.equal(feedFreshness(evidence.available_at_ms, evidence.available_at_ms + 180_001), "STALE");
   assert.equal(feedFreshness(null, now), "UNKNOWN");
   assert.equal(feedFreshness(now + 1, now), "UNKNOWN");
+});
+
+test("selected cohort is complete only when all asset and venue features are qualified and full", () => {
+  const complete = selectedCohortCoverage(evidence);
+  assert.equal(complete.complete, true);
+  assert.deepEqual(complete.dimensions.map(({ valid, expected }) => [valid, expected]), [[5, 5], [30, 30], [30, 30], [5, 5]]);
+  assert.equal(strategyAssessmentLabel({ ...evidence, strategy_assessment_eligible: true }), "Eligible");
+});
+
+test("partial coverage and exact zero remain visible as partial, not complete", () => {
+  const partialEvidence = structuredClone(evidence);
+  partialEvidence.features["spot.assets_valid"].value = 4;
+  partialEvidence.features["spot.asset_coverage_fraction"].value = 0.8;
+  partialEvidence.features["spot.venues_valid"].value = 0;
+  partialEvidence.features["spot.venue_coverage_fraction"].value = 0;
+  partialEvidence.features["derivatives.matched_assets"].value = 4;
+  const partial = selectedCohortCoverage(partialEvidence);
+  assert.equal(partial.complete, false);
+  assert.equal(partial.dimensions[0].valid, 4);
+  assert.equal(partial.dimensions[0].expected, 5);
+  assert.equal(partial.dimensions[1].valid, 0);
+  assert.equal(partial.dimensions[3].valid, 4);
+  partialEvidence.strategy_assessment_eligible = true;
+  assert.equal(strategyAssessmentLabel(partialEvidence), "Unavailable · partial source");
+});
+
+test("unknown or unqualified selected coverage fails closed and stays unavailable", () => {
+  const unknownEvidence = structuredClone(evidence);
+  unknownEvidence.features["derivatives.venues_expected"].status = "UNAVAILABLE";
+  unknownEvidence.features["derivatives.venues_expected"].value = null;
+  const unknown = selectedCohortCoverage(unknownEvidence);
+  assert.equal(unknown.complete, false);
+  assert.equal(unknown.dimensions[2].valid, null);
+  assert.equal(unknown.dimensions[2].expected, null);
+  assert.equal(unknown.dimensions[2].fraction, 1);
 });
 
 test("dollar strings are parsed strictly and invalid or negative values remain unavailable", () => {

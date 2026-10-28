@@ -96,6 +96,9 @@ def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
         value = report.get(key)
         if isinstance(value, str) and len(value) <= 256:
             safe_report[key] = value
+    coverage_status = report.get("coverage_status")
+    if coverage_status in {"COMPLETE_OBSERVED_COHORT", "PARTIAL_OR_UNKNOWN"}:
+        safe_report["coverage_status"] = coverage_status
     for key in ("requested_at_ms", "received_at_ms", "expires_at_ms"):
         value = report.get(key)
         if isinstance(value, int) and not isinstance(value, bool) and value > 0:

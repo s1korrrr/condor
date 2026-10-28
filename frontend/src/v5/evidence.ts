@@ -8,6 +8,59 @@ export interface MarketFeature {
   value: number | string | null;
 }
 
+export interface CohortCoverageDimension {
+  key: string;
+  label: string;
+  valid: number | null;
+  expected: number | null;
+  fraction: number | null;
+}
+
+const COHORT_DIMENSIONS = [
+  { key: "spot-assets", label: "Spot assets", valid: "spot.assets_valid", expected: "spot.assets_expected", fraction: "spot.asset_coverage_fraction" },
+  { key: "spot-venues", label: "Spot venue pairs", valid: "spot.venues_valid", expected: "spot.venues_expected", fraction: "spot.venue_coverage_fraction" },
+  { key: "perpetual-venues", label: "Perpetual venue pairs", valid: "derivatives.venues_valid", expected: "derivatives.venues_expected", fraction: "derivatives.venue_coverage_fraction" },
+  { key: "matched-assets", label: "Matched spot / perpetual assets", valid: "derivatives.matched_assets", expected: "spot.assets_expected", fraction: null },
+] as const;
+
+function qualifiedNumber(evidence: MarketEvidence, key: string): number | null {
+  const feature = evidence.features?.[key];
+  if (!feature || feature.status !== "QUALIFIED") return null;
+  const value = parseNonNegativeDecimal(feature.value);
+  return value != null && Number.isFinite(value) ? value : null;
+}
+
+export function selectedCohortCoverage(evidence: MarketEvidence): { complete: boolean; dimensions: CohortCoverageDimension[] } {
+  const dimensions = COHORT_DIMENSIONS.map(({ key, label, valid, expected, fraction }) => {
+    const validValue = qualifiedNumber(evidence, valid);
+    const expectedValue = qualifiedNumber(evidence, expected);
+    const reportedFraction = fraction == null ? null : qualifiedNumber(evidence, fraction);
+    const fractionValue = fraction == null
+      ? (validValue != null && expectedValue != null && expectedValue > 0 ? validValue / expectedValue : null)
+      : reportedFraction;
+    const countsValid = validValue != null && expectedValue != null && expectedValue > 0 && Number.isInteger(validValue) && Number.isInteger(expectedValue) && validValue <= expectedValue;
+    return {
+      key,
+      label,
+      valid: countsValid ? validValue : null,
+      expected: countsValid ? expectedValue : null,
+      fraction: fractionValue != null && fractionValue <= 1 ? fractionValue : null,
+    };
+  });
+  return {
+    complete: dimensions.every((row) => row.valid != null && row.expected != null && row.valid === row.expected && row.fraction === 1),
+    dimensions,
+  };
+}
+
+export function strategyAssessmentLabel(evidence: MarketEvidence): string {
+  if (evidence.strategy_assessment_eligible === false) return "Not eligible";
+  if (evidence.strategy_assessment_eligible === true) {
+    return selectedCohortCoverage(evidence).complete ? "Eligible" : "Unavailable · partial source";
+  }
+  return "Unavailable";
+}
+
 export function marketFeatures(evidence: MarketEvidence, prefix: string): MarketFeature[] {
   return Object.entries(evidence.features ?? {})
     .filter(([id]) => id.startsWith(prefix))

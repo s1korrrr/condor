@@ -17,9 +17,16 @@ from .config import Settings
 
 SLUG_RE = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
 ALLOWED_TOOLS = frozenset(
-    {"get_market_context", "get_advice_history", "request_market_report"}
+    {
+        "get_market_context",
+        "get_advice_history",
+        "request_market_report",
+        "get_paper_status",
+    }
 )
-REPORT_ROLES = frozenset({"market_analyst", "source_auditor"})
+REPORT_ROLES = frozenset({"market_analyst", "source_auditor", "decision_reviewer"})
+# Roles that also need a fresh read-only native paper owner before they may run.
+PAPER_ROLES = frozenset({"decision_reviewer"})
 AGENT_SPECS: dict[str, dict[str, Any]] = {
     "market_analyst": {
         "task_id": "market_context",
@@ -37,7 +44,15 @@ AGENT_SPECS: dict[str, dict[str, Any]] = {
             "request_market_report",
         ),
     },
-    "decision_reviewer": {"task_id": None, "allowed_tools": ()},
+    "decision_reviewer": {
+        "task_id": "decision_review",
+        "allowed_tools": (
+            "get_market_context",
+            "get_paper_status",
+            "get_advice_history",
+            "request_market_report",
+        ),
+    },
 }
 
 

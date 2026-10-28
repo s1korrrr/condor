@@ -96,5 +96,24 @@ export interface V5DashboardProfile {
   schema_version: "v5-dashboard-profile.v1";
   server: { server_id: string; host: string; port: number; mode: string; execution_enabled: boolean };
   condor: { base_revision: string };
-  readiness: { native_owner: string; account_owner: string; research_owner: string; tradepad_owner: string; market_picture_owner: string };
+  readiness: {
+    native_owner: string;
+    native_owner_reason?: string;
+    account_owner: string;
+    research_owner: string;
+    tradepad_owner: string;
+    market_picture_owner: string;
+    /** Present only when the deployment configures a read-only paper status file. */
+    paper_owner?: {
+      bot_name: string | null;
+      state: "FRESH" | "STALE" | "UNAVAILABLE";
+      reason: string;
+      mode: "PAPER";
+      execution: "SIMULATED_WALLET_ONLY";
+      generated_at: number | null;
+      ready: boolean | null;
+      readiness_reasons: string[];
+      failure: string | null;
+    };
+  };
 }

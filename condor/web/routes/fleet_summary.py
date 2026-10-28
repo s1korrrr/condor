@@ -42,6 +42,10 @@ OWNER_REUSE_SECONDS = 4.0
 CACHE_TTL_SECONDS = (
     5.0  # one computation serves a burst of dashboard, phone and watch polls
 )
+# Past their cache life completed reads still serve, projected at each request's clock, while one
+# background rebuild runs, for at most this long after they were read. A build is bounded by
+# TOTAL_TIMEOUT, so a working source always lands newer reads well inside this window.
+STALE_SERVE_SECONDS = 60.0
 HEADERS = {
     "Cache-Control": "private, no-cache",
     "X-Content-Type-Options": "nosniff",
@@ -56,8 +60,12 @@ HISTORY_WINDOW = "6h"  # the verdict replays the last six hours of stored breadt
 # must never be returned as a full payload. Each view coalesces its own builds:
 # a slow full read must not consume a glance request's deadline in lock wait.
 # At most one full and one glance computation run for a server/principal key.
+# Entries hold what a build read (``FleetInputs``), never a judged body, with the monotonic instant
+# their cache life ends. Every response projects them at its own clock.
 _cache: dict[tuple[str, bool], dict[str, tuple[float, dict]]] = {}
 _locks: dict[tuple[str, bool, str], asyncio.Lock] = {}
+# At most one background rebuild per server/principal key and view.
+_refreshes: dict[tuple[str, bool, str], asyncio.Task] = {}
 
 
 class _SummaryPhaseRecorder:
@@ -173,7 +181,9 @@ class LiveReaders:
                 if upstream.status != 200:
                     raise LookupError(str(upstream.status))
                 raw = await market_picture._body(upstream, market_picture.MAX_BYTES)
-                return validate_response(path, raw)
+                # Schema validation of a ~1 MB frame or a 1500-row history page takes about a second of
+                # CPU; on the event loop it stalled every other request and fired their timers late.
+                return await asyncio.to_thread(validate_response, path, raw)
 
         # One budget for the frame and its history: a slow frame leaves the history less time, never more.
         deadline = asyncio.get_running_loop().time() + MARKET_TIMEOUT * 2
@@ -305,17 +315,84 @@ def _http_wallet_projection(body: dict, native_claims: bool) -> dict:
     return body
 
 
+def _completed(
+    key: tuple, view: str, now: float
+) -> Optional[tuple[bool, summary.FleetInputs]]:
+    """``(fresh, inputs)`` for the newest completed read set that can serve ``view``, else None.
+
+    A full read set serves either view; a glance read set (smaller) serves only a glance.
+    """
+    entry = _cache.get(key, {})
+    rows = [entry.get("full")] + ([entry.get("glance")] if view == "glance" else [])
+    rows = [row for row in rows if row is not None]
+    if not rows:
+        return None
+    expires, inputs = max(rows, key=lambda row: row[1].read_at_ms)
+    return expires > now, inputs
+
+
+def _respond(inputs: summary.FleetInputs, view: str) -> dict:
+    """The response a read set gives now: the build's own projection at this request's clock, so a
+    cached read set answers exactly as a fresh build from identical reads would."""
+    body = summary.project_fleet_summary(inputs, time.time() * 1000)
+    return summary.glance(body) if view == "glance" else body
+
+
 async def cached_summary(
     name: str, *, admin: bool, user_id: Any, view: str = "full"
 ) -> dict:
-    """Build or read one view through the shared micro-cache. Raises TimeoutError."""
+    """One view through the shared cache. Raises TimeoutError only when nothing completed can serve.
+
+    The cache keeps what a build read, never a judged body: every response projects the reads at its
+    own clock. Within ``CACHE_TTL_SECONDS`` of the reads they are served as they are. Past that, they
+    serve for up to ``STALE_SERVE_SECONDS`` after they were read while exactly one background rebuild
+    runs. Only with nothing read in that window does a request wait for a build.
+    """
     if view not in summary.VIEWS:
         raise ValueError(f"unknown view {view!r}")
     key = (name, admin)
+    done = _completed(key, view, time.monotonic())
+    if done is not None:
+        fresh, inputs = done
+        if fresh:
+            return _respond(inputs, view)
+        if 0 <= time.time() * 1000 - inputs.read_at_ms <= STALE_SERVE_SECONDS * 1000:
+            _refresh(key, view, user_id)
+            return _respond(inputs, view)
+    return await _build(key, view, user_id)
+
+
+def _refresh(key: tuple, view: str, user_id: Any) -> None:
+    """Start the background rebuild of ``view`` unless one (or a full one, which serves both) runs."""
+    loop = asyncio.get_running_loop()
+    for running_view in {view, "full"}:
+        task = _refreshes.get((*key, running_view))
+        if task is not None and not task.done() and task.get_loop() is loop:
+            return
+    refresh_key = (*key, view)
+
+    async def rebuild() -> None:
+        try:
+            await _build(key, view, user_id, cache_status="refresh")
+        except TimeoutError:
+            pass  # logged by _build with its phases; the completed reads keep serving
+        except Exception:
+            logger.exception("event=fleet_summary_refresh_failed view=%s", view)
+        finally:
+            if _refreshes.get(refresh_key) is asyncio.current_task():
+                del _refreshes[refresh_key]
+
+    _refreshes[refresh_key] = asyncio.create_task(rebuild())
+
+
+async def _build(
+    key: tuple, view: str, user_id: Any, *, cache_status: str = "pending"
+) -> dict:
+    """Read one view under its lock and the total deadline, or serve reads completed while waiting."""
+    name, admin = key
     trace = _SummaryPhaseRecorder()
     started = time.monotonic()
     acquired = False
-    cache_status = "pending"
     deadline = asyncio.timeout(TOTAL_TIMEOUT)
     with summary.capture_phase_recorder(trace):
         try:
@@ -325,29 +402,15 @@ async def cached_summary(
                     await lock.acquire()
                 acquired = True
                 try:
-                    now = time.monotonic()
-                    entry = _cache.get(key, {})
-                    full_hit = entry.get("full")
-                    if full_hit is not None and full_hit[0] <= now:
-                        full_hit = None
-                    view_hit = entry.get(view)
-                    if view_hit is not None and view_hit[0] <= now:
-                        view_hit = None
+                    done = _completed(key, view, time.monotonic())
+                    if done is not None and done[0]:
+                        cache_status = "hit"
+                        return _respond(done[1], view)
 
-                    if view == "full" and full_hit is not None:
-                        cache_status = "full_hit"
-                        return full_hit[1]
-                    if view == "glance":
-                        if full_hit is not None:
-                            cache_status = "full_hit_projected"
-                            return summary.glance(full_hit[1])
-                        if view_hit is not None:
-                            cache_status = "view_hit"
-                            return view_hit[1]
-
-                    cache_status = "miss"
+                    if cache_status != "refresh":
+                        cache_status = "miss"
                     async with summary.phase_span("summary.build"):
-                        body = await summary.build_fleet_summary(
+                        inputs = await summary.gather_fleet_inputs(
                             name,
                             view,
                             READERS,
@@ -360,11 +423,8 @@ async def cached_summary(
                         )
                     if CACHE_TTL_SECONDS > 0:
                         expires = time.monotonic() + CACHE_TTL_SECONDS
-                        entry = _cache.setdefault(key, {})
-                        entry[view] = (expires, body)
-                        if view == "full":
-                            entry["glance"] = (expires, summary.glance(body))
-                    return body
+                        _cache.setdefault(key, {})[view] = (expires, inputs)
+                    return _respond(inputs, view)
                 finally:
                     if acquired:
                         lock.release()

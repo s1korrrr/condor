@@ -227,9 +227,7 @@ async def live_activity_content(
         max_age_seconds=2.0 * live_activity_publisher.configured_interval(),
         now=_clock(),
     )
-    if index is not None:
-        state["market_index"] = index
-    return _json(state)
+    return _json(la.with_market_index(state, index))
 
 
 @router.delete("/live-activities/{live_id}")

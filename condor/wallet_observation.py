@@ -27,7 +27,9 @@ from condor.fleet_identity import is_paper
 
 logger = logging.getLogger(__name__)
 
-READ_TIMEOUT = 8.0
+# Reporting rebuilds a snapshot in 1–12 s at its tail (3 s TTL, 2026-10-28); 8 s cut those honest reads.
+# The observer runs in its own lane, so a bound that covers the tail delays no request.
+READ_TIMEOUT = 15.0
 MAX_BYTES = 2 * 1024 * 1024
 CURRENCY = re.compile(r"^[A-Z0-9]{2,12}$")
 LIVE_SCOPE = "account_wallet"
@@ -176,18 +178,24 @@ async def observe_runtime(server: str, sources: dict[str, dict[str, str]] | None
     scoped = {bot: source for bot, source in sources.items() if source.get("server") == server}
     if not scoped:
         return {}
-    bodies: dict[str, object | None] = {}
     async with httpx.AsyncClient(timeout=READ_TIMEOUT, follow_redirects=False, trust_env=False) as client:
-        for bot, source in scoped.items():
+
+        async def one(bot: str, source: dict[str, str]) -> object | None:
             try:
                 async with asyncio.timeout(READ_TIMEOUT + 2):
-                    bodies[bot] = await _read(client, source, bot)
+                    body = await _read(client, source, bot)
             except (ValueError, httpx.HTTPError, TimeoutError, json.JSONDecodeError) as exc:
-                bodies[bot] = None
                 _note_read(server, bot, f"{type(exc).__name__}: {exc}")
-            else:
-                _note_read(server, bot, None)
-    return bodies
+                return None
+            _note_read(server, bot, None)
+            return body
+
+        # Each bot is read at once and bounded on its own: one slow owner no longer spends the others'
+        # time, and the round ends within one read bound instead of the sum of them.
+        reads = await asyncio.gather(
+            *(one(bot, source) for bot, source in scoped.items())
+        )
+    return dict(zip(scoped, reads))
 
 
 # The last read failure logged per (server, bot): a failure is logged when it first appears or changes,

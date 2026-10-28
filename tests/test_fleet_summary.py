@@ -1554,7 +1554,7 @@ async def test_inner_source_timeout_is_not_mislabeled_as_total_deadline(
     async def source_timeout(*args, **kwargs):
         raise TimeoutError("private upstream details")
 
-    monkeypatch.setattr(fs, "build_fleet_summary", source_timeout)
+    monkeypatch.setattr(fs, "gather_fleet_inputs", source_timeout)
     with pytest.raises(TimeoutError):
         await routes.cached_summary(SERVER, admin=True, user_id=7, view="glance")
 
@@ -1829,7 +1829,7 @@ async def test_cold_glance_does_not_wait_behind_full_summary_build(monkeypatch, 
     full_started = asyncio.Event()
     release_full = asyncio.Event()
     calls = []
-    original_build = fs.build_fleet_summary
+    original_build = fs.gather_fleet_inputs  # the route's read step
 
     async def controlled_build(server, view, *args, **kwargs):
         calls.append(view)
@@ -1838,7 +1838,7 @@ async def test_cold_glance_does_not_wait_behind_full_summary_build(monkeypatch, 
             await release_full.wait()
         return await original_build(server, view, *args, **kwargs)
 
-    monkeypatch.setattr(fs, 'build_fleet_summary', controlled_build)
+    monkeypatch.setattr(fs, 'gather_fleet_inputs', controlled_build)
     full = asyncio.create_task(routes.cached_summary(SERVER, admin=True, user_id=7, view='full'))
     try:
         await full_started.wait()
@@ -1857,7 +1857,7 @@ async def test_concurrent_same_view_misses_coalesce_after_partition(monkeypatch,
     monkeypatch.setattr(routes, 'CACHE_TTL_SECONDS', 60)
     entered, release = asyncio.Event(), asyncio.Event()
     builds = []
-    original_build = fs.build_fleet_summary
+    original_build = fs.gather_fleet_inputs  # the route's read step
 
     async def controlled_build(server, view, *args, **kwargs):
         builds.append(view)
@@ -1865,7 +1865,7 @@ async def test_concurrent_same_view_misses_coalesce_after_partition(monkeypatch,
         await release.wait()
         return await original_build(server, view, *args, **kwargs)
 
-    monkeypatch.setattr(fs, 'build_fleet_summary', controlled_build)
+    monkeypatch.setattr(fs, 'gather_fleet_inputs', controlled_build)
     first = asyncio.create_task(routes.cached_summary(SERVER, admin=True, user_id=7, view='glance'))
     await entered.wait()
     second = asyncio.create_task(routes.cached_summary(SERVER, admin=True, user_id=7, view='glance'))

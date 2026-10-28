@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import time
 
 from fastapi import APIRouter, Depends, HTTPException, Request
@@ -22,11 +23,14 @@ from condor.web.routes import fleet_summary as summary_route
 from config_manager import get_config_manager
 
 router = APIRouter(tags=["fleet"])
+logger = logging.getLogger(__name__)
 
 TOTAL_TIMEOUT = 12.0
 CACHE_TTL_SECONDS = (
     5.0  # one owner read serves a burst of dashboard, phone and widget polls
 )
+# How long after they were read completed reads serve while they rebuild.
+STALE_SERVE_SECONDS = 60.0
 HEADERS = {
     "Cache-Control": "private, no-store",
     "X-Content-Type-Options": "nosniff",
@@ -34,11 +38,14 @@ HEADERS = {
 }
 ALLOWED_QUERY = {"bot", "schema"}
 
-_cache: dict[str, tuple[float, dict]] = {}
+# Entries hold what a build read, ``(read_at_ms, reads)``, never a judged body.
+_cache: dict[str, tuple[float, tuple[float, dict]]] = {}
 _locks: dict[str, asyncio.Lock] = {}
+_refreshes: dict[str, asyncio.Task] = {}  # at most one background rebuild per server
 
 
-async def _read_all(server: str) -> dict:
+async def _read_all(server: str) -> tuple[float, dict]:
+    """``(read_at_ms, reads)``: each registered bot's owner quant-summary, or its reason code."""
     readers = summary_route.READERS
     bots = readers.registered_bots(server)
     if not bots:
@@ -63,21 +70,73 @@ async def _read_all(server: str) -> dict:
 
     unique = list(dict.fromkeys(bots))
     reads = await asyncio.gather(*(one(bot) for bot in unique))
-    return holdings.build_holdings(server, dict(zip(unique, reads)), time.time() * 1000)
+    return time.time() * 1000, dict(zip(unique, reads))
+
+
+def _respond(server: str, read: tuple[float, dict]) -> dict:
+    """The body a read set gives now: the holdings projection at this request's clock, so cached
+    reads answer exactly as a fresh build from identical reads would."""
+    read_at_ms, reads = read
+    return {
+        **holdings.build_holdings(server, reads, time.time() * 1000),
+        "sources_read_at_ms": int(read_at_ms),
+    }
 
 
 async def cached_holdings(server: str) -> dict:
+    """Holdings through the shared cache, served without waiting on a rebuild when it can be.
+
+    The cache keeps what a build read, never a judged body: every response projects the reads at its
+    own clock. Past their cache life the reads serve for up to ``STALE_SERVE_SECONDS`` after they were
+    read while exactly one background rebuild runs. Only with nothing read in that window does a
+    request wait for a build, and then a 504 is possible at the deadline.
+    """
+    hit = _cache.get(server)
+    if hit is not None:
+        expires, read = hit
+        if expires > time.monotonic():
+            return _respond(server, read)
+        if 0 <= time.time() * 1000 - read[0] <= STALE_SERVE_SECONDS * 1000:
+            _refresh(server)
+            return _respond(server, read)
+    return _respond(server, await _build(server))
+
+
+def _refresh(server: str) -> None:
+    task = _refreshes.get(server)
+    loop = asyncio.get_running_loop()
+    if task is not None and not task.done() and task.get_loop() is loop:
+        return
+
+    async def rebuild() -> None:
+        try:
+            await _build(server)
+        except HTTPException as exc:
+            # A deadline or an empty registry: the completed reads keep serving.
+            logger.warning(
+                "event=fleet_holdings_refresh_failed status=%d", exc.status_code
+            )
+        except Exception:
+            logger.exception("event=fleet_holdings_refresh_failed")
+        finally:
+            if _refreshes.get(server) is asyncio.current_task():
+                del _refreshes[server]
+
+    _refreshes[server] = asyncio.create_task(rebuild())
+
+
+async def _build(server: str) -> tuple[float, dict]:
     async with _locks.setdefault(server, asyncio.Lock()):
         hit = _cache.get(server)
         if hit is None or hit[0] <= time.monotonic():
             try:
                 async with asyncio.timeout(TOTAL_TIMEOUT):
-                    body = await _read_all(server)
+                    read = await _read_all(server)
             except TimeoutError:
                 raise HTTPException(
                     status_code=504, detail="Fleet holdings exceeded their deadline"
                 ) from None
-            hit = (time.monotonic() + CACHE_TTL_SECONDS, body)
+            hit = (time.monotonic() + CACHE_TTL_SECONDS, read)
             if CACHE_TTL_SECONDS > 0:
                 _cache[server] = hit
     return hit[1]

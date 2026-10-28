@@ -124,10 +124,20 @@ def _section_unavailable(glance: Mapping[str, Any], name: str) -> bool:
 def content_state(
     glance: Mapping[str, Any], *, stale_after_seconds: int = 600
 ) -> dict[str, Any]:
-    """The v1 content state for one fleet-summary glance. Absent means unknown, never zero."""
-    generated = glance.get("generated_at_ms")
-    if type(generated) is not int or generated <= 0:
+    """The v1 content state for one fleet-summary glance. Absent means unknown, never zero.
+
+    The content's ``generated_at_ms`` is the time its data was read (the glance's
+    ``sources_read_at_ms``), not the time a cached glance was served: the Activity's global
+    lifetime and stale date count from it, so serving cached reads never extends their freshness.
+    """
+    response = glance.get("generated_at_ms")
+    if type(response) is not int or response <= 0:
         raise ValueError("glance has no generation time")
+    read_at = glance.get("sources_read_at_ms")
+    # Older summaries carry no read time; their generation time is their read time.
+    generated = (
+        read_at if type(read_at) is int and 0 < read_at <= response else response
+    )
     if type(stale_after_seconds) is not int or not 120 <= stale_after_seconds <= 3600:
         raise ValueError("invalid Live Activity stale interval")
     state: dict[str, Any] = {
@@ -315,6 +325,31 @@ def content_state(
         or wallet.get("stale") is True
     )
     return state
+
+
+# The app rejects a content state whose Market index is dated more than this after its generation
+# (``FleetWireClock.futureToleranceMs``), and with it the whole update.
+INDEX_FUTURE_TOLERANCE_MS = 5_000
+
+
+def with_market_index(
+    state: Mapping[str, Any], index: Mapping[str, Any] | None
+) -> dict[str, Any]:
+    """``state`` with the Market index attached when the app can admit it: an index dated after the
+    content's data time (beyond the app's tolerance) is left out rather than make the app drop the
+    whole update. The index is optional evidence; PnL and wallet content stand without it.
+    """
+    out = dict(state)
+    if index is None:
+        return out
+    as_of, generated = index.get("as_of_ms"), state.get("generated_at_ms")
+    if (
+        type(as_of) is int
+        and type(generated) is int
+        and as_of <= generated + INDEX_FUTURE_TOLERANCE_MS
+    ):
+        out["market_index"] = dict(index)
+    return out
 
 
 def content_digest(state: Mapping[str, Any]) -> str:

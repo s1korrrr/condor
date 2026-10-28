@@ -3,6 +3,7 @@
  "view": "glance",
  "server": "v2",
  "generated_at_ms": 1800000030000,
+ "sources_read_at_ms": 1800000030000,
  "sections": {
   "wallet": {
    "status": "ok",

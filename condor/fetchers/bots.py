@@ -135,6 +135,7 @@ def build_bots_page(
     ctrl_configs: Optional[dict[str, dict]] = None,
     bot_runs: Optional[dict[str, str]] = None,
     latest_perf: Optional[dict[str, dict]] = None,
+    now: Optional[float] = None,
 ) -> dict:
     """Transform raw BOTS_STATUS data into a BotsPageResponse-shaped dict.
 
@@ -148,6 +149,7 @@ def build_bots_page(
         ctrl_configs: Controller configs keyed by config id / controller name.
         bot_runs: Deployed-at timestamps keyed by bot name.
         latest_perf: Latest DB performance snapshots keyed by controller_id.
+        now: Epoch seconds that native observation currency is judged at; the wall clock when omitted.
     """
     ctrl_configs = ctrl_configs or {}
     bot_runs = bot_runs or {}
@@ -175,7 +177,7 @@ def build_bots_page(
             metrics_available = False
         if bot_data.get(
             "source"
-        ) == "native_mqtt" and not native_performance_is_current(bot_data):
+        ) == "native_mqtt" and not native_performance_is_current(bot_data, now=now):
             # Shared/retained/stale MQTT observations cannot establish current
             # controller identity. Never revive them through DB enrichment.
             performance = {}

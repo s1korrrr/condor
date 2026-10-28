@@ -64,8 +64,9 @@ HISTORY_WINDOW = "6h"  # the verdict replays the last six hours of stored breadt
 # their cache life ends. Every response projects them at its own clock.
 _cache: dict[tuple[str, bool], dict[str, tuple[float, dict]]] = {}
 _locks: dict[tuple[str, bool, str], asyncio.Lock] = {}
-# At most one background rebuild per server/principal key and view.
+# At most one background rebuild per server/principal key and view, owned by the app lifespan.
 _refreshes: dict[tuple[str, bool, str], asyncio.Task] = {}
+_accepting_refreshes = True
 
 
 class _SummaryPhaseRecorder:
@@ -232,7 +233,7 @@ class LiveReaders:
             reused is not None
             and 0 <= time.monotonic() - reused[0] < OWNER_REUSE_SECONDS
         ):
-            content = reused[1]
+            fetched = reused[1]
         else:
             task = self._owner_inflight.get(key)
             if task is not None and task.get_loop() is not asyncio.get_running_loop():
@@ -244,11 +245,13 @@ class LiveReaders:
                     lambda done, key=key: self._owner_settled(key, done)
                 )
             # A caller that gives up (its own deadline) must not cancel the read other callers share.
-            content = await asyncio.shield(task)
-        if content is None:
+            fetched = await asyncio.shield(task)
+        if fetched is None:
             return summary.OwnerRead(None, summary.SOURCE_UNAVAILABLE)
+        content, read_at_ms = fetched
         try:
-            return summary.OwnerRead(json.loads(content))
+            # A reused body keeps the time it was fetched: its source clock never renews.
+            return summary.OwnerRead(json.loads(content), read_at_ms=read_at_ms)
         except ValueError:
             return summary.OwnerRead(None, summary.SOURCE_UNAVAILABLE)
 
@@ -266,8 +269,9 @@ class LiveReaders:
 
     async def _fetch_owner(
         self, source: dict, bot: str, path: str, params: dict
-    ) -> Optional[bytes]:
-        """One bounded upstream read: the raw body, or None when it failed or was refused."""
+    ) -> Optional[tuple[bytes, float]]:
+        """One bounded upstream read: ``(raw body, epoch ms it arrived)``, or None when it failed or
+        was refused."""
         try:
             auth = trading_visuals.source_auth(source)
             async with asyncio.timeout(OWNER_TIMEOUT):
@@ -282,7 +286,7 @@ class LiveReaders:
                 or len(response.content) > trading_visuals.REPORTING_MAX_BYTES
             ):
                 return None
-            return response.content
+            return response.content, time.time() * 1000
         except (httpx.HTTPError, ValueError, KeyError, TimeoutError, OSError):
             return None
 
@@ -331,11 +335,20 @@ def _completed(
     return expires > now, inputs
 
 
-def _respond(inputs: summary.FleetInputs, view: str) -> dict:
-    """The response a read set gives now: the build's own projection at this request's clock, so a
-    cached read set answers exactly as a fresh build from identical reads would."""
-    body = summary.project_fleet_summary(inputs, time.time() * 1000)
+def _project(inputs: summary.FleetInputs, view: str, now_ms: float) -> dict:
+    body = summary.project_fleet_summary(inputs, now_ms)
     return summary.glance(body) if view == "glance" else body
+
+
+async def _respond(inputs: summary.FleetInputs, view: str) -> dict:
+    """The response a read set gives now: the build's own projection at this request's clock, so a
+    cached read set answers exactly as a fresh build from identical reads would.
+
+    The clock is taken here, when the request is answered; the projection (history windows over every
+    stored sample) runs in a worker thread so it never holds the event loop. It is pure, so
+    concurrent projections of one read set are safe."""
+    now_ms = time.time() * 1000
+    return await asyncio.to_thread(_project, inputs, view, now_ms)
 
 
 async def cached_summary(
@@ -355,15 +368,40 @@ async def cached_summary(
     if done is not None:
         fresh, inputs = done
         if fresh:
-            return _respond(inputs, view)
+            return await _respond(inputs, view)
         if 0 <= time.time() * 1000 - inputs.read_at_ms <= STALE_SERVE_SECONDS * 1000:
             _refresh(key, view, user_id)
-            return _respond(inputs, view)
+            return await _respond(inputs, view)
     return await _build(key, view, user_id)
+
+
+def accept_refreshes() -> None:
+    """App start: background rebuilds may run."""
+    global _accepting_refreshes
+    _accepting_refreshes = True
+
+
+async def stop_refreshes() -> None:
+    """App shutdown: accept no new background rebuild, then cancel and await the rebuilds running and
+    the shared owner reads and history jobs they own. A request still being answered gets its own
+    timeout or cancellation; the completed reads stay cached for the next process to ignore.
+    """
+    global _accepting_refreshes
+    _accepting_refreshes = False
+    owned = list(_refreshes.values())
+    owned += list(getattr(READERS, "_owner_inflight", {}).values())
+    owned += list(LAST_KNOWN.history_jobs.values())
+    loop = asyncio.get_running_loop()
+    owned = [task for task in owned if not task.done() and task.get_loop() is loop]
+    for task in owned:
+        task.cancel()
+    await asyncio.gather(*owned, return_exceptions=True)
 
 
 def _refresh(key: tuple, view: str, user_id: Any) -> None:
     """Start the background rebuild of ``view`` unless one (or a full one, which serves both) runs."""
+    if not _accepting_refreshes:
+        return  # shutting down: the completed reads still serve, nothing new starts
     loop = asyncio.get_running_loop()
     for running_view in {view, "full"}:
         task = _refreshes.get((*key, running_view))
@@ -405,7 +443,7 @@ async def _build(
                     done = _completed(key, view, time.monotonic())
                     if done is not None and done[0]:
                         cache_status = "hit"
-                        return _respond(done[1], view)
+                        return await _respond(done[1], view)
 
                     if cache_status != "refresh":
                         cache_status = "miss"
@@ -424,7 +462,7 @@ async def _build(
                     if CACHE_TTL_SECONDS > 0:
                         expires = time.monotonic() + CACHE_TTL_SECONDS
                         _cache.setdefault(key, {})[view] = (expires, inputs)
-                    return _respond(inputs, view)
+                    return await _respond(inputs, view)
                 finally:
                     if acquired:
                         lock.release()

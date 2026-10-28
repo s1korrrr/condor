@@ -42,6 +42,7 @@ ALLOWED_QUERY = {"bot", "schema"}
 _cache: dict[str, tuple[float, tuple[float, dict]]] = {}
 _locks: dict[str, asyncio.Lock] = {}
 _refreshes: dict[str, asyncio.Task] = {}  # at most one background rebuild per server
+_accepting_refreshes = True
 
 
 async def _read_all(server: str) -> tuple[float, dict]:
@@ -102,7 +103,30 @@ async def cached_holdings(server: str) -> dict:
     return _respond(server, await _build(server))
 
 
+def accept_refreshes() -> None:
+    """App start: background rebuilds may run."""
+    global _accepting_refreshes
+    _accepting_refreshes = True
+
+
+async def stop_refreshes() -> None:
+    """App shutdown: accept no new background rebuild, then cancel and await the running ones."""
+    global _accepting_refreshes
+    _accepting_refreshes = False
+    loop = asyncio.get_running_loop()
+    owned = [
+        task
+        for task in _refreshes.values()
+        if not task.done() and task.get_loop() is loop
+    ]
+    for task in owned:
+        task.cancel()
+    await asyncio.gather(*owned, return_exceptions=True)
+
+
 def _refresh(server: str) -> None:
+    if not _accepting_refreshes:
+        return  # shutting down: the completed reads still serve, nothing new starts
     task = _refreshes.get(server)
     loop = asyncio.get_running_loop()
     if task is not None and not task.done() and task.get_loop() is loop:
@@ -126,19 +150,22 @@ def _refresh(server: str) -> None:
 
 
 async def _build(server: str) -> tuple[float, dict]:
-    async with _locks.setdefault(server, asyncio.Lock()):
-        hit = _cache.get(server)
-        if hit is None or hit[0] <= time.monotonic():
-            try:
-                async with asyncio.timeout(TOTAL_TIMEOUT):
+    """Read under the server's lock. One absolute deadline covers waiting for the lock, the cache
+    decision and the reads, so a request queued behind a slow build is bounded end to end.
+    """
+    try:
+        async with asyncio.timeout(TOTAL_TIMEOUT):
+            async with _locks.setdefault(server, asyncio.Lock()):
+                hit = _cache.get(server)
+                if hit is None or hit[0] <= time.monotonic():
                     read = await _read_all(server)
-            except TimeoutError:
-                raise HTTPException(
-                    status_code=504, detail="Fleet holdings exceeded their deadline"
-                ) from None
-            hit = (time.monotonic() + CACHE_TTL_SECONDS, read)
-            if CACHE_TTL_SECONDS > 0:
-                _cache[server] = hit
+                    hit = (time.monotonic() + CACHE_TTL_SECONDS, read)
+                    if CACHE_TTL_SECONDS > 0:
+                        _cache[server] = hit
+    except TimeoutError:
+        raise HTTPException(
+            status_code=504, detail="Fleet holdings exceeded their deadline"
+        ) from None
     return hit[1]
 
 

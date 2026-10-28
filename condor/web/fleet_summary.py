@@ -132,6 +132,8 @@ async def phase_span(name: str):
 class OwnerRead:
     payload: Any = None
     reason: Optional[str] = None  # None when the read succeeded
+    # When the owner body was fetched (None: unknown); a reused body keeps its own.
+    read_at_ms: Optional[float] = None
 
 
 @dataclass
@@ -2168,13 +2170,23 @@ def project_fleet_summary(inputs: FleetInputs, now_ms: float) -> dict:
             key=lambda f: (f["time_ms"] is not None, f["time_ms"] or 0), reverse=True
         )
         fills = merged[: RECENT_FILLS[view]]
-        times = [f["time_ms"] for f in merged if f["time_ms"] is not None]
         partial = any(read.payload is None for _, read in fill_reads)
+        # The section clock is the feed's: when the fill ledgers were read (the oldest admitted
+        # read), not when the newest fill happened. Each fill keeps its own event time (``time_ms``);
+        # a bot that has not traded for hours still has a current feed.
+        feed_at = min(
+            (
+                read.read_at_ms if read.read_at_ms is not None else inputs.read_at_ms
+                for _, read in fill_reads
+                if read.payload is not None
+            )
+        )
+        stale = now_ms - feed_at > STALE_AFTER_MS["fills"]
         sections["fills"] = _section(
-            "partial" if partial else "ok",
-            max(times) if times else None,
+            "stale" if stale else "partial" if partial else "ok",
+            feed_at,
             STALE_AFTER_MS["fills"],
-            PARTIAL_COVERAGE if partial else None,
+            (OWNER_NOT_CURRENT if stale else PARTIAL_COVERAGE if partial else None),
         )
     else:
         reason = (

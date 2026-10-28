@@ -81,6 +81,8 @@ async def _performance_observer_lifespan(app: FastAPI):
     subscriber = f"web-performance-{uuid4().hex}"
     service.start()
     publisher = None
+    fleet_summary.accept_refreshes()
+    fleet_holdings.accept_refreshes()
     try:
         for server in get_config_manager().list_servers():
             await service.subscribe(server, ServerDataType.BOTS_STATUS, subscriber)
@@ -91,6 +93,9 @@ async def _performance_observer_lifespan(app: FastAPI):
         yield
     finally:
         await live_activity_publisher.stop_publisher(publisher)
+        # Background summary and holdings rebuilds are this lifespan's work too.
+        await fleet_summary.stop_refreshes()
+        await fleet_holdings.stop_refreshes()
         service.unsubscribe_all(subscriber)
         # Never stop a pre-existing owner, or consumers added during this lifespan.
         if started_here and not service.has_subscriptions:

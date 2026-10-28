@@ -401,7 +401,7 @@ async def stop_refreshes(history_drain_seconds: float = HISTORY_DRAIN_SECONDS) -
     for task in owned:
         task.cancel()
     await asyncio.gather(*owned, return_exceptions=True)
-    reads = [job for job in LAST_KNOWN.history_jobs.values() if not job.done()]
+    reads = LAST_KNOWN.running_history_jobs()  # a snapshot; workers keep completing
     if reads:
         waiters = [asyncio.wrap_future(job) for job in reads]
         _, running = await asyncio.wait(waiters, timeout=history_drain_seconds)

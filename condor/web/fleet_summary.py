@@ -30,6 +30,7 @@ import hashlib
 import json
 import math
 import re
+import threading
 import time
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
@@ -170,6 +171,53 @@ class LastKnown:
         self.trading: dict[tuple[str, str], dict] = {}
         self.history: dict[tuple, tuple[float, Any]] = {}
         self.history_jobs: dict[tuple, concurrent.futures.Future] = {}
+        # One lock guards ``history`` and ``history_jobs`` for every party: request loops looking up or
+        # replacing a job, worker threads completing one, and shutdown taking a snapshot. Re-entrant,
+        # because a read that is already done runs its completion in the registering thread.
+        self.history_lock = threading.RLock()
+
+    def history_job(
+        self,
+        key: tuple,
+        start: Callable[[], concurrent.futures.Future],
+        started_ms: float,
+    ) -> concurrent.futures.Future:
+        """The running read for ``key``, else a new one from ``start()``: lookup, replacement and
+        registration are one step, so no completing worker can remove the replacement.
+        """
+        with self.history_lock:
+            job = self.history_jobs.get(key)
+            if job is not None and not job.done():
+                return job
+            job = start()
+            self.history_jobs[key] = job
+            job.add_done_callback(
+                lambda done: self.history_settled(key, done, started_ms)
+            )
+            return job
+
+    def history_settled(
+        self, key: tuple, job: concurrent.futures.Future, started_ms: float
+    ) -> None:
+        """A worker's completion (in its thread): leaves the registry only if it is still the
+        registered job, and stores its result unless a newer read's result is already stored.
+        """
+        with self.history_lock:
+            if self.history_jobs.get(key) is job:
+                del self.history_jobs[key]
+            if not job.cancelled() and job.exception() is None:
+                held = self.history.get(key)
+                if held is None or started_ms >= held[0]:
+                    self.history[key] = (started_ms, job.result())
+
+    def held_history(self, key: tuple) -> Optional[tuple[float, Any]]:
+        with self.history_lock:
+            return self.history.get(key)
+
+    def running_history_jobs(self) -> list[concurrent.futures.Future]:
+        """A snapshot of the reads still running, safe while workers complete."""
+        with self.history_lock:
+            return [job for job in list(self.history_jobs.values()) if not job.done()]
 
 
 class Readers(Protocol):
@@ -458,10 +506,32 @@ TRADING_MAX_RESTRICTIONS = 20
 # ``net_now`` history fallback). It is shown as last known: both sides ``unverified``, own ``observed_ms``.
 TRADING_HOLD_MS = 300_000
 HISTORY_HOLD_MS = 300_000
-# Local history reads run here, at most this many at once (one per server/fleet key in practice).
-_HISTORY_POOL = concurrent.futures.ThreadPoolExecutor(
-    max_workers=4, thread_name_prefix="fleet-history"
-)
+_history_threads = 0
+
+
+def _start_history_read(fn: Callable, *args) -> concurrent.futures.Future:
+    """Run one history read on its own daemon thread; the returned future is its completion.
+
+    A read is read-only, so a worker still running at interpreter exit can be abandoned: daemon
+    threads never hold the process open. The registry keeps it to one worker per key.
+    """
+    global _history_threads
+    future: concurrent.futures.Future = concurrent.futures.Future()
+    future.set_running_or_notify_cancel()
+
+    def run() -> None:
+        try:
+            result = fn(*args)
+        except BaseException as exc:  # noqa: BLE001 - delivered to the waiting builds
+            future.set_exception(exc)
+        else:
+            future.set_result(result)
+
+    _history_threads += 1
+    threading.Thread(
+        target=run, name=f"fleet-history-{_history_threads}", daemon=True
+    ).start()
+    return future
 PAIR_RE = re.compile(r"[A-Z0-9]+-[A-Z0-9]+")
 REASON_CODE_RE = re.compile(r"[a-z0-9_]{1,64}")
 SOURCE_RE = re.compile(r"[a-z][a-z0-9_]{0,39}")
@@ -1687,31 +1757,20 @@ async def _shared_history(
     the last completed read while it is younger than ``HISTORY_HOLD_MS``; otherwise the read failed.
     """
     key = (server, tuple(live), paper)
-    job = last_known.history_jobs.get(key)
-    if job is None or job.done():
-        job = _HISTORY_POOL.submit(
+    job = last_known.history_job(
+        key,
+        lambda: _start_history_read(
             _sync_reads, readers, server, live, read_now_ms, paper
-        )
-        last_known.history_jobs[key] = job
-
-        # Runs in the worker thread when the read really ends (or at once if it never started),
-        # so the job stays registered, and joinable, for exactly as long as its thread runs.
-        def settled(
-            done: concurrent.futures.Future, started_ms: float = read_now_ms
-        ) -> None:
-            if last_known.history_jobs.get(key) is done:
-                del last_known.history_jobs[key]
-            if not done.cancelled() and done.exception() is None:
-                last_known.history[key] = (started_ms, done.result())
-
-        job.add_done_callback(settled)
+        ),
+        read_now_ms,
+    )
     try:
         async with asyncio.timeout(timeout):
             # wrap_future joins the worker from any loop; the shield keeps a caller that gives up
             # from cancelling the read the next build will join.
             return await asyncio.shield(asyncio.wrap_future(job))
     except TimeoutError:
-        held = last_known.history.get(key)
+        held = last_known.held_history(key)
         if held is not None and 0 <= read_now_ms - held[0] <= HISTORY_HOLD_MS:
             phase["outcome"] = "held"
             return held[1]

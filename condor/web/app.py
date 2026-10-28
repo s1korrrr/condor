@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import os
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -53,6 +54,9 @@ from condor.web.routes import (
 )
 
 
+logger = logging.getLogger(__name__)
+
+
 def _build_cors_origins() -> list[str]:
     """Build CORS allowed origins from env, including WEB_URL for Tailscale/VPS deployments."""
     web_url = os.environ.get("WEB_URL", "").strip().rstrip("/")
@@ -92,15 +96,28 @@ async def _performance_observer_lifespan(app: FastAPI):
         )
         yield
     finally:
-        await live_activity_publisher.stop_publisher(publisher)
-        # Background summary and holdings rebuilds are this lifespan's work too.
-        await fleet_summary.stop_refreshes()
-        await fleet_holdings.stop_refreshes()
-        service.unsubscribe_all(subscriber)
-        # Never stop a pre-existing owner, or consumers added during this lifespan.
-        if started_here and not service.has_subscriptions:
-            service.stop()
-            await service.wait_closed()
+        # Each shutdown step runs even when an earlier one fails; a failure is logged, never silent.
+        async def stop_observer() -> None:
+            service.unsubscribe_all(subscriber)
+            # Never stop a pre-existing owner, or consumers added during this lifespan.
+            if started_here and not service.has_subscriptions:
+                service.stop()
+                await service.wait_closed()
+
+        for name, step in (
+            (
+                "live_activity_publisher",
+                lambda: live_activity_publisher.stop_publisher(publisher),
+            ),
+            # Background summary and holdings rebuilds are this lifespan's work too.
+            ("fleet_summary_refreshes", fleet_summary.stop_refreshes),
+            ("fleet_holdings_refreshes", fleet_holdings.stop_refreshes),
+            ("performance_observer", stop_observer),
+        ):
+            try:
+                await step()
+            except Exception:
+                logger.exception("event=web_shutdown_step_failed step=%s", name)
 
 
 def create_app() -> FastAPI:

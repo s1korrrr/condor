@@ -416,3 +416,221 @@ async def test_the_fills_read_clock_never_changes_the_validator(store):
     stale = copy.deepcopy(later)
     stale["sections"]["fills"]["status"] = "stale"
     assert fs.etag_for(stale) != fs.etag_for(later), "a freshness verdict is a change"
+
+
+# ── review of d72a5308: one lock for the history registry ──
+
+
+def _blocking_reads(monkeypatch):
+    """Each history read blocks until its own event is set; returns the list of those events."""
+    import threading
+
+    original, events = fs._sync_reads, []
+
+    def blocking(*args):
+        done = threading.Event()
+        events.append(done)
+        done.wait(5)
+        return original(*args)
+
+    monkeypatch.setattr(fs, "_sync_reads", blocking)
+    return events
+
+
+def _request(readers, last_known, live=("ok_rsi", "rsi_modular_v2")):
+    """One build's history wait in its own loop: joins or starts the read, gives up at once."""
+    try:
+        asyncio.run(
+            fs._shared_history(
+                readers,
+                SERVER,
+                list(live),
+                ("ok_rsi_paper",),
+                NOW_MS,
+                last_known,
+                0.01,
+                {},
+            )
+        )
+    except TimeoutError:
+        pass
+
+
+def test_a_completing_worker_never_removes_its_replacement(monkeypatch, store):
+    import threading
+
+    class GatedJobs(dict):
+        """Parks a worker's completion between its identity check and its removal."""
+
+        def __init__(self):
+            super().__init__()
+            self.armed, self.in_check = False, threading.Event()
+            self.proceed, self.replaced = threading.Event(), threading.Event()
+
+        def get(self, key, default=None):
+            found = super().get(key, default)
+            if self.armed and threading.current_thread().name.startswith(
+                "fleet-history"
+            ):
+                self.armed = False
+                self.in_check.set()
+                self.proceed.wait(
+                    5
+                )  # the completion has checked identity, not yet removed
+            return found
+
+        def __setitem__(self, key, value):
+            super().__setitem__(key, value)
+            if self.in_check.is_set():
+                self.replaced.set()
+
+    reads = _blocking_reads(monkeypatch)
+    readers, last_known = FakeReaders(store), fs.LastKnown()
+    jobs = last_known.history_jobs = GatedJobs()
+    try:
+        _request(readers, last_known)  # read A starts and keeps running
+        assert len(reads) == 1
+        jobs.armed = True
+        reads[0].set()  # A finishes; its completion is parked mid-check
+        assert jobs.in_check.wait(5)
+        replacement = threading.Thread(target=_request, args=(readers, last_known))
+        replacement.start()  # a request that finds A finished and replaces it
+        # With one lock the replacement waits for A's completion; without it, it registers now.
+        jobs.replaced.wait(1.0)
+        jobs.proceed.set()
+        replacement.join(5)
+        assert len(reads) == 2, "the replacement read B started once"
+        (key,) = jobs
+        assert not jobs[key].done(), "B is registered while it runs"
+        _request(readers, last_known)  # a third request joins B
+        assert len(reads) == 2, f"{len(reads)} reads were submitted for one key"
+    finally:
+        jobs.proceed.set()
+        for done in reads:
+            done.set()
+
+
+def test_shutdown_snapshots_the_registry_while_workers_complete(monkeypatch, store):
+    import threading
+
+    class GatedValues(dict):
+        """Pauses an iteration of the registry after its first job."""
+
+        def __init__(self):
+            super().__init__()
+            self.armed, self.paused = False, threading.Event()
+            self.resume, self.removed = threading.Event(), threading.Event()
+
+        def values(self):
+            view = super().values()
+
+            def iterate():
+                for index, value in enumerate(view):
+                    yield value
+                    if index == 0 and self.armed:
+                        self.armed = False
+                        self.paused.set()
+                        self.resume.wait(5)
+
+            return iterate()
+
+        def __delitem__(self, key):
+            super().__delitem__(key)
+            self.removed.set()
+
+    reads = _blocking_reads(monkeypatch)
+    readers = FakeReaders(store)
+    monkeypatch.setattr(routes, "LAST_KNOWN", fs.LastKnown())
+    jobs = routes.LAST_KNOWN.history_jobs = GatedValues()
+    outcome = {}
+
+    def shutdown():
+        try:
+            asyncio.run(routes.stop_refreshes(history_drain_seconds=0.2))
+        except BaseException as exc:  # noqa: BLE001 - the assertion below reports it
+            outcome["error"] = exc
+
+    try:
+        _request(readers, routes.LAST_KNOWN, live=("ok_rsi",))
+        _request(readers, routes.LAST_KNOWN, live=("rsi_modular_v2",))
+        assert len(jobs) == 2
+        jobs.armed = True
+        stopping = threading.Thread(target=shutdown)
+        stopping.start()
+        assert jobs.paused.wait(5)  # shutdown is mid-iteration
+        for done in reads:
+            done.set()  # workers complete and remove their entries
+        jobs.removed.wait(1.0)
+        jobs.resume.set()
+        stopping.join(5)
+        assert "error" not in outcome, repr(outcome.get("error"))
+    finally:
+        jobs.resume.set()
+        for done in reads:
+            done.set()
+        routes.accept_refreshes()
+
+
+def test_one_failing_shutdown_step_never_skips_the_others(monkeypatch, caplog):
+    import logging
+
+    import config_manager
+    from condor import server_data_service
+    from condor.web import app as web_app
+    from condor.web import live_activity_publisher as publisher
+
+    steps = []
+
+    class Service:
+        is_running, has_subscriptions = False, False
+
+        def start(self):
+            pass
+
+        def stop(self):
+            steps.append("service_stopped")
+
+        async def wait_closed(self):
+            steps.append("service_drained")
+
+        async def subscribe(self, *args):
+            pass
+
+        def unsubscribe_all(self, subscriber):
+            steps.append("unsubscribed")
+
+    async def stop_publisher(task):
+        steps.append("publisher_stopped")
+
+    async def broken_summary_stop():
+        raise RuntimeError("dictionary changed size during iteration")
+
+    async def holdings_stop():
+        steps.append("holdings_stopped")
+
+    monkeypatch.setattr(server_data_service, "get_server_data_service", Service)
+    monkeypatch.setattr(
+        config_manager,
+        "get_config_manager",
+        lambda: SimpleNamespace(list_servers=lambda: {}),
+    )
+    monkeypatch.setattr(publisher, "start_publisher", lambda *args: None)
+    monkeypatch.setattr(publisher, "stop_publisher", stop_publisher)
+    monkeypatch.setattr(routes, "stop_refreshes", broken_summary_stop)
+    monkeypatch.setattr(holdings_route, "stop_refreshes", holdings_stop)
+    app = web_app.create_app()
+
+    async def lifespan():
+        async with app.router.lifespan_context(app):
+            pass
+
+    with caplog.at_level(logging.ERROR, logger="condor.web.app"):
+        asyncio.run(lifespan())
+    assert steps == [
+        "publisher_stopped",
+        "holdings_stopped",
+        "unsubscribed",
+        "service_stopped",
+        "service_drained",
+    ]
+    assert "step=fleet_summary_refreshes" in caplog.text

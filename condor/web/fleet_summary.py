@@ -24,11 +24,13 @@ live readers and HTTP.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import contextvars
 import hashlib
 import json
 import math
 import re
+import threading
 import time
 from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass, field
@@ -132,6 +134,8 @@ async def phase_span(name: str):
 class OwnerRead:
     payload: Any = None
     reason: Optional[str] = None  # None when the read succeeded
+    # When the owner body was fetched (None: unknown); a reused body keeps its own.
+    read_at_ms: Optional[float] = None
 
 
 @dataclass
@@ -166,7 +170,54 @@ class LastKnown:
         self.wallet: dict[str, Any] = {}
         self.trading: dict[tuple[str, str], dict] = {}
         self.history: dict[tuple, tuple[float, Any]] = {}
-        self.history_jobs: dict[tuple, asyncio.Future] = {}
+        self.history_jobs: dict[tuple, concurrent.futures.Future] = {}
+        # One lock guards ``history`` and ``history_jobs`` for every party: request loops looking up or
+        # replacing a job, worker threads completing one, and shutdown taking a snapshot. Re-entrant,
+        # because a read that is already done runs its completion in the registering thread.
+        self.history_lock = threading.RLock()
+
+    def history_job(
+        self,
+        key: tuple,
+        start: Callable[[], concurrent.futures.Future],
+        started_ms: float,
+    ) -> concurrent.futures.Future:
+        """The running read for ``key``, else a new one from ``start()``: lookup, replacement and
+        registration are one step, so no completing worker can remove the replacement.
+        """
+        with self.history_lock:
+            job = self.history_jobs.get(key)
+            if job is not None and not job.done():
+                return job
+            job = start()
+            self.history_jobs[key] = job
+            job.add_done_callback(
+                lambda done: self.history_settled(key, done, started_ms)
+            )
+            return job
+
+    def history_settled(
+        self, key: tuple, job: concurrent.futures.Future, started_ms: float
+    ) -> None:
+        """A worker's completion (in its thread): leaves the registry only if it is still the
+        registered job, and stores its result unless a newer read's result is already stored.
+        """
+        with self.history_lock:
+            if self.history_jobs.get(key) is job:
+                del self.history_jobs[key]
+            if not job.cancelled() and job.exception() is None:
+                held = self.history.get(key)
+                if held is None or started_ms >= held[0]:
+                    self.history[key] = (started_ms, job.result())
+
+    def held_history(self, key: tuple) -> Optional[tuple[float, Any]]:
+        with self.history_lock:
+            return self.history.get(key)
+
+    def running_history_jobs(self) -> list[concurrent.futures.Future]:
+        """A snapshot of the reads still running, safe while workers complete."""
+        with self.history_lock:
+            return [job for job in list(self.history_jobs.values()) if not job.done()]
 
 
 class Readers(Protocol):
@@ -455,6 +506,32 @@ TRADING_MAX_RESTRICTIONS = 20
 # ``net_now`` history fallback). It is shown as last known: both sides ``unverified``, own ``observed_ms``.
 TRADING_HOLD_MS = 300_000
 HISTORY_HOLD_MS = 300_000
+_history_threads = 0
+
+
+def _start_history_read(fn: Callable, *args) -> concurrent.futures.Future:
+    """Run one history read on its own daemon thread; the returned future is its completion.
+
+    A read is read-only, so a worker still running at interpreter exit can be abandoned: daemon
+    threads never hold the process open. The registry keeps it to one worker per key.
+    """
+    global _history_threads
+    future: concurrent.futures.Future = concurrent.futures.Future()
+    future.set_running_or_notify_cancel()
+
+    def run() -> None:
+        try:
+            result = fn(*args)
+        except BaseException as exc:  # noqa: BLE001 - delivered to the waiting builds
+            future.set_exception(exc)
+        else:
+            future.set_result(result)
+
+    _history_threads += 1
+    threading.Thread(
+        target=run, name=f"fleet-history-{_history_threads}", daemon=True
+    ).start()
+    return future
 PAIR_RE = re.compile(r"[A-Z0-9]+-[A-Z0-9]+")
 REASON_CODE_RE = re.compile(r"[a-z0-9_]{1,64}")
 SOURCE_RE = re.compile(r"[a-z][a-z0-9_]{0,39}")
@@ -1674,31 +1751,26 @@ async def _shared_history(
     """This build's local history: the one read in flight for its key, else a new one.
 
     The read runs in a worker thread that cannot be cancelled, so it is shared rather than restarted:
-    a build that stops waiting leaves it running for the next build. Past ``timeout`` the build uses
+    a build that stops waiting leaves it running for the next build. The job is the worker's own
+    ``concurrent.futures.Future``, registered until the thread ends, so a later build (or a restarted
+    app on a new event loop) joins it instead of starting a duplicate. Past ``timeout`` the build uses
     the last completed read while it is younger than ``HISTORY_HOLD_MS``; otherwise the read failed.
     """
     key = (server, tuple(live), paper)
-    job = last_known.history_jobs.get(key)
-    if job is not None and job.get_loop() is not asyncio.get_running_loop():
-        job = None  # left by a loop that has since closed
-    if job is None:
-        job = asyncio.ensure_future(
-            asyncio.to_thread(_sync_reads, readers, server, live, read_now_ms, paper)
-        )
-        last_known.history_jobs[key] = job
-
-        def settled(done: asyncio.Future, started_ms: float = read_now_ms) -> None:
-            if last_known.history_jobs.get(key) is done:
-                del last_known.history_jobs[key]
-            if not done.cancelled() and done.exception() is None:
-                last_known.history[key] = (started_ms, done.result())
-
-        job.add_done_callback(settled)
+    job = last_known.history_job(
+        key,
+        lambda: _start_history_read(
+            _sync_reads, readers, server, live, read_now_ms, paper
+        ),
+        read_now_ms,
+    )
     try:
         async with asyncio.timeout(timeout):
-            return await asyncio.shield(job)
+            # wrap_future joins the worker from any loop; the shield keeps a caller that gives up
+            # from cancelling the read the next build will join.
+            return await asyncio.shield(asyncio.wrap_future(job))
     except TimeoutError:
-        held = last_known.history.get(key)
+        held = last_known.held_history(key)
         if held is not None and 0 <= read_now_ms - held[0] <= HISTORY_HOLD_MS:
             phase["outcome"] = "held"
             return held[1]
@@ -2168,13 +2240,23 @@ def project_fleet_summary(inputs: FleetInputs, now_ms: float) -> dict:
             key=lambda f: (f["time_ms"] is not None, f["time_ms"] or 0), reverse=True
         )
         fills = merged[: RECENT_FILLS[view]]
-        times = [f["time_ms"] for f in merged if f["time_ms"] is not None]
         partial = any(read.payload is None for _, read in fill_reads)
+        # The section clock is the feed's: when the fill ledgers were read (the oldest admitted
+        # read), not when the newest fill happened. Each fill keeps its own event time (``time_ms``);
+        # a bot that has not traded for hours still has a current feed.
+        feed_at = min(
+            (
+                read.read_at_ms if read.read_at_ms is not None else inputs.read_at_ms
+                for _, read in fill_reads
+                if read.payload is not None
+            )
+        )
+        stale = now_ms - feed_at > STALE_AFTER_MS["fills"]
         sections["fills"] = _section(
-            "partial" if partial else "ok",
-            max(times) if times else None,
+            "stale" if stale else "partial" if partial else "ok",
+            feed_at,
             STALE_AFTER_MS["fills"],
-            PARTIAL_COVERAGE if partial else None,
+            (OWNER_NOT_CURRENT if stale else PARTIAL_COVERAGE if partial else None),
         )
     else:
         reason = (
@@ -2380,11 +2462,18 @@ def canonical_json(body: dict) -> bytes:
     ).encode()
 
 
+# Clocks of reading and answering, not of owner data: an unchanged fleet keeps its validator across
+# them. The fills section's ``observed_at_ms`` is when the fills feed was read.
+_RESPONSE_CLOCKS = ("generated_at_ms", "sources_read_at_ms")
+
+
 def etag_for(body: dict) -> str:
-    """Strong validator over the body without its clocks, so an unchanged fleet keeps its tag."""
-    stable = {
-        k: v
-        for k, v in body.items()
-        if k not in ("generated_at_ms", "sources_read_at_ms")
-    }
+    """Strong validator over the body without its read and response clocks, so an unchanged fleet
+    keeps its tag. A 304 keeps the client's original body: its clocks are never renewed by it.
+    """
+    stable = {k: v for k, v in body.items() if k not in _RESPONSE_CLOCKS}
+    sections = stable.get("sections")
+    if isinstance(sections, dict) and isinstance(sections.get("fills"), dict):
+        fills = {k: v for k, v in sections["fills"].items() if k != "observed_at_ms"}
+        stable["sections"] = {**sections, "fills": fills}
     return '"' + hashlib.sha256(canonical_json(stable)).hexdigest() + '"'

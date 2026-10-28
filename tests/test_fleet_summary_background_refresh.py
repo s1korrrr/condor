@@ -673,13 +673,13 @@ async def test_serving_older_cached_reads_never_rolls_last_known_evidence_back(
     await gather_at(readers, "glance", NOW_MS + 6_000)
     # T+7 s: the older cached full read set is served.
     clock["s"] = NOW_S + 7
-    served = routes._respond(old_full, "full")
+    served = await routes._respond(old_full, "full")
     assert served["wallet"]["equity"] == "1000", "it still shows its own read"
     # T+8 s: a glance whose account read failed stands on the newest admitted wallet.
     readers.account_read = fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)
     failed = await gather_at(readers, "glance", NOW_MS + 8_000)
     clock["s"] = NOW_S + 8
-    glance = routes._respond(failed, "glance")
+    glance = await routes._respond(failed, "glance")
     assert glance["wallet"]["equity"] == "1100"
     assert glance["wallet"]["held"] is True
 
@@ -697,11 +697,11 @@ async def test_serving_older_cached_reads_never_rolls_a_trading_capability_back(
     readers.runtime_read = runtime_read("ok_rsi", NOW_MS + 5_000, NOW_MS + 5_000)
     await gather_at(readers, "glance", NOW_MS + 6_000)
     clock["s"] = NOW_S + 7
-    routes._respond(old_full, "full")
+    await routes._respond(old_full, "full")
     readers.runtime_read = fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)
     failed = await gather_at(readers, "full", NOW_MS + 8_000)
     clock["s"] = NOW_S + 8
-    trading = card(routes._respond(failed, "full"), "ok_rsi")["trading"]
+    trading = card(await routes._respond(failed, "full"), "ok_rsi")["trading"]
     assert trading["held"] is True
     assert trading["observed_ms"] == NOW_MS + 5_000, "the newest admitted capability"
 
@@ -738,7 +738,7 @@ async def test_projection_writes_no_last_known_state(monkeypatch, store):
     for seconds in (6, 10, 200, 400):
         monkeypatch.setattr(routes.time, "time", lambda s=seconds: NOW_S + s)
         for view in ("full", "glance"):
-            routes._respond(inputs, view)  # what every cached response does
+            await routes._respond(inputs, view)  # what every cached response does
     assert (routes.LAST_KNOWN.wallet, routes.LAST_KNOWN.trading) == before
 
 

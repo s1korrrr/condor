@@ -336,8 +336,10 @@ class FakeReaders:
         if path == "quant-cycles":
             return fs.OwnerRead(quant_cycles(bot))
         if path == "fills":
+            # The ledger was fetched 2 s before NOW, as a live owner read records its fetch time.
             return fs.OwnerRead(
-                fills(bot, NOW_MS - (7 * 60_000 if bot == "ok_rsi" else 2 * 60_000))
+                fills(bot, NOW_MS - (7 * 60_000 if bot == "ok_rsi" else 2 * 60_000)),
+                read_at_ms=NOW_MS - 2_000,
             )
         if path == "operations":
             return fs.OwnerRead(getattr(self, "incident_payload", INCIDENTS))

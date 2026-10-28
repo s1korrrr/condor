@@ -153,11 +153,17 @@ class LastKnown:
       Denied, unconfigured or invalid answers are real answers and are never masked.
     * trading: the last valid capability per (server, bot), used when the owner runtime read failed or
       was rejected, for at most ``TRADING_HOLD_MS`` after its own observation, both sides ``unverified``.
+    * history: the last completed local history read per (server, live bots, paper bots), used when
+      this build's read does not finish within its budget, for at most ``HISTORY_HOLD_MS`` after that
+      read. Its samples keep their own times, so windows still flag the coverage they lack. One read
+      runs at a time per key (``history_jobs``); a build that stops waiting never starts another.
     """
 
     def __init__(self) -> None:
         self.wallet: dict[str, Any] = {}
         self.trading: dict[tuple[str, str], dict] = {}
+        self.history: dict[tuple, tuple[float, Any]] = {}
+        self.history_jobs: dict[tuple, asyncio.Future] = {}
 
 
 class Readers(Protocol):
@@ -445,6 +451,7 @@ TRADING_MAX_RESTRICTIONS = 20
 # A failed owner read may stand on the last good capability this long (the same 5-minute bound as the
 # ``net_now`` history fallback). It is shown as last known: both sides ``unverified``, own ``observed_ms``.
 TRADING_HOLD_MS = 300_000
+HISTORY_HOLD_MS = 300_000
 PAIR_RE = re.compile(r"[A-Z0-9]+-[A-Z0-9]+")
 REASON_CODE_RE = re.compile(r"[a-z0-9_]{1,64}")
 SOURCE_RE = re.compile(r"[a-z][a-z0-9_]{0,39}")
@@ -1397,6 +1404,7 @@ def _bot_cards(
             and performance_limit > 0
             and now_ms / 1000 - performance_at < performance_limit
         )
+        sample = latest_samples.get(bot)
         observations = [
             (q["observed_ms"], q["current"]) if q is not None else (None, False),
             (rt["observed_ms"], rt["current"]) if rt is not None else (None, False),
@@ -1406,6 +1414,16 @@ def _bot_cards(
                     performance_current,
                 )
                 if performance_at is not None
+                else (None, False)
+            ),
+            # A paper owner publishes no native status; its newest recorded simulated sample is its own
+            # report (the runtime status ``updated_at`` the observer stored), kept after owner reads fail.
+            (
+                (
+                    int(round(sample[0].time)),
+                    0 <= now_ms - sample[0].time < OWNER_CURRENT_MS,
+                )
+                if paper and sample is not None
                 else (None, False)
             ),
         ]
@@ -1448,7 +1466,6 @@ def _bot_cards(
 
         net_now = None
         live = _controller_net(page, bot, now_ms)
-        sample = latest_samples.get(bot)
         if live is not None:
             net_now = {
                 "value": fleet_pnl.decimal_text(live[0]),
@@ -1601,6 +1618,51 @@ def _sync_reads(
     return histories, paper_histories
 
 
+async def _shared_history(
+    readers: Readers,
+    server: str,
+    live: list[str],
+    paper: tuple[str, ...],
+    read_now_ms: float,
+    last_known: LastKnown,
+    timeout: Optional[float],
+    phase: dict,
+):
+    """This build's local history: the one read in flight for its key, else a new one.
+
+    The read runs in a worker thread that cannot be cancelled, so it is shared rather than restarted:
+    a build that stops waiting leaves it running for the next build. Past ``timeout`` the build uses
+    the last completed read while it is younger than ``HISTORY_HOLD_MS``; otherwise the read failed.
+    """
+    key = (server, tuple(live), paper)
+    job = last_known.history_jobs.get(key)
+    if job is not None and job.get_loop() is not asyncio.get_running_loop():
+        job = None  # left by a loop that has since closed
+    if job is None:
+        job = asyncio.ensure_future(
+            asyncio.to_thread(_sync_reads, readers, server, live, read_now_ms, paper)
+        )
+        last_known.history_jobs[key] = job
+
+        def settled(done: asyncio.Future, started_ms: float = read_now_ms) -> None:
+            if last_known.history_jobs.get(key) is done:
+                del last_known.history_jobs[key]
+            if not done.cancelled() and done.exception() is None:
+                last_known.history[key] = (started_ms, done.result())
+
+        job.add_done_callback(settled)
+    try:
+        async with asyncio.timeout(timeout):
+            return await asyncio.shield(job)
+    except TimeoutError:
+        held = last_known.history.get(key)
+        if held is not None and 0 <= read_now_ms - held[0] <= HISTORY_HOLD_MS:
+            phase["outcome"] = "held"
+            return held[1]
+        phase["outcome"] = "unavailable"
+        raise
+
+
 async def build_fleet_summary(
     server: str,
     view: str,
@@ -1611,11 +1673,14 @@ async def build_fleet_summary(
     user_id: Any = None,
     clock_ms: Callable[[], float] | None = None,
     last_known: Optional[LastKnown] = None,
+    history_timeout: Optional[float] = None,
 ) -> dict:
     """Compute the whole payload. ``view='glance'`` is the compact projection of the same computation.
 
     ``last_known`` (optional) lets a failed account or owner runtime read stand on the last good
-    observation within its own age bound (see ``LastKnown``)."""
+    observation within its own age bound (see ``LastKnown``). With it, ``history_timeout`` bounds the
+    wait for local history, so a slow history read cannot hold the whole build past its deadline.
+    """
     if view not in VIEWS:
         raise ValueError(f"unknown view {view!r}")
     missing: list[dict] = []
@@ -1674,9 +1739,20 @@ async def build_fleet_summary(
         except Exception:
             pass  # An unavailable status still allows last-known history reads.
         read_now_ms = clock_ms() if clock_ms is not None else now_ms
-        async with phase_span("local_history"):
-            return await asyncio.to_thread(
-                _sync_reads, readers, server, live, read_now_ms, paper_bots
+        async with phase_span("local_history") as phase:
+            if last_known is None:
+                return await asyncio.to_thread(
+                    _sync_reads, readers, server, live, read_now_ms, paper_bots
+                )
+            return await _shared_history(
+                readers,
+                server,
+                live,
+                paper_bots,
+                read_now_ms,
+                last_known,
+                history_timeout,
+                phase,
             )
 
     async def read_market():
@@ -1718,7 +1794,14 @@ async def build_fleet_summary(
         missing.append({"section": "bots", "field": "status", "reason": SOURCE_UNAVAILABLE})
     now_ms = clock_ms() if clock_ms is not None else now_ms
     if isinstance(sync_result, BaseException):
-        histories = {r: [] for r in ("1D", "1W", "1M", "ALL")}
+        # The read was made and failed (or ran out of its budget): name it, as for paper bots.
+        histories = {
+            r: [
+                fleet_pnl.BotHistory(bot, r, reason=fleet_pnl.HISTORY_READ_FAILED)
+                for bot in live
+            ]
+            for r in ("1D", "1W", "1M", "ALL")
+        }
         paper_histories = [
             fleet_pnl.BotHistory(bot, "1D", reason=fleet_pnl.HISTORY_READ_FAILED)
             for bot in paper_bots

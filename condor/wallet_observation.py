@@ -154,7 +154,12 @@ async def _read(client: httpx.AsyncClient, source: dict[str, str], bot: str) -> 
     auth = None
     if source.get("username_env") and source.get("password_env"):
         auth = httpx.BasicAuth(os.environ.get(source["username_env"], ""), os.environ.get(source["password_env"], ""))
-    async with client.stream("GET", source["url"].rstrip("/") + "/runtime-status", params={"bot": bot}, auth=auth) as response:
+    # The monitor view is the owner's bounded monitoring transport: identity, summary, balances and
+    # controllers stay; executor, report and decision histories become counts. The default detail body
+    # carries those histories and grows past MAX_BYTES (a paper owner's reached 2.6 MB on 2026-10-28).
+    params = {"bot": bot, "view": "monitor"}
+    url = source["url"].rstrip("/") + "/runtime-status"
+    async with client.stream("GET", url, params=params, auth=auth) as response:
         if response.status_code != 200:
             raise ValueError(f"Reporting returned {response.status_code}")
         content = bytearray()
@@ -178,9 +183,34 @@ async def observe_runtime(server: str, sources: dict[str, dict[str, str]] | None
                 async with asyncio.timeout(READ_TIMEOUT + 2):
                     bodies[bot] = await _read(client, source, bot)
             except (ValueError, httpx.HTTPError, TimeoutError, json.JSONDecodeError) as exc:
-                logger.debug("Runtime status unavailable for %s/%s: %s", server, bot, exc)
                 bodies[bot] = None
+                _note_read(server, bot, f"{type(exc).__name__}: {exc}")
+            else:
+                _note_read(server, bot, None)
     return bodies
+
+
+# The last read failure logged per (server, bot): a failure is logged when it first appears or changes,
+# and its recovery once, so a runtime source that stops answering names its cause without flooding logs.
+_read_failures: dict[tuple[str, str], str] = {}
+
+
+def _note_read(server: str, bot: str, reason: str | None) -> None:
+    key = (server, bot)
+    previous = _read_failures.get(key)
+    if reason is None:
+        if previous is not None:
+            del _read_failures[key]
+            logger.info("event=runtime_status_recovered server=%s bot=%s", server, bot)
+        return
+    if reason != previous:
+        _read_failures[key] = reason
+        logger.warning(
+            "event=runtime_status_unavailable server=%s bot=%s reason=%r",
+            server,
+            bot,
+            reason,
+        )
 
 
 def _samples(bodies: dict[str, object | None], paper: bool) -> dict[str, dict | None]:

@@ -15,11 +15,14 @@ from __future__ import annotations
 
 import hashlib
 import json
+import logging
 import re
 from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from condor.fleet_identity import is_paper
+
+logger = logging.getLogger(__name__)
 
 STALE_AFTER_SECONDS = (
     120  # the reporting owner republishes runtime status every few seconds
@@ -118,13 +121,39 @@ def project_paper(payload: object, bot: str, now: float) -> dict:
 def paper_samples(
     bodies: dict[str, object | None], now: float
 ) -> dict[str, dict | None]:
-    """One simulated point per paper bot read; None when the read or validation failed. Live bots are skipped."""
+    """One simulated point per paper bot read; None when the read or validation failed. Live bots are skipped.
+
+    A rejected report is logged once when its reason first appears or changes, and its recovery once, so
+    a paper history that stops recording names its cause.
+    """
     samples: dict[str, dict | None] = {}
     for bot, body in bodies.items():
         if not is_paper(bot):
             continue
+        if body is None:
+            samples[bot] = None  # a failed read; the runtime reader logs its own reason
+            continue
+        reason = None
         try:
-            samples[bot] = None if body is None else project_paper(body, bot, now)
-        except (ValueError, TypeError, KeyError, AttributeError):
+            samples[bot] = project_paper(body, bot, now)
+        except (ValueError, TypeError, KeyError, AttributeError) as exc:
             samples[bot] = None
+            reason = f"{type(exc).__name__}: {exc}"
+        _note_rejection(bot, reason)
     return samples
+
+
+# The last rejection reason logged per paper bot (process memory; only for transition logging).
+_rejections: dict[str, str] = {}
+
+
+def _note_rejection(bot: str, reason: str | None) -> None:
+    previous = _rejections.get(bot)
+    if reason is None:
+        if previous is not None:
+            del _rejections[bot]
+            logger.info("event=paper_sample_recovered bot=%s", bot)
+        return
+    if reason != previous:
+        _rejections[bot] = reason
+        logger.warning("event=paper_sample_rejected bot=%s reason=%r", bot, reason)

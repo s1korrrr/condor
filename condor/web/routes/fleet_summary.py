@@ -42,9 +42,9 @@ OWNER_REUSE_SECONDS = 4.0
 CACHE_TTL_SECONDS = (
     5.0  # one computation serves a burst of dashboard, phone and watch polls
 )
-# Past its cache life a completed body is still served, re-judged at the request's clock, while one
-# background rebuild runs, for at most this long after it was generated. A build is bounded by
-# TOTAL_TIMEOUT, so a working source always lands a newer body well inside this window.
+# Past their cache life completed reads still serve, projected at each request's clock, while one
+# background rebuild runs, for at most this long after they were read. A build is bounded by
+# TOTAL_TIMEOUT, so a working source always lands newer reads well inside this window.
 STALE_SERVE_SECONDS = 60.0
 HEADERS = {
     "Cache-Control": "private, no-cache",
@@ -60,7 +60,8 @@ HISTORY_WINDOW = "6h"  # the verdict replays the last six hours of stored breadt
 # must never be returned as a full payload. Each view coalesces its own builds:
 # a slow full read must not consume a glance request's deadline in lock wait.
 # At most one full and one glance computation run for a server/principal key.
-# Entries hold full-shape bodies (``full_shape=True``) with the monotonic instant their cache life ends.
+# Entries hold what a build read (``FleetInputs``), never a judged body, with the monotonic instant
+# their cache life ends. Every response projects them at its own clock.
 _cache: dict[tuple[str, bool], dict[str, tuple[float, dict]]] = {}
 _locks: dict[tuple[str, bool, str], asyncio.Lock] = {}
 # At most one background rebuild per server/principal key and view.
@@ -314,18 +315,27 @@ def _http_wallet_projection(body: dict, native_claims: bool) -> dict:
     return body
 
 
-def _completed(key: tuple, view: str, now: float) -> Optional[tuple[bool, dict]]:
-    """``(fresh, body)`` for the newest completed full-shape body that can serve ``view``, else None.
+def _completed(
+    key: tuple, view: str, now: float
+) -> Optional[tuple[bool, summary.FleetInputs]]:
+    """``(fresh, inputs)`` for the newest completed read set that can serve ``view``, else None.
 
-    A full build serves either view; a glance build (its smaller read set) serves only a glance.
+    A full read set serves either view; a glance read set (smaller) serves only a glance.
     """
     entry = _cache.get(key, {})
     rows = [entry.get("full")] + ([entry.get("glance")] if view == "glance" else [])
     rows = [row for row in rows if row is not None]
     if not rows:
         return None
-    expires, body = max(rows, key=lambda row: row[1]["generated_at_ms"])
-    return expires > now, body
+    expires, inputs = max(rows, key=lambda row: row[1].read_at_ms)
+    return expires > now, inputs
+
+
+def _respond(inputs: summary.FleetInputs, view: str) -> dict:
+    """The response a read set gives now: the build's own projection at this request's clock, so a
+    cached read set answers exactly as a fresh build from identical reads would."""
+    body = summary.project_fleet_summary(inputs, time.time() * 1000, LAST_KNOWN)
+    return summary.glance(body) if view == "glance" else body
 
 
 async def cached_summary(
@@ -333,23 +343,22 @@ async def cached_summary(
 ) -> dict:
     """One view through the shared cache. Raises TimeoutError only when nothing completed can serve.
 
-    Every response is re-judged at the request's clock (``fleet_summary.aged``: values keep their own
-    times, current claims only age), cache hits included. Past its cache life, the newest completed
-    body is served for up to ``STALE_SERVE_SECONDS`` after it was generated while exactly one
-    background rebuild runs. Only with nothing completed in that window does a request wait for a build.
+    The cache keeps what a build read, never a judged body: every response projects the reads at its
+    own clock. Within ``CACHE_TTL_SECONDS`` of the reads they are served as they are. Past that, they
+    serve for up to ``STALE_SERVE_SECONDS`` after they were read while exactly one background rebuild
+    runs. Only with nothing read in that window does a request wait for a build.
     """
     if view not in summary.VIEWS:
         raise ValueError(f"unknown view {view!r}")
     key = (name, admin)
     done = _completed(key, view, time.monotonic())
     if done is not None:
-        fresh, body = done
-        now_ms = time.time() * 1000
+        fresh, inputs = done
         if fresh:
-            return summary.served(body, view, now_ms)
-        if 0 <= now_ms - body["generated_at_ms"] <= STALE_SERVE_SECONDS * 1000:
+            return _respond(inputs, view)
+        if 0 <= time.time() * 1000 - inputs.read_at_ms <= STALE_SERVE_SECONDS * 1000:
             _refresh(key, view, user_id)
-            return summary.served(body, view, now_ms)
+            return _respond(inputs, view)
     return await _build(key, view, user_id)
 
 
@@ -366,7 +375,7 @@ def _refresh(key: tuple, view: str, user_id: Any) -> None:
         try:
             await _build(key, view, user_id, cache_status="refresh")
         except TimeoutError:
-            pass  # logged by _build with its phases; the completed body keeps serving
+            pass  # logged by _build with its phases; the completed reads keep serving
         except Exception:
             logger.exception("event=fleet_summary_refresh_failed view=%s", view)
         finally:
@@ -379,7 +388,7 @@ def _refresh(key: tuple, view: str, user_id: Any) -> None:
 async def _build(
     key: tuple, view: str, user_id: Any, *, cache_status: str = "pending"
 ) -> dict:
-    """Build one view under its lock and the total deadline, or serve a body completed while waiting."""
+    """Read one view under its lock and the total deadline, or serve reads completed while waiting."""
     name, admin = key
     trace = _SummaryPhaseRecorder()
     started = time.monotonic()
@@ -396,12 +405,12 @@ async def _build(
                     done = _completed(key, view, time.monotonic())
                     if done is not None and done[0]:
                         cache_status = "hit"
-                        return summary.served(done[1], view, time.time() * 1000)
+                        return _respond(done[1], view)
 
                     if cache_status != "refresh":
                         cache_status = "miss"
                     async with summary.phase_span("summary.build"):
-                        body = await summary.build_fleet_summary(
+                        inputs = await summary.gather_fleet_inputs(
                             name,
                             view,
                             READERS,
@@ -411,12 +420,11 @@ async def _build(
                             clock_ms=lambda: time.time() * 1000,
                             last_known=LAST_KNOWN,
                             history_timeout=HISTORY_TIMEOUT,
-                            full_shape=True,
                         )
                     if CACHE_TTL_SECONDS > 0:
                         expires = time.monotonic() + CACHE_TTL_SECONDS
-                        _cache.setdefault(key, {})[view] = (expires, body)
-                    return summary.served(body, view, time.time() * 1000)
+                        _cache.setdefault(key, {})[view] = (expires, inputs)
+                    return _respond(inputs, view)
                 finally:
                     if acquired:
                         lock.release()

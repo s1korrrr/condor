@@ -25,7 +25,6 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
-import copy
 import hashlib
 import json
 import math
@@ -290,8 +289,6 @@ def project_quant_summary(payload: Any, bot: str, now_ms: float) -> Optional[dic
             observed if observed is not None else _instant_ms(known.get("observed_at"))
         ),
         "current": current,
-        # Internal (never in the payload): the instant this observation stops being current.
-        "current_until_ms": observed + OWNER_CURRENT_MS if current else None,
         "admitted": admitted,
         "open_cycles": _nonneg_int(counts.get("open")),
     }
@@ -455,10 +452,6 @@ TRADING_MAX_RESTRICTIONS = 20
 # ``net_now`` history fallback). It is shown as last known: both sides ``unverified``, own ``observed_ms``.
 TRADING_HOLD_MS = 300_000
 HISTORY_HOLD_MS = 300_000
-# A card's ``net_now`` may come from the newest stored sample while it is at most this old.
-NET_HISTORY_MS = 300_000
-# A day window's newest sample is stale past its read spacing plus 90 s (``fleet_pnl.bot_window``).
-DAY_SAMPLE_STALE_MS = fleet_pnl.gap_ms(None) + fleet_pnl.SAMPLE_GAP_MS
 PAIR_RE = re.compile(r"[A-Z0-9]+-[A-Z0-9]+")
 REASON_CODE_RE = re.compile(r"[a-z0-9_]{1,64}")
 SOURCE_RE = re.compile(r"[a-z][a-z0-9_]{0,39}")
@@ -616,13 +609,10 @@ def project_runtime_view(payload: Any, bot: str, now_ms: float) -> Optional[dict
         for row in controllers
     ):
         return None
-    current_for_ms = min(threshold, RUNTIME_STALE_CAP_S) * 1000
-    current = now_ms - observed < current_for_ms
+    current = now_ms - observed < min(threshold, RUNTIME_STALE_CAP_S) * 1000
     return {
         "observed_ms": observed,
         "current": current,
-        # Internal (never in the payload): the instant this observation stops being current.
-        "current_until_ms": observed + current_for_ms if current else None,
         "trading": project_trading(runtime.get("trading_capability"), current),
         "executors": len(active),
     }
@@ -738,18 +728,6 @@ def project_incidents(payload: Any, now_ms: float) -> Optional[dict]:
         "items": detail_rows,
         "items_truncated": items_truncated,
     }
-
-
-def incident_fresh_until(payload: Any) -> Optional[int]:
-    """When ``project_incidents`` stops calling the store fresh: both the store generation and the
-    monitor's last cycle must be within ``STALE_AFTER_MS['incidents']``; the older one ends it.
-    """
-    store = _obj(_obj(payload).get("incident_store"))
-    generated = _instant_ms(store.get("generated_at"))
-    last_cycle = _instant_ms(_obj(store.get("monitor")).get("last_cycle_at"))
-    if generated is None or last_cycle is None:
-        return None
-    return min(generated, last_cycle) + STALE_AFTER_MS["incidents"]
 
 
 def _incident_text(value: Any, limit: int) -> tuple[Optional[str], bool, bool]:
@@ -1137,31 +1115,6 @@ def _native_fresh(observed: Any, threshold: Any, now_ms: float) -> bool:
     return -5_000 <= age_ms < min(threshold, RUNTIME_STALE_CAP_S) * 1000
 
 
-def _controller_current_until(page: Optional[dict], bot: str) -> Optional[float]:
-    """When ``_controller_net``'s currency ends: both native observations stop being fresh at
-    ``observed + min(threshold, 30 s)`` (``_native_fresh``); the earlier one ends it."""
-    rows = [
-        row
-        for row in (page or {}).get("bots", [])
-        if isinstance(row, dict) and row.get("bot_name") == bot
-    ]
-    if len(rows) != 1:
-        return None
-    ends = []
-    for observed_key, threshold_key in (
-        ("status_received_at", "status_stale_after_seconds"),
-        ("performance_received_at", "performance_stale_after_seconds"),
-    ):
-        observed, threshold = rows[0].get(observed_key), rows[0].get(threshold_key)
-        if not all(
-            isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v)
-            for v in (observed, threshold)
-        ):
-            return None
-        ends.append(observed * 1000 + min(threshold, RUNTIME_STALE_CAP_S) * 1000)
-    return min(ends)
-
-
 def _native_amount(value: Any) -> Optional[Decimal]:
     """A finite JSON number, as the dashboard's ``finite()`` admits it; anything else is unknown."""
     if isinstance(value, bool) or not isinstance(value, (int, float)):
@@ -1367,14 +1320,9 @@ def _bot_cards(
     missing: list,
     paper_day: Optional[dict[str, fleet_pnl.FleetWindow]] = None,
     trading: Optional[dict[str, Optional[dict]]] = None,
-    aging: Optional[dict[str, dict]] = None,
 ) -> list[dict]:
     """One card per bot. A paper card carries its own simulated numbers (``simulated: true``); its gaps
-    stay on the card and never enter the fleet ``missing`` list.
-
-    ``aging`` (optional) receives, per bot, the instant each current claim on the card expires under
-    the rule that set it, so a completed body served later can be re-judged (see ``aged``).
-    """
+    stay on the card and never enter the fleet ``missing`` list."""
     status_by_bot = {b.get("bot_name"): b for b in (page or {}).get("bots", [])}
     day_by_bot = {w.bot: w for w in day.bots}
     paper_day = paper_day or {}
@@ -1457,30 +1405,16 @@ def _bot_cards(
             and now_ms / 1000 - performance_at < performance_limit
         )
         sample = latest_samples.get(bot)
-        # (stamp, current, current until): the last is when a current observation stops being current.
         observations = [
-            (
-                (q["observed_ms"], q["current"], q["current_until_ms"])
-                if q is not None
-                else (None, False, None)
-            ),
-            (
-                (rt["observed_ms"], rt["current"], rt["current_until_ms"])
-                if rt is not None
-                else (None, False, None)
-            ),
+            (q["observed_ms"], q["current"]) if q is not None else (None, False),
+            (rt["observed_ms"], rt["current"]) if rt is not None else (None, False),
             (
                 (
                     int(round(performance_at * 1000)),
                     performance_current,
-                    (
-                        (performance_at + performance_limit) * 1000
-                        if performance_current
-                        else None
-                    ),
                 )
                 if performance_at is not None
-                else (None, False, None)
+                else (None, False)
             ),
             # A paper owner publishes no native status; its newest recorded simulated sample is its own
             # report (the runtime status ``updated_at`` the observer stored), kept after owner reads fail.
@@ -1488,27 +1422,22 @@ def _bot_cards(
                 (
                     int(round(sample[0].time)),
                     0 <= now_ms - sample[0].time < OWNER_CURRENT_MS,
-                    sample[0].time + OWNER_CURRENT_MS,
                 )
                 if paper and sample is not None
-                else (None, False, None)
+                else (None, False)
             ),
         ]
         # The age and current flag must describe the same source. Prefer a
         # current owner observation before retaining an older source's clock.
-        report_at, report_current, report_until = next(
+        report_at, report_current = next(
             (
-                (stamp, current, until)
-                for stamp, current, until in observations
+                (stamp, current)
+                for stamp, current in observations
                 if stamp is not None and current
             ),
             next(
-                (
-                    (stamp, False, None)
-                    for stamp, _, _ in observations
-                    if stamp is not None
-                ),
-                (None, False, None),
+                ((stamp, False) for stamp, _ in observations if stamp is not None),
+                (None, False),
             ),
         )
         if report_at is None:
@@ -1545,18 +1474,18 @@ def _bot_cards(
             }
             if paper:
                 net_now["simulated"] = True
-        # The newest stored sample stands in for the controller report while it is within 5 minutes.
-        history_net = None
-        if sample is not None and now_ms - sample[0].time <= NET_HISTORY_MS:
-            history_net = {
+        if (
+            net_now is None
+            and sample is not None
+            and now_ms - sample[0].time <= 300_000
+        ):
+            net_now = {
                 "value": fleet_pnl.decimal_text(sample[0].total),
                 "unit": sample[1],
                 "source": "history",
             }
             if paper:
-                history_net["simulated"] = True
-        if net_now is None and history_net is not None:
-            net_now = dict(history_net)
+                net_now["simulated"] = True
         if net_now is None:
             gap("net_now", fleet_pnl.NO_SAMPLES)
 
@@ -1617,47 +1546,6 @@ def _bot_cards(
         if capability is None and not paper:
             # A live owner always publishes its capability; its absence is a failed or rejected read.
             gap("trading", runtime_reason or INVALID)
-
-        if aging is not None:
-            aging[bot] = {
-                "report_until_ms": report_until if report_current else None,
-                "positions_until_ms": (
-                    held["observed_at_ms"] + held["stale_after_ms"]
-                    if positions is not None and positions["current"]
-                    else None
-                ),
-                "pnl_day_until_ms": (
-                    day_window.last_at + DAY_SAMPLE_STALE_MS
-                    if pnl_day is not None
-                    and not pnl_day["stale"]
-                    and day_window.last_at is not None
-                    else None
-                ),
-                # Recorded while either side still makes a verified claim.
-                "trading_until_ms": (
-                    rt["current_until_ms"]
-                    if capability is not None
-                    and rt is not None
-                    and (
-                        capability["buy"] != "unverified"
-                        or capability["sell"] != "unverified"
-                    )
-                    else None
-                ),
-                "net_now": {
-                    "controller_until_ms": (
-                        _controller_current_until(page, bot)
-                        if live is not None
-                        else None
-                    ),
-                    "history": history_net,
-                    "history_until_ms": (
-                        sample[0].time + NET_HISTORY_MS
-                        if history_net is not None
-                        else None
-                    ),
-                },
-            }
 
         cards.append(
             {
@@ -1775,6 +1663,29 @@ async def _shared_history(
         raise
 
 
+@dataclass
+class FleetInputs:
+    """Everything one summary build read, before any projection. Projecting the same inputs at a later
+    clock gives exactly what a fresh build from identical reads would give at that clock.
+    """
+
+    server: str
+    view: str
+    is_admin: bool
+    bots: list
+    live: list
+    paper_bots: tuple
+    incident_bot: Optional[str]
+    owner_jobs: list
+    missing: list  # roster entries found before the reads (REGISTRY_FROM_STATUS)
+    status_raw: Any
+    sync_result: Any
+    market_result: Any
+    account_result: Any
+    owner_results: list
+    read_at_ms: float  # when the reads completed
+
+
 async def build_fleet_summary(
     server: str,
     view: str,
@@ -1786,22 +1697,44 @@ async def build_fleet_summary(
     clock_ms: Callable[[], float] | None = None,
     last_known: Optional[LastKnown] = None,
     history_timeout: Optional[float] = None,
-    full_shape: bool = False,
 ) -> dict:
     """Compute the whole payload. ``view='glance'`` is the compact projection of the same computation.
 
     ``last_known`` (optional) lets a failed account or owner runtime read stand on the last good
     observation within its own age bound (see ``LastKnown``). With it, ``history_timeout`` bounds the
     wait for local history, so a slow history read cannot hold the whole build past its deadline.
-
-    ``full_shape=True`` returns the unprojected body of ``view``'s read set, with a private ``_aging``
-    map of when each current claim expires. It is for a cache that serves the body later through
-    ``served``; ``_aging`` is never part of a served payload.
     """
+    inputs = await gather_fleet_inputs(
+        server,
+        view,
+        readers,
+        now_ms,
+        is_admin=is_admin,
+        user_id=user_id,
+        clock_ms=clock_ms,
+        last_known=last_known,
+        history_timeout=history_timeout,
+    )
+    body = project_fleet_summary(inputs, inputs.read_at_ms, last_known)
+    return glance(body) if view == "glance" else body
+
+
+async def gather_fleet_inputs(
+    server: str,
+    view: str,
+    readers: Readers,
+    now_ms: float,
+    *,
+    is_admin: bool,
+    user_id: Any = None,
+    clock_ms: Callable[[], float] | None = None,
+    last_known: Optional[LastKnown] = None,
+    history_timeout: Optional[float] = None,
+) -> FleetInputs:
+    """Every source read of one build, run together; each fails into its own reason code."""
     if view not in VIEWS:
         raise ValueError(f"unknown view {view!r}")
     missing: list[dict] = []
-    sections: dict[str, dict] = {}
 
     async def read_status():
         async with phase_span("status_read") as phase:
@@ -1901,15 +1834,52 @@ async def build_fleet_summary(
         *[read_owner(bot, path, params) for bot, path, params in owner_jobs],
         return_exceptions=True,
     )
+    return FleetInputs(
+        server=server,
+        view=view,
+        is_admin=is_admin,
+        bots=bots,
+        live=live,
+        paper_bots=paper_bots,
+        incident_bot=incident_bot,
+        owner_jobs=owner_jobs,
+        missing=list(missing),
+        status_raw=results[0],
+        sync_result=results[1],
+        market_result=results[2],
+        account_result=results[3],
+        owner_results=list(results[4:]),
+        read_at_ms=clock_ms() if clock_ms is not None else now_ms,
+    )
+
+
+def project_fleet_summary(
+    inputs: FleetInputs, now_ms: float, last_known: Optional[LastKnown] = None
+) -> dict:
+    """The full-shape payload of ``inputs`` judged at ``now_ms``: every currency rule of the build,
+    applied at that clock. ``glance`` projects the compact view. Pure apart from ``last_known``, which
+    it consults and updates exactly as a build does."""
+    server, view, is_admin = inputs.server, inputs.view, inputs.is_admin
+    bots, live, paper_bots = inputs.bots, inputs.live, inputs.paper_bots
+    incident_bot, owner_jobs = inputs.incident_bot, inputs.owner_jobs
+    missing: list[dict] = [dict(item) for item in inputs.missing]
+    sections: dict[str, dict] = {}
     status_raw, sync_result, market_result, account_result, owner_results = (
-        results[0], results[1], results[2], results[3], results[4:]
+        inputs.status_raw,
+        inputs.sync_result,
+        inputs.market_result,
+        inputs.account_result,
+        inputs.owner_results,
     )
     if isinstance(status_raw, BaseException):
         status_raw = None
-    page = build_bots_page(status_raw) if status_raw is not None else None
+    page = (
+        build_bots_page(status_raw, now=now_ms / 1000)
+        if status_raw is not None
+        else None
+    )
     if page is None:
         missing.append({"section": "bots", "field": "status", "reason": SOURCE_UNAVAILABLE})
-    now_ms = clock_ms() if clock_ms is not None else now_ms
     if isinstance(sync_result, BaseException):
         # The read was made and failed (or ran out of its budget): name it, as for paper bots.
         histories = {
@@ -2062,7 +2032,6 @@ async def build_fleet_summary(
             else None
         )
     day_window = windows.get("day") or fleet_pnl.fleet_window([], [], 0, 0, 0)
-    card_aging: dict[str, dict] = {}
     # Each paper bot's own simulated day change, for its card only: never part of a fleet window
     # (one window per bot, so two paper quotes never compete).
     paper_day = {
@@ -2091,7 +2060,6 @@ async def build_fleet_summary(
             missing,
             paper_day,
             trading,
-            card_aging,
         )
         if bots
         else []
@@ -2205,6 +2173,9 @@ async def build_fleet_summary(
         "view": view,
         "server": server,
         "generated_at_ms": int(now_ms),
+        # When the sources were read. A cached build is projected again at each response's clock, so
+        # this can be older than ``generated_at_ms``; every value still carries its own observation time.
+        "sources_read_at_ms": int(inputs.read_at_ms),
         "sections": sections,
         "missing": missing,
         "wallet": wallet,
@@ -2229,208 +2200,7 @@ async def build_fleet_summary(
     }
     if view == "full":
         body["paper_fills"] = paper_fills
-    if full_shape:
-        body["_aging"] = {
-            "cards": card_aging,
-            "incidents_until_ms": (
-                incident_fresh_until(owner[(incident_bot, "operations")].payload)
-                if incidents is not None and incidents["state"] != "unknown"
-                else None
-            ),
-        }
-        return body
-    return glance(body) if view == "glance" else body
-
-
-PNL_WINDOW_RANGES = {"day": "1D", "week": "1W", "month": "1M", "all": "ALL"}
-_FRESHNESS_RANK = {"fresh": 0, "lagging": 1, "stale": 2}
-
-
-def _stale_section(
-    section: dict, now_ms: float, reason: str = OWNER_NOT_CURRENT
-) -> bool:
-    """Mark an ``ok``/``partial`` section stale once its own observation is past ``stale_after_ms``."""
-    observed, limit = section.get("observed_at_ms"), section.get("stale_after_ms")
-    if (
-        section["status"] in ("ok", "partial")
-        and observed is not None
-        and limit is not None
-        and now_ms - observed > limit
-    ):
-        section.update(status="stale", reason=reason)
-        return True
-    return False
-
-
-def aged(body: dict, now_ms: float) -> dict:
-    """A completed full-shape body (``full_shape=True``) re-judged at ``now_ms``, for serving after its
-    cache life while a rebuild runs.
-
-    Values are unchanged: each keeps its own observation time and ``generated_at_ms`` stays the build
-    time, so a client ages them exactly as it would a fresh body. Every current claim is re-judged by
-    the rule the build applies, and only ever ages: a stale flag never becomes current. A card's
-    ``net_now`` falls back from the controller report to the stored sample, then to unknown
-    (``NO_SAMPLES``), as the build chooses them. Fills carry no currency claim and are left as built.
-    """
-    out = copy.deepcopy(body)
-    aging = out.pop("_aging", None) or {}
-    cards_aging = aging.get("cards", {})
-    sections = out["sections"]
-
-    incidents = out.get("incidents")
-    incidents_until = aging.get("incidents_until_ms")
-    if (
-        incidents is not None
-        and incidents["state"] != "unknown"
-        and incidents_until is not None
-        and now_ms > incidents_until
-    ):
-        # As project_incidents and the build judge a store or monitor cycle past its bound.
-        incidents["state"] = "unknown"
-        sections["incidents"].update(status="stale", reason=OWNER_NOT_CURRENT)
-
-    wallet = out.get("wallet")
-    if (
-        wallet is not None
-        and wallet.get("observed_at_ms") is not None
-        and now_ms - wallet["observed_at_ms"] > STALE_AFTER_MS["wallet"]
-    ):
-        wallet["stale"] = True
-        # An incomplete valuation stays partial, as the build judges it.
-        if sections["wallet"]["status"] == "ok":
-            sections["wallet"].update(status="stale", reason=OWNER_NOT_CURRENT)
-
-    pnl = out.get("pnl")
-    if pnl is not None:
-        _stale_section(sections["pnl"], now_ms)
-        for name, range_ in PNL_WINDOW_RANGES.items():
-            window = pnl.get(name)
-            if not isinstance(window, dict):
-                continue
-            limit = (
-                fleet_pnl.gap_ms(fleet_pnl.PERFORMANCE_BUCKETS.get(range_))
-                + fleet_pnl.SAMPLE_GAP_MS
-            )
-            for row in window.get("bots") or []:
-                if row["last_at_ms"] is None or now_ms - row["last_at_ms"] > limit:
-                    row["stale"] = True
-            latest = window.get("latest_at_ms")
-            # Past the limit, every counted bot's newest sample is older than it.
-            if latest is not None and now_ms - latest > limit:
-                window["stale"] = True
-
-    market = out.get("market")
-    if market is not None:
-        frame = market["frame"]
-        freshness = _freshness(frame, now_ms)
-        rank = _FRESHNESS_RANK.get(frame["freshness"], 3)
-        if freshness in _FRESHNESS_RANK and _FRESHNESS_RANK[freshness] > rank:
-            frame["freshness"] = freshness
-            sections["market"].update(
-                status="stale" if freshness == "stale" else "partial",
-                reason="FRAME_" + freshness.upper(),
-            )
-
-    for card in out.get("bots", []):
-        expiry = cards_aging.get(card["bot"], {})
-
-        def expired(name: str, *, strict: bool = False) -> bool:
-            # Each rule's own boundary: currency ends at ``until``; a day sample is stale only past it.
-            until = expiry.get(name)
-            return until is not None and (now_ms > until if strict else now_ms >= until)
-
-        if not card["report_stale"] and (
-            card["report_at_ms"] is None or expired("report_until_ms")
-        ):
-            card["report_stale"] = True
-        if (
-            card["positions"] is not None
-            and card["positions"]["current"]
-            and expired("positions_until_ms")
-        ):
-            card["positions"]["current"] = False
-        if (
-            card["pnl_day"] is not None
-            and not card["pnl_day"]["stale"]
-            and expired("pnl_day_until_ms", strict=True)
-        ):
-            card["pnl_day"]["stale"] = True
-        trading = card.get("trading")
-        if trading is not None and expired("trading_until_ms"):
-            # As project_trading judges a capability that is no longer current.
-            trading.update(buy="unverified", sell="unverified")
-
-        net, net_rule = card.get("net_now"), expiry.get("net_now") or {}
-        if net is not None and net_rule:
-            if net["source"] == "controller":
-                until = net_rule.get("controller_until_ms")
-                if until is not None and now_ms >= until:
-                    history = net_rule.get("history")
-                    history_until = net_rule.get("history_until_ms")
-                    net = (
-                        dict(history)
-                        if history is not None and now_ms <= history_until
-                        else None
-                    )
-            elif net["source"] == "history":
-                until = net_rule.get("history_until_ms")
-                if until is not None and now_ms > until:
-                    net = None
-            card["net_now"] = net
-            if net is None:
-                _card_gap(out, card, "net_now", fleet_pnl.NO_SAMPLES)
-
-    live = [c for c in out.get("bots", []) if not c["paper"]]
-    if "bot_counts" in out:
-        out["bot_counts"]["live_stale_reports"] = sum(c["report_stale"] for c in live)
-    bots_section = sections.get("bots")
-    if bots_section is not None and bots_section["status"] != "missing":
-        if any(c["report_stale"] for c in live):
-            bots_section.update(status="stale", reason=OWNER_NOT_CURRENT)
-        elif bots_section["status"] == "ok" and any(c.get("missing") for c in live):
-            bots_section.update(status="partial", reason=FIELDS_MISSING)
-    return out
-
-
-# The order ``_bot_cards`` lists a card's gaps in, so an aged gap sits where a fresh build puts it.
-_CARD_GAP_ORDER = (
-    "status",
-    "positions",
-    "executors",
-    "report_at_ms",
-    "pnl_day",
-    "net_now",
-    "fees",
-    "trades",
-    "trading",
-)
-
-
-def _card_gap(body: dict, card: dict, field: str, reason: str) -> None:
-    gap = {"field": field, "reason": reason}
-    rank = _CARD_GAP_ORDER.index(field)
-    index = next(
-        (
-            i
-            for i, row in enumerate(card["missing"])
-            if row["field"] in _CARD_GAP_ORDER
-            and _CARD_GAP_ORDER.index(row["field"]) > rank
-        ),
-        len(card["missing"]),
-    )
-    card["missing"].insert(index, gap)
-    if not card["paper"]:  # a paper card's gaps stay on the card
-        body["missing"].append(
-            {"section": "bots", "bot": card["bot"], "field": field, "reason": reason}
-        )
-
-
-def served(body: dict, view: str, now_ms: float) -> dict:
-    """The payload a cached full-shape body serves for ``view`` at ``now_ms``. Every response is aged,
-    including a cache hit a moment after its build: at its own generation time aging changes nothing.
-    """
-    body = aged(body, now_ms)
-    return glance(body) if view == "glance" else body
+    return body
 
 
 def glance(full: dict) -> dict:
@@ -2443,6 +2213,7 @@ def glance(full: dict) -> dict:
         "view": "glance",
         "server": full["server"],
         "generated_at_ms": full["generated_at_ms"],
+        "sources_read_at_ms": full["sources_read_at_ms"],
         "sections": full["sections"],
         "missing": [
             {
@@ -2498,7 +2269,19 @@ def glance(full: dict) -> dict:
                 "paper": c["paper"],
                 "status": c["status"],
                 "report_stale": c["report_stale"],
-                "pnl_day": None if c["pnl_day"] is None else c["pnl_day"]["change"],
+                # The glance carries no per-bot flags, so a day change that is no longer current is
+                # withheld rather than shown as current; ``pnl_day_stale: true`` (present only then)
+                # says why it is null.
+                "pnl_day": (
+                    None
+                    if c["pnl_day"] is None or c["pnl_day"].get("stale") is True
+                    else c["pnl_day"]["change"]
+                ),
+                **(
+                    {"pnl_day_stale": True}
+                    if c["pnl_day"] is not None and c["pnl_day"].get("stale") is True
+                    else {}
+                ),
                 # One word keeps the Watch glance under its 8 KiB budget; the full view has the detail.
                 "trading": None if c.get("trading") is None else trading_word(c["trading"]),
             }
@@ -2533,6 +2316,10 @@ def canonical_json(body: dict) -> bytes:
 
 
 def etag_for(body: dict) -> str:
-    """Strong validator over the body without its generation clock, so an unchanged fleet keeps its tag."""
-    stable = {k: v for k, v in body.items() if k != "generated_at_ms"}
+    """Strong validator over the body without its clocks, so an unchanged fleet keeps its tag."""
+    stable = {
+        k: v
+        for k, v in body.items()
+        if k not in ("generated_at_ms", "sources_read_at_ms")
+    }
     return '"' + hashlib.sha256(canonical_json(stable)).hexdigest() + '"'

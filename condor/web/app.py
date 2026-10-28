@@ -49,6 +49,7 @@ from condor.web.routes import (
     tradepad,
     trading_visuals,
     transcribe,
+    v5_advisory,
     ws,
 )
 
@@ -135,6 +136,7 @@ def create_app() -> FastAPI:
     app.include_router(research.router, prefix="/api/v1")
     app.include_router(screener.router, prefix="/api/v1")
     app.include_router(market_picture.router, prefix="/api/v1")
+    app.include_router(v5_advisory.router, prefix="/api/v1")
     app.include_router(bots.router, prefix="/api/v1")
     app.include_router(fleet.router, prefix="/api/v1")
     app.include_router(fleet_summary.router, prefix="/api/v1")

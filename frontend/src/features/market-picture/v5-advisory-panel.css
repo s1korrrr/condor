@@ -1,0 +1,143 @@
+.v5-advisory {
+  margin: 1rem 0;
+  padding: 1rem 1.1rem;
+  border: 1px solid var(--mp-border, rgba(138, 166, 189, 0.18));
+  border-radius: 0.9rem;
+  background: linear-gradient(135deg, rgba(24, 43, 58, 0.86), rgba(10, 23, 35, 0.94));
+  color: var(--mp-text, #e7eff5);
+}
+
+.v5-advisory__header,
+.v5-advisory__readout,
+.v5-advisory__columns,
+.v5-advisory li {
+  display: flex;
+  gap: 1rem;
+}
+
+.v5-advisory__header {
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.v5-advisory__eyebrow,
+.v5-advisory__readout span,
+.v5-advisory__muted,
+.v5-advisory small {
+  color: var(--mp-muted, #94aabd);
+}
+
+.v5-advisory__eyebrow {
+  margin: 0 0 0.25rem;
+  font-size: 0.68rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.v5-advisory h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.v5-advisory h3 {
+  margin: 0.9rem 0 0.4rem;
+  font-size: 0.78rem;
+}
+
+.v5-advisory__status {
+  padding: 0.25rem 0.55rem;
+  border: 1px solid var(--mp-border, rgba(138, 166, 189, 0.2));
+  border-radius: 999px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+}
+
+.v5-advisory__status[data-state="unavailable"],
+.v5-advisory__status[data-state="stale"],
+.v5-advisory__status[data-state="historical"] {
+  color: #f1c27a;
+}
+
+.v5-advisory__readout {
+  flex-wrap: wrap;
+  margin: 0.9rem 0 0;
+}
+
+.v5-advisory__readout > div {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 8rem;
+}
+
+.v5-advisory__readout span,
+.v5-advisory__readout strong {
+  font-size: 0.7rem;
+}
+
+.v5-advisory__readout strong {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.v5-advisory__summary,
+.v5-advisory__reasons {
+  max-width: 80ch;
+  margin: 0.8rem 0;
+  font-size: 0.78rem;
+  line-height: 1.45;
+}
+
+.v5-advisory__columns > div {
+  flex: 1;
+  min-width: 0;
+}
+
+.v5-advisory ul {
+  display: grid;
+  gap: 0.4rem;
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.v5-advisory li {
+  align-items: baseline;
+  justify-content: space-between;
+  padding-bottom: 0.32rem;
+  border-bottom: 1px solid rgba(138, 166, 189, 0.1);
+  font-size: 0.72rem;
+}
+
+.v5-advisory li > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.v5-advisory li > strong {
+  text-align: right;
+  overflow-wrap: anywhere;
+}
+
+.v5-advisory small {
+  font-size: 0.62rem;
+}
+
+.v5-advisory__history {
+  margin-top: 0.8rem;
+  color: var(--mp-muted, #94aabd);
+  font-size: 0.7rem;
+}
+
+.v5-advisory__history summary {
+  cursor: pointer;
+}
+
+.v5-advisory__history li time {
+  text-align: right;
+}
+
+@media (max-width: 640px) {
+  .v5-advisory__columns {
+    display: block;
+  }
+}

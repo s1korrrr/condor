@@ -13,7 +13,9 @@ function WorkspaceUnavailable({ title, children }: { title: string; children?: R
   </div>;
 }
 
-export function Overview(_props: { accountPresentation?: { description: string; unavailable: string; valuationNote: string; registryUnavailable?: string } } = {}) { return <WorkspaceUnavailable title="Overview" />; }
+type OverviewProps = { accountPresentation?: { description: string; unavailable: string; valuationNote: string; registryUnavailable?: string } };
+/** Same props as the workspace Overview; the unavailable stub renders without them. */
+export const Overview: (props: OverviewProps) => ReactNode = () => <WorkspaceUnavailable title="Overview" />;
 export function TradingVisuals() { return <WorkspaceUnavailable title="Trading Visuals" />; }
 
 export function Operations() { return <WorkspaceUnavailable title="Operations" />; }

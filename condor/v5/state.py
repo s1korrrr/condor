@@ -98,7 +98,8 @@ class WorkspaceState:
 
     def _initialize(self) -> None:
         with self._connection() as db:
-            db.executescript("""
+            db.executescript(
+                """
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY,
                     agent_id TEXT NOT NULL,
@@ -127,7 +128,8 @@ class WorkspaceState:
                     session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
                     bytes INTEGER NOT NULL CHECK(bytes >= 0)
                 );
-                """)
+                """
+            )
             # A process restart is a hard stop. Never resume loops or replay work.
             now = self.clock()
             db.execute(
@@ -174,7 +176,9 @@ class WorkspaceState:
             reserve_bytes = (
                 REPORT_RESERVATION_BYTES
                 if kind == "report"
-                else 4_096 if kind == "inspect" else 0
+                else 4_096
+                if kind == "inspect"
+                else 0
             )
         if reserve_bytes < 0 or reserve_bytes > MAX_RESERVATION_BYTES:
             raise StateCapacityError("requested journal reservation exceeds limit")

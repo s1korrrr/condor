@@ -591,3 +591,12 @@ def test_health_is_public_liveness_and_claims_no_source_readiness(tmp_path):
             "authority": "reports-only",
         }
         assert api.observation_calls == []
+
+
+def test_settings_preserve_owner_model_and_source_revision(tmp_path):
+    app = create_app(settings=settings(tmp_path), upstream=FakeUpstream())
+    with TestClient(app) as client:
+        login(client)
+        data = client.get("/api/v5/settings").json()
+        assert data["identity"]["upstream_revision"] == "api-test-sha"
+        assert data["budget"]["model"] == "claude-sonnet"

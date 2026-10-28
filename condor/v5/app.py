@@ -753,6 +753,7 @@ def create_app(
     async def settings_view():
         source, rows, errors = await collect_sources()
         advisor = source.get("advisor", {})
+        identity = source.get("identity", {})
         return {
             "identity": {
                 "name": "RSI V5",
@@ -760,12 +761,17 @@ def create_app(
                 "mode": "reports-only",
                 "execution_enabled": False,
                 "baseline_binding": None,
+                "upstream_revision": identity.get(
+                    "upstream_revision",
+                    identity.get("revision", identity.get("api_declared_commit")),
+                ),
             },
             "model": advisor.get("model"),
             "budget": {
                 key: advisor[key]
                 for key in (
                     "enabled",
+                    "model",
                     "calls_today",
                     "spent_usd",
                     "reserved_usd",

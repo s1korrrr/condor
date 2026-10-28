@@ -11,6 +11,7 @@
 !frontend/v5.html
 !frontend/vite.v5.config.ts
 !frontend/src/**
+!frontend/design-system/**
 !frontend/tooling/**
 !frontend/public/**
 frontend/node_modules

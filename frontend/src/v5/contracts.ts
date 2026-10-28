@@ -76,6 +76,8 @@ export interface V5TaskReport {
   task_id: string;
   status: string;
   effect: "NONE";
+  /** Why reports requested before this time cannot be current (advisor-owned reason code). */
+  validity_watermark?: { watermark_ms: number; reason: string };
   record: null | {
     request_id?: string;
     snapshot_id?: string;
@@ -86,6 +88,8 @@ export interface V5TaskReport {
       coverage_status?: "COMPLETE_OBSERVED_COHORT" | "PARTIAL_OR_UNKNOWN";
       model?: string;
       reason?: string;
+      /** Application-written reason a reply failed validation; never model text. */
+      rejection?: string;
       requested_at_ms?: number;
       received_at_ms?: number;
       expires_at_ms?: number;

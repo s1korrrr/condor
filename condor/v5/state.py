@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-import json
 import fcntl
+import json
 import os
 import sqlite3
 import stat
@@ -98,8 +98,7 @@ class WorkspaceState:
 
     def _initialize(self) -> None:
         with self._connection() as db:
-            db.executescript(
-                """
+            db.executescript("""
                 CREATE TABLE IF NOT EXISTS sessions (
                     id TEXT PRIMARY KEY,
                     agent_id TEXT NOT NULL,
@@ -128,8 +127,7 @@ class WorkspaceState:
                     session_id TEXT PRIMARY KEY REFERENCES sessions(id) ON DELETE CASCADE,
                     bytes INTEGER NOT NULL CHECK(bytes >= 0)
                 );
-                """
-            )
+                """)
             # A process restart is a hard stop. Never resume loops or replay work.
             now = self.clock()
             db.execute(
@@ -439,8 +437,11 @@ def _bounded_report(report: dict[str, Any]) -> dict[str, Any]:
         "model",
         "prompt_version",
         "validity",
+        "rejection",
     }
     filtered = {key: report[key] for key in allowed if key in report}
+    if "rejection" in filtered:
+        filtered["rejection"] = str(filtered["rejection"])[:300]
     advice = filtered.get("advice")
     if isinstance(advice, dict):
         allowed_advice = {"assessment", "reason_codes", "evidence_refs", "summary"}

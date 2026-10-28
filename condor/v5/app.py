@@ -50,7 +50,11 @@ def _safe_policy_metadata(payload: Any) -> tuple[dict[str, str], dict[str, Any]]
             "remaining_pilot_usd",
         ):
             value = raw_budget.get(key)
-            if isinstance(value, str) and len(value) <= 64 and _USD_STRING.fullmatch(value):
+            if (
+                isinstance(value, str)
+                and len(value) <= 64
+                and _USD_STRING.fullmatch(value)
+            ):
                 budget[key] = value
     raw_scheduler = payload.get("scheduler")
     scheduler: dict[str, Any] = {}
@@ -68,6 +72,9 @@ def _safe_policy_metadata(payload: Any) -> tuple[dict[str, str], dict[str, Any]]
     return budget, scheduler
 
 
+_WATERMARK_REASON = re.compile(r"[A-Z_]{1,32}(?::[a-z_,]{1,96})?")
+
+
 def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
     """Project only a report whose request and result both name this task."""
     status = payload.get("status") if isinstance(payload, dict) else None
@@ -77,6 +84,16 @@ def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
         "effect": "NONE",
         "record": None,
     }
+    watermark = payload.get("validity_watermark") if isinstance(payload, dict) else None
+    if isinstance(watermark, dict):
+        moved_at, reason = watermark.get("watermark_ms"), watermark.get("reason")
+        if (
+            type(moved_at) is int
+            and moved_at > 0
+            and isinstance(reason, str)
+            and _WATERMARK_REASON.fullmatch(reason)
+        ):
+            result["validity_watermark"] = {"watermark_ms": moved_at, "reason": reason}
     record = payload.get("record") if isinstance(payload, dict) else None
     if not isinstance(record, dict):
         return result
@@ -96,6 +113,10 @@ def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
         value = report.get(key)
         if isinstance(value, str) and len(value) <= 256:
             safe_report[key] = value
+    rejection = report.get("rejection")
+    if isinstance(rejection, str):
+        # Application-written by the advisor; never model text.
+        safe_report["rejection"] = rejection[:300]
     coverage_status = report.get("coverage_status")
     if coverage_status in {"COMPLETE_OBSERVED_COHORT", "PARTIAL_OR_UNKNOWN"}:
         safe_report["coverage_status"] = coverage_status
@@ -134,18 +155,30 @@ def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
 
 
 def _safe_feed_refresh(payload: Any) -> dict[str, Any]:
-    if not isinstance(payload, dict) or payload.get("schema_version") != "v5-feed-refresh-status.v1":
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema_version") != "v5-feed-refresh-status.v1"
+    ):
         return {"schema_version": "v5-feed-refresh-status.v1", "state": "UNKNOWN"}
     result: dict[str, Any] = {"schema_version": "v5-feed-refresh-status.v1"}
     if payload.get("state") in {"HEALTHY", "FAILED", "RUNNING", "NOT_READY", "UNKNOWN"}:
         result["state"] = payload["state"]
     else:
         result["state"] = "UNKNOWN"
-    for key in ("last_attempt_at_ms", "last_success_at_ms", "last_success_cutoff_ms", "observed_at_ms", "feed_fresh_until_ms"):
+    for key in (
+        "last_attempt_at_ms",
+        "last_success_at_ms",
+        "last_success_cutoff_ms",
+        "observed_at_ms",
+        "feed_fresh_until_ms",
+    ):
         value = payload.get(key)
         if isinstance(value, int) and not isinstance(value, bool) and value > 0:
             result[key] = value
-    for key, allowed in (("feed_freshness", {"FRESH", "UNAVAILABLE"}), ("refresher_status", {"CURRENT", "STALE"})):
+    for key, allowed in (
+        ("feed_freshness", {"FRESH", "UNAVAILABLE"}),
+        ("refresher_status", {"CURRENT", "STALE"}),
+    ):
         value = payload.get(key)
         if value in allowed:
             result[key] = value
@@ -256,11 +289,12 @@ def create_app(
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["Referrer-Policy"] = "no-referrer"
         response.headers["X-V5-Authority"] = "reports-only"
-        if request.url.path == "/" or request.url.path.startswith("/assets/"):
-            response.headers["Content-Security-Policy"] = (
-                "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
-                "script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
-            )
+        # Every response: HTML entry routes include /agents, /sessions/... and
+        # /settings, and JSON never needs a weaker policy.
+        response.headers["Content-Security-Policy"] = (
+            "default-src 'self'; img-src 'self' data:; style-src 'self' 'unsafe-inline'; "
+            "script-src 'self'; connect-src 'self'; object-src 'none'; base-uri 'self'; frame-ancestors 'none'"
+        )
         return response
 
     def dashboard_token() -> str:
@@ -463,7 +497,9 @@ def create_app(
                     f"{name}:{result.code if isinstance(result, UpstreamError) else 'unavailable'}"
                 )
             else:
-                source[name] = _safe_feed_refresh(result) if name == "source_refresh" else result
+                source[name] = (
+                    _safe_feed_refresh(result) if name == "source_refresh" else result
+                )
         task_result = results[len(names)]
         if isinstance(task_result, BaseException):
             errors.append(
@@ -472,7 +508,9 @@ def create_app(
             rows = []
         else:
             rows = task_rows(task_result)
-            source["budget_policy"], source["scheduler"] = _safe_policy_metadata(task_result)
+            source["budget_policy"], source["scheduler"] = _safe_policy_metadata(
+                task_result
+            )
         latest_by_task: dict[str, dict[str, Any]] = {}
         for task_id, report_result in zip(ADVISOR_TASK_IDS, results[len(names) + 1 :]):
             if isinstance(report_result, BaseException):
@@ -524,7 +562,10 @@ def create_app(
                 ),
             },
             "context": context,
-            "source_refresh": source.get("source_refresh", {"schema_version": "v5-feed-refresh-status.v1", "state": "UNKNOWN"}),
+            "source_refresh": source.get(
+                "source_refresh",
+                {"schema_version": "v5-feed-refresh-status.v1", "state": "UNKNOWN"},
+            ),
             "advisor": {
                 **status,
                 "task_profiles": rows,
@@ -581,7 +622,7 @@ def create_app(
     @app.post("/api/v5/agents/{agent_id}/inspect")
     async def inspect_agent(agent_id: str, request: Request):
         await authorized_mutation(request)
-        agent = agent_or_404(agent_id)
+        agent_or_404(agent_id)  # unknown agents are 404 before any session exists
         try:
             session = store.create_session(
                 agent_id, kind="inspect", summary="Source inspection started"
@@ -707,7 +748,15 @@ def create_app(
                 if status == "BLOCKED"
                 else "Advisor report request is unavailable"
             )
-            store.add_tick(session_id, status=status, summary=summary, error=exc.code)
+            refusal = exc.body.get("status") if isinstance(exc.body, dict) else None
+            detail = (
+                f"{exc.code}:{refusal}"
+                if isinstance(refusal, str) and refusal
+                else exc.code
+            )
+            store.add_tick(
+                session_id, status=status, summary=summary, error=detail[:128]
+            )
             store.finish_session(session_id, status, summary)
         except Exception as exc:
             logger.warning("V5 report request failed: %s", type(exc).__name__)
@@ -935,7 +984,10 @@ def create_app(
             "task_profiles": rows,
             "budget_policy": source.get("budget_policy", {}),
             "scheduler": source.get("scheduler", {}),
-            "source_refresh": source.get("source_refresh", {"schema_version": "v5-feed-refresh-status.v1", "state": "UNKNOWN"}),
+            "source_refresh": source.get(
+                "source_refresh",
+                {"schema_version": "v5-feed-refresh-status.v1", "state": "UNKNOWN"},
+            ),
             "effective_policy": {
                 "allowed_tools": sorted(
                     {

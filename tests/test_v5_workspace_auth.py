@@ -8,7 +8,6 @@ from condor.v5.app import _safe_feed_refresh, _safe_task_latest, create_app
 from condor.v5.config import ConfigurationError, Settings
 from condor.v5.state import WorkspaceState
 
-
 TOKEN = "d" * 48
 READ_TOKEN = "r" * 48
 REQUEST_TOKEN = "q" * 48
@@ -31,7 +30,12 @@ def test_latest_task_projection_rejects_cross_task_and_unqualified_costs():
         "status": "CURRENT_REPORT",
         "record": {
             "input": {"task_id": "market_context", "snapshot_id": "s"},
-            "result": {"task_id": "market_context", "actual_usd": "-1", "coverage_status": "NORMAL", "effect": "ORDER"},
+            "result": {
+                "task_id": "market_context",
+                "actual_usd": "-1",
+                "coverage_status": "NORMAL",
+                "effect": "ORDER",
+            },
         },
     }
     projected = _safe_task_latest("market_context", bad_cost)
@@ -41,15 +45,17 @@ def test_latest_task_projection_rejects_cross_task_and_unqualified_costs():
 
 
 def test_feed_refresh_projection_is_schema_bounded_and_rejects_bad_timestamps():
-    projected = _safe_feed_refresh({
-        "schema_version": "v5-feed-refresh-status.v1",
-        "state": "HEALTHY",
-        "last_attempt_at_ms": True,
-        "last_success_at_ms": 123,
-        "feed_freshness": "FRESH",
-        "feed_fresh_until_ms": -1,
-        "private": "must-not-leak",
-    })
+    projected = _safe_feed_refresh(
+        {
+            "schema_version": "v5-feed-refresh-status.v1",
+            "state": "HEALTHY",
+            "last_attempt_at_ms": True,
+            "last_success_at_ms": 123,
+            "feed_freshness": "FRESH",
+            "feed_fresh_until_ms": -1,
+            "private": "must-not-leak",
+        }
+    )
     assert projected["state"] == "HEALTHY"
     assert "last_attempt_at_ms" not in projected
     assert projected["last_success_at_ms"] == 123
@@ -174,7 +180,10 @@ class FakeUpstream:
                     "received_at_ms": 101,
                     "expires_at_ms": 200,
                     "actual_usd": "0.004200",
-                    "advice": {"assessment": "CAUTION", "summary": "Task-bound summary"},
+                    "advice": {
+                        "assessment": "CAUTION",
+                        "summary": "Task-bound summary",
+                    },
                     "effect": "NONE",
                     "provider_key": "must-not-leak",
                 },
@@ -288,20 +297,30 @@ def test_workspace_is_scoped_to_v5_roots_and_sanitizes_upstream(tmp_path):
         assert workspace["advisor"]["task_profiles"][0]["task_id"] == "market_context"
         assert workspace["advisor"]["task_profiles"][0]["credential_status"] == "READY"
         assert workspace["advisor"]["task_profiles"][1]["credential_status"] == "READY"
-        assert workspace["advisor"]["budget_policy"]["authorized_ceiling_usd"] == "200.00"
+        assert (
+            workspace["advisor"]["budget_policy"]["authorized_ceiling_usd"] == "200.00"
+        )
         assert "provider_balance_usd" not in workspace["advisor"]["budget_policy"]
         assert workspace["advisor"]["scheduler"]["task_id"] == "market_context"
         assert "secret" not in workspace["advisor"]["scheduler"]
         task_report = workspace["advisor"]["latest_by_task"]["market_context"]
         assert task_report["record"]["result"]["task_id"] == "market_context"
         assert task_report["record"]["result"]["actual_usd"] == "0.004200"
-        assert task_report["record"]["result"]["coverage_status"] == "PARTIAL_OR_UNKNOWN"
+        assert (
+            task_report["record"]["result"]["coverage_status"] == "PARTIAL_OR_UNKNOWN"
+        )
         assert "provider_key" not in task_report["record"]["result"]
         assert "provider_key" not in workspace["advisor"]
         api.credential_status = "API_KEY_REQUIRED"
         key_required = client.get("/api/v5/workspace").json()
-        assert key_required["advisor"]["task_profiles"][0]["credential_status"] == "API_KEY_REQUIRED"
-        assert key_required["advisor"]["task_profiles"][1]["credential_status"] == "API_KEY_REQUIRED"
+        assert (
+            key_required["advisor"]["task_profiles"][0]["credential_status"]
+            == "API_KEY_REQUIRED"
+        )
+        assert (
+            key_required["advisor"]["task_profiles"][1]["credential_status"]
+            == "API_KEY_REQUIRED"
+        )
         assert [agent["id"] for agent in workspace["agents"]] == [
             "market_analyst",
             "source_auditor",
@@ -332,6 +351,11 @@ def test_stock_catalog_and_v5_frontend_use_repository_level_roots(tmp_path):
         response = client.get("/")
         assert response.status_code == 200
         assert response.text == "<main>V5 isolated app</main>"
+        for path in ("/", "/settings", "/agents", "/agents/market_analyst"):
+            policy = client.get(path).headers.get("Content-Security-Policy", "")
+            assert (
+                "script-src 'self'" in policy and "frame-ancestors 'none'" in policy
+            ), path
 
 
 def test_inspect_is_deterministic_and_never_calls_advisor(tmp_path):
@@ -389,7 +413,8 @@ def test_report_refusal_is_blocked_and_never_relabelled_as_success(tmp_path):
         ).json()
         assert result["status"] == "BLOCKED"
         assert result["ticks"][0]["status"] == "BLOCKED"
-        assert result["ticks"][0]["error"] == "task_refused"
+        # The sanitized refusal status distinguishes refusals in the journal.
+        assert result["ticks"][0]["error"] == "task_refused:BUDGET_REFUSED"
         assert result["effect"] == "NONE"
 
 

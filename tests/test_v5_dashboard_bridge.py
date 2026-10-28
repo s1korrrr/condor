@@ -7,7 +7,6 @@ from fastapi.testclient import TestClient
 from condor.v5.app import create_app
 from condor.v5.config import Settings
 
-
 TOKEN = "d" * 48
 ORIGIN = "https://v5.example.test"
 SERVER = "rsibot-v5"

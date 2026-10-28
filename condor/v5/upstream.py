@@ -60,9 +60,19 @@ class V5Upstream:
                         data=data,
                         allow_redirects=False,
                     ) as response:
-                        raw = await response.content.read(MAX_RESPONSE_BYTES + 1)
-                        if len(raw) > MAX_RESPONSE_BYTES:
-                            raise UpstreamError("upstream_response_too_large")
+                        # read(n) may return one fragment; read through EOF
+                        # under the request timeout, stopping at the bound.
+                        body = bytearray()
+                        while True:
+                            chunk = await response.content.read(
+                                MAX_RESPONSE_BYTES + 1 - len(body)
+                            )
+                            if not chunk:
+                                break
+                            body.extend(chunk)
+                            if len(body) > MAX_RESPONSE_BYTES:
+                                raise UpstreamError("upstream_response_too_large")
+                        raw = bytes(body)
                         try:
                             result = json.loads(raw)
                         except (UnicodeDecodeError, json.JSONDecodeError) as exc:

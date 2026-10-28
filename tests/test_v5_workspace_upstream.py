@@ -13,7 +13,8 @@ class Content:
         self.body = body
 
     async def read(self, size):
-        return self.body[:size]
+        chunk, self.body = self.body[:size], self.body[size:]
+        return chunk
 
 
 class Response:

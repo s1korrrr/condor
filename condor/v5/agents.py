@@ -131,8 +131,6 @@ class AgentCatalog:
     def get(self, agent_id: str) -> AgentDefinition | None:
         if not SLUG_RE.fullmatch(agent_id) or agent_id not in AGENT_SPECS:
             return None
-        stock_dir = self.stock_root / agent_id
-        local_dir = self.local_root / agent_id
         stock_text = _read_scoped(self.stock_root, Path(agent_id) / "AGENT.md")
         local_text = _read_scoped(self.local_root, Path(agent_id) / "AGENT.md")
         # Local AGENT.md may customize prose, but hard-coded V5 policy owns tools,

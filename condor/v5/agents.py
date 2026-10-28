@@ -16,17 +16,11 @@ import yaml
 from .config import Settings
 
 SLUG_RE = re.compile(r"^[a-z][a-z0-9_]{0,47}$")
+# The unbound release: identical with or without this module's paper additions.
 ALLOWED_TOOLS = frozenset(
-    {
-        "get_market_context",
-        "get_advice_history",
-        "request_market_report",
-        "get_paper_status",
-    }
+    {"get_market_context", "get_advice_history", "request_market_report"}
 )
-REPORT_ROLES = frozenset({"market_analyst", "source_auditor", "decision_reviewer"})
-# Roles that also need a fresh read-only native paper owner before they may run.
-PAPER_ROLES = frozenset({"decision_reviewer"})
+REPORT_ROLES = frozenset({"market_analyst", "source_auditor"})
 AGENT_SPECS: dict[str, dict[str, Any]] = {
     "market_analyst": {
         "task_id": "market_context",
@@ -44,6 +38,12 @@ AGENT_SPECS: dict[str, dict[str, Any]] = {
             "request_market_report",
         ),
     },
+    "decision_reviewer": {"task_id": None, "allowed_tools": ()},
+}
+# Only while a read-only paper status file is configured. These roles also need a
+# fresh native paper owner before they may run, and read their own stock prose.
+PAPER_ROLES = frozenset({"decision_reviewer"})
+PAPER_AGENT_SPECS: dict[str, dict[str, Any]] = {
     "decision_reviewer": {
         "task_id": "decision_review",
         "allowed_tools": (
@@ -52,8 +52,10 @@ AGENT_SPECS: dict[str, dict[str, Any]] = {
             "get_advice_history",
             "request_market_report",
         ),
+        "stock_dir": "decision_reviewer_paper",
     },
 }
+PAPER_ALLOWED_TOOLS = ALLOWED_TOOLS | {"get_paper_status"}
 
 
 @dataclass(frozen=True)
@@ -139,14 +141,24 @@ class AgentCatalog:
             or Path(__file__).resolve().parents[2] / "agents_v5"
         ).resolve()
         self.local_root = (settings.runtime_root / "agents").resolve()
+        paper = settings.paper_status_file is not None
+        self.specs = {**AGENT_SPECS, **PAPER_AGENT_SPECS} if paper else AGENT_SPECS
+        self.report_roles = REPORT_ROLES | PAPER_ROLES if paper else REPORT_ROLES
+        self.paper_roles = PAPER_ROLES if paper else frozenset()
+        self.allowed_tools = PAPER_ALLOWED_TOOLS if paper else ALLOWED_TOOLS
 
     def ids(self) -> list[str]:
-        return list(AGENT_SPECS)
+        return list(self.specs)
+
+    def _stock_dir(self, agent_id: str) -> str:
+        return self.specs[agent_id].get("stock_dir", agent_id)
 
     def get(self, agent_id: str) -> AgentDefinition | None:
-        if not SLUG_RE.fullmatch(agent_id) or agent_id not in AGENT_SPECS:
+        if not SLUG_RE.fullmatch(agent_id) or agent_id not in self.specs:
             return None
-        stock_text = _read_scoped(self.stock_root, Path(agent_id) / "AGENT.md")
+        stock_text = _read_scoped(
+            self.stock_root, Path(self._stock_dir(agent_id)) / "AGENT.md"
+        )
         local_text = _read_scoped(self.local_root, Path(agent_id) / "AGENT.md")
         # Local AGENT.md may customize prose, but hard-coded V5 policy owns tools,
         # task identity, mode and model. Invalid/missing stock fails closed.
@@ -154,10 +166,10 @@ class AgentCatalog:
         if raw is None:
             return None
         metadata, instructions = _parse_frontmatter(raw)
-        spec = AGENT_SPECS[agent_id]
+        spec = self.specs[agent_id]
         task_id = spec["task_id"]
         role_tools = tuple(
-            tool for tool in spec["allowed_tools"] if tool in ALLOWED_TOOLS
+            tool for tool in spec["allowed_tools"] if tool in self.allowed_tools
         )
         blockers: list[str] = []
         status = "ready"
@@ -193,9 +205,9 @@ class AgentCatalog:
         loop_id = metadata.get("default_loop", agent_id)
         if not isinstance(loop_id, str) or not SLUG_RE.fullmatch(loop_id):
             loop_id = agent_id
-        relative = Path(agent_id) / "loops" / loop_id / "loop.md"
-        local = _read_scoped(self.local_root, relative)
-        stock = _read_scoped(self.stock_root, relative)
+        relative = Path("loops") / loop_id / "loop.md"
+        local = _read_scoped(self.local_root, agent_id / relative)
+        stock = _read_scoped(self.stock_root, self._stock_dir(agent_id) / relative)
         return (local or stock or "").strip()[:40_000]
 
     def _loops(self, agent_id: str) -> tuple[dict[str, Any], ...]:
@@ -219,9 +231,9 @@ class AgentCatalog:
         for skill_id in values[:12]:
             if not isinstance(skill_id, str) or not SLUG_RE.fullmatch(skill_id):
                 continue
-            relative = Path(agent_id) / "skills" / skill_id / "SKILL.md"
-            content = _read_scoped(self.local_root, relative) or _read_scoped(
-                self.stock_root, relative
+            relative = Path("skills") / skill_id / "SKILL.md"
+            content = _read_scoped(self.local_root, agent_id / relative) or (
+                _read_scoped(self.stock_root, self._stock_dir(agent_id) / relative)
             )
             if content is not None:
                 frontmatter, body = _parse_frontmatter(content)
@@ -237,13 +249,13 @@ class AgentCatalog:
         return tuple(result)
 
     def _notes(self, agent_id: str) -> str:
-        if agent_id not in REPORT_ROLES:
+        if agent_id not in self.report_roles:
             return ""
         relative = Path(agent_id) / "notes.md"
         return (_read_scoped(self.local_root, relative) or "")[:8_000]
 
     def save_notes(self, agent_id: str, text: str) -> str:
-        if agent_id not in REPORT_ROLES or not SLUG_RE.fullmatch(agent_id):
+        if agent_id not in self.report_roles or not SLUG_RE.fullmatch(agent_id):
             raise ValueError("notes are available only for report agents")
         if len(text) > 8_000:
             raise ValueError("notes exceed the 8000 character limit")

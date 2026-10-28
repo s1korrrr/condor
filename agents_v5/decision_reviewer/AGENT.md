@@ -1,13 +1,11 @@
 ---
 name: V5 Decision Reviewer
-description: Review recent simulated V5 paper-bot decisions against public market evidence.
+description: Review native V5 decision traces after the exact baseline is bound.
 default_loop: baseline_review
 skills:
   - decision_trace
 ---
 
-This role reviews the native V5 paper bot's recorded simulated decisions with
-the API-owned `decision_review` task. It is blocked unless the paper owner's
-status is fresh and the advisor reports that task enabled. The review is
-display-only: it never proposes or places orders, never changes the bot, and
-is not strategy qualification or a baseline binding.
+This role is blocked until an exact native V5 baseline and decision trace are
+bound. Do not infer the baseline from a V5 label or historical candidate. Do not
+produce an assessment while its task is disabled.

@@ -1,0 +1,446 @@
+{
+ "agent:decision_reviewer": {
+  "body": {
+   "blockers": [
+    "Native baseline identity and decision trace are not bound"
+   ],
+   "description": "Review native V5 decision traces after the exact baseline is bound.",
+   "empty_allowlist_means": "deny_all",
+   "id": "decision_reviewer",
+   "loops": [
+    {
+     "frequency_sec": 1800,
+     "id": "decision_reviewer_monitor",
+     "max_ticks": 48,
+     "name": "Bounded report monitor"
+    }
+   ],
+   "mode": "reports-only",
+   "model": null,
+   "name": "V5 Decision Reviewer",
+   "notes": "",
+   "playbook": "# Baseline review (blocked)\n\nNo decision review may run until the exact controller or recipe identity,\nconfiguration, source digest, and decision trace are available from the owner.\nDo not request a model report for this role while it is blocked.",
+   "policy": {
+    "allowed_tools": [],
+    "empty_allowlist_means": "deny_all",
+    "execution_enabled": false,
+    "tool_policy_mode": "explicit_v5_allowlist"
+   },
+   "skills": [
+    {
+     "content": "A review needs the native owner decision, exact baseline binding, decision-time\ninputs, and outcome linkage. Without these records the result is unavailable.\nMarket context alone does not establish a V5 decision or strategy performance.",
+     "id": "decision_trace",
+     "name": "Native Decision Trace"
+    }
+   ],
+   "source": "stock",
+   "source_error": null,
+   "status": "blocked",
+   "task_id": null,
+   "tool_policy_mode": "explicit_v5_allowlist",
+   "tools": []
+  },
+  "status_code": 200
+ },
+ "agent:market_analyst": {
+  "body": {
+   "blockers": [],
+   "description": "Review qualified market context and produce a bounded evidence report.",
+   "empty_allowlist_means": "deny_all",
+   "id": "market_analyst",
+   "loops": [
+    {
+     "frequency_sec": 1800,
+     "id": "market_analyst_monitor",
+     "max_ticks": 48,
+     "name": "Bounded report monitor"
+    }
+   ],
+   "mode": "reports-only",
+   "model": "fixture",
+   "name": "V5 Market Analyst",
+   "notes": "",
+   "playbook": "# Market context report\n\nOn an explicitly requested tick, read the latest qualified market context and\nrecent advisory history. Request the fixed `market_context` report only when the\nAPI reports that task enabled and within its shared budget. Record the returned\nreport envelope and its evidence references. If evidence is missing, stale,\nunbound, or refused, journal that state without filling gaps. This loop cannot\nplace orders or alter the native strategy.",
+   "policy": {
+    "allowed_tools": [
+     "get_market_context",
+     "get_advice_history",
+     "request_market_report"
+    ],
+    "empty_allowlist_means": "deny_all",
+    "execution_enabled": false,
+    "tool_policy_mode": "explicit_v5_allowlist"
+   },
+   "skills": [
+    {
+     "content": "Use only qualified snapshots. Report the snapshot identity, availability time,\ncoverage and rejection reasons. Keep spot and derivatives evidence separate.\nDo not infer executed flow, liquidity, tradability, or predictive probability\nfrom candle data. A missing or stale required field stays unavailable.",
+     "id": "market_context",
+     "name": "Market Context Evidence"
+    }
+   ],
+   "source": "stock",
+   "source_error": null,
+   "status": "ready",
+   "task_id": "market_context",
+   "tool_policy_mode": "explicit_v5_allowlist",
+   "tools": [
+    "get_market_context",
+    "get_advice_history",
+    "request_market_report"
+   ]
+  },
+  "status_code": 200
+ },
+ "agent:source_auditor": {
+  "body": {
+   "blockers": [],
+   "description": "Check source identity, freshness, coverage, and provenance for V5 reports.",
+   "empty_allowlist_means": "deny_all",
+   "id": "source_auditor",
+   "loops": [
+    {
+     "frequency_sec": 1800,
+     "id": "source_auditor_monitor",
+     "max_ticks": 48,
+     "name": "Bounded report monitor"
+    }
+   ],
+   "mode": "reports-only",
+   "model": "fixture",
+   "name": "V5 Source Auditor",
+   "notes": "",
+   "playbook": "# Source quality report\n\nOn an explicitly requested tick, inspect the latest market context identity and\nrecent report history. Request the fixed `source_quality` report only when the\nAPI reports that task enabled and within its shared budget. Preserve source and\navailability metadata. If identity, coverage, or freshness cannot be checked,\nrecord the missing evidence and stop.",
+   "policy": {
+    "allowed_tools": [
+     "get_market_context",
+     "get_advice_history",
+     "request_market_report"
+    ],
+    "empty_allowlist_means": "deny_all",
+    "execution_enabled": false,
+    "tool_policy_mode": "explicit_v5_allowlist"
+   },
+   "skills": [
+    {
+     "content": "Verify that evidence names its source, schema, event time, receipt or\navailability time, and qualification state. Distinguish absent, stale, rejected,\npartial, and unbound evidence. Never infer missing values or claim that a source\nis reliable from a successful HTTP response alone.",
+     "id": "source_quality",
+     "name": "Source Quality Review"
+    }
+   ],
+   "source": "stock",
+   "source_error": null,
+   "status": "ready",
+   "task_id": "source_quality",
+   "tool_policy_mode": "explicit_v5_allowlist",
+   "tools": [
+    "get_market_context",
+    "get_advice_history",
+    "request_market_report"
+   ]
+  },
+  "status_code": 200
+ },
+ "agent_page:decision_reviewer": 503,
+ "compatibility": {
+  "/api/v1/market-picture": {
+   "body": {
+    "detail": "V5 native market-picture frame owner is UNBOUND"
+   },
+   "status_code": 503
+  },
+  "/api/v1/operations": {
+   "body": {
+    "detail": "V5 native operations owner is UNBOUND"
+   },
+   "status_code": 503
+  },
+  "/api/v1/research": {
+   "body": {
+    "detail": "V5 Research OS owner is UNBOUND"
+   },
+   "status_code": 503
+  },
+  "/api/v1/servers": {
+   "body": [
+    {
+     "host": "razer",
+     "name": "rsibot-v5",
+     "online": true,
+     "permission": "observer",
+     "port": 8088
+    }
+   ],
+   "status_code": 200
+  },
+  "/api/v1/servers/rsibot-v5/bots": {
+   "body": {
+    "bots": [],
+    "controllers": [],
+    "error_hint": "Native strategy and bot state are UNBOUND in this V5 workspace.",
+    "metrics_available": false,
+    "metrics_unavailable_reason": "V5 native bot owner is unbound.",
+    "native_owner": "UNBOUND",
+    "server_online": true,
+    "total_pnl": null,
+    "total_volume": null
+   },
+   "status_code": 200
+  },
+  "/api/v1/servers/rsibot-v5/status": {
+   "body": {
+    "baseline_binding": null,
+    "capabilities": {
+     "account_management": false,
+     "accounts": false,
+     "docker": false,
+     "executor_management": false,
+     "fleet_catalogue": false,
+     "manual_trading": false,
+     "market_picture": false,
+     "market_screener": false,
+     "native_controls_enabled": false,
+     "native_status": true,
+     "native_stop": false,
+     "performance_history": false,
+     "portfolio_read": false
+    },
+    "execution_enabled": false,
+    "message": "V5 dashboard process is online; native Hummingbot owner is unbound.",
+    "native_owner": "UNBOUND",
+    "native_owner_reason": "The exact V5 controller baseline and native decision trace are not bound.",
+    "process_health": "RUNNING",
+    "profile": "native",
+    "status": "online"
+   },
+   "status_code": 200
+  },
+  "/api/v1/trading-visuals/bootstrap?bot=meridian_v5_paper": {
+   "body": {
+    "detail": "V5 native observations owner is UNBOUND"
+   },
+   "status_code": 503
+  },
+  "/api/v1/trading-visuals/sources": {
+   "body": {
+    "sources": []
+   },
+   "status_code": 200
+  }
+ },
+ "inspect:decision_reviewer": {
+  "status": "BLOCKED",
+  "status_code": 200,
+  "summary": "Blocked: exact native V5 baseline and decision trace are not bound",
+  "ticks": [
+   {
+    "error": "baseline_unbound",
+    "status": "BLOCKED",
+    "summary": "Blocked: exact native V5 baseline and decision trace are not bound"
+   }
+  ]
+ },
+ "loop:decision_reviewer": {
+  "body": {
+   "detail": {
+    "code": "loop_not_allowed"
+   }
+  },
+  "status_code": 403
+ },
+ "notes:decision_reviewer": {
+  "body": {
+   "detail": {
+    "code": "notes_invalid"
+   }
+  },
+  "status_code": 400
+ },
+ "notes:market_analyst": {
+  "body": {
+   "agent_id": "market_analyst",
+   "notes": "fixture note"
+  },
+  "status_code": 200
+ },
+ "notes:source_auditor": {
+  "body": {
+   "agent_id": "source_auditor",
+   "notes": "fixture note"
+  },
+  "status_code": 200
+ },
+ "profile": {
+  "body": {
+   "condor": {
+    "base_revision": "ff8858df765cffe4d325fde384f7a2eecdf51641"
+   },
+   "readiness": {
+    "account_owner": "UNBOUND",
+    "account_owner_reason": "No V5 account and position owner is bound.",
+    "market_picture_owner": "UNBOUND",
+    "market_picture_owner_reason": "The V5 context is not an ordinary Condor Market Picture frame.",
+    "native_owner": "UNBOUND",
+    "native_owner_reason": "The exact V5 controller baseline and native decision trace are not bound.",
+    "research_owner": "UNBOUND",
+    "research_owner_reason": "No V5 Research OS source is bound.",
+    "tradepad_owner": "UNBOUND",
+    "tradepad_owner_reason": "No V5 Tradepad session or publication is bound."
+   },
+   "schema_version": "v5-dashboard-profile.v1",
+   "server": {
+    "execution_enabled": false,
+    "host": "razer",
+    "mode": "reports-only",
+    "port": 8088,
+    "server_id": "rsibot-v5"
+   }
+  },
+  "status_code": 200
+ },
+ "report:decision_reviewer": {
+  "status": "BLOCKED",
+  "status_code": 200,
+  "summary": "This role is blocked until the native baseline is bound",
+  "ticks": [
+   {
+    "error": "task_not_allowed",
+    "status": "BLOCKED",
+    "summary": "This role has no enabled public-data task"
+   }
+  ]
+ },
+ "settings": {
+  "effective_policy": {
+   "allowed_tools": [
+    "get_advice_history",
+    "get_market_context",
+    "request_market_report"
+   ],
+   "execution_enabled": false,
+   "provider_key_exposed_to_dashboard": false,
+   "report_requests_require_explicit_user_action": true
+  },
+  "scheduler": {
+   "last_status": "ACCEPTED"
+  },
+  "task_profiles": [
+   {
+    "credential_status": "READY",
+    "enabled": true,
+    "model": "fixture",
+    "task_id": "market_context"
+   },
+   {
+    "credential_status": "READY",
+    "enabled": true,
+    "model": "fixture",
+    "task_id": "source_quality"
+   }
+  ]
+ },
+ "upstream_posts": [],
+ "upstream_task_reads": [
+  "latest:market_context",
+  "latest:source_quality"
+ ],
+ "workspace_agents": [
+  {
+   "blockers": [],
+   "description": "Review qualified market context and produce a bounded evidence report.",
+   "empty_allowlist_means": "deny_all",
+   "id": "market_analyst",
+   "loops": [
+    {
+     "frequency_sec": 1800,
+     "id": "market_analyst_monitor",
+     "max_ticks": 48,
+     "name": "Bounded report monitor"
+    }
+   ],
+   "mode": "reports-only",
+   "model": "fixture",
+   "name": "V5 Market Analyst",
+   "skills": [
+    {
+     "content": "Use only qualified snapshots. Report the snapshot identity, availability time,\ncoverage and rejection reasons. Keep spot and derivatives evidence separate.\nDo not infer executed flow, liquidity, tradability, or predictive probability\nfrom candle data. A missing or stale required field stays unavailable.",
+     "id": "market_context",
+     "name": "Market Context Evidence"
+    }
+   ],
+   "source": "stock",
+   "status": "ready",
+   "task_id": "market_context",
+   "tool_policy_mode": "explicit_v5_allowlist",
+   "tools": [
+    "get_market_context",
+    "get_advice_history",
+    "request_market_report"
+   ]
+  },
+  {
+   "blockers": [],
+   "description": "Check source identity, freshness, coverage, and provenance for V5 reports.",
+   "empty_allowlist_means": "deny_all",
+   "id": "source_auditor",
+   "loops": [
+    {
+     "frequency_sec": 1800,
+     "id": "source_auditor_monitor",
+     "max_ticks": 48,
+     "name": "Bounded report monitor"
+    }
+   ],
+   "mode": "reports-only",
+   "model": "fixture",
+   "name": "V5 Source Auditor",
+   "skills": [
+    {
+     "content": "Verify that evidence names its source, schema, event time, receipt or\navailability time, and qualification state. Distinguish absent, stale, rejected,\npartial, and unbound evidence. Never infer missing values or claim that a source\nis reliable from a successful HTTP response alone.",
+     "id": "source_quality",
+     "name": "Source Quality Review"
+    }
+   ],
+   "source": "stock",
+   "status": "ready",
+   "task_id": "source_quality",
+   "tool_policy_mode": "explicit_v5_allowlist",
+   "tools": [
+    "get_market_context",
+    "get_advice_history",
+    "request_market_report"
+   ]
+  },
+  {
+   "blockers": [
+    "Native baseline identity and decision trace are not bound"
+   ],
+   "description": "Review native V5 decision traces after the exact baseline is bound.",
+   "empty_allowlist_means": "deny_all",
+   "id": "decision_reviewer",
+   "loops": [
+    {
+     "frequency_sec": 1800,
+     "id": "decision_reviewer_monitor",
+     "max_ticks": 48,
+     "name": "Bounded report monitor"
+    }
+   ],
+   "mode": "reports-only",
+   "model": null,
+   "name": "V5 Decision Reviewer",
+   "skills": [
+    {
+     "content": "A review needs the native owner decision, exact baseline binding, decision-time\ninputs, and outcome linkage. Without these records the result is unavailable.\nMarket context alone does not establish a V5 decision or strategy performance.",
+     "id": "decision_trace",
+     "name": "Native Decision Trace"
+    }
+   ],
+   "source": "stock",
+   "status": "blocked",
+   "task_id": null,
+   "tool_policy_mode": "explicit_v5_allowlist",
+   "tools": []
+  }
+ ],
+ "workspace_task_profiles": null
+}

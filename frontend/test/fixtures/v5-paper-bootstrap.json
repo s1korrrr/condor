@@ -1,0 +1,448 @@
+{
+ "bot": "meridian_v5_paper",
+ "cases": {
+  "current_qualification": {
+   "now_ms": 1793228664252,
+   "payload": {
+    "monitoring": {
+     "bot_name": "meridian_v5_paper",
+     "stale_threshold_seconds": 30
+    },
+    "runtime_status": {
+     "active_executors": [],
+     "active_orders_count": null,
+     "bot_name": "meridian_v5_paper",
+     "controllers": [
+      {
+       "controller_id": "modular_spot_meridian_v5_paper_bnb",
+       "controller_name": "meridian_v5",
+       "custom_info": {
+        "acquisition_enabled": true,
+        "bag": {
+         "breakeven_price": "0",
+         "held_amount": "0",
+         "reason": "no_bag",
+         "release": null,
+         "trail_armed": false,
+         "trail_peak": null
+        },
+        "candle_open": 1793228580,
+        "capital_scope": "RECORDER_SCOPED",
+        "data_source": "native",
+        "economic_validation": "CANDLE_MODEL_MAR_SEP26_BNB_IN_SAMPLE_EXPLORATORY_PAPER_CANDIDATE",
+        "evidence_candidate_sha256": "c5fe59c58c8abdfa172efd72cdd37a3f48625d0d9daaae13c22cc88f128620b7",
+        "execution_enabled": true,
+        "execution_mode": "paper",
+        "exit_target": {
+         "kind": "fixed_net_take_profit",
+         "net_take_profit": "0.008"
+        },
+        "limits": {
+         "entry_quote": "100",
+         "pair_quote": "40000",
+         "program_quote": "200000"
+        },
+        "modular_status": "same_candle",
+        "operator": {
+         "entry_paused": false,
+         "last_command_id": null,
+         "reason": null,
+         "scope": null,
+         "updated_at": null
+        },
+        "recipe_binding": {
+         "configuration_sha256": "a2e6591a1c97f38bfb880c39228754f4acaee6cc07508810064d9561ed01d3e1",
+         "recipe_id": "meridian_v5_target_v1",
+         "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+         "schema_version": 1,
+         "source_sha256": "777a4b65438392ad80b02fbf910991b56bc7658484ce3ea9eb1299bfc76602b9"
+        },
+        "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+        "recipe_version": "meridian_v5_target_v1",
+        "strategy_name": "V5",
+        "universe_coverage": null,
+        "universe_mode": "fixed"
+       },
+       "execution_mode": "paper",
+       "observation_status": "available",
+       "pair": "BNB-USDC",
+       "report_state": "current",
+       "state": "same_candle"
+      },
+      {
+       "controller_id": "modular_spot_meridian_v5_paper_btc",
+       "controller_name": "meridian_v5",
+       "custom_info": {
+        "acquisition_enabled": true,
+        "bag": {
+         "breakeven_price": "0",
+         "held_amount": "0",
+         "reason": "no_bag",
+         "release": null,
+         "trail_armed": false,
+         "trail_peak": null
+        },
+        "candle_open": 1793228580,
+        "capital_scope": "RECORDER_SCOPED",
+        "data_source": "native",
+        "economic_validation": "CANDLE_MODEL_MAR_SEP26_BNB_IN_SAMPLE_EXPLORATORY_PAPER_CANDIDATE",
+        "evidence_candidate_sha256": "c5fe59c58c8abdfa172efd72cdd37a3f48625d0d9daaae13c22cc88f128620b7",
+        "execution_enabled": true,
+        "execution_mode": "paper",
+        "exit_target": {
+         "kind": "fixed_net_take_profit",
+         "net_take_profit": "0.008"
+        },
+        "limits": {
+         "entry_quote": "100",
+         "pair_quote": "40000",
+         "program_quote": "200000"
+        },
+        "modular_status": "same_candle",
+        "operator": {
+         "entry_paused": false,
+         "last_command_id": null,
+         "reason": null,
+         "scope": null,
+         "updated_at": null
+        },
+        "recipe_binding": {
+         "configuration_sha256": "eff5f910e857923a58b2c7aed044c5fdcad98d64c745b8cbca0d5627ebfbe25c",
+         "recipe_id": "meridian_v5_target_v1",
+         "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+         "schema_version": 1,
+         "source_sha256": "777a4b65438392ad80b02fbf910991b56bc7658484ce3ea9eb1299bfc76602b9"
+        },
+        "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+        "recipe_version": "meridian_v5_target_v1",
+        "strategy_name": "V5",
+        "universe_coverage": null,
+        "universe_mode": "fixed"
+       },
+       "execution_mode": "paper",
+       "observation_status": "available",
+       "pair": "BTC-USDC",
+       "report_state": "current",
+       "state": "same_candle"
+      },
+      {
+       "controller_id": "modular_spot_meridian_v5_paper_eth",
+       "controller_name": "meridian_v5",
+       "custom_info": {
+        "acquisition_enabled": true,
+        "bag": {
+         "breakeven_price": "0",
+         "held_amount": "0",
+         "reason": "no_bag",
+         "release": null,
+         "trail_armed": false,
+         "trail_peak": null
+        },
+        "candle_open": 1793228580,
+        "capital_scope": "RECORDER_SCOPED",
+        "data_source": "native",
+        "economic_validation": "CANDLE_MODEL_MAR_SEP26_BNB_IN_SAMPLE_EXPLORATORY_PAPER_CANDIDATE",
+        "evidence_candidate_sha256": "c5fe59c58c8abdfa172efd72cdd37a3f48625d0d9daaae13c22cc88f128620b7",
+        "execution_enabled": true,
+        "execution_mode": "paper",
+        "exit_target": {
+         "kind": "fixed_net_take_profit",
+         "net_take_profit": "0.008"
+        },
+        "limits": {
+         "entry_quote": "100",
+         "pair_quote": "40000",
+         "program_quote": "200000"
+        },
+        "modular_status": "same_candle",
+        "operator": {
+         "entry_paused": false,
+         "last_command_id": null,
+         "reason": null,
+         "scope": null,
+         "updated_at": null
+        },
+        "recipe_binding": {
+         "configuration_sha256": "11233f91528902a622479821deea11ec590aba73d74e2753f0b30c028013fdf3",
+         "recipe_id": "meridian_v5_target_v1",
+         "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+         "schema_version": 1,
+         "source_sha256": "777a4b65438392ad80b02fbf910991b56bc7658484ce3ea9eb1299bfc76602b9"
+        },
+        "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+        "recipe_version": "meridian_v5_target_v1",
+        "strategy_name": "V5",
+        "universe_coverage": null,
+        "universe_mode": "fixed"
+       },
+       "execution_mode": "paper",
+       "observation_status": "available",
+       "pair": "ETH-USDC",
+       "report_state": "current",
+       "state": "same_candle"
+      },
+      {
+       "controller_id": "modular_spot_meridian_v5_paper_sol",
+       "controller_name": "meridian_v5",
+       "custom_info": {
+        "acquisition_enabled": true,
+        "bag": {
+         "breakeven_price": "0",
+         "held_amount": "0",
+         "reason": "no_bag",
+         "release": null,
+         "trail_armed": false,
+         "trail_peak": null
+        },
+        "candle_open": 1793228580,
+        "capital_scope": "RECORDER_SCOPED",
+        "data_source": "native",
+        "economic_validation": "CANDLE_MODEL_MAR_SEP26_BNB_IN_SAMPLE_EXPLORATORY_PAPER_CANDIDATE",
+        "evidence_candidate_sha256": "c5fe59c58c8abdfa172efd72cdd37a3f48625d0d9daaae13c22cc88f128620b7",
+        "execution_enabled": true,
+        "execution_mode": "paper",
+        "exit_target": {
+         "kind": "fixed_net_take_profit",
+         "net_take_profit": "0.008"
+        },
+        "limits": {
+         "entry_quote": "100",
+         "pair_quote": "40000",
+         "program_quote": "200000"
+        },
+        "modular_status": "same_candle",
+        "operator": {
+         "entry_paused": false,
+         "last_command_id": null,
+         "reason": null,
+         "scope": null,
+         "updated_at": null
+        },
+        "recipe_binding": {
+         "configuration_sha256": "2ef11dd29be559eec2c0bcb2b4666397aad62b4e8bbe4f84f12643318ab61fd2",
+         "recipe_id": "meridian_v5_target_v1",
+         "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+         "schema_version": 1,
+         "source_sha256": "777a4b65438392ad80b02fbf910991b56bc7658484ce3ea9eb1299bfc76602b9"
+        },
+        "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+        "recipe_version": "meridian_v5_target_v1",
+        "strategy_name": "V5",
+        "universe_coverage": null,
+        "universe_mode": "fixed"
+       },
+       "execution_mode": "paper",
+       "observation_status": "available",
+       "pair": "SOL-USDC",
+       "report_state": "current",
+       "state": "same_candle"
+      },
+      {
+       "controller_id": "modular_spot_meridian_v5_paper_xrp",
+       "controller_name": "meridian_v5",
+       "custom_info": {
+        "acquisition_enabled": true,
+        "bag": {
+         "breakeven_price": "0",
+         "held_amount": "0",
+         "reason": "no_bag",
+         "release": null,
+         "trail_armed": false,
+         "trail_peak": null
+        },
+        "candle_open": 1793228580,
+        "capital_scope": "RECORDER_SCOPED",
+        "data_source": "native",
+        "economic_validation": "CANDLE_MODEL_MAR_SEP26_BNB_IN_SAMPLE_EXPLORATORY_PAPER_CANDIDATE",
+        "evidence_candidate_sha256": "c5fe59c58c8abdfa172efd72cdd37a3f48625d0d9daaae13c22cc88f128620b7",
+        "execution_enabled": true,
+        "execution_mode": "paper",
+        "exit_target": {
+         "kind": "fixed_net_take_profit",
+         "net_take_profit": "0.008"
+        },
+        "limits": {
+         "entry_quote": "100",
+         "pair_quote": "40000",
+         "program_quote": "200000"
+        },
+        "modular_status": "same_candle",
+        "operator": {
+         "entry_paused": false,
+         "last_command_id": null,
+         "reason": null,
+         "scope": null,
+         "updated_at": null
+        },
+        "recipe_binding": {
+         "configuration_sha256": "7399e6ebc0830d292fa1653f7cc3ced66174c49bc2fb01f5dff51b22f364a81d",
+         "recipe_id": "meridian_v5_target_v1",
+         "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+         "schema_version": 1,
+         "source_sha256": "777a4b65438392ad80b02fbf910991b56bc7658484ce3ea9eb1299bfc76602b9"
+        },
+        "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+        "recipe_version": "meridian_v5_target_v1",
+        "strategy_name": "V5",
+        "universe_coverage": null,
+        "universe_mode": "fixed"
+       },
+       "execution_mode": "paper",
+       "observation_status": "available",
+       "pair": "XRP-USDC",
+       "report_state": "current",
+       "state": "same_candle"
+      }
+     ],
+     "execution": "SIMULATED_WALLET_ONLY",
+     "execution_mode": "paper",
+     "positions_held": [],
+     "readiness_reasons": [],
+     "ready": true,
+     "simulated": true,
+     "updated_at": "2026-10-28T23:04:23.252Z"
+    }
+   }
+  },
+  "retained_all": {
+   "now_ms": 1800000000000,
+   "payload": {
+    "monitoring": {
+     "bot_name": "meridian_v5_paper",
+     "stale_threshold_seconds": 30
+    },
+    "runtime_status": {
+     "active_executors": null,
+     "active_orders_count": null,
+     "bot_name": "meridian_v5_paper",
+     "controllers": [
+      {
+       "controller_id": "meridian_v5_BNB_USDC",
+       "controller_name": "meridian_v5",
+       "custom_info": {
+        "bag": {
+         "breakeven_price": "600.5",
+         "held_amount": "0.1",
+         "reason": "hold",
+         "release": null,
+         "trail_armed": false,
+         "trail_peak": null
+        },
+        "candle_open": 1799999940,
+        "execution_enabled": true,
+        "modular_status": "hold"
+       },
+       "execution_mode": "paper",
+       "observation_status": "unavailable",
+       "pair": "BNB-USDC",
+       "report_observed_at": 1799999997.0,
+       "report_state": "retained",
+       "state": "hold"
+      },
+      {
+       "controller_id": "meridian_v5_BTC_USDC",
+       "controller_name": "meridian_v5",
+       "custom_info": {
+        "bag": {
+         "breakeven_price": "600.5",
+         "held_amount": "0.1",
+         "reason": "hold",
+         "release": null,
+         "trail_armed": false,
+         "trail_peak": null
+        },
+        "candle_open": 1799999940,
+        "execution_enabled": true,
+        "modular_status": "hold"
+       },
+       "execution_mode": "paper",
+       "observation_status": "unavailable",
+       "pair": "BTC-USDC",
+       "report_observed_at": 1799999997.0,
+       "report_state": "retained",
+       "state": "hold"
+      },
+      {
+       "controller_id": "meridian_v5_ETH_USDC",
+       "controller_name": "meridian_v5",
+       "custom_info": {
+        "bag": {
+         "breakeven_price": "600.5",
+         "held_amount": "0.1",
+         "reason": "hold",
+         "release": null,
+         "trail_armed": false,
+         "trail_peak": null
+        },
+        "candle_open": 1799999940,
+        "execution_enabled": true,
+        "modular_status": "hold"
+       },
+       "execution_mode": "paper",
+       "observation_status": "unavailable",
+       "pair": "ETH-USDC",
+       "report_observed_at": 1799999997.0,
+       "report_state": "retained",
+       "state": "hold"
+      },
+      {
+       "controller_id": "meridian_v5_SOL_USDC",
+       "controller_name": "meridian_v5",
+       "custom_info": {
+        "bag": {
+         "breakeven_price": "600.5",
+         "held_amount": "0.1",
+         "reason": "hold",
+         "release": null,
+         "trail_armed": false,
+         "trail_peak": null
+        },
+        "candle_open": 1799999940,
+        "execution_enabled": true,
+        "modular_status": "hold"
+       },
+       "execution_mode": "paper",
+       "observation_status": "unavailable",
+       "pair": "SOL-USDC",
+       "report_observed_at": 1799999997.0,
+       "report_state": "retained",
+       "state": "hold"
+      },
+      {
+       "controller_id": "meridian_v5_XRP_USDC",
+       "controller_name": "meridian_v5",
+       "custom_info": {
+        "bag": {
+         "breakeven_price": "600.5",
+         "held_amount": "0.1",
+         "reason": "hold",
+         "release": null,
+         "trail_armed": false,
+         "trail_peak": null
+        },
+        "candle_open": 1799999940,
+        "execution_enabled": true,
+        "modular_status": "hold"
+       },
+       "execution_mode": "paper",
+       "observation_status": "unavailable",
+       "pair": "XRP-USDC",
+       "report_observed_at": 1799999997.0,
+       "report_state": "retained",
+       "state": "hold"
+      }
+     ],
+     "execution": "SIMULATED_WALLET_ONLY",
+     "execution_mode": "paper",
+     "positions_held": null,
+     "readiness_reasons": [
+      "fresh_books_required:BNB-USDC"
+     ],
+     "ready": false,
+     "simulated": true,
+     "updated_at": "2027-01-15T07:59:59.000Z"
+    }
+   }
+  }
+ }
+}

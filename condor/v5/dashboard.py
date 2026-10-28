@@ -10,6 +10,7 @@ without it every projection is the unbound release, unchanged.
 from __future__ import annotations
 
 import json
+import math
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qsl, unquote, urlsplit
@@ -304,8 +305,12 @@ def _decimal_text(value) -> str | None:
 
 
 def _float(value) -> float | None:
+    """A finite float or None: a finite decimal beyond float range ("1e999") is withheld."""
     text = _decimal_text(value)
-    return None if text is None else float(text)
+    if text is None:
+        return None
+    number = float(text)
+    return number if math.isfinite(number) else None
 
 
 def _side(value) -> str | None:
@@ -446,15 +451,19 @@ def _paper_bots(paper: PaperObservation) -> dict:
         "controller_kind": status["controller_kind"],
         "process_boot_id": status["process_boot_id"],
     }
+    total_pnl = (
+        sum(row["global_pnl_quote"] for row in controllers) if complete else None
+    )
+    total_volume = (
+        sum(row["volume_traded"] for row in controllers) if complete else None
+    )
+    # Finite parts can still sum beyond float range.
+    complete = complete and math.isfinite(total_pnl) and math.isfinite(total_volume)
     return {
         "controllers": controllers,
         "bots": [bot],
-        "total_pnl": sum(row["global_pnl_quote"] for row in controllers)
-        if complete
-        else None,
-        "total_volume": sum(row["volume_traded"] for row in controllers)
-        if complete
-        else None,
+        "total_pnl": total_pnl if complete else None,
+        "total_volume": total_volume if complete else None,
         "metrics_available": complete,
         "metrics_unavailable_reason": None
         if complete
@@ -474,7 +483,8 @@ def _report_rows(controller_id: str, report: dict | None) -> tuple[list, list] |
     """Positions and active executors of one native report, or None when unrecognized."""
     if report is None:
         return None
-    executors, positions = report.get("executors", []), report.get("positions", [])
+    # Both lists are required: a missing list is an unknown, never an empty book.
+    executors, positions = report.get("executors"), report.get("positions")
     if (
         not isinstance(executors, list)
         or not isinstance(positions, list)
@@ -534,14 +544,38 @@ def _report_rows(controller_id: str, report: dict | None) -> tuple[list, list] |
     return held, active
 
 
+def _report_state(paper: PaperObservation, controller_id: str, current: bool) -> dict:
+    """Whether a controller's report is current; a retained one is labelled with its own date."""
+    if current:
+        return {"report_state": "current"}
+    status = paper.status
+    retained = status.get("retained_reports")
+    observed = status.get("retained_reports_observed_at")
+    if (
+        paper.state == "FRESH"
+        and isinstance(retained, dict)
+        and isinstance(retained.get(controller_id), dict)
+        and type(observed) in (int, float)
+        and math.isfinite(observed)
+    ):
+        # Valued at a quiet book's last observation: dated, never current, and
+        # never counted into this observation's executors or positions.
+        return {"report_state": "retained", "report_observed_at": observed}
+    return {"report_state": "unavailable"}
+
+
 def _paper_bootstrap(paper: PaperObservation) -> dict:
     status = paper.status
     controllers, positions, executors = [], [], []
+    complete = True
     for row in status["controllers"]:
         rows = _report_rows(row["id"], _report(paper, row["id"]))
-        if rows is not None:
+        if rows is None:
+            complete = False
+        else:
             positions.extend(rows[0])
             executors.extend(rows[1])
+        report_state = _report_state(paper, row["id"], rows is not None)
         info = _custom_info(row)
         pairs = _pairs(row)
         for pair in pairs:
@@ -558,6 +592,7 @@ def _paper_bootstrap(paper: PaperObservation) -> dict:
                     if rows is not None
                     else "unavailable",
                     "custom_info": info,
+                    **report_state,
                     **(
                         {"pair_projection_source": "native_owner_symbols"}
                         if isinstance(row["pair"], list)
@@ -578,8 +613,10 @@ def _paper_bootstrap(paper: PaperObservation) -> dict:
             "ready": status["ready"],
             "readiness_reasons": list(status["reasons"])[:MAX_ROWS],
             "controllers": controllers,
-            "positions_held": positions,
-            "active_executors": executors,
+            # Bot-wide lists are null, not partial, unless every controller has a
+            # current native report: a missing report is not zero executors.
+            "positions_held": positions if complete else None,
+            "active_executors": executors if complete else None,
             "active_orders_count": None,
         },
         "monitoring": {

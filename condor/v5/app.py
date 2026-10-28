@@ -22,13 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
-from .agents import (
-    AGENT_SPECS,
-    PAPER_ROLES,
-    REPORT_ROLES,
-    AgentCatalog,
-    AgentDefinition,
-)
+from .agents import AgentCatalog, AgentDefinition
 from .config import Settings, read_secret_file
 from .dashboard import dashboard_profile, read_compatibility_path
 from .paper import PaperObservation, read_paper_status
@@ -48,7 +42,9 @@ KNOWN_TASK_IDS = (*ADVISOR_TASK_IDS, PAPER_TASK_ID)
 _USD_STRING = re.compile(r"^(?:0|[1-9]\d*)(?:\.\d+)?$")
 
 
-def _safe_policy_metadata(payload: Any) -> tuple[dict[str, str], dict[str, Any]]:
+def _safe_policy_metadata(
+    payload: Any, task_ids: tuple[str, ...] = ADVISOR_TASK_IDS
+) -> tuple[dict[str, str], dict[str, Any]]:
     if not isinstance(payload, dict):
         return {}, {}
     raw_budget = payload.get("budget_policy")
@@ -75,7 +71,7 @@ def _safe_policy_metadata(payload: Any) -> tuple[dict[str, str], dict[str, Any]]
         for key in ("last_status", "task_id"):
             value = raw_scheduler.get(key)
             if isinstance(value, str) and len(value) <= 128:
-                if key != "task_id" or value in KNOWN_TASK_IDS:
+                if key != "task_id" or value in task_ids:
                     scheduler[key] = value
         value = raw_scheduler.get("last_attempt_ms")
         if isinstance(value, int) and not isinstance(value, bool) and value > 0:
@@ -261,6 +257,10 @@ def create_app(
     config = settings or Settings.from_env()
     store = state or WorkspaceState(config.runtime_root, clock=clock)
     agents = catalog or AgentCatalog(config)
+    # The decision-review task exists only with a configured paper status file.
+    task_ids = (
+        KNOWN_TASK_IDS if config.paper_status_file is not None else ADVISOR_TASK_IDS
+    )
     api = upstream or V5Upstream(config)
     active_loop_task: asyncio.Task | None = None
     active_loop_stop: asyncio.Event | None = None
@@ -442,7 +442,7 @@ def create_app(
 
     def task_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
         rows = payload.get("tasks", [])
-        allowed = set(KNOWN_TASK_IDS)
+        allowed = set(task_ids)
         credential_status = payload.get("credential_status")
         if credential_status not in {"READY", "API_KEY_REQUIRED"}:
             credential_status = None
@@ -500,7 +500,7 @@ def create_app(
         if agent.task_id:
             ready, reason = task_ready(agent.task_id, rows)
             blockers = [] if ready else [reason or "task_disabled"]
-            if agent.id in PAPER_ROLES:
+            if agent.id in agents.paper_roles:
                 owner = paper_blocker(paper)
                 blockers = ([owner] if owner else []) + blockers
                 if blockers:
@@ -529,9 +529,6 @@ def create_app(
             "latest": "/v1/advice/latest",
         }
         names = list(paths)
-        task_ids = (
-            KNOWN_TASK_IDS if config.paper_status_file is not None else ADVISOR_TASK_IDS
-        )
         results = await asyncio.gather(
             *(get_json(paths[name]) for name in names),
             api.task_profiles(),
@@ -558,7 +555,7 @@ def create_app(
         else:
             rows = task_rows(task_result)
             source["budget_policy"], source["scheduler"] = _safe_policy_metadata(
-                task_result
+                task_result, task_ids
             )
         latest_by_task: dict[str, dict[str, Any]] = {}
         for task_id, report_result in zip(task_ids, results[len(names) + 1 :]):
@@ -660,7 +657,8 @@ def create_app(
             skills=[dict(skill) for skill in agent.skills],
             notes=agent.notes,
             policy={
-                "allowed_tools": list(agent.tools),
+                # The effective allowlist: a blocked paper role exposes none.
+                "allowed_tools": list(value["tools"]),
                 "execution_enabled": False,
                 "tool_policy_mode": "explicit_v5_allowlist",
                 "empty_allowlist_means": "deny_all",
@@ -690,7 +688,7 @@ def create_app(
             raise HTTPException(
                 507, detail={"code": "workspace_storage_capacity"}
             ) from exc
-        if agent_id in PAPER_ROLES:
+        if agent_id in agents.paper_roles:
             paper = await current_paper()
             blocker = paper_blocker(paper)
             if blocker is not None:
@@ -712,6 +710,18 @@ def create_app(
                 evidence_refs=[f"paper:{paper.bot_name}:{owner['process_boot_id']}"],
             )
             store.finish_session(session["id"], "COMPLETED", summary)
+            return session_response(session["id"])
+        if agent_id == "decision_reviewer":
+            summary = (
+                "Blocked: exact native V5 baseline and decision trace are not bound"
+            )
+            store.add_tick(
+                session["id"],
+                status="BLOCKED",
+                summary=summary,
+                error="baseline_unbound",
+            )
+            store.finish_session(session["id"], "BLOCKED", summary)
             return session_response(session["id"])
         try:
             context = await get_json("/v1/context")
@@ -744,7 +754,7 @@ def create_app(
         return session_response(session["id"])
 
     async def perform_report(agent: AgentDefinition, session_id: str) -> dict[str, Any]:
-        if agent.task_id is None or agent.id not in REPORT_ROLES:
+        if agent.task_id is None or agent.id not in agents.report_roles:
             store.add_tick(
                 session_id,
                 status="BLOCKED",
@@ -757,7 +767,7 @@ def create_app(
                 "This role is blocked until the native baseline is bound",
             )
             return session_response(session_id)
-        if agent.id in PAPER_ROLES:
+        if agent.id in agents.paper_roles:
             blocker = paper_blocker(await current_paper())
             if blocker is not None:
                 store.add_tick(
@@ -943,9 +953,9 @@ def create_app(
         await authorized_mutation(request)
         agent = agent_or_404(agent_id)
         allowed_loop = f"{agent_id}_monitor"
-        if agent_id not in REPORT_ROLES or payload.loop_id != allowed_loop:
+        if agent_id not in agents.report_roles or payload.loop_id != allowed_loop:
             raise HTTPException(403, detail={"code": "loop_not_allowed"})
-        if agent.id in PAPER_ROLES:
+        if agent.id in agents.paper_roles:
             blocker = paper_blocker(await current_paper())
             if blocker is not None:
                 raise HTTPException(409, detail={"code": blocker})
@@ -1079,7 +1089,7 @@ def create_app(
                 "allowed_tools": sorted(
                     {
                         tool
-                        for spec in AGENT_SPECS.values()
+                        for spec in agents.specs.values()
                         for tool in spec["allowed_tools"]
                     }
                 ),

@@ -244,6 +244,70 @@ def test_missing_symlinked_fifo_and_non_canonical_status_paths_are_unavailable(
     assert read_paper_status(fifo, now=NOW).reason == "PAPER_STATUS_NOT_REGULAR"
 
 
+def _swap_parent_for_symlink(tmp_path, monkeypatch, path, *, when):
+    """Replace the status file's directory with a symlink to an outside one at a chosen open."""
+    from condor.v5 import paper
+
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / path.name).write_text(json.dumps(status(controller_kind="OUTSIDE")))
+    real_open = os.open
+    swapped = []
+
+    def racing_open(target, flags, *args, **kwargs):
+        if not swapped and when(target):
+            swapped.append(target)
+            path.parent.rename(tmp_path / "old_mounted")
+            path.parent.symlink_to(outside, target_is_directory=True)
+        return real_open(target, flags, *args, **kwargs)
+
+    monkeypatch.setattr(paper.os, "open", racing_open)
+    return swapped
+
+
+def test_parent_swapped_for_a_symlink_after_the_path_check_is_unavailable(
+    tmp_path, monkeypatch
+):
+    path = write_status(tmp_path, status())
+    swapped = _swap_parent_for_symlink(tmp_path, monkeypatch, path, when=lambda _: True)
+    result = read_paper_status(path, now=NOW)
+    assert swapped and result.state == "UNAVAILABLE"
+    assert result.reason == "PAPER_STATUS_PATH" and result.status is None
+
+
+def test_parent_swapped_before_the_file_open_still_reads_the_pinned_directory(
+    tmp_path, monkeypatch
+):
+    path = write_status(tmp_path, status())
+    swapped = _swap_parent_for_symlink(
+        tmp_path, monkeypatch, path, when=lambda target: str(target).endswith(path.name)
+    )
+    result = read_paper_status(path, now=NOW)
+    assert swapped and result.state == "FRESH"
+    assert result.status["controller_kind"] == "meridian_v5"
+
+
+def test_real_qualification_status_binds_all_five_controllers(tmp_path):
+    # A copy of the 2026-10-28 paper qualification status (qual-f2e81fe).
+    raw = (
+        Path(__file__).parent / "fixtures" / "v5_paper_qualification.status.json"
+    ).read_text()
+    payload = json.loads(raw)
+    observation = observe(tmp_path, raw, now=payload["generated_at"] + 1)
+    assert observation.state == "FRESH"
+    readiness = dashboard_profile(observation)["readiness"]
+    assert readiness["native_owner"] == "PAPER_BOUND"
+    boot = read_compatibility_path(
+        f"/api/v1/trading-visuals/bootstrap?bot={payload['bot_name']}", observation
+    )["runtime_status"]
+    assert len(boot["controllers"]) == 5
+    assert {row["observation_status"] for row in boot["controllers"]} == {"available"}
+    assert {row["report_state"] for row in boot["controllers"]} == {"current"}
+    assert boot["active_executors"] == [] and boot["positions_held"] == []
+    bots = read_compatibility_path(f"/api/v1/servers/{SERVER}/bots", observation)
+    assert bots["metrics_available"] is True and len(bots["controllers"]) == 5
+
+
 def test_settings_accept_only_an_absolute_status_file_path(tmp_path):
     env = {
         "V5_RUNTIME_ROOT": str(tmp_path / "runtime"),
@@ -277,14 +341,17 @@ def test_settings_accept_only_an_absolute_status_file_path(tmp_path):
 # --- pure projections -----------------------------------------------------------
 
 
-def test_unconfigured_projections_are_identical_to_the_unbound_release():
-    assert dashboard_profile(None) == dashboard_profile()
-    for path in (
-        f"/api/v1/servers/{SERVER}/status",
-        f"/api/v1/servers/{SERVER}/bots",
-        "/api/v1/trading-visuals/sources",
-    ):
-        assert read_compatibility_path(path, None) == read_compatibility_path(path)
+def test_unconfigured_app_is_identical_to_the_unbound_base_release():
+    # The fixture is v5_unbound_probe's output on condor 8284ffe7 (see its docstring):
+    # projections, reviewer identity and policy, notes, inspect, report and loop.
+    from v5_unbound_probe import probe
+
+    expected = json.loads(
+        (
+            Path(__file__).parent / "fixtures" / "v5_unbound_base_8284ffe7.json"
+        ).read_text()
+    )
+    assert probe() == expected
 
 
 def test_profile_binds_only_a_fresh_status(tmp_path):
@@ -470,6 +537,87 @@ def test_trading_visuals_list_the_paper_bot_and_its_bootstrap(tmp_path):
     assert unbound.value.status_code == 503
 
 
+@pytest.mark.parametrize(
+    "report_value",
+    [{}, {"executors": [], "performance": report("BNB-USDC")["performance"]}],
+)
+def test_a_report_without_its_lists_is_not_an_empty_book(tmp_path, report_value):
+    payload = status()
+    payload["native_reports"][controller_id("BNB-USDC")] = report_value
+    runtime = read_compatibility_path(
+        f"/api/v1/trading-visuals/bootstrap?bot={BOT}", observe(tmp_path, payload)
+    )["runtime_status"]
+    bnb = next(
+        row
+        for row in runtime["controllers"]
+        if row["controller_id"] == controller_id("BNB-USDC")
+    )
+    assert bnb["observation_status"] == "unavailable"
+    assert runtime["active_executors"] is None and runtime["positions_held"] is None
+
+
+def test_unavailable_and_retained_reports_never_become_a_current_zero_count(tmp_path):
+    payload = status(
+        retained_reports=status()["native_reports"],
+        native_reports={},
+        unavailable_controller_ids=[controller_id(pair) for pair in PAIRS],
+        report_observed_at=None,
+        retained_reports_observed_at=NOW - 400,
+        ready=False,
+        reasons=["fresh_books_required:BNB-USDC"],
+    )
+    runtime = read_compatibility_path(
+        f"/api/v1/trading-visuals/bootstrap?bot={BOT}", observe(tmp_path, payload)
+    )["runtime_status"]
+    assert runtime["active_executors"] is None and runtime["positions_held"] is None
+    for row in runtime["controllers"]:
+        assert row["observation_status"] == "unavailable"
+        assert row["report_state"] == "retained"
+        assert row["report_observed_at"] == NOW - 400
+
+
+def test_one_retained_controller_withholds_the_bot_wide_lists(tmp_path):
+    payload = status()
+    identity = controller_id("BNB-USDC")
+    payload["retained_reports"] = {identity: payload["native_reports"].pop(identity)}
+    payload["unavailable_controller_ids"] = [identity]
+    payload["retained_reports_observed_at"] = NOW - 3
+    runtime = read_compatibility_path(
+        f"/api/v1/trading-visuals/bootstrap?bot={BOT}", observe(tmp_path, payload)
+    )["runtime_status"]
+    states = {
+        row["controller_id"]: row["report_state"] for row in runtime["controllers"]
+    }
+    assert states.pop(identity) == "retained" and set(states.values()) == {"current"}
+    assert runtime["active_executors"] is None and runtime["positions_held"] is None
+
+
+@pytest.mark.parametrize("pnl", ["1e999", "1e308"])
+def test_non_finite_pnl_withholds_metrics(tmp_path, pnl):
+    # "1e999" overflows one value; four "1e308" overflow only their sum.
+    payload = status()
+    for value in payload["native_reports"].values():
+        value["performance"]["global_pnl_quote"] = pnl
+    page = read_compatibility_path(
+        f"/api/v1/servers/{SERVER}/bots", observe(tmp_path, payload)
+    )
+    assert page["metrics_available"] is False and page["total_pnl"] is None
+    assert json.dumps(page, allow_nan=False)
+
+
+def test_overflowing_pnl_is_unavailable_over_http_not_a_500(tmp_path):
+    payload = status()
+    for value in payload["native_reports"].values():
+        value["performance"]["global_pnl_quote"] = "1e999"
+    with client_for(tmp_path, ReviewUpstream(False), payload=payload) as client:
+        client._transport.raise_server_exceptions = False
+        response = client.get(
+            "/api/v5/dashboard/read", params={"path": f"/api/v1/servers/{SERVER}/bots"}
+        )
+    assert response.status_code == 200, response.text
+    assert response.json()["metrics_available"] is False
+
+
 def test_multi_pair_controller_rows_are_owner_symbol_projections(tmp_path):
     row = dict(controller_row("BNB-USDC"), id="meridian_v5_portfolio", pair=list(PAIRS))
     payload = status(controllers=[row], native_reports={})
@@ -589,7 +737,11 @@ def test_reviewer_is_ready_only_when_task_enabled_and_paper_bound(tmp_path):
             "paper_owner_stale"
         ]
     with client_for(tmp_path / "d", ReviewUpstream(True), configured=False) as client:
-        assert reviewer(client)["blockers"] == ["paper_owner_unbound"]
+        # Without a paper status file the reviewer is the unbound base role.
+        assert reviewer(client)["task_id"] is None
+        assert reviewer(client)["blockers"] == [
+            "Native baseline identity and decision trace are not bound"
+        ]
     with client_for(
         tmp_path / "e", ReviewUpstream(False), payload="not json"
     ) as client:
@@ -607,7 +759,7 @@ def test_blocked_reviewer_report_records_the_precise_reason_without_calling(tmp_
         ).json()
     assert (
         session["status"] == "BLOCKED"
-        and session["ticks"][0]["error"] == "paper_owner_unbound"
+        and session["ticks"][0]["error"] == "task_not_allowed"
     )
     assert not any(call[0] == "POST" for call in upstream.calls)
 
@@ -643,3 +795,54 @@ def test_app_profile_and_bots_read_the_configured_status(tmp_path):
     assert profile["readiness"]["native_owner"] == "PAPER_BOUND"
     assert bots["bots"][0]["bot_name"] == BOT
     assert boot.status_code == 200
+
+
+# --- backend-to-frontend contract ---------------------------------------------------
+
+FRONTEND_BOOTSTRAP = (
+    Path(__file__).parents[1]
+    / "frontend"
+    / "test"
+    / "fixtures"
+    / "v5-paper-bootstrap.json"
+)
+
+
+def frontend_bootstrap_cases(tmp_path) -> dict:
+    """Bootstrap projections the frontend test feeds through the Bots page code."""
+    retained = status(
+        retained_reports=status()["native_reports"],
+        native_reports={},
+        unavailable_controller_ids=[controller_id(pair) for pair in PAIRS],
+        report_observed_at=None,
+        retained_reports_observed_at=NOW - 3,
+        ready=False,
+        reasons=["fresh_books_required:BNB-USDC"],
+    )
+    real = json.loads(
+        (
+            Path(__file__).parent / "fixtures" / "v5_paper_qualification.status.json"
+        ).read_text()
+    )
+    path = f"/api/v1/trading-visuals/bootstrap?bot={BOT}"
+    return {
+        "retained_all": {
+            "now_ms": int(NOW * 1000),
+            "payload": read_compatibility_path(path, observe(tmp_path / "a", retained)),
+        },
+        "current_qualification": {
+            "now_ms": int((real["generated_at"] + 1) * 1000),
+            "payload": read_compatibility_path(
+                path, observe(tmp_path / "b", real, now=real["generated_at"] + 1)
+            ),
+        },
+    }
+
+
+def test_frontend_bootstrap_fixture_is_the_current_projection(tmp_path):
+    # frontend/test/v5-paper-binding.test.mjs runs these exact payloads through
+    # buildBotPositionView and projectBotStats; regenerate both together.
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    cases = frontend_bootstrap_cases(tmp_path)
+    assert json.loads(FRONTEND_BOOTSTRAP.read_text()) == {"bot": BOT, "cases": cases}

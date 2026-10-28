@@ -1,7 +1,5 @@
-# Paper decision review
+# Baseline review (blocked)
 
-Request one bounded `decision_review` report per tick. Each request uses the
-current public snapshot and the advisor's own read of the paper decision
-journal; this dashboard supplies no prompt, model or decision text. A blocked
-tick records the exact reason (paper owner stale, unavailable or unbound, or
-the task disabled) and makes no request.
+No decision review may run until the exact controller or recipe identity,
+configuration, source digest, and decision trace are available from the owner.
+Do not request a model report for this role while it is blocked.

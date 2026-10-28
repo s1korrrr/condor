@@ -4,7 +4,8 @@ Source contract: hummingbot ``scripts/component_paper_runtime.py``
 ``PaperRuntime.status()`` (``schema_version`` 1, ``paper_runtime_schema``
 ``native_component_paper_runtime_v1``), written atomically as
 ``<bot>.status.json`` every runtime step. The V5 dashboard reads one fixed,
-read-only mounted path. It never writes, never follows a symlink, and never
+read-only mounted path through a pinned directory chain. It never writes,
+never follows a symlink (in the file or any parent directory), and never
 fabricates a value: a missing, oversized or malformed file is UNAVAILABLE with
 a reason code, and an old one is STALE.
 """
@@ -78,14 +79,7 @@ def _read_regular(path: Path) -> bytes:
     # Symlinked parent directories would let the mount point be redirected.
     if os.path.realpath(path.parent) != str(path.parent):
         raise PaperStatusError("PAPER_STATUS_PATH")
-    flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | getattr(os, "O_CLOEXEC", 0)
-    try:
-        descriptor = os.open(path, flags)
-    except FileNotFoundError:
-        raise PaperStatusError("PAPER_STATUS_MISSING") from None
-    except OSError:
-        # ELOOP: the file itself is a symlink.
-        raise PaperStatusError("PAPER_STATUS_NOT_REGULAR") from None
+    descriptor = _open_pinned(path)
     try:
         metadata = os.fstat(descriptor)
         if not stat.S_ISREG(metadata.st_mode):
@@ -104,6 +98,43 @@ def _read_regular(path: Path) -> bytes:
         return b"".join(chunks)
     finally:
         os.close(descriptor)
+
+
+def _open_pinned(path: Path) -> int:
+    """Open ``path`` through a directory chain that cannot be redirected.
+
+    Each directory is opened with ``O_NOFOLLOW`` relative to its already opened
+    parent and the file relative to the last one, so no component can be swapped
+    for a symlink between the canonical-path check and the open. O_NONBLOCK keeps
+    a FIFO from blocking open.
+    """
+    cloexec = getattr(os, "O_CLOEXEC", 0)
+    directory_flags = os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | cloexec
+    try:
+        parent = os.open("/", directory_flags)
+    except OSError:
+        raise PaperStatusError("PAPER_STATUS_PATH") from None
+    try:
+        for part in path.parent.parts[1:]:
+            try:
+                child = os.open(part, directory_flags, dir_fd=parent)
+            except FileNotFoundError:
+                raise PaperStatusError("PAPER_STATUS_MISSING") from None
+            except OSError:
+                # ELOOP/ENOTDIR: a directory was replaced after the path check.
+                raise PaperStatusError("PAPER_STATUS_PATH") from None
+            os.close(parent)
+            parent = child
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK | cloexec
+        try:
+            return os.open(path.name, flags, dir_fd=parent)
+        except FileNotFoundError:
+            raise PaperStatusError("PAPER_STATUS_MISSING") from None
+        except OSError:
+            # ELOOP: the file itself is a symlink.
+            raise PaperStatusError("PAPER_STATUS_NOT_REGULAR") from None
+    finally:
+        os.close(parent)
 
 
 def _parse(raw: bytes) -> Any:

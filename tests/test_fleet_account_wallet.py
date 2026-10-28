@@ -406,7 +406,7 @@ def test_http_legacy_projection_does_not_mutate_canonical_micro_cache(
     # The cache keeps the reads; their canonical projection still carries the full wallet.
     cached_reads = routes._cache[(SERVER, True)]["full"][1]
     canonical = routes.summary.project_fleet_summary(
-        cached_reads, cached_reads.read_at_ms, routes.LAST_KNOWN
+        cached_reads, cached_reads.read_at_ms
     )
     assert canonical["wallet"]["equity"] == "900"
     glance = client.get(

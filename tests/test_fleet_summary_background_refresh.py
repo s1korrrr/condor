@@ -18,10 +18,12 @@ view, the glance and holdings; the named regressions are the review findings of 
 
 import asyncio
 import copy
+import json
 import random
 import threading
 import time
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 
@@ -414,7 +416,7 @@ async def test_projecting_cached_reads_equals_a_fresh_build_well_past_the_cache(
     snapshot = copy.deepcopy(inputs)
     for seconds in (0, 31, 89, 91, 119, 121, 179, 181, 240, 241, 300, 600):
         clock_ms = NOW_MS + seconds * 1000
-        projected = fs.project_fleet_summary(inputs, clock_ms, fs.LastKnown())
+        projected = fs.project_fleet_summary(inputs, clock_ms)
         fresh = await fs.build_fleet_summary(
             SERVER, "full", readers, clock_ms, is_admin=True, user_id=7
         )
@@ -460,7 +462,7 @@ async def cached_and_fresh(monkeypatch, store, seconds, view="full"):
         SERVER, view, readers, NOW_MS, is_admin=True, user_id=7
     )
     clock_ms = NOW_MS + seconds * 1000
-    cached = fs.project_fleet_summary(inputs, clock_ms, fs.LastKnown())
+    cached = fs.project_fleet_summary(inputs, clock_ms)
     fresh = await fs.build_fleet_summary(
         SERVER, "full", readers, clock_ms, is_admin=True, user_id=7
     )
@@ -553,8 +555,8 @@ async def test_finding_a_stale_day_change_is_withheld_from_the_glance(tmp_path):
     inputs = await fs.gather_fleet_inputs(
         SERVER, "glance", readers, NOW_MS, is_admin=True, user_id=7
     )
-    now = fs.glance(fs.project_fleet_summary(inputs, NOW_MS, fs.LastKnown()))
-    later = fs.glance(fs.project_fleet_summary(inputs, NOW_MS + 2_000, fs.LastKnown()))
+    now = fs.glance(fs.project_fleet_summary(inputs, NOW_MS))
+    later = fs.glance(fs.project_fleet_summary(inputs, NOW_MS + 2_000))
     ok_now = next(b for b in now["bots"] if b["bot"] == "ok_rsi")
     ok_later = next(b for b in later["bots"] if b["bot"] == "ok_rsi")
     assert ok_now["pnl_day"] == "1" and "pnl_day_stale" not in ok_now
@@ -605,3 +607,201 @@ def test_run_deltas_equal_the_per_pair_sum_near_the_boundary(seed):
     rng = random.Random(1000 + seed)
     samples = boundary_samples(rng, rng.randint(2, 12))
     assert fleet_pnl._run_deltas(samples) == reference_run_deltas(samples)
+
+
+# ── last known evidence never rolls backward (review of 9852e765) ──
+
+
+class ScriptedReaders(FakeReaders):
+    """Account and ok_rsi runtime reads that a test changes between builds."""
+
+    def __init__(self, store):
+        super().__init__(store)
+        self.account_read = fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)
+        self.runtime_read = None
+
+    async def account(self, server, user_id):
+        return copy.deepcopy(self.account_read)
+
+    async def owner(self, bot, path, params):
+        if bot == "ok_rsi" and path == "bootstrap" and self.runtime_read is not None:
+            return copy.deepcopy(self.runtime_read)
+        return await super().owner(bot, path, params)
+
+
+def runtime_read(bot, observed_ms, updated_ms):
+    body = _observed(
+        _capability(buy="can_trade", sell="can_trade", observed_at=iso(observed_ms)),
+        updated_ms,
+    )
+    body["runtime_status"]["bot_name"] = body["monitoring"]["bot_name"] = bot
+    return fs.OwnerRead(body)
+
+
+async def gather_at(readers, view, clock_ms):
+    return await fs.gather_fleet_inputs(
+        SERVER,
+        view,
+        readers,
+        clock_ms,
+        is_admin=True,
+        user_id=7,
+        clock_ms=lambda: clock_ms,
+        last_known=routes.LAST_KNOWN,
+    )
+
+
+@sync
+async def test_serving_older_cached_reads_never_rolls_last_known_evidence_back(
+    monkeypatch, store
+):
+    """Full and glance read sets share one LastKnown; an older one served later must not win."""
+    readers = ScriptedReaders(store)
+    monkeypatch.setattr(routes, "LAST_KNOWN", fs.LastKnown())
+    clock = {"s": NOW_S}
+    monkeypatch.setattr(routes.time, "time", lambda: clock["s"])
+
+    # T: the full view reads a wallet observed 119 s earlier.
+    readers.account_read = fs.OwnerRead(
+        account_analytics(observed_ms=NOW_MS - 119_000, amount="1000")
+    )
+    old_full = await gather_at(readers, "full", NOW_MS)
+    # T+6 s: a glance reads a newer wallet.
+    readers.account_read = fs.OwnerRead(
+        account_analytics(observed_ms=NOW_MS + 6_000, amount="1100")
+    )
+    await gather_at(readers, "glance", NOW_MS + 6_000)
+    # T+7 s: the older cached full read set is served.
+    clock["s"] = NOW_S + 7
+    served = routes._respond(old_full, "full")
+    assert served["wallet"]["equity"] == "1000", "it still shows its own read"
+    # T+8 s: a glance whose account read failed stands on the newest admitted wallet.
+    readers.account_read = fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)
+    failed = await gather_at(readers, "glance", NOW_MS + 8_000)
+    clock["s"] = NOW_S + 8
+    glance = routes._respond(failed, "glance")
+    assert glance["wallet"]["equity"] == "1100"
+    assert glance["wallet"]["held"] is True
+
+
+@sync
+async def test_serving_older_cached_reads_never_rolls_a_trading_capability_back(
+    monkeypatch, store
+):
+    readers = ScriptedReaders(store)
+    monkeypatch.setattr(routes, "LAST_KNOWN", fs.LastKnown())
+    clock = {"s": NOW_S}
+    monkeypatch.setattr(routes.time, "time", lambda: clock["s"])
+    readers.runtime_read = runtime_read("ok_rsi", NOW_MS - 50_000, NOW_MS - 1_000)
+    old_full = await gather_at(readers, "full", NOW_MS)
+    readers.runtime_read = runtime_read("ok_rsi", NOW_MS + 5_000, NOW_MS + 5_000)
+    await gather_at(readers, "glance", NOW_MS + 6_000)
+    clock["s"] = NOW_S + 7
+    routes._respond(old_full, "full")
+    readers.runtime_read = fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)
+    failed = await gather_at(readers, "full", NOW_MS + 8_000)
+    clock["s"] = NOW_S + 8
+    trading = card(routes._respond(failed, "full"), "ok_rsi")["trading"]
+    assert trading["held"] is True
+    assert trading["observed_ms"] == NOW_MS + 5_000, "the newest admitted capability"
+
+
+@sync
+async def test_an_older_read_completing_later_is_not_admitted(monkeypatch, store):
+    readers = ScriptedReaders(store)
+    monkeypatch.setattr(routes, "LAST_KNOWN", fs.LastKnown())
+    readers.account_read = fs.OwnerRead(
+        account_analytics(observed_ms=NOW_MS - 5_000, amount="1100")
+    )
+    await gather_at(readers, "glance", NOW_MS)
+    readers.account_read = fs.OwnerRead(
+        account_analytics(observed_ms=NOW_MS - 60_000, amount="1000")
+    )
+    await gather_at(
+        readers, "full", NOW_MS + 1_000
+    )  # a slower read, of an older observation
+    stored = routes.LAST_KNOWN.wallet[SERVER]
+    assert stored["current"]["priced_total"] == "1100"
+
+
+@sync
+async def test_projection_writes_no_last_known_state(monkeypatch, store):
+    readers = ScriptedReaders(store)
+    monkeypatch.setattr(routes, "LAST_KNOWN", fs.LastKnown())
+    readers.account_read = fs.OwnerRead(account_analytics(observed_ms=NOW_MS - 10_000))
+    readers.runtime_read = runtime_read("ok_rsi", NOW_MS - 2_000, NOW_MS - 1_000)
+    inputs = await gather_at(readers, "full", NOW_MS)
+    # Newer evidence admitted by a later read set.
+    readers.account_read = fs.OwnerRead(account_analytics(observed_ms=NOW_MS + 5_000))
+    await gather_at(readers, "glance", NOW_MS + 5_000)
+    before = copy.deepcopy((routes.LAST_KNOWN.wallet, routes.LAST_KNOWN.trading))
+    for seconds in (6, 10, 200, 400):
+        monkeypatch.setattr(routes.time, "time", lambda s=seconds: NOW_S + s)
+        for view in ("full", "glance"):
+            routes._respond(inputs, view)  # what every cached response does
+    assert (routes.LAST_KNOWN.wallet, routes.LAST_KNOWN.trading) == before
+
+
+# ── the Live Activity counts its lifetime from the source read (review of 9852e765) ──
+
+
+def activity_glance(read_at_ms, served_at_ms):
+    from condor.push import (
+        live_activity as la,
+    )  # noqa: F401  (imported for the module under test)
+
+    glance = json.loads(
+        (
+            Path(__file__).parent
+            / "fixtures"
+            / "fleet_summary"
+            / "summary_glance.example.json"
+        ).read_text()
+    )
+    glance["generated_at_ms"] = served_at_ms
+    glance["sources_read_at_ms"] = read_at_ms
+    glance["market"] = (
+        None  # no market verdict: the global lifetime alone bounds the content
+    )
+    glance["sections"]["market"] = {
+        "status": "missing",
+        "observed_at_ms": None,
+        "stale_after_ms": 90_000,
+        "reason": "FRAME_UNAVAILABLE",
+    }
+    return glance
+
+
+def test_a_cached_glance_does_not_extend_the_activity_lifetime():
+    from condor.push import live_activity as la
+
+    read_at = NOW_MS
+    state = la.content_state(
+        activity_glance(read_at, read_at + 59_000), stale_after_seconds=120
+    )
+    assert state["generated_at_ms"] == read_at, "the data time, not the serving time"
+    payload = la.build_update_payload(
+        state, now=(read_at + 59_000) / 1000, stale_after_seconds=120
+    )
+    assert payload["aps"]["stale-date"] == (read_at + 120_000) // 1000
+    # The app's global expiry (now - generated >= stale_after) is reached at T+120 s, not T+179 s.
+    assert (read_at + 121_000) - state["generated_at_ms"] >= state["stale_after_ms"]
+
+
+def test_an_older_summary_without_a_read_time_keeps_its_generation_time():
+    from condor.push import live_activity as la
+
+    glance = activity_glance(NOW_MS, NOW_MS)
+    del glance["sources_read_at_ms"]
+    assert la.content_state(glance)["generated_at_ms"] == NOW_MS
+
+
+def test_a_market_index_the_app_would_reject_is_left_out():
+    from condor.push import live_activity as la
+
+    state = la.content_state(activity_glance(NOW_MS, NOW_MS + 30_000))
+    admissible = {"as_of_ms": NOW_MS + 5_000, "value": "1"}
+    ahead = {"as_of_ms": NOW_MS + 5_001, "value": "1"}
+    assert la.with_market_index(state, admissible)["market_index"] == admissible
+    assert "market_index" not in la.with_market_index(state, ahead)
+    assert la.with_market_index(state, None) == state

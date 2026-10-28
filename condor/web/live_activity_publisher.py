@@ -164,7 +164,7 @@ async def publish_once(
                 registry,
                 user_id,
                 server,
-                {**state, "market_index": reused} if reused else state,
+                la.with_market_index(state, reused),
                 built_at=clock(),
             )
             written += 1
@@ -185,7 +185,7 @@ async def publish_once(
                     registry,
                     user_id,
                     server,
-                    {**state, "market_index": result},
+                    la.with_market_index(state, result),
                     built_at=clock(),
                 )
     if index_failed:

@@ -334,7 +334,7 @@ def _completed(
 def _respond(inputs: summary.FleetInputs, view: str) -> dict:
     """The response a read set gives now: the build's own projection at this request's clock, so a
     cached read set answers exactly as a fresh build from identical reads would."""
-    body = summary.project_fleet_summary(inputs, time.time() * 1000, LAST_KNOWN)
+    body = summary.project_fleet_summary(inputs, time.time() * 1000)
     return summary.glance(body) if view == "glance" else body
 
 

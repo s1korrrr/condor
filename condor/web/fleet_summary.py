@@ -31,7 +31,7 @@ import math
 import re
 import time
 from contextlib import asynccontextmanager, contextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Callable, Optional, Protocol
@@ -147,6 +147,9 @@ class LastKnown:
 
     Process memory only, owned by the caller (the route keeps one per process). A held value keeps its
     own observation time, so clients age it exactly as they age a fresh one; it is never renewed.
+    Wallet and trading evidence is admitted once per read set, when the reads complete
+    (``gather_fleet_inputs``), and only when it is at least as new as what is stored; projections
+    read the snapshot taken then and never write here.
 
     * wallet: the last valid account valuation per server, used only when the account read failed
       (``SOURCE_UNAVAILABLE``) and only while its own age is within the wallet ``stale_after_ms``.
@@ -1240,34 +1243,32 @@ def _held_wallet_section(
     read: OwnerRead,
     now_ms: float,
     missing: list,
-    last_known: Optional[LastKnown],
+    held_payload: Any = None,
 ) -> tuple[Optional[dict], dict]:
     """The wallet from this build's account read, or, when that read failed, the last valid
-    observation while its own age is within the wallet ``stale_after_ms`` (marked ``held``).
+    observation admitted before it (``held_payload``) while its own age is within the wallet
+    ``stale_after_ms`` (marked ``held``). Never writes last-known state; admission is at gather time.
     """
     own_missing: list = []
     wallet, section = _wallet_section(read, now_ms, own_missing)
-    if last_known is not None:
-        if wallet is not None and read.reason is None:
-            last_known.wallet[server] = read.payload
-        elif (
-            wallet is None
-            and read.reason == SOURCE_UNAVAILABLE
-            and server in last_known.wallet
+    if (
+        wallet is None
+        and read.reason == SOURCE_UNAVAILABLE
+        and held_payload is not None
+    ):
+        held_missing: list = []
+        held, held_section = _wallet_section(
+            OwnerRead(held_payload), now_ms, held_missing
+        )
+        if (
+            held is not None
+            and now_ms - held["observed_at_ms"] <= STALE_AFTER_MS["wallet"]
         ):
-            held_missing: list = []
-            held, held_section = _wallet_section(
-                OwnerRead(last_known.wallet[server]), now_ms, held_missing
+            wallet, section, own_missing = (
+                {**held, "held": True},
+                held_section,
+                held_missing,
             )
-            if (
-                held is not None
-                and now_ms - held["observed_at_ms"] <= STALE_AFTER_MS["wallet"]
-            ):
-                wallet, section, own_missing = (
-                    {**held, "held": True},
-                    held_section,
-                    held_missing,
-                )
     missing.extend(own_missing)
     if wallet is not None:
         wallet.setdefault("held", False)
@@ -1275,34 +1276,76 @@ def _held_wallet_section(
 
 
 def _held_trading(
-    server: str,
     bots: list[str],
     runtime: dict[str, Optional[dict]],
     owner: dict[tuple[str, str], OwnerRead],
     now_ms: float,
-    last_known: Optional[LastKnown],
+    held: dict[str, Optional[dict]],
 ) -> dict[str, Optional[dict]]:
-    """Each bot's capability from this build's owner runtime read, else its last good one (bounded)."""
+    """Each bot's capability from this build's owner runtime read, else the last good one admitted
+    before it (``held``), within ``TRADING_HOLD_MS`` of its own observation. Never writes state.
+    """
     result: dict[str, Optional[dict]] = {}
     for bot in bots:
         rt = runtime.get(bot)
         capability = rt.get("trading") if rt is not None else None
-        if last_known is not None:
-            key = (server, bot)
-            if capability is not None:
-                if capability["observed_ms"] is not None:
-                    last_known.trading[key] = capability
-            elif key in last_known.trading:
-                held = last_known.trading[key]
-                if 0 <= now_ms - held["observed_ms"] <= TRADING_HOLD_MS:
-                    read = owner.get((bot, "bootstrap"))
-                    capability = held_trading(
-                        held, (read.reason if read else None) or INVALID
-                    )
-                else:
-                    del last_known.trading[key]
+        last = held.get(bot)
+        if (
+            capability is None
+            and last is not None
+            and 0 <= now_ms - last["observed_ms"] <= TRADING_HOLD_MS
+        ):
+            read = owner.get((bot, "bootstrap"))
+            capability = held_trading(last, (read.reason if read else None) or INVALID)
         result[bot] = capability
     return result
+
+
+def _wallet_observed_ms(payload: Any, now_ms: float) -> Optional[int]:
+    wallet, _ = _wallet_section(OwnerRead(payload), now_ms, [])
+    return wallet["observed_at_ms"] if wallet is not None else None
+
+
+def _admit_last_known(
+    last_known: LastKnown,
+    server: str,
+    bots: list[str],
+    account: OwnerRead,
+    owner: dict[tuple[str, str], OwnerRead],
+    read_at_ms: float,
+) -> None:
+    """Observation admission, once per read set: a valid wallet or trading capability becomes the
+    last known one only when it is at least as new as the stored one, so a slow or older read never
+    rolls newer evidence back. An expired trading hold is dropped."""
+    observed = (
+        _wallet_observed_ms(account.payload, read_at_ms)
+        if account.reason is None
+        else None
+    )
+    if observed is not None:
+        stored = last_known.wallet.get(server)
+        stored_ms = (
+            _wallet_observed_ms(stored, read_at_ms) if stored is not None else None
+        )
+        if stored_ms is None or observed >= stored_ms:
+            last_known.wallet[server] = account.payload
+    for bot in bots:
+        read = owner.get((bot, "bootstrap"))
+        view = (
+            project_runtime_view(read.payload, bot, read_at_ms)
+            if read is not None and read.payload is not None
+            else None
+        )
+        capability = view.get("trading") if view is not None else None
+        key = (server, bot)
+        stored = last_known.trading.get(key)
+        if capability is not None and capability["observed_ms"] is not None:
+            if stored is None or capability["observed_ms"] >= stored["observed_ms"]:
+                last_known.trading[key] = capability
+        elif (
+            stored is not None and read_at_ms - stored["observed_ms"] > TRADING_HOLD_MS
+        ):
+            del last_known.trading[key]
 
 
 def _bot_cards(
@@ -1684,6 +1727,10 @@ class FleetInputs:
     account_result: Any
     owner_results: list
     read_at_ms: float  # when the reads completed
+    # Last known evidence as admitted when these reads completed: the projection may stand on it
+    # (within its own age bounds) but never writes it back.
+    held_wallet: Any = None
+    held_trading: dict = field(default_factory=dict)
 
 
 async def build_fleet_summary(
@@ -1715,7 +1762,7 @@ async def build_fleet_summary(
         last_known=last_known,
         history_timeout=history_timeout,
     )
-    body = project_fleet_summary(inputs, inputs.read_at_ms, last_known)
+    body = project_fleet_summary(inputs, inputs.read_at_ms)
     return glance(body) if view == "glance" else body
 
 
@@ -1834,6 +1881,24 @@ async def gather_fleet_inputs(
         *[read_owner(bot, path, params) for bot, path, params in owner_jobs],
         return_exceptions=True,
     )
+    read_at_ms = clock_ms() if clock_ms is not None else now_ms
+    held_wallet, held_trading_by_bot = None, {}
+    if last_known is not None:
+        account = (
+            results[3]
+            if isinstance(results[3], OwnerRead)
+            else OwnerRead(None, SOURCE_UNAVAILABLE)
+        )
+        owner = {
+            (bot, path): result
+            for (bot, path, _), result in zip(owner_jobs, results[4:])
+            if isinstance(result, OwnerRead)
+        }
+        _admit_last_known(last_known, server, bots, account, owner, read_at_ms)
+        held_wallet = last_known.wallet.get(server)
+        held_trading_by_bot = {
+            bot: last_known.trading.get((server, bot)) for bot in bots
+        }
     return FleetInputs(
         server=server,
         view=view,
@@ -1849,16 +1914,16 @@ async def gather_fleet_inputs(
         market_result=results[2],
         account_result=results[3],
         owner_results=list(results[4:]),
-        read_at_ms=clock_ms() if clock_ms is not None else now_ms,
+        read_at_ms=read_at_ms,
+        held_wallet=held_wallet,
+        held_trading=held_trading_by_bot,
     )
 
 
-def project_fleet_summary(
-    inputs: FleetInputs, now_ms: float, last_known: Optional[LastKnown] = None
-) -> dict:
+def project_fleet_summary(inputs: FleetInputs, now_ms: float) -> dict:
     """The full-shape payload of ``inputs`` judged at ``now_ms``: every currency rule of the build,
-    applied at that clock. ``glance`` projects the compact view. Pure apart from ``last_known``, which
-    it consults and updates exactly as a build does."""
+    applied at that clock. ``glance`` projects the compact view. Pure: it reads ``inputs`` (including
+    the last known evidence admitted when they were read) and writes nothing."""
     server, view, is_admin = inputs.server, inputs.view, inputs.is_admin
     bots, live, paper_bots = inputs.bots, inputs.live, inputs.paper_bots
     incident_bot, owner_jobs = inputs.incident_bot, inputs.owner_jobs
@@ -1918,7 +1983,7 @@ def project_fleet_summary(
         ),
         now_ms,
         missing,
-        last_known,
+        inputs.held_wallet,
     )
 
     # fleet PnL
@@ -2001,7 +2066,7 @@ def project_fleet_summary(
         bot: project_runtime_view(owner[(bot, "bootstrap")].payload, bot, now_ms)
         for bot in bots
     }
-    trading = _held_trading(server, bots, runtime, owner, now_ms, last_known)
+    trading = _held_trading(bots, runtime, owner, now_ms, inputs.held_trading)
     inventory = {
         bot: (
             holdings.project_bot(read.payload, bot, now_ms)

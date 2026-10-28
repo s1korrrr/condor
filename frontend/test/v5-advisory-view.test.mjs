@@ -86,6 +86,35 @@ test("large untrusted collections and text are bounded", () => {
   input["v1/context"].features = Object.fromEntries(Array.from({ length: 50 }, (_, i) => [`feature-${i}`, { value: i, unit: "x", status: "AVAILABLE" }]));
   input["v1/advice/latest"].record.result.advice.summary = "x".repeat(501);
   const view = projectV5Advisory(input, now);
-  assert.equal(view.features.length, 8);
+  assert.equal(view.features.length, 32);
   assert.equal(view.summary, null);
+});
+
+test("the API quality object and full component bundle remain inspectable", () => {
+  const input = payload();
+  input["v1/context"].features = Object.fromEntries(Array.from({ length: 22 }, (_, index) => [
+    index === 21 ? "derivatives.venue_dispersion_range_median_pct.1m" : `spot.component_${index}`,
+    { value: index, unit: "percent", status: "QUALIFIED" },
+  ]));
+  input["v1/context"].quality = { spot_venue_coverage_fraction: 1, target_row_states: { final: 135, missing: 1 } };
+  const view = projectV5Advisory(input, now);
+  assert.ok(view.quality.some((item) => item.id === "spot_venue_coverage_fraction" && item.value === "1"));
+  assert.ok(view.quality.some((item) => item.id === "target_row_states.missing" && item.value === "1"));
+  assert.ok(view.features.some((item) => item.id === "derivatives.venue_dispersion_range_median_pct.1m"));
+});
+
+test("a missing expiry cannot qualify a model report", () => {
+  const input = payload();
+  delete input["v1/advice/latest"].record.result.expires_at_ms;
+  assert.equal(projectV5Advisory(input, now).assessment, null);
+});
+
+test("recorded seven-venue API evidence retains source missingness and both dispersion components", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const context = JSON.parse(await readFile(new URL("./fixtures/v5-market-evidence.v1.json", import.meta.url), "utf8"));
+  const view = projectV5Advisory({ "v1/context": context }, context.available_at_ms);
+  assert.ok(view.quality.some((item) => item.id === "target_row_states.missing" && item.value === "1"));
+  assert.ok(view.features.some((item) => item.id === "spot.venue_dispersion_range_median_pct.1m" && item.value !== null));
+  assert.ok(view.features.some((item) => item.id === "derivatives.venue_dispersion_range_median_pct.1m" && item.value !== null));
+  assert.equal(view.assessment, null);
 });

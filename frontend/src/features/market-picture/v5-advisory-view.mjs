@@ -80,9 +80,9 @@ export function projectV5Advisory(payload, nowMs = Date.now()) {
   const contextFresh = contextAvailableAtMs !== null && contextAvailableAtMs <= nowMs && nowMs - contextAvailableAtMs <= MAX_AGE_MS;
   const adviceCurrent = contextFresh && latestRecordStatus === "CURRENT_REPORT" && latestResult.status === "ACCEPTED" &&
     latestAvailableAtMs !== null && latestAvailableAtMs <= nowMs &&
-    (expiresAtMs === null || nowMs < expiresAtMs) && nowMs - latestAvailableAtMs <= MAX_AGE_MS && snapshotMatches;
+    (expiresAtMs !== null && nowMs < expiresAtMs) && nowMs - latestAvailableAtMs <= MAX_AGE_MS && snapshotMatches;
   const featureEntries = asEntries(context.features);
-  const features = featureEntries.filter(([id]) => !String(id).startsWith("quality.")).slice(0, 8).map(([id, raw]) => {
+  const features = featureEntries.filter(([id]) => !String(id).startsWith("quality.")).slice(0, 32).map(([id, raw]) => {
     const feature = record(raw);
     const value = featureValue(feature.value);
     const qualified = feature.status === "QUALIFIED" && value !== null;
@@ -99,6 +99,15 @@ export function projectV5Advisory(payload, nowMs = Date.now()) {
     const value = item.status === "QUALIFIED" ? featureValue(item.value) : null;
     return { id: String(id).slice(0, 80), value: value === null ? null : String(value).slice(0, 48) };
   });
+  // API quality is a separate object; retain explicit source counts and cohorts.
+  for (const [id, raw] of asEntries(context.quality)) {
+    const items = record(raw) === raw ? asEntries(raw).map(([key, value]) => [`${id}.${key}`, value]) : [[id, raw]];
+    for (const [key, value] of items) {
+      if (quality.length >= 32) break;
+      const primitive = typeof value === "boolean" ? String(value) : featureValue(value);
+      quality.push({ id: String(key).slice(0, 96), value: contextFresh && primitive !== null ? String(primitive).slice(0, 128) : null });
+    }
+  }
   const rawReasons = latest.reason_codes ?? latest.reasons;
   const reasons = Array.isArray(rawReasons)
     ? rawReasons.filter((item) => typeof item === "string").slice(0, 8).map((item) => item.slice(0, 64))

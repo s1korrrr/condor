@@ -89,7 +89,7 @@ export function projectV5Advisory(payload, nowMs = Date.now()) {
     return {
       id: String(id).slice(0, 80),
       value: contextFresh && qualified ? value : null,
-      unit: typeof feature.unit === "string" ? feature.unit.slice(0, 24) : "",
+      unit: typeof feature.unit === "string" ? feature.unit.slice(0, 64) : "",
       status: !contextFresh ? (contextAvailableAtMs === null ? "UNAVAILABLE" : "STALE") :
         typeof feature.status === "string" ? feature.status.slice(0, 32) : "UNAVAILABLE",
     };
@@ -104,7 +104,9 @@ export function projectV5Advisory(payload, nowMs = Date.now()) {
     const items = record(raw) === raw ? asEntries(raw).map(([key, value]) => [`${id}.${key}`, value]) : [[id, raw]];
     for (const [key, value] of items) {
       if (quality.length >= 32) break;
-      const primitive = typeof value === "boolean" ? String(value) : featureValue(value);
+      const primitive = Array.isArray(value) && value.length > 0 && value.length <= 8 &&
+        value.every((item) => typeof item === "string" && item.length <= 32)
+        ? value.join(", ") : typeof value === "boolean" ? String(value) : featureValue(value);
       quality.push({ id: String(key).slice(0, 96), value: contextFresh && primitive !== null ? String(primitive).slice(0, 128) : null });
     }
   }

@@ -114,6 +114,7 @@ test("recorded seven-venue API evidence retains source missingness and both disp
   const context = JSON.parse(await readFile(new URL("./fixtures/v5-market-evidence.v1.json", import.meta.url), "utf8"));
   const view = projectV5Advisory({ "v1/context": context }, context.available_at_ms);
   assert.ok(view.quality.some((item) => item.id === "target_row_states.missing" && item.value === "1"));
+  assert.ok(view.quality.some((item) => item.id === "quote_cohort_by_market.spot" && item.value === "USDT"));
   assert.ok(view.features.some((item) => item.id === "spot.venue_dispersion_range_median_pct.1m" && item.value !== null));
   assert.ok(view.features.some((item) => item.id === "derivatives.venue_dispersion_range_median_pct.1m" && item.value !== null));
   assert.equal(view.assessment, null);

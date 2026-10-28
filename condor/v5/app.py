@@ -16,13 +16,14 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Any
 
-from fastapi import Depends, FastAPI, HTTPException, Request, Response
+from fastapi import Depends, FastAPI, HTTPException, Query, Request, Response
 from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 
 from .agents import AGENT_SPECS, REPORT_ROLES, AgentCatalog, AgentDefinition
 from .config import Settings, read_secret_file
+from .dashboard import dashboard_profile, read_compatibility_path
 from .state import StateCapacityError, WorkspaceState
 from .upstream import UpstreamError, V5Upstream
 
@@ -189,6 +190,16 @@ def create_app(
         return {
             "authenticated": bool(supplied and hmac.compare_digest(supplied, token))
         }
+
+    @app.get("/api/v5/dashboard/profile", dependencies=[Depends(require_auth)])
+    async def dashboard_compatibility_profile():
+        return dashboard_profile()
+
+    @app.get("/api/v5/dashboard/read", dependencies=[Depends(require_auth)])
+    async def dashboard_compatibility_read(
+        path: str = Query(min_length=1, max_length=2048),
+    ):
+        return read_compatibility_path(path)
 
     @app.post("/api/v5/auth/login")
     async def login(payload: LoginBody, request: Request, response: Response):
@@ -814,5 +825,37 @@ def create_app(
         return HTMLResponse(
             "V5 workspace frontend has not been built.", status_code=503
         )
+
+    for ui_path in (
+        "/capital",
+        "/bots",
+        "/operations",
+        "/research",
+        "/backtests",
+        "/settings",
+        "/market/evidence",
+        "/v5/readiness",
+        "/agents",
+        "/sessions",
+    ):
+        app.add_api_route(
+            ui_path,
+            root_page,
+            methods=["GET"],
+            response_class=HTMLResponse,
+            include_in_schema=False,
+        )
+
+    @app.get("/agents/{agent_id}", response_class=HTMLResponse)
+    async def agent_page(agent_id: str):
+        if agent_id not in agents.ids():
+            raise HTTPException(404)
+        return await root_page()
+
+    @app.get("/sessions/{session_id}", response_class=HTMLResponse)
+    async def session_page(session_id: str):
+        if not SESSION_ID_RE.fullmatch(session_id):
+            raise HTTPException(404)
+        return await root_page()
 
     return app

@@ -58,6 +58,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 
 export const v5Api = {
   auth: () => request<{ authenticated: boolean }>("/auth"),
+  profile: () => request<V5DashboardProfile>("/dashboard/profile"),
   login: (token: string) =>
     request<{ authenticated: boolean }>("/auth/login", {
       method: "POST",
@@ -90,3 +91,10 @@ export const v5Api = {
     }),
   settings: () => request<V5Settings>("/settings"),
 };
+
+export interface V5DashboardProfile {
+  schema_version: "v5-dashboard-profile.v1";
+  server: { server_id: string; host: string; port: number; mode: string; execution_enabled: boolean };
+  condor: { base_revision: string };
+  readiness: { native_owner: string; account_owner: string; research_owner: string; tradepad_owner: string; market_picture_owner: string };
+}

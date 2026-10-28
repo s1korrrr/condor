@@ -33,7 +33,7 @@ const TABS = [
 
 type TabKey = (typeof TABS)[number]["key"];
 
-export function Bots() {
+export function Bots({ allowDrafts = true, ownerUnavailableReason }: { allowDrafts?: boolean; ownerUnavailableReason?: string } = {}) {
   const { access, unavailableReason } = useServerCapabilities();
   const { server } = useServer();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -54,7 +54,7 @@ export function Bots() {
       <div className="quant-page">
         {unavailableReason && <p role="status">{unavailableReason}</p>}
         <Suspense fallback={<FallbackSpinner />}>
-          <ActiveBotsTab />
+          <ActiveBotsTab allowDrafts={allowDrafts} ownerUnavailableReason={ownerUnavailableReason} />
         </Suspense>
       </div>
     );
@@ -90,7 +90,7 @@ export function Bots() {
       <Suspense fallback={<FallbackSpinner />}>
         {visited.has("active") && (
           <div style={{ display: currentTab === "active" ? undefined : "none" }}>
-            <ActiveBotsTab />
+            <ActiveBotsTab allowDrafts={allowDrafts} ownerUnavailableReason={ownerUnavailableReason} />
           </div>
         )}
         {!access.native && visited.has("runs") && (

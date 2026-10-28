@@ -13,7 +13,7 @@ function WorkspaceUnavailable({ title, children }: { title: string; children?: R
   </div>;
 }
 
-export function Overview() { return <WorkspaceUnavailable title="Overview" />; }
+export function Overview(_props: { accountPresentation?: { description: string; unavailable: string; valuationNote: string; registryUnavailable?: string } } = {}) { return <WorkspaceUnavailable title="Overview" />; }
 export function TradingVisuals() { return <WorkspaceUnavailable title="Trading Visuals" />; }
 
 export function Operations() { return <WorkspaceUnavailable title="Operations" />; }

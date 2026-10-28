@@ -2,7 +2,7 @@
 
 * { box-sizing: border-box; }
 html, body, #v5-root { min-width: 320px; min-height: 100%; margin: 0; }
-body { background: var(--v5-bg); color: var(--v5-text); font-family: var(--v5-font-ui); font-size: 13px; -webkit-font-smoothing: antialiased; }
+body { background: var(--color-bg); color: var(--color-text); font-family: inherit; font-size: inherit; -webkit-font-smoothing: antialiased; }
 button, input, textarea { color: inherit; font: inherit; }
 button { cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .46; }

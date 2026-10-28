@@ -1,5 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
+import "../index.css";
 import "../../design-system/v5/app.css";
 import { V5App } from "./V5App";
 

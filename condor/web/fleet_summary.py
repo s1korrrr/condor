@@ -24,6 +24,7 @@ live readers and HTTP.
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import contextvars
 import hashlib
 import json
@@ -168,7 +169,7 @@ class LastKnown:
         self.wallet: dict[str, Any] = {}
         self.trading: dict[tuple[str, str], dict] = {}
         self.history: dict[tuple, tuple[float, Any]] = {}
-        self.history_jobs: dict[tuple, asyncio.Future] = {}
+        self.history_jobs: dict[tuple, concurrent.futures.Future] = {}
 
 
 class Readers(Protocol):
@@ -457,6 +458,10 @@ TRADING_MAX_RESTRICTIONS = 20
 # ``net_now`` history fallback). It is shown as last known: both sides ``unverified``, own ``observed_ms``.
 TRADING_HOLD_MS = 300_000
 HISTORY_HOLD_MS = 300_000
+# Local history reads run here, at most this many at once (one per server/fleet key in practice).
+_HISTORY_POOL = concurrent.futures.ThreadPoolExecutor(
+    max_workers=4, thread_name_prefix="fleet-history"
+)
 PAIR_RE = re.compile(r"[A-Z0-9]+-[A-Z0-9]+")
 REASON_CODE_RE = re.compile(r"[a-z0-9_]{1,64}")
 SOURCE_RE = re.compile(r"[a-z][a-z0-9_]{0,39}")
@@ -1676,20 +1681,24 @@ async def _shared_history(
     """This build's local history: the one read in flight for its key, else a new one.
 
     The read runs in a worker thread that cannot be cancelled, so it is shared rather than restarted:
-    a build that stops waiting leaves it running for the next build. Past ``timeout`` the build uses
+    a build that stops waiting leaves it running for the next build. The job is the worker's own
+    ``concurrent.futures.Future``, registered until the thread ends, so a later build (or a restarted
+    app on a new event loop) joins it instead of starting a duplicate. Past ``timeout`` the build uses
     the last completed read while it is younger than ``HISTORY_HOLD_MS``; otherwise the read failed.
     """
     key = (server, tuple(live), paper)
     job = last_known.history_jobs.get(key)
-    if job is not None and job.get_loop() is not asyncio.get_running_loop():
-        job = None  # left by a loop that has since closed
-    if job is None:
-        job = asyncio.ensure_future(
-            asyncio.to_thread(_sync_reads, readers, server, live, read_now_ms, paper)
+    if job is None or job.done():
+        job = _HISTORY_POOL.submit(
+            _sync_reads, readers, server, live, read_now_ms, paper
         )
         last_known.history_jobs[key] = job
 
-        def settled(done: asyncio.Future, started_ms: float = read_now_ms) -> None:
+        # Runs in the worker thread when the read really ends (or at once if it never started),
+        # so the job stays registered, and joinable, for exactly as long as its thread runs.
+        def settled(
+            done: concurrent.futures.Future, started_ms: float = read_now_ms
+        ) -> None:
             if last_known.history_jobs.get(key) is done:
                 del last_known.history_jobs[key]
             if not done.cancelled() and done.exception() is None:
@@ -1698,7 +1707,9 @@ async def _shared_history(
         job.add_done_callback(settled)
     try:
         async with asyncio.timeout(timeout):
-            return await asyncio.shield(job)
+            # wrap_future joins the worker from any loop; the shield keeps a caller that gives up
+            # from cancelling the read the next build will join.
+            return await asyncio.shield(asyncio.wrap_future(job))
     except TimeoutError:
         held = last_known.history.get(key)
         if held is not None and 0 <= read_now_ms - held[0] <= HISTORY_HOLD_MS:
@@ -2392,11 +2403,18 @@ def canonical_json(body: dict) -> bytes:
     ).encode()
 
 
+# Clocks of reading and answering, not of owner data: an unchanged fleet keeps its validator across
+# them. The fills section's ``observed_at_ms`` is when the fills feed was read.
+_RESPONSE_CLOCKS = ("generated_at_ms", "sources_read_at_ms")
+
+
 def etag_for(body: dict) -> str:
-    """Strong validator over the body without its clocks, so an unchanged fleet keeps its tag."""
-    stable = {
-        k: v
-        for k, v in body.items()
-        if k not in ("generated_at_ms", "sources_read_at_ms")
-    }
+    """Strong validator over the body without its read and response clocks, so an unchanged fleet
+    keeps its tag. A 304 keeps the client's original body: its clocks are never renewed by it.
+    """
+    stable = {k: v for k, v in body.items() if k not in _RESPONSE_CLOCKS}
+    sections = stable.get("sections")
+    if isinstance(sections, dict) and isinstance(sections.get("fills"), dict):
+        fills = {k: v for k, v in sections["fills"].items() if k != "observed_at_ms"}
+        stable["sections"] = {**sections, "fills": fills}
     return '"' + hashlib.sha256(canonical_json(stable)).hexdigest() + '"'

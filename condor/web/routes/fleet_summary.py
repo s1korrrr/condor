@@ -35,6 +35,8 @@ OWNER_TIMEOUT = 6.0  # a bootstrap observation is the largest read (about 0.7 MB
 MARKET_TIMEOUT = 4.0  # the frame and its history share one budget of twice this
 # Local history waits for the status read (OWNER_TIMEOUT) first; together they stay inside the deadline.
 HISTORY_TIMEOUT = 4.0
+# Shutdown waits this long for history reads still running in their worker threads.
+HISTORY_DRAIN_SECONDS = 10.0
 TOTAL_TIMEOUT = 12.0
 # A successful owner body is shared by the summary views and holdings for this long. The body keeps its
 # own observation times, so every consumer still judges currency against its own clock.
@@ -381,21 +383,35 @@ def accept_refreshes() -> None:
     _accepting_refreshes = True
 
 
-async def stop_refreshes() -> None:
+async def stop_refreshes(history_drain_seconds: float = HISTORY_DRAIN_SECONDS) -> None:
     """App shutdown: accept no new background rebuild, then cancel and await the rebuilds running and
-    the shared owner reads and history jobs they own. A request still being answered gets its own
-    timeout or cancellation; the completed reads stay cached for the next process to ignore.
+    the shared owner reads they own (both cooperative asyncio work).
+
+    History reads run in worker threads that cannot be interrupted. They are drained, not
+    cancelled: shutdown waits up to ``history_drain_seconds`` for them, and a read still running
+    stays registered until its thread really ends, so a restarted app joins it rather than starting
+    a second worker for the same key.
     """
     global _accepting_refreshes
     _accepting_refreshes = False
     owned = list(_refreshes.values())
     owned += list(getattr(READERS, "_owner_inflight", {}).values())
-    owned += list(LAST_KNOWN.history_jobs.values())
     loop = asyncio.get_running_loop()
     owned = [task for task in owned if not task.done() and task.get_loop() is loop]
     for task in owned:
         task.cancel()
     await asyncio.gather(*owned, return_exceptions=True)
+    reads = [job for job in LAST_KNOWN.history_jobs.values() if not job.done()]
+    if reads:
+        waiters = [asyncio.wrap_future(job) for job in reads]
+        _, running = await asyncio.wait(waiters, timeout=history_drain_seconds)
+        for waiter in running:
+            # Only this loop's waiter: a running worker cannot be cancelled and stays registered.
+            waiter.cancel()
+        if running:
+            logger.warning(
+                "event=fleet_history_drain_incomplete running=%d", len(running)
+            )
 
 
 def _refresh(key: tuple, view: str, user_id: Any) -> None:

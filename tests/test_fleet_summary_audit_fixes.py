@@ -10,6 +10,7 @@
 """
 
 import asyncio
+import copy
 import time
 from types import SimpleNamespace
 
@@ -328,3 +329,90 @@ def test_the_web_lifespan_owns_the_background_rebuilds(monkeypatch):
     asyncio.run(lifespan())
     routes.accept_refreshes()
     holdings_route.accept_refreshes()
+
+
+# ── review of 5e19fc8c ──
+
+
+def test_shutdown_keeps_a_running_history_read_joinable_across_a_restart(
+    monkeypatch, store
+):
+    """A history worker still running at shutdown stays registered until its thread ends, so the
+    restarted app (a new event loop) joins it instead of starting a second worker for the key.
+    """
+    import threading
+
+    started, release, calls = threading.Event(), threading.Event(), []
+    original = fs._sync_reads
+
+    def blocking(*args):
+        calls.append(1)
+        started.set()
+        release.wait(5)
+        return original(*args)
+
+    monkeypatch.setattr(fs, "_sync_reads", blocking)
+    monkeypatch.setattr(routes, "LAST_KNOWN", fs.LastKnown())
+    readers = FakeReaders(store)
+
+    async def gather(timeout):
+        return await fs.gather_fleet_inputs(
+            SERVER,
+            "full",
+            readers,
+            NOW_MS,
+            is_admin=True,
+            user_id=7,
+            last_known=routes.LAST_KNOWN,
+            history_timeout=timeout,
+        )
+
+    async def first_lifespan():
+        inputs = await gather(0.05)  # gives up waiting; the worker keeps running
+        assert started.is_set() and isinstance(inputs.sync_result, TimeoutError)
+        await routes.stop_refreshes(history_drain_seconds=0.05)
+        (job,) = routes.LAST_KNOWN.history_jobs.values()
+        assert not job.done(), "still registered while its thread runs"
+
+    async def restarted_lifespan():
+        routes.accept_refreshes()
+        threading.Timer(0.1, release.set).start()
+        inputs = await gather(5)
+        histories, _ = inputs.sync_result
+        assert histories["1D"], "the restarted app joined the running read"
+
+    try:
+        asyncio.run(first_lifespan())
+        asyncio.run(restarted_lifespan())
+    finally:
+        release.set()
+        routes.accept_refreshes()
+    assert len(calls) == 1, f"{len(calls)} history workers ran for one key"
+    assert (
+        not routes.LAST_KNOWN.history_jobs
+    ), "the job leaves the registry when its thread ends"
+
+
+@sync
+async def test_the_fills_read_clock_never_changes_the_validator(store):
+    async def body_read_at(read_at_ms, newest_fill_ms=NOW_MS - 3_600_000):
+        readers = LedgerReaders(
+            store, read_at_ms=read_at_ms, newest_fill_ms=newest_fill_ms
+        )
+        return await fs.build_fleet_summary(
+            SERVER, "full", readers, NOW_MS, is_admin=True, user_id=7
+        )
+
+    first = await body_read_at(NOW_MS - 16_000)
+    later = await body_read_at(NOW_MS - 1_000)  # the same ledgers, fetched 15 s later
+    assert (
+        first["sections"]["fills"]["observed_at_ms"]
+        != later["sections"]["fills"]["observed_at_ms"]
+    )
+    assert fs.etag_for(first) == fs.etag_for(later)
+    assert fs.etag_for(fs.glance(first)) == fs.etag_for(fs.glance(later))
+    changed = await body_read_at(NOW_MS - 1_000, newest_fill_ms=NOW_MS - 60_000)
+    assert fs.etag_for(changed) != fs.etag_for(later), "changed fills are a change"
+    stale = copy.deepcopy(later)
+    stale["sections"]["fills"]["status"] = "stale"
+    assert fs.etag_for(stale) != fs.etag_for(later), "a freshness verdict is a change"

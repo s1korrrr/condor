@@ -369,6 +369,9 @@ def create_app(
     def task_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
         rows = payload.get("tasks", [])
         allowed = {"market_context", "source_quality"}
+        credential_status = payload.get("credential_status")
+        if credential_status not in {"READY", "API_KEY_REQUIRED"}:
+            credential_status = None
         result = []
         if not isinstance(rows, list):
             return result
@@ -381,7 +384,6 @@ def create_app(
             profile["enabled"] = row.get("enabled") is True
             if isinstance(row.get("reason"), str):
                 profile["reason"] = row["reason"][:200]
-            credential_status = row.get("credential_status")
             if credential_status in {"READY", "API_KEY_REQUIRED"}:
                 profile["credential_status"] = credential_status
             result.append(profile)

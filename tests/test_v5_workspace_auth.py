@@ -67,14 +67,12 @@ class FakeUpstream:
                 "model": "claude-sonnet",
                 "enabled": True,
                 "reason": None,
-                "credential_status": "READY",
             },
             {
                 "task_id": "source_quality",
                 "model": "claude-sonnet",
                 "enabled": False,
                 "reason": "profile_not_enabled",
-                "credential_status": "API_KEY_REQUIRED",
             },
         ]
         self.report = {
@@ -110,6 +108,7 @@ class FakeUpstream:
         }
         self.fail_source = False
         self.refuse = False
+        self.credential_status = "READY"
 
     async def observation(self, path):
         self.observation_calls.append(path)
@@ -141,6 +140,7 @@ class FakeUpstream:
         return {
             "tasks": self.task_rows,
             "budget": {"calls_today": 1},
+            "credential_status": self.credential_status,
             "budget_policy": {
                 "pilot_usd": "150.00",
                 "daily_usd": "5.00",
@@ -285,6 +285,7 @@ def test_workspace_is_scoped_to_v5_roots_and_sanitizes_upstream(tmp_path):
         assert workspace["source_error"] is None
         assert workspace["advisor"]["task_profiles"][0]["task_id"] == "market_context"
         assert workspace["advisor"]["task_profiles"][0]["credential_status"] == "READY"
+        assert workspace["advisor"]["task_profiles"][1]["credential_status"] == "READY"
         assert workspace["advisor"]["budget_policy"]["authorized_ceiling_usd"] == "200.00"
         assert "provider_balance_usd" not in workspace["advisor"]["budget_policy"]
         assert workspace["advisor"]["scheduler"]["task_id"] == "market_context"
@@ -294,6 +295,10 @@ def test_workspace_is_scoped_to_v5_roots_and_sanitizes_upstream(tmp_path):
         assert task_report["record"]["result"]["actual_usd"] == "0.004200"
         assert "provider_key" not in task_report["record"]["result"]
         assert "provider_key" not in workspace["advisor"]
+        api.credential_status = "API_KEY_REQUIRED"
+        key_required = client.get("/api/v5/workspace").json()
+        assert key_required["advisor"]["task_profiles"][0]["credential_status"] == "API_KEY_REQUIRED"
+        assert key_required["advisor"]["task_profiles"][1]["credential_status"] == "API_KEY_REQUIRED"
         assert [agent["id"] for agent in workspace["agents"]] == [
             "market_analyst",
             "source_auditor",

@@ -81,23 +81,30 @@ def _read_regular(path: Path) -> bytes:
         raise PaperStatusError("PAPER_STATUS_PATH")
     descriptor = _open_pinned(path)
     try:
-        metadata = os.fstat(descriptor)
-        if not stat.S_ISREG(metadata.st_mode):
-            raise PaperStatusError("PAPER_STATUS_NOT_REGULAR")
-        if metadata.st_size > MAX_STATUS_BYTES:
-            raise PaperStatusError("PAPER_STATUS_CAPACITY")
-        chunks, total = [], 0
-        while total <= MAX_STATUS_BYTES:
-            chunk = os.read(descriptor, MAX_STATUS_BYTES + 1 - total)
-            if not chunk:
-                break
-            chunks.append(chunk)
-            total += len(chunk)
-        if total > MAX_STATUS_BYTES:
-            raise PaperStatusError("PAPER_STATUS_CAPACITY")
-        return b"".join(chunks)
+        return _read_descriptor(descriptor)
+    except OSError:
+        # EIO and similar faults on an opened status file: the owner is unavailable.
+        raise PaperStatusError("PAPER_STATUS_IO") from None
     finally:
         os.close(descriptor)
+
+
+def _read_descriptor(descriptor: int) -> bytes:
+    metadata = os.fstat(descriptor)
+    if not stat.S_ISREG(metadata.st_mode):
+        raise PaperStatusError("PAPER_STATUS_NOT_REGULAR")
+    if metadata.st_size > MAX_STATUS_BYTES:
+        raise PaperStatusError("PAPER_STATUS_CAPACITY")
+    chunks, total = [], 0
+    while total <= MAX_STATUS_BYTES:
+        chunk = os.read(descriptor, MAX_STATUS_BYTES + 1 - total)
+        if not chunk:
+            break
+        chunks.append(chunk)
+        total += len(chunk)
+    if total > MAX_STATUS_BYTES:
+        raise PaperStatusError("PAPER_STATUS_CAPACITY")
+    return b"".join(chunks)
 
 
 def _open_pinned(path: Path) -> int:
@@ -143,6 +150,8 @@ def _open_pinned(path: Path) -> int:
 
 # The status file carries counters and epoch times; 19 digits covers any int64.
 MAX_INT_DIGITS = 19
+# The real runtime status nests about ten levels (custom_info bags, executor configs).
+MAX_DEPTH = 32
 
 
 def _parse(raw: bytes) -> Any:
@@ -172,15 +181,27 @@ def _parse(raw: bytes) -> Any:
         return int(text)
 
     try:
-        return json.loads(
+        payload = json.loads(
             raw.decode("utf-8"),
             object_pairs_hook=pairs,
             parse_constant=constant,
             parse_float=finite_float,
             parse_int=bounded_int,
         )
-    except (UnicodeDecodeError, ValueError):
+    except (UnicodeDecodeError, ValueError, RecursionError):
         raise PaperStatusError("PAPER_STATUS_MALFORMED") from None
+    # Projections and the response encoder recurse; a status nested deeper than the
+    # runtime ever writes is malformed (checked iteratively, never recursively).
+    stack = [(payload, 1)]
+    while stack:
+        value, depth = stack.pop()
+        if depth > MAX_DEPTH:
+            raise PaperStatusError("PAPER_STATUS_MALFORMED")
+        if isinstance(value, dict):
+            stack.extend((item, depth + 1) for item in value.values())
+        elif isinstance(value, list):
+            stack.extend((item, depth + 1) for item in value)
+    return payload
 
 
 def _finite(value: Any) -> bool:

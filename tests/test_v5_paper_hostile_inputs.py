@@ -196,3 +196,59 @@ def test_component_walk_path_spellings(tmp_path, spelling):
             else path.parent / ".." / path.parent.name / path.name
         )
         assert paper.read_paper_status(requested, now=NOW).state == "UNAVAILABLE"
+
+
+def test_condor_deep_json_is_unavailable_not_http_500(tmp_path):
+    with client_for(tmp_path, ReviewUpstream(False), payload=status()) as client:
+        path = tmp_path / "runtime_status" / f"{BOT}.status.json"
+        document = path.read_text().rstrip()
+        path.write_text(
+            document[:-1] + ',"review_probe":' + "[" * 12000 + "0" + "]" * 12000 + "}"
+        )
+        assert path.stat().st_size < paper.MAX_STATUS_BYTES
+        client._transport.raise_server_exceptions = False
+        response = client.get("/api/v5/dashboard/profile")
+    assert response.status_code == 200, (response.status_code, response.text)
+    assert response.json()["readiness"]["paper_owner"]["state"] == "UNAVAILABLE"
+
+
+def test_condor_deep_custom_info_is_unavailable_not_http_500(tmp_path):
+    payload = status()
+    payload["controllers"][0]["custom_info"]["review_probe"] = "DEEP_FIXTURE"
+    with client_for(tmp_path, ReviewUpstream(False), payload=payload) as client:
+        path = tmp_path / "runtime_status" / f"{BOT}.status.json"
+        path.write_text(
+            path.read_text().replace('"DEEP_FIXTURE"', "[" * 1500 + "0" + "]" * 1500)
+        )
+        assert path.stat().st_size < paper.MAX_STATUS_BYTES
+        client._transport.raise_server_exceptions = False
+        response = client.get(
+            "/api/v5/dashboard/read",
+            params={"path": f"/api/v1/trading-visuals/bootstrap?bot={BOT}"},
+        )
+    # The malformed status makes the bound bot unavailable (503), never an encoder crash (500).
+    assert response.status_code == 503, (response.status_code, response.text)
+
+
+@pytest.mark.parametrize("operation", ["fstat", "read"])
+def test_condor_io_fault_is_unavailable_not_http_500(tmp_path, monkeypatch, operation):
+    with client_for(tmp_path, ReviewUpstream(False), payload=status()) as client:
+        path = tmp_path / "runtime_status" / f"{BOT}.status.json"
+        original = getattr(os, operation)
+        attempted = []
+        baseline = len(os.listdir("/proc/self/fd"))
+
+        def failed_operation(descriptor, *args, **kwargs):
+            if os.readlink(f"/proc/self/fd/{descriptor}") == str(path):
+                attempted.append(descriptor)
+                raise OSError(errno.EIO, "review injected status I/O failure")
+            return original(descriptor, *args, **kwargs)
+
+        monkeypatch.setattr(os, operation, failed_operation)
+        client._transport.raise_server_exceptions = False
+        response = client.get("/api/v5/dashboard/profile")
+        monkeypatch.undo()
+        assert attempted
+        assert len(os.listdir("/proc/self/fd")) == baseline
+    assert response.status_code == 200, (response.status_code, response.text)
+    assert response.json()["readiness"]["paper_owner"]["state"] == "UNAVAILABLE"

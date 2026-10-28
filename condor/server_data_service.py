@@ -718,6 +718,8 @@ class ServerDataService:
                 "Wallet and paper runtime observation failed for %s", server
             )
             return
+        # A paper observation's age is judged when it was read, not after other samples are stored.
+        observed_at = time.time()
 
         try:
             samples = wallet_observation.wallet_samples(bodies)
@@ -727,7 +729,7 @@ class ServerDataService:
             logger.exception("Wallet observation persistence failed for %s", server)
 
         try:
-            paper = paper_performance.paper_samples(bodies, time.time())
+            paper = paper_performance.paper_samples(bodies, observed_at)
             if paper:
                 await asyncio.to_thread(history.record_paper, server, paper)
         except Exception:

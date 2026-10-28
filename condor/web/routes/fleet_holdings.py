@@ -27,7 +27,6 @@ TOTAL_TIMEOUT = 12.0
 CACHE_TTL_SECONDS = (
     5.0  # one owner read serves a burst of dashboard, phone and widget polls
 )
-OWNER_CONCURRENCY = 4
 HEADERS = {
     "Cache-Control": "private, no-store",
     "X-Content-Type-Options": "nosniff",
@@ -46,14 +45,16 @@ async def _read_all(server: str) -> dict:
         raise HTTPException(
             status_code=503, detail="No registered reporting sources for this server"
         )
-    gate = asyncio.Semaphore(OWNER_CONCURRENCY)
 
+    # Every bot is read at once, as the summary reads them: each read is bounded by the owner timeout
+    # and fails into its own reason, so the build ends within one owner timeout. Queuing the reads
+    # behind a smaller gate stacked those timeouts past the deadline. The owner reader shares an
+    # in-flight or just-completed quant-summary with the summary build.
     async def one(bot: str):
-        async with gate:
-            try:
-                read = await readers.owner(bot, "quant-summary", {})
-            except Exception:  # a reader that raises is a reader that is down
-                return holdings.SOURCE_UNAVAILABLE
+        try:
+            read = await readers.owner(bot, "quant-summary", {})
+        except Exception:  # a reader that raises is a reader that is down
+            return holdings.SOURCE_UNAVAILABLE
         return (
             read.payload
             if read.payload is not None

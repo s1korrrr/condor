@@ -32,8 +32,13 @@ router = APIRouter(tags=["fleet"])
 logger = logging.getLogger(__name__)
 
 OWNER_TIMEOUT = 6.0  # a bootstrap observation is the largest read (about 0.7 MB for a busy V1 bot)
-MARKET_TIMEOUT = 4.0
+MARKET_TIMEOUT = 4.0  # the frame and its history share one budget of twice this
+# Local history waits for the status read (OWNER_TIMEOUT) first; together they stay inside the deadline.
+HISTORY_TIMEOUT = 4.0
 TOTAL_TIMEOUT = 12.0
+# A successful owner body is shared by the summary views and holdings for this long. The body keeps its
+# own observation times, so every consumer still judges currency against its own clock.
+OWNER_REUSE_SECONDS = 4.0
 CACHE_TTL_SECONDS = (
     5.0  # one computation serves a burst of dashboard, phone and watch polls
 )
@@ -78,6 +83,7 @@ class _SummaryPhaseRecorder:
             {
                 "count": 0,
                 "complete": 0,
+                "held": 0,
                 "unavailable": 0,
                 "cancelled": 0,
                 "error": 0,
@@ -106,6 +112,12 @@ class _SummaryPhaseRecorder:
 
 class LiveReaders:
     """Readers over the existing backend: nothing here owns storage."""
+
+    def __init__(self) -> None:
+        # One upstream read per (bot, path, params): concurrent identical reads share it, and a successful
+        # raw body is reused for OWNER_REUSE_SECONDS. Each consumer parses its own copy.
+        self._owner_inflight: dict[tuple, asyncio.Task] = {}
+        self._owner_bodies: dict[tuple, tuple[float, bytes]] = {}
 
     def registered_bots(self, server: str) -> Optional[list[str]]:
         try:
@@ -163,8 +175,10 @@ class LiveReaders:
                 raw = await market_picture._body(upstream, market_picture.MAX_BYTES)
                 return validate_response(path, raw)
 
+        # One budget for the frame and its history: a slow frame leaves the history less time, never more.
+        deadline = asyncio.get_running_loop().time() + MARKET_TIMEOUT * 2
         try:
-            async with asyncio.timeout(MARKET_TIMEOUT * 2):
+            async with asyncio.timeout_at(deadline):
                 async with summary.phase_span("market.latest"):
                     client = await cm.get_client(server)
                     transport = client.bot_orchestration
@@ -172,7 +186,7 @@ class LiveReaders:
         except Exception:
             return summary.MarketRead(reason=summary.FRAME_UNAVAILABLE)
         try:
-            async with asyncio.timeout(MARKET_TIMEOUT):
+            async with asyncio.timeout_at(deadline):
                 async with summary.phase_span("market.history"):
                     page = await read(
                         transport,
@@ -202,6 +216,48 @@ class LiveReaders:
             return summary.OwnerRead(None, summary.NOT_CONFIGURED)
         if source is None:
             return summary.OwnerRead(None, summary.NOT_CONFIGURED)
+        key = (bot, path, tuple(sorted(params.items())))
+        reused = self._owner_bodies.get(key)
+        if (
+            reused is not None
+            and 0 <= time.monotonic() - reused[0] < OWNER_REUSE_SECONDS
+        ):
+            content = reused[1]
+        else:
+            task = self._owner_inflight.get(key)
+            if task is not None and task.get_loop() is not asyncio.get_running_loop():
+                task = None  # left by a loop that has since closed
+            if task is None:
+                task = asyncio.create_task(self._fetch_owner(source, bot, path, params))
+                self._owner_inflight[key] = task
+                task.add_done_callback(
+                    lambda done, key=key: self._owner_settled(key, done)
+                )
+            # A caller that gives up (its own deadline) must not cancel the read other callers share.
+            content = await asyncio.shield(task)
+        if content is None:
+            return summary.OwnerRead(None, summary.SOURCE_UNAVAILABLE)
+        try:
+            return summary.OwnerRead(json.loads(content))
+        except ValueError:
+            return summary.OwnerRead(None, summary.SOURCE_UNAVAILABLE)
+
+    def _owner_settled(self, key: tuple, task: asyncio.Task) -> None:
+        if self._owner_inflight.get(key) is task:
+            del self._owner_inflight[key]
+        if (
+            not task.cancelled()
+            and task.exception() is None
+            and task.result() is not None
+        ):
+            self._owner_bodies[key] = (time.monotonic(), task.result())
+        else:
+            self._owner_bodies.pop(key, None)
+
+    async def _fetch_owner(
+        self, source: dict, bot: str, path: str, params: dict
+    ) -> Optional[bytes]:
+        """One bounded upstream read: the raw body, or None when it failed or was refused."""
         try:
             auth = trading_visuals.source_auth(source)
             async with asyncio.timeout(OWNER_TIMEOUT):
@@ -215,10 +271,10 @@ class LiveReaders:
                 response.status_code != 200
                 or len(response.content) > trading_visuals.REPORTING_MAX_BYTES
             ):
-                return summary.OwnerRead(None, summary.SOURCE_UNAVAILABLE)
-            return summary.OwnerRead(response.json())
+                return None
+            return response.content
         except (httpx.HTTPError, ValueError, KeyError, TimeoutError, OSError):
-            return summary.OwnerRead(None, summary.SOURCE_UNAVAILABLE)
+            return None
 
 
 READERS = LiveReaders()
@@ -300,6 +356,7 @@ async def cached_summary(
                             user_id=user_id,
                             clock_ms=lambda: time.time() * 1000,
                             last_known=LAST_KNOWN,
+                            history_timeout=HISTORY_TIMEOUT,
                         )
                     if CACHE_TTL_SECONDS > 0:
                         expires = time.monotonic() + CACHE_TTL_SECONDS

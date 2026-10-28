@@ -1,0 +1,65 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
+import { formatUsdAmount, marketFeatures, parseNonNegativeDecimal, qualifiedFeatureValue, timestampAgeMs } from "../src/v5/evidence.ts";
+
+const evidence = JSON.parse(readFileSync(new URL("./fixtures/v5-multi-venue-evidence-projection.json", import.meta.url), "utf8"));
+
+test("market evidence keeps spot and perpetual feature namespaces separate", () => {
+  const spot = marketFeatures(evidence, "spot.");
+  const perpetual = marketFeatures(evidence, "derivatives.");
+  assert.ok(spot.length > 0);
+  assert.ok(perpetual.length > 0);
+  assert.ok(spot.every((row) => row.id.startsWith("spot.")));
+  assert.ok(perpetual.every((row) => row.id.startsWith("derivatives.")));
+  assert.ok(!spot.some((row) => row.id.includes("spot_perp_return_divergence")));
+  assert.equal(spot.find((row) => row.id === "spot.return_median_pct.1m").unit, "percent");
+  assert.equal(spot.find((row) => row.id === "spot.pressure_original_1m").unit, "pressure_minus3_to_3");
+  assert.equal(spot.find((row) => row.id === "spot.pressure_missingness_lower").unit, "normalized_pressure_minus1_to_1");
+});
+
+test("only QUALIFIED feature values are presented as values, including explicit zero", () => {
+  const qualified = marketFeatures(evidence, "spot.").find((row) => row.id === "spot.decliners");
+  const unavailable = marketFeatures(evidence, "baseline.").find((row) => row.id === "baseline.composite_score");
+  assert.equal(qualifiedFeatureValue(qualified), "0");
+  assert.equal(unavailableFeatureValue(unavailable), "Unavailable");
+  assert.equal(evidence.baseline_binding_hash, null);
+  assert.equal(evidence.strategy_assessment_eligible, false);
+});
+
+function unavailableFeatureValue(feature) {
+  return feature ? qualifiedFeatureValue(feature) : "Unavailable";
+}
+
+test("missing feature rows stay missing and USDT cohort is not relabeled", () => {
+  const incomplete = { ...evidence, features: { ...evidence.features } };
+  delete incomplete.features["spot.return_median_pct.1m"];
+  assert.equal(marketFeatures(incomplete, "spot.").some((row) => row.id === "spot.return_median_pct.1m"), false);
+  assert.equal(evidence.quality.quote_cohort_by_market.spot[0], "USDT");
+  assert.equal(evidence.quality.quote_conversion, "none");
+  assert.equal(evidence.quality.target_row_states.missing, 1);
+  assert.equal(evidence.quality.quote_cohort_by_market.perpetual[0], "USDT");
+});
+
+test("market evidence timestamps expose exact snapshot age and future or missing times stay unavailable", () => {
+  assert.equal(timestampAgeMs(evidence.available_at_ms, evidence.available_at_ms + 30_000), 30_000);
+  assert.equal(timestampAgeMs(evidence.available_at_ms, evidence.available_at_ms - 1), null);
+  assert.equal(timestampAgeMs(null, evidence.available_at_ms), null);
+  assert.equal(evidence.available_at_ms - evidence.cutoff_ms, 105_679);
+});
+
+test("dollar strings are parsed strictly and invalid or negative values remain unavailable", () => {
+  assert.equal(parseNonNegativeDecimal("0.001000"), 0.001);
+  assert.equal(formatUsdAmount("0.001000"), "$0.001000");
+  assert.equal(formatUsdAmount("0"), "$0.00");
+  assert.equal(formatUsdAmount("-0.01"), "Unavailable");
+  assert.equal(formatUsdAmount(null), "Unavailable");
+  assert.equal(parseNonNegativeDecimal("0"), 0);
+  assert.equal(parseNonNegativeDecimal("-0.01"), null);
+  assert.equal(parseNonNegativeDecimal("NaN"), null);
+  assert.equal(parseNonNegativeDecimal("Infinity"), null);
+  assert.equal(parseNonNegativeDecimal("1e3"), null);
+  assert.equal(parseNonNegativeDecimal(""), null);
+  assert.equal(parseNonNegativeDecimal(null), null);
+  assert.equal(parseNonNegativeDecimal(Number.POSITIVE_INFINITY), null);
+});

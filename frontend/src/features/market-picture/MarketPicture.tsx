@@ -58,7 +58,6 @@ import {
 import { Empty, Panel } from "./Primitives";
 import { RelativeStrengthVisuals } from "./RelativeStrengthVisuals";
 import { HistoryComparisons } from "./HistoryComparisons";
-import { V5AdvisoryPanel } from "./V5AdvisoryPanel";
 import "./market-picture.css";
 import "./home.css";
 
@@ -499,7 +498,6 @@ export function MarketPictureSurface({
             : `${state.freshness} observation · values below are retained for inspection with their original timestamps. A current market verdict is unavailable.`}
         </div>
       )}
-      <V5AdvisoryPanel />
       <MarketPulseHero
         frame={frame}
         history={data?.history ?? EMPTY_HISTORY}

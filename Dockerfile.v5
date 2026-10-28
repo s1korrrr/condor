@@ -1,0 +1,24 @@
+# syntax=docker/dockerfile:1
+# Separate V5 workspace image; normal Condor entrypoints and runtime are absent.
+FROM node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da AS frontend
+WORKDIR /build/frontend
+COPY frontend/package.json frontend/package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY frontend/ ./
+RUN NODE_OPTIONS=--max-old-space-size=1536 npx tsc -b && npx vite build --config vite.v5.config.ts
+FROM python:3.12-slim@sha256:6b25cbe6577518889d553cdd5a5da97d259348d8f6e45b527dd731caaba27a07
+ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/opt/condor
+WORKDIR /opt/condor
+COPY requirements-v5.lock ./
+RUN pip install --no-cache-dir --require-hashes -r requirements-v5.lock
+COPY condor/__init__.py ./condor/__init__.py
+COPY condor/v5 ./condor/v5
+COPY agents_v5 ./agents_v5
+COPY --from=frontend /build/frontend/dist-v5 ./frontend/dist-v5
+ARG CONDOR_SOURCE_COMMIT
+ARG UPSTREAM_AGENTS_REVISION=6008bcfd803eba254d7cca44cc8e69618fd5e810
+ENV V5_CONDOR_SOURCE_COMMIT=${CONDOR_SOURCE_COMMIT} V5_UPSTREAM_AGENTS_REVISION=${UPSTREAM_AGENTS_REVISION}
+LABEL org.opencontainers.image.title="RSI V5 isolated agent workspace" org.opencontainers.image.revision=${CONDOR_SOURCE_COMMIT}
+USER 10001:10001
+EXPOSE 8088
+CMD ["uvicorn", "condor.v5.app:create_app", "--factory", "--host", "0.0.0.0", "--port", "8088"]

@@ -963,8 +963,6 @@ export interface BacktestTask {
 // ── API functions ──
 
 export const api = {
-  getV5Advisory: (path: string, signal?: AbortSignal) =>
-    authFetch(`/api/v1/v5-advisory/${path.split('/').map(encodeURIComponent).join('/')}`, { signal }),
   getMarketPicture: (server: string, path: string, query: Record<string, string> = {}, signal?: AbortSignal, etag?: string) =>
     authFetch(`/api/v1/servers/${encodeURIComponent(server)}/market-picture/${path.split('/').map(encodeURIComponent).join('/')}?${new URLSearchParams(query)}`, {
       signal,

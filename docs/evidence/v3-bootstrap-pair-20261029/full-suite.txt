@@ -99,7 +99,7 @@ tmp_path = PosixPath('/private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/p
 >           assert result.state == "FRESH", result.reason
 E           AssertionError: PAPER_STATUS_PATH
 E           assert 'UNAVAILABLE' == 'FRESH'
-E             
+E
 E             - FRESH
 E             + UNAVAILABLE
 
@@ -149,21 +149,21 @@ tests/test_fleet_telegram.py::test_retry_after_honors_server_delay_and_exits_on_
     return get_timedelta_value(  # type: ignore[return-value]
 
 tests/test_web_compression.py::test_lifespan_and_websocket_scopes_pass_through
-  /Users/s1kor/dev/trading/rsibot/.worktrees/condor-v3-bootstrap-pair-20261029/tests/test_web_compression.py:132: DeprecationWarning: 
+  /Users/s1kor/dev/trading/rsibot/.worktrees/condor-v3-bootstrap-pair-20261029/tests/test_web_compression.py:132: DeprecationWarning:
           on_event is deprecated, use lifespan event handlers instead.
-  
+
           Read more about it in the
           [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
-          
+
     @app.on_event("startup")
 
 tests/test_web_compression.py::test_lifespan_and_websocket_scopes_pass_through
-  /Users/s1kor/dev/trading/rsibot/condor/.venv/lib/python3.12/site-packages/fastapi/applications.py:4598: DeprecationWarning: 
+  /Users/s1kor/dev/trading/rsibot/condor/.venv/lib/python3.12/site-packages/fastapi/applications.py:4598: DeprecationWarning:
           on_event is deprecated, use lifespan event handlers instead.
-  
+
           Read more about it in the
           [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
-          
+
     return self.router.on_event(event_type)  # ty: ignore[deprecated]
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html

@@ -112,8 +112,9 @@ PYTHONPATH="$PWD:$PWD/tests" nice -n 10 /Users/s1kor/dev/trading/rsibot/condor/.
 git diff --check
 ```
 
-Final results are recorded below. Raw command output is retained alongside this
-file. Pytest also reports existing temporary-directory cleanup warnings from
+Final results are recorded below. Command output is retained alongside this file, with trailing whitespace
+removed for Git diff checks. Byte-preserved raw copies remain locally under
+`~/.codex/.tmp/condor-pr0-20261029/raw-command-output/`. Pytest also reports existing temporary-directory cleanup warnings from
 macOS permission fixtures; these are not new test failures.
 
 | Final check | Result |

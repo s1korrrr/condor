@@ -10,9 +10,9 @@ ______ test_native_pairless_portfolio_keeps_runtime_counts_and_capability ______
         assert {row["pair"] for row in runtime["operations"]["pairs"]} == {
             "BNB-USDC", "BTC-USDC", "ETH-USDC", "SOL-USDC", "XRP-USDC"
         }
-    
+
         view = fs.project_runtime_view(payload, BOT, capture_time(payload))
-    
+
 >       assert view is not None
 E       assert None is not None
 

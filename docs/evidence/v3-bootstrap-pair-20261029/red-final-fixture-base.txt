@@ -14,9 +14,9 @@ ______ test_native_pairless_portfolio_keeps_runtime_counts_and_capability ______
             "SOL-USDC",
             "XRP-USDC",
         }
-    
+
         view = fs.project_runtime_view(payload, BOT, capture_time(payload))
-    
+
 >       assert view is not None
 E       assert None is not None
 
@@ -28,14 +28,14 @@ store = <condor.performance_history.PerformanceHistory object at 0x10ad8bec0>
     @sync
     async def test_pairless_bootstrap_reaches_fleet_card_when_quant_is_unavailable(store):
         payload = captured()
-    
+
         class Readers(FakeReaders):
             async def owner(self, bot, path, params):
                 self.calls.append((bot, path))
                 if path == "bootstrap":
                     return fs.OwnerRead(copy.deepcopy(payload))
                 return fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)
-    
+
         body = await fs.build_fleet_summary(
             SERVER,
             "full",
@@ -47,7 +47,7 @@ store = <condor.performance_history.PerformanceHistory object at 0x10ad8bec0>
         v3 = card(body, BOT)
 >       assert (v3["executors"], v3["executors_basis"]) == (1, "runtime_active_executors")
 E       AssertionError: assert (None, None) == (1, 'runtime_...ve_executors')
-E         
+E
 E         At index 0 diff: None != 1
 E         Use -v to get more diff
 

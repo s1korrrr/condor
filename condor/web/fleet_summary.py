@@ -55,7 +55,9 @@ RECENT_FILLS = {"full": 10, "glance": 3}
 # One fill-ledger read per bot feeds both the recent-fills list and the lifetime totals for a bot that
 # publishes no scored cycles. Same page size the Bots page reads. A ledger this long is a lower bound.
 OWNER_FILL_LIMIT = 500
-RUNTIME_STALE_CAP_S = 30  # the dashboard calls an owner observation older than min(threshold, 30)s stale
+RUNTIME_STALE_CAP_S = (
+    30  # the dashboard calls an owner observation older than min(threshold, 30)s stale
+)
 
 # Per-section staleness thresholds (ms). A section older than this is flagged ``stale`` in ``sections``.
 STALE_AFTER_MS = {
@@ -86,6 +88,7 @@ FIELDS_MISSING = "FIELDS_MISSING"
 GLANCE_MAX_BOTS = 16
 GLANCE_MAX_MISSING = 16
 INCIDENT_DETAIL_LIMIT = 20
+
 
 class PhaseRecorder(Protocol):
     def phase_started(self, name: str, started: float) -> int: ...
@@ -405,7 +408,9 @@ RECEIPT_KEYS = {
 }
 
 
-def receipt_value(fill: dict, field: str, *, positive: bool) -> tuple[Optional[str], str]:
+def receipt_value(
+    fill: dict, field: str, *, positive: bool
+) -> tuple[Optional[str], str]:
     """``(decimal text, precision)`` for one receipt field, keeping the owner's admission verdict.
 
     The owner keeps raw ``exact_*`` strings for provenance even when it refuses them (unverified receipt
@@ -421,10 +426,14 @@ def receipt_value(fill: dict, field: str, *, positive: bool) -> tuple[Optional[s
     number = _dec(fill.get(key))
     if number is None or (positive and number <= 0):
         return None, "unavailable"
-    return fleet_pnl.decimal_text(number), "exact" if verdict == "exact_decimal" else "legacy_6dp"
+    return fleet_pnl.decimal_text(number), (
+        "exact" if verdict == "exact_decimal" else "legacy_6dp"
+    )
 
 
-def execution_time_fields(fill: dict, now_ms: Optional[float] = None, *, paper: bool = False) -> dict:
+def execution_time_fields(
+    fill: dict, now_ms: Optional[float] = None, *, paper: bool = False
+) -> dict:
     """Preserve an attested execution clock separately from the existing recorded clock."""
     executed = fill.get("execution_timestamp_ms")
     recorded = _instant_ms(fill.get("timestamp"), now_ms)
@@ -436,7 +445,8 @@ def execution_time_fields(fill: dict, now_ms: Optional[float] = None, *, paper: 
         and fill.get("execution_mode") != "paper"
         and type(executed) is int
         and 0 < executed <= 253402300799999
-        and recorded is not None and recorded > 0
+        and recorded is not None
+        and recorded > 0
         and executed <= recorded + 5000
         and (now_ms is None or executed <= now_ms + 5000)
     )
@@ -491,7 +501,9 @@ def _rows(value: Any) -> Optional[list[dict]]:
 
 
 def _text(value: Any) -> Optional[str]:
-    return value if isinstance(value, str) and value.strip() and value != "n/a" else None
+    return (
+        value if isinstance(value, str) and value.strip() and value != "n/a" else None
+    )
 
 
 def _nonneg_dec(value: Any) -> Optional[Decimal]:
@@ -532,6 +544,8 @@ def _start_history_read(fn: Callable, *args) -> concurrent.futures.Future:
         target=run, name=f"fleet-history-{_history_threads}", daemon=True
     ).start()
     return future
+
+
 PAIR_RE = re.compile(r"[A-Z0-9]+-[A-Z0-9]+")
 REASON_CODE_RE = re.compile(r"[a-z0-9_]{1,64}")
 SOURCE_RE = re.compile(r"[a-z][a-z0-9_]{0,39}")
@@ -552,7 +566,11 @@ def project_trading(value: Any, current: bool) -> Optional[dict]:
     read as able to trade: both become ``unverified``.
     """
     root = _obj(value)
-    if root.get("schema_version") != 1 or root.get("buy") not in TRADING_STATES or root.get("sell") not in TRADING_STATES:
+    if (
+        root.get("schema_version") != 1
+        or root.get("buy") not in TRADING_STATES
+        or root.get("sell") not in TRADING_STATES
+    ):
         return None
     raw = root.get("restrictions")
     if not isinstance(raw, list) or len(raw) > 500:
@@ -565,7 +583,12 @@ def project_trading(value: Any, current: bool) -> Optional[dict]:
         if (
             item.get("side") not in TRADING_SIDES
             or item.get("state") not in ("restricted", "blocked")
-            or not (pair is None or (isinstance(pair, str) and re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", pair)))
+            or not (
+                pair is None
+                or (
+                    isinstance(pair, str) and re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", pair)
+                )
+            )
             or not (isinstance(code, str) and re.fullmatch(r"[a-z0-9_]{1,64}", code))
             or type(item.get("alert")) is not bool
         ):
@@ -633,12 +656,85 @@ def trading_word(trading: dict) -> str:
     return "ok"
 
 
+def _portfolio_pairs_valid(
+    runtime: dict,
+    controllers: list[dict],
+    executors: list[dict],
+    observed: int,
+    threshold: float,
+    now_ms: float,
+) -> bool:
+    """Prove a pairless controller's scope from the same fresh native observation.
+
+    This only admits the aggregate runtime read. It does not expand controller rows,
+    assign a synthetic pair, or repeat portfolio amounts for each operation pair.
+    """
+    operations = _obj(runtime.get("operations"))
+    pairs = _rows(operations.get("pairs"))
+    if (
+        type(operations.get("schema_version")) is not int
+        or operations["schema_version"] != 1
+        or _instant_ms(operations.get("observed_at")) != observed
+        or not _native_fresh(observed / 1000, threshold, now_ms)
+        or not pairs
+        or len(pairs) > 500
+    ):
+        return False
+    owners = {}
+    for controller in controllers:
+        ident = _controller_id(controller.get("controller_id"))
+        connector = controller.get("connector_name")
+        pair = controller.get("pair")
+        if (
+            ident is None
+            or ident in owners
+            or not isinstance(connector, str)
+            or not SOURCE_RE.fullmatch(connector)
+            or "pair" not in controller
+            or not (pair is None or isinstance(pair, str) and PAIR_RE.fullmatch(pair))
+        ):
+            return False
+        owners[ident] = controller
+    scopes: dict[str, set[str]] = {ident: set() for ident in owners}
+    for row in pairs:
+        ident = _controller_id(row.get("controller_id"))
+        owner = owners.get(ident)
+        pair = row.get("pair")
+        if (
+            owner is None
+            or not isinstance(pair, str)
+            or not PAIR_RE.fullmatch(pair)
+            or row.get("connector") != owner["connector_name"]
+            or _instant_ms(row.get("observed_at")) != observed
+            or (owner["pair"] is not None and owner["pair"] != pair)
+            or pair in scopes[ident]
+        ):
+            return False
+        scopes[ident].add(pair)
+    pairless = {ident for ident, owner in owners.items() if owner["pair"] is None}
+    if any(len(scopes[ident]) < 2 for ident in pairless):
+        return False
+    # Keep the native active/lifecycle contract and reject executor scope conflicts.
+    for row in executors:
+        ident = _controller_id(row.get("controller_id"))
+        pair = row.get("pair")
+        if (
+            ident not in owners
+            or not isinstance(pair, str)
+            or pair not in scopes[ident]
+            or row.get("connector_name") != owners[ident]["connector_name"]
+        ):
+            return False
+    return True
+
+
 def project_runtime_view(payload: Any, bot: str, now_ms: float) -> Optional[dict]:
     """The owner's own runtime observation (``bootstrap``): active executors and trading capability.
 
     Only an identity-bound, well-formed observation is admitted (``None`` otherwise). An old one is returned
     with ``current: False``: staleness is a state, corruption is not. Inventory is not read here; it comes
     from the one holdings projection (``condor.web.holdings``).
+    A pairless portfolio also needs fresh, same-snapshot operation pair proof; expired proof is rejected.
     """
     root = _obj(payload)
     runtime, monitoring = _obj(root.get("runtime_status")), _obj(root.get("monitoring"))
@@ -672,6 +768,14 @@ def project_runtime_view(payload: Any, bot: str, now_ms: float) -> Optional[dict
         for a in active
     ):
         return None
+    if any(
+        not isinstance(row.get("pair"), str)
+        or not re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", row["pair"])
+        for row in controllers
+    ) and not _portfolio_pairs_valid(
+        runtime, controllers, [*active, *lifecycle], observed, threshold, now_ms
+    ):
+        return None
     idents = [i for i in (_text(row.get("controller_id")) for row in controllers) if i]
     if len(set(idents)) != len(idents):
         scoped = {(row.get("controller_id"), row.get("pair")) for row in controllers}
@@ -683,12 +787,6 @@ def project_runtime_view(payload: Any, bot: str, now_ms: float) -> Optional[dict
             for row in controllers
         ):
             return None
-    if any(
-        not isinstance(row.get("pair"), str)
-        or not re.fullmatch(r"[A-Z0-9]+-[A-Z0-9]+", row["pair"])
-        for row in controllers
-    ):
-        return None
     current = now_ms - observed < min(threshold, RUNTIME_STALE_CAP_S) * 1000
     return {
         "observed_ms": observed,
@@ -875,15 +973,19 @@ def _project_incident_item(
     ):
         return None, False, False
     bot, subject, link_valid = _incident_link(row)
-    return {
-        "id": incident_id,
-        **fields,
-        "severity": row["severity"],
-        "state": row["state"],
-        **times,
-        "bot": bot,
-        "subject": subject,
-    }, True, clipped or not link_valid
+    return (
+        {
+            "id": incident_id,
+            **fields,
+            "severity": row["severity"],
+            "state": row["state"],
+            **times,
+            "bot": bot,
+            "subject": subject,
+        },
+        True,
+        clipped or not link_valid,
+    )
 
 
 def _incident_link(row: dict) -> tuple[Optional[str], Optional[dict], bool]:
@@ -960,8 +1062,7 @@ def _wallet_section(
         and not current.get("excluded_dust_assets")
         and isinstance(usdt_holdings, list)
         and not any(
-            _obj(row).get("excluded_from_valuation") is True
-            for row in usdt_holdings
+            _obj(row).get("excluded_from_valuation") is True for row in usdt_holdings
         )
     )
     usdc_policy_valid = False
@@ -1051,7 +1152,9 @@ def _usdc_materiality_valid(payload: dict, current: dict) -> bool:
         for token in excluded_raw + unpriced_raw
     ):
         return False
-    if len(set(excluded_raw)) != len(excluded_raw) or len(set(unpriced_raw)) != len(unpriced_raw):
+    if len(set(excluded_raw)) != len(excluded_raw) or len(set(unpriced_raw)) != len(
+        unpriced_raw
+    ):
         return False
     if type(current.get("valuation_complete")) is not bool:
         return False
@@ -1073,7 +1176,11 @@ def _usdc_materiality_valid(payload: dict, current: dict) -> bool:
         total = _nonneg_dec(row.get("total"))
         value = _nonneg_dec(row.get("value")) if row.get("value") is not None else None
         price = _nonneg_dec(row.get("price")) if row.get("price") is not None else None
-        usd = _nonneg_dec(row.get("usd_equivalent")) if row.get("usd_equivalent") is not None else None
+        usd = (
+            _nonneg_dec(row.get("usd_equivalent"))
+            if row.get("usd_equivalent") is not None
+            else None
+        )
         source = row.get("usd_equivalent_source")
         marked = row.get("excluded_from_valuation")
         if (
@@ -1486,15 +1593,23 @@ def _bot_cards(
                 or (
                     INVALID
                     if held is None
-                    else INVALID
-                    if holdings.PAIR_FIELD_INVALID in held["incomplete_reasons"]
-                    else PARTIAL_COVERAGE
-                    if held["state"] != holdings.UNAVAILABLE
-                    else OWNER_NOT_CURRENT
-                    if held["reason"] == holdings.RUNTIME_NOT_CURRENT
-                    else INVALID
-                    if held["reason"] in holdings.MALFORMED
-                    else SOURCE_UNAVAILABLE
+                    else (
+                        INVALID
+                        if holdings.PAIR_FIELD_INVALID in held["incomplete_reasons"]
+                        else (
+                            PARTIAL_COVERAGE
+                            if held["state"] != holdings.UNAVAILABLE
+                            else (
+                                OWNER_NOT_CURRENT
+                                if held["reason"] == holdings.RUNTIME_NOT_CURRENT
+                                else (
+                                    INVALID
+                                    if held["reason"] in holdings.MALFORMED
+                                    else SOURCE_UNAVAILABLE
+                                )
+                            )
+                        )
+                    )
                 ),
             )
         open_cycles = c["counts"].get("open") if c is not None else None
@@ -1505,14 +1620,14 @@ def _bot_cards(
         elif open_cycles is not None:
             executors, executors_basis = open_cycles, "open_lifecycle_cycles"
         else:
-            gap("executors", cycles_reason or summary_reason or runtime_reason or INVALID)
+            gap(
+                "executors",
+                cycles_reason or summary_reason or runtime_reason or INVALID,
+            )
 
-        performance_at = (
-            _num(status.get("performance_received_at")) if status else None
-        )
-        if (
-            performance_at is not None
-            and (performance_at <= 0 or performance_at > (now_ms + 5_000) / 1000)
+        performance_at = _num(status.get("performance_received_at")) if status else None
+        if performance_at is not None and (
+            performance_at <= 0 or performance_at > (now_ms + 5_000) / 1000
         ):
             performance_at = None
         performance_limit = (
@@ -1571,9 +1686,11 @@ def _bot_cards(
             own = paper_day.get(bot)
             gap(
                 "pnl_day",
-                next((m["reason"] for m in own.missing), fleet_pnl.NO_SAMPLES)
-                if own is not None
-                else fleet_pnl.NOT_READ,
+                (
+                    next((m["reason"] for m in own.missing), fleet_pnl.NO_SAMPLES)
+                    if own is not None
+                    else fleet_pnl.NOT_READ
+                ),
             )
         else:
             gap(
@@ -1623,9 +1740,11 @@ def _bot_cards(
         else:
             gap(
                 "fees",
-                INVALID
-                if c is not None or ledger is not None
-                else cycles_reason or INVALID,
+                (
+                    INVALID
+                    if c is not None or ledger is not None
+                    else cycles_reason or INVALID
+                ),
             )
         if c is not None:
             since = now_ms - 86_400_000
@@ -1871,9 +1990,11 @@ async def gather_fleet_inputs(
         # status and owner reads are independent and must share one read window.
         status_raw = await read_status()
         page = build_bots_page(status_raw) if status_raw is not None else None
-        bots = list(dict.fromkeys(
-            b["bot_name"] for b in (page or {}).get("bots", []) if b.get("bot_name")
-        ))
+        bots = list(
+            dict.fromkeys(
+                b["bot_name"] for b in (page or {}).get("bots", []) if b.get("bot_name")
+            )
+        )
         if bots:
             missing.append({"section": "bots", "reason": REGISTRY_FROM_STATUS})
     live = [b for b in bots if not is_paper(b)]
@@ -2016,7 +2137,9 @@ def project_fleet_summary(inputs: FleetInputs, now_ms: float) -> dict:
         else None
     )
     if page is None:
-        missing.append({"section": "bots", "field": "status", "reason": SOURCE_UNAVAILABLE})
+        missing.append(
+            {"section": "bots", "field": "status", "reason": SOURCE_UNAVAILABLE}
+        )
     if isinstance(sync_result, BaseException):
         # The read was made and failed (or ran out of its budget): name it, as for paper bots.
         histories = {
@@ -2210,9 +2333,7 @@ def project_fleet_summary(inputs: FleetInputs, now_ms: float) -> dict:
         observed = [c["report_at_ms"] for c in cards if c["report_at_ms"] is not None]
         any_stale = any(c["report_stale"] for c in cards if not c["paper"])
         # The section verdict is the live fleet's: a paper card's own gaps never make it partial.
-        incomplete = (
-            any(c["missing"] for c in cards if not c["paper"]) or page is None
-        )
+        incomplete = any(c["missing"] for c in cards if not c["paper"]) or page is None
         sections["bots"] = _section(
             "stale" if any_stale else "partial" if incomplete else "ok",
             max(observed) if observed else None,
@@ -2430,7 +2551,9 @@ def glance(full: dict) -> dict:
                     else {}
                 ),
                 # One word keeps the Watch glance under its 8 KiB budget; the full view has the detail.
-                "trading": None if c.get("trading") is None else trading_word(c["trading"]),
+                "trading": (
+                    None if c.get("trading") is None else trading_word(c["trading"])
+                ),
             }
             for c in full["bots"][:GLANCE_MAX_BOTS]
         ],

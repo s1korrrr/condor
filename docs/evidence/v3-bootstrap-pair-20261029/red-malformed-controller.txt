@@ -1,0 +1,66 @@
+F                                                                        [100%]
+=================================== FAILURES ===================================
+____ test_malformed_duplicate_controller_scope_is_rejected_without_raising _____
+
+    def test_malformed_duplicate_controller_scope_is_rejected_without_raising():
+        payload = captured()
+        runtime = payload["runtime_status"]
+        runtime["controllers"].append(dict(runtime["controllers"][0], pair={"bad": "pair"}))
+>       assert fs.project_runtime_view(payload, BOT, capture_time(payload)) is None
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+tests/test_fleet_summary_portfolio_bootstrap.py:220: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+payload = {'monitoring': {'bot_name': 'meridian_v3', 'observed_at': '2026-10-29T12:56:56+00:00', 'runtime_state': 'fresh', 'stal...d_live', 'executor_id': '388259aa94e67ac2c8d4eb1a361353ffd360338b9349bfacfa0f86968873551b', 'pair': 'BTC-USDC'}], ...}}
+bot = 'meridian_v3', now_ms = 1793278617000
+
+    def project_runtime_view(payload: Any, bot: str, now_ms: float) -> Optional[dict]:
+        """The owner's own runtime observation (``bootstrap``): active executors and trading capability.
+    
+        Only an identity-bound, well-formed observation is admitted (``None`` otherwise). An old one is returned
+        with ``current: False``: staleness is a state, corruption is not. Inventory is not read here; it comes
+        from the one holdings projection (``condor.web.holdings``).
+        """
+        root = _obj(payload)
+        runtime, monitoring = _obj(root.get("runtime_status")), _obj(root.get("monitoring"))
+        observed = _instant_ms(runtime.get("updated_at"))
+        threshold = _num(monitoring.get("stale_threshold_seconds"))
+        if (
+            runtime.get("bot_name") != bot
+            or monitoring.get("bot_name") != bot
+            or observed is None
+            or threshold is None
+            or threshold <= 0
+            or observed > now_ms + 5_000
+        ):
+            return None
+        controllers = _rows(runtime.get("controllers"))
+        active = _rows(runtime.get("active_executors"))
+        lifecycle = (
+            active
+            if "lifecycle_executors" not in runtime
+            else _rows(runtime["lifecycle_executors"])
+        )
+        if controllers is None or active is None or lifecycle is None:
+            return None
+        if any(
+            not any(
+                row.get("executor_id") == a.get("executor_id")
+                and row.get("pair") == a.get("pair")
+                and row.get("controller_id") == a.get("controller_id")
+                for row in lifecycle
+            )
+            for a in active
+        ):
+            return None
+        idents = [i for i in (_text(row.get("controller_id")) for row in controllers) if i]
+        if len(set(idents)) != len(idents):
+>           scoped = {(row.get("controller_id"), row.get("pair")) for row in controllers}
+                      ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           TypeError: unhashable type: 'dict'
+
+condor/web/fleet_summary.py:772: TypeError
+=========================== short test summary info ============================
+FAILED tests/test_fleet_summary_portfolio_bootstrap.py::test_malformed_duplicate_controller_scope_is_rejected_without_raising
+1 failed in 1.10s

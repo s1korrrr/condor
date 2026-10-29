@@ -1,0 +1,5 @@
+Existing definitions changed: ['project_runtime_view']
+Added definition: ['_portfolio_pairs_valid']
+Existing definitions with unchanged AST: 54
+Source SHA256: df36f8fb294b60d3a9ea318485454bedd0fdf4e1c7daa52cf9b4f7be8542b0ae
+Fixture SHA256: 96dac3a3dbd1ce3e0dc8159871af2bb11e2a6fd39b1483877bf0edaea8a3a65e

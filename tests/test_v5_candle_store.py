@@ -125,7 +125,12 @@ def test_preserves_unknown_volume_and_rejects_fabricated_prices():
 
 
 def test_untrusted_overview_is_bounded():
-    for payload in ({}, {"now": 1, "tiles": [None]}, {"now": 1, "tiles": [{}] * 129}):
+    for payload in (
+        {},
+        {"now": 1, "tiles": []},
+        {"now": 1, "tiles": [None]},
+        {"now": 1, "tiles": [{}] * 129},
+    ):
         with pytest.raises(OwnerUnavailable):
             validate_payload("overview", payload)
 

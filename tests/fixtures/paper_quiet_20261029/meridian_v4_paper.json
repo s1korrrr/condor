@@ -1,0 +1,83 @@
+{
+  "_fixture_source": {
+    "kind": "candidate_reporting_projection_of_captured_runtime",
+    "retained_observed_at": 1793277109.201,
+    "runtime_fixture": "meridian_v4_paper_within_grace.json",
+    "runtime_sha256": "221a64d1749bd2ba63fbf8f1017048a554b89b55a8b8c192c0f9a2c001db2015",
+    "status_timestamp": 1793277114.5017529
+  },
+  "runtime_status": {
+    "bot_name": "meridian_v4_paper",
+    "controllers": [
+      {
+        "controller_id": "modular_spot_meridian_v4_paper_bnb",
+        "observation_status": "retained",
+        "pair": "BNB-USDC"
+      },
+      {
+        "controller_id": "modular_spot_meridian_v4_paper_btc",
+        "observation_status": "available",
+        "pair": "BTC-USDC"
+      },
+      {
+        "controller_id": "modular_spot_meridian_v4_paper_eth",
+        "observation_status": "available",
+        "pair": "ETH-USDC"
+      },
+      {
+        "controller_id": "modular_spot_meridian_v4_paper_sol",
+        "observation_status": "available",
+        "pair": "SOL-USDC"
+      },
+      {
+        "controller_id": "modular_spot_meridian_v4_paper_xrp",
+        "observation_status": "available",
+        "pair": "XRP-USDC"
+      }
+    ],
+    "native_reports_complete": false,
+    "ready": false,
+    "retained_marks": {
+      "BNB-USDC": {
+        "age_seconds": 5.300752878189087,
+        "source_timestamp": 1793277109.201
+      }
+    },
+    "simulated": true,
+    "summary": {
+      "active_executor_count": 7,
+      "balance_value_currency": "USDC",
+      "balance_value_quote": null,
+      "balance_value_scope": "paper_simulated_wallet",
+      "balance_value_status": "UNAVAILABLE",
+      "balance_value_unavailable_reason": "fixture_no_wallet",
+      "controller_count": 5,
+      "fees_included_in_pnl": true,
+      "fees_quote": 7.434334,
+      "initial_quote": "200000",
+      "lifecycle_executor_count": 7,
+      "net_pnl_quote": -4.207575,
+      "pnl_available": true,
+      "pnl_basis": "retained_marks",
+      "pnl_observed_at": "2026-10-29T12:31:49.201000+00:00",
+      "positions_held_count": 5,
+      "positions_value_quote": 3326.543856,
+      "realized_pnl_quote": 108.439993,
+      "retained_marks": {
+        "BNB-USDC": {
+          "age_seconds": 5.300752878189087,
+          "source_timestamp": 1793277109.201
+        }
+      },
+      "simulated": true,
+      "strategy_equity_quote": null,
+      "unrealized_pnl_quote": -112.647567,
+      "wallet_basis": "initial simulated quote plus exact paper TradeFill receipts (fees per receipt token)",
+      "wallet_equity_change_quote": null,
+      "wallet_fill_count": null,
+      "wallet_missing_price_assets": []
+    },
+    "updated_at": "2026-10-29T12:31:54.501753+00:00"
+  },
+  "simulated": true
+}

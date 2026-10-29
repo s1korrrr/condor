@@ -1,5 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
 import { paperReadState, paperCompleteRecords, paperControlState, paperRecordSummary, paperSnapshotsAgree, paperWords, paperAmount, paperExactAmount, paperSectionError, paperTime, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadiness, paperRiskHold, paperRiskHolds, paperExitProjection, paperRiskUsage, paperWalletInventory, paperWalletTotals, paperPairObservation } from '../src/v5/policy.ts';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
@@ -488,4 +490,15 @@ test('clock durability hold explains entry-only protection and owner acknowledge
   assert.equal(paperWords('clock_persistence_failed'), 'Clock durability failed; new acquisitions are held');
   assert.equal(paperRiskHold({...risk,data:null}), false);
   assert.equal(paperControlState(risk), 'Paper control not enabled');
+});
+
+test('hold banner labels the clock high-water without an orphaned control sentence', () => {
+  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
+  for (const highWater of [undefined, now]) {
+    const risk = {...fresh,section:'risk',data:{control_hold:null,holds:[{reason:'clock_persistence_failed',explanation:''}],clock_recovery:{high_water_ms:highWater}}};
+    const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:[risk],now,reportAt:now,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
+    assert.ok(html.includes(`Clock high-water mark: ${paperTime(highWater,now)}.`));
+    assert.doesNotMatch(html,/Not published\. Clock high-water mark/);
+  }
 });

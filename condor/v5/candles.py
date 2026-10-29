@@ -108,7 +108,7 @@ def _rows(payload, key, limit, fields):
                 or rule.get("level") not in {"green", "amber", "red"}
                 or any(
                     not isinstance(rule.get(name), str) or len(rule[name]) > 2048
-                    for name in ("name", "detail")
+                    for name in ("rule", "detail")
                 )
             ):
                 raise OwnerUnavailable("owner_invalid_health_rules")

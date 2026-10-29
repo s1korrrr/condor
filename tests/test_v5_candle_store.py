@@ -1,4 +1,6 @@
+import tempfile
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from aiohttp import web
@@ -75,7 +77,7 @@ async def test_bounded_transport_rejects_redirect_and_oversize(tmp_path):
         app.router.add_get("/api/overview", respond)
         runner = web.AppRunner(app)
         await runner.setup()
-        path = str(tmp_path / f"owner{index}.sock")
+        path = str(Path(tempfile.mkdtemp(prefix="uds-")) / f"owner{index}.sock")
         site = web.UnixSite(runner, path)
         await site.start()
         try:
@@ -141,3 +143,27 @@ def test_owner_totals_cannot_disagree_with_chart():
     payload["totals"]["final"] = 0
     with pytest.raises(OwnerUnavailable, match="inconsistent_totals"):
         validate_payload("candles", payload)
+
+
+def test_native_health_rule_contract_uses_rule_not_name():
+    payload = {
+        "now": 120,
+        "status_age_s": 2,
+        "status_error": None,
+        "tiles": [
+            {
+                "lane": "okx__spot",
+                "venue": "okx",
+                "segment": "spot",
+                "health": "green",
+                "health_rules": [
+                    {"level": "green", "rule": "service", "detail": "status age 2 s"}
+                ],
+                "partition_errors": [],
+                "available": True,
+                "gaps_7d": 0,
+            }
+        ],
+    }
+    result = validate_payload("overview", payload)
+    assert result["tiles"][0]["health_rules"][0]["rule"] == "service"

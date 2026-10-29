@@ -126,3 +126,18 @@ def test_untrusted_overview_is_bounded():
     for payload in ({}, {"now": 1, "tiles": [None]}, {"now": 1, "tiles": [{}] * 129}):
         with pytest.raises(OwnerUnavailable):
             validate_payload("overview", payload)
+
+
+@pytest.mark.parametrize("value", [10**1000, 1e300, float("nan"), True])
+def test_hostile_timestamp_is_unavailable_not_browser_crash(value):
+    payload = candle_payload()
+    payload["now"] = value
+    with pytest.raises(OwnerUnavailable):
+        validate_payload("candles", payload)
+
+
+def test_owner_totals_cannot_disagree_with_chart():
+    payload = candle_payload()
+    payload["totals"]["final"] = 0
+    with pytest.raises(OwnerUnavailable, match="inconsistent_totals"):
+        validate_payload("candles", payload)

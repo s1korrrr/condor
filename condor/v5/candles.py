@@ -33,6 +33,7 @@ ROW_KEYS = {
     "ws_state",
     "ws_last_message_age_s",
     "grace_s",
+    "health_rules",
 }
 TILE_KEYS = (ROW_KEYS - {"pair", "ws_state", "ws_last_message_age_s"}) | {
     "pairs_listed",
@@ -76,7 +77,10 @@ def validate_query(view: str, items: list[tuple[str, str]]) -> dict[str, str]:
 
 
 def _number(value: Any) -> bool:
-    return type(value) in (int, float) and math.isfinite(value)
+    try:
+        return type(value) in (int, float) and math.isfinite(value)
+    except OverflowError:
+        return False
 
 
 def _rows(payload, key, limit, fields):
@@ -95,6 +99,19 @@ def _rows(payload, key, limit, fields):
             raise OwnerUnavailable("owner_invalid_identity")
         if key == "rows" and not PAIR.fullmatch(str(row.get("pair", ""))):
             raise OwnerUnavailable("owner_invalid_identity")
+        rules = row.get("health_rules")
+        if not isinstance(rules, list) or len(rules) > 32:
+            raise OwnerUnavailable("owner_invalid_health_rules")
+        for rule in rules:
+            if (
+                not isinstance(rule, dict)
+                or rule.get("level") not in {"green", "amber", "red"}
+                or any(
+                    not isinstance(rule.get(name), str) or len(rule[name]) > 2048
+                    for name in ("name", "detail")
+                )
+            ):
+                raise OwnerUnavailable("owner_invalid_health_rules")
         numeric = {
             "last_minute",
             "last_minute_age_s",
@@ -116,6 +133,8 @@ def _rows(payload, key, limit, fields):
                 raise OwnerUnavailable("owner_invalid_number")
             if name in numeric and value is not None and value < 0:
                 raise OwnerUnavailable("owner_invalid_number")
+            if name == "last_minute" and value is not None and value > payload["now"]:
+                raise OwnerUnavailable("owner_invalid_timestamp")
             if (
                 name in {"ws_state", "volume_unit", "unavailable_reason"}
                 and value is not None
@@ -146,6 +165,7 @@ def validate_payload(view: str, payload: Any) -> dict:
         not isinstance(payload, dict)
         or not _number(payload.get("now"))
         or payload["now"] <= 0
+        or payload["now"] > 4_102_444_800
     ):
         raise OwnerUnavailable("owner_invalid_payload")
     if view == "overview":
@@ -193,6 +213,8 @@ def validate_payload(view: str, payload: Any) -> dict:
             or type(row[0]) is not int
             or row[0] <= previous
             or row[0] % 60
+            or row[0] < 0
+            or row[0] > payload["now"]
             or any(
                 value is not None and (not _number(value) or value < 0)
                 for value in row[1:6]

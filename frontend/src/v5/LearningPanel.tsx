@@ -1,3 +1,4 @@
+import { createContext, useContext, type ReactNode } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '../features/quant-ops/kit/DataTable';
 import { TileGrid } from '../features/quant-ops/kit/grid';
@@ -26,17 +27,23 @@ export interface LearningProjection {
 
 const unknown = (value: string | number | null | undefined) => value == null || value === '' ? 'Unknown' : String(value);
 const utc = (value: number | undefined) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 8640000000000000 ? new Date(value).toISOString().replace('T', ' ').replace('.000Z', ' UTC') : 'Unknown';
+const SyntheticClock = createContext(false);
+
+export function ProjectionClock({ status, sourceGeneration, children }: { status?: string; sourceGeneration?: string; children: ReactNode }) {
+  return <SyntheticClock.Provider value={status === 'FIXTURE_ONLY' || sourceGeneration?.startsWith('fixture-') === true}>{children}</SyntheticClock.Provider>;
+}
 
 export function UtcTime({ value }: { value?: number }) {
+  const synthetic = useContext(SyntheticClock);
   const formatted = utc(value);
-  return formatted === 'Unknown' ? <span>Unknown</span> : <time dateTime={new Date(value!).toISOString()}>{formatted}</time>;
+  return formatted === 'Unknown' ? <span>Unknown</span> : <span><time dateTime={new Date(value!).toISOString()}>{formatted}</time>{synthetic && <small className="block text-[var(--color-text-muted)]">Synthetic fixture clock</small>}</span>;
 }
 
 export function ProjectionNotice({ status, reason, generatedAt, error }: { status?: string; reason?: string; generatedAt?: number; error?: string }) {
   return <div className="v5-panel mb-4" role={error ? 'alert' : 'status'}>
     <strong>{error ? 'Read error' : status === 'STALE' ? 'Stale owner snapshot' : status === 'FIXTURE_ONLY' ? 'Synthetic fixtures · not production evidence' : 'Owner evidence unavailable'}</strong>
     <p>{error ?? reason ?? 'Reports only. Effect: NONE. No model call or execution permission.'}</p>
-    <p className="text-xs text-[var(--color-text-muted)]">Owner snapshot: {utc(generatedAt)} · Readiness: disabled · Native execution: unknown</p>
+    <p className="text-xs text-[var(--color-text-muted)]">Owner snapshot: <UtcTime value={generatedAt} /> · Readiness: disabled · Native execution: unknown</p>
   </div>;
 }
 
@@ -44,10 +51,10 @@ export function EvidenceList({ refs, empty = 'None reported by owner' }: { refs:
   if (!refs.length) return <span>{empty}</span>;
   const evidence = <ul className="space-y-2">{refs.map(reference => <li key={`${reference.record_id}:${reference.revision}`} className="break-all">
     <strong>{reference.record_id}</strong> · {reference.record_kind.replaceAll('_', ' ')} · {reference.owner}<br />
-    Revision {reference.revision} · {utc(reference.available_at_ms)}<br />
-    <span className="text-xs text-[var(--color-text-muted)]">SHA256 {reference.content_sha256}</span>
+    Revision {reference.revision} · <UtcTime value={reference.available_at_ms} /><br />
+    <span className="text-xs text-[var(--color-text-muted)]">SHA256 <code className="font-mono select-text">{reference.content_sha256}</code></span>
   </li>)}</ul>;
-  return refs.length > 2 ? <details><summary>Inspect {refs.length} evidence references</summary>{evidence}</details> : evidence;
+  return <div><span className="block truncate" title={refs[0].record_id}>{refs[0].record_id}</span><details><summary>Inspect {refs.length} evidence references</summary>{evidence}</details></div>;
 }
 
 export function MetricTiles({ items }: { items: { label: string; value: string | number }[] }) {
@@ -55,7 +62,7 @@ export function MetricTiles({ items }: { items: { label: string; value: string |
 }
 
 export function LearningPanel({ data, roles = [], error }: { data?: LearningProjection; roles?: RoleProjection[]; error?: string }) {
-  return <div className="space-y-4">
+  return <ProjectionClock status={data?.status} sourceGeneration={data?.source_generation}><div className="space-y-4">
     <div className="v5-page-heading"><div><h1>Learning oversight</h1><p>Inspect claims, contradictions and release adoption. Evidence never grants execution.</p></div></div>
     <ProjectionNotice status={data?.status} reason={data?.reason} generatedAt={data?.generated_at_ms} error={error} />
     <MetricTiles items={[{ label: 'Roles blocked', value: roles.length ? roles.filter(role => role.status === 'BLOCKED').length : 'Unknown' }, { label: 'Lessons on this page', value: data?.lessons?.length ?? 'Unknown' }, { label: 'Applied receipts on this page', value: data?.adoptions?.filter(row => row.disposition === 'APPLIED').length ?? 'Unknown' }, { label: 'View provider calls', value: 'Not dispatched' }]} />
@@ -72,7 +79,7 @@ export function LearningPanel({ data, roles = [], error }: { data?: LearningProj
       { id: 'state', header: 'Validity / lifecycle', value: row => `${row.evidence_validity} / ${row.lifecycle_state}` },
       { id: 'support', header: 'Support', value: row => row.support_refs.map(ref => ref.record_id).join(' '), cell: row => <EvidenceList refs={row.support_refs} />, wrap: true, size: 260 },
       { id: 'contradictions', header: 'Contradictions', value: row => row.contradictory_refs.map(ref => ref.record_id).join(' '), cell: row => <EvidenceList refs={row.contradictory_refs} />, wrap: true, size: 260 },
-      { id: 'time', header: 'Available UTC', value: row => utc(row.available_at_ms) },
+      { id: 'time', header: 'Available UTC', value: row => utc(row.available_at_ms), cell: row => <UtcTime value={row.available_at_ms} /> },
     ]} /></section>
     <section className="v5-panel"><h2>Knowledge releases</h2><DataTable label="Release consumer bindings" rows={data?.releases ?? []} rowId={row => row.record_id} columns={[
       { id: 'release', header: 'Release', value: row => row.release_id, rowHeader: true },
@@ -86,13 +93,13 @@ export function LearningPanel({ data, roles = [], error }: { data?: LearningProj
       { id: 'release', header: 'Release', value: row => row.new_release_ref.record_id },
       { id: 'disposition', header: 'Adoption', value: row => row.disposition },
       { id: 'reason', header: 'Reason', value: row => row.reason, wrap: true },
-      { id: 'boundary', header: 'Decision boundary UTC', value: row => utc(row.effective_decision_boundary_ms) },
+      { id: 'boundary', header: 'Decision boundary UTC', value: row => utc(row.effective_decision_boundary_ms), cell: row => <UtcTime value={row.effective_decision_boundary_ms} /> },
     ]} /><DataTable label="Retractions" rows={data?.retractions ?? []} rowId={row => row.record_id} emptyText="No retraction reported by this snapshot." columns={[
       { id: 'reason', header: 'Retraction reason', value: row => row.reason, rowHeader: true, wrap: true },
       { id: 'affected', header: 'Affected evidence', value: row => row.affected_refs.map(ref => ref.record_id).join(' '), cell: row => <EvidenceList refs={row.affected_refs} />, wrap: true },
-      { id: 'effective', header: 'Effective UTC', value: row => utc(row.effective_at_ms) },
+      { id: 'effective', header: 'Effective UTC', value: row => utc(row.effective_at_ms), cell: row => <UtcTime value={row.effective_at_ms} /> },
     ]} /></section>
-  </div>;
+  </div></ProjectionClock>;
 }
 
 export function LearningPage() {

@@ -30,7 +30,7 @@ export function loadPanel(file) {
 }
 export const render = (component, props) => renderToStaticMarkup(React.createElement(component, props));
 
-const { LearningPanel, UtcTime } = loadPanel('v5/LearningPanel.tsx');
+const { LearningPanel, UtcTime, EvidenceList, ProjectionClock } = loadPanel('v5/LearningPanel.tsx');
 const { learningRead } = loadPanel('v5/api.ts');
 test('learning states show unknown, empty, error and stale without false success', () => {
   const empty = render(LearningPanel, { data: { status: 'FIXTURE_ONLY', effect: 'NONE', lessons: [], releases: [], adoptions: [], retractions: [] } });
@@ -61,4 +61,23 @@ test('learning transport never accepts an authorizing result', async () => {
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ effect: 'ORDER' }) });
   try { await assert.rejects(learningRead('manifest'), /Invalid non-authorizing/); }
   finally { globalThis.fetch = previous; }
+});
+
+test('even a single evidence reference is collapsed with a selectable monospace hash', () => {
+  const reference = { owner: 'research_os', record_kind: 'run', record_id: 'trial-1', revision: 'v1', content_sha256: 'a'.repeat(64), available_at_ms: 1200 };
+  for (const refs of [[reference], [reference, { ...reference, record_id: 'trial-2' }]]) {
+    const markup = render(EvidenceList, { refs });
+    assert.match(markup, new RegExp(`<details><summary>Inspect ${refs.length} evidence references</summary>`));
+    assert.match(markup, /<code class="[^"]*select-text[^"]*">a{64}<\/code>/);
+    assert.doesNotMatch(markup, /<details open/);
+  }
+});
+
+test('fixture clocks keep exact UTC values and label all times, including stale fixtures', () => {
+  for (const status of ['FIXTURE_ONLY', 'STALE']) {
+    const markup = render(ProjectionClock, { status, sourceGeneration: 'fixture-g1', children: React.createElement(UtcTime, { value: 1200 }) });
+    assert.match(markup, /1970-01-01 00:00:01.200Z/);
+    assert.match(markup, /Synthetic fixture clock/);
+  }
+  assert.doesNotMatch(render(UtcTime, { value: 1200 }), /Synthetic fixture clock/);
 });

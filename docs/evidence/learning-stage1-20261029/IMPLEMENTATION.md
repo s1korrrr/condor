@@ -43,3 +43,26 @@ unavailable and all roles remain blocked. No paid queue exists to replay.
 Rollback is to leave this feature branch unmerged. No runtime restart or data
 migration is needed. Retain all prior files and screenshots; task instructions
 forbid deleting the worktree or any inherited artifact.
+
+## Parent cleanup (2026-10-29)
+
+Completed as a normal follow-up commit, without rewriting history. All 60 PNGs,
+the capture JSON and `fixture_dashboard.py` moved byte-for-byte to:
+`/home/rsi/dev/rsibot/.workspace/evidence/learning-stage1-20261029/`.
+`VALIDATION.md` records each path, byte count and SHA-256, plus the new capture
+hashes. The launcher SHA-256 is
+`43f6235bb204e78f47ad50c77993a921d689677a0a76646b184ef2d781251d9e`.
+No test fixture moved and no fixture value changed.
+
+All nonempty evidence cells now show a short identity and a closed reference
+disclosure. Full hashes and pinned identities remain selectable monospace text.
+All times in fixture snapshots carry a synthetic-clock label. Stale snapshots
+retain that label when their source generation has the explicit fixture prefix;
+epoch values alone never imply synthetic data. The four #79/#82 shared files
+have no new hunks in this cleanup.
+
+WP09/WP14, both full V5 suites, ordinary/private builds and changed-file ESLint
+pass. The two new regression tests failed before implementation. Twelve new
+Factory/Lineage captures cover both widths and all three themes. Each was
+inspected, as was the expanded hash detail. Only the new Serve route was removed.
+Independent review remains pending; no production authority is implied.

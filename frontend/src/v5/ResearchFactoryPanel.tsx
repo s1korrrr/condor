@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '../features/quant-ops/kit/DataTable';
-import { EvidenceList, MetricTiles, ProjectionNotice } from './LearningPanel';
+import { EvidenceList, MetricTiles, ProjectionClock, ProjectionNotice } from './LearningPanel';
 import { learningRead } from './api';
 import type { EvidenceRef } from './LearningPanel';
 
@@ -27,7 +27,7 @@ const unknown = (value: string | number | null | undefined) => value == null || 
 
 export function ResearchFactoryPanel({ data, error, loading = false, onNext, onFirst }: { data?: ResearchProjection; error?: string; loading?: boolean; onNext?: () => void; onFirst?: () => void }) {
   const candidates = data?.candidates ?? [];
-  return <div className="space-y-4">
+  return <ProjectionClock status={data?.status} sourceGeneration={data?.source_generation}><div className="space-y-4">
     <div className="v5-page-heading"><div><h1>Research factory</h1><p>Every candidate and trial remains inspectable. Catalog membership is not research support.</p></div></div>
     <ProjectionNotice status={data?.status} reason={data?.reason} generatedAt={data?.generated_at_ms} error={error} />
     <MetricTiles items={[{ label: 'Candidates · full catalog', value: data?.total_candidates ?? 'Unknown' }, { label: 'Families · full catalog', value: data?.total_families ?? 'Unknown' }, { label: 'Variants · full catalog', value: data?.total_variants ?? 'Unknown' }, { label: 'Forecast quality', value: unknown(data?.forecast_quality) }]} />
@@ -48,7 +48,7 @@ export function ResearchFactoryPanel({ data, error, loading = false, onNext, onF
     <section className="v5-panel"><h2>Native owner boundaries</h2><dl className="grid grid-cols-1 sm:grid-cols-2 gap-4">{[
       ['Inventory owner', data?.inventory_owner], ['Inventory policy', data?.inventory_policy], ['Open bags', data?.open_bags], ['Capital occupancy', data?.capital_occupancy], ['Native risk restrictions', data?.risk_restrictions], ['Rollback target', data?.rollback_target],
     ].map(([label, value]) => <div key={label}><dt className="text-xs text-[var(--color-text-muted)]">{label}</dt><dd>{unknown(value)}</dd></div>)}</dl><p>No bag, balance or native policy is reconstructed in the browser.</p></section>
-  </div>;
+  </div></ProjectionClock>;
 }
 
 export function ResearchFactoryPage() {

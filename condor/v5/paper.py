@@ -36,6 +36,393 @@ MAX_CONTROLLERS = 64
 STALE_AFTER_SECONDS = 30  # the runtime rewrites status about twice a second
 FUTURE_SKEW_SECONDS = 5
 
+C1_DATA_SCHEMA = json.loads(r"""
+{
+  "$defs": {
+    "decimal": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+    },
+    "accountingTotals": {
+      "type": "object",
+      "required": [
+        "fees_paid_quote",
+        "realized_pnl_quote",
+        "unrealized_pnl_quote",
+        "volume_traded_quote",
+        "accounting_since_ms",
+        "accounting_since_reason",
+        "fees_paid",
+        "fee_quote_valuation_basis",
+        "count_basis",
+        "unavailable_reasons",
+        "entry_count",
+        "exit_count"
+      ],
+      "properties": {
+        "fees_paid_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "realized_pnl_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unrealized_pnl_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "volume_traded_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "accounting_since_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "accounting_since_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fees_paid": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/decimal"
+          }
+        },
+        "fee_quote_valuation_basis": {
+          "type": "string"
+        },
+        "count_basis": {
+          "type": "string"
+        },
+        "unavailable_reasons": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "entry_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "exit_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    }
+  },
+  "properties": {
+    "wallet": {
+      "type": "object",
+      "required": [
+        "quote_asset",
+        "unit",
+        "assets",
+        "initial_funding_quote",
+        "external_cash_flows_quote",
+        "equity_quote",
+        "valuation_policy"
+      ],
+      "properties": {
+        "quote_asset": {
+          "const": "USDC"
+        },
+        "unit": {
+          "const": "USDC"
+        },
+        "assets": {
+          "type": "array",
+          "maxItems": 6,
+          "items": {
+            "type": "object",
+            "required": [
+              "asset",
+              "total",
+              "available",
+              "reserved",
+              "mark_quote",
+              "marked_value_quote",
+              "mark_at_ms"
+            ],
+            "properties": {
+              "asset": {
+                "type": "string"
+              },
+              "total": {
+                "$ref": "#/$defs/decimal"
+              },
+              "available": {
+                "$ref": "#/$defs/decimal"
+              },
+              "reserved": {
+                "$ref": "#/$defs/decimal"
+              },
+              "mark_quote": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/decimal"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "marked_value_quote": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/decimal"
+                  },
+                  {
+                    "type": "null"
+                  }
+                ]
+              },
+              "mark_at_ms": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              }
+            }
+          }
+        },
+        "initial_funding_quote": {
+          "$ref": "#/$defs/decimal"
+        },
+        "external_cash_flows_quote": {
+          "$ref": "#/$defs/decimal"
+        },
+        "equity_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "valuation_policy": {
+          "type": "string"
+        }
+      }
+    },
+    "positions": {
+      "type": "array",
+      "maxItems": 640,
+      "items": {
+        "type": "object",
+        "required": [
+          "position_id",
+          "controller_id",
+          "trading_pair",
+          "quantity",
+          "remaining_basis_quote",
+          "state"
+        ],
+        "properties": {
+          "quantity": {
+            "$ref": "#/$defs/decimal"
+          },
+          "remaining_basis_quote": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/decimal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          }
+        }
+      }
+    },
+    "fills": {
+      "type": "array",
+      "maxItems": 500,
+      "items": {
+        "type": "object",
+        "required": [
+          "trade_id",
+          "order_id",
+          "executor_id",
+          "controller_id",
+          "trading_pair",
+          "side",
+          "quantity",
+          "price",
+          "event_at_ms",
+          "observed_at_ms"
+        ],
+        "properties": {
+          "trade_id": {
+            "type": "string"
+          },
+          "order_id": {
+            "type": "string"
+          },
+          "trading_pair": {
+            "type": "string"
+          },
+          "executor_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "controller_id": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "side": {
+            "enum": [
+              "BUY",
+              "SELL"
+            ]
+          },
+          "quantity": {
+            "$ref": "#/$defs/decimal"
+          },
+          "price": {
+            "$ref": "#/$defs/decimal"
+          },
+          "fee_amount": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/decimal"
+              },
+              {
+                "type": "null"
+              }
+            ]
+          },
+          "fee_currency": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "event_at_ms": {
+            "type": "integer"
+          },
+          "observed_at_ms": {
+            "type": "integer"
+          }
+        }
+      }
+    },
+    "accounting": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "required": [
+            "controllers",
+            "program",
+            "source"
+          ],
+          "properties": {
+            "controllers": {
+              "type": "object",
+              "maxProperties": 5,
+              "additionalProperties": {
+                "$ref": "#/$defs/accountingTotals"
+              }
+            },
+            "program": {
+              "$ref": "#/$defs/accountingTotals"
+            },
+            "source": {
+              "type": "string"
+            }
+          }
+        }
+      ]
+    },
+    "risk": {
+      "anyOf": [
+        {
+          "type": "null"
+        },
+        {
+          "type": "object",
+          "if": {
+            "properties": {
+              "control_hold": {
+                "const": "clock_persistence_failed"
+              }
+            },
+            "required": [
+              "control_hold"
+            ]
+          },
+          "then": {
+            "required": [
+              "reason",
+              "explanation",
+              "clock_recovery"
+            ],
+            "properties": {
+              "reason": {
+                "const": "clock_persistence_failed"
+              },
+              "explanation": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+""")
+
 
 def validate_paper_read(
     payload: dict, *, section: str, bot: str | None, now_ms: int
@@ -79,10 +466,18 @@ def validate_paper_read(
         )
         or (payload["state"] == "available" and payload.get("data") is None)
     ):
-        raise HTTPException(502, detail={"code": "paper_read_schema_invalid"})
+        raise HTTPException(
+            502,
+            detail={
+                "code": "paper_read_schema_invalid",
+                "reason": "schema_invalid",
+                "section": section,
+            },
+        )
     try:
         encoded = json.dumps(payload, allow_nan=False)
         _validate_read_tree(payload.get("data"))
+        _validate_section_data(section, payload.get("data"))
         if section == "accounting" and payload.get("data") is not None:
             data = payload["data"]
             if not isinstance(data, dict) or not isinstance(data.get("program"), dict):
@@ -117,7 +512,14 @@ def validate_paper_read(
                     ):
                         raise ValueError("invalid lifetime amount")
     except (TypeError, ValueError):
-        raise HTTPException(502, detail={"code": "paper_read_schema_invalid"}) from None
+        raise HTTPException(
+            502,
+            detail={
+                "code": "paper_read_schema_invalid",
+                "reason": "schema_invalid",
+                "section": section,
+            },
+        ) from None
     if len(encoded.encode()) > MAX_STATUS_BYTES:
         raise HTTPException(502, detail={"code": "paper_read_capacity"})
     result = deepcopy(payload)
@@ -168,6 +570,145 @@ def validate_paper_read(
             }
         }
     return result
+
+
+def _validate_section_data(section: str, data: Any) -> None:
+    """Validate C1 data schemas vendored from hummingbot 031f67cc, then C3 containers.
+
+    C1 leaves executors, decisions, history and operations data unconstrained;
+    the read adapter must additionally enforce the record shapes it projects.
+    Null is reserved for the envelope's explicit unavailable/degraded states.
+    """
+    if data is None:
+        return
+    schema = C1_DATA_SCHEMA["properties"].get(section)
+    if schema is not None:
+        if not _matches_c1_schema(data, schema):
+            raise ValueError("invalid C1 section data")
+    list_sections = {"positions", "fills", "executors", "orders"}
+    if section in list_sections:
+        if not isinstance(data, list) or any(not isinstance(row, dict) for row in data):
+            raise ValueError("invalid section records")
+        identifiers = {
+            "positions": ("position_id", "controller_id", "trading_pair", "state"),
+            "fills": ("trade_id", "order_id", "trading_pair", "side"),
+            "executors": ("executor_id", "controller_id", "state"),
+            "orders": ("order_id", "executor_id", "side"),
+        }
+        for row in data:
+            for key in (
+                "quantity",
+                "remaining_close_quantity",
+                "remaining_basis_quote",
+                "cum_fees_quote",
+                "realized_pnl_quote",
+                "unrealized_pnl_quote",
+                "target_price",
+                "limit_price",
+            ):
+                if row.get(key) is not None and not _matches_c1_schema(
+                    row[key], C1_DATA_SCHEMA["$defs"]["decimal"]
+                ):
+                    raise ValueError("invalid record amount")
+            if any(
+                not isinstance(row.get(key), str) or not row[key]
+                for key in identifiers[section]
+            ):
+                raise ValueError("invalid section record identity")
+            for key in ("executor_id", "trading_pair"):
+                if (
+                    key in row
+                    and row[key] is not None
+                    and not isinstance(row[key], str)
+                ):
+                    raise ValueError("invalid record identity")
+            for key in ("protected_exit", "terminal"):
+                if key in row and type(row[key]) is not bool:
+                    raise ValueError("invalid record flag")
+    elif not isinstance(data, dict):
+        raise ValueError("invalid section object")
+    if isinstance(data, dict):
+        for key in (
+            "assets",
+            "controllers",
+            "conditions",
+            "rails",
+            "latches",
+            "segments",
+            "gaps",
+        ):
+            if key in data:
+                if section == "accounting" and key == "controllers":
+                    continue
+                if not isinstance(data[key], list) or any(
+                    not isinstance(row, dict) for row in data[key]
+                ):
+                    raise ValueError("invalid nested section records")
+        if section == "decisions":
+            for row in data.get("controllers", []):
+                if not isinstance(row.get("id"), str) or not isinstance(
+                    row.get("custom_info", {}), dict
+                ):
+                    raise ValueError("invalid decision controller")
+
+
+def _matches_c1_schema(value: Any, schema: dict) -> bool:
+    """Evaluate the bounded keywords used by the frozen C1 data schemas."""
+    if "$ref" in schema:
+        return _matches_c1_schema(
+            value, C1_DATA_SCHEMA["$defs"][schema["$ref"].rsplit("/", 1)[1]]
+        )
+    if "anyOf" in schema and not any(
+        _matches_c1_schema(value, option) for option in schema["anyOf"]
+    ):
+        return False
+    if (
+        "if" in schema
+        and _matches_c1_schema(value, schema["if"])
+        and not _matches_c1_schema(value, schema.get("then", {}))
+    ):
+        return False
+    types = {
+        "object": dict,
+        "array": list,
+        "string": str,
+        "integer": int,
+        "null": type(None),
+    }
+    expected = schema.get("type")
+    if expected is not None and type(value) not in [
+        types[name] for name in (expected if isinstance(expected, list) else [expected])
+    ]:
+        return False
+    if "const" in schema and value != schema["const"]:
+        return False
+    if "enum" in schema and value not in schema["enum"]:
+        return False
+    if isinstance(value, dict):
+        if any(key not in value for key in schema.get("required", [])) or len(
+            value
+        ) > schema.get("maxProperties", MAX_STATUS_BYTES):
+            return False
+        properties = schema.get("properties", {})
+        for key, child in value.items():
+            child_schema = properties.get(key, schema.get("additionalProperties", {}))
+            if not _matches_c1_schema(child, child_schema):
+                return False
+    elif isinstance(value, list):
+        if len(value) > schema.get("maxItems", 2000):
+            return False
+        if "items" in schema and not all(
+            _matches_c1_schema(child, schema["items"]) for child in value
+        ):
+            return False
+    elif isinstance(value, str):
+        if len(value) < schema.get("minLength", 0) or (
+            "pattern" in schema and re.search(schema["pattern"], value) is None
+        ):
+            return False
+    elif type(value) is int and "minimum" in schema and value < schema["minimum"]:
+        return False
+    return True
 
 
 def _validate_read_tree(value: Any, key: str = "", depth: int = 0) -> None:

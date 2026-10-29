@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import type { PaperRead } from "@/v5/contracts";
-import { paperAmount, paperControlState, paperLifetimeTotals, paperOpenExecutorCount, paperReadState, paperRiskHold, paperSnapshotsAgree, paperTime, paperWords } from "@/v5/policy";
+import { paperAmount, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperPairObservation, paperReadState, paperRiskHold, paperSectionError, paperSnapshotsAgree, paperTime, paperWalletInventory, paperWords } from "@/v5/policy";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
 import { paperHeartbeat } from "@/features/bots/fleet-health";
 import "@/components/bots/fleet-strip.css";
@@ -664,18 +664,18 @@ function PaperRecords({ read, now, kind }: { read?: PaperRead; now: number; kind
       { id: "unrealized", header: "Unrealized PnL", value: (row: PaperRow) => paperAmount(row.unrealized_pnl_quote, unit(row), 6), size: 180 },
       { id: "closed", header: "Closed at · UTC", value: (row: PaperRow) => paperTime(row.close_at_ms, now), size: 330 },
     ] : []),
-    { id: "detail", header: "Owner detail", value: row => String(row.executor_id ?? ""), size: 340, wrap: true, cell: row => <details><summary>Expand record</summary><dl className="paper-detail"><dt>Executor</dt><dd>{String(row.executor_id ?? "Not published")}</dd><dt>Controller</dt><dd>{String(row.controller_id ?? "Not published")}</dd>{kind === "positions" && <><dt>Protected exit</dt><dd>{paperWords(row.protected_exit)}</dd></>}{kind === "executors" && <><dt>Terminal receipt</dt><dd>{paperWords(row.terminal)}</dd><dt>Close reason</dt><dd>{paperWords(row.close_type)}</dd><dt>Residual inventory</dt><dd>{paperAmount(row.quantity, base(row), 6)}</dd><dt>Realized PnL</dt><dd>{paperAmount(row.realized_pnl_quote, unit(row), 6)}</dd><dt>Unrealized PnL</dt><dd>{paperAmount(row.unrealized_pnl_quote, unit(row), 6)}</dd><dt>Fees paid</dt><dd>{paperAmount(row.cum_fees_quote, unit(row), 6)}</dd></>}</dl></details> },
+    { id: "detail", header: "Owner detail", value: row => String(row.executor_id ?? ""), size: 340, wrap: true, cell: row => <details><summary>Expand record</summary><dl className="paper-detail"><dt>Executor</dt><dd>{String(row.executor_id ?? "Not published")}</dd><dt>Controller</dt><dd>{String(row.controller_id ?? "Not published")}</dd>{kind === "positions" && <><dt>Protected exit</dt><dd>{paperWords(row.protected_exit)}</dd></>}{kind === "executors" && <><dt>Terminal receipt</dt><dd>{paperWords(row.terminal)}</dd><dt>Close reason</dt><dd>{paperWords(row.close_type)}</dd><dt>Exact owner values</dt><dd>No rounding</dd><dt>Remaining basis</dt><dd>{paperExactAmount(row.remaining_basis_quote, unit(row))}</dd><dt>Remaining close</dt><dd>{paperExactAmount(row.remaining_close_quantity, base(row))}</dd><dt>Residual inventory</dt><dd>{paperExactAmount(row.quantity, base(row))}</dd><dt>Realized PnL</dt><dd>{paperExactAmount(row.realized_pnl_quote, unit(row))}</dd><dt>Unrealized PnL</dt><dd>{paperExactAmount(row.unrealized_pnl_quote, unit(row))}</dd><dt>Fees paid</dt><dd>{paperExactAmount(row.cum_fees_quote, unit(row))}</dd></>}</dl></details> },
   ];
   return <section className="paper-section"><div className="paper-section-heading"><h2>{kind === "positions" ? "Holdings" : kind === "fills" ? "Recent fills" : "Executors"}</h2><PaperBadge state={read ? paperReadState(read, now) : "collecting"}>{paperWords(read ? paperReadState(read, now) : "collecting")}</PaperBadge></div><p className="paper-caption">{paperTime(read?.generated_at_ms, now)} · Bounded owner records, not lifetime totals. Search, filter or resize columns.</p>{read?.reason && <p className="paper-caption">{paperWords(read.reason)}</p>}<DataTable rows={rows} columns={columns} rowId={(row, index) => String(row[idKey] ?? index)} label={`Paper ${kind}`} pageSize={8} emptyText={read?.data == null ? "Owner records are not available in this snapshot." : "No records in this owner snapshot."} maxHeight={360} exportName={`paper-${kind}`} />{read?.next_cursor && <p className="paper-caption">More records exist beyond this page; totals must not be inferred from these rows.</p>}{copyError && <p role="alert">Copy was unavailable. Select the owner ID to copy it manually.</p>}</section>;
 }
 
 export function PaperWorkspace({ reads, accountingRead, accountingError = false, now, reportAt, heartbeat, bot }: { reads: PaperRead[]; accountingRead?: PaperRead; accountingError?: boolean; now: number; reportAt: number | null; heartbeat: string; bot: string }) {
-  const bySection = Object.fromEntries(reads.map(read => [read.section, read]));
+  const errors = reads.map(read => paperSectionError(read) ?? (read.reason?.includes("schema invalid") ? read.reason : null)).filter(Boolean);
+  const bySection = Object.fromEntries(reads.map(read => [read.section, paperSectionError(read) ? { ...read, state: "degraded" as const, data: null, reason: paperSectionError(read) } : read]));
   const wallet = paperObject(bySection.wallet?.data);
   const assets = paperRows(wallet.assets);
   const cash = assets.find(asset => asset.asset === wallet.quote_asset);
-  const positions = paperRows(bySection.positions?.data);
-  const executors = paperRows(bySection.executors?.data);
+  const inventory = paperWalletInventory(bySection.wallet, now);
   const accounting = paperLifetimeTotals(accountingRead, reads[0], now);
   const accountingState = accountingRead ? paperReadState(accountingRead, now) : "collecting";
   const accountingNote = accounting ? "Lifetime · native receipts" : accountingError ? "Lifetime · owner read unavailable" : accountingState === "stale" ? "Lifetime · owner snapshot is stale" : accountingState === "degraded" ? "Lifetime · owner totals are incomplete" : "Lifetime · awaiting coherent owner totals";
@@ -685,11 +685,12 @@ export function PaperWorkspace({ reads, accountingRead, accountingError = false,
   const rails = paperRows(risk.rails);
   const hold = paperRiskHold(bySection.risk);
   return <>
+    {errors.map(error => <section className="v5-error-panel" role="alert" key={error}>{error}</section>)}
     {hold && <aside className="paper-fleet" role="status"><div className="paper-section-heading"><h2>New acquisitions held</h2><PaperBadge state="degraded">Owner maintenance required</PaperBadge></div><p>{hold}</p><p className="paper-caption">{paperWords(risk.control_hold)}. Clock high-water mark: {paperTime(paperObject(risk.clock_recovery).high_water_ms, now)}. Protective exits: {paperWords(risk.protected_exits)}.</p></aside>}
     <section className="paper-fleet"><div className="paper-section-heading"><div><span className="paper-eyebrow">SIMULATED ACCOUNT</span><h2>Paper fleet</h2></div><PaperBadge state={heartbeat === "Fresh" ? "available" : "stale"}>{heartbeat} · heartbeat</PaperBadge></div><p className="paper-caption">{bot} · Valuation: {paperWords(wallet.valuation_policy)}. Book freshness and completeness are separate from process heartbeat.</p><dl className="paper-metrics">
       <PaperMetric label="Wallet equity" value={paperAmount(wallet.equity_quote, "USDC")} note={paperWords(bySection.wallet?.reason ?? bySection.wallet?.state)} />
       <PaperMetric label="Available cash" value={paperAmount(cash?.available, "USDC")} />
-      <PaperMetric label="Holdings value" value={paperAmount(wallet.holdings_value_quote, "USDC")} note="Owner aggregate; never inferred from a page" />
+      <PaperMetric label="Holdings value" value={inventory ? paperAmount(inventory.value, inventory.unit, 2) : "Not published"} note={inventory ? `${paperReadState(bySection.wallet, now) === "stale" ? "Stale valuation · " : ""}Valuation: ${inventory.basis} · As of ${paperTime(inventory.asOf, now)} · Wallet marks, excluding cash` : "Complete current wallet marks not published"} />
       <PaperMetric label="Open executors" value={openExecutors ?? "Not published"} note="Current owner snapshot · excludes terminal receipts" />
       <PaperMetric label="Realized PnL" value={paperAmount(accounting?.realized_pnl_quote, "USDC")} note={accountingNote} />
       <PaperMetric label="Unrealized PnL" value={paperAmount(accounting?.unrealized_pnl_quote, "USDC")} note={accountingNote} />
@@ -698,9 +699,10 @@ export function PaperWorkspace({ reads, accountingRead, accountingError = false,
       <PaperMetric label="Last report" value={paperTime(reportAt, now)} note="Native process heartbeat" />
     </dl><p className="paper-caption">{accounting ? <>Filled orders: {typeof accounting.entry_count === "number" ? accounting.entry_count : "Not published"} entries · {typeof accounting.exit_count === "number" ? accounting.exit_count : "Not published"} exits. Accounting since: {paperTime(accounting.accounting_since_ms, now)}. Counts are distinct filled orders, not actions.</> : <>Lifetime accounting: {accountingError ? "Owner read unavailable; no totals are inferred from recent fills." : paperWords(accountingRead?.reason ?? "Collecting the snapshot-bound owner aggregate; no totals are inferred from recent fills.")}</>}</p></section>
     <section className="paper-section"><div className="paper-section-heading"><h2>Pair workspace</h2><span className="paper-caption">5 pairs · same fixed-target recipe</span></div><div className="paper-pairs">{["BNB-USDC", "BTC-USDC", "ETH-USDC", "SOL-USDC", "XRP-USDC"].map(pair => {
-      const position = positions.find(row => row.trading_pair === pair);
-      const executor = executors.find(row => row.executor_id === position?.executor_id);
-      return <article className="paper-pair" key={pair}><div className="paper-section-heading"><h3>{pair}</h3><PaperBadge>{position ? paperWords(position.state) : "No record"}</PaperBadge></div><dl className="paper-detail"><dt>Position</dt><dd>{position ? paperAmount(position.quantity, pair.split("-")[0], 6) : "Not published"}</dd><dt>Target price</dt><dd>{paperAmount(executor?.target_price, "USDC")}</dd><dt>Exit progress</dt><dd>{executor ? paperWords(executor.state) : "Not published"}</dd><dt>Protected exit</dt><dd>{paperWords(position?.protected_exit)}</dd></dl><a className="paper-chart-link" href={`#paper-charts-${bot}`}>Chart availability →</a></article>;
+      const { position, executor, knownFlat, decision } = paperPairObservation(pair, bySection.positions, bySection.executors, bySection.decisions, now);
+      const pairStates = [paperReadState(bySection.positions, now), paperReadState(bySection.executors, now)];
+      const pairState = pairStates.includes("stale") ? "stale" : pairStates.every(state => state === "available") ? "available" : "degraded";
+      return <article className="paper-pair" key={pair}><div className="paper-section-heading"><h3>{pair}</h3><PaperBadge state={pairState}>{pairState === "stale" ? "Stale · " : pairState === "degraded" ? "Incomplete · " : ""}{position ? paperWords(position.state) : knownFlat ? "No position" : executor ? paperWords(executor.state) : "Not published"}</PaperBadge></div><p className="paper-caption">As of {paperTime(bySection.positions?.source_at_ms ?? bySection.positions?.generated_at_ms, now)}</p>{knownFlat ? <p className="paper-caption">No position · waiting for entry signal</p> : <dl className="paper-detail"><dt>Position</dt><dd>{position ? paperAmount(position.quantity, pair.split("-")[0], 6) : "Not published"}</dd><dt>Target price</dt><dd>{executor?.target_price != null ? <>{paperAmount(executor.target_price, "USDC")} · Owner exit target</> : "Owner exit target not published"}</dd><dt>Exit progress</dt><dd>{executor ? paperWords(executor.state) : "Not published"}</dd><dt>Protected exit</dt><dd>{paperWords(position?.protected_exit)}</dd></dl>}{decision && <p className="paper-caption">Latest decision: {paperWords(decision.status)}{decision.reason ? ` · ${paperWords(decision.reason)}` : ""}{decision.event_at_ms != null ? ` · ${paperTime(decision.event_at_ms, now)}` : ""}</p>}</article>;
     })}</div></section>
     <section className="paper-section" id={`paper-charts-${bot}`} aria-label="Paper strategy charts"><div className="paper-section-heading"><h2>Pair charts</h2><span className="paper-caption">Native closed candles only · no inferred prices</span></div><Suspense fallback={<p role="status">Loading paper chart workspace…</p>}><PaperStrategyCharts bot={bot} server="rsibot-v5" observations={reads} /></Suspense></section>
     <PaperRecords read={bySection.positions} kind="positions" now={now} />
@@ -713,10 +715,19 @@ export function PaperWorkspace({ reads, accountingRead, accountingError = false,
 
 async function readPaper(path: string): Promise<PaperRead> {
   const response = await fetch(`/api/v5/dashboard/read?${new URLSearchParams({ path })}`, { credentials: "include", cache: "no-store" });
-  if (!response.ok) throw new Error(response.status === 409 ? "The owner snapshot changed. Refresh to read a coherent snapshot." : response.status === 401 ? "Your workspace session expired. Sign in again." : `Paper read failed (${response.status}). Check the observation service; no empty wallet is substituted.`);
+  if (!response.ok) {
+    const body = await response.json().catch(() => null);
+    if (response.status === 502 && body?.detail?.reason === "schema_invalid" && typeof body.detail.section === "string") throw new PaperSectionSchemaError(body.detail.section);
+    throw new Error(response.status === 409 ? "The owner snapshot changed. Refresh to read a coherent snapshot." : response.status === 401 ? "Your workspace session expired. Sign in again." : `Paper read failed (${response.status}). Check the observation service; no empty wallet is substituted.`);
+  }
   const value = await response.json() as PaperRead;
   if (value.schema !== "rsibot.v5-paper.read.v1" || value.execution_mode !== "paper" || value.simulated !== true) throw new Error("The paper read contract is invalid.");
   return value;
+}
+
+class PaperSectionSchemaError extends Error {
+  section: string;
+  constructor(section: string) { super(`${paperWords(section)} owner schema invalid; this section is unavailable.`); this.section = section; }
 }
 
 export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; generatedAt: number | null; ownerState: string }) {
@@ -731,7 +742,11 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
       const sections = await Promise.all(Object.entries(PAPER_SECTIONS).map(async ([section, suffix]) => {
         const path = ["executors", "risk", "decisions"].includes(section) ? `${prefix}bots/${encodeURIComponent(bot)}/${suffix}` : `${prefix}${suffix}`;
         const snapshot = status.snapshot_id ? `${path.includes("?") ? "&" : "?"}snapshot_id=${encodeURIComponent(status.snapshot_id)}` : "";
-        return readPaper(path + snapshot);
+        try { return await readPaper(path + snapshot); }
+        catch (error) {
+          if (!(error instanceof PaperSectionSchemaError) || error.section !== section) throw error;
+          return { ...status, section, state: "degraded" as const, reason: error.message, data: null, completeness: "unavailable" };
+        }
       }));
       if (status.snapshot_id && !paperSnapshotsAgree([status, ...sections])) throw new Error("Mixed owner snapshots were refused. Refresh; totals are not combined.");
       return [...sections, status];

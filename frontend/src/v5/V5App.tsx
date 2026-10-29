@@ -11,6 +11,9 @@ import { V5MarketHome } from "./V5MarketHome";
 import { V5AppShell } from "./V5AppShell";
 import { clearSessionCache, confirmLogout } from "./session-policy.mjs";
 import { V5PaperBots } from "@/pages/tabs/ActiveBotsTab";
+import { LearningPage } from './LearningPanel';
+import { ResearchFactoryPage } from './ResearchFactoryPanel';
+import { DecisionLineagePage } from './DecisionLineagePanel';
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 15_000 } } });
 const Capital = lazy(() => import("@workspace-monitoring").then(m => ({ default: function V5CapitalPage() {
@@ -71,5 +74,5 @@ function V5Providers({ children }: { children: React.ReactNode }) {
 }
 
 export function V5App() {
-  return <QueryClientProvider client={client}><BrowserRouter><Routes><Route element={<AuthGate />}><Route element={<ProfileGate />}><Route path="/" element={<V5MarketHome />} /><Route path="/capital" element={<Capital />} /><Route path="/bots" element={<Bots />} /><Route path="/operations" element={<Operations />} /><Route path="/research" element={<Research />} /><Route path="/backtests" element={<Tradepad />} /><Route path="/market/candles" element={<V5MarketHome />} /><Route path="/market/evidence" element={<V5MarketHome />} /><Route path="/v5/readiness" element={<PaperReadinessPage />} /><Route path="/agents" element={<AgentsPage />} /><Route path="/agents/:id" element={<AgentDetailPage />} /><Route path="/sessions" element={<SessionsPage />} /><Route path="/sessions/:id" element={<SessionDetailPage />} /><Route path="/settings" element={<SettingsPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Route></Route></Routes></BrowserRouter></QueryClientProvider>;
+  return <QueryClientProvider client={client}><BrowserRouter><Routes><Route element={<AuthGate />}><Route element={<ProfileGate />}><Route path="/" element={<V5MarketHome />} /><Route path="/capital" element={<Capital />} /><Route path="/bots" element={<Bots />} /><Route path="/operations" element={<Operations />} /><Route path="/research" element={<Research />} /><Route path="/learning" element={<LearningPage />} /><Route path="/research-factory" element={<ResearchFactoryPage />} /><Route path="/decision-lineage" element={<DecisionLineagePage />} /><Route path="/backtests" element={<Tradepad />} /><Route path="/market/candles" element={<V5MarketHome />} /><Route path="/market/evidence" element={<V5MarketHome />} /><Route path="/v5/readiness" element={<PaperReadinessPage />} /><Route path="/agents" element={<AgentsPage />} /><Route path="/agents/:id" element={<AgentDetailPage />} /><Route path="/sessions" element={<SessionsPage />} /><Route path="/sessions/:id" element={<SessionDetailPage />} /><Route path="/settings" element={<SettingsPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Route></Route></Routes></BrowserRouter></QueryClientProvider>;
 }

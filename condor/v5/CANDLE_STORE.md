@@ -15,7 +15,7 @@ partition can retain older observations; partition errors are shown explicitly.
 The consumer allowlists overview, symbols and candles, validates identities,
 limits responses to 2 MB, overview to 128 lanes, symbols to 1024 rows and
 charts to 10080 one-minute buckets. It accepts 1h, 6h, 24h and 7d, always 1m.
-Two in-flight consumer reads and an eight-second total deadline bound reads;
+Two in-flight consumer reads and a twelve-second total deadline bound reads;
 the owner permits at most two computations and rejects excess work instead of building an unbounded
 queue. The owner has no collector or download controls. Socket filesystem
 permissions are the host capability; browser reads require normal V5 sign-in.
@@ -92,7 +92,7 @@ pending only means inside settle grace. `totals` sums the six counter columns
 over the selected range and is checked against the buckets before delivery.
 
 Limits: 2 MB encoded response, 128 tiles, 1024 symbol rows, 10080 buckets;
-two concurrent reads, six-second upstream timeout, eight-second total deadline.
+two concurrent reads, ten-second upstream timeout, twelve-second total deadline.
 No redirects, proxy environment, network URL input, resampling or pagination.
 HTTP 401: sign-in required. HTTP 404: unconfigured/unknown view. HTTP 422:
 invalid query. HTTP 503: `{state: "UNAVAILABLE", reason: <bounded stable code>,
@@ -140,5 +140,9 @@ closed minute, and match every contiguous minute bucket; start must precede
 end. Matched but oversized corrections/totals cannot pass validation.
 Rejection returns typed UNAVAILABLE, never AVAILABLE with Infinity or an
 unencodable string. The owner uses two disposable Linux worker processes
-with a four-second deadline and bounded kill/reap before slot release; a
+with an eight-second deadline and bounded kill/reap before slot release; a
 consumer timeout cannot leave indefinitely running owner threads.
+The browser aborts after fourteen seconds. These nested budgets include cold
+parallel private snapshots: a measured single cold overview took 3.37 seconds,
+and a four-second owner deadline rejected legitimate parallel reads. The
+process deadline is still hard; no retries or abandoned work extend it.

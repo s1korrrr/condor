@@ -403,12 +403,12 @@ class CandleOwner:
 
     async def read(self, view: str, query: dict[str, str]) -> dict:
         try:
-            async with asyncio.timeout(8):
+            async with asyncio.timeout(12):
                 async with self._slots:
                     connector = aiohttp.UnixConnector(path=self.socket_path, limit=2)
                     async with self.session_factory(
                         connector=connector,
-                        timeout=aiohttp.ClientTimeout(total=6),
+                        timeout=aiohttp.ClientTimeout(total=10),
                         trust_env=False,
                         auto_decompress=False,
                     ) as session:

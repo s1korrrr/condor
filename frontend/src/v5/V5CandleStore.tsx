@@ -11,7 +11,7 @@ type Symbols = { now: number; rows: Row[] };
 type Candles = { now: number; lane: string; pair: string; venue: string; segment: string; range: string; volume_unit: string; buckets: RecordedMinute[]; totals: Record<string, number> };
 
 async function read<T>(view: string, params = ""): Promise<T> {
-  const response = await fetch(`/api/v5/candle-store/${view}${params}`, { credentials: "include", signal: AbortSignal.timeout(10000) });
+  const response = await fetch(`/api/v5/candle-store/${view}${params}`, { credentials: "include", signal: AbortSignal.timeout(14000) });
   const body = await response.json() as { state: string; reason: string | null; data: T | null };
   if (!response.ok || body.state !== "AVAILABLE" || !body.data) throw new Error(body.reason ?? "Owner read unavailable");
   return body.data;

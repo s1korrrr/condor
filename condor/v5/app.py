@@ -386,11 +386,18 @@ def create_app(
         path: str = Query(min_length=1, max_length=2048),
     ):
         paper = await current_paper()
-        return (
+        result = (
             read_compatibility_path(path)
             if paper is None
             else read_compatibility_path(path, paper)
         )
+        if paper is not None and isinstance(result, dict) and "source_route" in result:
+            try:
+                payload = await upstream.observation(result["source_route"])
+            except UpstreamError as exc:
+                raise HTTPException(exc.http_status, detail={"code": exc.code}) from exc
+            return read_compatibility_path(path, paper, paper_read=payload)
+        return result
 
     @app.post("/api/v5/auth/login")
     async def login(payload: LoginBody, request: Request, response: Response):

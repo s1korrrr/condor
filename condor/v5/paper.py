@@ -17,9 +17,12 @@ import math
 import os
 import re
 import stat
+from copy import deepcopy
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
+
+from fastapi import HTTPException
 
 # The shared Bots/fleet views classify a bot as paper by its ``_paper`` name suffix, so
 # only a paper-suffixed identity may bind; any other name would render as live.
@@ -32,6 +35,35 @@ MAX_STATUS_BYTES = 2 * 1024 * 1024
 MAX_CONTROLLERS = 64
 STALE_AFTER_SECONDS = 30  # the runtime rewrites status about twice a second
 FUTURE_SKEW_SECONDS = 5
+
+
+def validate_paper_read(payload: dict, *, section: str, bot: str | None, now_ms: int) -> dict:
+    states = {"available", "collecting", "not_applicable", "degraded", "stale"}
+    unbound = isinstance(payload, dict) and payload.get("state") in {"collecting", "degraded"} and payload.get("data") is None and payload.get("snapshot_id") is None
+    if (
+        not isinstance(payload, dict)
+        or payload.get("schema") != "rsibot.v5-paper.read.v1"
+        or payload.get("section") != section
+        or (payload.get("bot_id") != bot and not (unbound and payload.get("bot_id") is None))
+        or payload.get("execution_mode") != "paper"
+        or payload.get("simulated") is not True
+        or payload.get("state") not in states
+        or (not unbound and (not isinstance(payload.get("snapshot_id"), str) or not payload["snapshot_id"]))
+        or (not unbound and (type(payload.get("generated_at_ms")) is not int or payload["generated_at_ms"] < 0 or payload["generated_at_ms"] > now_ms + FUTURE_SKEW_SECONDS * 1000))
+        or (payload["state"] != "available" and not isinstance(payload.get("reason"), str))
+        or (payload["state"] == "available" and payload.get("data") is None)
+    ):
+        raise HTTPException(502, detail={"code": "paper_read_schema_invalid"})
+    try:
+        encoded = json.dumps(payload, allow_nan=False)
+    except (TypeError, ValueError):
+        raise HTTPException(502, detail={"code": "paper_read_schema_invalid"}) from None
+    if len(encoded.encode()) > MAX_STATUS_BYTES:
+        raise HTTPException(502, detail={"code": "paper_read_capacity"})
+    result = deepcopy(payload)
+    if not unbound and now_ms - payload["generated_at_ms"] > STALE_AFTER_SECONDS * 1000:
+        result.update(state="stale", reason="Paper observation source is older than 30 seconds.")
+    return result
 
 
 class PaperStatusError(ValueError):

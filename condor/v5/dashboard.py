@@ -18,7 +18,7 @@ from urllib.parse import parse_qsl, unquote, urlsplit
 
 from fastapi import HTTPException
 
-from .paper import STALE_AFTER_SECONDS, PaperObservation
+from .paper import STALE_AFTER_SECONDS, PaperObservation, validate_paper_read
 
 V5_SERVER_ID = "rsibot-v5"
 V5_HOST = "razer"
@@ -59,11 +59,19 @@ def dashboard_profile(paper: PaperObservation | None = None) -> dict:
             native_owner_reason=reason,
             paper_owner=_paper_owner(paper),
         )
+        profile["capabilities"] = {
+            "paper_owner": owner,
+            "account": "SIMULATED_WALLET_ONLY",
+            "advisor": "REPORTS_ONLY",
+            "live_execution": "DISABLED",
+            "paper_control": "NOT_ENABLED",
+            "read_schema": "rsibot.v5-paper.read.v1",
+        }
     return profile
 
 
 def read_compatibility_path(
-    raw_path: str, paper: PaperObservation | None = None
+    raw_path: str, paper: PaperObservation | None = None, *, paper_read: dict | None = None
 ) -> object:
     """Project one exact, safe legacy GET path into fixed V5-owned data.
 
@@ -98,6 +106,19 @@ def read_compatibility_path(
         raise HTTPException(400, detail="dot segments are not allowed")
 
     path = parts.path
+    if paper is not None:
+        route = paper_read_route(path, parts.query, paper.bot_name)
+        if route is not None:
+            section, query = route
+            if paper_read is not None:
+                return validate_paper_read(paper_read, section=section, bot=paper.bot_name, now_ms=int(paper.observed_at * 1000))
+            return {
+                "schema": "rsibot.v5-paper.read.v1", "section": section,
+                "state": "degraded", "reason": "Paper observation read is not connected.",
+                "bot_id": paper.bot_name, "execution_mode": "paper", "simulated": True,
+                "snapshot_id": None, "generated_at_ms": None, "data": None,
+                "source_route": f"/v1/paper/{section}" + (f"?{query}" if query else ""),
+            }
     if path == "/api/v1/servers":
         _require_no_query(parts.query)
         return [
@@ -173,6 +194,49 @@ def _require_no_query(query: str) -> None:
         raise HTTPException(
             400, detail="query parameters are not supported for this read"
         )
+
+
+def paper_read_route(path: str, query: str, bot: str | None) -> tuple[str, str] | None:
+    prefix = f"/api/v1/servers/{V5_SERVER_ID}/"
+    routes = {
+        "fleet/holdings": "positions", "fleet/fills": "fills",
+        "fleet/summary": "wallet", "account-balances": "wallet",
+        "controller-performance/history": "history",
+        f"bots/{bot}/native/status": "status", f"bots/{bot}/quant-summary": "status",
+        f"bots/{bot}/executors": "executors", f"bots/{bot}/risk": "risk",
+        f"bots/{bot}/decisions": "decisions", f"bots/{bot}/decision-journal": "decisions",
+    }
+    section = routes.get(path.removeprefix(prefix)) if path.startswith(prefix) else None
+    if path in {"/api/v1/operations", "/api/v1/operations/workspace"}:
+        section = "operations"
+    if section is None:
+        return None
+    try:
+        params = parse_qsl(query, keep_blank_values=True, strict_parsing=True) if query else []
+    except ValueError:
+        raise HTTPException(400, detail="invalid paper read query") from None
+    if len(params) != len(dict(params)):
+        raise HTTPException(400, detail="duplicate paper read query")
+    forwarded = []
+    for key, value in params:
+        if key == "bot" and value == bot:
+            continue
+        if key == "interval" and section == "history" and value in {"1m", "5m", "1h", "1d"}:
+            continue
+        if key == "limit" and value.isascii() and value.isdigit() and 1 <= int(value) <= 1000:
+            forwarded.append((key, value))
+        elif key in {"start_ms", "end_ms"} and value.isascii() and value.isdigit() and 0 <= int(value) <= 10**14:
+            forwarded.append((key, value))
+        elif key == "cursor" and re.fullmatch(r"[A-Za-z0-9_.:=-]{1,1024}", value):
+            forwarded.append((key, value))
+        else:
+            raise HTTPException(400, detail="unsupported paper read query")
+    bounds = dict(forwarded)
+    if "start_ms" in bounds and "end_ms" in bounds and int(bounds["start_ms"]) > int(bounds["end_ms"]):
+        raise HTTPException(400, detail="inverted paper read range")
+    from urllib.parse import urlencode
+
+    return section, urlencode(forwarded)
 
 
 def _unbound(owner: str) -> HTTPException:

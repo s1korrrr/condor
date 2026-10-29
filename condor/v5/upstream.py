@@ -4,6 +4,8 @@ from __future__ import annotations
 
 import asyncio
 import json
+import re
+from urllib.parse import parse_qsl, urlsplit
 from typing import Any
 
 import aiohttp
@@ -109,7 +111,27 @@ class V5Upstream:
             "/v1/advice/latest?task_id=decision_review",
             "/v1/tasks",
         }
-        if path not in allowed:
+        parts = urlsplit(path)
+        paper_route = parts.path in {
+            f"/v1/paper/{section}" for section in (
+                "status", "wallet", "fills", "positions", "executors", "risk",
+                "decisions", "history", "operations",
+            )
+        }
+        if paper_route:
+            params = parse_qsl(parts.query, keep_blank_values=True)
+            paper_route = (
+                not parts.scheme and not parts.netloc and not parts.fragment
+                and len(params) == len(dict(params))
+                and len(path) <= 2048
+                and all(
+                    (key == "limit" and value.isascii() and value.isdigit() and 1 <= int(value) <= 1000)
+                    or (key in {"start_ms", "end_ms"} and value.isascii() and value.isdigit() and 0 <= int(value) <= 10**14)
+                    or (key == "cursor" and re.fullmatch(r"[A-Za-z0-9_.:=-]{1,1024}", value))
+                    for key, value in params
+                )
+            )
+        if path not in allowed and not paper_route:
             raise UpstreamError("operation_not_allowed", http_status=403)
         base_url = (
             self.settings.advisor_control_base_url

@@ -1,0 +1,61 @@
+
+> frontend@0.0.0 lint
+> eslint .
+
+
+/home/rsi/dev/rsibot/condor/.worktrees/learning-stage1-20261029/frontend/src/components/charts/RecordedCandleChart.tsx
+  14:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/rsi/dev/rsibot/condor/.worktrees/learning-stage1-20261029/frontend/src/components/charts/RecordedCandleChart.tsx:14:5
+  12 |   useEffect(() => {
+  13 |     if (!container.current) return;
+> 14 |     setHover(null);
+     |     ^^^^^^^^ Avoid calling setState() directly within an effect
+  15 |     const colors = getThemeColors();
+  16 |     const chart = createChart(container.current, {
+  17 |       autoSize: true, height: 360,  react-hooks/set-state-in-effect
+
+/home/rsi/dev/rsibot/condor/.worktrees/learning-stage1-20261029/frontend/src/features/quant-ops/kit/DataTable.tsx
+  144:17  warning  Compilation Skipped: Use of incompatible library
+
+This API returns functions which cannot be memoized without leading to stale UI. To prevent this, by default React Compiler will skip memoizing this component/hook. However, you may see issues if values from this API are passed to other components/hooks that are memoized.
+
+/home/rsi/dev/rsibot/condor/.worktrees/learning-stage1-20261029/frontend/src/features/quant-ops/kit/DataTable.tsx:144:17
+  142 |     return [column.value(row), typeof shown === 'string' || typeof shown === 'number' ? shown : null];
+  143 |   }), effectiveSearch)) : rows, [rows, columns, effectiveSearch]);
+> 144 |   const table = useReactTable({
+      |                 ^^^^^^^^^^^^^ TanStack Table's `useReactTable()` API returns functions that cannot be memoized safely
+  145 |     data: searched, columns: definitions, getRowId: rowId,
+  146 |     state: { sorting, columnFilters: filters },
+  147 |     onSortingChange: setSorting, onColumnFiltersChange: setFilters,  react-hooks/incompatible-library
+
+/home/rsi/dev/rsibot/condor/.worktrees/learning-stage1-20261029/frontend/src/v5/V5AppShell.tsx
+  35:5  error  Error: Calling setState synchronously within an effect can trigger cascading renders
+
+Effects are intended to synchronize state between React and external systems such as manually updating the DOM, state management libraries, or other platform APIs. In general, the body of an effect should do one or both of the following:
+* Update external systems with the latest state from React.
+* Subscribe for updates from some external system, calling setState in a callback function when external state changes.
+
+Calling setState synchronously within an effect body causes cascading renders that can hurt performance, and is not recommended. (https://react.dev/learn/you-might-not-need-an-effect).
+
+/home/rsi/dev/rsibot/condor/.worktrees/learning-stage1-20261029/frontend/src/v5/V5AppShell.tsx:35:5
+  33 |   const heading = nav.find(item => item.to === pathname)?.label ?? (pathname.startsWith("/agents/") ? "Agent workspace" : pathname.startsWith("/sessions/") ? "Session record" : pathname === "/market/candles" ? "Candle store" : pathname === "/market/evidence" ? "V5 market evidence" : pathname === "/v5/readiness" ? "V5 readiness" : "RSI V5");
+  34 |   useEffect(() => {
+> 35 |     setNavOpen(false);
+     |     ^^^^^^^^^^ Avoid calling setState() directly within an effect
+  36 |     const el = navRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+  37 |     if (el?.offsetParent) el.scrollIntoView({ block: "nearest", inline: "nearest" });
+  38 |   }, [pathname]);  react-hooks/set-state-in-effect
+
+/home/rsi/dev/rsibot/condor/.worktrees/learning-stage1-20261029/frontend/src/v5/policy.ts
+  105:35  error  '_risk' is defined but never used   @typescript-eslint/no-unused-vars
+  290:32  error  '_owner' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 5 problems (4 errors, 1 warning)
+

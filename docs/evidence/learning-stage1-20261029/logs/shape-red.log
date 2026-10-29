@@ -1,0 +1,158 @@
+FFFF                                                                     [100%]
+=================================== FAILURES ===================================
+_______ test_structurally_invalid_lifecycle_is_a_validation_error[state] _______
+
+field = 'state'
+
+    @pytest.mark.parametrize("field", ["state", "history", "usage"])
+    def test_structurally_invalid_lifecycle_is_a_validation_error(field):
+        fixture = job()["data"]
+        if field == "state":
+            fixture["state"] = []
+        elif field == "history":
+            fixture["state_history"] = ["PROPOSED", [], "NOT_DISPATCHED"]
+        else:
+            fixture["usage"]["state"] = []
+        with pytest.raises(ValueError):
+>           project_workflow(record("agent_job", fixture), session_id="s1")
+
+tests/test_v5_workflow_projection.py:105: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+owner_receipt = {'available_at_ms': 100, 'correlation_id': 'fixture', 'created_at_ms': 100, 'data': {'admission_ref': {'available_at_m... ...}, 'allowed_action': 'READ_FIXTURE', 'attempt_id': 'a1', 'authority_ceiling': 'repository-process-only', ...}, ...}
+
+    def project_workflow(owner_receipt, *, session_id, interrupted=False):
+        data = owner_record(owner_receipt, "agent_job")
+>       if data.get("state") not in JOB_STATES:
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       TypeError: unhashable type: 'list'
+
+condor/v5/workflows.py:41: TypeError
+______ test_structurally_invalid_lifecycle_is_a_validation_error[history] ______
+
+field = 'history'
+
+    @pytest.mark.parametrize("field", ["state", "history", "usage"])
+    def test_structurally_invalid_lifecycle_is_a_validation_error(field):
+        fixture = job()["data"]
+        if field == "state":
+            fixture["state"] = []
+        elif field == "history":
+            fixture["state_history"] = ["PROPOSED", [], "NOT_DISPATCHED"]
+        else:
+            fixture["usage"]["state"] = []
+        with pytest.raises(ValueError):
+>           project_workflow(record("agent_job", fixture), session_id="s1")
+
+tests/test_v5_workflow_projection.py:105: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+condor/v5/workflows.py:67: in project_workflow
+    if any(
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+.0 = <zip object at 0x7d8de1f4e500>
+
+    if any(
+>       current not in JOB_TRANSITIONS.get(previous, ())
+        for previous, current in zip(history, history[1:])
+    ):
+E   TypeError: unhashable type: 'list'
+
+condor/v5/workflows.py:68: TypeError
+_______ test_structurally_invalid_lifecycle_is_a_validation_error[usage] _______
+
+field = 'usage'
+
+    @pytest.mark.parametrize("field", ["state", "history", "usage"])
+    def test_structurally_invalid_lifecycle_is_a_validation_error(field):
+        fixture = job()["data"]
+        if field == "state":
+            fixture["state"] = []
+        elif field == "history":
+            fixture["state_history"] = ["PROPOSED", [], "NOT_DISPATCHED"]
+        else:
+            fixture["usage"]["state"] = []
+        with pytest.raises(ValueError):
+>           project_workflow(record("agent_job", fixture), session_id="s1")
+
+tests/test_v5_workflow_projection.py:105: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+owner_receipt = {'available_at_ms': 100, 'correlation_id': 'fixture', 'created_at_ms': 100, 'data': {'admission_ref': {'available_at_m... ...}, 'allowed_action': 'READ_FIXTURE', 'attempt_id': 'a1', 'authority_ceiling': 'repository-process-only', ...}, ...}
+
+    def project_workflow(owner_receipt, *, session_id, interrupted=False):
+        data = owner_record(owner_receipt, "agent_job")
+        if data.get("state") not in JOB_STATES:
+            raise ValueError("unsupported Stage 1 owner state")
+        if (
+            data.get("allowed_action")
+            not in {
+                "READ_FIXTURE",
+                "INFER",
+                "RETRIEVE",
+                "EVALUATE",
+                "COMPILE",
+                "VALIDATE",
+                "REVIEW",
+            }
+            or data.get("authority_ceiling") != "repository-process-only"
+        ):
+            raise ValueError("non-fixture workflow rejected")
+        text(data.get("model_id"), identifier=True)
+        text(data.get("provider_id"), identifier=True)
+        history = data.get("state_history")
+        if (
+            not isinstance(history, list)
+            or not 1 <= len(history) <= 64
+            or history[0] != "PROPOSED"
+            or history[-1] != data["state"]
+        ):
+            raise ValueError("invalid job state history")
+        if any(
+            current not in JOB_TRANSITIONS.get(previous, ())
+            for previous, current in zip(history, history[1:])
+        ):
+            raise ValueError("illegal job transition")
+        usage = data.get("usage")
+        consumption = {"calls", "input_tokens", "output_tokens", "duration_ms", "money"}
+        if (
+            not isinstance(usage, dict)
+            or set(usage) != consumption | {"state"}
+>           or usage["state"] not in USAGE_STATES
+               ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        ):
+E       TypeError: unhashable type: 'list'
+
+condor/v5/workflows.py:77: TypeError
+_____________ test_malformed_schema_identity_is_a_validation_error _____________
+
+    def test_malformed_schema_identity_is_a_validation_error():
+        from condor.v5.learning import owner_record
+    
+        fixture = record()
+        fixture["schema_name"] = []
+        with pytest.raises(ValueError):
+>           owner_record(fixture)
+
+tests/test_v5_learning_projection.py:205: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+value = {'available_at_ms': 100, 'correlation_id': 'fixture', 'created_at_ms': 100, 'data': {'claim': 'Do not infer support from uptime', 'condition': 'Paper fixture', 'contradictory_refs': [], 'evidence_validity': 'PROVISIONAL', ...}, ...}
+kind = None
+
+    def owner_record(value, kind=None):
+        bounded(value)
+        if not isinstance(value, dict):
+            raise ValueError("invalid owner envelope")
+        name = value.get("schema_name")
+>       if name not in OWNERS or (kind is not None and name != kind):
+           ^^^^^^^^^^^^^^^^^^
+E       TypeError: unhashable type: 'list'
+
+condor/v5/learning.py:288: TypeError
+=========================== short test summary info ============================
+FAILED tests/test_v5_workflow_projection.py::test_structurally_invalid_lifecycle_is_a_validation_error[state]
+FAILED tests/test_v5_workflow_projection.py::test_structurally_invalid_lifecycle_is_a_validation_error[history]
+FAILED tests/test_v5_workflow_projection.py::test_structurally_invalid_lifecycle_is_a_validation_error[usage]
+FAILED tests/test_v5_learning_projection.py::test_malformed_schema_identity_is_a_validation_error
+4 failed, 73 deselected in 0.52s

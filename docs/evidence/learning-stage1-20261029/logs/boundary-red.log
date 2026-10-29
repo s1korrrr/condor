@@ -1,0 +1,113 @@
+FFF.F                                                                    [100%]
+=================================== FAILURES ===================================
+_____________ test_candidate_available_after_snapshot_is_rejected ______________
+
+    def test_candidate_available_after_snapshot_is_rejected():
+        from condor.v5.research import project_research
+    
+        source = catalog(1)
+        candidate = source["candidates"][0]
+        candidate["available_at_ms"] = source["generated_at_ms"] + 1
+        candidate.pop("payload_sha256")
+        candidate["payload_sha256"] = hashlib.sha256(
+            json.dumps(candidate, sort_keys=True, separators=(",", ":")).encode()
+        ).hexdigest()
+>       with pytest.raises(ValueError, match="unavailable"):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'ValueError'>
+
+tests/test_v5_learning_projection.py:195: Failed
+______ test_malformed_nested_lineage_binding_is_a_validation_error[None] _______
+
+binding = None
+
+    @pytest.mark.parametrize("binding", [None, [], {"refs": None}, {"refs": []}])
+    def test_malformed_nested_lineage_binding_is_a_validation_error(binding):
+        from condor.v5.research import project_lineage
+    
+        release = record("knowledge_release", {"consumer_manifest": {"models": binding}})
+        with pytest.raises(ValueError):
+>           project_lineage([release])
+
+tests/test_v5_learning_projection.py:205: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+records = [{'available_at_ms': 100, 'correlation_id': 'fixture', 'created_at_ms': 100, 'data': {'consumer_manifest': {'models': None}}, ...}]
+
+    def project_lineage(records):
+        rows = []
+        for value in records:
+            data = owner_record(value)
+            refs = []
+            for key, item in data.items():
+                if key.endswith("_refs"):
+                    refs.extend(references(item))
+                elif key.endswith("_ref") and item is not None:
+                    refs.extend(references([item]))
+                elif key == "consumer_manifest" and isinstance(item, dict):
+                    for component, binding in item.items():
+                        refs.extend(
+                            references(
+>                               [binding] if component.endswith("_ref") else binding["refs"]
+                                                                             ^^^^^^^^^^^^^^^
+                            )
+E                           TypeError: 'NoneType' object is not subscriptable
+
+condor/v5/research.py:20: TypeError
+____ test_malformed_nested_lineage_binding_is_a_validation_error[binding1] _____
+
+binding = []
+
+    @pytest.mark.parametrize("binding", [None, [], {"refs": None}, {"refs": []}])
+    def test_malformed_nested_lineage_binding_is_a_validation_error(binding):
+        from condor.v5.research import project_lineage
+    
+        release = record("knowledge_release", {"consumer_manifest": {"models": binding}})
+        with pytest.raises(ValueError):
+>           project_lineage([release])
+
+tests/test_v5_learning_projection.py:205: 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+
+records = [{'available_at_ms': 100, 'correlation_id': 'fixture', 'created_at_ms': 100, 'data': {'consumer_manifest': {'models': []}}, ...}]
+
+    def project_lineage(records):
+        rows = []
+        for value in records:
+            data = owner_record(value)
+            refs = []
+            for key, item in data.items():
+                if key.endswith("_refs"):
+                    refs.extend(references(item))
+                elif key.endswith("_ref") and item is not None:
+                    refs.extend(references([item]))
+                elif key == "consumer_manifest" and isinstance(item, dict):
+                    for component, binding in item.items():
+                        refs.extend(
+                            references(
+>                               [binding] if component.endswith("_ref") else binding["refs"]
+                                                                             ^^^^^^^^^^^^^^^
+                            )
+E                           TypeError: list indices must be integers or slices, not str
+
+condor/v5/research.py:20: TypeError
+____ test_malformed_nested_lineage_binding_is_a_validation_error[binding3] _____
+
+binding = {'refs': []}
+
+    @pytest.mark.parametrize("binding", [None, [], {"refs": None}, {"refs": []}])
+    def test_malformed_nested_lineage_binding_is_a_validation_error(binding):
+        from condor.v5.research import project_lineage
+    
+        release = record("knowledge_release", {"consumer_manifest": {"models": binding}})
+>       with pytest.raises(ValueError):
+             ^^^^^^^^^^^^^^^^^^^^^^^^^
+E       Failed: DID NOT RAISE <class 'ValueError'>
+
+tests/test_v5_learning_projection.py:204: Failed
+=========================== short test summary info ============================
+FAILED tests/test_v5_learning_projection.py::test_candidate_available_after_snapshot_is_rejected
+FAILED tests/test_v5_learning_projection.py::test_malformed_nested_lineage_binding_is_a_validation_error[None]
+FAILED tests/test_v5_learning_projection.py::test_malformed_nested_lineage_binding_is_a_validation_error[binding1]
+FAILED tests/test_v5_learning_projection.py::test_malformed_nested_lineage_binding_is_a_validation_error[binding3]
+4 failed, 1 passed, 24 deselected in 0.43s

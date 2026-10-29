@@ -300,7 +300,8 @@ async def test_runtime_owners_are_read_at_once_each_on_its_own_bound(monkeypatch
 
 # Seconds after the reads at which a cached answer is compared with a fresh build: either side of
 # every bound the fixtures sit near (owner currency 30 s, holdings 30 s, wallet 120 s, incidents 90 s,
-# market lag 90 s and expiry 120 s, day samples 180 s), within the 60 s the cache serves.
+# market lag 90 s and expiry 120 s, day samples 180 s). These projection tests use a 60 s
+# test TTL to inspect expiry beyond the production stale-serving window.
 CLOCKS_S = (0, 1, 2, 9, 10, 11, 29, 30, 31, 45, 59, 60)
 
 

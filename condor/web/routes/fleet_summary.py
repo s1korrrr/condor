@@ -45,9 +45,10 @@ CACHE_TTL_SECONDS = (
     5.0  # one computation serves a burst of dashboard, phone and watch polls
 )
 # Past their cache life completed reads still serve, projected at each request's clock, while one
-# background rebuild runs, for at most this long after they were read. A build is bounded by
-# TOTAL_TIMEOUT, so a working source always lands newer reads well inside this window.
-STALE_SERVE_SECONDS = 60.0
+# background rebuild runs. Do not serve inputs for longer than the bot freshness contract:
+# refreshes are demand-driven, so a sparse poll otherwise gets the previous poll's expired
+# observations even when every owner is healthy. Older inputs require a bounded foreground build.
+STALE_SERVE_SECONDS = summary.STALE_AFTER_MS["bots"] / 1000
 HEADERS = {
     "Cache-Control": "private, no-cache",
     "X-Content-Type-Options": "nosniff",
@@ -371,7 +372,7 @@ async def cached_summary(
         fresh, inputs = done
         if fresh:
             return await _respond(inputs, view)
-        if 0 <= time.time() * 1000 - inputs.read_at_ms <= STALE_SERVE_SECONDS * 1000:
+        if 0 <= time.time() * 1000 - inputs.read_at_ms < STALE_SERVE_SECONDS * 1000:
             _refresh(key, view, user_id)
             return await _respond(inputs, view)
     return await _build(key, view, user_id)

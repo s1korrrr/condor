@@ -4,8 +4,9 @@ A paper bot publishes no native performance to the API, so its PnL history is re
 same reporting runtime-status body the wallet observer already reads. The body has the live shape:
 ``runtime_status.summary`` carries ``realized_pnl_quote`` and ``unrealized_pnl_quote`` (with
 ``fees_quote`` and ``net_pnl_quote``), ``controllers[].pair`` names the traded pairs and
-``updated_at`` stamps the observation. The total is ``realized + unrealized``, the same definition
-as a live bot's ``global_pnl_quote``.
+``summary.pnl_observed_at`` dates the valuation when present; legacy reports use
+``updated_at``. A retained valuation never takes its date from a newer heartbeat.
+The total is ``realized + unrealized``, the same definition as a live bot's ``global_pnl_quote``.
 
 These points are simulated: they are stored apart from live points, read back with
 ``simulated: true`` and never enter a fleet window, a wallet total or Capital.
@@ -75,7 +76,11 @@ def project_paper(payload: object, bot: str, now: float) -> dict:
             expected = realized + unrealized - fees
         if abs(net - expected) > Decimal("0.00001"):
             raise ValueError("Inconsistent paper PnL summary")
-    observed = runtime.get("updated_at")
+    observed = summary.get("pnl_observed_at")
+    if observed is None:
+        if summary.get("pnl_basis") == "retained_marks":
+            raise ValueError("Retained paper observation time is missing")
+        observed = runtime.get("updated_at")
     if not isinstance(observed, str):
         raise ValueError("Paper observation time is missing")
     try:

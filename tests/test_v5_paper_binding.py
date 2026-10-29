@@ -152,6 +152,12 @@ def status(**changes) -> dict:
         },
     }
     value.update(changes)
+    if "unavailable_controller_ids" not in changes:
+        # As the runtime writes it: every declared controller without a current report.
+        value["unavailable_controller_ids"] = sorted(
+            {row["id"] for row in value["controllers"] if isinstance(row, dict)}
+            - set(value["native_reports"])
+        )
     return value
 
 

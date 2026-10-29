@@ -111,3 +111,14 @@ def test_a_mutated_real_status_never_causes_http_500(
                     route,
                     response.text[:200],
                 )
+                if compatibility_path == f"/api/v1/servers/{SERVER}/bots":
+                    # Completeness: a FRESH status projects every owned controller,
+                    # reported or unavailable; none can be hidden from the totals.
+                    written = json.loads(path.read_text())
+                    owned = set(written["native_reports"]) | set(
+                        written["unavailable_controller_ids"]
+                    )
+                    projected = {
+                        row["controller_id"] for row in response.json()["controllers"]
+                    }
+                    assert projected == owned, (location, operation, value)

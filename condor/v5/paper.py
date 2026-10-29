@@ -295,4 +295,12 @@ def validate_status(payload: Any, bot: str) -> dict[str, Any]:
             and len(row["controller_name"]) <= 128
         )
         _require(isinstance(row.get("custom_info", {}), dict))
+    # The runtime declares every controller it owns, and each one is either reported
+    # (native_reports) or listed unavailable, never both. A truncated declaration
+    # would let projections present partial inventory as complete.
+    _require(bool(seen))
+    reported, missing = set(payload["native_reports"]), set(unavailable)
+    _require(not reported & missing and reported | missing == seen)
+    retained = payload.get("retained_reports") or {}
+    _require(isinstance(retained, dict) and set(retained) <= seen)
     return payload

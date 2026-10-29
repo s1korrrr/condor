@@ -120,6 +120,7 @@ def test_missing_one_controller_report_withholds_whole_bot_counters(tmp_path):
     payload = status()
     missing = payload["controllers"][0]["id"]
     del payload["native_reports"][missing]
+    payload["unavailable_controller_ids"] = [missing]  # as the runtime writes it
     response = read_compatibility_path(
         f"/api/v1/trading-visuals/bootstrap?bot={BOT}", observe(tmp_path, payload)
     )
@@ -305,3 +306,31 @@ def test_hostile_status_values_never_bind_falsely_or_cause_http_500(
     assert response.status_code in (200, 503), (response.status_code, response.text)
     if case.startswith("decimal-"):
         assert response.json()["metrics_available"] is False
+
+
+@pytest.mark.parametrize(
+    "change",
+    [
+        "drop-declaration",
+        "empty-declarations",
+        "report-and-unavailable",
+        "undeclared-unavailable",
+        "undeclared-retained",
+    ],
+)
+def test_controller_declarations_must_account_for_every_report(tmp_path, change):
+    # A truncated declaration would let totals and inventory present partial data as complete.
+    payload = status()
+    first = payload["controllers"][0]["id"]
+    if change == "drop-declaration":
+        payload["controllers"] = payload["controllers"][1:]
+    elif change == "empty-declarations":
+        payload["controllers"] = []
+    elif change == "report-and-unavailable":
+        payload["unavailable_controller_ids"] = [first]
+    elif change == "undeclared-unavailable":
+        payload["unavailable_controller_ids"] = ["modular_spot_unknown"]
+    else:
+        payload["retained_reports"] = {"modular_spot_unknown": {}}
+    path = write_status(tmp_path, payload)
+    assert paper.read_paper_status(path, now=NOW).state == "UNAVAILABLE"

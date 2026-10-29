@@ -30,7 +30,7 @@ const columns: TableColumn<Row>[] = [
   ...(["1h", "24h", "7d"] as const).map(span => ({ id: `coverage_${span}`, header: `Settled coverage ${span} (%)`, value: (row: Row) => row[`coverage_${span}`] == null ? null : Number((row[`coverage_${span}`]! * 100).toFixed(2)), kind: "number" as const, size: 85 })),
   { id: "gaps", header: "Missing 7d (min)", value: row => row.gaps_7d, kind: "number", size: 75 },
   { id: "pending", header: "Pending (min)", value: row => row.pending, kind: "number", size: 75 },
-  { id: "unrecoverable", header: "Unrecoverable 7d (min)", value: row => row.unrecoverable_7d, kind: "number", size: 95 },
+  { id: "unrecoverable", header: "Unrecoverable 7d (min)", value: row => row.unrecoverable_7d, kind: "number", size: 115 },
   { id: "no_trade", header: "No-trade 7d (min)", value: row => row.no_trade_7d, kind: "number", size: 75 },
   { id: "ws", header: "WebSocket", value: row => row.ws_state ?? "Unavailable", size: 85 },
 ];

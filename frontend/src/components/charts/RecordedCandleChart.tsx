@@ -17,7 +17,7 @@ export function RecordedCandleChart({ buckets, label, volumeUnit }: { buckets: R
       autoSize: true, height: 360,
       layout: { background: { type: ColorType.Solid, color: colors.bg }, textColor: colors.text },
       grid: { vertLines: { color: colors.grid }, horzLines: { color: colors.grid } },
-      timeScale: { timeVisible: true, secondsVisible: false, minBarSpacing: 0.01 },
+      timeScale: { timeVisible: true, secondsVisible: false, minBarSpacing: 0.01, fixLeftEdge: true },
       localization: { timeFormatter: time => new Date(Number(time) * 1000).toISOString().replace("T", " ").slice(0, 16) + " UTC" },
     });
     const series = chart.addSeries(CandlestickSeries, { upColor: colors.up, downColor: colors.down, borderVisible: false, wickUpColor: colors.up, wickDownColor: colors.down });

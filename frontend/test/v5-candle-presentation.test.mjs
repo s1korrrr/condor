@@ -68,3 +68,20 @@ test("an empty successful instrument list has an explicit reason, not an empty d
   assert.doesNotMatch(html, /<select/);
   assert.match(html, /Chart selection unavailable until the owner instrument list is available and non-empty/);
 });
+
+test("recorded candle time scale keeps the left boundary label inside the chart", () => {
+  let options;
+  let fitted = false;
+  const { load } = frontendModules({
+    react: { useRef: () => ({ current: {} }), useState: () => [null, () => {}], useEffect: effect => effect() },
+    "@/hooks/useTheme": { useTheme: () => ({ theme: "dark" }) },
+    "@/lib/theme-colors": { getThemeColors: () => ({}) },
+    "lightweight-charts": { ColorType: { Solid: "solid" }, CandlestickSeries: {}, createChart: (_container, config) => {
+      options = config;
+      return { addSeries: () => ({ setData() {} }), subscribeCrosshairMove() {}, timeScale: () => ({ fitContent() { fitted = true; } }), remove() {} };
+    } },
+  });
+  renderToStaticMarkup(React.createElement(load("components/charts/RecordedCandleChart").RecordedCandleChart, { buckets: [], label: "okx · spot · BTC-USDT", volumeUnit: "base" }));
+  assert.equal(options.timeScale.fixLeftEdge, true);
+  assert.equal(fitted, true);
+});

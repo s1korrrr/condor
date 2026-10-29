@@ -6,6 +6,7 @@
   min-width: 0;
   white-space: normal;
   overflow: visible;
-  overflow-wrap: anywhere;
+  overflow-wrap: normal;
+  word-break: keep-all;
   text-overflow: clip;
 }

@@ -85,7 +85,7 @@ def _number(value: Any) -> bool:
 
 def _rows(payload, key, limit, fields):
     rows = payload.get(key)
-    if not isinstance(rows, list) or len(rows) > limit:
+    if not isinstance(rows, list) or not rows or len(rows) > limit:
         raise OwnerUnavailable("owner_invalid_rows")
     safe = []
     for row in rows:

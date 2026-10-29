@@ -93,6 +93,7 @@ export const v5Api = {
 };
 
 export interface V5DashboardProfile {
+  candle_store?: { configured: boolean };
   schema_version: "v5-dashboard-profile.v1";
   server: { server_id: string; host: string; port: number; mode: string; execution_enabled: boolean };
   condor: { base_revision: string };

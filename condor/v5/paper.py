@@ -430,7 +430,7 @@ def validate_paper_read(
     states = {"available", "collecting", "not_applicable", "degraded", "stale"}
     unbound = (
         isinstance(payload, dict)
-        and payload.get("state") in {"collecting", "degraded"}
+        and payload.get("state") in ("collecting", "degraded")
         and payload.get("data") is None
         and payload.get("snapshot_id") is None
     )
@@ -444,6 +444,7 @@ def validate_paper_read(
         )
         or payload.get("execution_mode") != "paper"
         or payload.get("simulated") is not True
+        or not isinstance(payload.get("state"), str)
         or payload.get("state") not in states
         or (
             not unbound
@@ -461,8 +462,36 @@ def validate_paper_read(
             )
         )
         or (
-            payload["state"] != "available"
-            and not isinstance(payload.get("reason"), str)
+            not isinstance(payload.get("reason"), str)
+            and not (payload["state"] == "available" and payload.get("reason") is None)
+        )
+        or any(
+            key in payload
+            and not (unbound and key == "generated_at_ms" and payload[key] is None)
+            and not (key == "source_at_ms" and payload[key] is None)
+            and (
+                type(payload[key]) is not int
+                or not 0
+                <= payload[key]
+                <= min(2**53 - 1, now_ms + FUTURE_SKEW_SECONDS * 1000)
+            )
+            for key in ("generated_at_ms", "source_at_ms", "observed_at_ms")
+        )
+        or (
+            "completeness" in payload
+            and payload["completeness"] not in ("complete", "partial", "unavailable")
+        )
+        or (
+            "next_cursor" in payload
+            and payload["next_cursor"] is not None
+            and (
+                not isinstance(payload["next_cursor"], str)
+                or not payload["next_cursor"]
+            )
+        )
+        or any(
+            key in payload and not isinstance(payload[key], dict)
+            for key in ("capabilities", "source")
         )
         or (payload["state"] == "available" and payload.get("data") is None)
     ):

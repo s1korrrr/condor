@@ -39,11 +39,28 @@ export function paperWorkspaceLabel(profile: { readiness?: { paper_owner?: unkno
   return profile?.readiness?.paper_owner ? "PAPER · simulated wallet · live disabled · advisor reports only" : null;
 }
 
-export function paperSectionError(read: { section?: string; data?: unknown } | undefined): string | null {
-  if (!read || read.data == null) return null;
+export function paperSectionError(read: Partial<import("./contracts").PaperRead> | undefined): string | null {
+  if (!read) return null;
   const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
   const records = (value: unknown): value is Record<string, unknown>[] => Array.isArray(value) && value.every(object);
-  const invalid = () => `${paperWords(read.section)} owner schema invalid; this section is unavailable.`;
+  const invalid = () => `${typeof read.section === "string" ? paperWords(read.section) : "Paper section"} owner schema invalid; this section is unavailable.`;
+  const unbound = ["collecting", "degraded"].includes(read.state ?? "") && read.data == null && read.snapshot_id === null;
+  if (!object(read) || read.schema !== "rsibot.v5-paper.read.v1" || typeof read.section !== "string" || !read.section ||
+    !["available", "collecting", "not_applicable", "degraded", "stale"].includes(read.state ?? "") ||
+    read.execution_mode !== "paper" || read.simulated !== true ||
+    (typeof read.reason !== "string" && !(read.state === "available" && read.reason == null)) ||
+    (typeof read.bot_id !== "string" || !read.bot_id) && !(unbound && read.bot_id === null) ||
+    (typeof read.snapshot_id !== "string" || !read.snapshot_id) && !unbound ||
+    (read.generated_at_ms == null && !unbound) ||
+    ["generated_at_ms", "source_at_ms", "observed_at_ms"].some(key => {
+      const value = read[key as "generated_at_ms" | "source_at_ms" | "observed_at_ms"];
+      return value != null && (!Number.isSafeInteger(value) || value < 0) || key === "observed_at_ms" && key in read && value == null;
+    }) ||
+    (read.completeness !== undefined && !["complete", "partial", "unavailable"].includes(read.completeness)) ||
+    (read.next_cursor != null && (typeof read.next_cursor !== "string" || !read.next_cursor)) ||
+    ["source", "capabilities"].some(key => key in read && !object(read[key as "source" | "capabilities"])) ||
+    read.state === "available" && read.data == null) return invalid();
+  if (read.data == null) return null;
   if (["positions", "fills", "executors", "orders"].includes(read.section ?? "")) {
     if (!records(read.data) || read.data.some(row => ["executor_id", "controller_id", "trading_pair", "state"].some(key => row[key] != null && typeof row[key] !== "string"))) return invalid();
     const required: Record<string, string[]> = { positions: ["position_id", "controller_id", "trading_pair", "state", "quantity"], executors: ["executor_id", "controller_id", "state"], fills: ["trade_id", "order_id", "trading_pair", "side", "quantity", "price"], orders: ["order_id", "executor_id", "side"] };
@@ -57,7 +74,7 @@ export function paperSectionError(read: { section?: string; data?: unknown } | u
   return null;
 }
 
-export function paperReadState(read: { schema?: string; section?: string; data?: unknown; state?: string; execution_mode?: string; simulated?: boolean; generated_at_ms?: number | null } | undefined, now: number): import("./contracts").PaperReadState {
+export function paperReadState(read: Partial<import("./contracts").PaperRead> | undefined, now: number): import("./contracts").PaperReadState {
   if (!read || read.schema !== "rsibot.v5-paper.read.v1" || read.execution_mode !== "paper" || read.simulated !== true) return "degraded";
   if (paperSectionError(read)) return "degraded";
   if (read.generated_at_ms != null && (!Number.isSafeInteger(read.generated_at_ms) || read.generated_at_ms > now + 5000)) return "degraded";
@@ -168,16 +185,22 @@ export function paperPairObservation(pair: string, positions: import("./contract
   const active = (row: Record<string, unknown>) => !terminal(row) && ["active", "running", "partial_close", "open", "not_started", "shutting_down"].includes(String(row.state).toLowerCase());
   const pairExecutors = rows(executors).filter(row => row.trading_pair === pair && active(row));
   const executor = position?.executor_id != null ? rows(executors).find(row => row.executor_id === position.executor_id && active(row)) : pairExecutors.length === 1 ? pairExecutors[0] : undefined;
-  const complete = (read: import("./contracts").PaperRead | undefined) => !!read && ["available", "stale"].includes(paperReadState(read, now)) && read.completeness === "complete" && !read.next_cursor;
+  const complete = (read: import("./contracts").PaperRead | undefined) => !!read && paperReadState(read, now) === "available" && read.completeness === "complete" && !read.next_cursor;
+  const historicallyComplete = (read: import("./contracts").PaperRead | undefined) => !!read && ["available", "stale"].includes(paperReadState(read, now)) && read.completeness === "complete" && !read.next_cursor;
   const unmappedActive = rows(executors).some(row => !terminal(row) && !row.trading_pair && !rows(positions).some(position => position.executor_id != null && position.executor_id === row.executor_id));
   const activeForPair = rows(executors).some(row => row.trading_pair === pair && !terminal(row));
   const knownFlat = !position && !activeForPair && !unmappedActive && complete(positions) && complete(executors) && Array.isArray(positions?.data) && Array.isArray(executors?.data) && paperSnapshotsAgree([positions!, executors!]);
+  const lastReportedFlat = !knownFlat && !position && !activeForPair && !unmappedActive && historicallyComplete(positions) && historicallyComplete(executors) && paperSnapshotsAgree([positions!, executors!]);
   const data = decisions?.data as { conditions?: unknown; controllers?: unknown } | null;
   const candidates = complete(decisions) && positions && paperSnapshotsAgree([positions, decisions!]) && Array.isArray(data?.conditions) ? data.conditions as Record<string, unknown>[] : [];
   const controller = complete(decisions) && positions && paperSnapshotsAgree([positions, decisions!]) && Array.isArray(data?.controllers) ? (data.controllers as Record<string, unknown>[]).find(row => row.pair === pair) : undefined;
   const info = controller?.custom_info && typeof controller.custom_info === "object" && !Array.isArray(controller.custom_info) ? controller.custom_info as Record<string, unknown> : {};
   const decision = candidates.filter(row => row.trading_pair === pair).sort((first, second) => Number(second.event_at_ms ?? 0) - Number(first.event_at_ms ?? 0))[0] ?? (info.modular_status != null ? { status: info.modular_status, reason: info.modular_reason, event_at_ms: decisions?.source_at_ms } : null);
-  return { position, executor, knownFlat, decision };
+  return { position, executor, knownFlat, lastReportedFlat, decision };
+}
+
+export function paperOrderCount(value: unknown, kind: "entry" | "exit"): string {
+  return typeof value === "number" && Number.isSafeInteger(value) && value >= 0 ? `${value} ${value === 1 ? kind : kind === "entry" ? "entries" : "exits"}` : "Count not published";
 }
 
 export function paperReadiness(_owner: unknown) {

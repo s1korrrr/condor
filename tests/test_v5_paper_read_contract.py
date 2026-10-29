@@ -92,6 +92,52 @@ def test_authenticated_malformed_section_is_a_typed_schema_error(
     assert response.json()["detail"]["reason"] == "schema_invalid"
 
 
+@pytest.mark.parametrize(
+    "state", ["available", "collecting", "degraded", "stale", "not_applicable"]
+)
+@pytest.mark.parametrize(
+    "field,bad",
+    [
+        ("reason", {}),
+        ("state", []),
+        ("generated_at_ms", True),
+        ("generated_at_ms", "1793275200000"),
+        ("source_at_ms", {}),
+        ("observed_at_ms", -1),
+        ("snapshot_id", []),
+        ("completeness", {}),
+        ("completeness", "unknown"),
+        ("next_cursor", []),
+        ("capabilities", []),
+        ("source", []),
+        ("bot_id", {}),
+        ("simulated", "true"),
+    ],
+)
+def test_authenticated_malformed_envelope_is_a_typed_section_error(
+    tmp_path, state, field, bad
+):
+    from test_v5_paper_binding import client_for
+
+    class Source:
+        async def observation(self, path):
+            return envelope(
+                "executors", **{"state": state, "reason": "Owner state", field: bad}
+            )
+
+    with client_for(tmp_path, Source()) as client:
+        response = client.get(
+            "/api/v5/dashboard/read",
+            params={"path": f"/api/v1/servers/rsibot-v5/bots/{BOT}/executors"},
+        )
+    assert response.status_code == 502
+    assert response.json()["detail"] == {
+        "code": "paper_read_schema_invalid",
+        "reason": "schema_invalid",
+        "section": "executors",
+    }
+
+
 def observe(_path):
     return PaperObservation(
         "FRESH", "PAPER_STATUS_FRESH", BOT, NOW, {"generated_at": NOW}

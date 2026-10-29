@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { paperReadState, paperControlState, paperRecordSummary, paperSnapshotsAgree, paperWords, paperAmount, paperExactAmount, paperSectionError, paperTime, paperLifetimeTotals, paperOpenExecutorCount, paperRiskHold, paperWalletInventory, paperPairObservation } from '../src/v5/policy.ts';
+import { paperReadState, paperControlState, paperRecordSummary, paperSnapshotsAgree, paperWords, paperAmount, paperExactAmount, paperSectionError, paperTime, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperRiskHold, paperWalletInventory, paperPairObservation } from '../src/v5/policy.ts';
 
 const now = 1793275200000;
 const fresh = {schema:'rsibot.v5-paper.read.v1', section:'wallet', state:'available', bot_id:'meridian_v5_paper', execution_mode:'paper', simulated:true, generated_at_ms:now, snapshot_id:'boot:1', data:{equity_quote:'1000.900000000000001'}};
@@ -42,7 +42,29 @@ test('known flat requires complete coherent positions and executors, and project
   assert.equal(paperPairObservation('BTC-USDC',positions,{...executors,data:[executorRow({trading_pair:'BTC-USDC',state:'TERMINATED'}),executorRow({trading_pair:'BTC-USDC',state:'active'})]},decisions,now).knownFlat,false);
   assert.equal(paperPairObservation('BTC-USDC',positions,{...executors,data:[executorRow({trading_pair:'BTC-USDC',state:'TERMINATED'})]},decisions,now).knownFlat,true);
   assert.equal(paperPairObservation('BTC-USDC',positions,executors,{...decisions,snapshot_id:'other:1'},now).decision,null);
-  assert.equal(paperPairObservation('BTC-USDC',positions,executors,decisions,now+31000).knownFlat,true);
+  const stale = paperPairObservation('BTC-USDC',positions,executors,decisions,now+31000);
+  assert.equal(stale.knownFlat,false);
+  assert.equal(stale.lastReportedFlat,true);
+  assert.equal(paperPairObservation('BTC-USDC',positions,{...executors,snapshot_id:'other:1'},decisions,now+31000).lastReportedFlat,false);
+});
+
+test('malformed envelope fields are isolated in every state before rendering', () => {
+  for (const state of ['available','collecting','degraded','stale','not_applicable']) {
+    for (const [key,value] of Object.entries({reason:{},state:[],generated_at_ms:true,source_at_ms:{},observed_at_ms:-1,snapshot_id:[],completeness:{},next_cursor:[],capabilities:[],source:[],bot_id:{},simulated:'true'})) {
+      const read = {...fresh,section:'executors',data:[],state,reason:'Owner state',[key]:value};
+      assert.match(paperSectionError(read), /Executors owner schema invalid/, `${state}: ${key}`);
+      assert.equal(paperReadState(read,now),'degraded');
+      assert.equal(paperPairObservation('BTC-USDC',{...fresh,section:'positions',data:[],completeness:'complete'},read,undefined,now).knownFlat,false);
+    }
+  }
+});
+
+test('filled order counts use singular and plural labels without inventing missing counts', () => {
+  assert.equal(paperOrderCount(1,'entry'),'1 entry');
+  assert.equal(paperOrderCount(1,'exit'),'1 exit');
+  assert.equal(paperOrderCount(0,'entry'),'0 entries');
+  assert.equal(paperOrderCount(2,'exit'),'2 exits');
+  assert.equal(paperOrderCount(null,'entry'),'Count not published');
 });
 
 test('an open position binds only its own active executor, never a terminal receipt target', () => {

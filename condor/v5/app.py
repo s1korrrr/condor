@@ -23,6 +23,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
 
 from .agents import AgentCatalog, AgentDefinition
+from .candles import CandleOwner, OwnerUnavailable, validate_query
 from .config import Settings, read_secret_file
 from .dashboard import dashboard_profile, read_compatibility_path
 from .paper import PaperObservation, read_paper_status
@@ -262,6 +263,11 @@ def create_app(
         KNOWN_TASK_IDS if config.paper_status_file is not None else ADVISOR_TASK_IDS
     )
     api = upstream or V5Upstream(config)
+    candle_owner = (
+        CandleOwner(str(config.candle_store_socket))
+        if config.candle_store_socket
+        else None
+    )
     active_loop_task: asyncio.Task | None = None
     active_loop_stop: asyncio.Event | None = None
     login_failures: dict[str, list[float]] = {}
@@ -379,7 +385,33 @@ def create_app(
     @app.get("/api/v5/dashboard/profile", dependencies=[Depends(require_auth)])
     async def dashboard_compatibility_profile():
         paper = await current_paper()
-        return dashboard_profile() if paper is None else dashboard_profile(paper)
+        profile = dashboard_profile() if paper is None else dashboard_profile(paper)
+        if candle_owner is not None:
+            profile["candle_store"] = {"configured": True}
+        return profile
+
+    @app.get("/api/v5/candle-store/{view}", dependencies=[Depends(require_auth)])
+    async def candle_store_read(view: str, request: Request):
+        if candle_owner is None:
+            raise HTTPException(404)
+        try:
+            query = validate_query(view, list(request.query_params.multi_items()))
+        except KeyError:
+            raise HTTPException(404) from None
+        except ValueError:
+            raise HTTPException(422, detail={"code": "invalid_candle_query"}) from None
+        try:
+            data = await candle_owner.read(view, query)
+            return JSONResponse(
+                {"state": "AVAILABLE", "reason": None, "data": data},
+                headers={"Cache-Control": "no-store"},
+            )
+        except OwnerUnavailable as exc:
+            return JSONResponse(
+                {"state": "UNAVAILABLE", "reason": str(exc), "data": None},
+                status_code=503,
+                headers={"Cache-Control": "no-store"},
+            )
 
     @app.get("/api/v5/dashboard/read", dependencies=[Depends(require_auth)])
     async def dashboard_compatibility_read(
@@ -1142,6 +1174,7 @@ def create_app(
         "/backtests",
         "/settings",
         "/market/evidence",
+        "/market/candles",
         "/v5/readiness",
         "/agents",
         "/sessions",

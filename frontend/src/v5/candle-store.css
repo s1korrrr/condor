@@ -1,0 +1,12 @@
+.v5-candle-store .q-dt thead th {
+  white-space: normal;
+}
+
+.v5-candle-store .q-dt__sort span {
+  min-width: 0;
+  white-space: normal;
+  overflow: visible;
+  overflow-wrap: normal;
+  word-break: keep-all;
+  text-overflow: clip;
+}

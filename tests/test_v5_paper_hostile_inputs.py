@@ -252,3 +252,56 @@ def test_condor_io_fault_is_unavailable_not_http_500(tmp_path, monkeypatch, oper
         assert len(os.listdir("/proc/self/fd")) == baseline
     assert response.status_code == 200, (response.status_code, response.text)
     assert response.json()["readiness"]["paper_owner"]["state"] == "UNAVAILABLE"
+
+
+def _hostile(case):
+    payload = status()
+    first_report = next(iter(payload["native_reports"].values()))
+    if case == "surrogate-failure":
+        payload["failure"] = "\ud800"
+    elif case == "surrogate-custom-info":
+        payload["controllers"][0]["custom_info"]["probe"] = "\ud800"
+    elif case == "surrogate-key":
+        payload["controllers"][0]["custom_info"]["\ud800"] = 1
+    elif case == "decimal-double-underscore":
+        first_report["performance"]["global_pnl_quote"] = "1__0"
+    elif case == "decimal-no-digits":
+        first_report["performance"]["global_pnl_quote"] = "_1"
+    elif case == "missing-failure":
+        del payload["failure"]
+    elif case == "missing-report-time":
+        del payload["report_observed_at"]
+    return payload
+
+
+@pytest.mark.parametrize(
+    "case,compatibility_path,unavailable",
+    [
+        ("surrogate-failure", None, True),
+        ("surrogate-custom-info", f"/api/v1/trading-visuals/bootstrap?bot={BOT}", True),
+        ("surrogate-key", f"/api/v1/trading-visuals/bootstrap?bot={BOT}", True),
+        ("decimal-double-underscore", f"/api/v1/servers/{SERVER}/bots", False),
+        ("decimal-no-digits", f"/api/v1/servers/{SERVER}/bots", False),
+        ("missing-failure", f"/api/v1/servers/{SERVER}/bots", True),
+        ("missing-report-time", f"/api/v1/servers/{SERVER}/bots", True),
+    ],
+)
+def test_hostile_status_values_never_bind_falsely_or_cause_http_500(
+    tmp_path, case, compatibility_path, unavailable
+):
+    # Lone surrogates and absent nullable keys make the status malformed; a malformed
+    # metric string is withheld while the rest of the status stays usable.
+    with client_for(tmp_path, ReviewUpstream(False), payload=_hostile(case)) as client:
+        path = tmp_path / "runtime_status" / f"{BOT}.status.json"
+        state = paper.read_paper_status(path, now=NOW).state
+        assert state == ("UNAVAILABLE" if unavailable else "FRESH")
+        client._transport.raise_server_exceptions = False
+        if compatibility_path is None:
+            response = client.get("/api/v5/dashboard/profile")
+        else:
+            response = client.get(
+                "/api/v5/dashboard/read", params={"path": compatibility_path}
+            )
+    assert response.status_code in (200, 503), (response.status_code, response.text)
+    if case.startswith("decimal-"):
+        assert response.json()["metrics_available"] is False

@@ -152,6 +152,19 @@ def _open_pinned(path: Path) -> int:
 MAX_INT_DIGITS = 19
 # The real runtime status nests about ten levels (custom_info bags, executor configs).
 MAX_DEPTH = 32
+REQUIRED_KEYS = (
+    "controller_kind",
+    "controllers",
+    "failure",
+    "generated_at",
+    "native_reports",
+    "process_boot_id",
+    "ready",
+    "reasons",
+    "report_observed_at",
+    "unavailable_controller_ids",
+    "simulation_assumptions",
+)
 
 
 def _parse(raw: bytes) -> Any:
@@ -199,8 +212,15 @@ def _parse(raw: bytes) -> Any:
             raise PaperStatusError("PAPER_STATUS_MALFORMED")
         if isinstance(value, dict):
             stack.extend((item, depth + 1) for item in value.values())
+            stack.extend((key, depth + 1) for key in value)
         elif isinstance(value, list):
             stack.extend((item, depth + 1) for item in value)
+        elif isinstance(value, str):
+            # JSON escapes can produce lone surrogates, which no response can encode.
+            try:
+                value.encode("utf-8")
+            except UnicodeEncodeError:
+                raise PaperStatusError("PAPER_STATUS_MALFORMED") from None
     return payload
 
 
@@ -239,6 +259,8 @@ def validate_status(payload: Any, bot: str) -> dict[str, Any]:
     reasons = payload.get("reasons")
     _require(isinstance(reasons, list) and len(reasons) <= 64)
     _require(all(isinstance(item, str) and len(item) <= 300 for item in reasons))
+    # Keys every projection indexes directly must be present, even when null.
+    _require(all(key in payload for key in REQUIRED_KEYS))
     failure = payload.get("failure")
     _require(failure is None or (isinstance(failure, str) and len(failure) <= 200))
     report_time = payload.get("report_observed_at")

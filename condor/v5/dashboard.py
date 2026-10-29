@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import math
+import re
 from datetime import datetime, timezone
 from decimal import Decimal, InvalidOperation
 from urllib.parse import parse_qsl, unquote, urlsplit
@@ -294,8 +295,15 @@ def _lifecycle(paper: PaperObservation) -> str:
     return "running"
 
 
+# Plain decimal text as the native reports write it; Decimal alone also admits
+# underscores ("1_0") and spellings that float() refuses.
+_DECIMAL_TEXT = re.compile(r"-?\d{1,40}(?:\.\d{1,40})?(?:[eE][-+]?\d{1,4})?")
+
+
 def _decimal_text(value) -> str | None:
     if isinstance(value, bool) or not isinstance(value, (str, int, float)):
+        return None
+    if isinstance(value, str) and _DECIMAL_TEXT.fullmatch(value) is None:
         return None
     try:
         number = Decimal(str(value))
@@ -309,7 +317,10 @@ def _float(value) -> float | None:
     text = _decimal_text(value)
     if text is None:
         return None
-    number = float(text)
+    try:
+        number = float(text)
+    except (ValueError, OverflowError):
+        return None
     return number if math.isfinite(number) else None
 
 

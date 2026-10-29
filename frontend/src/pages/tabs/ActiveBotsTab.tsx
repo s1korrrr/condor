@@ -14,6 +14,11 @@ import {
   Volume2,
 } from "lucide-react";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import type { PaperRead } from "@/v5/contracts";
+import { paperControlState, paperReadState, paperRecordSummary, paperSnapshotsAgree } from "@/v5/policy";
+import { paperHeartbeat } from "@/features/bots/fleet-health";
+import { StrategyChartsSlot } from "@/components/bots/StrategyChartsSlot";
+import "@/components/bots/fleet-strip.css";
 
 import { NoServerCard } from "@/components/NoServerCard";
 import { AggregatedPnlChart } from "@/components/bots/AggregatedPnlChart";
@@ -610,6 +615,58 @@ function BotsSection({ bots, server, onStopInitiated, onStopSettled }: { bots: B
 }
 
 // ── Main Page ──
+
+const PAPER_SECTIONS = {
+  wallet: "fleet/summary", positions: "fleet/holdings", fills: "fleet/fills?limit=100",
+  executors: "executors", risk: "risk", decisions: "decisions",
+  history: "controller-performance/history?interval=5m&limit=1000",
+} as const;
+
+function PaperValue({ value }: { value: unknown }) {
+  if (value === null || value === undefined) return <span>Unavailable · owner did not publish this value</span>;
+  if (typeof value !== "object") return <span>{String(value)}</span>;
+  if (Array.isArray(value)) return value.length ? <ol className="v5-paper-records">{value.map((row, index) => <li key={index}>{row && typeof row === "object" && !Array.isArray(row) ? <details><summary>{paperRecordSummary(row as Record<string, unknown>)}</summary><PaperValue value={row} /></details> : <PaperValue value={row} />}</li>)}</ol> : <span>No records in this owner snapshot</span>;
+  return <dl className="v5-paper-values">{Object.entries(value).map(([key, child]) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{Array.isArray(child) && child.length > 0 ? <details><summary>{child.length} owner records · expand full values</summary><PaperValue value={child} /></details> : <PaperValue value={child} />}</dd></div>)}</dl>;
+}
+
+async function readPaper(path: string): Promise<PaperRead> {
+  const response = await fetch(`/api/v5/dashboard/read?${new URLSearchParams({ path })}`, { credentials: "include", cache: "no-store" });
+  if (!response.ok) throw new Error(response.status === 409 ? "The owner snapshot changed. Refresh to read a coherent snapshot." : response.status === 401 ? "Your workspace session expired. Sign in again." : `Paper read failed (${response.status}). Check the observation service; no empty wallet is substituted.`);
+  const value = await response.json() as PaperRead;
+  if (value.schema !== "rsibot.v5-paper.read.v1" || value.execution_mode !== "paper" || value.simulated !== true) throw new Error("The paper read contract is invalid.");
+  return value;
+}
+
+export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; generatedAt: number | null; ownerState: string }) {
+  const [layout, setLayout] = useState<"grid" | "compact">("grid");
+  const [now, setNow] = useState(Date.now);
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
+  const query = useQuery({
+    queryKey: ["v5-paper-bots", bot], retry: false, refetchInterval: 15_000,
+    queryFn: async () => {
+      const prefix = `/api/v1/servers/rsibot-v5/`;
+      const status = await readPaper(`${prefix}bots/${encodeURIComponent(bot)}/native/status`);
+      const sections = await Promise.all(Object.entries(PAPER_SECTIONS).map(async ([section, suffix]) => {
+        const path = ["executors", "risk", "decisions"].includes(section) ? `${prefix}bots/${encodeURIComponent(bot)}/${suffix}` : `${prefix}${suffix}`;
+        const snapshot = status.snapshot_id ? `${path.includes("?") ? "&" : "?"}snapshot_id=${encodeURIComponent(status.snapshot_id)}` : "";
+        return readPaper(path + snapshot);
+      }));
+      if (status.snapshot_id && !paperSnapshotsAgree([status, ...sections])) throw new Error("Mixed owner snapshots were refused. Refresh; totals are not combined.");
+      return [...sections, status];
+    },
+  });
+  const clock = paperHeartbeat(generatedAt === null ? null : Math.floor(generatedAt * 1000), ownerState, now);
+  const age = clock.ageSeconds;
+  const heartbeat = clock.current ? "Fresh" : ownerState === "UNAVAILABLE" ? "Unavailable" : "Stale";
+  return <div className="v5-paper-bots" data-layout={layout}>
+    <header className="v5-page-heading"><div><h1>Paper bots</h1><p>{bot} · simulated wallet · live disabled</p></div><div className="v5-button-row"><button className="v5-button" aria-pressed={layout === "grid"} onClick={() => setLayout("grid")}>Grid</button><button className="v5-button" aria-pressed={layout === "compact"} onClick={() => setLayout("compact")}>Compact</button><button className="v5-button" onClick={() => void query.refetch()}>Refresh paper data</button></div></header>
+    <section className="v5-panel"><h2>{heartbeat} · process heartbeat</h2><p>Last native report: {age === null ? "Unavailable" : `${Math.floor(age)}s ago`}. Pair books, valuation and data completeness are reported separately below.</p><strong>{paperControlState(null)}</strong><p>Use the separately authenticated owner paper-control path when enabled by the operator. Entry halt must preserve protective exits; this dashboard cannot stop or liquidate the bot.</p><p>Fixed-target recipe: trailing exit is not applicable. DCA is not applicable without an owner-published active plan.</p></section>
+    {query.isPending && <p role="status">Reading bounded native paper observations…</p>}
+    {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
+    <div className="v5-paper-panels">{query.data?.map(read => <section className="v5-panel" key={read.section} data-state={paperReadState(read, now)}><h2>{read.section === "positions" ? "Holdings" : read.section === "status" ? "Native owner status" : read.section[0].toUpperCase() + read.section.slice(1)}</h2><p>{paperReadState(read, now)}{read.reason ? ` · ${read.reason}` : ""}</p><p className="v5-muted">Snapshot {read.snapshot_id ?? "not yet published"} · as of {read.generated_at_ms === null ? "unavailable" : new Date(read.generated_at_ms).toISOString()}</p><PaperValue value={read.data} />{read.next_cursor && <p>More owner records exist beyond this bounded page. Cursor retained by the owner; this is not a complete lifetime total.</p>}</section>)}</div>
+    <StrategyChartsSlot bot={bot} server="rsibot-v5" />
+  </div>;
+}
 
 export function ActiveBotsTab({ allowDrafts = true, ownerUnavailableReason }: { allowDrafts?: boolean; ownerUnavailableReason?: string } = {}) {
   const { server } = useServer();

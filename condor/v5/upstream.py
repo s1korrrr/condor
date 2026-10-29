@@ -113,21 +113,48 @@ class V5Upstream:
         }
         parts = urlsplit(path)
         paper_route = parts.path in {
-            f"/v1/paper/{section}" for section in (
-                "status", "wallet", "fills", "positions", "executors", "risk",
-                "decisions", "history", "operations",
+            f"/v1/paper/{section}"
+            for section in (
+                "status",
+                "wallet",
+                "fills",
+                "positions",
+                "executors",
+                "risk",
+                "decisions",
+                "history",
+                "operations",
             )
         }
         if paper_route:
             params = parse_qsl(parts.query, keep_blank_values=True)
             paper_route = (
-                not parts.scheme and not parts.netloc and not parts.fragment
+                not parts.scheme
+                and not parts.netloc
+                and not parts.fragment
                 and len(params) == len(dict(params))
                 and len(path) <= 2048
                 and all(
-                    (key == "limit" and value.isascii() and value.isdigit() and 1 <= int(value) <= 1000)
-                    or (key in {"start_ms", "end_ms"} and value.isascii() and value.isdigit() and 0 <= int(value) <= 10**14)
-                    or (key == "cursor" and re.fullmatch(r"[A-Za-z0-9_.:=-]{1,1024}", value))
+                    (
+                        key == "limit"
+                        and value.isascii()
+                        and value.isdigit()
+                        and 1 <= int(value) <= 1000
+                    )
+                    or (
+                        key in {"start_ms", "end_ms"}
+                        and value.isascii()
+                        and value.isdigit()
+                        and 0 <= int(value) <= 10**14
+                    )
+                    or (
+                        key == "cursor"
+                        and re.fullmatch(r"[A-Za-z0-9_.:=-]{1,1024}", value)
+                    )
+                    or (
+                        key == "snapshot_id"
+                        and re.fullmatch(r"[A-Za-z0-9_.:-]{1,160}", value)
+                    )
                     for key, value in params
                 )
             )

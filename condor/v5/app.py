@@ -389,11 +389,11 @@ def create_app(
         result = (
             read_compatibility_path(path)
             if paper is None
-            else read_compatibility_path(path, paper)
+            else read_compatibility_path(path, paper, resolve_paper_reads=True)
         )
         if paper is not None and isinstance(result, dict) and "source_route" in result:
             try:
-                payload = await upstream.observation(result["source_route"])
+                payload = await api.observation(result["source_route"])
             except UpstreamError as exc:
                 raise HTTPException(exc.http_status, detail={"code": exc.code}) from exc
             return read_compatibility_path(path, paper, paper_read=payload)

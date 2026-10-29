@@ -1,4 +1,39 @@
 /* B28 bot cards: one per registered bot, filling the row. The stat grid reflows to the card width. */
+.v5-paper-bots { min-width: 0; overflow-wrap: anywhere; }
+.condor-native .v5-panel, .v5-login-wrap .v5-login-panel,
+.condor-native .v5-identity-strip, .condor-native .v5-session-meta { color: var(--color-text); background: var(--color-surface); }
+.condor-native .v5-button, .v5-login-wrap .v5-button,
+.v5-login-wrap .v5-login-panel input, .condor-native .v5-notes-editor textarea,
+.condor-native .v5-markdown pre, .condor-native .v5-markdown code { color: var(--color-text); background: var(--color-surface-hover); }
+.condor-native .v5-panel { font-size: 14px; line-height: 1.6; }
+.condor-native .v5-data-value > strong { font-size: 13px; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; white-space: normal; }
+.condor-native .v5-data-value > span, .condor-native .v5-muted, .v5-login-wrap .v5-login-panel > p, .v5-login-wrap .v5-login-panel label { font-size: 12px; }
+.v5-login-wrap .v5-login-panel h1 { color: var(--color-text); }
+.condor-native .v5-button-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.condor-native .v5-page-heading { flex-wrap: wrap; }
+.condor-native .v5-blocker-panel, .condor-native .v5-blocker-panel strong, .condor-native .v5-blocker-panel p { color: var(--color-red); }
+.condor-native .v5-blocker-panel ul { color: var(--color-red); }
+.condor-native .v5-task-report { background: var(--color-surface-hover); }
+.condor-native .v5-session-copy strong, .condor-native .v5-session-copy small { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+.condor-native .v5-paper-bots .v5-button[aria-pressed=true], .condor-native .v5-paper-bots .v5-button:hover { color: var(--color-text); background: var(--color-surface-hover); border-color: var(--color-primary); }
+.v5-paper-panels { display: grid; align-items: start; grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr)); gap: 16px; margin: 16px 0; }
+.v5-paper-bots[data-layout=compact] .v5-paper-panels { grid-template-columns: 1fr; }
+.v5-paper-panels > section { min-width: 0; }
+.v5-paper-values { display: grid; gap: 8px; margin: 0; }
+.v5-paper-values > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.4fr); gap: 12px; border-bottom: 1px solid var(--color-border); padding: 8px 0; }
+.v5-paper-values dt { color: var(--color-text-muted); }
+.v5-paper-values dd { min-width: 0; margin: 0; white-space: normal; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.v5-paper-records { margin: 0; padding-left: 18px; }
+.v5-paper-records > li { margin-bottom: 16px; }
+.v5-paper-bots summary { cursor: pointer; overflow-wrap: anywhere; }
+.condor-native .v5-journal { background: var(--color-surface-hover); color: var(--color-text); white-space: pre-wrap; overflow-wrap: anywhere; }
+@media (max-width: 480px) { .v5-paper-values > div { grid-template-columns: 1fr; gap: 4px; } }
+@media (max-width: 640px) {
+  .condor-native .v5-session-table-wrap { overflow: visible; margin-right: 0; padding-right: 0; }
+  .condor-native .v5-session-rows.is-expanded .v5-session-row { min-width: 0; grid-template-columns: 20px minmax(0, 1fr); align-items: start; }
+  .condor-native .v5-session-row > .v5-status, .condor-native .v5-session-row > .v5-effect { grid-column: 2; justify-self: start; display: inline-flex; }
+  .condor-native .v5-session-row > .v5-row-chevron { display: none; }
+}
 [data-quant-ops] .fs-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: var(--q-gap); margin-bottom: var(--q-gap); }
 [data-quant-ops] .fs-card { container-type: inline-size; display: grid; gap: 10px; border-top: 2px solid var(--fs-accent, var(--q-blue)); align-content: start; }
 [data-quant-ops] .fs-card[data-state=stale] { border-top-color: var(--q-warning); }

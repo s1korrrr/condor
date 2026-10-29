@@ -37,33 +37,157 @@ STALE_AFTER_SECONDS = 30  # the runtime rewrites status about twice a second
 FUTURE_SKEW_SECONDS = 5
 
 
-def validate_paper_read(payload: dict, *, section: str, bot: str | None, now_ms: int) -> dict:
+def validate_paper_read(
+    payload: dict, *, section: str, bot: str | None, now_ms: int
+) -> dict:
     states = {"available", "collecting", "not_applicable", "degraded", "stale"}
-    unbound = isinstance(payload, dict) and payload.get("state") in {"collecting", "degraded"} and payload.get("data") is None and payload.get("snapshot_id") is None
+    unbound = (
+        isinstance(payload, dict)
+        and payload.get("state") in {"collecting", "degraded"}
+        and payload.get("data") is None
+        and payload.get("snapshot_id") is None
+    )
     if (
         not isinstance(payload, dict)
         or payload.get("schema") != "rsibot.v5-paper.read.v1"
         or payload.get("section") != section
-        or (payload.get("bot_id") != bot and not (unbound and payload.get("bot_id") is None))
+        or (
+            payload.get("bot_id") != bot
+            and not (unbound and payload.get("bot_id") is None)
+        )
         or payload.get("execution_mode") != "paper"
         or payload.get("simulated") is not True
         or payload.get("state") not in states
-        or (not unbound and (not isinstance(payload.get("snapshot_id"), str) or not payload["snapshot_id"]))
-        or (not unbound and (type(payload.get("generated_at_ms")) is not int or payload["generated_at_ms"] < 0 or payload["generated_at_ms"] > now_ms + FUTURE_SKEW_SECONDS * 1000))
-        or (payload["state"] != "available" and not isinstance(payload.get("reason"), str))
+        or (
+            not unbound
+            and (
+                not isinstance(payload.get("snapshot_id"), str)
+                or not payload["snapshot_id"]
+            )
+        )
+        or (
+            not unbound
+            and (
+                type(payload.get("generated_at_ms")) is not int
+                or payload["generated_at_ms"] < 0
+                or payload["generated_at_ms"] > now_ms + FUTURE_SKEW_SECONDS * 1000
+            )
+        )
+        or (
+            payload["state"] != "available"
+            and not isinstance(payload.get("reason"), str)
+        )
         or (payload["state"] == "available" and payload.get("data") is None)
     ):
         raise HTTPException(502, detail={"code": "paper_read_schema_invalid"})
     try:
         encoded = json.dumps(payload, allow_nan=False)
+        _validate_read_tree(payload.get("data"))
     except (TypeError, ValueError):
         raise HTTPException(502, detail={"code": "paper_read_schema_invalid"}) from None
     if len(encoded.encode()) > MAX_STATUS_BYTES:
         raise HTTPException(502, detail={"code": "paper_read_capacity"})
     result = deepcopy(payload)
+    if (
+        result.get("completeness") in {"partial", "unavailable"}
+        and result["state"] == "available"
+    ):
+        result.update(
+            state="degraded", reason="Paper section completeness is not complete."
+        )
     if not unbound and now_ms - payload["generated_at_ms"] > STALE_AFTER_SECONDS * 1000:
-        result.update(state="stale", reason="Paper observation source is older than 30 seconds.")
+        result.update(
+            state="stale", reason="Paper observation source is older than 30 seconds."
+        )
+    fields = {
+        "schema",
+        "section",
+        "state",
+        "reason",
+        "bot_id",
+        "execution_mode",
+        "simulated",
+        "snapshot_id",
+        "generated_at_ms",
+        "observed_at_ms",
+        "source_at_ms",
+        "completeness",
+        "capabilities",
+        "data",
+        "next_cursor",
+        "source",
+    }
+    result = {name: value for name, value in result.items() if name in fields}
+    if isinstance(result.get("source"), dict):
+        result["source"] = {
+            name: value
+            for name, value in result["source"].items()
+            if name
+            in {
+                "owner",
+                "schema",
+                "sha256",
+                "boot_id",
+                "sequence",
+                "source_sha256",
+                "config_sha256",
+                "recipe_sha256",
+            }
+        }
     return result
+
+
+def _validate_read_tree(value: Any, key: str = "", depth: int = 0) -> None:
+    if depth > 16 or isinstance(value, float):
+        raise ValueError("invalid paper observation value")
+    if value is None:
+        return
+    if key.endswith("_ms"):
+        if type(value) is not int or not 0 <= value <= 10**14:
+            raise ValueError("invalid paper timestamp")
+        return
+    if isinstance(value, str) and value.lower() in {
+        "nan",
+        "inf",
+        "infinity",
+        "-inf",
+        "-infinity",
+    }:
+        raise ValueError("invalid paper value")
+    if isinstance(value, dict):
+        for name, child in value.items():
+            _validate_read_tree(child, name, depth + 1)
+    elif isinstance(value, list):
+        if len(value) > 2000:
+            raise ValueError("paper row capacity")
+        for child in value:
+            _validate_read_tree(child, "", depth + 1)
+    elif (
+        not key.endswith(
+            (
+                "_currency",
+                "_asset",
+                "_unit",
+                "_source",
+                "_policy",
+                "_reason",
+                "_state",
+                "_id",
+                "_count",
+            )
+        )
+        and re.search(
+            r"(?:^|_)(?:price|quantity|amount|balance|total|available|reserved|basis|fee|fees|pnl|exposure|funding|mark|cash|equity)(?:_|$)",
+            key,
+        )
+        and type(value) is not bool
+    ):
+        if (
+            not isinstance(value, str)
+            or re.fullmatch(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?", value) is None
+            or len(value) > 128
+        ):
+            raise ValueError("paper financial value must be decimal text")
 
 
 class PaperStatusError(ValueError):

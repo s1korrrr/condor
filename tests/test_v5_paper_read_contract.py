@@ -1,3 +1,5 @@
+import json
+
 import pytest
 from fastapi import HTTPException
 
@@ -5,6 +7,206 @@ from condor.v5.dashboard import read_compatibility_path
 from condor.v5.paper import PaperObservation
 
 BOT = "meridian_v5_paper"
+
+C1_TARGET_HOLD_FIXTURES = json.loads(r"""{
+  "partial-buy-cancel-tp-partial-close": {
+    "positions": [
+      {
+        "position_id": "executor-1",
+        "executor_id": "executor-1",
+        "controller_id": "v5_BNB_USDC",
+        "trading_pair": "BNB-USDC",
+        "quantity": "0.6",
+        "remaining_basis_quote": "60.06",
+        "fee_currency": "USDC",
+        "state": "active",
+        "protected_exit": true,
+        "target_price": "102",
+        "target_basis": "native_placed_fixed_target_limit",
+        "target_reason": null,
+        "protected_exit_order": {
+          "order_id": "tp-1",
+          "state": "partially_filled",
+          "price": "102",
+          "remaining_amount": "0.6",
+          "placed_at_ms": 1793275130000
+        },
+        "remaining_target_amount": "0.6"
+      }
+    ],
+    "executors": [
+      {
+        "executor_id": "executor-1",
+        "controller_id": "v5_BNB_USDC",
+        "state": "partial_close",
+        "remaining_close_quantity": "0.6",
+        "quantity": "0.6",
+        "remaining_basis_quote": "60.06",
+        "cum_fees_quote": "0.1408",
+        "realized_pnl_quote": "0.7192",
+        "unrealized_pnl_quote": "0.54",
+        "unit": "USDC",
+        "custom_info": {
+          "entry_lifecycle": {
+            "state": "terminal",
+            "requested_quantity": "2",
+            "filled_quantity": "1",
+            "canceled_remainder_quantity": "1"
+          }
+        },
+        "target_price": "102",
+        "target_basis": "native_placed_fixed_target_limit",
+        "target_reason": null,
+        "protected_exit_order": {
+          "order_id": "tp-1",
+          "state": "partially_filled",
+          "price": "102",
+          "remaining_amount": "0.6",
+          "placed_at_ms": 1793275130000
+        },
+        "remaining_target_amount": "0.6",
+        "protected_exit": true
+      }
+    ]
+  },
+  "clock-failure-hold": {
+    "risk": {
+      "schema": "rsibot.v5-paper.risk.v1",
+      "control_hold": "clock_persistence_failed",
+      "reason": "clock_persistence_failed",
+      "explanation": "New acquisitions are held until explicit owner maintenance acknowledgement; protective exits remain enabled.",
+      "protected_exits": "preserved",
+      "clock_recovery": {
+        "required": true,
+        "high_water_ms": 1793275200000,
+        "hold": {
+          "reason": "clock_persistence_failed",
+          "failure_id": "fixture-failure",
+          "detail": "injected clock durability failure"
+        }
+      },
+      "holds": [
+        {
+          "reason": "clock_persistence_failed",
+          "explanation": "New acquisitions are held until explicit owner maintenance acknowledgement; protective exits remain enabled."
+        }
+      ]
+    }
+  },
+  "clock-invalid-hold": {
+    "risk": {
+      "schema": "rsibot.v5-paper.risk.v1",
+      "control_hold": "clock_persistence_failed",
+      "reason": "clock_invalid",
+      "explanation": "Invalid clock: stops still apply; clears and native advancement are held. Timestamp is the last valid native checkpoint.",
+      "protected_exits": "preserved",
+      "clock_recovery": {
+        "required": true,
+        "high_water_ms": 1793275200000,
+        "hold": {
+          "reason": "clock_persistence_failed",
+          "failure_id": "fixture-failure",
+          "detail": "clock_invalid: invalid poll sample"
+        }
+      },
+      "holds": [
+        {
+          "reason": "clock_persistence_failed",
+          "explanation": "New acquisitions are held until explicit owner maintenance acknowledgement; protective exits remain enabled."
+        },
+        {
+          "reason": "clock_invalid",
+          "explanation": "Invalid clock: stops still apply; clears and native advancement are held. Timestamp is the last valid native checkpoint."
+        }
+      ]
+    }
+  },
+  "stop-persistence-failure-hold": {
+    "risk": {
+      "schema": "rsibot.v5-paper.risk.v1",
+      "control_hold": "stop_persistence_failed",
+      "reason": "stop_persistence_failed",
+      "explanation": "Stop durability is unproven. Entries stay held until reviewed owner emergency reset; exits remain enabled.",
+      "protected_exits": "preserved",
+      "clock_recovery": {
+        "required": false,
+        "high_water_ms": 1793275200000,
+        "hold": null
+      },
+      "holds": [
+        {
+          "reason": "stop_persistence_failed",
+          "explanation": "Stop durability is unproven. Entries stay held until reviewed owner emergency reset; exits remain enabled."
+        }
+      ],
+      "emergency_recovery": {
+        "required": true,
+        "hold": {
+          "reason": "stop_persistence_failed",
+          "failure_id": "fixture-stop-durability",
+          "detail": "injected stop commit failure"
+        },
+        "acknowledgements": []
+      }
+    }
+  }
+}""")
+
+
+@pytest.mark.parametrize("section", ["positions", "executors"])
+def test_c1_native_exit_projection_validates_and_rejects_bad_fields(section):
+    from copy import deepcopy
+    from condor.v5.paper import validate_paper_read
+
+    rows = C1_TARGET_HOLD_FIXTURES["partial-buy-cancel-tp-partial-close"][section]
+    read = envelope(section, data=rows)
+    assert (
+        validate_paper_read(read, section=section, bot=BOT, now_ms=int(NOW * 1000))[
+            "data"
+        ]
+        == rows
+    )
+    for field, bad in [
+        ("target_basis", ""),
+        ("remaining_target_amount", {}),
+        ("protected_exit_order", {"state": "open"}),
+    ]:
+        malformed = deepcopy(read)
+        malformed["data"][0][field] = bad
+        with pytest.raises(HTTPException) as error:
+            validate_paper_read(
+                malformed, section=section, bot=BOT, now_ms=int(NOW * 1000)
+            )
+        assert error.value.status_code == 502
+        assert error.value.detail == {
+            "code": "paper_read_schema_invalid",
+            "reason": "schema_invalid",
+            "section": section,
+        }
+
+
+@pytest.mark.parametrize(
+    "name",
+    ["clock-failure-hold", "clock-invalid-hold", "stop-persistence-failure-hold"],
+)
+def test_c1_risk_hold_requires_each_explanation(name):
+    from copy import deepcopy
+    from condor.v5.paper import validate_paper_read
+
+    read = envelope("risk", data=C1_TARGET_HOLD_FIXTURES[name]["risk"])
+    assert (
+        validate_paper_read(read, section="risk", bot=BOT, now_ms=int(NOW * 1000))[
+            "data"
+        ]
+        == read["data"]
+    )
+    malformed = deepcopy(read)
+    malformed["data"]["holds"][0]["explanation"] = ""
+    with pytest.raises(HTTPException) as error:
+        validate_paper_read(malformed, section="risk", bot=BOT, now_ms=int(NOW * 1000))
+    assert error.value.detail["section"] == "risk"
+
+
 NOW = 1_800_000_000.0
 
 
@@ -138,6 +340,50 @@ def test_authenticated_malformed_envelope_is_a_typed_section_error(
     }
 
 
+@pytest.mark.parametrize("section", ["positions", "executors", "fills", "orders"])
+@pytest.mark.parametrize(
+    "state", ["available", "collecting", "degraded", "stale", "not_applicable"]
+)
+@pytest.mark.parametrize("completeness", ["missing", None, "invalid", {}])
+def test_list_sections_require_completeness_in_every_state(
+    section, state, completeness
+):
+    from condor.v5.paper import validate_paper_read
+
+    value = envelope(section, state=state, reason="Owner state", data=[])
+    if completeness == "missing":
+        value.pop("completeness", None)
+    else:
+        value["completeness"] = completeness
+    with pytest.raises(HTTPException) as caught:
+        validate_paper_read(value, section=section, bot=BOT, now_ms=int(NOW * 1000))
+    assert caught.value.status_code == 502
+    assert caught.value.detail == {
+        "code": "paper_read_schema_invalid",
+        "reason": "schema_invalid",
+        "section": section,
+    }
+
+
+def test_authenticated_empty_executors_without_completeness_are_not_available(tmp_path):
+    from test_v5_paper_binding import client_for
+
+    class Source:
+        async def observation(self, path):
+            value = envelope("executors", data=[])
+            value.pop("completeness", None)
+            return value
+
+    with client_for(tmp_path, Source()) as client:
+        response = client.get(
+            "/api/v5/dashboard/read",
+            params={"path": f"/api/v1/servers/rsibot-v5/bots/{BOT}/executors"},
+        )
+    assert response.status_code == 502
+    assert response.json()["detail"]["section"] == "executors"
+    assert response.json()["detail"]["reason"] == "schema_invalid"
+
+
 def observe(_path):
     return PaperObservation(
         "FRESH", "PAPER_STATUS_FRESH", BOT, NOW, {"generated_at": NOW}
@@ -165,6 +411,7 @@ def envelope(section="status", **changes):
         "schema": "rsibot.v5-paper.read.v1",
         "section": section,
         "state": "available",
+        "completeness": "complete",
         "reason": None,
         "bot_id": BOT,
         "execution_mode": "paper",

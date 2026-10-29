@@ -138,6 +138,7 @@ def read_compatibility_path(
                 "section": section,
                 "state": "degraded",
                 "reason": "Paper observation read is not connected.",
+                "completeness": "unavailable",
                 "bot_id": paper.bot_name,
                 "execution_mode": "paper",
                 "simulated": True,

@@ -57,6 +57,7 @@ export function paperSectionError(read: Partial<import("./contracts").PaperRead>
       return value != null && (!Number.isSafeInteger(value) || value < 0) || key === "observed_at_ms" && key in read && value == null;
     }) ||
     (read.completeness !== undefined && !["complete", "partial", "unavailable"].includes(read.completeness)) ||
+    (["positions", "fills", "executors", "orders"].includes(read.section) && read.completeness === undefined) ||
     (read.next_cursor != null && (typeof read.next_cursor !== "string" || !read.next_cursor)) ||
     ["source", "capabilities"].some(key => key in read && !object(read[key as "source" | "capabilities"])) ||
     read.state === "available" && read.data == null) return invalid();
@@ -65,6 +66,12 @@ export function paperSectionError(read: Partial<import("./contracts").PaperRead>
     if (!records(read.data) || read.data.some(row => ["executor_id", "controller_id", "trading_pair", "state"].some(key => row[key] != null && typeof row[key] !== "string"))) return invalid();
     const required: Record<string, string[]> = { positions: ["position_id", "controller_id", "trading_pair", "state", "quantity"], executors: ["executor_id", "controller_id", "state"], fills: ["trade_id", "order_id", "trading_pair", "side", "quantity", "price"], orders: ["order_id", "executor_id", "side"] };
     if (read.data.some(row => required[read.section!].some(key => typeof row[key] !== "string" || !row[key]))) return invalid();
+    if (["positions", "executors"].includes(read.section) && read.data.some(row => {
+      const decimal = (value: unknown) => typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value);
+      if (["target_price", "remaining_target_amount"].some(key => row[key] != null && !decimal(row[key])) || ["target_basis", "target_reason"].some(key => row[key] != null && typeof row[key] !== "string")) return true;
+      const order = row.protected_exit_order;
+      return order != null && (!object(order) || !["pending", "open", "partially_filled", "filled", "cancelled"].includes(String(order.state)) || !decimal(order.price) || !decimal(order.remaining_amount) || order.order_id != null && typeof order.order_id !== "string" || order.placed_at_ms != null && (!Number.isSafeInteger(order.placed_at_ms) || Number(order.placed_at_ms) < 0));
+    })) return invalid();
   } else {
     if (!object(read.data)) return invalid();
     for (const key of ["assets", "conditions", "rails", "segments", "gaps", ...(read.section === "decisions" ? ["controllers"] : [])]) {
@@ -77,6 +84,7 @@ export function paperSectionError(read: Partial<import("./contracts").PaperRead>
 export function paperReadState(read: Partial<import("./contracts").PaperRead> | undefined, now: number): import("./contracts").PaperReadState {
   if (!read || read.schema !== "rsibot.v5-paper.read.v1" || read.execution_mode !== "paper" || read.simulated !== true) return "degraded";
   if (paperSectionError(read)) return "degraded";
+  if (read.state === "available" && ["partial", "unavailable"].includes(read.completeness ?? "")) return "degraded";
   if (read.generated_at_ms != null && (!Number.isSafeInteger(read.generated_at_ms) || read.generated_at_ms > now + 5000)) return "degraded";
   if (read.generated_at_ms != null && now - read.generated_at_ms > 30_000) return "stale";
   return ["available", "collecting", "not_applicable", "degraded", "stale"].includes(read.state ?? "") ? read.state as import("./contracts").PaperReadState : "degraded";
@@ -108,6 +116,10 @@ export function paperWords(value: unknown): string {
     fixed_target_recipe: "Fixed-target recipe; trailing exit does not apply",
     no_active_plan: "No active DCA plan",
     clock_persistence_failed: "Clock durability failed; new acquisitions are held",
+    stop_persistence_failed: "Stop durability failed; new acquisitions are held",
+    clock_invalid: "Invalid owner clock; clears and native advancement are held",
+    native_placed_fixed_target_limit: "Native placed fixed-target limit",
+    partially_filled: "Partially filled",
     partial_close: "Partially closed",
     degraded: "Incomplete", available: "Available", not_applicable: "Not applicable",
   };
@@ -140,15 +152,37 @@ export function paperTime(value: unknown, now: number): string {
   return `${date.toISOString().slice(0, 19).replace("T", " ")} UTC · ${age} ago`;
 }
 
+export function paperCompleteRead(read: import("./contracts").PaperRead | undefined, now: number): boolean {
+  return !!read && paperReadState(read, now) === "available" && read.completeness === "complete" && !read.next_cursor;
+}
+
+export function paperCompleteRecords(read: import("./contracts").PaperRead | undefined, now: number): Record<string, unknown>[] | null {
+  return paperCompleteRead(read, now) && Array.isArray(read?.data) ? read.data : null;
+}
+
+export function paperWalletTotals(read: import("./contracts").PaperRead | undefined, now: number): { equity: unknown; cash: unknown } | null {
+  if (!read || read.section !== "wallet" || !paperCompleteRead(read, now) || !read.data || typeof read.data !== "object" || Array.isArray(read.data)) return null;
+  const wallet = read.data as Record<string, unknown>;
+  const assets = Array.isArray(wallet.assets) ? wallet.assets as Record<string, unknown>[] : [];
+  return { equity: wallet.equity_quote, cash: assets.find(asset => asset.asset === wallet.quote_asset)?.available };
+}
+
+export function paperRiskUsage(read: import("./contracts").PaperRead | undefined, now: number): Record<string, unknown>[] | null {
+  if (!read || read.section !== "risk" || !paperCompleteRead(read, now)) return null;
+  const risk = read.data as { rails?: Record<string, unknown>[] } | null;
+  return Array.isArray(risk?.rails) ? risk.rails : null;
+}
+
 export function paperLifetimeTotals(read: import("./contracts").PaperRead | undefined, snapshot: import("./contracts").PaperRead | undefined, now: number): Record<string, unknown> | null {
-  if (!read || !snapshot || read.section !== "accounting" || paperReadState(read, now) !== "available" || !paperSnapshotsAgree([read, snapshot])) return null;
+  if (!read || !snapshot || read.section !== "accounting" || !paperCompleteRead(read, now) || !paperSnapshotsAgree([read, snapshot])) return null;
   const data = read.data as { program?: unknown } | null;
   return data?.program && typeof data.program === "object" && !Array.isArray(data.program) ? data.program as Record<string, unknown> : null;
 }
 
 export function paperOpenExecutorCount(read: import("./contracts").PaperRead | undefined, now: number): number | null {
-  if (!read || paperReadState(read, now) !== "available" || read.next_cursor || !Array.isArray(read.data)) return null;
-  const rows = read.data as Record<string, unknown>[];
+  if (read?.section !== "executors") return null;
+  const rows = paperCompleteRecords(read, now);
+  if (!rows) return null;
   const terminal = new Set(["closed", "completed", "terminated"]);
   const active = new Set(["active", "running", "partial_close", "open", "not_started", "shutting_down"]);
   if (rows.some(row => row.terminal !== true && !terminal.has(String(row.state).toLowerCase()) && !active.has(String(row.state).toLowerCase()))) return null;
@@ -156,13 +190,35 @@ export function paperOpenExecutorCount(read: import("./contracts").PaperRead | u
 }
 
 export function paperRiskHold(read: import("./contracts").PaperRead | undefined): string | null {
+  return paperRiskHolds(read).map(hold => hold.explanation).join(" ") || null;
+}
+
+export function paperRiskHolds(read: import("./contracts").PaperRead | undefined): { reason: string; explanation: string; action: string }[] {
+  if (paperSectionError(read)) return [];
   const data = read?.data as Record<string, unknown> | null;
-  if (data?.control_hold !== "clock_persistence_failed") return null;
-  return typeof data.explanation === "string" ? data.explanation : "New acquisitions are held until explicit owner maintenance acknowledgement; protective exits remain enabled.";
+  const actions: Record<string, string> = {
+    stop_persistence_failed: "Owner action: review retained stop evidence, then use the owner-only emergency reset; resume entries cannot clear this hold.",
+    clock_persistence_failed: "Owner action: review retained clock evidence, then give explicit owner maintenance acknowledgement; resume entries cannot clear this hold.",
+    clock_invalid: "Owner action: restore a valid clock, review retained clock evidence, then give owner maintenance acknowledgement; resume entries cannot clear this hold.",
+  };
+  const holds = Array.isArray(data?.holds) ? data.holds : data?.control_hold ? [{ reason: data.reason ?? data.control_hold, explanation: data.explanation }] : [];
+  return holds.filter((hold): hold is Record<string, unknown> => !!hold && typeof hold === "object" && typeof hold.reason === "string" && hold.reason in actions).map(hold => ({ reason: String(hold.reason), explanation: typeof hold.explanation === "string" ? hold.explanation : "New acquisitions are held; protective exits remain enabled.", action: actions[String(hold.reason)] }));
+}
+
+export function paperExitProjection(position: Record<string, unknown> | undefined, executor: Record<string, unknown> | undefined) {
+  const record = position && "target_price" in position ? position : executor;
+  const order = record?.protected_exit_order;
+  return {
+    targetPrice: record?.target_price ?? null,
+    basis: record?.target_basis ? paperWords(record.target_basis) : null,
+    reason: record?.target_reason ? paperWords(record.target_reason) : "Owner exit target not published",
+    remainingAmount: record?.remaining_target_amount ?? null,
+    order: order && typeof order === "object" && !Array.isArray(order) ? order as Record<string, unknown> : null,
+  };
 }
 
 export function paperWalletInventory(read: import("./contracts").PaperRead | undefined, now: number): { value: string; unit: string; basis: string; asOf: number } | null {
-  if (!read || read.section !== "wallet" || read.completeness !== "complete" || read.next_cursor || !["available", "stale"].includes(paperReadState(read, now))) return null;
+  if (!read || read.section !== "wallet" || !paperCompleteRead(read, now)) return null;
   const wallet = read.data as Record<string, unknown> | null;
   if (!wallet || typeof wallet.quote_asset !== "string" || !Array.isArray(wallet.assets)) return null;
   const inventory = (wallet.assets as Record<string, unknown>[]).filter(asset => asset.asset !== wallet.quote_asset);
@@ -184,8 +240,8 @@ export function paperPairObservation(pair: string, positions: import("./contract
   const terminal = (row: Record<string, unknown>) => row.terminal === true || ["closed", "completed", "terminated"].includes(String(row.state).toLowerCase());
   const active = (row: Record<string, unknown>) => !terminal(row) && ["active", "running", "partial_close", "open", "not_started", "shutting_down"].includes(String(row.state).toLowerCase());
   const pairExecutors = rows(executors).filter(row => row.trading_pair === pair && active(row));
-  const executor = position?.executor_id != null ? rows(executors).find(row => row.executor_id === position.executor_id && active(row)) : pairExecutors.length === 1 ? pairExecutors[0] : undefined;
-  const complete = (read: import("./contracts").PaperRead | undefined) => !!read && paperReadState(read, now) === "available" && read.completeness === "complete" && !read.next_cursor;
+  const executor = position?.executor_id != null ? rows(executors).find(row => row.executor_id === position.executor_id && active(row)) : paperCompleteRead(executors, now) && pairExecutors.length === 1 ? pairExecutors[0] : undefined;
+  const complete = (read: import("./contracts").PaperRead | undefined) => paperCompleteRead(read, now);
   const historicallyComplete = (read: import("./contracts").PaperRead | undefined) => !!read && ["available", "stale"].includes(paperReadState(read, now)) && read.completeness === "complete" && !read.next_cursor;
   const unmappedActive = rows(executors).some(row => !terminal(row) && !row.trading_pair && !rows(positions).some(position => position.executor_id != null && position.executor_id === row.executor_id));
   const activeForPair = rows(executors).some(row => row.trading_pair === pair && !terminal(row));

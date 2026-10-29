@@ -1,9 +1,190 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { paperReadState, paperControlState, paperRecordSummary, paperSnapshotsAgree, paperWords, paperAmount, paperExactAmount, paperSectionError, paperTime, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperRiskHold, paperWalletInventory, paperPairObservation } from '../src/v5/policy.ts';
+import { paperReadState, paperCompleteRecords, paperControlState, paperRecordSummary, paperSnapshotsAgree, paperWords, paperAmount, paperExactAmount, paperSectionError, paperTime, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadiness, paperRiskHold, paperRiskHolds, paperExitProjection, paperRiskUsage, paperWalletInventory, paperWalletTotals, paperPairObservation } from '../src/v5/policy.ts';
+import { frontendModules } from './helpers/frontend-module.mjs';
 
 const now = 1793275200000;
-const fresh = {schema:'rsibot.v5-paper.read.v1', section:'wallet', state:'available', bot_id:'meridian_v5_paper', execution_mode:'paper', simulated:true, generated_at_ms:now, snapshot_id:'boot:1', data:{equity_quote:'1000.900000000000001'}};
+
+const c1TargetHoldFixtures = {
+  "partial-buy-cancel-tp-partial-close": {
+    "positions": [
+      {
+        "position_id": "executor-1",
+        "executor_id": "executor-1",
+        "controller_id": "v5_BNB_USDC",
+        "trading_pair": "BNB-USDC",
+        "quantity": "0.6",
+        "remaining_basis_quote": "60.06",
+        "fee_currency": "USDC",
+        "state": "active",
+        "protected_exit": true,
+        "target_price": "102",
+        "target_basis": "native_placed_fixed_target_limit",
+        "target_reason": null,
+        "protected_exit_order": {
+          "order_id": "tp-1",
+          "state": "partially_filled",
+          "price": "102",
+          "remaining_amount": "0.6",
+          "placed_at_ms": 1793275130000
+        },
+        "remaining_target_amount": "0.6"
+      }
+    ],
+    "executors": [
+      {
+        "executor_id": "executor-1",
+        "controller_id": "v5_BNB_USDC",
+        "state": "partial_close",
+        "remaining_close_quantity": "0.6",
+        "quantity": "0.6",
+        "remaining_basis_quote": "60.06",
+        "cum_fees_quote": "0.1408",
+        "realized_pnl_quote": "0.7192",
+        "unrealized_pnl_quote": "0.54",
+        "unit": "USDC",
+        "custom_info": {
+          "entry_lifecycle": {
+            "state": "terminal",
+            "requested_quantity": "2",
+            "filled_quantity": "1",
+            "canceled_remainder_quantity": "1"
+          }
+        },
+        "target_price": "102",
+        "target_basis": "native_placed_fixed_target_limit",
+        "target_reason": null,
+        "protected_exit_order": {
+          "order_id": "tp-1",
+          "state": "partially_filled",
+          "price": "102",
+          "remaining_amount": "0.6",
+          "placed_at_ms": 1793275130000
+        },
+        "remaining_target_amount": "0.6",
+        "protected_exit": true
+      }
+    ]
+  },
+  "clock-failure-hold": {
+    "risk": {
+      "schema": "rsibot.v5-paper.risk.v1",
+      "control_hold": "clock_persistence_failed",
+      "reason": "clock_persistence_failed",
+      "explanation": "New acquisitions are held until explicit owner maintenance acknowledgement; protective exits remain enabled.",
+      "protected_exits": "preserved",
+      "clock_recovery": {
+        "required": true,
+        "high_water_ms": 1793275200000,
+        "hold": {
+          "reason": "clock_persistence_failed",
+          "failure_id": "fixture-failure",
+          "detail": "injected clock durability failure"
+        }
+      },
+      "holds": [
+        {
+          "reason": "clock_persistence_failed",
+          "explanation": "New acquisitions are held until explicit owner maintenance acknowledgement; protective exits remain enabled."
+        }
+      ]
+    }
+  },
+  "clock-invalid-hold": {
+    "risk": {
+      "schema": "rsibot.v5-paper.risk.v1",
+      "control_hold": "clock_persistence_failed",
+      "reason": "clock_invalid",
+      "explanation": "Invalid clock: stops still apply; clears and native advancement are held. Timestamp is the last valid native checkpoint.",
+      "protected_exits": "preserved",
+      "clock_recovery": {
+        "required": true,
+        "high_water_ms": 1793275200000,
+        "hold": {
+          "reason": "clock_persistence_failed",
+          "failure_id": "fixture-failure",
+          "detail": "clock_invalid: invalid poll sample"
+        }
+      },
+      "holds": [
+        {
+          "reason": "clock_persistence_failed",
+          "explanation": "New acquisitions are held until explicit owner maintenance acknowledgement; protective exits remain enabled."
+        },
+        {
+          "reason": "clock_invalid",
+          "explanation": "Invalid clock: stops still apply; clears and native advancement are held. Timestamp is the last valid native checkpoint."
+        }
+      ]
+    }
+  },
+  "stop-persistence-failure-hold": {
+    "risk": {
+      "schema": "rsibot.v5-paper.risk.v1",
+      "control_hold": "stop_persistence_failed",
+      "reason": "stop_persistence_failed",
+      "explanation": "Stop durability is unproven. Entries stay held until reviewed owner emergency reset; exits remain enabled.",
+      "protected_exits": "preserved",
+      "clock_recovery": {
+        "required": false,
+        "high_water_ms": 1793275200000,
+        "hold": null
+      },
+      "holds": [
+        {
+          "reason": "stop_persistence_failed",
+          "explanation": "Stop durability is unproven. Entries stay held until reviewed owner emergency reset; exits remain enabled."
+        }
+      ],
+      "emergency_recovery": {
+        "required": true,
+        "hold": {
+          "reason": "stop_persistence_failed",
+          "failure_id": "fixture-stop-durability",
+          "detail": "injected stop commit failure"
+        },
+        "acknowledgements": []
+      }
+    }
+  }
+};
+
+test('C1 native target and protected exit remain exact owner values', () => {
+  const fixture = c1TargetHoldFixtures['partial-buy-cancel-tp-partial-close'];
+  const position = fixture.positions[0];
+  const executor = fixture.executors[0];
+  const exit = paperExitProjection(position, executor);
+  assert.equal(exit.targetPrice, '102');
+  assert.equal(exit.basis, 'Native placed fixed-target limit');
+  assert.equal(exit.remainingAmount, '0.6');
+  assert.equal(exit.order.order_id, 'tp-1');
+  assert.equal(exit.order.state, 'partially_filled');
+  assert.equal(exit.order.price, '102');
+  assert.equal(exit.order.placed_at_ms, 1793275130000);
+  assert.equal(paperExitProjection({...position,target_price:null,target_reason:'owner_target_unavailable',target_basis:null,protected_exit_order:null,remaining_target_amount:null},executor).targetPrice,null);
+  assert.equal(paperExitProjection(undefined,undefined).targetPrice,null);
+  for (const [key,value] of [['target_price',{}],['target_basis',7],['protected_exit_order',{state:'open'}],['remaining_target_amount',true]]) {
+    assert.match(paperSectionError({...fresh,section:'positions',data:[{...position,[key]:value}]}),/schema invalid/);
+  }
+});
+
+for (const [name,fixture] of Object.entries(c1TargetHoldFixtures).filter(([,fixture])=>fixture.risk)) {
+  test('C1 risk hold explains the owner clearing action: '+name, () => {
+    const read = {...fresh,section:'risk',state:'degraded',reason:fixture.risk.reason,data:fixture.risk};
+    const holds = paperRiskHolds(read);
+    assert.equal(holds.length, fixture.risk.holds.length);
+    for (const [index,hold] of holds.entries()) {
+      assert.equal(hold.explanation, fixture.risk.holds[index].explanation);
+      assert.ok(hold.action.includes('Owner'));
+      assert.ok(hold.action.includes('resume entries cannot clear'));
+      if (hold.reason==='stop_persistence_failed') assert.ok(hold.action.includes('emergency reset'));
+      else assert.ok(hold.action.includes('maintenance acknowledgement'));
+      if (hold.reason==='clock_invalid') assert.ok(hold.action.includes('valid clock'));
+    }
+  });
+}
+
+const fresh = {schema:'rsibot.v5-paper.read.v1', section:'wallet', state:'available', completeness:'complete', bot_id:'meridian_v5_paper', execution_mode:'paper', simulated:true, generated_at_ms:now, snapshot_id:'boot:1', data:{equity_quote:'1000.900000000000001'}};
 const positionRow = changes => ({position_id:'p1', controller_id:'v5_BNB_USDC', trading_pair:'BNB-USDC', state:'active', quantity:'0.6', ...changes});
 const executorRow = changes => ({executor_id:'e1', controller_id:'v5_BNB_USDC', state:'active', ...changes});
 
@@ -17,8 +198,8 @@ test('holdings project complete wallet marks, excluding cash, with exact decimal
   assert.equal(paperWalletInventory({...wallet,state:'degraded'}, now), null);
   assert.equal(paperWalletInventory({...wallet,completeness:'partial'}, now), null);
   assert.equal(paperWalletInventory({...wallet,next_cursor:'more'}, now), null);
-  assert.equal(paperWalletInventory(wallet, now+31000).value, '60.600000000000001');
-  assert.equal(paperWalletInventory(wallet, now+31000).asOf, now-5000);
+  assert.equal(paperWalletInventory(wallet, now+31000), null);
+  assert.equal(paperWalletInventory(wallet, now).asOf, now-5000);
   assert.equal(paperWalletInventory({...wallet,data:{...wallet.data,assets:[{asset:'BNB',marked_value_quote:null}]}}, now), null);
   assert.equal(paperWalletInventory({...wallet,data:{...wallet.data,assets:[wallet.data.assets[0]]}}, now).value, '0');
 });
@@ -182,9 +363,83 @@ test('terminal receipts and proven dust are not open executors or discarded PnL'
   assert.equal(paperWords('TERMINATED'), 'Terminated');
 });
 
+test('an empty executor page without completeness cannot prove zero open executors', () => {
+  const read = {...fresh,section:'executors',data:[]};
+  delete read.completeness;
+  assert.equal(paperOpenExecutorCount(read,now),null);
+});
+
+const incompleteChanges = [{completeness:undefined},{completeness:'partial'},{completeness:'unavailable'},{next_cursor:'more'},{state:'stale',reason:'Owner report expired'},{generated_at_ms:now-31000}];
+
+for (const section of ['positions','fills','executors','orders']) {
+  test(`${section} table row count never turns an incomplete page into a zero population`, () => {
+    const read = {...fresh,section,data:[]};
+    assert.deepEqual(paperCompleteRecords(read,now),[]);
+    for (const change of incompleteChanges) assert.equal(paperCompleteRecords({...read,...change},now),null);
+  });
+}
+
+for (const field of ['equity','cash']) {
+  test(`wallet ${field} total requires fresh complete unpaginated owner data`, () => {
+    const read = {...fresh,data:{equity_quote:'1001.2592',quote_asset:'USDC',assets:[{asset:'USDC',available:'940.6592'}]}};
+    assert.equal(paperWalletTotals(read,now)?.[field],field==='equity' ? '1001.2592' : '940.6592');
+    for (const change of incompleteChanges) assert.equal(paperWalletTotals({...read,...change},now),null);
+  });
+}
+
+test('marked holdings aggregate does not sum stale, partial or paginated inventory', () => {
+  const read = {...fresh,data:{quote_asset:'USDC',valuation_policy:'midpoint_fresh_book_only',assets:[{asset:'BNB',marked_value_quote:'60.60',mark_at_ms:now}]}};
+  assert.equal(paperWalletInventory(read,now)?.value,'60.60');
+  for (const change of incompleteChanges) assert.equal(paperWalletInventory({...read,...change},now),null);
+});
+
+for (const field of ['used_quote','limit_quote','used_percent']) {
+  test(`risk ${field} aggregate requires fresh complete owner data`, () => {
+    const rail = {used_quote:'10',limit_quote:'100',used_percent:10};
+    const read = {...fresh,section:'risk',data:{rails:[rail]}};
+    assert.equal(paperRiskUsage(read,now)?.[0][field],rail[field]);
+    for (const change of incompleteChanges) assert.equal(paperRiskUsage({...read,...change},now),null);
+  });
+}
+
+test('executor count and pair uniqueness require complete fresh unpaginated records', () => {
+  const executors = {...fresh,section:'executors',data:[executorRow({trading_pair:'BNB-USDC'})]};
+  const positions = {...fresh,section:'positions',data:[positionRow({})]};
+  assert.equal(paperOpenExecutorCount(executors,now),1);
+  for (const change of incompleteChanges) {
+    assert.equal(paperOpenExecutorCount({...executors,...change},now),null);
+    assert.equal(paperPairObservation('BNB-USDC',positions,{...executors,...change},undefined,now).executor,undefined);
+  }
+});
+
+test('paper fleet isolation publishes no rejected, entry, fill, holding or executor aggregates from legacy inputs', () => {
+  const {load} = frontendModules();
+  const {projectFleetTiles} = load('features/bots/fleet-tiles.ts');
+  const paper = {bot:'meridian_v5_paper',name:'Paper',status:'running',view:{activeExecutorCount:0,activeOrderCount:0},quant:{cycleCounts:{open:0}},cycles:{stats:{fillCount:0}},execution:{funnel:[{stage:'orders_rejected',count:0}]},health:null};
+  const tiles = projectFleetTiles([paper],now);
+  assert.deepEqual(tiles.map(tile=>tile.id),['B01-paper']);
+  assert.equal(tiles[0].value,'+1');
+  assert.match(tiles[0].basis,/simulated lanes/);
+});
+
+test('readiness gate count is checklist configuration, not an observation-derived execution total', () => {
+  for (const owner of [undefined,{completeness:'partial'},{ready:true}]) {
+    assert.equal(paperReadiness(owner).gates.filter(gate=>gate.priority==='P0' && gate.status!=='PASS').length,4);
+  }
+});
+
+for (const field of ['fees_paid_quote','realized_pnl_quote','unrealized_pnl_quote','volume_traded_quote','entry_count','exit_count']) {
+  test(`${field} is not a lifetime total without fresh complete unpaginated accounting`, () => {
+    const read = {...fresh,section:'accounting',completeness:'complete',data:{program:{[field]:field.endsWith('_count') ? 0 : '0'}}};
+    assert.equal(paperLifetimeTotals(read,fresh,now)?.[field],read.data.program[field]);
+    for (const change of [{completeness:undefined},{completeness:'partial'},{completeness:'unavailable'},{next_cursor:'more'}]) assert.equal(paperLifetimeTotals({...read,...change},fresh,now),null);
+    assert.equal(paperLifetimeTotals(read,fresh,now+31000),null);
+  });
+}
+
 test('clock durability hold explains entry-only protection and owner acknowledgement', () => {
-  const risk = {...fresh,section:'risk',state:'degraded',data:{control_hold:'clock_persistence_failed',protected_exits:'preserved'}};
-  assert.equal(paperRiskHold(risk), 'New acquisitions are held until explicit owner maintenance acknowledgement; protective exits remain enabled.');
+  const risk = {...fresh,section:'risk',state:'degraded',reason:'clock_persistence_failed',data:c1TargetHoldFixtures['clock-failure-hold'].risk};
+  assert.equal(paperRiskHold(risk), risk.data.explanation);
   assert.equal(paperWords('clock_persistence_failed'), 'Clock durability failed; new acquisitions are held');
   assert.equal(paperRiskHold({...risk,data:null}), null);
   assert.equal(paperControlState(risk), 'Paper control not enabled');

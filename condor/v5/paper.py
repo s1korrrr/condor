@@ -149,6 +149,178 @@ C1_DATA_SCHEMA = json.loads(r"""
           "minimum": 0
         }
       }
+    },
+    "protectedExitProjection": {
+      "type": "object",
+      "required": [
+        "target_price",
+        "target_basis",
+        "target_reason",
+        "protected_exit_order",
+        "remaining_target_amount"
+      ],
+      "properties": {
+        "target_price": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_basis": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "protected_exit_order": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "order_id",
+                "state",
+                "price",
+                "remaining_amount",
+                "placed_at_ms"
+              ],
+              "properties": {
+                "order_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "state": {
+                  "enum": [
+                    "pending",
+                    "open",
+                    "partially_filled",
+                    "filled",
+                    "cancelled"
+                  ]
+                },
+                "price": {
+                  "$ref": "#/$defs/decimal"
+                },
+                "remaining_amount": {
+                  "$ref": "#/$defs/decimal"
+                },
+                "placed_at_ms": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remaining_target_amount": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "target_price": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target_basis": {
+                "type": "null"
+              },
+              "target_reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "remaining_target_amount": {
+                "type": "null"
+              },
+              "protected_exit_order": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "target_basis": {
+                "type": "string",
+                "minLength": 1
+              },
+              "remaining_target_amount": {
+                "$ref": "#/$defs/decimal"
+              },
+              "protected_exit_order": {
+                "type": "object",
+                "required": [
+                  "order_id",
+                  "state",
+                  "price",
+                  "remaining_amount",
+                  "placed_at_ms"
+                ],
+                "properties": {
+                  "order_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "state": {
+                    "enum": [
+                      "pending",
+                      "open",
+                      "partially_filled",
+                      "filled",
+                      "cancelled"
+                    ]
+                  },
+                  "price": {
+                    "$ref": "#/$defs/decimal"
+                  },
+                  "remaining_amount": {
+                    "$ref": "#/$defs/decimal"
+                  },
+                  "placed_at_ms": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      ]
     }
   },
   "properties": {
@@ -274,7 +446,12 @@ C1_DATA_SCHEMA = json.loads(r"""
               }
             ]
           }
-        }
+        },
+        "allOf": [
+          {
+            "$ref": "#/$defs/protectedExitProjection"
+          }
+        ]
       }
     },
     "fills": {
@@ -393,7 +570,11 @@ C1_DATA_SCHEMA = json.loads(r"""
           "if": {
             "properties": {
               "control_hold": {
-                "const": "clock_persistence_failed"
+                "enum": [
+                  "clock_persistence_failed",
+                  "stop_persistence_failed",
+                  "clock_invalid"
+                ]
               }
             },
             "required": [
@@ -404,20 +585,56 @@ C1_DATA_SCHEMA = json.loads(r"""
             "required": [
               "reason",
               "explanation",
-              "clock_recovery"
+              "clock_recovery",
+              "holds"
             ],
             "properties": {
               "reason": {
-                "const": "clock_persistence_failed"
+                "enum": [
+                  "clock_persistence_failed",
+                  "stop_persistence_failed",
+                  "clock_invalid"
+                ]
               },
               "explanation": {
                 "type": "string",
                 "minLength": 1
+              },
+              "holds": {
+                "type": "array",
+                "minItems": 1,
+                "maxItems": 3,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "reason",
+                    "explanation"
+                  ],
+                  "properties": {
+                    "reason": {
+                      "enum": [
+                        "clock_persistence_failed",
+                        "stop_persistence_failed",
+                        "clock_invalid"
+                      ]
+                    },
+                    "explanation": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
               }
             }
           }
         }
       ]
+    },
+    "executors": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/protectedExitProjection"
+      }
     }
   }
 }
@@ -476,6 +693,10 @@ def validate_paper_read(
                 <= min(2**53 - 1, now_ms + FUTURE_SKEW_SECONDS * 1000)
             )
             for key in ("generated_at_ms", "source_at_ms", "observed_at_ms")
+        )
+        or (
+            section in {"positions", "fills", "executors", "orders"}
+            and "completeness" not in payload
         )
         or (
             "completeness" in payload
@@ -602,9 +823,9 @@ def validate_paper_read(
 
 
 def _validate_section_data(section: str, data: Any) -> None:
-    """Validate C1 data schemas vendored from hummingbot 031f67cc, then C3 containers.
+    """Validate C1 data schemas through hummingbot 17579565, then C3 containers.
 
-    C1 leaves executors, decisions, history and operations data unconstrained;
+    C1 leaves decisions, history and operations record identities unconstrained;
     the read adapter must additionally enforce the record shapes it projects.
     Null is reserved for the envelope's explicit unavailable/degraded states.
     """
@@ -683,6 +904,8 @@ def _validate_section_data(section: str, data: Any) -> None:
 
 def _matches_c1_schema(value: Any, schema: dict) -> bool:
     """Evaluate the bounded keywords used by the frozen C1 data schemas."""
+    if isinstance(schema, bool):
+        return schema
     if "$ref" in schema:
         return _matches_c1_schema(
             value, C1_DATA_SCHEMA["$defs"][schema["$ref"].rsplit("/", 1)[1]]
@@ -691,12 +914,14 @@ def _matches_c1_schema(value: Any, schema: dict) -> bool:
         _matches_c1_schema(value, option) for option in schema["anyOf"]
     ):
         return False
-    if (
-        "if" in schema
-        and _matches_c1_schema(value, schema["if"])
-        and not _matches_c1_schema(value, schema.get("then", {}))
+    if "allOf" in schema and not all(
+        _matches_c1_schema(value, option) for option in schema["allOf"]
     ):
         return False
+    if "if" in schema:
+        branch = "then" if _matches_c1_schema(value, schema["if"]) else "else"
+        if not _matches_c1_schema(value, schema.get(branch, {})):
+            return False
     types = {
         "object": dict,
         "array": list,
@@ -724,7 +949,9 @@ def _matches_c1_schema(value: Any, schema: dict) -> bool:
             if not _matches_c1_schema(child, child_schema):
                 return False
     elif isinstance(value, list):
-        if len(value) > schema.get("maxItems", 2000):
+        if len(value) < schema.get("minItems", 0) or len(value) > schema.get(
+            "maxItems", 2000
+        ):
             return False
         if "items" in schema and not all(
             _matches_c1_schema(child, schema["items"]) for child in value
@@ -766,7 +993,7 @@ def _validate_read_tree(value: Any, key: str = "", depth: int = 0) -> None:
         for child in value:
             _validate_read_tree(child, "", depth + 1)
     elif (
-        key not in {"fee_quote_valuation_basis", "count_basis"}
+        key not in {"fee_quote_valuation_basis", "count_basis", "target_basis"}
         and not key.endswith(
             (
                 "_currency",

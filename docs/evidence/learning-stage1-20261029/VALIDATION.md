@@ -99,6 +99,8 @@ python3 scripts/check_agent_context.py
 New regression evidence is retained in `logs/boundary-red.log`,
 `logs/shape-red.log` and `logs/ui-red.log`. They failed before repair. Their
 corresponding final suites pass. Logs contain no production credentials.
+Committed log copies normalize trailing whitespace only. Original raw output
+remains in the task scratch directory named by TMPDIR above.
 
 ## Browser evidence
 

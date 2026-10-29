@@ -16,8 +16,8 @@ field = 'state'
         with pytest.raises(ValueError):
 >           project_workflow(record("agent_job", fixture), session_id="s1")
 
-tests/test_v5_workflow_projection.py:105: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_v5_workflow_projection.py:105:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 owner_receipt = {'available_at_ms': 100, 'correlation_id': 'fixture', 'created_at_ms': 100, 'data': {'admission_ref': {'available_at_m... ...}, 'allowed_action': 'READ_FIXTURE', 'attempt_id': 'a1', 'authority_ceiling': 'repository-process-only', ...}, ...}
 
@@ -44,11 +44,11 @@ field = 'history'
         with pytest.raises(ValueError):
 >           project_workflow(record("agent_job", fixture), session_id="s1")
 
-tests/test_v5_workflow_projection.py:105: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_v5_workflow_projection.py:105:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 condor/v5/workflows.py:67: in project_workflow
     if any(
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 .0 = <zip object at 0x7d8de1f4e500>
 
@@ -75,8 +75,8 @@ field = 'usage'
         with pytest.raises(ValueError):
 >           project_workflow(record("agent_job", fixture), session_id="s1")
 
-tests/test_v5_workflow_projection.py:105: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_v5_workflow_projection.py:105:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 owner_receipt = {'available_at_ms': 100, 'correlation_id': 'fixture', 'created_at_ms': 100, 'data': {'admission_ref': {'available_at_m... ...}, 'allowed_action': 'READ_FIXTURE', 'attempt_id': 'a1', 'authority_ceiling': 'repository-process-only', ...}, ...}
 
@@ -128,14 +128,14 @@ _____________ test_malformed_schema_identity_is_a_validation_error _____________
 
     def test_malformed_schema_identity_is_a_validation_error():
         from condor.v5.learning import owner_record
-    
+
         fixture = record()
         fixture["schema_name"] = []
         with pytest.raises(ValueError):
 >           owner_record(fixture)
 
-tests/test_v5_learning_projection.py:205: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_v5_learning_projection.py:205:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 value = {'available_at_ms': 100, 'correlation_id': 'fixture', 'created_at_ms': 100, 'data': {'claim': 'Do not infer support from uptime', 'condition': 'Paper fixture', 'contradictory_refs': [], 'evidence_validity': 'PROVISIONAL', ...}, ...}
 kind = None

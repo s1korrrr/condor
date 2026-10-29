@@ -4,7 +4,7 @@ _____________ test_candidate_available_after_snapshot_is_rejected ______________
 
     def test_candidate_available_after_snapshot_is_rejected():
         from condor.v5.research import project_research
-    
+
         source = catalog(1)
         candidate = source["candidates"][0]
         candidate["available_at_ms"] = source["generated_at_ms"] + 1
@@ -24,13 +24,13 @@ binding = None
     @pytest.mark.parametrize("binding", [None, [], {"refs": None}, {"refs": []}])
     def test_malformed_nested_lineage_binding_is_a_validation_error(binding):
         from condor.v5.research import project_lineage
-    
+
         release = record("knowledge_release", {"consumer_manifest": {"models": binding}})
         with pytest.raises(ValueError):
 >           project_lineage([release])
 
-tests/test_v5_learning_projection.py:205: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_v5_learning_projection.py:205:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 records = [{'available_at_ms': 100, 'correlation_id': 'fixture', 'created_at_ms': 100, 'data': {'consumer_manifest': {'models': None}}, ...}]
 
@@ -61,13 +61,13 @@ binding = []
     @pytest.mark.parametrize("binding", [None, [], {"refs": None}, {"refs": []}])
     def test_malformed_nested_lineage_binding_is_a_validation_error(binding):
         from condor.v5.research import project_lineage
-    
+
         release = record("knowledge_release", {"consumer_manifest": {"models": binding}})
         with pytest.raises(ValueError):
 >           project_lineage([release])
 
-tests/test_v5_learning_projection.py:205: 
-_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ 
+tests/test_v5_learning_projection.py:205:
+_ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _ _
 
 records = [{'available_at_ms': 100, 'correlation_id': 'fixture', 'created_at_ms': 100, 'data': {'consumer_manifest': {'models': []}}, ...}]
 
@@ -98,7 +98,7 @@ binding = {'refs': []}
     @pytest.mark.parametrize("binding", [None, [], {"refs": None}, {"refs": []}])
     def test_malformed_nested_lineage_binding_is_a_validation_error(binding):
         from condor.v5.research import project_lineage
-    
+
         release = record("knowledge_release", {"consumer_manifest": {"models": binding}})
 >       with pytest.raises(ValueError):
              ^^^^^^^^^^^^^^^^^^^^^^^^^

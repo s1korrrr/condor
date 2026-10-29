@@ -140,7 +140,7 @@ class Settings:
                 or not status_file_name_valid(paper_status_file)
             ):
                 raise ConfigurationError(
-                    "V5_PAPER_STATUS_FILE must be an absolute normalized <bot>.status.json path"
+                    "V5_PAPER_STATUS_FILE must be an absolute normalized <bot>_paper.status.json path"
                 )
 
         return cls(

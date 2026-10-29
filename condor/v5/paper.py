@@ -21,7 +21,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-STATUS_NAME = re.compile(r"^([A-Za-z0-9][A-Za-z0-9_-]{0,63})\.status\.json$")
+# The shared Bots/fleet views classify a bot as paper by its ``_paper`` name suffix, so
+# only a paper-suffixed identity may bind; any other name would render as live.
+STATUS_NAME = re.compile(r"^([A-Za-z0-9][A-Za-z0-9_-]{0,57}_paper)\.status\.json$")
 CONTROLLER_ID = re.compile(r"^[A-Za-z0-9][A-Za-z0-9_.-]{0,63}$")
 PAIR = re.compile(r"^[A-Z0-9]+-[A-Z0-9]+$")
 HEX32 = re.compile(r"^[a-f0-9]{32}$")

@@ -334,3 +334,16 @@ def test_controller_declarations_must_account_for_every_report(tmp_path, change)
         payload["retained_reports"] = {"modular_spot_unknown": {}}
     path = write_status(tmp_path, payload)
     assert paper.read_paper_status(path, now=NOW).state == "UNAVAILABLE"
+
+
+@pytest.mark.parametrize(
+    "name", ["meridian_v5", "meridian_v5_live", "paper_meridian_v5"]
+)
+def test_only_a_paper_suffixed_identity_can_bind(tmp_path, name):
+    # The shared frontend labels paper bots by their _paper suffix; another name would render as live.
+    payload = status(bot_name=name)
+    path = write_status(tmp_path, payload, name=f"{name}.status.json")
+    observation = paper.read_paper_status(path, now=NOW)
+    assert (
+        observation.state == "UNAVAILABLE" and observation.reason == "PAPER_STATUS_PATH"
+    )

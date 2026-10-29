@@ -234,18 +234,18 @@ def test_missing_symlinked_fifo_and_non_canonical_status_paths_are_unavailable(
         tmp_path / "runtime_status" / f"{BOT}.status.json", now=NOW
     )
     assert missing.state == "UNAVAILABLE" and missing.reason == "PAPER_STATUS_MISSING"
-    target = write_status(tmp_path, status(), name="real.status.json")
+    target = write_status(tmp_path, status(), name="real_paper.status.json")
     link = target.with_name(f"{BOT}.status.json")
     link.symlink_to(target)
     assert read_paper_status(link, now=NOW).reason == "PAPER_STATUS_NOT_REGULAR"
     linked_dir = tmp_path / "linked"
     linked_dir.symlink_to(target.parent)
-    write_status(tmp_path, status(bot_name="real"), name="real.status.json")
+    write_status(tmp_path, status(bot_name="real_paper"), name="real_paper.status.json")
     assert (
-        read_paper_status(linked_dir / "real.status.json", now=NOW).reason
+        read_paper_status(linked_dir / "real_paper.status.json", now=NOW).reason
         == "PAPER_STATUS_PATH"
     )
-    fifo = tmp_path / "runtime_status" / "fifo.status.json"
+    fifo = tmp_path / "runtime_status" / "fifo_paper.status.json"
     os.mkfifo(fifo)
     assert read_paper_status(fifo, now=NOW).reason == "PAPER_STATUS_NOT_REGULAR"
 

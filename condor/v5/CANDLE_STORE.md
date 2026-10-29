@@ -124,3 +124,21 @@ keeps the valid instrument/range choices so the operator can retry/change them.
 Table headers wrap within a candle-view-only CSS scope; default column widths
 fit the desktop content area and shared resize controls remain active.
 The shared V5AppShell mobile header/nav is deliberately unchanged for its owner.
+
+## Independent-review schema/deadline repairs
+
+The consumer rejects duplicate JSON keys, lone Unicode surrogates, non-finite
+numbers, integers longer than 19 digits, numeric magnitudes beyond JS's safe
+integer ceiling (2^53-1), and nesting deeper than 32. This applies to the whole
+owner tree, including fields not projected to the browser. Projected fields
+also have domain checks: integer minute counters; bounded counts, timestamps,
+ages and coverage; explicit boolean/text/map types; unique lane/instrument
+identities. Minute-open timestamps are integers on the 60-second grid within
+epoch [0, 2100-01-01]. Owner evaluation time can have fractional seconds.
+The candle start/end must exactly span the requested range, end at the last
+closed minute, and match every contiguous minute bucket; start must precede
+end. Matched but oversized corrections/totals cannot pass validation.
+Rejection returns typed UNAVAILABLE, never AVAILABLE with Infinity or an
+unencodable string. The owner uses two disposable Linux worker processes
+with a four-second deadline and bounded kill/reap before slot release; a
+consumer timeout cannot leave indefinitely running owner threads.

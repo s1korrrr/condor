@@ -11,6 +11,9 @@ from typing import Any
 import aiohttp
 
 MAX_BYTES = 2_000_000
+MAX_INTEGER = 2**53 - 1
+MAX_TIMESTAMP = 4_102_444_800
+RANGE_MINUTES = {"1h": 60, "6h": 360, "24h": 1440, "7d": 10080}
 RANGES = {"1h", "6h", "24h", "7d"}
 LANE = re.compile(r"[a-z0-9_]{1,48}__(spot|perpetual)")
 PAIR = re.compile(r"[A-Za-z0-9]{1,24}-[A-Za-z0-9]{1,24}")
@@ -55,6 +58,55 @@ def _reject_constant(value):
     raise OwnerUnavailable("owner_invalid_json")
 
 
+def _validate_tree(payload):
+    stack = [(payload, 1)]
+    while stack:
+        value, depth = stack.pop()
+        if depth > 32:
+            raise OwnerUnavailable("owner_invalid_json")
+        if isinstance(value, dict):
+            if any(not isinstance(key, str) for key in value):
+                raise OwnerUnavailable("owner_invalid_json")
+            stack.extend((item, depth + 1) for item in value.values())
+            stack.extend((key, depth + 1) for key in value)
+        elif isinstance(value, list):
+            stack.extend((item, depth + 1) for item in value)
+        elif isinstance(value, str):
+            try:
+                value.encode("utf-8")
+            except UnicodeEncodeError:
+                raise OwnerUnavailable("owner_invalid_json") from None
+            if len(value) > 16384:
+                raise OwnerUnavailable("owner_invalid_text")
+        elif value is not None and type(value) is not bool:
+            if not _number(value) or abs(value) > MAX_INTEGER:
+                raise OwnerUnavailable("owner_invalid_number")
+
+
+def _decode_payload(raw):
+    def pairs(items):
+        result = {}
+        for key, value in items:
+            if key in result:
+                raise OwnerUnavailable("owner_invalid_json")
+            result[key] = value
+        return result
+
+    def integer(text):
+        if len(text.lstrip("-")) > 19:
+            raise OwnerUnavailable("owner_invalid_number")
+        return int(text)
+
+    payload = json.loads(
+        raw.decode("utf-8"),
+        object_pairs_hook=pairs,
+        parse_int=integer,
+        parse_constant=_reject_constant,
+    )
+    _validate_tree(payload)
+    return payload
+
+
 def validate_query(view: str, items: list[tuple[str, str]]) -> dict[str, str]:
     query = dict(items)
     if len(query) != len(items):
@@ -83,14 +135,27 @@ def _number(value: Any) -> bool:
         return False
 
 
+def _integer(value, maximum=MAX_INTEGER):
+    return type(value) is int and 0 <= value <= maximum
+
+
+def _minute(value):
+    return _integer(value, MAX_TIMESTAMP) and value % 60 == 0
+
+
 def _rows(payload, key, limit, fields):
     rows = payload.get(key)
     if not isinstance(rows, list) or not rows or len(rows) > limit:
         raise OwnerUnavailable("owner_invalid_rows")
     safe = []
+    identities = set()
     for row in rows:
         if (
             not isinstance(row, dict)
+            or any(
+                not isinstance(row.get(name), str)
+                for name in ("lane", "venue", "segment", "health")
+            )
             or not LANE.fullmatch(str(row.get("lane", "")))
             or row.get("segment") not in {"spot", "perpetual"}
             or row.get("lane") != f"{row.get('venue')}__{row.get('segment')}"
@@ -99,12 +164,17 @@ def _rows(payload, key, limit, fields):
             raise OwnerUnavailable("owner_invalid_identity")
         if key == "rows" and not PAIR.fullmatch(str(row.get("pair", ""))):
             raise OwnerUnavailable("owner_invalid_identity")
+        identity = (row["lane"], row.get("pair") if key == "rows" else None)
+        if identity in identities:
+            raise OwnerUnavailable("owner_invalid_identity")
+        identities.add(identity)
         rules = row.get("health_rules")
         if not isinstance(rules, list) or len(rules) > 32:
             raise OwnerUnavailable("owner_invalid_health_rules")
         for rule in rules:
             if (
                 not isinstance(rule, dict)
+                or not isinstance(rule.get("level"), str)
                 or rule.get("level") not in {"green", "amber", "red"}
                 or any(
                     not isinstance(rule.get(name), str) or len(rule[name]) > 2048
@@ -129,9 +199,45 @@ def _rows(payload, key, limit, fields):
             "ws_connected",
         }
         for name, value in row.items():
+            if (
+                name in {"gaps_7d", "pending", "unrecoverable_7d", "no_trade_7d"}
+                and value is not None
+            ):
+                if not _integer(value, 10080 * (1024 if key == "tiles" else 1)):
+                    raise OwnerUnavailable("owner_invalid_number")
+            if (
+                name in {"pairs_listed", "pairs_held", "ws_connected"}
+                and value is not None
+            ):
+                if not _integer(value, 1024):
+                    raise OwnerUnavailable("owner_invalid_number")
+            if name == "last_minute" and value is not None and not _minute(value):
+                raise OwnerUnavailable("owner_invalid_timestamp")
+            if (
+                name in {"available", "backfill_done"}
+                and value is not None
+                and type(value) is not bool
+            ):
+                raise OwnerUnavailable("owner_invalid_boolean")
+            if name == "ws_states" and value is not None:
+                if (
+                    not isinstance(value, dict)
+                    or len(value) > 32
+                    or any(
+                        not state or len(state) > 128 or not _integer(count, 1024)
+                        for state, count in value.items()
+                    )
+                ):
+                    raise OwnerUnavailable("owner_invalid_ws_states")
             if name in numeric and value is not None and not _number(value):
                 raise OwnerUnavailable("owner_invalid_number")
             if name in numeric and value is not None and value < 0:
+                raise OwnerUnavailable("owner_invalid_number")
+            if (
+                name in {"last_minute_age_s", "ws_last_message_age_s", "grace_s"}
+                and value is not None
+                and value > MAX_TIMESTAMP
+            ):
                 raise OwnerUnavailable("owner_invalid_number")
             if name == "last_minute" and value is not None and value > payload["now"]:
                 raise OwnerUnavailable("owner_invalid_timestamp")
@@ -156,24 +262,32 @@ def _rows(payload, key, limit, fields):
                     for name in ("day", "error")
                 ):
                     raise OwnerUnavailable("owner_invalid_partition_errors")
+            listed, held, connected = (
+                row.get(name) for name in ("pairs_listed", "pairs_held", "ws_connected")
+            )
+            if listed is not None and any(
+                value is not None and value > listed for value in (held, connected)
+            ):
+                raise OwnerUnavailable("owner_invalid_number")
         safe.append({name: row.get(name) for name in fields})
     return safe
 
 
 def validate_payload(view: str, payload: Any) -> dict:
+    _validate_tree(payload)
     if (
         not isinstance(payload, dict)
         or not _number(payload.get("now"))
         or payload["now"] <= 0
-        or payload["now"] > 4_102_444_800
+        or payload["now"] > MAX_TIMESTAMP
     ):
         raise OwnerUnavailable("owner_invalid_payload")
     if view == "overview":
         age = payload.get("status_age_s")
         error = payload.get("status_error")
-        if (age is not None and (not _number(age) or age < -5)) or (
-            error is not None and (not isinstance(error, str) or len(error) > 2048)
-        ):
+        if (
+            age is not None and (not _number(age) or not -5 <= age <= MAX_TIMESTAMP)
+        ) or (error is not None and (not isinstance(error, str) or len(error) > 2048)):
             raise OwnerUnavailable("owner_invalid_status")
         return {
             "now": payload["now"],
@@ -183,17 +297,35 @@ def validate_payload(view: str, payload: Any) -> dict:
         }
     if view == "symbols":
         return {"now": payload["now"], "rows": _rows(payload, "rows", 1024, ROW_KEYS)}
+    if view != "candles":
+        raise OwnerUnavailable("owner_invalid_payload")
     buckets = payload.get("buckets")
     if (
         not isinstance(buckets, list)
         or len(buckets) > 10080
-        or payload.get("res_s") != 60
+        or type(payload.get("res_s")) is not int
+        or payload["res_s"] != 60
         or not LANE.fullmatch(str(payload.get("lane", "")))
         or payload.get("lane") != f"{payload.get('venue')}__{payload.get('segment')}"
         or not PAIR.fullmatch(str(payload.get("pair", "")))
+        or any(
+            not isinstance(payload.get(name), str)
+            for name in ("lane", "venue", "segment", "pair", "range")
+        )
         or payload.get("range") not in RANGES
     ):
         raise OwnerUnavailable("owner_invalid_candles")
+    start, end = payload.get("start"), payload.get("end")
+    expected = RANGE_MINUTES[payload["range"]]
+    if (
+        not _minute(start)
+        or not _minute(end)
+        or start >= end
+        or end != (int(payload["now"]) // 60 - 1) * 60
+        or end - start != (expected - 1) * 60
+        or len(buckets) != expected
+    ):
+        raise OwnerUnavailable("owner_invalid_window")
     previous = -1
     totals = {
         name: 0
@@ -206,7 +338,7 @@ def validate_payload(view: str, payload: Any) -> dict:
             "corrections",
         )
     }
-    for row in buckets:
+    for offset, row in enumerate(buckets):
         if (
             not isinstance(row, list)
             or len(row) != 12
@@ -215,11 +347,12 @@ def validate_payload(view: str, payload: Any) -> dict:
             or row[0] % 60
             or row[0] < 0
             or row[0] > payload["now"]
+            or row[0] != start + offset * 60
             or any(
                 value is not None and (not _number(value) or value < 0)
                 for value in row[1:6]
             )
-            or any(type(value) is not int or value < 0 for value in row[6:])
+            or any(not _integer(value) for value in row[6:])
         ):
             raise OwnerUnavailable("owner_invalid_candles")
         prices = row[1:5]
@@ -291,7 +424,7 @@ class CandleOwner:
                                 raw.extend(chunk)
                                 if len(raw) > MAX_BYTES:
                                     raise OwnerUnavailable("owner_response_too_large")
-            payload = json.loads(raw, parse_constant=_reject_constant)
+            payload = _decode_payload(raw)
             safe = validate_payload(view, payload)
             if view == "candles" and any(
                 safe[name] != query[name] for name in ("lane", "pair", "range")

@@ -67,7 +67,7 @@ test('even a single evidence reference is collapsed with a selectable monospace 
   const reference = { owner: 'research_os', record_kind: 'run', record_id: 'trial-1', revision: 'v1', content_sha256: 'a'.repeat(64), available_at_ms: 1200 };
   for (const refs of [[reference], [reference, { ...reference, record_id: 'trial-2' }]]) {
     const markup = render(EvidenceList, { refs });
-    assert.match(markup, new RegExp(`<details><summary>Inspect ${refs.length} evidence references</summary>`));
+    assert.match(markup, new RegExp(`<details><summary>Inspect ${refs.length} evidence ${refs.length === 1 ? 'reference' : 'references'}</summary>`));
     assert.match(markup, /<code class="[^"]*select-text[^"]*">a{64}<\/code>/);
     assert.doesNotMatch(markup, /<details open/);
   }

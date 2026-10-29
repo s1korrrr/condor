@@ -1,7 +1,7 @@
 """Bounded fixture-only read projections, not a knowledge store or dispatcher.
 
-Owner envelopes follow rsibot 798ea9b4da65006e3010597ea55fe527a0b80ffc. The consumer checks integrity, identity,
-scope and displayed fields; canonical semantic validation stays with the owner.
+Owner envelopes follow rsibot 798ea9b4da65006e3010597ea55fe527a0b80ffc. The consumer checks pinned JSON shapes, integrity,
+identity and scope; canonical semantic validation stays with the owner.
 """
 
 import hashlib
@@ -10,6 +10,11 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from .projection_validation import (
+    OwnerReceiptValidationError,
+    ProjectionValidationError,
+    validate_owner_shape,
+)
 from .roles import ROLE_SPECS, resolve_role
 
 MAX_BYTES = 262144
@@ -94,7 +99,7 @@ def release_bindings(data):
     if set(manifest) != set(RELEASE_BINDINGS) or hashlib.sha256(
         bounded(manifest)
     ).hexdigest() != data.get("manifest_sha256"):
-        raise ValueError("consumer manifest digest or fields mismatch")
+        raise ProjectionValidationError("consumer manifest digest or fields mismatch")
     rows = []
     for key in RELEASE_BINDINGS:
         component = manifest[key]
@@ -107,31 +112,33 @@ def release_bindings(data):
                 "refs",
                 "absence_reason",
             }:
-                raise ValueError("invalid release component binding")
+                raise ProjectionValidationError("invalid release component binding")
             refs = references(component["refs"])
             expected = {"features": "feature", "calibrators": "calibrator"}.get(
                 key, key[:-1]
             )
             absence = component["absence_reason"]
             if (not refs and not absence) or (refs and absence is not None):
-                raise ValueError("release requires refs or explicit absence")
+                raise ProjectionValidationError(
+                    "release requires refs or explicit absence"
+                )
             if absence is not None:
                 text(absence)
         if any(ref["record_kind"] != expected for ref in refs):
-            raise ValueError("release component kind mismatch")
+            raise ProjectionValidationError("release component kind mismatch")
         rows.append({"component": key, "refs": refs, "absence_reason": absence})
     if manifest["retrieval_index_ref"]["content_sha256"] != data.get(
         "retrieval_index_sha256"
     ):
-        raise ValueError("retrieval digest mismatch")
+        raise ProjectionValidationError("retrieval digest mismatch")
     rights = {key: data.get(key) for key in ("rights_version", "retraction_digest")}
     if (
         manifest["rights_retraction_ref"]["content_sha256"]
         != hashlib.sha256(bounded(rights)).hexdigest()
     ):
-        raise ValueError("rights/retraction digest mismatch")
+        raise ProjectionValidationError("rights/retraction digest mismatch")
     if manifest["calibrators"]["refs"] != data.get("calibrator_refs"):
-        raise ValueError("calibrator binding mismatch")
+        raise ProjectionValidationError("calibrator binding mismatch")
     for key, digest_key in (
         ("prompts", "prompt_revision_hashes"),
         ("skills", "skill_revision_hashes"),
@@ -139,7 +146,7 @@ def release_bindings(data):
         if [ref["content_sha256"] for ref in manifest[key]["refs"]] != data.get(
             digest_key
         ):
-            raise ValueError("prompt/skill binding mismatch")
+            raise ProjectionValidationError("prompt/skill binding mismatch")
     missing = []
     for key, expected in (
         ("lesson_refs", "lesson_revision"),
@@ -149,34 +156,38 @@ def release_bindings(data):
         ("review_refs", "assessment"),
     ):
         if any(ref["record_kind"] != expected for ref in references(data.get(key, []))):
-            raise ValueError("release reference kind mismatch")
+            raise ProjectionValidationError("release reference kind mismatch")
     forecasts = references(data.get("forecast_refs", []))
     bindings = data.get("forecast_target_bindings", [])
     if not isinstance(bindings, list) or len(bindings) > 256:
-        raise ValueError("invalid forecast target binding collection")
+        raise ProjectionValidationError("invalid forecast target binding collection")
     bound_forecasts, bound_targets = [], set()
     for binding in bindings:
         if not isinstance(binding, dict) or set(binding) != {
             "forecast_ref",
             "target_ref",
         }:
-            raise ValueError("invalid forecast target binding")
+            raise ProjectionValidationError("invalid forecast target binding")
         forecast, target = references([binding["forecast_ref"], binding["target_ref"]])
         if forecast["record_kind"] != "forecast" or target["record_kind"] != "target":
-            raise ValueError("forecast target binding kind mismatch")
+            raise ProjectionValidationError("forecast target binding kind mismatch")
         bound_forecasts.append(bounded(forecast))
         bound_targets.add(bounded(target))
     if sorted(map(bounded, forecasts)) != sorted(bound_forecasts) or len(
         set(bound_forecasts)
     ) != len(bound_forecasts):
-        raise ValueError("release requires exact forecast target coverage")
+        raise ProjectionValidationError(
+            "release requires exact forecast target coverage"
+        )
     if forecasts and (
         not manifest["targets"]["refs"]
         or set(map(bounded, manifest["targets"]["refs"])) != bound_targets
         or not manifest["models"]["refs"]
         or not manifest["features"]["refs"]
     ):
-        raise ValueError("forecast targets, models or features incomplete")
+        raise ProjectionValidationError(
+            "forecast targets, models or features incomplete"
+        )
     if data.get("state") in {"VALIDATED", "PUBLISHED"}:
         for key in ("lesson_refs", "review_refs", "required_consumer_versions"):
             if not data.get(key):
@@ -195,22 +206,22 @@ def release_bindings(data):
 
 def clock(value):
     if type(value) is not int or not 0 <= value <= 9007199254740991:
-        raise ValueError("invalid projection clock or counter")
+        raise ProjectionValidationError("invalid projection clock or counter")
     return value
 
 
 def text(value, *, identifier=False):
     if not isinstance(value, str) or not 0 < len(value) <= 4096:
-        raise ValueError("invalid projection text")
+        raise ProjectionValidationError("invalid projection text")
     if identifier and not ID.fullmatch(value):
-        raise ValueError("invalid identifier")
+        raise ProjectionValidationError("invalid identifier")
     return value
 
 
 def bounded(value, *, max_bytes=MAX_BYTES):
     def check(item, depth=0):
         if depth > 24:
-            raise ValueError("projection nesting limit")
+            raise ProjectionValidationError("projection nesting limit")
         if item is None or type(item) in (str, bool):
             return
         if type(item) is int:
@@ -218,7 +229,7 @@ def bounded(value, *, max_bytes=MAX_BYTES):
             return
         if type(item) is list:
             if len(item) > 256:
-                raise ValueError("projection collection limit")
+                raise ProjectionValidationError("projection collection limit")
             for child in item:
                 check(child, depth + 1)
             return
@@ -226,7 +237,7 @@ def bounded(value, *, max_bytes=MAX_BYTES):
             for child in item.values():
                 check(child, depth + 1)
             return
-        raise ValueError("projection requires JSON without floats")
+        raise ProjectionValidationError("projection requires JSON without floats")
 
     try:
         check(value)
@@ -238,15 +249,15 @@ def bounded(value, *, max_bytes=MAX_BYTES):
             separators=(",", ":"),
         ).encode()
     except (TypeError, UnicodeError, OverflowError, RecursionError) as error:
-        raise ValueError("invalid projection JSON") from error
+        raise ProjectionValidationError("invalid projection JSON") from error
     if len(encoded) > max_bytes:
-        raise ValueError("projection byte limit")
+        raise ProjectionValidationError("projection byte limit")
     return encoded
 
 
 def references(value):
     if not isinstance(value, list) or len(value) > 64:
-        raise ValueError("invalid reference collection")
+        raise ProjectionValidationError("invalid reference collection")
     result = []
     for reference in value:
         if not isinstance(reference, dict) or set(reference) != {
@@ -257,24 +268,24 @@ def references(value):
             "content_sha256",
             "available_at_ms",
         }:
-            raise ValueError("invalid reference")
+            raise ProjectionValidationError("invalid reference")
         kind = text(reference["record_kind"], identifier=True)
         expected = REFERENCE_OWNERS.get(kind)
         if expected is None or reference["owner"] != expected:
-            raise ValueError("reference owner mismatch")
+            raise ProjectionValidationError("reference owner mismatch")
         if reference["owner"] not in {
             "research_os",
             "hummingbot",
             "hummingbot_api",
             "quants_lab",
         }:
-            raise ValueError("invalid reference owner")
+            raise ProjectionValidationError("invalid reference owner")
         text(reference["record_id"], identifier=True)
         text(reference["revision"], identifier=True)
         if not isinstance(reference["content_sha256"], str) or not HASH.fullmatch(
             reference["content_sha256"]
         ):
-            raise ValueError("invalid reference digest")
+            raise ProjectionValidationError("invalid reference digest")
         clock(reference["available_at_ms"])
         result.append(dict(reference))
     return result
@@ -282,38 +293,39 @@ def references(value):
 
 def owner_record(value, kind=None):
     bounded(value)
+    validate_owner_shape(value, kind)
     if not isinstance(value, dict):
-        raise ValueError("invalid owner envelope")
+        raise ProjectionValidationError("invalid owner envelope")
     name = value.get("schema_name")
     if (
         not isinstance(name, str)
         or name not in OWNERS
         or (kind is not None and name != kind)
     ):
-        raise ValueError("unsupported owner schema")
+        raise ProjectionValidationError("unsupported owner schema")
     if (
         value.get("schema_version") != ("2" if name == "lesson_revision" else "1")
         or value.get("producer_owner") != OWNERS[name]
     ):
-        raise ValueError("owner schema identity mismatch")
+        raise ProjectionValidationError("owner schema identity mismatch")
     if value.get("execution_authorized") is not False:
-        raise ValueError("authorizing envelope rejected")
+        raise ProjectionValidationError("authorizing envelope rejected")
     text(value.get("record_id"), identifier=True)
     text(value.get("correlation_id"), identifier=True)
     revision = value.get("producer_revision")
     if not isinstance(revision, str) or not re.fullmatch(
         r"(?:[a-f0-9]{40}|[a-f0-9]{64})", revision
     ):
-        raise ValueError("invalid producer revision")
+        raise ProjectionValidationError("invalid producer revision")
     if clock(value.get("created_at_ms")) > clock(value.get("available_at_ms")):
-        raise ValueError("invalid owner clock order")
+        raise ProjectionValidationError("invalid owner clock order")
     references(value.get("parent_refs"))
     references(value.get("evidence_refs"))
     digest = hashlib.sha256(
         bounded({key: child for key, child in value.items() if key != "payload_sha256"})
     ).hexdigest()
     if value.get("payload_sha256") != digest or not isinstance(value.get("data"), dict):
-        raise ValueError("owner payload integrity mismatch")
+        raise ProjectionValidationError("owner payload integrity mismatch")
     return value["data"]
 
 
@@ -323,27 +335,27 @@ def source_page(payload, expected_scope, now_ms):
         not isinstance(payload, dict)
         or payload.get("schema_version") != "condor-learning-source.v1"
     ):
-        raise ValueError("unsupported source projection")
+        raise ProjectionValidationError("unsupported source projection")
     if not expected_scope or payload.get("scope") != expected_scope:
-        raise ValueError("projection scope mismatch")
+        raise ProjectionValidationError("projection scope mismatch")
     generated = clock(payload.get("generated_at_ms"))
     expiry = clock(payload.get("fresh_until_ms"))
     if generated > clock(now_ms) or expiry < generated:
-        raise ValueError("invalid source clock")
+        raise ProjectionValidationError("invalid source clock")
     text(payload.get("source_generation"), identifier=True)
     records = payload.get("records")
     if not isinstance(records, list) or len(records) > MAX_RECORDS:
-        raise ValueError("owner page limit")
+        raise ProjectionValidationError("owner page limit")
     identities = set()
     for value in records:
         owner_record(value)
         if value["available_at_ms"] > generated:
-            raise ValueError("record unavailable at source generation")
+            raise ProjectionValidationError("record unavailable at source generation")
         if value["record_id"] in identities:
-            raise ValueError("duplicate owner record")
+            raise ProjectionValidationError("duplicate owner record")
         identities.add(value["record_id"])
         if "scope" in value["data"] and value["data"]["scope"] != expected_scope:
-            raise ValueError("record scope mismatch")
+            raise ProjectionValidationError("record scope mismatch")
     return records, "STALE" if now_ms > expiry else "FIXTURE_ONLY"
 
 
@@ -388,7 +400,7 @@ def project_learning_manifest(owner_payload, expected_scope, *, now_ms):
     for value in records:
         kind = value["schema_name"]
         if kind not in fields:
-            raise ValueError("unexpected learning record")
+            raise ProjectionValidationError("unexpected learning record")
         collection, strings, refs = fields[kind]
         data = value["data"]
         row = {
@@ -408,7 +420,9 @@ def project_learning_manifest(owner_payload, expected_scope, *, now_ms):
                 row["effective_decision_boundary_ms"]
                 < row["new_release_ref"]["available_at_ms"]
             ):
-                raise ValueError("adoption precedes release availability")
+                raise ProjectionValidationError(
+                    "adoption precedes release availability"
+                )
         if kind == "knowledge_release":
             row["missing_bindings"], row["bindings"] = release_bindings(data)
             row["binding_status"] = (
@@ -458,7 +472,7 @@ def learning_router(*, source, require_auth, check_origin, now):
             return project_learning_manifest(
                 source.manifest, source.scope, now_ms=now()
             )
-        except ValueError as error:
+        except ProjectionValidationError as error:
             raise HTTPException(
                 502, detail={"code": "INVALID_LEARNING_PROJECTION"}
             ) from error
@@ -475,7 +489,7 @@ def learning_router(*, source, require_auth, check_origin, now):
             return project_research(
                 source.research, source.scope, now_ms=now(), cursor=cursor, limit=limit
             )
-        except ValueError as error:
+        except ProjectionValidationError as error:
             raise HTTPException(
                 502, detail={"code": "INVALID_RESEARCH_PROJECTION"}
             ) from error
@@ -487,7 +501,15 @@ def learning_router(*, source, require_auth, check_origin, now):
             raise HTTPException(503, detail={"code": "STAGE1_DISPATCH_DISABLED"})
         try:
             return source.workflows.request(await request.json())
-        except (ValueError, TypeError) as error:
+        except OwnerReceiptValidationError as error:
+            raise HTTPException(
+                502, detail={"code": "INVALID_RESEARCH_PROJECTION"}
+            ) from error
+        except (
+            ProjectionValidationError,
+            json.JSONDecodeError,
+            UnicodeDecodeError,
+        ) as error:
             raise HTTPException(
                 422, detail={"code": "INVALID_FIXED_WORKFLOW"}
             ) from error

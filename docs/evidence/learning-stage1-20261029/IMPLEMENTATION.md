@@ -66,3 +66,27 @@ pass. The two new regression tests failed before implementation. Twelve new
 Factory/Lineage captures cover both widths and all three themes. Each was
 inspected, as was the expanded hash detail. Only the new Serve route was removed.
 Independent review remains pending; no production authority is implied.
+
+## Independent-review fix round (2026-10-29)
+
+The reviewer reproduced two malformed-owner 500s at `ae092e84`. Both now return
+typed `INVALID_RESEARCH_PROJECTION` 502s. A single owner-schema boundary runs
+before every owner-data read. It uses the 12 exact frozen owner JSON Schemas,
+included as package data. Existing semantic checks now raise the typed error.
+Routes catch that type, not arbitrary exceptions. Role input types are validated
+before registry lookup. Invalid owner workflow receipts return a typed 502;
+bad workflow requests remain 422. No dispatch or replay path was added.
+
+The generic regression exercises 1,965 malformed-field requests, with valid
+controls for every schema/route pair. Injected programming errors still return
+500, proving the route does not conceal implementation bugs. Frozen fixture
+dictionaries remain unchanged. Synthetic test builders now fill required owner
+fields from those dictionaries. Their money objects use the frozen `quote_asset`
+unit and explicit nullable `asset` field instead of the invalid `quote_currency`
+unit. A malformed release manifest is rejected rather than projected as merely
+incomplete; structurally valid but unqualified releases still remain blocked.
+
+The common reference disclosure now uses singular/plural labels correctly.
+There is no layout change, so no new screenshots or Serve route were needed.
+The four #79/#82 shared files have no new hunks. See `VALIDATION.md` for the
+red/green outputs, commands and counts. Re-review remains pending.

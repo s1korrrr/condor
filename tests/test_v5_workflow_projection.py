@@ -54,7 +54,8 @@ def usage(state):
             "money": {
                 "kind": "money",
                 "value": "0" if state == "NOT_DISPATCHED" else "0.01",
-                "unit": "quote_currency",
+                "unit": "quote_asset",
+                "asset": None,
                 "quote_currency": "USDC",
             },
         }

@@ -1,6 +1,7 @@
 """Fixture catalog projection. Native execution and economic support stay separate."""
 
 from .learning import bounded, clock, owner_record, references, source_page, text
+from .projection_validation import ProjectionValidationError
 
 
 def project_lineage(records):
@@ -19,7 +20,9 @@ def project_lineage(records):
                         not isinstance(binding, dict)
                         or set(binding) != {"refs", "absence_reason"}
                     ):
-                        raise ValueError("invalid lineage consumer binding")
+                        raise ProjectionValidationError(
+                            "invalid lineage consumer binding"
+                        )
                     refs.extend(
                         references(
                             [binding] if component.endswith("_ref") else binding["refs"]
@@ -27,13 +30,15 @@ def project_lineage(records):
                     )
             elif key == "forecast_target_bindings":
                 if not isinstance(item, list):
-                    raise ValueError("invalid lineage forecast bindings")
+                    raise ProjectionValidationError("invalid lineage forecast bindings")
                 for binding in item:
                     if not isinstance(binding, dict) or set(binding) != {
                         "forecast_ref",
                         "target_ref",
                     }:
-                        raise ValueError("invalid lineage forecast binding")
+                        raise ProjectionValidationError(
+                            "invalid lineage forecast binding"
+                        )
                     refs.extend(
                         references([binding["forecast_ref"], binding["target_ref"]])
                     )
@@ -81,10 +86,10 @@ def project_research(payload, expected_scope, *, now_ms, cursor=0, limit=25):
     bounded(payload, max_bytes=1048576)
     candidates = payload.get("candidates") if isinstance(payload, dict) else None
     if not isinstance(candidates, list) or len(candidates) > 200:
-        raise ValueError("candidate collection exceeds fixture bound")
+        raise ProjectionValidationError("candidate collection exceeds fixture bound")
     clock(cursor)
     if type(limit) is not int or not 1 <= limit <= 50 or cursor > len(candidates):
-        raise ValueError("invalid candidate page")
+        raise ProjectionValidationError("invalid candidate page")
     metadata = {key: value for key, value in payload.items() if key != "candidates"}
     records, status = source_page(metadata, expected_scope, now_ms)
     rows = []
@@ -92,17 +97,19 @@ def project_research(payload, expected_scope, *, now_ms, cursor=0, limit=25):
     for candidate in candidates:
         candidate_data = owner_record(candidate, "candidate_revision")
         if candidate["available_at_ms"] > payload["generated_at_ms"]:
-            raise ValueError("candidate unavailable at source generation")
+            raise ProjectionValidationError(
+                "candidate unavailable at source generation"
+            )
         candidate = candidate_data
         if candidate.get("scope") != expected_scope:
-            raise ValueError("candidate scope mismatch")
+            raise ProjectionValidationError("candidate scope mismatch")
         row = {
             key: text(candidate.get(key), identifier=True)
             for key in ("candidate_id", "candidate_revision", "family_id", "variant_id")
         }
         identity = (row["candidate_id"], row["candidate_revision"])
         if identity in identities:
-            raise ValueError("duplicate candidate revision")
+            raise ProjectionValidationError("duplicate candidate revision")
         identities.add(identity)
         if (
             candidate.get("implementation_status")
@@ -112,7 +119,7 @@ def project_research(payload, expected_scope, *, now_ms, cursor=0, limit=25):
             or candidate.get("readiness_status") != "DISABLED"
             or candidate.get("permission_status") != "NONE"
         ):
-            raise ValueError("invalid Stage 1 candidate states")
+            raise ProjectionValidationError("invalid Stage 1 candidate states")
         row.update(
             {
                 "catalog_eligibility": candidate["implementation_status"],
@@ -129,7 +136,7 @@ def project_research(payload, expected_scope, *, now_ms, cursor=0, limit=25):
         or len(campaigns) > 64
         or any(not isinstance(value, dict) for value in campaigns)
     ):
-        raise ValueError("campaign bound")
+        raise ProjectionValidationError("campaign bound")
     projected_campaigns = [
         {key: text(value.get(key)) for key in ("campaign_id", "state", "reason")}
         for value in campaigns

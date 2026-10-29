@@ -14,7 +14,7 @@ test('lineage preserves pinned inputs, independent owner states and unknown exec
   assert.match(markup, /aria-label="Full decision lineage"/);
   assert.match(markup, /Synthetic fixture clock/);
   assert.match(markup, /<code class="font-mono select-text">b{64}<\/code>/);
-  assert.match(markup, /<details><summary>Inspect 1 evidence references<\/summary>/);
+  assert.match(markup, /<details><summary>Inspect 1 evidence reference<\/summary>/);
 });
 test('missing lineage is not reconstructed and error remains distinct from empty', () => {
   assert.match(render(DecisionLineagePanel, {}), /No decision lineage bound/);

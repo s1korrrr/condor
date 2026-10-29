@@ -46,6 +46,10 @@ def record(kind="lesson_revision", data=None):
             "retraction_refs": [],
         },
     }
+    value["data"] = {
+        **copy.deepcopy(FROZEN_CONTRACT_FIXTURES[kind]["data"]),
+        **value["data"],
+    }
     value["payload_sha256"] = hashlib.sha256(
         json.dumps(
             value, sort_keys=True, ensure_ascii=False, separators=(",", ":")
@@ -152,7 +156,9 @@ def test_200_candidate_projection_covers_every_revision_once():
             project_research(value, SCOPE, now_ms=150, cursor=cursor, limit=limit)
 
 
-def test_release_binding_gaps_are_not_inferred_from_publication():
+def test_malformed_release_bindings_are_rejected_not_inferred_from_publication():
+    from condor.v5.projection_validation import ProjectionValidationError
+
     value = manifest()
     value["records"] = [
         record(
@@ -166,9 +172,9 @@ def test_release_binding_gaps_are_not_inferred_from_publication():
             },
         )
     ]
-    release = project_learning_manifest(value, SCOPE, now_ms=150)["releases"][0]
-    assert release["binding_status"] == "BLOCKED_INCOMPLETE"
-    assert "candidate_library_ref" in release["missing_bindings"]
+    del value["records"][0]["data"]["consumer_manifest"]["candidate_library_ref"]
+    with pytest.raises(ProjectionValidationError):
+        project_learning_manifest(value, SCOPE, now_ms=150)
 
 
 def test_research_lineage_keeps_exact_edges_and_workflow_identity():
@@ -1133,3 +1139,38 @@ def test_final_published_fixture_keeps_all_bindings_without_granting_authority()
     assert row["missing_bindings"] == []
     assert row["binding_status"] == "OWNER_VALIDATION_REQUIRED"
     assert len(row["bindings"]) == 10
+
+
+def test_owner_schemas_are_the_pinned_contract_bytes():
+    from pathlib import Path
+
+    from jsonschema import Draft202012Validator
+
+    from condor.v5.projection_validation import OWNER_SCHEMAS
+
+    digests = {
+        "adoption": "e6af92780f2d8775abdefb2d183d26a8f1802734c777b4e48d3030891ea49936",
+        "agent_job": "8233c10e909290b1e836008b72b94ea5eda20dedcc07fe6df49d10b60c3d2a41",
+        "agent_message": "0f40d74b34412af6be796bbded55d5f296e6cb5aa033b2784e3fa99894511eaf",
+        "candidate_revision": "00d4125b785f965d180b8afd986aebd91c5ce5f06e01ddf86a03795bb6172a4a",
+        "event": "d6943e64e37ea2b704fb765864ac643adea2903b77aafe55bd367c18bd8c85d7",
+        "experience_ref": "bc164e39c4d0f42903a8e69872511de7c6d0160f1d5592032852c36d1a8cfec2",
+        "forecast": "42e960a97c0f7c04f870ae338bf7cee6545f9408811921f48d828a0c85886c40",
+        "forecast_evaluation": "19b8154b2cfab807777e08d4caf74f9122576f88eebb35ad709acd3a1d486ebf",
+        "knowledge_release": "26997ee6362ac1a0a14f67986dd9a798bf521a6b57f01b4dedc36254fa1c2fba",
+        "lesson_revision": "ae130f7485f31372bb2fb306d8ad8737c665a5c621bf04435c54d155a2849d00",
+        "opportunity": "19451692fc7d90fc57f669aa2dfb204c4058e0ac2ec650b5b638fdbfc479d21b",
+        "retraction": "b7353f122e10fdee81a55aae4256a8c152f722bae982ffe48c1c1b4c1cdadb9e",
+    }
+    assert set(OWNER_SCHEMAS) == set(digests)
+    for kind, digest in digests.items():
+        Draft202012Validator.check_schema(OWNER_SCHEMAS[kind])
+        path = (
+            Path(__file__).parents[1]
+            / "condor"
+            / "v5"
+            / "schemas"
+            / "learning"
+            / f"{kind}.schema.json"
+        )
+        assert hashlib.sha256(path.read_bytes()).hexdigest() == digest

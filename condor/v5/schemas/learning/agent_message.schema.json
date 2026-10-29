@@ -1,0 +1,368 @@
+{
+  "$defs": {
+    "Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "available_at_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "content_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "owner": {
+          "enum": [
+            "research_os",
+            "hummingbot",
+            "hummingbot_api",
+            "quants_lab"
+          ],
+          "title": "Owner",
+          "type": "string"
+        },
+        "record_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Record Id",
+          "type": "string"
+        },
+        "record_kind": {
+          "enum": [
+            "candidate_revision",
+            "opportunity",
+            "agent_job",
+            "agent_message",
+            "event",
+            "forecast",
+            "forecast_evaluation",
+            "experience_ref",
+            "lesson_revision",
+            "retraction",
+            "knowledge_release",
+            "adoption",
+            "evidence",
+            "input_snapshot",
+            "inventory",
+            "critic_receipt",
+            "model",
+            "calibrator",
+            "candidate_library",
+            "program",
+            "idea_revision",
+            "native_receipt",
+            "outcome",
+            "policy",
+            "experiment",
+            "run",
+            "assessment",
+            "metrics",
+            "report",
+            "artifact_bundle",
+            "campaign",
+            "job_admission",
+            "strategy_selection_proposal",
+            "feature",
+            "regime",
+            "target",
+            "prompt",
+            "skill",
+            "retrieval_index",
+            "rights_retraction",
+            "source"
+          ],
+          "title": "Record Kind",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Revision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "record_kind",
+        "record_id",
+        "revision",
+        "content_sha256",
+        "available_at_ms"
+      ],
+      "title": "Reference",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "available_at_ms": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Available At Ms",
+      "type": "integer"
+    },
+    "correlation_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "created_at_ms": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Created At Ms",
+      "type": "integer"
+    },
+    "data": {
+      "additionalProperties": false,
+      "properties": {
+        "claim": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Claim",
+          "type": "string"
+        },
+        "consumed_input_refs": {
+          "items": {
+            "$ref": "#/$defs/Reference"
+          },
+          "maxItems": 64,
+          "title": "Consumed Input Refs",
+          "type": "array"
+        },
+        "context_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Context Sha256",
+          "type": "string"
+        },
+        "decision_at_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Decision At Ms",
+          "type": "integer"
+        },
+        "decision_cutoff_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Decision Cutoff Ms",
+          "type": "integer"
+        },
+        "disagreements": {
+          "items": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Disagreements",
+          "type": "array"
+        },
+        "expires_at_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "job_ref": {
+          "$ref": "#/$defs/Reference"
+        },
+        "kind": {
+          "enum": [
+            "OBSERVATION",
+            "QUESTION",
+            "ASSESSMENT",
+            "PROPOSAL",
+            "CRITIQUE",
+            "ABSTENTION",
+            "RECEIPT"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "knowledge_release_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Knowledge Release Id",
+          "type": "string"
+        },
+        "knowledge_release_ref": {
+          "$ref": "#/$defs/Reference"
+        },
+        "missing_inputs": {
+          "items": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Missing Inputs",
+          "type": "array"
+        },
+        "output_schema_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Output Schema Sha256",
+          "type": "string"
+        },
+        "proposed_consequence": {
+          "enum": [
+            "REVIEW_ONLY",
+            "ABSTAIN"
+          ],
+          "title": "Proposed Consequence",
+          "type": "string"
+        },
+        "recipient_role_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Recipient Role Id",
+          "type": "string"
+        },
+        "release_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Release Sha256",
+          "type": "string"
+        },
+        "role_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Role Id",
+          "type": "string"
+        },
+        "sender_role_revision": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Sender Role Revision",
+          "type": "string"
+        },
+        "subject_decision_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Subject Decision Id",
+          "type": "string"
+        },
+        "uncertainty": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Uncertainty",
+          "type": "string"
+        },
+        "untrusted_external_text": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Untrusted External Text"
+        },
+        "untrusted_user_text": {
+          "anyOf": [
+            {
+              "maxLength": 4096,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Untrusted User Text"
+        },
+        "workflow_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Workflow Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_cutoff_ms",
+        "decision_at_ms",
+        "expires_at_ms",
+        "job_ref",
+        "kind",
+        "role_id",
+        "sender_role_revision",
+        "recipient_role_id",
+        "workflow_id",
+        "subject_decision_id",
+        "consumed_input_refs",
+        "knowledge_release_id",
+        "knowledge_release_ref",
+        "output_schema_sha256",
+        "context_sha256",
+        "release_sha256",
+        "claim",
+        "uncertainty",
+        "missing_inputs",
+        "disagreements",
+        "untrusted_user_text",
+        "untrusted_external_text",
+        "proposed_consequence"
+      ],
+      "title": "AgentMessage",
+      "type": "object"
+    },
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "maxItems": 64,
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "execution_authorized": {
+      "const": false,
+      "title": "Execution Authorized",
+      "type": "boolean"
+    },
+    "parent_refs": {
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "maxItems": 64,
+      "title": "Parent Refs",
+      "type": "array"
+    },
+    "payload_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Payload Sha256",
+      "type": "string"
+    },
+    "producer_owner": {
+      "const": "hummingbot_api",
+      "type": "string"
+    },
+    "producer_revision": {
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$",
+      "title": "Producer Revision",
+      "type": "string"
+    },
+    "record_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Record Id",
+      "type": "string"
+    },
+    "schema_name": {
+      "const": "agent_message",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_name",
+    "schema_version",
+    "record_id",
+    "producer_owner",
+    "producer_revision",
+    "created_at_ms",
+    "available_at_ms",
+    "payload_sha256",
+    "correlation_id",
+    "parent_refs",
+    "evidence_refs",
+    "execution_authorized",
+    "data"
+  ],
+  "title": "Envelope",
+  "type": "object"
+}

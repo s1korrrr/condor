@@ -54,7 +54,7 @@ export function EvidenceList({ refs, empty = 'None reported by owner' }: { refs:
     Revision {reference.revision} · <UtcTime value={reference.available_at_ms} /><br />
     <span className="text-xs text-[var(--color-text-muted)]">SHA256 <code className="font-mono select-text">{reference.content_sha256}</code></span>
   </li>)}</ul>;
-  return <div><span className="block truncate" title={refs[0].record_id}>{refs[0].record_id}</span><details><summary>Inspect {refs.length} evidence references</summary>{evidence}</details></div>;
+  return <div><span className="block truncate" title={refs[0].record_id}>{refs[0].record_id}</span><details><summary>Inspect {refs.length} evidence {refs.length === 1 ? 'reference' : 'references'}</summary>{evidence}</details></div>;
 }
 
 export function MetricTiles({ items }: { items: { label: string; value: string | number }[] }) {

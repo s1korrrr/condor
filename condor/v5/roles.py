@@ -2,6 +2,8 @@
 
 from types import MappingProxyType
 
+from .projection_validation import ProjectionValidationError, validate_role_input
+
 ROLE_SPECS = MappingProxyType(
     {
         "market_analyst": ("Market Regime Analyst", "market_context", "agent_message"),
@@ -21,8 +23,9 @@ ROLE_SPECS = MappingProxyType(
 
 
 def resolve_role(role_id, capability_manifest):
+    validate_role_input(role_id, capability_manifest)
     if role_id not in ROLE_SPECS:
-        raise ValueError("unknown fixed role")
+        raise ProjectionValidationError("unknown fixed role")
     name, task_id, schema = ROLE_SPECS[role_id]
     return {
         "role_id": role_id,

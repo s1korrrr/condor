@@ -23,3 +23,14 @@ def test_markdown_or_capability_cannot_bind_an_unimplemented_task():
     assert role["tools"] == []
     with pytest.raises(ValueError):
         resolve_role("arbitrary", {})
+
+
+@pytest.mark.parametrize(
+    "role_id,capabilities",
+    [([], {}), ({}, {}), (None, {}), ("market_analyst", []), ("market_analyst", None)],
+)
+def test_malformed_role_inputs_raise_typed_validation_error(role_id, capabilities):
+    from condor.v5.projection_validation import ProjectionValidationError
+
+    with pytest.raises(ProjectionValidationError):
+        resolve_role(role_id, capabilities)

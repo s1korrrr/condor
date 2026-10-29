@@ -1,0 +1,743 @@
+{
+  "$defs": {
+    "Quantity": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Asset"
+        },
+        "kind": {
+          "enum": [
+            "money",
+            "quantity",
+            "price",
+            "probability",
+            "ordinal",
+            "simple_return",
+            "log_return",
+            "ratio",
+            "rank",
+            "z"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "quote_currency": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Quote Currency"
+        },
+        "unit": {
+          "enum": [
+            "quote_asset",
+            "base_asset",
+            "quote_per_base",
+            "probability_0_1",
+            "ordinal_score",
+            "simple_return_fraction",
+            "log_return",
+            "dimensionless_ratio",
+            "rank_index",
+            "z_score"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "pattern": "^-?(?:0|[1-9][0-9]{0,29})(?:\\.[0-9]{1,30})?$",
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "unit",
+        "value",
+        "asset",
+        "quote_currency"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "available_at_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "content_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "owner": {
+          "enum": [
+            "research_os",
+            "hummingbot",
+            "hummingbot_api",
+            "quants_lab"
+          ],
+          "title": "Owner",
+          "type": "string"
+        },
+        "record_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Record Id",
+          "type": "string"
+        },
+        "record_kind": {
+          "enum": [
+            "candidate_revision",
+            "opportunity",
+            "agent_job",
+            "agent_message",
+            "event",
+            "forecast",
+            "forecast_evaluation",
+            "experience_ref",
+            "lesson_revision",
+            "retraction",
+            "knowledge_release",
+            "adoption",
+            "evidence",
+            "input_snapshot",
+            "inventory",
+            "critic_receipt",
+            "model",
+            "calibrator",
+            "candidate_library",
+            "program",
+            "idea_revision",
+            "native_receipt",
+            "outcome",
+            "policy",
+            "experiment",
+            "run",
+            "assessment",
+            "metrics",
+            "report",
+            "artifact_bundle",
+            "campaign",
+            "job_admission",
+            "strategy_selection_proposal",
+            "feature",
+            "regime",
+            "target",
+            "prompt",
+            "skill",
+            "retrieval_index",
+            "rights_retraction",
+            "source"
+          ],
+          "title": "Record Kind",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Revision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "record_kind",
+        "record_id",
+        "revision",
+        "content_sha256",
+        "available_at_ms"
+      ],
+      "title": "Reference",
+      "type": "object"
+    },
+    "Reservation": {
+      "additionalProperties": false,
+      "properties": {
+        "data_query_limit": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Data Query Limit"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Duration Ms"
+        },
+        "fan_out": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Fan Out",
+          "type": "integer"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Input Tokens"
+        },
+        "max_calls": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Max Calls",
+          "type": "integer"
+        },
+        "money_limit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output Tokens"
+        },
+        "retries": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Retries",
+          "type": "integer"
+        },
+        "tool_invocations": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Tool Invocations",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "max_calls",
+        "input_tokens",
+        "output_tokens",
+        "duration_ms",
+        "retries",
+        "fan_out",
+        "tool_invocations",
+        "money_limit",
+        "data_query_limit"
+      ],
+      "title": "Reservation",
+      "type": "object"
+    },
+    "Usage": {
+      "additionalProperties": false,
+      "properties": {
+        "calls": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Calls"
+        },
+        "duration_ms": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Duration Ms"
+        },
+        "input_tokens": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Input Tokens"
+        },
+        "money": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output_tokens": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Output Tokens"
+        },
+        "state": {
+          "enum": [
+            "NOT_DISPATCHED",
+            "ESTIMATED",
+            "METERED",
+            "UNKNOWN"
+          ],
+          "title": "State",
+          "type": "string"
+        }
+      },
+      "required": [
+        "state",
+        "calls",
+        "input_tokens",
+        "output_tokens",
+        "duration_ms",
+        "money"
+      ],
+      "title": "Usage",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "available_at_ms": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Available At Ms",
+      "type": "integer"
+    },
+    "correlation_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "created_at_ms": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Created At Ms",
+      "type": "integer"
+    },
+    "data": {
+      "additionalProperties": false,
+      "properties": {
+        "admission_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "allowed_action": {
+          "enum": [
+            "READ_FIXTURE",
+            "INFER",
+            "RETRIEVE",
+            "EVALUATE",
+            "COMPILE",
+            "VALIDATE",
+            "REVIEW"
+          ],
+          "title": "Allowed Action",
+          "type": "string"
+        },
+        "attempt_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Attempt Id",
+          "type": "string"
+        },
+        "authority_ceiling": {
+          "const": "repository-process-only",
+          "title": "Authority Ceiling",
+          "type": "string"
+        },
+        "campaign_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Campaign Id",
+          "type": "string"
+        },
+        "campaign_ref": {
+          "$ref": "#/$defs/Reference"
+        },
+        "cancellation_generation": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Cancellation Generation",
+          "type": "integer"
+        },
+        "capability_manifest_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Capability Manifest Sha256",
+          "type": "string"
+        },
+        "context_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Context Sha256",
+          "type": "string"
+        },
+        "deadline_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Deadline Ms",
+          "type": "integer"
+        },
+        "decision_at_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Decision At Ms",
+          "type": "integer"
+        },
+        "decision_cutoff_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Decision Cutoff Ms",
+          "type": "integer"
+        },
+        "dispatch_resolution_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Reference"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "expires_at_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "idempotency_key": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Idempotency Key",
+          "type": "string"
+        },
+        "input_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Input Sha256",
+          "type": "string"
+        },
+        "job_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Job Id",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "model_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "output_schema_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Output Schema Sha256",
+          "type": "string"
+        },
+        "parent_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Parent Id"
+        },
+        "parent_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "program_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Program Id",
+          "type": "string"
+        },
+        "program_ref": {
+          "$ref": "#/$defs/Reference"
+        },
+        "prompt_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Prompt Sha256",
+          "type": "string"
+        },
+        "provider_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Provider Id",
+          "type": "string"
+        },
+        "release_ref": {
+          "$ref": "#/$defs/Reference"
+        },
+        "release_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Release Sha256",
+          "type": "string"
+        },
+        "reservation": {
+          "$ref": "#/$defs/Reservation"
+        },
+        "reservation_state": {
+          "default": "HELD",
+          "enum": [
+            "HELD",
+            "CLOSED"
+          ],
+          "title": "Reservation State",
+          "type": "string"
+        },
+        "role_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Role Id",
+          "type": "string"
+        },
+        "role_revision": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Role Revision",
+          "type": "string"
+        },
+        "settings_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Settings Sha256",
+          "type": "string"
+        },
+        "state": {
+          "enum": [
+            "PROPOSED",
+            "NOT_DISPATCHED",
+            "REJECTED",
+            "ADMITTED",
+            "DISPATCHED",
+            "DISPATCH_UNKNOWN",
+            "RUNNING",
+            "OUTPUT_PENDING",
+            "COMPLETED",
+            "FAILED",
+            "INTERRUPTED",
+            "CANCELLED"
+          ],
+          "title": "State",
+          "type": "string"
+        },
+        "state_history": {
+          "items": {
+            "enum": [
+              "PROPOSED",
+              "NOT_DISPATCHED",
+              "REJECTED",
+              "ADMITTED",
+              "DISPATCHED",
+              "DISPATCH_UNKNOWN",
+              "RUNNING",
+              "OUTPUT_PENDING",
+              "COMPLETED",
+              "FAILED",
+              "INTERRUPTED",
+              "CANCELLED"
+            ],
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "State History",
+          "type": "array"
+        },
+        "usage": {
+          "$ref": "#/$defs/Usage"
+        },
+        "workflow_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Workflow Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "decision_cutoff_ms",
+        "decision_at_ms",
+        "expires_at_ms",
+        "job_id",
+        "attempt_id",
+        "workflow_id",
+        "parent_id",
+        "role_id",
+        "role_revision",
+        "campaign_id",
+        "program_id",
+        "program_ref",
+        "campaign_ref",
+        "parent_ref",
+        "release_ref",
+        "admission_ref",
+        "allowed_action",
+        "input_sha256",
+        "context_sha256",
+        "release_sha256",
+        "prompt_sha256",
+        "model_id",
+        "model_ref",
+        "provider_id",
+        "settings_sha256",
+        "output_schema_sha256",
+        "capability_manifest_sha256",
+        "authority_ceiling",
+        "deadline_ms",
+        "idempotency_key",
+        "reservation",
+        "usage",
+        "cancellation_generation",
+        "state",
+        "state_history"
+      ],
+      "title": "AgentJob",
+      "type": "object"
+    },
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "maxItems": 64,
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "execution_authorized": {
+      "const": false,
+      "title": "Execution Authorized",
+      "type": "boolean"
+    },
+    "parent_refs": {
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "maxItems": 64,
+      "title": "Parent Refs",
+      "type": "array"
+    },
+    "payload_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Payload Sha256",
+      "type": "string"
+    },
+    "producer_owner": {
+      "const": "research_os",
+      "type": "string"
+    },
+    "producer_revision": {
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$",
+      "title": "Producer Revision",
+      "type": "string"
+    },
+    "record_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Record Id",
+      "type": "string"
+    },
+    "schema_name": {
+      "const": "agent_job",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_name",
+    "schema_version",
+    "record_id",
+    "producer_owner",
+    "producer_revision",
+    "created_at_ms",
+    "available_at_ms",
+    "payload_sha256",
+    "correlation_id",
+    "parent_refs",
+    "evidence_refs",
+    "execution_authorized",
+    "data"
+  ],
+  "title": "Envelope",
+  "type": "object"
+}

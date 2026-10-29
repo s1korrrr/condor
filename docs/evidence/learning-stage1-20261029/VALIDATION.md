@@ -355,3 +355,98 @@ changed in this cleanup. All 62 moved artifact hashes were rechecked before
 commit. The final PR tree contains no evidence PNG or disposable launcher.
 Normal history retains the prior commit; no history rewrite was attempted.
 Independent review is pending. No user action is needed for this cleanup.
+
+## Independent-review fix round: malformed owner shapes (2026-10-29)
+
+This section records the fix after REQUEST_CHANGES at `ae092e84`.
+Scope stays Condor and fixture-only. No model, research, production or trading
+surface was invoked. No new Serve route or screenshots were needed: only the
+disclosure noun changed, not the layout. The existing external evidence remains.
+The four #79/#82 shared files have no new hunks. Rollback is a normal revert of
+this fix commit; no data migration, restart or history rewrite is needed.
+
+### Fail before / pass after
+
+Ran the exact reviewer script with `PYTHONPATH=.:tests`, the Condor venv Python,
+and a dedicated workspace-scratch TMPDIR. Before:
+
+```text
+candidate-list-state 500 Internal Server Error
+job-missing-usage 500 Internal Server Error
+candidate-exception TypeError unhashable type: 'list'
+job-exception KeyError 'usage'
+```
+
+After:
+
+```text
+candidate-list-state 502 {"detail":{"code":"INVALID_RESEARCH_PROJECTION"}}
+job-missing-usage 502 {"detail":{"code":"INVALID_RESEARCH_PROJECTION"}}
+candidate-exception ProjectionValidationError invalid projection record shape
+job-exception ProjectionValidationError invalid projection record shape
+release-list-state 502 {"detail":{"code":"INVALID_LEARNING_PROJECTION"}}
+deep-json-body 422 {"detail":{"code":"INVALID_FIXED_WORKFLOW"}}
+valid-manifest-control FIXTURE_ONLY
+valid-catalog-control FIXTURE_ONLY
+```
+
+The first 18 new boundary cases failed before the boundary was connected.
+The final suite adds 27 tests: two probe regressions, 17 schema/route matrix
+cases, two unexpected-bug controls, five role-input cases and one schema-byte
+pin. The matrix sends 1,965 malformed-field HTTP requests: 1,365 research,
+383 learning and 217 workflow. It mutates types, removes required keys and
+corrupts enums, including nested fields. Records are resealed after mutation
+so digest rejection cannot hide missing field validation. Each case also
+requires typed errors from direct record/lineage projection. Each schema/route
+pair has a passing 200 control. Deliberately injected TypeError/KeyError bugs
+remain 500; malformed owner input does not.
+
+The 12 schemas are exact bytes from rsibot
+`798ea9b4da65006e3010597ea55fe527a0b80ffc`. Their digests are pinned in the test.
+Three additional canonical fixtures (event, forecast and forecast_evaluation)
+live under `tests/fixtures/v5-learning/`, not under docs. The prior frozen fixture
+dictionaries were not edited. Synthetic helper records now include the required
+canonical fields. Their money unit is `quote_asset`, with explicit `asset: null`.
+The old synthetic unit `quote_currency` was not valid in the frozen schema.
+The malformed-release regression now requires rejection; existing valid-but-
+unqualified release tests still require visible BLOCKED_INCOMPLETE.
+
+### Final commands and results
+
+Temporary logs are outside Git under
+`/home/rsi/dev/rsibot/.workspace/scratch/learning-condor-stage1-fix/`:
+`probe-before.log`, `regression-red.log`, and `tmp/{wp09,all-v5,wp14,frontend-all-v5,eslint-changed,build,private-build,probe-after}.log`.
+Intermediate narrow-suite logs are retained too. No failure evidence was erased.
+
+Set TMPDIR to that directory's `tmp/`, `PYTHONPATH=.:tests`, and
+`UV_PROJECT_ENVIRONMENT=/home/rsi/dev/rsibot/condor/.venv`. Run backend commands
+from the Condor worktree, Node commands from its `frontend/`:
+
+```bash
+uv run --with pytest-asyncio pytest tests/test_v5_role_registry.py tests/test_v5_learning_projection.py tests/test_v5_workflow_projection.py tests/test_v5_learning_isolation.py tests/test_v5_workspace_auth.py tests/test_v5_workspace_upstream.py tests/test_v5_audit_regressions.py tests/test_v5_paper_binding.py --basetemp="$TMPDIR/pytest-wp09" -p no:cacheprovider -q
+uv run --with pytest-asyncio pytest tests/test_v5_*.py --basetemp="$TMPDIR/pytest-all-v5" -p no:cacheprovider -q
+uv run python /home/rsi/dev/rsibot/.workspace/scratch/review-wp0914/probe_boundaries.py
+node --test test/v5-learning-projection.test.mjs test/v5-research-factory.test.mjs test/v5-decision-lineage.test.mjs test/v5-workspace-policy.test.mjs test/v5-workspace-evidence.test.mjs test/v5-paper-binding.test.mjs
+node --test test/v5-*.test.mjs
+npx eslint src/v5/LearningPanel.tsx test/v5-learning-projection.test.mjs test/v5-decision-lineage.test.mjs
+npm run build
+node /home/rsi/dev/rsibot/dashboard/v5-workspace/build.mjs /home/rsi/dev/rsibot/condor/.worktrees/learning-stage1-20261029/frontend
+git diff --check
+```
+
+| Check | Result |
+| --- | --- |
+| WP09 | PASS: 185 tests |
+| All backend V5 | PASS: 805 tests, 12 existing warnings |
+| WP14 | PASS: 38 tests |
+| All frontend V5 | PASS: 99 test executions |
+| Changed-file ESLint | PASS: no findings |
+| Ordinary build | PASS |
+| Private build/typecheck | PASS; existing chunk/import warnings |
+| Reviewer probe | PASS: rc=0; malformed records return typed 502 |
+| Diff whitespace | PASS |
+
+The base Condor venv lacked Black/isort. Formatting used `uv run --with black
+--with isort` instead; no dependency was added to the project. Broad lint was
+not rerun; its prior four errors and one warning remain outside this fix.
+No operator input is needed. Re-review remains pending, not claimed complete.

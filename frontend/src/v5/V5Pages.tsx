@@ -6,7 +6,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { v5Api } from "./api";
 import type { MarketEvidence, PaperRead, V5Agent, V5Session, V5SessionDetail, V5TaskReport, V5Workspace } from "./contracts";
 import { formatUsdAmount, marketFeatures, qualifiedFeatureValue, selectedCohortCoverage, strategyAssessmentLabel, timestampAgeMs } from "./evidence";
-import { boundedLoopParameters, canRequestReport, paperReadiness, paperWorkspaceLabel } from "./policy";
+import { boundedLoopParameters, canRequestReport, paperReadiness, paperWorkspaceLabel, paperWords } from "./policy";
 
 function useWorkspace() {
   return useQuery({ queryKey: ["v5-workspace"], queryFn: v5Api.workspace, refetchInterval: 30_000 });
@@ -18,7 +18,8 @@ export function PaperReadinessPage() {
   const owner = profile.data.readiness.paper_owner;
   const gates = paperReadiness(owner);
   return <><PageHeading title="Paper readiness" description="Paper operation, production qualification, economic support and live authority are separate gates." />
-    <section className="v5-panel"><h2>{gates.production} · open P0 evidence</h2><p>{paperWorkspaceLabel(profile.data)}</p><p>Owner reporting: {owner.state} · owner operating ready: {owner.ready === null ? "Unavailable" : String(owner.ready)}. This is not program acceptance.</p><p>{owner.reason}</p><ul>{gates.openGates.map(gate => <li key={gate}>{gate}</li>)}</ul><p>Live execution: {gates.live}. Historical economic support: {gates.economics}. NOT_RUN is never promoted from process uptime.</p><p>Next step: qualify the frozen production-readiness packages and bind their signed-off evidence. This dashboard cannot approve or activate live execution.</p></section>
+    <section className="paper-fleet paper-readiness"><div className="paper-section-heading"><div><span className="paper-eyebrow">PRODUCTION QUALIFICATION</span><h2>Evidence is still required</h2></div><span className="paper-badge" data-state="degraded">{gates.production}</span></div><p className="paper-caption">{paperWorkspaceLabel(profile.data)}</p><dl className="paper-metrics"><div className="paper-metric"><dt>Open critical gates</dt><dd>{gates.gates.filter(gate => gate.priority === "P0" && gate.status !== "PASS").length} P0</dd><small>Owner uptime cannot clear these gates</small></div><div className="paper-metric"><dt>Native observation</dt><dd>{paperWords(owner.state)}</dd><small>Owner operating ready: {paperWords(owner.ready)}</small></div><div className="paper-metric"><dt>Live execution</dt><dd>Disabled</dd><small>No dashboard action can activate trading</small></div></dl></section>
+    <section className="paper-section paper-readiness"><div className="paper-section-heading"><h2>Release checklist</h2><span className="paper-caption">Signed-off evidence only · no inferred passes</span></div><div className="paper-gates">{gates.gates.map((gate, index) => <article className="paper-gate" key={gate.id}><span className="paper-gate-number" aria-hidden="true">{String(index + 1).padStart(2, "0")}</span><div><div className="paper-section-heading"><h3>{gate.label}</h3><div className="paper-gate-badges"><span className="paper-badge">{gate.priority}</span><span className="paper-badge" data-state="collecting">{gate.status}</span></div></div><p>{gate.next}</p><span className="paper-caption">Evidence: not attached · no review link published</span></div></article>)}</div><p className="paper-caption">NOT_RUN is not PASS. Production stays NOT_READY until every P0 gate has reviewed evidence. Historical economic support remains unsupported in this dashboard.</p></section>
   </>;
 }
 

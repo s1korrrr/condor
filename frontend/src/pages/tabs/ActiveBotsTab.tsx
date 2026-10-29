@@ -13,11 +13,11 @@ import {
   TrendingUp,
   Volume2,
 } from "lucide-react";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType } from "react";
 import type { PaperRead } from "@/v5/contracts";
-import { paperControlState, paperReadState, paperRecordSummary, paperSnapshotsAgree } from "@/v5/policy";
+import { paperAmount, paperControlState, paperLifetimeTotals, paperOpenExecutorCount, paperReadState, paperRiskHold, paperSnapshotsAgree, paperTime, paperWords } from "@/v5/policy";
+import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
 import { paperHeartbeat } from "@/features/bots/fleet-health";
-import { StrategyChartsSlot } from "@/components/bots/StrategyChartsSlot";
 import "@/components/bots/fleet-strip.css";
 
 import { NoServerCard } from "@/components/NoServerCard";
@@ -622,11 +622,93 @@ const PAPER_SECTIONS = {
   history: "controller-performance/history?interval=5m&limit=1000",
 } as const;
 
-function PaperValue({ value }: { value: unknown }) {
-  if (value === null || value === undefined) return <span>Unavailable · owner did not publish this value</span>;
-  if (typeof value !== "object") return <span>{String(value)}</span>;
-  if (Array.isArray(value)) return value.length ? <ol className="v5-paper-records">{value.map((row, index) => <li key={index}>{row && typeof row === "object" && !Array.isArray(row) ? <details><summary>{paperRecordSummary(row as Record<string, unknown>)}</summary><PaperValue value={row} /></details> : <PaperValue value={row} />}</li>)}</ol> : <span>No records in this owner snapshot</span>;
-  return <dl className="v5-paper-values">{Object.entries(value).map(([key, child]) => <div key={key}><dt>{key.replaceAll("_", " ")}</dt><dd>{Array.isArray(child) && child.length > 0 ? <details><summary>{child.length} owner records · expand full values</summary><PaperValue value={child} /></details> : <PaperValue value={child} />}</dd></div>)}</dl>;
+type PaperRow = Record<string, unknown>;
+const paperObject = (value: unknown): PaperRow => value && typeof value === "object" && !Array.isArray(value) ? value as PaperRow : {};
+const paperRows = (value: unknown): PaperRow[] => Array.isArray(value) ? value.map(paperObject) : [];
+type PaperChartsProps = { bot: string; server: string; observations: PaperRead[] };
+function CollectingPaperCharts() {
+  return <div className="paper-chart-collecting"><PaperBadge state="collecting">Collecting</PaperBadge><h3>Closed one-minute price series</h3><p>Waiting for the bounded paper candle export and its chart binding. Fill and executor records remain available below. Empty charts are not zero trades.</p></div>;
+}
+const PaperStrategyCharts = lazy<ComponentType<PaperChartsProps>>(async () => {
+  const workspace = await import("@workspace-monitoring") as { PaperStrategyCharts?: ComponentType<PaperChartsProps> };
+  return { default: workspace.PaperStrategyCharts ?? CollectingPaperCharts };
+});
+
+function PaperBadge({ children, state }: { children: React.ReactNode; state?: string }) {
+  return <span className="paper-badge" data-state={state}>{children}</span>;
+}
+
+function PaperMetric({ label, value, note }: { label: string; value: React.ReactNode; note?: string }) {
+  return <div className="paper-metric"><dt>{label}</dt><dd>{value}</dd>{note && <small>{note}</small>}</div>;
+}
+
+function PaperRecords({ read, now, kind }: { read?: PaperRead; now: number; kind: "fills" | "executors" | "positions" }) {
+  const [copied, setCopied] = useState("");
+  const [copyError, setCopyError] = useState(false);
+  const rows = paperRows(read?.data);
+  const idKey = kind === "fills" ? "trade_id" : kind === "positions" ? "position_id" : "executor_id";
+  const unit = (row: PaperRow) => typeof row.unit === "string" ? row.unit : "USDC";
+  const base = (row: PaperRow) => String(row.trading_pair ?? "").split("-")[0] || "base units";
+  const columns: TableColumn<PaperRow>[] = [
+    { id: "id", header: kind === "fills" ? "Fill ID" : kind === "positions" ? "Position ID" : "Executor ID", value: row => String(row[idKey] ?? "Not published"), size: 180, cell: row => <button className="paper-copy" onClick={() => { const id = String(row[idKey] ?? ""); void navigator.clipboard.writeText(id).then(() => { setCopied(id); setCopyError(false); }, () => setCopyError(true)); }} title="Copy full owner ID">{copied === row[idKey] ? "Copied" : String(row[idKey] ?? "Not published")}</button> },
+    { id: "pair", header: "Pair", value: row => String(row.trading_pair ?? "Not published"), size: 130 },
+    { id: "state", header: kind === "fills" ? "Side" : "State", value: row => paperWords(row.side ?? row.state), size: 150 },
+    { id: "quantity", header: kind === "executors" ? "Remaining close" : "Quantity", value: row => paperAmount(kind === "executors" ? row.remaining_close_quantity : row.quantity, base(row), 6), size: 180 },
+    ...(kind === "fills" ? [
+      { id: "price", header: "Fill price", value: (row: PaperRow) => paperAmount(row.price, "USDC"), size: 160 },
+      { id: "fee", header: "Fee", value: (row: PaperRow) => paperAmount(row.fee_amount, String(row.fee_currency ?? "unit not published")), size: 160 },
+      { id: "time", header: "Filled at · UTC", value: (row: PaperRow) => paperTime(row.event_at_ms, now), size: 330 },
+    ] : [{ id: "basis", header: "Remaining basis", value: (row: PaperRow) => paperAmount(row.remaining_basis_quote, unit(row)), size: 175 }]),
+    ...(kind === "executors" ? [
+      { id: "realized", header: "Realized PnL", value: (row: PaperRow) => paperAmount(row.realized_pnl_quote, unit(row), 6), size: 180 },
+      { id: "unrealized", header: "Unrealized PnL", value: (row: PaperRow) => paperAmount(row.unrealized_pnl_quote, unit(row), 6), size: 180 },
+      { id: "closed", header: "Closed at · UTC", value: (row: PaperRow) => paperTime(row.close_at_ms, now), size: 330 },
+    ] : []),
+    { id: "detail", header: "Owner detail", value: row => String(row.executor_id ?? ""), size: 340, wrap: true, cell: row => <details><summary>Expand record</summary><dl className="paper-detail"><dt>Executor</dt><dd>{String(row.executor_id ?? "Not published")}</dd><dt>Controller</dt><dd>{String(row.controller_id ?? "Not published")}</dd>{kind === "positions" && <><dt>Protected exit</dt><dd>{paperWords(row.protected_exit)}</dd></>}{kind === "executors" && <><dt>Terminal receipt</dt><dd>{paperWords(row.terminal)}</dd><dt>Close reason</dt><dd>{paperWords(row.close_type)}</dd><dt>Residual inventory</dt><dd>{paperAmount(row.quantity, base(row), 6)}</dd><dt>Realized PnL</dt><dd>{paperAmount(row.realized_pnl_quote, unit(row), 6)}</dd><dt>Unrealized PnL</dt><dd>{paperAmount(row.unrealized_pnl_quote, unit(row), 6)}</dd><dt>Fees paid</dt><dd>{paperAmount(row.cum_fees_quote, unit(row), 6)}</dd></>}</dl></details> },
+  ];
+  return <section className="paper-section"><div className="paper-section-heading"><h2>{kind === "positions" ? "Holdings" : kind === "fills" ? "Recent fills" : "Executors"}</h2><PaperBadge state={read ? paperReadState(read, now) : "collecting"}>{paperWords(read ? paperReadState(read, now) : "collecting")}</PaperBadge></div><p className="paper-caption">{paperTime(read?.generated_at_ms, now)} · Bounded owner records, not lifetime totals. Search, filter or resize columns.</p>{read?.reason && <p className="paper-caption">{paperWords(read.reason)}</p>}<DataTable rows={rows} columns={columns} rowId={(row, index) => String(row[idKey] ?? index)} label={`Paper ${kind}`} pageSize={8} emptyText={read?.data == null ? "Owner records are not available in this snapshot." : "No records in this owner snapshot."} maxHeight={360} exportName={`paper-${kind}`} />{read?.next_cursor && <p className="paper-caption">More records exist beyond this page; totals must not be inferred from these rows.</p>}{copyError && <p role="alert">Copy was unavailable. Select the owner ID to copy it manually.</p>}</section>;
+}
+
+export function PaperWorkspace({ reads, accountingRead, accountingError = false, now, reportAt, heartbeat, bot }: { reads: PaperRead[]; accountingRead?: PaperRead; accountingError?: boolean; now: number; reportAt: number | null; heartbeat: string; bot: string }) {
+  const bySection = Object.fromEntries(reads.map(read => [read.section, read]));
+  const wallet = paperObject(bySection.wallet?.data);
+  const assets = paperRows(wallet.assets);
+  const cash = assets.find(asset => asset.asset === wallet.quote_asset);
+  const positions = paperRows(bySection.positions?.data);
+  const executors = paperRows(bySection.executors?.data);
+  const accounting = paperLifetimeTotals(accountingRead, reads[0], now);
+  const accountingState = accountingRead ? paperReadState(accountingRead, now) : "collecting";
+  const accountingNote = accounting ? "Lifetime · native receipts" : accountingError ? "Lifetime · owner read unavailable" : accountingState === "stale" ? "Lifetime · owner snapshot is stale" : accountingState === "degraded" ? "Lifetime · owner totals are incomplete" : "Lifetime · awaiting coherent owner totals";
+  const openExecutors = paperOpenExecutorCount(bySection.executors, now);
+  const decisions = paperObject(bySection.decisions?.data);
+  const risk = paperObject(bySection.risk?.data);
+  const rails = paperRows(risk.rails);
+  const hold = paperRiskHold(bySection.risk);
+  return <>
+    {hold && <aside className="paper-fleet" role="status"><div className="paper-section-heading"><h2>New acquisitions held</h2><PaperBadge state="degraded">Owner maintenance required</PaperBadge></div><p>{hold}</p><p className="paper-caption">{paperWords(risk.control_hold)}. Clock high-water mark: {paperTime(paperObject(risk.clock_recovery).high_water_ms, now)}. Protective exits: {paperWords(risk.protected_exits)}.</p></aside>}
+    <section className="paper-fleet"><div className="paper-section-heading"><div><span className="paper-eyebrow">SIMULATED ACCOUNT</span><h2>Paper fleet</h2></div><PaperBadge state={heartbeat === "Fresh" ? "available" : "stale"}>{heartbeat} · heartbeat</PaperBadge></div><p className="paper-caption">{bot} · Valuation: {paperWords(wallet.valuation_policy)}. Book freshness and completeness are separate from process heartbeat.</p><dl className="paper-metrics">
+      <PaperMetric label="Wallet equity" value={paperAmount(wallet.equity_quote, "USDC")} note={paperWords(bySection.wallet?.reason ?? bySection.wallet?.state)} />
+      <PaperMetric label="Available cash" value={paperAmount(cash?.available, "USDC")} />
+      <PaperMetric label="Holdings value" value={paperAmount(wallet.holdings_value_quote, "USDC")} note="Owner aggregate; never inferred from a page" />
+      <PaperMetric label="Open executors" value={openExecutors ?? "Not published"} note="Current owner snapshot · excludes terminal receipts" />
+      <PaperMetric label="Realized PnL" value={paperAmount(accounting?.realized_pnl_quote, "USDC")} note={accountingNote} />
+      <PaperMetric label="Unrealized PnL" value={paperAmount(accounting?.unrealized_pnl_quote, "USDC")} note={accountingNote} />
+      <PaperMetric label="Fees paid" value={paperAmount(accounting?.fees_paid_quote, "USDC")} note={accountingNote} />
+      <PaperMetric label="Traded volume" value={paperAmount(accounting?.volume_traded_quote, "USDC")} note={accountingNote} />
+      <PaperMetric label="Last report" value={paperTime(reportAt, now)} note="Native process heartbeat" />
+    </dl><p className="paper-caption">{accounting ? <>Filled orders: {typeof accounting.entry_count === "number" ? accounting.entry_count : "Not published"} entries · {typeof accounting.exit_count === "number" ? accounting.exit_count : "Not published"} exits. Accounting since: {paperTime(accounting.accounting_since_ms, now)}. Counts are distinct filled orders, not actions.</> : <>Lifetime accounting: {accountingError ? "Owner read unavailable; no totals are inferred from recent fills." : paperWords(accountingRead?.reason ?? "Collecting the snapshot-bound owner aggregate; no totals are inferred from recent fills.")}</>}</p></section>
+    <section className="paper-section"><div className="paper-section-heading"><h2>Pair workspace</h2><span className="paper-caption">5 pairs · same fixed-target recipe</span></div><div className="paper-pairs">{["BNB-USDC", "BTC-USDC", "ETH-USDC", "SOL-USDC", "XRP-USDC"].map(pair => {
+      const position = positions.find(row => row.trading_pair === pair);
+      const executor = executors.find(row => row.executor_id === position?.executor_id);
+      return <article className="paper-pair" key={pair}><div className="paper-section-heading"><h3>{pair}</h3><PaperBadge>{position ? paperWords(position.state) : "No record"}</PaperBadge></div><dl className="paper-detail"><dt>Position</dt><dd>{position ? paperAmount(position.quantity, pair.split("-")[0], 6) : "Not published"}</dd><dt>Target price</dt><dd>{paperAmount(executor?.target_price, "USDC")}</dd><dt>Exit progress</dt><dd>{executor ? paperWords(executor.state) : "Not published"}</dd><dt>Protected exit</dt><dd>{paperWords(position?.protected_exit)}</dd></dl><a className="paper-chart-link" href={`#paper-charts-${bot}`}>Chart availability →</a></article>;
+    })}</div></section>
+    <section className="paper-section" id={`paper-charts-${bot}`} aria-label="Paper strategy charts"><div className="paper-section-heading"><h2>Pair charts</h2><span className="paper-caption">Native closed candles only · no inferred prices</span></div><Suspense fallback={<p role="status">Loading paper chart workspace…</p>}><PaperStrategyCharts bot={bot} server="rsibot-v5" observations={reads} /></Suspense></section>
+    <PaperRecords read={bySection.positions} kind="positions" now={now} />
+    <PaperRecords read={bySection.fills} kind="fills" now={now} />
+    <PaperRecords read={bySection.executors} kind="executors" now={now} />
+    <section className="paper-section"><div className="paper-section-heading"><h2>Risk rails & entry latch</h2><PaperBadge state="degraded">{paperWords(bySection.risk?.state ?? "collecting")}</PaperBadge></div><p className="paper-caption">{paperWords(bySection.risk?.reason ?? "controls_not_integrated")}. Loss rails stop new acquisitions, never force a sale.</p><div className="paper-rails">{rails.length ? rails.map((rail, index) => <article className="paper-pair" key={index}><h3>{paperWords(rail.label)}</h3><p>{paperAmount(rail.used_quote, "USDC")} of {paperAmount(rail.limit_quote, "USDC")}</p>{typeof rail.used_percent === "number" && Number.isFinite(rail.used_percent) && rail.used_percent >= 0 && rail.used_percent <= 100 ? <progress max={100} value={rail.used_percent} aria-label={`${paperWords(rail.label)} use`} /> : <p className="paper-caption">Use not published</p>}</article>) : ["Pair exposure", "Program exposure", "New acquisitions"].map(label => <article className="paper-pair" key={label}><h3>{label}</h3><PaperBadge>{hold && label === "New acquisitions" ? "Held by owner" : "Not connected"}</PaperBadge><div className="paper-empty-rail" aria-hidden="true" /><p className="paper-caption">{hold && label === "New acquisitions" ? "Owner maintenance acknowledgement is required. Protective exits remain enabled." : "No owner limit or latch observation. No use bar is inferred."}</p></article>)}</div></section>
+    <section className="paper-section"><h2>Decisions & paper control</h2><div className="paper-rails"><article><h3>Exit policy</h3><p>{paperWords(paperObject(decisions.trailing).reason)}</p><p>Underwater positions remain held. Protective exits must survive entry halt.</p></article><article><h3>Acquisition plan</h3><p>{paperWords(paperObject(decisions.dca).reason)}</p><p>Comparable history: {paperWords(paperObject(bySection.history?.data).reason)}</p></article><article><h3>{paperControlState(null)}</h3><p>Read-only dashboard. A separately authenticated owner path must acknowledge paper commands before controls can appear here.</p></article></div><details className="paper-provenance"><summary>Observation provenance</summary><p>Snapshot: {reads[0]?.snapshot_id ?? "Not published"}</p><p>Observed: {paperTime(reads[0]?.generated_at_ms, now)}</p></details></section>
+  </>;
 }
 
 async function readPaper(path: string): Promise<PaperRead> {
@@ -655,16 +737,18 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
       return [...sections, status];
     },
   });
+  const snapshot = query.data?.[0];
+  const accounting = useQuery({
+    queryKey: ["v5-paper-accounting", bot, snapshot?.snapshot_id], enabled: Boolean(snapshot?.snapshot_id), retry: false,
+    queryFn: () => readPaper(`/api/v1/servers/rsibot-v5/fleet/accounting?snapshot_id=${encodeURIComponent(snapshot!.snapshot_id!)}`),
+  });
   const clock = paperHeartbeat(generatedAt === null ? null : Math.floor(generatedAt * 1000), ownerState, now);
-  const age = clock.ageSeconds;
   const heartbeat = clock.current ? "Fresh" : ownerState === "UNAVAILABLE" ? "Unavailable" : "Stale";
   return <div className="v5-paper-bots" data-layout={layout}>
     <header className="v5-page-heading"><div><h1>Paper bots</h1><p>{bot} · simulated wallet · live disabled</p></div><div className="v5-button-row"><button className="v5-button" aria-pressed={layout === "grid"} onClick={() => setLayout("grid")}>Grid</button><button className="v5-button" aria-pressed={layout === "compact"} onClick={() => setLayout("compact")}>Compact</button><button className="v5-button" onClick={() => void query.refetch()}>Refresh paper data</button></div></header>
-    <section className="v5-panel"><h2>{heartbeat} · process heartbeat</h2><p>Last native report: {age === null ? "Unavailable" : `${Math.floor(age)}s ago`}. Pair books, valuation and data completeness are reported separately below.</p><strong>{paperControlState(null)}</strong><p>Use the separately authenticated owner paper-control path when enabled by the operator. Entry halt must preserve protective exits; this dashboard cannot stop or liquidate the bot.</p><p>Fixed-target recipe: trailing exit is not applicable. DCA is not applicable without an owner-published active plan.</p></section>
     {query.isPending && <p role="status">Reading bounded native paper observations…</p>}
     {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
-    <div className="v5-paper-panels">{query.data?.map(read => <section className="v5-panel" key={read.section} data-state={paperReadState(read, now)}><h2>{read.section === "positions" ? "Holdings" : read.section === "status" ? "Native owner status" : read.section[0].toUpperCase() + read.section.slice(1)}</h2><p>{paperReadState(read, now)}{read.reason ? ` · ${read.reason}` : ""}</p><p className="v5-muted">Snapshot {read.snapshot_id ?? "not yet published"} · as of {read.generated_at_ms === null ? "unavailable" : new Date(read.generated_at_ms).toISOString()}</p><PaperValue value={read.data} />{read.next_cursor && <p>More owner records exist beyond this bounded page. Cursor retained by the owner; this is not a complete lifetime total.</p>}</section>)}</div>
-    <StrategyChartsSlot bot={bot} server="rsibot-v5" />
+    {query.data && <PaperWorkspace reads={query.data} accountingRead={accounting.data} accountingError={accounting.isError} now={now} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} />}
   </div>;
 }
 

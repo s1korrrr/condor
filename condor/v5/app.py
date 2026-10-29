@@ -427,6 +427,16 @@ def create_app(
             try:
                 payload = await api.observation(result["source_route"])
             except UpstreamError as exc:
+                if result.get("section") == "accounting" and exc.http_status in {
+                    404,
+                    501,
+                }:
+                    result.pop("source_route")
+                    result.update(
+                        state="collecting",
+                        reason="Lifetime accounting export is not yet published by the observation API.",
+                    )
+                    return result
                 raise HTTPException(exc.http_status, detail={"code": exc.code}) from exc
             return read_compatibility_path(path, paper, paper_read=payload)
         return result

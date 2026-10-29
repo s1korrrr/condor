@@ -124,6 +124,7 @@ class V5Upstream:
                 "decisions",
                 "history",
                 "operations",
+                "accounting",
             )
         }
         if paper_route:

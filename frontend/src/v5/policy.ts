@@ -62,6 +62,65 @@ export function paperControlState(_risk: unknown): string {
   return "Paper control not enabled";
 }
 
+export function paperWords(value: unknown): string {
+  if (value == null || value === "") return "Not published";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  const labels: Record<string, string> = {
+    midpoint_fresh_book_only: "Mid of fresh book",
+    controls_not_integrated: "Risk controls not yet connected to this paper bot",
+    insufficient_comparable_history: "Collecting comparable history",
+    fixed_target_recipe: "Fixed-target recipe; trailing exit does not apply",
+    no_active_plan: "No active DCA plan",
+    clock_persistence_failed: "Clock durability failed; new acquisitions are held",
+    partial_close: "Partially closed",
+    degraded: "Incomplete", available: "Available", not_applicable: "Not applicable",
+  };
+  const text = String(value);
+  const words = text.includes("_") || /^[A-Z_]+$/.test(text) ? text.toLowerCase().replaceAll("_", " ") : text;
+  return labels[text] ?? words.replace(/^./, first => first.toUpperCase());
+}
+
+export function paperAmount(value: unknown, unit: string, places = 4): string {
+  if (typeof value !== "string" || !/^-?\d+(\.\d+)?$/.test(value) || value.length > 128) return "Not published";
+  const negative = value.startsWith("-");
+  const [whole, fraction = ""] = value.replace(/^-/, "").split(".");
+  const digits = fraction.padEnd(places + 1, "0");
+  const scaled = BigInt(whole + digits.slice(0, places)) + (digits[places] >= "5" ? 1n : 0n);
+  const rounded = scaled.toString().padStart(places + 1, "0");
+  const integer = places ? rounded.slice(0, -places) : rounded;
+  return `${negative && scaled !== 0n ? "−" : ""}${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${places ? "." + rounded.slice(-places) : ""} ${unit}`;
+}
+
+export function paperTime(value: unknown, now: number): string {
+  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0 || value > now + 5000) return "Not published";
+  const date = new Date(value);
+  if (!Number.isFinite(date.getTime())) return "Not published";
+  const seconds = Math.max(0, Math.floor((now - value) / 1000));
+  const age = seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m` : seconds < 86400 ? `${Math.floor(seconds / 3600)}h` : `${Math.floor(seconds / 86400)}d`;
+  return `${date.toISOString().slice(0, 19).replace("T", " ")} UTC · ${age} ago`;
+}
+
+export function paperLifetimeTotals(read: import("./contracts").PaperRead | undefined, snapshot: import("./contracts").PaperRead | undefined, now: number): Record<string, unknown> | null {
+  if (!read || !snapshot || read.section !== "accounting" || paperReadState(read, now) !== "available" || !paperSnapshotsAgree([read, snapshot])) return null;
+  const data = read.data as { program?: unknown } | null;
+  return data?.program && typeof data.program === "object" && !Array.isArray(data.program) ? data.program as Record<string, unknown> : null;
+}
+
+export function paperOpenExecutorCount(read: import("./contracts").PaperRead | undefined, now: number): number | null {
+  if (!read || paperReadState(read, now) !== "available" || read.next_cursor || !Array.isArray(read.data)) return null;
+  const rows = read.data as Record<string, unknown>[];
+  const terminal = new Set(["closed", "completed", "terminated"]);
+  const active = new Set(["active", "running", "partial_close", "open", "not_started", "shutting_down"]);
+  if (rows.some(row => row.terminal !== true && !terminal.has(String(row.state).toLowerCase()) && !active.has(String(row.state).toLowerCase()))) return null;
+  return rows.filter(row => row.terminal !== true && !terminal.has(String(row.state).toLowerCase())).length;
+}
+
+export function paperRiskHold(read: import("./contracts").PaperRead | undefined): string | null {
+  const data = read?.data as Record<string, unknown> | null;
+  if (data?.control_hold !== "clock_persistence_failed") return null;
+  return typeof data.explanation === "string" ? data.explanation : "New acquisitions are held until explicit owner maintenance acknowledgement; protective exits remain enabled.";
+}
+
 export function paperReadiness(_owner: unknown) {
   return {
     production: "NOT_READY", live: "DISABLED", economics: "V5_NOT_SUPPORTED",
@@ -70,6 +129,13 @@ export function paperReadiness(_owner: unknown) {
       "P0 · Durable paper controls and protected exits: NOT_RUN in this dashboard",
       "P0 · Full route and screenshot qualification: NOT_RUN in this dashboard",
       "P0 · Continuous supervision and restore proof: NOT_RUN in this dashboard",
+    ],
+    gates: [
+      { id: "recovery", priority: "P0", label: "Recovery with open obligations", status: "NOT_RUN", evidence: null, next: "Restore a copied nonempty wallet and prove protective exits survive." },
+      { id: "controls", priority: "P0", label: "Durable paper controls", status: "NOT_RUN", evidence: null, next: "Bind owner acknowledgements and prove entry halt preserves exits." },
+      { id: "qualification", priority: "P0", label: "Route and visual qualification", status: "NOT_RUN", evidence: null, next: "Attach reviewed evidence for every production route and state." },
+      { id: "supervision", priority: "P0", label: "Supervision and restore", status: "NOT_RUN", evidence: null, next: "Attach continuous supervision and bounded restore proof." },
+      { id: "economics", priority: "P1", label: "Historical economic support", status: "NOT_RUN", evidence: null, next: "V5 historical economic support is not connected to this dashboard." },
     ],
   };
 }

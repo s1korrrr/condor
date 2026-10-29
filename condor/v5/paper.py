@@ -83,6 +83,39 @@ def validate_paper_read(
     try:
         encoded = json.dumps(payload, allow_nan=False)
         _validate_read_tree(payload.get("data"))
+        if section == "accounting" and payload.get("data") is not None:
+            data = payload["data"]
+            if not isinstance(data, dict) or not isinstance(data.get("program"), dict):
+                raise ValueError("invalid lifetime accounting")
+            controllers = data.get("controllers", {})
+            if not isinstance(controllers, dict) or len(controllers) > MAX_CONTROLLERS:
+                raise ValueError("invalid lifetime controllers")
+            for total in [data["program"], *controllers.values()]:
+                if not isinstance(total, dict):
+                    raise ValueError("invalid lifetime totals")
+                for key in ("entry_count", "exit_count"):
+                    value = total.get(key)
+                    if value is not None and (type(value) is not int or value < 0):
+                        raise ValueError("invalid lifetime count")
+                since = total.get("accounting_since_ms")
+                if since is not None and (
+                    type(since) is not int or not 0 <= since <= now_ms + 5000
+                ):
+                    raise ValueError("invalid accounting clock")
+                for key in (
+                    "fees_paid_quote",
+                    "realized_pnl_quote",
+                    "unrealized_pnl_quote",
+                    "volume_traded_quote",
+                ):
+                    value = total.get(key)
+                    if value is not None and (
+                        not isinstance(value, str)
+                        or len(value) > 128
+                        or re.fullmatch(r"-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?", value)
+                        is None
+                    ):
+                        raise ValueError("invalid lifetime amount")
     except (TypeError, ValueError):
         raise HTTPException(502, detail={"code": "paper_read_schema_invalid"}) from None
     if len(encoded.encode()) > MAX_STATUS_BYTES:
@@ -163,7 +196,8 @@ def _validate_read_tree(value: Any, key: str = "", depth: int = 0) -> None:
         for child in value:
             _validate_read_tree(child, "", depth + 1)
     elif (
-        not key.endswith(
+        key not in {"fee_quote_valuation_basis", "count_basis"}
+        and not key.endswith(
             (
                 "_currency",
                 "_asset",

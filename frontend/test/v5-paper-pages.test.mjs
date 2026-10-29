@@ -13,4 +13,6 @@ test('paper uptime cannot clear program P0s or economic support', () => {
   assert.equal(readiness.live, 'DISABLED');
   assert.equal(readiness.economics, 'V5_NOT_SUPPORTED');
   assert.ok(readiness.openGates.length > 0);
+  assert.equal(readiness.gates.filter(gate => gate.priority === 'P0').length, 4);
+  assert.ok(readiness.gates.every(gate => gate.status === 'NOT_RUN' && gate.evidence === null));
 });

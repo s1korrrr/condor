@@ -21,6 +21,7 @@ ROUTES = {
     "/api/v1/servers/rsibot-v5/fleet/holdings": "positions",
     "/api/v1/servers/rsibot-v5/fleet/fills?limit=100": "fills",
     "/api/v1/servers/rsibot-v5/fleet/summary": "wallet",
+    "/api/v1/servers/rsibot-v5/fleet/accounting": "accounting",
     f"/api/v1/servers/rsibot-v5/bots/{BOT}/executors": "executors",
     f"/api/v1/servers/rsibot-v5/bots/{BOT}/risk": "risk",
     f"/api/v1/servers/rsibot-v5/bots/{BOT}/decisions": "decisions",
@@ -42,7 +43,24 @@ def envelope(section="status", **changes):
         "boot_id": "boot-a",
         "sequence": 7,
         "generated_at_ms": int(NOW * 1000),
-        "data": {"amount": "51.089087718", "unit": "USDC"},
+        "data": {
+            "amount": "51.089087718",
+            "unit": "USDC",
+            **(
+                {
+                    "program": {
+                        "entry_count": 1,
+                        "exit_count": 1,
+                        "fees_paid_quote": "0.1408",
+                        "realized_pnl_quote": "0.7192",
+                        "unrealized_pnl_quote": "0.54",
+                        "volume_traded_quote": "140.8",
+                    }
+                }
+                if section == "accounting"
+                else {}
+            ),
+        },
     }
     value.update(changes)
     return value
@@ -63,6 +81,70 @@ def test_missing_section_is_degraded_not_a_fabricated_empty_wallet(tmp_path):
     )
     assert result["state"] == "degraded"
     assert result["data"] is None
+
+
+@pytest.mark.parametrize(
+    "status,expected", [(404, 200), (501, 200), (503, 503), (401, 401)]
+)
+def test_optional_accounting_is_collecting_only_when_not_published(
+    tmp_path, status, expected
+):
+    from test_v5_paper_binding import client_for
+    from condor.v5.upstream import UpstreamError
+
+    class Source:
+        async def observation(self, path):
+            assert path == "/v1/paper/accounting"
+            raise UpstreamError("upstream_unavailable", http_status=status)
+
+    with client_for(tmp_path, Source()) as client:
+        response = client.get(
+            "/api/v5/dashboard/read",
+            params={"path": "/api/v1/servers/rsibot-v5/fleet/accounting"},
+        )
+        assert response.status_code == expected
+        if expected == 200:
+            assert response.json()["state"] == "collecting"
+            assert response.json()["data"] is None
+            assert response.json()["snapshot_id"] is None
+
+
+@pytest.mark.parametrize(
+    "field,value",
+    [
+        ("entry_count", True),
+        ("exit_count", -1),
+        ("volume_traded_quote", 140),
+        ("accounting_since_ms", int(NOW * 1000) + 6000),
+    ],
+)
+def test_accounting_rejects_untyped_totals_and_future_clocks(tmp_path, field, value):
+    packet = envelope("accounting")
+    packet["data"]["program"][field] = value
+    with pytest.raises(HTTPException) as caught:
+        read_compatibility_path(
+            "/api/v1/servers/rsibot-v5/fleet/accounting",
+            observe(tmp_path),
+            paper_read=packet,
+        )
+    assert caught.value.status_code == 502
+
+
+def test_accounting_keeps_native_receipt_provenance_and_decimal_totals(tmp_path):
+    packet = envelope("accounting")
+    total = packet["data"]["program"]
+    total.update(
+        fees_paid={"USDC": "0.1408"},
+        fee_quote_valuation_basis="exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once",
+        count_basis="distinct_native_filled_buy_and_sell_orders_not_actions",
+        unavailable_reasons={},
+    )
+    result = read_compatibility_path(
+        "/api/v1/servers/rsibot-v5/fleet/accounting",
+        observe(tmp_path),
+        paper_read=packet,
+    )
+    assert result["data"]["program"] == total
 
 
 @pytest.mark.parametrize(

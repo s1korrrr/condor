@@ -229,6 +229,7 @@ def paper_read_route(path: str, query: str, bot: str | None) -> tuple[str, str] 
         "fleet/holdings": "positions",
         "fleet/fills": "fills",
         "fleet/summary": "wallet",
+        "fleet/accounting": "accounting",
         "account-balances": "wallet",
         "controller-performance/history": "history",
         f"bots/{bot}/native/status": "status",

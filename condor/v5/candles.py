@@ -114,6 +114,8 @@ def _rows(payload, key, limit, fields):
         for name, value in row.items():
             if name in numeric and value is not None and not _number(value):
                 raise OwnerUnavailable("owner_invalid_number")
+            if name in numeric and value is not None and value < 0:
+                raise OwnerUnavailable("owner_invalid_number")
             if (
                 name in {"ws_state", "volume_unit", "unavailable_reason"}
                 and value is not None
@@ -212,7 +214,9 @@ def validate_payload(view: str, payload: Any) -> dict:
         for index, name in enumerate(totals):
             totals[name] += row[index + 6]
         previous = row[0]
-    if payload.get("totals") != totals:
+    if payload.get("totals") != totals or any(
+        type(value) is not int for value in payload["totals"].values()
+    ):
         raise OwnerUnavailable("owner_inconsistent_totals")
     if (
         not isinstance(payload.get("volume_unit"), str)

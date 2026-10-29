@@ -16,7 +16,7 @@ async function read<T>(view: string, params = ""): Promise<T> {
   return body.data;
 }
 
-const utc = (value: number | null) => value == null ? "Unavailable" : new Date(value * 1000).toISOString().replace("T", " ").replace(".000Z", " UTC");
+const utc = (value: number | null) => value == null ? "Unavailable" : new Date(value * 1000).toISOString().replace("T", " ").replace(/\.\d+Z$/, " UTC");
 const show = (value: number | null | undefined) => value == null ? "Unavailable" : value.toLocaleString();
 const columns: TableColumn<Row>[] = [
   { id: "venue", header: "Venue", value: row => row.venue },
@@ -50,7 +50,7 @@ export function V5CandleStore() {
   const chart = candles.isError ? null : candles.data;
   const refresh = () => { void overview.refetch(); void symbols.refetch(); if (instrument) void candles.refetch(); };
   return <div className="space-y-5 min-w-0">
-    <header className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">Razer candle store</h2><p className="text-sm text-[var(--color-text-muted)]">Read-only owner observations · 1m candles · UTC · spot and perpetual lanes stay separate</p></div><button className="v5-button" onClick={refresh}>Refresh</button></header>
+    <header className="flex flex-wrap items-center justify-between gap-3"><div><h2 className="text-xl font-semibold">Razer candle store</h2><p className="text-sm text-[var(--color-text-muted)]">Read-only owner observations · 1m candles · UTC · spot and perpetual lanes stay separate</p></div><button className="q-chip" onClick={refresh}>Refresh</button></header>
     {overview.isPending ? <p role="status">Loading owner coverage…</p> : overview.isError ? <Unavailable error={overview.error} /> : null}
     {snapshot && <><div className="rounded-lg border border-[var(--color-border)] p-4 text-sm">Evaluated {utc(snapshot.now)} · Collector heartbeat {snapshot.status_age_s == null ? "unavailable" : `${snapshot.status_age_s <= 60 ? "current" : "delayed"} (${show(snapshot.status_age_s)} s)`}. This is collector liveness, not candle finality or source correctness.{snapshot.status_error && <p role="alert">Owner status: {snapshot.status_error}</p>}</div>
       <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">{snapshot.tiles.map(tile => <article key={tile.lane} className="min-w-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-4"><h3 className="font-semibold">{tile.venue} · {tile.segment}</h3><p className="text-sm">Owner lane health: {tile.health} · {show(tile.pairs_held)}/{show(tile.pairs_listed)} instruments held/listed</p><dl className="mt-3 grid grid-cols-3 gap-2 text-sm"><div><dt>Missing 7d</dt><dd>{show(tile.gaps_7d)} min</dd></div><div><dt>Pending</dt><dd>{show(tile.pending)} min</dd></div><div><dt>Unrecoverable 7d</dt><dd>{show(tile.unrecoverable_7d)} min</dd></div></dl>{tile.available === false && <p className="mt-2 text-sm">Lane unavailable: {tile.unavailable_reason ?? "Owner did not supply a reason"}</p>}{tile.partition_errors?.length > 0 && <p role="alert" className="mt-2 break-words text-sm">Partition read errors: {tile.partition_errors.map(item => `${item.day}: ${item.error}`).join("; ")}. Retained observations may be old.</p>}</article>)}</div></>}

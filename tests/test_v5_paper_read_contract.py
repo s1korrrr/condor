@@ -207,6 +207,100 @@ def test_c1_risk_hold_requires_each_explanation(name):
     assert error.value.detail["section"] == "risk"
 
 
+@pytest.mark.parametrize(
+    "state", ["available", "collecting", "degraded", "stale", "not_applicable"]
+)
+@pytest.mark.parametrize("control", ["missing", None, "clock_persistence_failed"])
+@pytest.mark.parametrize("explanation", [None, "", "   ", 7])
+def test_risk_holds_validate_each_entry_independent_of_control_and_state(
+    state, control, explanation
+):
+    from copy import deepcopy
+    from condor.v5.paper import validate_paper_read
+
+    data = deepcopy(C1_TARGET_HOLD_FIXTURES["clock-failure-hold"]["risk"])
+    if control == "missing":
+        data.pop("control_hold")
+    else:
+        data["control_hold"] = control
+    data["holds"][0]["explanation"] = explanation
+    with pytest.raises(HTTPException) as error:
+        validate_paper_read(
+            envelope("risk", state=state, reason="Owner read", data=data),
+            section="risk",
+            bot=BOT,
+            now_ms=int(NOW * 1000),
+        )
+    assert error.value.status_code == 502
+    assert error.value.detail["reason"] == "schema_invalid"
+    assert error.value.detail["section"] == "risk"
+    assert error.value.detail["holds"] == [{"reason": "clock_persistence_failed"}]
+
+
+@pytest.mark.parametrize(
+    "control,holds",
+    [
+        (None, [{"reason": "clock_invalid", "explanation": "Clock held"}]),
+        ("clock_invalid", []),
+        (
+            "clock_invalid",
+            [{"reason": "clock_persistence_failed", "explanation": "Clock held"}],
+        ),
+        (None, [{"reason": "future_safety_hold", "explanation": "Owner held"}]),
+    ],
+)
+def test_risk_hold_inconsistency_is_typed_but_retains_structured_hold_signals(
+    control, holds
+):
+    from condor.v5.paper import validate_paper_read
+
+    with pytest.raises(HTTPException) as error:
+        validate_paper_read(
+            envelope("risk", data={"control_hold": control, "holds": holds}),
+            section="risk",
+            bot=BOT,
+            now_ms=int(NOW * 1000),
+        )
+    assert error.value.status_code == 502
+    assert error.value.detail["section"] == "risk"
+    assert error.value.detail["holds"]
+
+
+@pytest.mark.parametrize(
+    "reason,control",
+    [
+        ("clock_persistence_failed", None),
+        ("clock_invalid", "missing"),
+        ("stop_persistence_failed", None),
+        ("future_safety_hold", None),
+    ],
+)
+def test_authenticated_invalid_risk_preserves_hold_presence_without_trusting_explanation(
+    tmp_path, reason, control
+):
+    from test_v5_paper_binding import client_for
+
+    class Source:
+        async def observation(self, path):
+            data = {"holds": [{"reason": reason, "explanation": ""}]}
+            if control != "missing":
+                data["control_hold"] = control
+            return envelope("risk", data=data)
+
+    with client_for(tmp_path, Source()) as client:
+        response = client.get(
+            "/api/v5/dashboard/read",
+            params={"path": f"/api/v1/servers/rsibot-v5/bots/{BOT}/risk"},
+        )
+    assert response.status_code == 502
+    assert response.json()["detail"] == {
+        "code": "paper_read_schema_invalid",
+        "reason": "schema_invalid",
+        "section": "risk",
+        "holds": [{"reason": reason}],
+    }
+
+
 NOW = 1_800_000_000.0
 
 

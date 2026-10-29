@@ -189,31 +189,57 @@ export function paperOpenExecutorCount(read: import("./contracts").PaperRead | u
   return rows.filter(row => row.terminal !== true && !terminal.has(String(row.state).toLowerCase())).length;
 }
 
-export function paperRiskHold(read: import("./contracts").PaperRead | undefined): string | null {
-  return paperRiskHolds(read).map(hold => hold.explanation).join(" ") || null;
+export function paperRiskHold(read: import("./contracts").PaperRead | undefined): boolean {
+  return paperRiskHolds(read).length > 0;
 }
 
-export function paperRiskHolds(read: import("./contracts").PaperRead | undefined): { reason: string; explanation: string; action: string }[] {
-  if (paperSectionError(read)) return [];
-  const data = read?.data as Record<string, unknown> | null;
+export function paperRiskHolds(read: import("./contracts").PaperRead | undefined): { reason: string; label: string; explanation: string; action: string }[] {
+  const data = read?.data && typeof read.data === "object" && !Array.isArray(read.data) ? read.data as Record<string, unknown> : null;
   const actions: Record<string, string> = {
     stop_persistence_failed: "Owner action: review retained stop evidence, then use the owner-only emergency reset; resume entries cannot clear this hold.",
     clock_persistence_failed: "Owner action: review retained clock evidence, then give explicit owner maintenance acknowledgement; resume entries cannot clear this hold.",
     clock_invalid: "Owner action: restore a valid clock, review retained clock evidence, then give owner maintenance acknowledgement; resume entries cannot clear this hold.",
   };
-  const holds = Array.isArray(data?.holds) ? data.holds : data?.control_hold ? [{ reason: data.reason ?? data.control_hold, explanation: data.explanation }] : [];
-  return holds.filter((hold): hold is Record<string, unknown> => !!hold && typeof hold === "object" && typeof hold.reason === "string" && hold.reason in actions).map(hold => ({ reason: String(hold.reason), explanation: typeof hold.explanation === "string" ? hold.explanation : "New acquisitions are held; protective exits remain enabled.", action: actions[String(hold.reason)] }));
+  const defaults: Record<string, string> = {
+    stop_persistence_failed: "Stop durability is unproven. New acquisitions stay held pending the owner-only emergency reset.",
+    clock_persistence_failed: "Owner clock continuity could not be persisted or proven. New acquisitions stay held pending owner maintenance acknowledgement.",
+    clock_invalid: "The owner clock sample is invalid. Clears and native advancement stay held until the owner restores a valid clock and acknowledges recovery.",
+  };
+  const records = Array.isArray(data?.holds) ? data.holds.slice(0, 16).filter((hold): hold is Record<string, unknown> => !!hold && typeof hold === "object" && !Array.isArray(hold)) : [];
+  if (data?.control_hold != null && !records.some(hold => hold.reason === data.control_hold)) records.push({ reason: data.control_hold, explanation: data.explanation });
+  const unique = new Map<string, Record<string, unknown>>();
+  for (const hold of records) {
+    const reason = typeof hold.reason === "string" && hold.reason.trim() ? hold.reason.slice(0, 128) : "invalid owner hold";
+    if (!unique.has(reason)) unique.set(reason, hold);
+  }
+  return [...unique].map(([reason, hold]) => {
+    const known = Object.hasOwn(actions, reason);
+    return { reason, label: known ? paperWords(reason) : `Unrecognised owner hold: ${reason} · entries held`, explanation: typeof hold.explanation === "string" && hold.explanation.trim() ? hold.explanation : known ? defaults[reason] : "The owner published an unrecognised safety hold. Treat entries as held; its clearing procedure is not published.", action: known ? actions[reason] : "Owner action: review the retained hold evidence and use the owner's documented recovery procedure. This dashboard cannot clear the hold." };
+  });
 }
 
-export function paperExitProjection(position: Record<string, unknown> | undefined, executor: Record<string, unknown> | undefined) {
+export function paperExitProjection(position: Record<string, unknown> | undefined, positions: import("./contracts").PaperRead | undefined, executors: import("./contracts").PaperRead | undefined, now: number) {
+  const rows = paperCompleteRecords(executors, now);
+  const matches = rows?.filter(row => typeof position?.executor_id === "string" && row.executor_id === position.executor_id && row.terminal !== true && ["active", "running", "partial_close", "open", "not_started", "shutting_down"].includes(String(row.state).toLowerCase())) ?? [];
+  const verified = !!position && positions?.section === "positions" && executors?.section === "executors" && positions.bot_id === executors.bot_id && !!paperCompleteRecords(positions, now)?.includes(position) && paperCompleteRead(executors, now) && paperSnapshotsAgree([positions, executors]) && matches.length === 1 && matches[0].controller_id === position.controller_id && (matches[0].trading_pair == null || matches[0].trading_pair === position.trading_pair) && (position.protected_exit == null || matches[0].protected_exit === position.protected_exit);
+  if (!verified) {
+    const issue = !paperCompleteRead(positions, now) ? positions : executors;
+    const stale = paperReadState(issue, now) === "stale";
+    const reportedAt = issue?.source_at_ms ?? issue?.generated_at_ms;
+    const since = typeof reportedAt === "number" ? reportedAt + (stale && now - reportedAt > 30_000 ? 30_000 : 0) : null;
+    return { verified: false, targetPrice: null, basis: null, reason: `Protection status unknown · ${issue === positions ? "position" : "executor"} data ${stale ? "stale" : "incomplete"} since ${paperTime(since, now)}`, remainingAmount: null, order: null, protectedExit: null };
+  }
+  const executor = matches[0];
   const record = position && "target_price" in position ? position : executor;
   const order = record?.protected_exit_order;
   return {
+    verified: true,
     targetPrice: record?.target_price ?? null,
     basis: record?.target_basis ? paperWords(record.target_basis) : null,
     reason: record?.target_reason ? paperWords(record.target_reason) : "Owner exit target not published",
     remainingAmount: record?.remaining_target_amount ?? null,
     order: order && typeof order === "object" && !Array.isArray(order) ? order as Record<string, unknown> : null,
+    protectedExit: typeof position?.protected_exit === "boolean" ? position.protected_exit : null,
   };
 }
 
@@ -252,7 +278,9 @@ export function paperPairObservation(pair: string, positions: import("./contract
   const controller = complete(decisions) && positions && paperSnapshotsAgree([positions, decisions!]) && Array.isArray(data?.controllers) ? (data.controllers as Record<string, unknown>[]).find(row => row.pair === pair) : undefined;
   const info = controller?.custom_info && typeof controller.custom_info === "object" && !Array.isArray(controller.custom_info) ? controller.custom_info as Record<string, unknown> : {};
   const decision = candidates.filter(row => row.trading_pair === pair).sort((first, second) => Number(second.event_at_ms ?? 0) - Number(first.event_at_ms ?? 0))[0] ?? (info.modular_status != null ? { status: info.modular_status, reason: info.modular_reason, event_at_ms: decisions?.source_at_ms } : null);
-  return { position, executor, knownFlat, lastReportedFlat, decision };
+  const staleTimes = [positions, executors].filter(read => paperReadState(read, now) === "stale").map(read => read?.source_at_ms ?? read?.generated_at_ms).filter((time): time is number => typeof time === "number").map(time => now - time > 30_000 ? time + 30_000 : time);
+  const staleSince = staleTimes.length ? Math.min(...staleTimes) : null;
+  return { position, executor, knownFlat, lastReportedFlat, staleSince, decision };
 }
 
 export function paperOrderCount(value: unknown, kind: "entry" | "exit"): string {

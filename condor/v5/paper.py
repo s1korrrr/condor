@@ -641,6 +641,43 @@ C1_DATA_SCHEMA = json.loads(r"""
 """)
 
 
+def _paper_hold_signals(data: Any) -> list[dict[str, str]]:
+    if not isinstance(data, dict):
+        return []
+    signals = []
+    holds = data.get("holds")
+    if isinstance(holds, list):
+        signals.extend(row.get("reason") for row in holds[:16] if isinstance(row, dict))
+    if data.get("control_hold") is not None:
+        signals.append(data["control_hold"])
+    reasons = []
+    for signal in signals:
+        reason = (
+            signal[:128]
+            if isinstance(signal, str) and signal.strip()
+            else "invalid owner hold"
+        )
+        if reason not in reasons:
+            reasons.append(reason)
+    return [{"reason": reason} for reason in reasons]
+
+
+def _paper_schema_error(section: str, payload: Any) -> HTTPException:
+    detail = {
+        "code": "paper_read_schema_invalid",
+        "reason": "schema_invalid",
+        "section": section,
+    }
+    holds = (
+        _paper_hold_signals(payload.get("data"))
+        if section == "risk" and isinstance(payload, dict)
+        else []
+    )
+    if holds:
+        detail["holds"] = holds
+    return HTTPException(502, detail=detail)
+
+
 def validate_paper_read(
     payload: dict, *, section: str, bot: str | None, now_ms: int
 ) -> dict:
@@ -716,14 +753,7 @@ def validate_paper_read(
         )
         or (payload["state"] == "available" and payload.get("data") is None)
     ):
-        raise HTTPException(
-            502,
-            detail={
-                "code": "paper_read_schema_invalid",
-                "reason": "schema_invalid",
-                "section": section,
-            },
-        )
+        raise _paper_schema_error(section, payload)
     try:
         encoded = json.dumps(payload, allow_nan=False)
         _validate_read_tree(payload.get("data"))
@@ -762,14 +792,7 @@ def validate_paper_read(
                     ):
                         raise ValueError("invalid lifetime amount")
     except (TypeError, ValueError):
-        raise HTTPException(
-            502,
-            detail={
-                "code": "paper_read_schema_invalid",
-                "reason": "schema_invalid",
-                "section": section,
-            },
-        ) from None
+        raise _paper_schema_error(section, payload) from None
     if len(encoded.encode()) > MAX_STATUS_BYTES:
         raise HTTPException(502, detail={"code": "paper_read_capacity"})
     result = deepcopy(payload)
@@ -831,6 +854,35 @@ def _validate_section_data(section: str, data: Any) -> None:
     """
     if data is None:
         return
+    if section == "risk" and isinstance(data, dict):
+        known = {"clock_persistence_failed", "stop_persistence_failed", "clock_invalid"}
+        holds = data.get("holds", [])
+        if not isinstance(holds, list) or len(holds) > 3:
+            raise ValueError("invalid owner holds")
+        reasons = []
+        for hold in holds:
+            if (
+                not isinstance(hold, dict)
+                or not isinstance(hold.get("reason"), str)
+                or hold["reason"] not in known
+                or not isinstance(hold.get("explanation"), str)
+                or not hold["explanation"].strip()
+            ):
+                raise ValueError("invalid owner hold entry")
+            reasons.append(hold["reason"])
+        control = data.get("control_hold")
+        if (
+            control is not None
+            and (
+                not isinstance(control, str)
+                or control not in known
+                or control not in reasons
+            )
+            or reasons
+            and control is None
+            or len(set(reasons)) != len(reasons)
+        ):
+            raise ValueError("inconsistent owner holds")
     schema = C1_DATA_SCHEMA["properties"].get(section)
     if schema is not None:
         if not _matches_c1_schema(data, schema):

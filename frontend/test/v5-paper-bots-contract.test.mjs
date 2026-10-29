@@ -153,7 +153,9 @@ test('C1 native target and protected exit remain exact owner values', () => {
   const fixture = c1TargetHoldFixtures['partial-buy-cancel-tp-partial-close'];
   const position = fixture.positions[0];
   const executor = fixture.executors[0];
-  const exit = paperExitProjection(position, executor);
+  const positions = {...fresh,section:'positions',data:[position]};
+  const executors = {...fresh,section:'executors',data:[executor]};
+  const exit = paperExitProjection(position,positions,executors,now);
   assert.equal(exit.targetPrice, '102');
   assert.equal(exit.basis, 'Native placed fixed-target limit');
   assert.equal(exit.remainingAmount, '0.6');
@@ -161,11 +163,52 @@ test('C1 native target and protected exit remain exact owner values', () => {
   assert.equal(exit.order.state, 'partially_filled');
   assert.equal(exit.order.price, '102');
   assert.equal(exit.order.placed_at_ms, 1793275130000);
-  assert.equal(paperExitProjection({...position,target_price:null,target_reason:'owner_target_unavailable',target_basis:null,protected_exit_order:null,remaining_target_amount:null},executor).targetPrice,null);
-  assert.equal(paperExitProjection(undefined,undefined).targetPrice,null);
+  const unavailable = {...position,target_price:null,target_reason:'owner_target_unavailable',target_basis:null,protected_exit_order:null,remaining_target_amount:null};
+  assert.equal(paperExitProjection(unavailable,{...positions,data:[unavailable]},executors,now).targetPrice,null);
+  assert.equal(paperExitProjection(undefined,positions,executors,now).targetPrice,null);
   for (const [key,value] of [['target_price',{}],['target_basis',7],['protected_exit_order',{state:'open'}],['remaining_target_amount',true]]) {
     assert.match(paperSectionError({...fresh,section:'positions',data:[{...position,[key]:value}]}),/schema invalid/);
   }
+});
+
+test('affirmative protection requires coherent fresh complete sections and an exact active executor ID', () => {
+  const fixture = c1TargetHoldFixtures['partial-buy-cancel-tp-partial-close'];
+  const position = fixture.positions[0];
+  const positions = {...fresh,section:'positions',data:[position]};
+  const executors = {...fresh,section:'executors',data:fixture.executors};
+  const verified = paperExitProjection(position,positions,executors,now);
+  assert.equal(verified.protectedExit,true);
+  assert.equal(verified.targetPrice,'102');
+  for (const change of [{completeness:'partial'},{completeness:undefined},{generated_at_ms:now-31000},{snapshot_id:'other:1'},{bot_id:'another_bot'},{data:[]},{data:[{...fixture.executors[0],executor_id:'other'}]},{data:[{...fixture.executors[0],state:'TERMINATED'}]},{data:[{...fixture.executors[0],protected_exit:false}]},{data:[{...fixture.executors[0],trading_pair:'BTC-USDC'}]},{data:[fixture.executors[0],fixture.executors[0]]}]) {
+    const unknown = paperExitProjection(position,positions,{...executors,...change},now);
+    assert.equal(unknown.protectedExit,null);
+    assert.equal(unknown.targetPrice,null);
+    assert.equal(unknown.order,null);
+    assert.equal(unknown.remainingAmount,null);
+    assert.match(unknown.reason,/Protection status unknown · executor data (stale|incomplete) since/);
+  }
+  for (const change of [{completeness:'partial'},{generated_at_ms:now-31000},{snapshot_id:'other:1'}]) assert.equal(paperExitProjection(position,{...positions,...change},executors,now).protectedExit,null);
+  assert.equal(paperExitProjection({...position,executor_id:undefined},positions,executors,now).targetPrice,null);
+});
+
+test('hold presence never depends on explanation text, control_hold or envelope validity', () => {
+  for (const reason of ['stop_persistence_failed','clock_persistence_failed','clock_invalid']) {
+    for (const control of [undefined,null,reason]) for (const explanation of [undefined,null,'','   ']) {
+      const read = {...fresh,section:'risk',data:{control_hold:control,holds:[{reason,explanation}]}};
+      assert.ok(paperRiskHold(read));
+      assert.equal(paperRiskHolds(read)[0].reason,reason);
+      assert.ok(paperRiskHolds(read)[0].explanation.trim());
+      assert.match(paperRiskHolds(read)[0].action,/Owner action:/);
+      assert.ok(paperRiskHold({...read,reason:{}}));
+    }
+  }
+  for (const data of [{control_hold:'future_safety_hold',holds:[]},{holds:[{reason:'future_safety_hold',explanation:''}]}]) {
+    const read = {...fresh,section:'risk',data};
+    assert.ok(paperRiskHold(read));
+    assert.equal(paperRiskHolds(read)[0].label,'Unrecognised owner hold: future_safety_hold · entries held');
+    assert.match(paperRiskHolds(read)[0].action,/Owner/);
+  }
+  assert.equal(paperRiskHolds({...fresh,section:'risk',data:{control_hold:'clock_invalid',holds:[]}})[0].reason,'clock_invalid');
 });
 
 for (const [name,fixture] of Object.entries(c1TargetHoldFixtures).filter(([,fixture])=>fixture.risk)) {
@@ -226,6 +269,8 @@ test('known flat requires complete coherent positions and executors, and project
   const stale = paperPairObservation('BTC-USDC',positions,executors,decisions,now+31000);
   assert.equal(stale.knownFlat,false);
   assert.equal(stale.lastReportedFlat,true);
+  assert.equal(stale.staleSince,now+30000);
+  assert.equal(paperPairObservation('BTC-USDC',positions,{...executors,state:'stale',reason:'Owner report expired',source_at_ms:now-60000},decisions,now).staleSince,now-30000);
   assert.equal(paperPairObservation('BTC-USDC',positions,{...executors,snapshot_id:'other:1'},decisions,now+31000).lastReportedFlat,false);
 });
 
@@ -439,8 +484,8 @@ for (const field of ['fees_paid_quote','realized_pnl_quote','unrealized_pnl_quot
 
 test('clock durability hold explains entry-only protection and owner acknowledgement', () => {
   const risk = {...fresh,section:'risk',state:'degraded',reason:'clock_persistence_failed',data:c1TargetHoldFixtures['clock-failure-hold'].risk};
-  assert.equal(paperRiskHold(risk), risk.data.explanation);
+  assert.equal(paperRiskHold(risk), true);
   assert.equal(paperWords('clock_persistence_failed'), 'Clock durability failed; new acquisitions are held');
-  assert.equal(paperRiskHold({...risk,data:null}), null);
+  assert.equal(paperRiskHold({...risk,data:null}), false);
   assert.equal(paperControlState(risk), 'Paper control not enabled');
 });

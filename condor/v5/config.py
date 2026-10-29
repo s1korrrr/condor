@@ -9,6 +9,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
+from .paper import status_file_name_valid
+
 
 class ConfigurationError(ValueError):
     """Raised when the V5 process is missing an isolation boundary."""
@@ -26,6 +28,8 @@ class Settings:
     cookie_secure: bool = True
     stock_agents_root: Path | None = None
     frontend_dist: Path | None = None
+    # Optional read-only native paper status file; None keeps the unbound release.
+    paper_status_file: Path | None = None
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
@@ -126,6 +130,19 @@ class Settings:
                 "V5 observation and advisory request tokens must be different"
             )
 
+        paper_status_file = None
+        configured_paper = values.get("V5_PAPER_STATUS_FILE", "").strip()
+        if configured_paper:
+            paper_status_file = Path(configured_paper)
+            if (
+                not paper_status_file.is_absolute()
+                or os.path.normpath(configured_paper) != configured_paper
+                or not status_file_name_valid(paper_status_file)
+            ):
+                raise ConfigurationError(
+                    "V5_PAPER_STATUS_FILE must be an absolute normalized <bot>_paper.status.json path"
+                )
+
         return cls(
             runtime_root=runtime_root,
             dashboard_token_file=dashboard_token_file,
@@ -138,6 +155,7 @@ class Settings:
             not in {"0", "false", "no"},
             stock_agents_root=stock_agents_root,
             frontend_dist=frontend_dist,
+            paper_status_file=paper_status_file,
         )
 
 

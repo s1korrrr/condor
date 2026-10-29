@@ -424,6 +424,22 @@ def create_app(
             else read_compatibility_path(path, paper, resolve_paper_reads=True)
         )
         if paper is not None and isinstance(result, dict) and "source_route" in result:
+            if (
+                result.get("section") == "operations"
+                and config.host_operations_file is not None
+            ):
+                from .host_operations import read_host_operations
+
+                try:
+                    payload = await asyncio.to_thread(
+                        read_host_operations, config.host_operations_file, clock()
+                    )
+                except (OSError, ValueError):
+                    raise HTTPException(
+                        503, detail={"code": "HOST_OPERATIONS_INVALID"}
+                    ) from None
+                payload = dict(payload, bot_id=paper.bot_name)
+                return read_compatibility_path(path, paper, paper_read=payload)
             try:
                 payload = await api.observation(result["source_route"])
             except UpstreamError as exc:

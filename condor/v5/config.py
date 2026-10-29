@@ -31,6 +31,7 @@ class Settings:
     # Optional read-only native paper status file; None keeps the unbound release.
     paper_status_file: Path | None = None
     candle_store_socket: Path | None = None
+    host_operations_file: Path | None = None
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
@@ -157,6 +158,18 @@ class Settings:
                     "V5_CANDLE_STORE_SOCKET must be an absolute normalized .sock path"
                 )
 
+        host_operations_file = None
+        configured_operations = values.get("V5_HOST_OPERATIONS_FILE", "").strip()
+        if configured_operations:
+            host_operations_file = Path(configured_operations)
+            if (
+                not host_operations_file.is_absolute()
+                or os.path.normpath(configured_operations) != configured_operations
+            ):
+                raise ConfigurationError(
+                    "V5_HOST_OPERATIONS_FILE must be an absolute normalized path"
+                )
+
         return cls(
             runtime_root=runtime_root,
             dashboard_token_file=dashboard_token_file,
@@ -171,6 +184,7 @@ class Settings:
             frontend_dist=frontend_dist,
             paper_status_file=paper_status_file,
             candle_store_socket=candle_store_socket,
+            host_operations_file=host_operations_file,
         )
 
 

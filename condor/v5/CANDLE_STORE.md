@@ -106,3 +106,21 @@ conditional profile field, one authenticated GET route and one SPA route.
 V5App.tsx adds one `/market/candles` route. V5AppShell.tsx changes only its
 notice on that route. V5MarketHome.tsx adds the opt-in tab/branch; api.ts adds
 one optional profile property. No paper/dashboard/upstream semantics change.
+
+## Review polish (2026-10-29)
+
+The chart defaults to held OKX spot BTC-USDC when present, otherwise held
+OKX spot BTC-USDT. The qualified store currently holds OKX spot BTC-USDT,
+ETH-USDT, BNB-USDT, XRP-USDT and SOL-USDT, not any of V5's BNB-USDC,
+BTC-USDC, ETH-USDC, SOL-USDC or XRP-USDC pairs. The view discloses the held
+and missing pairs from each instrument response; it does not substitute or
+convert USDT candles into USDC candles. A listed pair with no held minute
+does not establish held coverage.
+
+Failed reads use one consolidated alert with the dashboard's UTC check time,
+explicitly not an invented owner evaluation time. An unavailable/empty
+instrument list hides chart selectors and gives a reason. Candle-only failure
+keeps the valid instrument/range choices so the operator can retry/change them.
+Table headers wrap within a candle-view-only CSS scope; default column widths
+fit the desktop content area and shared resize controls remain active.
+The shared V5AppShell mobile header/nav is deliberately unchanged for its owner.

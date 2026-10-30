@@ -9,6 +9,34 @@ import { frontendModules } from './helpers/frontend-module.mjs';
 
 const now = 1793275200000;
 
+test('numeric rail absence is stated only when usable rails are absent', () => {
+  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
+  for (const rails of [[], [{label:'Program exposure',used_quote:'1',limit_quote:'2',used_percent:50}]]) {
+    const risk = {...fresh,section:'risk',data:{controllers:{bnb:{operator:{},native:{}}},rails}};
+    const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:[risk],now,reportAt:now,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
+    assert.equal(html.includes('Numeric rail limits are not published'), rails.length === 0);
+  }
+});
+
+for (const [reason,label,action] of [
+  ['stop_intent_log_damaged','Stop intent log is damaged','emergency reset'],
+  ['ingress_unreadable','Command ingress is unreadable','ingress reset'],
+  ['clock_anomaly','Owner clock evidence conflicts','clock maintenance'],
+  ['paper_controls_unavailable','Paper controls could not be acquired','control-store failure'],
+]) test(`owner hold ${reason} renders a human label and clearing action`, () => {
+  const risk = {...fresh,section:'risk',data:{reason,holds:[{reason,explanation:''}]}};
+  const [hold] = paperRiskHolds(risk);
+  assert.equal(hold.label, label);
+  assert.match(hold.action, new RegExp(action));
+  assert.ok(hold.explanation.length > 20);
+  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:[risk],now,reportAt:now,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
+  assert.ok(html.includes(label));
+  assert.ok(html.includes('New acquisitions held'));
+});
+
 test('risk controllers are a keyed native map, while decisions remain a list', () => {
   const fixture = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-c1-1e131c74/native-entry-holds.json', import.meta.url)));
   const risk = {...fresh, section:'risk', data:fixture.risk.data};

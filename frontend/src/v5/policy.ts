@@ -130,6 +130,11 @@ export function paperWords(value: unknown): string {
   if (value == null || value === "") return "Not published";
   if (typeof value === "boolean") return value ? "Yes" : "No";
   const labels: Record<string, string> = {
+    PAPER_STATUS_FRESH: "Paper process heartbeat is current; owner read health is separate",
+    stop_intent_log_damaged: "Stop intent log is damaged",
+    ingress_unreadable: "Command ingress is unreadable",
+    clock_anomaly: "Owner clock evidence conflicts",
+    paper_controls_unavailable: "Paper controls could not be acquired",
     midpoint_fresh_book_only: "Mid of fresh book",
     controls_not_integrated: "Risk controls not yet connected to this paper bot",
     insufficient_comparable_history: "Collecting comparable history",
@@ -222,11 +227,19 @@ export function paperRiskHold(read: import("./contracts").PaperRead | undefined)
 export function paperRiskHolds(read: import("./contracts").PaperRead | undefined): { reason: string; label: string; explanation: string; action: string }[] {
   const data = read?.data && typeof read.data === "object" && !Array.isArray(read.data) ? read.data as Record<string, unknown> : null;
   const actions: Record<string, string> = {
+    stop_intent_log_damaged: "Owner action: review quarantined intent evidence, then use the owner-only emergency reset; resume entries cannot clear this hold.",
+    ingress_unreadable: "Owner action: review ingress evidence, restore access, then use the owner-only ingress reset; resume and clock acknowledgement cannot clear this hold.",
+    clock_anomaly: "Owner action: review retained clock anomalies, then use explicit owner clock maintenance; resume entries cannot clear this hold.",
+    paper_controls_unavailable: "Owner action: resolve the control-store failure before restarting the runtime. This dashboard cannot acquire or repair the control store.",
     stop_persistence_failed: "Owner action: review retained stop evidence, then use the owner-only emergency reset; resume entries cannot clear this hold.",
     clock_persistence_failed: "Owner action: review retained clock evidence, then give explicit owner maintenance acknowledgement; resume entries cannot clear this hold.",
     clock_invalid: "Owner action: restore a valid clock, review retained clock evidence, then give owner maintenance acknowledgement; resume entries cannot clear this hold.",
   };
   const defaults: Record<string, string> = {
+    stop_intent_log_damaged: "The stop intent log contains damaged or torn records. New acquisitions stay held; damaged evidence is retained for owner review.",
+    ingress_unreadable: "Command ingress could not be read or enumerated. An unread stop cannot be excluded, so new acquisitions stay held.",
+    clock_anomaly: "Retained clock evidence conflicts with provider samples. New acquisitions stay held; suspicious timestamps are quarantined, not adopted as clock authority.",
+    paper_controls_unavailable: "Paper controls could not be acquired. The runtime refuses all native ticks and exits until the control-store failure is resolved.",
     stop_persistence_failed: "Stop durability is unproven. New acquisitions stay held pending the owner-only emergency reset.",
     clock_persistence_failed: "Owner clock continuity could not be persisted or proven. New acquisitions stay held pending owner maintenance acknowledgement.",
     clock_invalid: "The owner clock sample is invalid. Clears and native advancement stay held until the owner restores a valid clock and acknowledges recovery.",

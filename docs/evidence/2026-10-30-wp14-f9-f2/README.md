@@ -1,5 +1,7 @@
 # WP-14 F9 and F2 fixture qualification — 2026-10-30
 
+> The initial after evidence below was rejected because it mixed build versions. It is historical, not qualification proof. The latest repair and single-build qualification are in `review-b123.md`. The sheets, screenshot index and browser summary in this directory are refreshed by that round. Original scratch captures are retained.
+
 The consumer-side F2 defect is fixed. The F9 routes render coherent paper states in a disposable fixture dashboard. This is not a live-stack qualification or a production-readiness pass. The upstream companion-read race (F3) is outside this change.
 
 ## Scope and authority

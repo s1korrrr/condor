@@ -2,6 +2,26 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { paperWorkspaceLabel, paperReadiness } from '../src/v5/policy.ts';
 import * as policy from '../src/v5/policy.ts';
+import React from 'react';
+import { renderToStaticMarkup } from 'react-dom/server';
+import { frontendModules } from './helpers/frontend-module.mjs';
+
+test('unavailable Settings identity confines fresh times and reasons to heartbeat rows', () => {
+  const profile = { readiness: { paper_owner: { mode:'PAPER', bot_name:'meridian_v5_paper', state:'FRESH', generated_at:1793357640, reason:'PAPER_STATUS_FRESH' } } };
+  const {load} = frontendModules({
+    '@tanstack/react-query': { useQuery: () => ({data:profile}) },
+    './api': {v5Api:{}},
+    './usePaperObservation': {usePaperObservation: () => ({summary:{label:'Unavailable',reason:'Identity owner read unavailable'},isError:true,error:new Error('Identity owner read unavailable')})},
+    'react-markdown': {},
+  }, {'v5/V5Pages.tsx':['PaperIdentity']});
+  const html = renderToStaticMarkup(React.createElement(load('v5/V5Pages.tsx').PaperIdentity));
+  assert.match(html, /Paper owner reads<\/span><strong>Unavailable/);
+  assert.match(html, /Heartbeat as of/);
+  assert.match(html, /Heartbeat reason<\/span><strong>Paper process heartbeat is current; owner read health is separate/);
+  assert.doesNotMatch(html, /PAPER_STATUS_FRESH|Source as of|Owner reason/);
+  const withoutHeartbeatRows = html.replace(/<div class="v5-data-value"><span>(?:Process heartbeat|Heartbeat[^<]*)<\/span>.*?<\/div>/g, '');
+  assert.doesNotMatch(withoutHeartbeatRows, /\bfresh\b|as of/i);
+});
 
 test('paper routes select native read-only exports, not live fleet discovery', () => {
   assert.deepEqual(policy.paperWorkspaceReads('capital'), {presentation:'paper',paperReadUrl:'/api/v1/servers/rsibot-v5/account-balances',paperHistoryReadUrl:'/api/v1/servers/rsibot-v5/controller-performance/history',paperAccountingReadUrl:'/api/v1/servers/rsibot-v5/fleet/accounting'});

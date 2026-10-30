@@ -18,6 +18,63 @@ def c1_native_risk():
     )["risk"]["data"]
 
 
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "stop_persistence_failed", "clock_persistence_failed", "clock_invalid",
+        "stop_intent_log_damaged", "ingress_unreadable", "clock_anomaly",
+        "paper_controls_unavailable",
+    ],
+)
+def test_c1_all_owner_hold_classes_are_readable(reason):
+    from copy import deepcopy
+    from condor.v5.paper import validate_paper_read
+
+    data = deepcopy(C1_TARGET_HOLD_FIXTURES["clock-failure-hold"]["risk"])
+    data.update(
+        control_hold=reason, reason=reason, explanation="Owner safety hold",
+        holds=[{"reason": reason, "explanation": "Owner safety hold"}],
+    )
+    fixtures = {
+        "stop_intent_log_damaged": "stop-intent-log-damaged",
+        "ingress_unreadable": "ingress-unreadable-hold",
+        "clock_anomaly": "clock-anomaly-hold",
+        "paper_controls_unavailable": "paper-controls-unavailable",
+    }
+    if reason in fixtures:
+        path = Path(__file__).parent / "fixtures/paper-c1-1e131c74" / (fixtures[reason] + ".json")
+        data = json.loads(path.read_text())["risk"]["data"]
+    read = envelope("risk", state="degraded", reason=reason, data=data)
+    assert validate_paper_read(
+        read, section="risk", bot=BOT, now_ms=int(NOW * 1000)
+    )["data"] == data
+
+
+def test_unknown_owner_hold_class_still_fails_closed():
+    from condor.v5.paper import validate_paper_read
+
+    with pytest.raises(HTTPException) as error:
+        validate_paper_read(
+            envelope("risk", data={"control_hold": "future_hold",
+                "holds": [{"reason": "future_hold", "explanation": "Held"}]}),
+            section="risk", bot=BOT, now_ms=int(NOW * 1000),
+        )
+    assert error.value.status_code == 502
+    assert error.value.detail["section"] == "risk"
+
+
+def test_risk_hold_schema_tracks_the_pinned_c1_owner_enum():
+    from condor.v5.paper import C1_DATA_SCHEMA
+
+    path = Path(__file__).parent / "fixtures/paper-c1-1e131c74/schema.json"
+    owner = json.loads(path.read_text())
+    producer = owner["properties"]["risk"]["allOf"][1]["properties"]["data"]["anyOf"][1]
+    consumer = C1_DATA_SCHEMA["properties"]["risk"]["anyOf"][1]
+    assert consumer["if"] == producer["if"]
+    assert consumer["then"] == producer["then"]
+    assert C1_DATA_SCHEMA["properties"]["risk"]["allOf"] == producer["allOf"]
+
+
 def test_c1_keyed_risk_map_is_readable(tmp_path):
     from test_v5_paper_binding import client_for
 

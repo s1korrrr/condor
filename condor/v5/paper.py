@@ -623,6 +623,58 @@ C1_DATA_SCHEMA = json.loads(r"""
               }
             }
           }
+        },
+        {
+          "if": {
+            "properties": {
+              "reason": {
+                "const": "paper_controls_unavailable"
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          },
+          "then": {
+            "required": [
+              "explanation",
+              "holds",
+              "native",
+              "unavailable_reason"
+            ],
+            "properties": {
+              "explanation": {
+                "type": "string",
+                "minLength": 1
+              },
+              "native": {
+                "type": "null"
+              },
+              "unavailable_reason": {
+                "const": "paper_controls_not_acquired"
+              },
+              "holds": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "reason",
+                    "explanation"
+                  ],
+                  "properties": {
+                    "reason": {
+                      "const": "paper_controls_unavailable"
+                    },
+                    "explanation": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
         }
       ],
       "anyOf": [
@@ -637,6 +689,9 @@ C1_DATA_SCHEMA = json.loads(r"""
                 "enum": [
                   "clock_persistence_failed",
                   "stop_persistence_failed",
+                  "stop_intent_log_damaged",
+                  "ingress_unreadable",
+                  "clock_anomaly",
                   "clock_invalid"
                 ]
               }
@@ -657,6 +712,9 @@ C1_DATA_SCHEMA = json.loads(r"""
                 "enum": [
                   "clock_persistence_failed",
                   "stop_persistence_failed",
+                  "stop_intent_log_damaged",
+                  "ingress_unreadable",
+                  "clock_anomaly",
                   "clock_invalid"
                 ]
               },
@@ -667,7 +725,7 @@ C1_DATA_SCHEMA = json.loads(r"""
               "holds": {
                 "type": "array",
                 "minItems": 1,
-                "maxItems": 3,
+                "maxItems": 6,
                 "items": {
                   "type": "object",
                   "required": [
@@ -679,6 +737,9 @@ C1_DATA_SCHEMA = json.loads(r"""
                       "enum": [
                         "clock_persistence_failed",
                         "stop_persistence_failed",
+                        "stop_intent_log_damaged",
+                        "ingress_unreadable",
+                        "clock_anomaly",
                         "clock_invalid"
                       ]
                     },
@@ -919,9 +980,13 @@ def _validate_section_data(section: str, data: Any) -> None:
     if data is None:
         return
     if section == "risk" and isinstance(data, dict):
-        known = {"clock_persistence_failed", "stop_persistence_failed", "clock_invalid"}
+        known = {
+            "clock_persistence_failed", "stop_persistence_failed", "clock_invalid",
+            "stop_intent_log_damaged", "ingress_unreadable", "clock_anomaly",
+            "paper_controls_unavailable",
+        }
         holds = data.get("holds", [])
-        if not isinstance(holds, list) or len(holds) > 3:
+        if not isinstance(holds, list) or len(holds) > 6:
             raise ValueError("invalid owner holds")
         reasons = []
         for hold in holds:
@@ -935,6 +1000,14 @@ def _validate_section_data(section: str, data: Any) -> None:
                 raise ValueError("invalid owner hold entry")
             reasons.append(hold["reason"])
         control = data.get("control_hold")
+        controls_unavailable = (
+            reasons == ["paper_controls_unavailable"]
+            and data.get("reason") == "paper_controls_unavailable"
+            and isinstance(data.get("explanation"), str)
+            and bool(data["explanation"].strip())
+            and data.get("native", "missing") is None
+            and data.get("unavailable_reason") == "paper_controls_not_acquired"
+        )
         if (
             control is not None
             and (
@@ -944,6 +1017,7 @@ def _validate_section_data(section: str, data: Any) -> None:
             )
             or reasons
             and control is None
+            and not controls_unavailable
             or len(set(reasons)) != len(reasons)
         ):
             raise ValueError("inconsistent owner holds")

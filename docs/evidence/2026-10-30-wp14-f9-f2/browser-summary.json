@@ -1,21 +1,30 @@
 {
-  "captures": 114,
-  "contactSheets": 38,
-  "errors": [],
-  "overflow": [],
-  "clippedMain": [],
-  "riskReadProbe": {
-    "status": 200,
-    "section": "risk",
-    "controllersType": "object",
-    "isList": false,
-    "controllerIds": [
-      "bnb",
-      "btc",
-      "eth",
-      "sol"
-    ]
+  "captures": 138,
+  "sheets": 46,
+  "originalSheetsRecaptured": 38,
+  "themes": [
+    "light",
+    "dark",
+    "colorblind"
+  ],
+  "widths": [
+    1440,
+    390
+  ],
+  "built": {
+    "entryPath": "/assets/v5-CWIOvTPd.js",
+    "entrySha256": "94fee85fa031a395fe73546cd92b7dc6d964c95a21dcc491bffa104f40c46857",
+    "htmlSha256": "180af726306a8a0d923bb9d6ece0ce9338d2e62c46f447eda2068356035be98f"
   },
-  "serveRouteWithdrawn": true,
-  "existingServeRoutesUnchanged": true
+  "pageErrors": 0,
+  "documentOverflow": 0,
+  "mainClipping": 0,
+  "inspectedSheets": 46,
+  "sourceIdentity": "source-identity.json",
+  "agentDetailRecheck": ".workspace/evidence/wp14-b123-agent-final-20261030",
+  "scope": "Disposable fixtures; no deployment or trading authority",
+  "fixtureStopped": true,
+  "ownServeRouteWithdrawn": true,
+  "preexistingServeRoutesPreserved": true,
+  "ownedBrowserTabClosed": true
 }

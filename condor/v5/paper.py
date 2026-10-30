@@ -561,6 +561,70 @@ C1_DATA_SCHEMA = json.loads(r"""
       ]
     },
     "risk": {
+      "allOf": [
+        {
+          "properties": {
+            "controllers": {
+              "type": "object",
+              "maxProperties": 5,
+              "propertyNames": {
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "operator",
+                  "native"
+                ],
+                "properties": {
+                  "operator": {
+                    "type": "object"
+                  },
+                  "native": {
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "native_entry_holds": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "controller_id",
+                  "reason",
+                  "explanation",
+                  "protected_exits"
+                ],
+                "properties": {
+                  "controller_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "reason": {
+                    "enum": [
+                      "native_refusal_receipt_pending",
+                      "native_refusal_owner_ambiguous",
+                      "native_refusal_recovery_unavailable",
+                      "v5_risk_incomplete"
+                    ]
+                  },
+                  "explanation": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "protected_exits": {
+                    "const": "preserved"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
       "anyOf": [
         {
           "type": "null"
@@ -846,7 +910,7 @@ def validate_paper_read(
 
 
 def _validate_section_data(section: str, data: Any) -> None:
-    """Validate C1 data schemas through hummingbot 17579565, then C3 containers.
+    """Validate C1 data and the 1e131c74 risk-map extension, then C3 containers.
 
     C1 leaves decisions, history and operations record identities unconstrained;
     the read adapter must additionally enforce the record shapes it projects.
@@ -940,7 +1004,7 @@ def _validate_section_data(section: str, data: Any) -> None:
             "gaps",
         ):
             if key in data:
-                if section == "accounting" and key == "controllers":
+                if section in {"accounting", "risk"} and key == "controllers":
                     continue
                 if not isinstance(data[key], list) or any(
                     not isinstance(row, dict) for row in data[key]
@@ -997,6 +1061,10 @@ def _matches_c1_schema(value: Any, schema: dict) -> bool:
             return False
         properties = schema.get("properties", {})
         for key, child in value.items():
+            if "propertyNames" in schema and not _matches_c1_schema(
+                key, schema["propertyNames"]
+            ):
+                return False
             child_schema = properties.get(key, schema.get("additionalProperties", {}))
             if not _matches_c1_schema(child, child_schema):
                 return False
@@ -1010,8 +1078,10 @@ def _matches_c1_schema(value: Any, schema: dict) -> bool:
         ):
             return False
     elif isinstance(value, str):
-        if len(value) < schema.get("minLength", 0) or (
-            "pattern" in schema and re.search(schema["pattern"], value) is None
+        if (
+            len(value) > schema.get("maxLength", MAX_STATUS_BYTES)
+            or len(value) < schema.get("minLength", 0)
+            or ("pattern" in schema and re.search(schema["pattern"], value) is None)
         ):
             return False
     elif type(value) is int and "minimum" in schema and value < schema["minimum"]:

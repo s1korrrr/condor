@@ -5,7 +5,7 @@ import { ServerContext } from "@/hooks/useServer";
 import { AuthContext, type AuthState } from "@/lib/auth";
 import type { User } from "@/lib/auth-session";
 import { V5ApiError, v5Api } from "./api";
-import { botsOwnerUnavailableReason } from "./policy";
+import { botsOwnerUnavailableReason, paperWorkspaceReads } from "./policy";
 import { AgentsPage, AgentDetailPage, PaperReadinessPage, SessionDetailPage, SessionsPage, SettingsPage } from "./V5Pages";
 import { V5MarketHome } from "./V5MarketHome";
 import { V5AppShell } from "./V5AppShell";
@@ -16,10 +16,17 @@ const client = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchO
 const Capital = lazy(() => import("@workspace-monitoring").then(m => ({ default: function V5CapitalPage() {
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile });
   const paper = Boolean(profile.data?.readiness.paper_owner);
+  if (paper) return <m.Overview {...paperWorkspaceReads("capital")} />;
   return <m.Overview accountPresentation={{ description: paper ? "Simulated paper wallet · live exchange balances are not applicable." : "V5 account owner is unbound; no account valuation is available.", unavailable: paper ? "The native paper wallet read is unavailable. Check the observation binding; no zero balance is substituted." : "Bind the V5 account owner to view capital. This V5 service cannot select the existing stack account.", valuationNote: paper ? "Simulated wallet · native owner valuation" : "V5 owner valuation", registryUnavailable: paper ? "Paper owner · registration is read-only" : "V5 native owner unbound · bot registration unavailable" }} />;
 } })));
-const Operations = lazy(() => import("@workspace-monitoring").then(m => ({ default: m.Operations })));
-const Tradepad = lazy(() => import("@workspace-monitoring").then(m => ({ default: m.Tradepad })));
+const Operations = lazy(() => import("@workspace-monitoring").then(m => ({ default: function V5OperationsPage() {
+  const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile });
+  return <m.Operations {...(profile.data?.readiness.paper_owner ? paperWorkspaceReads("operations") : {})} />;
+} })));
+const Tradepad = lazy(() => import("@workspace-monitoring").then(m => ({ default: function V5TradepadPage() {
+  const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile });
+  return <m.Tradepad {...(profile.data?.readiness.paper_owner ? paperWorkspaceReads("tradepad") : {})} />;
+} })));
 const Bots = lazy(() => import("@/pages/Bots").then(m => ({ default: function V5BotsPage() {
   // Only a fresh read-only paper status lifts the unbound notice; capabilities stay read-only.
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, retry: false, refetchInterval: 15_000 });

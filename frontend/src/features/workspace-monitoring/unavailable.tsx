@@ -13,15 +13,16 @@ function WorkspaceUnavailable({ title, children }: { title: string; children?: R
   </div>;
 }
 
-type OverviewProps = { accountPresentation?: { description: string; unavailable: string; valuationNote: string; registryUnavailable?: string } };
+type PaperReadProps = { presentation?: 'paper'; paperReadUrl?: string; paperHistoryReadUrl?: string; paperAccountingReadUrl?: string };
+type OverviewProps = PaperReadProps & { accountPresentation?: { description: string; unavailable: string; valuationNote: string; registryUnavailable?: string } };
 /** Same props as the workspace Overview; the unavailable stub renders without them. */
 export const Overview: (props: OverviewProps) => ReactNode = () => <WorkspaceUnavailable title="Overview" />;
 export function TradingVisuals() { return <WorkspaceUnavailable title="Trading Visuals" />; }
 
-export function Operations() { return <WorkspaceUnavailable title="Operations" />; }
+export function Operations(_props: PaperReadProps) { return <WorkspaceUnavailable title="Operations" />; }
 
 /** The backtest catalog needs the optional workspace. The viewer page itself is served by the backend at `/tradepad`. */
-export function Tradepad() {
+export function Tradepad(_props: PaperReadProps) {
   return <WorkspaceUnavailable title="Tradepad">
     <p className="text-sm text-[var(--color-text-muted)]">The backtest catalog, its filters and research links are part of that workspace. When this server publishes a Tradepad viewer, it opens on its own page: <a className="text-[var(--color-primary)]" href="/tradepad">Open the Tradepad viewer</a>.</p>
   </WorkspaceUnavailable>;

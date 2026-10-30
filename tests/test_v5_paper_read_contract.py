@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
@@ -7,6 +8,78 @@ from condor.v5.dashboard import read_compatibility_path
 from condor.v5.paper import PaperObservation
 
 BOT = "meridian_v5_paper"
+
+
+def c1_native_risk():
+    return json.loads(
+        (
+            Path(__file__).parent / "fixtures/paper-c1-1e131c74/native-entry-holds.json"
+        ).read_text()
+    )["risk"]["data"]
+
+
+def test_c1_keyed_risk_map_is_readable(tmp_path):
+    from test_v5_paper_binding import client_for
+
+    class Source:
+        async def observation(self, path):
+            return envelope("risk", data=c1_native_risk())
+
+    with client_for(tmp_path, Source()) as client:
+        response = client.get(
+            "/api/v5/dashboard/read",
+            params={"path": f"/api/v1/servers/rsibot-v5/bots/{BOT}/risk"},
+        )
+    assert response.status_code == 200
+    assert response.json()["data"]["controllers"]["sol"]["native"]["complete"] is False
+
+
+@pytest.mark.parametrize(
+    "controllers,expected", [([], 200), ({"bnb": {"operator": {}, "native": {}}}, 502)]
+)
+def test_decisions_keep_their_list_contract(tmp_path, controllers, expected):
+    from test_v5_paper_binding import client_for
+
+    class Source:
+        async def observation(self, path):
+            return envelope("decisions", data={"controllers": controllers})
+
+    with client_for(tmp_path, Source()) as client:
+        response = client.get(
+            "/api/v5/dashboard/read",
+            params={"path": f"/api/v1/servers/rsibot-v5/bots/{BOT}/decisions"},
+        )
+    assert response.status_code == expected
+    if expected == 502:
+        assert response.json()["detail"]["section"] == "decisions"
+
+
+@pytest.mark.parametrize(
+    "controllers",
+    [
+        [],
+        {"": {"operator": {}, "native": {}}},
+        {"bnb": None},
+        {"bnb": {"operator": [], "native": {}}},
+        {"bnb": {"operator": {}}},
+    ],
+)
+def test_risk_controller_map_rejects_malformed_shapes(tmp_path, controllers):
+    from test_v5_paper_binding import client_for
+
+    class Source:
+        async def observation(self, path):
+            return envelope("risk", data={"controllers": controllers})
+
+    with client_for(tmp_path, Source()) as client:
+        response = client.get(
+            "/api/v5/dashboard/read",
+            params={"path": f"/api/v1/servers/rsibot-v5/bots/{BOT}/risk"},
+        )
+    assert response.status_code == 502
+    assert response.json()["detail"]["section"] == "risk"
+    assert response.json()["detail"]["reason"] == "schema_invalid"
+
 
 C1_TARGET_HOLD_FIXTURES = json.loads(r"""{
   "partial-buy-cancel-tp-partial-close": {

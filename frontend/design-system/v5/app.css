@@ -85,6 +85,12 @@ a { color: inherit; text-decoration: none; }
 .v5-muted { margin: 0; color: var(--v5-muted); font-size: 11px; line-height: 1.6; }
 .v5-status { flex: 0 0 auto; display: inline-flex; align-items: center; gap: 6px; padding: 4px 8px; border: 1px solid var(--v5-border); border-radius: 99px; color: var(--v5-muted); background: rgb(255 255 255 / 2%); font-size: 9px; font-weight: 650; letter-spacing: .015em; white-space: nowrap; text-transform: capitalize; }
 .v5-status i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; }
+.condor-native .v5-status { flex-shrink: 1; max-width: 100%; white-space: normal; overflow-wrap: anywhere; }
+.condor-native .v5-status i { flex-shrink: 0; }
+.condor-native :is(.v5-market-refresh > div, .v5-source-warning, .v5-blocker-inline, .v5-safe-action, .v5-settings-note, .v5-no-secret) { min-width: 0; overflow-wrap: anywhere; flex-wrap: wrap; }
+.condor-native :is(.v5-safe-action > span, .v5-blocker-inline > span, .v5-market-refresh > span, .v5-settings-note > div) { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+.condor-native :is(.v5-panel, .v5-journal, .v5-cohort-coverage-row, .v5-domain-block) { background: var(--color-surface); }
+.condor-native :is(.v5-agent-side, .v5-agent-main, .v5-overview-side, .v5-data-value) { min-width: 0; }
 .v5-status.is-ready, .v5-status.is-completed { color: var(--v5-teal); border-color: rgb(118 195 176 / 23%); background: rgb(118 195 176 / 6%); }
 .v5-status.is-blocked, .v5-status.is-failed { color: var(--v5-red); border-color: rgb(239 135 125 / 24%); background: rgb(239 135 125 / 6%); }
 .v5-status.is-running { color: var(--v5-gold-soft); border-color: rgb(214 180 105 / 24%); background: rgb(214 180 105 / 6%); }
@@ -297,6 +303,8 @@ a { color: inherit; text-decoration: none; }
 .v5-task-reports { margin-top: 16px; }
 .v5-task-report-list { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 360px), 1fr)); gap: 12px; }
 .v5-task-report { min-width: 0; padding: 14px; border: 1px solid var(--v5-border); border-radius: var(--v5-radius-md); background: rgb(8 20 31 / 35%); }
+.condor-native .v5-task-report > .v5-section-heading { flex-wrap: wrap; }
+.condor-native .v5-task-report > .v5-section-heading > .v5-status { flex-shrink: 0; }
 .v5-task-report h3 { margin: 0; font-size: 14px; }
 .v5-task-report-meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 14px 0; }
 .v5-task-report-summary { margin: 0 0 12px; color: var(--v5-text); line-height: 1.55; white-space: pre-wrap; }
@@ -306,6 +314,9 @@ a { color: inherit; text-decoration: none; }
 .v5-cohort-coverage { padding: 14px; margin: 16px 0; border: 1px solid rgb(239 135 125 / 28%); border-radius: var(--v5-radius-md); background: rgb(239 135 125 / 5%); }
 .v5-cohort-coverage.is-complete { border-color: rgb(118 195 176 / 24%); background: rgb(118 195 176 / 4%); }
 .v5-cohort-coverage-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }
+.condor-native .v5-cohort-coverage-heading { flex-wrap: wrap; }
+.condor-native .v5-cohort-coverage-heading > div { flex: 1 1 220px; min-width: 0; }
+.condor-native .v5-cohort-coverage-heading > .v5-status { flex: 0 0 auto; }
 .v5-cohort-coverage-heading strong { color: var(--v5-red); font-size: 12px; letter-spacing: .04em; }
 .v5-cohort-coverage.is-complete .v5-cohort-coverage-heading strong { color: var(--v5-teal); }
 .v5-cohort-coverage-heading p { margin: 5px 0 0; color: var(--v5-muted); font-size: 10px; line-height: 1.5; }

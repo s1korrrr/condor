@@ -1,0 +1,348 @@
+{
+  "schema": "rsibot.v5-paper.observation.v2",
+  "bot_id": "meridian_v5_paper",
+  "execution_mode": "paper",
+  "simulated": true,
+  "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "recipe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "boot_id": "fixture-boot",
+  "sequence": 1,
+  "generated_at_ms": 1793275200000,
+  "wallet": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "quote_asset": "USDC",
+      "assets": [
+        {
+          "asset": "USDC",
+          "total": "899.9",
+          "available": "899.9",
+          "reserved": "0",
+          "mark_quote": "1",
+          "marked_value_quote": "899.9",
+          "mark_at_ms": 1793275200000
+        },
+        {
+          "asset": "BNB",
+          "total": "1",
+          "available": "0",
+          "reserved": "1",
+          "mark_quote": "101",
+          "marked_value_quote": "101",
+          "mark_at_ms": 1793275200000
+        }
+      ],
+      "initial_funding_quote": "1000",
+      "external_cash_flows_quote": "0",
+      "equity_quote": "1000.9",
+      "valuation_policy": "midpoint_fresh_book_only",
+      "unit": "USDC"
+    }
+  },
+  "fills": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": [
+      {
+        "trade_id": "trade-buy-1",
+        "order_id": "buy-1",
+        "executor_id": "executor-1",
+        "controller_id": "v5_BNB_USDC",
+        "trading_pair": "BNB-USDC",
+        "side": "BUY",
+        "quantity": "1",
+        "price": "100",
+        "fee_amount": "0.1",
+        "fee_currency": "USDC",
+        "event_at_ms": 1793275100000,
+        "observed_at_ms": 1793275200000
+      }
+    ]
+  },
+  "positions": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": [
+      {
+        "position_id": "executor-1",
+        "executor_id": "executor-1",
+        "controller_id": "v5_BNB_USDC",
+        "trading_pair": "BNB-USDC",
+        "quantity": "1",
+        "remaining_basis_quote": "100.1",
+        "fee_currency": "USDC",
+        "state": "active",
+        "protected_exit": true,
+        "target_price": "102",
+        "target_basis": "native_placed_fixed_target_limit",
+        "target_reason": null,
+        "protected_exit_order": {
+          "order_id": "tp-1",
+          "state": "open",
+          "price": "102",
+          "remaining_amount": "1",
+          "placed_at_ms": 1793275130000
+        },
+        "remaining_target_amount": "1"
+      }
+    ]
+  },
+  "executors": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": [
+      {
+        "executor_id": "executor-1",
+        "controller_id": "v5_BNB_USDC",
+        "state": "resting_take_profit",
+        "remaining_close_quantity": "1",
+        "quantity": "1",
+        "remaining_basis_quote": "100.1",
+        "cum_fees_quote": "0.1",
+        "realized_pnl_quote": "0",
+        "unrealized_pnl_quote": "0.9",
+        "unit": "USDC",
+        "custom_info": {
+          "entry_lifecycle": {
+            "state": "terminal",
+            "requested_quantity": "2",
+            "filled_quantity": "1",
+            "canceled_remainder_quantity": "1"
+          }
+        },
+        "target_price": "102",
+        "target_basis": "native_placed_fixed_target_limit",
+        "target_reason": null,
+        "protected_exit_order": {
+          "order_id": "tp-1",
+          "state": "open",
+          "price": "102",
+          "remaining_amount": "1",
+          "placed_at_ms": 1793275130000
+        },
+        "remaining_target_amount": "1",
+        "protected_exit": true
+      }
+    ]
+  },
+  "orders": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": [
+      {
+        "order_id": "tp-1",
+        "executor_id": "executor-1",
+        "side": "SELL",
+        "remaining_quantity": "1"
+      }
+    ]
+  },
+  "decisions": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "conditions": [],
+      "trailing": {
+        "applicable": false,
+        "reason": "fixed_target_recipe"
+      },
+      "dca": {
+        "applicable": false,
+        "reason": "no_active_plan"
+      }
+    }
+  },
+  "risk": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "partial",
+    "stale_reason": "native_refusal_receipt_pending",
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "native_entry_holds": [
+        {
+          "controller_id": "bnb",
+          "reason": "native_refusal_receipt_pending",
+          "explanation": "A native refusal receipt is pending durable reconciliation. All new entries for this owner are held.",
+          "protected_exits": "preserved"
+        },
+        {
+          "controller_id": "btc",
+          "reason": "native_refusal_owner_ambiguous",
+          "explanation": "Native activation evidence has ambiguous ownership. New entries for this owner require explicit evidence review.",
+          "protected_exits": "preserved"
+        },
+        {
+          "controller_id": "eth",
+          "reason": "native_refusal_receipt_pending",
+          "explanation": "A native refusal receipt is pending durable reconciliation. All new entries for this owner are held.",
+          "protected_exits": "preserved"
+        },
+        {
+          "controller_id": "sol",
+          "reason": "v5_risk_incomplete",
+          "explanation": "Native V5 risk evidence is incomplete. New entries are held until native risk evidence is complete.",
+          "protected_exits": "preserved"
+        }
+      ],
+      "controllers": {
+        "bnb": {
+          "operator": {"paused": false, "emergency": false, "command_id": null, "reason": null, "effective_at_ms": null},
+          "native": {
+            "complete": true
+          }
+        },
+        "btc": {
+          "operator": {"paused": false, "emergency": false, "command_id": null, "reason": null, "effective_at_ms": null},
+          "native": {
+            "complete": true
+          }
+        },
+        "eth": {
+          "operator": {"paused": false, "emergency": false, "command_id": null, "reason": null, "effective_at_ms": null},
+          "native": {
+            "complete": true
+          }
+        },
+        "sol": {
+          "operator": {"paused": false, "emergency": false, "command_id": null, "reason": null, "effective_at_ms": null},
+          "native": {
+            "complete": false
+          }
+        }
+      }
+    }
+  },
+  "history": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "retention_start_ms": 1793275200000,
+      "gaps": [],
+      "segments": [],
+      "statistics": null,
+      "reason": "insufficient_comparable_history"
+    }
+  },
+  "operations": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "restored": false,
+      "ready": true,
+      "reason": null
+    }
+  },
+  "accounting": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "controllers": {
+        "v5_BNB_USDC": {
+          "accounting_since_ms": 1793275100000,
+          "accounting_since_reason": null,
+          "fees_paid": {
+            "USDC": "0.1"
+          },
+          "fees_paid_quote": "0.1",
+          "fee_quote_valuation_basis": "exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once",
+          "realized_pnl_quote": "0",
+          "unrealized_pnl_quote": "0.9",
+          "volume_traded_quote": "100",
+          "entry_count": 1,
+          "exit_count": 0,
+          "count_basis": "distinct_native_filled_buy_and_sell_orders_not_actions",
+          "unavailable_reasons": {}
+        }
+      },
+      "program": {
+        "accounting_since_ms": 1793275100000,
+        "accounting_since_reason": null,
+        "fees_paid": {
+          "USDC": "0.1"
+        },
+        "fees_paid_quote": "0.1",
+        "fee_quote_valuation_basis": "exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once",
+        "realized_pnl_quote": "0",
+        "unrealized_pnl_quote": "0.9",
+        "volume_traded_quote": "100",
+        "entry_count": 1,
+        "exit_count": 0,
+        "count_basis": "distinct_native_filled_buy_and_sell_orders_not_actions",
+        "unavailable_reasons": {}
+      },
+      "source": "native_exact_lifetime_receipts_not_fill_pages"
+    }
+  },
+  "candles": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "file": "candles/fresh.json",
+      "sha256": "1fe8ed1de72cca23d629bf4e7ac96c4027e62acb23499d35d49826f59f21bfa4",
+      "section": "candles",
+      "snapshot_id": {
+        "boot_id": "fixture-boot-1",
+        "sequence": 1
+      },
+      "retention": "last_1440_consumed_closed_bars_per_pair; no_gap_filling",
+      "page_size": 240,
+      "limit_per_pair": 1440,
+      "retention_start_ms": 1793275020000
+    }
+  }
+}

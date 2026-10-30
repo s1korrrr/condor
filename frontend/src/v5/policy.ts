@@ -8,6 +8,21 @@ export interface ReportPermissionInput {
   agentExecutionEnabled: boolean;
 }
 
+export function paperWorkspaceReads(page: "capital" | "operations" | "tradepad") {
+  if (page === "capital") return { presentation: "paper" as const, paperReadUrl: "/api/v1/servers/rsibot-v5/account-balances", paperHistoryReadUrl: "/api/v1/servers/rsibot-v5/controller-performance/history", paperAccountingReadUrl: "/api/v1/servers/rsibot-v5/fleet/accounting" };
+  if (page === "operations") return { presentation: "paper" as const, paperReadUrl: "/api/v1/operations/workspace" };
+  return { presentation: "paper" as const };
+}
+
+export function paperObservationSummary(reads: import("./contracts").PaperRead[], bot: string, now: number) {
+  const required = ["status", "wallet", "positions", "executors", "risk"];
+  if (reads.length !== required.length || required.some(section => reads.filter(read => read.section === section && read.bot_id === bot).length !== 1) || reads.some(read => paperSectionError(read)) || !paperSnapshotsAgree(reads)) return { label: "Unavailable", reason: "A complete, validated set of paper reads from one owner snapshot is not available." };
+  const states = reads.map(read => paperReadState(read, now));
+  if (states.includes("stale")) return { label: "Stale", reason: "The retained paper report has expired. Process heartbeat does not refresh its data." };
+  if (!reads.every(read => paperCompleteRead(read, now))) return { label: "Incomplete", reason: "One or more owner sections are incomplete or unavailable. No qualification pass is inferred." };
+  return { label: "Available", reason: "Required paper sections passed their read contracts at one snapshot. This is not production qualification." };
+}
+
 export function canRequestReport(input: ReportPermissionInput): boolean {
   return input.agentReady &&
     input.advisorEnabled &&
@@ -74,6 +89,11 @@ export function paperSectionError(read: Partial<import("./contracts").PaperRead>
     })) return invalid();
   } else {
     if (!object(read.data)) return invalid();
+    if (read.section === "risk" && "controllers" in read.data) {
+      const controllers = read.data.controllers;
+      if (!object(controllers) || Object.keys(controllers).length > 5 || Object.entries(controllers).some(([id, row]) => !id || id.length > 128 || !object(row) || !object(row.operator) || !object(row.native))) return invalid();
+    }
+    if (read.section === "risk" && "native_entry_holds" in read.data && (!records(read.data.native_entry_holds) || read.data.native_entry_holds.length > 20 || read.data.native_entry_holds.some(hold => typeof hold.controller_id !== "string" || !hold.controller_id || typeof hold.explanation !== "string" || !hold.explanation.trim() || !["native_refusal_receipt_pending", "native_refusal_owner_ambiguous", "native_refusal_recovery_unavailable", "v5_risk_incomplete"].includes(String(hold.reason)) || hold.protected_exits !== "preserved"))) return invalid();
     for (const key of ["assets", "conditions", "rails", "segments", "gaps", ...(read.section === "decisions" ? ["controllers"] : [])]) {
       if (key in read.data && !records(read.data[key])) return invalid();
     }
@@ -171,6 +191,12 @@ export function paperRiskUsage(read: import("./contracts").PaperRead | undefined
   if (!read || read.section !== "risk" || !paperCompleteRead(read, now)) return null;
   const risk = read.data as { rails?: Record<string, unknown>[] } | null;
   return Array.isArray(risk?.rails) ? risk.rails : null;
+}
+
+export function paperRiskControllers(read: import("./contracts").PaperRead | undefined, now: number) {
+  if (!read || read.section !== "risk" || paperSectionError(read)) return null;
+  const risk = read.data as import("./contracts").PaperRiskData;
+  return risk?.controllers ? Object.entries(risk.controllers).map(([id, controller]) => ({ id, ...controller, current: paperCompleteRead(read, now), holds: risk.native_entry_holds?.filter(hold => hold.controller_id === id) ?? [] })) : null;
 }
 
 export function paperLifetimeTotals(read: import("./contracts").PaperRead | undefined, snapshot: import("./contracts").PaperRead | undefined, now: number): Record<string, unknown> | null {

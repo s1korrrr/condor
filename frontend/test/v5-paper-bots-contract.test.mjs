@@ -1,11 +1,27 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { paperRiskControllers } from '../src/v5/policy.ts';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { paperReadState, paperCompleteRecords, paperControlState, paperRecordSummary, paperSnapshotsAgree, paperWords, paperAmount, paperExactAmount, paperSectionError, paperTime, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadiness, paperRiskHold, paperRiskHolds, paperExitProjection, paperRiskUsage, paperWalletInventory, paperWalletTotals, paperPairObservation } from '../src/v5/policy.ts';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
 const now = 1793275200000;
+
+test('risk controllers are a keyed native map, while decisions remain a list', () => {
+  const fixture = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-c1-1e131c74/native-entry-holds.json', import.meta.url)));
+  const risk = {...fresh, section:'risk', data:fixture.risk.data};
+  assert.equal(paperSectionError(risk), null);
+  const controllers = paperRiskControllers(risk, now);
+  assert.equal(controllers.find(row => row.id === 'sol').native.complete, false);
+  assert.equal(controllers.find(row => row.id === 'bnb').holds[0].reason, 'native_refusal_receipt_pending');
+  assert.equal(paperRiskControllers({...risk,completeness:'partial'}, now)[0].current, false);
+  assert.equal(paperRiskControllers(risk, now + 31000)[0].current, false);
+  for (const controllers of [[], {'':{operator:{},native:{}}}, {bnb:null}, {bnb:{operator:[],native:{}}}, {bnb:{operator:{}}}]) assert.match(paperSectionError({...risk,data:{controllers}}), /schema invalid/);
+  assert.match(paperSectionError({...risk,section:'decisions'}), /schema invalid/);
+  assert.equal(paperSectionError({...risk,section:'decisions',data:{controllers:[]}}), null);
+});
 
 const c1TargetHoldFixtures = {
   "partial-buy-cancel-tp-partial-close": {
@@ -501,4 +517,20 @@ test('hold banner labels the clock high-water without an orphaned control senten
     assert.ok(html.includes(`Clock high-water mark: ${paperTime(highWater,now)}.`));
     assert.doesNotMatch(html,/Not published\. Clock high-water mark/);
   }
+});
+
+test('risk map renders native holds even when the owner section is partial', () => {
+  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
+  const fixture = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-c1-1e131c74/native-entry-holds.json', import.meta.url)));
+  const risk = {...fresh,section:'risk',completeness:'partial',data:fixture.risk.data};
+  risk.data.controllers.xrp = {operator:{paused:false,emergency:false},native:{complete:true}};
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:[risk],now,reportAt:now,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
+  assert.match(html,/Controller entry controls/);
+  assert.match(html,/New entries held/);
+  assert.match(html,/Held by owner/);
+  assert.match(html,/The owner reports an entry hold/);
+  assert.match(html,/Current entry state unknown/);
+  assert.match(html,/A native refusal receipt is pending durable reconciliation/);
+  assert.doesNotMatch(html,/Native evidence complete|Fresh owner report/);
 });

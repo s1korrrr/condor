@@ -1,0 +1,21 @@
+{
+  "captures": 114,
+  "contactSheets": 38,
+  "errors": [],
+  "overflow": [],
+  "clippedMain": [],
+  "riskReadProbe": {
+    "status": 200,
+    "section": "risk",
+    "controllersType": "object",
+    "isList": false,
+    "controllerIds": [
+      "bnb",
+      "btc",
+      "eth",
+      "sol"
+    ]
+  },
+  "serveRouteWithdrawn": true,
+  "existingServeRoutesUnchanged": true
+}

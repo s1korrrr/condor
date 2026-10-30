@@ -9,6 +9,24 @@ import { frontendModules } from './helpers/frontend-module.mjs';
 
 const now = 1793275200000;
 
+const apiEnvelopes = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-api-7b12d1c2/envelopes.json', import.meta.url)));
+
+test('pinned API73 envelopes render owner reads without schema failures', () => {
+  for (const read of Object.values(apiEnvelopes)) {
+    assert.equal(paperSectionError(read), null, read.section);
+    assert.equal(paperReadState(read, now), read.state, read.section);
+  }
+  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.entries(apiEnvelopes).filter(([name])=>name!=='collecting').map(([,read])=>read),now,reportAt:now,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
+  assert.doesNotMatch(html, /owner schema invalid/);
+  assert.match(html, /Available/);
+  for (const capabilities of [[], ['read']]) assert.equal(paperSectionError({...apiEnvelopes.executors,capabilities}),null);
+  for (const capabilities of [{}, 1, [1], ['']]) assert.match(paperSectionError({...apiEnvelopes.executors,capabilities}),/schema invalid/);
+  for (const state of ['available','collecting','degraded','stale','not_applicable']) assert.equal(paperSectionError({...apiEnvelopes.executors,state,reason:null,source_at_ms:null,observed_at_ms:null}),null);
+  assert.equal(paperSectionError({...apiEnvelopes.collecting,section:'status',state:'degraded',data:{owner_chain_anchor:{seq:1}}}),null);
+});
+
 test('numeric rail absence is stated only when usable rails are absent', () => {
   const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
   const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
@@ -322,7 +340,7 @@ test('known flat requires complete coherent positions and executors, and project
 
 test('malformed envelope fields are isolated in every state before rendering', () => {
   for (const state of ['available','collecting','degraded','stale','not_applicable']) {
-    for (const [key,value] of Object.entries({reason:{},state:[],generated_at_ms:true,source_at_ms:{},observed_at_ms:-1,snapshot_id:[],completeness:{},next_cursor:[],capabilities:[],source:[],bot_id:{},simulated:'true'})) {
+    for (const [key,value] of Object.entries({reason:{},state:[],generated_at_ms:true,source_at_ms:{},observed_at_ms:-1,read_at_ms:true,stale_reason:{},snapshot_id:[],completeness:{},next_cursor:[],capabilities:{},source:[],bot_id:{},simulated:'true'})) {
       const read = {...fresh,section:'executors',data:[],state,reason:'Owner state',[key]:value};
       assert.match(paperSectionError(read), /Executors owner schema invalid/, `${state}: ${key}`);
       assert.equal(paperReadState(read,now),'degraded');

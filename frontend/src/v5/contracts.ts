@@ -20,9 +20,11 @@ export interface PaperRead {
   snapshot_id: string | null;
   generated_at_ms: number | null;
   source_at_ms?: number | null;
-  observed_at_ms?: number;
+  observed_at_ms?: number | null;
+  read_at_ms?: number;
+  stale_reason?: string | null;
   completeness?: string;
-  capabilities?: Record<string, unknown>;
+  capabilities?: string[];
   data: unknown;
   next_cursor?: string | null;
   source?: Record<string, unknown>;

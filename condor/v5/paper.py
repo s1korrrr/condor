@@ -810,7 +810,6 @@ def validate_paper_read(
     unbound = (
         isinstance(payload, dict)
         and payload.get("state") in ("collecting", "degraded")
-        and payload.get("data") is None
         and payload.get("snapshot_id") is None
     )
     if (
@@ -841,20 +840,24 @@ def validate_paper_read(
             )
         )
         or (
-            not isinstance(payload.get("reason"), str)
-            and not (payload["state"] == "available" and payload.get("reason") is None)
+            payload.get("reason") is not None
+            and not isinstance(payload["reason"], str)
+        )
+        or (
+            payload.get("stale_reason") is not None
+            and not isinstance(payload["stale_reason"], str)
         )
         or any(
             key in payload
             and not (unbound and key == "generated_at_ms" and payload[key] is None)
-            and not (key == "source_at_ms" and payload[key] is None)
+            and not (key in {"source_at_ms", "observed_at_ms"} and payload[key] is None)
             and (
                 type(payload[key]) is not int
                 or not 0
                 <= payload[key]
                 <= min(2**53 - 1, now_ms + FUTURE_SKEW_SECONDS * 1000)
             )
-            for key in ("generated_at_ms", "source_at_ms", "observed_at_ms")
+            for key in ("generated_at_ms", "source_at_ms", "observed_at_ms", "read_at_ms")
         )
         or (
             section in {"positions", "fills", "executors", "orders"}
@@ -862,7 +865,7 @@ def validate_paper_read(
         )
         or (
             "completeness" in payload
-            and payload["completeness"] not in ("complete", "partial", "unavailable")
+            and payload["completeness"] not in ("complete", "partial", "collecting", "unavailable")
         )
         or (
             "next_cursor" in payload
@@ -872,9 +875,16 @@ def validate_paper_read(
                 or not payload["next_cursor"]
             )
         )
-        or any(
-            key in payload and not isinstance(payload[key], dict)
-            for key in ("capabilities", "source")
+        or ("source" in payload and not isinstance(payload["source"], dict))
+        or (
+            "capabilities" in payload
+            and (
+                not isinstance(payload["capabilities"], list)
+                or any(
+                    not isinstance(capability, str) or not capability.strip()
+                    for capability in payload["capabilities"]
+                )
+            )
         )
         or (payload["state"] == "available" and payload.get("data") is None)
     ):
@@ -922,7 +932,7 @@ def validate_paper_read(
         raise HTTPException(502, detail={"code": "paper_read_capacity"})
     result = deepcopy(payload)
     if (
-        result.get("completeness") in {"partial", "unavailable"}
+        result.get("completeness") in {"partial", "collecting", "unavailable"}
         and result["state"] == "available"
     ):
         result.update(
@@ -937,12 +947,14 @@ def validate_paper_read(
         "section",
         "state",
         "reason",
+        "stale_reason",
         "bot_id",
         "execution_mode",
         "simulated",
         "snapshot_id",
         "generated_at_ms",
         "observed_at_ms",
+        "read_at_ms",
         "source_at_ms",
         "completeness",
         "capabilities",

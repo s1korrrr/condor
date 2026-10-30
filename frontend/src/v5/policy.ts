@@ -59,22 +59,24 @@ export function paperSectionError(read: Partial<import("./contracts").PaperRead>
   const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
   const records = (value: unknown): value is Record<string, unknown>[] => Array.isArray(value) && value.every(object);
   const invalid = () => `${typeof read.section === "string" ? paperWords(read.section) : "Paper section"} owner schema invalid; this section is unavailable.`;
-  const unbound = ["collecting", "degraded"].includes(read.state ?? "") && read.data == null && read.snapshot_id === null;
+  const unbound = ["collecting", "degraded"].includes(read.state ?? "") && read.snapshot_id === null;
   if (!object(read) || read.schema !== "rsibot.v5-paper.read.v1" || typeof read.section !== "string" || !read.section ||
     !["available", "collecting", "not_applicable", "degraded", "stale"].includes(read.state ?? "") ||
     read.execution_mode !== "paper" || read.simulated !== true ||
-    (typeof read.reason !== "string" && !(read.state === "available" && read.reason == null)) ||
+    (read.reason != null && typeof read.reason !== "string") ||
+    (read.stale_reason != null && typeof read.stale_reason !== "string") ||
     (typeof read.bot_id !== "string" || !read.bot_id) && !(unbound && read.bot_id === null) ||
     (typeof read.snapshot_id !== "string" || !read.snapshot_id) && !unbound ||
     (read.generated_at_ms == null && !unbound) ||
-    ["generated_at_ms", "source_at_ms", "observed_at_ms"].some(key => {
-      const value = read[key as "generated_at_ms" | "source_at_ms" | "observed_at_ms"];
-      return value != null && (!Number.isSafeInteger(value) || value < 0) || key === "observed_at_ms" && key in read && value == null;
+    ["generated_at_ms", "source_at_ms", "observed_at_ms", "read_at_ms"].some(key => {
+      const value = read[key as "generated_at_ms" | "source_at_ms" | "observed_at_ms" | "read_at_ms"];
+      return value != null && (!Number.isSafeInteger(value) || value < 0) || key === "read_at_ms" && key in read && value == null;
     }) ||
-    (read.completeness !== undefined && !["complete", "partial", "unavailable"].includes(read.completeness)) ||
+    (read.completeness !== undefined && !["complete", "partial", "collecting", "unavailable"].includes(read.completeness)) ||
     (["positions", "fills", "executors", "orders"].includes(read.section) && read.completeness === undefined) ||
     (read.next_cursor != null && (typeof read.next_cursor !== "string" || !read.next_cursor)) ||
-    ["source", "capabilities"].some(key => key in read && !object(read[key as "source" | "capabilities"])) ||
+    ("source" in read && !object(read.source)) ||
+    ("capabilities" in read && (!Array.isArray(read.capabilities) || read.capabilities.some(value => typeof value !== "string" || !value.trim()))) ||
     read.state === "available" && read.data == null) return invalid();
   if (read.data == null) return null;
   if (["positions", "fills", "executors", "orders"].includes(read.section ?? "")) {

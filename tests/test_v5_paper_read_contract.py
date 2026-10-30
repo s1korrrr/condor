@@ -9,6 +9,67 @@ from condor.v5.paper import PaperObservation
 
 BOT = "meridian_v5_paper"
 
+API_ENVELOPES = json.loads(
+    (Path(__file__).parent / "fixtures/paper-api-7b12d1c2/envelopes.json").read_text()
+)
+
+
+@pytest.mark.parametrize("name", list(API_ENVELOPES))
+def test_real_api_73_envelopes_cross_authenticated_condor_boundary(tmp_path, name):
+    from test_v5_paper_binding import client_for
+
+    payload = API_ENVELOPES[name]
+
+    class Source:
+        async def observation(self, path):
+            return payload
+
+    if payload["section"] == "candles":
+        from condor.v5.paper import validate_paper_read
+
+        result = validate_paper_read(
+            payload, section="candles", bot=BOT, now_ms=payload["read_at_ms"]
+        )
+        assert result["capabilities"] == []
+        assert result["state"] == "collecting"
+        return
+    route = next(path for path, section in ROUTES.items() if section == payload["section"])
+    with client_for(tmp_path, Source(), clock_s=payload["read_at_ms"] / 1000) as client:
+        response = client.get("/api/v5/dashboard/read", params={"path": route})
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["capabilities"] == payload["capabilities"]
+    assert result["state"] == payload["state"]
+    assert result["read_at_ms"] == payload["read_at_ms"]
+
+
+@pytest.mark.parametrize("capabilities", [[], ["read"], ["read", "history"]])
+def test_string_capability_lists_are_valid(capabilities):
+    from condor.v5.paper import validate_paper_read
+
+    result = validate_paper_read(
+        envelope("executors", capabilities=capabilities), section="executors",
+        bot=BOT, now_ms=int(NOW * 1000),
+    )
+    assert result["capabilities"] == capabilities
+
+
+def test_api_nullable_metadata_and_collecting_completeness_are_preserved():
+    from condor.v5.paper import validate_paper_read
+
+    for state in ["available", "collecting", "degraded", "stale", "not_applicable"]:
+        payload = envelope("executors", state=state, reason=None,
+                           observed_at_ms=None, source_at_ms=None,
+                           read_at_ms=int(NOW * 1000), stale_reason=None)
+        assert validate_paper_read(
+            payload, section="executors", bot=BOT, now_ms=int(NOW * 1000)
+        )["reason"] is None
+    payload = dict(API_ENVELOPES["collecting"], section="status", state="degraded",
+                   data={"owner_chain_anchor": {"seq": 1}})
+    assert validate_paper_read(
+        payload, section="status", bot=BOT, now_ms=payload["read_at_ms"]
+    )["observed_at_ms"] is None
+
 
 def c1_native_risk():
     return json.loads(
@@ -534,7 +595,13 @@ def test_authenticated_malformed_section_is_a_typed_schema_error(
         ("completeness", {}),
         ("completeness", "unknown"),
         ("next_cursor", []),
-        ("capabilities", []),
+        ("capabilities", {}),
+        ("capabilities", 1),
+        ("capabilities", [1]),
+        ("capabilities", [""]),
+        ("read_at_ms", True),
+        ("read_at_ms", -1),
+        ("stale_reason", {}),
         ("source", []),
         ("bot_id", {}),
         ("simulated", "true"),

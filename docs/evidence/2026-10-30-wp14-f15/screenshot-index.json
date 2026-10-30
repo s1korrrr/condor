@@ -1,0 +1,4338 @@
+[
+  {
+    "apiReads": [
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      }
+    ],
+    "name": "bots",
+    "route": "/bots",
+    "scenario": "fresh",
+    "width": 1440,
+    "theme": "light",
+    "path": "/home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/.workspace/evidence/wp14-f15-verified-20261030/bots-light-1440.png",
+    "pngSha256": "dd3808036e1f3d3af6d00ff3b759fbfc31281b0b87ab45f0fa0bc806f50c72b9",
+    "bundle": {
+      "entryPath": "/assets/v5-CnR1BLP8.js",
+      "entrySha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce",
+      "htmlSha256": "2ecf4e0143573e228b04fc122863cf57c3c26886e86aef8513cf0f46fca9bd13"
+    },
+    "loadedAssets": [
+      {
+        "path": "/assets/v5-Bwe1AIV1.css",
+        "sha256": "87f2492ac1cdd8bf1ae402ad1a06f177d39ece14466755bb75d252605f1475b3"
+      },
+      {
+        "path": "/assets/auth-token-CijoHaBo.js",
+        "sha256": "84f4cce43557dbd3f49cab72b1c799ca2fe3dc49f87a346cbd314783f642c4a8"
+      },
+      {
+        "path": "/assets/preload-helper-Czpn1I53.js",
+        "sha256": "aba87f2a53e45ecdc9113fc30387d16e449d1676428cf5f82dd624c1df97d152"
+      },
+      {
+        "path": "/assets/createLucideIcon-CGDrmTep.js",
+        "sha256": "8f0af689ed3b4e9a72a7bd9de668b32447b92d1fe1a41b9af37de94996e2aee4"
+      },
+      {
+        "path": "/assets/jsx-runtime-BaSZ_JNh.js",
+        "sha256": "e8e123269724e152489c9eceb62b841447fa294b00094249e19d564519b407c9"
+      },
+      {
+        "path": "/assets/v5-CnR1BLP8.js",
+        "sha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce"
+      },
+      {
+        "path": "/assets/history-DRWSxsha.js",
+        "sha256": "5e335961c86a35ed363b326c3ae22217ce73053ba7e477e47f002f307c2ce52b"
+      },
+      {
+        "path": "/assets/Bots-DOw0qVSz.js",
+        "sha256": "ec0e71e1d50554e9bd9b3dfb50fb950c8874a494e523328f184c02b68dd49c91"
+      },
+      {
+        "path": "/assets/src-BaNBn19l.css",
+        "sha256": "3f2f70807feb89de6c91cc90d6c638cd1acf51fcce468dff7f9e33d5776e87f2"
+      },
+      {
+        "path": "/assets/heat-strip-CqgE5CwU.js",
+        "sha256": "bd735ec1961ad09da416d2e7f35ca888600bffb556de814ac3dbcddcd498aa90"
+      },
+      {
+        "path": "/assets/external-link-pe0BE9Ay.js",
+        "sha256": "eaef69b179d3d1d9d4191851bc82af7ab19a9af52b732444b89dced4d146aad9"
+      },
+      {
+        "path": "/assets/refresh-cw-BqLEp1Rx.js",
+        "sha256": "0de88132eb22cc591f6251be2d67ac3e9c88acbaac414d6c845645f2e9b7f2d2"
+      },
+      {
+        "path": "/assets/trash-2-Du0wmDIz.js",
+        "sha256": "2f458c0d35a6b83143145d770a5240f475776be935f5cf26554f22c303c7b61e"
+      },
+      {
+        "path": "/assets/src-DdMJPQ81.js",
+        "sha256": "d6f98f815aeda85cf18f33437eef36941d21d9f515aebdb73f2ebf60150416a2"
+      }
+    ],
+    "viewport": 1440,
+    "document": 1440,
+    "text": "RSIBOT V5\nPAPER · live disabled\nMarket\nCapital\nBots\nOperations\nResearch\nTradepad\nAgents\nSessions\nRefresh\nPAPER · simulated wallet · live disabled · advisor reports only\nReadiness and open gates\nPaper bots\n\nmeridian_v5_paper · simulated wallet · live disabled\n\nGrid\nCompact\nRefresh paper data\nSIMULATED ACCOUNT\nPaper fleet\nFresh · heartbeat\n\nmeridian_v5_paper · Valuation: Mid of fresh book. Book freshness and completeness are separate from process heartbeat.\n\nWallet equity\n1,001.2592 USDC\nFresh complete owner wallet\nAvailable cash\n940.6592 USDC\nHoldings value\n60.60 USDC\nValuation: Mid of fresh book · As of 2026-10-30 22:24:30 UTC · 8s ago · Wallet marks, excluding cash\nOpen executors\n1\nFresh complete owner snapshot · excludes terminal receipts\nRealized PnL\n0.7192 USDC\nLifetime · native receipts\nUnrealized PnL\n0.5400 USDC\nLifetime · native receipts\nFees paid\n0.1408 USDC\nLifetime · native receipts\nTraded volume\n140.8000 USDC\nLifetime · native receipts\nLast report\n2026-10-30 22:24:35 UTC · 2s ago\nNative process heartbeat\n\nFilled orders: 1 entry · 1 exit. Accounting since: 2026-10-30 22:22:50 UTC · 1m ago. Counts are distinct filled orders, not actions.\n\nPair workspace\n5 pairs · same fixed-target recipe\nBNB-USDC\nActive\n\nPosition as of 2026-10-30 22:24:30 UTC · 8s ago\n\nPosition\n0.600000 BNB\nTarget price\n102.0000 USDC\nNative placed fixed-target limit\nExit progress\nPartially filled · 0.6 BNB remaining\nOrder tp-1 · LIMIT 102 USDC\nPlaced 2026-10-30 22:23:20 UTC · 1m ago\nProtected exit\nYes\nBTC-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:30 UTC · 8s ago\n\nNo position · waiting for entry signal\n\nETH-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:30 UTC · 8s ago\n\nNo position · waiting for entry signal\n\nSOL-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:30 UTC · 8s ago\n\nNo position · waiting for entry signal\n\nXRP-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:30 UTC · 8s ago\n\nNo position · waiting for entry signal\n\nPair charts\nNative closed candles only · no inferred prices\nCollecting\nClosed one-minute price series\n\nWaiting for the bounded paper candle export and its chart binding. Fill and executor records remain available below. Empty charts are not zero trades.\n\nHoldings\nAvailable\n\n2026-10-30 22:24:30 UTC · 8s ago · Bounded owner records, not lifetime totals. Search, filter or resize columns.\n\nFilters\n1 row\nExport CSV\nPosition ID\n↕\n\t\nPair\n↕\n\t\nState\n↕\n\t\nQuantity\n↕\n\t\nRemaining basis\n↕\n\t\nOwner detail\n↕\n\nexecutor-1\tBNB-USDC\tActive\t0.600000 BNB\t60.0600 USDC\t\nExpand record\nRecent fills\nAvailable\n\n2026-10-30 22:24:30 UTC · 8s ago · Bounded owner records, not lifetime totals. Search, filter or resize columns.\n\nFilters\n2 rows\nExport CSV\nFill ID\n↕\n\t\nPair\n↕\n\t\nSide\n↕\n\t\nQuantity\n↕\n\t\nFill price\n↕\n\t\nFee\n↕\n\t\nFilled at · UTC\n↕\n\t\nOwner detail\n↕\n\ntrade-buy-1\tBNB-USDC\tBuy\t1.000000 BNB\t100.0000 USDC\t0.1000 USDC\t2026-10-30 22:22:50 UTC · 1m ago\t\nExpand record\n\ntrade-sell-1\tBNB-USDC\tSell\t0.400000 BNB\t102.0000 USDC\t0.0408 USDC\t2026-10-30 22:23:40 UTC · 55s ago\t\nExpand record\nExecutors\nAvailable\n\n2026-10-30 22:24:30 UTC · 8s ago · Bounded owner records, not lifetime totals. Search, filter or resize columns.\n\nFilters\n1 row\nExport CSV\nExecutor ID\n↕\n\t\nPair\n↕\n\t\nState\n↕\n\t\nRemaining close\n↕\n\t\nRemaining basis\n↕\n\t\nRealized PnL\n↕\n\t\nUnrealized PnL\n↕\n\t\nClosed at · UTC\n↕\n\t\nOwner detail\n↕\n\nexecutor-1\tNot published\tPartially closed\t0.600000 base units\t60.0600 USDC\t0.719200 USDC\t0.540000 USDC\tNot published\t\nExpand record\nRisk rails & entry latch\nIncomplete\n\nRisk controls not yet connected to this paper bot. Loss rails stop new acquisitions, never force a sale.\n\nPair exposure\nNot connected\n\nNo owner limit or latch observation. No use bar is inferred.\n\nProgram exposure\nNot connected\n\nNo owner limit or latch observation. No use bar is inferred.\n\nNew acquisitions\nNot connected\n\nNo owner limit or latch observation. No use bar is inferred.\n\nDecisions & paper control\nExit policy\n\nFixed-target recipe; trailing exit does not apply\n\nUnderwater positions remain held. Protective exits must survive entry halt.\n\nAcquisition plan\n\nNo active DCA plan\n\nComparable history: Collecting comparable history\n\nPaper control not enabled\n\nRead-only dashboard. A separately authenticated owner path must acknowledge paper commands before controls can appear here.\n\nObservation provenance",
+    "scrollers": [
+      {
+        "height": 2651,
+        "scroll": 2651
+      }
+    ],
+    "committedPath": "docs/evidence/2026-10-30-wp14-f15/screenshots/bots-light-1440.png"
+  },
+  {
+    "apiReads": [
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      }
+    ],
+    "name": "bots",
+    "route": "/bots",
+    "scenario": "fresh",
+    "width": 1440,
+    "theme": "dark",
+    "path": "/home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/.workspace/evidence/wp14-f15-verified-20261030/bots-dark-1440.png",
+    "pngSha256": "e00e78bd6b6e923610c6c87e1cae6f10c5f995883c5daf55989d3b1573e9f0f4",
+    "bundle": {
+      "entryPath": "/assets/v5-CnR1BLP8.js",
+      "entrySha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce",
+      "htmlSha256": "2ecf4e0143573e228b04fc122863cf57c3c26886e86aef8513cf0f46fca9bd13"
+    },
+    "loadedAssets": [
+      {
+        "path": "/assets/v5-Bwe1AIV1.css",
+        "sha256": "87f2492ac1cdd8bf1ae402ad1a06f177d39ece14466755bb75d252605f1475b3"
+      },
+      {
+        "path": "/assets/preload-helper-Czpn1I53.js",
+        "sha256": "aba87f2a53e45ecdc9113fc30387d16e449d1676428cf5f82dd624c1df97d152"
+      },
+      {
+        "path": "/assets/jsx-runtime-BaSZ_JNh.js",
+        "sha256": "e8e123269724e152489c9eceb62b841447fa294b00094249e19d564519b407c9"
+      },
+      {
+        "path": "/assets/auth-token-CijoHaBo.js",
+        "sha256": "84f4cce43557dbd3f49cab72b1c799ca2fe3dc49f87a346cbd314783f642c4a8"
+      },
+      {
+        "path": "/assets/createLucideIcon-CGDrmTep.js",
+        "sha256": "8f0af689ed3b4e9a72a7bd9de668b32447b92d1fe1a41b9af37de94996e2aee4"
+      },
+      {
+        "path": "/assets/v5-CnR1BLP8.js",
+        "sha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce"
+      },
+      {
+        "path": "/assets/history-DRWSxsha.js",
+        "sha256": "5e335961c86a35ed363b326c3ae22217ce73053ba7e477e47f002f307c2ce52b"
+      },
+      {
+        "path": "/assets/Bots-DOw0qVSz.js",
+        "sha256": "ec0e71e1d50554e9bd9b3dfb50fb950c8874a494e523328f184c02b68dd49c91"
+      },
+      {
+        "path": "/assets/src-BaNBn19l.css",
+        "sha256": "3f2f70807feb89de6c91cc90d6c638cd1acf51fcce468dff7f9e33d5776e87f2"
+      },
+      {
+        "path": "/assets/external-link-pe0BE9Ay.js",
+        "sha256": "eaef69b179d3d1d9d4191851bc82af7ab19a9af52b732444b89dced4d146aad9"
+      },
+      {
+        "path": "/assets/refresh-cw-BqLEp1Rx.js",
+        "sha256": "0de88132eb22cc591f6251be2d67ac3e9c88acbaac414d6c845645f2e9b7f2d2"
+      },
+      {
+        "path": "/assets/heat-strip-CqgE5CwU.js",
+        "sha256": "bd735ec1961ad09da416d2e7f35ca888600bffb556de814ac3dbcddcd498aa90"
+      },
+      {
+        "path": "/assets/trash-2-Du0wmDIz.js",
+        "sha256": "2f458c0d35a6b83143145d770a5240f475776be935f5cf26554f22c303c7b61e"
+      },
+      {
+        "path": "/assets/src-DdMJPQ81.js",
+        "sha256": "d6f98f815aeda85cf18f33437eef36941d21d9f515aebdb73f2ebf60150416a2"
+      }
+    ],
+    "viewport": 1440,
+    "document": 1440,
+    "text": "RSIBOT V5\nPAPER · live disabled\nMarket\nCapital\nBots\nOperations\nResearch\nTradepad\nAgents\nSessions\nRefresh\nPAPER · simulated wallet · live disabled · advisor reports only\nReadiness and open gates\nPaper bots\n\nmeridian_v5_paper · simulated wallet · live disabled\n\nGrid\nCompact\nRefresh paper data\nSIMULATED ACCOUNT\nPaper fleet\nFresh · heartbeat\n\nmeridian_v5_paper · Valuation: Mid of fresh book. Book freshness and completeness are separate from process heartbeat.\n\nWallet equity\n1,001.2592 USDC\nFresh complete owner wallet\nAvailable cash\n940.6592 USDC\nHoldings value\n60.60 USDC\nValuation: Mid of fresh book · As of 2026-10-30 22:24:30 UTC · 11s ago · Wallet marks, excluding cash\nOpen executors\n1\nFresh complete owner snapshot · excludes terminal receipts\nRealized PnL\n0.7192 USDC\nLifetime · native receipts\nUnrealized PnL\n0.5400 USDC\nLifetime · native receipts\nFees paid\n0.1408 USDC\nLifetime · native receipts\nTraded volume\n140.8000 USDC\nLifetime · native receipts\nLast report\n2026-10-30 22:24:39 UTC · 2s ago\nNative process heartbeat\n\nFilled orders: 1 entry · 1 exit. Accounting since: 2026-10-30 22:22:50 UTC · 1m ago. Counts are distinct filled orders, not actions.\n\nPair workspace\n5 pairs · same fixed-target recipe\nBNB-USDC\nActive\n\nPosition as of 2026-10-30 22:24:30 UTC · 11s ago\n\nPosition\n0.600000 BNB\nTarget price\n102.0000 USDC\nNative placed fixed-target limit\nExit progress\nPartially filled · 0.6 BNB remaining\nOrder tp-1 · LIMIT 102 USDC\nPlaced 2026-10-30 22:23:20 UTC · 1m ago\nProtected exit\nYes\nBTC-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:30 UTC · 11s ago\n\nNo position · waiting for entry signal\n\nETH-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:30 UTC · 11s ago\n\nNo position · waiting for entry signal\n\nSOL-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:30 UTC · 11s ago\n\nNo position · waiting for entry signal\n\nXRP-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:30 UTC · 11s ago\n\nNo position · waiting for entry signal\n\nPair charts\nNative closed candles only · no inferred prices\nCollecting\nClosed one-minute price series\n\nWaiting for the bounded paper candle export and its chart binding. Fill and executor records remain available below. Empty charts are not zero trades.\n\nHoldings\nAvailable\n\n2026-10-30 22:24:30 UTC · 11s ago · Bounded owner records, not lifetime totals. Search, filter or resize columns.\n\nFilters\n1 row\nExport CSV\nPosition ID\n↕\n\t\nPair\n↕\n\t\nState\n↕\n\t\nQuantity\n↕\n\t\nRemaining basis\n↕\n\t\nOwner detail\n↕\n\nexecutor-1\tBNB-USDC\tActive\t0.600000 BNB\t60.0600 USDC\t\nExpand record\nRecent fills\nAvailable\n\n2026-10-30 22:24:30 UTC · 11s ago · Bounded owner records, not lifetime totals. Search, filter or resize columns.\n\nFilters\n2 rows\nExport CSV\nFill ID\n↕\n\t\nPair\n↕\n\t\nSide\n↕\n\t\nQuantity\n↕\n\t\nFill price\n↕\n\t\nFee\n↕\n\t\nFilled at · UTC\n↕\n\t\nOwner detail\n↕\n\ntrade-buy-1\tBNB-USDC\tBuy\t1.000000 BNB\t100.0000 USDC\t0.1000 USDC\t2026-10-30 22:22:50 UTC · 1m ago\t\nExpand record\n\ntrade-sell-1\tBNB-USDC\tSell\t0.400000 BNB\t102.0000 USDC\t0.0408 USDC\t2026-10-30 22:23:40 UTC · 59s ago\t\nExpand record\nExecutors\nAvailable\n\n2026-10-30 22:24:30 UTC · 11s ago · Bounded owner records, not lifetime totals. Search, filter or resize columns.\n\nFilters\n1 row\nExport CSV\nExecutor ID\n↕\n\t\nPair\n↕\n\t\nState\n↕\n\t\nRemaining close\n↕\n\t\nRemaining basis\n↕\n\t\nRealized PnL\n↕\n\t\nUnrealized PnL\n↕\n\t\nClosed at · UTC\n↕\n\t\nOwner detail\n↕\n\nexecutor-1\tNot published\tPartially closed\t0.600000 base units\t60.0600 USDC\t0.719200 USDC\t0.540000 USDC\tNot published\t\nExpand record\nRisk rails & entry latch\nIncomplete\n\nRisk controls not yet connected to this paper bot. Loss rails stop new acquisitions, never force a sale.\n\nPair exposure\nNot connected\n\nNo owner limit or latch observation. No use bar is inferred.\n\nProgram exposure\nNot connected\n\nNo owner limit or latch observation. No use bar is inferred.\n\nNew acquisitions\nNot connected\n\nNo owner limit or latch observation. No use bar is inferred.\n\nDecisions & paper control\nExit policy\n\nFixed-target recipe; trailing exit does not apply\n\nUnderwater positions remain held. Protective exits must survive entry halt.\n\nAcquisition plan\n\nNo active DCA plan\n\nComparable history: Collecting comparable history\n\nPaper control not enabled\n\nRead-only dashboard. A separately authenticated owner path must acknowledge paper commands before controls can appear here.\n\nObservation provenance",
+    "scrollers": [
+      {
+        "height": 2651,
+        "scroll": 2651
+      }
+    ],
+    "committedPath": "docs/evidence/2026-10-30-wp14-f15/screenshots/bots-dark-1440.png"
+  },
+  {
+    "apiReads": [
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "d629dd8e0f01226cc5f6f0316a20087151d766eff30c33a1590282ce4bc6e3de",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "82a97c0dd980bd6e2ce13541f66676436db3e03de81384852dfc39bf7a0459f8",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "59600b9677ee8b84441ec85c908d46c202138acf5a2e70890692a9ad16146bca",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "93e16999b63ef0e01862f21b1e115bc1ae5d9ee48e48fa4351ba473c68e7320d",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "84442acfd313c12744e6bc8407fe5a59709e6c117e96886153a618f997b4fdfc",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "4c31f1c49e04a69f80e8af292edcd1553d42d67163065844bbf4f9c7df7f2e6b",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      }
+    ],
+    "name": "bots",
+    "route": "/bots",
+    "scenario": "fresh",
+    "width": 390,
+    "theme": "light",
+    "path": "/home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/.workspace/evidence/wp14-f15-verified-20261030/bots-light-390.png",
+    "pngSha256": "56e59fd48fb5a7f54305315f1969da08102e71399a728d0befafb53a2ab35923",
+    "bundle": {
+      "entryPath": "/assets/v5-CnR1BLP8.js",
+      "entrySha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce",
+      "htmlSha256": "2ecf4e0143573e228b04fc122863cf57c3c26886e86aef8513cf0f46fca9bd13"
+    },
+    "loadedAssets": [
+      {
+        "path": "/assets/v5-Bwe1AIV1.css",
+        "sha256": "87f2492ac1cdd8bf1ae402ad1a06f177d39ece14466755bb75d252605f1475b3"
+      },
+      {
+        "path": "/assets/preload-helper-Czpn1I53.js",
+        "sha256": "aba87f2a53e45ecdc9113fc30387d16e449d1676428cf5f82dd624c1df97d152"
+      },
+      {
+        "path": "/assets/jsx-runtime-BaSZ_JNh.js",
+        "sha256": "e8e123269724e152489c9eceb62b841447fa294b00094249e19d564519b407c9"
+      },
+      {
+        "path": "/assets/createLucideIcon-CGDrmTep.js",
+        "sha256": "8f0af689ed3b4e9a72a7bd9de668b32447b92d1fe1a41b9af37de94996e2aee4"
+      },
+      {
+        "path": "/assets/auth-token-CijoHaBo.js",
+        "sha256": "84f4cce43557dbd3f49cab72b1c799ca2fe3dc49f87a346cbd314783f642c4a8"
+      },
+      {
+        "path": "/assets/v5-CnR1BLP8.js",
+        "sha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce"
+      },
+      {
+        "path": "/assets/history-DRWSxsha.js",
+        "sha256": "5e335961c86a35ed363b326c3ae22217ce73053ba7e477e47f002f307c2ce52b"
+      },
+      {
+        "path": "/assets/Bots-DOw0qVSz.js",
+        "sha256": "ec0e71e1d50554e9bd9b3dfb50fb950c8874a494e523328f184c02b68dd49c91"
+      },
+      {
+        "path": "/assets/src-BaNBn19l.css",
+        "sha256": "3f2f70807feb89de6c91cc90d6c638cd1acf51fcce468dff7f9e33d5776e87f2"
+      },
+      {
+        "path": "/assets/external-link-pe0BE9Ay.js",
+        "sha256": "eaef69b179d3d1d9d4191851bc82af7ab19a9af52b732444b89dced4d146aad9"
+      },
+      {
+        "path": "/assets/refresh-cw-BqLEp1Rx.js",
+        "sha256": "0de88132eb22cc591f6251be2d67ac3e9c88acbaac414d6c845645f2e9b7f2d2"
+      },
+      {
+        "path": "/assets/trash-2-Du0wmDIz.js",
+        "sha256": "2f458c0d35a6b83143145d770a5240f475776be935f5cf26554f22c303c7b61e"
+      },
+      {
+        "path": "/assets/heat-strip-CqgE5CwU.js",
+        "sha256": "bd735ec1961ad09da416d2e7f35ca888600bffb556de814ac3dbcddcd498aa90"
+      },
+      {
+        "path": "/assets/src-DdMJPQ81.js",
+        "sha256": "d6f98f815aeda85cf18f33437eef36941d21d9f515aebdb73f2ebf60150416a2"
+      }
+    ],
+    "viewport": 390,
+    "document": 390,
+    "text": "RSIBOT V5\nPAPER · live disabled\nMenu\nBots\nRefresh\nPAPER · simulated wallet · live disabled · advisor reports only\nReadiness and open gates\nPaper bots\n\nmeridian_v5_paper · simulated wallet · live disabled\n\nGrid\nCompact\nRefresh paper data\nSIMULATED ACCOUNT\nPaper fleet\nFresh · heartbeat\n\nmeridian_v5_paper · Valuation: Mid of fresh book. Book freshness and completeness are separate from process heartbeat.\n\nWallet equity\n1,001.2592 USDC\nFresh complete owner wallet\nAvailable cash\n940.6592 USDC\nHoldings value\n60.60 USDC\nValuation: Mid of fresh book · As of 2026-10-30 22:24:40 UTC · 4s ago · Wallet marks, excluding cash\nOpen executors\n1\nFresh complete owner snapshot · excludes terminal receipts\nRealized PnL\n0.7192 USDC\nLifetime · native receipts\nUnrealized PnL\n0.5400 USDC\nLifetime · native receipts\nFees paid\n0.1408 USDC\nLifetime · native receipts\nTraded volume\n140.8000 USDC\nLifetime · native receipts\nLast report\n2026-10-30 22:24:42 UTC · 2s ago\nNative process heartbeat\n\nFilled orders: 1 entry · 1 exit. Accounting since: 2026-10-30 22:23:00 UTC · 1m ago. Counts are distinct filled orders, not actions.\n\nPair workspace\n5 pairs · same fixed-target recipe\nBNB-USDC\nActive\n\nPosition as of 2026-10-30 22:24:40 UTC · 4s ago\n\nPosition\n0.600000 BNB\nTarget price\n102.0000 USDC\nNative placed fixed-target limit\nExit progress\nPartially filled · 0.6 BNB remaining\nOrder tp-1 · LIMIT 102 USDC\nPlaced 2026-10-30 22:23:30 UTC · 1m ago\nProtected exit\nYes\nBTC-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:40 UTC · 4s ago\n\nNo position · waiting for entry signal\n\nETH-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:40 UTC · 4s ago\n\nNo position · waiting for entry signal\n\nSOL-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:40 UTC · 4s ago\n\nNo position · waiting for entry signal\n\nXRP-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:40 UTC · 4s ago\n\nNo position · waiting for entry signal\n\nPair charts\nNative closed candles only · no inferred prices\nCollecting\nClosed one-minute price series\n\nWaiting for the bounded paper candle export and its chart binding. Fill and executor records remain available below. Empty charts are not zero trades.\n\nHoldings\nAvailable\n\n2026-10-30 22:24:40 UTC · 4s ago · Bounded owner records, not lifetime totals. Search, filter or resize columns.\n\nFilters\n1 row\nExport CSV\nPosition ID\n↕\n\t\nPair\n↕\n\t\nState\n↕\n\t\nQuantity\n↕\n\t\nRemaining basis\n↕\n\t\nOwner detail\n↕\n\nexecutor-1\tBNB-USDC\tActive\t0.600000 BNB\t60.0600 USDC\t\nExpand record\nRecent fills\nAvailable\n\n2026-10-30 22:24:40 UTC · 4s ago · Bounded owner records, not lifetime totals. Search, filter or resize columns.\n\nFilters\n2 rows\nExport CSV\nFill ID\n↕\n\t\nPair\n↕\n\t\nSide\n↕\n\t\nQuantity\n↕\n\t\nFill price\n↕\n\t\nFee\n↕\n\t\nFilled at · UTC\n↕\n\t\nOwner detail\n↕\n\ntrade-buy-1\tBNB-USDC\tBuy\t1.000000 BNB\t100.0000 USDC\t0.1000 USDC\t2026-10-30 22:23:00 UTC · 1m ago\t\nExpand record\n\ntrade-sell-1\tBNB-USDC\tSell\t0.400000 BNB\t102.0000 USDC\t0.0408 USDC\t2026-10-30 22:23:50 UTC · 52s ago\t\nExpand record\nExecutors\nAvailable\n\n2026-10-30 22:24:40 UTC · 4s ago · Bounded owner records, not lifetime totals. Search, filter or resize columns.\n\nFilters\n1 row\nExport CSV\nExecutor ID\n↕\n\t\nPair\n↕\n\t\nState\n↕\n\t\nRemaining close\n↕\n\t\nRemaining basis\n↕\n\t\nRealized PnL\n↕\n\t\nUnrealized PnL\n↕\n\t\nClosed at · UTC\n↕\n\t\nOwner detail\n↕\n\nexecutor-1\tNot published\tPartially closed\t0.600000 base units\t60.0600 USDC\t0.719200 USDC\t0.540000 USDC\tNot published\t\nExpand record\nRisk rails & entry latch\nIncomplete\n\nRisk controls not yet connected to this paper bot. Loss rails stop new acquisitions, never force a sale.\n\nPair exposure\nNot connected\n\nNo owner limit or latch observation. No use bar is inferred.\n\nProgram exposure\nNot connected\n\nNo owner limit or latch observation. No use bar is inferred.\n\nNew acquisitions\nNot connected\n\nNo owner limit or latch observation. No use bar is inferred.\n\nDecisions & paper control\nExit policy\n\nFixed-target recipe; trailing exit does not apply\n\nUnderwater positions remain held. Protective exits must survive entry halt.\n\nAcquisition plan\n\nNo active DCA plan\n\nComparable history: Collecting comparable history\n\nPaper control not enabled\n\nRead-only dashboard. A separately authenticated owner path must acknowledge paper commands before controls can appear here.\n\nObservation provenance",
+    "scrollers": [
+      {
+        "height": 4133,
+        "scroll": 4133
+      }
+    ],
+    "committedPath": "docs/evidence/2026-10-30-wp14-f15/screenshots/bots-light-390.png"
+  },
+  {
+    "apiReads": [
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "d629dd8e0f01226cc5f6f0316a20087151d766eff30c33a1590282ce4bc6e3de",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "82a97c0dd980bd6e2ce13541f66676436db3e03de81384852dfc39bf7a0459f8",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "59600b9677ee8b84441ec85c908d46c202138acf5a2e70890692a9ad16146bca",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "93e16999b63ef0e01862f21b1e115bc1ae5d9ee48e48fa4351ba473c68e7320d",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "84442acfd313c12744e6bc8407fe5a59709e6c117e96886153a618f997b4fdfc",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "4c31f1c49e04a69f80e8af292edcd1553d42d67163065844bbf4f9c7df7f2e6b",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "d629dd8e0f01226cc5f6f0316a20087151d766eff30c33a1590282ce4bc6e3de",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "82a97c0dd980bd6e2ce13541f66676436db3e03de81384852dfc39bf7a0459f8",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "84442acfd313c12744e6bc8407fe5a59709e6c117e96886153a618f997b4fdfc",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "59600b9677ee8b84441ec85c908d46c202138acf5a2e70890692a9ad16146bca",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "93e16999b63ef0e01862f21b1e115bc1ae5d9ee48e48fa4351ba473c68e7320d",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "4c31f1c49e04a69f80e8af292edcd1553d42d67163065844bbf4f9c7df7f2e6b",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      }
+    ],
+    "name": "bots",
+    "route": "/bots",
+    "scenario": "fresh",
+    "width": 390,
+    "theme": "dark",
+    "path": "/home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/.workspace/evidence/wp14-f15-verified-20261030/bots-dark-390.png",
+    "pngSha256": "f17a31f5ea0e08759114246f4f3bdfe4339f0aa5dd458f4e4db3a88b09381b6f",
+    "bundle": {
+      "entryPath": "/assets/v5-CnR1BLP8.js",
+      "entrySha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce",
+      "htmlSha256": "2ecf4e0143573e228b04fc122863cf57c3c26886e86aef8513cf0f46fca9bd13"
+    },
+    "loadedAssets": [
+      {
+        "path": "/assets/auth-token-CijoHaBo.js",
+        "sha256": "84f4cce43557dbd3f49cab72b1c799ca2fe3dc49f87a346cbd314783f642c4a8"
+      },
+      {
+        "path": "/assets/v5-Bwe1AIV1.css",
+        "sha256": "87f2492ac1cdd8bf1ae402ad1a06f177d39ece14466755bb75d252605f1475b3"
+      },
+      {
+        "path": "/assets/jsx-runtime-BaSZ_JNh.js",
+        "sha256": "e8e123269724e152489c9eceb62b841447fa294b00094249e19d564519b407c9"
+      },
+      {
+        "path": "/assets/preload-helper-Czpn1I53.js",
+        "sha256": "aba87f2a53e45ecdc9113fc30387d16e449d1676428cf5f82dd624c1df97d152"
+      },
+      {
+        "path": "/assets/createLucideIcon-CGDrmTep.js",
+        "sha256": "8f0af689ed3b4e9a72a7bd9de668b32447b92d1fe1a41b9af37de94996e2aee4"
+      },
+      {
+        "path": "/assets/v5-CnR1BLP8.js",
+        "sha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce"
+      },
+      {
+        "path": "/assets/history-DRWSxsha.js",
+        "sha256": "5e335961c86a35ed363b326c3ae22217ce73053ba7e477e47f002f307c2ce52b"
+      },
+      {
+        "path": "/assets/Bots-DOw0qVSz.js",
+        "sha256": "ec0e71e1d50554e9bd9b3dfb50fb950c8874a494e523328f184c02b68dd49c91"
+      },
+      {
+        "path": "/assets/src-BaNBn19l.css",
+        "sha256": "3f2f70807feb89de6c91cc90d6c638cd1acf51fcce468dff7f9e33d5776e87f2"
+      },
+      {
+        "path": "/assets/refresh-cw-BqLEp1Rx.js",
+        "sha256": "0de88132eb22cc591f6251be2d67ac3e9c88acbaac414d6c845645f2e9b7f2d2"
+      },
+      {
+        "path": "/assets/trash-2-Du0wmDIz.js",
+        "sha256": "2f458c0d35a6b83143145d770a5240f475776be935f5cf26554f22c303c7b61e"
+      },
+      {
+        "path": "/assets/heat-strip-CqgE5CwU.js",
+        "sha256": "bd735ec1961ad09da416d2e7f35ca888600bffb556de814ac3dbcddcd498aa90"
+      },
+      {
+        "path": "/assets/external-link-pe0BE9Ay.js",
+        "sha256": "eaef69b179d3d1d9d4191851bc82af7ab19a9af52b732444b89dced4d146aad9"
+      },
+      {
+        "path": "/assets/src-DdMJPQ81.js",
+        "sha256": "d6f98f815aeda85cf18f33437eef36941d21d9f515aebdb73f2ebf60150416a2"
+      }
+    ],
+    "viewport": 390,
+    "document": 390,
+    "text": "RSIBOT V5\nPAPER · live disabled\nMenu\nBots\nRefresh\nPAPER · simulated wallet · live disabled · advisor reports only\nReadiness and open gates\nPaper bots\n\nmeridian_v5_paper · simulated wallet · live disabled\n\nGrid\nCompact\nRefresh paper data\nSIMULATED ACCOUNT\nPaper fleet\nFresh · heartbeat\n\nmeridian_v5_paper · Valuation: Mid of fresh book. Book freshness and completeness are separate from process heartbeat.\n\nWallet equity\n1,001.2592 USDC\nFresh complete owner wallet\nAvailable cash\n940.6592 USDC\nHoldings value\n60.60 USDC\nValuation: Mid of fresh book · As of 2026-10-30 22:24:40 UTC · 7s ago · Wallet marks, excluding cash\nOpen executors\n1\nFresh complete owner snapshot · excludes terminal receipts\nRealized PnL\n0.7192 USDC\nLifetime · native receipts\nUnrealized PnL\n0.5400 USDC\nLifetime · native receipts\nFees paid\n0.1408 USDC\nLifetime · native receipts\nTraded volume\n140.8000 USDC\nLifetime · native receipts\nLast report\n2026-10-30 22:24:45 UTC · 2s ago\nNative process heartbeat\n\nFilled orders: 1 entry · 1 exit. Accounting since: 2026-10-30 22:23:00 UTC · 1m ago. Counts are distinct filled orders, not actions.\n\nPair workspace\n5 pairs · same fixed-target recipe\nBNB-USDC\nActive\n\nPosition as of 2026-10-30 22:24:40 UTC · 7s ago\n\nPosition\n0.600000 BNB\nTarget price\n102.0000 USDC\nNative placed fixed-target limit\nExit progress\nPartially filled · 0.6 BNB remaining\nOrder tp-1 · LIMIT 102 USDC\nPlaced 2026-10-30 22:23:30 UTC · 1m ago\nProtected exit\nYes\nBTC-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:40 UTC · 7s ago\n\nNo position · waiting for entry signal\n\nETH-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:40 UTC · 7s ago\n\nNo position · waiting for entry signal\n\nSOL-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:40 UTC · 7s ago\n\nNo position · waiting for entry signal\n\nXRP-USDC\nNo position\n\nPosition as of 2026-10-30 22:24:40 UTC · 7s ago\n\nNo position · waiting for entry signal\n\nPair charts\nNative closed candles only · no inferred prices\nCollecting\nClosed one-minute price series\n\nWaiting for the bounded paper candle export and its chart binding. Fill and executor records remain available below. Empty charts are not zero trades.\n\nHoldings\nAvailable\n\n2026-10-30 22:24:40 UTC · 7s ago · Bounded owner records, not lifetime totals. Search, filter or resize columns.\n\nFilters\n1 row\nExport CSV\nPosition ID\n↕\n\t\nPair\n↕\n\t\nState\n↕\n\t\nQuantity\n↕\n\t\nRemaining basis\n↕\n\t\nOwner detail\n↕\n\nexecutor-1\tBNB-USDC\tActive\t0.600000 BNB\t60.0600 USDC\t\nExpand record\nRecent fills\nAvailable\n\n2026-10-30 22:24:40 UTC · 7s ago · Bounded owner records, not lifetime totals. Search, filter or resize columns.\n\nFilters\n2 rows\nExport CSV\nFill ID\n↕\n\t\nPair\n↕\n\t\nSide\n↕\n\t\nQuantity\n↕\n\t\nFill price\n↕\n\t\nFee\n↕\n\t\nFilled at · UTC\n↕\n\t\nOwner detail\n↕\n\ntrade-buy-1\tBNB-USDC\tBuy\t1.000000 BNB\t100.0000 USDC\t0.1000 USDC\t2026-10-30 22:23:00 UTC · 1m ago\t\nExpand record\n\ntrade-sell-1\tBNB-USDC\tSell\t0.400000 BNB\t102.0000 USDC\t0.0408 USDC\t2026-10-30 22:23:50 UTC · 55s ago\t\nExpand record\nExecutors\nAvailable\n\n2026-10-30 22:24:40 UTC · 7s ago · Bounded owner records, not lifetime totals. Search, filter or resize columns.\n\nFilters\n1 row\nExport CSV\nExecutor ID\n↕\n\t\nPair\n↕\n\t\nState\n↕\n\t\nRemaining close\n↕\n\t\nRemaining basis\n↕\n\t\nRealized PnL\n↕\n\t\nUnrealized PnL\n↕\n\t\nClosed at · UTC\n↕\n\t\nOwner detail\n↕\n\nexecutor-1\tNot published\tPartially closed\t0.600000 base units\t60.0600 USDC\t0.719200 USDC\t0.540000 USDC\tNot published\t\nExpand record\nRisk rails & entry latch\nIncomplete\n\nRisk controls not yet connected to this paper bot. Loss rails stop new acquisitions, never force a sale.\n\nPair exposure\nNot connected\n\nNo owner limit or latch observation. No use bar is inferred.\n\nProgram exposure\nNot connected\n\nNo owner limit or latch observation. No use bar is inferred.\n\nNew acquisitions\nNot connected\n\nNo owner limit or latch observation. No use bar is inferred.\n\nDecisions & paper control\nExit policy\n\nFixed-target recipe; trailing exit does not apply\n\nUnderwater positions remain held. Protective exits must survive entry halt.\n\nAcquisition plan\n\nNo active DCA plan\n\nComparable history: Collecting comparable history\n\nPaper control not enabled\n\nRead-only dashboard. A separately authenticated owner path must acknowledge paper commands before controls can appear here.\n\nObservation provenance",
+    "scrollers": [
+      {
+        "height": 4133,
+        "scroll": 4133
+      }
+    ],
+    "committedPath": "docs/evidence/2026-10-30-wp14-f15/screenshots/bots-dark-390.png"
+  },
+  {
+    "apiReads": [
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "d629dd8e0f01226cc5f6f0316a20087151d766eff30c33a1590282ce4bc6e3de",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "82a97c0dd980bd6e2ce13541f66676436db3e03de81384852dfc39bf7a0459f8",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "59600b9677ee8b84441ec85c908d46c202138acf5a2e70890692a9ad16146bca",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "93e16999b63ef0e01862f21b1e115bc1ae5d9ee48e48fa4351ba473c68e7320d",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "84442acfd313c12744e6bc8407fe5a59709e6c117e96886153a618f997b4fdfc",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "4c31f1c49e04a69f80e8af292edcd1553d42d67163065844bbf4f9c7df7f2e6b",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "d629dd8e0f01226cc5f6f0316a20087151d766eff30c33a1590282ce4bc6e3de",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "82a97c0dd980bd6e2ce13541f66676436db3e03de81384852dfc39bf7a0459f8",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "84442acfd313c12744e6bc8407fe5a59709e6c117e96886153a618f997b4fdfc",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "59600b9677ee8b84441ec85c908d46c202138acf5a2e70890692a9ad16146bca",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "93e16999b63ef0e01862f21b1e115bc1ae5d9ee48e48fa4351ba473c68e7320d",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "4c31f1c49e04a69f80e8af292edcd1553d42d67163065844bbf4f9c7df7f2e6b",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      }
+    ],
+    "name": "capital",
+    "route": "/capital",
+    "scenario": "fresh",
+    "width": 1440,
+    "theme": "light",
+    "path": "/home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/.workspace/evidence/wp14-f15-verified-20261030/capital-light-1440.png",
+    "pngSha256": "de035cf9f8f11fbc65e253fca025a2a7fa3b5d5fdc6aca11e2823173957b600b",
+    "bundle": {
+      "entryPath": "/assets/v5-CnR1BLP8.js",
+      "entrySha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce",
+      "htmlSha256": "2ecf4e0143573e228b04fc122863cf57c3c26886e86aef8513cf0f46fca9bd13"
+    },
+    "loadedAssets": [
+      {
+        "path": "/assets/v5-Bwe1AIV1.css",
+        "sha256": "87f2492ac1cdd8bf1ae402ad1a06f177d39ece14466755bb75d252605f1475b3"
+      },
+      {
+        "path": "/assets/auth-token-CijoHaBo.js",
+        "sha256": "84f4cce43557dbd3f49cab72b1c799ca2fe3dc49f87a346cbd314783f642c4a8"
+      },
+      {
+        "path": "/assets/preload-helper-Czpn1I53.js",
+        "sha256": "aba87f2a53e45ecdc9113fc30387d16e449d1676428cf5f82dd624c1df97d152"
+      },
+      {
+        "path": "/assets/createLucideIcon-CGDrmTep.js",
+        "sha256": "8f0af689ed3b4e9a72a7bd9de668b32447b92d1fe1a41b9af37de94996e2aee4"
+      },
+      {
+        "path": "/assets/jsx-runtime-BaSZ_JNh.js",
+        "sha256": "e8e123269724e152489c9eceb62b841447fa294b00094249e19d564519b407c9"
+      },
+      {
+        "path": "/assets/v5-CnR1BLP8.js",
+        "sha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce"
+      },
+      {
+        "path": "/assets/src-BaNBn19l.css",
+        "sha256": "3f2f70807feb89de6c91cc90d6c638cd1acf51fcce468dff7f9e33d5776e87f2"
+      },
+      {
+        "path": "/assets/refresh-cw-BqLEp1Rx.js",
+        "sha256": "0de88132eb22cc591f6251be2d67ac3e9c88acbaac414d6c845645f2e9b7f2d2"
+      },
+      {
+        "path": "/assets/heat-strip-CqgE5CwU.js",
+        "sha256": "bd735ec1961ad09da416d2e7f35ca888600bffb556de814ac3dbcddcd498aa90"
+      },
+      {
+        "path": "/assets/external-link-pe0BE9Ay.js",
+        "sha256": "eaef69b179d3d1d9d4191851bc82af7ab19a9af52b732444b89dced4d146aad9"
+      },
+      {
+        "path": "/assets/trash-2-Du0wmDIz.js",
+        "sha256": "2f458c0d35a6b83143145d770a5240f475776be935f5cf26554f22c303c7b61e"
+      },
+      {
+        "path": "/assets/src-DdMJPQ81.js",
+        "sha256": "d6f98f815aeda85cf18f33437eef36941d21d9f515aebdb73f2ebf60150416a2"
+      }
+    ],
+    "viewport": 1440,
+    "document": 1440,
+    "text": "RSIBOT V5\nPAPER · live disabled\nMarket\nCapital\nBots\nOperations\nResearch\nTradepad\nAgents\nSessions\nRefresh\nPAPER · simulated wallet · live disabled · advisor reports only\nReadiness and open gates\nCapital\n\nPAPER · Simulated wallet only · Live capital excluded\n\nRefresh read\n\nOwner meridian_v5_paper · Snapshot fixture-boot:179339908 · As of 2026-10-30 22:24:40 UTC · available\n\nNative cash plus marked inventory reconciles to wallet equity.\n\nInitial simulated funding\n1000 USDC\nAvailable cash\n940.6592 USDC\nReserved cash\n0 USDC\nMarked inventory\n60.6 USDC\nWallet equity\n1001.2592 USDC\nFees paid · quote equivalent\n0.1408 USDC\nExternal simulated cash flows\n0 USDC\nNative realized controller PnL\n0.7192 USDC\nNative unrealized controller PnL\n0.54 USDC\nNative lifetime accounting · available\n\nSame wallet snapshot fixture-boot:179339908 · Since 2026-10-30 22:23:00 UTC\n\nFees by currency: 0.1408 USDC. Quote equivalent uses the original native fee valuation; base fees are not charged twice.\n\nGross traded volume: 140.8 USDC · Filled BUY orders: 1 · Filled SELL orders: 1. Counts are distinct filled orders, not decisions or round trips.\n\nNative simulated balances\n\nOne wallet snapshot; held and executor inventory must not be counted twice.\n\nUSDC\ntotal\n940.6592 USDC\navailable\n940.6592 USDC\nreserved\n0 USDC\nBNB\ntotal\n0.6 BNB\navailable\n0 BNB\nreserved\n0.6 BNB\nComparable wallet history\n\nCoverage starts 2026-10-30 22:24:40 UTC · 0 native samples · 0 reported gaps\n\n24h return\n\nCollecting\n\nCollecting enough comparable wallet history. No return or Sharpe is inferred.\n\n7d return\n\nCollecting\n\nCollecting enough comparable wallet history. No return or Sharpe is inferred.\n\nSharpe · requires qualified sampling\n\nCollecting\n\nCollecting enough comparable wallet history. No return or Sharpe is inferred.\n\nWallet return is not deployed-controller return. Fees and native PnL keep their owner accounting scope. Real exchange balances, deposits, margin, funding and liquidation: not applicable to this spot paper wallet.",
+    "scrollers": [
+      {
+        "height": 1096,
+        "scroll": 1096
+      }
+    ],
+    "committedPath": "docs/evidence/2026-10-30-wp14-f15/screenshots/capital-light-1440.png"
+  },
+  {
+    "apiReads": [
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "d629dd8e0f01226cc5f6f0316a20087151d766eff30c33a1590282ce4bc6e3de",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "82a97c0dd980bd6e2ce13541f66676436db3e03de81384852dfc39bf7a0459f8",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "59600b9677ee8b84441ec85c908d46c202138acf5a2e70890692a9ad16146bca",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "93e16999b63ef0e01862f21b1e115bc1ae5d9ee48e48fa4351ba473c68e7320d",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "84442acfd313c12744e6bc8407fe5a59709e6c117e96886153a618f997b4fdfc",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "4c31f1c49e04a69f80e8af292edcd1553d42d67163065844bbf4f9c7df7f2e6b",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "d629dd8e0f01226cc5f6f0316a20087151d766eff30c33a1590282ce4bc6e3de",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "82a97c0dd980bd6e2ce13541f66676436db3e03de81384852dfc39bf7a0459f8",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "84442acfd313c12744e6bc8407fe5a59709e6c117e96886153a618f997b4fdfc",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "59600b9677ee8b84441ec85c908d46c202138acf5a2e70890692a9ad16146bca",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "93e16999b63ef0e01862f21b1e115bc1ae5d9ee48e48fa4351ba473c68e7320d",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "4c31f1c49e04a69f80e8af292edcd1553d42d67163065844bbf4f9c7df7f2e6b",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ed5343fec20243f84a1277e496bc06facae7eba22c527e0e1446e9b288e33666",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "9bb0e0d877a7d7cb92826a601fdc63f661e6d98aafefa99888abace1bf7fca84",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "e53decdd466f363110c8c333451c38023772811a27bc48f498d79fe10292e48b",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      }
+    ],
+    "name": "capital",
+    "route": "/capital",
+    "scenario": "fresh",
+    "width": 1440,
+    "theme": "dark",
+    "path": "/home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/.workspace/evidence/wp14-f15-verified-20261030/capital-dark-1440.png",
+    "pngSha256": "8d44810a646af56fdb6ebcbe4ef6f38f52207d93bad6c465c97c088de00cd7f6",
+    "bundle": {
+      "entryPath": "/assets/v5-CnR1BLP8.js",
+      "entrySha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce",
+      "htmlSha256": "2ecf4e0143573e228b04fc122863cf57c3c26886e86aef8513cf0f46fca9bd13"
+    },
+    "loadedAssets": [
+      {
+        "path": "/assets/v5-Bwe1AIV1.css",
+        "sha256": "87f2492ac1cdd8bf1ae402ad1a06f177d39ece14466755bb75d252605f1475b3"
+      },
+      {
+        "path": "/assets/jsx-runtime-BaSZ_JNh.js",
+        "sha256": "e8e123269724e152489c9eceb62b841447fa294b00094249e19d564519b407c9"
+      },
+      {
+        "path": "/assets/auth-token-CijoHaBo.js",
+        "sha256": "84f4cce43557dbd3f49cab72b1c799ca2fe3dc49f87a346cbd314783f642c4a8"
+      },
+      {
+        "path": "/assets/createLucideIcon-CGDrmTep.js",
+        "sha256": "8f0af689ed3b4e9a72a7bd9de668b32447b92d1fe1a41b9af37de94996e2aee4"
+      },
+      {
+        "path": "/assets/preload-helper-Czpn1I53.js",
+        "sha256": "aba87f2a53e45ecdc9113fc30387d16e449d1676428cf5f82dd624c1df97d152"
+      },
+      {
+        "path": "/assets/v5-CnR1BLP8.js",
+        "sha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce"
+      },
+      {
+        "path": "/assets/src-BaNBn19l.css",
+        "sha256": "3f2f70807feb89de6c91cc90d6c638cd1acf51fcce468dff7f9e33d5776e87f2"
+      },
+      {
+        "path": "/assets/trash-2-Du0wmDIz.js",
+        "sha256": "2f458c0d35a6b83143145d770a5240f475776be935f5cf26554f22c303c7b61e"
+      },
+      {
+        "path": "/assets/external-link-pe0BE9Ay.js",
+        "sha256": "eaef69b179d3d1d9d4191851bc82af7ab19a9af52b732444b89dced4d146aad9"
+      },
+      {
+        "path": "/assets/heat-strip-CqgE5CwU.js",
+        "sha256": "bd735ec1961ad09da416d2e7f35ca888600bffb556de814ac3dbcddcd498aa90"
+      },
+      {
+        "path": "/assets/refresh-cw-BqLEp1Rx.js",
+        "sha256": "0de88132eb22cc591f6251be2d67ac3e9c88acbaac414d6c845645f2e9b7f2d2"
+      },
+      {
+        "path": "/assets/src-DdMJPQ81.js",
+        "sha256": "d6f98f815aeda85cf18f33437eef36941d21d9f515aebdb73f2ebf60150416a2"
+      }
+    ],
+    "viewport": 1440,
+    "document": 1440,
+    "text": "RSIBOT V5\nPAPER · live disabled\nMarket\nCapital\nBots\nOperations\nResearch\nTradepad\nAgents\nSessions\nRefresh\nPAPER · simulated wallet · live disabled · advisor reports only\nReadiness and open gates\nCapital\n\nPAPER · Simulated wallet only · Live capital excluded\n\nRefresh read\n\nOwner meridian_v5_paper · Snapshot fixture-boot:179339909 · As of 2026-10-30 22:24:50 UTC · available\n\nNative cash plus marked inventory reconciles to wallet equity.\n\nInitial simulated funding\n1000 USDC\nAvailable cash\n940.6592 USDC\nReserved cash\n0 USDC\nMarked inventory\n60.6 USDC\nWallet equity\n1001.2592 USDC\nFees paid · quote equivalent\n0.1408 USDC\nExternal simulated cash flows\n0 USDC\nNative realized controller PnL\n0.7192 USDC\nNative unrealized controller PnL\n0.54 USDC\nNative lifetime accounting · available\n\nSame wallet snapshot fixture-boot:179339909 · Since 2026-10-30 22:23:10 UTC\n\nFees by currency: 0.1408 USDC. Quote equivalent uses the original native fee valuation; base fees are not charged twice.\n\nGross traded volume: 140.8 USDC · Filled BUY orders: 1 · Filled SELL orders: 1. Counts are distinct filled orders, not decisions or round trips.\n\nNative simulated balances\n\nOne wallet snapshot; held and executor inventory must not be counted twice.\n\nUSDC\ntotal\n940.6592 USDC\navailable\n940.6592 USDC\nreserved\n0 USDC\nBNB\ntotal\n0.6 BNB\navailable\n0 BNB\nreserved\n0.6 BNB\nComparable wallet history\n\nCoverage starts 2026-10-30 22:24:50 UTC · 0 native samples · 0 reported gaps\n\n24h return\n\nCollecting\n\nCollecting enough comparable wallet history. No return or Sharpe is inferred.\n\n7d return\n\nCollecting\n\nCollecting enough comparable wallet history. No return or Sharpe is inferred.\n\nSharpe · requires qualified sampling\n\nCollecting\n\nCollecting enough comparable wallet history. No return or Sharpe is inferred.\n\nWallet return is not deployed-controller return. Fees and native PnL keep their owner accounting scope. Real exchange balances, deposits, margin, funding and liquidation: not applicable to this spot paper wallet.",
+    "scrollers": [
+      {
+        "height": 1096,
+        "scroll": 1096
+      }
+    ],
+    "committedPath": "docs/evidence/2026-10-30-wp14-f15/screenshots/capital-dark-1440.png"
+  },
+  {
+    "apiReads": [
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "d629dd8e0f01226cc5f6f0316a20087151d766eff30c33a1590282ce4bc6e3de",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "82a97c0dd980bd6e2ce13541f66676436db3e03de81384852dfc39bf7a0459f8",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "59600b9677ee8b84441ec85c908d46c202138acf5a2e70890692a9ad16146bca",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "93e16999b63ef0e01862f21b1e115bc1ae5d9ee48e48fa4351ba473c68e7320d",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "84442acfd313c12744e6bc8407fe5a59709e6c117e96886153a618f997b4fdfc",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "4c31f1c49e04a69f80e8af292edcd1553d42d67163065844bbf4f9c7df7f2e6b",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "d629dd8e0f01226cc5f6f0316a20087151d766eff30c33a1590282ce4bc6e3de",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "82a97c0dd980bd6e2ce13541f66676436db3e03de81384852dfc39bf7a0459f8",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "84442acfd313c12744e6bc8407fe5a59709e6c117e96886153a618f997b4fdfc",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "59600b9677ee8b84441ec85c908d46c202138acf5a2e70890692a9ad16146bca",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "93e16999b63ef0e01862f21b1e115bc1ae5d9ee48e48fa4351ba473c68e7320d",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "4c31f1c49e04a69f80e8af292edcd1553d42d67163065844bbf4f9c7df7f2e6b",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ed5343fec20243f84a1277e496bc06facae7eba22c527e0e1446e9b288e33666",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "9bb0e0d877a7d7cb92826a601fdc63f661e6d98aafefa99888abace1bf7fca84",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "e53decdd466f363110c8c333451c38023772811a27bc48f498d79fe10292e48b",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ed5343fec20243f84a1277e496bc06facae7eba22c527e0e1446e9b288e33666",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "9bb0e0d877a7d7cb92826a601fdc63f661e6d98aafefa99888abace1bf7fca84",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "e53decdd466f363110c8c333451c38023772811a27bc48f498d79fe10292e48b",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      }
+    ],
+    "name": "capital",
+    "route": "/capital",
+    "scenario": "fresh",
+    "width": 390,
+    "theme": "light",
+    "path": "/home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/.workspace/evidence/wp14-f15-verified-20261030/capital-light-390.png",
+    "pngSha256": "fcfe4e2d5618bd13c18aff22fb9c1e6e0a2890391d16220d9a650a556a8e80e6",
+    "bundle": {
+      "entryPath": "/assets/v5-CnR1BLP8.js",
+      "entrySha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce",
+      "htmlSha256": "2ecf4e0143573e228b04fc122863cf57c3c26886e86aef8513cf0f46fca9bd13"
+    },
+    "loadedAssets": [
+      {
+        "path": "/assets/v5-Bwe1AIV1.css",
+        "sha256": "87f2492ac1cdd8bf1ae402ad1a06f177d39ece14466755bb75d252605f1475b3"
+      },
+      {
+        "path": "/assets/jsx-runtime-BaSZ_JNh.js",
+        "sha256": "e8e123269724e152489c9eceb62b841447fa294b00094249e19d564519b407c9"
+      },
+      {
+        "path": "/assets/createLucideIcon-CGDrmTep.js",
+        "sha256": "8f0af689ed3b4e9a72a7bd9de668b32447b92d1fe1a41b9af37de94996e2aee4"
+      },
+      {
+        "path": "/assets/preload-helper-Czpn1I53.js",
+        "sha256": "aba87f2a53e45ecdc9113fc30387d16e449d1676428cf5f82dd624c1df97d152"
+      },
+      {
+        "path": "/assets/auth-token-CijoHaBo.js",
+        "sha256": "84f4cce43557dbd3f49cab72b1c799ca2fe3dc49f87a346cbd314783f642c4a8"
+      },
+      {
+        "path": "/assets/v5-CnR1BLP8.js",
+        "sha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce"
+      },
+      {
+        "path": "/assets/src-BaNBn19l.css",
+        "sha256": "3f2f70807feb89de6c91cc90d6c638cd1acf51fcce468dff7f9e33d5776e87f2"
+      },
+      {
+        "path": "/assets/refresh-cw-BqLEp1Rx.js",
+        "sha256": "0de88132eb22cc591f6251be2d67ac3e9c88acbaac414d6c845645f2e9b7f2d2"
+      },
+      {
+        "path": "/assets/trash-2-Du0wmDIz.js",
+        "sha256": "2f458c0d35a6b83143145d770a5240f475776be935f5cf26554f22c303c7b61e"
+      },
+      {
+        "path": "/assets/heat-strip-CqgE5CwU.js",
+        "sha256": "bd735ec1961ad09da416d2e7f35ca888600bffb556de814ac3dbcddcd498aa90"
+      },
+      {
+        "path": "/assets/external-link-pe0BE9Ay.js",
+        "sha256": "eaef69b179d3d1d9d4191851bc82af7ab19a9af52b732444b89dced4d146aad9"
+      },
+      {
+        "path": "/assets/src-DdMJPQ81.js",
+        "sha256": "d6f98f815aeda85cf18f33437eef36941d21d9f515aebdb73f2ebf60150416a2"
+      }
+    ],
+    "viewport": 390,
+    "document": 390,
+    "text": "RSIBOT V5\nPAPER · live disabled\nMenu\nCapital\nRefresh\nPAPER · simulated wallet · live disabled · advisor reports only\nReadiness and open gates\nCapital\n\nPAPER · Simulated wallet only · Live capital excluded\n\nRefresh read\n\nOwner meridian_v5_paper · Snapshot fixture-boot:179339909 · As of 2026-10-30 22:24:50 UTC · available\n\nNative cash plus marked inventory reconciles to wallet equity.\n\nInitial simulated funding\n1000 USDC\nAvailable cash\n940.6592 USDC\nReserved cash\n0 USDC\nMarked inventory\n60.6 USDC\nWallet equity\n1001.2592 USDC\nFees paid · quote equivalent\n0.1408 USDC\nExternal simulated cash flows\n0 USDC\nNative realized controller PnL\n0.7192 USDC\nNative unrealized controller PnL\n0.54 USDC\nNative lifetime accounting · available\n\nSame wallet snapshot fixture-boot:179339909 · Since 2026-10-30 22:23:10 UTC\n\nFees by currency: 0.1408 USDC. Quote equivalent uses the original native fee valuation; base fees are not charged twice.\n\nGross traded volume: 140.8 USDC · Filled BUY orders: 1 · Filled SELL orders: 1. Counts are distinct filled orders, not decisions or round trips.\n\nNative simulated balances\n\nOne wallet snapshot; held and executor inventory must not be counted twice.\n\nUSDC\ntotal\n940.6592 USDC\navailable\n940.6592 USDC\nreserved\n0 USDC\nBNB\ntotal\n0.6 BNB\navailable\n0 BNB\nreserved\n0.6 BNB\nComparable wallet history\n\nCoverage starts 2026-10-30 22:24:50 UTC · 0 native samples · 0 reported gaps\n\n24h return\n\nCollecting\n\nCollecting enough comparable wallet history. No return or Sharpe is inferred.\n\n7d return\n\nCollecting\n\nCollecting enough comparable wallet history. No return or Sharpe is inferred.\n\nSharpe · requires qualified sampling\n\nCollecting\n\nCollecting enough comparable wallet history. No return or Sharpe is inferred.\n\nWallet return is not deployed-controller return. Fees and native PnL keep their owner accounting scope. Real exchange balances, deposits, margin, funding and liquidation: not applicable to this spot paper wallet.",
+    "scrollers": [
+      {
+        "height": 2347,
+        "scroll": 2347
+      }
+    ],
+    "committedPath": "docs/evidence/2026-10-30-wp14-f15/screenshots/capital-light-390.png"
+  },
+  {
+    "apiReads": [
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5d9140bdc3ca4e9381665a2fb816be2227f5118981336b65e12865e841d001cd",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f9d78d0866108f38dfd23792784b01ea3d7bf125898476a46c1e50397d59417d",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "2e8429590a8fcffe7a879621a4c4c1a0e8bfc0a06ab7ffe2e3b4bfacc1895afe",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "072e4cc6cfe4b835c1f9629790c42b202c6eb09a3cec8a646b65d4bf9b48cbd7",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ba39e198eee5d4c79132e5d6b7b157592f7ed37ce5a3e6d4987164f1bd1d5966",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "1816df9528a06d6165fc74c8b73a5f1262d8e827793f33185f14f3abb2305993",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "fb6786527bddf1d6040c56f32d91ccbf3f7fe7b547ece224693e742260bd252b",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5494ef4e9fb8207dc425c4d48fa45f9c175c301edc1e9cb09e4585db9c604d9d",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "f7c04b86e77306952d3906fa8f6d4fff04181e013321517ea26dadd3eb66f7d2",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339907"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "d629dd8e0f01226cc5f6f0316a20087151d766eff30c33a1590282ce4bc6e3de",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "82a97c0dd980bd6e2ce13541f66676436db3e03de81384852dfc39bf7a0459f8",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "59600b9677ee8b84441ec85c908d46c202138acf5a2e70890692a9ad16146bca",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "93e16999b63ef0e01862f21b1e115bc1ae5d9ee48e48fa4351ba473c68e7320d",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "84442acfd313c12744e6bc8407fe5a59709e6c117e96886153a618f997b4fdfc",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "4c31f1c49e04a69f80e8af292edcd1553d42d67163065844bbf4f9c7df7f2e6b",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "d629dd8e0f01226cc5f6f0316a20087151d766eff30c33a1590282ce4bc6e3de",
+        "section": "status",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "82a97c0dd980bd6e2ce13541f66676436db3e03de81384852dfc39bf7a0459f8",
+        "section": "positions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "84442acfd313c12744e6bc8407fe5a59709e6c117e96886153a618f997b4fdfc",
+        "section": "risk",
+        "state": "degraded",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "59600b9677ee8b84441ec85c908d46c202138acf5a2e70890692a9ad16146bca",
+        "section": "fills",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "93e16999b63ef0e01862f21b1e115bc1ae5d9ee48e48fa4351ba473c68e7320d",
+        "section": "decisions",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "4c31f1c49e04a69f80e8af292edcd1553d42d67163065844bbf4f9c7df7f2e6b",
+        "section": "executors",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "0d1bd2923379caec1eed4b88717aa65bc57f88730f35726bc81a9a2ca81555cf",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "5b22ec073aafbcb299184cf462c70c78b03d415bad42cf69b6e5a687a569b4e1",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "b9a1b5870642d3929095f04145d01838fd3da0c374f7969bf84d5ac3b4b7493f",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339908"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ed5343fec20243f84a1277e496bc06facae7eba22c527e0e1446e9b288e33666",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "9bb0e0d877a7d7cb92826a601fdc63f661e6d98aafefa99888abace1bf7fca84",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "e53decdd466f363110c8c333451c38023772811a27bc48f498d79fe10292e48b",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ed5343fec20243f84a1277e496bc06facae7eba22c527e0e1446e9b288e33666",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "9bb0e0d877a7d7cb92826a601fdc63f661e6d98aafefa99888abace1bf7fca84",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "e53decdd466f363110c8c333451c38023772811a27bc48f498d79fe10292e48b",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "ed5343fec20243f84a1277e496bc06facae7eba22c527e0e1446e9b288e33666",
+        "section": "wallet",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "9bb0e0d877a7d7cb92826a601fdc63f661e6d98aafefa99888abace1bf7fca84",
+        "section": "history",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      },
+      {
+        "status": 200,
+        "payloadSha256": "e53decdd466f363110c8c333451c38023772811a27bc48f498d79fe10292e48b",
+        "section": "accounting",
+        "state": "available",
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "snapshot_id": "fixture-boot:179339909"
+      }
+    ],
+    "name": "capital",
+    "route": "/capital",
+    "scenario": "fresh",
+    "width": 390,
+    "theme": "dark",
+    "path": "/home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/.workspace/evidence/wp14-f15-verified-20261030/capital-dark-390.png",
+    "pngSha256": "1c18ef9a490bed9c7af9266a00b06fb40f3c6a69cef31688f8cd86139a99990d",
+    "bundle": {
+      "entryPath": "/assets/v5-CnR1BLP8.js",
+      "entrySha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce",
+      "htmlSha256": "2ecf4e0143573e228b04fc122863cf57c3c26886e86aef8513cf0f46fca9bd13"
+    },
+    "loadedAssets": [
+      {
+        "path": "/assets/v5-Bwe1AIV1.css",
+        "sha256": "87f2492ac1cdd8bf1ae402ad1a06f177d39ece14466755bb75d252605f1475b3"
+      },
+      {
+        "path": "/assets/auth-token-CijoHaBo.js",
+        "sha256": "84f4cce43557dbd3f49cab72b1c799ca2fe3dc49f87a346cbd314783f642c4a8"
+      },
+      {
+        "path": "/assets/jsx-runtime-BaSZ_JNh.js",
+        "sha256": "e8e123269724e152489c9eceb62b841447fa294b00094249e19d564519b407c9"
+      },
+      {
+        "path": "/assets/preload-helper-Czpn1I53.js",
+        "sha256": "aba87f2a53e45ecdc9113fc30387d16e449d1676428cf5f82dd624c1df97d152"
+      },
+      {
+        "path": "/assets/createLucideIcon-CGDrmTep.js",
+        "sha256": "8f0af689ed3b4e9a72a7bd9de668b32447b92d1fe1a41b9af37de94996e2aee4"
+      },
+      {
+        "path": "/assets/v5-CnR1BLP8.js",
+        "sha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce"
+      },
+      {
+        "path": "/assets/src-BaNBn19l.css",
+        "sha256": "3f2f70807feb89de6c91cc90d6c638cd1acf51fcce468dff7f9e33d5776e87f2"
+      },
+      {
+        "path": "/assets/external-link-pe0BE9Ay.js",
+        "sha256": "eaef69b179d3d1d9d4191851bc82af7ab19a9af52b732444b89dced4d146aad9"
+      },
+      {
+        "path": "/assets/trash-2-Du0wmDIz.js",
+        "sha256": "2f458c0d35a6b83143145d770a5240f475776be935f5cf26554f22c303c7b61e"
+      },
+      {
+        "path": "/assets/refresh-cw-BqLEp1Rx.js",
+        "sha256": "0de88132eb22cc591f6251be2d67ac3e9c88acbaac414d6c845645f2e9b7f2d2"
+      },
+      {
+        "path": "/assets/heat-strip-CqgE5CwU.js",
+        "sha256": "bd735ec1961ad09da416d2e7f35ca888600bffb556de814ac3dbcddcd498aa90"
+      },
+      {
+        "path": "/assets/src-DdMJPQ81.js",
+        "sha256": "d6f98f815aeda85cf18f33437eef36941d21d9f515aebdb73f2ebf60150416a2"
+      }
+    ],
+    "viewport": 390,
+    "document": 390,
+    "text": "RSIBOT V5\nPAPER · live disabled\nMenu\nCapital\nRefresh\nPAPER · simulated wallet · live disabled · advisor reports only\nReadiness and open gates\nCapital\n\nPAPER · Simulated wallet only · Live capital excluded\n\nRefresh read\n\nOwner meridian_v5_paper · Snapshot fixture-boot:179339909 · As of 2026-10-30 22:24:50 UTC · available\n\nNative cash plus marked inventory reconciles to wallet equity.\n\nInitial simulated funding\n1000 USDC\nAvailable cash\n940.6592 USDC\nReserved cash\n0 USDC\nMarked inventory\n60.6 USDC\nWallet equity\n1001.2592 USDC\nFees paid · quote equivalent\n0.1408 USDC\nExternal simulated cash flows\n0 USDC\nNative realized controller PnL\n0.7192 USDC\nNative unrealized controller PnL\n0.54 USDC\nNative lifetime accounting · available\n\nSame wallet snapshot fixture-boot:179339909 · Since 2026-10-30 22:23:10 UTC\n\nFees by currency: 0.1408 USDC. Quote equivalent uses the original native fee valuation; base fees are not charged twice.\n\nGross traded volume: 140.8 USDC · Filled BUY orders: 1 · Filled SELL orders: 1. Counts are distinct filled orders, not decisions or round trips.\n\nNative simulated balances\n\nOne wallet snapshot; held and executor inventory must not be counted twice.\n\nUSDC\ntotal\n940.6592 USDC\navailable\n940.6592 USDC\nreserved\n0 USDC\nBNB\ntotal\n0.6 BNB\navailable\n0 BNB\nreserved\n0.6 BNB\nComparable wallet history\n\nCoverage starts 2026-10-30 22:24:50 UTC · 0 native samples · 0 reported gaps\n\n24h return\n\nCollecting\n\nCollecting enough comparable wallet history. No return or Sharpe is inferred.\n\n7d return\n\nCollecting\n\nCollecting enough comparable wallet history. No return or Sharpe is inferred.\n\nSharpe · requires qualified sampling\n\nCollecting\n\nCollecting enough comparable wallet history. No return or Sharpe is inferred.\n\nWallet return is not deployed-controller return. Fees and native PnL keep their owner accounting scope. Real exchange balances, deposits, margin, funding and liquidation: not applicable to this spot paper wallet.",
+    "scrollers": [
+      {
+        "height": 2347,
+        "scroll": 2347
+      }
+    ],
+    "committedPath": "docs/evidence/2026-10-30-wp14-f15/screenshots/capital-dark-390.png"
+  }
+]

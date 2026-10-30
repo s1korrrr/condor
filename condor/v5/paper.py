@@ -881,7 +881,7 @@ def validate_paper_read(
             and (
                 not isinstance(payload["capabilities"], list)
                 or any(
-                    not isinstance(capability, str) or not capability.strip()
+                    not isinstance(capability, str)
                     for capability in payload["capabilities"]
                 )
             )

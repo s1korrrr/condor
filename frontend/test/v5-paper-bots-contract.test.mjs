@@ -21,8 +21,8 @@ test('pinned API73 envelopes render owner reads without schema failures', () => 
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.entries(apiEnvelopes).filter(([name])=>name!=='collecting').map(([,read])=>read),now,reportAt:now,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
   assert.doesNotMatch(html, /owner schema invalid/);
   assert.match(html, /Available/);
-  for (const capabilities of [[], ['read']]) assert.equal(paperSectionError({...apiEnvelopes.executors,capabilities}),null);
-  for (const capabilities of [{}, 1, [1], ['']]) assert.match(paperSectionError({...apiEnvelopes.executors,capabilities}),/schema invalid/);
+  for (const capabilities of [[], ['read'], ['']]) assert.equal(paperSectionError({...apiEnvelopes.executors,capabilities}),null);
+  for (const capabilities of [{}, 1, [1]]) assert.match(paperSectionError({...apiEnvelopes.executors,capabilities}),/schema invalid/);
   for (const state of ['available','collecting','degraded','stale','not_applicable']) assert.equal(paperSectionError({...apiEnvelopes.executors,state,reason:null,source_at_ms:null,observed_at_ms:null}),null);
   assert.equal(paperSectionError({...apiEnvelopes.collecting,section:'status',state:'degraded',data:{owner_chain_anchor:{seq:1}}}),null);
 });

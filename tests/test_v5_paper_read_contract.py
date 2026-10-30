@@ -43,7 +43,7 @@ def test_real_api_73_envelopes_cross_authenticated_condor_boundary(tmp_path, nam
     assert result["read_at_ms"] == payload["read_at_ms"]
 
 
-@pytest.mark.parametrize("capabilities", [[], ["read"], ["read", "history"]])
+@pytest.mark.parametrize("capabilities", [[], ["read"], ["read", "history"], [""]])
 def test_string_capability_lists_are_valid(capabilities):
     from condor.v5.paper import validate_paper_read
 
@@ -598,7 +598,6 @@ def test_authenticated_malformed_section_is_a_typed_schema_error(
         ("capabilities", {}),
         ("capabilities", 1),
         ("capabilities", [1]),
-        ("capabilities", [""]),
         ("read_at_ms", True),
         ("read_at_ms", -1),
         ("stale_reason", {}),

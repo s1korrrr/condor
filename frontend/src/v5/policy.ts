@@ -76,7 +76,7 @@ export function paperSectionError(read: Partial<import("./contracts").PaperRead>
     (["positions", "fills", "executors", "orders"].includes(read.section) && read.completeness === undefined) ||
     (read.next_cursor != null && (typeof read.next_cursor !== "string" || !read.next_cursor)) ||
     ("source" in read && !object(read.source)) ||
-    ("capabilities" in read && (!Array.isArray(read.capabilities) || read.capabilities.some(value => typeof value !== "string" || !value.trim()))) ||
+    ("capabilities" in read && (!Array.isArray(read.capabilities) || read.capabilities.some(value => typeof value !== "string"))) ||
     read.state === "available" && read.data == null) return invalid();
   if (read.data == null) return null;
   if (["positions", "fills", "executors", "orders"].includes(read.section ?? "")) {

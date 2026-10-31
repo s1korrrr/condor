@@ -177,3 +177,41 @@ the pinned owner, because emergency is OR-merged at
 in this implementation round. The explicit emergency-clear fixture tests
 consumer supersession, not the reachability of that owner operation.
 The deferred gcTime safety expiry, pre-sleep frame and other items above remain.
+
+## Round-7 review repair: owner partial shape and controller coverage
+
+Inputs: Condor `b599e513`, workspace `61edd9ecd`. Authority stays
+repository-process-only; no owner, API, stack, unit, deployment or trading
+changes. Rollback is a revert of this round's feature commits.
+
+The pinned owner publishes partial risk when holds remain. API #73 maps that
+to degraded. Extend qualification only for a reason in the pinned owner's six
+owner-hold or four native-entry-hold reasons, actually published in that read.
+Keep explicit controller flags, section-schema validity, no cursor and owner
+boot/sequence ordering. Unknown reasons, mark faults and other partial risk
+remain fail-safe. Constants are checked against a byte-identical pinned owner
+source fixture, not a second manually maintained expected-reason list.
+
+Apply supersession to safety scopes, not whole reads. A qualified newer risk
+may replace signals only for controllers it explicitly covers. Omitted or
+removed controllers keep their previous evidence, including across a boot
+replacement. Owner-level holds need an explicit newer owner-hold list.
+Retained safety projections keep the original snapshot identity and only their
+uncovered scopes. They never supply data totals. The banner explains that
+omitted controllers remain unknown, not cleared.
+
+Replace the round-6 supersession scenarios with native-entry/ingress partial
+owner fixtures. Keep complete API fixtures as an additional coverage path for
+the GPT omission regression. Add removal, later explicit clearance, missing
+owner-list and non-hold partial cases. Mutation audits must reject removal of
+partial qualification, controller coverage and owner-list coverage. Keep the
+earlier flag, incompleteness, ordering, clock and totals regressions.
+
+Validation: both original reviewer probes before/after; the final real-query
+suite against original source and repaired source; full owner/workspace suites,
+both typechecks, lint, whitespace checks and independent-root bundle rebuilds.
+Receipt: `docs/evidence/2026-10-31-v5-dashboard-polish/round8-partial-coverage.md`.
+Install Condor frontend devDependencies with npm ci before the linked workspace
+suite, and use node --preserve-symlinks. #625's pin is unchanged: merge #85 and
+bump the pin before building #625. Existing held merge/requalification gates,
+the unconfirmed owner emergency-clear finding and deferred items remain.

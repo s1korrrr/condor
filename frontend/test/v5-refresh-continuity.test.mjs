@@ -52,7 +52,8 @@ function harness(kind, initial) {
     const path = new URL(request.url,'https://fixture.invalid').searchParams.get('path');
     const section = path.includes('/native/status') ? 'status' : path.includes('account-balances') || path.includes('fleet/summary') ? 'wallet' : path.includes('/history') ? 'history' : path.includes('/holdings') ? 'positions' : path.includes('/accounting') ? 'accounting' : sections.find(section => path.includes(section));
     const read = section === 'fills' && new URL(path,'https://fixture.invalid').searchParams.has('cursor') ? fixture('fills-offset-200') : fixture(section);
-    request.resolve({ok:true,json:async () => mutate(read)});
+    const value = mutate(read);
+    request.resolve({ok:true,json:async () => value,text:async () => JSON.stringify(value)});
     await setImmediate();
   }
   return {query,render,start,requests,deliver,remount:() => {slots.length = 0;},restore:() => {client.clear();global.fetch = original;}};

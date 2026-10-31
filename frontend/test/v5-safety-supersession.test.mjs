@@ -163,9 +163,9 @@ test('owner hold evidence stays retained when the newer risk omits its owner-hol
   assert.deepEqual(paperSafetyReads(retained, [], explicit), []);
 });
 
-test('raw clock anomaly fixture with an unsafe numeric timestamp remains fail-safe', () => {
+test('quarantined clock anomaly does not block qualified newer risk evidence', () => {
   const older = structuredClone(base);
   older.data.controllers[bnb].operator.emergency = true;
   const newer = advance(ownerRisk('clock-anomaly-hold', fixture('risk')));
-  assert.deepEqual(paperSafetyReads([older], [], newer), [older]);
+  assert.deepEqual(paperSafetyReads([older], [], newer), []);
 });

@@ -1,5 +1,46 @@
 # V5 dashboard polish — 2026-10-31
 
+## Round-8 review repair: quarantined clock anomaly evidence
+
+Input heads: Condor f67a70ef and workspace cd69ea16b. Scope is the Condor
+consumer boundary and paired regression harnesses. Authority remains
+repository-process-only. No owner/API changes, live services, units, networks,
+deployments or merges. Rollback is a revert of this round's feature commits.
+
+The pinned owner permanently republishes reviewed clock anomalies. Their
+nanosecond-scale evidence is not a current clock or a monetary value. Preserve
+the original JSON number tokens as strings at exactly
+risk.data.clock_recovery.anomalies[*].timestamp and .provider_upper_bound.
+A frozen constant names that quarantine path, the two pinned numeric fields
+and the reason. All other numeric/schema checks stay unchanged. The anomaly
+fields never supply arithmetic or current-state projections.
+
+Both Bots and shared owner-health reads must use the same exact-text parser.
+Keep the existing boot/sequence, partial-reason, explicit-flag, controller and
+owner-list coverage rules. Qualifying post-acknowledgement risk can then clear
+only superseded safety scopes, and a NEW emergency remains visible while the
+reviewed anomaly is still published.
+
+Validation includes the reported function/render and real-query regressions,
+exact token preservation, negative boundary tests for monetary/position/flag/
+_ms fields, newer emergency flags, and mutations that restore schema rejection
+or round the opaque evidence. Run the full required suites, both typechecks,
+whitespace checks and independent-root bundle rebuilds. Record final results in
+docs/evidence/2026-10-31-v5-dashboard-polish/round9-quarantined-anomalies.md.
+
+The three obsolete whole-read assertions identified by GPT are scratch-only,
+not repository tests. Do not change another reviewer's scratch resources.
+Update the repository's old unsafe-anomaly negative test to the new contract.
+The earlier deferred gcTime/pre-sleep/owner-emergency-clear findings remain.
+Keep #625's pin unchanged; tests use this newer linked Condor, after npm ci.
+Merge #85 and bump the Condor pin before building #625. Fresh exact-head
+review and integration requalification remain required.
+
+Round-8 implementation complete: 4,256 Python passes / 8 skips, 1,199 Condor
+Node passes / 1 skip, 573 workspace passes, both typechecks, 13 killed mutation
+audits, branch whitespace checks and 35-file cross-root reproducibility pass.
+New boundary lint passes; the same three pre-existing policy lint errors remain.
+
 ## R1 freshness repair
 
 Complete: shared retained-snapshot age labels for Capital, Bots and Paper

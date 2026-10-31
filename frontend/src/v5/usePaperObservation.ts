@@ -3,12 +3,13 @@ import { paperBoundedRead, paperCoherentRead, paperObservationSummary, paperSect
 import { usePaperSnapshot } from "./usePaperSnapshot";
 import { paperSnapshotPresentation } from "./snapshot-presentation";
 import { usePaperClock } from "./usePaperClock";
+import { parsePaperReadText } from "./paper-json";
 
 async function readPaperSection(path: string, section: string, bot: string | null | undefined, signal: AbortSignal) {
   signal.throwIfAborted();
   const response = await fetch(`/api/v5/dashboard/read?${new URLSearchParams({ path })}`, { credentials: "include", cache: "no-store", signal: AbortSignal.any([signal, AbortSignal.timeout(14_000)]) });
   if (!response.ok) throw Object.assign(new Error(`${section === "status" ? "Identity" : section} owner read unavailable. Check the retained observation diagnostics.`), { status: response.status });
-  const value = await response.json() as PaperRead;
+  const value = parsePaperReadText(await response.text()) as PaperRead;
   signal.throwIfAborted();
   if (!value || value.section !== section || (bot && value.bot_id !== bot) || paperSectionError(value)) throw new Error(`${section} owner read failed validation. No current observation is inferred.`);
   return value;

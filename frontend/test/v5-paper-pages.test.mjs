@@ -19,7 +19,7 @@ for (const page of ['health','capital','operations','bots']) for (const failure 
     if(section==='status'||section==='operations')attempt++;
     if ((!failed || exhausted) && (section==='risk'||page==='capital'&&section==='history'||section==='operations')) {failed=true;return {ok:false,status:failure,json:async()=>({})};}
     const value=structuredClone(fixtures[section]??fixtures.status);value.section=section;value.snapshot_id=`test:${attempt}`;value.generated_at_ms=1793275200000+attempt;value.next_cursor=null;
-    return {ok:true,status:200,json:async()=>value};
+    return {ok:true,status:200,json:async()=>value,text:async()=>JSON.stringify(value)};
   };
   try {
     const overrides={

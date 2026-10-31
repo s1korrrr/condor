@@ -1,9 +1,10 @@
 # V5 paper dashboard polish — local evidence
 
-Latest repair: [round8-partial-coverage.md](round8-partial-coverage.md) records
-round-7 hold-only partial risk, per-controller and owner-list coverage,
-fixture/source parity, real-query regressions, mutation evidence and rebuilt
-hashes. Earlier receipts describe earlier heads and are historical.
+Latest repair: [round9-quarantined-anomalies.md](round9-quarantined-anomalies.md)
+records round-8 exact quarantined anomaly tokens, strict boundary tests,
+post-acknowledgement supersession, current emergency flags, real-query
+regressions, mutation evidence and rebuilt hashes. Earlier receipts describe
+earlier heads and are historical.
 
 Latest fix-round results are in [round2.md](round2.md). The bundle hashes,
 counts and browser evidence below describe the original `43695d26` round,

@@ -17,6 +17,7 @@ import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState, t
 import type { PaperRead } from "@/v5/contracts";
 import { usePaperSnapshot } from "@/v5/usePaperSnapshot";
 import { usePaperClock } from "@/v5/usePaperClock";
+import { parsePaperReadText } from "@/v5/paper-json";
 import { paperSnapshotPresentation } from "@/v5/snapshot-presentation";
 import { paperAmount, paperCoherentRead, paperCompleteRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperPairObservation, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperTime, paperWalletInventory, paperWalletTotals, paperWords } from "@/v5/policy";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
@@ -751,7 +752,7 @@ async function readPaper(path: string, section: string, signal: AbortSignal): Pr
     if (response.status === 502 && body?.detail?.reason === "schema_invalid" && typeof body.detail.section === "string") throw new PaperSectionSchemaError(body.detail.section, body.detail.holds);
     throw Object.assign(new Error(response.status === 409 ? "The owner snapshot changed. Refresh to read a coherent snapshot." : response.status === 401 ? "Your workspace session expired. Sign in again." : "Paper observations are unavailable. Check the observation service and its retained read-contract evidence; no empty wallet is substituted."), {status:response.status});
   }
-  const value = await response.json() as PaperRead;
+  const value = parsePaperReadText(await response.text()) as PaperRead;
   signal.throwIfAborted();
   if (!value || value.section !== section || paperSectionError(value)) throw new PaperSectionSchemaError(section, section === "risk" ? paperRiskHolds(value).map(({ reason }) => ({ reason })) : undefined);
   return value;

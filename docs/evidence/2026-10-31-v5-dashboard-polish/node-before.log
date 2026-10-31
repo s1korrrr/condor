@@ -1,0 +1,299 @@
+✖ three-worker pinned pool streams sections and drains failures before restart (28.858457ms)
+✖ requires API envelope field reason (7.019262ms)
+✖ requires API envelope field read_at_ms (4.937139ms)
+✖ requires API envelope field observed_at_ms (4.067444ms)
+✖ requires API envelope field source_at_ms (2.942532ms)
+✖ requires API envelope field capabilities (2.952929ms)
+✖ requires API envelope field source (3.192223ms)
+✖ rejects fee_quote container {} (3.51231ms)
+✖ rejects fee_quote container [] (4.062116ms)
+✔ rejects price container {} (3.292062ms)
+✔ rejects price container [] (3.520493ms)
+✔ rejects quantity container {} (3.120232ms)
+✔ rejects quantity container [] (2.636564ms)
+✖ rejects amount container {} (2.459187ms)
+✖ rejects amount container [] (2.847465ms)
+✖ rejects balance container {} (2.859283ms)
+✖ rejects balance container [] (2.887042ms)
+✖ rejects pnl container {} (2.618515ms)
+✖ rejects pnl container [] (2.120709ms)
+✔ blank capability members remain owner-compatible (2.497798ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 5
+ℹ fail 15
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 323.599323
+
+✖ failing tests:
+
+test at frontend/test/v5-dashboard-polish.test.mjs:8:1
+✖ three-worker pinned pool streams sections and drains failures before restart (28.858457ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  
+  1 !== 3
+  
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:21:10)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 3,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at frontend/test/v5-dashboard-polish.test.mjs:31:107
+✖ requires API envelope field reason (7.019262ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:33:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at frontend/test/v5-dashboard-polish.test.mjs:31:107
+✖ requires API envelope field read_at_ms (4.937139ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:33:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at frontend/test/v5-dashboard-polish.test.mjs:31:107
+✖ requires API envelope field observed_at_ms (4.067444ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:33:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at frontend/test/v5-dashboard-polish.test.mjs:31:107
+✖ requires API envelope field source_at_ms (2.942532ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:33:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at frontend/test/v5-dashboard-polish.test.mjs:31:107
+✖ requires API envelope field capabilities (2.952929ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:33:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at frontend/test/v5-dashboard-polish.test.mjs:31:107
+✖ requires API envelope field source (3.192223ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:33:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at frontend/test/v5-dashboard-polish.test.mjs:36:115
+✖ rejects fee_quote container {} (3.51231ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:38:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at frontend/test/v5-dashboard-polish.test.mjs:36:115
+✖ rejects fee_quote container [] (4.062116ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:38:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at frontend/test/v5-dashboard-polish.test.mjs:36:115
+✖ rejects amount container {} (2.459187ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:38:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at frontend/test/v5-dashboard-polish.test.mjs:36:115
+✖ rejects amount container [] (2.847465ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:38:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at frontend/test/v5-dashboard-polish.test.mjs:36:115
+✖ rejects balance container {} (2.859283ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:38:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at frontend/test/v5-dashboard-polish.test.mjs:36:115
+✖ rejects balance container [] (2.887042ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:38:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at frontend/test/v5-dashboard-polish.test.mjs:36:115
+✖ rejects pnl container {} (2.618515ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:38:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at frontend/test/v5-dashboard-polish.test.mjs:36:115
+✖ rejects pnl container [] (2.120709ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:38:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }

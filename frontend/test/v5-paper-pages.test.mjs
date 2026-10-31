@@ -69,13 +69,13 @@ test('paper retries stop at two whole attempts and never retry auth/schema failu
   }
 });
 
-test('paper read refuses cross-snapshot success and bounds owner concurrency to one', async () => {
+test('paper read refuses cross-snapshot success with bounded parallel owner reads', async () => {
   let active=0, maximum=0;
   await assert.rejects(policy.paperCoherentRead('/status', [{section:'wallet',path:'/wallet'},{section:'risk',path:'/risk'}], async (_,section) => {
     active++;maximum=Math.max(maximum,active);await Promise.resolve();active--;
     return {section,snapshot_id:section==='risk'?'other:2':'boot:1',generated_at_ms:1};
   }), /Mixed owner snapshots/);
-  assert.equal(maximum,1);
+  assert.equal(maximum,2);
 });
 
 test('unavailable Settings identity confines fresh times and reasons to heartbeat rows', () => {
@@ -104,7 +104,7 @@ test('paper routes select native read-only exports, not live fleet discovery', (
 test('heartbeat cannot label missing, invalid or incoherent paper reads fresh', () => {
   assert.equal(policy.paperObservationSummary([], 'paper', Date.now()).label,'Unavailable');
   const now=1793275200000;
-  const reads=['status','wallet','positions','executors','risk'].map(section=>({schema:'rsibot.v5-paper.read.v1',section,bot_id:'paper',execution_mode:'paper',simulated:true,state:'available',completeness:'complete',snapshot_id:'boot:1',generated_at_ms:now,data:['positions','executors'].includes(section)?[]:{}}));
+  const reads=['status','wallet','positions','executors','risk'].map(section=>({schema:'rsibot.v5-paper.read.v1',section,bot_id:'paper',execution_mode:'paper',simulated:true,state:'available',completeness:'complete',snapshot_id:'boot:1',generated_at_ms:now,reason:null,read_at_ms:now,observed_at_ms:now,source_at_ms:now,capabilities:[],source:{},data:['positions','executors'].includes(section)?[]:{}}));
   assert.equal(policy.paperObservationSummary(reads,'paper',now).label,'Available');
   for (const change of [{snapshot_id:'boot:2'},{state:'degraded',reason:'Owner export unavailable',data:null},{reason:{}},{completeness:'partial'}]) assert.notEqual(policy.paperObservationSummary(reads.map(read=>read.section==='risk'?{...read,...change}:read),'paper',now).label,'Available');
   assert.equal(policy.paperObservationSummary(reads,'paper',now+31000).label,'Stale');

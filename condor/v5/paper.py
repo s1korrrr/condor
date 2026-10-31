@@ -814,6 +814,7 @@ def validate_paper_read(
     )
     if (
         not isinstance(payload, dict)
+        or any(key not in payload for key in ("reason", "read_at_ms", "observed_at_ms", "source_at_ms", "capabilities", "source"))
         or payload.get("schema") != "rsibot.v5-paper.read.v1"
         or payload.get("section") != section
         or (
@@ -1238,7 +1239,7 @@ def _validate_read_tree(value: Any, key: str = "", depth: int = 0, *, native_fee
 
             if any(abs(Decimal(amount).adjusted()) > 128 for name, amount in value.items() if name != "blocked_reason" and amount is not None):
                 raise ValueError("invalid close quantity scale")
-        native_fee = key == "fee"
+        return
     if key == "fees_paid":
         if not isinstance(value, dict) or len(value) > 32 or any(
             re.fullmatch(r"[A-Z0-9]{1,20}", currency) is None or not _matches_c1_schema(amount, NATIVE_DECIMAL) or amount.startswith("-")
@@ -1246,6 +1247,8 @@ def _validate_read_tree(value: Any, key: str = "", depth: int = 0, *, native_fee
         ):
             raise ValueError("invalid fee currency amounts")
         return
+    if isinstance(value, (dict, list)) and key not in NATIVE_STRUCTURED_FINANCIAL and not key.endswith(("_currency", "_asset", "_unit", "_source", "_policy", "_reason", "_state", "_id", "_count", "_enabled", "_applicable", "_known")) and re.search(r"(?:^|_)(?:price|quantity|amount|balance|total|available|reserved|basis|fee|fees|pnl|exposure|funding|mark|cash|equity)(?:_|$)", key):
+        raise ValueError("paper financial value must be decimal text")
     if isinstance(value, dict):
         for name, child in value.items():
             _validate_read_tree(child, name + "_reason" if key == "unavailable_reasons" else name, depth + 1, native_fee=native_fee)

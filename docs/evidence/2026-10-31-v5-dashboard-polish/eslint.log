@@ -1,0 +1,7 @@
+
+/home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/src/v5/policy.ts
+  224:35  error  '_risk' is defined but never used   @typescript-eslint/no-unused-vars
+  428:32  error  '_owner' is defined but never used  @typescript-eslint/no-unused-vars
+
+✖ 2 problems (2 errors, 0 warnings)
+

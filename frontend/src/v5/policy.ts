@@ -19,16 +19,39 @@ export async function paperBoundedRead<Result>(attempt: () => Promise<Result>, w
   }
 }
 
-export async function paperCoherentRead(statusPath: string, sections: { section: string; path: string; paginate?: boolean }[], read: (path: string, section: string) => Promise<import("./contracts").PaperRead>, wait?: (milliseconds: number) => Promise<void>) {
+export async function paperCoherentRead(statusPath: string, sections: { section: string; path: string; paginate?: boolean }[], read: (path: string, section: string, status?: import("./contracts").PaperRead) => Promise<import("./contracts").PaperRead>, wait?: (milliseconds: number) => Promise<void>, progress: (reads: import("./contracts").PaperRead[]) => void = () => {}) {
   return paperBoundedRead(async () => {
-    const status = await read(statusPath, "status");
-    const reads = [status];
-    for (const section of sections) {
-      const path = section.path + (status.snapshot_id ? `${section.path.includes("?") ? "&" : "?"}snapshot_id=${encodeURIComponent(status.snapshot_id)}` : "");
-      reads.push(section.paginate ? await paperObservationPages(path, page => read(page, section.section)) : await read(path, section.section));
+    progress([]);
+    try {
+      const status = await read(statusPath, "status");
+      if (!status.snapshot_id) throw new Error("Owner snapshot is unavailable. No sections or totals are inferred.");
+      const reads: import("./contracts").PaperRead[] = [status];
+      progress([...reads]);
+      let nextIndex = 0;
+      let failure: { error: unknown } | undefined;
+      async function worker() {
+        while (!failure && nextIndex < sections.length) {
+          const index = nextIndex++;
+          const section = sections[index];
+          const path = section.path + `${section.path.includes("?") ? "&" : "?"}snapshot_id=${encodeURIComponent(status.snapshot_id!)}`;
+          try {
+            const value = section.paginate ? await paperObservationPages(path, page => read(page, section.section, status)) : await read(path, section.section, status);
+            if (failure) return;
+            if (!paperSnapshotsAgree([status, value])) throw new Error("Mixed owner snapshots were refused. Refresh; totals are not combined.");
+            reads[index + 1] = value;
+            progress(reads.filter(Boolean));
+          } catch (error) {
+            if (!failure) { failure = { error }; progress([]); }
+          }
+        }
+      }
+      await Promise.all(Array.from({ length: Math.min(3, sections.length) }, () => worker()));
+      if (failure) throw failure.error;
+      return reads;
+    } catch (error) {
+      progress([]);
+      throw error;
     }
-    if (!paperSnapshotsAgree(reads)) throw new Error("Mixed owner snapshots were refused. Refresh; totals are not combined.");
-    return reads;
   }, wait);
 }
 
@@ -90,11 +113,12 @@ function paperNativeRecordValid(value: unknown, key = "", depth = 0, nativeFee =
   if (["count_basis", "fee_quote_valuation_basis", "target_basis", "pnl_scope"].includes(key) || nativeFee && key === "fee_type") return typeof value === "string" && !!value && (!["target_basis", "pnl_scope"].includes(key) || /^[A-Za-z0-9_.-]{1,128}$/.test(value));
   if (key === "fee") {
     if (!fields(value, ["fee_type", "flat_fees", "percent", "percent_token"]) || !["AddedToCost", "DeductedFromReturns"].includes(String(value.fee_type)) || !decimal(value.percent) || value.percent_token !== null && !currency(value.percent_token) || !Array.isArray(value.flat_fees) || value.flat_fees.length > 32 || !value.flat_fees.every(part => fields(part, ["amount", "token"]) && decimal(part.amount) && currency(part.token))) return false;
-    nativeFee = true;
+    return true;
   }
   if (key === "fees") return Array.isArray(value) && value.length <= 32 && value.every(part => fields(part, ["amount", "currency"]) && decimal(part.amount) && currency(part.currency));
   if (key === "fees_paid") return object(value) && Object.keys(value).length <= 32 && Object.entries(value).every(([asset, amount]) => /^[A-Z0-9]{1,20}$/.test(asset) && decimal(amount) && !String(amount).startsWith("-"));
   if (key === "close_quantity") return fields(value, [], ["owned_base", "available_base", "order_amount", "residual_base", "quantity_increment", "blocked_reason"]) && Object.entries(value).every(([name, amount]) => amount === null || typeof amount === "string" && (name === "blocked_reason" ? /^[A-Za-z0-9_.-]{1,128}$/.test(amount) : amount.length <= 128 && /^-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]{1,3})?$/.test(amount) && Number.isFinite(Number(amount)) && (Number(amount) === 0 || Math.abs(Math.floor(Math.log10(Math.abs(Number(amount))))) <= 128)));
+  if ((object(value) || Array.isArray(value)) && key !== "fee" && /(?:^|_)(?:price|quantity|amount|balance|total|available|reserved|basis|fee|fees|pnl|exposure|funding|mark|cash|equity)(?:_|$)/.test(key) && !/_(?:currency|asset|unit|source|policy|reason|state|id|count|enabled|applicable|known)$/.test(key)) return false;
   if (object(value)) return Object.entries(value).every(([name, part]) => paperNativeRecordValid(part, key === "unavailable_reasons" ? name + "_reason" : name, depth + 1, nativeFee));
   if (Array.isArray(value)) return value.length <= 2000 && value.every(part => paperNativeRecordValid(part, "", depth + 1, nativeFee));
   if (/(?:^|_)(?:price|quantity|amount|balance|total|available|reserved|basis|fee|fees|pnl|exposure|funding|mark|cash|equity)(?:_|$)/.test(key) && !/_(?:currency|asset|unit|source|policy|reason|state|id|count|enabled|applicable|known)$/.test(key)) return decimal(value);
@@ -132,7 +156,7 @@ export function paperSectionError(read: Partial<import("./contracts").PaperRead>
   const records = (value: unknown): value is Record<string, unknown>[] => Array.isArray(value) && value.every(object);
   const invalid = () => `${typeof read.section === "string" ? paperWords(read.section) : "Paper section"} owner schema invalid; this section is unavailable.`;
   const unbound = ["collecting", "degraded"].includes(read.state ?? "") && read.snapshot_id === null;
-  if (!object(read) || read.schema !== "rsibot.v5-paper.read.v1" || typeof read.section !== "string" || !read.section ||
+  if (!object(read) || ["reason", "read_at_ms", "observed_at_ms", "source_at_ms", "capabilities", "source"].some(key => !Object.hasOwn(read, key)) || read.schema !== "rsibot.v5-paper.read.v1" || typeof read.section !== "string" || !read.section ||
     !["available", "collecting", "not_applicable", "degraded", "stale"].includes(read.state ?? "") ||
     read.execution_mode !== "paper" || read.simulated !== true ||
     (read.reason != null && typeof read.reason !== "string") ||

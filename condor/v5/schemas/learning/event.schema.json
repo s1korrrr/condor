@@ -1,0 +1,296 @@
+{
+  "$defs": {
+    "Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "available_at_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "content_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "owner": {
+          "enum": [
+            "research_os",
+            "hummingbot",
+            "hummingbot_api",
+            "quants_lab"
+          ],
+          "title": "Owner",
+          "type": "string"
+        },
+        "record_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Record Id",
+          "type": "string"
+        },
+        "record_kind": {
+          "enum": [
+            "candidate_revision",
+            "opportunity",
+            "agent_job",
+            "agent_message",
+            "event",
+            "forecast",
+            "forecast_evaluation",
+            "experience_ref",
+            "lesson_revision",
+            "retraction",
+            "knowledge_release",
+            "adoption",
+            "evidence",
+            "input_snapshot",
+            "inventory",
+            "critic_receipt",
+            "model",
+            "calibrator",
+            "candidate_library",
+            "program",
+            "idea_revision",
+            "native_receipt",
+            "outcome",
+            "policy",
+            "experiment",
+            "run",
+            "assessment",
+            "metrics",
+            "report",
+            "artifact_bundle",
+            "campaign",
+            "job_admission",
+            "strategy_selection_proposal",
+            "feature",
+            "regime",
+            "target",
+            "prompt",
+            "skill",
+            "retrieval_index",
+            "rights_retraction",
+            "source"
+          ],
+          "title": "Record Kind",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Revision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "record_kind",
+        "record_id",
+        "revision",
+        "content_sha256",
+        "available_at_ms"
+      ],
+      "title": "Reference",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "available_at_ms": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Available At Ms",
+      "type": "integer"
+    },
+    "correlation_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "created_at_ms": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Created At Ms",
+      "type": "integer"
+    },
+    "data": {
+      "additionalProperties": false,
+      "properties": {
+        "content_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "event_at_ms": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Event At Ms"
+        },
+        "event_type": {
+          "enum": [
+            "OBSERVED_LIQUIDATION",
+            "HEATMAP_ESTIMATE",
+            "SOCIAL_EVENT",
+            "UNRESOLVED"
+          ],
+          "title": "Event Type",
+          "type": "string"
+        },
+        "expires_at_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Expires At Ms",
+          "type": "integer"
+        },
+        "first_observed_at_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "First Observed At Ms",
+          "type": "integer"
+        },
+        "generation_completed_at_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Generation Completed At Ms",
+          "type": "integer"
+        },
+        "published_at_ms": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Published At Ms"
+        },
+        "resolution": {
+          "enum": [
+            "UNRESOLVED",
+            "CONFIRMED",
+            "RETRACTED"
+          ],
+          "title": "Resolution",
+          "type": "string"
+        },
+        "rights_policy_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Rights Policy Sha256",
+          "type": "string"
+        },
+        "source_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_ref": {
+          "$ref": "#/$defs/Reference"
+        },
+        "source_revision": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Source Revision",
+          "type": "string"
+        },
+        "untrusted_external_text": {
+          "maxLength": 4096,
+          "minLength": 1,
+          "title": "Untrusted External Text",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_at_ms",
+        "published_at_ms",
+        "first_observed_at_ms",
+        "generation_completed_at_ms",
+        "expires_at_ms",
+        "source_id",
+        "source_revision",
+        "source_ref",
+        "rights_policy_sha256",
+        "content_sha256",
+        "event_type",
+        "untrusted_external_text",
+        "resolution"
+      ],
+      "title": "Event",
+      "type": "object"
+    },
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "maxItems": 64,
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "execution_authorized": {
+      "const": false,
+      "title": "Execution Authorized",
+      "type": "boolean"
+    },
+    "parent_refs": {
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "maxItems": 64,
+      "title": "Parent Refs",
+      "type": "array"
+    },
+    "payload_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Payload Sha256",
+      "type": "string"
+    },
+    "producer_owner": {
+      "const": "quants_lab",
+      "type": "string"
+    },
+    "producer_revision": {
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$",
+      "title": "Producer Revision",
+      "type": "string"
+    },
+    "record_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Record Id",
+      "type": "string"
+    },
+    "schema_name": {
+      "const": "event",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_name",
+    "schema_version",
+    "record_id",
+    "producer_owner",
+    "producer_revision",
+    "created_at_ms",
+    "available_at_ms",
+    "payload_sha256",
+    "correlation_id",
+    "parent_refs",
+    "evidence_refs",
+    "execution_authorized",
+    "data"
+  ],
+  "title": "Envelope",
+  "type": "object"
+}

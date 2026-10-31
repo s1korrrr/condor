@@ -37,3 +37,4 @@ profile = "black"
 [tool.setuptools.package-data]
 "condor.reports" = ["report_runtime.js"]
 "condor.web" = ["market_picture.schema.json", "market_picture_responses.schema.json"]
+"condor.v5" = ["schemas/learning/*.schema.json"]

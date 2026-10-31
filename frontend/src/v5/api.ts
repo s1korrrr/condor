@@ -92,6 +92,14 @@ export const v5Api = {
   settings: () => request<V5Settings>("/settings"),
 };
 
+export async function learningRead<T>(path: 'manifest' | 'roles' | `research?cursor=${number}&limit=25`): Promise<T> {
+  const data = await request<unknown>(`/learning/${path}`);
+  if (!data || typeof data !== 'object' || (data as { effect?: unknown }).effect !== 'NONE') {
+    throw new V5ApiError('Invalid non-authorizing projection.', 502, 'INVALID_LEARNING_PROJECTION');
+  }
+  return data as T;
+}
+
 export interface V5DashboardProfile {
   candle_store?: { configured: boolean };
   schema_version: "v5-dashboard-profile.v1";

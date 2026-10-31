@@ -1,0 +1,40 @@
+✔ learning states show unknown, empty, error and stale without false success (101.370324ms)
+✔ roles expose blockers and never offer a paid or execution control (25.257488ms)
+✔ missing role data never presents a measured zero blocked roles (18.029342ms)
+✔ learning transport never accepts an authorizing result (1.582539ms)
+✔ lineage preserves pinned inputs, independent owner states and unknown execution (12.638084ms)
+✔ missing lineage is not reconstructed and error remains distinct from empty (39.788901ms)
+✔ revised lifecycle and structured unknown usage stay explicit, including nonzero reservations (12.862279ms)
+✔ learning states show unknown, empty, error and stale without false success (98.131184ms)
+✔ roles expose blockers and never offer a paid or execution control (22.152385ms)
+✔ missing role data never presents a measured zero blocked roles (19.670977ms)
+✔ learning transport never accepts an authorizing result (1.33629ms)
+✔ Bots notice stays unbound until a fresh paper owner is bound (6.471958ms)
+✔ Unavailable or retained paper reports never become a fresh zero executor count (1.97506ms)
+✔ A current paper status from the qualification run shows its five controllers (1.483513ms)
+✔ learning states show unknown, empty, error and stale without false success (108.735268ms)
+✔ roles expose blockers and never offer a paid or execution control (21.93627ms)
+✔ missing role data never presents a measured zero blocked roles (17.661218ms)
+✔ learning transport never accepts an authorizing result (2.240334ms)
+✔ 200-candidate catalog is paginated without losing trials or family totals (281.788923ms)
+✔ native gaps, failure and empty states are explicit and accessible (27.125772ms)
+✔ every bounded trial reference remains inspectable without inventing an outcome (17.433373ms)
+✔ market evidence keeps spot and perpetual feature namespaces separate (24.409797ms)
+✔ only QUALIFIED feature values are presented as values, including explicit zero (0.523485ms)
+✔ missing feature rows stay missing and USDT cohort is not relabeled (0.481387ms)
+✔ market evidence timestamps expose exact snapshot age and future or missing times stay unavailable (0.242164ms)
+✔ feed freshness fails closed for missing or future owner timestamps (0.274928ms)
+✔ selected cohort is complete only when all asset and venue features are qualified and full (3.172881ms)
+✔ partial coverage and exact zero remain visible as partial, not complete (0.70212ms)
+✔ unknown or unqualified selected coverage fails closed and stays unavailable (0.391032ms)
+✔ dollar strings are parsed strictly and invalid or negative values remain unavailable (13.475459ms)
+✔ reports require every owner readiness condition (2.737911ms)
+✔ report loops are bounded to at least 15 minutes and at most 96 ticks (2.676346ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1641.085647

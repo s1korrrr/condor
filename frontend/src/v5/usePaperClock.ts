@@ -1,18 +1,24 @@
-import { useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 
-function subscribe(notify: () => void) {
-  const timer = window.setInterval(notify, 1000);
-  window.addEventListener('focus', notify);
-  document.addEventListener('visibilitychange', notify);
-  return () => {
-    window.clearInterval(timer);
-    window.removeEventListener('focus', notify);
-    document.removeEventListener('visibilitychange', notify);
+export function createPaperClock(readNow: () => number = Date.now) {
+  let highWater = readNow();
+  const observe = () => { highWater = Math.max(highWater, readNow()); return highWater; };
+  const subscribe = (notify: () => void) => {
+    const update = () => { observe(); notify(); };
+    const timer = window.setInterval(update, 1000);
+    window.addEventListener('focus', update);
+    document.addEventListener('visibilitychange', update);
+    update();
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener('focus', update);
+      document.removeEventListener('visibilitychange', update);
+    };
   };
+  return {subscribe, getSnapshot:() => highWater, observe};
 }
 
-const clockSnapshot = () => Math.floor(Date.now() / 1000) * 1000;
-
 export function usePaperClock() {
-  return useSyncExternalStore(subscribe, clockSnapshot, clockSnapshot);
+  const [clock] = useState(() => createPaperClock(() => Date.now()));
+  return useSyncExternalStore(clock.subscribe, clock.getSnapshot, clock.observe);
 }

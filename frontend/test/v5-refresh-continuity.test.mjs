@@ -26,7 +26,7 @@ function harness(kind, initial) {
     if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial === Date.now ? owner.read_at_ms : initial() : initial;
     return [slots[index], next => { slots[index] = typeof next === 'function' ? next(slots[index]) : next; }];
   };
-  const {load} = frontendModules({...stubs, react:{...React,useState,useRef:initial => useState(() => ({current:initial}))[0],useEffect() {}}, '@tanstack/react-query':{...ReactQuery,useQuery:options => {
+  const {load} = frontendModules({...stubs, '@/v5/usePaperClock':{usePaperClock:() => owner.read_at_ms}, react:{...React,useState,useRef:initial => useState(() => ({current:initial}))[0],useEffect() {}}, '@tanstack/react-query':{...ReactQuery,useQuery:options => {
     if (options.enabled === false) return {isPending:true,isFetching:false,isError:false,refetch() {}};
     spec = options;
     return query;
@@ -69,7 +69,10 @@ test('Bots retains held complete snapshot, as-of and totals during refresh and f
     assert.equal(riskCaption(mid),riskCaption(full));
     h.query.isFetching = false; h.query.isError = true; h.query.error = new Error('Refresh failed');
     assert.match(h.render(),/New acquisitions held/);
-    h.query.isError = false; h.query.data = reads.map(read => ({...read,snapshot_id:'newer:752',generated_at_ms:read.generated_at_ms + 1,...(read.section === 'risk' ? {data:{...read.data,control_hold:null}} : {})}));
+    h.query.isError = false;
+    h.query.data = reads.map(read => read.section === 'risk' ? {...read,data:{...read.data,control_hold:null}} : read);
+    assert.match(h.render(),/New acquisitions held/,'Clearing the global hold cannot hide a controller emergency');
+    h.query.isError = false; h.query.data = reads.map(read => ({...read,snapshot_id:'newer:752',generated_at_ms:read.generated_at_ms + 1,...(read.section === 'risk' ? {data:{...read.data,control_hold:null,native_entry_holds:[],controllers:Object.fromEntries(Object.entries(read.data.controllers).map(([id,controller]) => [id,{...controller,operator:{...controller.operator,paused:false,emergency:false},native:{...controller.native,entry_hold:false}}]))}} : {})}));
     assert.doesNotMatch(h.render(),/New acquisitions held/);
   } finally {h.restore();}
 });

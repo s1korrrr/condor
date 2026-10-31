@@ -77,3 +77,20 @@ Python/TS agree on all 14 object-section monetary-container cases. Before-diff
 whitespace findings: 32; after: zero. Cross-root bundle: 35 identical files.
 Injected 300 ms/request Bots p95: 3.114860 s serial, 1.285031 s pool three,
 20 timed samples each. No deployed latency or independent approval is inferred.
+
+## Round-3 review repair: shared clocks and early safety signals
+
+Completed fixture repair: one shared 5,000 ms future-skew validator, exact
+<= 30,000 ms freshness, millisecond page-session high-water clocks, compact
+stable retained labels and Operations parity. Positive received emergency,
+pause and native entry-hold signals render before the snapshot completes.
+Retention/query/coherence semantics remain unchanged. Both reviewer regressions
+are retained in the workspace test suite and pass fully.
+
+Final receipt: `docs/evidence/2026-10-31-v5-dashboard-polish/round4-clocks.md`.
+4,256 Python pass / 8 skip; 1,091 Condor Node pass / 1 skip; 506 workspace Node
+pass; both typechecks pass. Rebuilt manifest and cross-root 35-file identity
+are recorded there. #625 was validated against the newer linked Condor checkout,
+not its `be2a3365` pin. Merge #85 and bump that pin before building #625.
+No new deployed latency, browser or qualification claim. Existing deferred
+Settings extra read, sub-1e-6 digits and pair-chart remount items remain deferred.

@@ -1,4 +1,4 @@
-import { PAPER_SNAPSHOT_FRESH_MS } from './snapshot-presentation.ts';
+import { PAPER_SNAPSHOT_FRESH_MS, paperAge, paperTimestampIssue } from './snapshot-presentation.ts';
 
 export interface ReportPermissionInput {
   agentReady: boolean;
@@ -206,7 +206,7 @@ export function paperReadState(read: Partial<import("./contracts").PaperRead> | 
   if (!read || read.schema !== "rsibot.v5-paper.read.v1" || read.execution_mode !== "paper" || read.simulated !== true) return "degraded";
   if (paperSectionError(read)) return "degraded";
   if (read.state === "available" && ["partial", "unavailable"].includes(read.completeness ?? "")) return "degraded";
-  if (read.generated_at_ms != null && (!Number.isSafeInteger(read.generated_at_ms) || read.generated_at_ms > now + 5000)) return "degraded";
+  if (read.generated_at_ms != null && paperTimestampIssue(read.generated_at_ms, now)) return "degraded";
   if (read.generated_at_ms != null && now - read.generated_at_ms > PAPER_SNAPSHOT_FRESH_MS) return "stale";
   return ["available", "collecting", "not_applicable", "degraded", "stale"].includes(read.state ?? "") ? read.state as import("./contracts").PaperReadState : "degraded";
 }
@@ -270,11 +270,11 @@ export function paperExactAmount(value: unknown, unit: string): string {
 }
 
 export function paperTime(value: unknown, now: number): string {
-  if (typeof value !== "number" || !Number.isSafeInteger(value) || value < 0 || value > now + 5000) return "Not published";
-  const date = new Date(value);
+  if (paperTimestampIssue(value, now)) return "Not published";
+  const timestamp = value as number;
+  const date = new Date(timestamp);
   if (!Number.isFinite(date.getTime())) return "Not published";
-  const seconds = Math.max(0, Math.floor((now - value) / 1000));
-  const age = seconds < 60 ? `${seconds}s` : seconds < 3600 ? `${Math.floor(seconds / 60)}m` : seconds < 86400 ? `${Math.floor(seconds / 3600)}h` : `${Math.floor(seconds / 86400)}d`;
+  const age = paperAge(now - timestamp);
   return `${date.toISOString().slice(0, 19).replace("T", " ")} UTC · ${age} ago`;
 }
 

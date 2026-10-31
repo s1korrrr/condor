@@ -10,6 +10,7 @@
 !frontend/tsconfig*.json
 !frontend/v5.html
 !frontend/vite.v5.config.ts
+!frontend/v5-reviewed-build.json
 !frontend/src/**
 !frontend/design-system/**
 !frontend/tooling/**

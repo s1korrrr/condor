@@ -1,0 +1,170 @@
+#0 building with "default" instance using docker driver
+
+#1 [internal] load build definition from Dockerfile.v5
+#1 transferring dockerfile: 2.42kB done
+#1 DONE 0.1s
+
+#2 resolve image config for docker-image://docker.io/docker/dockerfile:1
+#2 DONE 0.8s
+
+#3 docker-image://docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e
+#3 resolve docker.io/docker/dockerfile:1@sha256:4edf897a3ffa55b89f906fc8cc78afdb3f1834cc9c7083565e611a8a7d5fe99e 0.0s done
+#3 CACHED
+
+#4 [internal] load metadata for docker.io/library/node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da
+#4 ...
+
+#5 [context workspace] load .dockerignore
+#5 transferring workspace: 2B done
+#5 DONE 0.1s
+
+#6 [internal] load metadata for docker.io/library/python:3.12-slim@sha256:6b25cbe6577518889d553cdd5a5da97d259348d8f6e45b527dd731caaba27a07
+#6 ...
+
+#4 [internal] load metadata for docker.io/library/node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da
+#4 DONE 0.7s
+
+#6 [internal] load metadata for docker.io/library/python:3.12-slim@sha256:6b25cbe6577518889d553cdd5a5da97d259348d8f6e45b527dd731caaba27a07
+#6 DONE 0.7s
+
+#7 [context workspace] load from client
+#7 DONE 0.0s
+
+#8 [context workspace] load from client
+#8 DONE 0.0s
+
+#9 [internal] load build context
+#9 DONE 0.0s
+
+#10 [context workspace] load from client
+#10 DONE 0.0s
+
+#11 [frontend  1/10] FROM docker.io/library/node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da
+#11 resolve docker.io/library/node:22-bookworm-slim@sha256:4b150b48b4116e2a22f2c39cc27025fbf4f153e2078fd3b14d159fdb5c7279da 0.0s done
+#11 DONE 0.1s
+
+#12 [stage-1 1/8] FROM docker.io/library/python:3.12-slim@sha256:6b25cbe6577518889d553cdd5a5da97d259348d8f6e45b527dd731caaba27a07
+#12 resolve docker.io/library/python:3.12-slim@sha256:6b25cbe6577518889d553cdd5a5da97d259348d8f6e45b527dd731caaba27a07
+#12 resolve docker.io/library/python:3.12-slim@sha256:6b25cbe6577518889d553cdd5a5da97d259348d8f6e45b527dd731caaba27a07 0.0s done
+#12 DONE 0.1s
+
+#7 [context workspace] load from client
+#7 transferring workspace: 3.49kB done
+#7 DONE 0.1s
+
+#8 [context workspace] load from client
+#8 transferring workspace: 1.25MB 0.0s done
+#8 DONE 0.1s
+
+#10 [context workspace] load from client
+#10 transferring workspace: 2.49MB 0.0s done
+#10 DONE 0.2s
+
+#9 [internal] load build context
+#9 transferring context: 5.56MB 0.1s done
+#9 DONE 0.2s
+
+#13 [frontend  2/10] WORKDIR /build/condor/frontend
+#13 CACHED
+
+#14 [frontend  3/10] COPY frontend/package.json frontend/package-lock.json ./
+#14 CACHED
+
+#15 [frontend  4/10] RUN npm ci --no-audit --no-fund
+#15 CACHED
+
+#16 [frontend  5/10] COPY frontend/ ./
+#16 DONE 0.1s
+
+#17 [frontend  6/10] COPY --from=workspace dashboard/condor-workspace/ /build/dashboard/condor-workspace/
+#17 DONE 0.1s
+
+#18 [frontend  7/10] COPY --from=workspace dashboard/hummingbot-reporting-next/ /build/dashboard/hummingbot-reporting-next/
+#18 DONE 0.1s
+
+#19 [frontend  8/10] COPY --from=workspace dashboard/v5-workspace/ /build/dashboard/v5-workspace/
+#19 DONE 0.1s
+
+#20 [frontend  9/10] RUN NODE_OPTIONS=--max-old-space-size=1536 node /build/dashboard/v5-workspace/build.mjs /build/condor/frontend
+#20 47.80 vite v8.2.2 building client environment for production...
+#20 47.86 transforming...
+#20 52.53 ✓ 2786 modules transformed.
+#20 53.41 rendering chunks...
+#20 55.36 computing gzip size...
+#20 55.44 dist-v5/v5.html                                      0.85 kB │ gzip:   0.40 kB
+#20 55.44 dist-v5/assets/Research-Cvfp2KsA.css                17.22 kB │ gzip:   3.55 kB
+#20 55.44 dist-v5/assets/NativeScreenerTools-TK9vw0in.css     20.37 kB │ gzip:   4.46 kB
+#20 55.44 dist-v5/assets/MarketPicture-B7QnsIPv.css           49.49 kB │ gzip:  10.09 kB
+#20 55.44 dist-v5/assets/v5-Bwe1AIV1.css                     167.34 kB │ gzip:  28.31 kB
+#20 55.44 dist-v5/assets/src-BaNBn19l.css                    395.25 kB │ gzip:  52.83 kB
+#20 55.44 dist-v5/assets/ReportingDesk-4RaAI18J.js             0.06 kB │ gzip:   0.07 kB
+#20 55.44 dist-v5/assets/history-DRWSxsha.js                   0.23 kB │ gzip:   0.19 kB
+#20 55.44 dist-v5/assets/refresh-cw-BqLEp1Rx.js                0.32 kB │ gzip:   0.22 kB
+#20 55.44 dist-v5/assets/trash-2-Du0wmDIz.js                   0.32 kB │ gzip:   0.21 kB
+#20 55.44 dist-v5/assets/plus-BVCjs_Ox.js                      0.33 kB │ gzip:   0.25 kB
+#20 55.44 dist-v5/assets/external-link-pe0BE9Ay.js             0.42 kB │ gzip:   0.28 kB
+#20 55.44 dist-v5/assets/heat-strip-CqgE5CwU.js                0.48 kB │ gzip:   0.28 kB
+#20 55.44 dist-v5/assets/BarChart-D-pxYiCM.js                  0.55 kB │ gzip:   0.38 kB
+#20 55.44 dist-v5/assets/executor-volume-hPjuFCF6.js           0.69 kB │ gzip:   0.46 kB
+#20 55.44 dist-v5/assets/preload-helper-Czpn1I53.js            1.19 kB │ gzip:   0.67 kB
+#20 55.44 dist-v5/assets/auth-token-CijoHaBo.js                1.25 kB │ gzip:   0.64 kB
+#20 55.44 dist-v5/assets/Bots-8PcTUA2r.js                      5.89 kB │ gzip:   2.21 kB
+#20 55.44 dist-v5/assets/jsx-runtime-BaSZ_JNh.js               8.55 kB │ gzip:   3.26 kB
+#20 55.44 dist-v5/assets/BotRunsTab-BU6ECGoJ.js                9.12 kB │ gzip:   2.82 kB
+#20 55.44 dist-v5/assets/createLucideIcon-CGDrmTep.js         14.95 kB │ gzip:   5.31 kB
+#20 55.44 dist-v5/assets/CanonicalContext-Ap6oKWbp.js         16.56 kB │ gzip:   5.11 kB
+#20 55.44 dist-v5/assets/ArchivedBotsTab-D9K5BoKp.js          28.66 kB │ gzip:   8.07 kB
+#20 55.44 dist-v5/assets/EditorTab-Cty18bhF.js                36.10 kB │ gzip:   7.91 kB
+#20 55.44 dist-v5/assets/BacktestingTab-Ct_iA3vv.js           46.73 kB │ gzip:  10.78 kB
+#20 55.44 dist-v5/assets/NativeScreenerTools-CmnerdQV.js      63.83 kB │ gzip:  18.75 kB
+#20 55.44 dist-v5/assets/Research-CFR66I4-.js                102.32 kB │ gzip:  31.71 kB
+#20 55.44 dist-v5/assets/MarketPicture-C_U_KDCQ.js           322.74 kB │ gzip:  93.67 kB
+#20 55.44 dist-v5/assets/src-DF1gLXNq.js                     504.17 kB │ gzip: 146.99 kB
+#20 55.44 dist-v5/assets/v5-BdG4FGa7.js                    1,859.51 kB │ gzip: 566.23 kB
+#20 55.44 
+#20 55.45 ✓ built in 7.64s
+#20 55.45 [33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../../tmp/rsibot-v5-private-0okZpt/dashboard/hummingbot-reporting-next/app/components/ReportingDesk.tsx is dynamically imported by ../../../tmp/rsibot-v5-private-0okZpt/dashboard/condor-workspace/src/features/strategy-charts/Records.tsx but also statically imported by ../../../tmp/rsibot-v5-private-0okZpt/dashboard/condor-workspace/src/pages/TradingVisuals.tsx, dynamic import will not move module into another chunk.
+#20 55.45 
+#20 55.45 [plugin builtin:vite-reporter] 
+#20 55.45 (!) Some chunks are larger than 600 kB after minification. Consider:
+#20 55.45 - Using dynamic import() to code-split the application
+#20 55.45 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+#20 55.45 - Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+#20 DONE 55.8s
+
+#21 [frontend 10/10] RUN node tooling/check-v5-reproducibility.mjs verify dist-v5
+#21 0.916 {"entry":"assets/v5-BdG4FGa7.js","sha256":"7393b0aed4dda1c735455071737ae12be388fb04c98e85fe7b5631acf32f12b8","files":35}
+#21 DONE 1.0s
+
+#22 [stage-1 2/8] WORKDIR /opt/condor
+#22 CACHED
+
+#23 [stage-1 3/8] COPY requirements-v5.lock ./
+#23 CACHED
+
+#24 [stage-1 4/8] RUN pip install --no-cache-dir --require-hashes -r requirements-v5.lock
+#24 CACHED
+
+#25 [stage-1 5/8] COPY condor/__init__.py ./condor/__init__.py
+#25 CACHED
+
+#26 [stage-1 6/8] COPY condor/v5 ./condor/v5
+#26 CACHED
+
+#27 [stage-1 7/8] COPY agents_v5 ./agents_v5
+#27 CACHED
+
+#28 [stage-1 8/8] COPY --from=frontend /build/condor/frontend/dist-v5 ./frontend/dist-v5
+#28 CACHED
+
+#29 exporting to image
+#29 exporting layers 0.0s done
+#29 exporting manifest sha256:3b5c0718fb129e50e9c2e214498428154f4f663e6049fab7d65965656e6906f4 done
+#29 exporting config sha256:b65ebc6f1fabc45eb825585eb71297db1fc73ef7919b8a9d853cab096de182e8 done
+#29 exporting attestation manifest sha256:72aea2ae2ab9ac5549697aa7bf070f15d0f60974f1f71c215e631442c1228c0b
+#29 exporting attestation manifest sha256:72aea2ae2ab9ac5549697aa7bf070f15d0f60974f1f71c215e631442c1228c0b 0.1s done
+#29 exporting manifest list sha256:cb49f19a5260123f2f15faa0d976d5036a1923d0dba295b9c3579af9093f3440 0.0s done
+#29 naming to docker.io/library/rsibot-v5-dashboard:f21-candidate 0.0s done
+#29 unpacking to docker.io/library/rsibot-v5-dashboard:f21-candidate
+#29 unpacking to docker.io/library/rsibot-v5-dashboard:f21-candidate 0.0s done
+#29 DONE 0.4s

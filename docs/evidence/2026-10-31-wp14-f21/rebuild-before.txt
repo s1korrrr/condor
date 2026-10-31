@@ -1,0 +1,184 @@
+vite v8.2.2 building client environment for production...
+transforming...
+✓ 2787 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/v5.html                                      0.85 kB │ gzip:   0.41 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/Research-Cvfp2KsA.css                17.22 kB │ gzip:   3.55 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/NativeScreenerTools-TK9vw0in.css     20.37 kB │ gzip:   4.46 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/MarketPicture-B7QnsIPv.css           49.49 kB │ gzip:  10.09 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/v5-Bwe1AIV1.css                     167.34 kB │ gzip:  28.31 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/src-BaNBn19l.css                    395.25 kB │ gzip:  52.83 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/ReportingDesk-i7V4NbzL.js             0.06 kB │ gzip:   0.07 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/history-DRWSxsha.js                   0.23 kB │ gzip:   0.19 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/refresh-cw-BqLEp1Rx.js                0.32 kB │ gzip:   0.22 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/trash-2-Du0wmDIz.js                   0.32 kB │ gzip:   0.21 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/plus-BVCjs_Ox.js                      0.33 kB │ gzip:   0.25 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/external-link-pe0BE9Ay.js             0.42 kB │ gzip:   0.28 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/heat-strip-CqgE5CwU.js                0.48 kB │ gzip:   0.28 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/BarChart-CAaxp4nt.js                  0.55 kB │ gzip:   0.38 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/executor-volume-hPjuFCF6.js           0.69 kB │ gzip:   0.46 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/preload-helper-Czpn1I53.js            1.19 kB │ gzip:   0.67 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/auth-token-CijoHaBo.js                1.25 kB │ gzip:   0.64 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/Bots-DCeQhEkB.js                      5.89 kB │ gzip:   2.21 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/jsx-runtime-BaSZ_JNh.js               8.55 kB │ gzip:   3.26 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/BotRunsTab-DWvBPn2v.js                9.12 kB │ gzip:   2.82 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/createLucideIcon-CGDrmTep.js         14.95 kB │ gzip:   5.31 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/CanonicalContext-Ap6oKWbp.js         16.56 kB │ gzip:   5.11 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/ArchivedBotsTab-Fl4tUUzJ.js          28.66 kB │ gzip:   8.08 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/EditorTab-DGprC8cd.js                36.10 kB │ gzip:   7.92 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/BacktestingTab-CxgpVe9f.js           46.73 kB │ gzip:  10.78 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/NativeScreenerTools-B8ZezSqf.js      63.82 kB │ gzip:  18.75 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/Research-C0bEA2mc.js                102.32 kB │ gzip:  31.70 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/MarketPicture-DS0ELkEv.js           322.74 kB │ gzip:  93.68 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/src-CL1-RYfi.js                     504.60 kB │ gzip: 147.12 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/before/build-1/assets/v5-PXRF8ydq.js                    1,859.50 kB │ gzip: 566.20 kB
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../../../.workspace/scratch/v5-wp14/final3-20261030/src/workspace-f3dcee938f3c/dashboard/hummingbot-reporting-next/app/components/ReportingDesk.tsx is dynamically imported by ../../../../.workspace/scratch/v5-wp14/final3-20261030/src/workspace-f3dcee938f3c/dashboard/condor-workspace/src/features/strategy-charts/Records.tsx but also statically imported by ../../../../.workspace/scratch/v5-wp14/final3-20261030/src/workspace-f3dcee938f3c/dashboard/condor-workspace/src/pages/TradingVisuals.tsx, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 600 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.66s
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: V5 dist differs from the reviewed manifest
++ actual - expected
+... Skipped lines
+
+  {
++   'assets/ArchivedBotsTab-Fl4tUUzJ.js': '6c74aaeca79fa2cd4d674c5ef2ced7b8fe63b605842118a940823db8b7d07667',
++   'assets/BacktestingTab-CxgpVe9f.js': '78069c8de574223b6b21002d09ac274b3668c9d4d5fbad51c6d8a453e6649a46',
++   'assets/BarChart-CAaxp4nt.js': '5c1e7d0a16e16850cb4ecb7956a1fd218fe79b8015fcec8ac5d084136cbc848a',
++   'assets/BotRunsTab-DWvBPn2v.js': '7a94ad8918715cdbbcdca917bb1daa9b729e6b9cee9a2f6dc848475006d9ac20',
++   'assets/Bots-DCeQhEkB.js': 'd56833ac63a08e7ad78db9fbeabfa15f6dbd5f7fe430a8d102a182cfd0f8e902',
+-   'assets/ArchivedBotsTab-D9K5BoKp.js': 'da5390bc0543828aa93fb48d6a0bb048a63e3d67172ee3a8d80d25013c17ecdf',
+-   'assets/BacktestingTab-Ct_iA3vv.js': 'a456670b025a674b8785f952169cb628896e42dfce51f8b99bbcf854cbaf0f13',
+-   'assets/BarChart-D-pxYiCM.js': '935d13007ff0c2cbd341e1e04379e49d4486468c87c74d9bcf185300618a612c',
+-   'assets/BotRunsTab-BU6ECGoJ.js': 'd4c491eb1b0b9f20f34e5dbd82eec0cf91a9a79b84e156431f987ee746df2ad6',
+-   'assets/Bots-8PcTUA2r.js': 'bb1eed7a8ed60e284c890748b1b72b8813a08f7798aba16bc75ac7a819cb9c0d',
+    'assets/CanonicalContext-Ap6oKWbp.js': 'ef55f743ebf2696bd6f8ce268e6b49c2aea0981140090a952aa66290c70d826c',
++   'assets/EditorTab-DGprC8cd.js': '2a65300c04b66ee692fa57d7c5a605487bec282c343c003ff767a5a97bbac949',
+-   'assets/EditorTab-Cty18bhF.js': '0d6917d01a9db9230e2ddfca924026e4d24252e4caad69446e2caafedd86d08a',
+    'assets/MarketPicture-B7QnsIPv.css': 'ee15a36b0748e4aa526938bbe0eb079bd910bf0969cb849392415fefa188472a',
++   'assets/MarketPicture-DS0ELkEv.js': 'd3d9a4b0f725ab4f58c05ee14e60518a6779aa471c3daacfaad7cd2f8905c88b',
++   'assets/NativeScreenerTools-B8ZezSqf.js': '7a000946ecd79538aebfccd66826024c2c8d440d163a13990265fa0c0078599d',
+-   'assets/MarketPicture-C_U_KDCQ.js': '47afaa4a08120f233fd90bcb762f29b55b863464aa79316a8ff0b97affaad159',
+-   'assets/NativeScreenerTools-CmnerdQV.js': 'b73a722e3ce03aa94ed09731c8d0af943c678aa6315fab7af83f05a4e357c183',
+    'assets/NativeScreenerTools-TK9vw0in.css': 'b2ef52ab3c73ce2134845362e9064e5aaddda2331ef3ab782a63848460d69b7a',
++   'assets/ReportingDesk-i7V4NbzL.js': '180526b2b2d2879c2cf4da50282e3735278e6b96c83c06a3ab3a6ccfb78b76d9',
++   'assets/Research-C0bEA2mc.js': '6879ff7a5d905202156d4e6a5b6fa003f5a01368f3fd6662da43be734fc60619',
+-   'assets/ReportingDesk-4RaAI18J.js': 'f2760978c800004f13d98a93a9961a01f4364faa2230850a2bf691666d5b3756',
+-   'assets/Research-CFR66I4-.js': '5cffd435cd56846980446dfb504da990525756c20b27c0c9fa9158282423306c',
+    'assets/Research-Cvfp2KsA.css': '916f31a5135daa527b09a463a4025d2c79f0045b3e12e373ed7174ffdc792e0a',
+    'assets/auth-token-CijoHaBo.js': '84f4cce43557dbd3f49cab72b1c799ca2fe3dc49f87a346cbd314783f642c4a8',
+    'assets/createLucideIcon-CGDrmTep.js': '8f0af689ed3b4e9a72a7bd9de668b32447b92d1fe1a41b9af37de94996e2aee4',
+    'assets/executor-volume-hPjuFCF6.js': 'd3b734b549f2604f13176c1ae6aacca3a56a9e9b12d22ac761d5f2692d824bfe',
+    'assets/external-link-pe0BE9Ay.js': 'eaef69b179d3d1d9d4191851bc82af7ab19a9af52b732444b89dced4d146aad9',
+...
+    'assets/src-BaNBn19l.css': '3f2f70807feb89de6c91cc90d6c638cd1acf51fcce468dff7f9e33d5776e87f2',
++   'assets/src-CL1-RYfi.js': '316eb69a8e06687a1d0adf2da81d228d7e86bf478722c6a43c815aabb04b42b0',
+-   'assets/src-DF1gLXNq.js': 'd0289485aa2c2d7376c8aa032e71315fe84c7444c5b784ef6623822d0a7de980',
+    'assets/trash-2-Du0wmDIz.js': '2f458c0d35a6b83143145d770a5240f475776be935f5cf26554f22c303c7b61e',
+-   'assets/v5-BdG4FGa7.js': '7393b0aed4dda1c735455071737ae12be388fb04c98e85fe7b5631acf32f12b8',
+    'assets/v5-Bwe1AIV1.css': '87f2492ac1cdd8bf1ae402ad1a06f177d39ece14466755bb75d252605f1475b3',
++   'assets/v5-PXRF8ydq.js': 'fe4ad689dc593f9820101e527966f7c00a0f1a65053d4c96ddf108d8c62df9a4',
+    'condor.png': '4c13a4b5ea445054b56a1cb54e0f5c8e7b2e2982e5d1f8611fa6254836901e90',
+    'condor_old.jpeg': 'c6e93221b2367b263f24813ba4ac5957b20ceb5b13a2773d6f8e219167bdb8e5',
+    'favicon.svg': '61bc9a161de58248288e6905425d7180f0624c2865007b97d763fdac12043a66',
+    'hyperliquid.png': 'faa5f91aec8158bd69c5fca8e48f61985ab410eddc8e0d6c867325bbb709e419',
+    'icons.svg': 'b45fa506195cfcdef406ba9f0c77b36ddc1a7c224040926ec70abc2fdea7b93a',
++   'v5.html': 'b261e674887d9092876a7d25a316a2e34dcb88fbfb51f609d2321cbfb09bafe6'
+-   'v5.html': 'e525c5bca9692883ced9eab84dc48e4f3140b78829a820b3d09ad34b21b8c4c6'
+  }
+
+    at verifyDist (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/frontend/tooling/check-v5-reproducibility.mjs:25:10)
+    at file:///home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/frontend/tooling/check-v5-reproducibility.mjs:48:68
+    at ModuleJob.run (node:internal/modules/esm/module_job:561:25)
+    at async onImport.tracePromise.__proto__ (node:internal/modules/esm/loader:647:26)
+    at async asyncRunEntryPointWithESMLoader (node:internal/modules/run_main:101:5) {
+  generatedMessage: false,
+  code: 'ERR_ASSERTION',
+  actual: {
+    'assets/ArchivedBotsTab-Fl4tUUzJ.js': '6c74aaeca79fa2cd4d674c5ef2ced7b8fe63b605842118a940823db8b7d07667',
+    'assets/auth-token-CijoHaBo.js': '84f4cce43557dbd3f49cab72b1c799ca2fe3dc49f87a346cbd314783f642c4a8',
+    'assets/BacktestingTab-CxgpVe9f.js': '78069c8de574223b6b21002d09ac274b3668c9d4d5fbad51c6d8a453e6649a46',
+    'assets/BarChart-CAaxp4nt.js': '5c1e7d0a16e16850cb4ecb7956a1fd218fe79b8015fcec8ac5d084136cbc848a',
+    'assets/BotRunsTab-DWvBPn2v.js': '7a94ad8918715cdbbcdca917bb1daa9b729e6b9cee9a2f6dc848475006d9ac20',
+    'assets/Bots-DCeQhEkB.js': 'd56833ac63a08e7ad78db9fbeabfa15f6dbd5f7fe430a8d102a182cfd0f8e902',
+    'assets/CanonicalContext-Ap6oKWbp.js': 'ef55f743ebf2696bd6f8ce268e6b49c2aea0981140090a952aa66290c70d826c',
+    'assets/createLucideIcon-CGDrmTep.js': '8f0af689ed3b4e9a72a7bd9de668b32447b92d1fe1a41b9af37de94996e2aee4',
+    'assets/EditorTab-DGprC8cd.js': '2a65300c04b66ee692fa57d7c5a605487bec282c343c003ff767a5a97bbac949',
+    'assets/executor-volume-hPjuFCF6.js': 'd3b734b549f2604f13176c1ae6aacca3a56a9e9b12d22ac761d5f2692d824bfe',
+    'assets/external-link-pe0BE9Ay.js': 'eaef69b179d3d1d9d4191851bc82af7ab19a9af52b732444b89dced4d146aad9',
+    'assets/heat-strip-CqgE5CwU.js': 'bd735ec1961ad09da416d2e7f35ca888600bffb556de814ac3dbcddcd498aa90',
+    'assets/history-DRWSxsha.js': '5e335961c86a35ed363b326c3ae22217ce73053ba7e477e47f002f307c2ce52b',
+    'assets/jsx-runtime-BaSZ_JNh.js': 'e8e123269724e152489c9eceb62b841447fa294b00094249e19d564519b407c9',
+    'assets/MarketPicture-B7QnsIPv.css': 'ee15a36b0748e4aa526938bbe0eb079bd910bf0969cb849392415fefa188472a',
+    'assets/MarketPicture-DS0ELkEv.js': 'd3d9a4b0f725ab4f58c05ee14e60518a6779aa471c3daacfaad7cd2f8905c88b',
+    'assets/NativeScreenerTools-B8ZezSqf.js': '7a000946ecd79538aebfccd66826024c2c8d440d163a13990265fa0c0078599d',
+    'assets/NativeScreenerTools-TK9vw0in.css': 'b2ef52ab3c73ce2134845362e9064e5aaddda2331ef3ab782a63848460d69b7a',
+    'assets/plus-BVCjs_Ox.js': '470cf163b2e54a400aaf95fb1a3467b4335d689a8f41500883c82c1d4f1664ab',
+    'assets/preload-helper-Czpn1I53.js': 'aba87f2a53e45ecdc9113fc30387d16e449d1676428cf5f82dd624c1df97d152',
+    'assets/refresh-cw-BqLEp1Rx.js': '0de88132eb22cc591f6251be2d67ac3e9c88acbaac414d6c845645f2e9b7f2d2',
+    'assets/ReportingDesk-i7V4NbzL.js': '180526b2b2d2879c2cf4da50282e3735278e6b96c83c06a3ab3a6ccfb78b76d9',
+    'assets/Research-C0bEA2mc.js': '6879ff7a5d905202156d4e6a5b6fa003f5a01368f3fd6662da43be734fc60619',
+    'assets/Research-Cvfp2KsA.css': '916f31a5135daa527b09a463a4025d2c79f0045b3e12e373ed7174ffdc792e0a',
+    'assets/src-BaNBn19l.css': '3f2f70807feb89de6c91cc90d6c638cd1acf51fcce468dff7f9e33d5776e87f2',
+    'assets/src-CL1-RYfi.js': '316eb69a8e06687a1d0adf2da81d228d7e86bf478722c6a43c815aabb04b42b0',
+    'assets/trash-2-Du0wmDIz.js': '2f458c0d35a6b83143145d770a5240f475776be935f5cf26554f22c303c7b61e',
+    'assets/v5-Bwe1AIV1.css': '87f2492ac1cdd8bf1ae402ad1a06f177d39ece14466755bb75d252605f1475b3',
+    'assets/v5-PXRF8ydq.js': 'fe4ad689dc593f9820101e527966f7c00a0f1a65053d4c96ddf108d8c62df9a4',
+    'condor_old.jpeg': 'c6e93221b2367b263f24813ba4ac5957b20ceb5b13a2773d6f8e219167bdb8e5',
+    'condor.png': '4c13a4b5ea445054b56a1cb54e0f5c8e7b2e2982e5d1f8611fa6254836901e90',
+    'favicon.svg': '61bc9a161de58248288e6905425d7180f0624c2865007b97d763fdac12043a66',
+    'hyperliquid.png': 'faa5f91aec8158bd69c5fca8e48f61985ab410eddc8e0d6c867325bbb709e419',
+    'icons.svg': 'b45fa506195cfcdef406ba9f0c77b36ddc1a7c224040926ec70abc2fdea7b93a',
+    'v5.html': 'b261e674887d9092876a7d25a316a2e34dcb88fbfb51f609d2321cbfb09bafe6'
+  },
+  expected: {
+    'assets/ArchivedBotsTab-D9K5BoKp.js': 'da5390bc0543828aa93fb48d6a0bb048a63e3d67172ee3a8d80d25013c17ecdf',
+    'assets/auth-token-CijoHaBo.js': '84f4cce43557dbd3f49cab72b1c799ca2fe3dc49f87a346cbd314783f642c4a8',
+    'assets/BacktestingTab-Ct_iA3vv.js': 'a456670b025a674b8785f952169cb628896e42dfce51f8b99bbcf854cbaf0f13',
+    'assets/BarChart-D-pxYiCM.js': '935d13007ff0c2cbd341e1e04379e49d4486468c87c74d9bcf185300618a612c',
+    'assets/BotRunsTab-BU6ECGoJ.js': 'd4c491eb1b0b9f20f34e5dbd82eec0cf91a9a79b84e156431f987ee746df2ad6',
+    'assets/Bots-8PcTUA2r.js': 'bb1eed7a8ed60e284c890748b1b72b8813a08f7798aba16bc75ac7a819cb9c0d',
+    'assets/CanonicalContext-Ap6oKWbp.js': 'ef55f743ebf2696bd6f8ce268e6b49c2aea0981140090a952aa66290c70d826c',
+    'assets/createLucideIcon-CGDrmTep.js': '8f0af689ed3b4e9a72a7bd9de668b32447b92d1fe1a41b9af37de94996e2aee4',
+    'assets/EditorTab-Cty18bhF.js': '0d6917d01a9db9230e2ddfca924026e4d24252e4caad69446e2caafedd86d08a',
+    'assets/executor-volume-hPjuFCF6.js': 'd3b734b549f2604f13176c1ae6aacca3a56a9e9b12d22ac761d5f2692d824bfe',
+    'assets/external-link-pe0BE9Ay.js': 'eaef69b179d3d1d9d4191851bc82af7ab19a9af52b732444b89dced4d146aad9',
+    'assets/heat-strip-CqgE5CwU.js': 'bd735ec1961ad09da416d2e7f35ca888600bffb556de814ac3dbcddcd498aa90',
+    'assets/history-DRWSxsha.js': '5e335961c86a35ed363b326c3ae22217ce73053ba7e477e47f002f307c2ce52b',
+    'assets/jsx-runtime-BaSZ_JNh.js': 'e8e123269724e152489c9eceb62b841447fa294b00094249e19d564519b407c9',
+    'assets/MarketPicture-B7QnsIPv.css': 'ee15a36b0748e4aa526938bbe0eb079bd910bf0969cb849392415fefa188472a',
+    'assets/MarketPicture-C_U_KDCQ.js': '47afaa4a08120f233fd90bcb762f29b55b863464aa79316a8ff0b97affaad159',
+    'assets/NativeScreenerTools-CmnerdQV.js': 'b73a722e3ce03aa94ed09731c8d0af943c678aa6315fab7af83f05a4e357c183',
+    'assets/NativeScreenerTools-TK9vw0in.css': 'b2ef52ab3c73ce2134845362e9064e5aaddda2331ef3ab782a63848460d69b7a',
+    'assets/plus-BVCjs_Ox.js': '470cf163b2e54a400aaf95fb1a3467b4335d689a8f41500883c82c1d4f1664ab',
+    'assets/preload-helper-Czpn1I53.js': 'aba87f2a53e45ecdc9113fc30387d16e449d1676428cf5f82dd624c1df97d152',
+    'assets/refresh-cw-BqLEp1Rx.js': '0de88132eb22cc591f6251be2d67ac3e9c88acbaac414d6c845645f2e9b7f2d2',
+    'assets/ReportingDesk-4RaAI18J.js': 'f2760978c800004f13d98a93a9961a01f4364faa2230850a2bf691666d5b3756',
+    'assets/Research-CFR66I4-.js': '5cffd435cd56846980446dfb504da990525756c20b27c0c9fa9158282423306c',
+    'assets/Research-Cvfp2KsA.css': '916f31a5135daa527b09a463a4025d2c79f0045b3e12e373ed7174ffdc792e0a',
+    'assets/src-BaNBn19l.css': '3f2f70807feb89de6c91cc90d6c638cd1acf51fcce468dff7f9e33d5776e87f2',
+    'assets/src-DF1gLXNq.js': 'd0289485aa2c2d7376c8aa032e71315fe84c7444c5b784ef6623822d0a7de980',
+    'assets/trash-2-Du0wmDIz.js': '2f458c0d35a6b83143145d770a5240f475776be935f5cf26554f22c303c7b61e',
+    'assets/v5-BdG4FGa7.js': '7393b0aed4dda1c735455071737ae12be388fb04c98e85fe7b5631acf32f12b8',
+    'assets/v5-Bwe1AIV1.css': '87f2492ac1cdd8bf1ae402ad1a06f177d39ece14466755bb75d252605f1475b3',
+    'condor_old.jpeg': 'c6e93221b2367b263f24813ba4ac5957b20ceb5b13a2773d6f8e219167bdb8e5',
+    'condor.png': '4c13a4b5ea445054b56a1cb54e0f5c8e7b2e2982e5d1f8611fa6254836901e90',
+    'favicon.svg': '61bc9a161de58248288e6905425d7180f0624c2865007b97d763fdac12043a66',
+    'hyperliquid.png': 'faa5f91aec8158bd69c5fca8e48f61985ab410eddc8e0d6c867325bbb709e419',
+    'icons.svg': 'b45fa506195cfcdef406ba9f0c77b36ddc1a7c224040926ec70abc2fdea7b93a',
+    'v5.html': 'e525c5bca9692883ced9eab84dc48e4f3140b78829a820b3d09ad34b21b8c4c6'
+  },
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.21.0

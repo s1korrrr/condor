@@ -1,9 +1,9 @@
 # V5 paper dashboard polish — local evidence
 
-Latest repair: [round6-render-boundaries.md](round6-render-boundaries.md) records
-round-5 render-time sampling, affirmative risk clearance, owner ordering, real
-renderer regressions, mutant kills and rebuilt hashes. Earlier receipts describe
-earlier heads and are historical.
+Latest repair: [round7-selective-supersession.md](round7-selective-supersession.md)
+records round-6 selective safety supersession, real-query regressions, mutant
+kills, dependency setup and rebuilt hashes. Earlier receipts describe earlier
+heads and are historical.
 
 Latest fix-round results are in [round2.md](round2.md). The bundle hashes,
 counts and browser evidence below describe the original `43695d26` round,

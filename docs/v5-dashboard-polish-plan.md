@@ -146,3 +146,34 @@ Deferred, not repaired in this round:
 - Previous stale/unavailable summary briefly replaced by Checking on refresh.
 - Settings extra five-section read, sub-1e-6 significant digits, pair-chart remounts.
 - Deployed latency and separate requalification remain unverified here.
+
+## Round-6 review repair: selective safety supersession
+
+Input: Condor `d81f105f` and workspace `6ad6fa0e`. Authority and rollback remain
+repository-process-only and revert-only. No services or owner changes.
+
+Separate qualification to supersede from absence of holds. A coherent completed
+risk read supersedes older safety evidence by owner boot/sequence if it is
+available, complete, schema-valid, has no continuation, and every controller
+explicitly publishes boolean paused, emergency and native-complete flags. It
+may still carry holds. Its own signals remain visible. Missing flags, degraded
+risk, incomplete risk and unknown ordering keep older evidence fail-safe.
+
+Retain scoped-resume, named-durability-reset, mixed-controller and explicit
+emergency-clear regressions at both the pure boundary and real QueryClient
+completion path. Restore the obsolete all-clear condition as an isolated mutant
+and require all four real-renderer scenarios to reject it. Run full suites,
+both typechecks, lint, whitespace checks and independent-root bundle rebuilds.
+Results: `docs/evidence/2026-10-31-v5-dashboard-polish/round7-selective-supersession.md`.
+
+Workspace test prerequisite: run `npm ci` in the linked Condor frontend first.
+The real-renderer tests require Condor's happy-dom and react-test-renderer dev
+dependencies; a stale symlinked node_modules is not sufficient. #625 still
+requires #85 to merge and its Condor pin to be bumped before build.
+
+Found, not repaired: the reviewer reports no in-boot emergency-clear path in
+the pinned owner, because emergency is OR-merged at
+`meridian_v5_paper_control.py:1129-1134`. This is pre-existing and unconfirmed
+in this implementation round. The explicit emergency-clear fixture tests
+consumer supersession, not the reachability of that owner operation.
+The deferred gcTime safety expiry, pre-sleep frame and other items above remain.

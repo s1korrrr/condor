@@ -22,10 +22,10 @@ function newerSnapshot(candidate: PaperRead, prior: PaperRead): boolean {
   return false;
 }
 
-function riskClear(read: PaperRead): boolean {
+function riskSupersedes(read: PaperRead): boolean {
   const controllers = paperRiskControllers(read, 0);
   return read.section === 'risk' && read.state === 'available' && read.completeness === 'complete' && !read.next_cursor && !paperSectionError(read) &&
-    signalKeys(read).length === 0 && !!controllers?.length && controllers.every(controller => controller.native.complete === true && controller.operator.emergency === false && controller.operator.paused === false);
+    !!controllers?.length && controllers.every(controller => typeof controller.native.complete === 'boolean' && typeof controller.operator.emergency === 'boolean' && typeof controller.operator.paused === 'boolean');
 }
 
 export function paperSafetyReads(previous: PaperRead[], received: PaperRead[], complete?: PaperRead): PaperRead[] {
@@ -33,7 +33,7 @@ export function paperSafetyReads(previous: PaperRead[], received: PaperRead[], c
   const incoming = received.filter(read => read.section === 'risk' && status && read.bot_id === status.bot_id && paperSnapshotsAgree([status, read]));
   const signals = new Map<string, PaperRead>();
   for (const read of [...previous, ...incoming]) {
-    if (complete && read.bot_id === complete.bot_id && riskClear(complete) && newerSnapshot(complete, read)) continue;
+    if (complete && read.bot_id === complete.bot_id && riskSupersedes(complete) && newerSnapshot(complete, read)) continue;
     for (const key of signalKeys(read)) {
       const prior = signals.get(key);
       if (!prior || newerSnapshot(read, prior)) signals.set(key, read);

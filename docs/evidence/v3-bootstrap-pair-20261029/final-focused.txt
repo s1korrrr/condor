@@ -1,0 +1,9 @@
+........................................................................ [ 88%]
+.........                                                                [100%]
+81 passed in 2.57s
+/Users/s1kor/dev/trading/rsibot/condor/.venv/lib/python3.12/site-packages/_pytest/pathlib.py:103: PytestWarning: (rm_rf) unknown function <built-in function scandir> when removing /private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/garbage-513feeee-8ed1-4e85-8487-f95ea072a809/test_verified_python_buffer_us0/sealed-runtime/lib:
+<class 'PermissionError'>: [Errno 1] Operation not permitted: '/private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/garbage-513feeee-8ed1-4e85-8487-f95ea072a809/test_verified_python_buffer_us0/sealed-runtime/lib'
+  warnings.warn(
+/Users/s1kor/dev/trading/rsibot/condor/.venv/lib/python3.12/site-packages/_pytest/pathlib.py:103: PytestWarning: (rm_rf) unknown function <built-in function scandir> when removing /private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/garbage-fd895bb3-b5ef-49c4-bff1-a543b5854d59/test_verified_python_buffer_us0/sealed-runtime/lib:
+<class 'PermissionError'>: [Errno 1] Operation not permitted: '/private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/garbage-fd895bb3-b5ef-49c4-bff1-a543b5854d59/test_verified_python_buffer_us0/sealed-runtime/lib'
+  warnings.warn(

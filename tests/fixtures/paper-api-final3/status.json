@@ -1,0 +1,441 @@
+{
+  "schema": "rsibot.v5-paper.read.v1",
+  "state": "available",
+  "section": "status",
+  "snapshot_id": "ebc8f9016a66ea614edc47cee4ed00fc:41",
+  "bot_id": "meridian_v5_paper",
+  "execution_mode": "paper",
+  "simulated": true,
+  "generated_at_ms": 1793401542783,
+  "observed_at_ms": 1793401542783,
+  "read_at_ms": 1793401546406,
+  "source_at_ms": 1793401542783,
+  "completeness": "complete",
+  "reason": null,
+  "capabilities": [
+    "read"
+  ],
+  "data": {
+    "wallet": {
+      "capabilities": [
+        "read"
+      ],
+      "completeness": "complete",
+      "observed_at_ms": 1793401542783,
+      "source_at_ms": 1793401541407,
+      "stale_reason": null,
+      "state": "available",
+      "reason": null
+    },
+    "fills": {
+      "capabilities": [
+        "read"
+      ],
+      "completeness": "complete",
+      "observed_at_ms": 1793401542783,
+      "source_at_ms": 1793401542783,
+      "stale_reason": null,
+      "state": "available",
+      "reason": null
+    },
+    "positions": {
+      "capabilities": [
+        "read"
+      ],
+      "completeness": "complete",
+      "observed_at_ms": 1793401542783,
+      "source_at_ms": 1793401542783,
+      "stale_reason": null,
+      "state": "available",
+      "reason": null
+    },
+    "executors": {
+      "capabilities": [
+        "read"
+      ],
+      "completeness": "complete",
+      "observed_at_ms": 1793401542783,
+      "source_at_ms": 1793401542783,
+      "stale_reason": null,
+      "state": "available",
+      "reason": null
+    },
+    "risk": {
+      "capabilities": [
+        "read"
+      ],
+      "completeness": "complete",
+      "observed_at_ms": 1793401542783,
+      "source_at_ms": 1793401542783,
+      "stale_reason": null,
+      "state": "available",
+      "reason": null
+    },
+    "decisions": {
+      "capabilities": [
+        "read"
+      ],
+      "completeness": "complete",
+      "observed_at_ms": 1793401542783,
+      "source_at_ms": 1793401542783,
+      "stale_reason": null,
+      "state": "available",
+      "reason": null
+    },
+    "history": {
+      "capabilities": [
+        "read"
+      ],
+      "completeness": "complete",
+      "observed_at_ms": 1793401542783,
+      "source_at_ms": 1793401542783,
+      "stale_reason": null,
+      "state": "available",
+      "reason": null
+    },
+    "operations": {
+      "capabilities": [
+        "read"
+      ],
+      "completeness": "complete",
+      "observed_at_ms": 1793401542783,
+      "source_at_ms": 1793401542783,
+      "stale_reason": null,
+      "state": "available",
+      "reason": null
+    },
+    "accounting": {
+      "capabilities": [
+        "read"
+      ],
+      "completeness": "complete",
+      "observed_at_ms": 1793401542783,
+      "source_at_ms": 1793401542783,
+      "stale_reason": null,
+      "state": "available",
+      "reason": null
+    },
+    "candles": {
+      "capabilities": [
+        "read"
+      ],
+      "completeness": "complete",
+      "observed_at_ms": 1793401542783,
+      "source_at_ms": 1793401501135,
+      "stale_reason": null,
+      "state": "available",
+      "reason": null
+    },
+    "orders": {
+      "capabilities": [
+        "read"
+      ],
+      "completeness": "complete",
+      "observed_at_ms": 1793401542783,
+      "source_at_ms": 1793401542783,
+      "stale_reason": null,
+      "state": "available",
+      "reason": null
+    },
+    "watermark_attestation": {
+      "reason": "initial integration enrollment",
+      "operator_note": "Host owner reviewed the copied paper source and release identity",
+      "recorded_at_ms": 1793401505922,
+      "accepted": {
+        "last": [
+          "ebc8f9016a66ea614edc47cee4ed00fc",
+          22,
+          1793401501135,
+          "588e49f542515906dd56d0a6d974270515ff53e0b2f6d688d03eb018f320b492"
+        ],
+        "clocks": [
+          [
+            [
+              "wallet",
+              "observed_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "wallet",
+              "source_at_ms"
+            ],
+            1793401498903
+          ],
+          [
+            [
+              "wallet",
+              "mark",
+              "assets",
+              [
+                "asset",
+                "BNB"
+              ]
+            ],
+            1793401500807
+          ],
+          [
+            [
+              "wallet",
+              "mark",
+              "assets",
+              [
+                "asset",
+                "BTC"
+              ]
+            ],
+            1793401499503
+          ],
+          [
+            [
+              "wallet",
+              "mark",
+              "assets",
+              [
+                "asset",
+                "ETH"
+              ]
+            ],
+            1793401499107
+          ],
+          [
+            [
+              "wallet",
+              "mark",
+              "assets",
+              [
+                "asset",
+                "SOL"
+              ]
+            ],
+            1793401498903
+          ],
+          [
+            [
+              "wallet",
+              "mark",
+              "assets",
+              [
+                "asset",
+                "USDC"
+              ]
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "wallet",
+              "mark",
+              "assets",
+              [
+                "asset",
+                "XRP"
+              ]
+            ],
+            1793401501007
+          ],
+          [
+            [
+              "fills",
+              "observed_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "fills",
+              "source_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "positions",
+              "observed_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "positions",
+              "source_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "executors",
+              "observed_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "executors",
+              "source_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "risk",
+              "observed_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "risk",
+              "source_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "decisions",
+              "observed_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "decisions",
+              "source_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "history",
+              "observed_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "history",
+              "source_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "operations",
+              "observed_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "operations",
+              "source_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "accounting",
+              "observed_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "accounting",
+              "source_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "candles",
+              "observed_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "candles",
+              "source_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "orders",
+              "observed_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "orders",
+              "source_at_ms"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "candles",
+              "pair",
+              "BNB-USDC"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "candles",
+              "pair",
+              "BTC-USDC"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "candles",
+              "pair",
+              "ETH-USDC"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "candles",
+              "pair",
+              "SOL-USDC"
+            ],
+            1793401501135
+          ],
+          [
+            [
+              "candles",
+              "pair",
+              "XRP-USDC"
+            ],
+            1793401501135
+          ]
+        ],
+        "retired": []
+      },
+      "audit_file": "owner-event-00000003-c1ac2ebbcb3042c4af26491de94e3e79.json",
+      "audit_sha256": "4b2d06ad77e6058be53f612f6d79ecbec890c77d3ee241e7757d72871fe3c677"
+    },
+    "owner_chain_anchor": {
+      "genesis_sha256": "6f21d1e04a0fae1240b87a2a62066c8a28da67c6ec2bb7d67351c0ede8fd5768",
+      "seq": 5,
+      "head_sha256": "f81374b8c3eb2581f3e370101640f16252e701799c602be8dfec87fbf078707b"
+    }
+  },
+  "next_cursor": null,
+  "source": {
+    "owner": "hummingbot",
+    "schema": "rsibot.v5-paper.observation.v2",
+    "sha256": "296e05ddad62e9f9ae52b7ec0eebcc781546fb7b5ae1a3713e194464bce14903",
+    "boot_id": "ebc8f9016a66ea614edc47cee4ed00fc",
+    "sequence": 41,
+    "source_sha256": "93f2287ffd7f8112ef08fa2ba3bb9eb597f447e6ba1d825e6c3461796924f762",
+    "config_sha256": "b80096664a0aefc7d614dbcff167057bffffb02a2a78c72e08ee5c7a9876c5e0",
+    "recipe_sha256": "ebec0189e6666a0c8c23732afe45315957e6c068fcd5b3c4c0b0c73b3955885a"
+  }
+}

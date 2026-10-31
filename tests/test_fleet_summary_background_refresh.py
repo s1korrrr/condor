@@ -26,13 +26,6 @@ from decimal import Decimal
 from pathlib import Path
 
 import pytest
-
-from condor import wallet_observation
-from condor.web import fleet_pnl
-from condor.web import fleet_summary as fs
-from condor.web import holdings
-from condor.web.routes import fleet_holdings as holdings_route
-from condor.web.routes import fleet_summary as routes
 from test_fleet_summary import (  # noqa: F401  (store is a pytest fixture)
     INCIDENTS,
     NOW_MS,
@@ -48,6 +41,13 @@ from test_fleet_summary import (  # noqa: F401  (store is a pytest fixture)
     store,
     sync,
 )
+
+from condor import wallet_observation
+from condor.web import fleet_pnl
+from condor.web import fleet_summary as fs
+from condor.web import holdings
+from condor.web.routes import fleet_holdings as holdings_route
+from condor.web.routes import fleet_summary as routes
 
 # ── the fleet windows ──
 
@@ -300,7 +300,8 @@ async def test_runtime_owners_are_read_at_once_each_on_its_own_bound(monkeypatch
 
 # Seconds after the reads at which a cached answer is compared with a fresh build: either side of
 # every bound the fixtures sit near (owner currency 30 s, holdings 30 s, wallet 120 s, incidents 90 s,
-# market lag 90 s and expiry 120 s, day samples 180 s), within the 60 s the cache serves.
+# market lag 90 s and expiry 120 s, day samples 180 s). These projection tests use a 60 s
+# test TTL to inspect expiry beyond the production stale-serving window.
 CLOCKS_S = (0, 1, 2, 9, 10, 11, 29, 30, 31, 45, 59, 60)
 
 
@@ -526,8 +527,9 @@ async def test_finding_native_controller_count_is_withdrawn(monkeypatch, store):
 
 @sync
 async def test_finding_a_stale_day_change_is_withheld_from_the_glance(tmp_path):
-    from condor.performance_history import PerformanceHistory
     from test_fleet_summary import seed
+
+    from condor.performance_history import PerformanceHistory
 
     store = PerformanceHistory(tmp_path / "native-performance.sqlite3")
     seed(store, ("ok_rsi", "rsi_modular_v2", "ok_rsi_paper"))
@@ -746,9 +748,9 @@ async def test_projection_writes_no_last_known_state(monkeypatch, store):
 
 
 def activity_glance(read_at_ms, served_at_ms):
-    from condor.push import (
+    from condor.push import (  # noqa: F401  (imported for the module under test)
         live_activity as la,
-    )  # noqa: F401  (imported for the module under test)
+    )
 
     glance = json.loads(
         (

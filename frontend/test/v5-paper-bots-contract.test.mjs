@@ -1,11 +1,152 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
+import fs from 'node:fs';
+import { paperRiskControllers } from '../src/v5/policy.ts';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { paperReadState, paperCompleteRecords, paperControlState, paperRecordSummary, paperSnapshotsAgree, paperWords, paperAmount, paperExactAmount, paperSectionError, paperTime, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadiness, paperRiskHold, paperRiskHolds, paperExitProjection, paperRiskUsage, paperWalletInventory, paperWalletTotals, paperPairObservation } from '../src/v5/policy.ts';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
+const final3 = Object.fromEntries(['status','wallet','positions','executors','fills','risk','decisions','history','operations'].map(section => [section, JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/${section}.json`, import.meta.url)))]));
+
+test('FINAL3 real native API records render without losing metadata', () => {
+  for (const read of Object.values(final3)) assert.equal(paperSectionError(read),null,read.section);
+  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values(final3),now:final3.status.read_at_ms,reportAt:final3.status.generated_at_ms,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
+  assert.doesNotMatch(html,/owner schema invalid|Paper observations are unavailable/);
+  assert.equal(final3.executors.data[0].pnl_scope,'native_executor_fee_inclusive');
+});
+
+test('real native API replay keeps available and degraded owner states distinct', () => {
+  for (const section of ['status','wallet','positions','fills','executors','risk','decisions','history','operations','accounting']) {
+    const read=JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`,import.meta.url)));
+    assert.equal(paperSectionError(read),null,section);
+    assert.equal(paperReadState(read,read.read_at_ms),read.state,section);
+  }
+});
+
+for (const [section,change] of [
+  ['executors',{pnl_scope:1}], ['executors',{pnl_scope:'bad scope'}],
+  ['fills',{fee:{fee_type:'invented',flat_fees:[],percent:'0',percent_token:null}}],
+  ['fills',{fee:{fee_type:'AddedToCost',flat_fees:[],percent:0,percent_token:null}}],
+  ['fills',{quantity:'not money'}], ['fills',{quantity:false}], ['executors',{fees_paid:{USDC:1}}],
+]) test(`real native ${section} rejects malformed typed fields ${JSON.stringify(change)}`, () => {
+  const read=structuredClone(final3[section]); Object.assign(read.data[0],change);
+  assert.match(paperSectionError(read),/schema invalid/);
+});
+
+test('history pages use the API73 limit and snapshot-bound next cursor', async () => {
+  const {load}=frontendModules();
+  const {paperObservationPages}=load('v5/policy.ts');
+  const paths=[];
+  const result=await paperObservationPages('/api/v1/servers/rsibot-v5/controller-performance/history?snapshot_id=epoch',async path=>{
+    paths.push(path);
+    return {...final3.history,data:{...final3.history.data,segments:[{event_at_ms:paths.length}]},next_cursor:paths.length===1?'owner-cursor==':null};
+  });
+  assert.equal(result.data.segments.length,2);
+  assert.ok(paths.every(path=>new URL(path,'https://fixture.invalid').searchParams.get('limit')==='200'));
+  assert.equal(new URL(paths[1],'https://fixture.invalid').searchParams.get('cursor'),'owner-cursor==');
+  assert.equal(new URL(paths[1],'https://fixture.invalid').searchParams.get('snapshot_id'),final3.history.snapshot_id);
+  await assert.rejects(()=>paperObservationPages('/history',async path=>({...final3.history,snapshot_id:path.includes('cursor')?'changed':final3.history.snapshot_id,next_cursor:'more'})),/snapshot/i);
+});
+
+test('list paging stays bounded, pins epochs and cannot promote partial owner records', async () => {
+  const {load}=frontendModules();
+  const {paperObservationPages}=load('v5/policy.ts');
+  let calls=0;
+  const result=await paperObservationPages('/fills?limit=1000',async path=>{
+    assert.equal(new URL(path,'https://fixture.invalid').searchParams.get('limit'),'200');
+    calls++;
+    return {...final3.fills,data:[final3.fills.data[0]],next_cursor:String(calls)};
+  });
+  assert.equal(calls,5);
+  assert.equal(result.data.length,5);
+  assert.equal(result.next_cursor,'5');
+  assert.equal(paperCompleteRecords(result,result.read_at_ms),null);
+  await assert.rejects(()=>paperObservationPages('/fills',async path=>({...final3.fills,completeness:path.includes('cursor')?'complete':'partial',next_cursor:'more'})),/states/);
+  await assert.rejects(()=>paperObservationPages('/fills',async ()=>({...final3.fills,next_cursor:'same'})),/Repeated/);
+});
+
+test('real authenticated API fill pages join to the retained native record window', async () => {
+  const {load}=frontendModules();
+  const {paperObservationPages}=load('v5/policy.ts');
+  const first=JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-api-final3/native-replay/fills.json',import.meta.url)));
+  const next=JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-api-final3/native-replay/fills-offset-200.json',import.meta.url)));
+  const read=await paperObservationPages('/fills',async path=>{
+    const params=new URL(path,'https://fixture.invalid').searchParams;
+    assert.equal(params.get('limit'),'200');
+    if (!params.has('cursor')) return first;
+    assert.equal(params.get('cursor'),first.next_cursor);
+    assert.equal(params.get('snapshot_id'),first.snapshot_id);
+    return next;
+  });
+  assert.deepEqual(read.data,[...first.data,...next.data]);
+  assert.equal(read.data.length,344);
+  assert.equal(paperCompleteRecords(read,read.read_at_ms).length,344);
+});
+
 const now = 1793275200000;
+
+const apiEnvelopes = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-api-7b12d1c2/envelopes.json', import.meta.url)));
+
+test('pinned API73 envelopes render owner reads without schema failures', () => {
+  for (const read of Object.values(apiEnvelopes)) {
+    assert.equal(paperSectionError(read), null, read.section);
+    assert.equal(paperReadState(read, now), read.state, read.section);
+  }
+  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.entries(apiEnvelopes).filter(([name])=>name!=='collecting').map(([,read])=>read),now,reportAt:now,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
+  assert.doesNotMatch(html, /owner schema invalid/);
+  assert.match(html, /Available/);
+  for (const capabilities of [[], ['read'], ['']]) assert.equal(paperSectionError({...apiEnvelopes.executors,capabilities}),null);
+  for (const capabilities of [{}, 1, [1]]) assert.match(paperSectionError({...apiEnvelopes.executors,capabilities}),/schema invalid/);
+  for (const state of ['available','collecting','degraded','stale','not_applicable']) assert.equal(paperSectionError({...apiEnvelopes.executors,state,reason:null,source_at_ms:null,observed_at_ms:null}),null);
+  assert.equal(paperSectionError({...apiEnvelopes.collecting,section:'status',state:'degraded',data:{owner_chain_anchor:{seq:1}}}),null);
+});
+
+test('numeric rail absence is stated only when usable rails are absent', () => {
+  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
+  for (const rails of [[], [{label:'Program exposure',used_quote:'1',limit_quote:'2',used_percent:50}]]) {
+    const risk = {...fresh,section:'risk',data:{controllers:{bnb:{operator:{},native:{}}},rails}};
+    const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:[risk],now,reportAt:now,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
+    assert.equal(html.includes('Numeric rail limits are not published'), rails.length === 0);
+  }
+});
+
+for (const [reason,label,action] of [
+  ['stop_intent_log_damaged','Stop intent log is damaged','emergency reset'],
+  ['ingress_unreadable','Command ingress is unreadable','ingress reset'],
+  ['clock_anomaly','Owner clock evidence conflicts','clock maintenance'],
+  ['paper_controls_unavailable','Paper controls could not be acquired','control-store failure'],
+]) test(`owner hold ${reason} renders a human label and clearing action`, () => {
+  const risk = {...fresh,section:'risk',data:{reason,holds:[{reason,explanation:''}]}};
+  const [hold] = paperRiskHolds(risk);
+  assert.equal(hold.label, label);
+  assert.match(hold.action, new RegExp(action));
+  assert.ok(hold.explanation.length > 20);
+  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:[risk],now,reportAt:now,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
+  assert.ok(html.includes(label));
+  assert.ok(html.includes('New acquisitions held'));
+});
+
+test('risk controllers are a keyed native map, while decisions remain a list', () => {
+  const fixture = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-c1-1e131c74/native-entry-holds.json', import.meta.url)));
+  const risk = {...fresh, section:'risk', data:fixture.risk.data};
+  assert.equal(paperSectionError(risk), null);
+  const controllers = paperRiskControllers(risk, now);
+  assert.equal(controllers.find(row => row.id === 'sol').native.complete, false);
+  assert.equal(controllers.find(row => row.id === 'bnb').holds[0].reason, 'native_refusal_receipt_pending');
+  assert.equal(paperRiskControllers({...risk,completeness:'partial'}, now)[0].current, false);
+  assert.equal(paperRiskControllers(risk, now + 31000)[0].current, false);
+  for (const controllers of [[], {'':{operator:{},native:{}}}, {bnb:null}, {bnb:{operator:[],native:{}}}, {bnb:{operator:{}}}]) assert.match(paperSectionError({...risk,data:{controllers}}), /schema invalid/);
+  assert.match(paperSectionError({...risk,section:'decisions'}), /schema invalid/);
+  assert.equal(paperSectionError({...risk,section:'decisions',data:{controllers:[]}}), null);
+});
 
 const c1TargetHoldFixtures = {
   "partial-buy-cancel-tp-partial-close": {
@@ -278,7 +419,7 @@ test('known flat requires complete coherent positions and executors, and project
 
 test('malformed envelope fields are isolated in every state before rendering', () => {
   for (const state of ['available','collecting','degraded','stale','not_applicable']) {
-    for (const [key,value] of Object.entries({reason:{},state:[],generated_at_ms:true,source_at_ms:{},observed_at_ms:-1,snapshot_id:[],completeness:{},next_cursor:[],capabilities:[],source:[],bot_id:{},simulated:'true'})) {
+    for (const [key,value] of Object.entries({reason:{},state:[],generated_at_ms:true,source_at_ms:{},observed_at_ms:-1,read_at_ms:true,stale_reason:{},snapshot_id:[],completeness:{},next_cursor:[],capabilities:{},source:[],bot_id:{},simulated:'true'})) {
       const read = {...fresh,section:'executors',data:[],state,reason:'Owner state',[key]:value};
       assert.match(paperSectionError(read), /Executors owner schema invalid/, `${state}: ${key}`);
       assert.equal(paperReadState(read,now),'degraded');
@@ -501,4 +642,20 @@ test('hold banner labels the clock high-water without an orphaned control senten
     assert.ok(html.includes(`Clock high-water mark: ${paperTime(highWater,now)}.`));
     assert.doesNotMatch(html,/Not published\. Clock high-water mark/);
   }
+});
+
+test('risk map renders native holds even when the owner section is partial', () => {
+  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
+  const fixture = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-c1-1e131c74/native-entry-holds.json', import.meta.url)));
+  const risk = {...fresh,section:'risk',completeness:'partial',data:fixture.risk.data};
+  risk.data.controllers.xrp = {operator:{paused:false,emergency:false},native:{complete:true}};
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:[risk],now,reportAt:now,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
+  assert.match(html,/Controller entry controls/);
+  assert.match(html,/New entries held/);
+  assert.match(html,/Held by owner/);
+  assert.match(html,/The owner reports an entry hold/);
+  assert.match(html,/Current entry state unknown/);
+  assert.match(html,/A native refusal receipt is pending durable reconciliation/);
+  assert.doesNotMatch(html,/Native evidence complete|Fresh owner report/);
 });

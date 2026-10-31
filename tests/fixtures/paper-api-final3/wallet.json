@@ -1,0 +1,93 @@
+{
+  "schema": "rsibot.v5-paper.read.v1",
+  "state": "available",
+  "section": "wallet",
+  "snapshot_id": "ebc8f9016a66ea614edc47cee4ed00fc:41",
+  "bot_id": "meridian_v5_paper",
+  "execution_mode": "paper",
+  "simulated": true,
+  "generated_at_ms": 1793401542783,
+  "observed_at_ms": 1793401542783,
+  "read_at_ms": 1793401546438,
+  "source_at_ms": 1793401541407,
+  "completeness": "complete",
+  "reason": null,
+  "capabilities": [
+    "read"
+  ],
+  "data": {
+    "assets": [
+      {
+        "asset": "BNB",
+        "available": "0.3573739",
+        "mark_at_ms": 1793401541407,
+        "mark_quote": "700.695",
+        "marked_value_quote": "250.4101048605",
+        "reserved": "0.0000000",
+        "total": "0.3573739"
+      },
+      {
+        "asset": "BTC",
+        "available": "0.006355670",
+        "mark_at_ms": 1793401542603,
+        "mark_quote": "76975.45",
+        "marked_value_quote": "489.23055830150",
+        "reserved": "0.000000000",
+        "total": "0.006355670"
+      },
+      {
+        "asset": "ETH",
+        "available": "0.1746600",
+        "mark_at_ms": 1793401542607,
+        "mark_quote": "2235.715",
+        "marked_value_quote": "390.4899819000",
+        "reserved": "0.0000000",
+        "total": "0.1746600"
+      },
+      {
+        "asset": "SOL",
+        "available": "6.144430",
+        "mark_at_ms": 1793401542603,
+        "mark_quote": "95.82",
+        "marked_value_quote": "588.75928260",
+        "reserved": "0.000000",
+        "total": "6.144430"
+      },
+      {
+        "asset": "USDC",
+        "available": "197961.12379971913040",
+        "mark_at_ms": 1793401542783,
+        "mark_quote": "1",
+        "marked_value_quote": "197961.12379971913040",
+        "reserved": "0.00000000000000",
+        "total": "197961.12379971913040"
+      },
+      {
+        "asset": "XRP",
+        "available": "235.6530",
+        "mark_at_ms": 1793401542607,
+        "mark_quote": "1.2525",
+        "marked_value_quote": "295.15538250",
+        "reserved": "0.0000",
+        "total": "235.6530"
+      }
+    ],
+    "equity_quote": "199975.16910988113040",
+    "external_cash_flows_quote": "0",
+    "initial_funding_quote": "200000",
+    "quote_asset": "USDC",
+    "unit": "USDC",
+    "valuation_policy": "midpoint_fresh_book_only"
+  },
+  "next_cursor": null,
+  "source": {
+    "owner": "hummingbot",
+    "schema": "rsibot.v5-paper.observation.v2",
+    "sha256": "296e05ddad62e9f9ae52b7ec0eebcc781546fb7b5ae1a3713e194464bce14903",
+    "boot_id": "ebc8f9016a66ea614edc47cee4ed00fc",
+    "sequence": 41,
+    "source_sha256": "93f2287ffd7f8112ef08fa2ba3bb9eb597f447e6ba1d825e6c3461796924f762",
+    "config_sha256": "b80096664a0aefc7d614dbcff167057bffffb02a2a78c72e08ee5c7a9876c5e0",
+    "recipe_sha256": "ebec0189e6666a0c8c23732afe45315957e6c068fcd5b3c4c0b0c73b3955885a"
+  }
+}

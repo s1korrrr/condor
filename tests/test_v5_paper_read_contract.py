@@ -1,4 +1,5 @@
 import json
+from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
@@ -7,6 +8,280 @@ from condor.v5.dashboard import read_compatibility_path
 from condor.v5.paper import PaperObservation
 
 BOT = "meridian_v5_paper"
+
+API_ENVELOPES = json.loads(
+    (Path(__file__).parent / "fixtures/paper-api-7b12d1c2/envelopes.json").read_text()
+)
+
+FINAL3 = Path(__file__).parent / "fixtures/paper-api-final3"
+
+
+@pytest.mark.parametrize("section", ["wallet", "positions", "fills", "executors", "risk", "decisions", "history", "operations", "status"])
+def test_final3_authenticated_native_api_records_are_available(tmp_path, section):
+    from test_v5_paper_binding import client_for
+
+    payload = json.loads((FINAL3 / (section + ".json")).read_text())
+
+    class Source:
+        async def observation(self, path):
+            return payload
+
+    route = next(path for path, name in ROUTES.items() if name == section)
+    with client_for(tmp_path, Source(), clock_s=payload["read_at_ms"] / 1000) as client:
+        response = client.get("/api/v5/dashboard/read", params={"path": route})
+    assert response.status_code == 200, response.text
+    assert response.json()["state"] == "available"
+    assert response.json()["data"] == payload["data"]
+
+
+def test_final3_native_orders_and_accounting_are_validated_without_inventing_api_routes():
+    from condor.v5.paper import _validate_section_data, _validate_read_tree
+
+    native = json.loads((FINAL3 / "native-observation.json").read_text())
+    for section in ("orders", "accounting"):
+        data = native[section]["data"]
+        _validate_read_tree(data)
+        _validate_section_data(section, data)
+
+
+@pytest.mark.parametrize("section,change", [
+    ("executors", {"pnl_scope": 1}), ("executors", {"pnl_scope": "bad scope"}),
+    ("fills", {"fee": {"fee_type": "invented", "flat_fees": [], "percent": "0", "percent_token": None}}),
+    ("fills", {"fee": {"fee_type": "AddedToCost", "flat_fees": [], "percent": 0, "percent_token": None}}),
+    ("fills", {"quantity": "not money"}), ("fills", {"quantity": False}), ("executors", {"fees_paid": {"USDC": 1}}),
+])
+def test_native_financial_metadata_does_not_weaken_amount_or_enum_validation(section, change):
+    from condor.v5.paper import validate_paper_read
+
+    payload = json.loads((FINAL3 / (section + ".json")).read_text())
+    payload["data"][0].update(change)
+    with pytest.raises(HTTPException) as error:
+        validate_paper_read(payload, section=section, bot=BOT, now_ms=payload["read_at_ms"])
+    assert error.value.detail["section"] == section
+    assert error.value.detail["code"] == "paper_read_schema_invalid"
+
+
+def test_real_response_provenance_hashes_are_reproducible():
+    from hashlib import sha256
+
+    receipt = json.loads((FINAL3 / "provenance.json").read_text())
+    for filename, item in receipt["records"].items():
+        assert sha256((FINAL3 / filename).read_bytes()).hexdigest() == item.get("vendored_sha256", item.get("sha256"))
+
+
+@pytest.mark.parametrize("section", ["status", "wallet", "positions", "fills", "executors", "risk", "decisions", "history", "operations", "accounting"])
+def test_real_native_api_replay_preserves_owner_states_and_records(section):
+    from condor.v5.paper import validate_paper_read
+
+    packet = json.loads((FINAL3 / "native-replay" / (section + ".json")).read_text())
+    read = validate_paper_read(packet, section=section, bot=BOT, now_ms=packet["read_at_ms"])
+    assert read["state"] == packet["state"]
+    assert read["data"] == packet["data"]
+
+
+def test_history_limit_is_capped_to_pinned_api73_query_constraint(tmp_path):
+    import re
+    from condor.v5.dashboard import paper_read_route
+    from urllib.parse import parse_qs
+
+    declaration = (FINAL3 / "api73-paper-route.py.txt").read_text()
+    maximum = int(re.search(r"limit: int = Query\(default=100, ge=1, le=(\d+)\)", declaration)[1])
+    result = paper_read_route("/api/v1/servers/rsibot-v5/controller-performance/history", "limit=1000&interval=5m", BOT)
+    assert parse_qs(result[1])["limit"] == [str(maximum)]
+
+
+@pytest.mark.parametrize("query", ["cursor=" + "a" * 513, "start_ms=1", "start_ms=1&end_ms=2678400002"])
+def test_owner_query_bounds_reject_invalid_cursor_and_ranges(query):
+    from condor.v5.dashboard import paper_read_route
+
+    with pytest.raises(HTTPException):
+        paper_read_route("/api/v1/servers/rsibot-v5/controller-performance/history", query, BOT)
+
+
+@pytest.mark.parametrize("name", list(API_ENVELOPES))
+def test_real_api_73_envelopes_cross_authenticated_condor_boundary(tmp_path, name):
+    from test_v5_paper_binding import client_for
+
+    payload = API_ENVELOPES[name]
+
+    class Source:
+        async def observation(self, path):
+            return payload
+
+    if payload["section"] == "candles":
+        from condor.v5.paper import validate_paper_read
+
+        result = validate_paper_read(
+            payload, section="candles", bot=BOT, now_ms=payload["read_at_ms"]
+        )
+        assert result["capabilities"] == []
+        assert result["state"] == "collecting"
+        return
+    route = next(path for path, section in ROUTES.items() if section == payload["section"])
+    with client_for(tmp_path, Source(), clock_s=payload["read_at_ms"] / 1000) as client:
+        response = client.get("/api/v5/dashboard/read", params={"path": route})
+    assert response.status_code == 200, response.text
+    result = response.json()
+    assert result["capabilities"] == payload["capabilities"]
+    assert result["state"] == payload["state"]
+    assert result["read_at_ms"] == payload["read_at_ms"]
+
+
+@pytest.mark.parametrize("capabilities", [[], ["read"], ["read", "history"], [""]])
+def test_string_capability_lists_are_valid(capabilities):
+    from condor.v5.paper import validate_paper_read
+
+    result = validate_paper_read(
+        envelope("executors", capabilities=capabilities), section="executors",
+        bot=BOT, now_ms=int(NOW * 1000),
+    )
+    assert result["capabilities"] == capabilities
+
+
+def test_api_nullable_metadata_and_collecting_completeness_are_preserved():
+    from condor.v5.paper import validate_paper_read
+
+    for state in ["available", "collecting", "degraded", "stale", "not_applicable"]:
+        payload = envelope("executors", state=state, reason=None,
+                           observed_at_ms=None, source_at_ms=None,
+                           read_at_ms=int(NOW * 1000), stale_reason=None)
+        assert validate_paper_read(
+            payload, section="executors", bot=BOT, now_ms=int(NOW * 1000)
+        )["reason"] is None
+    payload = dict(API_ENVELOPES["collecting"], section="status", state="degraded",
+                   data={"owner_chain_anchor": {"seq": 1}})
+    assert validate_paper_read(
+        payload, section="status", bot=BOT, now_ms=payload["read_at_ms"]
+    )["observed_at_ms"] is None
+
+
+def c1_native_risk():
+    return json.loads(
+        (
+            Path(__file__).parent / "fixtures/paper-c1-1e131c74/native-entry-holds.json"
+        ).read_text()
+    )["risk"]["data"]
+
+
+@pytest.mark.parametrize(
+    "reason",
+    [
+        "stop_persistence_failed", "clock_persistence_failed", "clock_invalid",
+        "stop_intent_log_damaged", "ingress_unreadable", "clock_anomaly",
+        "paper_controls_unavailable",
+    ],
+)
+def test_c1_all_owner_hold_classes_are_readable(reason):
+    from copy import deepcopy
+    from condor.v5.paper import validate_paper_read
+
+    data = deepcopy(C1_TARGET_HOLD_FIXTURES["clock-failure-hold"]["risk"])
+    data.update(
+        control_hold=reason, reason=reason, explanation="Owner safety hold",
+        holds=[{"reason": reason, "explanation": "Owner safety hold"}],
+    )
+    fixtures = {
+        "stop_intent_log_damaged": "stop-intent-log-damaged",
+        "ingress_unreadable": "ingress-unreadable-hold",
+        "clock_anomaly": "clock-anomaly-hold",
+        "paper_controls_unavailable": "paper-controls-unavailable",
+    }
+    if reason in fixtures:
+        path = Path(__file__).parent / "fixtures/paper-c1-1e131c74" / (fixtures[reason] + ".json")
+        data = json.loads(path.read_text())["risk"]["data"]
+    read = envelope("risk", state="degraded", reason=reason, data=data)
+    assert validate_paper_read(
+        read, section="risk", bot=BOT, now_ms=int(NOW * 1000)
+    )["data"] == data
+
+
+def test_unknown_owner_hold_class_still_fails_closed():
+    from condor.v5.paper import validate_paper_read
+
+    with pytest.raises(HTTPException) as error:
+        validate_paper_read(
+            envelope("risk", data={"control_hold": "future_hold",
+                "holds": [{"reason": "future_hold", "explanation": "Held"}]}),
+            section="risk", bot=BOT, now_ms=int(NOW * 1000),
+        )
+    assert error.value.status_code == 502
+    assert error.value.detail["section"] == "risk"
+
+
+def test_risk_hold_schema_tracks_the_pinned_c1_owner_enum():
+    from condor.v5.paper import C1_DATA_SCHEMA
+
+    path = Path(__file__).parent / "fixtures/paper-c1-1e131c74/schema.json"
+    owner = json.loads(path.read_text())
+    producer = owner["properties"]["risk"]["allOf"][1]["properties"]["data"]["anyOf"][1]
+    consumer = C1_DATA_SCHEMA["properties"]["risk"]["anyOf"][1]
+    assert consumer["if"] == producer["if"]
+    assert consumer["then"] == producer["then"]
+    assert C1_DATA_SCHEMA["properties"]["risk"]["allOf"] == producer["allOf"]
+
+
+def test_c1_keyed_risk_map_is_readable(tmp_path):
+    from test_v5_paper_binding import client_for
+
+    class Source:
+        async def observation(self, path):
+            return envelope("risk", data=c1_native_risk())
+
+    with client_for(tmp_path, Source()) as client:
+        response = client.get(
+            "/api/v5/dashboard/read",
+            params={"path": f"/api/v1/servers/rsibot-v5/bots/{BOT}/risk"},
+        )
+    assert response.status_code == 200
+    assert response.json()["data"]["controllers"]["sol"]["native"]["complete"] is False
+
+
+@pytest.mark.parametrize(
+    "controllers,expected", [([], 200), ({"bnb": {"operator": {}, "native": {}}}, 502)]
+)
+def test_decisions_keep_their_list_contract(tmp_path, controllers, expected):
+    from test_v5_paper_binding import client_for
+
+    class Source:
+        async def observation(self, path):
+            return envelope("decisions", data={"controllers": controllers})
+
+    with client_for(tmp_path, Source()) as client:
+        response = client.get(
+            "/api/v5/dashboard/read",
+            params={"path": f"/api/v1/servers/rsibot-v5/bots/{BOT}/decisions"},
+        )
+    assert response.status_code == expected
+    if expected == 502:
+        assert response.json()["detail"]["section"] == "decisions"
+
+
+@pytest.mark.parametrize(
+    "controllers",
+    [
+        [],
+        {"": {"operator": {}, "native": {}}},
+        {"bnb": None},
+        {"bnb": {"operator": [], "native": {}}},
+        {"bnb": {"operator": {}}},
+    ],
+)
+def test_risk_controller_map_rejects_malformed_shapes(tmp_path, controllers):
+    from test_v5_paper_binding import client_for
+
+    class Source:
+        async def observation(self, path):
+            return envelope("risk", data={"controllers": controllers})
+
+    with client_for(tmp_path, Source()) as client:
+        response = client.get(
+            "/api/v5/dashboard/read",
+            params={"path": f"/api/v1/servers/rsibot-v5/bots/{BOT}/risk"},
+        )
+    assert response.status_code == 502
+    assert response.json()["detail"]["section"] == "risk"
+    assert response.json()["detail"]["reason"] == "schema_invalid"
+
 
 C1_TARGET_HOLD_FIXTURES = json.loads(r"""{
   "partial-buy-cancel-tp-partial-close": {
@@ -404,7 +679,12 @@ def test_authenticated_malformed_section_is_a_typed_schema_error(
         ("completeness", {}),
         ("completeness", "unknown"),
         ("next_cursor", []),
-        ("capabilities", []),
+        ("capabilities", {}),
+        ("capabilities", 1),
+        ("capabilities", [1]),
+        ("read_at_ms", True),
+        ("read_at_ms", -1),
+        ("stale_reason", {}),
         ("source", []),
         ("bot_id", {}),
         ("simulated", "true"),

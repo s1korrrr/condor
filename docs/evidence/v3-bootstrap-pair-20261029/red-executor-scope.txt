@@ -1,0 +1,18 @@
+.F                                                                       [100%]
+=================================== FAILURES ===================================
+_ test_pairless_runtime_rejects_unbound_executor_even_with_matching_lifecycle __
+
+    def test_pairless_runtime_rejects_unbound_executor_even_with_matching_lifecycle():
+        payload = captured()
+        for field in ("active_executors", "lifecycle_executors"):
+            payload["runtime_status"][field][0]["controller_id"] = "other-controller"
+>       assert fs.project_runtime_view(payload, BOT, capture_time(payload)) is None
+E       AssertionError: assert {'current': True, 'executors': 1, 'observed_ms': 1793278616000, 'trading': {'buy': 'can_trade', 'coverage': 'partial', 'held': False, 'observed_ms': 1793278616000, ...}} is None
+E        +  where {'current': True, 'executors': 1, 'observed_ms': 1793278616000, 'trading': {'buy': 'can_trade', 'coverage': 'partial', 'held': False, 'observed_ms': 1793278616000, ...}} = <function project_runtime_view at 0x10dfcb240>({'monitoring': {'bot_name': 'meridian_v3', 'observed_at': '2026-10-29T12:56:56+00:00', 'runtime_state': 'fresh', 'stal...le_executors': [{'age': '6d20h', 'amount_base': '0.00061483', 'close_type': None, 'connector_name': 'okx', ...}], ...}}, 'meridian_v3', 1793278617000)
+E        +    where <function project_runtime_view at 0x10dfcb240> = fs.project_runtime_view
+E        +    and   1793278617000 = capture_time({'monitoring': {'bot_name': 'meridian_v3', 'observed_at': '2026-10-29T12:56:56+00:00', 'runtime_state': 'fresh', 'stal...le_executors': [{'age': '6d20h', 'amount_base': '0.00061483', 'close_type': None, 'connector_name': 'okx', ...}], ...}})
+
+tests/test_fleet_summary_portfolio_bootstrap.py:46: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_fleet_summary_portfolio_bootstrap.py::test_pairless_runtime_rejects_unbound_executor_even_with_matching_lifecycle
+1 failed, 1 passed in 0.40s

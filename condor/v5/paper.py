@@ -561,6 +561,122 @@ C1_DATA_SCHEMA = json.loads(r"""
       ]
     },
     "risk": {
+      "allOf": [
+        {
+          "properties": {
+            "controllers": {
+              "type": "object",
+              "maxProperties": 5,
+              "propertyNames": {
+                "minLength": 1,
+                "maxLength": 128
+              },
+              "additionalProperties": {
+                "type": "object",
+                "required": [
+                  "operator",
+                  "native"
+                ],
+                "properties": {
+                  "operator": {
+                    "type": "object"
+                  },
+                  "native": {
+                    "type": "object"
+                  }
+                }
+              }
+            },
+            "native_entry_holds": {
+              "type": "array",
+              "maxItems": 20,
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "controller_id",
+                  "reason",
+                  "explanation",
+                  "protected_exits"
+                ],
+                "properties": {
+                  "controller_id": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "reason": {
+                    "enum": [
+                      "native_refusal_receipt_pending",
+                      "native_refusal_owner_ambiguous",
+                      "native_refusal_recovery_unavailable",
+                      "v5_risk_incomplete"
+                    ]
+                  },
+                  "explanation": {
+                    "type": "string",
+                    "minLength": 1
+                  },
+                  "protected_exits": {
+                    "const": "preserved"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "reason": {
+                "const": "paper_controls_unavailable"
+              }
+            },
+            "required": [
+              "reason"
+            ]
+          },
+          "then": {
+            "required": [
+              "explanation",
+              "holds",
+              "native",
+              "unavailable_reason"
+            ],
+            "properties": {
+              "explanation": {
+                "type": "string",
+                "minLength": 1
+              },
+              "native": {
+                "type": "null"
+              },
+              "unavailable_reason": {
+                "const": "paper_controls_not_acquired"
+              },
+              "holds": {
+                "type": "array",
+                "minItems": 1,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "reason",
+                    "explanation"
+                  ],
+                  "properties": {
+                    "reason": {
+                      "const": "paper_controls_unavailable"
+                    },
+                    "explanation": {
+                      "type": "string",
+                      "minLength": 1
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
       "anyOf": [
         {
           "type": "null"
@@ -573,6 +689,9 @@ C1_DATA_SCHEMA = json.loads(r"""
                 "enum": [
                   "clock_persistence_failed",
                   "stop_persistence_failed",
+                  "stop_intent_log_damaged",
+                  "ingress_unreadable",
+                  "clock_anomaly",
                   "clock_invalid"
                 ]
               }
@@ -593,6 +712,9 @@ C1_DATA_SCHEMA = json.loads(r"""
                 "enum": [
                   "clock_persistence_failed",
                   "stop_persistence_failed",
+                  "stop_intent_log_damaged",
+                  "ingress_unreadable",
+                  "clock_anomaly",
                   "clock_invalid"
                 ]
               },
@@ -603,7 +725,7 @@ C1_DATA_SCHEMA = json.loads(r"""
               "holds": {
                 "type": "array",
                 "minItems": 1,
-                "maxItems": 3,
+                "maxItems": 6,
                 "items": {
                   "type": "object",
                   "required": [
@@ -615,6 +737,9 @@ C1_DATA_SCHEMA = json.loads(r"""
                       "enum": [
                         "clock_persistence_failed",
                         "stop_persistence_failed",
+                        "stop_intent_log_damaged",
+                        "ingress_unreadable",
+                        "clock_anomaly",
                         "clock_invalid"
                       ]
                     },
@@ -685,7 +810,6 @@ def validate_paper_read(
     unbound = (
         isinstance(payload, dict)
         and payload.get("state") in ("collecting", "degraded")
-        and payload.get("data") is None
         and payload.get("snapshot_id") is None
     )
     if (
@@ -716,20 +840,24 @@ def validate_paper_read(
             )
         )
         or (
-            not isinstance(payload.get("reason"), str)
-            and not (payload["state"] == "available" and payload.get("reason") is None)
+            payload.get("reason") is not None
+            and not isinstance(payload["reason"], str)
+        )
+        or (
+            payload.get("stale_reason") is not None
+            and not isinstance(payload["stale_reason"], str)
         )
         or any(
             key in payload
             and not (unbound and key == "generated_at_ms" and payload[key] is None)
-            and not (key == "source_at_ms" and payload[key] is None)
+            and not (key in {"source_at_ms", "observed_at_ms"} and payload[key] is None)
             and (
                 type(payload[key]) is not int
                 or not 0
                 <= payload[key]
                 <= min(2**53 - 1, now_ms + FUTURE_SKEW_SECONDS * 1000)
             )
-            for key in ("generated_at_ms", "source_at_ms", "observed_at_ms")
+            for key in ("generated_at_ms", "source_at_ms", "observed_at_ms", "read_at_ms")
         )
         or (
             section in {"positions", "fills", "executors", "orders"}
@@ -737,7 +865,7 @@ def validate_paper_read(
         )
         or (
             "completeness" in payload
-            and payload["completeness"] not in ("complete", "partial", "unavailable")
+            and payload["completeness"] not in ("complete", "partial", "collecting", "unavailable")
         )
         or (
             "next_cursor" in payload
@@ -747,9 +875,16 @@ def validate_paper_read(
                 or not payload["next_cursor"]
             )
         )
-        or any(
-            key in payload and not isinstance(payload[key], dict)
-            for key in ("capabilities", "source")
+        or ("source" in payload and not isinstance(payload["source"], dict))
+        or (
+            "capabilities" in payload
+            and (
+                not isinstance(payload["capabilities"], list)
+                or any(
+                    not isinstance(capability, str)
+                    for capability in payload["capabilities"]
+                )
+            )
         )
         or (payload["state"] == "available" and payload.get("data") is None)
     ):
@@ -797,7 +932,7 @@ def validate_paper_read(
         raise HTTPException(502, detail={"code": "paper_read_capacity"})
     result = deepcopy(payload)
     if (
-        result.get("completeness") in {"partial", "unavailable"}
+        result.get("completeness") in {"partial", "collecting", "unavailable"}
         and result["state"] == "available"
     ):
         result.update(
@@ -812,12 +947,14 @@ def validate_paper_read(
         "section",
         "state",
         "reason",
+        "stale_reason",
         "bot_id",
         "execution_mode",
         "simulated",
         "snapshot_id",
         "generated_at_ms",
         "observed_at_ms",
+        "read_at_ms",
         "source_at_ms",
         "completeness",
         "capabilities",
@@ -846,7 +983,7 @@ def validate_paper_read(
 
 
 def _validate_section_data(section: str, data: Any) -> None:
-    """Validate C1 data schemas through hummingbot 17579565, then C3 containers.
+    """Validate C1 data and the 1e131c74 risk-map extension, then C3 containers.
 
     C1 leaves decisions, history and operations record identities unconstrained;
     the read adapter must additionally enforce the record shapes it projects.
@@ -855,9 +992,13 @@ def _validate_section_data(section: str, data: Any) -> None:
     if data is None:
         return
     if section == "risk" and isinstance(data, dict):
-        known = {"clock_persistence_failed", "stop_persistence_failed", "clock_invalid"}
+        known = {
+            "clock_persistence_failed", "stop_persistence_failed", "clock_invalid",
+            "stop_intent_log_damaged", "ingress_unreadable", "clock_anomaly",
+            "paper_controls_unavailable",
+        }
         holds = data.get("holds", [])
-        if not isinstance(holds, list) or len(holds) > 3:
+        if not isinstance(holds, list) or len(holds) > 6:
             raise ValueError("invalid owner holds")
         reasons = []
         for hold in holds:
@@ -871,6 +1012,14 @@ def _validate_section_data(section: str, data: Any) -> None:
                 raise ValueError("invalid owner hold entry")
             reasons.append(hold["reason"])
         control = data.get("control_hold")
+        controls_unavailable = (
+            reasons == ["paper_controls_unavailable"]
+            and data.get("reason") == "paper_controls_unavailable"
+            and isinstance(data.get("explanation"), str)
+            and bool(data["explanation"].strip())
+            and data.get("native", "missing") is None
+            and data.get("unavailable_reason") == "paper_controls_not_acquired"
+        )
         if (
             control is not None
             and (
@@ -880,6 +1029,7 @@ def _validate_section_data(section: str, data: Any) -> None:
             )
             or reasons
             and control is None
+            and not controls_unavailable
             or len(set(reasons)) != len(reasons)
         ):
             raise ValueError("inconsistent owner holds")
@@ -940,7 +1090,7 @@ def _validate_section_data(section: str, data: Any) -> None:
             "gaps",
         ):
             if key in data:
-                if section == "accounting" and key == "controllers":
+                if section in {"accounting", "risk"} and key == "controllers":
                     continue
                 if not isinstance(data[key], list) or any(
                     not isinstance(row, dict) for row in data[key]
@@ -997,6 +1147,10 @@ def _matches_c1_schema(value: Any, schema: dict) -> bool:
             return False
         properties = schema.get("properties", {})
         for key, child in value.items():
+            if "propertyNames" in schema and not _matches_c1_schema(
+                key, schema["propertyNames"]
+            ):
+                return False
             child_schema = properties.get(key, schema.get("additionalProperties", {}))
             if not _matches_c1_schema(child, child_schema):
                 return False
@@ -1010,8 +1164,10 @@ def _matches_c1_schema(value: Any, schema: dict) -> bool:
         ):
             return False
     elif isinstance(value, str):
-        if len(value) < schema.get("minLength", 0) or (
-            "pattern" in schema and re.search(schema["pattern"], value) is None
+        if (
+            len(value) > schema.get("maxLength", MAX_STATUS_BYTES)
+            or len(value) < schema.get("minLength", 0)
+            or ("pattern" in schema and re.search(schema["pattern"], value) is None)
         ):
             return False
     elif type(value) is int and "minimum" in schema and value < schema["minimum"]:
@@ -1019,7 +1175,39 @@ def _matches_c1_schema(value: Any, schema: dict) -> bool:
     return True
 
 
-def _validate_read_tree(value: Any, key: str = "", depth: int = 0) -> None:
+NATIVE_DECIMAL = {"type": "string", "maxLength": 128, "pattern": r"\A-?[0-9]+(?:\.[0-9]+)?\Z"}
+NATIVE_CURRENCY = {"type": "string", "pattern": r"\A[A-Za-z0-9_.-]{1,32}\Z"}
+NATIVE_STRUCTURED_FINANCIAL = {
+    "fee": {
+        "type": "object", "additionalProperties": False,
+        "required": ["fee_type", "flat_fees", "percent", "percent_token"],
+        "properties": {
+            "fee_type": {"enum": ["AddedToCost", "DeductedFromReturns"]},
+            "percent": NATIVE_DECIMAL,
+            "percent_token": {"anyOf": [NATIVE_CURRENCY, {"type": "null"}]},
+            "flat_fees": {"type": "array", "maxItems": 32, "items": {
+                "type": "object", "additionalProperties": False, "required": ["amount", "token"],
+                "properties": {"amount": NATIVE_DECIMAL, "token": NATIVE_CURRENCY},
+            }},
+        },
+    },
+    "fees": {"type": "array", "maxItems": 32, "items": {
+        "type": "object", "additionalProperties": False, "required": ["amount", "currency"],
+        "properties": {"amount": NATIVE_DECIMAL, "currency": NATIVE_CURRENCY},
+    }},
+    "close_quantity": {
+        "type": "object", "additionalProperties": False,
+        "properties": {
+            **{name: {"anyOf": [{"type": "string", "maxLength": 128,
+                "pattern": r"\A-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]{1,3})?\Z"}, {"type": "null"}]}
+               for name in ("owned_base", "available_base", "order_amount", "residual_base", "quantity_increment")},
+            "blocked_reason": {"type": ["string", "null"], "pattern": r"\A[A-Za-z0-9_.-]{1,128}\Z"},
+        },
+    },
+}
+
+
+def _validate_read_tree(value: Any, key: str = "", depth: int = 0, *, native_fee: bool = False) -> None:
     if depth > 16 or isinstance(value, float):
         raise ValueError("invalid paper observation value")
     if value is None:
@@ -1036,17 +1224,38 @@ def _validate_read_tree(value: Any, key: str = "", depth: int = 0) -> None:
         "-infinity",
     }:
         raise ValueError("invalid paper value")
+    if key in {"fee_quote_valuation_basis", "count_basis", "target_basis", "pnl_scope"} or (native_fee and key == "fee_type"):
+        if not isinstance(value, str) or not value or len(value) > 4096:
+            raise ValueError("invalid accounting metadata")
+        if key in {"target_basis", "pnl_scope"} and re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", value) is None:
+            raise ValueError("invalid accounting label")
+        return
+    if key in NATIVE_STRUCTURED_FINANCIAL:
+        if not _matches_c1_schema(value, NATIVE_STRUCTURED_FINANCIAL[key]):
+            raise ValueError("invalid structured financial value")
+        if key == "close_quantity":
+            from decimal import Decimal
+
+            if any(abs(Decimal(amount).adjusted()) > 128 for name, amount in value.items() if name != "blocked_reason" and amount is not None):
+                raise ValueError("invalid close quantity scale")
+        native_fee = key == "fee"
+    if key == "fees_paid":
+        if not isinstance(value, dict) or len(value) > 32 or any(
+            re.fullmatch(r"[A-Z0-9]{1,20}", currency) is None or not _matches_c1_schema(amount, NATIVE_DECIMAL) or amount.startswith("-")
+            for currency, amount in value.items()
+        ):
+            raise ValueError("invalid fee currency amounts")
+        return
     if isinstance(value, dict):
         for name, child in value.items():
-            _validate_read_tree(child, name, depth + 1)
+            _validate_read_tree(child, name + "_reason" if key == "unavailable_reasons" else name, depth + 1, native_fee=native_fee)
     elif isinstance(value, list):
         if len(value) > 2000:
             raise ValueError("paper row capacity")
         for child in value:
-            _validate_read_tree(child, "", depth + 1)
+            _validate_read_tree(child, "", depth + 1, native_fee=native_fee)
     elif (
-        key not in {"fee_quote_valuation_basis", "count_basis", "target_basis"}
-        and not key.endswith(
+        not key.endswith(
             (
                 "_currency",
                 "_asset",
@@ -1057,13 +1266,15 @@ def _validate_read_tree(value: Any, key: str = "", depth: int = 0) -> None:
                 "_state",
                 "_id",
                 "_count",
+                "_enabled",
+                "_applicable",
+                "_known",
             )
         )
         and re.search(
             r"(?:^|_)(?:price|quantity|amount|balance|total|available|reserved|basis|fee|fees|pnl|exposure|funding|mark|cash|equity)(?:_|$)",
             key,
         )
-        and type(value) is not bool
     ):
         if (
             not isinstance(value, str)

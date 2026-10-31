@@ -1,0 +1,64 @@
+FF                                                                       [100%]
+=================================== FAILURES ===================================
+______ test_native_pairless_portfolio_keeps_runtime_counts_and_capability ______
+
+    def test_native_pairless_portfolio_keeps_runtime_counts_and_capability():
+        payload = captured()
+        before = copy.deepcopy(payload)
+        runtime = payload["runtime_status"]
+        assert runtime["controllers"][0]["pair"] is None
+        assert {row["pair"] for row in runtime["operations"]["pairs"]} == {
+            "BNB-USDC",
+            "BTC-USDC",
+            "ETH-USDC",
+            "SOL-USDC",
+            "XRP-USDC",
+        }
+
+        view = fs.project_runtime_view(payload, BOT, capture_time(payload))
+
+>       assert view is not None
+E       assert None is not None
+
+tests/test_fleet_summary_portfolio_bootstrap.py:36: AssertionError
+_____ test_pairless_bootstrap_reaches_fleet_card_when_quant_is_unavailable _____
+
+store = <condor.performance_history.PerformanceHistory object at 0x10ad8bec0>
+
+    @sync
+    async def test_pairless_bootstrap_reaches_fleet_card_when_quant_is_unavailable(store):
+        payload = captured()
+
+        class Readers(FakeReaders):
+            async def owner(self, bot, path, params):
+                self.calls.append((bot, path))
+                if path == "bootstrap":
+                    return fs.OwnerRead(copy.deepcopy(payload))
+                return fs.OwnerRead(None, fs.SOURCE_UNAVAILABLE)
+
+        body = await fs.build_fleet_summary(
+            SERVER,
+            "full",
+            Readers(store, registry=[BOT]),
+            capture_time(payload),
+            is_admin=False,
+            user_id=7,
+        )
+        v3 = card(body, BOT)
+>       assert (v3["executors"], v3["executors_basis"]) == (1, "runtime_active_executors")
+E       AssertionError: assert (None, None) == (1, 'runtime_...ve_executors')
+E
+E         At index 0 diff: None != 1
+E         Use -v to get more diff
+
+tests/test_fleet_summary_portfolio_bootstrap.py:203: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_fleet_summary_portfolio_bootstrap.py::test_native_pairless_portfolio_keeps_runtime_counts_and_capability
+FAILED tests/test_fleet_summary_portfolio_bootstrap.py::test_pairless_bootstrap_reaches_fleet_card_when_quant_is_unavailable
+2 failed in 1.17s
+/Users/s1kor/dev/trading/rsibot/condor/.venv/lib/python3.12/site-packages/_pytest/pathlib.py:103: PytestWarning: (rm_rf) unknown function <built-in function scandir> when removing /private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/garbage-c8e8e706-d8b8-4f73-ba36-f50f48ac6f6e/test_verified_python_buffer_us0/sealed-runtime/lib:
+<class 'PermissionError'>: [Errno 1] Operation not permitted: '/private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/garbage-c8e8e706-d8b8-4f73-ba36-f50f48ac6f6e/test_verified_python_buffer_us0/sealed-runtime/lib'
+  warnings.warn(
+/Users/s1kor/dev/trading/rsibot/condor/.venv/lib/python3.12/site-packages/_pytest/pathlib.py:103: PytestWarning: (rm_rf) unknown function <built-in function scandir> when removing /private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/garbage-429da3b9-7274-4d90-9135-8384d380eb0a/test_verified_python_buffer_us0/sealed-runtime/lib:
+<class 'PermissionError'>: [Errno 1] Operation not permitted: '/private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/garbage-429da3b9-7274-4d90-9135-8384d380eb0a/test_verified_python_buffer_us0/sealed-runtime/lib'
+  warnings.warn(

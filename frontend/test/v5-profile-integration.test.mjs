@@ -33,7 +33,8 @@ test("V5 entry reuses the actual dashboard pages under an isolated cookie profil
   assert.match(pages, /remaining_pilot_usd/);
   assert.match(pages, /authorized_ceiling_usd/);
   assert.match(pages, /Provider billing balance/);
-  assert.match(pages, /secrets\/anthropic\.env/);
+  assert.doesNotMatch(pages, /secrets\/anthropic\.env/);
+  assert.match(pages, /Provider access is managed by the advisor service owner/);
   assert.match(config, /@workspace-monitoring/);
   assert.match(config, /V5_WORKSPACE_ROOT/);
   assert.match(auth, /credentials:\s*"include"/);

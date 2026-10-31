@@ -1,0 +1,101 @@
+....FF.......F.....FF...............                                     [100%]
+=================================== FAILURES ===================================
+____ test_permissions_and_repeated_opens_do_not_leak_descriptors[directory] ____
+
+tmp_path = PosixPath('/private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/pytest-2223/test_permissions_and_repeated_0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10e769250>
+denied = 'directory'
+
+    @pytest.mark.parametrize("denied", ["directory", "file"])
+    def test_permissions_and_repeated_opens_do_not_leak_descriptors(
+        tmp_path, monkeypatch, denied
+    ):
+        path = write_status(tmp_path, status())
+        original_open = os.open
+>       baseline = len(os.listdir("/proc/self/fd"))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/proc/self/fd'
+
+tests/test_v5_paper_hostile_inputs.py:85: FileNotFoundError
+______ test_permissions_and_repeated_opens_do_not_leak_descriptors[file] _______
+
+tmp_path = PosixPath('/private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/pytest-2223/test_permissions_and_repeated_1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10e7bb230>
+denied = 'file'
+
+    @pytest.mark.parametrize("denied", ["directory", "file"])
+    def test_permissions_and_repeated_opens_do_not_leak_descriptors(
+        tmp_path, monkeypatch, denied
+    ):
+        path = write_status(tmp_path, status())
+        original_open = os.open
+>       baseline = len(os.listdir("/proc/self/fd"))
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E       FileNotFoundError: [Errno 2] No such file or directory: '/proc/self/fd'
+
+tests/test_v5_paper_hostile_inputs.py:85: FileNotFoundError
+__________ test_searchable_but_unlistable_parent_is_a_readable_source __________
+
+tmp_path = PosixPath('/private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/pytest-2223/test_searchable_but_unlistable0')
+
+    def test_searchable_but_unlistable_parent_is_a_readable_source(tmp_path):
+        path = write_status(tmp_path, status())
+        path.parent.chmod(0o100)
+        try:
+            assert path.read_bytes()
+            result = paper.read_paper_status(path, now=NOW)
+>           assert result.state == "FRESH", result.reason
+E           AssertionError: PAPER_STATUS_PATH
+E           assert 'UNAVAILABLE' == 'FRESH'
+E
+E             - FRESH
+E             + UNAVAILABLE
+
+tests/test_v5_paper_hostile_inputs.py:180: AssertionError
+___________ test_condor_io_fault_is_unavailable_not_http_500[fstat] ____________
+
+tmp_path = PosixPath('/private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/pytest-2223/test_condor_io_fault_is_unavai0')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10ea17170>
+operation = 'fstat'
+
+    @pytest.mark.parametrize("operation", ["fstat", "read"])
+    def test_condor_io_fault_is_unavailable_not_http_500(tmp_path, monkeypatch, operation):
+        with client_for(tmp_path, ReviewUpstream(False), payload=status()) as client:
+            path = tmp_path / "runtime_status" / f"{BOT}.status.json"
+            original = getattr(os, operation)
+            attempted = []
+>           baseline = len(os.listdir("/proc/self/fd"))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           FileNotFoundError: [Errno 2] No such file or directory: '/proc/self/fd'
+
+tests/test_v5_paper_hostile_inputs.py:240: FileNotFoundError
+____________ test_condor_io_fault_is_unavailable_not_http_500[read] ____________
+
+tmp_path = PosixPath('/private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/pytest-2223/test_condor_io_fault_is_unavai1')
+monkeypatch = <_pytest.monkeypatch.MonkeyPatch object at 0x10e7b86b0>
+operation = 'read'
+
+    @pytest.mark.parametrize("operation", ["fstat", "read"])
+    def test_condor_io_fault_is_unavailable_not_http_500(tmp_path, monkeypatch, operation):
+        with client_for(tmp_path, ReviewUpstream(False), payload=status()) as client:
+            path = tmp_path / "runtime_status" / f"{BOT}.status.json"
+            original = getattr(os, operation)
+            attempted = []
+>           baseline = len(os.listdir("/proc/self/fd"))
+                           ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+E           FileNotFoundError: [Errno 2] No such file or directory: '/proc/self/fd'
+
+tests/test_v5_paper_hostile_inputs.py:240: FileNotFoundError
+=========================== short test summary info ============================
+FAILED tests/test_v5_paper_hostile_inputs.py::test_permissions_and_repeated_opens_do_not_leak_descriptors[directory]
+FAILED tests/test_v5_paper_hostile_inputs.py::test_permissions_and_repeated_opens_do_not_leak_descriptors[file]
+FAILED tests/test_v5_paper_hostile_inputs.py::test_searchable_but_unlistable_parent_is_a_readable_source
+FAILED tests/test_v5_paper_hostile_inputs.py::test_condor_io_fault_is_unavailable_not_http_500[fstat]
+FAILED tests/test_v5_paper_hostile_inputs.py::test_condor_io_fault_is_unavailable_not_http_500[read]
+5 failed, 31 passed in 1.28s
+/Users/s1kor/dev/trading/rsibot/condor/.venv/lib/python3.12/site-packages/_pytest/pathlib.py:103: PytestWarning: (rm_rf) unknown function <built-in function scandir> when removing /private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/garbage-797f9b09-9e2e-4985-857e-f967407efd3a/test_verified_python_buffer_us0/sealed-runtime/lib:
+<class 'PermissionError'>: [Errno 1] Operation not permitted: '/private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/garbage-797f9b09-9e2e-4985-857e-f967407efd3a/test_verified_python_buffer_us0/sealed-runtime/lib'
+  warnings.warn(
+/Users/s1kor/dev/trading/rsibot/condor/.venv/lib/python3.12/site-packages/_pytest/pathlib.py:103: PytestWarning: (rm_rf) unknown function <built-in function scandir> when removing /private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/garbage-1e15b20b-96ce-4b30-ab35-5fb31f9b3d88/test_verified_python_buffer_us0/sealed-runtime/lib:
+<class 'PermissionError'>: [Errno 1] Operation not permitted: '/private/var/folders/g6/mrhqfgk15_d2gjj52991r1jr0000gn/T/pytest-of-s1kor/garbage-1e15b20b-96ce-4b30-ab35-5fb31f9b3d88/test_verified_python_buffer_us0/sealed-runtime/lib'
+  warnings.warn(

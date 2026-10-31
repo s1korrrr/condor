@@ -140,7 +140,7 @@ class V5Upstream:
                         key == "limit"
                         and value.isascii()
                         and value.isdigit()
-                        and 1 <= int(value) <= 1000
+                        and 1 <= int(value) <= 200
                     )
                     or (
                         key in {"start_ms", "end_ms"}
@@ -150,7 +150,7 @@ class V5Upstream:
                     )
                     or (
                         key == "cursor"
-                        and re.fullmatch(r"[A-Za-z0-9_.:=-]{1,1024}", value)
+                        and re.fullmatch(r"[A-Za-z0-9_=-]{1,512}", value)
                     )
                     or (
                         key == "snapshot_id"

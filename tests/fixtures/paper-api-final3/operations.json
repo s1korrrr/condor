@@ -1,0 +1,45 @@
+{
+  "schema": "rsibot.v5-paper.read.v1",
+  "state": "available",
+  "section": "operations",
+  "snapshot_id": "ebc8f9016a66ea614edc47cee4ed00fc:41",
+  "bot_id": "meridian_v5_paper",
+  "execution_mode": "paper",
+  "simulated": true,
+  "generated_at_ms": 1793401542783,
+  "observed_at_ms": 1793401542783,
+  "read_at_ms": 1793401546667,
+  "source_at_ms": 1793401542783,
+  "completeness": "complete",
+  "reason": null,
+  "capabilities": [
+    "read"
+  ],
+  "data": {
+    "driver_source_sha256": "214ff78bc8386769f7d0783756f16e0edae559f724ffa87ad3a18b6bddf6e04a",
+    "failure": null,
+    "journal_failures": 0,
+    "ready": true,
+    "reasons": [],
+    "recovery_required": {},
+    "restored": true,
+    "session_identity": {
+      "connector_contract": "de0a86d1e3baaaf75e673096a39ed367316743732e0bea4dbc523bbf6e846c69",
+      "controllers_sha256": "ebec0189e6666a0c8c23732afe45315957e6c068fcd5b3c4c0b0c73b3955885a",
+      "initial_balances_sha256": "14a4478b32233b2909c975d2549d2e5d48acf2cf2afa67c7b73f860752c22c37",
+      "schema": "native_paper_session_v1",
+      "source_runtime_sha256": "5b996a943dd721e96d8bca7fa5372fd158938106e3be740943c6141f3550ba77"
+    }
+  },
+  "next_cursor": null,
+  "source": {
+    "owner": "hummingbot",
+    "schema": "rsibot.v5-paper.observation.v2",
+    "sha256": "296e05ddad62e9f9ae52b7ec0eebcc781546fb7b5ae1a3713e194464bce14903",
+    "boot_id": "ebc8f9016a66ea614edc47cee4ed00fc",
+    "sequence": 41,
+    "source_sha256": "93f2287ffd7f8112ef08fa2ba3bb9eb597f447e6ba1d825e6c3461796924f762",
+    "config_sha256": "b80096664a0aefc7d614dbcff167057bffffb02a2a78c72e08ee5c7a9876c5e0",
+    "recipe_sha256": "ebec0189e6666a0c8c23732afe45315957e6c068fcd5b3c4c0b0c73b3955885a"
+  }
+}

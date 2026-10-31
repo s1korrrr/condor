@@ -1,0 +1,44 @@
+vite v8.2.2 building client environment for production...
+transforming...
+✓ 2787 modules transformed.
+rendering chunks...
+computing gzip size...
+frontend/dist-v5/v5.html                                      0.85 kB │ gzip:   0.40 kB
+frontend/dist-v5/assets/Research-Cvfp2KsA.css                17.22 kB │ gzip:   3.55 kB
+frontend/dist-v5/assets/NativeScreenerTools-TK9vw0in.css     20.37 kB │ gzip:   4.46 kB
+frontend/dist-v5/assets/MarketPicture-B7QnsIPv.css           49.49 kB │ gzip:  10.09 kB
+frontend/dist-v5/assets/v5-Bwe1AIV1.css                     167.34 kB │ gzip:  28.31 kB
+frontend/dist-v5/assets/src-BaNBn19l.css                    395.25 kB │ gzip:  52.83 kB
+frontend/dist-v5/assets/ReportingDesk-rYF2ipha.js             0.06 kB │ gzip:   0.07 kB
+frontend/dist-v5/assets/history-DRWSxsha.js                   0.23 kB │ gzip:   0.19 kB
+frontend/dist-v5/assets/refresh-cw-BqLEp1Rx.js                0.32 kB │ gzip:   0.22 kB
+frontend/dist-v5/assets/trash-2-Du0wmDIz.js                   0.32 kB │ gzip:   0.21 kB
+frontend/dist-v5/assets/plus-BVCjs_Ox.js                      0.33 kB │ gzip:   0.25 kB
+frontend/dist-v5/assets/external-link-pe0BE9Ay.js             0.42 kB │ gzip:   0.28 kB
+frontend/dist-v5/assets/heat-strip-CqgE5CwU.js                0.48 kB │ gzip:   0.28 kB
+frontend/dist-v5/assets/BarChart-DP_3Knal.js                  0.55 kB │ gzip:   0.38 kB
+frontend/dist-v5/assets/executor-volume-hPjuFCF6.js           0.69 kB │ gzip:   0.46 kB
+frontend/dist-v5/assets/preload-helper-Czpn1I53.js            1.19 kB │ gzip:   0.67 kB
+frontend/dist-v5/assets/auth-token-CijoHaBo.js                1.25 kB │ gzip:   0.64 kB
+frontend/dist-v5/assets/Bots-BNoDM3Tw.js                      5.89 kB │ gzip:   2.21 kB
+frontend/dist-v5/assets/jsx-runtime-BaSZ_JNh.js               8.55 kB │ gzip:   3.26 kB
+frontend/dist-v5/assets/BotRunsTab-DGeYdOys.js                9.12 kB │ gzip:   2.82 kB
+frontend/dist-v5/assets/createLucideIcon-CGDrmTep.js         14.95 kB │ gzip:   5.31 kB
+frontend/dist-v5/assets/CanonicalContext-Ap6oKWbp.js         16.56 kB │ gzip:   5.11 kB
+frontend/dist-v5/assets/ArchivedBotsTab-NMPX8g31.js          28.66 kB │ gzip:   8.08 kB
+frontend/dist-v5/assets/EditorTab-DTkOXMbw.js                36.10 kB │ gzip:   7.92 kB
+frontend/dist-v5/assets/BacktestingTab-Cw3f2hzR.js           46.73 kB │ gzip:  10.78 kB
+frontend/dist-v5/assets/NativeScreenerTools-PlCTPK5y.js      63.82 kB │ gzip:  18.75 kB
+frontend/dist-v5/assets/Research-1OManStF.js                102.32 kB │ gzip:  31.70 kB
+frontend/dist-v5/assets/MarketPicture-Cfev0XCt.js           322.74 kB │ gzip:  93.68 kB
+frontend/dist-v5/assets/src-DMFossQd.js                     504.60 kB │ gzip: 147.11 kB
+frontend/dist-v5/assets/v5-C9Jpl8K6.js                    1,857.63 kB │ gzip: 565.65 kB
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../../.workspace/scratch/v5-wp14/final3-20261030/src/workspace-f3dcee938f3c/dashboard/hummingbot-reporting-next/app/components/ReportingDesk.tsx is dynamically imported by ../../../.workspace/scratch/v5-wp14/final3-20261030/src/workspace-f3dcee938f3c/dashboard/condor-workspace/src/features/strategy-charts/Records.tsx but also statically imported by ../../../.workspace/scratch/v5-wp14/final3-20261030/src/workspace-f3dcee938f3c/dashboard/condor-workspace/src/pages/TradingVisuals.tsx, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 600 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 8.36s

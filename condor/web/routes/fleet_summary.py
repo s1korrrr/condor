@@ -31,7 +31,9 @@ from config_manager import get_config_manager
 router = APIRouter(tags=["fleet"])
 logger = logging.getLogger(__name__)
 
-OWNER_TIMEOUT = 6.0  # a bootstrap observation is the largest read (about 0.7 MB for a busy V1 bot)
+OWNER_TIMEOUT = (
+    6.0  # a bootstrap observation is the largest read (about 0.7 MB for a busy V1 bot)
+)
 MARKET_TIMEOUT = 4.0  # the frame and its history share one budget of twice this
 # Local history waits for the status read (OWNER_TIMEOUT) first; together they stay inside the deadline.
 HISTORY_TIMEOUT = 4.0
@@ -45,9 +47,11 @@ CACHE_TTL_SECONDS = (
     5.0  # one computation serves a burst of dashboard, phone and watch polls
 )
 # Past their cache life completed reads still serve, projected at each request's clock, while one
-# background rebuild runs, for at most this long after they were read. A build is bounded by
-# TOTAL_TIMEOUT, so a working source always lands newer reads well inside this window.
-STALE_SERVE_SECONDS = 60.0
+# background rebuild runs. Bound immediate stale serving by the bot freshness contract:
+# refreshes are demand-driven, so a sparse poll otherwise gets the previous poll's expired
+# observations even when every owner is healthy. Older inputs wait up to TOTAL_TIMEOUT for the
+# rebuild, then fall back to completed reads projected now if it is still running.
+STALE_SERVE_SECONDS = summary.STALE_AFTER_MS["bots"] / 1000
 HEADERS = {
     "Cache-Control": "private, no-cache",
     "X-Content-Type-Options": "nosniff",
@@ -360,8 +364,9 @@ async def cached_summary(
 
     The cache keeps what a build read, never a judged body: every response projects the reads at its
     own clock. Within ``CACHE_TTL_SECONDS`` of the reads they are served as they are. Past that, they
-    serve for up to ``STALE_SERVE_SECONDS`` after they were read while exactly one background rebuild
-    runs. Only with nothing read in that window does a request wait for a build.
+    serve while strictly younger than ``STALE_SERVE_SECONDS`` and one background rebuild runs.
+    Older reads wait up to ``TOTAL_TIMEOUT`` for that rebuild, then serve the latest completed reads
+    projected now. The wait never cancels the rebuild. With no completed reads, a bounded build runs.
     """
     if view not in summary.VIEWS:
         raise ValueError(f"unknown view {view!r}")
@@ -371,10 +376,30 @@ async def cached_summary(
         fresh, inputs = done
         if fresh:
             return await _respond(inputs, view)
-        if 0 <= time.time() * 1000 - inputs.read_at_ms <= STALE_SERVE_SECONDS * 1000:
+        if 0 <= time.time() * 1000 - inputs.read_at_ms < STALE_SERVE_SECONDS * 1000:
             _refresh(key, view, user_id)
             return await _respond(inputs, view)
-    return await _build(key, view, user_id)
+        rebuild = _refresh(key, view, user_id)
+        if rebuild is not None:
+            try:
+                await asyncio.wait_for(asyncio.shield(rebuild), timeout=TOTAL_TIMEOUT)
+            except TimeoutError:
+                logger.warning(
+                    "event=fleet_summary_wait_timeout deadline_ms=%d view=%s cache=stale",
+                    round(TOTAL_TIMEOUT * 1000),
+                    view,
+                )
+        # Recheck: this view (or a full build) may have completed during the wait.
+        latest = _completed(key, view, time.monotonic())
+        return await _respond(latest[1] if latest is not None else inputs, view)
+    try:
+        return await _build(key, view, user_id)
+    except TimeoutError:
+        # A concurrent build, or this build's read step, may have completed meanwhile.
+        latest = _completed(key, view, time.monotonic())
+        if latest is None:
+            raise
+        return await _respond(latest[1], view)
 
 
 def accept_refreshes() -> None:
@@ -414,7 +439,7 @@ async def stop_refreshes(history_drain_seconds: float = HISTORY_DRAIN_SECONDS) -
             )
 
 
-def _refresh(key: tuple, view: str, user_id: Any) -> None:
+def _refresh(key: tuple, view: str, user_id: Any) -> Optional[asyncio.Task]:
     """Start the background rebuild of ``view`` unless one (or a full one, which serves both) runs."""
     if not _accepting_refreshes:
         return  # shutting down: the completed reads still serve, nothing new starts
@@ -422,7 +447,7 @@ def _refresh(key: tuple, view: str, user_id: Any) -> None:
     for running_view in {view, "full"}:
         task = _refreshes.get((*key, running_view))
         if task is not None and not task.done() and task.get_loop() is loop:
-            return
+            return task
     refresh_key = (*key, view)
 
     async def rebuild() -> None:
@@ -437,17 +462,22 @@ def _refresh(key: tuple, view: str, user_id: Any) -> None:
                 del _refreshes[refresh_key]
 
     _refreshes[refresh_key] = asyncio.create_task(rebuild())
+    return _refreshes[refresh_key]
 
 
 async def _build(
     key: tuple, view: str, user_id: Any, *, cache_status: str = "pending"
 ) -> dict:
-    """Read one view under its lock and the total deadline, or serve reads completed while waiting."""
+    """Read one view under its lock; foreground builds include lock wait in their deadline.
+
+    Background builds retain the per-source bounds and app shutdown ownership. Their request
+    waiters have a separate deadline, so timing out a waiter cannot discard an in-flight rebuild.
+    """
     name, admin = key
     trace = _SummaryPhaseRecorder()
     started = time.monotonic()
     acquired = False
-    deadline = asyncio.timeout(TOTAL_TIMEOUT)
+    deadline = asyncio.timeout(None if cache_status == "refresh" else TOTAL_TIMEOUT)
     with summary.capture_phase_recorder(trace):
         try:
             async with deadline:

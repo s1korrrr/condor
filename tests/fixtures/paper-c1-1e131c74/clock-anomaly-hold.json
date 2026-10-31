@@ -1,0 +1,223 @@
+{
+  "schema": "rsibot.v5-paper.observation.v2",
+  "bot_id": "meridian_v5_paper",
+  "execution_mode": "paper",
+  "simulated": true,
+  "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+  "recipe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+  "boot_id": "fixture-boot",
+  "sequence": 1,
+  "generated_at_ms": 1793275200000,
+  "wallet": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "quote_asset": "USDC",
+      "assets": [
+        {
+          "asset": "USDC",
+          "total": "1000",
+          "available": "1000",
+          "reserved": "0",
+          "mark_quote": "1",
+          "marked_value_quote": "1000",
+          "mark_at_ms": 1793275200000
+        },
+        {
+          "asset": "BNB",
+          "total": "0",
+          "available": "0",
+          "reserved": "0",
+          "mark_quote": null,
+          "marked_value_quote": "0",
+          "mark_at_ms": null
+        }
+      ],
+      "initial_funding_quote": "1000",
+      "external_cash_flows_quote": "0",
+      "equity_quote": "1000",
+      "valuation_policy": "midpoint_fresh_book_only",
+      "unit": "USDC"
+    }
+  },
+  "fills": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": []
+  },
+  "positions": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": []
+  },
+  "executors": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": []
+  },
+  "orders": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": []
+  },
+  "decisions": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "conditions": [],
+      "trailing": {
+        "applicable": false,
+        "reason": "fixed_target_recipe"
+      },
+      "dca": {
+        "applicable": false,
+        "reason": "no_active_plan"
+      }
+    }
+  },
+  "risk": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "partial",
+    "stale_reason": "clock_anomaly",
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "schema": "rsibot.v5-paper.risk.v1",
+      "control_hold": "clock_persistence_failed",
+      "reason": "clock_anomaly",
+      "explanation": "Clock evidence exceeds provider authority and is quarantined. New acquisitions are held until explicit owner clock review.",
+      "protected_exits": "preserved",
+      "clock_recovery": {
+        "required": true,
+        "high_water_ms": 1793275200000,
+        "hold": {
+          "reason": "clock_persistence_failed",
+          "failure_id": "fixture-failure",
+          "detail": "clock_anomaly: quarantined evidence from clock.json"
+        },
+        "anomalies": [
+          {
+            "source": "clock.json",
+            "timestamp": 1000000000000000000,
+            "provider_upper_bound": 1793275500000
+          }
+        ]
+      },
+      "holds": [
+        {
+          "reason": "clock_persistence_failed",
+          "explanation": "New acquisitions are held until explicit owner maintenance acknowledgement; protective exits remain enabled."
+        },
+        {
+          "reason": "clock_anomaly",
+          "explanation": "Clock evidence exceeds provider authority and is quarantined. New acquisitions are held until explicit owner clock review."
+        }
+      ]
+    }
+  },
+  "history": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "retention_start_ms": 1793275200000,
+      "gaps": [],
+      "segments": [],
+      "statistics": null,
+      "reason": "insufficient_comparable_history"
+    }
+  },
+  "operations": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "restored": false,
+      "ready": false,
+      "reason": "collecting"
+    }
+  },
+  "accounting": {
+    "observed_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "stale_reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "controllers": {
+        "v5_BNB_USDC": {
+          "accounting_since_ms": null,
+          "accounting_since_reason": "no_native_fills",
+          "fees_paid": {},
+          "fees_paid_quote": "0",
+          "fee_quote_valuation_basis": "exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once",
+          "realized_pnl_quote": "0",
+          "unrealized_pnl_quote": "0",
+          "volume_traded_quote": "0",
+          "entry_count": 0,
+          "exit_count": 0,
+          "count_basis": "distinct_native_filled_buy_and_sell_orders_not_actions",
+          "unavailable_reasons": {}
+        }
+      },
+      "program": {
+        "accounting_since_ms": null,
+        "accounting_since_reason": "no_native_fills",
+        "fees_paid": {},
+        "fees_paid_quote": "0",
+        "fee_quote_valuation_basis": "exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once",
+        "realized_pnl_quote": "0",
+        "unrealized_pnl_quote": "0",
+        "volume_traded_quote": "0",
+        "entry_count": 0,
+        "exit_count": 0,
+        "count_basis": "distinct_native_filled_buy_and_sell_orders_not_actions",
+        "unavailable_reasons": {}
+      },
+      "source": "native_exact_lifetime_receipts_not_fill_pages"
+    }
+  }
+}

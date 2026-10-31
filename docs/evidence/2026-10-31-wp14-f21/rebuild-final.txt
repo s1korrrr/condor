@@ -1,0 +1,90 @@
+vite v8.2.2 building client environment for production...
+transforming...
+✓ 2786 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/v5.html                                      0.85 kB │ gzip:   0.40 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/Research-Cvfp2KsA.css                17.22 kB │ gzip:   3.55 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/NativeScreenerTools-TK9vw0in.css     20.37 kB │ gzip:   4.46 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/MarketPicture-B7QnsIPv.css           49.49 kB │ gzip:  10.09 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/v5-Bwe1AIV1.css                     167.34 kB │ gzip:  28.31 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/src-BaNBn19l.css                    395.25 kB │ gzip:  52.83 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/ReportingDesk-4RaAI18J.js             0.06 kB │ gzip:   0.07 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/history-DRWSxsha.js                   0.23 kB │ gzip:   0.19 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/refresh-cw-BqLEp1Rx.js                0.32 kB │ gzip:   0.22 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/trash-2-Du0wmDIz.js                   0.32 kB │ gzip:   0.21 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/plus-BVCjs_Ox.js                      0.33 kB │ gzip:   0.25 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/external-link-pe0BE9Ay.js             0.42 kB │ gzip:   0.28 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/heat-strip-CqgE5CwU.js                0.48 kB │ gzip:   0.28 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/BarChart-D-pxYiCM.js                  0.55 kB │ gzip:   0.38 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/executor-volume-hPjuFCF6.js           0.69 kB │ gzip:   0.46 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/preload-helper-Czpn1I53.js            1.19 kB │ gzip:   0.67 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/auth-token-CijoHaBo.js                1.25 kB │ gzip:   0.64 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/Bots-8PcTUA2r.js                      5.89 kB │ gzip:   2.21 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/jsx-runtime-BaSZ_JNh.js               8.55 kB │ gzip:   3.26 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/BotRunsTab-BU6ECGoJ.js                9.12 kB │ gzip:   2.82 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/createLucideIcon-CGDrmTep.js         14.95 kB │ gzip:   5.31 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/CanonicalContext-Ap6oKWbp.js         16.56 kB │ gzip:   5.11 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/ArchivedBotsTab-D9K5BoKp.js          28.66 kB │ gzip:   8.07 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/EditorTab-Cty18bhF.js                36.10 kB │ gzip:   7.91 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/BacktestingTab-Ct_iA3vv.js           46.73 kB │ gzip:  10.78 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/NativeScreenerTools-CmnerdQV.js      63.83 kB │ gzip:  18.75 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/Research-CFR66I4-.js                102.32 kB │ gzip:  31.71 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/MarketPicture-C_U_KDCQ.js           322.74 kB │ gzip:  93.67 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/src-DF1gLXNq.js                     504.17 kB │ gzip: 146.99 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-1/assets/v5-BdG4FGa7.js                    1,859.51 kB │ gzip: 566.23 kB
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../../../.workspace/scratch/v5-wp14/final3-20261030/src/workspace-f3dcee938f3c/dashboard/hummingbot-reporting-next/app/components/ReportingDesk.tsx is dynamically imported by ../../../../.workspace/scratch/v5-wp14/final3-20261030/src/workspace-f3dcee938f3c/dashboard/condor-workspace/src/features/strategy-charts/Records.tsx but also statically imported by ../../../../.workspace/scratch/v5-wp14/final3-20261030/src/workspace-f3dcee938f3c/dashboard/condor-workspace/src/pages/TradingVisuals.tsx, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 600 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 4.72s
+{"build":1,"workspace":"/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/final3-20261030/src/workspace-f3dcee938f3c","entry":"assets/v5-BdG4FGa7.js","sha256":"7393b0aed4dda1c735455071737ae12be388fb04c98e85fe7b5631acf32f12b8","files":35}
+vite v8.2.2 building client environment for production...
+transforming...
+✓ 2786 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/v5.html                                      0.85 kB │ gzip:   0.40 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/Research-Cvfp2KsA.css                17.22 kB │ gzip:   3.55 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/NativeScreenerTools-TK9vw0in.css     20.37 kB │ gzip:   4.46 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/MarketPicture-B7QnsIPv.css           49.49 kB │ gzip:  10.09 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/v5-Bwe1AIV1.css                     167.34 kB │ gzip:  28.31 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/src-BaNBn19l.css                    395.25 kB │ gzip:  52.83 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/ReportingDesk-4RaAI18J.js             0.06 kB │ gzip:   0.07 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/history-DRWSxsha.js                   0.23 kB │ gzip:   0.19 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/refresh-cw-BqLEp1Rx.js                0.32 kB │ gzip:   0.22 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/trash-2-Du0wmDIz.js                   0.32 kB │ gzip:   0.21 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/plus-BVCjs_Ox.js                      0.33 kB │ gzip:   0.25 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/external-link-pe0BE9Ay.js             0.42 kB │ gzip:   0.28 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/heat-strip-CqgE5CwU.js                0.48 kB │ gzip:   0.28 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/BarChart-D-pxYiCM.js                  0.55 kB │ gzip:   0.38 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/executor-volume-hPjuFCF6.js           0.69 kB │ gzip:   0.46 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/preload-helper-Czpn1I53.js            1.19 kB │ gzip:   0.67 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/auth-token-CijoHaBo.js                1.25 kB │ gzip:   0.64 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/Bots-8PcTUA2r.js                      5.89 kB │ gzip:   2.21 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/jsx-runtime-BaSZ_JNh.js               8.55 kB │ gzip:   3.26 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/BotRunsTab-BU6ECGoJ.js                9.12 kB │ gzip:   2.82 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/createLucideIcon-CGDrmTep.js         14.95 kB │ gzip:   5.31 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/CanonicalContext-Ap6oKWbp.js         16.56 kB │ gzip:   5.11 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/ArchivedBotsTab-D9K5BoKp.js          28.66 kB │ gzip:   8.07 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/EditorTab-Cty18bhF.js                36.10 kB │ gzip:   7.91 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/BacktestingTab-Ct_iA3vv.js           46.73 kB │ gzip:  10.78 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/NativeScreenerTools-CmnerdQV.js      63.83 kB │ gzip:  18.75 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/Research-CFR66I4-.js                102.32 kB │ gzip:  31.71 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/MarketPicture-C_U_KDCQ.js           322.74 kB │ gzip:  93.67 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/src-DF1gLXNq.js                     504.17 kB │ gzip: 146.99 kB
+../../../../.workspace/scratch/v5-paper-dashboard/f21/final/build-2/assets/v5-BdG4FGa7.js                    1,859.51 kB │ gzip: 566.23 kB
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../../../.workspace/scratch/v5-paper-dashboard/f21/staged/dashboard/hummingbot-reporting-next/app/components/ReportingDesk.tsx is dynamically imported by ../../../../.workspace/scratch/v5-paper-dashboard/f21/staged/dashboard/condor-workspace/src/features/strategy-charts/Records.tsx but also statically imported by ../../../../.workspace/scratch/v5-paper-dashboard/f21/staged/dashboard/condor-workspace/src/pages/TradingVisuals.tsx, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter] 
+(!) Some chunks are larger than 600 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 3.38s
+{"build":2,"workspace":"/home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f21/staged","entry":"assets/v5-BdG4FGa7.js","sha256":"7393b0aed4dda1c735455071737ae12be388fb04c98e85fe7b5631acf32f12b8","files":35}

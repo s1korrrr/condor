@@ -1,0 +1,96 @@
+{
+  "monitoring": {
+    "bot_name": "meridian_v3",
+    "observed_at": "2026-10-29T12:56:56+00:00",
+    "runtime_state": "fresh",
+    "stale_threshold_seconds": 180.0
+  },
+  "runtime_status": {
+    "active_executors": [
+      {
+        "connector_name": "okx",
+        "controller_id": "modular_spot_meridian_v3_unified_live",
+        "executor_id": "388259aa94e67ac2c8d4eb1a361353ffd360338b9349bfacfa0f86968873551b",
+        "pair": "BTC-USDC"
+      }
+    ],
+    "bot_name": "meridian_v3",
+    "controllers": [
+      {
+        "connector_name": "okx",
+        "controller_id": "modular_spot_meridian_v3_unified_live",
+        "controller_name": "meridian_v3_unified",
+        "observation_status": "available",
+        "pair": null
+      }
+    ],
+    "lifecycle_executors": [
+      {
+        "connector_name": "okx",
+        "controller_id": "modular_spot_meridian_v3_unified_live",
+        "executor_id": "388259aa94e67ac2c8d4eb1a361353ffd360338b9349bfacfa0f86968873551b",
+        "pair": "BTC-USDC"
+      }
+    ],
+    "operations": {
+      "observed_at": "2026-10-29T12:56:56+00:00",
+      "pairs": [
+        {
+          "connector": "okx",
+          "controller_id": "modular_spot_meridian_v3_unified_live",
+          "observed_at": "2026-10-29T12:56:56+00:00",
+          "pair": "BNB-USDC"
+        },
+        {
+          "connector": "okx",
+          "controller_id": "modular_spot_meridian_v3_unified_live",
+          "observed_at": "2026-10-29T12:56:56+00:00",
+          "pair": "BTC-USDC"
+        },
+        {
+          "connector": "okx",
+          "controller_id": "modular_spot_meridian_v3_unified_live",
+          "observed_at": "2026-10-29T12:56:56+00:00",
+          "pair": "ETH-USDC"
+        },
+        {
+          "connector": "okx",
+          "controller_id": "modular_spot_meridian_v3_unified_live",
+          "observed_at": "2026-10-29T12:56:56+00:00",
+          "pair": "SOL-USDC"
+        },
+        {
+          "connector": "okx",
+          "controller_id": "modular_spot_meridian_v3_unified_live",
+          "observed_at": "2026-10-29T12:56:56+00:00",
+          "pair": "XRP-USDC"
+        }
+      ],
+      "schema_version": 1
+    },
+    "schema_version": 1,
+    "trading_capability": {
+      "buy": "can_trade",
+      "coverage": "partial",
+      "evidence": "fresh",
+      "not_covered": [
+        "sell_quantity_constraints",
+        "funding_holds",
+        "connector_order_rejections",
+        "candle_readiness"
+      ],
+      "observed_at": "2026-10-29T12:56:56+00:00",
+      "pairs": [
+        "BNB-USDC",
+        "BTC-USDC",
+        "ETH-USDC",
+        "SOL-USDC",
+        "XRP-USDC"
+      ],
+      "restrictions": [],
+      "schema_version": 1,
+      "sell": "can_trade"
+    },
+    "updated_at": "2026-10-29T12:56:56+00:00"
+  }
+}

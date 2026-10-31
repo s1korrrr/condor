@@ -38,12 +38,11 @@ export async function paperCoherentRead(statusPath: string, sections: { section:
           const path = section.path + `${section.path.includes("?") ? "&" : "?"}snapshot_id=${encodeURIComponent(status.snapshot_id!)}`;
           try {
             const value = section.paginate ? await paperObservationPages(path, page => read(page, section.section, status)) : await read(path, section.section, status);
-            if (failure) return;
             if (!paperSnapshotsAgree([status, value])) throw new Error("Mixed owner snapshots were refused. Refresh; totals are not combined.");
             reads[index + 1] = value;
             progress(reads.filter(Boolean));
           } catch (error) {
-            if (!failure) { failure = { error }; progress([]); }
+            if (!failure) failure = { error };
           }
         }
       }
@@ -51,7 +50,6 @@ export async function paperCoherentRead(statusPath: string, sections: { section:
       if (failure) throw failure.error;
       return reads;
     } catch (error) {
-      progress([]);
       throw error;
     }
   }, wait);

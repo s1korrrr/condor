@@ -1,8 +1,9 @@
 # V5 paper dashboard polish — local evidence
 
-Latest repair: [round4-clocks.md](round4-clocks.md) records clock-skew and
-rollback protection, early emergency banners, both reviewer regressions,
-reviewed bundle hashes and current checks. Earlier receipts are historical.
+Latest repair: [round5-cache-safety.md](round5-cache-safety.md) records the
+round-4 review fixes: document-wide clock lifetime, query-lifetime hold evidence,
+real-hook regressions, mutant kills and the rebuilt bundle. Earlier receipts
+describe earlier heads and are historical.
 
 Latest fix-round results are in [round2.md](round2.md). The bundle hashes,
 counts and browser evidence below describe the original `43695d26` round,
@@ -27,8 +28,11 @@ live-trial move, with Condor #84 and the separate rsibot workspace branch.
 ## Mechanism
 
 Status establishes the snapshot. Three workers fetch pinned sections; each
-worker pages its own section serially. A failure stops further section dispatch,
-clears progress and drains existing workers before any second whole-read attempt.
+worker pages its own section serially. A failure stops further section dispatch
+and drains existing workers before any second whole-read attempt. Validated
+same-snapshot sections remain in progress after a failure; a new whole attempt
+resets data progress. Positive risk evidence has a separate query-lifetime
+channel and is not cleared by progress resets or failed attempts.
 409 restarts once. 503 waits 200 ms and retries once. Other errors fail closed.
 Pagination retains the existing five-page bound. No results from different
 snapshots are joined.

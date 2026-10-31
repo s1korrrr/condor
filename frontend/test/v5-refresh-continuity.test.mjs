@@ -15,9 +15,10 @@ const completeReads = () => sections.map(section => {
   if (section === 'risk') read.data.control_hold = 'clock_anomaly';
   return read;
 });
-const stubs = Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}]));
+const stubs = {...Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])), '@/features/quant-ops/kit/DataTable':{DataTable:() => null}};
 
 function harness(kind, initial) {
+  const client = new ReactQuery.QueryClient();
   let cursor = 0, spec;
   const slots = [], requests = [];
   const query = { data:initial, isFetching:false, isPending:!initial, isError:false, error:null, refetch() {} };
@@ -26,9 +27,11 @@ function harness(kind, initial) {
     if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial === Date.now ? owner.read_at_ms : initial() : initial;
     return [slots[index], next => { slots[index] = typeof next === 'function' ? next(slots[index]) : next; }];
   };
-  const {load} = frontendModules({...stubs, '@/v5/usePaperClock':{usePaperClock:() => owner.read_at_ms}, react:{...React,useState,useRef:initial => useState(() => ({current:initial}))[0],useEffect() {}}, '@tanstack/react-query':{...ReactQuery,useQuery:options => {
+  const {load} = frontendModules({...stubs, '@/v5/usePaperClock':{usePaperClock:() => owner.read_at_ms}, react:{...React,useState,useRef:initial => useState(() => ({current:initial}))[0],useEffect() {}}, '@tanstack/react-query':{...ReactQuery,useQueryClient:() => client,useQuery:options => {
     if (options.enabled === false) return {isPending:true,isFetching:false,isError:false,refetch() {}};
     spec = options;
+    const cached = client.getQueryCache().build(client, options);
+    if (cached.state.data !== query.data) cached.setState({data:query.data});
     return query;
   }}});
   const component = kind === 'bots' ? load('pages/tabs/ActiveBotsTab.tsx').V5PaperBots : load('v5/usePaperObservation.ts').usePaperWorkspace;
@@ -45,14 +48,72 @@ function harness(kind, initial) {
     promise.catch(() => {});
     return {controller,promise};
   }
-  async function deliver(request) {
+  async function deliver(request, mutate = read => read) {
     const path = new URL(request.url,'https://fixture.invalid').searchParams.get('path');
     const section = path.includes('/native/status') ? 'status' : path.includes('account-balances') || path.includes('fleet/summary') ? 'wallet' : path.includes('/history') ? 'history' : path.includes('/holdings') ? 'positions' : path.includes('/accounting') ? 'accounting' : sections.find(section => path.includes(section));
     const read = section === 'fills' && new URL(path,'https://fixture.invalid').searchParams.has('cursor') ? fixture('fills-offset-200') : fixture(section);
-    request.resolve({ok:true,json:async () => read});
+    request.resolve({ok:true,json:async () => mutate(read)});
     await setImmediate();
   }
-  return {query,render,start,requests,deliver,restore:() => {global.fetch = original;}};
+  return {query,render,start,requests,deliver,remount:() => {slots.length = 0;},restore:() => {client.clear();global.fetch = original;}};
+}
+
+function clearRisk(read) {
+  if (read.section !== 'risk') return read;
+  read.data.control_hold = null;
+  read.data.holds = [];
+  read.data.native_entry_holds = [];
+  for (const controller of Object.values(read.data.controllers)) {
+    controller.operator.emergency = false;
+    controller.operator.paused = false;
+    controller.native.entry_hold = false;
+  }
+  return read;
+}
+
+for (const signal of ['emergency','paused','entry_hold','control_hold','native_refusal']) {
+  for (const seeded of [false,true,'owner-clock-rollback']) test(`real hook retains received ${signal}: ${seeded || 'first load'} and late failure`, async () => {
+    const initial = seeded ? completeReads().map(read => ({...clearRisk(read),generated_at_ms:read.generated_at_ms + (seeded === 'owner-clock-rollback' ? 5000 : 0)})) : undefined;
+    const h = harness('bots', initial);
+    const held = /New acquisitions held/;
+    const update = read => {
+      clearRisk(read);
+      if (read.section === 'risk') {
+        const controller = Object.values(read.data.controllers)[0];
+        if (signal === 'control_hold') read.data.control_hold = 'clock_anomaly';
+        else if (signal === 'native_refusal') read.data.native_entry_holds = [{controller_id:Object.keys(read.data.controllers)[0],reason:'native_refusal_receipt_pending',explanation:'Native entry refused',protected_exits:'preserved'}];
+        else if (signal === 'entry_hold') controller.native.entry_hold = true;
+        else controller.operator[signal] = true;
+      }
+      return read;
+    };
+    try {
+      assert.doesNotMatch(h.render(), held);
+      const pending = h.start();
+      while (h.requests.length && !/New acquisitions held/.test(h.render())) await h.deliver(h.requests.shift(), update);
+      assert.match(h.render(), held, 'signal must override a clear retained snapshot');
+      if (signal === 'emergency') assert.match(h.render(), /Emergency halt reported|Reported emergency halt: Yes/);
+      const failed = h.requests.shift();
+      assert.ok(failed);
+      failed.resolve({ok:false,status:502,json:async () => ({detail:'Later section failed'})});
+      await setImmediate();
+      while (h.requests.length) await h.deliver(h.requests.shift(), update);
+      await assert.rejects(pending.promise);
+      h.query.isFetching = false; h.query.isError = true; h.query.error = new Error('Later section failed');
+      assert.match(h.render(), /Later section failed/);
+      assert.match(h.render(), held, 'error must not erase a received signal');
+      h.remount();
+      assert.match(h.render(), held, 'signal must survive navigation while its query stays cached');
+      h.query.isError = false;
+      const retry = h.start();
+      assert.match(h.render(), held, 'empty new-attempt progress must not clear safety evidence');
+      const newer = read => ({...clearRisk(read),snapshot_id:'complete-newer',generated_at_ms:read.generated_at_ms + 10000});
+      while (h.requests.length) await h.deliver(h.requests.shift(), newer);
+      h.query.data = await retry.promise;
+      h.query.isFetching = false;
+      assert.doesNotMatch(h.render(), held, 'only a complete newer snapshot may clear the signal');
+    } finally {h.restore();}
+  });
 }
 
 test('Bots retains held complete snapshot, as-of and totals during refresh and failed refresh', () => {

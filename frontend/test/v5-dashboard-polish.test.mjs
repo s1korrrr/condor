@@ -1,3 +1,4 @@
+import * as ReactQuery from '@tanstack/react-query';
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
@@ -66,7 +67,7 @@ for (const label of ['Checking','Unavailable','Stale','Incomplete','Available'])
   const profile = {readiness:{paper_owner:{mode:'PAPER',bot_name:'meridian_v5_paper'}}};
   const settings = {identity:{},budget:{}};
   const {load} = frontendModules({
-    '@tanstack/react-query':{useQuery:({queryKey}) => ({data:queryKey[0]==='v5-profile'?profile:settings,refetch(){}})},
+    '@tanstack/react-query':{useQueryClient:() => new ReactQuery.QueryClient(),useQuery:({queryKey}) => ({data:queryKey[0]==='v5-profile'?profile:settings,refetch(){}})},
     './usePaperObservation':{usePaperObservation:() => ({summary:{label,reason:'Fixture state'}})},
     'react-markdown':{},
   });

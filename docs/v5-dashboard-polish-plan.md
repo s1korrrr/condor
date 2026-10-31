@@ -94,3 +94,20 @@ are recorded there. #625 was validated against the newer linked Condor checkout,
 not its `be2a3365` pin. Merge #85 and bump that pin before building #625.
 No new deployed latency, browser or qualification claim. Existing deferred
 Settings extra read, sub-1e-6 digits and pair-chart remount items remain deferred.
+
+## Round-4 review repair: document/query lifetime
+
+Completed: document-wide singleton clock/high-water mark with one subscription
+set and interval; positive risk evidence retained for the lifetime of the cached
+Query, separate from totals/progress; received late risk signals preserved after
+peer failure. Emergency signals override an older clear data snapshot and render
+beside first-load errors. Only a complete newer snapshot clears older signals.
+
+New evidence: `docs/evidence/2026-10-31-v5-dashboard-polish/round5-cache-safety.md`.
+Original Claude probes: 0/5 -> 5/5 pass. GPT faithful probes: 9/13 -> 13/13 pass.
+Real-hook regressions: 0/15 on old source -> 10/15 pass. Unsafe no-high-water,
+per-hook-clock and always-fresh mutants trigger 6, 2 and 2 assertion failures.
+Full suites: 4,256 Python pass / 8 skip; 1,110 Condor Node pass / 1 skip; 529
+workspace Node pass. Both typechecks pass. Rebuilt cross-root 35-file manifest.
+The #625 Condor-pin dependency, held merge order and requalification requirement
+remain. No new browser, deployed latency, service or authority claim.

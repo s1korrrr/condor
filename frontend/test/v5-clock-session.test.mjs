@@ -94,3 +94,24 @@ test('focus and visibility sample the monotonic clock and unsubscribe cleanly', 
     if (previousDocument === undefined) delete globalThis.document; else globalThis.document = previousDocument;
   }
 });
+
+test('one shared clock interval serves all subscriptions and survives a zero-subscriber gap', () => {
+  const previousWindow = globalThis.window, previousDocument = globalThis.document;
+  const browser = new EventTarget();
+  let intervals = 0, cleared = 0, now = 1793268045000;
+  browser.setInterval = () => ++intervals;
+  browser.clearInterval = () => cleared++;
+  globalThis.window = browser; globalThis.document = new EventTarget();
+  try {
+    const clock = createPaperClock(() => now);
+    const first = clock.subscribe(() => {}), second = clock.subscribe(() => {});
+    assert.equal(intervals,1);
+    first(); assert.equal(cleared,0);
+    second(); assert.equal(cleared,1);
+    now -= 30000;
+    const remounted = clock.subscribe(() => {});
+    assert.equal(intervals,2);
+    assert.equal(clock.getSnapshot(),1793268045000);
+    remounted(); assert.equal(cleared,2);
+  } finally {globalThis.window = previousWindow; globalThis.document = previousDocument;}
+});

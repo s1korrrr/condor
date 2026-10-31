@@ -23,7 +23,7 @@ for (const page of ['health','capital','operations','bots']) for (const failure 
   };
   try {
     const overrides={
-      '@tanstack/react-query':{...ReactQuery,useQuery:options=>{queries.push(options);return {isPending:true,refetch(){}};}},
+      '@tanstack/react-query':{...ReactQuery,useQueryClient:() => new ReactQuery.QueryClient(),useQuery:options=>{queries.push(options);return {isPending:true,refetch(){}};}},
       ...Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name=>[name,{}])),
     };
     const {load}=frontendModules(overrides);
@@ -81,7 +81,7 @@ test('paper read refuses cross-snapshot success with bounded parallel owner read
 test('unavailable Settings identity confines fresh times and reasons to heartbeat rows', () => {
   const profile = { readiness: { paper_owner: { mode:'PAPER', bot_name:'meridian_v5_paper', state:'FRESH', generated_at:1793357640, reason:'PAPER_STATUS_FRESH' } } };
   const {load} = frontendModules({
-    '@tanstack/react-query': { useQuery: () => ({data:profile}) },
+    '@tanstack/react-query': {useQueryClient:() => new ReactQuery.QueryClient(), useQuery: () => ({data:profile}) },
     './api': {v5Api:{}},
     './usePaperObservation': {usePaperObservation: () => ({summary:{label:'Unavailable',reason:'Identity owner read unavailable'},isError:true,error:new Error('Identity owner read unavailable')})},
     'react-markdown': {},

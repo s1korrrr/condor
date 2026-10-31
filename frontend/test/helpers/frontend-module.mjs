@@ -9,7 +9,7 @@ const sourceRoot = fileURLToPath(new URL('../../src/', import.meta.url));
 
 // Fresh module graph per scenario. Actual TS/TSX and dependencies run unchanged;
 // callers replace only browser I/O or a component's external context boundary.
-export function frontendModules(overrides = {}, privateExports = {}) {
+export function frontendModules(overrides = {}, privateExports = {}, transform = (_filename, source) => source) {
   const modules = new Map();
   function load(relative) {
     const base = path.isAbsolute(relative) ? relative : path.join(sourceRoot, relative);
@@ -18,7 +18,7 @@ export function frontendModules(overrides = {}, privateExports = {}) {
     if (modules.has(filename)) return modules.get(filename).exports;
     const module = { exports: {} };
     modules.set(filename, module);
-    const code = ts.transpileModule(fs.readFileSync(filename, 'utf8'), {
+    const code = ts.transpileModule(transform(filename, fs.readFileSync(filename, 'utf8')), {
       // This synchronous harness executes every source module as CommonJS.
       // TypeScript otherwise preserves ESM for .mjs despite ModuleKind.CommonJS.
       fileName: filename.replace(/\.mjs$/, '.js'),

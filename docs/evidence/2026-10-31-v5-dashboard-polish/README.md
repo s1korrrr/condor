@@ -1,9 +1,9 @@
 # V5 paper dashboard polish — local evidence
 
-Latest repair: [round5-cache-safety.md](round5-cache-safety.md) records the
-round-4 review fixes: document-wide clock lifetime, query-lifetime hold evidence,
-real-hook regressions, mutant kills and the rebuilt bundle. Earlier receipts
-describe earlier heads and are historical.
+Latest repair: [round6-render-boundaries.md](round6-render-boundaries.md) records
+round-5 render-time sampling, affirmative risk clearance, owner ordering, real
+renderer regressions, mutant kills and rebuilt hashes. Earlier receipts describe
+earlier heads and are historical.
 
 Latest fix-round results are in [round2.md](round2.md). The bundle hashes,
 counts and browser evidence below describe the original `43695d26` round,

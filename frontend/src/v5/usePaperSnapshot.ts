@@ -2,12 +2,15 @@ import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import type { PaperRead } from "./contracts";
 import { paperSafetyReads } from "./paper-safety";
+import { paperSnapshotsAgree } from "./policy";
 
 const safetyByQuery = new WeakMap<object, {reads: PaperRead[]; completed: unknown}>();
 
 function completionSnapshot(data: unknown): PaperRead | undefined {
-  const status = Array.isArray(data) ? data.find(read => read.section === 'status') : data;
-  return status && typeof status === 'object' && 'bot_id' in status && 'generated_at_ms' in status ? status as PaperRead : undefined;
+  if (!Array.isArray(data)) return undefined;
+  const status = data.find(read => read.section === 'status');
+  const risk = data.find(read => read.section === 'risk');
+  return status && risk && status.bot_id === risk.bot_id && paperSnapshotsAgree([status, risk]) ? risk as PaperRead : undefined;
 }
 
 export function usePaperSnapshot<Result>(queryKey: QueryKey, enabled: boolean, total: number, load: (progress: (reads: PaperRead[]) => void, signal: AbortSignal) => Promise<Result>) {

@@ -1,5 +1,5 @@
 import type { PaperRead } from './contracts';
-import { paperRiskControllers, paperRiskHolds, paperSnapshotsAgree } from './policy.ts';
+import { paperRiskControllers, paperRiskHolds, paperSectionError, paperSnapshotsAgree } from './policy.ts';
 
 function signalKeys(read: PaperRead): string[] {
   return [
@@ -13,15 +13,30 @@ function signalKeys(read: PaperRead): string[] {
   ];
 }
 
-export function paperSafetyReads(previous: PaperRead[], received: PaperRead[], complete?: Pick<PaperRead, 'bot_id' | 'generated_at_ms'>): PaperRead[] {
+function newerSnapshot(candidate: PaperRead, prior: PaperRead): boolean {
+  const candidateSource = candidate.source, priorSource = prior.source;
+  if (typeof candidateSource?.boot_id === 'string' && candidateSource.boot_id && typeof priorSource?.boot_id === 'string' && priorSource.boot_id &&
+      Number.isSafeInteger(candidateSource.sequence) && Number(candidateSource.sequence) > 0 && Number.isSafeInteger(priorSource.sequence) && Number(priorSource.sequence) > 0) {
+    return candidateSource.boot_id !== priorSource.boot_id || Number(candidateSource.sequence) > Number(priorSource.sequence);
+  }
+  return false;
+}
+
+function riskClear(read: PaperRead): boolean {
+  const controllers = paperRiskControllers(read, 0);
+  return read.section === 'risk' && read.state === 'available' && read.completeness === 'complete' && !read.next_cursor && !paperSectionError(read) &&
+    signalKeys(read).length === 0 && !!controllers?.length && controllers.every(controller => controller.native.complete === true && controller.operator.emergency === false && controller.operator.paused === false);
+}
+
+export function paperSafetyReads(previous: PaperRead[], received: PaperRead[], complete?: PaperRead): PaperRead[] {
   const status = received.find(read => read.section === 'status');
   const incoming = received.filter(read => read.section === 'risk' && status && read.bot_id === status.bot_id && paperSnapshotsAgree([status, read]));
   const signals = new Map<string, PaperRead>();
   for (const read of [...previous, ...incoming]) {
-    if (complete && read.bot_id === complete.bot_id && read.generated_at_ms !== null && complete.generated_at_ms !== null && read.generated_at_ms < complete.generated_at_ms) continue;
+    if (complete && read.bot_id === complete.bot_id && riskClear(complete) && newerSnapshot(complete, read)) continue;
     for (const key of signalKeys(read)) {
       const prior = signals.get(key);
-      if (!prior || (read.generated_at_ms ?? -1) >= (prior.generated_at_ms ?? -1)) signals.set(key, read);
+      if (!prior || newerSnapshot(read, prior)) signals.set(key, read);
     }
   }
   return [...new Set(signals.values())];

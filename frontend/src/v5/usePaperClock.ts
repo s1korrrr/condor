@@ -31,5 +31,6 @@ let documentClock: ReturnType<typeof createPaperClock> | undefined;
 
 export function usePaperClock() {
   const clock = documentClock ??= createPaperClock(() => Date.now());
+  clock.observe();
   return useSyncExternalStore(clock.subscribe, clock.getSnapshot, clock.observe);
 }

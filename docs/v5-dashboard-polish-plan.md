@@ -111,3 +111,38 @@ Full suites: 4,256 Python pass / 8 skip; 1,110 Condor Node pass / 1 skip; 529
 workspace Node pass. Both typechecks pass. Rebuilt cross-root 35-file manifest.
 The #625 Condor-pin dependency, held merge order and requalification requirement
 remain. No new browser, deployed latency, service or authority claim.
+
+## Round-5 review repair: render and risk boundaries
+
+Scope: Condor #85 at `d4f15a67` and workspace #625 at `585e993fc`.
+Authority remains repository-process-only. No API, live stack, service, unit,
+Docker network, learning-route, deployment or trading changes are authorized.
+Rollback is a revert of this round's feature commits; no runtime state changes.
+
+Completed implementation: observe the document clock before the external-store
+read on every render. Keep `getSnapshot` cached. Remove the temporal harness's
+synthetic focus dispatch. Retain both reviewers' real React/QueryClient suites,
+including layout-effect first-frame capture and stopped-interval rerenders.
+
+Safety clearance now uses the coherent completed risk section, never status.
+The risk must be available, complete, schema-valid and affirmatively clear.
+Compare owner `source.boot_id` and `source.sequence`, not wall time. A subsequent
+qualified replacement boot supersedes the previous boot; sequence orders reads
+within a boot. Missing ordering evidence retains safety fail-safe. A retained
+null generated time does not prevent clearance when owner ordering is known.
+First-load errors render an unavailable panel beside retained safety evidence.
+
+Validation: both reviewer baseline failures; real-renderer regressions; unsafe
+clock, unavailable-risk, timestamp-order and pending-error mutants; full Python
+and both Node suites; both typechecks; targeted lint; independent-root V5 bundle
+rebuild and full-branch whitespace checks. Record results and hashes in
+`docs/evidence/2026-10-31-v5-dashboard-polish/round6-render-boundaries.md`.
+Keep #625's old Condor pin explicit: merge #85 and bump the pin before build.
+Keep #84 independent; regenerate the manifest if it merges second.
+
+Deferred, not repaired in this round:
+- Positive safety evidence expires with the Query after gcTime while unmounted.
+- A pre-sleep committed frame cannot change until an event or render occurs.
+- Previous stale/unavailable summary briefly replaced by Checking on refresh.
+- Settings extra five-section read, sub-1e-6 significant digits, pair-chart remounts.
+- Deployed latency and separate requalification remain unverified here.

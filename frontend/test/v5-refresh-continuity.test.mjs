@@ -107,7 +107,7 @@ for (const signal of ['emergency','paused','entry_hold','control_hold','native_r
       h.query.isError = false;
       const retry = h.start();
       assert.match(h.render(), held, 'empty new-attempt progress must not clear safety evidence');
-      const newer = read => ({...clearRisk(read),snapshot_id:'complete-newer',generated_at_ms:read.generated_at_ms + 10000});
+      const newer = read => ({...clearRisk(read),snapshot_id:'complete-newer',generated_at_ms:read.generated_at_ms + 10000,source:{...read.source,sequence:read.source.sequence + 1}});
       while (h.requests.length) await h.deliver(h.requests.shift(), newer);
       h.query.data = await retry.promise;
       h.query.isFetching = false;

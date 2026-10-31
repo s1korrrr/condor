@@ -1,0 +1,9 @@
+FAIL accepted missing reason
+FAIL accepted missing read_at_ms
+FAIL accepted missing observed_at_ms
+FAIL accepted missing source_at_ms
+FAIL accepted missing capabilities
+FAIL accepted missing source
+FAIL accepted fee_quote {}
+FAIL accepted fee_quote []
+baseline_path /home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/condor-baseline/condor/v5/paper.py failures 8 of 8

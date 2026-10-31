@@ -1,0 +1,1119 @@
+✖ status rejects a monetary container in fee_quote: {} (6.641023ms)
+✖ status rejects a monetary container in fee_quote: [] (0.634109ms)
+✖ wallet rejects a monetary container in fee_quote: {} (0.479979ms)
+✖ wallet rejects a monetary container in fee_quote: [] (0.454103ms)
+✖ risk rejects a monetary container in fee_quote: {} (0.5317ms)
+✖ risk rejects a monetary container in fee_quote: [] (0.339597ms)
+✖ decisions rejects a monetary container in fee_quote: {} (0.32746ms)
+✖ decisions rejects a monetary container in fee_quote: [] (0.248173ms)
+✖ history rejects a monetary container in fee_quote: {} (0.500172ms)
+✖ history rejects a monetary container in fee_quote: [] (0.427497ms)
+✖ accounting rejects a monetary container in fee_quote: {} (0.347964ms)
+✖ accounting rejects a monetary container in fee_quote: [] (0.290212ms)
+✖ operations rejects a monetary container in fee_quote: {} (0.389681ms)
+✖ operations rejects a monetary container in fee_quote: [] (0.334327ms)
+✔ three-worker pinned pool streams sections and drains failures before restart (26.607771ms)
+✔ requires API envelope field reason (1.628198ms)
+✔ requires API envelope field read_at_ms (1.968625ms)
+✔ requires API envelope field observed_at_ms (1.783095ms)
+✔ requires API envelope field source_at_ms (1.90729ms)
+✔ requires API envelope field capabilities (1.947628ms)
+✔ requires API envelope field source (1.947916ms)
+✔ rejects fee_quote container {} (3.524153ms)
+✔ rejects fee_quote container [] (2.199753ms)
+✔ rejects price container {} (1.965421ms)
+✔ rejects price container [] (2.166037ms)
+✔ rejects quantity container {} (1.882833ms)
+✔ rejects quantity container [] (1.678455ms)
+✔ rejects amount container {} (1.70353ms)
+✔ rejects amount container [] (1.763014ms)
+✔ rejects balance container {} (1.940716ms)
+✔ rejects balance container [] (2.073056ms)
+✔ rejects pnl container {} (1.986725ms)
+✔ rejects pnl container [] (1.895597ms)
+✔ blank capability members remain owner-compatible (8.638181ms)
+✔ Bots risk caption normalizes owner punctuation and hides partial totals (1599.164417ms)
+✔ Settings subtitle reflects Checking owner reads (132.975577ms)
+✔ Settings subtitle reflects Unavailable owner reads (116.368462ms)
+✔ Settings subtitle reflects Stale owner reads (119.896659ms)
+✔ Settings subtitle reflects Incomplete owner reads (108.505569ms)
+✔ Settings subtitle reflects Available owner reads (177.149686ms)
+✖ Bots retains held complete snapshot, as-of and totals during refresh and failed refresh (1821.910332ms)
+✖ Bots first load reports pending risk and rails, never absent controls or numeric limits (707.476379ms)
+✖ Capital hook retains the complete wallet, history and accounting while refreshing (43.900489ms)
+✖ bots ignores progress from an aborted orphaned refresh (578.002541ms)
+✖ capital ignores progress from an aborted orphaned refresh (58.062225ms)
+ℹ tests 45
+ℹ suites 0
+ℹ pass 26
+ℹ fail 19
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3687.63424
+
+✖ failing tests:
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:11:128
+✖ status rejects a monetary container in fee_quote: {} (6.641023ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:11:128
+✖ status rejects a monetary container in fee_quote: [] (0.634109ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:11:128
+✖ wallet rejects a monetary container in fee_quote: {} (0.479979ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:11:128
+✖ wallet rejects a monetary container in fee_quote: [] (0.454103ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:11:128
+✖ risk rejects a monetary container in fee_quote: {} (0.5317ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:11:128
+✖ risk rejects a monetary container in fee_quote: [] (0.339597ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:11:128
+✖ decisions rejects a monetary container in fee_quote: {} (0.32746ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:11:128
+✖ decisions rejects a monetary container in fee_quote: [] (0.248173ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:11:128
+✖ history rejects a monetary container in fee_quote: {} (0.500172ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:11:128
+✖ history rejects a monetary container in fee_quote: [] (0.427497ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:11:128
+✖ accounting rejects a monetary container in fee_quote: {} (0.347964ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:11:128
+✖ accounting rejects a monetary container in fee_quote: [] (0.290212ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:11:128
+✖ operations rejects a monetary container in fee_quote: {} (0.389681ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:11:128
+✖ operations rejects a monetary container in fee_quote: [] (0.334327ms)
+  AssertionError [ERR_ASSERTION]: The "string" argument must be of type string. Received type object (null)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-dashboard-polish.test.mjs:15:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: /schema invalid/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-refresh-continuity.test.mjs:58:1
+✖ Bots retains held complete snapshot, as-of and totals during refresh and failed refresh (1821.910332ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /New acquisitions held/. Input:
+
+  '<div class="v5-paper-bots" data-layout="grid"><header class="v5-page-heading"><div><h1>Paper bots</h1><p>meridian_v5_paper · simulated wallet · live disabled</p></div><div class="v5-button-row"><button class="v5-button" aria-pressed="true">Grid</button><button class="v5-button" aria-pressed="false">Compact</button><button class="v5-button">Refresh paper data</button></div></header><p role="status">Reading one owner snapshot: 0/9 sections. Totals are withheld until the read completes.</p></div>'
+
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-refresh-continuity.test.mjs:63:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<div class="v5-paper-bots" data-layout="grid"><header class="v5-page-heading"><div><h1>Paper bots</h1><p>meridian_v5_paper · simulated wallet · live disabled</p></div><div class="v5-button-row"><button class="v5-button" aria-pressed="true">Grid</button><button class="v5-button" aria-pressed="false">Compact</button><button class="v5-button">Refresh paper data</button></div></header><p role="status">Reading one owner snapshot: 0/9 sections. Totals are withheld until the read completes.</p></div>',
+    expected: /New acquisitions held/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-refresh-continuity.test.mjs:77:1
+✖ Bots first load reports pending risk and rails, never absent controls or numeric limits (707.476379ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Checking: 0\/9 sections/. Input:
+
+  '<div class="v5-paper-bots" data-layout="grid"><header class="v5-page-heading"><div><h1>Paper bots</h1><p>meridian_v5_paper · simulated wallet · live disabled</p></div><div class="v5-button-row"><button class="v5-button" aria-pressed="true">Grid</button><button class="v5-button" aria-pressed="false">Compact</button><button class="v5-button">Refresh paper data</button></div></header><p role="status">Reading one owner snapshot: 0/9 sections. Totals are withheld until the read completes.</p></div>'
+
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-refresh-continuity.test.mjs:82:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<div class="v5-paper-bots" data-layout="grid"><header class="v5-page-heading"><div><h1>Paper bots</h1><p>meridian_v5_paper · simulated wallet · live disabled</p></div><div class="v5-button-row"><button class="v5-button" aria-pressed="true">Grid</button><button class="v5-button" aria-pressed="false">Compact</button><button class="v5-button">Refresh paper data</button></div></header><p role="status">Reading one owner snapshot: 0/9 sections. Totals are withheld until the read completes.</p></div>',
+    expected: /Checking: 0\/9 sections/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-refresh-continuity.test.mjs:88:1
+✖ Capital hook retains the complete wallet, history and accounting while refreshing (43.900489ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
+  + actual - expected
+
+  + null
+  - {
+  -   accounting_read: {
+  -     bot_id: 'meridian_v5_paper',
+  -     capabilities: [
+  -       'read'
+  -     ],
+  -     completeness: 'complete',
+  -     data: {
+  -       controllers: {
+  -         modular_spot_meridian_v5_paper_bnb: {
+  -           accounting_since_ms: 1793260749980,
+  -           accounting_since_reason: null,
+  -           count_basis: 'distinct_native_filled_buy_and_sell_orders_not_actions',
+  -           entry_count: 8,
+  -           exit_count: 4,
+  -           fee_quote_valuation_basis: 'exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once',
+  -           fees_paid: {
+  -             USDC: '0.8826265951164'
+  -           },
+  -           fees_paid_quote: '0.8826265951164',
+  -           realized_pnl_quote: '3.416532061746000000000000000',
+  -           unavailable_reasons: {},
+  -           unrealized_pnl_quote: '-3.006116417362400000000000000',
+  -           volume_traded_quote: '1055.817140468'
+  -         },
+  -         modular_spot_meridian_v5_paper_btc: {
+  -           accounting_since_ms: 1793296271358,
+  -           accounting_since_reason: null,
+  -           count_basis: 'distinct_native_filled_buy_and_sell_orders_not_actions',
+  -           entry_count: 7,
+  -           exit_count: 3,
+  -           fee_quote_valuation_basis: 'exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once',
+  -           fees_paid: {
+  -             USDC: '0.86036650425520'
+  -           },
+  -           fees_paid_quote: '0.86036650425520',
+  -           realized_pnl_quote: '2.40068420753760',
+  -           unavailable_reasons: {},
+  -           unrealized_pnl_quote: '-9.34891520729280',
+  -           volume_traded_quote: '999.9472904050'
+  -         },
+  -         modular_spot_meridian_v5_paper_eth: {
+  -           accounting_since_ms: 1793296261795,
+  -           accounting_since_reason: null,
+  -           count_basis: 'distinct_native_filled_buy_and_sell_orders_not_actions',
+  -           entry_count: 7,
+  -           exit_count: 3,
+  -           fee_quote_valuation_basis: 'exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once',
+  -           fees_paid: {
+  -             USDC: '0.8509987299660'
+  -           },
+  -           fees_paid_quote: '0.8509987299660',
+  -           realized_pnl_quote: '2.418013339770000000000000000',
+  -           unavailable_reasons: {},
+  -           unrealized_pnl_quote: '-7.432349039736000000000000000',
+  -           volume_traded_quote: '999.947913090'
+  -         },
+  -         modular_spot_meridian_v5_paper_sol: {
+  -           accounting_since_ms: 1793296142410,
+  -           accounting_since_reason: null,
+  -           count_basis: 'distinct_native_filled_buy_and_sell_orders_not_actions',
+  -           entry_count: 8,
+  -           exit_count: 3,
+  -           fee_quote_valuation_basis: 'exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once',
+  -           fees_paid: {
+  -             USDC: '0.940165006160'
+  -           },
+  -           fees_paid_quote: '0.940165006160',
+  -           realized_pnl_quote: '2.439935831520000000000000000',
+  -           unavailable_reasons: {},
+  -           unrealized_pnl_quote: '-9.314608687680000000000000000',
+  -           volume_traded_quote: '1099.68570110'
+  -         },
+  -         modular_spot_meridian_v5_paper_xrp: {
+  -           accounting_since_ms: 1793298906278,
+  -           accounting_since_reason: null,
+  -           count_basis: 'distinct_native_filled_buy_and_sell_orders_not_actions',
+  -           entry_count: 6,
+  -           exit_count: 3,
+  -           fee_quote_valuation_basis: 'exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once',
+  -           fees_paid: {
+  -             USDC: '0.780622206880'
+  -           },
+  -           fees_paid_quote: '0.780622206880',
+  -           realized_pnl_quote: '2.418537428640',
+  -           unavailable_reasons: {},
+  -           unrealized_pnl_quote: '-3.914567285520',
+  -           volume_traded_quote: '900.26265110'
+  -         }
+  -       },
+  -       program: {
+  -         accounting_since_ms: 1793260749980,
+  -         accounting_since_reason: null,
+  -         count_basis: 'distinct_native_filled_buy_and_sell_orders_not_actions',
+  -         entry_count: 36,
+  -         exit_count: 16,
+  -         fee_quote_valuation_basis: 'exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once',
+  -         fees_paid: {
+  -           USDC: '4.31477904237760'
+  -         },
+  -         fees_paid_quote: '4.31477904237760',
+  -         realized_pnl_quote: '13.09370286921360000000000000',
+  -         unavailable_reasons: {},
+  -         unrealized_pnl_quote: '-33.01655663759120000000000000',
+  -         volume_traded_quote: '5055.6606961630'
+  -       },
+  -       source: 'native_exact_lifetime_receipts_not_fill_pages'
+  -     },
+  -     execution_mode: 'paper',
+  -     generated_at_ms: 1793403300404,
+  -     next_cursor: null,
+  -     observed_at_ms: 1793403300404,
+  -     read_at_ms: 1793403300404,
+  -     reason: null,
+  -     schema: 'rsibot.v5-paper.read.v1',
+  -     section: 'accounting',
+  -     simulated: true,
+  -     snapshot_id: '4bc58bd65620dced4b9431804c1ef789:751',
+  -     source: {
+  -       boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -       config_sha256: 'b80096664a0aefc7d614dbcff167057bffffb02a2a78c72e08ee5c7a9876c5e0',
+  -       owner: 'hummingbot',
+  -       recipe_sha256: 'ebec0189e6666a0c8c23732afe45315957e6c068fcd5b3c4c0b0c73b3955885a',
+  -       schema: 'rsibot.v5-paper.observation.v2',
+  -       sequence: 751,
+  -       sha256: 'f158eb03398f79cb056b01c538f489d3fdb05ca7e4e3d0c431d99f2b653e2668',
+  -       source_sha256: '93f2287ffd7f8112ef08fa2ba3bb9eb597f447e6ba1d825e6c3461796924f762'
+  -     },
+  -     source_at_ms: 1793403300404,
+  -     state: 'available'
+  -   },
+  -   bot_id: 'meridian_v5_paper',
+  -   capabilities: [
+  -     'read'
+  -   ],
+  -   completeness: 'complete',
+  -   data: {
+  -     assets: [
+  -       {
+  -         asset: 'BNB',
+  -         available: '0.3573739',
+  -         mark_at_ms: 1793403298601,
+  -         mark_quote: '703.225',
+  -         marked_value_quote: '251.3142608275',
+  -         reserved: '0.0000000',
+  -         total: '0.3573739'
+  -       },
+  -       {
+  -         asset: 'BTC',
+  -         available: '0.005050050',
+  -         mark_at_ms: 1793403298803,
+  -         mark_quote: '77181.95',
+  -         marked_value_quote: '389.77270659750',
+  -         reserved: '0.000000000',
+  -         total: '0.005050050'
+  -       },
+  -       {
+  -         asset: 'ETH',
+  -         available: '0.1746600',
+  -         mark_at_ms: 1793403298501,
+  -         mark_quote: '2242.565',
+  -         marked_value_quote: '391.6864029000',
+  -         reserved: '0.0000000',
+  -         total: '0.1746600'
+  -       },
+  -       {
+  -         asset: 'SOL',
+  -         available: '5.094290',
+  -         mark_at_ms: 1793403298703,
+  -         mark_quote: '96.105',
+  -         marked_value_quote: '489.586740450',
+  -         reserved: '0.000000',
+  -         total: '5.094290'
+  -       },
+  -       {
+  -         asset: 'USDC',
+  -         available: '198162.29065200662240',
+  -         mark_at_ms: 1793403300404,
+  -         mark_quote: '1',
+  -         marked_value_quote: '198162.29065200662240',
+  -         reserved: '0.00000000000000',
+  -         total: '198162.29065200662240'
+  -       },
+  -       {
+  -         asset: 'XRP',
+  -         available: '235.6530',
+  -         mark_at_ms: 1793403298801,
+  -         mark_quote: '1.25365',
+  -         marked_value_quote: '295.426383450',
+  -         reserved: '0.0000',
+  -         total: '235.6530'
+  -       }
+  -     ],
+  -     equity_quote: '199980.07714623162240',
+  -     external_cash_flows_quote: '0',
+  -     initial_funding_quote: '200000',
+  -     quote_asset: 'USDC',
+  -     unit: 'USDC',
+  -     valuation_policy: 'midpoint_fresh_book_only'
+  -   },
+  -   execution_mode: 'paper',
+  -   generated_at_ms: 1793403300404,
+  -   history_read: {
+  -     bot_id: 'meridian_v5_paper',
+  -     capabilities: [
+  -       'read'
+  -     ],
+  -     completeness: 'complete',
+  -     data: {
+  -       archival_policy: 'preserve_immutable_segments_hold_at_capacity',
+  -       chain_checkpoint_file: 'paper_observation.v2.chain.json',
+  -       chain_head_sha256: 'a0326713166a73d96da66caa6f4087439bb06f5dadb5b1faf6f7dbe601679b55',
+  -       gaps: [],
+  -       genesis_prev_sha256: null,
+  -       manifest_predecessor_sha256: null,
+  -       reason: 'insufficient_comparable_history',
+  -       retention_start_ms: 1793401418848,
+  -       segment_count: 53,
+  -       segment_limit: 4096,
+  -       segments: [
+  -         {
+  -           boot_id: 'legacy-3853aba6caaefbf8ee5a8983136a0e47fb78d9f8f5c246e9b1a0c23ed53eb94f',
+  -           generated_at_ms: 1793401418848,
+  -           name: '0000-legacy-genesis-3853aba6caaefbf8ee5a8983136a0e47fb78d9f8f5c246e9b1a0c23ed53eb94f.json',
+  -           prev_sha256: null,
+  -           sequence: 1,
+  -           sha256: '2d56afea36cc5a5a408cec73f38e00208a649a35071ec06439101c739ecf4e90'
+  -         },
+  -         {
+  -           boot_id: 'ebc8f9016a66ea614edc47cee4ed00fc',
+  -           generated_at_ms: 1793401469365,
+  -           name: '0001793401469365-ebc8f9016a66ea614edc47cee4ed00fc-000000000001-dc0000078c4d4a9687645fcf8d52d264.json',
+  -           prev_sha256: '2d56afea36cc5a5a408cec73f38e00208a649a35071ec06439101c739ecf4e90',
+  -           sequence: 1,
+  -           sha256: '922b366ea73f8064a52e7d4edb4ce7e2e3e361b2b96beae4b5258f59f853ab98'
+  -         },
+  -         {
+  -           boot_id: 'ebc8f9016a66ea614edc47cee4ed00fc',
+  -           generated_at_ms: 1793401501135,
+  -           name: '0001793401501135-ebc8f9016a66ea614edc47cee4ed00fc-000000000022-4b890d00db7a455e9cd4e3cc5a028a49.json',
+  -           prev_sha256: '922b366ea73f8064a52e7d4edb4ce7e2e3e361b2b96beae4b5258f59f853ab98',
+  -           sequence: 22,
+  -           sha256: 'ecb02255a7167b2e0dd1dc2cbdb9d1db000496c661beafca31b6aaa0c3085113'
+  -         },
+  -         {
+  -           boot_id: 'ebc8f9016a66ea614edc47cee4ed00fc',
+  -           generated_at_ms: 1793401562632,
+  -           name: '0001793401562632-ebc8f9016a66ea614edc47cee4ed00fc-000000000051-c05cac1c143e4a97a58589ddc10ee724.json',
+  -           prev_sha256: 'ecb02255a7167b2e0dd1dc2cbdb9d1db000496c661beafca31b6aaa0c3085113',
+  -           sequence: 51,
+  -           sha256: 'b15ee8aaaf8aaf706a2c5f6efd8ec6115f888c7697ee48622d1e8c4634167548'
+  -         },
+  -         {
+  -           boot_id: 'ebc8f9016a66ea614edc47cee4ed00fc',
+  -           generated_at_ms: 1793401621534,
+  -           name: '0001793401621534-ebc8f9016a66ea614edc47cee4ed00fc-000000000079-b0a046accc4c49fd9433a4364bfc68c7.json',
+  -           prev_sha256: 'b15ee8aaaf8aaf706a2c5f6efd8ec6115f888c7697ee48622d1e8c4634167548',
+  -           sequence: 79,
+  -           sha256: '65a9a26b6776e5eb78913eabd830464d8fd83490f8e0cb73f68fd85c6c03e976'
+  -         },
+  -         {
+  -           boot_id: 'ebc8f9016a66ea614edc47cee4ed00fc',
+  -           generated_at_ms: 1793401681089,
+  -           name: '0001793401681089-ebc8f9016a66ea614edc47cee4ed00fc-000000000107-abec1cdb4c44474db5e708a15d974025.json',
+  -           prev_sha256: '65a9a26b6776e5eb78913eabd830464d8fd83490f8e0cb73f68fd85c6c03e976',
+  -           sequence: 107,
+  -           sha256: 'bbccc6e22f9e8fb6a92ef13e8f2b65609bd4c8400ee026011c20573c44a1e42b'
+  -         },
+  -         {
+  -           boot_id: 'ebc8f9016a66ea614edc47cee4ed00fc',
+  -           generated_at_ms: 1793401683559,
+  -           name: '0001793401683559-ebc8f9016a66ea614edc47cee4ed00fc-000000000108-14cf158c08184cb8a35a55e5d533807c.json',
+  -           prev_sha256: 'bbccc6e22f9e8fb6a92ef13e8f2b65609bd4c8400ee026011c20573c44a1e42b',
+  -           sequence: 108,
+  -           sha256: 'e314b4b7ee99052baba88abae511bedb9131ce733d07cbc65345a6b098665999'
+  -         },
+  -         {
+  -           boot_id: 'ebc8f9016a66ea614edc47cee4ed00fc',
+  -           generated_at_ms: 1793401740082,
+  -           name: '0001793401740082-ebc8f9016a66ea614edc47cee4ed00fc-000000000132-fca12aa8bbcc426fb87f6ea13357cfd7.json',
+  -           prev_sha256: 'e314b4b7ee99052baba88abae511bedb9131ce733d07cbc65345a6b098665999',
+  -           sequence: 132,
+  -           sha256: '06ac92d0ff9b4eeab4cc6d8df8dbd00a94da50a5100484315df39dda3b0dc6d5'
+  -         },
+  -         {
+  -           boot_id: 'ebc8f9016a66ea614edc47cee4ed00fc',
+  -           generated_at_ms: 1793401742768,
+  -           name: '0001793401742768-ebc8f9016a66ea614edc47cee4ed00fc-000000000133-ab4d96b17496405bbbf435695b828568.json',
+  -           prev_sha256: '06ac92d0ff9b4eeab4cc6d8df8dbd00a94da50a5100484315df39dda3b0dc6d5',
+  -           sequence: 133,
+  -           sha256: 'be6df4c390725cb7fbfca37faf0c57ad0d313d8652d93065d2a78f52405484e2'
+  -         },
+  -         {
+  -           boot_id: 'ebc8f9016a66ea614edc47cee4ed00fc',
+  -           generated_at_ms: 1793401770304,
+  -           name: '0001793401770304-ebc8f9016a66ea614edc47cee4ed00fc-000000000145-06ad311b42444d66918aa29f29017b5e.json',
+  -           prev_sha256: 'be6df4c390725cb7fbfca37faf0c57ad0d313d8652d93065d2a78f52405484e2',
+  -           sequence: 145,
+  -           sha256: '1c03a8059dbfdf1bfebec13ef3a5b065f74fd01e44380d541ec0dfe55e82c532'
+  -         },
+  -         {
+  -           boot_id: 'ebc8f9016a66ea614edc47cee4ed00fc',
+  -           generated_at_ms: 1793401800395,
+  -           name: '0001793401800395-ebc8f9016a66ea614edc47cee4ed00fc-000000000158-ad8c6262ba4f4198850a03ba72e61e4e.json',
+  -           prev_sha256: '1c03a8059dbfdf1bfebec13ef3a5b065f74fd01e44380d541ec0dfe55e82c532',
+  -           sequence: 158,
+  -           sha256: '68460208d4e03bfc3b4238342e29debf7104a7f96633830d0e00f59830a03d01'
+  -         },
+  -         {
+  -           boot_id: 'ebc8f9016a66ea614edc47cee4ed00fc',
+  -           generated_at_ms: 1793401803630,
+  -           name: '0001793401803630-ebc8f9016a66ea614edc47cee4ed00fc-000000000159-c4cd87a75cdd46cdba8b92a8fb27efb6.json',
+  -           prev_sha256: '68460208d4e03bfc3b4238342e29debf7104a7f96633830d0e00f59830a03d01',
+  -           sequence: 159,
+  -           sha256: '35e42ccc6289c2ff8622ff5eaa79ab3121b26b613e9cdf12b479ad0f38972307'
+  -         },
+  -         {
+  -           boot_id: 'ebc8f9016a66ea614edc47cee4ed00fc',
+  -           generated_at_ms: 1793401860413,
+  -           name: '0001793401860413-ebc8f9016a66ea614edc47cee4ed00fc-000000000186-709f29fac2e249078ca161dd8a1e7106.json',
+  -           prev_sha256: '35e42ccc6289c2ff8622ff5eaa79ab3121b26b613e9cdf12b479ad0f38972307',
+  -           sequence: 186,
+  -           sha256: 'a0868734fc8c8623f0457272748da2289b91448cfabf43a5f3590f1f3cda5e70'
+  -         },
+  -         {
+  -           boot_id: 'ebc8f9016a66ea614edc47cee4ed00fc',
+  -           generated_at_ms: 1793401862981,
+  -           name: '0001793401862981-ebc8f9016a66ea614edc47cee4ed00fc-000000000187-19c45d369b374ce9a85150acb0343a08.json',
+  -           prev_sha256: 'a0868734fc8c8623f0457272748da2289b91448cfabf43a5f3590f1f3cda5e70',
+  -           sequence: 187,
+  -           sha256: 'f926c4dafc05ccca0e34e598030ea5803a292f0e0628bc3e459ff14bcca04f8a'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793401922228,
+  -           name: '0001793401922228-4bc58bd65620dced4b9431804c1ef789-000000000001-d95f00da5ba343a7823c390254daca5c.json',
+  -           prev_sha256: 'f926c4dafc05ccca0e34e598030ea5803a292f0e0628bc3e459ff14bcca04f8a',
+  -           sequence: 1,
+  -           sha256: '28782c9150a7e03558a661988c04635e0018d4028cb4a476e509b1a31369c90e'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793401982034,
+  -           name: '0001793401982034-4bc58bd65620dced4b9431804c1ef789-000000000038-467490faa47d46bfbe63d4a6a0e07659.json',
+  -           prev_sha256: '28782c9150a7e03558a661988c04635e0018d4028cb4a476e509b1a31369c90e',
+  -           sequence: 38,
+  -           sha256: '0e4e2a5910023c1807f93714af8187c28adfb8c633aa2221f3232362ffd29fbb'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402040056,
+  -           name: '0001793402040056-4bc58bd65620dced4b9431804c1ef789-000000000065-5975b52bb66e4c8ea911ed772afba36e.json',
+  -           prev_sha256: '0e4e2a5910023c1807f93714af8187c28adfb8c633aa2221f3232362ffd29fbb',
+  -           sequence: 65,
+  -           sha256: '84f6bc85cfd21cba541f5ab83c3cbdaf3ed9404203b512a40800ae442336f86f'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402042928,
+  -           name: '0001793402042928-4bc58bd65620dced4b9431804c1ef789-000000000066-a145a68b27104e0fbea645a39c9fa11c.json',
+  -           prev_sha256: '84f6bc85cfd21cba541f5ab83c3cbdaf3ed9404203b512a40800ae442336f86f',
+  -           sequence: 66,
+  -           sha256: 'e10b4fa1fc1522264ed346e6fd39c0862856861214eef894a25a9cca826603e9'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402100767,
+  -           name: '0001793402100767-4bc58bd65620dced4b9431804c1ef789-000000000097-40f215a10ef1439f83b3ade80c450cd1.json',
+  -           prev_sha256: 'e10b4fa1fc1522264ed346e6fd39c0862856861214eef894a25a9cca826603e9',
+  -           sequence: 97,
+  -           sha256: '592cd6c7f8fdcfc504c3077463f08a1acc25ba9588f8ee9bbfd247f7c59aa448'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402103585,
+  -           name: '0001793402103585-4bc58bd65620dced4b9431804c1ef789-000000000098-3a58ef18eebe4a7293f96b41a1840b25.json',
+  -           prev_sha256: '592cd6c7f8fdcfc504c3077463f08a1acc25ba9588f8ee9bbfd247f7c59aa448',
+  -           sequence: 98,
+  -           sha256: '5561cbb798b314a287231fcf982e1409ee5953d54843379bf78ce9015b3dc2ff'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402162107,
+  -           name: '0001793402162107-4bc58bd65620dced4b9431804c1ef789-000000000129-15fcc966b8144b0c83ed129c9b76f692.json',
+  -           prev_sha256: '5561cbb798b314a287231fcf982e1409ee5953d54843379bf78ce9015b3dc2ff',
+  -           sequence: 129,
+  -           sha256: 'fd465b00b460ea8b7e578edd5adfe95e48428e12ce9170ae0fd56ecb22d0c939'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402221498,
+  -           name: '0001793402221498-4bc58bd65620dced4b9431804c1ef789-000000000160-f00120d87ab34fa9823d80cf1d62e475.json',
+  -           prev_sha256: 'fd465b00b460ea8b7e578edd5adfe95e48428e12ce9170ae0fd56ecb22d0c939',
+  -           sequence: 160,
+  -           sha256: '8b6a604043234f045b7ae971ea185a5c00e94ad56b383b25a2acab583a6523fb'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402280215,
+  -           name: '0001793402280215-4bc58bd65620dced4b9431804c1ef789-000000000191-400300bc8abd419596511dcfd848dcb3.json',
+  -           prev_sha256: '8b6a604043234f045b7ae971ea185a5c00e94ad56b383b25a2acab583a6523fb',
+  -           sequence: 191,
+  -           sha256: '38468a2b30ac734e535dcbfad49a303db0c1dd9834f34dd6c19af578db96ac4f'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402282553,
+  -           name: '0001793402282553-4bc58bd65620dced4b9431804c1ef789-000000000192-39663beb174e43aebff4a29a2132f0b8.json',
+  -           prev_sha256: '38468a2b30ac734e535dcbfad49a303db0c1dd9834f34dd6c19af578db96ac4f',
+  -           sequence: 192,
+  -           sha256: 'b3a631a417215b9fedc911128167fce168c6ae4530ea6b1ab79b69f3843917b4'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402342305,
+  -           name: '0001793402342305-4bc58bd65620dced4b9431804c1ef789-000000000224-1201528e23564dbbaabbf982b2652170.json',
+  -           prev_sha256: 'b3a631a417215b9fedc911128167fce168c6ae4530ea6b1ab79b69f3843917b4',
+  -           sequence: 224,
+  -           sha256: '46bcf4eaddd1642dc320de4d061e9153d48fe3f380134033424ff81925ce2196'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402400330,
+  -           name: '0001793402400330-4bc58bd65620dced4b9431804c1ef789-000000000255-223982943e1549868a791839dd1013f7.json',
+  -           prev_sha256: '46bcf4eaddd1642dc320de4d061e9153d48fe3f380134033424ff81925ce2196',
+  -           sequence: 255,
+  -           sha256: 'a359d26a906751f4b51c2c693adb9419ef9bd56e2137af4a18dbde17de567fd3'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402402856,
+  -           name: '0001793402402856-4bc58bd65620dced4b9431804c1ef789-000000000256-f21e5d45722e45c5b6c0fd0979fc78b8.json',
+  -           prev_sha256: 'a359d26a906751f4b51c2c693adb9419ef9bd56e2137af4a18dbde17de567fd3',
+  -           sequence: 256,
+  -           sha256: 'e65649d99ab32025f47612cf0abfbe429bc9c42d09cb80aa9dd1e75f7e0a616a'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402460022,
+  -           name: '0001793402460022-4bc58bd65620dced4b9431804c1ef789-000000000287-e27696c904ca426fba6238453a762fcc.json',
+  -           prev_sha256: 'e65649d99ab32025f47612cf0abfbe429bc9c42d09cb80aa9dd1e75f7e0a616a',
+  -           sequence: 287,
+  -           sha256: 'f691550b15ea902eb87d1fcc857e4a1bf44d1667073a6125754731a70357c7dd'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402462252,
+  -           name: '0001793402462252-4bc58bd65620dced4b9431804c1ef789-000000000288-30653dd2135047d79e697f7c07488080.json',
+  -           prev_sha256: 'f691550b15ea902eb87d1fcc857e4a1bf44d1667073a6125754731a70357c7dd',
+  -           sequence: 288,
+  -           sha256: '2840a599dee56b780e21b09693fdf3ce2f703047745ddfc099871b012cf246ea'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402521039,
+  -           name: '0001793402521039-4bc58bd65620dced4b9431804c1ef789-000000000319-d08d63fc0d154fcea287ecd6de3043f6.json',
+  -           prev_sha256: '2840a599dee56b780e21b09693fdf3ce2f703047745ddfc099871b012cf246ea',
+  -           sequence: 319,
+  -           sha256: '2fd732d99b5db8af60fe5455caae1d7aabf5fcd34a5b0ff47878a2379473259d'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402523085,
+  -           name: '0001793402523085-4bc58bd65620dced4b9431804c1ef789-000000000320-669d2b84a95f4186881ff3850e221623.json',
+  -           prev_sha256: '2fd732d99b5db8af60fe5455caae1d7aabf5fcd34a5b0ff47878a2379473259d',
+  -           sequence: 320,
+  -           sha256: '65fae9852892d0ff44664deca8378726b8146ed0fd85b113916b2520c35fe53a'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402580889,
+  -           name: '0001793402580889-4bc58bd65620dced4b9431804c1ef789-000000000351-152ebc313f8740c3af7b07b1a72dc76e.json',
+  -           prev_sha256: '65fae9852892d0ff44664deca8378726b8146ed0fd85b113916b2520c35fe53a',
+  -           sequence: 351,
+  -           sha256: '5cb5dc4644eed4e6d519714839a897149b6936ea7e3fd50ad733a2dd143c0ce9'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402583119,
+  -           name: '0001793402583119-4bc58bd65620dced4b9431804c1ef789-000000000352-ce7f58d9bf8a4e1e8821bf777157058e.json',
+  -           prev_sha256: '5cb5dc4644eed4e6d519714839a897149b6936ea7e3fd50ad733a2dd143c0ce9',
+  -           sequence: 352,
+  -           sha256: '2bcd77333dc6f51bb608dde9948c45bd12d24ae39168ba2504d1aee38c3820ec'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402640074,
+  -           name: '0001793402640074-4bc58bd65620dced4b9431804c1ef789-000000000384-10bd1885fda349289a5ca0496746bbf3.json',
+  -           prev_sha256: '2bcd77333dc6f51bb608dde9948c45bd12d24ae39168ba2504d1aee38c3820ec',
+  -           sequence: 384,
+  -           sha256: '5fe9523b3d13a92cdf353475ef676acb02afec7f7ec0b6faf7bcf72fc2da9e3b'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402642269,
+  -           name: '0001793402642269-4bc58bd65620dced4b9431804c1ef789-000000000385-35ac4a64fbd74d53919cac1733f16918.json',
+  -           prev_sha256: '5fe9523b3d13a92cdf353475ef676acb02afec7f7ec0b6faf7bcf72fc2da9e3b',
+  -           sequence: 385,
+  -           sha256: 'f44f581745b446efca890c84b54485420127342d0476d631f1f0d9be812c09cf'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402701463,
+  -           name: '0001793402701463-4bc58bd65620dced4b9431804c1ef789-000000000418-9183ec13551f4fd4bb3ed35fa2008802.json',
+  -           prev_sha256: 'f44f581745b446efca890c84b54485420127342d0476d631f1f0d9be812c09cf',
+  -           sequence: 418,
+  -           sha256: '6af1faf81e16d1fa1bf6fd8eb7d22701bd3773ee07eea17e7bae9fe85a5db4bd'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402760186,
+  -           name: '0001793402760186-4bc58bd65620dced4b9431804c1ef789-000000000451-b811c72b607848d6a50bce26556b3d90.json',
+  -           prev_sha256: '6af1faf81e16d1fa1bf6fd8eb7d22701bd3773ee07eea17e7bae9fe85a5db4bd',
+  -           sequence: 451,
+  -           sha256: 'a5d4abaa89694063c6f49f5d65aefad6833fdaca64a2fbd7f629b580d25344d8'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402762586,
+  -           name: '0001793402762586-4bc58bd65620dced4b9431804c1ef789-000000000452-d9d594b1152b46f1a8e06259230c598c.json',
+  -           prev_sha256: 'a5d4abaa89694063c6f49f5d65aefad6833fdaca64a2fbd7f629b580d25344d8',
+  -           sequence: 452,
+  -           sha256: '095dc8a6b76959459c7a9a47648baaf06c020f04547f518fd3e1e569c7cca0af'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402821107,
+  -           name: '0001793402821107-4bc58bd65620dced4b9431804c1ef789-000000000484-562f5f6048554751be4e8bdd7fceda1b.json',
+  -           prev_sha256: '095dc8a6b76959459c7a9a47648baaf06c020f04547f518fd3e1e569c7cca0af',
+  -           sequence: 484,
+  -           sha256: '9e65120398142abdfeab9f3ffb874ae16add49fb74e5ad172de8d95d18357002'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402823333,
+  -           name: '0001793402823333-4bc58bd65620dced4b9431804c1ef789-000000000485-4f3ef374622046dca959b3baea17cae5.json',
+  -           prev_sha256: '9e65120398142abdfeab9f3ffb874ae16add49fb74e5ad172de8d95d18357002',
+  -           sequence: 485,
+  -           sha256: '905450fe2cdbc28738cf3eb82112474e41d0e9196293a3bf516f3ccd8c3dbf7f'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402880305,
+  -           name: '0001793402880305-4bc58bd65620dced4b9431804c1ef789-000000000517-03f2a5db7cd946b78d8b85f0de2f97c2.json',
+  -           prev_sha256: '905450fe2cdbc28738cf3eb82112474e41d0e9196293a3bf516f3ccd8c3dbf7f',
+  -           sequence: 517,
+  -           sha256: '8d5d505d3813240b3673c9bf829b7098856f64419c3ca9049343c7ab2ad90d3e'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402882428,
+  -           name: '0001793402882428-4bc58bd65620dced4b9431804c1ef789-000000000518-34518a577ae3446eb5f84b1bf610286a.json',
+  -           prev_sha256: '8d5d505d3813240b3673c9bf829b7098856f64419c3ca9049343c7ab2ad90d3e',
+  -           sequence: 518,
+  -           sha256: 'fedc27be1edeb66bea68d78409dc3750f788a14f2967c79218fde98f567b43ef'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793402941737,
+  -           name: '0001793402941737-4bc58bd65620dced4b9431804c1ef789-000000000551-e49e7ca822a248c8a8061900a0bab8b4.json',
+  -           prev_sha256: 'fedc27be1edeb66bea68d78409dc3750f788a14f2967c79218fde98f567b43ef',
+  -           sequence: 551,
+  -           sha256: 'bcef5df6b2559954d1abd2781da039b8e97a7b46ebfb9423f9b5d0f29764af60'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793403000267,
+  -           name: '0001793403000267-4bc58bd65620dced4b9431804c1ef789-000000000584-3cbf79d5225648e8938f3c1199e5b4ea.json',
+  -           prev_sha256: 'bcef5df6b2559954d1abd2781da039b8e97a7b46ebfb9423f9b5d0f29764af60',
+  -           sequence: 584,
+  -           sha256: '62d046a45ade1726218f78e71dff03b4c490dd66dab1aedf84a1f72e8f326d36'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793403002423,
+  -           name: '0001793403002423-4bc58bd65620dced4b9431804c1ef789-000000000585-dbc7b4ad7bc24ec8bc4d0637cfd56c96.json',
+  -           prev_sha256: '62d046a45ade1726218f78e71dff03b4c490dd66dab1aedf84a1f72e8f326d36',
+  -           sequence: 585,
+  -           sha256: '884088269265084440c2be90d6fca2634f987a36968c076f47ee3cccfd656c30'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793403061390,
+  -           name: '0001793403061390-4bc58bd65620dced4b9431804c1ef789-000000000618-5a7e9de205d04fd49994fdf8123e21b8.json',
+  -           prev_sha256: '884088269265084440c2be90d6fca2634f987a36968c076f47ee3cccfd656c30',
+  -           sequence: 618,
+  -           sha256: '63911c90354fe6c51c9e427eb491fd9ddb5ae7e0dfc9fb688894618d61a09e8a'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793403121183,
+  -           name: '0001793403121183-4bc58bd65620dced4b9431804c1ef789-000000000651-b66631f0891b4f11a7ba49ce8106955b.json',
+  -           prev_sha256: '63911c90354fe6c51c9e427eb491fd9ddb5ae7e0dfc9fb688894618d61a09e8a',
+  -           sequence: 651,
+  -           sha256: 'd5271d9586f97995638545fa0754922bd88930d7095f04a73e9ee6cc46974097'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793403123240,
+  -           name: '0001793403123240-4bc58bd65620dced4b9431804c1ef789-000000000652-0f8fcc1b07584de8baa6d77cfd1b26b5.json',
+  -           prev_sha256: 'd5271d9586f97995638545fa0754922bd88930d7095f04a73e9ee6cc46974097',
+  -           sequence: 652,
+  -           sha256: '0495662e8d49361fe83c5d72108f4d95332b4ef8f2e28459cdd236301164ff1a'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793403180558,
+  -           name: '0001793403180558-4bc58bd65620dced4b9431804c1ef789-000000000684-9717a0bf164249b7b110ebde53738c20.json',
+  -           prev_sha256: '0495662e8d49361fe83c5d72108f4d95332b4ef8f2e28459cdd236301164ff1a',
+  -           sequence: 684,
+  -           sha256: 'b718a740ddd8af8feb26528e441b42b08040511ddd9cb1f41ae3459673a33183'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793403182678,
+  -           name: '0001793403182678-4bc58bd65620dced4b9431804c1ef789-000000000685-38bc352d979a49d0b3d3eaf34988deb3.json',
+  -           prev_sha256: 'b718a740ddd8af8feb26528e441b42b08040511ddd9cb1f41ae3459673a33183',
+  -           sequence: 685,
+  -           sha256: 'f1e3c35b5adfde98245af577664e01b8f40374830ae0129cc7119748cf5c3e50'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793403189805,
+  -           name: '0001793403189805-4bc58bd65620dced4b9431804c1ef789-000000000689-325ef270b7864b4289f866750c6e30b6.json',
+  -           prev_sha256: 'f1e3c35b5adfde98245af577664e01b8f40374830ae0129cc7119748cf5c3e50',
+  -           sequence: 689,
+  -           sha256: 'fe271bca4ca8b60e67573c51b1947235ebf12d5fe9dbd3f99d4cfcd773c6e13d'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793403242090,
+  -           name: '0001793403242090-4bc58bd65620dced4b9431804c1ef789-000000000718-20ea3849c76d4c18a3c54b336f80bdbc.json',
+  -           prev_sha256: 'fe271bca4ca8b60e67573c51b1947235ebf12d5fe9dbd3f99d4cfcd773c6e13d',
+  -           sequence: 718,
+  -           sha256: 'd7e6268f225d429b1aba17f4c1e0d03b2f02e475b4466a4236e96ee7d6f3d3d5'
+  -         },
+  -         {
+  -           boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -           generated_at_ms: 1793403300404,
+  -           name: '0001793403300404-4bc58bd65620dced4b9431804c1ef789-000000000751-72609edf25964a08bf66dac78bba1920.json',
+  -           prev_sha256: 'd7e6268f225d429b1aba17f4c1e0d03b2f02e475b4466a4236e96ee7d6f3d3d5',
+  -           sequence: 751,
+  -           sha256: 'a0326713166a73d96da66caa6f4087439bb06f5dadb5b1faf6f7dbe601679b55'
+  -         }
+  -       ],
+  -       statistics: null,
+  -       terminal_executors: {
+  -         capabilities: [
+  -           'read'
+  -         ],
+  -         completeness: 'complete',
+  -         data: {
+  -           file: 'paper_observation.v2.journal/0001793403300404-4bc58bd65620dced4b9431804c1ef789-000000000751-72609edf25964a08bf66dac78bba1920.json',
+  -           page_size: 100,
+  -           retained_count: 37,
+  -           retention: 'last_500_terminal_executors; full_native_receipts_retained_in_owner_database',
+  -           retention_start_ms: 1793264403046,
+  -           section: 'terminal_executors',
+  -           sha256: 'a0326713166a73d96da66caa6f4087439bb06f5dadb5b1faf6f7dbe601679b55',
+  -           snapshot_id: {
+  -             boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -             sequence: 751
+  -           },
+  -           total_count: 37,
+  -           truncated: false
+  -         },
+  -         observed_at_ms: 1793403300404,
+  -         source_at_ms: 1793403300404,
+  -         stale_reason: null
+  -       },
+  -       valuation_policy: 'midpoint_fresh_book_only'
+  -     },
+  -     execution_mode: 'paper',
+  -     generated_at_ms: 1793403300404,
+  -     next_cursor: null,
+  -     observed_at_ms: 1793403300404,
+  -     read_at_ms: 1793403300404,
+  -     reason: null,
+  -     schema: 'rsibot.v5-paper.read.v1',
+  -     section: 'history',
+  -     simulated: true,
+  -     snapshot_id: '4bc58bd65620dced4b9431804c1ef789:751',
+  -     source: {
+  -       boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -       config_sha256: 'b80096664a0aefc7d614dbcff167057bffffb02a2a78c72e08ee5c7a9876c5e0',
+  -       owner: 'hummingbot',
+  -       recipe_sha256: 'ebec0189e6666a0c8c23732afe45315957e6c068fcd5b3c4c0b0c73b3955885a',
+  -       schema: 'rsibot.v5-paper.observation.v2',
+  -       sequence: 751,
+  -       sha256: 'f158eb03398f79cb056b01c538f489d3fdb05ca7e4e3d0c431d99f2b653e2668',
+  -       source_sha256: '93f2287ffd7f8112ef08fa2ba3bb9eb597f447e6ba1d825e6c3461796924f762'
+  -     },
+  -     source_at_ms: 1793403300404,
+  -     state: 'available'
+  -   },
+  -   next_cursor: null,
+  -   observed_at_ms: 1793403300404,
+  -   read_at_ms: 1793403300404,
+  -   reason: null,
+  -   schema: 'rsibot.v5-paper.read.v1',
+  -   section: 'wallet',
+  -   simulated: true,
+  -   snapshot_id: '4bc58bd65620dced4b9431804c1ef789:751',
+  -   source: {
+  -     boot_id: '4bc58bd65620dced4b9431804c1ef789',
+  -     config_sha256: 'b80096664a0aefc7d614dbcff167057bffffb02a2a78c72e08ee5c7a9876c5e0',
+  -     owner: 'hummingbot',
+  -     recipe_sha256: 'ebec0189e6666a0c8c23732afe45315957e6c068fcd5b3c4c0b0c73b3955885a',
+  -     schema: 'rsibot.v5-paper.observation.v2',
+  -     sequence: 751,
+  -     sha256: 'f158eb03398f79cb056b01c538f489d3fdb05ca7e4e3d0c431d99f2b653e2668',
+  -     source_sha256: '93f2287ffd7f8112ef08fa2ba3bb9eb597f447e6ba1d825e6c3461796924f762'
+  -   },
+  -   source_at_ms: 1793403298501,
+  -   state: 'available'
+  - }
+
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-refresh-continuity.test.mjs:94:12)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: null,
+    expected: { schema: 'rsibot.v5-paper.read.v1', state: 'available', section: 'wallet', snapshot_id: '4bc58bd65620dced4b9431804c1ef789:751', bot_id: 'meridian_v5_paper', execution_mode: 'paper', simulated: true, generated_at_ms: 1793403300404, observed_at_ms: 1793403300404, read_at_ms: 1793403300404, source_at_ms: 1793403298501, completeness: 'complete', reason: null, capabilities: [ 'read' ], data: { assets: [Array], equity_quote: '199980.07714623162240', external_cash_flows_quote: '0', initial_funding_quote: '200000', quote_asset: 'USDC', unit: 'USDC', valuation_policy: 'midpoint_fresh_book_only' }, next_cursor: null, source: { owner: 'hummingbot', schema: 'rsibot.v5-paper.observation.v2', sha256: 'f158eb03398f79cb056b01c538f489d3fdb05ca7e4e3d0c431d99f2b653e2668', boot_id: '4bc58bd65620dced4b9431804c1ef789', sequence: 751, source_sha256: '93f2287ffd7f8112ef08fa2ba3bb9eb597f447e6ba1d825e6c3461796924f762', config_sha256: 'b80096664a0aefc7d614dbcff167057bffffb02a2a78c72e08ee5c7a9876c5e0', recipe_sha256: 'ebec0189e6666a0c8c23732afe45315957e6c068fcd5b3c4c0b0c73b3955885a' }, history_read: { schema: 'rsibot.v5-paper.read.v1', state: 'available', section: 'history', snapshot_id: '4bc58bd65620dced4b9431804c1ef789:751', bot_id: 'meridian_v5_paper', execution_mode: 'paper', simulated: true, generated_at_ms: 1793403300404, observed_at_ms: 1793403300404, read_at_ms: 1793403300404, source_at_ms: 1793403300404, completeness: 'complete', reason: null, capabilities: [Array], data: [Object], next_cursor: null, source: [Object] }, accounting_read: { schema: 'rsibot.v5-paper.read.v1', state: 'available', section: 'accounting', snapshot_id: '4bc58bd65620dced4b9431804c1ef789:751', bot_id: 'meridian_v5_paper', execution_mode: 'paper', simulated: true, generated_at_ms: 1793403300404, observed_at_ms: 1793403300404, read_at_ms: 1793403300404, source_at_ms: 1793403300404, completeness: 'complete', reason: null, capabilities: [Array], data: [Object], next_cursor: null, source: [Object] } },
+    operator: 'deepStrictEqual',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-refresh-continuity.test.mjs:102:40
+✖ bots ignores progress from an aborted orphaned refresh (578.002541ms)
+  AssertionError [ERR_ASSERTION]: The input was expected to not match the regular expression /Not connected|No owner limit or latch observation|Numeric rail limits are not published/. Input:
+
+  '<div class="v5-paper-bots" data-layout="grid"><header class="v5-page-heading"><div><h1>Paper bots</h1><p>meridian_v5_paper · simulated wallet · live disabled</p></div><div class="v5-button-row"><button class="v5-button" aria-pressed="true">Grid</button><button class="v5-button" aria-pressed="false">Compact</button><button class="v5-button">Refresh paper data</button></div></header><p role="status">Reading one owner snapshot: 2/9 sections. Totals are withheld until the read completes.</p><section class="paper-fleet"><div class="paper-section-heading"><div><span class="paper-eyebrow">SIMULATED ACCOUNT</span><h2>Paper fleet</h2></div><span class="paper-badge" data-state="stale">Stale · heartbeat</span></div><p class="paper-caption">meridian_v5_paper · Valuation: Mid of fresh book. Book freshness and completeness are separate from process heartbeat.</p><dl class="paper-metrics"><div class="paper-metric"><dt>Wallet equity</dt><dd>Not published</dd><small>Fresh complete wallet required</small></div><div class="paper-metric"><dt>Available cash</dt><dd>Not published</dd></div><div class="paper-metric"><dt>Holdings value</dt><dd>Not published</dd><small>Complete current wallet marks not published</small></div><div class="paper-metric"><dt>Open executors</dt><dd>Not published</dd><small>Incomplete or stale owner read · count not inferred</small></div><div class="paper-metric"><dt>Realized PnL</dt><dd>Not published</dd><small>Lifetime · awaiting coherent owner totals</small></div><div class="paper-metric"><dt>Unrealized PnL</dt><dd>Not published</dd><small>Lifetime · awaiting coherent owner totals</small></div><div class="paper-metric"><dt>Fees paid</dt><dd>Not published</dd><small>Lifetime · awaiting coherent owner totals</small></div><div class="paper-metric"><dt>Traded volume</dt><dd>Not published</dd><small>Lifetime · awaiting coherent owner totals</small></div><div class="paper-metric"><dt>Last report</dt><dd>2026-10-30 23:35:00 UTC · 0s ago</dd><small>Native process heartbeat</small></div></dl><p class="paper-caption">Lifetime accounting: Collecting the snapshot-bound owner aggregate; no totals are inferred from recent fills.</p></section><section class="paper-section"><div class="paper-section-heading"><h2>Pair workspace</h2><span class="paper-caption">5 pairs · same fixed-target recipe</span></div><div class="paper-pairs"><article class="paper-pair"><div class="paper-section-heading"><h3>BNB-USDC</h3><span class="paper-badge" data-state="degraded">Incomplete · Not published</span></div><p class="paper-caption">Position as of Not published</p><dl class="paper-detail"><dt>Position</dt><dd>Not published</dd></dl><p class="paper-caption">Protection status unknown · position data incomplete since Not published</p></article><article class="paper-pair"><div class="paper-section-heading"><h3>BTC-USDC</h3><span class="paper-badge" data-state="degraded">Incomplete · Not published</span></div><p class="paper-caption">Position as of Not published</p><dl class="paper-detail"><dt>Position</dt><dd>Not published</dd></dl><p class="paper-caption">Protection status unknown · position data incomplete since Not published</p></article><article class="paper-pair"><div class="paper-section-heading"><h3>ETH-USDC</h3><span class="paper-badge" data-state="degraded">Incomplete · Not published</span></div><p class="paper-caption">Position as of Not published</p><dl class="paper-detail"><dt>Position</dt><dd>Not published</dd></dl><p class="paper-caption">Protection status unknown · position data incomplete since Not published</p></article><article class="paper-pair"><div class="paper-section-heading"><h3>SOL-USDC</h3><span class="paper-badge" data-state="degraded">Incomplete · Not published</span></div><p class="paper-caption">Position as of Not published</p><dl class="paper-detail"><dt>Position</dt><dd>Not published</dd></dl><p class="paper-caption">Protection status unknown · position data incomplete since Not published</p></article><article class="paper-pair"><div class="paper-section-heading"><h3>XRP-USDC</h3><span class="paper-badge" data-state="degraded">Incomplete · Not published</span></div><p class="paper-caption">Position as of Not published</p><dl class="paper-detail"><dt>Position</dt><dd>Not published</dd></dl><p class="paper-caption">Protection status unknown · position data incomplete since Not published</p></article></div></section><section class="paper-section"><div class="paper-section-heading"><h2>Holdings</h2><span class="paper-badge" data-state="collecting">Collecting</span></div><p class="paper-caption">Not published · Bounded owner records, not lifetime totals. Search, filter or resize columns.</p><p class="paper-caption">Incomplete or stale owner read. Record counts and totals are not published.</p></section><section class="paper-section"><div class="paper-section-heading"><h2>Recent fills</h2><span class="paper-badge" data-state="collecting">Collecting</span></div><p class="paper-caption">Not published · Bounded owner records, not lifetime totals. Search, filter or resize columns.</p><p class="paper-caption">Incomplete or stale owner read. Record counts and totals are not published.</p></section><section class="paper-section"><div class="paper-section-heading"><h2>Executors</h2><span class="paper-badge" data-state="collecting">Collecting</span></div><p class="paper-caption">Not published · Bounded owner records, not lifetime totals. Search, filter or resize columns.</p><p class="paper-caption">Incomplete or stale owner read. Record counts and totals are not published.</p></section><section class="paper-section"><div class="paper-section-heading"><h2>Risk rails &amp; entry latch</h2><span class="paper-badge" data-state="degraded">Incomplete</span></div><p class="paper-caption">Risk controls not yet connected to this paper bot. Loss rails stop new acquisitions, never force a sale.</p><div class="paper-rails"><article class="paper-pair"><h3>Pair exposure</h3><span class="paper-badge">Not connected</span><div class="paper-empty-rail" aria-hidden="true"></div><p class="paper-caption">No owner limit or latch observation. No use bar is inferred.</p></article><article class="paper-pair"><h3>Program exposure</h3><span class="paper-badge">Not connected</span><div class="paper-empty-rail" aria-hidden="true"></div><p class="paper-caption">No owner limit or latch observation. No use bar is inferred.</p></article><article class="paper-pair"><h3>New acquisitions</h3><span class="paper-badge">Not connected</span><div class="paper-empty-rail" aria-hidden="true"></div><p class="paper-caption">No owner limit or latch observation. No use bar is inferred.</p></article></div></section><section class="paper-section"><h2>Decisions &amp; paper control</h2><div class="paper-rails"><article><h3>Exit policy</h3><p>Not published</p><p>Underwater positions remain held. Protective exits must survive entry halt.</p></article><article><h3>Acquisition plan</h3><p>Not published</p><p>Comparable history: Not published</p></article><article><h3>Paper control not enabled</h3><p>Read-only dashboard. A separately authenticated owner path must acknowledge paper commands before controls can appear here.</p></article></div><details class="paper-provenance"><summary>Observation provenance</summary><p>Snapshot: 4bc58bd65620dced4b9431804c1ef789:751</p><p>Observed: 2026-10-30 23:35:00 UTC · 0s ago</p></details></section></div>'
+
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-refresh-continuity.test.mjs:113:33)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<div class="v5-paper-bots" data-layout="grid"><header class="v5-page-heading"><div><h1>Paper bots</h1><p>meridian_v5_paper · simulated wallet · live disabled</p></div><div class="v5-button-row"><button class="v5-button" aria-pressed="true">Grid</button><button class="v5-button" aria-pressed="false">Compact</button><button class="v5-button">Refresh paper data</button></div></header><p role="status">Reading one owner snapshot: 2/9 sections. Totals are withheld until the read completes.</p><section class="paper-fleet"><div class="paper-section-heading"><div><span class="paper-eyebrow">SIMULATED ACCOUNT</span><h2>Paper fleet</h2></div><span class="paper-badge" data-state="stale">Stale · heartbeat</span></div><p class="paper-caption">meridian_v5_paper · Valuation: Mid of fresh book. Book freshness and completeness are separate from process heartbeat.</p><dl class="paper-metrics"><div class="paper-metric"><dt>Wallet equity</dt><dd>Not published</dd><small>Fresh complete wallet required</small></div><div class="paper-metric"><dt>Available cash</dt><dd>Not published</dd></div><div class="paper-metric"><dt>Holdings value</dt><dd>Not published</dd><small>Complete current wallet marks not published</small></div><div class="paper-metric"><dt>Open executors</dt><dd>Not published</dd><small>Incomplete or stale owner read · count not inferred</small></div><div class="paper-metric"><dt>Realized PnL</dt><dd>Not published</dd><small>Lifetime · awaiting coherent owner totals</small></div><div class="paper-metric"><dt>Unrealized PnL</dt><dd>Not published</dd><small>Lifetime · awaiting coherent owner totals</small></div><div class="paper-metric"><dt>Fees paid</dt><dd>Not published</dd><small>Lifetime · awaiting coherent owner totals</small></div><div class="paper-metric"><dt>Traded volume</dt><dd>Not published</dd><small>Lifetime · awaiting coherent owner totals</small></div><div class="paper-metric"><dt>Last report</dt><dd>2026-10-30 23:35:00 UTC · 0s ago</dd><small>Native process heartbeat</small></div></dl><p class="paper-caption">Lifetime accounting: Collecting the snapshot-bound owner aggregate; no totals are inferred from recent fills.</p></section><section class="paper-section"><div class="paper-section-heading"><h2>Pair workspace</h2><span class="paper-caption">5 pairs · same fixed-target recipe</span></div><div class="paper-pairs"><article class="paper-pair"><div class="paper-section-heading"><h3>BNB-USDC</h3><span class="paper-badge" data-state="degraded">Incomplete · Not published</span></div><p class="paper-caption">Position as of Not published</p><dl class="paper-detail"><dt>Position</dt><dd>Not published</dd></dl><p class="paper-caption">Protection status unknown · position data incomplete since Not published</p></article><article class="paper-pair"><div class="paper-section-heading"><h3>BTC-USDC</h3><span class="paper-badge" data-state="degraded">Incomplete · Not published</span></div><p class="paper-caption">Position as of Not published</p><dl class="paper-detail"><dt>Position</dt><dd>Not published</dd></dl><p class="paper-caption">Protection status unknown · position data incomplete since Not published</p></article><article class="paper-pair"><div class="paper-section-heading"><h3>ETH-USDC</h3><span class="paper-badge" data-state="degraded">Incomplete · Not published</span></div><p class="paper-caption">Position as of Not published</p><dl class="paper-detail"><dt>Position</dt><dd>Not published</dd></dl><p class="paper-caption">Protection status unknown · position data incomplete since Not published</p></article><article class="paper-pair"><div class="paper-section-heading"><h3>SOL-USDC</h3><span class="paper-badge" data-state="degraded">Incomplete · Not published</span></div><p class="paper-caption">Position as of Not published</p><dl class="paper-detail"><dt>Position</dt><dd>Not published</dd></dl><p class="paper-caption">Protection status unknown · position data incomplete since Not published</p></article><article class="paper-pair"><div class="paper-section-heading"><h3>XRP-USDC</h3><span class="paper-badge" data-state="degraded">Incomplete · Not published</span></div><p class="paper-caption">Position as of Not published</p><dl class="paper-detail"><dt>Position</dt><dd>Not published</dd></dl><p class="paper-caption">Protection status unknown · position data incomplete since Not published</p></article></div></section><section class="paper-section"><div class="paper-section-heading"><h2>Holdings</h2><span class="paper-badge" data-state="collecting">Collecting</span></div><p class="paper-caption">Not published · Bounded owner records, not lifetime totals. Search, filter or resize columns.</p><p class="paper-caption">Incomplete or stale owner read. Record counts and totals are not published.</p></section><section class="paper-section"><div class="paper-section-heading"><h2>Recent fills</h2><span class="paper-badge" data-state="collecting">Collecting</span></div><p class="paper-caption">Not published · Bounded owner records, not lifetime totals. Search, filter or resize columns.</p><p class="paper-caption">Incomplete or stale owner read. Record counts and totals are not published.</p></section><section class="paper-section"><div class="paper-section-heading"><h2>Executors</h2><span class="paper-badge" data-state="collecting">Collecting</span></div><p class="paper-caption">Not published · Bounded owner records, not lifetime totals. Search, filter or resize columns.</p><p class="paper-caption">Incomplete or stale owner read. Record counts and totals are not published.</p></section><section class="paper-section"><div class="paper-section-heading"><h2>Risk rails &amp; entry latch</h2><span class="paper-badge" data-state="degraded">Incomplete</span></div><p class="paper-caption">Risk controls not yet connected to this paper bot. Loss rails stop new acquisitions, never force a sale.</p><div class="paper-rails"><article class="paper-pair"><h3>Pair exposure</h3><span class="paper-badge">Not connected</span><div class="paper-empty-rail" aria-hidden="true"></div><p class="paper-caption">No owner limit or latch observation. No use bar is inferred.</p></article><article class="paper-pair"><h3>Program exposure</h3><span class="paper-badge">Not connected</span><div class="paper-empty-rail" aria-hidden="true"></div><p class="paper-caption">No owner limit or latch observation. No use bar is inferred.</p></article><article class="paper-pair"><h3>New acquisitions</h3><span class="paper-badge">Not connected</span><div class="paper-empty-rail" aria-hidden="true"></div><p class="paper-caption">No owner limit or latch observation. No use bar is inferred.</p></article></div></section><section class="paper-section"><h2>Decisions &amp; paper control</h2><div class="paper-rails"><article><h3>Exit policy</h3><p>Not published</p><p>Underwater positions remain held. Protective exits must survive entry halt.</p></article><article><h3>Acquisition plan</h3><p>Not published</p><p>Comparable history: Not published</p></article><article><h3>Paper control not enabled</h3><p>Read-only dashboard. A separately authenticated owner path must acknowledge paper commands before controls can appear here.</p></article></div><details class="paper-provenance"><summary>Observation provenance</summary><p>Snapshot: 4bc58bd65620dced4b9431804c1ef789:751</p><p>Observed: 2026-10-30 23:35:00 UTC · 0s ago</p></details></section></div>',
+    expected: /Not connected|No owner limit or latch observation|Numeric rail limits are not published/,
+    operator: 'doesNotMatch',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-refresh-continuity.test.mjs:102:40
+✖ capital ignores progress from an aborted orphaned refresh (58.062225ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+  + actual - expected
+
+  + 'Reading one owner snapshot: 1/4 sections. Totals are withheld until the read completes.'
+  - 'Reading one owner snapshot: 2/4 sections. Totals are withheld until the read completes.'
+
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/round2-baseline-condor/frontend/test/v5-refresh-continuity.test.mjs:117:12)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'Reading one owner snapshot: 1/4 sections. Totals are withheld until the read completes.',
+    expected: 'Reading one owner snapshot: 2/4 sections. Totals are withheld until the read completes.',
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

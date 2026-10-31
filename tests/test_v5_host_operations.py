@@ -93,6 +93,10 @@ def test_authenticated_operations_route_reads_host_without_upstream_calls(tmp_pa
         assert response.status_code == 200, response.text
         assert response.json()["data"] == value["data"]
         assert response.json()["bot_id"] == BOT
+        assert response.json()["source"] == {"owner": "host_monitor_export"}
+        assert response.json()["source_at_ms"] == value["generated_at_ms"]
+        assert response.json()["read_at_ms"] == int(NOW * 1000)
+        assert response.json()["capabilities"] == []
         value["execution_mode"] = "live"
         path.write_text(json.dumps(value))
         response = client.get("/api/v5/dashboard/read", params=query)

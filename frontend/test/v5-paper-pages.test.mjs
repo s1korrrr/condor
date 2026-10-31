@@ -19,11 +19,11 @@ for (const page of ['health','capital','operations','bots']) for (const failure 
     if(section==='status'||section==='operations')attempt++;
     if ((!failed || exhausted) && (section==='risk'||page==='capital'&&section==='history'||section==='operations')) {failed=true;return {ok:false,status:failure,json:async()=>({})};}
     const value=structuredClone(fixtures[section]??fixtures.status);value.section=section;value.snapshot_id=`test:${attempt}`;value.generated_at_ms=1793275200000+attempt;value.next_cursor=null;
-    return {ok:true,status:200,json:async()=>value};
+    return {ok:true,status:200,json:async()=>value,text:async()=>JSON.stringify(value)};
   };
   try {
     const overrides={
-      '@tanstack/react-query':{...ReactQuery,useQuery:options=>{queries.push(options);return {isPending:true,refetch(){}};}},
+      '@tanstack/react-query':{...ReactQuery,useQueryClient:() => new ReactQuery.QueryClient(),useQuery:options=>{queries.push(options);return {isPending:true,refetch(){}};}},
       ...Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name=>[name,{}])),
     };
     const {load}=frontendModules(overrides);
@@ -35,11 +35,11 @@ for (const page of ['health','capital','operations','bots']) for (const failure 
     }
     assert.equal(queries[0].retry,false);
     if (exhausted) {
-      await assert.rejects(queries[0].queryFn(), /unavailable|snapshot changed/);
+      await assert.rejects(queries[0].queryFn({signal:new AbortController().signal}), /unavailable|snapshot changed/);
       assert.equal(attempt,2);
       return;
     }
-    const result=await queries[0].queryFn();
+    const result=await queries[0].queryFn({signal:new AbortController().signal});
     assert.equal(attempt,2);
     if(page==='bots'||page==='health')assert.ok(result.every(read=>read.snapshot_id==='test:2'));
     if(page==='capital')assert.deepEqual([result.snapshot_id,result.history_read.snapshot_id,result.accounting_read.snapshot_id],['test:2','test:2','test:2']);
@@ -69,19 +69,19 @@ test('paper retries stop at two whole attempts and never retry auth/schema failu
   }
 });
 
-test('paper read refuses cross-snapshot success and bounds owner concurrency to one', async () => {
+test('paper read refuses cross-snapshot success with bounded parallel owner reads', async () => {
   let active=0, maximum=0;
   await assert.rejects(policy.paperCoherentRead('/status', [{section:'wallet',path:'/wallet'},{section:'risk',path:'/risk'}], async (_,section) => {
     active++;maximum=Math.max(maximum,active);await Promise.resolve();active--;
     return {section,snapshot_id:section==='risk'?'other:2':'boot:1',generated_at_ms:1};
   }), /Mixed owner snapshots/);
-  assert.equal(maximum,1);
+  assert.equal(maximum,2);
 });
 
 test('unavailable Settings identity confines fresh times and reasons to heartbeat rows', () => {
   const profile = { readiness: { paper_owner: { mode:'PAPER', bot_name:'meridian_v5_paper', state:'FRESH', generated_at:1793357640, reason:'PAPER_STATUS_FRESH' } } };
   const {load} = frontendModules({
-    '@tanstack/react-query': { useQuery: () => ({data:profile}) },
+    '@tanstack/react-query': {useQueryClient:() => new ReactQuery.QueryClient(), useQuery: () => ({data:profile}) },
     './api': {v5Api:{}},
     './usePaperObservation': {usePaperObservation: () => ({summary:{label:'Unavailable',reason:'Identity owner read unavailable'},isError:true,error:new Error('Identity owner read unavailable')})},
     'react-markdown': {},
@@ -104,7 +104,7 @@ test('paper routes select native read-only exports, not live fleet discovery', (
 test('heartbeat cannot label missing, invalid or incoherent paper reads fresh', () => {
   assert.equal(policy.paperObservationSummary([], 'paper', Date.now()).label,'Unavailable');
   const now=1793275200000;
-  const reads=['status','wallet','positions','executors','risk'].map(section=>({schema:'rsibot.v5-paper.read.v1',section,bot_id:'paper',execution_mode:'paper',simulated:true,state:'available',completeness:'complete',snapshot_id:'boot:1',generated_at_ms:now,data:['positions','executors'].includes(section)?[]:{}}));
+  const reads=['status','wallet','positions','executors','risk'].map(section=>({schema:'rsibot.v5-paper.read.v1',section,bot_id:'paper',execution_mode:'paper',simulated:true,state:'available',completeness:'complete',snapshot_id:'boot:1',generated_at_ms:now,reason:null,read_at_ms:now,observed_at_ms:now,source_at_ms:now,capabilities:[],source:{},data:['positions','executors'].includes(section)?[]:{}}));
   assert.equal(policy.paperObservationSummary(reads,'paper',now).label,'Available');
   for (const change of [{snapshot_id:'boot:2'},{state:'degraded',reason:'Owner export unavailable',data:null},{reason:{}},{completeness:'partial'}]) assert.notEqual(policy.paperObservationSummary(reads.map(read=>read.section==='risk'?{...read,...change}:read),'paper',now).label,'Available');
   assert.equal(policy.paperObservationSummary(reads,'paper',now+31000).label,'Stale');

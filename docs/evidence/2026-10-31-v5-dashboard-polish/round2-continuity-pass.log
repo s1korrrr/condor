@@ -1,0 +1,13 @@
+✔ Bots retains held complete snapshot, as-of and totals during refresh and failed refresh (1729.677497ms)
+✔ Bots first load reports pending risk and rails, never absent controls or numeric limits (610.234714ms)
+✔ Capital hook retains the complete wallet, history and accounting while refreshing (37.360303ms)
+✔ bots ignores progress from an aborted orphaned refresh (617.388576ms)
+✔ capital ignores progress from an aborted orphaned refresh (42.201399ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3528.82116

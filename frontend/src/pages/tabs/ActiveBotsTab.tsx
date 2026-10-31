@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import type { PaperRead } from "@/v5/contracts";
-import { paperAmount, paperCompleteRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperPairObservation, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperSnapshotsAgree, paperTime, paperWalletInventory, paperWalletTotals, paperWords } from "@/v5/policy";
+import { paperAmount, paperCompleteRecords, paperControlState, paperExactAmount, paperObservationPages, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperPairObservation, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperSnapshotsAgree, paperTime, paperWalletInventory, paperWalletTotals, paperWords } from "@/v5/policy";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
 import { paperHeartbeat } from "@/features/bots/fleet-health";
 import "@/components/bots/fleet-strip.css";
@@ -619,7 +619,7 @@ function BotsSection({ bots, server, onStopInitiated, onStopSettled }: { bots: B
 const PAPER_SECTIONS = {
   wallet: "fleet/summary", positions: "fleet/holdings", fills: "fleet/fills?limit=100",
   executors: "executors", risk: "risk", decisions: "decisions",
-  history: "controller-performance/history?interval=5m&limit=1000",
+  history: "controller-performance/history?interval=5m&limit=200",
 } as const;
 
 type PaperRow = Record<string, unknown>;
@@ -766,7 +766,7 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
       const sections = await Promise.all(Object.entries(PAPER_SECTIONS).map(async ([section, suffix]) => {
         const path = ["executors", "risk", "decisions"].includes(section) ? `${prefix}bots/${encodeURIComponent(bot)}/${suffix}` : `${prefix}${suffix}`;
         const snapshot = status.snapshot_id ? `${path.includes("?") ? "&" : "?"}snapshot_id=${encodeURIComponent(status.snapshot_id)}` : "";
-        try { return await readPaper(path + snapshot, section); }
+        try { return ["positions", "fills", "executors", "history"].includes(section) ? await paperObservationPages(path + snapshot, page => readPaper(page, section)) : await readPaper(path + snapshot, section); }
         catch (error) {
           if (!(error instanceof PaperSectionSchemaError) || error.section !== section) throw error;
           return { ...status, section, state: "degraded" as const, reason: error.message, data: section === "risk" && error.holds ? { holds: error.holds } : null, completeness: "unavailable" };

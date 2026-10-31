@@ -1,0 +1,126 @@
+{
+  "TCP": {
+    "10443": {
+      "HTTPS": true
+    },
+    "11443": {
+      "HTTPS": true
+    },
+    "12443": {
+      "HTTPS": true
+    },
+    "13443": {
+      "HTTPS": true
+    },
+    "14443": {
+      "HTTPS": true
+    },
+    "15443": {
+      "HTTPS": true
+    },
+    "16443": {
+      "HTTPS": true
+    },
+    "22443": {
+      "HTTPS": true
+    },
+    "23443": {
+      "HTTPS": true
+    },
+    "443": {
+      "HTTPS": true
+    },
+    "8443": {
+      "HTTPS": true
+    },
+    "9443": {
+      "HTTPS": true
+    }
+  },
+  "Web": {
+    "razer.tailb24ea3.ts.net:10443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:18768"
+        }
+      }
+    },
+    "razer.tailb24ea3.ts.net:11443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:18770"
+        }
+      }
+    },
+    "razer.tailb24ea3.ts.net:12443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:18771"
+        }
+      }
+    },
+    "razer.tailb24ea3.ts.net:13443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:18772"
+        }
+      }
+    },
+    "razer.tailb24ea3.ts.net:14443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:18773"
+        }
+      }
+    },
+    "razer.tailb24ea3.ts.net:15443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:28882"
+        }
+      }
+    },
+    "razer.tailb24ea3.ts.net:16443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:29896"
+        }
+      }
+    },
+    "razer.tailb24ea3.ts.net:22443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:19400"
+        }
+      }
+    },
+    "razer.tailb24ea3.ts.net:23443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:18794"
+        }
+      }
+    },
+    "razer.tailb24ea3.ts.net:443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:8743"
+        }
+      }
+    },
+    "razer.tailb24ea3.ts.net:8443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:18769"
+        }
+      }
+    },
+    "razer.tailb24ea3.ts.net:9443": {
+      "Handlers": {
+        "/": {
+          "Proxy": "http://127.0.0.1:8095"
+        }
+      }
+    }
+  }
+}

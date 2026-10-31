@@ -275,7 +275,7 @@ def paper_read_route(path: str, query: str, bot: str | None) -> tuple[str, str] 
             and value.isdigit()
             and 1 <= int(value) <= 1000
         ):
-            forwarded.append((key, value))
+            forwarded.append((key, str(min(int(value), 200))))
         elif (
             key in {"start_ms", "end_ms"}
             and value.isascii()
@@ -283,13 +283,19 @@ def paper_read_route(path: str, query: str, bot: str | None) -> tuple[str, str] 
             and 0 <= int(value) <= 10**14
         ):
             forwarded.append((key, value))
-        elif key == "cursor" and re.fullmatch(r"[A-Za-z0-9_.:=-]{1,1024}", value):
+        elif key == "cursor" and re.fullmatch(r"[A-Za-z0-9_=-]{1,512}", value):
             forwarded.append((key, value))
         elif key == "snapshot_id" and re.fullmatch(r"[A-Za-z0-9_.:-]{1,160}", value):
             forwarded.append((key, value))
         else:
             raise HTTPException(400, detail="unsupported paper read query")
     bounds = dict(forwarded)
+    if ("start_ms" in bounds) != ("end_ms" in bounds):
+        raise HTTPException(400, detail="paper read range requires both bounds")
+    if "start_ms" in bounds and int(bounds["end_ms"]) - int(bounds["start_ms"]) > 31 * 86400000:
+        raise HTTPException(400, detail="paper read range exceeds owner maximum")
+    if section not in {"fills", "positions", "executors", "history"} and any(key in bounds for key in ("cursor", "start_ms", "end_ms")):
+        raise HTTPException(400, detail="paper section is not pageable")
     if (
         "start_ms" in bounds
         and "end_ms" in bounds

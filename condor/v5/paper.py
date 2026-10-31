@@ -1175,7 +1175,39 @@ def _matches_c1_schema(value: Any, schema: dict) -> bool:
     return True
 
 
-def _validate_read_tree(value: Any, key: str = "", depth: int = 0) -> None:
+NATIVE_DECIMAL = {"type": "string", "maxLength": 128, "pattern": r"\A-?[0-9]+(?:\.[0-9]+)?\Z"}
+NATIVE_CURRENCY = {"type": "string", "pattern": r"\A[A-Za-z0-9_.-]{1,32}\Z"}
+NATIVE_STRUCTURED_FINANCIAL = {
+    "fee": {
+        "type": "object", "additionalProperties": False,
+        "required": ["fee_type", "flat_fees", "percent", "percent_token"],
+        "properties": {
+            "fee_type": {"enum": ["AddedToCost", "DeductedFromReturns"]},
+            "percent": NATIVE_DECIMAL,
+            "percent_token": {"anyOf": [NATIVE_CURRENCY, {"type": "null"}]},
+            "flat_fees": {"type": "array", "maxItems": 32, "items": {
+                "type": "object", "additionalProperties": False, "required": ["amount", "token"],
+                "properties": {"amount": NATIVE_DECIMAL, "token": NATIVE_CURRENCY},
+            }},
+        },
+    },
+    "fees": {"type": "array", "maxItems": 32, "items": {
+        "type": "object", "additionalProperties": False, "required": ["amount", "currency"],
+        "properties": {"amount": NATIVE_DECIMAL, "currency": NATIVE_CURRENCY},
+    }},
+    "close_quantity": {
+        "type": "object", "additionalProperties": False,
+        "properties": {
+            **{name: {"anyOf": [{"type": "string", "maxLength": 128,
+                "pattern": r"\A-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]{1,3})?\Z"}, {"type": "null"}]}
+               for name in ("owned_base", "available_base", "order_amount", "residual_base", "quantity_increment")},
+            "blocked_reason": {"type": ["string", "null"], "pattern": r"\A[A-Za-z0-9_.-]{1,128}\Z"},
+        },
+    },
+}
+
+
+def _validate_read_tree(value: Any, key: str = "", depth: int = 0, *, native_fee: bool = False) -> None:
     if depth > 16 or isinstance(value, float):
         raise ValueError("invalid paper observation value")
     if value is None:
@@ -1192,17 +1224,38 @@ def _validate_read_tree(value: Any, key: str = "", depth: int = 0) -> None:
         "-infinity",
     }:
         raise ValueError("invalid paper value")
+    if key in {"fee_quote_valuation_basis", "count_basis", "target_basis", "pnl_scope"} or (native_fee and key == "fee_type"):
+        if not isinstance(value, str) or not value or len(value) > 4096:
+            raise ValueError("invalid accounting metadata")
+        if key in {"target_basis", "pnl_scope"} and re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", value) is None:
+            raise ValueError("invalid accounting label")
+        return
+    if key in NATIVE_STRUCTURED_FINANCIAL:
+        if not _matches_c1_schema(value, NATIVE_STRUCTURED_FINANCIAL[key]):
+            raise ValueError("invalid structured financial value")
+        if key == "close_quantity":
+            from decimal import Decimal
+
+            if any(abs(Decimal(amount).adjusted()) > 128 for name, amount in value.items() if name != "blocked_reason" and amount is not None):
+                raise ValueError("invalid close quantity scale")
+        native_fee = key == "fee"
+    if key == "fees_paid":
+        if not isinstance(value, dict) or len(value) > 32 or any(
+            re.fullmatch(r"[A-Z0-9]{1,20}", currency) is None or not _matches_c1_schema(amount, NATIVE_DECIMAL) or amount.startswith("-")
+            for currency, amount in value.items()
+        ):
+            raise ValueError("invalid fee currency amounts")
+        return
     if isinstance(value, dict):
         for name, child in value.items():
-            _validate_read_tree(child, name, depth + 1)
+            _validate_read_tree(child, name + "_reason" if key == "unavailable_reasons" else name, depth + 1, native_fee=native_fee)
     elif isinstance(value, list):
         if len(value) > 2000:
             raise ValueError("paper row capacity")
         for child in value:
-            _validate_read_tree(child, "", depth + 1)
+            _validate_read_tree(child, "", depth + 1, native_fee=native_fee)
     elif (
-        key not in {"fee_quote_valuation_basis", "count_basis", "target_basis"}
-        and not key.endswith(
+        not key.endswith(
             (
                 "_currency",
                 "_asset",
@@ -1213,13 +1266,15 @@ def _validate_read_tree(value: Any, key: str = "", depth: int = 0) -> None:
                 "_state",
                 "_id",
                 "_count",
+                "_enabled",
+                "_applicable",
+                "_known",
             )
         )
         and re.search(
             r"(?:^|_)(?:price|quantity|amount|balance|total|available|reserved|basis|fee|fees|pnl|exposure|funding|mark|cash|equity)(?:_|$)",
             key,
         )
-        and type(value) is not bool
     ):
         if (
             not isinstance(value, str)

@@ -13,6 +13,90 @@ API_ENVELOPES = json.loads(
     (Path(__file__).parent / "fixtures/paper-api-7b12d1c2/envelopes.json").read_text()
 )
 
+FINAL3 = Path(__file__).parent / "fixtures/paper-api-final3"
+
+
+@pytest.mark.parametrize("section", ["wallet", "positions", "fills", "executors", "risk", "decisions", "history", "operations", "status"])
+def test_final3_authenticated_native_api_records_are_available(tmp_path, section):
+    from test_v5_paper_binding import client_for
+
+    payload = json.loads((FINAL3 / (section + ".json")).read_text())
+
+    class Source:
+        async def observation(self, path):
+            return payload
+
+    route = next(path for path, name in ROUTES.items() if name == section)
+    with client_for(tmp_path, Source(), clock_s=payload["read_at_ms"] / 1000) as client:
+        response = client.get("/api/v5/dashboard/read", params={"path": route})
+    assert response.status_code == 200, response.text
+    assert response.json()["state"] == "available"
+    assert response.json()["data"] == payload["data"]
+
+
+def test_final3_native_orders_and_accounting_are_validated_without_inventing_api_routes():
+    from condor.v5.paper import _validate_section_data, _validate_read_tree
+
+    native = json.loads((FINAL3 / "native-observation.json").read_text())
+    for section in ("orders", "accounting"):
+        data = native[section]["data"]
+        _validate_read_tree(data)
+        _validate_section_data(section, data)
+
+
+@pytest.mark.parametrize("section,change", [
+    ("executors", {"pnl_scope": 1}), ("executors", {"pnl_scope": "bad scope"}),
+    ("fills", {"fee": {"fee_type": "invented", "flat_fees": [], "percent": "0", "percent_token": None}}),
+    ("fills", {"fee": {"fee_type": "AddedToCost", "flat_fees": [], "percent": 0, "percent_token": None}}),
+    ("fills", {"quantity": "not money"}), ("fills", {"quantity": False}), ("executors", {"fees_paid": {"USDC": 1}}),
+])
+def test_native_financial_metadata_does_not_weaken_amount_or_enum_validation(section, change):
+    from condor.v5.paper import validate_paper_read
+
+    payload = json.loads((FINAL3 / (section + ".json")).read_text())
+    payload["data"][0].update(change)
+    with pytest.raises(HTTPException) as error:
+        validate_paper_read(payload, section=section, bot=BOT, now_ms=payload["read_at_ms"])
+    assert error.value.detail["section"] == section
+    assert error.value.detail["code"] == "paper_read_schema_invalid"
+
+
+def test_real_response_provenance_hashes_are_reproducible():
+    from hashlib import sha256
+
+    receipt = json.loads((FINAL3 / "provenance.json").read_text())
+    for filename, item in receipt["records"].items():
+        assert sha256((FINAL3 / filename).read_bytes()).hexdigest() == item.get("vendored_sha256", item.get("sha256"))
+
+
+@pytest.mark.parametrize("section", ["status", "wallet", "positions", "fills", "executors", "risk", "decisions", "history", "operations", "accounting"])
+def test_real_native_api_replay_preserves_owner_states_and_records(section):
+    from condor.v5.paper import validate_paper_read
+
+    packet = json.loads((FINAL3 / "native-replay" / (section + ".json")).read_text())
+    read = validate_paper_read(packet, section=section, bot=BOT, now_ms=packet["read_at_ms"])
+    assert read["state"] == packet["state"]
+    assert read["data"] == packet["data"]
+
+
+def test_history_limit_is_capped_to_pinned_api73_query_constraint(tmp_path):
+    import re
+    from condor.v5.dashboard import paper_read_route
+    from urllib.parse import parse_qs
+
+    declaration = (FINAL3 / "api73-paper-route.py.txt").read_text()
+    maximum = int(re.search(r"limit: int = Query\(default=100, ge=1, le=(\d+)\)", declaration)[1])
+    result = paper_read_route("/api/v1/servers/rsibot-v5/controller-performance/history", "limit=1000&interval=5m", BOT)
+    assert parse_qs(result[1])["limit"] == [str(maximum)]
+
+
+@pytest.mark.parametrize("query", ["cursor=" + "a" * 513, "start_ms=1", "start_ms=1&end_ms=2678400002"])
+def test_owner_query_bounds_reject_invalid_cursor_and_ranges(query):
+    from condor.v5.dashboard import paper_read_route
+
+    with pytest.raises(HTTPException):
+        paper_read_route("/api/v1/servers/rsibot-v5/controller-performance/history", query, BOT)
+
 
 @pytest.mark.parametrize("name", list(API_ENVELOPES))
 def test_real_api_73_envelopes_cross_authenticated_condor_boundary(tmp_path, name):

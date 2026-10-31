@@ -1,0 +1,11 @@
+    @application.get("/v1/paper/{section}", dependencies=[Depends(authorize)], response_model=PaperEnvelope)
+    async def paper_read(
+        section: Literal["status", "wallet", "fills", "positions", "executors", "risk", "decisions", "history", "operations", "accounting", "candles"],
+        limit: int = Query(default=100, ge=1, le=200),
+        cursor: str | None = Query(default=None, max_length=512),
+        start_ms: int | None = Query(default=None, ge=0),
+        end_ms: int | None = Query(default=None, ge=0),
+        snapshot_id: str | None = Query(default=None, max_length=160),
+        pair: str | None = Query(default=None, max_length=41),
+    ):
+        def operation():

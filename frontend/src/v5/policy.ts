@@ -54,6 +54,54 @@ export function paperWorkspaceLabel(profile: { readiness?: { paper_owner?: unkno
   return profile?.readiness?.paper_owner ? "PAPER · simulated wallet · live disabled · advisor reports only" : null;
 }
 
+function paperNativeRecordValid(value: unknown, key = "", depth = 0, nativeFee = false): boolean {
+  if (depth > 16) return false;
+  if (value == null) return true;
+  const object = (part: unknown): part is Record<string, unknown> => !!part && typeof part === "object" && !Array.isArray(part);
+  const decimal = (part: unknown) => typeof part === "string" && part.length <= 128 && /^-?[0-9]+(?:\.[0-9]+)?$/.test(part);
+  const currency = (part: unknown) => typeof part === "string" && /^[A-Za-z0-9_.-]{1,32}$/.test(part);
+  const fields = (part: unknown, required: string[], allowed = required): part is Record<string, unknown> => object(part) && required.every(name => name in part) && Object.keys(part).every(name => allowed.includes(name));
+  if (typeof value === "string" && (value.length > 4096 || /^(?:nan|-?inf|-?infinity)$/i.test(value))) return false;
+  if (key.endsWith("_ms") || key.endsWith("_count")) return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
+  if (["count_basis", "fee_quote_valuation_basis", "target_basis", "pnl_scope"].includes(key) || nativeFee && key === "fee_type") return typeof value === "string" && !!value && (!["target_basis", "pnl_scope"].includes(key) || /^[A-Za-z0-9_.-]{1,128}$/.test(value));
+  if (key === "fee") {
+    if (!fields(value, ["fee_type", "flat_fees", "percent", "percent_token"]) || !["AddedToCost", "DeductedFromReturns"].includes(String(value.fee_type)) || !decimal(value.percent) || value.percent_token !== null && !currency(value.percent_token) || !Array.isArray(value.flat_fees) || value.flat_fees.length > 32 || !value.flat_fees.every(part => fields(part, ["amount", "token"]) && decimal(part.amount) && currency(part.token))) return false;
+    nativeFee = true;
+  }
+  if (key === "fees") return Array.isArray(value) && value.length <= 32 && value.every(part => fields(part, ["amount", "currency"]) && decimal(part.amount) && currency(part.currency));
+  if (key === "fees_paid") return object(value) && Object.keys(value).length <= 32 && Object.entries(value).every(([asset, amount]) => /^[A-Z0-9]{1,20}$/.test(asset) && decimal(amount) && !String(amount).startsWith("-"));
+  if (key === "close_quantity") return fields(value, [], ["owned_base", "available_base", "order_amount", "residual_base", "quantity_increment", "blocked_reason"]) && Object.entries(value).every(([name, amount]) => amount === null || typeof amount === "string" && (name === "blocked_reason" ? /^[A-Za-z0-9_.-]{1,128}$/.test(amount) : amount.length <= 128 && /^-?[0-9]+(?:\.[0-9]+)?(?:[eE][+-]?[0-9]{1,3})?$/.test(amount) && Number.isFinite(Number(amount)) && (Number(amount) === 0 || Math.abs(Math.floor(Math.log10(Math.abs(Number(amount))))) <= 128)));
+  if (object(value)) return Object.entries(value).every(([name, part]) => paperNativeRecordValid(part, key === "unavailable_reasons" ? name + "_reason" : name, depth + 1, nativeFee));
+  if (Array.isArray(value)) return value.length <= 2000 && value.every(part => paperNativeRecordValid(part, "", depth + 1, nativeFee));
+  if (/(?:^|_)(?:price|quantity|amount|balance|total|available|reserved|basis|fee|fees|pnl|exposure|funding|mark|cash|equity)(?:_|$)/.test(key) && !/_(?:currency|asset|unit|source|policy|reason|state|id|count|enabled|applicable|known)$/.test(key)) return decimal(value);
+  return typeof value !== "number" || Number.isSafeInteger(value);
+}
+
+export async function paperObservationPages(path: string, fetchPage: (path: string) => Promise<import("./contracts").PaperRead>): Promise<import("./contracts").PaperRead> {
+  const url = new URL(path, "https://paper.invalid");
+  url.searchParams.set("limit", "200");
+  let result = await fetchPage(url.pathname + url.search);
+  const seen = new Set<string>();
+  for (let page = 1; result.next_cursor && page < 5; page++) {
+    if (seen.has(result.next_cursor)) throw new Error("Repeated owner history cursor was refused.");
+    seen.add(result.next_cursor);
+    url.searchParams.set("cursor", result.next_cursor);
+    if (!result.snapshot_id) throw new Error("Owner history snapshot is unavailable.");
+    url.searchParams.set("snapshot_id", result.snapshot_id);
+    const next = await fetchPage(url.pathname + url.search);
+    if (!paperSnapshotsAgree([result, next]) || result.section !== next.section || result.state !== next.state || result.completeness !== next.completeness) throw new Error("Mixed owner page snapshots or states were refused.");
+    if (Array.isArray(result.data) && Array.isArray(next.data)) {
+      result = { ...next, data: [...result.data, ...next.data] };
+      continue;
+    }
+    const previousData = result.data as Record<string, unknown> | null;
+    const nextData = next.data as Record<string, unknown> | null;
+    if (!Array.isArray(previousData?.segments) || !Array.isArray(nextData?.segments)) throw new Error("Owner history page is invalid.");
+    result = { ...next, data: { ...nextData, segments: [...previousData.segments, ...nextData.segments] } };
+  }
+  return result;
+}
+
 export function paperSectionError(read: Partial<import("./contracts").PaperRead> | undefined): string | null {
   if (!read) return null;
   const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
@@ -80,6 +128,7 @@ export function paperSectionError(read: Partial<import("./contracts").PaperRead>
     read.state === "available" && read.data == null) return invalid();
   if (read.data == null) return null;
   if (["positions", "fills", "executors", "orders"].includes(read.section ?? "")) {
+    if (!paperNativeRecordValid(read.data)) return invalid();
     if (!records(read.data) || read.data.some(row => ["executor_id", "controller_id", "trading_pair", "state"].some(key => row[key] != null && typeof row[key] !== "string"))) return invalid();
     const required: Record<string, string[]> = { positions: ["position_id", "controller_id", "trading_pair", "state", "quantity"], executors: ["executor_id", "controller_id", "state"], fills: ["trade_id", "order_id", "trading_pair", "side", "quantity", "price"], orders: ["order_id", "executor_id", "side"] };
     if (read.data.some(row => required[read.section!].some(key => typeof row[key] !== "string" || !row[key]))) return invalid();

@@ -1,0 +1,307 @@
+{
+  "schema": "rsibot.v5-paper.read.v1",
+  "state": "available",
+  "section": "risk",
+  "snapshot_id": "ebc8f9016a66ea614edc47cee4ed00fc:41",
+  "bot_id": "meridian_v5_paper",
+  "execution_mode": "paper",
+  "simulated": true,
+  "generated_at_ms": 1793401542783,
+  "observed_at_ms": 1793401542783,
+  "read_at_ms": 1793401546598,
+  "source_at_ms": 1793401542783,
+  "completeness": "complete",
+  "reason": null,
+  "capabilities": [
+    "read"
+  ],
+  "data": {
+    "acknowledgements": [],
+    "boot_id": "ebc8f9016a66ea614edc47cee4ed00fc",
+    "clock_recovery": {
+      "anomalies": [],
+      "high_water_ms": 1793401542783,
+      "hold": null,
+      "required": false
+    },
+    "control_hold": null,
+    "controllers": {
+      "modular_spot_meridian_v5_paper_bnb": {
+        "native": {
+          "acknowledgements": [],
+          "complete": true,
+          "configured_limits": {
+            "buy_quote": "100",
+            "cash_reserve_quote": "0",
+            "fee_reserve_fraction": "0.003",
+            "max_active_tranches": 64,
+            "max_daily_loss_fraction": "0.99",
+            "max_drawdown_fraction": "0.99",
+            "max_spread_fraction": "0.003",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "daily_loss_use": "0",
+          "day": 20756,
+          "day_baseline_pnl": "-1.7709067876044",
+          "drawdown_use": "1.981528564688000006992328054",
+          "hard_account_loss_ceiling": false,
+          "latched": false,
+          "marked_exposure": "250.4101048605",
+          "missing_mark_policy": "hold_new_acquisitions_only",
+          "native_marked_pnl": "-0.547221695116400006992328054",
+          "observed_at_ms": 1793401542783,
+          "peak_pnl": "1.4343068695716",
+          "protected_exit_state": null,
+          "protected_exit_state_reason": "entry rails do not certify coverage; use native C1 executor/recovery",
+          "protected_exits": "preserved",
+          "reason": "risk_clear",
+          "reservation_policy": "non-additive native gross commitments including fees until proven flat",
+          "reserved_admission": "399.99837471643",
+          "schema": "rsibot.v5-paper.native-risk.v1",
+          "scope": "modular_spot_meridian_v5_paper_bnb",
+          "source_at_ms": null,
+          "source_timestamp_reason": "native report supplies receipt age, not event time",
+          "stale_reason": null,
+          "unit": "USDC"
+        },
+        "operator": {
+          "command_id": null,
+          "effective_at_ms": null,
+          "emergency": false,
+          "paused": false,
+          "reason": null
+        }
+      },
+      "modular_spot_meridian_v5_paper_btc": {
+        "native": {
+          "acknowledgements": [],
+          "complete": true,
+          "configured_limits": {
+            "buy_quote": "100",
+            "cash_reserve_quote": "0",
+            "fee_reserve_fraction": "0.003",
+            "max_active_tranches": 64,
+            "max_daily_loss_fraction": "0.99",
+            "max_drawdown_fraction": "0.99",
+            "max_spread_fraction": "0.003",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "daily_loss_use": "2.259407795650399969904388478",
+          "day": 20756,
+          "day_baseline_pnl": "-5.811281644296800000000000000",
+          "drawdown_use": "8.210226429076799969904388478",
+          "hard_account_loss_ceiling": false,
+          "latched": false,
+          "marked_exposure": "489.23055830150",
+          "missing_mark_policy": "hold_new_acquisitions_only",
+          "native_marked_pnl": "-8.070689439947199969904388478",
+          "observed_at_ms": 1793401542783,
+          "peak_pnl": "0.1395369891296000000000000000",
+          "protected_exit_state": null,
+          "protected_exit_state_reason": "entry rails do not certify coverage; use native C1 executor/recovery",
+          "protected_exits": "preserved",
+          "reason": "risk_clear",
+          "reservation_policy": "non-additive native gross commitments including fees until proven flat",
+          "reserved_admission": "499.998626905659",
+          "schema": "rsibot.v5-paper.native-risk.v1",
+          "scope": "modular_spot_meridian_v5_paper_btc",
+          "source_at_ms": null,
+          "source_timestamp_reason": "native report supplies receipt age, not event time",
+          "stale_reason": null,
+          "unit": "USDC"
+        },
+        "operator": {
+          "command_id": null,
+          "effective_at_ms": null,
+          "emergency": false,
+          "paused": false,
+          "reason": null
+        }
+      },
+      "modular_spot_meridian_v5_paper_eth": {
+        "native": {
+          "acknowledgements": [],
+          "complete": true,
+          "configured_limits": {
+            "buy_quote": "100",
+            "cash_reserve_quote": "0",
+            "fee_reserve_fraction": "0.003",
+            "max_active_tranches": 64,
+            "max_daily_loss_fraction": "0.99",
+            "max_drawdown_fraction": "0.99",
+            "max_spread_fraction": "0.003",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "daily_loss_use": "0.324285475043999896998265293",
+          "day": 20756,
+          "day_baseline_pnl": "-5.886694044921999999999999975",
+          "drawdown_use": "6.382710534381999896998265268",
+          "hard_account_loss_ceiling": false,
+          "latched": false,
+          "marked_exposure": "390.4899819000",
+          "missing_mark_policy": "hold_new_acquisitions_only",
+          "native_marked_pnl": "-6.210979519965999896998265268",
+          "observed_at_ms": 1793401542783,
+          "peak_pnl": "0.1717310144160000000000000000",
+          "protected_exit_state": null,
+          "protected_exit_state_reason": "entry rails do not certify coverage; use native C1 executor/recovery",
+          "protected_exits": "preserved",
+          "reason": "risk_clear",
+          "reservation_policy": "non-additive native gross commitments including fees until proven flat",
+          "reserved_admission": "399.99611130651",
+          "schema": "rsibot.v5-paper.native-risk.v1",
+          "scope": "modular_spot_meridian_v5_paper_eth",
+          "source_at_ms": null,
+          "source_timestamp_reason": "native report supplies receipt age, not event time",
+          "stale_reason": null,
+          "unit": "USDC"
+        },
+        "operator": {
+          "command_id": null,
+          "effective_at_ms": null,
+          "emergency": false,
+          "paused": false,
+          "reason": null
+        }
+      },
+      "modular_spot_meridian_v5_paper_sol": {
+        "native": {
+          "acknowledgements": [],
+          "complete": true,
+          "configured_limits": {
+            "buy_quote": "100",
+            "cash_reserve_quote": "0",
+            "fee_reserve_fraction": "0.003",
+            "max_active_tranches": 64,
+            "max_daily_loss_fraction": "0.99",
+            "max_drawdown_fraction": "0.99",
+            "max_spread_fraction": "0.003",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "daily_loss_use": "0.130635878159999903964919683",
+          "day": 20756,
+          "day_baseline_pnl": "-8.179133704799999999999999994",
+          "drawdown_use": "8.487045334959999903964919677",
+          "hard_account_loss_ceiling": false,
+          "latched": false,
+          "marked_exposure": "588.75928260",
+          "missing_mark_policy": "hold_new_acquisitions_only",
+          "native_marked_pnl": "-8.309769582959999903964919677",
+          "observed_at_ms": 1793401542783,
+          "peak_pnl": "0.1772757520000000000000000000",
+          "protected_exit_state": null,
+          "protected_exit_state_reason": "entry rails do not certify coverage; use native C1 executor/recovery",
+          "protected_exits": "preserved",
+          "reason": "risk_clear",
+          "reservation_policy": "non-additive native gross commitments including fees until proven flat",
+          "reserved_admission": "599.9974472161",
+          "schema": "rsibot.v5-paper.native-risk.v1",
+          "scope": "modular_spot_meridian_v5_paper_sol",
+          "source_at_ms": null,
+          "source_timestamp_reason": "native report supplies receipt age, not event time",
+          "stale_reason": null,
+          "unit": "USDC"
+        },
+        "operator": {
+          "command_id": null,
+          "effective_at_ms": null,
+          "emergency": false,
+          "paused": false,
+          "reason": null
+        }
+      },
+      "modular_spot_meridian_v5_paper_xrp": {
+        "native": {
+          "acknowledgements": [],
+          "complete": true,
+          "configured_limits": {
+            "buy_quote": "100",
+            "cash_reserve_quote": "0",
+            "fee_reserve_fraction": "0.003",
+            "max_active_tranches": 64,
+            "max_daily_loss_fraction": "0.99",
+            "max_drawdown_fraction": "0.99",
+            "max_spread_fraction": "0.003",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "daily_loss_use": "0",
+          "day": 20756,
+          "day_baseline_pnl": "-5.713908407380000000000000059",
+          "drawdown_use": "2.515190906660000013420687992",
+          "hard_account_loss_ceiling": false,
+          "latched": false,
+          "marked_exposure": "295.15538250",
+          "missing_mark_policy": "hold_new_acquisitions_only",
+          "native_marked_pnl": "-1.774968706880000013420688051",
+          "observed_at_ms": 1793401542783,
+          "peak_pnl": "0.7402221997799999999999999409",
+          "protected_exit_state": null,
+          "protected_exit_state_reason": "entry rails do not certify coverage; use native C1 executor/recovery",
+          "protected_exits": "preserved",
+          "reason": "risk_clear",
+          "reservation_policy": "non-additive native gross commitments including fees until proven flat",
+          "reserved_admission": "299.9989744082",
+          "schema": "rsibot.v5-paper.native-risk.v1",
+          "scope": "modular_spot_meridian_v5_paper_xrp",
+          "source_at_ms": null,
+          "source_timestamp_reason": "native report supplies receipt age, not event time",
+          "stale_reason": null,
+          "unit": "USDC"
+        },
+        "operator": {
+          "command_id": null,
+          "effective_at_ms": null,
+          "emergency": false,
+          "paused": false,
+          "reason": null
+        }
+      }
+    },
+    "emergency_recovery": {
+      "acknowledgements": [],
+      "hold": null,
+      "required": false
+    },
+    "execution_mode": "paper",
+    "hard_account_loss_ceiling": false,
+    "holds": [],
+    "ingress_recovery": {
+      "acknowledgements": [],
+      "hold": null,
+      "required": false
+    },
+    "missing_mark_policy": "hold_new_acquisitions_only",
+    "native_entry_holds": [],
+    "observed_stop_fingerprint": "41cbad32cfa4d8a0b879f09db2de721bd4bbfee79ceabc6662ab91d8656ea416",
+    "observed_stop_generation": 0,
+    "protected_exits": "preserved",
+    "schema": "rsibot.v5-paper.risk.v1",
+    "sequence": 40,
+    "simulated": true,
+    "startup_evidence": {
+      "damage": [],
+      "hold": null,
+      "required": false
+    },
+    "stop_pending_durability": {
+      "required": false,
+      "stops": []
+    }
+  },
+  "next_cursor": null,
+  "source": {
+    "owner": "hummingbot",
+    "schema": "rsibot.v5-paper.observation.v2",
+    "sha256": "296e05ddad62e9f9ae52b7ec0eebcc781546fb7b5ae1a3713e194464bce14903",
+    "boot_id": "ebc8f9016a66ea614edc47cee4ed00fc",
+    "sequence": 41,
+    "source_sha256": "93f2287ffd7f8112ef08fa2ba3bb9eb597f447e6ba1d825e6c3461796924f762",
+    "config_sha256": "b80096664a0aefc7d614dbcff167057bffffb02a2a78c72e08ee5c7a9876c5e0",
+    "recipe_sha256": "ebec0189e6666a0c8c23732afe45315957e6c068fcd5b3c4c0b0c73b3955885a"
+  }
+}

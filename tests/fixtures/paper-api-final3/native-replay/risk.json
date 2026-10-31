@@ -1,0 +1,405 @@
+{
+  "schema": "rsibot.v5-paper.read.v1",
+  "state": "available",
+  "section": "risk",
+  "snapshot_id": "4bc58bd65620dced4b9431804c1ef789:751",
+  "bot_id": "meridian_v5_paper",
+  "execution_mode": "paper",
+  "simulated": true,
+  "generated_at_ms": 1793403300404,
+  "observed_at_ms": 1793403300404,
+  "read_at_ms": 1793403300404,
+  "source_at_ms": 1793403300404,
+  "completeness": "complete",
+  "reason": null,
+  "capabilities": [
+    "read"
+  ],
+  "data": {
+    "acknowledgements": [
+      {
+        "acquisition_reconciliation": "native_next_tick",
+        "action": "pause_entries",
+        "boot_id": "ebc8f9016a66ea614edc47cee4ed00fc",
+        "bot_id": "meridian_v5_paper",
+        "command_id": "wp14-pause_entries-1793401546775",
+        "controller_scope": [
+          "modular_spot_meridian_v5_paper_bnb",
+          "modular_spot_meridian_v5_paper_btc",
+          "modular_spot_meridian_v5_paper_eth",
+          "modular_spot_meridian_v5_paper_sol",
+          "modular_spot_meridian_v5_paper_xrp"
+        ],
+        "effective_at_ms": 1793401547622,
+        "protected_exits": "preserved",
+        "schema": "rsibot.v5-paper.ack.v1",
+        "sequence": 42,
+        "status": "applied"
+      },
+      {
+        "acquisition_reconciliation": "native_next_tick",
+        "action": "resume_entries",
+        "boot_id": "ebc8f9016a66ea614edc47cee4ed00fc",
+        "bot_id": "meridian_v5_paper",
+        "command_id": "wp14-resume_entries-1793401558791",
+        "controller_scope": [
+          "modular_spot_meridian_v5_paper_bnb",
+          "modular_spot_meridian_v5_paper_btc",
+          "modular_spot_meridian_v5_paper_eth",
+          "modular_spot_meridian_v5_paper_sol",
+          "modular_spot_meridian_v5_paper_xrp"
+        ],
+        "effective_at_ms": 1793401560420,
+        "protected_exits": "preserved",
+        "schema": "rsibot.v5-paper.ack.v1",
+        "sequence": 49,
+        "status": "applied"
+      },
+      {
+        "acquisition_reconciliation": "native_next_tick",
+        "action": "emergency_entry_halt",
+        "boot_id": "ebc8f9016a66ea614edc47cee4ed00fc",
+        "bot_id": "meridian_v5_paper",
+        "command_id": "wp14-emergency_entry_halt-1793401900624",
+        "controller_scope": [
+          "modular_spot_meridian_v5_paper_bnb",
+          "modular_spot_meridian_v5_paper_btc",
+          "modular_spot_meridian_v5_paper_eth",
+          "modular_spot_meridian_v5_paper_sol",
+          "modular_spot_meridian_v5_paper_xrp"
+        ],
+        "effective_at_ms": 1793401901335,
+        "protected_exits": "preserved",
+        "schema": "rsibot.v5-paper.ack.v1",
+        "sequence": 204,
+        "status": "applied"
+      },
+      {
+        "action": "resume_entries",
+        "boot_id": "ebc8f9016a66ea614edc47cee4ed00fc",
+        "bot_id": "meridian_v5_paper",
+        "command_id": "wp14-resume_entries-1793401902639",
+        "controller_scope": [
+          "modular_spot_meridian_v5_paper_bnb",
+          "modular_spot_meridian_v5_paper_btc",
+          "modular_spot_meridian_v5_paper_eth",
+          "modular_spot_meridian_v5_paper_sol",
+          "modular_spot_meridian_v5_paper_xrp"
+        ],
+        "effective_at_ms": null,
+        "error": "entry stop changed after the observed sequence; review the current observation",
+        "observed_at_ms": 1793401903191,
+        "schema": "rsibot.v5-paper.ack.v1",
+        "sequence": 205,
+        "status": "rejected"
+      },
+      {
+        "acquisition_reconciliation": "native_next_tick",
+        "action": "resume_entries",
+        "boot_id": "ebc8f9016a66ea614edc47cee4ed00fc",
+        "bot_id": "meridian_v5_paper",
+        "command_id": "wp14-resume_entries-1793401904682",
+        "controller_scope": [
+          "modular_spot_meridian_v5_paper_bnb",
+          "modular_spot_meridian_v5_paper_btc",
+          "modular_spot_meridian_v5_paper_eth",
+          "modular_spot_meridian_v5_paper_sol",
+          "modular_spot_meridian_v5_paper_xrp"
+        ],
+        "effective_at_ms": null,
+        "error": "emergency entry halt requires separate reviewed reset",
+        "observed_at_ms": 1793401908589,
+        "protected_exits": "preserved",
+        "schema": "rsibot.v5-paper.ack.v1",
+        "sequence": 206,
+        "status": "rejected"
+      }
+    ],
+    "boot_id": "4bc58bd65620dced4b9431804c1ef789",
+    "clock_recovery": {
+      "anomalies": [],
+      "high_water_ms": 1793403298973,
+      "hold": null,
+      "required": false
+    },
+    "control_hold": null,
+    "controllers": {
+      "modular_spot_meridian_v5_paper_bnb": {
+        "native": {
+          "acknowledgements": [],
+          "complete": true,
+          "configured_limits": {
+            "buy_quote": "100",
+            "cash_reserve_quote": "0",
+            "fee_reserve_fraction": "0.003",
+            "max_active_tranches": 64,
+            "max_daily_loss_fraction": "0.99",
+            "max_drawdown_fraction": "0.99",
+            "max_spread_fraction": "0.003",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "daily_loss_use": "0",
+          "day": 20756,
+          "day_baseline_pnl": "-1.7709067876044",
+          "drawdown_use": "1.086045252688000006992328054",
+          "hard_account_loss_ceiling": false,
+          "latched": false,
+          "marked_exposure": "251.3142608275",
+          "missing_mark_policy": "hold_new_acquisitions_only",
+          "native_marked_pnl": "0.348261616883599993007671946",
+          "observed_at_ms": 1793403298973,
+          "peak_pnl": "1.4343068695716",
+          "protected_exit_state": null,
+          "protected_exit_state_reason": "entry rails do not certify coverage; use native C1 executor/recovery",
+          "protected_exits": "preserved",
+          "reason": "risk_clear",
+          "reservation_policy": "non-additive native gross commitments including fees until proven flat",
+          "reserved_admission": "399.99837471643",
+          "schema": "rsibot.v5-paper.native-risk.v1",
+          "scope": "modular_spot_meridian_v5_paper_bnb",
+          "source_at_ms": null,
+          "source_timestamp_reason": "native report supplies receipt age, not event time",
+          "stale_reason": null,
+          "unit": "USDC"
+        },
+        "operator": {
+          "command_id": "wp14-emergency_entry_halt-1793401900624",
+          "effective_at_ms": 1793401901335,
+          "emergency": true,
+          "paused": true,
+          "reason": "WP-14 disposable qualification: emergency entry halt"
+        }
+      },
+      "modular_spot_meridian_v5_paper_btc": {
+        "native": {
+          "acknowledgements": [],
+          "complete": true,
+          "configured_limits": {
+            "buy_quote": "100",
+            "cash_reserve_quote": "0",
+            "fee_reserve_fraction": "0.003",
+            "max_active_tranches": 64,
+            "max_daily_loss_fraction": "0.99",
+            "max_drawdown_fraction": "0.99",
+            "max_spread_fraction": "0.003",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "daily_loss_use": "1.137077707958399969904388478",
+          "day": 20756,
+          "day_baseline_pnl": "-5.811281644296800000000000000",
+          "drawdown_use": "7.087896341384799969904388478",
+          "hard_account_loss_ceiling": false,
+          "latched": false,
+          "marked_exposure": "389.77270659750",
+          "missing_mark_policy": "hold_new_acquisitions_only",
+          "native_marked_pnl": "-6.948359352255199969904388478",
+          "observed_at_ms": 1793403298973,
+          "peak_pnl": "0.1395369891296000000000000000",
+          "protected_exit_state": null,
+          "protected_exit_state_reason": "entry rails do not certify coverage; use native C1 executor/recovery",
+          "protected_exits": "preserved",
+          "reason": "risk_clear",
+          "reservation_policy": "non-additive native gross commitments including fees until proven flat",
+          "reserved_admission": "499.998626905659",
+          "schema": "rsibot.v5-paper.native-risk.v1",
+          "scope": "modular_spot_meridian_v5_paper_btc",
+          "source_at_ms": null,
+          "source_timestamp_reason": "native report supplies receipt age, not event time",
+          "stale_reason": null,
+          "unit": "USDC"
+        },
+        "operator": {
+          "command_id": "wp14-emergency_entry_halt-1793401900624",
+          "effective_at_ms": 1793401901335,
+          "emergency": true,
+          "paused": true,
+          "reason": "WP-14 disposable qualification: emergency entry halt"
+        }
+      },
+      "modular_spot_meridian_v5_paper_eth": {
+        "native": {
+          "acknowledgements": [],
+          "complete": true,
+          "configured_limits": {
+            "buy_quote": "100",
+            "cash_reserve_quote": "0",
+            "fee_reserve_fraction": "0.003",
+            "max_active_tranches": 64,
+            "max_daily_loss_fraction": "0.99",
+            "max_drawdown_fraction": "0.99",
+            "max_spread_fraction": "0.003",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "daily_loss_use": "0",
+          "day": 20756,
+          "day_baseline_pnl": "-5.886694044921999999999999975",
+          "drawdown_use": "5.186735174381999896998265268",
+          "hard_account_loss_ceiling": false,
+          "latched": false,
+          "marked_exposure": "391.6864029000",
+          "missing_mark_policy": "hold_new_acquisitions_only",
+          "native_marked_pnl": "-5.015004159965999896998265268",
+          "observed_at_ms": 1793403298973,
+          "peak_pnl": "0.1717310144160000000000000000",
+          "protected_exit_state": null,
+          "protected_exit_state_reason": "entry rails do not certify coverage; use native C1 executor/recovery",
+          "protected_exits": "preserved",
+          "reason": "risk_clear",
+          "reservation_policy": "non-additive native gross commitments including fees until proven flat",
+          "reserved_admission": "399.99611130651",
+          "schema": "rsibot.v5-paper.native-risk.v1",
+          "scope": "modular_spot_meridian_v5_paper_eth",
+          "source_at_ms": null,
+          "source_timestamp_reason": "native report supplies receipt age, not event time",
+          "stale_reason": null,
+          "unit": "USDC"
+        },
+        "operator": {
+          "command_id": "wp14-emergency_entry_halt-1793401900624",
+          "effective_at_ms": 1793401901335,
+          "emergency": true,
+          "paused": true,
+          "reason": "WP-14 disposable qualification: emergency entry halt"
+        }
+      },
+      "modular_spot_meridian_v5_paper_sol": {
+        "native": {
+          "acknowledgements": [],
+          "complete": true,
+          "configured_limits": {
+            "buy_quote": "100",
+            "cash_reserve_quote": "0",
+            "fee_reserve_fraction": "0.003",
+            "max_active_tranches": 64,
+            "max_daily_loss_fraction": "0.99",
+            "max_drawdown_fraction": "0.99",
+            "max_spread_fraction": "0.003",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "daily_loss_use": "0",
+          "day": 20756,
+          "day_baseline_pnl": "-8.179133704799999999999999994",
+          "drawdown_use": "7.057149458159999957561688020",
+          "hard_account_loss_ceiling": false,
+          "latched": false,
+          "marked_exposure": "489.586740450",
+          "missing_mark_policy": "hold_new_acquisitions_only",
+          "native_marked_pnl": "-6.879873706159999957561688020",
+          "observed_at_ms": 1793403298973,
+          "peak_pnl": "0.1772757520000000000000000000",
+          "protected_exit_state": null,
+          "protected_exit_state_reason": "entry rails do not certify coverage; use native C1 executor/recovery",
+          "protected_exits": "preserved",
+          "reason": "risk_clear",
+          "reservation_policy": "non-additive native gross commitments including fees until proven flat",
+          "reserved_admission": "599.9974472161",
+          "schema": "rsibot.v5-paper.native-risk.v1",
+          "scope": "modular_spot_meridian_v5_paper_sol",
+          "source_at_ms": null,
+          "source_timestamp_reason": "native report supplies receipt age, not event time",
+          "stale_reason": null,
+          "unit": "USDC"
+        },
+        "operator": {
+          "command_id": "wp14-emergency_entry_halt-1793401900624",
+          "effective_at_ms": 1793401901335,
+          "emergency": true,
+          "paused": true,
+          "reason": "WP-14 disposable qualification: emergency entry halt"
+        }
+      },
+      "modular_spot_meridian_v5_paper_xrp": {
+        "native": {
+          "acknowledgements": [],
+          "complete": true,
+          "configured_limits": {
+            "buy_quote": "100",
+            "cash_reserve_quote": "0",
+            "fee_reserve_fraction": "0.003",
+            "max_active_tranches": 64,
+            "max_daily_loss_fraction": "0.99",
+            "max_drawdown_fraction": "0.99",
+            "max_spread_fraction": "0.003",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "daily_loss_use": "0",
+          "day": 20756,
+          "day_baseline_pnl": "-5.713908407380000000000000059",
+          "drawdown_use": "2.240221006660000013420687992",
+          "hard_account_loss_ceiling": false,
+          "latched": false,
+          "marked_exposure": "295.426383450",
+          "missing_mark_policy": "hold_new_acquisitions_only",
+          "native_marked_pnl": "-1.499998806880000013420688051",
+          "observed_at_ms": 1793403298973,
+          "peak_pnl": "0.7402221997799999999999999409",
+          "protected_exit_state": null,
+          "protected_exit_state_reason": "entry rails do not certify coverage; use native C1 executor/recovery",
+          "protected_exits": "preserved",
+          "reason": "risk_clear",
+          "reservation_policy": "non-additive native gross commitments including fees until proven flat",
+          "reserved_admission": "299.9989744082",
+          "schema": "rsibot.v5-paper.native-risk.v1",
+          "scope": "modular_spot_meridian_v5_paper_xrp",
+          "source_at_ms": null,
+          "source_timestamp_reason": "native report supplies receipt age, not event time",
+          "stale_reason": null,
+          "unit": "USDC"
+        },
+        "operator": {
+          "command_id": "wp14-emergency_entry_halt-1793401900624",
+          "effective_at_ms": 1793401901335,
+          "emergency": true,
+          "paused": true,
+          "reason": "WP-14 disposable qualification: emergency entry halt"
+        }
+      }
+    },
+    "emergency_recovery": {
+      "acknowledgements": [],
+      "hold": null,
+      "required": false
+    },
+    "execution_mode": "paper",
+    "hard_account_loss_ceiling": false,
+    "holds": [],
+    "ingress_recovery": {
+      "acknowledgements": [],
+      "hold": null,
+      "required": false
+    },
+    "missing_mark_policy": "hold_new_acquisitions_only",
+    "native_entry_holds": [],
+    "observed_stop_fingerprint": "d686002159f3ffbab72c90e4a63ddda664ff58b401ab20e2d56a84afe0d8cd75",
+    "observed_stop_generation": 4,
+    "protected_exits": "preserved",
+    "schema": "rsibot.v5-paper.risk.v1",
+    "sequence": 750,
+    "simulated": true,
+    "startup_evidence": {
+      "damage": [],
+      "hold": null,
+      "required": false
+    },
+    "stop_pending_durability": {
+      "required": false,
+      "stops": []
+    }
+  },
+  "next_cursor": null,
+  "source": {
+    "owner": "hummingbot",
+    "schema": "rsibot.v5-paper.observation.v2",
+    "sha256": "f158eb03398f79cb056b01c538f489d3fdb05ca7e4e3d0c431d99f2b653e2668",
+    "boot_id": "4bc58bd65620dced4b9431804c1ef789",
+    "sequence": 751,
+    "source_sha256": "93f2287ffd7f8112ef08fa2ba3bb9eb597f447e6ba1d825e6c3461796924f762",
+    "config_sha256": "b80096664a0aefc7d614dbcff167057bffffb02a2a78c72e08ee5c7a9876c5e0",
+    "recipe_sha256": "ebec0189e6666a0c8c23732afe45315957e6c068fcd5b3c4c0b0c73b3955885a"
+  }
+}

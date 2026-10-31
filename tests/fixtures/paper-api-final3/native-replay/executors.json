@@ -1,0 +1,3559 @@
+{
+  "schema": "rsibot.v5-paper.read.v1",
+  "state": "available",
+  "section": "executors",
+  "snapshot_id": "4bc58bd65620dced4b9431804c1ef789:751",
+  "bot_id": "meridian_v5_paper",
+  "execution_mode": "paper",
+  "simulated": true,
+  "generated_at_ms": 1793403300404,
+  "observed_at_ms": 1793403300404,
+  "read_at_ms": 1793403300404,
+  "source_at_ms": 1793403300404,
+  "completeness": "complete",
+  "reason": null,
+  "capabilities": [
+    "read"
+  ],
+  "data": [
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": null,
+      "close_type": null,
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "created_at_ms": 1793317741085,
+      "cum_fees_quote": "0.07976011516000",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.005050050",
+          "blocked_reason": null,
+          "order_amount": "0.00127702",
+          "owned_base": "0.001277020",
+          "quantity_increment": "0.00000001",
+          "residual_base": "0.000000000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793317741.0857844",
+          "deadline_timestamp": "1793318041.0857844",
+          "max_age_seconds": 300,
+          "order_id": "paper-c1f95920e28f42aaab36ec90cb476308",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793317741.0857844",
+          "terminal_exchange_timestamp": "1793317768.3940048",
+          "terminal_observed_timestamp": "1793317768.3940048"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.001277020",
+          "entry_gross_quote": "99.7001439500",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.07976011516000",
+          "remaining_owned_base": "0.001277020",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.02146228584681123424015216003",
+          "executable_bid": "77181.9",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "78838.4"
+        },
+        "order_ids": [
+          "paper-c1f95920e28f42aaab36ec90cb476308"
+        ]
+      },
+      "executor_id": "c5e2c0720bd812adb8fff05abebe78df07db6743d95db236473acc4666dfc09f",
+      "fees_paid": {
+        "USDC": "0.07976011516000"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": {
+        "order_id": null,
+        "placed_at_ms": null,
+        "price": "78838.4",
+        "remaining_amount": "0.00127702",
+        "state": "pending"
+      },
+      "protection_reason": "native_target_not_yet_placed",
+      "quantity": "0.001277020",
+      "realized_pnl_quote": "0.00000000000000",
+      "remaining_basis_quote": "99.77990406516000",
+      "remaining_close_quantity": "0.001277020",
+      "remaining_target_amount": "0.00127702",
+      "state": "RUNNING",
+      "target_basis": "net_target_after_fees_with_native_notional_lot_tick_floor",
+      "target_price": "78838.4",
+      "target_reason": null,
+      "target_restored_at_ms": null,
+      "terminal": false,
+      "trading_pair": "BTC-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-1.21701027616000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": null,
+      "close_type": null,
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "created_at_ms": 1793340121120,
+      "cum_fees_quote": "0.0797599341760",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.1746600",
+          "blocked_reason": null,
+          "order_amount": "0.044564",
+          "owned_base": "0.0445640",
+          "quantity_increment": "0.000001",
+          "residual_base": "0.0000000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793340121.1206844",
+          "deadline_timestamp": "1793340421.1206844",
+          "max_age_seconds": 300,
+          "order_id": "paper-3a02d2efa7024f1c939e2fa64c8b4f35",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793340121.1206844",
+          "terminal_exchange_timestamp": "1793340275.6340508",
+          "terminal_observed_timestamp": "1793340275.6340508"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.0445640",
+          "entry_gross_quote": "99.699917720",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.0797599341760",
+          "remaining_owned_base": "0.0445640",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.007415665202559586185369334017",
+          "executable_bid": "2242.55",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "2259.18"
+        },
+        "order_ids": [
+          "paper-3a02d2efa7024f1c939e2fa64c8b4f35"
+        ]
+      },
+      "executor_id": "18363ec873b54276f69970d2dd1a5eefdb7fccfe8c47b22bcf8af61577e05005",
+      "fees_paid": {
+        "USDC": "0.0797599341760"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": {
+        "order_id": null,
+        "placed_at_ms": null,
+        "price": "2259.18",
+        "remaining_amount": "0.044564",
+        "state": "pending"
+      },
+      "protection_reason": "native_target_not_yet_placed",
+      "quantity": "0.0445640",
+      "realized_pnl_quote": "0.0000000000000",
+      "remaining_basis_quote": "99.7796776541760",
+      "remaining_close_quantity": "0.0445640",
+      "remaining_target_amount": "0.044564",
+      "state": "RUNNING",
+      "target_basis": "net_target_after_fees_with_native_notional_lot_tick_floor",
+      "target_price": "2259.18",
+      "target_reason": null,
+      "target_restored_at_ms": null,
+      "terminal": false,
+      "trading_pair": "ETH-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.1579890058240"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": null,
+      "close_type": null,
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "created_at_ms": 1793344561569,
+      "cum_fees_quote": "0.0029013405760",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.3573739",
+          "blocked_reason": null,
+          "order_amount": "0.005088",
+          "owned_base": "0.0050885",
+          "quantity_increment": "0.000001",
+          "residual_base": "0.0000005"
+        },
+        "entry_lifecycle": {
+          "cancel_event_observed_timestamp": "1793344862.6569285",
+          "cancel_event_observed_wall_timestamp": "1793344862.914295",
+          "cancel_event_order_id": "paper-3a43d70ef52d4d47afe8072918cb6684",
+          "cancel_event_timestamp": "1793344862.6569285",
+          "cancel_requested_timestamp": "1793344862.6569285",
+          "creation_timestamp": "1793344561.569212",
+          "deadline_timestamp": "1793344861.569212",
+          "max_age_seconds": 300,
+          "order_id": "paper-3a43d70ef52d4d47afe8072918cb6684",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_observed_wall_timestamp": "1793344862.9137442",
+          "stop_reason": "modular_entry_permission_revoked",
+          "stop_requested_timestamp": "1793344862.6569285",
+          "submission_timestamp": "1793344561.569212",
+          "terminal_exchange_timestamp": "1793344862.6569285",
+          "terminal_observed_timestamp": "1793344863.6343572"
+        },
+        "entry_reconciliation": {
+          "amount": "0.139887",
+          "exchange_order_id": "paper-6f7d4df2fc5c44bd9c01a275e2b28fb2",
+          "filled_base": "0.0050885",
+          "order_id": "paper-3a43d70ef52d4d47afe8072918cb6684",
+          "schema": 1,
+          "side": "BUY",
+          "source": "native_paper_terminal_v1",
+          "state": "CANCELED",
+          "trade_ids": [
+            "trade:530601:paper-3a43d70ef52d4d47afe8072918cb6684",
+            "trade:530602:paper-3a43d70ef52d4d47afe8072918cb6684"
+          ],
+          "trading_pair": "BNB-USDC"
+        },
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.0050885",
+          "entry_gross_quote": "3.626675720",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.0029013405760",
+          "remaining_owned_base": "0.0050885",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.02386879276254960811368259342",
+          "executable_bid": "703.01",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "719.79"
+        },
+        "order_ids": [
+          "paper-3a43d70ef52d4d47afe8072918cb6684"
+        ]
+      },
+      "executor_id": "f0b01a6afef89142447ef17c96279be81280636eb075037e5b518fc3619c4f34",
+      "fees_paid": {
+        "USDC": "0.0029013405760"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": {
+        "order_id": null,
+        "placed_at_ms": null,
+        "price": "719.79",
+        "remaining_amount": "0.005088",
+        "state": "pending"
+      },
+      "protection_reason": "native_target_not_yet_placed",
+      "quantity": "0.0050885",
+      "realized_pnl_quote": "0.0000000000000",
+      "remaining_basis_quote": "3.6295770605760",
+      "remaining_close_quantity": "0.0050885",
+      "remaining_target_amount": "0.005088",
+      "state": "RUNNING",
+      "target_basis": "net_target_after_fees_with_native_notional_lot_tick_floor",
+      "target_price": "719.79",
+      "target_reason": null,
+      "target_restored_at_ms": null,
+      "terminal": false,
+      "trading_pair": "BNB-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-0.0512166480760"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": null,
+      "close_type": null,
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "created_at_ms": 1793345401698,
+      "cum_fees_quote": "0.079760019200",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "235.6530",
+          "blocked_reason": null,
+          "order_amount": "79.379",
+          "owned_base": "79.3790",
+          "quantity_increment": "0.001",
+          "residual_base": "0.0000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793345401.6989152",
+          "deadline_timestamp": "1793345701.6989152",
+          "max_age_seconds": 300,
+          "order_id": "paper-ecd6a38a0bfb492b855ed78ae082c28a",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793345401.6989152",
+          "terminal_exchange_timestamp": "1793345671.8718512",
+          "terminal_observed_timestamp": "1793345671.8718512"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "79.3790",
+          "entry_gross_quote": "99.70002400",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.079760019200",
+          "remaining_owned_base": "79.3790",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.01180599872367581365666879387",
+          "executable_bid": "1.2536",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "1.2684"
+        },
+        "order_ids": [
+          "paper-ecd6a38a0bfb492b855ed78ae082c28a"
+        ]
+      },
+      "executor_id": "211c3e06777c9c990ced6b77ce5d28dc6dc84fd8d9cdc4ee3815f7fcf6688ef2",
+      "fees_paid": {
+        "USDC": "0.079760019200"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": {
+        "order_id": null,
+        "placed_at_ms": null,
+        "price": "1.2684",
+        "remaining_amount": "79.379",
+        "state": "pending"
+      },
+      "protection_reason": "native_target_not_yet_placed",
+      "quantity": "79.3790",
+      "realized_pnl_quote": "0.000000000000",
+      "remaining_basis_quote": "99.779784019200",
+      "remaining_close_quantity": "79.3790",
+      "remaining_target_amount": "79.379",
+      "state": "RUNNING",
+      "target_basis": "net_target_after_fees_with_native_notional_lot_tick_floor",
+      "target_price": "1.2684",
+      "target_reason": null,
+      "target_restored_at_ms": null,
+      "terminal": false,
+      "trading_pair": "XRP-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-0.266300669200"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": null,
+      "close_type": null,
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "created_at_ms": 1793346781875,
+      "cum_fees_quote": "0.0797604904720",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.3573739",
+          "blocked_reason": null,
+          "order_amount": "0.141193",
+          "owned_base": "0.1411930",
+          "quantity_increment": "0.000001",
+          "residual_base": "0.0000000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793346781.8757868",
+          "deadline_timestamp": "1793347081.8757868",
+          "max_age_seconds": 300,
+          "order_id": "paper-908fe402d6cf483682eb6b28583a149d",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793346781.8757868",
+          "terminal_exchange_timestamp": "1793346863.9072382",
+          "terminal_observed_timestamp": "1793346863.9072382"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.1411930",
+          "entry_gross_quote": "99.700613090",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.0797604904720",
+          "remaining_owned_base": "0.1411930",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.01429567146982261987738438998",
+          "executable_bid": "703.01",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "713.06"
+        },
+        "order_ids": [
+          "paper-908fe402d6cf483682eb6b28583a149d"
+        ]
+      },
+      "executor_id": "1691fddce770c91bf98abfb222fc04d0493dd948c6f17040da7242069524bc3a",
+      "fees_paid": {
+        "USDC": "0.0797604904720"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": {
+        "order_id": null,
+        "placed_at_ms": null,
+        "price": "713.06",
+        "remaining_amount": "0.141193",
+        "state": "pending"
+      },
+      "protection_reason": "native_target_not_yet_placed",
+      "quantity": "0.1411930",
+      "realized_pnl_quote": "0.0000000000000",
+      "remaining_basis_quote": "99.7803735804720",
+      "remaining_close_quantity": "0.1411930",
+      "remaining_target_amount": "0.141193",
+      "state": "RUNNING",
+      "target_basis": "net_target_after_fees_with_native_notional_lot_tick_floor",
+      "target_price": "713.06",
+      "target_reason": null,
+      "target_restored_at_ms": null,
+      "terminal": false,
+      "trading_pair": "BNB-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-0.4899261554720"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": null,
+      "close_type": null,
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "created_at_ms": 1793361482571,
+      "cum_fees_quote": "0.07976069725680",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.005050050",
+          "blocked_reason": null,
+          "order_amount": "0.00129003",
+          "owned_base": "0.001290030",
+          "quantity_increment": "0.00000001",
+          "residual_base": "0.000000000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793361482.571247",
+          "deadline_timestamp": "1793361782.571247",
+          "max_age_seconds": 300,
+          "order_id": "paper-3f3beb88816f48249bfab4bd83525d1f",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793361482.571247",
+          "terminal_exchange_timestamp": "1793361512.7781913",
+          "terminal_observed_timestamp": "1793361512.7781913"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.001290030",
+          "entry_gross_quote": "99.7008715710",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.07976069725680",
+          "remaining_owned_base": "0.001290030",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.01116842161180276722910423299",
+          "executable_bid": "77181.9",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "78043.9"
+        },
+        "order_ids": [
+          "paper-3f3beb88816f48249bfab4bd83525d1f"
+        ]
+      },
+      "executor_id": "67267ecb570851262c235b21671ccbfc995713669a6c9a51d60a795cac8c1f0e",
+      "fees_paid": {
+        "USDC": "0.07976069725680"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": {
+        "order_id": null,
+        "placed_at_ms": null,
+        "price": "78043.9",
+        "remaining_amount": "0.00129003",
+        "state": "pending"
+      },
+      "protection_reason": "native_target_not_yet_placed",
+      "quantity": "0.001290030",
+      "realized_pnl_quote": "0.00000000000000",
+      "remaining_basis_quote": "99.78063226825680",
+      "remaining_close_quantity": "0.001290030",
+      "remaining_target_amount": "0.00129003",
+      "state": "RUNNING",
+      "target_basis": "net_target_after_fees_with_native_notional_lot_tick_floor",
+      "target_price": "78043.9",
+      "target_reason": null,
+      "target_restored_at_ms": null,
+      "terminal": false,
+      "trading_pair": "BTC-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-0.21360130975680"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": null,
+      "close_type": null,
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "created_at_ms": 1793363881276,
+      "cum_fees_quote": "0.0797605656400",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.3573739",
+          "blocked_reason": null,
+          "order_amount": "0.142807",
+          "owned_base": "0.1428070",
+          "quantity_increment": "0.000001",
+          "residual_base": "0.0000000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793363881.2766726",
+          "deadline_timestamp": "1793364181.2766726",
+          "max_age_seconds": 300,
+          "order_id": "paper-5bd7cf095421474ba3ce0dbd73f28c34",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793363881.2766726",
+          "terminal_exchange_timestamp": "1793364145.1622145",
+          "terminal_observed_timestamp": "1793364145.1622145"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.1428070",
+          "entry_gross_quote": "99.700707050",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.0797605656400",
+          "remaining_owned_base": "0.1428070",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.002830685196512140652337804583",
+          "executable_bid": "703.01",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "705.00"
+        },
+        "order_ids": [
+          "paper-5bd7cf095421474ba3ce0dbd73f28c34"
+        ]
+      },
+      "executor_id": "5180e386773e64e1bbd8bbe5de928746afd9c1f0064aa629d1c3f93ac0edc460",
+      "fees_paid": {
+        "USDC": "0.0797605656400"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": {
+        "order_id": null,
+        "placed_at_ms": null,
+        "price": "705.00",
+        "remaining_amount": "0.142807",
+        "state": "pending"
+      },
+      "protection_reason": "native_target_not_yet_placed",
+      "quantity": "0.1428070",
+      "realized_pnl_quote": "0.0000000000000",
+      "remaining_basis_quote": "99.7804676156400",
+      "remaining_close_quantity": "0.1428070",
+      "remaining_target_amount": "0.142807",
+      "state": "RUNNING",
+      "target_basis": "net_target_after_fees_with_native_notional_lot_tick_floor",
+      "target_price": "705.00",
+      "target_reason": null,
+      "target_restored_at_ms": null,
+      "terminal": false,
+      "trading_pair": "BNB-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.6449849593600"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": null,
+      "close_type": null,
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "created_at_ms": 1793366821003,
+      "cum_fees_quote": "0.079760235600",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "5.094290",
+          "blocked_reason": null,
+          "order_amount": "1.04017",
+          "owned_base": "1.040170",
+          "quantity_increment": "0.00001",
+          "residual_base": "0.000000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793366821.003816",
+          "deadline_timestamp": "1793367121.003816",
+          "max_age_seconds": 300,
+          "order_id": "paper-a0f3c6eedf134c609fd153f9fbe9e349",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793366821.003816",
+          "terminal_exchange_timestamp": "1793366853.6050346",
+          "terminal_observed_timestamp": "1793366853.6050346"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "1.040170",
+          "entry_gross_quote": "99.70029450",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.079760235600",
+          "remaining_owned_base": "1.040170",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.007284079084287200832466181061",
+          "executable_bid": "96.10",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "96.80"
+        },
+        "order_ids": [
+          "paper-a0f3c6eedf134c609fd153f9fbe9e349"
+        ]
+      },
+      "executor_id": "07a8fef0d61ddc913b2fb1cdcfbc778b6de30743983dfcda6a0ace81e93002e3",
+      "fees_paid": {
+        "USDC": "0.079760235600"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": {
+        "order_id": null,
+        "placed_at_ms": null,
+        "price": "96.80",
+        "remaining_amount": "1.04017",
+        "state": "pending"
+      },
+      "protection_reason": "native_target_not_yet_placed",
+      "quantity": "1.040170",
+      "realized_pnl_quote": "0.000000000000",
+      "remaining_basis_quote": "99.780054735600",
+      "remaining_close_quantity": "1.040170",
+      "remaining_target_amount": "1.04017",
+      "state": "RUNNING",
+      "target_basis": "net_target_after_fees_with_native_notional_lot_tick_floor",
+      "target_price": "96.80",
+      "target_reason": null,
+      "target_restored_at_ms": null,
+      "terminal": false,
+      "trading_pair": "SOL-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.185483114400"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793403189805,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "created_at_ms": 1793386441385,
+      "cum_fees_quote": "0.1804412275576",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.006355670",
+          "blocked_reason": null,
+          "order_amount": "0.00130562",
+          "owned_base": "0.00130562",
+          "quantity_increment": "0.00000001",
+          "residual_base": "0.00000000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793386441.385303",
+          "deadline_timestamp": "1793386741.385303",
+          "max_age_seconds": 300,
+          "order_id": "paper-ec59e0b5873e41f09fdf6cb53e5d9708",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793386441.385303",
+          "terminal_exchange_timestamp": "1793386446.55895",
+          "terminal_observed_timestamp": "1793386446.55895"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.00130562",
+          "entry_gross_quote": "99.700537812",
+          "exit_gross_base": "0.00130562",
+          "exit_gross_quote": "100.680797308",
+          "fees_quote": "0.1804412275576",
+          "remaining_owned_base": "0.00000000",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "77181.9",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-ec59e0b5873e41f09fdf6cb53e5d9708",
+          "paper-c0960fd239ba4a07a0ba06b2b84ee326"
+        ]
+      },
+      "executor_id": "48758fdddf88f8a9ca1a7febaad205336d6c30380535ed3f7ace2def6e06b94e",
+      "fees_paid": {
+        "USDC": "0.1804412275576"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.00000000",
+      "realized_pnl_quote": "0.7998182684424",
+      "remaining_basis_quote": "0.0000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BTC-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.0000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793401770304,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "created_at_ms": 1793368021370,
+      "cum_fees_quote": "0.180447656480",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "6.144430",
+          "blocked_reason": null,
+          "order_amount": "1.05014",
+          "owned_base": "1.050140",
+          "quantity_increment": "0.00001",
+          "residual_base": "0.000000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793368021.370051",
+          "deadline_timestamp": "1793368321.370051",
+          "max_age_seconds": 300,
+          "order_id": "paper-2d2946403372489f93002fc3385befd4",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793368021.370051",
+          "terminal_exchange_timestamp": "1793368078.082298",
+          "terminal_observed_timestamp": "1793368078.082298"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "1.050140",
+          "entry_gross_quote": "99.70029160",
+          "exit_gross_base": "1.05014",
+          "exit_gross_quote": "100.6874232",
+          "fees_quote": "0.180447656480",
+          "remaining_owned_base": "0.000000",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "95.87",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-2d2946403372489f93002fc3385befd4",
+          "paper-664b6eea263a4a598169490169b12266"
+        ]
+      },
+      "executor_id": "3a3f586b2b705a806b0250fd7ae99bc3e721fc2353cd1e13f094a854292c40b0",
+      "fees_paid": {
+        "USDC": "0.180447656480"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.000000",
+      "realized_pnl_quote": "0.806683943520",
+      "remaining_basis_quote": "0.000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "SOL-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793386343097,
+      "close_type": "POSITION_HOLD",
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "created_at_ms": 1793360940995,
+      "cum_fees_quote": "0.079760509120",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "6.144430",
+          "blocked_reason": null,
+          "order_amount": "1.03381",
+          "owned_base": "1.033810",
+          "quantity_increment": "0.00001",
+          "residual_base": "0.000000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793360940.9955838",
+          "deadline_timestamp": "1793361240.9955838",
+          "max_age_seconds": 300,
+          "order_id": "paper-f24074a27ba04bc28daf872e4a0212ae",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793360940.9955838",
+          "terminal_exchange_timestamp": "1793361216.307366",
+          "terminal_observed_timestamp": "1793361216.307366"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "held_position",
+          "entry_gross_base": "1.033810",
+          "entry_gross_quote": "99.70063640",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.079760509120",
+          "remaining_owned_base": "1.033810",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.01691552678291740628589328600",
+          "executable_bid": "95.77",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "97.39"
+        },
+        "order_ids": [
+          "paper-f24074a27ba04bc28daf872e4a0212ae"
+        ]
+      },
+      "executor_id": "e95545ee6d91fcdca8b212e7bbb58875d251837a3383b052ce8ae4a3143ae000",
+      "fees_paid": {
+        "USDC": "0.079760509120"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "1.033810",
+      "realized_pnl_quote": "0.000000000000",
+      "remaining_basis_quote": "99.780396909120",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "SOL-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-0.426086859120"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793372837559,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "created_at_ms": 1793368442107,
+      "cum_fees_quote": "0.18043892414400",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.006349500",
+          "blocked_reason": null,
+          "order_amount": "0.00129945",
+          "owned_base": "0.001299450",
+          "quantity_increment": "0.00000001",
+          "residual_base": "0E-9"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793368442.1079788",
+          "deadline_timestamp": "1793368742.1079788",
+          "max_age_seconds": 300,
+          "order_id": "paper-94a2bc4f53f74440918f09f2c6488a2d",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793368442.1079788",
+          "terminal_exchange_timestamp": "1793368445.6956081",
+          "terminal_observed_timestamp": "1793368445.6956081"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.001299450",
+          "entry_gross_quote": "99.7001713050",
+          "exit_gross_base": "0.00129945",
+          "exit_gross_quote": "100.678787100",
+          "fees_quote": "0.18043892414400",
+          "remaining_owned_base": "0E-9",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "76914.2",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-94a2bc4f53f74440918f09f2c6488a2d",
+          "paper-fa0c83abcb1f46ab98bb9307e0a09ba2"
+        ]
+      },
+      "executor_id": "16c51a7efd81f9ac539309a2bf45df763f5b68ff9f57b191c51bf8efc9400137",
+      "fees_paid": {
+        "USDC": "0.18043892414400"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.000000000",
+      "realized_pnl_quote": "0.79817687085600",
+      "remaining_basis_quote": "0.00000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BTC-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.00000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793372529691,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "created_at_ms": 1793367240872,
+      "cum_fees_quote": "0.1804391079960",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.2195370",
+          "blocked_reason": null,
+          "order_amount": "0.044877",
+          "owned_base": "0.0448770",
+          "quantity_increment": "0.000001",
+          "residual_base": "0E-7"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793367240.8728116",
+          "deadline_timestamp": "1793367540.8728116",
+          "max_age_seconds": 300,
+          "order_id": "paper-96f822b058d140f8a7e43647363e68e4",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793367240.8728116",
+          "terminal_exchange_timestamp": "1793367334.4541576",
+          "terminal_observed_timestamp": "1793367334.4541576"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.0448770",
+          "entry_gross_quote": "99.699191970",
+          "exit_gross_base": "0.044877",
+          "exit_gross_quote": "100.67975442",
+          "fees_quote": "0.1804391079960",
+          "remaining_owned_base": "0E-7",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "2234.90",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-96f822b058d140f8a7e43647363e68e4",
+          "paper-4e933c1b0eed486b8fb15e86da96bcc5"
+        ]
+      },
+      "executor_id": "a36aabb11881e10999c50108167db3a527fbe5b36bdb19d4c9fa22d9b798843a",
+      "fees_paid": {
+        "USDC": "0.1804391079960"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.0000000",
+      "realized_pnl_quote": "0.8001233420040",
+      "remaining_basis_quote": "0.0000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "ETH-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.0000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793368310964,
+      "close_type": "POSITION_HOLD",
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "created_at_ms": 1793346241535,
+      "cum_fees_quote": "0.079760481760",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "6.144430",
+          "blocked_reason": null,
+          "order_amount": "1.02341",
+          "owned_base": "1.023410",
+          "quantity_increment": "0.00001",
+          "residual_base": "0.000000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793346241.5353968",
+          "deadline_timestamp": "1793346541.5353968",
+          "max_age_seconds": 300,
+          "order_id": "paper-925454319ff04215a40903eed437ad62",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793346241.5353968",
+          "terminal_exchange_timestamp": "1793346246.5831802",
+          "terminal_observed_timestamp": "1793346246.5831802"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "held_position",
+          "entry_gross_base": "1.023410",
+          "entry_gross_quote": "99.70060220",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.079760481760",
+          "remaining_owned_base": "1.023410",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.02725279315025582123838362744",
+          "executable_bid": "95.77",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "98.38"
+        },
+        "order_ids": [
+          "paper-925454319ff04215a40903eed437ad62"
+        ]
+      },
+      "executor_id": "6028e2d57aa83c932ea796ae86e718a6df57cc802ff2a1b1d7b95ced743d64af",
+      "fees_paid": {
+        "USDC": "0.079760481760"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "1.023410",
+      "realized_pnl_quote": "0.000000000000",
+      "remaining_basis_quote": "99.780362681760",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "SOL-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-1.425544631760"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793361905103,
+      "close_type": "EXPIRED",
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "created_at_ms": 1793361601439,
+      "cum_fees_quote": "0",
+      "custom_info": {
+        "close_quantity": {},
+        "entry_lifecycle": {
+          "cancel_event_observed_timestamp": "1793361903.3803165",
+          "cancel_event_observed_wall_timestamp": "1793361904.001479",
+          "cancel_event_order_id": "paper-3957dd1836b248fdb2aed6b25905d723",
+          "cancel_event_timestamp": "1793361903.3803165",
+          "cancel_requested_timestamp": "1793361903.3803165",
+          "creation_timestamp": "1793361601.4390085",
+          "deadline_timestamp": "1793361901.4390085",
+          "max_age_seconds": 300,
+          "order_id": "paper-3957dd1836b248fdb2aed6b25905d723",
+          "policy": "single_attempt",
+          "state": "ended_no_fill",
+          "stop_observed_wall_timestamp": "1793361904.0008075",
+          "stop_reason": "modular_entry_permission_revoked",
+          "stop_requested_timestamp": "1793361903.3803165",
+          "submission_timestamp": "1793361601.4390085",
+          "terminal_exchange_timestamp": "1793361903.3803165",
+          "terminal_observed_timestamp": "1793361905.1036344"
+        },
+        "entry_reconciliation": {
+          "amount": "0.142752",
+          "exchange_order_id": "paper-5b7c5b6b5fab4427b057065650169ddc",
+          "filled_base": "0",
+          "order_id": "paper-3957dd1836b248fdb2aed6b25905d723",
+          "schema": 1,
+          "side": "BUY",
+          "source": "native_paper_terminal_v1",
+          "state": "CANCELED",
+          "trade_ids": [],
+          "trading_pair": "BNB-USDC"
+        },
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0",
+          "entry_gross_quote": "0",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0",
+          "remaining_owned_base": "0",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "699.83",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "pending",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-3957dd1836b248fdb2aed6b25905d723"
+        ]
+      },
+      "executor_id": "b2d9d78b0c12744cf9afaed53f06650dc0ce68ba588df0366c995ffb5b926b28",
+      "fees_paid": {},
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0",
+      "realized_pnl_quote": "0",
+      "remaining_basis_quote": "0",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BNB-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793361302876,
+      "close_type": "EXPIRED",
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "created_at_ms": 1793361000948,
+      "cum_fees_quote": "0",
+      "custom_info": {
+        "close_quantity": {},
+        "entry_lifecycle": {
+          "cancel_event_observed_timestamp": "1793361301.4489336",
+          "cancel_event_observed_wall_timestamp": "1793361302.10148",
+          "cancel_event_order_id": "paper-42064b46bbf646688fdf6882cbba4adb",
+          "cancel_event_timestamp": "1793361301.4489336",
+          "cancel_requested_timestamp": "1793361301.4489336",
+          "creation_timestamp": "1793361000.9483588",
+          "deadline_timestamp": "1793361300.9483588",
+          "max_age_seconds": 300,
+          "order_id": "paper-42064b46bbf646688fdf6882cbba4adb",
+          "policy": "single_attempt",
+          "state": "ended_no_fill",
+          "stop_observed_wall_timestamp": "1793361302.1011758",
+          "stop_reason": "modular_entry_permission_revoked",
+          "stop_requested_timestamp": "1793361301.4489336",
+          "submission_timestamp": "1793361000.9483588",
+          "terminal_exchange_timestamp": "1793361301.4489336",
+          "terminal_observed_timestamp": "1793361302.876247"
+        },
+        "entry_reconciliation": {
+          "amount": "0.142680",
+          "exchange_order_id": "paper-2201e3942d964f9eab4232a4365e55d5",
+          "filled_base": "0",
+          "order_id": "paper-42064b46bbf646688fdf6882cbba4adb",
+          "schema": 1,
+          "side": "BUY",
+          "source": "native_paper_terminal_v1",
+          "state": "CANCELED",
+          "trade_ids": [],
+          "trading_pair": "BNB-USDC"
+        },
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0",
+          "entry_gross_quote": "0",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0",
+          "remaining_owned_base": "0",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "699.83",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "pending",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-42064b46bbf646688fdf6882cbba4adb"
+        ]
+      },
+      "executor_id": "97e51293464d1deb1b21384cb0907f363daaec7493c9034d03532b21b5da7ace",
+      "fees_paid": {},
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0",
+      "realized_pnl_quote": "0",
+      "remaining_basis_quote": "0",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BNB-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793359564614,
+      "close_type": "EXPIRED",
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "created_at_ms": 1793359261818,
+      "cum_fees_quote": "0",
+      "custom_info": {
+        "close_quantity": {},
+        "entry_lifecycle": {
+          "cancel_event_observed_timestamp": "1793359563.4794898",
+          "cancel_event_observed_wall_timestamp": "1793359563.8498871",
+          "cancel_event_order_id": "paper-d54adb81791949b6be29570b2bb9e9b6",
+          "cancel_event_timestamp": "1793359563.4794898",
+          "cancel_requested_timestamp": "1793359563.4794898",
+          "creation_timestamp": "1793359261.8187752",
+          "deadline_timestamp": "1793359561.8187752",
+          "max_age_seconds": 300,
+          "order_id": "paper-d54adb81791949b6be29570b2bb9e9b6",
+          "policy": "single_attempt",
+          "state": "ended_no_fill",
+          "stop_observed_wall_timestamp": "1793359563.8495345",
+          "stop_reason": "modular_entry_permission_revoked",
+          "stop_requested_timestamp": "1793359563.4794898",
+          "submission_timestamp": "1793359261.8187752",
+          "terminal_exchange_timestamp": "1793359563.4794898",
+          "terminal_observed_timestamp": "1793359564.6140695"
+        },
+        "entry_reconciliation": {
+          "amount": "0.142265",
+          "exchange_order_id": "paper-c137f38a6c8f490f92c553446ad7f72b",
+          "filled_base": "0",
+          "order_id": "paper-d54adb81791949b6be29570b2bb9e9b6",
+          "schema": 1,
+          "side": "BUY",
+          "source": "native_paper_terminal_v1",
+          "state": "CANCELED",
+          "trade_ids": [],
+          "trading_pair": "BNB-USDC"
+        },
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0",
+          "entry_gross_quote": "0",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0",
+          "remaining_owned_base": "0",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "699.83",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "pending",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-d54adb81791949b6be29570b2bb9e9b6"
+        ]
+      },
+      "executor_id": "2643b30a29e2c92124cda1ba6654e7858b679444ac783f6f412975eb34c3eab5",
+      "fees_paid": {},
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0",
+      "realized_pnl_quote": "0",
+      "remaining_basis_quote": "0",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BNB-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793357707523,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "created_at_ms": 1793355781080,
+      "cum_fees_quote": "0.18044458746",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "315.6820",
+          "blocked_reason": null,
+          "order_amount": "80.029",
+          "owned_base": "80.029",
+          "quantity_increment": "0.001",
+          "residual_base": "0.000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793355781.0807605",
+          "deadline_timestamp": "1793356081.0807605",
+          "max_age_seconds": 300,
+          "order_id": "paper-5915d966bcdd40eea61e375d8a4ad159",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793355781.0807605",
+          "terminal_exchange_timestamp": "1793355789.164643",
+          "terminal_observed_timestamp": "1793355789.164643"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "80.029",
+          "entry_gross_quote": "99.7001282",
+          "exit_gross_base": "80.029",
+          "exit_gross_quote": "100.6844849",
+          "fees_quote": "0.18044458746",
+          "remaining_owned_base": "0.000",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "1.2521",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-5915d966bcdd40eea61e375d8a4ad159",
+          "paper-9c46dc08257948d8b2f5db62235feed3"
+        ]
+      },
+      "executor_id": "5cdb46cd32248d1ac9e5143bf0d97c21076004284f1d420cf441a5366399ea46",
+      "fees_paid": {
+        "USDC": "0.18044458746"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.000",
+      "realized_pnl_quote": "0.80391211254",
+      "remaining_basis_quote": "0.00000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "XRP-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.00000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793335566170,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "created_at_ms": 1793319601061,
+      "cum_fees_quote": "0.1710719778720",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.1300960",
+          "blocked_reason": null,
+          "order_amount": "0.020740",
+          "owned_base": "0.0207402",
+          "quantity_increment": "0.000001",
+          "residual_base": "2E-7"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793319601.061619",
+          "deadline_timestamp": "1793319901.061619",
+          "max_age_seconds": 300,
+          "order_id": "paper-2d626276b83b42648a6729b50a3fbadd",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793319601.061619",
+          "terminal_exchange_timestamp": "1793319602.2335734",
+          "terminal_observed_timestamp": "1793319602.2335734"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.0448860",
+          "entry_gross_quote": "99.700783200",
+          "exit_gross_base": "0.0448860",
+          "exit_gross_quote": "100.680769140",
+          "fees_quote": "0.1710719778720",
+          "remaining_owned_base": "0E-7",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "2234.90",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-2d626276b83b42648a6729b50a3fbadd",
+          "paper-26693f50e538453596dd7c832057df2b"
+        ]
+      },
+      "executor_id": "febf641435c04ac03010367a1714538e688fb894de49a5f118430f88df70d654",
+      "fees_paid": {
+        "USDC": "0.1710719778720"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.0000000",
+      "realized_pnl_quote": "0.8089139621280000000000000000",
+      "remaining_basis_quote": "0.00000000000000000000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "ETH-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.00000000000000000000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793331408212,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "created_at_ms": 1793319602233,
+      "cum_fees_quote": "0.180452992840",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "237.6750",
+          "blocked_reason": null,
+          "order_amount": "81.401",
+          "owned_base": "81.4010",
+          "quantity_increment": "0.001",
+          "residual_base": "0.0000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793319602.2335734",
+          "deadline_timestamp": "1793319902.2335734",
+          "max_age_seconds": 300,
+          "order_id": "paper-d9bc7e6658774936b245e655c22c4fdd",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793319602.2335734",
+          "terminal_exchange_timestamp": "1793319625.2332687",
+          "terminal_observed_timestamp": "1793319625.2332687"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "81.4010",
+          "entry_gross_quote": "99.69994480",
+          "exit_gross_base": "81.401",
+          "exit_gross_quote": "100.693037",
+          "fees_quote": "0.180452992840",
+          "remaining_owned_base": "0.0000",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "1.2521",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-d9bc7e6658774936b245e655c22c4fdd",
+          "paper-9e5917f7404d4ad9acc5b47d7eff6d23"
+        ]
+      },
+      "executor_id": "7f21c99a3436eb5133c56fb4c4c4bb7182d3b0b5fcc68608aa783e783357cd9a",
+      "fees_paid": {
+        "USDC": "0.180452992840"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.0000",
+      "realized_pnl_quote": "0.812639207160",
+      "remaining_basis_quote": "0.000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "XRP-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793327157424,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "created_at_ms": 1793319601061,
+      "cum_fees_quote": "0.180457418400",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "3.056980",
+          "blocked_reason": null,
+          "order_amount": "1.06008",
+          "owned_base": "1.060080",
+          "quantity_increment": "0.00001",
+          "residual_base": "0.000000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793319601.061619",
+          "deadline_timestamp": "1793319901.061619",
+          "max_age_seconds": 300,
+          "order_id": "paper-73ce1b3c18044de08d21fe5b3abfdb0a",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793319601.061619",
+          "terminal_exchange_timestamp": "1793319619.23884",
+          "terminal_observed_timestamp": "1793319619.23884"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "1.060080",
+          "entry_gross_quote": "99.70052400",
+          "exit_gross_base": "1.06008",
+          "exit_gross_quote": "100.6969992",
+          "fees_quote": "0.180457418400",
+          "remaining_owned_base": "0.000000",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "95.77",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-73ce1b3c18044de08d21fe5b3abfdb0a",
+          "paper-55ee0e047550406781e99830e371d8f1"
+        ]
+      },
+      "executor_id": "69b8e656ad779557e99c974f3571ac893ff80615e6abd9b6728a15fd1fcd2c07",
+      "fees_paid": {
+        "USDC": "0.180457418400"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.000000",
+      "realized_pnl_quote": "0.816017781600",
+      "remaining_basis_quote": "0.000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "SOL-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793324283164,
+      "close_type": "EXPIRED",
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "created_at_ms": 1793323981406,
+      "cum_fees_quote": "0",
+      "custom_info": {
+        "close_quantity": {},
+        "entry_lifecycle": {
+          "cancel_event_observed_timestamp": "1793324282.2857525",
+          "cancel_event_observed_wall_timestamp": "1793324282.5196838",
+          "cancel_event_order_id": "paper-9b4e12d3ea344d208fff9ff7b759cfd6",
+          "cancel_event_timestamp": "1793324282.2857525",
+          "cancel_requested_timestamp": "1793324282.2857525",
+          "creation_timestamp": "1793323981.4067056",
+          "deadline_timestamp": "1793324281.4067056",
+          "max_age_seconds": 300,
+          "order_id": "paper-9b4e12d3ea344d208fff9ff7b759cfd6",
+          "policy": "single_attempt",
+          "state": "ended_no_fill",
+          "stop_observed_wall_timestamp": "1793324282.5177774",
+          "stop_reason": "modular_entry_permission_revoked",
+          "stop_requested_timestamp": "1793324282.2857525",
+          "submission_timestamp": "1793323981.4067056",
+          "terminal_exchange_timestamp": "1793324282.2857525",
+          "terminal_observed_timestamp": "1793324283.164352"
+        },
+        "entry_reconciliation": {
+          "amount": "82.506",
+          "exchange_order_id": "paper-86ee5ac2b79944acaceaec0b62dd78cd",
+          "filled_base": "0",
+          "order_id": "paper-9b4e12d3ea344d208fff9ff7b759cfd6",
+          "schema": 1,
+          "side": "BUY",
+          "source": "native_paper_terminal_v1",
+          "state": "CANCELED",
+          "trade_ids": [],
+          "trading_pair": "XRP-USDC"
+        },
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0",
+          "entry_gross_quote": "0",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0",
+          "remaining_owned_base": "0",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "1.2521",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "pending",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-9b4e12d3ea344d208fff9ff7b759cfd6"
+        ]
+      },
+      "executor_id": "c439289daa890795d9b0f0d24a5c8f013373f74b5cd5cc54de540ac3dd984959",
+      "fees_paid": {},
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0",
+      "realized_pnl_quote": "0",
+      "remaining_basis_quote": "0",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "XRP-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793324283164,
+      "close_type": "EXPIRED",
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "created_at_ms": 1793323981406,
+      "cum_fees_quote": "0",
+      "custom_info": {
+        "close_quantity": {},
+        "entry_lifecycle": {
+          "cancel_event_observed_timestamp": "1793324282.2857525",
+          "cancel_event_observed_wall_timestamp": "1793324282.4981565",
+          "cancel_event_order_id": "paper-2d0df01c55b842ca9c647022ea0dc6af",
+          "cancel_event_timestamp": "1793324282.2857525",
+          "cancel_requested_timestamp": "1793324282.2857525",
+          "creation_timestamp": "1793323981.4067056",
+          "deadline_timestamp": "1793324281.4067056",
+          "max_age_seconds": 300,
+          "order_id": "paper-2d0df01c55b842ca9c647022ea0dc6af",
+          "policy": "single_attempt",
+          "state": "ended_no_fill",
+          "stop_observed_wall_timestamp": "1793324282.4979026",
+          "stop_reason": "modular_entry_permission_revoked",
+          "stop_requested_timestamp": "1793324282.2857525",
+          "submission_timestamp": "1793323981.4067056",
+          "terminal_exchange_timestamp": "1793324282.2857525",
+          "terminal_observed_timestamp": "1793324283.164352"
+        },
+        "entry_reconciliation": {
+          "amount": "0.045482",
+          "exchange_order_id": "paper-80dce5cb98e94c4d85912aa2a9a6eb9d",
+          "filled_base": "0",
+          "order_id": "paper-2d0df01c55b842ca9c647022ea0dc6af",
+          "schema": 1,
+          "side": "BUY",
+          "source": "native_paper_terminal_v1",
+          "state": "CANCELED",
+          "trade_ids": [],
+          "trading_pair": "ETH-USDC"
+        },
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0",
+          "entry_gross_quote": "0",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0",
+          "remaining_owned_base": "0",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "2234.90",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "pending",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-2d0df01c55b842ca9c647022ea0dc6af"
+        ]
+      },
+      "executor_id": "90b1b013c5e70b6b72f1459903bff9c738d07e03079a17798eb862e6ca6be111",
+      "fees_paid": {},
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0",
+      "realized_pnl_quote": "0",
+      "remaining_basis_quote": "0",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "ETH-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793323855285,
+      "close_type": "POSITION_HOLD",
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "created_at_ms": 1793317681329,
+      "cum_fees_quote": "0.0797595550800",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.1746600",
+          "blocked_reason": null,
+          "order_amount": "0.044315",
+          "owned_base": "0.0443150",
+          "quantity_increment": "0.000001",
+          "residual_base": "0E-7"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793317681.3290548",
+          "deadline_timestamp": "1793317981.3290548",
+          "max_age_seconds": 300,
+          "order_id": "paper-724c9164390c449e9d1b0c8974cc2a37",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793317681.3290548",
+          "terminal_exchange_timestamp": "1793317682.4764307",
+          "terminal_observed_timestamp": "1793317682.4764307"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "held_position",
+          "entry_gross_base": "0.0443150",
+          "entry_gross_quote": "99.699443850",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.0797595550800",
+          "remaining_owned_base": "0.0443150",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.01654212716452637701910600027",
+          "executable_bid": "2234.90",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "2271.87"
+        },
+        "order_ids": [
+          "paper-724c9164390c449e9d1b0c8974cc2a37"
+        ]
+      },
+      "executor_id": "48921430ebc98c6325645621f4e49b444afe67f979d1557c79cfd9f9061a8e65",
+      "fees_paid": {
+        "USDC": "0.0797595550800"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.0443150",
+      "realized_pnl_quote": "0.0000000000000",
+      "remaining_basis_quote": "99.7792034050800",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "ETH-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-0.3999354300800"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793322728826,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "created_at_ms": 1793319602233,
+      "cum_fees_quote": "0.1608973617960",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.0682854",
+          "blocked_reason": null,
+          "order_amount": "0.066390",
+          "owned_base": "0.0663907",
+          "quantity_increment": "0.000001",
+          "residual_base": "7E-7"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793319602.2335734",
+          "deadline_timestamp": "1793319902.2335734",
+          "max_age_seconds": 300,
+          "order_id": "paper-707e89f1920a4a3d923701be549f63ba",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793319602.2335734",
+          "terminal_exchange_timestamp": "1793319636.2404487",
+          "terminal_observed_timestamp": "1793319636.2404487"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.1446000",
+          "entry_gross_quote": "99.700254000",
+          "exit_gross_base": "0.1446000",
+          "exit_gross_quote": "100.679366520",
+          "fees_quote": "0.1608973617960",
+          "remaining_owned_base": "0E-7",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "699.83",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-707e89f1920a4a3d923701be549f63ba",
+          "paper-a19d2dc85de2492cbcefac9efff178cb"
+        ]
+      },
+      "executor_id": "c5b86c575cf694692a935b9420414298fe69d8863b11ddc93d3c687265905b64",
+      "fees_paid": {
+        "USDC": "0.1608973617960"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.0000000",
+      "realized_pnl_quote": "0.8182151582040000000000000000",
+      "remaining_basis_quote": "0.000000000000000000000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BNB-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.000000000000000000000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793320818801,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "created_at_ms": 1793319782470,
+      "cum_fees_quote": "0.1632285850280",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.2128854",
+          "blocked_reason": null,
+          "order_amount": "0.110853",
+          "owned_base": "0.1108536",
+          "quantity_increment": "0.000001",
+          "residual_base": "6E-7"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793319782.4702854",
+          "deadline_timestamp": "1793320082.4702854",
+          "max_age_seconds": 300,
+          "order_id": "paper-64f83bb95a1841978493e2e344f2d8b6",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793319782.4702854",
+          "terminal_exchange_timestamp": "1793319800.6356378",
+          "terminal_observed_timestamp": "1793319800.6356378"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.1458040",
+          "entry_gross_quote": "99.700775200",
+          "exit_gross_base": "0.1458040",
+          "exit_gross_quote": "100.679755230",
+          "fees_quote": "0.1632285850280",
+          "remaining_owned_base": "0E-7",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "699.83",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-64f83bb95a1841978493e2e344f2d8b6",
+          "paper-fc045a121b0e4446819ba21c22813518"
+        ]
+      },
+      "executor_id": "28b2451cbb86754e6b9982755ad16f7acb76ce7454893614d079f586b4deb5ef",
+      "fees_paid": {
+        "USDC": "0.1632285850280"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.0000000",
+      "realized_pnl_quote": "0.8157514449720000000000000000",
+      "remaining_basis_quote": "0.00000000000000000000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BNB-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.00000000000000000000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793319496609,
+      "close_type": "POSITION_HOLD",
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "created_at_ms": 1793306221239,
+      "cum_fees_quote": "0.0797605405056",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.006355670",
+          "blocked_reason": null,
+          "order_amount": "0.00124752",
+          "owned_base": "0.00124752",
+          "quantity_increment": "0.00000001",
+          "residual_base": "0E-8"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793306221.2395809",
+          "deadline_timestamp": "1793306521.2395809",
+          "max_age_seconds": 300,
+          "order_id": "paper-7c94f64b61204c1696b2f4412eb1313b",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793306221.2395809",
+          "terminal_exchange_timestamp": "1793306228.4955668",
+          "terminal_observed_timestamp": "1793306228.4955668"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "held_position",
+          "entry_gross_base": "0.00124752",
+          "entry_gross_quote": "99.700675632",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.0797605405056",
+          "remaining_owned_base": "0.00124752",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.04926138476380174272111001610",
+          "executable_bid": "76914.2",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "80703.1"
+        },
+        "order_ids": [
+          "paper-7c94f64b61204c1696b2f4412eb1313b"
+        ]
+      },
+      "executor_id": "e6d587da9f10db2aa865d53fde20ebce41b61519735c161ef91b37d2b3d8faef",
+      "fees_paid": {
+        "USDC": "0.0797605405056"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.00124752",
+      "realized_pnl_quote": "0.0000000000000",
+      "remaining_basis_quote": "99.7804361725056",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BTC-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-3.4944099085056"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793308722638,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "created_at_ms": 1793306941416,
+      "cum_fees_quote": "0.18044428876080",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.003746830",
+          "blocked_reason": null,
+          "order_amount": "0.00126383",
+          "owned_base": "0.001263830",
+          "quantity_increment": "0.00000001",
+          "residual_base": "0E-9"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793306941.4163947",
+          "deadline_timestamp": "1793307241.4163947",
+          "max_age_seconds": 300,
+          "order_id": "paper-32c9c394a20049348f743b611d050432",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793306941.4163947",
+          "terminal_exchange_timestamp": "1793306961.3887918",
+          "terminal_observed_timestamp": "1793306961.3887918"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.001263830",
+          "entry_gross_quote": "99.7006418910",
+          "exit_gross_base": "0.00126383",
+          "exit_gross_quote": "100.683775248",
+          "fees_quote": "0.18044428876080",
+          "remaining_owned_base": "0E-9",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "76914.2",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-32c9c394a20049348f743b611d050432",
+          "paper-4397bc73b86545d7a2f358a168ed7ab1"
+        ]
+      },
+      "executor_id": "b329438b3632e14bde8ce37bbeabf48c9c8ce6ff4a0ae38a3a2d83a01cb88ff3",
+      "fees_paid": {
+        "USDC": "0.18044428876080"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.000000000",
+      "realized_pnl_quote": "0.80268906823920",
+      "remaining_basis_quote": "0.00000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BTC-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.00000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793308638521,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "created_at_ms": 1793306941416,
+      "cum_fees_quote": "0.1804478743620",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.1299320",
+          "blocked_reason": null,
+          "order_amount": "0.044151",
+          "owned_base": "0.0441510",
+          "quantity_increment": "0.000001",
+          "residual_base": "0E-7"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793306941.4163947",
+          "deadline_timestamp": "1793307241.4163947",
+          "max_age_seconds": 300,
+          "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793306941.4163947",
+          "terminal_exchange_timestamp": "1793306965.2844915",
+          "terminal_observed_timestamp": "1793306965.2844915"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.0441510",
+          "entry_gross_quote": "99.699139140",
+          "exit_gross_base": "0.044151",
+          "exit_gross_quote": "100.68856305",
+          "fees_quote": "0.1804478743620",
+          "remaining_owned_base": "0E-7",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "2234.90",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-b1a3801edee149eab81ec4bfe801c5bc",
+          "paper-118bd6b0b72f42e6a18afbbe30b1d90e"
+        ]
+      },
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fees_paid": {
+        "USDC": "0.1804478743620"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.0000000",
+      "realized_pnl_quote": "0.8089760356380",
+      "remaining_basis_quote": "0.0000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "ETH-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.0000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793308619517,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "created_at_ms": 1793306941416,
+      "cum_fees_quote": "0.180457893600",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "3.032100",
+          "blocked_reason": null,
+          "order_amount": "1.03520",
+          "owned_base": "1.035200",
+          "quantity_increment": "0.00001",
+          "residual_base": "0.000000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793306941.4163947",
+          "deadline_timestamp": "1793307241.4163947",
+          "max_age_seconds": 300,
+          "order_id": "paper-a71beed35a0249e0a8089d8b95b03980",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793306941.4163947",
+          "terminal_exchange_timestamp": "1793306962.2767913",
+          "terminal_observed_timestamp": "1793306962.2767913"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "1.035200",
+          "entry_gross_quote": "99.70011200",
+          "exit_gross_base": "1.03520",
+          "exit_gross_quote": "100.6978040",
+          "fees_quote": "0.180457893600",
+          "remaining_owned_base": "0.000000",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "95.77",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-a71beed35a0249e0a8089d8b95b03980",
+          "paper-fdbe1141dd1f47cf80d858a1227f3874"
+        ]
+      },
+      "executor_id": "9dcb9c318eb2fac687f5a3f012a231b911d9ff7004f4677c00915b075d1f8a14",
+      "fees_paid": {
+        "USDC": "0.180457893600"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.000000",
+      "realized_pnl_quote": "0.8172341064000000000000000000",
+      "remaining_basis_quote": "0.00000000000000000000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "SOL-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.00000000000000000000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793308462077,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "created_at_ms": 1793307001622,
+      "cum_fees_quote": "0.180443291060",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "236.8010",
+          "blocked_reason": null,
+          "order_amount": "80.527",
+          "owned_base": "80.5270",
+          "quantity_increment": "0.001",
+          "residual_base": "0.0000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793307001.622214",
+          "deadline_timestamp": "1793307301.622214",
+          "max_age_seconds": 300,
+          "order_id": "paper-5516cf0537e94c298cfc1f887714dfe4",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793307001.622214",
+          "terminal_exchange_timestamp": "1793307224.9188728",
+          "terminal_observed_timestamp": "1793307224.9188728"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "80.5270",
+          "entry_gross_quote": "99.70047870",
+          "exit_gross_base": "80.527",
+          "exit_gross_quote": "100.6829081",
+          "fees_quote": "0.180443291060",
+          "remaining_owned_base": "0.0000",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "1.2521",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-5516cf0537e94c298cfc1f887714dfe4",
+          "paper-1627d87df92e4965a339a8b71ccaea0e"
+        ]
+      },
+      "executor_id": "f325121e7dfc953af72889cec182e7540b7b72eeb9a8ed15d9b9f9cd28c1e5ed",
+      "fees_paid": {
+        "USDC": "0.180443291060"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.0000",
+      "realized_pnl_quote": "0.801986108940",
+      "remaining_basis_quote": "0.000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "XRP-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793307931884,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "created_at_ms": 1793307062394,
+      "cum_fees_quote": "0.1806153497560",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.2096624",
+          "blocked_reason": null,
+          "order_amount": "0.141377",
+          "owned_base": "0.1413770",
+          "quantity_increment": "0.000001",
+          "residual_base": "0E-7"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793307062.3948092",
+          "deadline_timestamp": "1793307362.3948092",
+          "max_age_seconds": 300,
+          "order_id": "paper-34401f7705e64869a48a75cc9fa82844",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793307062.3948092",
+          "terminal_exchange_timestamp": "1793307064.1822212",
+          "terminal_observed_timestamp": "1793307064.1822212"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.1413770",
+          "entry_gross_quote": "99.700474170",
+          "exit_gross_base": "0.141377",
+          "exit_gross_quote": "100.85497042",
+          "fees_quote": "0.1806153497560",
+          "remaining_owned_base": "0E-7",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "699.83",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-34401f7705e64869a48a75cc9fa82844",
+          "paper-1f2bd8fcd32b460faf41c732da5f7a34"
+        ]
+      },
+      "executor_id": "a277738f5fe171d1e0eb66fe4239ad9285168a00b4283b3dfa7b83c9d3a44e99",
+      "fees_paid": {
+        "USDC": "0.1806153497560"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.0000000",
+      "realized_pnl_quote": "0.9738809002440000000000000000",
+      "remaining_basis_quote": "0.00000000000000000000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BNB-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.00000000000000000000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793306844583,
+      "close_type": "POSITION_HOLD",
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "created_at_ms": 1793296141389,
+      "cum_fees_quote": "0.07976071087040",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.005050050",
+          "blocked_reason": null,
+          "order_amount": "0.00123548",
+          "owned_base": "0.001235480",
+          "quantity_increment": "0.00000001",
+          "residual_base": "0E-9"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793296141.3894022",
+          "deadline_timestamp": "1793296441.3894022",
+          "max_age_seconds": 300,
+          "order_id": "paper-67b960d7c52143118ba83028fab85067",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793296141.3894022",
+          "terminal_exchange_timestamp": "1793296282.8006055",
+          "terminal_observed_timestamp": "1793296282.8006055"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "held_position",
+          "entry_gross_base": "0.001235480",
+          "entry_gross_quote": "99.7008885880",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.07976071087040",
+          "remaining_owned_base": "0.001235480",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.06682568504673019546954715109",
+          "executable_bid": "76385.3",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "81489.8"
+        },
+        "order_ids": [
+          "paper-67b960d7c52143118ba83028fab85067"
+        ]
+      },
+      "executor_id": "7c3cf33a235bb3f97b7ccbae2f9f320acf44d641c66b4a645925eadf2f01243e",
+      "fees_paid": {
+        "USDC": "0.07976071087040"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.001235480",
+      "realized_pnl_quote": "0.00000000000000",
+      "remaining_basis_quote": "99.78064929887040",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BTC-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-4.42389371287040"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793306820534,
+      "close_type": "POSITION_HOLD",
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "created_at_ms": 1793304541323,
+      "cum_fees_quote": "0.07976056320",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "6.144430",
+          "blocked_reason": null,
+          "order_amount": "1.00830",
+          "owned_base": "1.00830",
+          "quantity_increment": "0.00001",
+          "residual_base": "0.00000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793304541.3236344",
+          "deadline_timestamp": "1793304841.3236344",
+          "max_age_seconds": 300,
+          "order_id": "paper-d10d04f4ed0f425da84a2f011e56e98b",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793304541.3236344",
+          "terminal_exchange_timestamp": "1793304601.0223048",
+          "terminal_observed_timestamp": "1793304601.0223048"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "held_position",
+          "entry_gross_base": "1.00830",
+          "entry_gross_quote": "99.7007040",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.07976056320",
+          "remaining_owned_base": "1.00830",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.04260206745327346768299049807",
+          "executable_bid": "95.77",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "99.85"
+        },
+        "order_ids": [
+          "paper-d10d04f4ed0f425da84a2f011e56e98b"
+        ]
+      },
+      "executor_id": "46a34fb64757b93ee3f28ce3c76f2c6940e7439fb4129951efe4303c9fb88a2f",
+      "fees_paid": {
+        "USDC": "0.07976056320"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "1.00830",
+      "realized_pnl_quote": "0.00000000000",
+      "remaining_basis_quote": "99.78046456320",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "SOL-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-2.87779306320"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793306594964,
+      "close_type": "POSITION_HOLD",
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "created_at_ms": 1793304541323,
+      "cum_fees_quote": "0.079760612640",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "235.6530",
+          "blocked_reason": null,
+          "order_amount": "78.486",
+          "owned_base": "78.4860",
+          "quantity_increment": "0.001",
+          "residual_base": "0.0000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793304541.3236344",
+          "deadline_timestamp": "1793304841.3236344",
+          "max_age_seconds": 300,
+          "order_id": "paper-e0ffbb8c51b54496a797d31a93cb8a9a",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793304541.3236344",
+          "terminal_exchange_timestamp": "1793304581.655735",
+          "terminal_observed_timestamp": "1793304581.655735"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "held_position",
+          "entry_gross_base": "78.4860",
+          "entry_gross_quote": "99.70076580",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.079760612640",
+          "remaining_owned_base": "78.4860",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.02451880840188483347975401326",
+          "executable_bid": "1.2521",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "1.2828"
+        },
+        "order_ids": [
+          "paper-e0ffbb8c51b54496a797d31a93cb8a9a"
+        ]
+      },
+      "executor_id": "916b32266a942998d67f35c62e194b0626d68ab769196f8cb3d14027e53e44ee",
+      "fees_paid": {
+        "USDC": "0.079760612640"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "78.4860",
+      "realized_pnl_quote": "0.000000000000",
+      "remaining_basis_quote": "99.780526412640",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "XRP-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-1.386552512640"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793306594964,
+      "close_type": "POSITION_HOLD",
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "created_at_ms": 1793304540454,
+      "cum_fees_quote": "0.079760074896",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.1746600",
+          "blocked_reason": null,
+          "order_amount": "0.043083",
+          "owned_base": "0.043083",
+          "quantity_increment": "0.000001",
+          "residual_base": "0.000000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793304540.4548979",
+          "deadline_timestamp": "1793304840.4548979",
+          "max_age_seconds": 300,
+          "order_id": "paper-a2f2d19c7c9d45a396c6bcc3cbd16e36",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793304540.4548979",
+          "terminal_exchange_timestamp": "1793304556.6192195",
+          "terminal_observed_timestamp": "1793304556.6192195"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "held_position",
+          "entry_gross_base": "0.043083",
+          "entry_gross_quote": "99.70009362",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.079760074896",
+          "remaining_owned_base": "0.043083",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.04561725356839232180410756633",
+          "executable_bid": "2234.90",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "2336.85"
+        },
+        "order_ids": [
+          "paper-a2f2d19c7c9d45a396c6bcc3cbd16e36"
+        ]
+      },
+      "executor_id": "1ecccf5ec6a95309e31cc3086dadadee55ac99c3c5c9a60a6ca03aaa1cf2c2e1",
+      "fees_paid": {
+        "USDC": "0.079760074896"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.043083",
+      "realized_pnl_quote": "0.000000000000",
+      "remaining_basis_quote": "99.779853694896",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "ETH-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-3.163425799896"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793306542013,
+      "close_type": "POSITION_HOLD",
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "created_at_ms": 1793298901593,
+      "cum_fees_quote": "0.07976070368",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "235.6530",
+          "blocked_reason": null,
+          "order_amount": "77.788",
+          "owned_base": "77.788",
+          "quantity_increment": "0.001",
+          "residual_base": "0.000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793298901.5939567",
+          "deadline_timestamp": "1793299201.5939567",
+          "max_age_seconds": 300,
+          "order_id": "paper-9e0bd1f87fb940c59e65835c47394077",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793298901.5939567",
+          "terminal_exchange_timestamp": "1793298917.980326",
+          "terminal_observed_timestamp": "1793298917.980326"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "held_position",
+          "entry_gross_base": "77.788",
+          "entry_gross_quote": "99.7008796",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.07976070368",
+          "remaining_owned_base": "77.788",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.03370337832441498282884753614",
+          "executable_bid": "1.2521",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "1.2943"
+        },
+        "order_ids": [
+          "paper-9e0bd1f87fb940c59e65835c47394077"
+        ]
+      },
+      "executor_id": "be50d8d9e5648a2498559df1f70e99e180df3f5ac40f6a4ca8fb5a74563e6602",
+      "fees_paid": {
+        "USDC": "0.07976070368"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "77.788",
+      "realized_pnl_quote": "0.00000000000",
+      "remaining_basis_quote": "99.78064030368",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "XRP-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-2.26171410368"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793306540504,
+      "close_type": "POSITION_HOLD",
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "created_at_ms": 1793296201591,
+      "cum_fees_quote": "0.0797602055840",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.1746600",
+          "blocked_reason": null,
+          "order_amount": "0.042698",
+          "owned_base": "0.0426980",
+          "quantity_increment": "0.000001",
+          "residual_base": "0E-7"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793296201.5914338",
+          "deadline_timestamp": "1793296501.5914338",
+          "max_age_seconds": 300,
+          "order_id": "paper-bbfa350a4d8e41b4b72699a11a2a9433",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793296201.5914338",
+          "terminal_exchange_timestamp": "1793296289.7521718",
+          "terminal_observed_timestamp": "1793296289.7521718"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "held_position",
+          "entry_gross_base": "0.0426980",
+          "entry_gross_quote": "99.700256980",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.0797602055840",
+          "remaining_owned_base": "0.0426980",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.05504496845496442793861022865",
+          "executable_bid": "2234.90",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "2357.92"
+        },
+        "order_ids": [
+          "paper-bbfa350a4d8e41b4b72699a11a2a9433"
+        ]
+      },
+      "executor_id": "22afe1ac1c5cf0309c2d228db08bda2cdb08aff0497315735786e7599e2f52d7",
+      "fees_paid": {
+        "USDC": "0.0797602055840"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.0426980",
+      "realized_pnl_quote": "0.0000000000000",
+      "remaining_basis_quote": "99.7800171855840",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "ETH-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-4.0269768155840"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793306492971,
+      "close_type": "POSITION_HOLD",
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "created_at_ms": 1793296141389,
+      "cum_fees_quote": "0.079760248000",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "6.144430",
+          "blocked_reason": null,
+          "order_amount": "0.98860",
+          "owned_base": "0.988600",
+          "quantity_increment": "0.00001",
+          "residual_base": "0.000000"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793296141.3894022",
+          "deadline_timestamp": "1793296441.3894022",
+          "max_age_seconds": 300,
+          "order_id": "paper-3016fc8816ee4638af4cf5d855bdd3c9",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793296141.3894022",
+          "terminal_exchange_timestamp": "1793296352.6878822",
+          "terminal_observed_timestamp": "1793296352.6878822"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "held_position",
+          "entry_gross_base": "0.988600",
+          "entry_gross_quote": "99.70031000",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.079760248000",
+          "remaining_owned_base": "0.988600",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.06338101701994361491072360865",
+          "executable_bid": "95.77",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "101.84"
+        },
+        "order_ids": [
+          "paper-3016fc8816ee4638af4cf5d855bdd3c9"
+        ]
+      },
+      "executor_id": "dd3e8ca1e06204a291d859c435db30f6be59f26cd3d838bb681ea10778dd911c",
+      "fees_paid": {
+        "USDC": "0.079760248000"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.988600",
+      "realized_pnl_quote": "0.000000000000",
+      "remaining_basis_quote": "99.780070248000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "SOL-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-4.770667248000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793305977393,
+      "close_type": "POSITION_HOLD",
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "created_at_ms": 1793260680780,
+      "cum_fees_quote": "0.0408712701744",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.2145669",
+          "blocked_reason": null,
+          "order_amount": "0.068285",
+          "owned_base": "0.0682854",
+          "quantity_increment": "0.000001",
+          "residual_base": "4E-7"
+        },
+        "entry_lifecycle": {
+          "cancel_event_observed_timestamp": "1793260981.0993953",
+          "cancel_event_observed_wall_timestamp": "1793260981.3627162",
+          "cancel_event_order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+          "cancel_event_timestamp": "1793260981.0993953",
+          "cancel_requested_timestamp": "1793260981.0993953",
+          "creation_timestamp": "1793260680.780253",
+          "deadline_timestamp": "1793260980.780253",
+          "max_age_seconds": 300,
+          "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_observed_wall_timestamp": "1793260981.3620837",
+          "stop_reason": "modular_entry_permission_revoked",
+          "stop_requested_timestamp": "1793260981.0993953",
+          "submission_timestamp": "1793260680.780253",
+          "terminal_exchange_timestamp": "1793260981.0993953",
+          "terminal_observed_timestamp": "1793260981.8990161"
+        },
+        "entry_reconciliation": {
+          "amount": "0.133259",
+          "exchange_order_id": "paper-915a6a69384e488bb5ab68cfdd4c8ced",
+          "filled_base": "0.0682854",
+          "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+          "schema": 1,
+          "side": "BUY",
+          "source": "native_paper_terminal_v1",
+          "state": "CANCELED",
+          "trade_ids": [
+            "trade:514940:paper-f5e5925f99f1496d85139db43fd8414f",
+            "trade:514941:paper-f5e5925f99f1496d85139db43fd8414f",
+            "trade:514942:paper-f5e5925f99f1496d85139db43fd8414f",
+            "trade:514943:paper-f5e5925f99f1496d85139db43fd8414f",
+            "trade:514944:paper-f5e5925f99f1496d85139db43fd8414f",
+            "trade:514945:paper-f5e5925f99f1496d85139db43fd8414f",
+            "trade:514946:paper-f5e5925f99f1496d85139db43fd8414f",
+            "trade:514947:paper-f5e5925f99f1496d85139db43fd8414f",
+            "trade:514948:paper-f5e5925f99f1496d85139db43fd8414f",
+            "trade:514949:paper-f5e5925f99f1496d85139db43fd8414f",
+            "trade:514950:paper-f5e5925f99f1496d85139db43fd8414f",
+            "trade:514951:paper-f5e5925f99f1496d85139db43fd8414f",
+            "trade:514952:paper-f5e5925f99f1496d85139db43fd8414f"
+          ],
+          "trading_pair": "BNB-USDC"
+        },
+        "execution_receipt": {
+          "accounting_owner": "held_position",
+          "entry_gross_base": "0.0682854",
+          "entry_gross_quote": "51.089087718",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0.0408712701744",
+          "remaining_owned_base": "0.0682854",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": "0.08064193151586234516691935807",
+          "executable_bid": "699.14",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "waiting",
+          "target_sell_price": "755.52"
+        },
+        "order_ids": [
+          "paper-f5e5925f99f1496d85139db43fd8414f"
+        ]
+      },
+      "executor_id": "ea6ef3cc48062a466d027b2cc450c33db56ee20b6713c9d4de1fe7a89669f774",
+      "fees_paid": {
+        "USDC": "0.0408712701744"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.0682854",
+      "realized_pnl_quote": "0.0000000000000",
+      "remaining_basis_quote": "51.1299589881744",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BNB-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "-3.1099585731744"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793305022024,
+      "close_type": "EXPIRED",
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "created_at_ms": 1793304720615,
+      "cum_fees_quote": "0",
+      "custom_info": {
+        "close_quantity": {},
+        "entry_lifecycle": {
+          "cancel_event_observed_timestamp": "1793305021.1078286",
+          "cancel_event_observed_wall_timestamp": "1793305021.4553046",
+          "cancel_event_order_id": "paper-0312cad7241f4a15810e967b7add5285",
+          "cancel_event_timestamp": "1793305021.1078286",
+          "cancel_requested_timestamp": "1793305021.1078286",
+          "creation_timestamp": "1793304720.6157258",
+          "deadline_timestamp": "1793305020.6157258",
+          "max_age_seconds": 300,
+          "order_id": "paper-0312cad7241f4a15810e967b7add5285",
+          "policy": "single_attempt",
+          "state": "ended_no_fill",
+          "stop_observed_wall_timestamp": "1793305021.4550006",
+          "stop_reason": "modular_entry_permission_revoked",
+          "stop_requested_timestamp": "1793305021.1078286",
+          "submission_timestamp": "1793304720.6157258",
+          "terminal_exchange_timestamp": "1793305021.1078286",
+          "terminal_observed_timestamp": "1793305022.0242846"
+        },
+        "entry_reconciliation": {
+          "amount": "0.135002",
+          "exchange_order_id": "paper-a5360c69fd8642c9a41fb58233b56b17",
+          "filled_base": "0",
+          "order_id": "paper-0312cad7241f4a15810e967b7add5285",
+          "schema": 1,
+          "side": "BUY",
+          "source": "native_paper_terminal_v1",
+          "state": "CANCELED",
+          "trade_ids": [],
+          "trading_pair": "BNB-USDC"
+        },
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0",
+          "entry_gross_quote": "0",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0",
+          "remaining_owned_base": "0",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "699.83",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "pending",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-0312cad7241f4a15810e967b7add5285"
+        ]
+      },
+      "executor_id": "36a54b029e4108bc7ca99de6814606e07fc4bfb80bf3f15230b299ac299bea85",
+      "fees_paid": {},
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0",
+      "realized_pnl_quote": "0",
+      "remaining_basis_quote": "0",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BNB-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793299203181,
+      "close_type": "EXPIRED",
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "created_at_ms": 1793298901593,
+      "cum_fees_quote": "0",
+      "custom_info": {
+        "close_quantity": {},
+        "entry_lifecycle": {
+          "cancel_event_observed_timestamp": "1793299202.4747076",
+          "cancel_event_observed_wall_timestamp": "1793299202.628496",
+          "cancel_event_order_id": "paper-5d4687ddf63b44d89660f3a31207e5da",
+          "cancel_event_timestamp": "1793299202.4747076",
+          "cancel_requested_timestamp": "1793299202.4747076",
+          "creation_timestamp": "1793298901.5939567",
+          "deadline_timestamp": "1793299201.5939567",
+          "max_age_seconds": 300,
+          "order_id": "paper-5d4687ddf63b44d89660f3a31207e5da",
+          "policy": "single_attempt",
+          "state": "ended_no_fill",
+          "stop_observed_wall_timestamp": "1793299202.628153",
+          "stop_reason": "modular_entry_permission_revoked",
+          "stop_requested_timestamp": "1793299202.4747076",
+          "submission_timestamp": "1793298901.5939567",
+          "terminal_exchange_timestamp": "1793299202.4747076",
+          "terminal_observed_timestamp": "1793299203.1816278"
+        },
+        "entry_reconciliation": {
+          "amount": "0.134313",
+          "exchange_order_id": "paper-3305b8dc47ed4b4bb99a1c211e64f47d",
+          "filled_base": "0",
+          "order_id": "paper-5d4687ddf63b44d89660f3a31207e5da",
+          "schema": 1,
+          "side": "BUY",
+          "source": "native_paper_terminal_v1",
+          "state": "CANCELED",
+          "trade_ids": [],
+          "trading_pair": "BNB-USDC"
+        },
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0",
+          "entry_gross_quote": "0",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0",
+          "remaining_owned_base": "0",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "699.83",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "pending",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-5d4687ddf63b44d89660f3a31207e5da"
+        ]
+      },
+      "executor_id": "199d7f206abd266b104c385af9930aa7a221ded392786396a9f125554f101949",
+      "fees_paid": {},
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0",
+      "realized_pnl_quote": "0",
+      "remaining_basis_quote": "0",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BNB-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793286510595,
+      "close_type": "TAKE_PROFIT",
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "created_at_ms": 1793269081856,
+      "cum_fees_quote": "0.1745916316740",
+      "custom_info": {
+        "close_quantity": {
+          "available_base": "0.0682854",
+          "blocked_reason": null,
+          "order_amount": "0.022185",
+          "owned_base": "0.0221857",
+          "quantity_increment": "0.000001",
+          "residual_base": "7E-7"
+        },
+        "entry_lifecycle": {
+          "creation_timestamp": "1793269081.8567696",
+          "deadline_timestamp": "1793269381.8567696",
+          "max_age_seconds": 300,
+          "order_id": "paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+          "policy": "single_attempt",
+          "state": "managing_fill",
+          "stop_reason": null,
+          "submission_timestamp": "1793269081.8567696",
+          "terminal_exchange_timestamp": "1793269175.3090239",
+          "terminal_observed_timestamp": "1793269175.3090239"
+        },
+        "entry_reconciliation": null,
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0.1344870",
+          "entry_gross_quote": "99.700592580",
+          "exit_gross_base": "0.1344870",
+          "exit_gross_quote": "100.683868770",
+          "fees_quote": "0.1745916316740",
+          "remaining_owned_base": "0E-7",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "698.97",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "triggered",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+          "paper-09fad894eb3243c9bb6f805f59afa8d5"
+        ]
+      },
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fees_paid": {
+        "USDC": "0.1745916316740"
+      },
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0.0000000",
+      "realized_pnl_quote": "0.8086845583260000000000000000",
+      "remaining_basis_quote": "0.00000000000000000000000000000",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "BNB-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0.00000000000000000000000000000"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793269622258,
+      "close_type": "EXPIRED",
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "created_at_ms": 1793269321126,
+      "cum_fees_quote": "0",
+      "custom_info": {
+        "close_quantity": {},
+        "entry_lifecycle": {
+          "cancel_event_observed_timestamp": "1793269621.3629239",
+          "cancel_event_observed_wall_timestamp": "1793269621.721464",
+          "cancel_event_order_id": "paper-cc447bc8c7144ba3b8ca46d5fc155081",
+          "cancel_event_timestamp": "1793269621.3629239",
+          "cancel_requested_timestamp": "1793269621.3629239",
+          "creation_timestamp": "1793269321.126196",
+          "deadline_timestamp": "1793269621.126196",
+          "max_age_seconds": 300,
+          "order_id": "paper-cc447bc8c7144ba3b8ca46d5fc155081",
+          "policy": "single_attempt",
+          "state": "ended_no_fill",
+          "stop_observed_wall_timestamp": "1793269621.7211533",
+          "stop_reason": "modular_entry_permission_revoked",
+          "stop_requested_timestamp": "1793269621.3629239",
+          "submission_timestamp": "1793269321.126196",
+          "terminal_exchange_timestamp": "1793269621.3629239",
+          "terminal_observed_timestamp": "1793269622.258165"
+        },
+        "entry_reconciliation": {
+          "amount": "77.449",
+          "exchange_order_id": "paper-2f918d10fb2546648320988a8a805298",
+          "filled_base": "0",
+          "order_id": "paper-cc447bc8c7144ba3b8ca46d5fc155081",
+          "schema": 1,
+          "side": "BUY",
+          "source": "native_paper_terminal_v1",
+          "state": "CANCELED",
+          "trade_ids": [],
+          "trading_pair": "XRP-USDC"
+        },
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0",
+          "entry_gross_quote": "0",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0",
+          "remaining_owned_base": "0",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "1.2508",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "pending",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-cc447bc8c7144ba3b8ca46d5fc155081"
+        ]
+      },
+      "executor_id": "e72acd694b9cdd64f85fa6c9bdddc2940a603059712aa2c5409115de76030ea4",
+      "fees_paid": {},
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0",
+      "realized_pnl_quote": "0",
+      "remaining_basis_quote": "0",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "XRP-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0"
+    },
+    {
+      "basis_reason": "native_position_hold_accounting_over_exact_order_receipts",
+      "close_at_ms": 1793264403046,
+      "close_type": "EXPIRED",
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "created_at_ms": 1793264102096,
+      "cum_fees_quote": "0",
+      "custom_info": {
+        "close_quantity": {},
+        "entry_lifecycle": {
+          "cancel_event_observed_timestamp": "1793264402.3826332",
+          "cancel_event_observed_wall_timestamp": "1793264402.518229",
+          "cancel_event_order_id": "paper-bb2071f584c24102b32c44aa0cd7da93",
+          "cancel_event_timestamp": "1793264402.3826332",
+          "cancel_requested_timestamp": "1793264402.3826332",
+          "creation_timestamp": "1793264102.0965805",
+          "deadline_timestamp": "1793264402.0965805",
+          "max_age_seconds": 300,
+          "order_id": "paper-bb2071f584c24102b32c44aa0cd7da93",
+          "policy": "single_attempt",
+          "state": "ended_no_fill",
+          "stop_observed_wall_timestamp": "1793264402.5179546",
+          "stop_reason": "modular_entry_permission_revoked",
+          "stop_requested_timestamp": "1793264402.3826332",
+          "submission_timestamp": "1793264102.0965805",
+          "terminal_exchange_timestamp": "1793264402.3826332",
+          "terminal_observed_timestamp": "1793264403.0463388"
+        },
+        "entry_reconciliation": {
+          "amount": "77.407",
+          "exchange_order_id": "paper-b7e3800daad24b449caeeb42fad4b1ee",
+          "filled_base": "0",
+          "order_id": "paper-bb2071f584c24102b32c44aa0cd7da93",
+          "schema": 1,
+          "side": "BUY",
+          "source": "native_paper_terminal_v1",
+          "state": "CANCELED",
+          "trade_ids": [],
+          "trading_pair": "XRP-USDC"
+        },
+        "execution_receipt": {
+          "accounting_owner": "executor",
+          "entry_gross_base": "0",
+          "entry_gross_quote": "0",
+          "exit_gross_base": "0",
+          "exit_gross_quote": "0",
+          "fees_quote": "0",
+          "remaining_owned_base": "0",
+          "residual_dust_base": "0"
+        },
+        "exit_target": {
+          "distance_to_target_pct": null,
+          "executable_bid": "1.2320",
+          "kind": "fixed_net_take_profit",
+          "net_take_profit": "0.008",
+          "state": "pending",
+          "target_sell_price": null
+        },
+        "order_ids": [
+          "paper-bb2071f584c24102b32c44aa0cd7da93"
+        ]
+      },
+      "executor_id": "03317f133d1728d82b127d75608792de6fa6b7153e63971e34be40cfd7bbcab3",
+      "fees_paid": {},
+      "pnl_scope": "native_executor_fee_inclusive",
+      "protected_exit": false,
+      "protected_exit_order": null,
+      "protection_reason": "no_active_fixed_target_executor",
+      "quantity": "0",
+      "realized_pnl_quote": "0",
+      "remaining_basis_quote": "0",
+      "remaining_close_quantity": "0",
+      "remaining_target_amount": null,
+      "state": "TERMINATED",
+      "target_basis": null,
+      "target_price": null,
+      "target_reason": "no_active_fixed_target_executor",
+      "target_restored_at_ms": null,
+      "terminal": true,
+      "trading_pair": "XRP-USDC",
+      "unit": "USDC",
+      "unrealized_pnl_quote": "0"
+    }
+  ],
+  "next_cursor": null,
+  "source": {
+    "owner": "hummingbot",
+    "schema": "rsibot.v5-paper.observation.v2",
+    "sha256": "f158eb03398f79cb056b01c538f489d3fdb05ca7e4e3d0c431d99f2b653e2668",
+    "boot_id": "4bc58bd65620dced4b9431804c1ef789",
+    "sequence": 751,
+    "source_sha256": "93f2287ffd7f8112ef08fa2ba3bb9eb597f447e6ba1d825e6c3461796924f762",
+    "config_sha256": "b80096664a0aefc7d614dbcff167057bffffb02a2a78c72e08ee5c7a9876c5e0",
+    "recipe_sha256": "ebec0189e6666a0c8c23732afe45315957e6c068fcd5b3c4c0b0c73b3955885a"
+  }
+}

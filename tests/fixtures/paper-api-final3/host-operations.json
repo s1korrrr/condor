@@ -1,0 +1,1584 @@
+{
+  "data": {
+    "alert_delivery": {
+      "reason": "Local sink acknowledgement is not external recipient delivery.",
+      "state": "not_run"
+    },
+    "checks": [
+      {
+        "id": "risk.entry_paused",
+        "reason": "risk.entry_paused",
+        "state": "degraded"
+      },
+      {
+        "id": "feed.fault",
+        "reason": "feed.fault",
+        "state": "degraded"
+      },
+      {
+        "id": "feed.stale",
+        "reason": "feed.stale",
+        "state": "degraded"
+      },
+      {
+        "id": "disk.low:/home",
+        "reason": "disk.low:/home",
+        "state": "degraded"
+      },
+      {
+        "id": "docker.log_size_unavailable",
+        "reason": "docker.log_size_unavailable",
+        "state": "degraded"
+      },
+      {
+        "id": "feed.unreadable",
+        "reason": "feed.unreadable",
+        "state": "degraded"
+      },
+      {
+        "id": "owner_witness.status_stale_or_unavailable",
+        "reason": "owner_witness.status_stale_or_unavailable",
+        "state": "degraded"
+      }
+    ],
+    "history": {
+      "samples": [
+        {
+          "observed_at": "2026-10-30T23:05:06.569309+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:05:22.471162+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:06:26.642986+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:07:32.029229+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:08:35.147547+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:09:38.981600+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:10:42.360100+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:11:46.150839+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:12:53.830041+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:13:57.746316+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:15:02.429354+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:16:07.872462+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:17:10.929051+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:18:13.959865+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "degraded"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:19:16.412656+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "degraded"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:20:18.770241+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "degraded"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:21:21.631120+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "degraded"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:22:24.568815+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "degraded"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:23:27.092561+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "degraded"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:24:29.382067+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "degraded"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:25:31.693151+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "degraded"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:26:34.017953+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "degraded"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:27:36.544214+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "degraded"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:28:39.135096+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "degraded"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:29:41.871962+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "degraded"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:30:44.430923+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "degraded"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:31:47.065115+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:32:52.326551+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        },
+        {
+          "observed_at": "2026-10-30T23:33:55.497240+00:00",
+          "services": [
+            {
+              "id": "paper.candles",
+              "state": "healthy"
+            },
+            {
+              "id": "paper.engine",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.advisor",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.dashboard",
+              "state": "healthy"
+            },
+            {
+              "id": "workspace.observation",
+              "state": "healthy"
+            }
+          ]
+        }
+      ]
+    },
+    "incidents": [
+      {
+        "detail": "Host monitor finding. No lifecycle action was taken.",
+        "id": "1793403235497:risk.entry_paused",
+        "service": "monitor",
+        "state": "open",
+        "timestamp_ms": 1793403235497,
+        "title": "risk.entry_paused"
+      },
+      {
+        "detail": "Host monitor finding. No lifecycle action was taken.",
+        "id": "1793403235497:feed.fault",
+        "service": "monitor",
+        "state": "open",
+        "timestamp_ms": 1793403235497,
+        "title": "feed.fault"
+      },
+      {
+        "detail": "Host monitor finding. No lifecycle action was taken.",
+        "id": "1793403235497:feed.stale",
+        "service": "monitor",
+        "state": "open",
+        "timestamp_ms": 1793403235497,
+        "title": "feed.stale"
+      },
+      {
+        "detail": "Host monitor finding. No lifecycle action was taken.",
+        "id": "1793403235497:disk.low:/home",
+        "service": "monitor",
+        "state": "open",
+        "timestamp_ms": 1793403235497,
+        "title": "disk.low:/home"
+      },
+      {
+        "detail": "Host monitor finding. No lifecycle action was taken.",
+        "id": "1793403235497:docker.log_size_unavailable",
+        "service": "monitor",
+        "state": "open",
+        "timestamp_ms": 1793403235497,
+        "title": "docker.log_size_unavailable"
+      },
+      {
+        "detail": "Host monitor finding. No lifecycle action was taken.",
+        "id": "1793403235497:feed.unreadable",
+        "service": "monitor",
+        "state": "open",
+        "timestamp_ms": 1793403235497,
+        "title": "feed.unreadable"
+      },
+      {
+        "detail": "Host monitor finding. No lifecycle action was taken.",
+        "id": "1793403235497:owner_witness.status_stale_or_unavailable",
+        "service": "monitor",
+        "state": "open",
+        "timestamp_ms": 1793403235497,
+        "title": "owner_witness.status_stale_or_unavailable"
+      }
+    ],
+    "service_logs": {
+      "entries": [
+        {
+          "id": "735778afcd0045f9372846dafdfbb96622192e7f69449f17134f002b3fce8907",
+          "message": "okx-candle-service listening=127.0.0.1:8093 pairs=5 history=1500",
+          "service": "paper.candles",
+          "timestamp_ms": 1793401458507
+        },
+        {
+          "id": "a91b321035e006baafa580de720c3896d11f70446d9e5cf1b3b89af7c7aafba9",
+          "message": "INFO:     127.0.0.1:44400 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402508357
+        },
+        {
+          "id": "f06a4108ccf969dde9c33b0d87ab4368f787634fdd73c4048d00b4283d77c4b5",
+          "message": "INFO:     10.214.45.2:47446 - \"GET /v1/tasks HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402512097
+        },
+        {
+          "id": "6c3b5257d9b5257f3ee4d84fead6ffcb62a9d34a2f1780d772cc63ff3f33b750",
+          "message": "INFO:     127.0.0.1:45732 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402523978
+        },
+        {
+          "id": "4ebe0c810017ab32c6653367a2fd89f30bf564fe157ee95c6d5b2d74f3427d26",
+          "message": "INFO:     10.214.45.2:32954 - \"GET /v1/tasks HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402524683
+        },
+        {
+          "id": "c550cb9f45d438513fb66d3c2518ba7f64d44e84ea902c298de892ff87560a84",
+          "message": "INFO:     127.0.0.1:47720 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402539569
+        },
+        {
+          "id": "adbaa3003455fd3b79618479591d5752c4b34e952d6aaff1ae08f5141041a15c",
+          "message": "INFO:     127.0.0.1:46756 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402555064
+        },
+        {
+          "id": "6490fffaa989fece0e568a9ae41e3dd395c48a8ac0cbb2524e4ce7a062fea8b7",
+          "message": "INFO:     10.214.45.2:54616 - \"GET /v1/tasks HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402564259
+        },
+        {
+          "id": "c3202e57d85c1e9a072ca5ec1b1abbd31608dd59606b9da792191a42a0c60281",
+          "message": "INFO:     127.0.0.1:46850 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402570851
+        },
+        {
+          "id": "cbe7c95e8966916647123b39d4129d315ec207b5b11c16829eb499c42c9548f1",
+          "message": "INFO:     127.0.0.1:38646 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402586369
+        },
+        {
+          "id": "be8f90e10045dd4b93ea264cb13dbd7fefa69e1a20954251bed6c78ebd4fe9b8",
+          "message": "INFO:     127.0.0.1:38122 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402602187
+        },
+        {
+          "id": "fbd6c1dac1371ad55564f3133b6b373286c6d7fa0717830d3189eb4296aab94e",
+          "message": "INFO:     127.0.0.1:48734 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402617797
+        },
+        {
+          "id": "c5ac46b69ab21e2048803f7df0b1f39bf0d7f07e0555e52eff500e0baad20625",
+          "message": "INFO:     127.0.0.1:35694 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402633550
+        },
+        {
+          "id": "3212cc6493d065021b4207155636877dfd17fe2f8357ce69326128e36cf4e667",
+          "message": "INFO:     127.0.0.1:59164 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402649060
+        },
+        {
+          "id": "295fe6a49ab3e4f4ed803464673059babb20062d55a6d1265c26c2d6466ebfa4",
+          "message": "INFO:     127.0.0.1:47708 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402664587
+        },
+        {
+          "id": "cc2ae7b0315feb381e1e56f2616d04d6213d01de7de6fae677c52687c4967e6c",
+          "message": "INFO:     127.0.0.1:55754 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402680096
+        },
+        {
+          "id": "5ca4c0a5c3c08d73962f4ee2b46982b75b0784f037b31c44b3bbf2922f1eae3b",
+          "message": "INFO:     127.0.0.1:49106 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402695894
+        },
+        {
+          "id": "4487e54cac3fc148e8d7634635a5fa8583ae2ddd8b9340c86a6ec5c8d6347d78",
+          "message": "INFO:     127.0.0.1:40148 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402711477
+        },
+        {
+          "id": "1b7549c3c65350ea3fa2dbbda1cf5f2f71cabf7c11928a55d80e792414c873d0",
+          "message": "INFO:     127.0.0.1:34528 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402727087
+        },
+        {
+          "id": "ac73d6db527a0ca82b1008cd2a5d30f961bf4ad5b7fa88b69174075be461bcb9",
+          "message": "INFO:     127.0.0.1:51076 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402742674
+        },
+        {
+          "id": "0c2bdd085d41f678e9f2a8b4f4995c2e33bd1f22a35109186d4e597840ab9332",
+          "message": "INFO:     127.0.0.1:57254 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402758195
+        },
+        {
+          "id": "315c55ebd3fc10a753a97a63a81c07291fe95d1f3655c3aadb0edff5c62d8174",
+          "message": "INFO:     127.0.0.1:35708 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402773780
+        },
+        {
+          "id": "fe3a14aa3407adffdbb073b94786805699b40bcd02ffed18f848ccc0bbda59a5",
+          "message": "INFO:     127.0.0.1:48106 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402789389
+        },
+        {
+          "id": "3239a22a0bbdab76e19725c0c9c4768396eb19d3624ebc934919dd0cd243f737",
+          "message": "INFO:     127.0.0.1:54212 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402805054
+        },
+        {
+          "id": "143a2baf64344219d2372bc73a02f55fe82b91e93ecef1d70e5b6c806860c839",
+          "message": "INFO:     127.0.0.1:48676 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402820681
+        },
+        {
+          "id": "f84f8284ed1462cf1607404f0e921d75233afadcc56b3e6ecdd73c576e0c13cb",
+          "message": "INFO:     127.0.0.1:58568 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402836171
+        },
+        {
+          "id": "a927f59a3ca01f75e137271dbc6deaf6286e800abdf69015b27463915e43222f",
+          "message": "INFO:     127.0.0.1:48510 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402851660
+        },
+        {
+          "id": "f333cc109c588001b30ea5e57c2d03f09d720109a9de6565ed672e913102757a",
+          "message": "INFO:     127.0.0.1:56108 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402867450
+        },
+        {
+          "id": "c0e148a3ed11de2c6191d6a761a0ef3dfbdfd81bd48eecfa20b1881b47afad30",
+          "message": "INFO:     127.0.0.1:44622 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402882975
+        },
+        {
+          "id": "bbe009ed1c991251212136ba0d7c164d0ac371aa638114cf892a525f3c04de3d",
+          "message": "INFO:     127.0.0.1:43766 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402898459
+        },
+        {
+          "id": "fe02cf267b3d1c6bb8ee5068207a20aa8919b86728b8e2626346b30e26a102bd",
+          "message": "INFO:     127.0.0.1:50716 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402914160
+        },
+        {
+          "id": "b775418129b3704d3a5eca68f67ed314bca9c863461af22bc4cb415b4edf4e03",
+          "message": "INFO:     127.0.0.1:57106 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402929682
+        },
+        {
+          "id": "6d4a427fd199648be8ebb09c164d454b8b8632f3ee3312c8cf78515f15565713",
+          "message": "INFO:     127.0.0.1:59966 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402945170
+        },
+        {
+          "id": "a0d7b7e8bbb5bcb1a874751d991be20f21cc5df340ac3f96ffd3832406d60e68",
+          "message": "INFO:     127.0.0.1:36086 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402960761
+        },
+        {
+          "id": "29b0ef55308307695934f82ce313f9197a00859e01b119ff9787865b32761550",
+          "message": "INFO:     127.0.0.1:47708 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402976286
+        },
+        {
+          "id": "a1c47928c26d6532fe051ef6a1c3f7eb89a380b3a6951206e284f5029e436ebf",
+          "message": "INFO:     127.0.0.1:51652 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793402991766
+        },
+        {
+          "id": "a7251a71d798e4915cb8b51dd1013182c38509950eba30471c1801d8d71b976e",
+          "message": "INFO:     127.0.0.1:51500 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403007294
+        },
+        {
+          "id": "a05e9c6c8c0938ac6826a91f21205baea85e5eef239925c40e8690344a4dff5e",
+          "message": "INFO:     127.0.0.1:44392 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403022876
+        },
+        {
+          "id": "12d118ce53891ced1978f210f048ad5ae71905d0d2daae74f176c9fb6727c27e",
+          "message": "INFO:     127.0.0.1:52530 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403038392
+        },
+        {
+          "id": "9d2345e143f80cf2a7a28b889ffefee3079cd2961ed08121bf85085e9be634f0",
+          "message": "INFO:     127.0.0.1:33612 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403053973
+        },
+        {
+          "id": "80d0393ce8da7614405e4058c65834b4dd52834e51392b4077b40a68531fe458",
+          "message": "INFO:     127.0.0.1:50208 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403069480
+        },
+        {
+          "id": "aafeae0eb92cfdd2fed1fcc690c4502edd971159c347175dd3fce9054bef10b3",
+          "message": "INFO:     127.0.0.1:40646 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403084966
+        },
+        {
+          "id": "0f86132661791d4b60ade64afa97f691bf7a233cebb12bbcdf84e7fa01676fb7",
+          "message": "INFO:     127.0.0.1:57266 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403100687
+        },
+        {
+          "id": "45cad2df3514784811752c700e25278c5ae6a62921e0c0b81dbcff01723b4a8c",
+          "message": "INFO:     127.0.0.1:40080 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403116261
+        },
+        {
+          "id": "eca3d3b91d4eecca2f4499341a825ad8f9e56654f5791bd50223255270f52568",
+          "message": "INFO:     127.0.0.1:37154 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403131796
+        },
+        {
+          "id": "d61b02a6ef6a0e00313a16813c5011ebbf24391b1af50db901e1aae55837bbf0",
+          "message": "INFO:     127.0.0.1:49082 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403147362
+        },
+        {
+          "id": "634d08c3f21fbdfb3a93050f0546c9da45727342b5927f068607ceb242fee9e5",
+          "message": "INFO:     127.0.0.1:59110 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403162889
+        },
+        {
+          "id": "a75753962638f428a9833a5656c406d24f7e27e478f2f6b233061136e570955b",
+          "message": "INFO:     127.0.0.1:58064 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403178585
+        },
+        {
+          "id": "81db033e2da54316a175b9fe0defd1e87e7719ab133a5aabefc28f8356e99e76",
+          "message": "INFO:     127.0.0.1:59138 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403194149
+        },
+        {
+          "id": "6c02ab5902aef8e5652d6e195a8390cb09310c6326c9945e57347d2a37d4af95",
+          "message": "INFO:     127.0.0.1:51004 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403209675
+        },
+        {
+          "id": "54ee603a53bd9c6862c9fd072d87594b1601fc6f77d1e893c2c0753b17189919",
+          "message": "INFO:     127.0.0.1:56278 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.advisor",
+          "timestamp_ms": 1793403225162
+        },
+        {
+          "id": "5a63ed54679c737d69ef7dc242a1b418a135cebb51b16ba73920c7e736f28898",
+          "message": "INFO:     127.0.0.1:56456 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402788504
+        },
+        {
+          "id": "45e9feb31fc89eaa563f414101d0938920a7c62e94957d423db9755d96f24cef",
+          "message": "INFO:     10.214.45.1:57120 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402802923
+        },
+        {
+          "id": "0b18cca99bf9b79fe62db8b414993181f4082fddcc680da5d69903c5e548cdfb",
+          "message": "INFO:     127.0.0.1:37770 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402803804
+        },
+        {
+          "id": "7713c832e7038288e08788394dcb98a4936f73914e8af713723c4460a3a39019",
+          "message": "INFO:     10.214.45.1:34302 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402817929
+        },
+        {
+          "id": "9dd6d0f53d9f45e084f2b6a6feefc1acf702d66ba3d86faa1a3a20b29e14afa7",
+          "message": "INFO:     127.0.0.1:50286 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402819102
+        },
+        {
+          "id": "1ddf7c5432e2838ab23b66d726de09de68778ef65d46ce8c71f61813bf730012",
+          "message": "INFO:     10.214.45.1:56834 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402832934
+        },
+        {
+          "id": "2a1ba931206ce1aa1b98ffbb56ad528edb13e66cfa4d662fcd7c6ba5f642b3a0",
+          "message": "INFO:     127.0.0.1:54172 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402834381
+        },
+        {
+          "id": "251649293058ecee562f1f981b9093f69d2225301e2b1b4c1f251eea777a7660",
+          "message": "INFO:     10.214.45.1:42778 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402847939
+        },
+        {
+          "id": "0a82c603091204028e3d71837f198a95af8953015323d16de5f1b3b379e43219",
+          "message": "INFO:     127.0.0.1:52888 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402849660
+        },
+        {
+          "id": "8bd2a01e4efb87916d27c0c65e64b7d7947956d221f2d07047d29ac6a24b3e82",
+          "message": "INFO:     10.214.45.1:42170 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402862945
+        },
+        {
+          "id": "af531d0ce092745a353635f745062d46ead3e028594c6f8b5f8812a6ca0703a9",
+          "message": "INFO:     127.0.0.1:54590 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402864958
+        },
+        {
+          "id": "66d105a5290ebbb0ed6ce507bcc7760badbdef8b8b64bedf3ac819b7f30c7654",
+          "message": "INFO:     10.214.45.1:39318 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402877950
+        },
+        {
+          "id": "4b1ddee69865c2a13057f4ec0e094ddfd67b044d2fe5a6ddf69f50d3b872749c",
+          "message": "INFO:     127.0.0.1:40392 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402880284
+        },
+        {
+          "id": "7949042d70c5ecd4a6a2422958920cd13c186b36f0b952ac5168ad04a36b77a0",
+          "message": "INFO:     10.214.45.1:42310 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402892955
+        },
+        {
+          "id": "f7eafa0aad51293b59c32690dea6d9926a7e6019e0014570a9b2e212476af6e1",
+          "message": "INFO:     127.0.0.1:48162 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402895556
+        },
+        {
+          "id": "e6362ae5c2f2693f0ff796165ce6a4e417f783ff0a6e77e611803ed108f256fa",
+          "message": "INFO:     10.214.45.1:51656 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402907961
+        },
+        {
+          "id": "81647dd24a81d67d2d74fb1a4091db6d65d0716bacb9db9e23aea04f8f460d32",
+          "message": "INFO:     127.0.0.1:34828 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402910830
+        },
+        {
+          "id": "bfbb62da82b84cb284f50a3f93c4c906faa084e7e678ede162749d7350a5a075",
+          "message": "INFO:     10.214.45.1:39592 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402922967
+        },
+        {
+          "id": "78d9387a79ad1d68e10de92c4edd0af5d9b548bb0578eebe62f8657f29bed6c5",
+          "message": "INFO:     127.0.0.1:56954 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402926125
+        },
+        {
+          "id": "de2a8a59718a45310bf9deda1c891ca766dfa8b8943955ea035876a816890bb2",
+          "message": "INFO:     10.214.45.1:38826 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402937972
+        },
+        {
+          "id": "29a9ee54ca1a95ec518e9f190759c16d8fa357202ed9b8e293cae27d047f2464",
+          "message": "INFO:     127.0.0.1:59112 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402941430
+        },
+        {
+          "id": "b30fe24b8bc02d3fd09c10b6abbac69d8a9adae7142a21e2f16bc74e3c8f3ba1",
+          "message": "INFO:     10.214.45.1:41336 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402952977
+        },
+        {
+          "id": "b7750fd8c443f47cff29350f0314365c7d917dc2089ceca8ae13bd65c5996d04",
+          "message": "INFO:     127.0.0.1:56932 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402956765
+        },
+        {
+          "id": "e9db47e95e1b20f95f90e562b85b4088428435c4c151223b6ed54d87916a73e7",
+          "message": "INFO:     10.214.45.1:41418 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402967983
+        },
+        {
+          "id": "074c176d3c388ff8a11028d0752cb79f606c2a2917fe516568200a5af9ac28b8",
+          "message": "INFO:     127.0.0.1:49834 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402972067
+        },
+        {
+          "id": "1b7a900b3b45dab53ec0fd45b5f2764f0811f452a4303cad4a41c936f6941e25",
+          "message": "INFO:     10.214.45.1:53126 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402982989
+        },
+        {
+          "id": "d640861a2e249333bd2916df3a903d0cc85abbb63c87d8d68eaa6e04031dbf65",
+          "message": "INFO:     127.0.0.1:37720 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402987383
+        },
+        {
+          "id": "788181a34900907b2bf64af964e2f7809101e38cee3937769d4e350b4895bb7a",
+          "message": "INFO:     10.214.45.1:42158 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793402997995
+        },
+        {
+          "id": "cc3b0ce4e874ea679485bc57b470fac34d06d8b53e224c39c070cf8092a1baa8",
+          "message": "INFO:     127.0.0.1:41048 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403002679
+        },
+        {
+          "id": "824465ba68bfb921f2a98c9493fd271e295315a0a5410990c9529ff56cb6854e",
+          "message": "INFO:     10.214.45.1:54766 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403013000
+        },
+        {
+          "id": "d104f7a1e80dc7cfb9bcebef74f2d2ca64d764ce66b3575d9dc46cdf3a2aa071",
+          "message": "INFO:     127.0.0.1:48282 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403017967
+        },
+        {
+          "id": "5ec0a9baf095ea1fce748f09e5f74ff90a38786f28c3a3b173c73bdd1cc21864",
+          "message": "INFO:     10.214.45.1:42730 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403028006
+        },
+        {
+          "id": "b2f79bc4ed2df50bcb613d4db75ea669dd2ad45cde66b4e89d52f508e4d70a86",
+          "message": "INFO:     127.0.0.1:45046 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403033243
+        },
+        {
+          "id": "4dfb24ebe5895753ec2fb4a772abc14607a1282821b613f9b53be3a7f7b8c8a7",
+          "message": "INFO:     10.214.45.1:52028 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403043011
+        },
+        {
+          "id": "0e72c803b739554d341ec3da370615690a15e0d4689c4087167e3fbac5c294ec",
+          "message": "INFO:     127.0.0.1:54334 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403048544
+        },
+        {
+          "id": "3d9b49f02af8b14f085698bde8ac7425d885b0107ac3a9110adeb02a251a2d69",
+          "message": "INFO:     10.214.45.1:35220 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403058016
+        },
+        {
+          "id": "61058a26e252b976bad4c54dda593f7c7df0808f7a5b3ecc8f816ec3b990a50a",
+          "message": "INFO:     127.0.0.1:41292 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403063853
+        },
+        {
+          "id": "a272d2074ecec654e33c91dfabf706630a41ce56b0a2f06b9b2aabd8b4456714",
+          "message": "INFO:     10.214.45.1:43872 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403073022
+        },
+        {
+          "id": "59d3ae1834e3dcc3c5ba698bca11dd81e94e31c104e2cc8133c34ea1db305024",
+          "message": "INFO:     127.0.0.1:42226 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403079144
+        },
+        {
+          "id": "53134db3a8f788b5a7271c41dd7701777749a4bb71d9e57bed73d862121dfec6",
+          "message": "INFO:     10.214.45.1:42412 - \"GET /api/v5/auth HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403088028
+        },
+        {
+          "id": "8af6fa1542ab419c0dd45e03e7491d78e4fd6a1c64d8c5899730c35b107beece",
+          "message": "INFO:     127.0.0.1:56306 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403094468
+        },
+        {
+          "id": "01fc647ecfae43188efcb72a930f01b8a2a6e3775a4877fe694f07d689f15004",
+          "message": "INFO:     127.0.0.1:52810 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403109858
+        },
+        {
+          "id": "ecda436d0d1d5c45d4284613bee30a69d9cf6562aee2afb92e85eb10f79299f0",
+          "message": "INFO:     127.0.0.1:38858 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403125155
+        },
+        {
+          "id": "d3d51f55075e62ec8d5bec7dbc78b22cbe48ecb37241338ed976e062c345331b",
+          "message": "INFO:     127.0.0.1:57968 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403140458
+        },
+        {
+          "id": "4ad6d7138733847e57171cd4bf4a2a1cd11c3ee776723f1f7210d5e81d4ffb49",
+          "message": "INFO:     127.0.0.1:55596 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403155757
+        },
+        {
+          "id": "ca82dcb79df4b6e00ce79bc5f8bafa1ef2cb382a48048cfeeb347ade87ea355f",
+          "message": "INFO:     127.0.0.1:35604 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403171073
+        },
+        {
+          "id": "8b5d6f212bcc55e75efaec8672f207b4d657cffe430cb2c0093712c018579179",
+          "message": "INFO:     127.0.0.1:34468 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403186362
+        },
+        {
+          "id": "b56355fdc048d69c8fc1f58ef8d20f8bfd91209e728c3a4763cdbb9afec22722",
+          "message": "INFO:     127.0.0.1:44110 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403201760
+        },
+        {
+          "id": "6e3f2a0302606cbe4d4d358f386e51dcf1caadd3eddcc4d830ed341ce7a20c13",
+          "message": "INFO:     127.0.0.1:39642 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403217043
+        },
+        {
+          "id": "6a1c166ea3a83fd1509857f57d1df76c7f9b55311d8dedd3283fa32961c41508",
+          "message": "INFO:     127.0.0.1:54206 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.dashboard",
+          "timestamp_ms": 1793403232318
+        },
+        {
+          "id": "a9de9f56fffddee1705f3597c5d111990f2646f69d912d734c9c88772dc3b66c",
+          "message": "INFO:     Started server process [7]",
+          "service": "workspace.observation",
+          "timestamp_ms": 1793403101734
+        },
+        {
+          "id": "af18097b54fdf86c282ab0a2fcfb724f124d3c1e9f235e393fc68b203a45625c",
+          "message": "INFO:     Waiting for application startup.",
+          "service": "workspace.observation",
+          "timestamp_ms": 1793403101734
+        },
+        {
+          "id": "8d8086ef281a58de5e579ea033d6257a0f5386a385653548fe06cb16a41dc7ee",
+          "message": "INFO:     Application startup complete.",
+          "service": "workspace.observation",
+          "timestamp_ms": 1793403101751
+        },
+        {
+          "id": "bb9330888a24f330ca1cd36c3fb4daa1b9035a723a44d314ef0746f287b5519c",
+          "message": "INFO:     Uvicorn running on http://0.0.0.0:8080 (Press CTRL+C to quit)",
+          "service": "workspace.observation",
+          "timestamp_ms": 1793403101752
+        },
+        {
+          "id": "4804fc451f99210939de8e34ed7f63a56a0d09e00820a0093ee10be828c5ec71",
+          "message": "INFO:     127.0.0.1:51378 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.observation",
+          "timestamp_ms": 1793403105647
+        },
+        {
+          "id": "3d1c7689aac991a1469c3c00923cfa1c50a773c47ceb89dde0f18d24be535eb6",
+          "message": "INFO:     10.214.45.1:60684 - \"GET /v1/paper/status HTTP/1.1\" 200 OK",
+          "service": "workspace.observation",
+          "timestamp_ms": 1793403112164
+        },
+        {
+          "id": "dd3597a366af602ebb93fb5a32b03954248d6fb01e45f0c5f40b72ae611957b9",
+          "message": "INFO:     127.0.0.1:48572 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.observation",
+          "timestamp_ms": 1793403135941
+        },
+        {
+          "id": "c017f866bdcc8491f004dfc08cb8891a1a1f62a7ca4df4cc1a8710bc3dda1bf7",
+          "message": "INFO:     10.214.45.1:59070 - \"GET /v1/paper/history?limit=1000 HTTP/1.1\" 422 Unprocessable Entity",
+          "service": "workspace.observation",
+          "timestamp_ms": 1793403140922
+        },
+        {
+          "id": "7e1ebc99be669ee663f7ba0974d7672ac3cd0923e2b1c1b197e73e28c470c18b",
+          "message": "INFO:     10.214.45.1:59080 - \"GET /v1/paper/positions HTTP/1.1\" 200 OK",
+          "service": "workspace.observation",
+          "timestamp_ms": 1793403143237
+        },
+        {
+          "id": "67efcd9be45e52897ee4c576a3a110413c58bac7cb9582d529ea4cee17d031fb",
+          "message": "INFO:     10.214.45.1:59092 - \"GET /v1/paper/candles HTTP/1.1\" 422 Unprocessable Entity",
+          "service": "workspace.observation",
+          "timestamp_ms": 1793403143597
+        },
+        {
+          "id": "18033f56f7cb5aa2ec26ad999e48f4b050c8240a899b138db6e53263c430b223",
+          "message": "INFO:     127.0.0.1:40256 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.observation",
+          "timestamp_ms": 1793403166226
+        },
+        {
+          "id": "d9ac7ff279fcdcd63e2503fa6acb73a2f53153117f86764c278ba3d562547f27",
+          "message": "INFO:     10.214.45.1:37652 - \"GET /v1/paper/status HTTP/1.1\" 200 OK",
+          "service": "workspace.observation",
+          "timestamp_ms": 1793403175370
+        },
+        {
+          "id": "8c1e42545081a759d3fbc726434497059bdcaf4a79c5a8388833af70ff5ffacf",
+          "message": "INFO:     127.0.0.1:52298 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.observation",
+          "timestamp_ms": 1793403196545
+        },
+        {
+          "id": "b1e85ce93b65c55d279a9a8c1b3c66f4c76ad99d517db811a8021e022154e3fa",
+          "message": "INFO:     127.0.0.1:43480 - \"GET /health HTTP/1.1\" 200 OK",
+          "service": "workspace.observation",
+          "timestamp_ms": 1793403226822
+        }
+      ],
+      "limit": 250,
+      "reason": null,
+      "redacted": true,
+      "state": "available"
+    },
+    "services": [
+      {
+        "health_age_seconds": null,
+        "health_checked_at_ms": null,
+        "id": "paper.candles",
+        "liveness": "running",
+        "observed_at_ms": 1793403235497,
+        "readiness": "healthy",
+        "reason": "Docker health check time was not observed.",
+        "restart_count": 0,
+        "state": "healthy"
+      },
+      {
+        "health_age_seconds": null,
+        "health_checked_at_ms": null,
+        "id": "paper.engine",
+        "liveness": "running",
+        "observed_at_ms": 1793403235497,
+        "readiness": "healthy",
+        "reason": "Docker health check time was not observed.",
+        "restart_count": 0,
+        "state": "healthy"
+      },
+      {
+        "health_age_seconds": null,
+        "health_checked_at_ms": null,
+        "id": "workspace.advisor",
+        "liveness": "running",
+        "observed_at_ms": 1793403235497,
+        "readiness": "healthy",
+        "reason": "Docker health check time was not observed.",
+        "restart_count": 0,
+        "state": "healthy"
+      },
+      {
+        "health_age_seconds": null,
+        "health_checked_at_ms": null,
+        "id": "workspace.dashboard",
+        "liveness": "running",
+        "observed_at_ms": 1793403235497,
+        "readiness": "healthy",
+        "reason": "Docker health check time was not observed.",
+        "restart_count": 0,
+        "state": "healthy"
+      },
+      {
+        "health_age_seconds": null,
+        "health_checked_at_ms": null,
+        "id": "workspace.observation",
+        "liveness": "running",
+        "observed_at_ms": 1793403235497,
+        "readiness": "healthy",
+        "reason": "Docker health check time was not observed.",
+        "restart_count": 0,
+        "state": "healthy"
+      }
+    ]
+  },
+  "execution_mode": "paper",
+  "generated_at_ms": 1793403235497,
+  "observed_at_ms": 1793403235497,
+  "reason": "HOST_MONITOR_HOLD",
+  "schema": "rsibot.v5-paper.read.v1",
+  "section": "operations",
+  "simulated": true,
+  "snapshot_id": "host-monitor:1793403235497",
+  "state": "degraded"
+}

@@ -1,0 +1,38 @@
+{
+  "events": [
+    {
+      "event": "request",
+      "url": "https://razer.tailb24ea3.ts.net:29443/api/v5/candle-store/overview",
+      "at": 1793412176529
+    },
+    {
+      "event": "request",
+      "url": "https://razer.tailb24ea3.ts.net:29443/api/v5/candle-store/symbols",
+      "at": 1793412176530
+    },
+    {
+      "event": "response",
+      "url": "https://razer.tailb24ea3.ts.net:29443/api/v5/candle-store/overview",
+      "status": 200,
+      "at": 1793412176545
+    },
+    {
+      "event": "response",
+      "url": "https://razer.tailb24ea3.ts.net:29443/api/v5/candle-store/symbols",
+      "status": 200,
+      "at": 1793412176546
+    },
+    {
+      "event": "request",
+      "url": "https://razer.tailb24ea3.ts.net:29443/api/v5/candle-store/candles?lane=okx__spot&pair=BTC-USDC&range=24h",
+      "at": 1793412176584
+    },
+    {
+      "event": "response",
+      "url": "https://razer.tailb24ea3.ts.net:29443/api/v5/candle-store/candles?lane=okx__spot&pair=BTC-USDC&range=24h",
+      "status": 200,
+      "at": 1793412176613
+    }
+  ],
+  "text": "RSIBOT V5\nPAPER · live disabled\nMarket\nCapital\nBots\nOperations\nResearch\nTradepad\nAgents\nSessions\nRefresh\nCandle store · read-only owner observations · execution disabled\nReadiness and open gates\nMarket\n\nMarket monitoring for the V5 stack on Razer.\n\nV5 multi-venue context\nCondor Market Picture\nCandle store\nRazer candle store\n\nRead-only owner observations · 1m candles · UTC · spot and perpetual lanes stay separate\n\nRefresh\nEvaluated 2026-10-31 02:02:56 UTC · Collector heartbeat current (2 s). This is collector liveness, not candle finality or source correctness.\nokx · spot\n\nOwner lane health: green · 5/5 instruments held/listed\n\nMissing 7d\nUnavailable min\nPending\n0 min\nUnrecoverable 7d\nUnavailable min\nHealth evidence\nInstrument coverage · evaluated 2026-10-31 02:02:56 UTC\n\nV5 trades OKX spot BNB-USDC, BTC-USDC, ETH-USDC, SOL-USDC, XRP-USDC. This store holds OKX spot: BNB-USDC, BTC-USDC, ETH-USDC, SOL-USDC, XRP-USDC. All five V5 pairs have held candles. USDT candles are not USDC candles; no conversion is applied.\n\nCoverage excludes pending minutes inside the owner settle grace. Missing, no-trade and unrecoverable are distinct states. Filter by venue or market type; resize column edges. Blank metrics mean unavailable.\n\nFilters\n5 rows\nVenue\n↕\n\t\nMarket type\n↕\n\t\nInstrument\n↕\n\t\nData health\n↕\n\t\nLast open (UTC)\n↕\n\t\nAge since close (s)\n↕\n\t\nSettle grace (s)\n↕\n\t\nSettled coverage 1h (%)\n↕\n\t\nSettled coverage 24h (%)\n↕\n\t\nSettled coverage 7d (%)\n↕\n\t\nMissing 7d (min)\n↕\n\t\nPending (min)\n↕\n\t\nUnrecoverable 7d (min)\n↕\n\t\nNo-trade 7d (min)\n↕\n\t\nWebSocket\n↕\n\nokx\tspot\tBNB-USDC\tgreen\t2026-10-31 02:01:00 UTC\t56\t10\t100\t—\t—\t—\t0\t—\t—\tfixture\nokx\tspot\tBTC-USDC\tgreen\t2026-10-31 02:01:00 UTC\t56\t10\t100\t—\t—\t—\t0\t—\t—\tfixture\nokx\tspot\tETH-USDC\tgreen\t2026-10-31 02:01:00 UTC\t56\t10\t100\t—\t—\t—\t0\t—\t—\tfixture\nokx\tspot\tSOL-USDC\tgreen\t2026-10-31 02:01:00 UTC\t56\t10\t100\t—\t—\t—\t0\t—\t—\tfixture\nokx\tspot\tXRP-USDC\tgreen\t2026-10-31 02:01:00 UTC\t56\t10\t100\t—\t—\t—\t0\t—\t—\tfixture\nInstrument\nokx · spot · BNB-USDC\nokx · spot · BTC-USDC\nokx · spot · ETH-USDC\nokx · spot · SOL-USDC\nokx · spot · XRP-USDC\nRange\n1h\n6h\n24h\n7d\nokx · spot · BTC-USDC (price in USDC) · 1m · UTC\n\t\n\t\n\n\t\n\t\n\nHover for recorded OHLC, volume and minute state. Drag to pan; scroll to zoom. Gaps are never filled.\n\nSelected range only · evaluated 2026-10-31 02:02:56 UTC · final: 1,440 min · no_trade: 0 min · unrecoverable: 0 min · missing: 0 min · pending: 0 min · corrections: 0 min. Chart counts use the selected range; table and tiles label their own windows."
+}

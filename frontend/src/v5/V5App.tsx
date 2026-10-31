@@ -11,17 +11,20 @@ import { V5MarketHome } from "./V5MarketHome";
 import { V5AppShell } from "./V5AppShell";
 import { clearSessionCache, confirmLogout } from "./session-policy.mjs";
 import { V5PaperBots } from "@/pages/tabs/ActiveBotsTab";
+import { usePaperWorkspace } from "./usePaperObservation";
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 15_000 } } });
 const Capital = lazy(() => import("@workspace-monitoring").then(m => ({ default: function V5CapitalPage() {
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile });
   const paper = Boolean(profile.data?.readiness.paper_owner);
-  if (paper) return <m.Overview {...paperWorkspaceReads("capital")} />;
+  const read = usePaperWorkspace("capital", profile.data?.readiness.paper_owner?.bot_name);
+  if (paper) return <m.Overview {...{...paperWorkspaceReads("capital"), paperRead:read}} />;
   return <m.Overview accountPresentation={{ description: paper ? "Simulated paper wallet · live exchange balances are not applicable." : "V5 account owner is unbound; no account valuation is available.", unavailable: paper ? "The native paper wallet read is unavailable. Check the observation binding; no zero balance is substituted." : "Bind the V5 account owner to view capital. This V5 service cannot select the existing stack account.", valuationNote: paper ? "Simulated wallet · native owner valuation" : "V5 owner valuation", registryUnavailable: paper ? "Paper owner · registration is read-only" : "V5 native owner unbound · bot registration unavailable" }} />;
 } })));
 const Operations = lazy(() => import("@workspace-monitoring").then(m => ({ default: function V5OperationsPage() {
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile });
-  return <m.Operations {...(profile.data?.readiness.paper_owner ? paperWorkspaceReads("operations") : {})} />;
+  const read = usePaperWorkspace("operations", profile.data?.readiness.paper_owner?.bot_name);
+  return <m.Operations {...(profile.data?.readiness.paper_owner ? {...paperWorkspaceReads("operations"), paperRead:read} : {})} />;
 } })));
 const Tradepad = lazy(() => import("@workspace-monitoring").then(m => ({ default: function V5TradepadPage() {
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile });

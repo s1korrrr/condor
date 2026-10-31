@@ -1,0 +1,248 @@
+✖ health actual query 409 retries once and publishes only a coherent result (195.718245ms)
+✖ health actual query 409 stops unavailable at the cap (93.754961ms)
+✖ health actual query 503 retries once and publishes only a coherent result (67.312957ms)
+✖ health actual query 503 stops unavailable at the cap (44.50259ms)
+✖ capital actual query 409 retries once and publishes only a coherent result (66.913999ms)
+✖ capital actual query 409 stops unavailable at the cap (41.137755ms)
+✖ capital actual query 503 retries once and publishes only a coherent result (41.449153ms)
+✖ capital actual query 503 stops unavailable at the cap (42.36573ms)
+✖ operations actual query 409 retries once and publishes only a coherent result (35.432452ms)
+✖ operations actual query 409 stops unavailable at the cap (36.865146ms)
+✖ operations actual query 503 retries once and publishes only a coherent result (49.74235ms)
+✖ operations actual query 503 stops unavailable at the cap (38.00561ms)
+✖ bots actual query 409 retries once and publishes only a coherent result (1165.619786ms)
+✖ bots actual query 409 stops unavailable at the cap (542.875475ms)
+✖ bots actual query 503 retries once and publishes only a coherent result (500.628248ms)
+✖ bots actual query 503 stops unavailable at the cap (559.85172ms)
+ℹ tests 16
+ℹ suites 0
+ℹ pass 0
+ℹ fail 16
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4120.356434
+
+✖ failing tests:
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ health actual query 409 retries once and publishes only a coherent result (195.718245ms)
+  Error: risk owner read unavailable. Check the retained observation diagnostics.
+      at read (eval at load (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/helpers/frontend-module.mjs:28:5), <anonymous>:16:27)
+      at async Promise.all (index 3)
+      at async Object.queryFn (eval at load (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/helpers/frontend-module.mjs:28:5), <anonymous>:24:30)
+      at async TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:42:18)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ health actual query 409 stops unavailable at the cap (93.754961ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  1 !== 2
+
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:39:14)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ health actual query 503 retries once and publishes only a coherent result (67.312957ms)
+  Error: risk owner read unavailable. Check the retained observation diagnostics.
+      at read (eval at load (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/helpers/frontend-module.mjs:28:5), <anonymous>:16:27)
+      at async Promise.all (index 3)
+      at async Object.queryFn (eval at load (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/helpers/frontend-module.mjs:28:5), <anonymous>:24:30)
+      at async TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:42:18)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ health actual query 503 stops unavailable at the cap (44.50259ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  1 !== 2
+
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:39:14)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ capital actual query 409 retries once and publishes only a coherent result (66.913999ms)
+  TypeError: hooks.usePaperWorkspace is not a function
+      at Probe (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:33:85)
+      at Object.react_stack_bottom_frame (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9808:18)
+      at renderWithHooks (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5062:19)
+      at renderElement (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5497:23)
+      at retryNode (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:6417:31)
+      at performWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:7435:17)
+      at startWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8270:7)
+      at renderToStringImpl (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8380:7)
+      at process.env.NODE_ENV.exports.renderToStaticMarkup (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9861:14)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:34:7)
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ capital actual query 409 stops unavailable at the cap (41.137755ms)
+  TypeError: hooks.usePaperWorkspace is not a function
+      at Probe (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:33:85)
+      at Object.react_stack_bottom_frame (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9808:18)
+      at renderWithHooks (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5062:19)
+      at renderElement (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5497:23)
+      at retryNode (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:6417:31)
+      at performWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:7435:17)
+      at startWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8270:7)
+      at renderToStringImpl (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8380:7)
+      at process.env.NODE_ENV.exports.renderToStaticMarkup (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9861:14)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:34:7)
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ capital actual query 503 retries once and publishes only a coherent result (41.449153ms)
+  TypeError: hooks.usePaperWorkspace is not a function
+      at Probe (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:33:85)
+      at Object.react_stack_bottom_frame (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9808:18)
+      at renderWithHooks (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5062:19)
+      at renderElement (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5497:23)
+      at retryNode (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:6417:31)
+      at performWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:7435:17)
+      at startWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8270:7)
+      at renderToStringImpl (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8380:7)
+      at process.env.NODE_ENV.exports.renderToStaticMarkup (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9861:14)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:34:7)
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ capital actual query 503 stops unavailable at the cap (42.36573ms)
+  TypeError: hooks.usePaperWorkspace is not a function
+      at Probe (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:33:85)
+      at Object.react_stack_bottom_frame (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9808:18)
+      at renderWithHooks (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5062:19)
+      at renderElement (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5497:23)
+      at retryNode (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:6417:31)
+      at performWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:7435:17)
+      at startWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8270:7)
+      at renderToStringImpl (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8380:7)
+      at process.env.NODE_ENV.exports.renderToStaticMarkup (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9861:14)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:34:7)
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ operations actual query 409 retries once and publishes only a coherent result (35.432452ms)
+  TypeError: hooks.usePaperWorkspace is not a function
+      at Probe (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:33:85)
+      at Object.react_stack_bottom_frame (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9808:18)
+      at renderWithHooks (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5062:19)
+      at renderElement (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5497:23)
+      at retryNode (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:6417:31)
+      at performWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:7435:17)
+      at startWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8270:7)
+      at renderToStringImpl (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8380:7)
+      at process.env.NODE_ENV.exports.renderToStaticMarkup (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9861:14)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:34:7)
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ operations actual query 409 stops unavailable at the cap (36.865146ms)
+  TypeError: hooks.usePaperWorkspace is not a function
+      at Probe (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:33:85)
+      at Object.react_stack_bottom_frame (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9808:18)
+      at renderWithHooks (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5062:19)
+      at renderElement (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5497:23)
+      at retryNode (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:6417:31)
+      at performWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:7435:17)
+      at startWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8270:7)
+      at renderToStringImpl (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8380:7)
+      at process.env.NODE_ENV.exports.renderToStaticMarkup (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9861:14)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:34:7)
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ operations actual query 503 retries once and publishes only a coherent result (49.74235ms)
+  TypeError: hooks.usePaperWorkspace is not a function
+      at Probe (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:33:85)
+      at Object.react_stack_bottom_frame (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9808:18)
+      at renderWithHooks (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5062:19)
+      at renderElement (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5497:23)
+      at retryNode (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:6417:31)
+      at performWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:7435:17)
+      at startWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8270:7)
+      at renderToStringImpl (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8380:7)
+      at process.env.NODE_ENV.exports.renderToStaticMarkup (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9861:14)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:34:7)
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ operations actual query 503 stops unavailable at the cap (38.00561ms)
+  TypeError: hooks.usePaperWorkspace is not a function
+      at Probe (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:33:85)
+      at Object.react_stack_bottom_frame (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9808:18)
+      at renderWithHooks (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5062:19)
+      at renderElement (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:5497:23)
+      at retryNode (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:6417:31)
+      at performWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:7435:17)
+      at startWork (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8270:7)
+      at renderToStringImpl (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:8380:7)
+      at process.env.NODE_ENV.exports.renderToStaticMarkup (/home/rsi/dev/rsibot/condor/frontend/node_modules/react-dom/cjs/react-dom-server-legacy.node.development.js:9861:14)
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:34:7)
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ bots actual query 409 retries once and publishes only a coherent result (1165.619786ms)
+  Error: The owner snapshot changed. Refresh to read a coherent snapshot.
+      at readPaper (eval at load (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/helpers/frontend-module.mjs:28:5), <anonymous>:387:15)
+      at async eval (eval at load (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/helpers/frontend-module.mjs:28:5), <anonymous>:412:190)
+      at async Promise.all (index 4)
+      at async Object.queryFn (eval at load (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/helpers/frontend-module.mjs:28:5), <anonymous>:408:30)
+      at async TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:42:18)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ bots actual query 409 stops unavailable at the cap (542.875475ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  1 !== 2
+
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:39:14)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ bots actual query 503 retries once and publishes only a coherent result (500.628248ms)
+  Error: Paper observations are unavailable. Check the observation service and its retained read-contract evidence; no empty wallet is substituted.
+      at readPaper (eval at load (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/helpers/frontend-module.mjs:28:5), <anonymous>:387:15)
+      at async eval (eval at load (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/helpers/frontend-module.mjs:28:5), <anonymous>:412:190)
+      at async Promise.all (index 4)
+      at async Object.queryFn (eval at load (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/helpers/frontend-module.mjs:28:5), <anonymous>:408:30)
+      at async TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:42:18)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at ../../../.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:11:133
+✖ bots actual query 503 stops unavailable at the cap (559.85172ms)
+  AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
+
+  1 !== 2
+
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f19-approved-before/frontend/test/v5-paper-pages.test.mjs:39:14)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 1,
+    expected: 2,
+    operator: 'strictEqual',
+    diff: 'simple'
+  }

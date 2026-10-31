@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import type { PaperRead } from "@/v5/contracts";
-import { paperAmount, paperCompleteRecords, paperControlState, paperExactAmount, paperObservationPages, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperPairObservation, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperSnapshotsAgree, paperTime, paperWalletInventory, paperWalletTotals, paperWords } from "@/v5/policy";
+import { paperAmount, paperBoundedRead, paperCompleteRecords, paperControlState, paperExactAmount, paperObservationPages, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperPairObservation, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperSnapshotsAgree, paperTime, paperWalletInventory, paperWalletTotals, paperWords } from "@/v5/policy";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
 import { paperHeartbeat } from "@/features/bots/fleet-health";
 import "@/components/bots/fleet-strip.css";
@@ -737,11 +737,11 @@ export function PaperWorkspace({ reads, accountingRead, accountingError = false,
 }
 
 async function readPaper(path: string, section: string): Promise<PaperRead> {
-  const response = await fetch(`/api/v5/dashboard/read?${new URLSearchParams({ path })}`, { credentials: "include", cache: "no-store" });
+  const response = await fetch(`/api/v5/dashboard/read?${new URLSearchParams({ path })}`, { credentials: "include", cache: "no-store", signal: AbortSignal.timeout(14_000) });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     if (response.status === 502 && body?.detail?.reason === "schema_invalid" && typeof body.detail.section === "string") throw new PaperSectionSchemaError(body.detail.section, body.detail.holds);
-    throw new Error(response.status === 409 ? "The owner snapshot changed. Refresh to read a coherent snapshot." : response.status === 401 ? "Your workspace session expired. Sign in again." : "Paper observations are unavailable. Check the observation service and its retained read-contract evidence; no empty wallet is substituted.");
+    throw Object.assign(new Error(response.status === 409 ? "The owner snapshot changed. Refresh to read a coherent snapshot." : response.status === 401 ? "Your workspace session expired. Sign in again." : "Paper observations are unavailable. Check the observation service and its retained read-contract evidence; no empty wallet is substituted."), {status:response.status});
   }
   const value = await response.json() as PaperRead;
   if (!value || value.section !== section || paperSectionError(value)) throw new PaperSectionSchemaError(section, section === "risk" ? paperRiskHolds(value).map(({ reason }) => ({ reason })) : undefined);
@@ -760,34 +760,35 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
   const query = useQuery({
     queryKey: ["v5-paper-bots", bot], retry: false, refetchInterval: 15_000,
-    queryFn: async () => {
+    queryFn: () => paperBoundedRead(async () => {
       const prefix = `/api/v1/servers/rsibot-v5/`;
       const status = await readPaper(`${prefix}bots/${encodeURIComponent(bot)}/native/status`, "status");
-      const sections = await Promise.all(Object.entries(PAPER_SECTIONS).map(async ([section, suffix]) => {
+      const sections: PaperRead[] = [];
+      for (const [section, suffix] of Object.entries({...PAPER_SECTIONS, accounting:"fleet/accounting"})) {
         const path = ["executors", "risk", "decisions"].includes(section) ? `${prefix}bots/${encodeURIComponent(bot)}/${suffix}` : `${prefix}${suffix}`;
         const snapshot = status.snapshot_id ? `${path.includes("?") ? "&" : "?"}snapshot_id=${encodeURIComponent(status.snapshot_id)}` : "";
-        try { return ["positions", "fills", "executors", "history"].includes(section) ? await paperObservationPages(path + snapshot, page => readPaper(page, section)) : await readPaper(path + snapshot, section); }
+        try { sections.push(["positions", "fills", "executors", "history"].includes(section) ? await paperObservationPages(path + snapshot, page => readPaper(page, section)) : await readPaper(path + snapshot, section)); }
         catch (error) {
+          if (section === "accounting" && error && typeof error === "object" && "status" in error && ![409,503,401,403].includes(Number(error.status))) {
+            sections.push({...status, section, state:"degraded",reason:"Accounting owner read unavailable.",data:null,completeness:"unavailable"});
+            continue;
+          }
           if (!(error instanceof PaperSectionSchemaError) || error.section !== section) throw error;
-          return { ...status, section, state: "degraded" as const, reason: error.message, data: section === "risk" && error.holds ? { holds: error.holds } : null, completeness: "unavailable" };
+          sections.push({ ...status, section, state: "degraded" as const, reason: error.message, data: section === "risk" && error.holds ? { holds: error.holds } : null, completeness: "unavailable" });
         }
-      }));
+      }
       if (status.snapshot_id && !paperSnapshotsAgree([status, ...sections])) throw new Error("Mixed owner snapshots were refused. Refresh; totals are not combined.");
       return [...sections, status];
-    },
+    }),
   });
-  const snapshot = query.data?.[0];
-  const accounting = useQuery({
-    queryKey: ["v5-paper-accounting", bot, snapshot?.snapshot_id], enabled: Boolean(snapshot?.snapshot_id), retry: false,
-    queryFn: () => readPaper(`/api/v1/servers/rsibot-v5/fleet/accounting?snapshot_id=${encodeURIComponent(snapshot!.snapshot_id!)}`, "accounting"),
-  });
+  const accounting = query.data?.find(read => read.section === "accounting");
   const clock = paperHeartbeat(generatedAt === null ? null : Math.floor(generatedAt * 1000), ownerState, now);
   const heartbeat = clock.current ? "Fresh" : ownerState === "UNAVAILABLE" ? "Unavailable" : "Stale";
   return <div className="v5-paper-bots" data-layout={layout}>
     <header className="v5-page-heading"><div><h1>Paper bots</h1><p>{bot} · simulated wallet · live disabled</p></div><div className="v5-button-row"><button className="v5-button" aria-pressed={layout === "grid"} onClick={() => setLayout("grid")}>Grid</button><button className="v5-button" aria-pressed={layout === "compact"} onClick={() => setLayout("compact")}>Compact</button><button className="v5-button" onClick={() => void query.refetch()}>Refresh paper data</button></div></header>
     {query.isPending && <p role="status">Reading bounded native paper observations…</p>}
     {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
-    {query.data && <PaperWorkspace reads={query.data} accountingRead={accounting.data} accountingError={accounting.isError} now={now} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} />}
+    {!query.isError && query.data && <PaperWorkspace reads={query.data} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} />}
   </div>;
 }
 

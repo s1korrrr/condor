@@ -8,6 +8,30 @@ export interface ReportPermissionInput {
   agentExecutionEnabled: boolean;
 }
 
+export async function paperBoundedRead<Result>(attempt: () => Promise<Result>, wait: (milliseconds: number) => Promise<void> = milliseconds => new Promise(resolve => setTimeout(resolve, milliseconds))): Promise<Result> {
+  for (let index = 0; ; index++) {
+    try { return await attempt(); }
+    catch (error) {
+      const status = error && typeof error === "object" && "status" in error ? error.status : null;
+      if (index >= 1 || (status !== 409 && status !== 503)) throw error;
+      if (status === 503) await wait(200);
+    }
+  }
+}
+
+export async function paperCoherentRead(statusPath: string, sections: { section: string; path: string; paginate?: boolean }[], read: (path: string, section: string) => Promise<import("./contracts").PaperRead>, wait?: (milliseconds: number) => Promise<void>) {
+  return paperBoundedRead(async () => {
+    const status = await read(statusPath, "status");
+    const reads = [status];
+    for (const section of sections) {
+      const path = section.path + (status.snapshot_id ? `${section.path.includes("?") ? "&" : "?"}snapshot_id=${encodeURIComponent(status.snapshot_id)}` : "");
+      reads.push(section.paginate ? await paperObservationPages(path, page => read(page, section.section)) : await read(path, section.section));
+    }
+    if (!paperSnapshotsAgree(reads)) throw new Error("Mixed owner snapshots were refused. Refresh; totals are not combined.");
+    return reads;
+  }, wait);
+}
+
 export function paperWorkspaceReads(page: "capital" | "operations" | "tradepad") {
   if (page === "capital") return { presentation: "paper" as const, paperReadUrl: "/api/v1/servers/rsibot-v5/account-balances", paperHistoryReadUrl: "/api/v1/servers/rsibot-v5/controller-performance/history", paperAccountingReadUrl: "/api/v1/servers/rsibot-v5/fleet/accounting" };
   if (page === "operations") return { presentation: "paper" as const, paperReadUrl: "/api/v1/operations/workspace" };

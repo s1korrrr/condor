@@ -1,6 +1,14 @@
 export type AgentStatus = "ready" | "blocked";
 
 export type PaperReadState = "available" | "collecting" | "not_applicable" | "degraded" | "stale";
+export interface PaperRiskController {
+  operator: Record<string, unknown>;
+  native: Record<string, unknown>;
+}
+export interface PaperRiskData {
+  controllers?: Record<string, PaperRiskController>;
+  native_entry_holds?: { controller_id: string; reason: string; explanation: string; protected_exits: "preserved" }[];
+}
 export interface PaperRead {
   schema: "rsibot.v5-paper.read.v1";
   section: string;
@@ -12,9 +20,11 @@ export interface PaperRead {
   snapshot_id: string | null;
   generated_at_ms: number | null;
   source_at_ms?: number | null;
-  observed_at_ms?: number;
+  observed_at_ms?: number | null;
+  read_at_ms?: number;
+  stale_reason?: string | null;
   completeness?: string;
-  capabilities?: Record<string, unknown>;
+  capabilities?: string[];
   data: unknown;
   next_cursor?: string | null;
   source?: Record<string, unknown>;

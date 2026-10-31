@@ -1,0 +1,4 @@
+c39571aaa13312225616a82438a2501fe7952502ce196af098cd295a99aea97e  frontend/src/v5/policy.ts
+67274b444b7f2c99ab4df0e26c5b0d472121cb560acf3737df084fd0228b5fa4  frontend/src/v5/usePaperObservation.ts
+c4380b76ccc7f3145031dfd970ff7476b711d5bafd14f25c93f5adad0e950fbc  frontend/src/v5/V5App.tsx
+d43354d0022cf174eb72c39b135dde013b79833da21c2fcb7bcf3c3bb0cae2e5  frontend/src/pages/tabs/ActiveBotsTab.tsx

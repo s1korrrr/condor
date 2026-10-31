@@ -1,0 +1,52 @@
+{
+  "api_revision": "7b12d1c210cfde14af4f75071850187bd38f3089",
+  "producer_revision": "d13fb9b1ab72d3d167a6edc71f1ef363789cc553",
+  "method": "Authenticated API73 create_app TestClient over a byte-for-byte copy of the FINAL3 real native runtime export. Clock pinned to generated_at_ms. Disposable, private watermark and owner trust. No synthetic financial records.",
+  "native_primary_sha256": "f158eb03398f79cb056b01c538f489d3fdb05ca7e4e3d0c431d99f2b653e2668",
+  "records": {
+    "accounting.json": {
+      "http": 200,
+      "sha256": "f92a5c00c0a5f1b6a6fc3c512eb83f7ab50e097a156689e114981408d72fb201"
+    },
+    "decisions.json": {
+      "http": 200,
+      "sha256": "5cfd56ee5ea1e5479d58b130d0c8ef49cf4f972366011316c9549f6570ff478c"
+    },
+    "executors.json": {
+      "http": 200,
+      "sha256": "338a913a8c513a36f55085e548738b887165a9363a6ecd14da3fecd37b3e881b"
+    },
+    "fills.json": {
+      "http": 200,
+      "sha256": "75f5b77773c06e8cb7dab365af81779ee410ebe1bb44796cbcbee3d985aa7b7e"
+    },
+    "history.json": {
+      "http": 200,
+      "sha256": "e394467e8b5621d6b84f5d49812140b27d95bbf22c17dd9ff2f5a5386131c3dd"
+    },
+    "operations.json": {
+      "http": 200,
+      "sha256": "9bd21c06d6e428f15e749f3dbe1157b258d7bcfe65bb688b963e0fcbae66ba89"
+    },
+    "positions.json": {
+      "http": 200,
+      "sha256": "7a6e3800d96aaeb46162ac561921720aa8a3686856e5260769d4321ee474b1a9"
+    },
+    "risk.json": {
+      "http": 200,
+      "sha256": "c76b61fee1cb86364abd7cc312d033ebd5af5887beda0de70ea302fe8e8342e3"
+    },
+    "status.json": {
+      "http": 200,
+      "sha256": "391a25ef2599c48349f820ea913100b50b1073c34f81669b297888ecd4ec46d9"
+    },
+    "wallet.json": {
+      "http": 200,
+      "sha256": "5cda4f29b966678b3ef3234c66a54c719a687368da3383a820f507d3831a2c59"
+    },
+    "fills-offset-200.json": {
+      "http": 200,
+      "sha256": "73d5ea33e30ff0b6709c0365a3ab2c25eec5bc0e6d093c09bb2fe51695fea58e"
+    }
+  }
+}

@@ -1,0 +1,704 @@
+[
+  {
+    "state": "post-lifecycle-full",
+    "page": "market",
+    "variant": "1440",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-1440-light.png",
+    "sha256": "2976984fbc29a68e0554f84133804f70b8c79fff9a65e5e618666232a5c98380",
+    "captured_at": "2026-10-30T09:33:11.571Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market-candles",
+    "variant": "1440",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-candles-1440-light.png",
+    "sha256": "eca2f847378ee4d0757be38233be782eafbdb74aff34de0e8647526d9f4a5e71",
+    "captured_at": "2026-10-30T09:33:17.549Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market-evidence",
+    "variant": "1440",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-evidence-1440-light.png",
+    "sha256": "d120e9c5525343ff3a8d5b13d6510bcfc8a9b4d9b3ebfe496a78744590654252",
+    "captured_at": "2026-10-30T09:33:23.790Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "bots",
+    "variant": "1440",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/bots-1440-light.png",
+    "sha256": "a7c2dad8fd027d201184f018c902c6485548bc4d066cc3fcc046948f29186ea9",
+    "captured_at": "2026-10-30T09:33:28.744Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "capital",
+    "variant": "1440",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/capital-1440-light.png",
+    "sha256": "d06dbb05d45a19a551ba3029f744a626ce76d8226fe479a1c38b07a47c73bb6e",
+    "captured_at": "2026-10-30T09:33:34.735Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "operations",
+    "variant": "1440",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/operations-1440-light.png",
+    "sha256": "c294443608c0f86fc860f9605abac0088805e4d4ebc8144139976060c6817b5c",
+    "captured_at": "2026-10-30T09:33:40.962Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "research",
+    "variant": "1440",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/research-1440-light.png",
+    "sha256": "740c6197b706fc05129c87ad2b8b6017251c6d5a4155218a79554639acdc67d5",
+    "captured_at": "2026-10-30T09:33:45.909Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "tradepad",
+    "variant": "1440",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/tradepad-1440-light.png",
+    "sha256": "dd14067c8019c14b7faedfabf03d5fcfc4bd4571f30a29042e34965a18772124",
+    "captured_at": "2026-10-30T09:33:50.875Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "agents",
+    "variant": "1440",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/agents-1440-light.png",
+    "sha256": "424272e8e1bd4db971241776ce3834d6e64eceba99eb479a98f0784db24d19c9",
+    "captured_at": "2026-10-30T09:33:55.777Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "sessions",
+    "variant": "1440",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/sessions-1440-light.png",
+    "sha256": "16829ced34aaeef95426c137af8e9cd89215968d8badab2f33f71f35a9643f7d",
+    "captured_at": "2026-10-30T09:34:00.716Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "settings",
+    "variant": "1440",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/settings-1440-light.png",
+    "sha256": "1d77dfbb62eb086c70e7d480f979dce9fea361cdd746b2234f047e151581de2a",
+    "captured_at": "2026-10-30T09:34:07.040Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "readiness",
+    "variant": "1440",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/readiness-1440-light.png",
+    "sha256": "e34e989193e804c1ea788acfa41d9468da6565250805c9363a18fb62bac9338c",
+    "captured_at": "2026-10-30T09:34:13.003Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "agent-detail",
+    "variant": "1440",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/agent-detail-1440-light.png",
+    "sha256": "d0b4562de92a82f08e097d6b47200b232d94bf753798303b1606818218ead929",
+    "captured_at": "2026-10-30T09:34:18.990Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market",
+    "variant": "390",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-390-light.png",
+    "sha256": "f31bbc6a0b623f00fe171b10e3dd4c6fe6139b9634f9d0376d1cb91b28702b06",
+    "captured_at": "2026-10-30T09:34:25.292Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market-candles",
+    "variant": "390",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-candles-390-light.png",
+    "sha256": "ebac43a9ec7df861bfc03447d96fc8d8dd2df4a5671d71ac7e03d51b87ff0e46",
+    "captured_at": "2026-10-30T09:34:30.332Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market-evidence",
+    "variant": "390",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-evidence-390-light.png",
+    "sha256": "6cc871b2ded8d99c397906611069d81a118c46e1e2913bb5de3a1a0c5ec787e7",
+    "captured_at": "2026-10-30T09:34:36.836Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "bots",
+    "variant": "390",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/bots-390-light.png",
+    "sha256": "da773ad0c5914b80273f8bb6c16ed2c127f3bbb56a5c9ee045aa00b8498df4c5",
+    "captured_at": "2026-10-30T09:34:41.774Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "capital",
+    "variant": "390",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/capital-390-light.png",
+    "sha256": "e30eac8d8c6bd803a7fff43c573ac1e96788795acad7c6f448d7880e87513f62",
+    "captured_at": "2026-10-30T09:34:47.935Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "operations",
+    "variant": "390",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/operations-390-light.png",
+    "sha256": "0577ad817969d5c0ec2342a2bc244e1831fe86da93bf264e2223bc9a4dba9ded",
+    "captured_at": "2026-10-30T09:34:54.640Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "research",
+    "variant": "390",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/research-390-light.png",
+    "sha256": "5dc53ea5acc4adddfc6f6ae88ff45cc0e262aafc60dd8bce63b752b9f32da494",
+    "captured_at": "2026-10-30T09:34:59.776Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "tradepad",
+    "variant": "390",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/tradepad-390-light.png",
+    "sha256": "d113e08549283811723b2a9a578551473508b01f2a3427cd851f77b4b6cace2b",
+    "captured_at": "2026-10-30T09:35:04.813Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "agents",
+    "variant": "390",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/agents-390-light.png",
+    "sha256": "ef310b58df2af34fbc5ae85e640aeace3f028ba75d7c39a426174d8ec0c03533",
+    "captured_at": "2026-10-30T09:35:09.806Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "sessions",
+    "variant": "390",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/sessions-390-light.png",
+    "sha256": "df358c33f66007f154d92ae80ba98e307460e4e2cae6dd252bf3ba0ca9b396ad",
+    "captured_at": "2026-10-30T09:35:14.723Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "settings",
+    "variant": "390",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/settings-390-light.png",
+    "sha256": "d775795b4ebcb587d34459763cfe3865071baa0e922bf477e0993a9ed4038bf8",
+    "captured_at": "2026-10-30T09:35:21.179Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "readiness",
+    "variant": "390",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/readiness-390-light.png",
+    "sha256": "06dede44fa0e327e949c2f5e561f141a14f3101975e35d1d9cb227a587a54ed0",
+    "captured_at": "2026-10-30T09:35:27.388Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "agent-detail",
+    "variant": "390",
+    "theme": "light",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/agent-detail-390-light.png",
+    "sha256": "3ab8d68290dca0359dadd025541edd4c022c61b996a0b3d2f7446ffa30720e35",
+    "captured_at": "2026-10-30T09:35:33.533Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market",
+    "variant": "1440",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-1440-dark.png",
+    "sha256": "dadcad3a55ccb3844de4636b340876685eb4f1a6c8da915b5fd8a2a87b1db6bd",
+    "captured_at": "2026-10-30T09:35:38.938Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market-candles",
+    "variant": "1440",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-candles-1440-dark.png",
+    "sha256": "fa9270a4fe7b873b480b79cdc5e31662c599f764d93d6ba93f8e59dd901c1449",
+    "captured_at": "2026-10-30T09:35:44.906Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market-evidence",
+    "variant": "1440",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-evidence-1440-dark.png",
+    "sha256": "6d60922e9041b59f52dc4b4993c97256d577d88952734d8fad039b019dbb22d9",
+    "captured_at": "2026-10-30T09:35:51.107Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "bots",
+    "variant": "1440",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/bots-1440-dark.png",
+    "sha256": "41a9b389716bf76172021b613eb8f0d304dc54c962c6f050e4e22419533204bf",
+    "captured_at": "2026-10-30T09:35:56.188Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "capital",
+    "variant": "1440",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/capital-1440-dark.png",
+    "sha256": "81b0c193f1414a830a4085ecfc82a2f48ee3737c5d8894eff8f8420d7fc87948",
+    "captured_at": "2026-10-30T09:36:02.244Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "operations",
+    "variant": "1440",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/operations-1440-dark.png",
+    "sha256": "65ea333e4d70dd1715045043fe02c83ea9160aaa439ee14d575be3e0bdebd407",
+    "captured_at": "2026-10-30T09:36:08.519Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "research",
+    "variant": "1440",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/research-1440-dark.png",
+    "sha256": "304956ed987e4ff52b1b2d308676b3262ca682bde0f2fbe0d1704846fb0b180e",
+    "captured_at": "2026-10-30T09:36:13.494Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "tradepad",
+    "variant": "1440",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/tradepad-1440-dark.png",
+    "sha256": "eb1a34a7f9b7086ffe9af2422d77b662b2c85c631e3843920e1d7f0917004afc",
+    "captured_at": "2026-10-30T09:36:18.514Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "agents",
+    "variant": "1440",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/agents-1440-dark.png",
+    "sha256": "03a414e0d363bc64fdeced78c4681d8bd5af8b51fe904f8047c941eaee91cd4c",
+    "captured_at": "2026-10-30T09:36:23.521Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "sessions",
+    "variant": "1440",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/sessions-1440-dark.png",
+    "sha256": "d3ff0f8e132e49d9a207a3037f2bcb9e9a6c9304527556a0b4e48b38fdf5ab5a",
+    "captured_at": "2026-10-30T09:36:28.471Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "settings",
+    "variant": "1440",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/settings-1440-dark.png",
+    "sha256": "b77a4b2f981290191128a5c3a066ae8894d2bb156df761733f78ff5e16d727b3",
+    "captured_at": "2026-10-30T09:36:35.714Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "readiness",
+    "variant": "1440",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/readiness-1440-dark.png",
+    "sha256": "18f9e780e38f21039fc7ae4eb5c2307d0b358a5cf3b3b35e50c45c9148f052b4",
+    "captured_at": "2026-10-30T09:36:41.884Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "agent-detail",
+    "variant": "1440",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/agent-detail-1440-dark.png",
+    "sha256": "f05fb6019e5fcb1c92fbb46d55b4238e2cc468114c95b8edadef7014c0af2cb7",
+    "captured_at": "2026-10-30T09:36:48.094Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market",
+    "variant": "390",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-390-dark.png",
+    "sha256": "017ee9610b3022099a2cdfbe8cf17fb38e46db6dc9ad9235c15858597d054fa3",
+    "captured_at": "2026-10-30T09:36:54.523Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market-candles",
+    "variant": "390",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-candles-390-dark.png",
+    "sha256": "4ad1979e397a0840ad3cc29147dfc258f39acd1c805e3ce06df89e65745b4a23",
+    "captured_at": "2026-10-30T09:36:59.589Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market-evidence",
+    "variant": "390",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-evidence-390-dark.png",
+    "sha256": "eaf6210b8124a746b1b203c283969fdfd97b6c2a9b5f743f70f5555c05f5e7f4",
+    "captured_at": "2026-10-30T09:37:06.289Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "bots",
+    "variant": "390",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/bots-390-dark.png",
+    "sha256": "d0f9aef1ff5a13aa7145202ca0b14f2df3a02746e0d51c56c9f54f23ddbb5956",
+    "captured_at": "2026-10-30T09:37:11.287Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "capital",
+    "variant": "390",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/capital-390-dark.png",
+    "sha256": "0968e19d01d03192501dcbaf488cca013598a61adfac208637a2b91f686596db",
+    "captured_at": "2026-10-30T09:37:17.484Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "operations",
+    "variant": "390",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/operations-390-dark.png",
+    "sha256": "cd97c6af285bba5effd885acd95ba4e07d7cc10c93864aac9a23f8b630431c8b",
+    "captured_at": "2026-10-30T09:37:25.285Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "research",
+    "variant": "390",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/research-390-dark.png",
+    "sha256": "facba6552308d05627847bb48df50c4e5c45c6c31cb301c79205c26898409c60",
+    "captured_at": "2026-10-30T09:37:30.382Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "tradepad",
+    "variant": "390",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/tradepad-390-dark.png",
+    "sha256": "5713ce0fb47853a8a5ae34213fc736d9df8c26b337db70c5eca0b66cc7acd527",
+    "captured_at": "2026-10-30T09:37:35.631Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "agents",
+    "variant": "390",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/agents-390-dark.png",
+    "sha256": "076487232d5ab28b4be4c9b746eccf3f0746713f1d47909832ae621e884cfccd",
+    "captured_at": "2026-10-30T09:37:40.946Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "sessions",
+    "variant": "390",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/sessions-390-dark.png",
+    "sha256": "9ed6445163c69f7a5aad261e97f7536428db39714ea5a8438c5b0f7b9d9220de",
+    "captured_at": "2026-10-30T09:37:46.098Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "settings",
+    "variant": "390",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/settings-390-dark.png",
+    "sha256": "e760044f1eccbfd0682fa948816235a83d2b7dec630c6d763441f10dcc49eaa5",
+    "captured_at": "2026-10-30T09:37:52.522Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "readiness",
+    "variant": "390",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/readiness-390-dark.png",
+    "sha256": "b0e2042b3dfd2dfe5c580ee0d77c956603db567a345d3878e239b2f27e01a05b",
+    "captured_at": "2026-10-30T09:37:58.792Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "agent-detail",
+    "variant": "390",
+    "theme": "dark",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/agent-detail-390-dark.png",
+    "sha256": "7d5a51c19bee743cb9c1cff739f05281fa78acf05eabc0840dab06a88eea0f58",
+    "captured_at": "2026-10-30T09:38:05.052Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market",
+    "variant": "1440",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-1440-colorblind.png",
+    "sha256": "6cdd32d82b0e5a88b97fd975b14bf3ea1b1cd9181514a1be0ebd6c308a3d6c49",
+    "captured_at": "2026-10-30T09:38:10.838Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market-candles",
+    "variant": "1440",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-candles-1440-colorblind.png",
+    "sha256": "b305a5d18eb6821e820ee10e9288b940f92eceb0af7658c50110a4bc8e897fa8",
+    "captured_at": "2026-10-30T09:38:16.223Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market-evidence",
+    "variant": "1440",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-evidence-1440-colorblind.png",
+    "sha256": "45c2327c891fbc8d1e18e678b2501414326808817069fa29484ee1945d06209a",
+    "captured_at": "2026-10-30T09:38:23.727Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "bots",
+    "variant": "1440",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/bots-1440-colorblind.png",
+    "sha256": "1168c2390d470c6813b5181621e2c1fd6b09e2cd68420fcae598d7c02cd099a5",
+    "captured_at": "2026-10-30T09:38:29.087Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "capital",
+    "variant": "1440",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/capital-1440-colorblind.png",
+    "sha256": "e6ea7664707946f80ca21de9e048a4a5cf4af18ad58406f1303aa79600d5ab55",
+    "captured_at": "2026-10-30T09:38:36.002Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "operations",
+    "variant": "1440",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/operations-1440-colorblind.png",
+    "sha256": "b53b8fe595e38c9eacdbf5e08494ba6fafc4b84827b04e99c83ce51456f1b3f1",
+    "captured_at": "2026-10-30T09:38:44.334Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "research",
+    "variant": "1440",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/research-1440-colorblind.png",
+    "sha256": "259d2a7fb0d051a34421b653c4a30aad6ebaa565c0e3ef5ddfe7b593882f0b05",
+    "captured_at": "2026-10-30T09:38:50.447Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "tradepad",
+    "variant": "1440",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/tradepad-1440-colorblind.png",
+    "sha256": "a57daeada6a17e471aa882730b9515ca56afe048f196cbcd8fe859d343b5dfde",
+    "captured_at": "2026-10-30T09:38:56.593Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "agents",
+    "variant": "1440",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/agents-1440-colorblind.png",
+    "sha256": "77be043dcf959f6e5a74133b88a82d0c548a4e25f86ec0848796d55786683c9e",
+    "captured_at": "2026-10-30T09:39:02.686Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "sessions",
+    "variant": "1440",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/sessions-1440-colorblind.png",
+    "sha256": "2937304bf2d2581ed4b3de3fa82da17230a8dca2b1c944adfe55627965ae4b10",
+    "captured_at": "2026-10-30T09:39:08.838Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "settings",
+    "variant": "1440",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/settings-1440-colorblind.png",
+    "sha256": "96d25310f80c4ba2e083eb5d09d2ecd9de31b19e56ec9974e631793adf93878a",
+    "captured_at": "2026-10-30T09:39:16.609Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "readiness",
+    "variant": "1440",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/readiness-1440-colorblind.png",
+    "sha256": "5be868e0f23a24212f9a9d77e03b58cb94428a1d4b7c9eb0a875836617fc9a14",
+    "captured_at": "2026-10-30T09:39:23.747Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "agent-detail",
+    "variant": "1440",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/agent-detail-1440-colorblind.png",
+    "sha256": "cae1659e02df203ba09a0f3c00e3de74739e362d37e165a7045f6491cdc7de41",
+    "captured_at": "2026-10-30T09:39:30.432Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market",
+    "variant": "390",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-390-colorblind.png",
+    "sha256": "22f46b624e24214ec68eecb30cd0e9caba5bf84cfd6165f6abaf80d8ccd6c13e",
+    "captured_at": "2026-10-30T09:39:37.610Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market-candles",
+    "variant": "390",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-candles-390-colorblind.png",
+    "sha256": "d43a3a9e5037b17887f7283334d1c69c873a7fb349e736be7d97539125c181b8",
+    "captured_at": "2026-10-30T09:39:42.744Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "market-evidence",
+    "variant": "390",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/market-evidence-390-colorblind.png",
+    "sha256": "7b1c29daeb4063b0bea5d2828d945a94480bfad07817bc3b235055104f42f366",
+    "captured_at": "2026-10-30T09:39:49.311Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "bots",
+    "variant": "390",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/bots-390-colorblind.png",
+    "sha256": "7f228893a21dbbcd62197c0e3c43bad90234c07fffe77ed8f9d72898c2c1397e",
+    "captured_at": "2026-10-30T09:39:54.443Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "capital",
+    "variant": "390",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/capital-390-colorblind.png",
+    "sha256": "9a59a71616c637d8bfc225b85764563548ff816c07776479425c597d32c3228b",
+    "captured_at": "2026-10-30T09:40:00.769Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "operations",
+    "variant": "390",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/operations-390-colorblind.png",
+    "sha256": "b8aa1138d3ca3a2f959940b740e639de0f3941a20aba8f2a3e634d0eb3fbdb62",
+    "captured_at": "2026-10-30T09:40:07.543Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "research",
+    "variant": "390",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/research-390-colorblind.png",
+    "sha256": "f589c3740689882360636b20aab7e23a1a3230c2017cf8374e2f4fc4b0c1a33e",
+    "captured_at": "2026-10-30T09:40:12.518Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "tradepad",
+    "variant": "390",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/tradepad-390-colorblind.png",
+    "sha256": "88db904f7152ddc9f23a1a284f5d4cec323f232ca37a4061e92159a3c2f3e0ce",
+    "captured_at": "2026-10-30T09:40:17.526Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "agents",
+    "variant": "390",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/agents-390-colorblind.png",
+    "sha256": "b12a7fdb5bb5ec8447147c960fd71f587a1cbd3a50c3d17d2ec7a9aa22b06c50",
+    "captured_at": "2026-10-30T09:40:22.587Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "sessions",
+    "variant": "390",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/sessions-390-colorblind.png",
+    "sha256": "8f21bfd300ce0247f7b3f06cc52e9b451262a255e3b50e1e3a0458444a5df69c",
+    "captured_at": "2026-10-30T09:40:27.595Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "settings",
+    "variant": "390",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/settings-390-colorblind.png",
+    "sha256": "e9ce0fdebca9e3ce94596e47c32ae92212be3608d4ea9a68bf9ca172657e8d69",
+    "captured_at": "2026-10-30T09:40:35.073Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "readiness",
+    "variant": "390",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/readiness-390-colorblind.png",
+    "sha256": "9d647b34a1ba5e11384cc2fa8d86eabbcad365664d106570da86fb0a729859db",
+    "captured_at": "2026-10-30T09:40:41.307Z"
+  },
+  {
+    "state": "post-lifecycle-full",
+    "page": "agent-detail",
+    "variant": "390",
+    "theme": "colorblind",
+    "file": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/prefinal-20261030a/shots-full/agent-detail-390-colorblind.png",
+    "sha256": "4de56927c30967b3476d2ce871e04ae73951fdf697b78b82253521129cca551a",
+    "captured_at": "2026-10-30T09:40:47.526Z"
+  }
+]

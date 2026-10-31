@@ -33,6 +33,23 @@ function v5ReadTransportAlias(): Plugin {
   };
 }
 
+function v5CondorOwnerImports(): Plugin {
+  const workspaceFrontend = path.join(workspaceRoot!, "condor/frontend");
+  return {
+    name: "v5-condor-owner-imports",
+    enforce: "pre",
+    async resolveId(source, importer) {
+      if (!importer || !source.startsWith(".")) return null;
+      const resolved = path.resolve(path.dirname(importer), source);
+      const relative = path.relative(workspaceFrontend, resolved);
+      if (relative.startsWith("..") || path.isAbsolute(relative)) return null;
+      const owner = await this.resolve(path.join(frontendRoot, relative), importer, { skipSelf: true });
+      if (!owner) throw new Error(`V5 workspace import has no current Condor owner: ${relative}`);
+      return owner;
+    },
+  };
+}
+
 const sharedScopeSource = readFileSync(path.join(workspaceRoot, "dashboard/condor-workspace/tooling/scope-reporting-css.ts"), "utf8");
 const sharedScopeJavaScript = ts.transpileModule(sharedScopeSource, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText;
 const sharedScopeModule: { exports: { scopeReportingCss?: (file: string) => Plugin } } = { exports: {} };
@@ -43,7 +60,7 @@ if (!scopeReportingCss) throw new Error("The private reporting CSS scope helper 
 export default defineConfig({
   root: frontendRoot,
   base: "/",
-  plugins: [v5ReadTransportAlias(), react(), tailwindcss()],
+  plugins: [v5CondorOwnerImports(), v5ReadTransportAlias(), react(), tailwindcss()],
   css: { postcss: { plugins: [scopeReportingCss(reportingCss)] } },
   resolve: {
     dedupe: ["react", "react-dom", "react-router-dom", "@tanstack/react-query", "@tanstack/query-core", "recharts", "lucide-react", "lightweight-charts"],

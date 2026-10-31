@@ -1,0 +1,306 @@
+{
+  "schema": "rsibot.v5-paper.read.v1",
+  "state": "available",
+  "section": "decisions",
+  "snapshot_id": "4bc58bd65620dced4b9431804c1ef789:751",
+  "bot_id": "meridian_v5_paper",
+  "execution_mode": "paper",
+  "simulated": true,
+  "generated_at_ms": 1793403300404,
+  "observed_at_ms": 1793403300404,
+  "read_at_ms": 1793403300404,
+  "source_at_ms": 1793403298973,
+  "completeness": "complete",
+  "reason": null,
+  "capabilities": [
+    "read"
+  ],
+  "data": {
+    "controllers": [
+      {
+        "controller_name": "meridian_v5",
+        "custom_info": {
+          "acquisition_enabled": true,
+          "bag": {
+            "breakeven_price": "748.17",
+            "held_amount": "0.0682854",
+            "reason": "below_target",
+            "release": null,
+            "trail_armed": false,
+            "trail_peak": null
+          },
+          "candle_open": 1793403180,
+          "capital_scope": "RECORDER_SCOPED",
+          "data_source": "native",
+          "economic_validation": "CANDLE_MODEL_MAR_SEP26_BNB_IN_SAMPLE_EXPLORATORY_PAPER_CANDIDATE",
+          "evidence_candidate_sha256": "c5fe59c58c8abdfa172efd72cdd37a3f48625d0d9daaae13c22cc88f128620b7",
+          "execution_enabled": true,
+          "execution_mode": "paper",
+          "exit_target": {
+            "kind": "fixed_net_take_profit",
+            "net_take_profit": "0.008"
+          },
+          "limits": {
+            "entry_quote": "100",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "modular_status": "operator_entry_pause",
+          "operator": {
+            "entry_paused": true,
+            "last_command_id": "wp14-emergency_entry_halt-1793401900624",
+            "reason": "WP-14 disposable qualification: emergency entry halt",
+            "scope": "modular_spot_meridian_v5_paper_bnb",
+            "updated_at": "1793401901.335"
+          },
+          "recipe_binding": {
+            "configuration_sha256": "a2e6591a1c97f38bfb880c39228754f4acaee6cc07508810064d9561ed01d3e1",
+            "recipe_id": "meridian_v5_target_v1",
+            "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+            "schema_version": 1,
+            "source_sha256": "7a2533e5de60e21177dfb8560607abe3f969cc328705faab70fce3255e9f4af1"
+          },
+          "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+          "recipe_version": "meridian_v5_target_v1",
+          "strategy_name": "V5",
+          "universe_coverage": null,
+          "universe_mode": "fixed"
+        },
+        "execution_mode": "paper",
+        "id": "modular_spot_meridian_v5_paper_bnb",
+        "pair": "BNB-USDC"
+      },
+      {
+        "controller_name": "meridian_v5",
+        "custom_info": {
+          "acquisition_enabled": true,
+          "bag": {
+            "breakeven_price": "80306.71132501006846556584776",
+            "held_amount": "0.002483000",
+            "reason": "below_target",
+            "release": null,
+            "trail_armed": false,
+            "trail_peak": null
+          },
+          "candle_open": 1793403180,
+          "capital_scope": "RECORDER_SCOPED",
+          "data_source": "native",
+          "economic_validation": "CANDLE_MODEL_MAR_SEP26_BNB_IN_SAMPLE_EXPLORATORY_PAPER_CANDIDATE",
+          "evidence_candidate_sha256": "c5fe59c58c8abdfa172efd72cdd37a3f48625d0d9daaae13c22cc88f128620b7",
+          "execution_enabled": true,
+          "execution_mode": "paper",
+          "exit_target": {
+            "kind": "fixed_net_take_profit",
+            "net_take_profit": "0.008"
+          },
+          "limits": {
+            "entry_quote": "100",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "modular_status": "operator_entry_pause",
+          "operator": {
+            "entry_paused": true,
+            "last_command_id": "wp14-emergency_entry_halt-1793401900624",
+            "reason": "WP-14 disposable qualification: emergency entry halt",
+            "scope": "modular_spot_meridian_v5_paper_btc",
+            "updated_at": "1793401901.335"
+          },
+          "recipe_binding": {
+            "configuration_sha256": "eff5f910e857923a58b2c7aed044c5fdcad98d64c745b8cbca0d5627ebfbe25c",
+            "recipe_id": "meridian_v5_target_v1",
+            "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+            "schema_version": 1,
+            "source_sha256": "7a2533e5de60e21177dfb8560607abe3f969cc328705faab70fce3255e9f4af1"
+          },
+          "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+          "recipe_version": "meridian_v5_target_v1",
+          "strategy_name": "V5",
+          "universe_coverage": null,
+          "universe_mode": "fixed"
+        },
+        "execution_mode": "paper",
+        "id": "modular_spot_meridian_v5_paper_btc",
+        "pair": "BTC-USDC"
+      },
+      {
+        "controller_name": "meridian_v5",
+        "custom_info": {
+          "acquisition_enabled": true,
+          "bag": {
+            "breakeven_price": "2299.069874938506948714795228",
+            "held_amount": "0.1300960",
+            "reason": "below_target",
+            "release": null,
+            "trail_armed": false,
+            "trail_peak": null
+          },
+          "candle_open": 1793403180,
+          "capital_scope": "RECORDER_SCOPED",
+          "data_source": "native",
+          "economic_validation": "CANDLE_MODEL_MAR_SEP26_BNB_IN_SAMPLE_EXPLORATORY_PAPER_CANDIDATE",
+          "evidence_candidate_sha256": "c5fe59c58c8abdfa172efd72cdd37a3f48625d0d9daaae13c22cc88f128620b7",
+          "execution_enabled": true,
+          "execution_mode": "paper",
+          "exit_target": {
+            "kind": "fixed_net_take_profit",
+            "net_take_profit": "0.008"
+          },
+          "limits": {
+            "entry_quote": "100",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "modular_status": "operator_entry_pause",
+          "operator": {
+            "entry_paused": true,
+            "last_command_id": "wp14-emergency_entry_halt-1793401900624",
+            "reason": "WP-14 disposable qualification: emergency entry halt",
+            "scope": "modular_spot_meridian_v5_paper_eth",
+            "updated_at": "1793401901.335"
+          },
+          "recipe_binding": {
+            "configuration_sha256": "11233f91528902a622479821deea11ec590aba73d74e2753f0b30c028013fdf3",
+            "recipe_id": "meridian_v5_target_v1",
+            "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+            "schema_version": 1,
+            "source_sha256": "7a2533e5de60e21177dfb8560607abe3f969cc328705faab70fce3255e9f4af1"
+          },
+          "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+          "recipe_version": "meridian_v5_target_v1",
+          "strategy_name": "V5",
+          "universe_coverage": null,
+          "universe_mode": "fixed"
+        },
+        "execution_mode": "paper",
+        "id": "modular_spot_meridian_v5_paper_eth",
+        "pair": "ETH-USDC"
+      },
+      {
+        "controller_name": "meridian_v5",
+        "custom_info": {
+          "acquisition_enabled": true,
+          "bag": {
+            "breakeven_price": "98.36962216214616242242459523",
+            "held_amount": "4.054120",
+            "reason": "below_target",
+            "release": null,
+            "trail_armed": false,
+            "trail_peak": null
+          },
+          "candle_open": 1793403180,
+          "capital_scope": "RECORDER_SCOPED",
+          "data_source": "native",
+          "economic_validation": "CANDLE_MODEL_MAR_SEP26_BNB_IN_SAMPLE_EXPLORATORY_PAPER_CANDIDATE",
+          "evidence_candidate_sha256": "c5fe59c58c8abdfa172efd72cdd37a3f48625d0d9daaae13c22cc88f128620b7",
+          "execution_enabled": true,
+          "execution_mode": "paper",
+          "exit_target": {
+            "kind": "fixed_net_take_profit",
+            "net_take_profit": "0.008"
+          },
+          "limits": {
+            "entry_quote": "100",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "modular_status": "operator_entry_pause",
+          "operator": {
+            "entry_paused": true,
+            "last_command_id": "wp14-emergency_entry_halt-1793401900624",
+            "reason": "WP-14 disposable qualification: emergency entry halt",
+            "scope": "modular_spot_meridian_v5_paper_sol",
+            "updated_at": "1793401901.335"
+          },
+          "recipe_binding": {
+            "configuration_sha256": "2ef11dd29be559eec2c0bcb2b4666397aad62b4e8bbe4f84f12643318ab61fd2",
+            "recipe_id": "meridian_v5_target_v1",
+            "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+            "schema_version": 1,
+            "source_sha256": "7a2533e5de60e21177dfb8560607abe3f969cc328705faab70fce3255e9f4af1"
+          },
+          "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+          "recipe_version": "meridian_v5_target_v1",
+          "strategy_name": "V5",
+          "universe_coverage": null,
+          "universe_mode": "fixed"
+        },
+        "execution_mode": "paper",
+        "id": "modular_spot_meridian_v5_paper_sol",
+        "pair": "SOL-USDC"
+      },
+      {
+        "controller_name": "meridian_v5",
+        "custom_info": {
+          "acquisition_enabled": true,
+          "bag": {
+            "breakeven_price": "1.275974540870522287776597515",
+            "held_amount": "156.2740",
+            "reason": "below_target",
+            "release": null,
+            "trail_armed": false,
+            "trail_peak": null
+          },
+          "candle_open": 1793403180,
+          "capital_scope": "RECORDER_SCOPED",
+          "data_source": "native",
+          "economic_validation": "CANDLE_MODEL_MAR_SEP26_BNB_IN_SAMPLE_EXPLORATORY_PAPER_CANDIDATE",
+          "evidence_candidate_sha256": "c5fe59c58c8abdfa172efd72cdd37a3f48625d0d9daaae13c22cc88f128620b7",
+          "execution_enabled": true,
+          "execution_mode": "paper",
+          "exit_target": {
+            "kind": "fixed_net_take_profit",
+            "net_take_profit": "0.008"
+          },
+          "limits": {
+            "entry_quote": "100",
+            "pair_quote": "40000",
+            "program_quote": "200000"
+          },
+          "modular_status": "operator_entry_pause",
+          "operator": {
+            "entry_paused": true,
+            "last_command_id": "wp14-emergency_entry_halt-1793401900624",
+            "reason": "WP-14 disposable qualification: emergency entry halt",
+            "scope": "modular_spot_meridian_v5_paper_xrp",
+            "updated_at": "1793401901.335"
+          },
+          "recipe_binding": {
+            "configuration_sha256": "7399e6ebc0830d292fa1653f7cc3ced66174c49bc2fb01f5dff51b22f364a81d",
+            "recipe_id": "meridian_v5_target_v1",
+            "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+            "schema_version": 1,
+            "source_sha256": "7a2533e5de60e21177dfb8560607abe3f969cc328705faab70fce3255e9f4af1"
+          },
+          "recipe_sha256": "752dcd1517eb60ed02743e1917f601c1e6f8a69e231eb40dba08a47856a50b75",
+          "recipe_version": "meridian_v5_target_v1",
+          "strategy_name": "V5",
+          "universe_coverage": null,
+          "universe_mode": "fixed"
+        },
+        "execution_mode": "paper",
+        "id": "modular_spot_meridian_v5_paper_xrp",
+        "pair": "XRP-USDC"
+      }
+    ],
+    "dca": {
+      "applicable": false,
+      "reason": "no_active_plan"
+    },
+    "trailing": {
+      "applicable": false,
+      "reason": "fixed_target_recipe"
+    }
+  },
+  "next_cursor": null,
+  "source": {
+    "owner": "hummingbot",
+    "schema": "rsibot.v5-paper.observation.v2",
+    "sha256": "f158eb03398f79cb056b01c538f489d3fdb05ca7e4e3d0c431d99f2b653e2668",
+    "boot_id": "4bc58bd65620dced4b9431804c1ef789",
+    "sequence": 751,
+    "source_sha256": "93f2287ffd7f8112ef08fa2ba3bb9eb597f447e6ba1d825e6c3461796924f762",
+    "config_sha256": "b80096664a0aefc7d614dbcff167057bffffb02a2a78c72e08ee5c7a9876c5e0",
+    "recipe_sha256": "ebec0189e6666a0c8c23732afe45315957e6c068fcd5b3c4c0b0c73b3955885a"
+  }
+}

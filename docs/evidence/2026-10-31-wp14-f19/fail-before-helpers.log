@@ -1,0 +1,61 @@
+✖ whole paper read restarts coherently after 409 (1.909274ms)
+✖ whole paper read restarts coherently after 503 (0.175834ms)
+✖ paper retries stop at two whole attempts and never retry auth/schema failures (0.206902ms)
+✖ paper read refuses cross-snapshot success and bounds owner concurrency to one (0.192904ms)
+✔ unavailable Settings identity confines fresh times and reasons to heartbeat rows (332.294074ms)
+✔ paper routes select native read-only exports, not live fleet discovery (1.34103ms)
+✔ heartbeat cannot label missing, invalid or incoherent paper reads fresh (1.451319ms)
+✔ configured paper identity separates simulated execution from advisor authority (0.185423ms)
+✔ paper uptime cannot clear program P0s or economic support (0.309233ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 5
+ℹ fail 4
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 849.69503
+
+✖ failing tests:
+
+test at frontend/test/v5-paper-pages.test.mjs:9:34
+✖ whole paper read restarts coherently after 409 (1.909274ms)
+  TypeError: policy.paperCoherentRead is not a function
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/frontend/test/v5-paper-pages.test.mjs:12:30)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.start (node:internal/test_runner/test:1262:17)
+      at startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17)
+
+test at frontend/test/v5-paper-pages.test.mjs:9:34
+✖ whole paper read restarts coherently after 503 (0.175834ms)
+  TypeError: policy.paperCoherentRead is not a function
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/frontend/test/v5-paper-pages.test.mjs:12:30)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+
+test at frontend/test/v5-paper-pages.test.mjs:23:1
+✖ paper retries stop at two whole attempts and never retry auth/schema failures (0.206902ms)
+  TypeError: policy.paperCoherentRead is not a function
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/frontend/test/v5-paper-pages.test.mjs:26:33)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+
+test at frontend/test/v5-paper-pages.test.mjs:31:1
+✖ paper read refuses cross-snapshot success and bounds owner concurrency to one (0.192904ms)
+  TypeError: policy.paperCoherentRead is not a function
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/frontend/test/v5-paper-pages.test.mjs:33:31)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7)

@@ -10,6 +10,7 @@ COPY --from=workspace dashboard/hummingbot-reporting-next/ /build/dashboard/humm
 COPY --from=workspace dashboard/v5-workspace/ /build/dashboard/v5-workspace/
 ENV V5_WORKSPACE_ROOT=/build
 RUN NODE_OPTIONS=--max-old-space-size=1536 node /build/dashboard/v5-workspace/build.mjs /build/condor/frontend
+RUN node tooling/check-v5-reproducibility.mjs verify dist-v5
 FROM python:3.12-slim@sha256:6b25cbe6577518889d553cdd5a5da97d259348d8f6e45b527dd731caaba27a07
 ENV PYTHONDONTWRITEBYTECODE=1 PYTHONUNBUFFERED=1 PYTHONPATH=/opt/condor
 WORKDIR /opt/condor

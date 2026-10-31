@@ -1,0 +1,29 @@
+{
+  "captures": 8,
+  "inspectedCaptures": 8,
+  "widths": [
+    1440,
+    390
+  ],
+  "themes": [
+    "light",
+    "dark"
+  ],
+  "built": {
+    "entryPath": "/assets/v5-CnR1BLP8.js",
+    "entrySha256": "0eed2590b0dce9911e4532e9f49c20eb3ee58a0c76a86d367356454dcaec24ce",
+    "htmlSha256": "2ecf4e0143573e228b04fc122863cf57c3c26886e86aef8513cf0f46fca9bd13"
+  },
+  "apiReadResponses": 57,
+  "allReadResponsesHttp200": true,
+  "capabilitiesAlwaysLists": true,
+  "pageErrors": 0,
+  "overflow": 0,
+  "mainClipping": 0,
+  "sourceSha256": "89494edbda850d6c5d0a461d895214b54cf409d66f62b7edf485fc7efb9bb4dc",
+  "scope": "Pinned real API HTTP envelopes; fixture clocks and epochs rebased; no deployment",
+  "fixtureStopped": true,
+  "ownServeRouteWithdrawn": true,
+  "preexistingServeRoutesPreserved": true,
+  "ownedBrowserTabClosed": true
+}

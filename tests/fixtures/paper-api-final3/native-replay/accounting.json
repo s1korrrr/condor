@@ -1,0 +1,130 @@
+{
+  "schema": "rsibot.v5-paper.read.v1",
+  "state": "available",
+  "section": "accounting",
+  "snapshot_id": "4bc58bd65620dced4b9431804c1ef789:751",
+  "bot_id": "meridian_v5_paper",
+  "execution_mode": "paper",
+  "simulated": true,
+  "generated_at_ms": 1793403300404,
+  "observed_at_ms": 1793403300404,
+  "read_at_ms": 1793403300404,
+  "source_at_ms": 1793403300404,
+  "completeness": "complete",
+  "reason": null,
+  "capabilities": [
+    "read"
+  ],
+  "data": {
+    "controllers": {
+      "modular_spot_meridian_v5_paper_bnb": {
+        "accounting_since_ms": 1793260749980,
+        "accounting_since_reason": null,
+        "count_basis": "distinct_native_filled_buy_and_sell_orders_not_actions",
+        "entry_count": 8,
+        "exit_count": 4,
+        "fee_quote_valuation_basis": "exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once",
+        "fees_paid": {
+          "USDC": "0.8826265951164"
+        },
+        "fees_paid_quote": "0.8826265951164",
+        "realized_pnl_quote": "3.416532061746000000000000000",
+        "unavailable_reasons": {},
+        "unrealized_pnl_quote": "-3.006116417362400000000000000",
+        "volume_traded_quote": "1055.817140468"
+      },
+      "modular_spot_meridian_v5_paper_btc": {
+        "accounting_since_ms": 1793296271358,
+        "accounting_since_reason": null,
+        "count_basis": "distinct_native_filled_buy_and_sell_orders_not_actions",
+        "entry_count": 7,
+        "exit_count": 3,
+        "fee_quote_valuation_basis": "exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once",
+        "fees_paid": {
+          "USDC": "0.86036650425520"
+        },
+        "fees_paid_quote": "0.86036650425520",
+        "realized_pnl_quote": "2.40068420753760",
+        "unavailable_reasons": {},
+        "unrealized_pnl_quote": "-9.34891520729280",
+        "volume_traded_quote": "999.9472904050"
+      },
+      "modular_spot_meridian_v5_paper_eth": {
+        "accounting_since_ms": 1793296261795,
+        "accounting_since_reason": null,
+        "count_basis": "distinct_native_filled_buy_and_sell_orders_not_actions",
+        "entry_count": 7,
+        "exit_count": 3,
+        "fee_quote_valuation_basis": "exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once",
+        "fees_paid": {
+          "USDC": "0.8509987299660"
+        },
+        "fees_paid_quote": "0.8509987299660",
+        "realized_pnl_quote": "2.418013339770000000000000000",
+        "unavailable_reasons": {},
+        "unrealized_pnl_quote": "-7.432349039736000000000000000",
+        "volume_traded_quote": "999.947913090"
+      },
+      "modular_spot_meridian_v5_paper_sol": {
+        "accounting_since_ms": 1793296142410,
+        "accounting_since_reason": null,
+        "count_basis": "distinct_native_filled_buy_and_sell_orders_not_actions",
+        "entry_count": 8,
+        "exit_count": 3,
+        "fee_quote_valuation_basis": "exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once",
+        "fees_paid": {
+          "USDC": "0.940165006160"
+        },
+        "fees_paid_quote": "0.940165006160",
+        "realized_pnl_quote": "2.439935831520000000000000000",
+        "unavailable_reasons": {},
+        "unrealized_pnl_quote": "-9.314608687680000000000000000",
+        "volume_traded_quote": "1099.68570110"
+      },
+      "modular_spot_meridian_v5_paper_xrp": {
+        "accounting_since_ms": 1793298906278,
+        "accounting_since_reason": null,
+        "count_basis": "distinct_native_filled_buy_and_sell_orders_not_actions",
+        "entry_count": 6,
+        "exit_count": 3,
+        "fee_quote_valuation_basis": "exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once",
+        "fees_paid": {
+          "USDC": "0.780622206880"
+        },
+        "fees_paid_quote": "0.780622206880",
+        "realized_pnl_quote": "2.418537428640",
+        "unavailable_reasons": {},
+        "unrealized_pnl_quote": "-3.914567285520",
+        "volume_traded_quote": "900.26265110"
+      }
+    },
+    "program": {
+      "accounting_since_ms": 1793260749980,
+      "accounting_since_reason": null,
+      "count_basis": "distinct_native_filled_buy_and_sell_orders_not_actions",
+      "entry_count": 36,
+      "exit_count": 16,
+      "fee_quote_valuation_basis": "exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once",
+      "fees_paid": {
+        "USDC": "4.31477904237760"
+      },
+      "fees_paid_quote": "4.31477904237760",
+      "realized_pnl_quote": "13.09370286921360000000000000",
+      "unavailable_reasons": {},
+      "unrealized_pnl_quote": "-33.01655663759120000000000000",
+      "volume_traded_quote": "5055.6606961630"
+    },
+    "source": "native_exact_lifetime_receipts_not_fill_pages"
+  },
+  "next_cursor": null,
+  "source": {
+    "owner": "hummingbot",
+    "schema": "rsibot.v5-paper.observation.v2",
+    "sha256": "f158eb03398f79cb056b01c538f489d3fdb05ca7e4e3d0c431d99f2b653e2668",
+    "boot_id": "4bc58bd65620dced4b9431804c1ef789",
+    "sequence": 751,
+    "source_sha256": "93f2287ffd7f8112ef08fa2ba3bb9eb597f447e6ba1d825e6c3461796924f762",
+    "config_sha256": "b80096664a0aefc7d614dbcff167057bffffb02a2a78c72e08ee5c7a9876c5e0",
+    "recipe_sha256": "ebec0189e6666a0c8c23732afe45315957e6c068fcd5b3c4c0b0c73b3955885a"
+  }
+}

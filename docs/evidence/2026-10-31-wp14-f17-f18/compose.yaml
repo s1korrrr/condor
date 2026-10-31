@@ -1,0 +1,21 @@
+networks:
+  default:
+    ipam:
+      config:
+        - subnet: 10.214.35.0/24
+services:
+  dashboard:
+    image: rsibot-v5-dashboard:main-024dcf5a-aa306357
+    user: "1000:1000"
+    command: ["uvicorn", "fixture_f17:app", "--app-dir", "/fixture", "--host", "0.0.0.0", "--port", "8088"]
+    ports: ["127.0.0.1:18161:8088"]
+    volumes:
+      - /home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard:/fixture:ro
+      - /home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f17-runtime:/fixture-runtime
+      - /home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/condor:/opt/condor/condor:ro
+      - /home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/agents_v5:/opt/condor/agents_v5:ro
+      - /home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/f17-dist:/opt/condor/frontend/dist-v5:ro
+      - /home/rsi/dev/rsibot/condor/.worktrees/v5-operations-export-20261029/tests/fixtures/paper-api-final3:/opt/condor/real-fixtures:ro
+    environment:
+      TMPDIR: /fixture-runtime
+    read_only: true

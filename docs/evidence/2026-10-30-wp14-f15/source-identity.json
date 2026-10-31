@@ -1,0 +1,2632 @@
+{
+  "sourceSha256": "89494edbda850d6c5d0a461d895214b54cf409d66f62b7edf485fc7efb9bb4dc",
+  "workspaceHead": "e6483d7a94cc4330563369ba464f6cf1ea5923d0",
+  "files": [
+    {
+      "repo": "condor",
+      "path": "condor/v5/__init__.py",
+      "sha256": "4527b1156aee97a9daa935a736922e74352c1e7ba68a96ce7af999b1fb257920"
+    },
+    {
+      "repo": "condor",
+      "path": "condor/v5/agents.py",
+      "sha256": "cef5cbb07a6d743a460d43996d66a7a454ce872fc2f3e5257536fcb5089857c1"
+    },
+    {
+      "repo": "condor",
+      "path": "condor/v5/app.py",
+      "sha256": "40113ddc9a82c7ba8c9cfff545cf8babd99a16ff1192fff2b1cd2c4ca1738792"
+    },
+    {
+      "repo": "condor",
+      "path": "condor/v5/CANDLE_STORE.md",
+      "sha256": "a2cadb3023e013e3e9b337c9b2d0bbc43513e19a6b13e640afb145d79b0a28f9"
+    },
+    {
+      "repo": "condor",
+      "path": "condor/v5/candles.py",
+      "sha256": "3ae837167e4158ac2ae7f7fc5792f8c7e26f77068ac088e3a8b8a7176f2cc02a"
+    },
+    {
+      "repo": "condor",
+      "path": "condor/v5/config.py",
+      "sha256": "773ee63cdfb9e637bda2098eebf64c7e3811d980e0e5d4962b2e8ffe3e4469ba"
+    },
+    {
+      "repo": "condor",
+      "path": "condor/v5/dashboard.py",
+      "sha256": "39dd88b812ad4de245f8ac5ccce21039814969ca7a0b42ac5138c22940c075a1"
+    },
+    {
+      "repo": "condor",
+      "path": "condor/v5/host_operations.py",
+      "sha256": "883a6d4dfe6cc2e08fe9d917bd0e2925c0c9dfc80c5cd16e8393478d2ffe66c0"
+    },
+    {
+      "repo": "condor",
+      "path": "condor/v5/paper.py",
+      "sha256": "6db8daf9107f4176ca1357cace9000a1b5092f7bd29d9aba1902eccb402ee4ef"
+    },
+    {
+      "repo": "condor",
+      "path": "condor/v5/README.md",
+      "sha256": "577b81f93c37234537138ef4202351d9bcac04e9b0cd363ecdcd0659d7e5ba2a"
+    },
+    {
+      "repo": "condor",
+      "path": "condor/v5/state.py",
+      "sha256": "7a8e1ce4ec513ee17ef389b9e702f3d99c45651bd32d8904842a536cde139ae5"
+    },
+    {
+      "repo": "condor",
+      "path": "condor/v5/upstream.py",
+      "sha256": "03e1bf47252c31d7ec27b6c316fc43b2a3a463ab61106150cad35451b6143884"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/design-system/v5/app.css",
+      "sha256": "0455c967d3658ed3086165f8273adca43c8db520e946f5b59c8eff7853b02864"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/design-system/v5/tokens.css",
+      "sha256": "1934727c257c4721956a12d11b29fdcf349861f3c8b939204cb7917bdaa8180b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/App.tsx",
+      "sha256": "5a84857118604eeca737e16790d552beda353919825f29ab52f846ec5e0c93c8"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/assets/hero.png",
+      "sha256": "72a860570eddf1dd9988f26c7106c67be286bc9f2fd3303c465ce87edb1ae6cd"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/assets/react.svg",
+      "sha256": "35ef61ed53b323ae94a16a8ec659b3d0af3880698791133f23b084085ab1c2e5"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/assets/vite.svg",
+      "sha256": "5be21acd42eb7b896e517f4e0f0f11eb5c5d9e54fbbcebe9453f033008fcca6f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/AccountPortfolio.tsx",
+      "sha256": "cc1b6d05e403fd1d3310e23cbb2e7ff67668459649501e35aff4f11c5adb2f85"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/agent-pnl-data.ts",
+      "sha256": "c98c2e27440ac715e6bfeecd3b3a6e3c6bfdceb2c754fd24487ee9fbf16f7eab"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/AgentControls.tsx",
+      "sha256": "67fe190470081ffd9406a929dfccde9041090cba9789a288cff4bcb0592a4ee3"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/AgentMarketStrip.tsx",
+      "sha256": "a69d5dd69badad4032df5c987f30853f3594bde62a45cce6f1bb6edc38f3027c"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/AgentOverviewTab.tsx",
+      "sha256": "0a55d53e2f4aef230b551c78c42f3dff6872618924a48a267e09aabbb38358f5"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/AgentPnlChart.tsx",
+      "sha256": "49eb42917de14d9f4403c7d17d95ef51804ef20c24f47072926cdcac63d534ad"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/AgentSessionContent.tsx",
+      "sha256": "ed7d1c9511e2880bcd584d606d9f47e7d155057e4f2b9d15582b2abab2967480"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/agentStatus.ts",
+      "sha256": "f5e11b6d5941e8393eb568c78424890fa551e933fe051f1dd3f95b527c755e79"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/ConfirmDialog.tsx",
+      "sha256": "010b00810506c641f2901fdee8ab18e0ac90c8c053f7349b5785f8006dc552c6"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/DelegationDetail.tsx",
+      "sha256": "bdd4141e0cc4f482229222e3322d36f5f791a80630b4b8577e72a31bf2c11fa0"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/DelegationHistory.tsx",
+      "sha256": "b250eb7e04c464e38c3a629b9a2a0f440bc95eb8798163fa8954dbd035abb87b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/DelegationSheet.tsx",
+      "sha256": "b453d5e49eaae0436fc1fe49bf0fd22bbbb5bf396f055eb98336775f0087977b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/delegationStatus.ts",
+      "sha256": "9f6a59c58bff8b147ec82661b246cb6c27518fcd9bcf0bc52b62215c38049d6e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/DelegationTranscript.tsx",
+      "sha256": "88db80022d32053ef69ea2fa88f7e8ef3e9318e6ca197eb69859e1a8bce707a6"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/EntityCard.tsx",
+      "sha256": "24ad99a328ea6fa1a5c635b45dd6b85f76d725a6f63cab595b8e0c43f48c8bb4"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/ModeBadge.tsx",
+      "sha256": "746162c00a9330e41dd74d42c76b330e1a83f4f7fc99dccc4b7511c2cd34f4f1"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/modeStyles.ts",
+      "sha256": "7949d286815e996ab91b114ef93600c60ed13e1e39f1c34eda16792dd218658a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/SessionReviewer.tsx",
+      "sha256": "d5606978fe05a8ed7ea7cc124e43dfb3d756b17f07d9ddd52deaa49350135cd6"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/agent/StatusBadge.tsx",
+      "sha256": "4ad0d8e8c9e2ab9b0978c93030c2d67d0fd83c484135c8072672f43bb3af2f13"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/AggregatedPnlChart.tsx",
+      "sha256": "08deeb14a0ba13a4b370fe14dd5288497966d6778587a6fd2bce90e3b6260092"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/BotDraftWizard.tsx",
+      "sha256": "f2917f7e77f81300bcd96794ede10c09bfc29aa199d11f7c368ea7c4b7ca45dc"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/bots-roster.css",
+      "sha256": "9b163ca4b91c5bfbb2e893bc4bed9b93b50685164a6e35939460fdc3d49c5527"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/BotsRoster.tsx",
+      "sha256": "99dad109bf96d2a626529faf7a2d69a187f43731a84e215c48811a7fabc595f3"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/command-desk.css",
+      "sha256": "e308ffb5f9cc1d9effd4c8d2c0c101be851007c1a76c4451fecc0401f2e45f5b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/ControllerBrowser.tsx",
+      "sha256": "120c0a217529d732a404667f74ed92e61c3891e326b78f35a5639a0951cbe987"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/ControllerPnlChart.tsx",
+      "sha256": "024bf7062e3412a9eb4957972f93de42a54da2922980277114c73200d470c36c"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/deployBotConfig.ts",
+      "sha256": "adc6a6cfb4bcda9aea10ec943f044d2b1dd12c0cccea6eeb24d68bbb835978a0"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/DeployBotDialog.tsx",
+      "sha256": "5396c8b47180a16e7034abf710a9742a7753b0830d5f51b425157def1904f8aa"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/fleet-fills-columns.tsx",
+      "sha256": "10b3247d3d14bb622ddbda34c4cf39f464555a554cec3940cc6824517275deae"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/fleet-input.ts",
+      "sha256": "ca7e975679a04e04d07481912852b3b64bc3d69a6c0ffaebf6484b705417ebfb"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/fleet-strip.css",
+      "sha256": "654f589594e2f2d7c832e5449f884b73a5ef5ce661a8ea27d620777bae5f5b6f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/FleetFillsPanel.tsx",
+      "sha256": "0975e8da7e4d1dbeb0e4df09fa7303e361511c8da621fdf0704347b44ac459cf"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/FleetStrip.tsx",
+      "sha256": "cadd9ab22b9e033687ba9918b10bb4dddea2413dc2b1dd4683c260c56d5552b2"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/NativeBotActivityCharts.tsx",
+      "sha256": "e2f5b79b4133628c9c5bd562696de8483c666d6b9c4826bb39104872792f78b2"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/NativeBotCommandDesk.tsx",
+      "sha256": "cf985b713284a4890e9d4db8a7df044ea1859958813ce255b3e22be3de5808d5"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/NativeBotPositions.tsx",
+      "sha256": "bd7c91154fd114c965d72019cd906ce3af7d881102a7df3b27da8d34971c78f1"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/NativeBotStatistics.tsx",
+      "sha256": "ee064fe60f80f5d94d588904b003a70b134e2039e18db713494564ee15c4ac26"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/NativeEntryControls.tsx",
+      "sha256": "65abe82c25d5eaf32b2a53284cd4da926d8420132a164c1b37d52e1c985beb63"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/PnlChartTooltips.tsx",
+      "sha256": "9fb0dc570357df2880b5ef6805175937c258ed1156d7fe348f1b3ef58113f61f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/PnlSparkline.tsx",
+      "sha256": "1eaeb9b6922dead990146a24cabfcb7810052f081824b4a2f9ec63f2d2808bfe"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/bots/StrategyChartsSlot.tsx",
+      "sha256": "47a6a71998a77afcb5eb85f833fa2b11b987a495ec435a995b5370792c0f06a0"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/CapabilityUnavailable.tsx",
+      "sha256": "b35fcf77557363d72879d8473343e1ade7b0e62d90e568c8904d11447ba0c478"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/charts/ArchivedPerformanceCharts.tsx",
+      "sha256": "5484ca3bf4039e2014f7399d5c4f4b3673db3ca394046a9dbf8364e7e323f001"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/charts/ExecutorChart.tsx",
+      "sha256": "2fc11c93c31ed7fd8835ec9921d0c02932bc0b8f31b0a627f8af237379629b6a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/charts/RecordedCandleChart.tsx",
+      "sha256": "686a00fa641d3570729e1e01895286aab0bf03342f00e6b826eacc74d085ba74"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/BrainPicker.tsx",
+      "sha256": "0358880b8da8f1b2d2d8d05d42e747fbea009db502a3219e9c6ac17db522b8d7"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/chatAgentLabel.ts",
+      "sha256": "bccc26c58136746334dc53942beb344c0a7228b7b6ec4be4fc4febd92cf5f3f9"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/ChatInput.tsx",
+      "sha256": "e798ca554ea6bcb53437ad949d98ee83a0fb63bd46515b4d525bd3cddecb603e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/ChatMessage.tsx",
+      "sha256": "80bc22a6d47f7f578bf4dfc30c943b36eecf1b5d2c722329bf490c3faec62557"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/ChatProvider.tsx",
+      "sha256": "dad75209000fa9cd640b2f014b9b5da6b225a00f19a9d52042ed158651ddf4a0"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/ChatSessionIdentity.tsx",
+      "sha256": "08d6fc2af4fefc3739fe05c6777262789c0edd430cb74461241aeb6b12b29f77"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/ChatThread.tsx",
+      "sha256": "3e8d65d89796d4a8fa2f1e4ed7cd8ed2a544b278984f90b1c677e56cc9681936"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/ContextDock.tsx",
+      "sha256": "0a54c5e40913ecabd8b637e2715436a7800761f17dfd6a74130f47d8a34f2e96"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/conversationInstances.ts",
+      "sha256": "dd26461e1b4b37da5da8e7e9fda44703c5533e45f8888ae742f7ff4ee9daf74b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/ConversationList.tsx",
+      "sha256": "a9b00b1e8b26361f5c13d8abc8509ddded22357654bf121428d6d344178901eb"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/DockRoutines.tsx",
+      "sha256": "e6a13490cd087543e37c476df77ba7ce313388cad4a38609ee5f36443c97adcb"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/DockTasks.tsx",
+      "sha256": "6ccf4e5dc130568abf29a3134adb47c937a6b36008cbcdac227e7a76b8f29cc3"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/SessionServerChip.tsx",
+      "sha256": "757a7b91cb3fe1a838c4d1a7f8f765f1287fbc649c1701de9e22de56a720187f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/ToolCallStatus.tsx",
+      "sha256": "9211c5a2ecfdad16e93b2b24ee500d5468f64ee12b2e6f1d8a13dac69fbe3fe2"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/chat/WorkspaceSheet.tsx",
+      "sha256": "b9547ec6aa80bd9e8b63b4325b00d2b2ce98f6b63c25bf77638c6bd6eba82051"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/ConnectKeysOverlay.tsx",
+      "sha256": "71060c93c0105db410ebe565ff5ef5a155b07c3680e1621f1be466385a2c9eae"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/editor/CodeEditor.tsx",
+      "sha256": "9c4b1d1b25b3e8fc018373ee25a19a3ac80e6fa0c94a508d861f02cdb664b6a0"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/editor/EditorDialogs.tsx",
+      "sha256": "7fcae9c8f8deeb4fc37bc6d9409967339e4786b68cdc6a41dc9b69b9cbbe3563"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/ErrorBoundary.tsx",
+      "sha256": "fb28ba619f491103489d5051df85c3e95f72b8a104f29dc6764a7976bafb1f23"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/executor/DCAConfigModel.ts",
+      "sha256": "1473e7b87b632bfc72939bb81f82b7944f530d58edff8802ae9bf94c474115b1"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/executor/DCAConfigPanel.tsx",
+      "sha256": "8c64e28e6f919c0c8391c1a9a77f0dac6bbdbf336dba556230c2e260c8245dfe"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/executor/ExecutorTable.tsx",
+      "sha256": "f8e70a279e6d5e95a3b0e80eddae401fa1632f84d6c5e6b1df6c91fc652d8068"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/executor/field-options.ts",
+      "sha256": "3447821fe24e5f6218146232efa3369a72b97a28a0b53fec948dc5e10ce1ed1f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/executor/fields.tsx",
+      "sha256": "6f7d8db4334a21df4c9e3a74831dcf67f077bba9508d722afc2092f4a4399c16"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/executor/OrderConfigModel.ts",
+      "sha256": "67b550168903a9e8b4b046d1d6caf0754ff9d0213fd53a33ea80a43528377568"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/executor/OrderConfigPanel.tsx",
+      "sha256": "3acdca7f381bc041e3d2b33af95231224d749371255fdf773a0594a00c24991a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/executor/PairLabel.tsx",
+      "sha256": "3e288890447f6ba8a427359a18f200448b569709b037c26022ad341ec8fc079c"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/executor/PositionConfigModel.ts",
+      "sha256": "e3670a309e23d9180e3bf854aaad74cc473f766fa079ca8773508765396c9f0b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/executor/PositionConfigPanel.tsx",
+      "sha256": "c433d809324f7118e940613a0c60e55e6fbb17b3073ef58457ce380aa11a18e3"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/executor/types.ts",
+      "sha256": "fb861a5f3e1f0e7c274a5e83baf73731634ad1d23734a4a27a4db7cf47f8b91f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/grid/GridConfigPanel.tsx",
+      "sha256": "c3a36030ecc060e389533caf49f234e96816dfb0f15ac64c46752db9ecff9386"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/grid/useGridValidation.ts",
+      "sha256": "4024d2dcefb57bdf4ce00906449c9de55eb9cc80535375d2e096193a96498906"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/layout/AppShell.tsx",
+      "sha256": "acfda4af2b29e5cdd8b37397a96dbf6e625b3054478cf05e9f0784c8b0758e40"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/layout/CurrencySelector.tsx",
+      "sha256": "9b42aa044b74372baba7d1e464aab54dd3a660ec44affd32d6aa6357f221ec24"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/layout/ServerSelector.tsx",
+      "sha256": "afd2195d4c2990d395596d7d5748ec3309ad80b48ffed7d59b165ec770037a31"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/market/ExchangeSelector.tsx",
+      "sha256": "39e09a8ff74f8187014f7a5b17a61d5a9e7830d919c343f7b45494d61e303994"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/market/MarketDepthPanel.tsx",
+      "sha256": "30bd6eff36c66f077c6a655d5ce3b440e79f443083e5ffa6c6f6e2cd9fae248e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/market/MarketsPanel.tsx",
+      "sha256": "dc6b59713b641f2a21593c702565ba50135b97d722ffb1a6e16ed915df14d1fe"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/market/OrderBook.tsx",
+      "sha256": "77ec1351c57d3dc50312831ed8c09cc0ba591cdd6b46f8e49ca23f331392c505"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/market/PairSelector.tsx",
+      "sha256": "4f69599d5f24286cb0ffb0834877cfadbf281d4c689a94eb8640593272ae9d6e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/market/PriceTicker.tsx",
+      "sha256": "bae97a25a0e7d90214205af7aa8b736f9f707bc77741d2d2e12b9a19ee52e7e7"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/market/RecentTrades.tsx",
+      "sha256": "e9ffb35b48d597b4434562fa8496b4dd2078f58e7312933ee378373369ce3dc5"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/market/TradingRulesInfo.tsx",
+      "sha256": "a3e138181a0432464c02364df9bd967af25d01ddc22c4d4b2d03ef15edacf097"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/market/useTickers.ts",
+      "sha256": "82bd55ccb46df316e789728fb56eddf5a2f9e2a6736be2ca6f9b3c83074df4cf"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/market/useTradingRules.ts",
+      "sha256": "4ed5d36200a3eb080b08cfec3659b4b1858cd63e252160b8c98894275a5c0232"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/NoServerCard.tsx",
+      "sha256": "09dafb6f198c20095106afb307dd690896f86ce44107e8fc33877eb8b7f4ca9e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/routines/ReportBrowser.tsx",
+      "sha256": "a74b7d492e2c2d68215a682691b6909a86b2c95220fe0553479fa958123bc81e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/routines/ReportFrame.tsx",
+      "sha256": "19c9fe5cd1a4ddd19d14e0f255990d3b41310c7aeaa1ece34f7bd8c6e347e238"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/routines/ReportViewer.tsx",
+      "sha256": "051f1d39a6233f1c7a61b215de82320f63795cf19f7e355a766f429c3b121b6f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/routines/RoutineConfigForm.tsx",
+      "sha256": "13110a5a1807fc91d218a70d97b71c8f475545ec97777fb415a002cef6c24d95"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/routines/RoutineHooksPanel.tsx",
+      "sha256": "face8f9928de6175ad93a0e5889a2fe57dc7d5d70a4b4e5de1ff5baba8aae336"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/routines/RoutineResultView.tsx",
+      "sha256": "2e2dffbe2332e20bdb0a22dd5572ebc45a8d95b331bcf738fb6bc1fa42b2129a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/routines/RoutineTable.tsx",
+      "sha256": "785a6191c50ba644ab3e5b7a2309f128c498c83733ca82b45f9b9ee93fd4fffa"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/routines/ScheduleDropdown.tsx",
+      "sha256": "20fccb8847956c259f44331cb5fa845632b9dab9190cd7c35c5f4b48f50d4107"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/settings/ApiKeysSettings.tsx",
+      "sha256": "50a971fb878d3c47991b4abf233aee0e16120a83d12f738fdf31692cf4e97690"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/settings/ConnectHyperliquid.tsx",
+      "sha256": "27f36958326435668aa07097db379775be005fb420e85bf337ea1bdd1db9f8bb"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/settings/CustomProvidersSettings.tsx",
+      "sha256": "b00ae7c2cbbf097c5772e0f486e7c5339795da9e1a6016b91e4dab3480d98612"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/settings/DeploymentVersions.tsx",
+      "sha256": "0273f48a112afc280fb7a20eb38f753f1a24de4cc2207cba6d5dee903e49d75c"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/settings/GatewaySettings.tsx",
+      "sha256": "f6c2c379b079cc2ff77095c520efd39f842445b027618002db7762b2c2f766ee"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/settings/ServersSettings.tsx",
+      "sha256": "cfb481377bcc240f08de55d0ad239fb5e79b414b163c0c39d07251005cc63dec"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/settings/SettingsReadError.tsx",
+      "sha256": "7390046e6017d8c1a07489ca4f7a337f445234dcf1327d4c93dffda211151869"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/settings/VoiceSettings.tsx",
+      "sha256": "eca06a0372cb38ad4e804468a7755bf8b3067a5ce234ac3bb64cb0d6196a0e26"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/trade/TradeBottomPane.tsx",
+      "sha256": "7d296761af9a68166aab4ed0b465b2e1d7666116702402a7082430a3bb78d9b6"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/trade/TradeChart.tsx",
+      "sha256": "1f3566fc99080103a682794ea544e1e4f03ac8ee1e28463a0559e9b2cba38da7"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/components/ui/FallbackSpinner.tsx",
+      "sha256": "7c0e2ef7e8332327f0d604e842d500f53af7912887adc2834df1dd67c57afa4f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/bots/bot-net.ts",
+      "sha256": "3764a46bb4ace9e371a911ebe57de31f9f8d428b7e7ca1b0b7ba60851919c95c"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/bots/chart-links.ts",
+      "sha256": "d5dfb6e508770b99d28c4e29b1a8871b322fac2ba1c00cb03305f35f0ad24130"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/bots/controller-pnl.ts",
+      "sha256": "1b9ae4a36469b55dffdd499251f0fb5b63604f9f07c2e9ef9ca4c25d584aac8f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/bots/fill-trips.ts",
+      "sha256": "3d4626017d00b91d9eed0c2747fac77683b8364234456c36f7fb0c1526f9791e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/bots/fleet-fills-model.ts",
+      "sha256": "a9886282b279727f9e313483db1c94c41016844d9159cefbf049a8913f5c3cde"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/bots/fleet-health.ts",
+      "sha256": "6ae7863229db9065c244ef5aae6108485cd95e1c306b81cf5e75f6a7eea049e4"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/bots/fleet-inventory.ts",
+      "sha256": "d5b2a4e41c04276dadf61266022cc2bbc33e0ad06f70b4de123852ff35609db2"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/bots/fleet-tiles.ts",
+      "sha256": "2a267b5b4947f0716dbf9877a099162d36cf5cdcc2d79994976a07d9f1493d57"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/bots/observed-policy.ts",
+      "sha256": "7f6e6624739dff022d8280d3270486dec5a147e255768514606726efbc6ef17e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/bots/pnl-series.ts",
+      "sha256": "40974930126a767d14162c4ffb9329770a953fee0e65adf467bc59f4638bd8b3"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/bots/position-view.ts",
+      "sha256": "689d4e94a0098ec6a37e490e90c067258323c781a10ace22d7a6aee981fae26a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/bots/quant-roster.ts",
+      "sha256": "d944f60874e5a79a7eaf6de27bdf0b425efa49f8e4c12d49eb528c192a9df976"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/bots/summary-card.ts",
+      "sha256": "6010825f1641ee7eed50ee632451d1ad68338e6dc49aea2b3afd586b9d689ed3"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/AssetPanels.tsx",
+      "sha256": "06bf9bf08e73016c15323e775afd762bdda0cf9e565b0c4ef93e9bf7a82eb075"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/availability.ts",
+      "sha256": "52cb74b09b2a90b16c13272d5b1c076bbcb0b03589772cfd815224a2cb4ca6eb"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/breadth-timeline.d.ts",
+      "sha256": "b6ae7182994cffaf3ae2e394a45e9b7be0736f1a7aaeac17258869171c9d4e0e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/breadth-timeline.mjs",
+      "sha256": "3cf68ceb9b32928e1ef1e58cb0a753bc34ac6a10e7962858a6540da8bbbdeca4"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/BreadthTimeline.tsx",
+      "sha256": "f38a09846aae6de0322c6efc897c3ce56501c646585ab6a6a810a7e8b4c4215c"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/contract.d.ts",
+      "sha256": "ce82e2137eb6a95537631520f4a2fdd620ebdd71c22ef7cc84380cfd1ace908d"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/contract.mjs",
+      "sha256": "27ebbb71a4ea49bfbaa74c7c578d4f4c2dc5ab942da8e64087efd056d20b9f1f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/DetailViews.tsx",
+      "sha256": "b947e1cc397166a2924349069f25b76b0ec07ede11f5f568eb3a18a65cd864e9"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/flow-history-visuals.d.ts",
+      "sha256": "17846dbacc594b20406f9990884b26723aa3245cf17e03653ded72f5305f060d"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/flow-history-visuals.mjs",
+      "sha256": "111053b510019a5de78b0747dfe9e033da2e7d3036365964d38f124685a8c1e4"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/health.mjs",
+      "sha256": "f1a481db2758e58f234b1b4b044e97774feb378992558a704108b339e5920656"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/history-comparisons.d.ts",
+      "sha256": "3473297cbe9606debe6be898a398459aa01edb023a3f7ab3c779ec77ae082de3"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/history-comparisons.mjs",
+      "sha256": "8be97f881d67ba755eff7d1c46a45ae2c6bfa5e6fa7f94715581c7b8635564a2"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/HistoryComparisons.tsx",
+      "sha256": "c004ad73921648354422c07ac8a461ad387c4f8061e38748152dc930cc4d0a7a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/home.css",
+      "sha256": "fee39ef7ea3ca5ea5082df60b833ab09c883599d9cfbdb4ff4e220e14e08e46c"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/instrument-view.ts",
+      "sha256": "14143dd60617792e97355924118cba7059d75d3ff8b0492c0c590386f61d5460"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/market-picture.css",
+      "sha256": "d8ae82f2f5f40b7d22e0959540b69aa208505512989f422daa29dab163f711f5"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/MarketPicture.tsx",
+      "sha256": "c8d0a44152b9fea55be956ea93e0636da5bdc956ed3ce2021398bd67ef1ff573"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/MarketPulse.tsx",
+      "sha256": "8283daf035a78bea8bb9b5e4e77abbb248ebf52c2edbca869471144597bc8f72"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/metric-cohort.d.ts",
+      "sha256": "6229079e1eeb0edd301ed15970520d9a7ec40d53966b7dfcd93850be1b02e939"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/metric-cohort.mjs",
+      "sha256": "e28378e4de3881ff047d7a06b9cc7d41ba2c709fffa6406be2fccd14323fda54"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/microstructure-visuals.d.ts",
+      "sha256": "bf1aca882c0d09db7bb4d5b9bc76bbca1da3dfc56fa11e1975c2b20400b14e67"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/microstructure-visuals.mjs",
+      "sha256": "bb24de6b424107f40c5ed093b8688e74b1a27a790ea2b276768ba8882ee416c5"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/MicrostructureVisuals.tsx",
+      "sha256": "452eee0e7a232aa19e9de5d6a2766ee8da44aa9adbe600ad87b04a2b5418de90"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/model.d.ts",
+      "sha256": "db0e94cdd9d5ee35a34771a31b2f1fed125cbe2319ca7b32388e7182debae8f8"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/model.mjs",
+      "sha256": "a91ffcec6097c310e4e36a2c71dbf4155895fabc0749c23499176a111018937b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/observation-state.ts",
+      "sha256": "f48968e9f352079ba7e90d6ece1a44c276414ccd4cf9d2cca9aeab2c9fa6fab8"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/OverviewPanels.tsx",
+      "sha256": "e8a8fe47b0c199efce05460880f82ef679dd4f9922b7696178595c4e5e2e5724"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/presentation.ts",
+      "sha256": "d03552749324186378dfb1655ef09a35dea0bab1108d232ef7a87e6c354aa4ff"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/Primitives.tsx",
+      "sha256": "560fdd60cfaa374620ac11640c3cab4bdde84205a22c36c65e878155f1bc3962"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/pulse.d.ts",
+      "sha256": "947ac0c28fd4e4315492ff1c35816ac3f0689690dad865e2c0ce0cf65f48e41b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/pulse.mjs",
+      "sha256": "52ac6b4599400b8eaebd2ece6f58123c63e5b9b1ee9ada762cd076d8fa918427"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/relative-visuals.d.ts",
+      "sha256": "ae67bd79679b0e05bab95827c74a75fed24b5b26529e8d2f852a30207e7addaf"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/relative-visuals.mjs",
+      "sha256": "96132412c90310668bb45f3ea682c18454f7e5d69ea5f1f4d5030ae146818f98"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/RelativeStrengthVisuals.tsx",
+      "sha256": "973025e547dbd57e63a7716d1139f4c5f82c2ddd5e0837c499a5d33ca6c6e51a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/source-errors.ts",
+      "sha256": "b6d7410fce40ec241d6477a2e08037f5d9ba66dd4568020c181a2cd6590c8c4d"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/source.ts",
+      "sha256": "ee2d596be8d8c9b3105b121778bed2a11407d117a39984690f53b8e3d3fe0b6d"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/stored.d.ts",
+      "sha256": "8801c6e87e7615fa054167d25a7fa06e9a32d341489bd88f71c906f8a2b46a3b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/stored.mjs",
+      "sha256": "3b0494be1cf94f24a15652948473d037d6514ebd3edf050060cea3da7ca08b3a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/SummaryEvidence.tsx",
+      "sha256": "1657dda6a9a835260289871908dd846462d05e4fde6bbe74b1476a71d8d3ca28"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/market-picture/useMarketPicture.ts",
+      "sha256": "cbfce64e446ff12f753af49da1932a65e7ffe666f4239b164604db0a1d2222ac"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/portfolio/cache.ts",
+      "sha256": "b107515807d4874d4bd705d8d8cb89fcea6d5d435b1ea62c6f5f9c82462364a6"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/portfolio/format.ts",
+      "sha256": "f8fa18fbb5b27a8c34c23a8754857c7a1ac418031af7b830ef21d6ecb125d5f5"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/portfolio/model.ts",
+      "sha256": "344ac2d55d38ef4c39eb9f07b969d5899afea1ba6c10091c371448595956a595"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/portfolio/PortfolioCharts.tsx",
+      "sha256": "cca629c4b991c3e9ab25aa54af597e8f0a279550cde04a1bbfe3380401a8a6a8"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/capital-project.ts",
+      "sha256": "c10aa70a4af9cc885e983609e1f048099fd7affa8f1ef1d9edeee5e05a2f040e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/decimal-display.ts",
+      "sha256": "65367c068ce9e9740f7bf74f7b738c155b192b3dca966e1a739d7914b7a0aaa5"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/EquityChart.tsx",
+      "sha256": "9ae5366135cc14d3bd34a6c52af7ad46b1ee5631294bb834098aa121150162e0"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/fleet-performance.ts",
+      "sha256": "acb331480b83a0a139b0c315ff47e3a7437982ba40693896c071dc5d6fd8290e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/fleet-reads.ts",
+      "sha256": "5048345b938bd9e0038cb7f1f1d41e29bce5998dd6ef70399c68caee88b4c042"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/format.ts",
+      "sha256": "beadd138e6cd594848da4098bf1e8460999aa03e89d7ffdc1435d452cce8fecb"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/kit/charts.tsx",
+      "sha256": "49a667e785340b2c43e1839020ec765dc88fa50aafd27bee4135c12706bc0d15"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/kit/DataTable.tsx",
+      "sha256": "239c22844285e26ab2a5761762d439fbe00e4b62ae478ff140ffb5c3a9cbad05"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/kit/gauges.css",
+      "sha256": "3aa32504ff238e3deb9bcbf6c293973cb02f220c51cc37514886200257bab438"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/kit/gauges.tsx",
+      "sha256": "8d4ae79f749ed8fbde8c500bf83fc7f3e38bce86e158e0211ee66c8b4d6b8314"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/kit/grid.tsx",
+      "sha256": "dfbfcad10497a58ac7ac0705a6838352cd32a8e83ad09cd33a57c1a7b00dd300"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/kit/heat-strip.css",
+      "sha256": "1bcd3cef4c036eb16eb416550312bbb6abd0292eabbcdc9f559c6cab3f08b6c9"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/kit/heat-strip.ts",
+      "sha256": "f7ed3e3721f58f6ad9c2598eb5fc4e3d064320a11bd834c2115957240f6977e9"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/kit/HeatStrip.tsx",
+      "sha256": "a365d5cf5374fc99a8fb5019957c983b3502cc826bd22d6bd852582e43194f3d"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/kit/kit.css",
+      "sha256": "1d209cbc3e6fe0cf762cbe8ba562d5572a8badae0f46b6ecf2fdeed31f64178b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/kit/layout.ts",
+      "sha256": "52afe6f539d322ddfb411ca23cce1e93ce84e4af64b7edaa46e48181b5c39784"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/kit/README.md",
+      "sha256": "b3374d138fac89fea4d0c6b2acdedfd970c42535c72943f1b67ad8a753720fbf"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/kit/series.ts",
+      "sha256": "1c219db2348d92ad8d80d3afbc104253d6c9534c4e36504784f2bf6a373a831a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/kit/table-filter.ts",
+      "sha256": "993892da273920b7d032b33cdb64296bb45483d323077aa015b6466c3c53d03f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/kit/useElementWidth.ts",
+      "sha256": "86673025483ddbc5d6ecaec3fac06456cc0891c5ba7da2579696ede0d3bb941a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/panel-registry.ts",
+      "sha256": "56fa5cfd658c4135c831ea66d9e09a2d9bc9d85ec34270acfd00e05cb5fef3c9"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/panel-state.ts",
+      "sha256": "90ed54d40b5da07cea9c22591538086706eca1dffe4aab37d2d12ec54ef0e1cd"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/performance-history.ts",
+      "sha256": "1442381cc074ddf360cb1bbf339c7e2548c56d16f2a3431109730cc5a9fb9c84"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/primitives.tsx",
+      "sha256": "997f88c4ebad5c739c3fb088bccf04dade6b2d76cfc7a79aebe81daa6897c997"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/quant-ops.css",
+      "sha256": "e5b01d340a893100b8d8285976481699c4edf069feaf826c04898a3d19e1b8bf"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/use-fleet-fills.ts",
+      "sha256": "4ff91c4203d874cba2eef001835bc9fe52ad2d38c114adb5929e40a228365f69"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/use-fleet-holdings.ts",
+      "sha256": "7cd029c3d01ea6a14621887be142e8053699a8b940e75c196ddabcfbecc6632f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/use-fleet-summary.ts",
+      "sha256": "ea2c96c599fc98a040696eed61d45c2d6385bd3c16b99831500ad8d568246ec0"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/quant-ops/window.ts",
+      "sha256": "e9eff345212a5623002c8cf4e459e8a2bda583219ae65e878c7099f5d01c5f90"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/lab-network-data.ts",
+      "sha256": "dbadad118c4a0d49739ea5f7da878983545e82c8379f33c66433b2406b54d24c"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/lab-network-engine.d.ts",
+      "sha256": "9fef4c758ba7097a317f63e015a71470d088a7a064c53ec91a73edb62970871d"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/lab-network-engine.js",
+      "sha256": "5c6f7100d7a980936a70e22bee8653ef9ace21e973b3cb564cabb5f0f29bc1a4"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/lab-state.ts",
+      "sha256": "36fb7ea3513d67e5f1192a18ca2c4845e94fe83dfbb493b7f5e702ade9ec6974"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/lab.css",
+      "sha256": "3fabec371bc1d4bc2f4e57d39f6df11aac2a573081510faa762233c63c86ec74"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/library.ts",
+      "sha256": "84530ba0c5379b40cf8500321f92685ea4566f489fa38354413e7dd24b727959"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/model.ts",
+      "sha256": "67a69283c01d94ba7059bf08ff4cdc4250de4d4928d1418394dec25fbbcf6519"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/read.ts",
+      "sha256": "c6c0da92b8833b51de9a92c2b462f2cbd3ca29417510a13e9885b18816e4dc2c"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/record-summary.ts",
+      "sha256": "d9dd0414ab4b863f1deb3c40a6f829198897ea2f5b15e13e6c2030b02503ed80"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/research-archive.css",
+      "sha256": "e433ce31d7658b65cf6ee781c76268dfdae48a8626cab74e57bb3c0160466520"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/research-archive.ts",
+      "sha256": "8a6e9da497d9f1b5de90294f0223bb7043eebf210a4d4ac084fc107b0a8c25a1"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/research-detail.css",
+      "sha256": "0182b5562b1b84bc8aa0be365a32ab77a9fc7c82a0f38672340f5ab42af285ee"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/research-detail.ts",
+      "sha256": "256093ebdbf24fc54a2cb80ee8c83057a3a3ae036de371c4616d4f84ea8839f0"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/research-document-pagination.ts",
+      "sha256": "39e451027dd0544eb9c28ab2b00ff79ef255cfef95471d6804d145442e8a1868"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/research-document-read.ts",
+      "sha256": "fee10eb8ca3b8f42979188215191bfec9a4b417a4f16bdbf2b874b1dd2813dc0"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/research-graph.ts",
+      "sha256": "7aa061bd424ec97b283d999381867a9e0cabf509191ad377023f672b03c6c587"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/ResearchArchive.tsx",
+      "sha256": "b5f322e3a59026ea99db3ddab01943b0332b11b23c657ee315363ea00e58fdc9"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/ResearchConclusions.tsx",
+      "sha256": "f2619023453ab31b97dd99f1a218fde90d55763dbc0d847c17f64c92999728cd"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/ResearchDocument.tsx",
+      "sha256": "fb3495f579bbf1fcdf93b626093ef3c04f88b7cd94acd93da8bfee3319476484"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/ResearchGraph.tsx",
+      "sha256": "6abce436ec9b6228cbdcd78bd3ff07ba65a6ac888c6a6a9120fa8980bd90a0ed"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/ResearchInspector.tsx",
+      "sha256": "910d4234c7357ae0be4b22731d9e4b73d1e0d0ecec4da9e8ca51dc8837e874d4"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/ResearchNetwork.tsx",
+      "sha256": "aa028854d8a305fe26f75d3feeb202c505f2d37208edb825614c169bd197f7ee"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/ResearchOverview.tsx",
+      "sha256": "d509614fef7e00e9f4bdc509875c4ebb9bbf97fdf11415082adcc6d9aef0431e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/ResearchResults.tsx",
+      "sha256": "2acfdd35238031a6df8a1aa1247b520cbea1877cc4ea2e128cd0c1a5896c97d6"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/ResearchViews.tsx",
+      "sha256": "0febd8d2ca5906f43a38103724408b6375f61b5c58648733e9e87cc3bb71c0dc"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/results.ts",
+      "sha256": "cbbfe8b3a6c348638d11c09c33a0ef7ab4aee44c1dc8b568f4ed43d421240ed8"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/verdict-tone.ts",
+      "sha256": "d02761fe1a20c5902c8b092b38a89581fd0154e88a5a408cc32ca2721d5e64bf"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/research/workspace.css",
+      "sha256": "892565bb3fdcdefd61a4d0c789e6e271c5b03ace9a37a37cc1b2dcb7e918149f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/screener/CandleChart.tsx",
+      "sha256": "a86217dd07a891302d60c4db0fee92aefba513d65b323fa0c8e185a3d2ce6546"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/screener/canonical-context.d.ts",
+      "sha256": "61f2eb439e8fb2db8870d759435b8491a4475dc23de20e12badcacac5fc5f597"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/screener/canonical-context.mjs",
+      "sha256": "04d261df3a795a7c37276fe14d661d7cbd7bb74ff8034e16857eb7ad7e6db468"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/screener/CanonicalContext.tsx",
+      "sha256": "0fd5bef83bbd44ed2fb944eda6378cf27ed02324a47259c387068810c1ce4a8d"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/screener/contracts.ts",
+      "sha256": "9d8aca395b9782162fe11e4ee7c7a40735d884953cc6b6fb043ef2e69700af4e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/screener/market-context.ts",
+      "sha256": "c2bfa5776f10a2cc519e4a6abe76e5468bab737468a69abf35effaa47da04347"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/screener/MarketOverview.tsx",
+      "sha256": "6e9d2e3b29f95be4eec2c0993c76952d7e540ef98904b42090e8bfd1e3affb1a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/screener/model.d.ts",
+      "sha256": "1495fca39748a079ebb61d92a45d6727e29088025740de9864a134d4fa6a4f79"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/screener/model.mjs",
+      "sha256": "4a6cdc3de0f849ad7ec0d517156ec6d0d762c7aaa3ed843a2d50950214a1bb82"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/screener/NativeScreenerTools.tsx",
+      "sha256": "b358937943b8a5153b228800fd1feedf192c4ad30c502abb3900c4a8f42ffc7d"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/screener/screener.css",
+      "sha256": "4167101808a98199030c98e5285883b6cd8e0f5fed0ffb3f8e33426daa1a6e38"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/trading-visuals/README.md",
+      "sha256": "5fba64e33beb5de7a5cd64b8ce11796bd21df6a7bb574c3ccec9d07e75026765"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/trading-visuals/sources.ts",
+      "sha256": "5ea71a4ea1c7342a5dbaa00ca6b82ad789cb3989ec16b5f96f8aaec9b211ac1f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/features/workspace-monitoring/unavailable.tsx",
+      "sha256": "9fffe71041b47835502a491ff57d4c9be2d5e40a86a24ffa76af2e1eb5c1d932"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/chatContext.ts",
+      "sha256": "53c40a1537c980d62f09373219e3218ba826aa09c2f761d9ab58413e2b295d6a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useAgentExecutors.ts",
+      "sha256": "ae2bb7b719bc7bcbfd93bc1ea5f017cbc253683332d5eba18f7f7a20a49afdf9"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useBacktest.ts",
+      "sha256": "0792f8e638ce998a95f7d247ba6ff381959b8a712363c56a700dffcf6613d244"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useBrainSwitch.ts",
+      "sha256": "ee144ffc431898dc96170a98c2eaec18e9ae1f2301c6ab5042e45f54c7ff9812"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useCandleStore.ts",
+      "sha256": "c06ac0c121cd0abe8c42391f4577e917465aa8d549e2d0f9451504656632495c"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useChat.tsx",
+      "sha256": "2eab52ca14b5cd450904ffe1d96813ea9b3b25e4f94f67f94bd8b3fcdc7cf5f9"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useChatSocket.ts",
+      "sha256": "9b1487501b2451758ed1b922726e5618c6f7c960aa1b6066b67c7d0a48e17ca1"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useCredentials.ts",
+      "sha256": "7e3dc5993ab97d1a7b63379c79a9811123124e9260487c317c7ec75567a39bae"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useDeploymentPolicy.ts",
+      "sha256": "9dd451214ee9b342738e76db9cab3e82db4e163d8d85241bcfbeba2cbe73ee39"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useDisplayCurrency.ts",
+      "sha256": "b3c2d5eca98bddb0ad54b2eb5b000dbd281c71db95ae13093aa2f14ddbd95e9c"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useEscapeKey.ts",
+      "sha256": "74bf0e4dc442b9e89ec04ee1f2b30322e1bdf2059d91f8710028dc6a802ad0af"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useLiveDisclosure.ts",
+      "sha256": "7475f7144d16cebb93b0ec64d1ca95aca4c1f40c7eb76a4ee7dd410b2c324476"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useMainControllerData.ts",
+      "sha256": "f3207b632419c861268d4b896348119b7a80695a5ab2cb3f8a6ef0f25e366b65"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/usePrefetchData.ts",
+      "sha256": "ca1a11d8c7220c15266c2885d8f3cf41ed703ecb6b05dab152c634c1c4e8f9cb"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useRates.ts",
+      "sha256": "4521da6449dcbaaa6ac4fdf9b17da41c35d87a91fc353db50ee0435a510145ed"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useResizeDrag.ts",
+      "sha256": "e548f2cc1fabb3fceace0fe1d10fb7787f63024967d66eaff656725c5981312a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useServer.ts",
+      "sha256": "022f74ec66c914d1e3ea97850aaa7fb869c72af05a761f7b323f380789ba499f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useServerCapabilities.ts",
+      "sha256": "aa7574779e9568d3af8d9c301603ceaa58d2dc3c394b9191d1fa805f29c634a0"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useServers.ts",
+      "sha256": "7e49cc2d5bd69fd56a66332c9fe21393654f520b72cfda3e6c9dbe524e40a42d"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useTheme.ts",
+      "sha256": "e189ecec0c27ac17c258e5d3cd0a04fa0468e2123ee4546555be77393a1d0eee"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/hooks/useWebSocket.ts",
+      "sha256": "359a8806015e6470b1dbfa07e3ec1857fe8cee7c2b52fdadedbb14d85df985fb"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/index.css",
+      "sha256": "6baeebd946108c2d6c0f8927f68f775c73226948425a5c5e74c24482fa23529a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/account-balances.ts",
+      "sha256": "ff0d554951a79d7b40bccab4512cd4284a6c0652cb2f8285ab4a5fe55bc54d7a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/api.ts",
+      "sha256": "19b9fd3d9b56b566d7642266c5d7da5f0d3678ee22f51fed6ac43de07e83213a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/auth-login.ts",
+      "sha256": "bb8e325249269e78aaeb8d91bc09a8d702026cfeac0caf365a36cd0bc181848e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/auth-session.ts",
+      "sha256": "093e4f46f34524a7d8b11b941fa4fba048bfa7059f65bb56c7df809f38c12181"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/auth-token.ts",
+      "sha256": "bc164996e57573ea95f1d932b6f8e0939fac188bfe215c6b732656c5bf97a152"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/auth.ts",
+      "sha256": "9933b89ce2964daffd339fc95dd56459244185bb7f1a0655316620ad3cc59ba3"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/backtest.ts",
+      "sha256": "66f7c686d9ed5491fa546b3ef4ec501f36024b74921df61cb7aecac65dc80399"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/bot-monitoring.ts",
+      "sha256": "4a0e4ea0bf5ba0764e3a47360c4d3dfd02b5925758d9e1887ee3c34bce0e5343"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/candle-store.ts",
+      "sha256": "8667587b46d05988b268f9ad619f1b8263241b36abfea0c578eeefd98938a87b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/capital-route.ts",
+      "sha256": "a0121e85abb9054831238ec71b77bd830ee43fc81fdd3c695a00d0edd850c682"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/configYaml.ts",
+      "sha256": "8302627919f137bd1bec504c32fdaee4e2b92397bf6bb7fd64f362c99745f1d5"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/credential-fields.ts",
+      "sha256": "dd2e8c6f44679d6fbe5fa0f4124a17f2b64532967657c75a0e5f18d468bfb66f"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/deployment-policy.ts",
+      "sha256": "49613047809c344da720968363d4105a8f5fae1e7d16bb93abead78df5f6d2d8"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/dialog-focus.ts",
+      "sha256": "9e2ee08a42a0d2a9bf7e0b39e6ae33c55188d29bc1bac1e90e80153adc69a96c"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/executor-overlays.ts",
+      "sha256": "6482e3aa7822cd032015e4a8cd1764156fbdd9266d8919241101a773a2822b69"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/executor-volume.ts",
+      "sha256": "a46a8d5f111b227871efbc20cde17d26658b73c0de4db53b2589ded01a41f3dc"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/fleet-fills.ts",
+      "sha256": "c4696ba1d3b8b4814d3414fb27dd76bc7acb25ed2ea077a9305965bba7bd274c"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/fleet-holdings.ts",
+      "sha256": "f0ee490fa6574b66697756912063759b10dfd7625fa2dd8f5d5da00415b090e6"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/fleet-summary.ts",
+      "sha256": "c5caf08275a60b760016702b12d10e024f80df460e7ce6a197f3ab75f9d4b22e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/formatters.ts",
+      "sha256": "a3ae8efbf919fef3f67605c4fdd7dd5949f6775543e82517df244d9ec9371c03"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/gridExecutor.ts",
+      "sha256": "3f91eb35c45274f9a4315d136da5061c26d626e63e0305bf6828b535d9dc49b2"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/native-bot-controls.ts",
+      "sha256": "4b596cd53b2f5395ffef3f3d7b19d2309c7a10d4e0cb0d42ad0659e27bdb36ab"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/native-bot-statistics.ts",
+      "sha256": "3c3c3196dd0c74a97e40d55b1cb01276363c7aab6de858aa641c1ec8233b6973"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/native-entry-controls.ts",
+      "sha256": "6db0e23408de90a5ce3d575bb761b6ad0c176f50a28a5fb7b39a4492b9aa4a4d"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/parse-agent.ts",
+      "sha256": "ca7d60a3950a833f8a0dddf3c0e158c275292910058694d3176fda667b1dcf45"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/pnl-chart.ts",
+      "sha256": "7e1d35ec7fd4e5668663f85e0e0699f5e67d1af5c4711dd30f6375f5b8a5a592"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/queryClient.ts",
+      "sha256": "c77b735331f48b8861ab6a5ae20a354fda85d3dc7bd869e305733e6aefbea9ed"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/read-continuity.ts",
+      "sha256": "044e1426848f59c6c83ccdd5e1b3da93538199f3c61bf425a9d62ed36a32dcd9"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/routineUtils.ts",
+      "sha256": "b8af60c7751deb717388908bc0ce379df3a4356e0e6a67883fae81029a456667"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/rsiSafety.ts",
+      "sha256": "e13dd05117302db6e7ba769bc7e8171ed09c350dcb8d07872e68705de10fe85b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/server-capabilities.ts",
+      "sha256": "390cc151e2c088d511b4242f648556d7623ab531b64f7f428a890a95be0e3c67"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/server-discovery.ts",
+      "sha256": "4043b282a742abe6842ea107945d2b1ce110a36527ee26866b2bd67b6cdccffc"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/server-selection.ts",
+      "sha256": "f98dc9e54fc8cae358c543bf97cb84dc510f7c16bc6ec205ab63795b2c07bfa4"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/shared-socket.ts",
+      "sha256": "1660e1602b77f167f772f95b8578795d345926e9404085471e0879cbd4ef1d87"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/theme-colors.ts",
+      "sha256": "40a3481bcc67f49228cbfc415cec3adc81a38084a3487c2df4798f53a0744e89"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/viewContext.ts",
+      "sha256": "ec465d0981d4ba4b58417f60b7e902b7e38baff3e58d484f0d2cb35b4dafb3d8"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/wallet/evm.ts",
+      "sha256": "f1d998abcc8b6bfcdc4d4759012f5c66aa93c8f8dfafbe546286245e86ec50f0"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/wallet/hyperliquid.ts",
+      "sha256": "d518de2cd8dbba31392b19c84bed8a0cb465d6dab353887c04684efcfbb3ed8a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/lib/websocket.ts",
+      "sha256": "4dd669c4920bcd38c956510b222b566096ee14a5b44993f5ff47226e32690455"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/main.tsx",
+      "sha256": "6e9e5807fcbd48b75a96db5cbef36c996262196be42e6d4760dc86babbe61ad2"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/AgentDetail.tsx",
+      "sha256": "14750e3efe291b0e58b3a537c3d1673872b3652f587c157e61f200cbda18f7ee"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/Agents.tsx",
+      "sha256": "f90acedea4b6760a8145d1c6365ae2856393d30c4026571ae87696f1ecc4947e"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/BotDetail.tsx",
+      "sha256": "5f92e3c7ad6e9b9b3a106ffeaf10d3d36ac42ecbe1d4c10b08907ba7a57b7104"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/Bots.tsx",
+      "sha256": "57aa915eb3ac1e34c610fbd739ccf01886423b8dbae5b89e3aa19c45b2bd90b3"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/CreateExecutor.tsx",
+      "sha256": "de3a22f6d1bdebabbcdf2c50e60fbae00d4881e7fca23b4957f27e00d12f21eb"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/CreateGridExecutor.tsx",
+      "sha256": "26586b7797174d2ff4d54029a3ee983ba34c0fa88469c0e981618cb6ed3fb44a"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/Executors.tsx",
+      "sha256": "1ab3c59c6b19d2b4e490a2111265376530335422bf7009472dbae7e1558d8ef1"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/Login.tsx",
+      "sha256": "0d44b69c5136b87c068fab216c1905b6d25db2b0ef514a99b25f6f940598e221"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/Operations.tsx",
+      "sha256": "154ee488b846f95ec8e334d04333c3c719bb42707da80ba230552b1e99a9c2ca"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/Overview.tsx",
+      "sha256": "0a0d33592f4ad01e99d1a7f8ec62af56d936fec95bfe9ab4eac051917cf4fcff"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/Portfolio.tsx",
+      "sha256": "c8dcaa9b372aea7ed8343492413c2fe1f610810ac42b9c83434a717f48fc4628"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/Reports.tsx",
+      "sha256": "48fb34ba7af8ede0ec53992eeb0004e37c9f04164631be219fd1efcfbad29b06"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/Research.tsx",
+      "sha256": "496639e6d67a94ea3f566e13c52adca510f448b76325431cfe6eee2a40623492"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/Routines.tsx",
+      "sha256": "42654c172dc3369debf19f58aac92f83a1455786cca0e529e7f7d51088d3b328"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/Screener.tsx",
+      "sha256": "964efb5afce950f692abdf125b193a8059f7a9525d111bbe49a720eccade14b1"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/Settings.tsx",
+      "sha256": "454ace84edcbd7db21cd291784486d24e7abc600ab61d1ffeb1e5c67c94bc89c"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/StrategyCharts.tsx",
+      "sha256": "dd3f6ce69cfa6ee276831fc7b3d68f823417495f169bb222e4349983fb3748c2"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/StrategyDetail.tsx",
+      "sha256": "bfbc5449841ae28336e903a0915ba0babd9271b9131a323c5892b6bca259f927"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/tabs/ActiveBotsTab.tsx",
+      "sha256": "b861d3dd58a9f0c0700739b5c03dbe047b658f683141cd3525d5768afb034c7b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/tabs/AgentChatTab.tsx",
+      "sha256": "c08b9403ab7877bc73791917565044480bf02a21669d9f19b3c6b0332ab68aa1"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/tabs/ArchivedBotsTab.tsx",
+      "sha256": "8aff85de6534f9f5a806c6013cc367d99e9a5c0d871640c8cbc73b7936ea3099"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/tabs/BacktestingTab.tsx",
+      "sha256": "dcfd4c9dfbf2525f567619a0cd0b658f5bff447cca3d84e840658f457041719d"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/tabs/BotRunsTab.tsx",
+      "sha256": "002e962444c7c1bd4da5161151f40060508ee1cdbd6337f36dd26082bddbbe32"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/tabs/EditorTab.tsx",
+      "sha256": "586c67ced1fd6e1eb752b176f2524dcd52fc1de03a040171a9a4ba82db3852e2"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/Tradepad.tsx",
+      "sha256": "bbdfa60abb147cfce6ac98f050b998a6d0c29e9cd0b3dfb4e11d10a74f6afb7b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/TradingVisuals.tsx",
+      "sha256": "94fbd35aa693bfdf9d6fec76991213db5b507ab138be7f52489e1670c117c006"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/pages/WorkspaceTools.tsx",
+      "sha256": "ed1293ca58cc54a4f3b1804c62e0a03922ee572937e75b8889fbed56074bbb09"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/api.ts",
+      "sha256": "4322fed9eb32d4e8de742ec13a8e797e31a803d98bc3da65f11204306bc0ad89"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/auth-token.ts",
+      "sha256": "b85d6f8de1a72a713e8bbde72def2c63f100b6a097c49ddbee680a5f64ce34b3"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/candle-store.css",
+      "sha256": "b8c76f0efa11dafeaf962088430ca126cb3f5cf7371e593a8f8c127480001096"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/contracts.ts",
+      "sha256": "f800ac721186f0b6c16177e1c8dd1f3e35691d938a5e9e5ab68d459f5d2f6a4b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/evidence.ts",
+      "sha256": "1adfc2e3fcef16c3b6246a5c166f3d851117833ef4cb8c32aaf27027044dc4c8"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/main.tsx",
+      "sha256": "ac4f897f839008b3663e3aef0655211996925b62f64b11b9c86f02a885774e7d"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/policy.ts",
+      "sha256": "fec4522b6821586b9f7d5349522e3a1e688d66d9d67fbd00e4140f06b4e5ab51"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/session-policy.d.ts",
+      "sha256": "64470fde37d50a85c27357f059988a298ef6e64b2bac471174037177533d65da"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/session-policy.mjs",
+      "sha256": "f127495d7a553a56d578383bf72ba17229ddb0a2c1e992f28453d70bd32afb06"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/transport-policy.d.ts",
+      "sha256": "611747de052ed0b515f4d4323e5045903e2136aa5550d81fd592368a88cead9d"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/transport-policy.mjs",
+      "sha256": "b3e56a88a7a46a0299b78310c3f2ac1d19f142976d6aa6d5b1cbce01079b6a6d"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/usePaperObservation.ts",
+      "sha256": "bd190c94ee30bd9bb5c57c7fa5f8a419746f69a577158202b42d764e6d0c5112"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/V5App.tsx",
+      "sha256": "9d17e9726a8fcd8475b2171356a6ded37d4e1ee0bf98320ea48302ef1d10cb18"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/V5AppShell.tsx",
+      "sha256": "1f5519a64d76fa69be16389f6735d2313a65379dab7772a57506958bb4dda198"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/V5CandleStore.tsx",
+      "sha256": "6e4cdcea66a5b9ea6e2c132704ef59ef86ca85cbf6b046d99d7be32ea3cf04e3"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/V5MarketHome.tsx",
+      "sha256": "03163a54b1e04fad5e913a8252457deb174258a60b6b13c284f9e72a80e41904"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/src/v5/V5Pages.tsx",
+      "sha256": "8f046b39ab0ecb96013667cc53244e7277cfd1c9633f7de25c94d587c117a43b"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/v5.html",
+      "sha256": "28ea7e9bfa34b738d7069ce282939dde2838572ce2d67311b56caf73521adf51"
+    },
+    {
+      "repo": "condor",
+      "path": "frontend/vite.v5.config.ts",
+      "sha256": "2b3db256ba00daccf7e0cf46a4429a93d52bb6c35d6dc4eedbd0faa875df00be"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/decision-evidence/DecisionEvidence.tsx",
+      "sha256": "a19cac3871db4f6a090e1ca5559ca71c7a94f8dc04ecd31dd297c4873369791d"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/decision-evidence/model.ts",
+      "sha256": "5725c2265c8d7208424d921a8ba744b9d68deb00b8523e7929136ce7c3137f35"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/market-context/MarketContext.tsx",
+      "sha256": "32b6441559294049b59b5b1ebd9768256a954cb72a889b8ef96e31e88f95bcf1"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/market-context/model.ts",
+      "sha256": "c53450fd66640106c1b7f34ba593391199600184cebe890fd6b09fd1c7270643"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/operations/incident-store.ts",
+      "sha256": "a436976d3ee3e928033da7ad557110a7356ec9f030ea8c2e063843b12011d062"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/operations/model.ts",
+      "sha256": "def1838ac089999c3996ce540b16b4472baa8bee0d9f82a0f87407e413237b65"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/operations/operations.css",
+      "sha256": "374e7f6f1717cfe3c70fde75d2120a3ca2ffa9719b60917a7a59374137e44866"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/operations/service-history.ts",
+      "sha256": "afc2d8be45179d892dcba8df69a85e4f2bd7cd9cb3c80a6adf16f7b96b790a06"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/operations/ServiceHistory.tsx",
+      "sha256": "b957af39acd3c137cb52f98fb152cf953adfdfe7547d696a476cb97ae28ad8d4"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/operations/SharedIncidentPanel.tsx",
+      "sha256": "6ed6dde623b185aaacc0bb923a94ba13341421bd21ca0bcf592946dd85b783d7"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/operations/useHistoryRecorder.ts",
+      "sha256": "e82184e8b8d8353b3eb91d9336686c540079168a6ac58061d37da7eb38493662"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/AccountAnalytics.tsx",
+      "sha256": "cace0946856e4b3371c1a11d7753bc9ae171f7d0470ced8fb257e08c234ac239"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/capital-model.ts",
+      "sha256": "b9b55eb83568431ef5aac9a85d5c009a2571688f03429a525d042497cc94557e"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/capital-stats.ts",
+      "sha256": "bb2d0b59d1de3993e54b15ee933d4361b6ec84ccab351c2d9ce2f35041ce71b0"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/capital.css",
+      "sha256": "6267202a09f81e25cd8040828ceccee1bdfa962245c37d838ca87d84a71a60fb"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/CapitalPage.tsx",
+      "sha256": "9a4b912e4b0c0324eac798b80278bdb1d0a02536c2e637597a6860d849ae07fb"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/controller-pnl.ts",
+      "sha256": "04632a45714bb00bc6cbf490c310a9b4cb68ceb2cc6915a79e3150e27f35298c"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/ControllerPnl.tsx",
+      "sha256": "84ccc1630d23bcf90f04894ddd621bdf4ed67ecd3c9e9e72f68920468e394259"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/event-projection.ts",
+      "sha256": "0c60576e30bf31d3922da69c29f0c5bb68780f43d232489c17df9b13c9538e3e"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/fleet-capital.ts",
+      "sha256": "cd3ad55abb25deebc5bc81d802df08aab3dcba3076b7995f5381a43d35fc03c2"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/holding-pnl.ts",
+      "sha256": "8069f737eebf6faf1a376b70a486304d6994a56c1b93affabd7bc116db878253"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/model.ts",
+      "sha256": "edf1797e622e647c4c86a82e2e96582e6cd4c6f9422f27aec037276eb37b58ac"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/ObservedPnl.tsx",
+      "sha256": "dc1aca6e55c5c7794e7ca3d593e15e9d9ff4028c611a9de4c5b7f5a37527a334"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/overview.css",
+      "sha256": "7e8212169a25c499b014e8753b93cd4c0893b43df519cbffda551392bffbf696"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/OverviewCharts.tsx",
+      "sha256": "497c7df9e7f7871fd6f1c854e693c5cad89fffe3ade9975c0dab18eec51cb381"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/paper-lanes.ts",
+      "sha256": "a93098c496255aec5bebe6fce12276d623bb3acc75b10463ad1ea2c58a3ee055"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/PaperLanes.tsx",
+      "sha256": "23710dcbef783d018a5337aec1bcf66105abb8e26daf361490e6c294bc9eb8bd"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/performance-history.ts",
+      "sha256": "3d5540fc4d57fb9651de0d664c7568a6e098a1897dba4128dc1a3223797f2234"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/quant-metric.ts",
+      "sha256": "5f2524c179a23c655b23bd4354b6c654b5fc397bd3f1228eec827376f50ef155"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/read-health.ts",
+      "sha256": "df60e803df51a7149fa0d1adfeb865c28d3e746a057da530d1c0449a6d477cbe"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/README.md",
+      "sha256": "5ce635efc10cb8f709b976164acbb9aee34fc48472d83431ee2bc0728ed51cdb"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/RecentFills.tsx",
+      "sha256": "b7958568894557b8d709660977ab4d8da0337e5c73f3ca2bb8bce6bed048ade5"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/service-health.ts",
+      "sha256": "bc5d74aff0af9ec7849e043cbdd311b25dd26df96d50126de372e1a6925c221c"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/ServiceHealth.tsx",
+      "sha256": "6c3a8485a8c5cfed5a69c84d7588ccf4dff1bb910011be7f7ffd2411f64bbe69"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/summary-windows.ts",
+      "sha256": "2a529b4f64e904b2c8e507c6d418145cf11aefee992914c592c766e26bc967bb"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/useAccountAnalytics.ts",
+      "sha256": "f3a823e061f01352e7d5d5cfd58aba29efc5b7f88d12b89c1b92a0e81d2f2fb6"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/useBotPnlHistory.ts",
+      "sha256": "30798958ba26ad3391a3a02216f8168116c71ee379d9cbf41f4777547a6c39a2"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/useControllerPnl.ts",
+      "sha256": "0017ac46ac6505116b30b2b095507523a968b6060d11a0df554cb4a28f636111"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/useOverview.ts",
+      "sha256": "dedb406a623aaf6531686962659dbc42407c03da3c35b5cba17d2135f8f19578"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/useQuantReads.ts",
+      "sha256": "290057dd58cc4178cb9cc3b7b2575d961d7a1bb6881d43a1e1f393fe450f2632"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/useResearchHealth.ts",
+      "sha256": "af6c63fe3d9be645ef3d91bb11bbe47bdbe5edb87f297c147ac4ee6df634d206"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/useWalletHistory.ts",
+      "sha256": "3e4439b06e9ec5b8187b69958934abc7967a84f424c062ca126b0a5450f9ba32"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/overview/visual-model.ts",
+      "sha256": "c68fae65a7e6fed55c759a4aa444b69a4fc50df309f9f35800ab9bdf3c19c5ac"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/paper/PaperBoundary.tsx",
+      "sha256": "6471806c50326bb40f2badbaa74e85340d3a0d4c63b96842c8516a1633dab9c1"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/paper/read-status.ts",
+      "sha256": "7bb3d01422945af795e7c05d265e5d2c4677c4bfa2d4a372c8f9d03b91ae4c68"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/paper/time.ts",
+      "sha256": "60b48ee14ae896ba652bfa67accf3ec35670437fe026381878359a77419c1c35"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/paper/validation.ts",
+      "sha256": "09b0665e3933bb1ee65a60ac65afc0bef0628812593cbb2cbab6f226e7440ee4"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/strategy-charts/BotTiles.tsx",
+      "sha256": "a48583784b86a197f4c7674760c0eada633135d4584e35a43a439d91d5c5b50f"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/strategy-charts/chart-cache.ts",
+      "sha256": "c6587e9a8320ff37f6a58032f56e48ec6169da56e05dd988cd87ab1cf50aa78c"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/strategy-charts/CompositeChart.tsx",
+      "sha256": "b626097e426eb740096f9ea14845d07435ff8d6e751a557f7d1a13635b28fe5f"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/strategy-charts/CompositeSection.tsx",
+      "sha256": "9f22663b235186d756d8933708f13d675da4bafbce7a875ff964cb0f417e1831"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/strategy-charts/model.ts",
+      "sha256": "1b028206acbfb7058122fc83c4de7cb77ed135ba41c6faa2e84801500e51a16a"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/strategy-charts/PairTile.tsx",
+      "sha256": "2568982bc64c82cb46a3b791acda354625cff71c4d0e1856b3cf698a49e8e519"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/strategy-charts/palette.ts",
+      "sha256": "441131a8eeeb70f4d321d01381aa1b996040f2b4569bb8074ae928e8e3e03b49"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/strategy-charts/PriceChart.tsx",
+      "sha256": "89aa73ab2e0b429dbdcba1057159d7be1b2d315e354288b94afa4446a7068243"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/strategy-charts/reads.ts",
+      "sha256": "40b1d77b2c8a8fae3a3a4ff58f4ef2e58c34965060a4c33bb2f84da16a93483c"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/strategy-charts/Records.tsx",
+      "sha256": "3ca63b0ff4d7fafbfc44b4e19a20f316c30b93567706813c0ea52427a7a5ad0b"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/strategy-charts/strategy-charts.css",
+      "sha256": "798c5bb67e4649360f336ae38e106666643cf5f916ca3c3857aa5aac6fddfd5f"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/strategy-charts/StrategyCharts.tsx",
+      "sha256": "9520c879df322d0c95b1cac57074777ff991672bf50ec9b8fae50bd9034422f7"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/strategy-charts/view.ts",
+      "sha256": "2d22ac8994edaa27cf992ea38c76dc32c39e7304e01b015b889f2215811ad84f"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/tradepad/CatalogTable.tsx",
+      "sha256": "7023ffacd72443a67fb2ab4a31bf9dd4765e11dd1049105f906ad4ad17156681"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/tradepad/FilterControls.tsx",
+      "sha256": "13f9d542978e9d22494b5542e20c06ccd5cdbd502ab1f61de4be01b5867a0680"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/tradepad/model.ts",
+      "sha256": "cad841e64b4f56e0393302b4daf3005d25c5b24b100346c8ec55f72ce529e7fb"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/tradepad/parts.tsx",
+      "sha256": "f619dffeea8eb41ada61161cda94f2eab1ee65765bc78da341a1bab76a925b7f"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/tradepad/read.ts",
+      "sha256": "804741b58c64a4e54b72da245d02d7440a956e7e558435a37b04445e0de161e2"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/tradepad/ResearchPanel.tsx",
+      "sha256": "73aa5ea59e089defc4e320259461f7bf151d354ffcbe9252e09fd5f09312a42f"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/tradepad/SavedViews.tsx",
+      "sha256": "7cefc2d97d36b2e21287b6e755424156dacfe87446fe9d53e23a30bb2fbfd022"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/tradepad/SearchBar.tsx",
+      "sha256": "99ef9508a5bba68740044902072543de99e439ef428c75c1780e643e5ff1c5ad"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/tradepad/SummaryTiles.tsx",
+      "sha256": "98970239444141d69cf4b160d63bd3cd110b489b861d666f030e613decf2f399"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/tradepad/tradepad.css",
+      "sha256": "9876a8f0156460d5d3e1f0c8087acdcaa23c9da166bd247f67c2355163766bd8"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/tradepad/use-dismissable-menu.ts",
+      "sha256": "8be0dffde693e812ad5278105c9e048fe80a33f134323a15e3da62665c0362ec"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/tradepad/ViewerFrame.tsx",
+      "sha256": "63f067fb77076c13a8c0460704d178bb3da25695626b1e11b15e678a6e6fee37"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/trading-visuals/desk-reads.ts",
+      "sha256": "ab321cf2bc8e64606ee14648b001bc2c205ae9540e3a12a5113364a95634c3e3"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/trading-visuals/DeskEvidence.tsx",
+      "sha256": "46d64bf0f156fa2b9d49ccb588cee1f14e43838ed99f54e0476b2246c9cfede1"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/trading-visuals/PairStrip.tsx",
+      "sha256": "b21a99827b7796ea3aedaac76ec59f73a686bc2fcf6df6cfba9276c80ffcefb5"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/trading-visuals/README.md",
+      "sha256": "0f4fba854967fa37392974f3c18db5a3ce569cf35b0dbd378788443184aebca1"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/trading-visuals/source-provenance.json",
+      "sha256": "3b29039749e76a99bd79245e67f0a038374098e6b5485a4d16ca8cce7be5b59f"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/features/trading-visuals/trading-visuals.css",
+      "sha256": "f17591967fe6d84e27bb2313923ecbb55f000b6270cf971ad88784c90b4685e5"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/index.ts",
+      "sha256": "db26f98fd872c9b8c8eb42a353fe20901c4c4f8dae7efe53ec7faa8bb3094798"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/pages/Operations.tsx",
+      "sha256": "038ff8fb64e03d61afba1f35a680b69ba7967d482714df8fb4a077fbaa848291"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/pages/Overview.tsx",
+      "sha256": "e418fccbf153bb190b463a07a1efd8f6bf2a69bb79f09aa76ac06be8166e9302"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/pages/Tradepad.tsx",
+      "sha256": "eb02430d13b7d805d1b0d0e73cc8440a3d86f2b36eb0850e1b2072771aeb5583"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/src/pages/TradingVisuals.tsx",
+      "sha256": "bd85ca219b076ef4bac09e891f493d44df87c31ccad9c5af032fc4b230160456"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/condor-workspace/tooling/scope-reporting-css.ts",
+      "sha256": "5fb3b195a5ec55cfd61879c1af6c28a2edfb4fe1a4b7b7ce8a3d96b17569e55c"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/api/monitor/[...path]/route.ts",
+      "sha256": "e1ad382305fed71faf2544afd82e6edf9a597143a433e89caf75ae14ea9de9eb"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/api/perps-rl/artifact/route.ts",
+      "sha256": "d3774c5710e4ad5a93392712f110e5cb02e9ede01359ef498deca41f5f25492a"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/api/perps-rl/decisions/route.ts",
+      "sha256": "e2feb31c0df41cec11254d7506bb0b6f477d6f7cd85594d6e2c9f95db0de34e7"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/api/perps-rl/learning/route.ts",
+      "sha256": "6f5528c60421d7ed79fe33cb1ad0c7dfcdce7cd75b7ef7fc6c2df6b7c1e02fd1"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/api/perps-rl/paper/route.ts",
+      "sha256": "c9f2e43f6590db3f1af557161f989b2378596ef9ae05ba7081235cebb004dfe9"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/api/perps-rl/refresh/route.ts",
+      "sha256": "ff5c532f9caef2c23991fe053b1b294d31e30ce4333e6bbee4f54bf3bb91be1a"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/api/perps-rl/status/route.ts",
+      "sha256": "7017a95c372831b1ba6131c2346f6c0b5cea5ef56edf83b734c334c20182dff3"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/api/rl-allocator/current-sidecar/route.ts",
+      "sha256": "b592f37a1c2b8127a04dd0f1aeaf593cb8e9cbe7b0578dbe036d45dba98efd83"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/api/rl-allocator/walk-forward-sidecar/route.ts",
+      "sha256": "a5f93f95225e0871ddaa4c8e1b274fa291db80e7fbe25b71e95523b41bd20aa9"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/api/screener/ops/proxy.ts",
+      "sha256": "1294004b9f8ea608bb8a77bbf0fd7c4fb28e7ede8d19e462b6dcaf909f7df937"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/api/screener/ops/refresh/route.ts",
+      "sha256": "e7c75b97d53f071827b63dc72480cd735f0abfd5f52951a18b1c132995a3da24"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/BinanceMarketPulseDesk.tsx",
+      "sha256": "12232aba3cb90a4686dba615e5dc7b1995bd42ff9859978283d06ebbe0457ef4"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/DeskApp.tsx",
+      "sha256": "911d669da2a8fae630e0e8766c551c07e8ae3ac0eac98da65d359c9ddf5d5da2"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/LineChart.tsx",
+      "sha256": "368545f58b7f54c5b5d7837ea1873c9caa360531e5b24b60ee3a926e7f1392f8"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/LiveScreenerDesk.tsx",
+      "sha256": "1824e04129cd600b2155fe7d4f5d97ae6d888dc6729936cfd7a5e6572fd45c6c"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/MarketPulseRegimePanel.tsx",
+      "sha256": "1f82b7bcf141e0bbe80225f43601254f5a89f40411d8551b95b7d1fa75415384"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/OperationsPanel.tsx",
+      "sha256": "cf007a48cca01eb405ee451146b95756c2b31a8fbfb10e81014fc2e3474424ea"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/PerpsRlBrainDesk.tsx",
+      "sha256": "0e3609eebad648cc4169523214a879e61819a044dfe841e7bb740dc833faf03f"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/PerpsRlBrainOpsPanel.tsx",
+      "sha256": "a29469808dcbd14fa1037cb8262db9f24c93320c24f1c969531b0b2314fbaed0"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/PerpsRlDecisionStudio.tsx",
+      "sha256": "aba892a0b580be16144b56b8aa0d571755c42915f4a332ffd22686c6ef3e4d5b"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/ReportingDesk.tsx",
+      "sha256": "ba08a7bca25d507a1bad6139ea63fb79f647846f8e09840851bd20143c84d143"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/RlAllocatorDesk.tsx",
+      "sha256": "da068ab140784a6a6970476d33b98794e1669d1ca7be64476189a25dbad1a5d1"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/RlLearningCockpit.tsx",
+      "sha256": "ce8712c12df8912f497c6edc1f5eb9aec77180a9c888f8507db96e9647ee2918"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/RlLiveTheater.tsx",
+      "sha256": "2741166761116c682cc41e3a6db30c4a3dbf415d42673ac2f634c60ab1a01182"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/RsiSentinelDesk.tsx",
+      "sha256": "063c0dce913473614cd44f9d34c6834cb0ff129b6e1cdec89b816ee0d2b1e0d2"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/RsiV5CompositePanel.tsx",
+      "sha256": "f67233374ebe2f56a00ca12069b18457889e791d50532daba9e2d1f1ee3eaceb"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/ScreenerDesk.tsx",
+      "sha256": "d52ec64c7028c2cf30817cb5da87081c69ec57f32162619d33655410b15b8d6c"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/SectionCard.tsx",
+      "sha256": "703dbe6018f432b90bb3e9093648d22819d079e37fb7ce5f1df67f2d38a7671c"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/ShadowRankerDesk.tsx",
+      "sha256": "9596c9b8375d894d6359a955a024fefc9f12dba0522651da4b75ea0d81587dd2"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/StrategiesDesk.tsx",
+      "sha256": "7ad1528d899431f51631c50a558e9c5c309b90878700348fbb288e30d85095c3"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/StrategyStatsPanel.tsx",
+      "sha256": "9c611933404792a66ebb111442086bf1d13e9d64b127128cf4739be3ccb244c4"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/SummaryStrip.tsx",
+      "sha256": "9f9cbd7cdc57005fa3ef106a4f24742694bb99ec2b17d9665a406af18e4d4cc4"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/TradingChart.tsx",
+      "sha256": "39d1f9efba03eb43d0b7dc9bc6a6ab8b5ad75bae0d6263be929a955f28cde31c"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/components/UnifiedRlAgentDesk.tsx",
+      "sha256": "8cf4ec91963148a50ca3bb597883108e4b7af07cf4db1156f68d25da4b5c04ee"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/globals.css",
+      "sha256": "4191ba303b856796cd5874692ddd23508554fc88d48befeb420b847d948ff0d8"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/layout.tsx",
+      "sha256": "65b37fe5b62854326a98fef2d25c0f0fd3759a62830261069574c4d17fe9a316"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/lib/api.ts",
+      "sha256": "c621a700ab532fda5acc8a33826b2c3f1437afb025f66310bc81ef052f0af751"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/lib/dashboard-runtime-core.ts",
+      "sha256": "5e22614e3cc4a3c3eb64c0ee0b25995e26e0b052a8e9068b357de6ce839e9b01"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/lib/dashboard-runtime.tsx",
+      "sha256": "ace847d17d4c7eadb07fecf749eb60a511fcbba1fd48cb3124fa37b7636298a5"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/lib/execution-mode.ts",
+      "sha256": "18ef206d2e8e8519499af9d6ff5dd86802873525930304bb918a3e8810554817"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/lib/perps-rl-decisions.ts",
+      "sha256": "dd2cef0fde429b8272e425a57b53a4bac9e807c6a72e404a0398916ce7da7140"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/lib/perps-rl-learning.ts",
+      "sha256": "12499fa927f6ba4dfd86e7099c97fd82549074c266863df8b1208e515576bdb3"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/lib/perps-rl-status.ts",
+      "sha256": "4023260d15959289eb48dd40c846845591a76e1e4758e772114fde95013c840b"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/lib/query.ts",
+      "sha256": "a3a8ddddab46af66a229ad632dc87919b9e12060090676bb2dfc3758e4f24286"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/lib/reporting-read-api.ts",
+      "sha256": "00df09bb1c1d8aeb9a0b53c8d31f22f1d67220ececb6e12cdccaf1054d876560"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/lib/rl-sidecar-fallback.ts",
+      "sha256": "89c9b25f1eeb3affa0d7d77477d29b48fe54530ce7599194ee498bf62613733f"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/lib/types.ts",
+      "sha256": "c374e6607490122c063a21e79785bd8dcbd80eede86d359c5c46170d119ca8cc"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/market-pulse/page.tsx",
+      "sha256": "ea98abebfb24b39446aecf0ef33df3acfd9152ed49bdccf8771e3a803929ba2c"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/page.tsx",
+      "sha256": "d58c004d02ee037e34735c2829d40fe7b30932cb9fcc66335aabe0e9831f3895"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/chart-payload.ts",
+      "sha256": "7c096b9c7468647393d1ed03160eea618ef8176d05e0bee5b10f9d9689bb5199"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/chart-response.ts",
+      "sha256": "ed9770e71682f8a0d64a6c5434813a37fa97a360b9eaa1b1965e4092ff033202"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/chart-theme.ts",
+      "sha256": "aa9a44be40456cd12bc12a6487de6f47f82505a17d138faeedc0614219650870"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/chart.ts",
+      "sha256": "19134e540fd4696ad018f5d916b236b52583fa3ae7187a071a8cf880e841d6d4"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/composite-chart.ts",
+      "sha256": "50fc8abd56c5cac2dc860aba8d97d54bc445fe848285b70db85d56012ff44b7e"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/desk-tabs.ts",
+      "sha256": "450ae54ac01bfb069126e39c47dfc54484245dfadfdb3ab35c3d6688ecf698d9"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/evidence-labels.ts",
+      "sha256": "bb85083f5c218c3f5cb414219c1e4b2f06eb3ae9ca40c3f695c04219775581b2"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/exposure-label.ts",
+      "sha256": "791d8dc07bca06dacd8b685048f9af3cff954c6ec6927fee58e13cf578aa3ea7"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/format.ts",
+      "sha256": "1e7a61a4d6f33be521070030c336d47079ae79b9d82c0c2dec9cdce178b562f7"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/impulse-panel-layout.ts",
+      "sha256": "73b2f3f2cd49736e7922cb250d945ad34b704fada4a6c509777b90fb083a0e48"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/live-screener-selection.ts",
+      "sha256": "1ce778670e9509d0ce19899ea8ff1aaf1723ab7db5d5f0fe80a6d4d04c2cb5a1"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/monitoring-freshness.ts",
+      "sha256": "ddbb311c83e45426c7bc0c18e3c0e9103d9f3ac460e0a5f1fdab1321b9d2bd82"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/monitoring-reads.ts",
+      "sha256": "1851a93989b2220ac23bcfff3fb8292145a1888c3d38acf4cda7673b716346d7"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/monitoring-workspace.ts",
+      "sha256": "2d211b6b094d4a4f87e6e0207543beac6b238b11c68bbaea8b9ca417d62988f9"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/operations-health.ts",
+      "sha256": "33daf572205f60b08408c4f7b66c5b6fc186fb32a9651a2d1c2ff1ba626fffc1"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/panel-layout.ts",
+      "sha256": "2b2ba522dc8d45804e21164906d7e101d48f4ba76314deda4a277ee8a879fe38"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/paper-reporting.ts",
+      "sha256": "4bf592b8bd2f2428deea01dd1a55f3cbafafe0f2c75cbce7b75c75955c69db5d"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/position-inventory.ts",
+      "sha256": "0a5666e20b317062e8fa089f000fac4bbd0e351efcff382e4a59e94e3416e32b"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/quote-format.ts",
+      "sha256": "9cad7a8ddb56862debc00710fc53c602a965ee6eee93229c32277e7eb50fa349"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/quoted-pnl.ts",
+      "sha256": "6d72c9868530b92882bc75a150c3b95aab2e94279eea88f87c6652e830d4666e"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/reporting-chart-focus.ts",
+      "sha256": "4d4d3e1aa4d9bfb48a8c44b4123d60eb57ca8aafa931bb9d701d20979d36466a"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/reporting-identity.ts",
+      "sha256": "06d65189d17aebfac195456e7c3f69b3d6361fb24b8c7d4cbc6ca07072078279"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/rl-allocator.ts",
+      "sha256": "1f11d220843b4b8db43092b8fa1db9103d19dd2a236546f065eaa514d49c7b10"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/rl-viz.ts",
+      "sha256": "11856ea8456e9832c229b1c4249fdda2a5be6c0d2edacb6116a04619ea8f3df2"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/strategy-capital.ts",
+      "sha256": "478dbd2ea3545ef64944ad6010862675870e566b473ca96996387424610e02c5"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/strategy-stats.ts",
+      "sha256": "0db5e6ed140306a674001bbfa6e1e996077b4634fbb446e7a219f6b09905dc6b"
+    },
+    {
+      "repo": "workspace",
+      "path": "dashboard/hummingbot-reporting-next/app/utils/trading-chart.ts",
+      "sha256": "77c33ca6cd412275d0c4c9647f5a33c1118f81289a06e61641b8f7497b9ed809"
+    }
+  ],
+  "condorBase": "764aea3fce1d8100d9d674241bc0a25fdb0d8eac"
+}

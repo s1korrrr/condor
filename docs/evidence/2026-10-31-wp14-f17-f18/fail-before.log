@@ -1,0 +1,74 @@
+..FF.....F                                                               [100%]
+=================================== FAILURES ===================================
+______ test_final3_authenticated_native_api_records_are_available[fills] _______
+
+tmp_path = PosixPath('/home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/tmp/f17-red-final/test_final3_authenticated_nati2')
+section = 'fills'
+
+    @pytest.mark.parametrize("section", ["wallet", "positions", "fills", "executors", "risk", "decisions", "history", "operations", "status"])
+    def test_final3_authenticated_native_api_records_are_available(tmp_path, section):
+        from test_v5_paper_binding import client_for
+
+        payload = json.loads((FINAL3 / (section + ".json")).read_text())
+
+        class Source:
+            async def observation(self, path):
+                return payload
+
+        route = next(path for path, name in ROUTES.items() if name == section)
+        with client_for(tmp_path, Source(), clock_s=payload["read_at_ms"] / 1000) as client:
+            response = client.get("/api/v5/dashboard/read", params={"path": route})
+>       assert response.status_code == 200, response.text
+E       AssertionError: {"detail":{"code":"paper_read_schema_invalid","reason":"schema_invalid","section":"fills"}}
+E       assert 502 == 200
+E        +  where 502 = <Response [502 Bad Gateway]>.status_code
+
+tests/test_v5_paper_read_contract.py:32: AssertionError
+____ test_final3_authenticated_native_api_records_are_available[executors] _____
+
+tmp_path = PosixPath('/home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/tmp/f17-red-final/test_final3_authenticated_nati3')
+section = 'executors'
+
+    @pytest.mark.parametrize("section", ["wallet", "positions", "fills", "executors", "risk", "decisions", "history", "operations", "status"])
+    def test_final3_authenticated_native_api_records_are_available(tmp_path, section):
+        from test_v5_paper_binding import client_for
+
+        payload = json.loads((FINAL3 / (section + ".json")).read_text())
+
+        class Source:
+            async def observation(self, path):
+                return payload
+
+        route = next(path for path, name in ROUTES.items() if name == section)
+        with client_for(tmp_path, Source(), clock_s=payload["read_at_ms"] / 1000) as client:
+            response = client.get("/api/v5/dashboard/read", params={"path": route})
+>       assert response.status_code == 200, response.text
+E       AssertionError: {"detail":{"code":"paper_read_schema_invalid","reason":"schema_invalid","section":"executors"}}
+E       assert 502 == 200
+E        +  where 502 = <Response [502 Bad Gateway]>.status_code
+
+tests/test_v5_paper_read_contract.py:32: AssertionError
+________ test_history_limit_is_capped_to_pinned_api73_query_constraint _________
+
+tmp_path = PosixPath('/home/rsi/dev/rsibot/.workspace/scratch/v5-paper-dashboard/tmp/f17-red-final/test_history_limit_is_capped_t0')
+
+    def test_history_limit_is_capped_to_pinned_api73_query_constraint(tmp_path):
+        import re
+        from condor.v5.dashboard import paper_read_route
+        from urllib.parse import parse_qs
+
+        declaration = (FINAL3 / "api73-paper-route.py.txt").read_text()
+        maximum = int(re.search(r"limit: int = Query\(default=100, ge=1, le=(\d+)\)", declaration)[1])
+        result = paper_read_route("/api/v1/servers/rsibot-v5/controller-performance/history", "limit=1000&interval=5m", BOT)
+>       assert parse_qs(result[1])["limit"] == [str(maximum)]
+E       AssertionError: assert ['1000'] == ['200']
+E
+E         At index 0 diff: '1000' != '200'
+E         Use -v to get more diff
+
+tests/test_v5_paper_read_contract.py:90: AssertionError
+=========================== short test summary info ============================
+FAILED tests/test_v5_paper_read_contract.py::test_final3_authenticated_native_api_records_are_available[fills]
+FAILED tests/test_v5_paper_read_contract.py::test_final3_authenticated_native_api_records_are_available[executors]
+FAILED tests/test_v5_paper_read_contract.py::test_history_limit_is_capped_to_pinned_api73_query_constraint
+3 failed, 7 passed, 369 deselected in 1.26s

@@ -1,0 +1,812 @@
+{
+  "status": {
+    "schema": "rsibot.v5-paper.read.v1",
+    "state": "degraded",
+    "section": "status",
+    "snapshot_id": "fixture-boot:1",
+    "bot_id": "meridian_v5_paper",
+    "execution_mode": "paper",
+    "simulated": true,
+    "generated_at_ms": 1793275200000,
+    "observed_at_ms": 1793275200000,
+    "read_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "reason": "OWNER_SECTION_DEGRADED",
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "wallet": {
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "observed_at_ms": 1793275200000,
+        "source_at_ms": 1793275200000,
+        "stale_reason": null,
+        "state": "available",
+        "reason": null
+      },
+      "fills": {
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "observed_at_ms": 1793275200000,
+        "source_at_ms": 1793275200000,
+        "stale_reason": null,
+        "state": "available",
+        "reason": null
+      },
+      "positions": {
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "observed_at_ms": 1793275200000,
+        "source_at_ms": 1793275200000,
+        "stale_reason": null,
+        "state": "available",
+        "reason": null
+      },
+      "executors": {
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "observed_at_ms": 1793275200000,
+        "source_at_ms": 1793275200000,
+        "stale_reason": null,
+        "state": "available",
+        "reason": null
+      },
+      "risk": {
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "unavailable",
+        "observed_at_ms": 1793275200000,
+        "source_at_ms": null,
+        "stale_reason": "controls_not_integrated",
+        "state": "degraded",
+        "reason": "controls_not_integrated"
+      },
+      "decisions": {
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "observed_at_ms": 1793275200000,
+        "source_at_ms": 1793275200000,
+        "stale_reason": null,
+        "state": "available",
+        "reason": null
+      },
+      "history": {
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "observed_at_ms": 1793275200000,
+        "source_at_ms": 1793275200000,
+        "stale_reason": null,
+        "state": "available",
+        "reason": null
+      },
+      "operations": {
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "observed_at_ms": 1793275200000,
+        "source_at_ms": 1793275200000,
+        "stale_reason": null,
+        "state": "available",
+        "reason": null
+      },
+      "accounting": {
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "observed_at_ms": 1793275200000,
+        "source_at_ms": 1793275200000,
+        "stale_reason": null,
+        "state": "available",
+        "reason": null
+      },
+      "orders": {
+        "capabilities": [
+          "read"
+        ],
+        "completeness": "complete",
+        "observed_at_ms": 1793275200000,
+        "source_at_ms": 1793275200000,
+        "stale_reason": null,
+        "state": "available",
+        "reason": null
+      },
+      "watermark_attestation": {
+        "reason": "F15 consumer contract regression",
+        "operator_note": "Synthetic pinned API fixture, no runtime state",
+        "recorded_at_ms": 1793275200000,
+        "accepted": {
+          "last": [
+            "fixture-boot",
+            1,
+            1793275200000,
+            "8dc601fdd1035609c8c949131c98debb4d32c80c5fbbde42b3333e8289b65d1e"
+          ],
+          "clocks": [
+            [
+              [
+                "wallet",
+                "observed_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "wallet",
+                "source_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "wallet",
+                "mark",
+                "assets",
+                [
+                  "asset",
+                  "USDC"
+                ]
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "wallet",
+                "mark",
+                "assets",
+                [
+                  "asset",
+                  "BNB"
+                ]
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "fills",
+                "observed_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "fills",
+                "source_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "positions",
+                "observed_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "positions",
+                "source_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "executors",
+                "observed_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "executors",
+                "source_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "risk",
+                "observed_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "decisions",
+                "observed_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "decisions",
+                "source_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "history",
+                "observed_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "history",
+                "source_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "operations",
+                "observed_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "operations",
+                "source_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "accounting",
+                "observed_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "accounting",
+                "source_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "orders",
+                "observed_at_ms"
+              ],
+              1793275200000
+            ],
+            [
+              [
+                "orders",
+                "source_at_ms"
+              ],
+              1793275200000
+            ]
+          ],
+          "retired": []
+        },
+        "audit_file": "owner-event-00000003-8596dbeb009d489088d3d492aa1eabf2.json",
+        "audit_sha256": "3200284802d1b073614b2b6208f35680eabeee07c143f081e8f9c0906342cd46"
+      },
+      "owner_chain_anchor": {
+        "genesis_sha256": "a4cd6d00df9d5db664d6d16b1977efcc5ab742f05f9be569929a59ca8a1191ee",
+        "seq": 4,
+        "head_sha256": "5659b153575030e790085976a766172cf1b638c266b18b5c854730cbe79de013"
+      }
+    },
+    "next_cursor": null,
+    "source": {
+      "owner": "hummingbot",
+      "schema": "rsibot.v5-paper.observation.v2",
+      "sha256": "8dc601fdd1035609c8c949131c98debb4d32c80c5fbbde42b3333e8289b65d1e",
+      "boot_id": "fixture-boot",
+      "sequence": 1,
+      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "recipe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "wallet": {
+    "schema": "rsibot.v5-paper.read.v1",
+    "state": "available",
+    "section": "wallet",
+    "snapshot_id": "fixture-boot:1",
+    "bot_id": "meridian_v5_paper",
+    "execution_mode": "paper",
+    "simulated": true,
+    "generated_at_ms": 1793275200000,
+    "observed_at_ms": 1793275200000,
+    "read_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "quote_asset": "USDC",
+      "assets": [
+        {
+          "asset": "USDC",
+          "total": "940.6592",
+          "available": "940.6592",
+          "reserved": "0",
+          "mark_quote": "1",
+          "marked_value_quote": "940.6592",
+          "mark_at_ms": 1793275200000
+        },
+        {
+          "asset": "BNB",
+          "total": "0.6",
+          "available": "0",
+          "reserved": "0.6",
+          "mark_quote": "101",
+          "marked_value_quote": "60.6",
+          "mark_at_ms": 1793275200000
+        }
+      ],
+      "initial_funding_quote": "1000",
+      "external_cash_flows_quote": "0",
+      "equity_quote": "1001.2592",
+      "valuation_policy": "midpoint_fresh_book_only",
+      "unit": "USDC"
+    },
+    "next_cursor": null,
+    "source": {
+      "owner": "hummingbot",
+      "schema": "rsibot.v5-paper.observation.v2",
+      "sha256": "8dc601fdd1035609c8c949131c98debb4d32c80c5fbbde42b3333e8289b65d1e",
+      "boot_id": "fixture-boot",
+      "sequence": 1,
+      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "recipe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "positions": {
+    "schema": "rsibot.v5-paper.read.v1",
+    "state": "available",
+    "section": "positions",
+    "snapshot_id": "fixture-boot:1",
+    "bot_id": "meridian_v5_paper",
+    "execution_mode": "paper",
+    "simulated": true,
+    "generated_at_ms": 1793275200000,
+    "observed_at_ms": 1793275200000,
+    "read_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": [
+      {
+        "position_id": "executor-1",
+        "executor_id": "executor-1",
+        "controller_id": "v5_BNB_USDC",
+        "trading_pair": "BNB-USDC",
+        "quantity": "0.6",
+        "remaining_basis_quote": "60.06",
+        "fee_currency": "USDC",
+        "state": "active",
+        "protected_exit": true,
+        "target_price": "102",
+        "target_basis": "native_placed_fixed_target_limit",
+        "target_reason": null,
+        "protected_exit_order": {
+          "order_id": "tp-1",
+          "state": "partially_filled",
+          "price": "102",
+          "remaining_amount": "0.6",
+          "placed_at_ms": 1793275130000
+        },
+        "remaining_target_amount": "0.6"
+      }
+    ],
+    "next_cursor": null,
+    "source": {
+      "owner": "hummingbot",
+      "schema": "rsibot.v5-paper.observation.v2",
+      "sha256": "8dc601fdd1035609c8c949131c98debb4d32c80c5fbbde42b3333e8289b65d1e",
+      "boot_id": "fixture-boot",
+      "sequence": 1,
+      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "recipe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "executors": {
+    "schema": "rsibot.v5-paper.read.v1",
+    "state": "available",
+    "section": "executors",
+    "snapshot_id": "fixture-boot:1",
+    "bot_id": "meridian_v5_paper",
+    "execution_mode": "paper",
+    "simulated": true,
+    "generated_at_ms": 1793275200000,
+    "observed_at_ms": 1793275200000,
+    "read_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": [
+      {
+        "executor_id": "executor-1",
+        "controller_id": "v5_BNB_USDC",
+        "state": "partial_close",
+        "remaining_close_quantity": "0.6",
+        "quantity": "0.6",
+        "remaining_basis_quote": "60.06",
+        "cum_fees_quote": "0.1408",
+        "realized_pnl_quote": "0.7192",
+        "unrealized_pnl_quote": "0.54",
+        "unit": "USDC",
+        "custom_info": {
+          "entry_lifecycle": {
+            "state": "terminal",
+            "requested_quantity": "2",
+            "filled_quantity": "1",
+            "canceled_remainder_quantity": "1"
+          }
+        },
+        "target_price": "102",
+        "target_basis": "native_placed_fixed_target_limit",
+        "target_reason": null,
+        "protected_exit_order": {
+          "order_id": "tp-1",
+          "state": "partially_filled",
+          "price": "102",
+          "remaining_amount": "0.6",
+          "placed_at_ms": 1793275130000
+        },
+        "remaining_target_amount": "0.6",
+        "protected_exit": true
+      }
+    ],
+    "next_cursor": null,
+    "source": {
+      "owner": "hummingbot",
+      "schema": "rsibot.v5-paper.observation.v2",
+      "sha256": "8dc601fdd1035609c8c949131c98debb4d32c80c5fbbde42b3333e8289b65d1e",
+      "boot_id": "fixture-boot",
+      "sequence": 1,
+      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "recipe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "risk": {
+    "schema": "rsibot.v5-paper.read.v1",
+    "state": "degraded",
+    "section": "risk",
+    "snapshot_id": "fixture-boot:1",
+    "bot_id": "meridian_v5_paper",
+    "execution_mode": "paper",
+    "simulated": true,
+    "generated_at_ms": 1793275200000,
+    "observed_at_ms": 1793275200000,
+    "read_at_ms": 1793275200000,
+    "source_at_ms": null,
+    "completeness": "unavailable",
+    "reason": "controls_not_integrated",
+    "capabilities": [
+      "read"
+    ],
+    "data": null,
+    "next_cursor": null,
+    "source": {
+      "owner": "hummingbot",
+      "schema": "rsibot.v5-paper.observation.v2",
+      "sha256": "8dc601fdd1035609c8c949131c98debb4d32c80c5fbbde42b3333e8289b65d1e",
+      "boot_id": "fixture-boot",
+      "sequence": 1,
+      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "recipe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "fills": {
+    "schema": "rsibot.v5-paper.read.v1",
+    "state": "available",
+    "section": "fills",
+    "snapshot_id": "fixture-boot:1",
+    "bot_id": "meridian_v5_paper",
+    "execution_mode": "paper",
+    "simulated": true,
+    "generated_at_ms": 1793275200000,
+    "observed_at_ms": 1793275200000,
+    "read_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": [
+      {
+        "trade_id": "trade-buy-1",
+        "order_id": "buy-1",
+        "executor_id": "executor-1",
+        "controller_id": "v5_BNB_USDC",
+        "trading_pair": "BNB-USDC",
+        "side": "BUY",
+        "quantity": "1",
+        "price": "100",
+        "fee_amount": "0.1",
+        "fee_currency": "USDC",
+        "event_at_ms": 1793275100000,
+        "observed_at_ms": 1793275200000
+      },
+      {
+        "trade_id": "trade-sell-1",
+        "order_id": "tp-1",
+        "executor_id": "executor-1",
+        "controller_id": "v5_BNB_USDC",
+        "trading_pair": "BNB-USDC",
+        "side": "SELL",
+        "quantity": "0.4",
+        "price": "102",
+        "fee_amount": "0.0408",
+        "fee_currency": "USDC",
+        "event_at_ms": 1793275150000,
+        "observed_at_ms": 1793275200000
+      }
+    ],
+    "next_cursor": null,
+    "source": {
+      "owner": "hummingbot",
+      "schema": "rsibot.v5-paper.observation.v2",
+      "sha256": "8dc601fdd1035609c8c949131c98debb4d32c80c5fbbde42b3333e8289b65d1e",
+      "boot_id": "fixture-boot",
+      "sequence": 1,
+      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "recipe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "accounting": {
+    "schema": "rsibot.v5-paper.read.v1",
+    "state": "available",
+    "section": "accounting",
+    "snapshot_id": "fixture-boot:1",
+    "bot_id": "meridian_v5_paper",
+    "execution_mode": "paper",
+    "simulated": true,
+    "generated_at_ms": 1793275200000,
+    "observed_at_ms": 1793275200000,
+    "read_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "controllers": {
+        "v5_BNB_USDC": {
+          "accounting_since_ms": 1793275100000,
+          "accounting_since_reason": null,
+          "fees_paid": {
+            "USDC": "0.1408"
+          },
+          "fees_paid_quote": "0.1408",
+          "fee_quote_valuation_basis": "exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once",
+          "realized_pnl_quote": "0.7192",
+          "unrealized_pnl_quote": "0.54",
+          "volume_traded_quote": "140.8",
+          "entry_count": 1,
+          "exit_count": 1,
+          "count_basis": "distinct_native_filled_buy_and_sell_orders_not_actions",
+          "unavailable_reasons": {}
+        }
+      },
+      "program": {
+        "accounting_since_ms": 1793275100000,
+        "accounting_since_reason": null,
+        "fees_paid": {
+          "USDC": "0.1408"
+        },
+        "fees_paid_quote": "0.1408",
+        "fee_quote_valuation_basis": "exact_native_fill_event_quote_equivalent; base_fees_costed_in_net_inventory_once",
+        "realized_pnl_quote": "0.7192",
+        "unrealized_pnl_quote": "0.54",
+        "volume_traded_quote": "140.8",
+        "entry_count": 1,
+        "exit_count": 1,
+        "count_basis": "distinct_native_filled_buy_and_sell_orders_not_actions",
+        "unavailable_reasons": {}
+      },
+      "source": "native_exact_lifetime_receipts_not_fill_pages"
+    },
+    "next_cursor": null,
+    "source": {
+      "owner": "hummingbot",
+      "schema": "rsibot.v5-paper.observation.v2",
+      "sha256": "8dc601fdd1035609c8c949131c98debb4d32c80c5fbbde42b3333e8289b65d1e",
+      "boot_id": "fixture-boot",
+      "sequence": 1,
+      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "recipe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "decisions": {
+    "schema": "rsibot.v5-paper.read.v1",
+    "state": "available",
+    "section": "decisions",
+    "snapshot_id": "fixture-boot:1",
+    "bot_id": "meridian_v5_paper",
+    "execution_mode": "paper",
+    "simulated": true,
+    "generated_at_ms": 1793275200000,
+    "observed_at_ms": 1793275200000,
+    "read_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "conditions": [],
+      "trailing": {
+        "applicable": false,
+        "reason": "fixed_target_recipe"
+      },
+      "dca": {
+        "applicable": false,
+        "reason": "no_active_plan"
+      }
+    },
+    "next_cursor": null,
+    "source": {
+      "owner": "hummingbot",
+      "schema": "rsibot.v5-paper.observation.v2",
+      "sha256": "8dc601fdd1035609c8c949131c98debb4d32c80c5fbbde42b3333e8289b65d1e",
+      "boot_id": "fixture-boot",
+      "sequence": 1,
+      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "recipe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "history": {
+    "schema": "rsibot.v5-paper.read.v1",
+    "state": "available",
+    "section": "history",
+    "snapshot_id": "fixture-boot:1",
+    "bot_id": "meridian_v5_paper",
+    "execution_mode": "paper",
+    "simulated": true,
+    "generated_at_ms": 1793275200000,
+    "observed_at_ms": 1793275200000,
+    "read_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "retention_start_ms": 1793275200000,
+      "gaps": [],
+      "segments": [],
+      "statistics": null,
+      "reason": "insufficient_comparable_history"
+    },
+    "next_cursor": null,
+    "source": {
+      "owner": "hummingbot",
+      "schema": "rsibot.v5-paper.observation.v2",
+      "sha256": "8dc601fdd1035609c8c949131c98debb4d32c80c5fbbde42b3333e8289b65d1e",
+      "boot_id": "fixture-boot",
+      "sequence": 1,
+      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "recipe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "operations": {
+    "schema": "rsibot.v5-paper.read.v1",
+    "state": "available",
+    "section": "operations",
+    "snapshot_id": "fixture-boot:1",
+    "bot_id": "meridian_v5_paper",
+    "execution_mode": "paper",
+    "simulated": true,
+    "generated_at_ms": 1793275200000,
+    "observed_at_ms": 1793275200000,
+    "read_at_ms": 1793275200000,
+    "source_at_ms": 1793275200000,
+    "completeness": "complete",
+    "reason": null,
+    "capabilities": [
+      "read"
+    ],
+    "data": {
+      "restored": false,
+      "ready": true,
+      "reason": null
+    },
+    "next_cursor": null,
+    "source": {
+      "owner": "hummingbot",
+      "schema": "rsibot.v5-paper.observation.v2",
+      "sha256": "8dc601fdd1035609c8c949131c98debb4d32c80c5fbbde42b3333e8289b65d1e",
+      "boot_id": "fixture-boot",
+      "sequence": 1,
+      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "recipe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "candles": {
+    "schema": "rsibot.v5-paper.read.v1",
+    "state": "collecting",
+    "section": "candles",
+    "snapshot_id": "fixture-boot:1",
+    "bot_id": "meridian_v5_paper",
+    "execution_mode": "paper",
+    "simulated": true,
+    "generated_at_ms": 1793275200000,
+    "observed_at_ms": 1793275200000,
+    "read_at_ms": 1793275200000,
+    "source_at_ms": null,
+    "completeness": "collecting",
+    "reason": "OWNER_CANDLES_NOT_PUBLISHED",
+    "capabilities": [],
+    "data": null,
+    "next_cursor": null,
+    "source": {
+      "owner": "hummingbot",
+      "schema": "rsibot.v5-paper.observation.v2",
+      "sha256": "8dc601fdd1035609c8c949131c98debb4d32c80c5fbbde42b3333e8289b65d1e",
+      "boot_id": "fixture-boot",
+      "sequence": 1,
+      "companion_sha256": null,
+      "source_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "config_sha256": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      "recipe_sha256": "cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc"
+    }
+  },
+  "collecting": {
+    "schema": "rsibot.v5-paper.read.v1",
+    "state": "collecting",
+    "section": "positions",
+    "snapshot_id": null,
+    "bot_id": null,
+    "execution_mode": "paper",
+    "simulated": true,
+    "generated_at_ms": null,
+    "observed_at_ms": null,
+    "read_at_ms": 1793275200000,
+    "source_at_ms": null,
+    "completeness": "unavailable",
+    "reason": "PAPER_OBSERVATION_NOT_BOUND",
+    "capabilities": [],
+    "data": null,
+    "next_cursor": null,
+    "source": {
+      "owner": "hummingbot",
+      "schema": "rsibot.v5-paper.observation.v2"
+    }
+  }
+}

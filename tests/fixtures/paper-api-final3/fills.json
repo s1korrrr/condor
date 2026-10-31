@@ -1,0 +1,3531 @@
+{
+  "schema": "rsibot.v5-paper.read.v1",
+  "state": "available",
+  "section": "fills",
+  "snapshot_id": "ebc8f9016a66ea614edc47cee4ed00fc:41",
+  "bot_id": "meridian_v5_paper",
+  "execution_mode": "paper",
+  "simulated": true,
+  "generated_at_ms": 1793401542783,
+  "observed_at_ms": 1793401542783,
+  "read_at_ms": 1793401546486,
+  "source_at_ms": 1793401542783,
+  "completeness": "complete",
+  "reason": null,
+  "capabilities": [
+    "read"
+  ],
+  "data": [
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793260749980,
+      "executor_id": "ea6ef3cc48062a466d027b2cc450c33db56ee20b6713c9d4de1fe7a89669f774",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.00369296712",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.00369296712",
+      "fee_currency": "USDC",
+      "fee_quote": "0.00369296712",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.00369296712",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+      "ownership_reason": null,
+      "price": "748.17",
+      "quantity": "0.00617",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:514940:paper-f5e5925f99f1496d85139db43fd8414f",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793260749980,
+      "executor_id": "ea6ef3cc48062a466d027b2cc450c33db56ee20b6713c9d4de1fe7a89669f774",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.00480025872",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.00480025872",
+      "fee_currency": "USDC",
+      "fee_quote": "0.00480025872",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.00480025872",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+      "ownership_reason": null,
+      "price": "748.17",
+      "quantity": "0.00802",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:514941:paper-f5e5925f99f1496d85139db43fd8414f",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793260749980,
+      "executor_id": "ea6ef3cc48062a466d027b2cc450c33db56ee20b6713c9d4de1fe7a89669f774",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0000010175112",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0000010175112",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0000010175112",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0000010175112",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+      "ownership_reason": null,
+      "price": "748.17",
+      "quantity": "0.0000017",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:514942:paper-f5e5925f99f1496d85139db43fd8414f",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793260749980,
+      "executor_id": "ea6ef3cc48062a466d027b2cc450c33db56ee20b6713c9d4de1fe7a89669f774",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0063674055288",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0063674055288",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0063674055288",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0063674055288",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+      "ownership_reason": null,
+      "price": "748.17",
+      "quantity": "0.0106383",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:514943:paper-f5e5925f99f1496d85139db43fd8414f",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793260749980,
+      "executor_id": "ea6ef3cc48062a466d027b2cc450c33db56ee20b6713c9d4de1fe7a89669f774",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0000032320944",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0000032320944",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0000032320944",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0000032320944",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+      "ownership_reason": null,
+      "price": "748.17",
+      "quantity": "0.0000054",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:514944:paper-f5e5925f99f1496d85139db43fd8414f",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793260749980,
+      "executor_id": "ea6ef3cc48062a466d027b2cc450c33db56ee20b6713c9d4de1fe7a89669f774",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0084899937456",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0084899937456",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0084899937456",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0084899937456",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+      "ownership_reason": null,
+      "price": "748.17",
+      "quantity": "0.0141846",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:514945:paper-f5e5925f99f1496d85139db43fd8414f",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793260749980,
+      "executor_id": "ea6ef3cc48062a466d027b2cc450c33db56ee20b6713c9d4de1fe7a89669f774",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0000042496056",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0000042496056",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0000042496056",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0000042496056",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+      "ownership_reason": null,
+      "price": "748.17",
+      "quantity": "0.0000071",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:514946:paper-f5e5925f99f1496d85139db43fd8414f",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793260749980,
+      "executor_id": "ea6ef3cc48062a466d027b2cc450c33db56ee20b6713c9d4de1fe7a89669f774",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0084889762344",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0084889762344",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0084889762344",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0084889762344",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+      "ownership_reason": null,
+      "price": "748.17",
+      "quantity": "0.0141829",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:514947:paper-f5e5925f99f1496d85139db43fd8414f",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793260749980,
+      "executor_id": "ea6ef3cc48062a466d027b2cc450c33db56ee20b6713c9d4de1fe7a89669f774",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0000052671168",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0000052671168",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0000052671168",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0000052671168",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+      "ownership_reason": null,
+      "price": "748.17",
+      "quantity": "0.0000088",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:514948:paper-f5e5925f99f1496d85139db43fd8414f",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793260749980,
+      "executor_id": "ea6ef3cc48062a466d027b2cc450c33db56ee20b6713c9d4de1fe7a89669f774",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0019160334432",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0019160334432",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0019160334432",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0019160334432",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+      "ownership_reason": null,
+      "price": "748.17",
+      "quantity": "0.0032012",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:514949:paper-f5e5925f99f1496d85139db43fd8414f",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793260749980,
+      "executor_id": "ea6ef3cc48062a466d027b2cc450c33db56ee20b6713c9d4de1fe7a89669f774",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.00656593992",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.00656593992",
+      "fee_currency": "USDC",
+      "fee_quote": "0.00656593992",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.00656593992",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+      "ownership_reason": null,
+      "price": "748.17",
+      "quantity": "0.01097",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:514950:paper-f5e5925f99f1496d85139db43fd8414f",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793260758646,
+      "executor_id": "ea6ef3cc48062a466d027b2cc450c33db56ee20b6713c9d4de1fe7a89669f774",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0002679645672",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0002679645672",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0002679645672",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0002679645672",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+      "ownership_reason": null,
+      "price": "748.17",
+      "quantity": "0.0004477",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:514951:paper-f5e5925f99f1496d85139db43fd8414f",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793260758646,
+      "executor_id": "ea6ef3cc48062a466d027b2cc450c33db56ee20b6713c9d4de1fe7a89669f774",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0002679645672",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0002679645672",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0002679645672",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0002679645672",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-f5e5925f99f1496d85139db43fd8414f",
+      "ownership_reason": null,
+      "price": "748.17",
+      "quantity": "0.0004477",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:514952:paper-f5e5925f99f1496d85139db43fd8414f",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793269157469,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0002655183344",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0002655183344",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0002655183344",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0002655183344",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "ownership_reason": null,
+      "price": "741.34",
+      "quantity": "0.0004477",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:515567:paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793269157469,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0001632134144",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0001632134144",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0001632134144",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0001632134144",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "ownership_reason": null,
+      "price": "741.34",
+      "quantity": "0.0002752",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:515568:paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793269157469,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0015229495888",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0015229495888",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0015229495888",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0015229495888",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "ownership_reason": null,
+      "price": "741.34",
+      "quantity": "0.0025679",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:515569:paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793269157469,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0002117860112",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0002117860112",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0002117860112",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0002117860112",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "ownership_reason": null,
+      "price": "741.34",
+      "quantity": "0.0003571",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:515570:paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793269163616,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0000702790320",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0000702790320",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0000702790320",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0000702790320",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "ownership_reason": null,
+      "price": "741.34",
+      "quantity": "0.0001185",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:515571:paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793269167702,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0002397790096",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0002397790096",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0002397790096",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0002397790096",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "ownership_reason": null,
+      "price": "741.34",
+      "quantity": "0.0004043",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:515572:paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793269175309,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0003927915856",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0003927915856",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0003927915856",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0003927915856",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "ownership_reason": null,
+      "price": "741.34",
+      "quantity": "0.0006623",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:515573:paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793269175309,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0002040760752",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0002040760752",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0002040760752",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0002040760752",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "ownership_reason": null,
+      "price": "741.34",
+      "quantity": "0.0003441",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:515574:paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793269175309,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0034188228512",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0034188228512",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0034188228512",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0034188228512",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "ownership_reason": null,
+      "price": "741.34",
+      "quantity": "0.0057646",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:515575:paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793269175309,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0732712581616",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0732712581616",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0732712581616",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0732712581616",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "ownership_reason": null,
+      "price": "741.34",
+      "quantity": "0.1235453",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:515576:paper-7f82d0bbabb94efbb5e84ce8b42731b0",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793284635369,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "DeductedFromReturns",
+        "flat_fees": [
+          {
+            "amount": "0.040639641890",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.040639641890",
+      "fee_currency": "USDC",
+      "fee_quote": "0.040639641890",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.040639641890",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-09fad894eb3243c9bb6f805f59afa8d5",
+      "ownership_reason": null,
+      "price": "748.69",
+      "quantity": "0.054281",
+      "side": "SELL",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "book:1793284635207:0:paper-09fad894eb3243c9bb6f805f59afa8d5",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793284635369,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "DeductedFromReturns",
+        "flat_fees": [
+          {
+            "amount": "0.030780671080",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.030780671080",
+      "fee_currency": "USDC",
+      "fee_quote": "0.030780671080",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.030780671080",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-09fad894eb3243c9bb6f805f59afa8d5",
+      "ownership_reason": null,
+      "price": "748.63",
+      "quantity": "0.041116",
+      "side": "SELL",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "book:1793284635207:1:paper-09fad894eb3243c9bb6f805f59afa8d5",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793286496151,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "DeductedFromReturns",
+        "flat_fees": [
+          {
+            "amount": "0.0000708493968",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0000708493968",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0000708493968",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0000708493968",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-09fad894eb3243c9bb6f805f59afa8d5",
+      "ownership_reason": null,
+      "price": "748.62",
+      "quantity": "0.0001183",
+      "side": "SELL",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:516253:paper-09fad894eb3243c9bb6f805f59afa8d5",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793286496789,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "DeductedFromReturns",
+        "flat_fees": [
+          {
+            "amount": "0.005026534128",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.005026534128",
+      "fee_currency": "USDC",
+      "fee_quote": "0.005026534128",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.005026534128",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-09fad894eb3243c9bb6f805f59afa8d5",
+      "ownership_reason": null,
+      "price": "748.62",
+      "quantity": "0.008393",
+      "side": "SELL",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:516254:paper-09fad894eb3243c9bb6f805f59afa8d5",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793286496789,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "DeductedFromReturns",
+        "flat_fees": [
+          {
+            "amount": "0.005026534128",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.005026534128",
+      "fee_currency": "USDC",
+      "fee_quote": "0.005026534128",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.005026534128",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-09fad894eb3243c9bb6f805f59afa8d5",
+      "ownership_reason": null,
+      "price": "748.62",
+      "quantity": "0.008393",
+      "side": "SELL",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:516255:paper-09fad894eb3243c9bb6f805f59afa8d5",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793286510595,
+      "executor_id": "4f5728fc3fa8e044de2c2427266c65f12e256e97f7b528ab178cc67ac50dbf5a",
+      "fee": {
+        "fee_type": "DeductedFromReturns",
+        "flat_fees": [
+          {
+            "amount": "0.0132869269872",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0132869269872",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0132869269872",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0132869269872",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-09fad894eb3243c9bb6f805f59afa8d5",
+      "ownership_reason": null,
+      "price": "748.62",
+      "quantity": "0.0221857",
+      "side": "SELL",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:516257:paper-09fad894eb3243c9bb6f805f59afa8d5",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793296142410,
+      "executor_id": "dd3e8ca1e06204a291d859c435db30f6be59f26cd3d838bb681ea10778dd911c",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0099075040",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0099075040",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0099075040",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0099075040",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "ownership_reason": null,
+      "price": "100.85",
+      "quantity": "0.1228",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3611020:paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793296261795,
+      "executor_id": "22afe1ac1c5cf0309c2d228db08bda2cdb08aff0497315735786e7599e2f52d7",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0004003141144",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0004003141144",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0004003141144",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0004003141144",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-bbfa350a4d8e41b4b72699a11a2a9433",
+      "ownership_reason": null,
+      "price": "2335.01",
+      "quantity": "0.0002143",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3500417:paper-bbfa350a4d8e41b4b72699a11a2a9433",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793296269216,
+      "executor_id": "dd3e8ca1e06204a291d859c435db30f6be59f26cd3d838bb681ea10778dd911c",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.008067919320",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.008067919320",
+      "fee_currency": "USDC",
+      "fee_quote": "0.008067919320",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.008067919320",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "ownership_reason": null,
+      "price": "100.85",
+      "quantity": "0.099999",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3611029:paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793296269216,
+      "executor_id": "dd3e8ca1e06204a291d859c435db30f6be59f26cd3d838bb681ea10778dd911c",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0080680",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0080680",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0080680",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0080680",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "ownership_reason": null,
+      "price": "100.85",
+      "quantity": "0.1",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3611030:paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "event_at_ms": 1793296271358,
+      "executor_id": "7c3cf33a235bb3f97b7ccbae2f9f320acf44d641c66b4a645925eadf2f01243e",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.01197869684704",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.01197869684704",
+      "fee_currency": "USDC",
+      "fee_quote": "0.01197869684704",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.01197869684704",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-67b960d7c52143118ba83028fab85067",
+      "ownership_reason": null,
+      "price": "80698.1",
+      "quantity": "0.000185548",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:7110004:paper-67b960d7c52143118ba83028fab85067",
+      "trading_pair": "BTC-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793296272103,
+      "executor_id": "22afe1ac1c5cf0309c2d228db08bda2cdb08aff0497315735786e7599e2f52d7",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0004003141144",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0004003141144",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0004003141144",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0004003141144",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-bbfa350a4d8e41b4b72699a11a2a9433",
+      "ownership_reason": null,
+      "price": "2335.01",
+      "quantity": "0.0002143",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3500418:paper-bbfa350a4d8e41b4b72699a11a2a9433",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "event_at_ms": 1793296281372,
+      "executor_id": "7c3cf33a235bb3f97b7ccbae2f9f320acf44d641c66b4a645925eadf2f01243e",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.00040006890056",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.00040006890056",
+      "fee_currency": "USDC",
+      "fee_quote": "0.00040006890056",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.00040006890056",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-67b960d7c52143118ba83028fab85067",
+      "ownership_reason": null,
+      "price": "80698.1",
+      "quantity": "0.000006197",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:7110010:paper-67b960d7c52143118ba83028fab85067",
+      "trading_pair": "BTC-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "event_at_ms": 1793296282800,
+      "executor_id": "7c3cf33a235bb3f97b7ccbae2f9f320acf44d641c66b4a645925eadf2f01243e",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.06738194512280",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.06738194512280",
+      "fee_currency": "USDC",
+      "fee_quote": "0.06738194512280",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.06738194512280",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-67b960d7c52143118ba83028fab85067",
+      "ownership_reason": null,
+      "price": "80698.1",
+      "quantity": "0.001043735",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:7110011:paper-67b960d7c52143118ba83028fab85067",
+      "trading_pair": "BTC-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793296289752,
+      "executor_id": "dd3e8ca1e06204a291d859c435db30f6be59f26cd3d838bb681ea10778dd911c",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0000887480",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0000887480",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0000887480",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0000887480",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "ownership_reason": null,
+      "price": "100.85",
+      "quantity": "0.0011",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3611032:paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793296289752,
+      "executor_id": "22afe1ac1c5cf0309c2d228db08bda2cdb08aff0497315735786e7599e2f52d7",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0789595773552",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0789595773552",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0789595773552",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0789595773552",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-bbfa350a4d8e41b4b72699a11a2a9433",
+      "ownership_reason": null,
+      "price": "2335.01",
+      "quantity": "0.0422694",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3500421:paper-bbfa350a4d8e41b4b72699a11a2a9433",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793296298044,
+      "executor_id": "dd3e8ca1e06204a291d859c435db30f6be59f26cd3d838bb681ea10778dd911c",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0080680",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0080680",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0080680",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0080680",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "ownership_reason": null,
+      "price": "100.85",
+      "quantity": "0.1",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3611034:paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793296298044,
+      "executor_id": "dd3e8ca1e06204a291d859c435db30f6be59f26cd3d838bb681ea10778dd911c",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.001285474440",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.001285474440",
+      "fee_currency": "USDC",
+      "fee_quote": "0.001285474440",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.001285474440",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "ownership_reason": null,
+      "price": "100.85",
+      "quantity": "0.015933",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3611035:paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793296309935,
+      "executor_id": "dd3e8ca1e06204a291d859c435db30f6be59f26cd3d838bb681ea10778dd911c",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0080680",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0080680",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0080680",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0080680",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "ownership_reason": null,
+      "price": "100.85",
+      "quantity": "0.1",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3611037:paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793296330662,
+      "executor_id": "dd3e8ca1e06204a291d859c435db30f6be59f26cd3d838bb681ea10778dd911c",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0080680",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0080680",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0080680",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0080680",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "ownership_reason": null,
+      "price": "100.85",
+      "quantity": "0.1",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3611039:paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793296338953,
+      "executor_id": "dd3e8ca1e06204a291d859c435db30f6be59f26cd3d838bb681ea10778dd911c",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0080680",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0080680",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0080680",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0080680",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "ownership_reason": null,
+      "price": "100.85",
+      "quantity": "0.1",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3611041:paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793296352687,
+      "executor_id": "dd3e8ca1e06204a291d859c435db30f6be59f26cd3d838bb681ea10778dd911c",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.020070602240",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.020070602240",
+      "fee_currency": "USDC",
+      "fee_quote": "0.020070602240",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.020070602240",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "ownership_reason": null,
+      "price": "100.85",
+      "quantity": "0.248768",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3611044:paper-3016fc8816ee4638af4cf5d855bdd3c9",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "event_at_ms": 1793298906278,
+      "executor_id": "be50d8d9e5648a2498559df1f70e99e180df3f5ac40f6a4ca8fb5a74563e6602",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.072492952",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.072492952",
+      "fee_currency": "USDC",
+      "fee_quote": "0.072492952",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.072492952",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-9e0bd1f87fb940c59e65835c47394077",
+      "ownership_reason": null,
+      "price": "1.2817",
+      "quantity": "70.7",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:1883724:paper-9e0bd1f87fb940c59e65835c47394077",
+      "trading_pair": "XRP-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "event_at_ms": 1793298917980,
+      "executor_id": "be50d8d9e5648a2498559df1f70e99e180df3f5ac40f6a4ca8fb5a74563e6602",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.00726775168",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.00726775168",
+      "fee_currency": "USDC",
+      "fee_quote": "0.00726775168",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.00726775168",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-9e0bd1f87fb940c59e65835c47394077",
+      "ownership_reason": null,
+      "price": "1.2817",
+      "quantity": "7.088",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:1883726:paper-9e0bd1f87fb940c59e65835c47394077",
+      "trading_pair": "XRP-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793304548463,
+      "executor_id": "1ecccf5ec6a95309e31cc3086dadadee55ac99c3c5c9a60a6ca03aaa1cf2c2e1",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0088862976",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0088862976",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0088862976",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0088862976",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-a2f2d19c7c9d45a396c6bcc3cbd16e36",
+      "ownership_reason": null,
+      "price": "2314.14",
+      "quantity": "0.0048",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3505949:paper-a2f2d19c7c9d45a396c6bcc3cbd16e36",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793304548463,
+      "executor_id": "1ecccf5ec6a95309e31cc3086dadadee55ac99c3c5c9a60a6ca03aaa1cf2c2e1",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.03471210000",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.03471210000",
+      "fee_currency": "USDC",
+      "fee_quote": "0.03471210000",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.03471210000",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-a2f2d19c7c9d45a396c6bcc3cbd16e36",
+      "ownership_reason": null,
+      "price": "2314.14",
+      "quantity": "0.01875",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3505950:paper-a2f2d19c7c9d45a396c6bcc3cbd16e36",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793304556619,
+      "executor_id": "1ecccf5ec6a95309e31cc3086dadadee55ac99c3c5c9a60a6ca03aaa1cf2c2e1",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.036161677296",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.036161677296",
+      "fee_currency": "USDC",
+      "fee_quote": "0.036161677296",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.036161677296",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-a2f2d19c7c9d45a396c6bcc3cbd16e36",
+      "ownership_reason": null,
+      "price": "2314.14",
+      "quantity": "0.019533",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3505954:paper-a2f2d19c7c9d45a396c6bcc3cbd16e36",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "event_at_ms": 1793304572118,
+      "executor_id": "916b32266a942998d67f35c62e194b0626d68ab769196f8cb3d14027e53e44ee",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.000400093688",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.000400093688",
+      "fee_currency": "USDC",
+      "fee_quote": "0.000400093688",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.000400093688",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-e0ffbb8c51b54496a797d31a93cb8a9a",
+      "ownership_reason": null,
+      "price": "1.2703",
+      "quantity": "0.3937",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:1885368:paper-e0ffbb8c51b54496a797d31a93cb8a9a",
+      "trading_pair": "XRP-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "event_at_ms": 1793304577977,
+      "executor_id": "916b32266a942998d67f35c62e194b0626d68ab769196f8cb3d14027e53e44ee",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.001736449288",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.001736449288",
+      "fee_currency": "USDC",
+      "fee_quote": "0.001736449288",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.001736449288",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-e0ffbb8c51b54496a797d31a93cb8a9a",
+      "ownership_reason": null,
+      "price": "1.2703",
+      "quantity": "1.7087",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:1885371:paper-e0ffbb8c51b54496a797d31a93cb8a9a",
+      "trading_pair": "XRP-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "event_at_ms": 1793304580177,
+      "executor_id": "916b32266a942998d67f35c62e194b0626d68ab769196f8cb3d14027e53e44ee",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.00173472168",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.00173472168",
+      "fee_currency": "USDC",
+      "fee_quote": "0.00173472168",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.00173472168",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-e0ffbb8c51b54496a797d31a93cb8a9a",
+      "ownership_reason": null,
+      "price": "1.2703",
+      "quantity": "1.707",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:1885372:paper-e0ffbb8c51b54496a797d31a93cb8a9a",
+      "trading_pair": "XRP-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "event_at_ms": 1793304581655,
+      "executor_id": "916b32266a942998d67f35c62e194b0626d68ab769196f8cb3d14027e53e44ee",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.075889347984",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.075889347984",
+      "fee_currency": "USDC",
+      "fee_quote": "0.075889347984",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.075889347984",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-e0ffbb8c51b54496a797d31a93cb8a9a",
+      "ownership_reason": null,
+      "price": "1.2703",
+      "quantity": "74.6766",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:1885373:paper-e0ffbb8c51b54496a797d31a93cb8a9a",
+      "trading_pair": "XRP-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793304592142,
+      "executor_id": "46a34fb64757b93ee3f28ce3c76f2c6940e7439fb4129951efe4303c9fb88a2f",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0079104",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0079104",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0079104",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0079104",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-d10d04f4ed0f425da84a2f011e56e98b",
+      "ownership_reason": null,
+      "price": "98.88",
+      "quantity": "0.1",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3615573:paper-d10d04f4ed0f425da84a2f011e56e98b",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793304593548,
+      "executor_id": "46a34fb64757b93ee3f28ce3c76f2c6940e7439fb4129951efe4303c9fb88a2f",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0079104",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0079104",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0079104",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0079104",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-d10d04f4ed0f425da84a2f011e56e98b",
+      "ownership_reason": null,
+      "price": "98.88",
+      "quantity": "0.1",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3615574:paper-d10d04f4ed0f425da84a2f011e56e98b",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793304597214,
+      "executor_id": "46a34fb64757b93ee3f28ce3c76f2c6940e7439fb4129951efe4303c9fb88a2f",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.00802272768",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.00802272768",
+      "fee_currency": "USDC",
+      "fee_quote": "0.00802272768",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.00802272768",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-d10d04f4ed0f425da84a2f011e56e98b",
+      "ownership_reason": null,
+      "price": "98.88",
+      "quantity": "0.10142",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3615576:paper-d10d04f4ed0f425da84a2f011e56e98b",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793304601022,
+      "executor_id": "46a34fb64757b93ee3f28ce3c76f2c6940e7439fb4129951efe4303c9fb88a2f",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0247120896",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0247120896",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0247120896",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0247120896",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-d10d04f4ed0f425da84a2f011e56e98b",
+      "ownership_reason": null,
+      "price": "98.88",
+      "quantity": "0.3124",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3615577:paper-d10d04f4ed0f425da84a2f011e56e98b",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793304601022,
+      "executor_id": "46a34fb64757b93ee3f28ce3c76f2c6940e7439fb4129951efe4303c9fb88a2f",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.03120494592",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.03120494592",
+      "fee_currency": "USDC",
+      "fee_quote": "0.03120494592",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.03120494592",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-d10d04f4ed0f425da84a2f011e56e98b",
+      "ownership_reason": null,
+      "price": "98.88",
+      "quantity": "0.39448",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3615578:paper-d10d04f4ed0f425da84a2f011e56e98b",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "event_at_ms": 1793306228495,
+      "executor_id": "e6d587da9f10db2aa865d53fde20ebce41b61519735c161ef91b37d2b3d8faef",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.000070328808",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.000070328808",
+      "fee_currency": "USDC",
+      "fee_quote": "0.000070328808",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.000070328808",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-7c94f64b61204c1696b2f4412eb1313b",
+      "ownership_reason": null,
+      "price": "79919.1",
+      "quantity": "0.0000011",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:7125686:paper-7c94f64b61204c1696b2f4412eb1313b",
+      "trading_pair": "BTC-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "event_at_ms": 1793306228495,
+      "executor_id": "e6d587da9f10db2aa865d53fde20ebce41b61519735c161ef91b37d2b3d8faef",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0796902116976",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0796902116976",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0796902116976",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0796902116976",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-7c94f64b61204c1696b2f4412eb1313b",
+      "ownership_reason": null,
+      "price": "79919.1",
+      "quantity": "0.00124642",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:7125688:paper-7c94f64b61204c1696b2f4412eb1313b",
+      "trading_pair": "BTC-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793306958898,
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0017600846416",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0017600846416",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0017600846416",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0017600846416",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "ownership_reason": null,
+      "price": "2258.14",
+      "quantity": "0.0009743",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3521310:paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793306960560,
+      "executor_id": "9dcb9c318eb2fac687f5a3f012a231b911d9ff7004f4677c00915b075d1f8a14",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.00797215656",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.00797215656",
+      "fee_currency": "USDC",
+      "fee_quote": "0.00797215656",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.00797215656",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-a71beed35a0249e0a8089d8b95b03980",
+      "ownership_reason": null,
+      "price": "96.31",
+      "quantity": "0.10347",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3625686:paper-a71beed35a0249e0a8089d8b95b03980",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793306960560,
+      "executor_id": "9dcb9c318eb2fac687f5a3f012a231b911d9ff7004f4677c00915b075d1f8a14",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.000000385240",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.000000385240",
+      "fee_currency": "USDC",
+      "fee_quote": "0.000000385240",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.000000385240",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-a71beed35a0249e0a8089d8b95b03980",
+      "ownership_reason": null,
+      "price": "96.31",
+      "quantity": "0.000005",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3625687:paper-a71beed35a0249e0a8089d8b95b03980",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793306960560,
+      "executor_id": "9dcb9c318eb2fac687f5a3f012a231b911d9ff7004f4677c00915b075d1f8a14",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.01192471896",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.01192471896",
+      "fee_currency": "USDC",
+      "fee_quote": "0.01192471896",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.01192471896",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-a71beed35a0249e0a8089d8b95b03980",
+      "ownership_reason": null,
+      "price": "96.31",
+      "quantity": "0.15477",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3625688:paper-a71beed35a0249e0a8089d8b95b03980",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793306960560,
+      "executor_id": "9dcb9c318eb2fac687f5a3f012a231b911d9ff7004f4677c00915b075d1f8a14",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.000000231144",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.000000231144",
+      "fee_currency": "USDC",
+      "fee_quote": "0.000000231144",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.000000231144",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-a71beed35a0249e0a8089d8b95b03980",
+      "ownership_reason": null,
+      "price": "96.31",
+      "quantity": "0.000003",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3625689:paper-a71beed35a0249e0a8089d8b95b03980",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793306960560,
+      "executor_id": "9dcb9c318eb2fac687f5a3f012a231b911d9ff7004f4677c00915b075d1f8a14",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0077048",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0077048",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0077048",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0077048",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-a71beed35a0249e0a8089d8b95b03980",
+      "ownership_reason": null,
+      "price": "96.31",
+      "quantity": "0.1",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3625690:paper-a71beed35a0249e0a8089d8b95b03980",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793306960560,
+      "executor_id": "9dcb9c318eb2fac687f5a3f012a231b911d9ff7004f4677c00915b075d1f8a14",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.00650053976",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.00650053976",
+      "fee_currency": "USDC",
+      "fee_quote": "0.00650053976",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.00650053976",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-a71beed35a0249e0a8089d8b95b03980",
+      "ownership_reason": null,
+      "price": "96.31",
+      "quantity": "0.08437",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3625692:paper-a71beed35a0249e0a8089d8b95b03980",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793306960560,
+      "executor_id": "9dcb9c318eb2fac687f5a3f012a231b911d9ff7004f4677c00915b075d1f8a14",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.000000616384",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.000000616384",
+      "fee_currency": "USDC",
+      "fee_quote": "0.000000616384",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.000000616384",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-a71beed35a0249e0a8089d8b95b03980",
+      "ownership_reason": null,
+      "price": "96.31",
+      "quantity": "0.000008",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3625693:paper-a71beed35a0249e0a8089d8b95b03980",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793306960560,
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0001806512",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0001806512",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0001806512",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0001806512",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "ownership_reason": null,
+      "price": "2258.14",
+      "quantity": "0.0001",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3521313:paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793306960560,
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0010049626256",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0010049626256",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0010049626256",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0010049626256",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "ownership_reason": null,
+      "price": "2258.14",
+      "quantity": "0.0005563",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3521314:paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793306960560,
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0014031178704",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0014031178704",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0014031178704",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0014031178704",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "ownership_reason": null,
+      "price": "2258.14",
+      "quantity": "0.0007767",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3521315:paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793306960560,
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0058373822256",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0058373822256",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0058373822256",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0058373822256",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "ownership_reason": null,
+      "price": "2258.14",
+      "quantity": "0.0032313",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3521317:paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "event_at_ms": 1793306961388,
+      "executor_id": "b329438b3632e14bde8ce37bbeabf48c9c8ce6ff4a0ae38a3a2d83a01cb88ff3",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.03353049111816",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.03353049111816",
+      "fee_currency": "USDC",
+      "fee_quote": "0.03353049111816",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.03353049111816",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-32c9c394a20049348f743b611d050432",
+      "ownership_reason": null,
+      "price": "78887.7",
+      "quantity": "0.000531301",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:7144505:paper-32c9c394a20049348f743b611d050432",
+      "trading_pair": "BTC-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "event_at_ms": 1793306961388,
+      "executor_id": "b329438b3632e14bde8ce37bbeabf48c9c8ce6ff4a0ae38a3a2d83a01cb88ff3",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.00647339844168",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.00647339844168",
+      "fee_currency": "USDC",
+      "fee_quote": "0.00647339844168",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.00647339844168",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-32c9c394a20049348f743b611d050432",
+      "ownership_reason": null,
+      "price": "78887.7",
+      "quantity": "0.000102573",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:7144506:paper-32c9c394a20049348f743b611d050432",
+      "trading_pair": "BTC-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "event_at_ms": 1793306961388,
+      "executor_id": "b329438b3632e14bde8ce37bbeabf48c9c8ce6ff4a0ae38a3a2d83a01cb88ff3",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0207203277312",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0207203277312",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0207203277312",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0207203277312",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-32c9c394a20049348f743b611d050432",
+      "ownership_reason": null,
+      "price": "78887.7",
+      "quantity": "0.00032832",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:7144512:paper-32c9c394a20049348f743b611d050432",
+      "trading_pair": "BTC-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_btc",
+      "event_at_ms": 1793306961388,
+      "executor_id": "b329438b3632e14bde8ce37bbeabf48c9c8ce6ff4a0ae38a3a2d83a01cb88ff3",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.01903629622176",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.01903629622176",
+      "fee_currency": "USDC",
+      "fee_quote": "0.01903629622176",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.01903629622176",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-32c9c394a20049348f743b611d050432",
+      "ownership_reason": null,
+      "price": "78887.7",
+      "quantity": "0.000301636",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:7144513:paper-32c9c394a20049348f743b611d050432",
+      "trading_pair": "BTC-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793306961388,
+      "executor_id": "9dcb9c318eb2fac687f5a3f012a231b911d9ff7004f4677c00915b075d1f8a14",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.00010940816",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.00010940816",
+      "fee_currency": "USDC",
+      "fee_quote": "0.00010940816",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.00010940816",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-a71beed35a0249e0a8089d8b95b03980",
+      "ownership_reason": null,
+      "price": "96.31",
+      "quantity": "0.00142",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3625694:paper-a71beed35a0249e0a8089d8b95b03980",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793306961388,
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0058493052048",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0058493052048",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0058493052048",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0058493052048",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "ownership_reason": null,
+      "price": "2258.14",
+      "quantity": "0.0032379",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3521324:paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793306961388,
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.000462467072",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.000462467072",
+      "fee_currency": "USDC",
+      "fee_quote": "0.000462467072",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.000462467072",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "ownership_reason": null,
+      "price": "2258.14",
+      "quantity": "0.000256",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3521325:paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793306961388,
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0023594853232",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0023594853232",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0023594853232",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0023594853232",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "ownership_reason": null,
+      "price": "2258.14",
+      "quantity": "0.0013061",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3521326:paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793306961388,
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0056480597680",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0056480597680",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0056480597680",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0056480597680",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "ownership_reason": null,
+      "price": "2258.14",
+      "quantity": "0.0031265",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3521327:paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_sol",
+      "event_at_ms": 1793306962276,
+      "executor_id": "9dcb9c318eb2fac687f5a3f012a231b911d9ff7004f4677c00915b075d1f8a14",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.045547233392",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.045547233392",
+      "fee_currency": "USDC",
+      "fee_quote": "0.045547233392",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.045547233392",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-a71beed35a0249e0a8089d8b95b03980",
+      "ownership_reason": null,
+      "price": "96.31",
+      "quantity": "0.591154",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3625696:paper-a71beed35a0249e0a8089d8b95b03980",
+      "trading_pair": "SOL-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793306962276,
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.00616020592",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.00616020592",
+      "fee_currency": "USDC",
+      "fee_quote": "0.00616020592",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.00616020592",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "ownership_reason": null,
+      "price": "2258.14",
+      "quantity": "0.00341",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3521330:paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793306962276,
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.007291082432",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.007291082432",
+      "fee_currency": "USDC",
+      "fee_quote": "0.007291082432",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.007291082432",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "ownership_reason": null,
+      "price": "2258.14",
+      "quantity": "0.004036",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3521331:paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793306962276,
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0086712576",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0086712576",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0086712576",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0086712576",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "ownership_reason": null,
+      "price": "2258.14",
+      "quantity": "0.0048",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3521332:paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793306965284,
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0001806512",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0001806512",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0001806512",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0001806512",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "ownership_reason": null,
+      "price": "2258.14",
+      "quantity": "0.0001",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3521337:paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_eth",
+      "event_at_ms": 1793306965284,
+      "executor_id": "8cda6c1a4788dbb647f6b4dec11957306b504d78fc0c616aa91e0c5816825d09",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0329505982288",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0329505982288",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0329505982288",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0329505982288",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "ownership_reason": null,
+      "price": "2258.14",
+      "quantity": "0.0182399",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:3521338:paper-b1a3801edee149eab81ec4bfe801c5bc",
+      "trading_pair": "ETH-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "event_at_ms": 1793307003353,
+      "executor_id": "f325121e7dfc953af72889cec182e7540b7b72eeb9a8ed15d9b9f9cd28c1e5ed",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.00040015392",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.00040015392",
+      "fee_currency": "USDC",
+      "fee_quote": "0.00040015392",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.00040015392",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-5516cf0537e94c298cfc1f887714dfe4",
+      "ownership_reason": null,
+      "price": "1.2381",
+      "quantity": "0.404",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:1890205:paper-5516cf0537e94c298cfc1f887714dfe4",
+      "trading_pair": "XRP-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793307064182,
+      "executor_id": "a277738f5fe171d1e0eb66fe4239ad9285168a00b4283b3dfa7b83c9d3a44e99",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0000668539080",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0000668539080",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0000668539080",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0000668539080",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-34401f7705e64869a48a75cc9fa82844",
+      "ownership_reason": null,
+      "price": "705.21",
+      "quantity": "0.0001185",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:522042:paper-34401f7705e64869a48a75cc9fa82844",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793307064182,
+      "executor_id": "a277738f5fe171d1e0eb66fe4239ad9285168a00b4283b3dfa7b83c9d3a44e99",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.001300971408",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.001300971408",
+      "fee_currency": "USDC",
+      "fee_quote": "0.001300971408",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.001300971408",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-34401f7705e64869a48a75cc9fa82844",
+      "ownership_reason": null,
+      "price": "705.21",
+      "quantity": "0.002306",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:522044:paper-34401f7705e64869a48a75cc9fa82844",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793307064182,
+      "executor_id": "a277738f5fe171d1e0eb66fe4239ad9285168a00b4283b3dfa7b83c9d3a44e99",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0000977703144",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0000977703144",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0000977703144",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0000977703144",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-34401f7705e64869a48a75cc9fa82844",
+      "ownership_reason": null,
+      "price": "705.21",
+      "quantity": "0.0001733",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:522045:paper-34401f7705e64869a48a75cc9fa82844",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793307064182,
+      "executor_id": "a277738f5fe171d1e0eb66fe4239ad9285168a00b4283b3dfa7b83c9d3a44e99",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0058032577152",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0058032577152",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0058032577152",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0058032577152",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-34401f7705e64869a48a75cc9fa82844",
+      "ownership_reason": null,
+      "price": "705.21",
+      "quantity": "0.0102864",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:522046:paper-34401f7705e64869a48a75cc9fa82844",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793307064182,
+      "executor_id": "a277738f5fe171d1e0eb66fe4239ad9285168a00b4283b3dfa7b83c9d3a44e99",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0000668539080",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0000668539080",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0000668539080",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0000668539080",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-34401f7705e64869a48a75cc9fa82844",
+      "ownership_reason": null,
+      "price": "705.21",
+      "quantity": "0.0001185",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:522047:paper-34401f7705e64869a48a75cc9fa82844",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793307064182,
+      "executor_id": "a277738f5fe171d1e0eb66fe4239ad9285168a00b4283b3dfa7b83c9d3a44e99",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0000564168",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0000564168",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0000564168",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0000564168",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-34401f7705e64869a48a75cc9fa82844",
+      "ownership_reason": null,
+      "price": "705.21",
+      "quantity": "0.0001",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:522048:paper-34401f7705e64869a48a75cc9fa82844",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793307064182,
+      "executor_id": "a277738f5fe171d1e0eb66fe4239ad9285168a00b4283b3dfa7b83c9d3a44e99",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0498683891904",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0498683891904",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0498683891904",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0498683891904",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-34401f7705e64869a48a75cc9fa82844",
+      "ownership_reason": null,
+      "price": "705.21",
+      "quantity": "0.0883928",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:522049:paper-34401f7705e64869a48a75cc9fa82844",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_bnb",
+      "event_at_ms": 1793307064182,
+      "executor_id": "a277738f5fe171d1e0eb66fe4239ad9285168a00b4283b3dfa7b83c9d3a44e99",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.0224998660920",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.0224998660920",
+      "fee_currency": "USDC",
+      "fee_quote": "0.0224998660920",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.0224998660920",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-34401f7705e64869a48a75cc9fa82844",
+      "ownership_reason": null,
+      "price": "705.21",
+      "quantity": "0.0398815",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:522050:paper-34401f7705e64869a48a75cc9fa82844",
+      "trading_pair": "BNB-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "event_at_ms": 1793307210056,
+      "executor_id": "f325121e7dfc953af72889cec182e7540b7b72eeb9a8ed15d9b9f9cd28c1e5ed",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.001064666952",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.001064666952",
+      "fee_currency": "USDC",
+      "fee_quote": "0.001064666952",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.001064666952",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-5516cf0537e94c298cfc1f887714dfe4",
+      "ownership_reason": null,
+      "price": "1.2381",
+      "quantity": "1.0749",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:1890606:paper-5516cf0537e94c298cfc1f887714dfe4",
+      "trading_pair": "XRP-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "event_at_ms": 1793307211591,
+      "executor_id": "f325121e7dfc953af72889cec182e7540b7b72eeb9a8ed15d9b9f9cd28c1e5ed",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.00013272432",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.00013272432",
+      "fee_currency": "USDC",
+      "fee_quote": "0.00013272432",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.00013272432",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-5516cf0537e94c298cfc1f887714dfe4",
+      "ownership_reason": null,
+      "price": "1.2381",
+      "quantity": "0.134",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:1890607:paper-5516cf0537e94c298cfc1f887714dfe4",
+      "trading_pair": "XRP-USDC"
+    },
+    {
+      "controller_id": "modular_spot_meridian_v5_paper_xrp",
+      "event_at_ms": 1793307216263,
+      "executor_id": "f325121e7dfc953af72889cec182e7540b7b72eeb9a8ed15d9b9f9cd28c1e5ed",
+      "fee": {
+        "fee_type": "AddedToCost",
+        "flat_fees": [
+          {
+            "amount": "0.027547725000",
+            "token": "USDC"
+          }
+        ],
+        "percent": "0",
+        "percent_token": null
+      },
+      "fee_amount": "0.027547725000",
+      "fee_currency": "USDC",
+      "fee_quote": "0.027547725000",
+      "fee_reason": null,
+      "fees": [
+        {
+          "amount": "0.027547725000",
+          "currency": "USDC"
+        }
+      ],
+      "observed_at_ms": 1793401542783,
+      "order_id": "paper-5516cf0537e94c298cfc1f887714dfe4",
+      "ownership_reason": null,
+      "price": "1.2381",
+      "quantity": "27.8125",
+      "side": "BUY",
+      "timestamp_semantics": "native_paper_simulation_event",
+      "trade_id": "trade:1890612:paper-5516cf0537e94c298cfc1f887714dfe4",
+      "trading_pair": "XRP-USDC"
+    }
+  ],
+  "next_cursor": "eyJzbmFwc2hvdF9pZCI6ICJlYmM4ZjkwMTZhNjZlYTYxNGVkYzQ3Y2VlNGVkMDBmYzo0MSIsICJzZWN0aW9uIjogImZpbGxzIiwgIm9mZnNldCI6IDEwMCwgInN0YXJ0X21zIjogbnVsbCwgImVuZF9tcyI6IG51bGx9",
+  "source": {
+    "owner": "hummingbot",
+    "schema": "rsibot.v5-paper.observation.v2",
+    "sha256": "296e05ddad62e9f9ae52b7ec0eebcc781546fb7b5ae1a3713e194464bce14903",
+    "boot_id": "ebc8f9016a66ea614edc47cee4ed00fc",
+    "sequence": 41,
+    "source_sha256": "93f2287ffd7f8112ef08fa2ba3bb9eb597f447e6ba1d825e6c3461796924f762",
+    "config_sha256": "b80096664a0aefc7d614dbcff167057bffffb02a2a78c72e08ee5c7a9876c5e0",
+    "recipe_sha256": "ebec0189e6666a0c8c23732afe45315957e6c068fcd5b3c4c0b0c73b3955885a"
+  }
+}

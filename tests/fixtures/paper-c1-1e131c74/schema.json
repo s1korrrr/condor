@@ -1,0 +1,1407 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "rsibot.v5-paper.observation.v2",
+  "type": "object",
+  "required": [
+    "schema",
+    "bot_id",
+    "execution_mode",
+    "simulated",
+    "source_sha256",
+    "config_sha256",
+    "recipe_sha256",
+    "boot_id",
+    "sequence",
+    "generated_at_ms",
+    "wallet",
+    "fills",
+    "positions",
+    "executors",
+    "orders",
+    "decisions",
+    "risk",
+    "history",
+    "operations"
+  ],
+  "properties": {
+    "schema": {
+      "const": "rsibot.v5-paper.observation.v2"
+    },
+    "bot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "execution_mode": {
+      "const": "paper"
+    },
+    "simulated": {
+      "const": true
+    },
+    "source_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "config_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "recipe_sha256": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "boot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "generated_at_ms": {
+      "type": "integer"
+    },
+    "wallet": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/section"
+        },
+        {
+          "properties": {
+            "data": {
+              "type": "object",
+              "required": [
+                "quote_asset",
+                "unit",
+                "assets",
+                "initial_funding_quote",
+                "external_cash_flows_quote",
+                "equity_quote",
+                "valuation_policy"
+              ],
+              "properties": {
+                "quote_asset": {
+                  "const": "USDC"
+                },
+                "unit": {
+                  "const": "USDC"
+                },
+                "assets": {
+                  "type": "array",
+                  "maxItems": 6,
+                  "items": {
+                    "type": "object",
+                    "required": [
+                      "asset",
+                      "total",
+                      "available",
+                      "reserved",
+                      "mark_quote",
+                      "marked_value_quote",
+                      "mark_at_ms"
+                    ],
+                    "properties": {
+                      "asset": {
+                        "type": "string"
+                      },
+                      "total": {
+                        "$ref": "#/$defs/decimal"
+                      },
+                      "available": {
+                        "$ref": "#/$defs/decimal"
+                      },
+                      "reserved": {
+                        "$ref": "#/$defs/decimal"
+                      },
+                      "mark_quote": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/decimal"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "marked_value_quote": {
+                        "anyOf": [
+                          {
+                            "$ref": "#/$defs/decimal"
+                          },
+                          {
+                            "type": "null"
+                          }
+                        ]
+                      },
+                      "mark_at_ms": {
+                        "type": [
+                          "integer",
+                          "null"
+                        ]
+                      }
+                    }
+                  }
+                },
+                "initial_funding_quote": {
+                  "$ref": "#/$defs/decimal"
+                },
+                "external_cash_flows_quote": {
+                  "$ref": "#/$defs/decimal"
+                },
+                "equity_quote": {
+                  "anyOf": [
+                    {
+                      "$ref": "#/$defs/decimal"
+                    },
+                    {
+                      "type": "null"
+                    }
+                  ]
+                },
+                "valuation_policy": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "fills": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/section"
+        },
+        {
+          "properties": {
+            "data": {
+              "type": "array",
+              "maxItems": 500,
+              "items": {
+                "type": "object",
+                "required": [
+                  "trade_id",
+                  "order_id",
+                  "executor_id",
+                  "controller_id",
+                  "trading_pair",
+                  "side",
+                  "quantity",
+                  "price",
+                  "event_at_ms",
+                  "observed_at_ms"
+                ],
+                "properties": {
+                  "trade_id": {
+                    "type": "string"
+                  },
+                  "order_id": {
+                    "type": "string"
+                  },
+                  "trading_pair": {
+                    "type": "string"
+                  },
+                  "executor_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "controller_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "side": {
+                    "enum": [
+                      "BUY",
+                      "SELL"
+                    ]
+                  },
+                  "quantity": {
+                    "$ref": "#/$defs/decimal"
+                  },
+                  "price": {
+                    "$ref": "#/$defs/decimal"
+                  },
+                  "fee_amount": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/$defs/decimal"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  },
+                  "fee_currency": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "event_at_ms": {
+                    "type": "integer"
+                  },
+                  "observed_at_ms": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "positions": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/section"
+        },
+        {
+          "properties": {
+            "data": {
+              "type": "array",
+              "maxItems": 640,
+              "items": {
+                "type": "object",
+                "required": [
+                  "position_id",
+                  "controller_id",
+                  "trading_pair",
+                  "quantity",
+                  "remaining_basis_quote",
+                  "state"
+                ],
+                "properties": {
+                  "quantity": {
+                    "$ref": "#/$defs/decimal"
+                  },
+                  "remaining_basis_quote": {
+                    "anyOf": [
+                      {
+                        "$ref": "#/$defs/decimal"
+                      },
+                      {
+                        "type": "null"
+                      }
+                    ]
+                  }
+                },
+                "allOf": [
+                  {
+                    "$ref": "#/$defs/protectedExitProjection"
+                  }
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "executors": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/section"
+        },
+        {
+          "properties": {
+            "data": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/protectedExitProjection"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "orders": {
+      "$ref": "#/$defs/section"
+    },
+    "decisions": {
+      "$ref": "#/$defs/section"
+    },
+    "risk": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/section"
+        },
+        {
+          "properties": {
+            "data": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "allOf": [
+                    {
+                      "properties": {
+                        "controllers": {
+                          "type": "object",
+                          "maxProperties": 5,
+                          "propertyNames": {"minLength": 1, "maxLength": 128},
+                          "additionalProperties": {
+                            "type": "object",
+                            "required": ["operator", "native"],
+                            "properties": {
+                              "operator": {"type": "object"},
+                              "native": {"type": "object"}
+                            }
+                          }
+                        },
+                        "native_entry_holds": {
+                          "type": "array", "maxItems": 20,
+                          "items": {
+                            "type": "object", "additionalProperties": false,
+                            "required": ["controller_id", "reason", "explanation", "protected_exits"],
+                            "properties": {
+                              "controller_id": {"type": "string", "minLength": 1},
+                              "reason": {"enum": ["native_refusal_receipt_pending", "native_refusal_owner_ambiguous", "native_refusal_recovery_unavailable", "v5_risk_incomplete"]},
+                              "explanation": {"type": "string", "minLength": 1},
+                              "protected_exits": {"const": "preserved"}
+                            }
+                          }
+                        }
+                      }
+                    },
+                    {
+                      "if": {
+                        "properties": {"reason": {"const": "paper_controls_unavailable"}},
+                        "required": ["reason"]
+                      },
+                      "then": {
+                        "required": ["explanation", "holds", "native", "unavailable_reason"],
+                        "properties": {
+                          "explanation": {"type": "string", "minLength": 1},
+                          "native": {"type": "null"},
+                          "unavailable_reason": {"const": "paper_controls_not_acquired"},
+                          "holds": {
+                            "type": "array", "minItems": 1,
+                            "items": {
+                              "type": "object", "required": ["reason", "explanation"],
+                              "properties": {
+                                "reason": {"const": "paper_controls_unavailable"},
+                                "explanation": {"type": "string", "minLength": 1}
+                              }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "if": {
+                    "properties": {
+                      "control_hold": {
+                        "enum": [
+                          "clock_persistence_failed",
+                          "stop_persistence_failed",
+                          "stop_intent_log_damaged",
+                          "ingress_unreadable",
+                          "clock_anomaly",
+                          "clock_invalid"
+                        ]
+                      }
+                    },
+                    "required": [
+                      "control_hold"
+                    ]
+                  },
+                  "then": {
+                    "required": [
+                      "reason",
+                      "explanation",
+                      "clock_recovery",
+                      "holds"
+                    ],
+                    "properties": {
+                      "reason": {
+                        "enum": [
+                          "clock_persistence_failed",
+                          "stop_persistence_failed",
+                          "stop_intent_log_damaged",
+                          "ingress_unreadable",
+                          "clock_anomaly",
+                          "clock_invalid"
+                        ]
+                      },
+                      "explanation": {
+                        "type": "string",
+                        "minLength": 1
+                      },
+                      "holds": {
+                        "type": "array",
+                        "minItems": 1,
+                        "maxItems": 6,
+                        "items": {
+                          "type": "object",
+                          "required": [
+                            "reason",
+                            "explanation"
+                          ],
+                          "properties": {
+                            "reason": {
+                              "enum": [
+                                "clock_persistence_failed",
+                                "stop_persistence_failed",
+                                "stop_intent_log_damaged",
+                                "ingress_unreadable",
+                                "clock_anomaly",
+                                "clock_invalid"
+                              ]
+                            },
+                            "explanation": {
+                              "type": "string",
+                              "minLength": 1
+                            }
+                          }
+                        }
+                      }
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "history": {
+      "$ref": "#/$defs/section"
+    },
+    "accounting": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/section"
+        },
+        {
+          "properties": {
+            "data": {
+              "anyOf": [
+                {
+                  "type": "null"
+                },
+                {
+                  "type": "object",
+                  "required": [
+                    "controllers",
+                    "program",
+                    "source"
+                  ],
+                  "properties": {
+                    "controllers": {
+                      "type": "object",
+                      "maxProperties": 5,
+                      "additionalProperties": {
+                        "$ref": "#/$defs/accountingTotals"
+                      }
+                    },
+                    "program": {
+                      "$ref": "#/$defs/accountingTotals"
+                    },
+                    "source": {
+                      "type": "string"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        }
+      ]
+    },
+    "candles": {
+      "allOf": [
+        {
+          "$ref": "#/$defs/section"
+        },
+        {
+          "properties": {
+            "data": {
+              "$ref": "#/$defs/companionReference"
+            }
+          }
+        }
+      ]
+    },
+    "operations": {
+      "$ref": "#/$defs/section"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "section": {
+      "type": "object",
+      "required": [
+        "observed_at_ms",
+        "source_at_ms",
+        "completeness",
+        "stale_reason",
+        "capabilities",
+        "data"
+      ],
+      "properties": {
+        "observed_at_ms": {
+          "type": "integer"
+        },
+        "source_at_ms": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "completeness": {
+          "enum": [
+            "complete",
+            "partial",
+            "collecting",
+            "unavailable"
+          ]
+        },
+        "stale_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "capabilities": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "data": {}
+      },
+      "additionalProperties": false
+    },
+    "decimal": {
+      "type": "string",
+      "pattern": "^-?[0-9]+(\\.[0-9]+)?$"
+    },
+    "accountingTotals": {
+      "type": "object",
+      "required": [
+        "fees_paid_quote",
+        "realized_pnl_quote",
+        "unrealized_pnl_quote",
+        "volume_traded_quote",
+        "accounting_since_ms",
+        "accounting_since_reason",
+        "fees_paid",
+        "fee_quote_valuation_basis",
+        "count_basis",
+        "unavailable_reasons",
+        "entry_count",
+        "exit_count"
+      ],
+      "properties": {
+        "fees_paid_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "realized_pnl_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unrealized_pnl_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "volume_traded_quote": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "accounting_since_ms": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "accounting_since_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "fees_paid": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": {
+            "$ref": "#/$defs/decimal"
+          }
+        },
+        "fee_quote_valuation_basis": {
+          "type": "string"
+        },
+        "count_basis": {
+          "type": "string"
+        },
+        "unavailable_reasons": {
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          }
+        },
+        "entry_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        },
+        "exit_count": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0
+        }
+      }
+    },
+    "companionReference": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "file",
+        "sha256",
+        "section",
+        "snapshot_id",
+        "retention",
+        "page_size"
+      ],
+      "properties": {
+        "file": {
+          "type": "string"
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "section": {
+          "enum": [
+            "candles",
+            "terminal_executors"
+          ]
+        },
+        "snapshot_id": {
+          "type": "object",
+          "required": [
+            "boot_id",
+            "sequence"
+          ],
+          "properties": {
+            "boot_id": {
+              "type": "string"
+            },
+            "sequence": {
+              "type": "integer",
+              "minimum": 1
+            }
+          }
+        },
+        "retention": {
+          "type": "string"
+        },
+        "page_size": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 240
+        }
+      }
+    },
+    "candlesExport": {
+      "type": "object",
+      "required": [
+        "schema",
+        "closed_only",
+        "limit_per_pair",
+        "page_size",
+        "cursor_semantics",
+        "retention",
+        "pairs"
+      ],
+      "properties": {
+        "schema": {
+          "const": "rsibot.v5-paper.observation.v2.candles"
+        },
+        "closed_only": {
+          "const": true
+        },
+        "limit_per_pair": {
+          "const": 1440
+        },
+        "page_size": {
+          "const": 240
+        },
+        "cursor_semantics": {
+          "type": "string"
+        },
+        "retention": {
+          "type": "string"
+        },
+        "pairs": {
+          "type": "object",
+          "maxProperties": 5,
+          "additionalProperties": {
+            "type": "object",
+            "required": [
+              "state",
+              "reason",
+              "source_identity",
+              "source_at_ms",
+              "retention_start_ms",
+              "count",
+              "gaps",
+              "pages"
+            ],
+            "properties": {
+              "state": {
+                "enum": [
+                  "fresh",
+                  "gap",
+                  "collecting"
+                ]
+              },
+              "reason": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "source_identity": {
+                "type": "object"
+              },
+              "source_at_ms": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "retention_start_ms": {
+                "type": [
+                  "integer",
+                  "null"
+                ]
+              },
+              "count": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 1440
+              },
+              "gaps": {
+                "type": "array",
+                "maxItems": 1440,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "from_open_time_ms",
+                    "through_open_time_ms",
+                    "reason"
+                  ]
+                }
+              },
+              "pages": {
+                "type": "array",
+                "maxItems": 6,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "before_ms",
+                    "next_before_ms",
+                    "bars"
+                  ],
+                  "properties": {
+                    "before_ms": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "next_before_ms": {
+                      "type": [
+                        "integer",
+                        "null"
+                      ]
+                    },
+                    "bars": {
+                      "type": "array",
+                      "maxItems": 240,
+                      "items": {
+                        "type": "object",
+                        "required": [
+                          "open",
+                          "high",
+                          "low",
+                          "close",
+                          "volume",
+                          "open_time_ms",
+                          "closed_at_ms"
+                        ],
+                        "properties": {
+                          "open": {
+                            "$ref": "#/$defs/decimal"
+                          },
+                          "high": {
+                            "$ref": "#/$defs/decimal"
+                          },
+                          "low": {
+                            "$ref": "#/$defs/decimal"
+                          },
+                          "close": {
+                            "$ref": "#/$defs/decimal"
+                          },
+                          "volume": {
+                            "$ref": "#/$defs/decimal"
+                          },
+                          "open_time_ms": {
+                            "type": "integer",
+                            "minimum": 0
+                          },
+                          "closed_at_ms": {
+                            "type": "integer",
+                            "minimum": 60000
+                          }
+                        },
+                        "additionalProperties": false
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "terminalHistory": {
+      "type": "object",
+      "required": [
+        "retention",
+        "retention_start_ms",
+        "total_count",
+        "retained_count",
+        "truncated",
+        "page_size",
+        "pages"
+      ],
+      "properties": {
+        "total_count": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "retained_count": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 500
+        },
+        "truncated": {
+          "type": "boolean"
+        },
+        "page_size": {
+          "const": 100
+        },
+        "pages": {
+          "type": "array",
+          "maxItems": 5,
+          "items": {
+            "type": "object",
+            "required": [
+              "cursor",
+              "next_cursor",
+              "records"
+            ],
+            "properties": {
+              "cursor": {
+                "type": "string"
+              },
+              "next_cursor": {
+                "type": [
+                  "string",
+                  "null"
+                ]
+              },
+              "records": {
+                "type": "array",
+                "maxItems": 100,
+                "items": {
+                  "type": "object",
+                  "required": [
+                    "executor_id",
+                    "controller_id",
+                    "terminal",
+                    "state",
+                    "close_type",
+                    "close_at_ms",
+                    "quantity",
+                    "remaining_basis_quote",
+                    "realized_pnl_quote",
+                    "cum_fees_quote",
+                    "fees_paid"
+                  ],
+                  "properties": {
+                    "terminal": {
+                      "const": true
+                    },
+                    "quantity": {
+                      "$ref": "#/$defs/decimal"
+                    },
+                    "remaining_basis_quote": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/decimal"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "realized_pnl_quote": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/decimal"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    },
+                    "cum_fees_quote": {
+                      "anyOf": [
+                        {
+                          "$ref": "#/$defs/decimal"
+                        },
+                        {
+                          "type": "null"
+                        }
+                      ]
+                    }
+                  },
+                  "allOf": [
+                    {
+                      "$ref": "#/$defs/protectedExitProjection"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "chainCheckpoint": {
+      "type": "object",
+      "required": [
+        "schema",
+        "bot_id",
+        "genesis_prev_sha256",
+        "head_sha256",
+        "segments"
+      ],
+      "properties": {
+        "schema": {
+          "const": "rsibot.v5-paper.observation.v2.chain"
+        },
+        "bot_id": {
+          "type": "string"
+        },
+        "genesis_prev_sha256": {
+          "type": "null"
+        },
+        "head_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "segments": {
+          "type": "array",
+          "maxItems": 4096,
+          "items": {
+            "type": "object",
+            "required": [
+              "name",
+              "sha256",
+              "prev_sha256",
+              "generated_at_ms",
+              "boot_id",
+              "sequence"
+            ],
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "sha256": {
+                "type": "string",
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "prev_sha256": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^[a-f0-9]{64}$"
+              },
+              "generated_at_ms": {
+                "type": "integer"
+              },
+              "boot_id": {
+                "type": "string"
+              },
+              "sequence": {
+                "type": "integer",
+                "minimum": 1
+              }
+            }
+          }
+        }
+      }
+    },
+    "journalSegment": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/nativeJournalSegment"
+        },
+        {
+          "$ref": "#/$defs/legacyGenesis"
+        }
+      ]
+    },
+    "nativeJournalSegment": {
+      "type": "object",
+      "required": [
+        "schema",
+        "bot_id",
+        "boot_id",
+        "sequence",
+        "generated_at_ms",
+        "prev_sha256",
+        "wallet",
+        "fills",
+        "positions",
+        "executors",
+        "accounting",
+        "candles",
+        "terminal_executors"
+      ],
+      "properties": {
+        "schema": {
+          "const": "rsibot.v5-paper.observation.v2.journal"
+        },
+        "prev_sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        },
+        "candles": {
+          "$ref": "#/$defs/candlesExport"
+        },
+        "terminal_executors": {
+          "anyOf": [
+            {
+              "type": "null"
+            },
+            {
+              "$ref": "#/$defs/terminalHistory"
+            }
+          ]
+        }
+      }
+    },
+    "legacyGenesis": {
+      "type": "object",
+      "required": [
+        "schema",
+        "kind",
+        "bot_id",
+        "boot_id",
+        "sequence",
+        "generated_at_ms",
+        "prev_sha256",
+        "legacy"
+      ],
+      "properties": {
+        "schema": {
+          "const": "rsibot.v5-paper.observation.v2.journal"
+        },
+        "kind": {
+          "const": "legacy_genesis"
+        },
+        "prev_sha256": {
+          "type": "null"
+        },
+        "sequence": {
+          "const": 1
+        },
+        "legacy": {
+          "type": "object",
+          "required": [
+            "plan_sha256",
+            "receipt_file",
+            "policy",
+            "files"
+          ],
+          "properties": {
+            "plan_sha256": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{64}$"
+            },
+            "receipt_file": {
+              "const": "paper_observation.v2.legacy-receipt.json"
+            },
+            "files": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 8194,
+              "items": {
+                "type": "object",
+                "required": [
+                  "source_path",
+                  "preserved_path",
+                  "sha256",
+                  "byte_count",
+                  "time_range_ms"
+                ],
+                "properties": {
+                  "source_path": {
+                    "type": "string"
+                  },
+                  "preserved_path": {
+                    "type": "string"
+                  },
+                  "sha256": {
+                    "type": "string",
+                    "pattern": "^[a-f0-9]{64}$"
+                  },
+                  "byte_count": {
+                    "type": "integer",
+                    "minimum": 0
+                  },
+                  "time_range_ms": {
+                    "type": "object",
+                    "required": [
+                      "start",
+                      "end",
+                      "complete",
+                      "reason"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "protectedExitProjection": {
+      "type": "object",
+      "required": [
+        "target_price",
+        "target_basis",
+        "target_reason",
+        "protected_exit_order",
+        "remaining_target_amount"
+      ],
+      "properties": {
+        "target_price": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "target_basis": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "target_restored_at_ms": {
+          "type": ["integer", "null"],
+          "minimum": 0,
+          "description": "Native restore checkpoint time for a retained protective order; placement time stays native."
+        },
+        "target_reason": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "protected_exit_order": {
+          "anyOf": [
+            {
+              "type": "object",
+              "required": [
+                "order_id",
+                "state",
+                "price",
+                "remaining_amount",
+                "placed_at_ms"
+              ],
+              "properties": {
+                "order_id": {
+                  "type": [
+                    "string",
+                    "null"
+                  ]
+                },
+                "state": {
+                  "enum": [
+                    "pending",
+                    "open",
+                    "partially_filled",
+                    "filled",
+                    "cancelled"
+                  ]
+                },
+                "price": {
+                  "$ref": "#/$defs/decimal"
+                },
+                "remaining_amount": {
+                  "$ref": "#/$defs/decimal"
+                },
+                "placed_at_ms": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ],
+                  "minimum": 0
+                }
+              },
+              "additionalProperties": false
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "remaining_target_amount": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/decimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "target_price": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "target_basis": {
+                "type": "null"
+              },
+              "target_reason": {
+                "type": "string",
+                "minLength": 1
+              },
+              "remaining_target_amount": {
+                "type": "null"
+              },
+              "protected_exit_order": {
+                "type": "null"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "target_basis": {
+                "type": "string",
+                "minLength": 1
+              },
+              "remaining_target_amount": {
+                "$ref": "#/$defs/decimal"
+              },
+              "protected_exit_order": {
+                "type": "object",
+                "required": [
+                  "order_id",
+                  "state",
+                  "price",
+                  "remaining_amount",
+                  "placed_at_ms"
+                ],
+                "properties": {
+                  "order_id": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "state": {
+                    "enum": [
+                      "pending",
+                      "open",
+                      "partially_filled",
+                      "filled",
+                      "cancelled"
+                    ]
+                  },
+                  "price": {
+                    "$ref": "#/$defs/decimal"
+                  },
+                  "remaining_amount": {
+                    "$ref": "#/$defs/decimal"
+                  },
+                  "placed_at_ms": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ],
+                    "minimum": 0
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

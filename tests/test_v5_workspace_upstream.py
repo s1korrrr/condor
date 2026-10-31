@@ -51,6 +51,18 @@ requests = []
 timeouts = []
 
 
+@pytest.mark.asyncio
+async def test_paper_transport_enforces_api73_page_limit_and_cursor_capacity(tmp_path):
+    requests.clear()
+    upstream = V5Upstream(make_settings(tmp_path), session_factory=Session)
+    await upstream.observation("/v1/paper/history?limit=200")
+    assert len(requests) == 1
+    for query in ("limit=201", "limit=1000", "cursor=" + "a" * 513):
+        with pytest.raises(UpstreamError, match="operation_not_allowed"):
+            await upstream.observation("/v1/paper/history?" + query)
+    assert len(requests) == 1
+
+
 class SlowValidResponse(Response):
     simulated_elapsed_sec = 10.1
 

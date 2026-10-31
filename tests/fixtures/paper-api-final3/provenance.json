@@ -1,0 +1,86 @@
+{
+  "api_revision": "7b12d1c210cfde14af4f75071850187bd38f3089",
+  "producer_revision": "d13fb9b1ab72d3d167a6edc71f1ef363789cc553",
+  "origin": "/home/rsi/dev/rsibot/.workspace/scratch/v5-wp14/final3-20261030",
+  "records": {
+    "executors.json": {
+      "retained_response": "api/executors.json",
+      "http": 200,
+      "wrapper_sha256": "5191a93ce02c14e2072b5bf344883ed042904986d07e018220cb3e6db7bb53a0",
+      "body_sha256": "36a613a376f39b1b31824d831f681fe27fa86c9c35685fb3c87656919223bba4",
+      "vendored_sha256": "0b60a09d865088a950ecdf39fd6c2089b9409993dd8664c1ff5b2d7956bc75da"
+    },
+    "fills.json": {
+      "retained_response": "api/fills.json",
+      "http": 200,
+      "wrapper_sha256": "1411701a1b6d89f52ff2d1c9a40138ff5d10a6e14e79be68ef01129fcf7682c8",
+      "body_sha256": "e5ad635f2e63b228728560f41d51771a6262e128f3dd61e255c90327e9a54839",
+      "vendored_sha256": "9e87eb4dc377c0064395320878ebc7054653962f17b7d7bcd6f7ef43bf8859e6"
+    },
+    "status.json": {
+      "retained_response": "api/status.json",
+      "http": 200,
+      "wrapper_sha256": "e221b3811aff33e8b93eb578ec75de79f34adda0a97e1a204a9d10d53a5acd09",
+      "body_sha256": "b9190177ca1d660820434c8aee988cb16e0d09b1b86107ff6c4219ffde703a7f",
+      "vendored_sha256": "10f9f77ef538e40e6cf0d833008a15e1e65767d1a8668af812a0e47fcaf786da"
+    },
+    "wallet.json": {
+      "retained_response": "api/wallet.json",
+      "http": 200,
+      "wrapper_sha256": "3bb6cea32892a8a8f7c3a7d033e5971874d33268b7564189c4a1ca5f952a9080",
+      "body_sha256": "d993c3e070b179a22f0ee3d7394083bfb03abb8fd378d158596ad4185e9259ba",
+      "vendored_sha256": "9381a92b5ce5eeacc618458f37adbfd99a09870a8c538ecfb7cb35c1aeba8f8d"
+    },
+    "decisions.json": {
+      "retained_response": "api/decisions.json",
+      "http": 200,
+      "wrapper_sha256": "4bb424764c2c4e2de05359623e6720de62bcb251f683eda8d72dafa2896055e6",
+      "body_sha256": "098c3863937a0a4ec2b2efe64090bc7e082d41beadd1e6526408042aa62994a9",
+      "vendored_sha256": "94f0d626f16e3557a3a42f406eecead1d26d0bf22736ceb4819370d92e329ba8"
+    },
+    "history.json": {
+      "retained_response": "api/history.json",
+      "http": 200,
+      "wrapper_sha256": "ee9e03df4292d6a84b27cc259bcab022e866ea59478ab81ab3eb354beed71a69",
+      "body_sha256": "810868f7159638810db3be3a1ac835b4d15836b2f77c6b3b8c2ffbd708da5374",
+      "vendored_sha256": "301cf751d2c2ad7f8ec1402480bfdafea1cc341e2ed1e46a1c87101165f84b31"
+    },
+    "operations.json": {
+      "retained_response": "api/operations.json",
+      "http": 200,
+      "wrapper_sha256": "94a7163f3d284c60bfc7cbcaf23b80c1875058fda8ab14155354c936c979895a",
+      "body_sha256": "faf3080b002ef0ed3367926e112c83a299930aacb98497ebc30b02115f321856",
+      "vendored_sha256": "2c6aaab7344001c43202af913a30f85b3b2118c67ac705cca9157257756d2597"
+    },
+    "positions.json": {
+      "retained_response": "api/positions.json",
+      "http": 200,
+      "wrapper_sha256": "f6e37563b9a324c8f46805ef84ea2482004ef0bdb475c05aa96775a739993536",
+      "body_sha256": "c7d2ade661854afb98f70ab18425f19caf656321ac39810ffe7a7365aad41cdf",
+      "vendored_sha256": "461f330cb85a357f389d5cc0f370daeb95bacadbdcd726e5e48327db434df53b"
+    },
+    "risk.json": {
+      "retained_response": "api/risk.json",
+      "http": 200,
+      "wrapper_sha256": "9cae9737626a5c221ed930be164b54666e04c7f18515fb1fa63ec0632d842e02",
+      "body_sha256": "99d4f5a52fab4a3b68b1d3d63c43f8e5608721a049aa5f86023bb5547a905478",
+      "vendored_sha256": "f50c0c1f6eaf3faea416afe8342e256c508b7de00e00e5d31c6d98bf87e528fe"
+    },
+    "native-observation.json": {
+      "retained_source": "trial/data/runtime_status/paper_observation.v2.json",
+      "sha256": "f158eb03398f79cb056b01c538f489d3fdb05ca7e4e3d0c431d99f2b653e2668",
+      "vendored_sha256": "8a45f57a56f3eff7f7326343be1972b6f9c1e6843bc1ffaf4b92411de4268ceb"
+    },
+    "host-operations.json": {
+      "retained_source": "host-export/operations.json",
+      "sha256": "9e11682beb85fc9fd925a28184bdb76ab789d5e1e4f5dab8df69338d1fa8a31d",
+      "vendored_sha256": "9e11682beb85fc9fd925a28184bdb76ab789d5e1e4f5dab8df69338d1fa8a31d"
+    },
+    "native-status.json": {
+      "retained_source": "trial/data/runtime_status/meridian_v5_paper.status.json",
+      "sha256": "7e9544579f100830b9151522e59ebf163de56860cf030353faf5d56d125c1656",
+      "vendored_sha256": "ccd516997390fa4562ab40a2d00f3d88e7736bb95fe1da634ffd539251078fc6"
+    }
+  },
+  "orders_note": "API73 has no orders HTTP route. Orders are validated directly from the retained real native observation; no HTTP200 orders response is fabricated."
+}

@@ -14,6 +14,12 @@ const object = (value: unknown): Record<string, unknown> => value && typeof valu
 const text = (value: unknown): string | null => typeof value === 'string' && value ? value : null;
 const count = (value: unknown): number | null => typeof value === 'number' && Number.isInteger(value) && value >= 0 ? value : null;
 
+export function paperHeartbeat(generatedAtMs: number | null, ownerState: string, now: number): { current: boolean; ageSeconds: number | null } {
+  if (generatedAtMs === null || !Number.isSafeInteger(generatedAtMs) || generatedAtMs < 0 || generatedAtMs > now + 5000) return { current: false, ageSeconds: null };
+  const ageSeconds = Math.max(0, (now - generatedAtMs) / 1000);
+  return { current: ownerState === 'FRESH' && ageSeconds <= 30, ageSeconds };
+}
+
 /** Operations workspace → bot health. Rejects another bot's payload and a future or unstamped generation. */
 export function projectFleetHealth(payload: unknown, bot: string, now: number): FleetHealth | null {
   const root = object(payload);

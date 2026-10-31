@@ -1,5 +1,25 @@
 export type AgentStatus = "ready" | "blocked";
 
+export type PaperReadState = "available" | "collecting" | "not_applicable" | "degraded" | "stale";
+export interface PaperRead {
+  schema: "rsibot.v5-paper.read.v1";
+  section: string;
+  state: PaperReadState;
+  reason: string | null;
+  bot_id: string | null;
+  execution_mode: "paper";
+  simulated: true;
+  snapshot_id: string | null;
+  generated_at_ms: number | null;
+  source_at_ms?: number | null;
+  observed_at_ms?: number;
+  completeness?: string;
+  capabilities?: Record<string, unknown>;
+  data: unknown;
+  next_cursor?: string | null;
+  source?: Record<string, unknown>;
+}
+
 export interface V5Skill {
   id: string;
   name: string;

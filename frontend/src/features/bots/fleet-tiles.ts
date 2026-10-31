@@ -3,7 +3,7 @@ import { formatDecimal } from '@/features/quant-ops/format';
 import { projectBotInventory, type buildBotPositionView } from './position-view';
 import type { BotHoldings, HoldingsState } from '@/lib/fleet-holdings';
 import type { ExecutionStats, QuantBotSummary, QuantCycles } from './quant-roster';
-import { stackRestarts, type FleetHealth } from './fleet-health';
+import { paperHeartbeat, stackRestarts, type FleetHealth } from './fleet-health';
 import { paperNote, splitPaper } from './fleet-inventory';
 
 /**
@@ -24,6 +24,7 @@ export type FleetBotInput = {
   cycles: QuantCycles | null;
   execution: ExecutionStats | null;
   health: FleetHealth | null;
+  paperOwner?: { generatedAtMs: number | null; state: string };
   /** Lifetime totals from the owner's fill ledger; used where the owner publishes no lifetime fee/fill total. */
   fillTotals?: FillTotals | null;
 };
@@ -115,6 +116,7 @@ export function projectBotStats(input: FleetBotInput, now: number): BotStats {
   const observedAt = quant?.observedAt ?? view?.observedAt ?? null;
   const observedMs = at(observedAt);
   const age = observedMs === null ? null : Math.max(0, (now - observedMs) / 1000);
+  const paperClock = input.paperOwner ? paperHeartbeat(input.paperOwner.generatedAtMs, input.paperOwner.state, now) : null;
   // Fees: the owner's exact lifetime total when it publishes one in a known quote; when it withholds it (null, or
   // an `unknown` quote), the fill ledger stands in only if it is complete. Same precedence as the server summary,
   // so a value never appears from the ledger while cycles load and then vanishes when they land.
@@ -141,7 +143,7 @@ export function projectBotStats(input: FleetBotInput, now: number): BotStats {
     volume: feesBasis === 'fill ledger' ? ledger!.volume : stats ? finite(stats.grossVolume) : ledger?.volume ?? null,
     quote: feesBasis === 'fill ledger' ? ledger!.quote : cycleQuote ?? ledger?.quote ?? null,
     feesBasis, inexactFees: feesBasis === 'fill ledger' ? ledger!.inexactFees : 0,
-    heartbeatAgeSeconds: age, heartbeatCurrent: quant?.freshness === 'current', heartbeatRead: quant !== null,
+    heartbeatAgeSeconds: paperClock ? paperClock.ageSeconds : age, heartbeatCurrent: paperClock ? paperClock.current : quant?.freshness === 'current', heartbeatRead: paperClock ? paperClock.ageSeconds !== null : quant !== null,
     stackHeartbeat: health?.heartbeat.state ?? null, bootId: health?.heartbeat.bootId ?? null, sequence: health?.heartbeat.sequence ?? null,
   };
 }

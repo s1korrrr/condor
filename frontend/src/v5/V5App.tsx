@@ -1,26 +1,36 @@
 import { QueryClient, QueryClientProvider, useQuery } from "@tanstack/react-query";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
 import { BrowserRouter, Navigate, Outlet, Route, Routes } from "react-router-dom";
 import { ServerContext } from "@/hooks/useServer";
 import { AuthContext, type AuthState } from "@/lib/auth";
 import type { User } from "@/lib/auth-session";
 import { V5ApiError, v5Api } from "./api";
 import { botsOwnerUnavailableReason } from "./policy";
-import { AgentsPage, AgentDetailPage, OverviewPage, SessionDetailPage, SessionsPage, SettingsPage } from "./V5Pages";
+import { AgentsPage, AgentDetailPage, PaperReadinessPage, SessionDetailPage, SessionsPage, SettingsPage } from "./V5Pages";
 import { V5MarketHome } from "./V5MarketHome";
 import { V5AppShell } from "./V5AppShell";
 import { clearSessionCache, confirmLogout } from "./session-policy.mjs";
+import { V5PaperBots } from "@/pages/tabs/ActiveBotsTab";
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 15_000 } } });
-const Capital = lazy(() => import("@workspace-monitoring").then(m => ({ default: function V5CapitalPage() { return <m.Overview accountPresentation={{ description: "V5 account owner is unbound; no account valuation is available.", unavailable: "Bind the V5 account owner to view capital. This V5 service cannot select the existing stack account.", valuationNote: "V5 owner valuation", registryUnavailable: "V5 native owner unbound · bot registration unavailable" }} />; } })));
+const Capital = lazy(() => import("@workspace-monitoring").then(m => ({ default: function V5CapitalPage() {
+  const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile });
+  const paper = Boolean(profile.data?.readiness.paper_owner);
+  return <m.Overview accountPresentation={{ description: paper ? "Simulated paper wallet · live exchange balances are not applicable." : "V5 account owner is unbound; no account valuation is available.", unavailable: paper ? "The native paper wallet read is unavailable. Check the observation binding; no zero balance is substituted." : "Bind the V5 account owner to view capital. This V5 service cannot select the existing stack account.", valuationNote: paper ? "Simulated wallet · native owner valuation" : "V5 owner valuation", registryUnavailable: paper ? "Paper owner · registration is read-only" : "V5 native owner unbound · bot registration unavailable" }} />;
+} })));
 const Operations = lazy(() => import("@workspace-monitoring").then(m => ({ default: m.Operations })));
 const Tradepad = lazy(() => import("@workspace-monitoring").then(m => ({ default: m.Tradepad })));
 const Bots = lazy(() => import("@/pages/Bots").then(m => ({ default: function V5BotsPage() {
   // Only a fresh read-only paper status lifts the unbound notice; capabilities stay read-only.
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, retry: false, refetchInterval: 15_000 });
+  const paper = profile.data?.readiness.paper_owner;
+  if (paper?.bot_name) return <V5PaperBots bot={paper.bot_name} generatedAt={paper.generated_at} ownerState={paper.state} />;
   return <m.Bots allowDrafts={false} ownerUnavailableReason={botsOwnerUnavailableReason(profile.data)} />;
 } })));
-const Research = lazy(() => import("@/pages/Research").then(m => ({ default: m.Research })));
+const Research = lazy(() => import("@/pages/Research").then(m => ({ default: function V5ResearchPage() {
+  const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile });
+  return <m.Research v5Paper={Boolean(profile.data?.readiness.paper_owner)} />;
+} })));
 
 function LoginPage() {
   const [token, setToken] = useState("");
@@ -32,11 +42,12 @@ function LoginPage() {
     catch (cause) { setError(cause instanceof Error ? cause.message : "Sign in failed."); }
     finally { setBusy(false); }
   }
-  return <main className="v5-login-wrap"><section className="v5-login-panel" aria-labelledby="login-title"><div className="v5-brand-mark" aria-hidden="true"><span>R</span><i /></div><h1 id="login-title">RSI V5</h1><p>Sign in to the Razer research workspace.</p><form onSubmit={submit}><label htmlFor="v5-session-token">Workspace access token</label><input id="v5-session-token" type="password" autoComplete="off" value={token} onChange={e => setToken(e.target.value)} required />{error && <p className="v5-error-text" role="alert">{error}</p>}<button className="v5-button v5-button-primary v5-login-button" disabled={busy || !token.trim()}>{busy ? "Signing in…" : "Sign in"}</button></form><small>Sign-in uses the V5 workspace cookie.</small></section></main>;
+  return <main className="v5-login-wrap"><section className="v5-login-panel" aria-labelledby="login-title"><div className="v5-brand-mark" aria-hidden="true"><span>R</span><i /></div><h1 id="login-title">RSI V5</h1><p>Sign in to the Razer workspace. If your session expired, sign in again to continue.</p><form onSubmit={submit}><label htmlFor="v5-session-token">Workspace access token</label><input id="v5-session-token" type="password" autoComplete="off" value={token} onChange={e => setToken(e.target.value)} required />{error && <p className="v5-error-text" role="alert">{error}</p>}<button className="v5-button v5-button-primary v5-login-button" disabled={busy || !token.trim()}>{busy ? "Signing in…" : "Sign in"}</button></form><small>Sign-in uses the V5 workspace cookie.</small></section></main>;
 }
 
 function AuthGate() {
-  const auth = useQuery({ queryKey: ["v5-auth"], queryFn: v5Api.auth, retry: false });
+  const auth = useQuery({ queryKey: ["v5-auth"], queryFn: v5Api.auth, retry: false, refetchInterval: 15_000, refetchOnWindowFocus: true });
+  useEffect(() => { if (auth.data?.authenticated === false || (auth.isError && auth.error instanceof V5ApiError && auth.error.status === 401)) client.removeQueries({ predicate: query => query.queryKey[0] !== "v5-auth" }); }, [auth.isError, auth.error, auth.data?.authenticated]);
   if (auth.isPending) return <main className="v5-loading-screen"><div className="v5-spinner" /><span>Connecting to the V5 workspace…</span></main>;
   if (auth.isError && auth.error instanceof V5ApiError && auth.error.status === 401) return <LoginPage />;
   if (auth.isError) return <main className="v5-loading-screen"><div className="v5-error-panel" role="alert"><strong>Workspace connection failed</strong><span>{auth.error.message}</span><button className="v5-button" onClick={() => void auth.refetch()}>Retry connection</button></div></main>;
@@ -60,5 +71,5 @@ function V5Providers({ children }: { children: React.ReactNode }) {
 }
 
 export function V5App() {
-  return <QueryClientProvider client={client}><BrowserRouter><Routes><Route element={<AuthGate />}><Route element={<ProfileGate />}><Route path="/" element={<V5MarketHome />} /><Route path="/capital" element={<Capital />} /><Route path="/bots" element={<Bots />} /><Route path="/operations" element={<Operations />} /><Route path="/research" element={<Research />} /><Route path="/backtests" element={<Tradepad />} /><Route path="/market/evidence" element={<V5MarketHome />} /><Route path="/v5/readiness" element={<OverviewPage />} /><Route path="/agents" element={<AgentsPage />} /><Route path="/agents/:id" element={<AgentDetailPage />} /><Route path="/sessions" element={<SessionsPage />} /><Route path="/sessions/:id" element={<SessionDetailPage />} /><Route path="/settings" element={<SettingsPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Route></Route></Routes></BrowserRouter></QueryClientProvider>;
+  return <QueryClientProvider client={client}><BrowserRouter><Routes><Route element={<AuthGate />}><Route element={<ProfileGate />}><Route path="/" element={<V5MarketHome />} /><Route path="/capital" element={<Capital />} /><Route path="/bots" element={<Bots />} /><Route path="/operations" element={<Operations />} /><Route path="/research" element={<Research />} /><Route path="/backtests" element={<Tradepad />} /><Route path="/market/candles" element={<V5MarketHome />} /><Route path="/market/evidence" element={<V5MarketHome />} /><Route path="/v5/readiness" element={<PaperReadinessPage />} /><Route path="/agents" element={<AgentsPage />} /><Route path="/agents/:id" element={<AgentDetailPage />} /><Route path="/sessions" element={<SessionsPage />} /><Route path="/sessions/:id" element={<SessionDetailPage />} /><Route path="/settings" element={<SettingsPage />} /><Route path="*" element={<Navigate to="/" replace />} /></Route></Route></Routes></BrowserRouter></QueryClientProvider>;
 }

@@ -41,7 +41,7 @@ import "@/features/research/workspace.css";
 import "@/features/research/lab.css";
 
 const read = readResearch(authFetch);
-export function Research() {
+export function Research({ v5Paper = false }: { v5Paper?: boolean } = {}) {
   const { server } = useServer();
   const [params, setParams] = useSearchParams();
   const [previousServer, setPreviousServer] = useState(server);
@@ -54,7 +54,7 @@ export function Research() {
   }, [server, serverChanged, params, setParams]);
   return (
     <div className="quant-workspace research-lab">
-      {server && !serverChanged ? (
+      {v5Paper ? <><header className="quant-heading"><div><h1>Research</h1><p>Paper operating test · economic support remains V5_NOT_SUPPORTED.</p></div></header><section className="quant-notice" role="status"><h2>Not connected to this paper workspace</h2><p>The Research OS read export is not connected. Existing owner records and decisions remain authoritative; this page does not infer strategy support from paper uptime.</p><p>Next step: bind the existing V5 Research OS record IDs, hashes and decisions through a read-only export. No backtest or model call is started by viewing this page.</p></section></> : server && !serverChanged ? (
         <ResearchLab key={server} server={server} />
       ) : (
         <>

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import type { PaperRead } from "@/v5/contracts";
+import { usePaperSnapshot } from "@/v5/usePaperSnapshot";
 import { paperAmount, paperCoherentRead, paperCompleteRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperPairObservation, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperTime, paperWalletInventory, paperWalletTotals, paperWords } from "@/v5/policy";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
 import { paperHeartbeat } from "@/features/bots/fleet-health";
@@ -708,6 +709,7 @@ export function PaperWorkspace({ reads, accountingRead, accountingError = false,
   return <>
     {errors.map(error => <section className="v5-error-panel" role="alert" key={error}>{error}</section>)}
     {hold && <PaperIsolatedSection name="Entry hold" resetKey={resetKey} render={() => <aside className="paper-fleet" role="status"><div className="paper-section-heading"><h2>New acquisitions held</h2><PaperBadge state="degraded">Owner action required</PaperBadge></div><div className="paper-rails">{holds.map(item => <article key={item.reason}><h3>{item.label}</h3><p>{item.explanation}</p><p className="paper-caption">{item.action}</p></article>)}</div><p className="paper-caption">Clock high-water mark: {paperTime(paperObject(risk.clock_recovery).high_water_ms, now)}. Order protection is verified per position below.</p></aside>} /> }
+    {!complete ? <section className="paper-section" role="status"><h2>Checking owner snapshot</h2><p>Risk controls and numeric rail limits are pending until the complete owner snapshot arrives. No absent controls or capital totals are inferred.</p><ul>{["status", "wallet", "positions", "fills", "executors", "risk", "decisions", "history", "accounting"].map(section => <li key={section}>{paperWords(section)}: {bySection[section] ? "Received · awaiting complete snapshot" : "Pending"}</li>)}</ul></section> : <>
     <PaperIsolatedSection name="Paper fleet" resetKey={resetKey} render={() => <section className="paper-fleet"><div className="paper-section-heading"><div><span className="paper-eyebrow">SIMULATED ACCOUNT</span><h2>Paper fleet</h2></div><PaperBadge state={heartbeat === "Fresh" ? "available" : "stale"}>{heartbeat} · heartbeat</PaperBadge></div><p className="paper-caption">{bot} · Valuation: {paperWords(wallet.valuation_policy)}. Book freshness and completeness are separate from process heartbeat.</p><dl className="paper-metrics">
       <PaperMetric label="Wallet equity" value={paperAmount(walletTotals?.equity, "USDC")} note={walletTotals ? "Fresh complete owner wallet" : "Fresh complete wallet required"} />
       <PaperMetric label="Available cash" value={paperAmount(walletTotals?.cash, "USDC")} />
@@ -733,17 +735,20 @@ export function PaperWorkspace({ reads, accountingRead, accountingError = false,
     {riskControllers && <PaperIsolatedSection name="Controller entry controls" resetKey={resetKey} render={() => <section className="paper-section"><div className="paper-section-heading"><h2>Controller entry controls</h2><PaperBadge state={paperReadState(bySection.risk, now)}>{paperWords(paperReadState(bySection.risk, now))} owner report</PaperBadge></div><p className="paper-caption">Report as of {paperTime(bySection.risk?.source_at_ms ?? bySection.risk?.generated_at_ms, now)}. Entry holds never authorize a forced sale.</p><div className="paper-rails">{riskControllers.map(controller => <article className="paper-pair" key={controller.id}><h3>{controller.id}</h3><PaperBadge state={controller.holds.length || controller.operator.paused === true || controller.operator.emergency === true || controller.native.entry_hold === true || !controller.current || controller.native.complete !== true ? "degraded" : "available"}>{controller.holds.length || controller.operator.paused === true || controller.operator.emergency === true || controller.native.entry_hold === true ? "New entries held" : !controller.current ? "Current entry state unknown" : controller.native.complete === true ? "Native evidence complete" : "Native evidence incomplete"}</PaperBadge><p>Reported operator pause: {controller.operator.paused === true ? "Yes" : controller.operator.paused === false ? "No" : "Not published"} · Reported emergency halt: {controller.operator.emergency === true ? "Yes" : controller.operator.emergency === false ? "No" : "Not published"}</p>{controller.holds.map(hold => <p key={hold.reason}>{hold.explanation} Protective exits: preserved.</p>)}</article>)}</div></section>} />}
     <PaperIsolatedSection name="Risk rails" resetKey={resetKey} render={() => <section className="paper-section"><div className="paper-section-heading"><h2>Risk rails & entry latch</h2><PaperBadge state={paperReadState(bySection.risk, now)}>{paperWords(paperReadState(bySection.risk, now))}</PaperBadge></div><p className="paper-caption">{(riskControllers ? `Controller entry observations are shown above.${rails.length ? "" : " Numeric rail limits are not published"}` : paperWords(bySection.risk?.reason ?? "controls_not_integrated")).replace(/[.!?]+$/, "")}. Loss rails stop new acquisitions, never force a sale.</p><div className="paper-rails">{rails.length ? rails.map((rail, index) => <article className="paper-pair" key={index}><h3>{paperWords(rail.label)}</h3><p>{paperAmount(rail.used_quote, "USDC")} of {paperAmount(rail.limit_quote, "USDC")}</p>{typeof rail.used_percent === "number" && Number.isFinite(rail.used_percent) && rail.used_percent >= 0 && rail.used_percent <= 100 ? <progress max={100} value={rail.used_percent} aria-label={`${paperWords(rail.label)} use`} /> : <p className="paper-caption">Use not published</p>}</article>) : ["Pair exposure", "Program exposure", "New acquisitions"].map(label => <article className="paper-pair" key={label}><h3>{label}</h3><PaperBadge>{entryHoldObserved && label === "New acquisitions" ? "Held by owner" : "Not connected"}</PaperBadge><div className="paper-empty-rail" aria-hidden="true" /><p className="paper-caption">{entryHoldObserved && label === "New acquisitions" ? "The owner reports an entry hold. Review the controller evidence and owner clearing procedure above; protection is verified per position." : "No owner limit or latch observation. No use bar is inferred."}</p></article>)}</div></section>} />
     <PaperIsolatedSection name="Decisions and paper control" resetKey={resetKey} render={() => <section className="paper-section"><h2>Decisions & paper control</h2><div className="paper-rails"><article><h3>Exit policy</h3><p>{paperWords(paperObject(decisions.trailing).reason)}</p><p>Underwater positions remain held. Protective exits must survive entry halt.</p></article><article><h3>Acquisition plan</h3><p>{paperWords(paperObject(decisions.dca).reason)}</p><p>Comparable history: {paperWords(paperObject(bySection.history?.data).reason)}</p></article><article><h3>{paperControlState(null)}</h3><p>Read-only dashboard. A separately authenticated owner path must acknowledge paper commands before controls can appear here.</p></article></div><details className="paper-provenance"><summary>Observation provenance</summary><p>Snapshot: {reads[0]?.snapshot_id ?? "Not published"}</p><p>Observed: {paperTime(reads[0]?.generated_at_ms, now)}</p></details></section>} />
+    </>}
   </>;
 }
 
-async function readPaper(path: string, section: string): Promise<PaperRead> {
-  const response = await fetch(`/api/v5/dashboard/read?${new URLSearchParams({ path })}`, { credentials: "include", cache: "no-store", signal: AbortSignal.timeout(14_000) });
+async function readPaper(path: string, section: string, signal: AbortSignal): Promise<PaperRead> {
+  signal.throwIfAborted();
+  const response = await fetch(`/api/v5/dashboard/read?${new URLSearchParams({ path })}`, { credentials: "include", cache: "no-store", signal: AbortSignal.any([signal, AbortSignal.timeout(14_000)]) });
   if (!response.ok) {
     const body = await response.json().catch(() => null);
     if (response.status === 502 && body?.detail?.reason === "schema_invalid" && typeof body.detail.section === "string") throw new PaperSectionSchemaError(body.detail.section, body.detail.holds);
     throw Object.assign(new Error(response.status === 409 ? "The owner snapshot changed. Refresh to read a coherent snapshot." : response.status === 401 ? "Your workspace session expired. Sign in again." : "Paper observations are unavailable. Check the observation service and its retained read-contract evidence; no empty wallet is substituted."), {status:response.status});
   }
   const value = await response.json() as PaperRead;
+  signal.throwIfAborted();
   if (!value || value.section !== section || paperSectionError(value)) throw new PaperSectionSchemaError(section, section === "risk" ? paperRiskHolds(value).map(({ reason }) => ({ reason })) : undefined);
   return value;
 }
@@ -756,19 +761,16 @@ class PaperSectionSchemaError extends Error {
 
 export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; generatedAt: number | null; ownerState: string }) {
   const [layout, setLayout] = useState<"grid" | "compact">("grid");
-  const [progress, setProgress] = useState<{bot: string; reads: PaperRead[]} | null>(null);
   const [now, setNow] = useState(Date.now);
   useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
-  const query = useQuery({
-    queryKey: ["v5-paper-bots", bot], retry: false, refetchInterval: 15_000,
-    queryFn: () => {
+  const query = usePaperSnapshot<PaperRead[]>(["v5-paper-bots", bot], true, 9, (progress, signal) => {
       const prefix = `/api/v1/servers/rsibot-v5/`;
       const sections = Object.entries({...PAPER_SECTIONS, accounting:"fleet/accounting"}).map(([section, suffix]) => {
         const path = ["executors", "risk", "decisions"].includes(section) ? `${prefix}bots/${encodeURIComponent(bot)}/${suffix}` : `${prefix}${suffix}`;
         return {section, path, paginate:["positions", "fills", "executors", "history"].includes(section)};
       });
       return paperCoherentRead(`${prefix}bots/${encodeURIComponent(bot)}/native/status`, sections, async (path, section, status) => {
-        try { return await readPaper(path, section); }
+        try { return await readPaper(path, section, signal); }
         catch (error) {
           if (!status) throw error;
           if (section === "accounting" && error && typeof error === "object" && "status" in error && ![409,503,401,403].includes(Number(error.status))) {
@@ -777,19 +779,19 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
           if (!(error instanceof PaperSectionSchemaError) || error.section !== section) throw error;
           return { ...status, section, state: "degraded" as const, reason: error.message, data: section === "risk" && error.holds ? { holds: error.holds } : null, completeness: "unavailable" };
         }
-      }, undefined, reads => setProgress({bot, reads}));
-    },
+      }, undefined, progress);
   });
-  const complete = !query.isPending && !query.isFetching && !query.isError;
-  const reads = query.isError ? [] : complete ? query.data ?? [] : progress?.bot === bot ? progress.reads : [];
+  const complete = query.complete;
+  const reads = query.data ?? (query.isError ? [] : query.reads);
   const accounting = complete ? reads.find(read => read.section === "accounting") : undefined;
   const clock = paperHeartbeat(generatedAt === null ? null : Math.floor(generatedAt * 1000), ownerState, now);
   const heartbeat = clock.current ? "Fresh" : ownerState === "UNAVAILABLE" ? "Unavailable" : "Stale";
   return <div className="v5-paper-bots" data-layout={layout}>
     <header className="v5-page-heading"><div><h1>Paper bots</h1><p>{bot} · simulated wallet · live disabled</p></div><div className="v5-button-row"><button className="v5-button" aria-pressed={layout === "grid"} onClick={() => setLayout("grid")}>Grid</button><button className="v5-button" aria-pressed={layout === "compact"} onClick={() => setLayout("compact")}>Compact</button><button className="v5-button" onClick={() => void query.refetch()}>Refresh paper data</button></div></header>
-    {!complete && !query.isError && <p role="status">Reading one owner snapshot: {reads.length}/9 sections. Totals are withheld until the read completes.</p>}
+    {complete && <p>Last complete owner snapshot · As of {paperTime(reads[0]?.generated_at_ms, now)}</p>}
+    {query.progress && <p role="status">{query.progress}</p>}
     {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
-    {!query.isError && reads.length > 0 && <PaperWorkspace reads={reads} complete={complete} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} />}
+    {(!query.isError || complete) && <PaperWorkspace reads={reads} complete={complete} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} />}
   </div>;
 }
 

@@ -8,6 +8,13 @@ import { frontendModules } from './helpers/frontend-module.mjs';
 
 const fixture = section => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
 
+for (const section of ['status','wallet','risk','decisions','history','accounting','operations']) for (const value of [{},[]]) test(`${section} rejects a monetary container in fee_quote: ${JSON.stringify(value)}`, () => {
+  const read = fixture(section);
+  assert.equal(paperSectionError(read),null);
+  read.data.fee_quote = value;
+  assert.match(paperSectionError(read),/schema invalid/);
+});
+
 test('three-worker pinned pool streams sections and drains failures before restart', async () => {
   let active = 0, peak = 0, attempt = 0;
   const progress = [];

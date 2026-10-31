@@ -35,11 +35,11 @@ for (const page of ['health','capital','operations','bots']) for (const failure 
     }
     assert.equal(queries[0].retry,false);
     if (exhausted) {
-      await assert.rejects(queries[0].queryFn(), /unavailable|snapshot changed/);
+      await assert.rejects(queries[0].queryFn({signal:new AbortController().signal}), /unavailable|snapshot changed/);
       assert.equal(attempt,2);
       return;
     }
-    const result=await queries[0].queryFn();
+    const result=await queries[0].queryFn({signal:new AbortController().signal});
     assert.equal(attempt,2);
     if(page==='bots'||page==='health')assert.ok(result.every(read=>read.snapshot_id==='test:2'));
     if(page==='capital')assert.deepEqual([result.snapshot_id,result.history_read.snapshot_id,result.accounting_read.snapshot_id],['test:2','test:2','test:2']);

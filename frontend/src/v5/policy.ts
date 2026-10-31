@@ -175,8 +175,8 @@ export function paperSectionError(read: Partial<import("./contracts").PaperRead>
     ("capabilities" in read && (!Array.isArray(read.capabilities) || read.capabilities.some(value => typeof value !== "string"))) ||
     read.state === "available" && read.data == null) return invalid();
   if (read.data == null) return null;
+  if (!paperNativeRecordValid(read.data)) return invalid();
   if (["positions", "fills", "executors", "orders"].includes(read.section ?? "")) {
-    if (!paperNativeRecordValid(read.data)) return invalid();
     if (!records(read.data) || read.data.some(row => ["executor_id", "controller_id", "trading_pair", "state"].some(key => row[key] != null && typeof row[key] !== "string"))) return invalid();
     const required: Record<string, string[]> = { positions: ["position_id", "controller_id", "trading_pair", "state", "quantity"], executors: ["executor_id", "controller_id", "state"], fills: ["trade_id", "order_id", "trading_pair", "side", "quantity", "price"], orders: ["order_id", "executor_id", "side"] };
     if (read.data.some(row => required[read.section!].some(key => typeof row[key] !== "string" || !row[key]))) return invalid();

@@ -1,0 +1,95 @@
+✔ C1 lifetime aggregates use native program totals at the wallet snapshot, never the bounded fill page (9.651659ms)
+✔ Capital rejects malformed arrays rather than presenting an empty complete parse (0.804088ms)
+✔ C3 accounting reads must match wallet owner, snapshot, time and paper identity (2.474933ms)
+✔ paper equity uses one native snapshot and preserves exact decimal strings (0.293728ms)
+✔ normal C3 collecting is a connection state, never fake zero money or a corruption error (0.438713ms)
+✔ cross-snapshot, live and malformed money fail closed (0.520699ms)
+✔ inconsistent or partial valuation never displays reconciled equity (0.537871ms)
+✔ each native asset must also reconcile total to available plus reserved without negative spot balances (0.338775ms)
+✔ collecting history cannot imply zero return, 24h, 7d or Sharpe (0.408202ms)
+✔ frozen C1 partial close and held inventory reconcile without counting executors twice (1.389274ms)
+✔ explicit paper scope avoids live capital readers; default view remains the live view (1310.677245ms)
+✔ Operations rejects malformed nested collections instead of a partial success (1.150856ms)
+✔ five services retain UTC source times, restarts and independent readiness/liveness (0.19055ms)
+✔ unredacted or unbounded log exports are rejected, not printed (0.264911ms)
+✔ cross-snapshot or live observations cannot mix into paper operations (0.239993ms)
+✔ paper page renders five-service evidence without mounting legacy recorder or research reads (443.11051ms)
+✔ Capital groups large exact decimals, retains exact tooltip and removes doubled periods (681.908264ms)
+✔ Capital partial snapshot retains balances but withholds all metric totals (653.182584ms)
+✔ Operations gives known checks human labels and keeps exact IDs secondary (563.420283ms)
+✖ Capital first-load pending history and accounting never imply absent owner exports (553.972977ms)
+✖ Capital first load without a wallet reports checking, not missing exports (694.634505ms)
+✖ Capital normalizes leading zeros without losing the exact native tooltip (694.203922ms)
+ℹ tests 22
+ℹ suites 0
+ℹ pass 19
+ℹ fail 3
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6185.816436
+
+✖ failing tests:
+
+test at test/v5-dashboard-polish.test.mjs:40:1
+✖ Capital first-load pending history and accounting never imply absent owner exports (553.972977ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /History pending/. Input:
+
+  '<div class="capital-workspace capital-paper" data-scope="paper"><header class="capital-heading"><div><h1>Capital</h1><p>PAPER · Simulated wallet only · Live capital excluded</p></div><button type="button" class="capital-refresh">Refresh read</button></header><p class="capital-paper-source">Owner <code>v5-paper</code> · Snapshot <code>boot-a:12</code> · As of 2026-10-29 10:00:00 UTC · available</p><p role="status">Checking: 2/4 sections</p><p role="status">Native cash plus marked inventory reconciles to wallet equity.</p><section class="capital-metrics"><article><span>Initial simulated funding</span><strong>Awaiting complete snapshot</strong></article><article><span>Available cash</span><strong>Awaiting complete snapshot</strong></article><article><span>Reserved cash</span><strong>Awaiting complete snapshot</strong></article><article><span>Marked inventory</span><strong>Awaiting complete snapshot</strong></article><article><span>Wallet equity</span><strong>Awaiting complete snapshot</strong></article><article><span>Fees paid · quote equivalent</span><strong>Awaiting complete snapshot</strong></article><article><span>External simulated cash flows</span><strong>Awaiting complete snapshot</strong></article><article><span>Native realized controller PnL</span><strong>Awaiting complete snapshot</strong></article><article><span>Native unrealized controller PnL</span><strong>Awaiting complete snapshot</strong></article></section><section class="capital-panel"><div class="capital-panel-heading"><h2>Native simulated balances</h2><p>One wallet snapshot; held and executor inventory must not be counted twice.</p></div><div class="capital-paper-balances"><article><h3>USDC</h3><dl><div><dt>total</dt><dd><span title="899.9 USDC">899.9 USDC</span></dd></div><div><dt>available</dt><dd><span title="899.9 USDC">899.9 USDC</span></dd></div><div><dt>reserved</dt><dd><span title="0 USDC">0 USDC</span></dd></div></dl></article><article><h3>BNB</h3><dl><div><dt>total</dt><dd><span title="0.1 BNB">0.1 BNB</span></dd></div><div><dt>available</dt><dd><span title="0.1 BNB">0.1 BNB</span></dd></div><div><dt>reserved</dt><dd><span title="0 BNB">0 BNB</span></dd></div></dl></article></div></section><section class="capital-panel"><div class="capital-panel-heading"><h2>Comparable wallet history</h2><p>Coverage starts 2026-10-29 10:00:00 UTC · 0 native samples · 0 reported gaps</p></div><div class="capital-paper-balances"><article><h3>24h return</h3><p>Collecting</p><p>Collecting comparable native wallet history; this statistic is not yet observed. No return or Sharpe is inferred.</p></article><article><h3>7d return</h3><p>Collecting</p><p>Collecting comparable native wallet history; this statistic is not yet observed. No return or Sharpe is inferred.</p></article><article><h3>Sharpe · requires qualified sampling</h3><p>Collecting</p><p>Collecting comparable native wallet history; this statistic is not yet observed. No return or Sharpe is inferred.</p></article></div></section><p>Wallet return is not deployed-controller return. Fees and native PnL keep their owner accounting scope. Real exchange balances, deposits, margin, funding and liquidation: not applicable to this spot paper wallet.</p></div>'
+
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.worktrees/v5-workspace-polish/dashboard/condor-workspace/test/v5-dashboard-polish.test.mjs:43:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<div class="capital-workspace capital-paper" data-scope="paper"><header class="capital-heading"><div><h1>Capital</h1><p>PAPER · Simulated wallet only · Live capital excluded</p></div><button type="button" class="capital-refresh">Refresh read</button></header><p class="capital-paper-source">Owner <code>v5-paper</code> · Snapshot <code>boot-a:12</code> · As of 2026-10-29 10:00:00 UTC · available</p><p role="status">Checking: 2/4 sections</p><p role="status">Native cash plus marked inventory reconciles to wallet equity.</p><section class="capital-metrics"><article><span>Initial simulated funding</span><strong>Awaiting complete snapshot</strong></article><article><span>Available cash</span><strong>Awaiting complete snapshot</strong></article><article><span>Reserved cash</span><strong>Awaiting complete snapshot</strong></article><article><span>Marked inventory</span><strong>Awaiting complete snapshot</strong></article><article><span>Wallet equity</span><strong>Awaiting complete snapshot</strong></article><article><span>Fees paid · quote equivalent</span><strong>Awaiting complete snapshot</strong></article><article><span>External simulated cash flows</span><strong>Awaiting complete snapshot</strong></article><article><span>Native realized controller PnL</span><strong>Awaiting complete snapshot</strong></article><article><span>Native unrealized controller PnL</span><strong>Awaiting complete snapshot</strong></article></section><section class="capital-panel"><div class="capital-panel-heading"><h2>Native simulated balances</h2><p>One wallet snapshot; held and executor inventory must not be counted twice.</p></div><div class="capital-paper-balances"><article><h3>USDC</h3><dl><div><dt>total</dt><dd><span title="899.9 USDC">899.9 USDC</span></dd></div><div><dt>available</dt><dd><span title="899.9 USDC">899.9 USDC</span></dd></div><div><dt>reserved</dt><dd><span title="0 USDC">0 USDC</span></dd></div></dl></article><article><h3>BNB</h3><dl><div><dt>total</dt><dd><span title="0.1 BNB">0.1 BNB</span></dd></div><div><dt>available</dt><dd><span title="0.1 BNB">0.1 BNB</span></dd></div><div><dt>reserved</dt><dd><span title="0 BNB">0 BNB</span></dd></div></dl></article></div></section><section class="capital-panel"><div class="capital-panel-heading"><h2>Comparable wallet history</h2><p>Coverage starts 2026-10-29 10:00:00 UTC · 0 native samples · 0 reported gaps</p></div><div class="capital-paper-balances"><article><h3>24h return</h3><p>Collecting</p><p>Collecting comparable native wallet history; this statistic is not yet observed. No return or Sharpe is inferred.</p></article><article><h3>7d return</h3><p>Collecting</p><p>Collecting comparable native wallet history; this statistic is not yet observed. No return or Sharpe is inferred.</p></article><article><h3>Sharpe · requires qualified sampling</h3><p>Collecting</p><p>Collecting comparable native wallet history; this statistic is not yet observed. No return or Sharpe is inferred.</p></article></div></section><p>Wallet return is not deployed-controller return. Fees and native PnL keep their owner accounting scope. Real exchange balances, deposits, margin, funding and liquidation: not applicable to this spot paper wallet.</p></div>',
+    expected: /History pending/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at test/v5-dashboard-polish.test.mjs:48:1
+✖ Capital first load without a wallet reports checking, not missing exports (694.634505ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Checking: 0\/4 sections/. Input:
+
+  '<div class="capital-workspace capital-paper" data-scope="paper"><header class="capital-heading"><div><h1>Capital</h1><p>PAPER · Simulated wallet only · Live capital excluded</p></div><button type="button" class="capital-refresh">Refresh read</button></header><p role="status">Reading native simulated wallet…</p></div>'
+
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.worktrees/v5-workspace-polish/dashboard/condor-workspace/test/v5-dashboard-polish.test.mjs:50:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<div class="capital-workspace capital-paper" data-scope="paper"><header class="capital-heading"><div><h1>Capital</h1><p>PAPER · Simulated wallet only · Live capital excluded</p></div><button type="button" class="capital-refresh">Refresh read</button></header><p role="status">Reading native simulated wallet…</p></div>',
+    expected: /Checking: 0\/4 sections/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at test/v5-dashboard-polish.test.mjs:54:1
+✖ Capital normalizes leading zeros without losing the exact native tooltip (694.203922ms)
+  AssertionError [ERR_ASSERTION]: The input was expected to not match the regular expression /00,012/. Input:
+
+  '<div class="capital-workspace capital-paper" data-scope="paper"><header class="capital-heading"><div><h1>Capital</h1><p>PAPER · Simulated wallet only · Live capital excluded</p></div><button type="button" class="capital-refresh">Refresh read</button></header><p class="capital-paper-source">Owner <code>v5-paper</code> · Snapshot <code>boot-a:12</code> · As of 2026-10-29 10:00:00 UTC · degraded</p><p role="status">Valuation incomplete or native wallet totals do not reconcile.</p><section class="capital-metrics"><article><span>Initial simulated funding</span><strong><span title="1000 USDC">1,000 USDC</span></strong></article><article><span>Available cash</span><strong><span title="00012 USDC">00,012 USDC</span></strong></article><article><span>Reserved cash</span><strong><span title="0 USDC">0 USDC</span></strong></article><article><span>Marked inventory</span><strong><span title="100 USDC">100 USDC</span></strong></article><article><span>Wallet equity</span><strong>Unavailable</strong></article><article><span>Fees paid · quote equivalent</span><strong><span title="0.1 USDC">0.1 USDC</span></strong></article><article><span>External simulated cash flows</span><strong><span title="0 USDC">0 USDC</span></strong></article><article><span>Native realized controller PnL</span><strong><span title="0 USDC">0 USDC</span></strong></article><article><span>Native unrealized controller PnL</span><strong><span title="0 USDC">0 USDC</span></strong></article></section><section class="capital-panel"><div class="capital-panel-heading"><h2>Native simulated balances</h2><p>One wallet snapshot; held and executor inventory must not be counted twice.</p></div><div class="capital-paper-balances"><article><h3>USDC</h3><dl><div><dt>total</dt><dd><span title="899.9 USDC">899.9 USDC</span></dd></div><div><dt>available</dt><dd><span title="899.9 USDC">899.9 USDC</span></dd></div><div><dt>reserved</dt><dd><span title="0 USDC">0 USDC</span></dd></div></dl></article><article><h3>BNB</h3><dl><div><dt>total</dt><dd><span title="0.1 BNB">0.1 BNB</span></dd></div><div><dt>available</dt><dd><span title="0.1 BNB">0.1 BNB</span></dd></div><div><dt>reserved</dt><dd><span title="0 BNB">0 BNB</span></dd></div></dl></article></div></section><section class="capital-panel"><div class="capital-panel-heading"><h2>Comparable wallet history</h2><p>Coverage starts 2026-10-29 10:00:00 UTC · 0 native samples · 0 reported gaps</p></div><div class="capital-paper-balances"><article><h3>24h return</h3><p>Collecting</p><p>Collecting comparable native wallet history; this statistic is not yet observed. No return or Sharpe is inferred.</p></article><article><h3>7d return</h3><p>Collecting</p><p>Collecting comparable native wallet history; this statistic is not yet observed. No return or Sharpe is inferred.</p></article><article><h3>Sharpe · requires qualified sampling</h3><p>Collecting</p><p>Collecting comparable native wallet history; this statistic is not yet observed. No return or Sharpe is inferred.</p></article></div></section><p>Wallet return is not deployed-controller return. Fees and native PnL keep their owner accounting scope. Real exchange balances, deposits, margin, funding and liquidation: not applicable to this spot paper wallet.</p></div>'
+
+      at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.worktrees/v5-workspace-polish/dashboard/condor-workspace/test/v5-dashboard-polish.test.mjs:58:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1402:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+      at Test.postRun (node:internal/test_runner/test:1542:19)
+      at Test.run (node:internal/test_runner/test:1467:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: '<div class="capital-workspace capital-paper" data-scope="paper"><header class="capital-heading"><div><h1>Capital</h1><p>PAPER · Simulated wallet only · Live capital excluded</p></div><button type="button" class="capital-refresh">Refresh read</button></header><p class="capital-paper-source">Owner <code>v5-paper</code> · Snapshot <code>boot-a:12</code> · As of 2026-10-29 10:00:00 UTC · degraded</p><p role="status">Valuation incomplete or native wallet totals do not reconcile.</p><section class="capital-metrics"><article><span>Initial simulated funding</span><strong><span title="1000 USDC">1,000 USDC</span></strong></article><article><span>Available cash</span><strong><span title="00012 USDC">00,012 USDC</span></strong></article><article><span>Reserved cash</span><strong><span title="0 USDC">0 USDC</span></strong></article><article><span>Marked inventory</span><strong><span title="100 USDC">100 USDC</span></strong></article><article><span>Wallet equity</span><strong>Unavailable</strong></article><article><span>Fees paid · quote equivalent</span><strong><span title="0.1 USDC">0.1 USDC</span></strong></article><article><span>External simulated cash flows</span><strong><span title="0 USDC">0 USDC</span></strong></article><article><span>Native realized controller PnL</span><strong><span title="0 USDC">0 USDC</span></strong></article><article><span>Native unrealized controller PnL</span><strong><span title="0 USDC">0 USDC</span></strong></article></section><section class="capital-panel"><div class="capital-panel-heading"><h2>Native simulated balances</h2><p>One wallet snapshot; held and executor inventory must not be counted twice.</p></div><div class="capital-paper-balances"><article><h3>USDC</h3><dl><div><dt>total</dt><dd><span title="899.9 USDC">899.9 USDC</span></dd></div><div><dt>available</dt><dd><span title="899.9 USDC">899.9 USDC</span></dd></div><div><dt>reserved</dt><dd><span title="0 USDC">0 USDC</span></dd></div></dl></article><article><h3>BNB</h3><dl><div><dt>total</dt><dd><span title="0.1 BNB">0.1 BNB</span></dd></div><div><dt>available</dt><dd><span title="0.1 BNB">0.1 BNB</span></dd></div><div><dt>reserved</dt><dd><span title="0 BNB">0 BNB</span></dd></div></dl></article></div></section><section class="capital-panel"><div class="capital-panel-heading"><h2>Comparable wallet history</h2><p>Coverage starts 2026-10-29 10:00:00 UTC · 0 native samples · 0 reported gaps</p></div><div class="capital-paper-balances"><article><h3>24h return</h3><p>Collecting</p><p>Collecting comparable native wallet history; this statistic is not yet observed. No return or Sharpe is inferred.</p></article><article><h3>7d return</h3><p>Collecting</p><p>Collecting comparable native wallet history; this statistic is not yet observed. No return or Sharpe is inferred.</p></article><article><h3>Sharpe · requires qualified sampling</h3><p>Collecting</p><p>Collecting comparable native wallet history; this statistic is not yet observed. No return or Sharpe is inferred.</p></article></div></section><p>Wallet return is not deployed-controller return. Fees and native PnL keep their owner accounting scope. Real exchange balances, deposits, margin, funding and liquidation: not applicable to this spot paper wallet.</p></div>',
+    expected: /00,012/,
+    operator: 'doesNotMatch',
+    diff: 'simple'
+  }

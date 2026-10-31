@@ -73,21 +73,21 @@ tests/test_v5_candle_store.py: 12 warnings
     warnings.warn(
 
 tests/test_web_compression.py::test_lifespan_and_websocket_scopes_pass_through
-  /home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/tests/test_web_compression.py:132: DeprecationWarning: 
+  /home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/tests/test_web_compression.py:132: DeprecationWarning:
           on_event is deprecated, use lifespan event handlers instead.
-  
+
           Read more about it in the
           [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
-          
+
     @app.on_event("startup")
 
 tests/test_web_compression.py::test_lifespan_and_websocket_scopes_pass_through
-  /home/rsi/dev/rsibot/condor/.venv/lib/python3.12/site-packages/fastapi/applications.py:4598: DeprecationWarning: 
+  /home/rsi/dev/rsibot/condor/.venv/lib/python3.12/site-packages/fastapi/applications.py:4598: DeprecationWarning:
           on_event is deprecated, use lifespan event handlers instead.
-  
+
           Read more about it in the
           [FastAPI docs for Lifespan Events](https://fastapi.tiangolo.com/advanced/events/).
-          
+
     return self.router.on_event(event_type)  # ty: ignore[deprecated]
 
 -- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html

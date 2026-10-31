@@ -1,5 +1,9 @@
 # V5 paper dashboard polish — local evidence
 
+Latest fix-round results are in [round2.md](round2.md). The bundle hashes,
+counts and browser evidence below describe the original `43695d26` round,
+not the fixed head. Independent rereview remains pending.
+
 Requested test suites and typechecks pass. Two baseline ESLint errors remain.
 This is a draft integration candidate, not requalification,
 deployment, a merge decision or paper/live authority. Merge only after the

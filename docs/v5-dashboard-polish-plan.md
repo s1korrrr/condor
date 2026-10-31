@@ -39,3 +39,30 @@ only the task's fixture service. No runtime restart is required or authorized.
   fixture process, browser tabs and Serve route removed; other routes preserved.
 - Two unchanged baseline ESLint errors remain. Final full tests are green.
 - Draft publication is separate from parent review, merge and requalification.
+
+## Fix round — independent review B1/B2
+
+Cause: background progress replaced cached complete query data. Missing in-flight
+sections then entered absence projections. Retain the complete query result at
+the shared snapshot hook; expose attempt-bound progress separately. First-load
+sections must say pending, not missing. Owner holds survive refresh and errors
+until a complete newer result replaces them. Retain native as-of timestamps.
+
+Also bind reads/progress to cancellation and attempt identity; normalize leading
+zeros only in display; validate recursive financial fields in every TS section;
+prove Python/TS parity. Strip trailing whitespace from committed evidence logs.
+Regenerate the reviewed manifest against both paired branches. No authority change.
+
+Deferred follow-ups: Checking can briefly hide a prior Stale/Unavailable health
+summary; Settings adds a five-section read every 15 seconds; decimal significant
+digits below 1e-6; pair-chart remounts. The injected-delay benchmark is included
+in this round. Pagination remains serial within each worker, so deployed p95 is
+not inferred from the pool size or fixture target.
+
+Final local evidence: `docs/evidence/2026-10-31-v5-dashboard-polish/round2.md`.
+4,256 Python passes / 8 skips, 1,079 Node passes / 1 skip, 446 workspace Node
+passes, both typechecks pass. Final focused regressions/bundle checks: 47 passes.
+Python/TS agree on all 14 object-section monetary-container cases. Before-diff
+whitespace findings: 32; after: zero. Cross-root bundle: 35 identical files.
+Injected 300 ms/request Bots p95: 3.114860 s serial, 1.285031 s pool three,
+20 timed samples each. No deployed latency or independent approval is inferred.

@@ -3,11 +3,14 @@ import { spawn } from 'node:child_process';
 import { createInterface } from 'node:readline';
 import { pathToFileURL, fileURLToPath } from 'node:url';
 import { paperCoherentRead, paperSectionError } from '../src/v5/policy.ts';
+import { setTimeout } from 'node:timers/promises';
 
-const [python, apiSource, fixtures, scratch, baselinePolicy, sampleText = '30'] = process.argv.slice(2);
-assert(baselinePolicy, 'Usage: benchmark-v5-paper.mjs PYTHON API73_SOURCE FIXTURES SCRATCH BASELINE_POLICY [SAMPLES]');
+const [python, apiSource, fixtures, scratch, baselinePolicy, sampleText = '30', delayText = '0'] = process.argv.slice(2);
+assert(baselinePolicy, 'Usage: benchmark-v5-paper.mjs PYTHON API73_SOURCE FIXTURES SCRATCH BASELINE_POLICY [SAMPLES] [REQUEST_DELAY_MS]');
 const samples = Number(sampleText);
 assert(Number.isSafeInteger(samples) && samples >= 20);
+const requestDelayMs = Number(delayText);
+assert(Number.isSafeInteger(requestDelayMs) && requestDelayMs >= 0);
 const baseline = await import(pathToFileURL(baselinePolicy));
 const bridge = spawn(python, [fileURLToPath(new URL('./benchmark-v5-paper-bridge.py', import.meta.url)), apiSource, fixtures, scratch], {stdio:['pipe','pipe','inherit']});
 let nextId = 0;
@@ -30,6 +33,7 @@ const sections = {
 let active = 0, peak = 0;
 async function read(path, section) {
   active++; peak = Math.max(peak, active);
+  if (requestDelayMs) await setTimeout(requestDelayMs);
   const id = ++nextId;
   const response = await new Promise(resolve => {pending.set(id, resolve); bridge.stdin.write(JSON.stringify({id,path}) + '\n');});
   active--;
@@ -59,5 +63,5 @@ try {
     }
     results.push({page,...measured});
   }
-  console.log(JSON.stringify({api_head:'5a24d9c25158f9740b846bdbdc4ad79a53e2af55',metadata,transport:'in-process TestClient through stdio; no injected delay; one warmup per page/loader; retained immutable fixture snapshot',results}, null, 2));
+  console.log(JSON.stringify({api_head:'5a24d9c25158f9740b846bdbdc4ad79a53e2af55',metadata,request_delay_ms:requestDelayMs,transport:`in-process TestClient through stdio; ${requestDelayMs} ms injected per request; one warmup per page/loader; retained immutable fixture snapshot`,results}, null, 2));
 } finally {bridge.stdin.end();}

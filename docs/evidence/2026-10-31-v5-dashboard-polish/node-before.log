@@ -32,9 +32,9 @@
 test at frontend/test/v5-dashboard-polish.test.mjs:8:1
 ✖ three-worker pinned pool streams sections and drains failures before restart (28.858457ms)
   AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:
-  
+
   1 !== 3
-  
+
       at TestContext.<anonymous> (file:///home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/frontend/test/v5-dashboard-polish.test.mjs:21:10)
       at async Test.run (node:internal/test_runner/test:1409:7)
       at async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3) {

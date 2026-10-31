@@ -33,3 +33,15 @@ def test_blank_capability_remains_accepted():
     read = fill_read()
     read['capabilities'] = ['']
     validate_paper_read(read, section='fills', bot=read['bot_id'], now_ms=read['read_at_ms'])
+
+
+@pytest.mark.parametrize('section', ['status', 'wallet', 'risk', 'decisions', 'history', 'accounting', 'operations'])
+@pytest.mark.parametrize('value', [{}, []])
+def test_non_list_financial_container_parity(section, value):
+    read = json.loads((Path(__file__).parent / f'fixtures/paper-api-final3/native-replay/{section}.json').read_text())
+    validate_paper_read(read, section=section, bot=read['bot_id'], now_ms=read['read_at_ms'])
+    read['data']['fee_quote'] = value
+    with pytest.raises(HTTPException) as failure:
+        validate_paper_read(read, section=section, bot=read['bot_id'], now_ms=read['read_at_ms'])
+    assert failure.value.status_code == 502
+    assert failure.value.detail['code'] == 'paper_read_schema_invalid'

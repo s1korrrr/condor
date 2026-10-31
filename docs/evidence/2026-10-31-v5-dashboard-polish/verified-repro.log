@@ -36,7 +36,7 @@ computing gzip size...
 
 [33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../../../.worktrees/v5-workspace-polish/dashboard/hummingbot-reporting-next/app/components/ReportingDesk.tsx is dynamically imported by ../../../../.worktrees/v5-workspace-polish/dashboard/condor-workspace/src/features/strategy-charts/Records.tsx but also statically imported by ../../../../.worktrees/v5-workspace-polish/dashboard/condor-workspace/src/pages/TradingVisuals.tsx, dynamic import will not move module into another chunk.
 
-[plugin builtin:vite-reporter] 
+[plugin builtin:vite-reporter]
 (!) Some chunks are larger than 600 kB after minification. Consider:
 - Using dynamic import() to code-split the application
 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
@@ -81,7 +81,7 @@ computing gzip size...
 
 [33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../../../.workspace/scratch/v5-dashboard-polish/workspace-independent/dashboard/hummingbot-reporting-next/app/components/ReportingDesk.tsx is dynamically imported by ../../../../.workspace/scratch/v5-dashboard-polish/workspace-independent/dashboard/condor-workspace/src/features/strategy-charts/Records.tsx but also statically imported by ../../../../.workspace/scratch/v5-dashboard-polish/workspace-independent/dashboard/condor-workspace/src/pages/TradingVisuals.tsx, dynamic import will not move module into another chunk.
 
-[plugin builtin:vite-reporter] 
+[plugin builtin:vite-reporter]
 (!) Some chunks are larger than 600 kB after minification. Consider:
 - Using dynamic import() to code-split the application
 - Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting

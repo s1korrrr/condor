@@ -1,5 +1,16 @@
 # V5 dashboard polish — 2026-10-31
 
+## R1 freshness repair
+
+Complete: shared retained-snapshot age labels for Capital, Bots and Paper
+identity; shared 30-second freshness bound; explicit Capital clock and stale
+total gating; negative-zero normalization. Retention, owner holds, progress
+isolation and errors stay unchanged. Authority and rollback remain below.
+Evidence: `docs/evidence/2026-10-31-v5-dashboard-polish/round3-r1.md`.
+Seven defect probes fail before and pass after. Full suites and both typechecks
+pass. Two real workspace roots reproduce the reviewed 35-file bundle.
+Fresh independent review and integration requalification remain required.
+
 ## Contract
 
 Objective: reduce fixture full-data latency with three concurrent pinned section

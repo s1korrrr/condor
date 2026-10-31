@@ -1,5 +1,8 @@
 # V5 paper dashboard polish — local evidence
 
+Latest repair: `round3-r1.md` records retained-data age labels, shared freshness,
+identity regressions, reviewed bundle hashes and current checks.
+
 Latest fix-round results are in [round2.md](round2.md). The bundle hashes,
 counts and browser evidence below describe the original `43695d26` round,
 not the fixed head. Independent rereview remains pending.

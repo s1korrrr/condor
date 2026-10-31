@@ -16,6 +16,7 @@ import {
 import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useState, type ComponentType, type ReactNode } from "react";
 import type { PaperRead } from "@/v5/contracts";
 import { usePaperSnapshot } from "@/v5/usePaperSnapshot";
+import { paperSnapshotPresentation } from "@/v5/snapshot-presentation";
 import { paperAmount, paperCoherentRead, paperCompleteRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperPairObservation, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperTime, paperWalletInventory, paperWalletTotals, paperWords } from "@/v5/policy";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
 import { paperHeartbeat } from "@/features/bots/fleet-health";
@@ -788,7 +789,7 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
   const heartbeat = clock.current ? "Fresh" : ownerState === "UNAVAILABLE" ? "Unavailable" : "Stale";
   return <div className="v5-paper-bots" data-layout={layout}>
     <header className="v5-page-heading"><div><h1>Paper bots</h1><p>{bot} · simulated wallet · live disabled</p></div><div className="v5-button-row"><button className="v5-button" aria-pressed={layout === "grid"} onClick={() => setLayout("grid")}>Grid</button><button className="v5-button" aria-pressed={layout === "compact"} onClick={() => setLayout("compact")}>Compact</button><button className="v5-button" onClick={() => void query.refetch()}>Refresh paper data</button></div></header>
-    {complete && <p>Last complete owner snapshot · As of {paperTime(reads[0]?.generated_at_ms, now)}</p>}
+    {complete && <p>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}</p>}
     {query.progress && <p role="status">{query.progress}</p>}
     {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
     {(!query.isError || complete) && <PaperWorkspace reads={reads} complete={complete} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} />}

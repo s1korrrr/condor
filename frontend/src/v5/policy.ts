@@ -1,3 +1,5 @@
+import { PAPER_SNAPSHOT_FRESH_MS } from './snapshot-presentation.ts';
+
 export interface ReportPermissionInput {
   agentReady: boolean;
   advisorEnabled: boolean;
@@ -205,7 +207,7 @@ export function paperReadState(read: Partial<import("./contracts").PaperRead> | 
   if (paperSectionError(read)) return "degraded";
   if (read.state === "available" && ["partial", "unavailable"].includes(read.completeness ?? "")) return "degraded";
   if (read.generated_at_ms != null && (!Number.isSafeInteger(read.generated_at_ms) || read.generated_at_ms > now + 5000)) return "degraded";
-  if (read.generated_at_ms != null && now - read.generated_at_ms > 30_000) return "stale";
+  if (read.generated_at_ms != null && now - read.generated_at_ms > PAPER_SNAPSHOT_FRESH_MS) return "stale";
   return ["available", "collecting", "not_applicable", "degraded", "stale"].includes(read.state ?? "") ? read.state as import("./contracts").PaperReadState : "degraded";
 }
 

@@ -1,7 +1,8 @@
-import { useEffect, useState } from "react";
 import type { PaperRead } from "./contracts";
 import { paperBoundedRead, paperCoherentRead, paperObservationSummary, paperSectionError } from "./policy";
 import { usePaperSnapshot } from "./usePaperSnapshot";
+import { paperSnapshotPresentation } from "./snapshot-presentation";
+import { usePaperClock } from "./usePaperClock";
 
 async function readPaperSection(path: string, section: string, bot: string | null | undefined, signal: AbortSignal) {
   signal.throwIfAborted();
@@ -36,8 +37,7 @@ export function usePaperWorkspace(page: "capital" | "operations", bot?: string |
 }
 
 export function usePaperObservation(bot: string | null | undefined) {
-  const [now, setNow] = useState(Date.now);
-  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 1000); return () => window.clearInterval(timer); }, []);
+  const now = usePaperClock();
   const query = usePaperSnapshot<PaperRead[]>(["v5-paper-observation-health", bot], Boolean(bot), 5, async (progress, signal) => {
     const prefix = "/api/v1/servers/rsibot-v5/";
     return paperCoherentRead(`${prefix}bots/${encodeURIComponent(bot!)}/native/status`, [
@@ -49,5 +49,7 @@ export function usePaperObservation(bot: string | null | undefined) {
   });
   const reads = query.reads;
   const summary = query.isError ? { label: "Unavailable", reason: query.error.message } : query.isPending || query.isFetching ? { label: "Checking", reason: `Reading one owner snapshot: ${reads.length}/5 sections. Process heartbeat is a separate signal.` } : paperObservationSummary(query.data ?? [], bot ?? "", now);
-  return { ...query, summary, status: (query.data ?? reads).find(read => read.section === "status") };
+  const status = (query.data ?? reads).find(read => read.section === "status");
+  const snapshot = query.complete ? paperSnapshotPresentation(status?.generated_at_ms, now, query.isFetching || query.isError) : null;
+  return { ...query, summary, status, snapshot };
 }

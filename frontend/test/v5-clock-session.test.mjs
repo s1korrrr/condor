@@ -5,7 +5,9 @@ import fs from 'node:fs';
 import {frontendModules} from './helpers/frontend-module.mjs';
 import {PAPER_FUTURE_SKEW_MS, paperSnapshotPresentation} from '../src/v5/snapshot-presentation.ts';
 import {paperReadState, paperTime} from '../src/v5/policy.ts';
-import {createPaperClock} from '../src/v5/usePaperClock.ts';
+import {clockMutation} from './helpers/paper-clock-mutants.mjs';
+
+const {createPaperClock} = frontendModules({}, {}, clockMutation).load('v5/usePaperClock.ts');
 
 function clockSession() {
   let subscribe;
@@ -128,7 +130,7 @@ test('one shared clock interval serves all subscriptions and survives a zero-sub
   } finally {globalThis.window = previousWindow; globalThis.document = previousDocument;}
 });
 
-test('render reads only the published clock; lifecycle events advance its high-water mark', () => {
+test('render reads share one time per turn and refresh without lifecycle events on the next turn', async () => {
   const previousWindow = globalThis.window, previousDocument = globalThis.document;
   const browser = new EventTarget();
   let tick;
@@ -145,8 +147,11 @@ test('render reads only the published clock; lifecycle events advance its high-w
     now += 30001;
     assert.equal(clock.getSnapshot(),published);
     assert.equal(clock.getSnapshot(),published);
-    assert.equal(samples,beforeRender,'snapshot reads must not sample wall time');
+    assert.equal(samples,beforeRender,'later snapshot reads in one turn must not sample wall time');
     assert.equal(paperSnapshotPresentation(published,clock.getSnapshot(),false).stale,false);
+    await Promise.resolve();
+    assert.equal(clock.getSnapshot(),published + 30001,'cache must not freeze time across turns');
+    assert.equal(paperSnapshotPresentation(published,clock.getSnapshot(),false).stale,true);
     tick();
     assert.equal(clock.getSnapshot(),published + 30001);
     assert.equal(paperSnapshotPresentation(published,clock.getSnapshot(),false).stale,true);
@@ -155,5 +160,44 @@ test('render reads only the published clock; lifecycle events advance its high-w
     assert.equal(clock.getSnapshot(),published + 30001);
     assert.equal(paperSnapshotPresentation(published,clock.getSnapshot(),false).stale,true);
     unsubscribe();
+  } finally {globalThis.window = previousWindow; globalThis.document = previousDocument;}
+});
+
+test('clock refreshes once per turn before initial mount and each zero-subscriber remount', async () => {
+  const previousWindow = globalThis.window, previousDocument = globalThis.document;
+  const browser = new EventTarget();
+  browser.setInterval = () => 1;
+  browser.clearInterval = () => {};
+  globalThis.window = browser; globalThis.document = new EventTarget();
+  const at = 1793268000000;
+  let now = at, samples = 0;
+  try {
+    const clock = createPaperClock(() => {samples++; return now;});
+    now += 61000;
+    assert.equal(clock.getSnapshot(),now,'first read must refresh before any subscription');
+    const first = clock.getSnapshot(), sampled = samples;
+    now++;
+    assert.equal(clock.getSnapshot(),first,'later consumers in the same render must share the cached time');
+    assert.equal(samples,sampled,'later consumers must not sample wall time');
+    const firstUnsubscribe = clock.subscribe(() => {}), lastUnsubscribe = clock.subscribe(() => {});
+    const active = clock.getSnapshot(), activeSamples = samples;
+    firstUnsubscribe();
+    now += 60000;
+    assert.equal(clock.getSnapshot(),active,'one remaining subscriber must keep render reads cached');
+    assert.equal(samples,activeSamples);
+    lastUnsubscribe();
+    await Promise.resolve();
+    assert.equal(clock.getSnapshot(),now,'next render must refresh before resubscribing');
+    const resumed = clock.getSnapshot(), resumedSamples = samples;
+    now++;
+    assert.equal(clock.getSnapshot(),resumed);
+    assert.equal(samples,resumedSamples);
+    const unsubscribe = clock.subscribe(() => {});
+    const highWater = clock.getSnapshot();
+    unsubscribe();
+    now = at + 25000;
+    await Promise.resolve();
+    assert.equal(clock.getSnapshot(),highWater,'refresh must never regress after clock rollback');
+    assert.equal(paperSnapshotPresentation(at,clock.getSnapshot(),false).stale,true);
   } finally {globalThis.window = previousWindow; globalThis.document = previousDocument;}
 });

@@ -1,6 +1,15 @@
 # Settings render-loop repair — 2026-11-01
 
-## Current revision: frame-consistent publication
+## Current revision: one cached time per microtask turn
+
+Revision 2 closed frame tearing but froze the clock before a delayed first
+commit and during event-free rerenders. The parent accepted both blockers at
+`6f6ff2dd` and authorized a microtask-scoped snapshot cache. The dormant-only
+experiment was not published. See [revision4.md](revision4.md) for the repair,
+unchanged-assertion harness diff, historical matrix and current evidence.
+All earlier reports and logs are historical, not current approval evidence.
+
+## Historical second revision: frame-consistent publication
 
 The original repair below stopped the render loop but returned a separate
 wall-clock sample to each consumer. The parent accepted GPT's frame-consistency

@@ -1,0 +1,397 @@
+diff --git a/dashboard/condor-workspace/test/helpers/render-turn.mjs b/dashboard/condor-workspace/test/helpers/render-turn.mjs
+new file mode 100644
+index 000000000..51a2e4779
+--- /dev/null
++++ b/dashboard/condor-workspace/test/helpers/render-turn.mjs
+@@ -0,0 +1,3 @@
++export async function nextRenderTurn() {
++  await Promise.resolve();
++}
+diff --git a/dashboard/condor-workspace/test/v5-clock-skew-gpt.test.mjs b/dashboard/condor-workspace/test/v5-clock-skew-gpt.test.mjs
+index 396b0c9eb..8b2e219ad 100644
+--- a/dashboard/condor-workspace/test/v5-clock-skew-gpt.test.mjs
++++ b/dashboard/condor-workspace/test/v5-clock-skew-gpt.test.mjs
+@@ -1,3 +1,4 @@
++import {nextRenderTurn} from './helpers/render-turn.mjs';
+ import test from 'node:test';
+ import assert from 'node:assert/strict';
+ import fs from 'node:fs';
+@@ -63,16 +64,16 @@ function harness({seedBots = true} = {}) {
+ const numericTiles = html => [...html.matchAll(/<strong>(.*?)<\/strong>/g)].map(match => match[1].replace(/<[^>]*>/g,''));
+ const capitalSource = html => html.match(/capital-paper-source[^]*?<\/p>/)?.[0].replace(/<[^>]+>/g,' ');
+ 
+-for (const kind of ['capital','bots','identity']) test(`${kind}: fresh retained refresh, stale, recovery, bot switch`, () => {
++for (const kind of ['capital','bots','identity']) test(`${kind}: fresh retained refresh, stale, recovery, bot switch`, async () => {
+   const current = harness();
+   try {
+     current[kind]();
+-    current.setNow(current.full.generated_at_ms + 5000);
++    await nextRenderTurn(); current.setNow(current.full.generated_at_ms + 5000);
+     current.fetching(kind);
+     const fresh = current[kind]();
+     assert.match(fresh,/5s old.*snapshot only; not current/);
+     if (kind === 'capital') assert.ok(numericTiles(fresh).some(value => value.includes('USDC')));
+-    current.setNow(current.full.generated_at_ms + 60000);
++    await nextRenderTurn(); current.setNow(current.full.generated_at_ms + 60000);
+     const stale = current[kind]();
+     assert.match(stale,/stale; not current/);
+     if (kind === 'capital') assert.ok(numericTiles(stale).every(value => value === 'Stale · totals withheld'));
+@@ -88,36 +89,36 @@ for (const kind of ['capital','bots','identity']) test(`${kind}: fresh retained
+   } finally {current.close();}
+ });
+ 
+-test('B1: future timestamp must not show Capital available totals while Bots rejects its clock', () => {
++test('B1: future timestamp must not show Capital available totals while Bots rejects its clock', async () => {
+   const current = harness();
+   try {
+-    current.setNow(current.full.generated_at_ms - 60000);
++    await nextRenderTurn(); current.setNow(current.full.generated_at_ms - 60000);
+     const capital = current.capital(), bots = current.bots();
+     assert.equal(/UTC · available/.test(capital),false,'Future owner timestamp must not be current available capital');
+     assert.ok(numericTiles(capital).every(value => !value.includes('USDC')),'Untrusted clock must withhold capital totals');
+   } finally {current.close();}
+ });
+ 
+-test('B1: rollback must not revive previously stale Capital as current', () => {
++test('B1: rollback must not revive previously stale Capital as current', async () => {
+   const current = harness();
+   try {
+     current.capital();
+-    current.setNow(current.full.generated_at_ms+60000);
++    await nextRenderTurn(); current.setNow(current.full.generated_at_ms+60000);
+     assert.match(current.capital(),/stale; not current/);
+-    current.setNow(current.full.generated_at_ms+25000);
++    await nextRenderTurn(); current.setNow(current.full.generated_at_ms+25000);
+     const html = current.capital();
+     assert.match(html,/stale; not current/);
+     assert.ok(numericTiles(html).every(value => !value.includes('USDC')));
+   } finally {current.close();}
+ });
+ 
+-test('B2: Capital and Bots must both withhold totals strictly beyond 30000 ms', () => {
++test('B2: Capital and Bots must both withhold totals strictly beyond 30000 ms', async () => {
+   const current = harness();
+   try {
+-    current.setNow(current.full.generated_at_ms+30000);
++    await nextRenderTurn(); current.setNow(current.full.generated_at_ms+30000);
+     assert.ok(numericTiles(current.capital()).some(value => value.includes('USDC')));
+     assert.match(current.bots(),/Fresh complete owner wallet/);
+-    current.setNow(current.full.generated_at_ms+30001);
++    await nextRenderTurn(); current.setNow(current.full.generated_at_ms+30001);
+     const capital = current.capital(), bots = current.bots();
+     assert.match(bots,/stale; not current/);
+     assert.ok(numericTiles(capital).every(value => value === 'Stale · totals withheld'),'Capital must enforce the exact same 30 s bound as Bots');
+@@ -136,11 +137,11 @@ test('B3: a received controller emergency halt must remain visible before other
+   } finally {current.close();}
+ });
+ 
+-test('Readiness stays not ready over refresh, stale time and recovery', () => {
++test('Readiness stays not ready over refresh, stale time and recovery', async () => {
+   const current = harness();
+   try {
+     for (const delay of [0,5000,30000,30001,60000]) {
+-      current.setNow(current.full.generated_at_ms+delay);
++      await nextRenderTurn(); current.setNow(current.full.generated_at_ms+delay);
+       if (delay === 5000) current.fetching('identity');
+       const html = current.readiness();
+       assert.match(html,/NOT_READY/);
+diff --git a/dashboard/condor-workspace/test/v5-clock-skew.test.mjs b/dashboard/condor-workspace/test/v5-clock-skew.test.mjs
+index 50b450cfc..ebbc53927 100644
+--- a/dashboard/condor-workspace/test/v5-clock-skew.test.mjs
++++ b/dashboard/condor-workspace/test/v5-clock-skew.test.mjs
+@@ -1,3 +1,4 @@
++import {nextRenderTurn} from './helpers/render-turn.mjs';
+ // Round-3 temporal probes. Run from rsibot2/dashboard/condor-workspace with: node --preserve-symlinks --test <this file>
+ import test from 'node:test';
+ import assert from 'node:assert/strict';
+@@ -51,13 +52,13 @@ test('Q2 skew: browser clock 10 min behind; owner dead 5 min; refresh errors ->
+   assert.ok(!TOTALS.test(html), 'retained totals stay visible 5 minutes after the last owner snapshot');
+ });
+ 
+-test('Q2 now moves backwards (NTP step -60 s) at real age 45 s -> stale snapshot must not become fresh again', () => {
++test('Q2 now moves backwards (NTP step -60 s) at real age 45 s -> stale snapshot must not become fresh again', async () => {
+   const current = harness();
+   try {
+     const at = current.full.generated_at_ms;
+-    current.setNow(at + 45000);
++    await nextRenderTurn(); current.setNow(at + 45000);
+     assert.match(current.capital(), /stale; not current/);
+-    current.setNow(at + 25000);
++    await nextRenderTurn(); current.setNow(at + 25000);
+     const html = current.capital();
+     assert.match(html, /45s old.*stale; not current/);
+     assert.ok(!TOTALS.test(html), 'rollback inside the skew window must not revive totals');
+diff --git a/dashboard/condor-workspace/test/v5-document-clock-claude.test.mjs b/dashboard/condor-workspace/test/v5-document-clock-claude.test.mjs
+index 3962b5986..1cc1f4f86 100644
+--- a/dashboard/condor-workspace/test/v5-document-clock-claude.test.mjs
++++ b/dashboard/condor-workspace/test/v5-document-clock-claude.test.mjs
+@@ -1,16 +1,17 @@
++import {nextRenderTurn} from './helpers/render-turn.mjs';
+ import test from 'node:test';
+ import assert from 'node:assert/strict';
+ import {harness, numericTiles} from './helpers/paper-temporal.mjs';
+ 
+-test('R4-A Capital: remount after a backward clock step revives stale totals as current', () => {
++test('R4-A Capital: remount after a backward clock step revives stale totals as current', async () => {
+   const h = harness();
+   try {
+     const at = h.full.generated_at_ms;
+-    h.setNow(at); h.capital();
+-    h.setNow(at + 45000);                 // owner silent 45 s: stale
++    await nextRenderTurn(); h.setNow(at); h.capital();
++    await nextRenderTurn(); h.setNow(at + 45000);                 // owner silent 45 s: stale
+     const before = h.capital();
+     assert.ok(numericTiles(before).every(v => v === 'Stale · totals withheld'), 'withheld before step');
+-    h.setNow(at + 15000);                 // wall clock steps back 30 s
++    await nextRenderTurn(); h.setNow(at + 15000);                 // wall clock steps back 30 s
+     assert.ok(numericTiles(h.capital()).every(v => !v.includes('USDC')), 'still withheld while mounted');
+     h.remount('capital');                 // navigate away and back (same SPA, same query cache)
+     const after = h.capital();
+@@ -19,25 +20,25 @@ test('R4-A Capital: remount after a backward clock step revives stale totals as
+   } finally { h.close(); }
+ });
+ 
+-test('R4-A Bots: same remount path makes a 45 s-old snapshot read as fresh', () => {
++test('R4-A Bots: same remount path makes a 45 s-old snapshot read as fresh', async () => {
+   const h = harness();
+   try {
+     const at = h.reads[0].generated_at_ms;
+-    h.setNow(at + 45000); assert.match(h.bots(), /stale; not current/);
+-    h.setNow(at + 15000); h.remount('bots');
++    await nextRenderTurn(); h.setNow(at + 45000); assert.match(h.bots(), /stale; not current/);
++    await nextRenderTurn(); h.setNow(at + 15000); h.remount('bots');
+     const html = h.bots();
+     assert.doesNotMatch(html, /Fresh complete owner wallet/, 'Bots shows 45 s-old wallet as fresh complete');
+   } finally { h.close(); }
+ });
+ 
+-test('remounts within the entire tolerated skew/fresh window cannot revive totals', () => {
++test('remounts within the entire tolerated skew/fresh window cannot revive totals', async () => {
+   const current = harness();
+   try {
+     const at = current.full.generated_at_ms;
+-    current.setNow(at + 45000);
++    await nextRenderTurn(); current.setNow(at + 45000);
+     assert.match(current.capital(), /stale; not current/);
+     for (const offset of [-5000,-4999,0,15000,25000,30000]) {
+-      current.setNow(at + offset);
++      await nextRenderTurn(); current.setNow(at + offset);
+       current.remount('capital'); current.remount('bots');
+       assert.match(current.capital(), /45s old.*stale; not current/);
+       assert.ok(numericTiles(current.capital()).every(value => !value.includes('USDC')));
+@@ -47,15 +48,15 @@ test('remounts within the entire tolerated skew/fresh window cannot revive total
+   } finally {current.close();}
+ });
+ 
+-test('pages first mounted at different wall-clock times share the document high-water mark', () => {
++test('pages first mounted at different wall-clock times share the document high-water mark', async () => {
+   const current = harness();
+   try {
+     const at = current.full.generated_at_ms;
+-    current.setNow(at + 45000); current.capital();
+-    current.setNow(at + 15000);
++    await nextRenderTurn(); current.setNow(at + 45000); current.capital();
++    await nextRenderTurn(); current.setNow(at + 15000);
+     assert.match(current.bots(), /45s old.*stale; not current/);
+     assert.match(current.identity(), /45s old.*stale; not current/);
+-    current.setNow(at + 60000);
++    await nextRenderTurn(); current.setNow(at + 60000);
+     assert.match(current.identity(), /1m old.*stale; not current/);
+     assert.match(current.capital(), /1m old.*stale; not current/);
+   } finally {current.close();}
+diff --git a/dashboard/condor-workspace/test/v5-document-clock-gpt.test.mjs b/dashboard/condor-workspace/test/v5-document-clock-gpt.test.mjs
+index 2627a0356..3fa0d5a96 100644
+--- a/dashboard/condor-workspace/test/v5-document-clock-gpt.test.mjs
++++ b/dashboard/condor-workspace/test/v5-document-clock-gpt.test.mjs
+@@ -1,16 +1,17 @@
++import {nextRenderTurn} from './helpers/render-turn.mjs';
+ import test from 'node:test';
+ import assert from 'node:assert/strict';
+ import {harness,numericTiles} from './helpers/paper-temporal.mjs';
+-for (const kind of ['capital','bots','identity']) test(`${kind}: fresh retained refresh, stale, recovery, bot switch`, () => {
++for (const kind of ['capital','bots','identity']) test(`${kind}: fresh retained refresh, stale, recovery, bot switch`, async () => {
+   const current = harness();
+   try {
+     current[kind]();
+-    current.setNow(current.full.generated_at_ms + 5000);
++    await nextRenderTurn(); current.setNow(current.full.generated_at_ms + 5000);
+     current.fetching(kind);
+     const fresh = current[kind]();
+     assert.match(fresh,/5s old.*snapshot only; not current/);
+     if (kind === 'capital') assert.ok(numericTiles(fresh).some(value => value.includes('USDC')));
+-    current.setNow(current.full.generated_at_ms + 60000);
++    await nextRenderTurn(); current.setNow(current.full.generated_at_ms + 60000);
+     const stale = current[kind]();
+     assert.match(stale,/stale; not current/);
+     if (kind === 'capital') assert.ok(numericTiles(stale).every(value => value === 'Stale · totals withheld'));
+@@ -26,35 +27,35 @@ for (const kind of ['capital','bots','identity']) test(`${kind}: fresh retained
+   } finally {current.close();}
+ });
+ 
+-test('B1: future timestamp must not show Capital available totals while Bots rejects its clock', () => {
++test('B1: future timestamp must not show Capital available totals while Bots rejects its clock', async () => {
+   const current = harness();
+   try {
+-    current.setNow(current.full.generated_at_ms - 60000);
++    await nextRenderTurn(); current.setNow(current.full.generated_at_ms - 60000);
+     const capital = current.capital(), bots = current.bots();
+     assert.equal(/UTC · available/.test(capital),false,'Future owner timestamp must not be current available capital');
+     assert.ok(numericTiles(capital).every(value => !value.includes('USDC')),'Untrusted clock must withhold capital totals');
+   } finally {current.close();}
+ });
+ 
+-test('B1: rollback must not revive previously stale Capital as current', () => {
++test('B1: rollback must not revive previously stale Capital as current', async () => {
+   const current = harness();
+   try {
+     current.capital();
+-    current.setNow(current.full.generated_at_ms+60000);
++    await nextRenderTurn(); current.setNow(current.full.generated_at_ms+60000);
+     assert.match(current.capital(),/stale; not current/);
+-    current.setNow(current.full.generated_at_ms-60000);
++    await nextRenderTurn(); current.setNow(current.full.generated_at_ms-60000);
+     const html = current.capital();
+     assert.equal(/stale; not current|clock|unavailable/i.test(html),true,'Clock rollback must not make an already stale snapshot current');
+   } finally {current.close();}
+ });
+ 
+-test('B2: Capital and Bots must both withhold totals strictly beyond 30000 ms', () => {
++test('B2: Capital and Bots must both withhold totals strictly beyond 30000 ms', async () => {
+   const current = harness();
+   try {
+-    current.setNow(current.full.generated_at_ms+30000);
++    await nextRenderTurn(); current.setNow(current.full.generated_at_ms+30000);
+     assert.ok(numericTiles(current.capital()).some(value => value.includes('USDC')));
+     assert.match(current.bots(),/Fresh complete owner wallet/);
+-    current.setNow(current.full.generated_at_ms+30001);
++    await nextRenderTurn(); current.setNow(current.full.generated_at_ms+30001);
+     const capital = current.capital(), bots = current.bots();
+     assert.match(bots,/stale; not current/);
+     assert.ok(numericTiles(capital).every(value => value === 'Stale · totals withheld'),'Capital must enforce the exact same 30 s bound as Bots');
+@@ -73,11 +74,11 @@ test('B3: a received controller emergency halt must remain visible before other
+   } finally {current.close();}
+ });
+ 
+-test('Readiness stays not ready over refresh, stale time and recovery', () => {
++test('Readiness stays not ready over refresh, stale time and recovery', async () => {
+   const current = harness();
+   try {
+     for (const delay of [0,5000,30000,30001,60000]) {
+-      current.setNow(current.full.generated_at_ms+delay);
++      await nextRenderTurn(); current.setNow(current.full.generated_at_ms+delay);
+       if (delay === 5000) current.fetching('identity');
+       const html = current.readiness();
+       assert.match(html,/NOT_READY/);
+@@ -129,41 +130,41 @@ test('R4: new partial emergency overrides an earlier complete no-hold snapshot',
+   } finally {current.close();}
+ });
+ 
+-test('R4: Capital cannot revive stale data on page remount after rollback', () => {
++test('R4: Capital cannot revive stale data on page remount after rollback', async () => {
+   const current = harness();
+   try {
+     const at = current.full.generated_at_ms;
+-    current.setNow(at+45000);
++    await nextRenderTurn(); current.setNow(at+45000);
+     assert.ok(numericTiles(current.capital()).every(value => value === 'Stale · totals withheld'));
+     current.remount('capital');
+-    current.setNow(at+25000);
++    await nextRenderTurn(); current.setNow(at+25000);
+     const html = current.capital();
+     console.log('REMOUNT_ROLLBACK',JSON.stringify({totals:numericTiles(html)}));
+     assert.ok(numericTiles(html).every(value => !value.includes('USDC')),'Previously stale Capital revives after remount');
+   } finally {current.close();}
+ });
+ 
+-test('R4: Bots cannot revive stale data on page remount after rollback', () => {
++test('R4: Bots cannot revive stale data on page remount after rollback', async () => {
+   const current = harness();
+   try {
+     const at = current.full.generated_at_ms;
+-    current.setNow(at+45000);
++    await nextRenderTurn(); current.setNow(at+45000);
+     assert.doesNotMatch(current.bots(), /Fresh complete owner wallet/);
+     current.remount('bots');
+-    current.setNow(at+25000);
++    await nextRenderTurn(); current.setNow(at+25000);
+     const html = current.bots();
+     console.log('BOTS_REMOUNT_ROLLBACK',JSON.stringify({freshWallet:html.includes('Fresh complete owner wallet')}));
+     assert.doesNotMatch(html,/Fresh complete owner wallet/,'Previously stale Bots wallet becomes fresh after remount');
+   } finally {current.close();}
+ });
+ 
+-test('R4: bot switch in the same mount preserves clock high-water', () => {
++test('R4: bot switch in the same mount preserves clock high-water', async () => {
+   const current = harness();
+   try {
+     const at = current.full.generated_at_ms;
+-    current.setNow(at+45000);
++    await nextRenderTurn(); current.setNow(at+45000);
+     current.bots();
+-    current.setNow(at+25000);
++    await nextRenderTurn(); current.setNow(at+25000);
+     current.bots('other-bot');
+     assert.doesNotMatch(current.bots(),/Fresh complete owner wallet/);
+   } finally {current.close();}
+diff --git a/dashboard/condor-workspace/test/v5-received-holds-claude.test.mjs b/dashboard/condor-workspace/test/v5-received-holds-claude.test.mjs
+index 2062c275b..a7259bed1 100644
+--- a/dashboard/condor-workspace/test/v5-received-holds-claude.test.mjs
++++ b/dashboard/condor-workspace/test/v5-received-holds-claude.test.mjs
+@@ -1,3 +1,4 @@
++import {nextRenderTurn} from './helpers/render-turn.mjs';
+ import test from 'node:test';
+ import assert from 'node:assert/strict';
+ import {harness, fixture} from './helpers/paper-temporal.mjs';
+@@ -35,7 +36,7 @@ test('R4-B2 Bots first load: risk with emergency received, then a later section
+   } finally { h.close(); }
+ });
+ 
+-test('R4-B3 Bots refresh: new emergency in a refresh that fails is hidden behind a fresh retained snapshot with no hold', () => {
++test('R4-B3 Bots refresh: new emergency in a refresh that fails is hidden behind a fresh retained snapshot with no hold', async () => {
+   const h = harness();
+   try {
+     const risk = h.reads.find(r => r.section === 'risk');
+@@ -43,7 +44,7 @@ test('R4-B3 Bots refresh: new emergency in a refresh that fails is hidden behind
+     for (const c of Object.values(risk.data.controllers)) { c.operator.emergency = false; c.operator.paused = false; c.native.entry_hold = false; }
+     risk.data.native_entry_holds = [];
+     h.client.setQueryData(['v5-paper-bots',h.owner], h.reads);
+-    h.setNow(h.reads[0].generated_at_ms + 10000);
++    await nextRenderTurn(); h.setNow(h.reads[0].generated_at_ms + 10000);
+     assert.doesNotMatch(h.bots(), HELD, 'precondition: no hold in the retained snapshot');
+     const next = h.reads.map(r => structuredClone({...r, generated_at_ms:r.generated_at_ms + 9000}));
+     const nr = next.find(r => r.section === 'risk');
+diff --git a/dashboard/condor-workspace/test/v5-retained-query-observer.test.mjs b/dashboard/condor-workspace/test/v5-retained-query-observer.test.mjs
+index 8e732404b..2252c3d0d 100644
+--- a/dashboard/condor-workspace/test/v5-retained-query-observer.test.mjs
++++ b/dashboard/condor-workspace/test/v5-retained-query-observer.test.mjs
+@@ -4,6 +4,7 @@ import fs from 'node:fs';
+ import {fileURLToPath} from 'node:url';
+ import {createRequire} from 'node:module';
+ import {frontendModules} from '../../../condor/frontend/test/helpers/frontend-module.mjs';
++import {nextRenderTurn} from './helpers/render-turn.mjs';
+ 
+ const root = fileURLToPath(new URL('../../../',import.meta.url));
+ const require = createRequire(root + 'condor/frontend/package.json');
+@@ -59,7 +60,7 @@ test('Capital marks retained aged snapshot stale during refresh', async () => {
+   try {
+     const first = h.capital();
+     assert.equal(first.read.complete,true);
+-    h.advance(60_000);
++    await nextRenderTurn(); h.advance(60_000);
+     const query = h.client.getQueryCache().find({queryKey:['v5-paper-workspace','capital',h.owner]});
+     query.setState({fetchStatus:'fetching'});
+     const retained = h.capital();
+@@ -69,11 +70,11 @@ test('Capital marks retained aged snapshot stale during refresh', async () => {
+   } finally {h.close();}
+ });
+ 
+-test('Bots ages retained values and preserves timestamp', () => {
++test('Bots ages retained values and preserves timestamp', async () => {
+   const h = harness();
+   try {
+     assert.match(h.bots(),/Fresh complete owner wallet/);
+-    h.advance(60_000);
++    await nextRenderTurn(); h.advance(60_000);
+     const html = h.bots();
+     assert.match(html,/Last complete owner snapshot.*As of/);
+     assert.match(html,/Stale/);

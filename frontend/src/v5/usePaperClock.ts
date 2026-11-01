@@ -1,10 +1,20 @@
 import { useSyncExternalStore } from 'react';
 
 export function createPaperClock(readNow: () => number = Date.now) {
-  let published = readNow();
+  let highWater = readNow();
+  let cached = false;
   const listeners = new Set<() => void>();
   let timer: number | undefined;
-  const update = () => { published = Math.max(published, readNow()); listeners.forEach(notify => notify()); };
+  const sample = () => { highWater = Math.max(highWater, readNow()); };
+  const update = () => { sample(); listeners.forEach(notify => notify()); };
+  const getSnapshot = () => {
+    if (!cached) {
+      clock.observe();
+      cached = true;
+      queueMicrotask(() => { cached = false; });
+    }
+    return highWater;
+  };
   const subscribe = (notify: () => void) => {
     listeners.add(notify);
     if (timer === undefined) {
@@ -23,11 +33,13 @@ export function createPaperClock(readNow: () => number = Date.now) {
       }
     };
   };
-  return {subscribe, getSnapshot:() => published};
+  const clock = {subscribe, getSnapshot, observe:sample};
+  return clock;
 }
 
-const documentClock = createPaperClock(() => Date.now());
+let documentClock: ReturnType<typeof createPaperClock> | undefined;
 
 export function usePaperClock() {
-  return useSyncExternalStore(documentClock.subscribe, documentClock.getSnapshot, documentClock.getSnapshot);
+  const clock = documentClock ??= createPaperClock(() => Date.now());
+  return useSyncExternalStore(clock.subscribe, clock.getSnapshot, clock.getSnapshot);
 }

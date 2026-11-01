@@ -6,6 +6,7 @@ import React from 'react';
 import * as Router from 'react-router-dom';
 import {Window} from 'happy-dom';
 import {frontendModules} from './helpers/frontend-module.mjs';
+import {clockMutation} from './helpers/paper-clock-mutants.mjs';
 
 const browser = new Window({url:'https://fixture.invalid/'});
 for (const name of ['window','document','navigator','HTMLElement','Element','Node','MutationObserver','localStorage']) {
@@ -46,6 +47,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   Date.now = () => ++now;
   const overrides = {'lightweight-charts':await import('lightweight-charts'),'react-router-dom':{...Router,BrowserRouter:({children}) => React.createElement(Router.MemoryRouter,{initialEntries:[route]},children)}};
   const {load} = frontendModules(overrides,{'v5/V5App.tsx':['client']},(filename,source) => {
+    source = clockMutation(filename,source);
     if (!filename.endsWith('/v5/V5Pages.tsx')) return source;
     const anchor = 'function PaperIdentity() {';
     assert.equal(source.split(anchor).length - 1,1,'frame probe must target exactly one real PaperIdentity');
@@ -123,8 +125,9 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           } finally {delete globalThis.__v5FrameBoundaryAdvance;}
           const text = container.textContent;
           assert.ok(!(text.includes('paper owner reads: available') && text.includes('stale; not current')),'Settings must not call owner reads available while identity marks the same snapshot stale');
-          assert.match(text,/paper owner reads: available/,'render alone must not advance the published clock');
-          assert.doesNotMatch(text,/stale; not current/);
+          await React.act(async () => {window.dispatchEvent(new browser.Event('focus'));});
+          assert.match(container.textContent,/stale; not current/,'the next turn must observe the crossed freshness boundary');
+          assert.doesNotMatch(container.textContent,/paper owner reads: available/);
         }
         await React.act(async () => {window.dispatchEvent(new browser.Event('focus'));});
         if (pathname === '/settings') {

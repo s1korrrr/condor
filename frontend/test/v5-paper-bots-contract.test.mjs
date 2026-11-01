@@ -370,7 +370,7 @@ for (const [name,fixture] of Object.entries(c1TargetHoldFixtures).filter(([,fixt
   });
 }
 
-const fresh = {schema:'rsibot.v5-paper.read.v1', section:'wallet', state:'available', completeness:'complete', bot_id:'meridian_v5_paper', execution_mode:'paper', simulated:true, generated_at_ms:now, snapshot_id:'boot:1', data:{equity_quote:'1000.900000000000001'}};
+const fresh = {schema:'rsibot.v5-paper.read.v1', section:'wallet', state:'available', completeness:'complete', bot_id:'meridian_v5_paper', execution_mode:'paper', simulated:true, generated_at_ms:now, snapshot_id:'boot:1', reason:null,read_at_ms:now,observed_at_ms:now,source_at_ms:now,capabilities:[],source:{},data:{equity_quote:'1000.900000000000001'}};
 const positionRow = changes => ({position_id:'p1', controller_id:'v5_BNB_USDC', trading_pair:'BNB-USDC', state:'active', quantity:'0.6', ...changes});
 const executorRow = changes => ({executor_id:'e1', controller_id:'v5_BNB_USDC', state:'active', ...changes});
 

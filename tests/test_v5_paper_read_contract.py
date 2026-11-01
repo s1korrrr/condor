@@ -794,6 +794,11 @@ def envelope(section="status", **changes):
         "boot_id": "boot-a",
         "sequence": 7,
         "generated_at_ms": int(NOW * 1000),
+        "read_at_ms": int(NOW * 1000),
+        "observed_at_ms": int(NOW * 1000),
+        "source_at_ms": int(NOW * 1000),
+        "capabilities": [],
+        "source": {},
         "data": {
             "amount": "51.089087718",
             "unit": "USDC",

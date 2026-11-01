@@ -1,0 +1,127 @@
+{
+  "views": [
+    {
+      "file": "bots-dark-1440.png",
+      "css_width": 1440,
+      "png_width": 1280,
+      "png_height": 889,
+      "sha256": "766a6d7227910cf2ef3534f56c5797b1ba2c3ffb4cd84682beab64e27e145709"
+    },
+    {
+      "file": "bots-dark-390.png",
+      "css_width": 390,
+      "png_width": 390,
+      "png_height": 1000,
+      "sha256": "dae1764f39aa60d52d654873e38c438863e4af11fe581f8bd77ea3cdfdddbf7b"
+    },
+    {
+      "file": "bots-light-1440.png",
+      "css_width": 1440,
+      "png_width": 1280,
+      "png_height": 889,
+      "sha256": "90f31e4d30c3a9e44cdda2a30c51a5ac28b11bc2b1a3594a6e46c6ad9cc3576d"
+    },
+    {
+      "file": "bots-light-390.png",
+      "css_width": 390,
+      "png_width": 390,
+      "png_height": 1000,
+      "sha256": "968d4c9bf0cd8eab67a892c1b804970e907c40e2dbedcecb9a703de2453902e6"
+    },
+    {
+      "file": "capital-dark-1440.png",
+      "css_width": 1440,
+      "png_width": 1280,
+      "png_height": 889,
+      "sha256": "45e85fe4cea2a7f12c4d96b9c09718dfce297bac7d2aaaadf5a776e09d3b26a9"
+    },
+    {
+      "file": "capital-dark-390.png",
+      "css_width": 390,
+      "png_width": 390,
+      "png_height": 1000,
+      "sha256": "94a632b819bf7cb58857eed2dfaf7088ffa5fa8ed7a5a69352e1ec92348e6f8d"
+    },
+    {
+      "file": "capital-light-1440.png",
+      "css_width": 1440,
+      "png_width": 1280,
+      "png_height": 889,
+      "sha256": "09fe5cc123c5b11a9ef92e1cf3d8c23eabe5f34f05eca27a57a5cd0c391f06c2"
+    },
+    {
+      "file": "capital-light-390.png",
+      "css_width": 390,
+      "png_width": 390,
+      "png_height": 1000,
+      "sha256": "9e7eda3933ce205cb410047fe840039fe95016bf9ba61426e4b481a7b7a5ad92"
+    },
+    {
+      "file": "operations-dark-1440.png",
+      "css_width": 1440,
+      "png_width": 1280,
+      "png_height": 889,
+      "sha256": "0a577cc956ba1e78db5d1efdc11e5b58f177b2886159153c38cbb1c2009ee7d2"
+    },
+    {
+      "file": "operations-dark-390.png",
+      "css_width": 390,
+      "png_width": 390,
+      "png_height": 1000,
+      "sha256": "abe51bb252dce5733fe97b5ca7563fc70996423563d8878e9ec898cfb8925e8f"
+    },
+    {
+      "file": "operations-light-1440.png",
+      "css_width": 1440,
+      "png_width": 1280,
+      "png_height": 889,
+      "sha256": "c3b094776a15c519289a9d5aa2cf428622ff7a09eefbe1250d4d0cecc2da5d11"
+    },
+    {
+      "file": "operations-light-390.png",
+      "css_width": 390,
+      "png_width": 390,
+      "png_height": 1000,
+      "sha256": "b8c05ef1e711759b3057cfc20fb60d191e85eacea51d27ed24de44b5097b7ce1"
+    },
+    {
+      "file": "settings-dark-1440.png",
+      "css_width": 1440,
+      "png_width": 1280,
+      "png_height": 889,
+      "sha256": "17ce46a55d99f9f51b0456ae7a35228de02c6bef6407980037328e70acefad30"
+    },
+    {
+      "file": "settings-dark-390.png",
+      "css_width": 390,
+      "png_width": 390,
+      "png_height": 1000,
+      "sha256": "f8405b3896d989e3a321a7bef44f1ea342ed07550433a6441ad23725d9553458"
+    },
+    {
+      "file": "settings-fault-light-390.png",
+      "css_width": 390,
+      "png_width": 390,
+      "png_height": 1000,
+      "sha256": "787ba55bb8fc802458241de2759a7cf538c57d80ee6263a2800e272d61e3db24"
+    },
+    {
+      "file": "settings-light-1440.png",
+      "css_width": 1440,
+      "png_width": 1280,
+      "png_height": 889,
+      "sha256": "9a0741a7f80d728f2cb86a801e13a2458df4c1968e3566e710f5d6d9c3db38b7"
+    },
+    {
+      "file": "settings-light-390.png",
+      "css_width": 390,
+      "png_width": 390,
+      "png_height": 1000,
+      "sha256": "ec9909c4e001ad9a18f0101090cee47c79d01fffe9bf0467782d2aa29a1ca1bd"
+    }
+  ],
+  "requested_matrix_count": 16,
+  "extra_fault_count": 1,
+  "inspected": true,
+  "desktop_images_downscaled_by_browser_tool": true
+}

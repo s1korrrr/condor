@@ -1,0 +1,840 @@
+"""Read-only C1 projection of a synchronous native paper-owner checkpoint."""
+
+import hashlib
+import json
+import os
+import re
+import stat
+import time
+import uuid
+from decimal import Decimal, DecimalException
+from pathlib import Path
+from typing import Protocol
+
+SCHEMA = 'rsibot.v5-paper.observation.v2'
+MAX_SEGMENTS = 4096
+MAX_REFERENCES = 128
+MAX_PAYLOAD_BYTES = 2 * 1024 * 1024
+MAX_SEGMENT_BYTES = 4 * 1024 * 1024
+
+
+def _legacy_digest(value):
+    return hashlib.sha256(json.dumps(value, sort_keys=True, separators=(',', ':'), allow_nan=False).encode()).hexdigest()
+
+
+def _legacy_sources(config):
+    root = config.status_path.parent
+    decisions = root / (config.bot_name + '.decisions.jsonl')
+    paths = [path for path in (decisions, root / 'paper_observation.v2.json') if path.exists() or path.is_symlink()]
+    for directory, pattern in ((decisions.with_name(decisions.name + '.segments'), '*.jsonl'),
+                               (root / 'paper_observation.v2.journal', '*.json')):
+        if directory.is_symlink():
+            raise ValueError('Legacy journal directory must not be a symlink')
+        paths.extend(directory.glob(pattern))
+    if len(paths) > 8194:
+        raise ValueError('Legacy evidence exceeds the bounded file manifest capacity')
+    return sorted(paths)
+
+
+def _legacy_record(path):
+    with os.fdopen(os.open(path, os.O_RDONLY | os.O_NOFOLLOW), 'rb') as stream:
+        first = os.fstat(stream.fileno())
+        if not stat.S_ISREG(first.st_mode) or first.st_uid != os.geteuid() or first.st_nlink != 1:
+            raise ValueError('Legacy evidence requires an owner-only regular single-link file')
+        digest = hashlib.sha256()
+        for chunk in iter(lambda: stream.read(1024 * 1024), b''):
+            digest.update(chunk)
+        stream.seek(0)
+        timestamps, unknown = [], False
+        try:
+            records = (json.loads(line) for line in stream if line.strip()) if path.suffix == '.jsonl' else [json.load(stream)]
+            for value in records:
+                timestamp = value.get('generated_at_ms')
+                if timestamp is None and value.get('t') is not None:
+                    timestamp = Decimal(str(value['t'])) * 1000
+                if (timestamp is None or not Decimal(str(timestamp)).is_finite()
+                        or not 0 <= Decimal(str(timestamp)) <= 2 ** 63 - 1):
+                    unknown = True
+                else:
+                    timestamps.append(int(timestamp))
+        except (ValueError, TypeError, AttributeError, DecimalException):
+            unknown = True
+        last = os.fstat(stream.fileno())
+        fingerprint = lambda info: (info.st_dev, info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_mode)
+        if fingerprint(first) != fingerprint(last):
+            raise ValueError('Legacy file changed during inspection')
+    return dict(sha256=digest.hexdigest(), byte_count=first.st_size,
+        time_range_ms=dict(start=min(timestamps, default=None), end=max(timestamps, default=None),
+            complete=bool(timestamps) and not unknown,
+            reason='legacy_event_time_unproven_or_partial' if unknown or not timestamps else None),
+        identity=dict(device=first.st_dev, inode=first.st_ino, mtime_ns=first.st_mtime_ns,
+                      ctime_ns=first.st_ctime_ns, mode=stat.S_IMODE(first.st_mode)))
+
+
+def legacy_journal_plan(config, now_ms):
+    root = config.status_path.parent
+    receipt_path = root / 'paper_observation.v2.legacy-receipt.json'
+    if receipt_path.exists():
+        return json.loads(receipt_path.read_text())['plan']
+    if (root / 'paper_observation.v2.chain.json').exists():
+        raise ValueError('An existing chain cannot be replaced by a legacy migration')
+    sources = _legacy_sources(config)
+    if not sources:
+        raise ValueError('No legacy journal evidence requires migration')
+    files = []
+    for path in sources:
+        if not path.resolve().is_relative_to(root.resolve()):
+            raise ValueError('Legacy evidence escaped its configured directory')
+        files.append(dict(source_path=str(path), relative_path=str(path.relative_to(root)), **_legacy_record(path)))
+    plan = dict(schema=SCHEMA + '.legacy-plan', bot_id=config.bot_name,
+        state_path=str(config.state_path), status_path=str(config.status_path), created_at_ms=now_ms,
+        preservation='rename_original_inode_into_read_only_archive; never_rewrite_or_delete_legacy_bytes', files=files)
+    plan['plan_sha256'] = _legacy_digest(plan)
+    return plan
+
+
+def _legacy_plan_checked(config, plan, approved):
+    unsigned = {key: value for key, value in plan.items() if key != 'plan_sha256'}
+    if (plan.get('schema') != SCHEMA + '.legacy-plan' or plan.get('plan_sha256') != approved
+            or _legacy_digest(unsigned) != approved or plan.get('bot_id') != config.bot_name
+            or plan.get('state_path') != str(config.state_path) or plan.get('status_path') != str(config.status_path)
+            or not plan.get('files') or len(plan['files']) > 8194
+            or len(json.dumps(plan).encode()) > MAX_SEGMENT_BYTES // 2):
+        raise ValueError('Approved legacy plan identity or digest differs')
+    paths = []
+    for item in plan['files']:
+        relative = item['relative_path']
+        source = config.status_path.parent / relative
+        parts = Path(relative).parts
+        allowed = (relative in (config.bot_name + '.decisions.jsonl', 'paper_observation.v2.json')
+            or len(parts) == 2 and (parts[0] == config.bot_name + '.decisions.jsonl.segments' and source.suffix == '.jsonl'
+                or parts[0] == 'paper_observation.v2.journal' and source.suffix == '.json'))
+        if (Path(relative).is_absolute() or '..' in Path(relative).parts or str(source) != item['source_path']
+                or not allowed or source.is_symlink()
+                or not source.resolve().is_relative_to(config.status_path.parent.resolve())):
+            raise ValueError('Approved legacy source path differs')
+        paths.append(relative)
+    if len(set(paths)) != len(paths):
+        raise ValueError('Approved legacy plan duplicates a source')
+
+
+def _legacy_sync(directory):
+    descriptor = os.open(directory, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        os.fsync(descriptor)
+    finally:
+        os.close(descriptor)
+
+
+def apply_legacy_journal_plan(config, plan, approved, writer):
+    _legacy_plan_checked(config, plan, approved)
+    root = config.status_path.parent
+    receipt_path = root / 'paper_observation.v2.legacy-receipt.json'
+    chain_path = root / 'paper_observation.v2.chain.json'
+    if receipt_path.is_symlink():
+        raise ValueError('Legacy receipt must not be a symlink')
+    prior = json.loads(receipt_path.read_text()) if receipt_path.exists() else None
+    if prior is not None and (prior.get('plan') != plan or prior.get('bot_id') != config.bot_name
+            or prior.get('schema') != SCHEMA + '.legacy-receipt' or prior.get('plan_sha256') != approved
+            or prior.get('status') not in ('prepared', 'committed')):
+        raise ValueError('A different legacy migration receipt already exists')
+    if prior is not None and prior['status'] == 'committed':
+        runtime = type('StoppedLegacyOwner', (), dict(config=config))()
+        PaperObservation(runtime, writer)
+        return prior
+    if prior is None:
+        if chain_path.exists():
+            raise ValueError('An existing chain cannot be replaced by a legacy migration')
+        if [str(path.relative_to(root)) for path in _legacy_sources(config)] != [item['relative_path'] for item in plan['files']]:
+            raise ValueError('Legacy journal file set changed after review')
+        for item in plan['files']:
+            if _legacy_record(Path(item['source_path'])) != {key: item[key] for key in ('sha256', 'byte_count', 'time_range_ms', 'identity')}:
+                raise ValueError('Legacy file changed after review')
+        prior = dict(schema=SCHEMA + '.legacy-receipt', bot_id=config.bot_name,
+            plan_sha256=approved, plan=plan, status='prepared', genesis=None)
+        writer(receipt_path, prior, mode=0o600)
+    archive = root / 'paper_observation.v2.legacy' / approved
+    if archive.is_symlink() or archive.parent.is_symlink():
+        raise ValueError('Legacy archive must not be a symlink')
+    archive.mkdir(parents=True, exist_ok=True, mode=0o700)
+    for directory in (archive, archive.parent, root):
+        _legacy_sync(directory)
+    evidence = []
+    for item in plan['files']:
+        source, destination = Path(item['source_path']), archive / item['relative_path']
+        destination.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        _legacy_sync(destination.parent)
+        _legacy_sync(archive)
+        if (destination.is_symlink() or destination.parent.is_symlink()
+                or not destination.resolve().is_relative_to(archive.resolve())):
+            raise ValueError('Legacy archive must not be a symlink')
+        current = destination if destination.exists() else source
+        record = _legacy_record(current)
+        if (record['sha256'] != item['sha256'] or record['byte_count'] != item['byte_count']
+                or any(record['identity'][key] != item['identity'][key] for key in ('device', 'inode', 'mtime_ns'))):
+            raise ValueError('Legacy file changed during migration')
+        with os.fdopen(os.open(current, os.O_RDONLY | os.O_NOFOLLOW), 'rb') as original:
+            os.fchmod(original.fileno(), 0o444)
+            os.fsync(original.fileno())
+        if current == source:
+            os.rename(source, destination)
+            _legacy_sync(source.parent)
+            _legacy_sync(destination.parent)
+        elif source.exists():
+            raise ValueError('Legacy source reappeared before migration committed')
+        sealed = _legacy_record(destination)
+        if (sealed['sha256'] != item['sha256'] or sealed['byte_count'] != item['byte_count']
+                or any(sealed['identity'][key] != item['identity'][key] for key in ('device', 'inode', 'mtime_ns'))):
+            raise ValueError('Legacy file changed while being sealed')
+        evidence.append(dict(source_path=item['source_path'], preserved_path=str(destination.relative_to(root)),
+            **{key: item[key] for key in ('sha256', 'byte_count', 'time_range_ms')}))
+    segments = root / 'paper_observation.v2.journal'
+    segments.mkdir(parents=True, exist_ok=True)
+    _legacy_sync(root)
+    name = '0000-legacy-genesis-' + approved + '.json'
+    if any(path != segments / name for path in _legacy_sources(config)):
+        raise ValueError('Legacy journal file set changed during migration')
+    genesis = dict(schema=SCHEMA + '.journal', kind='legacy_genesis', bot_id=config.bot_name,
+        boot_id='legacy-' + approved, sequence=1, generated_at_ms=plan['created_at_ms'], prev_sha256=None,
+        legacy=dict(plan_sha256=approved, receipt_file=receipt_path.name,
+            policy='exact_legacy_bytes_observed_at_migration; not_retrospective_financial_truth', files=evidence))
+    if (segments / name).exists():
+        if json.loads((segments / name).read_text()) != genesis:
+            raise ValueError('Existing legacy genesis differs')
+    else:
+        writer(segments / name, genesis, mode=0o444)
+    reference = dict(name=name, sha256=hashlib.sha256((segments / name).read_bytes()).hexdigest(),
+        generated_at_ms=genesis['generated_at_ms'], boot_id=genesis['boot_id'], sequence=1, prev_sha256=None)
+    checkpoint = dict(schema=SCHEMA + '.chain', bot_id=config.bot_name, genesis_prev_sha256=None,
+                      head_sha256=reference['sha256'], segments=[reference])
+    if chain_path.exists():
+        if json.loads(chain_path.read_text()) != checkpoint:
+            raise ValueError('Prepared legacy chain checkpoint differs')
+    else:
+        writer(chain_path, checkpoint, mode=0o644)
+    committed = dict(prior, status='committed', genesis=reference)
+    writer(receipt_path, committed, mode=0o600)
+    runtime = type('StoppedLegacyOwner', (), dict(config=config))()
+    PaperObservation(runtime, writer)
+    return committed
+
+
+class JournalCorrupt(ValueError):
+    code = 'journal_corrupt'
+
+
+class ObservationSerializationError(ValueError):
+    code = 'observation_serialization_invalid'
+
+    def __init__(self, reason, field_path):
+        self.field_path = field_path
+        super().__init__(field_path + ': ' + reason)
+
+
+class PaperControlAdapter(Protocol):
+    def bind_observation(self, sequence: int) -> None: ...
+
+    def risk_snapshot(self) -> dict: ...
+
+    def poll_commands(self, *, now_ms: int, limit: int = 64) -> list[dict]: ...
+
+    def close(self) -> None: ...
+
+
+def decimal_text(value):
+    number = Decimal(str(value))
+    if not number.is_finite():
+        raise ValueError('Observation financial values must be finite')
+    return format(number, 'f')
+
+
+def encode(value):
+    if isinstance(value, Decimal):
+        return decimal_text(value)
+    if hasattr(value, 'model_dump'):
+        return value.model_dump(mode='json')
+    if hasattr(value, 'name'):
+        return value.name
+    raise TypeError(type(value).__name__)
+
+
+def _financial_number_key(key):
+    return (not key.endswith(('_ms', '_count')) and bool(re.search(
+        r'(?:^|_)(?:money|quantity|amount|price|fee|fees|balance|total|available|reserved|basis|pnl|exposure|'
+        r'funding|mark|cash|equity|ratio|fraction|participation|percent|percentage|bps|pct|rate|volume)(?:_|$)', key)))
+
+
+def decimal_tree(value, *, field_path='$', key=''):
+    if (isinstance(value, (float, Decimal)) or type(value) is int and _financial_number_key(key)
+            or isinstance(value, str) and _financial_number_key(key)
+            and re.fullmatch(r'[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?', value)):
+        try:
+            return decimal_text(value)
+        except (ValueError, TypeError, DecimalException) as error:
+            raise ObservationSerializationError('numeric values must be finite decimals', field_path) from error
+    if isinstance(value, dict):
+        result = {}
+        for child_key, child in value.items():
+            if not isinstance(child_key, str):
+                raise ObservationSerializationError('object keys must be strings', field_path)
+            result[child_key] = decimal_tree(child, field_path=field_path + '.' + child_key,
+                key='amount' if key == 'fees_paid' else child_key)
+        return result
+    if isinstance(value, (list, tuple)):
+        return [decimal_tree(child, field_path=f'{field_path}[{index}]', key=key)
+                for index, child in enumerate(value)]
+    if isinstance(value, str) and value.lower() in {'nan', 'inf', 'infinity', '-inf', '-infinity'}:
+        raise ObservationSerializationError('numeric values must be finite decimals', field_path)
+    if value is None or type(value) in (str, int, bool):
+        return value
+    try:
+        projected = value.model_dump(mode='python') if hasattr(value, 'model_dump') else encode(value)
+    except (ValueError, TypeError, DecimalException) as error:
+        raise ObservationSerializationError('unsupported native value ' + type(value).__name__, field_path) from error
+    return decimal_tree(projected, field_path=field_path, key=key)
+
+
+def float_paths(value, field_path='$'):
+    if isinstance(value, float):
+        yield field_path
+    elif isinstance(value, dict):
+        for key, child in value.items():
+            yield from float_paths(child, field_path + '.' + key)
+    elif isinstance(value, (list, tuple)):
+        for index, child in enumerate(value):
+            yield from float_paths(child, f'{field_path}[{index}]')
+
+
+def assert_decimal_wire(value):
+    field_path = next(float_paths(value), None)
+    if field_path is not None:
+        raise ObservationSerializationError('floating point observation value', field_path)
+
+
+def section(data, now_ms, *, source_ms=None, reason=None, completeness=None):
+    return {'observed_at_ms': now_ms, 'source_at_ms': source_ms,
+            'completeness': completeness or ('complete' if reason is None else
+                                             'unavailable' if data is None else 'partial'),
+            'stale_reason': reason, 'capabilities': ['read'] if data is not None else [], 'data': data}
+
+
+def closed_candles(runtime, now_ms):
+    provider = getattr(runtime.session, 'market_data_provider', None)
+    pairs = {}
+    for pair in runtime.config.pairs:
+        frame = getattr(provider, '_frames', {}).get(('okx', pair, '1m'))
+        publication = provider.candle_publication('okx', pair, '1m') if provider is not None else None
+        source = getattr(runtime, '_consumed_candle_sources', {}).get(pair)
+        rows = []
+        if frame is not None and publication is not None:
+            for row in frame.itertuples(index=False):
+                timestamp = int(row.timestamp) * 1000
+                if timestamp + 60000 <= min(now_ms, int(publication[1] * 1000)):
+                    rows.append(dict(open_time_ms=timestamp, closed_at_ms=timestamp + 60000,
+                        **{field: decimal_text(getattr(row, field)) for field in ('open', 'high', 'low', 'close', 'volume')}))
+        rows = rows[-1440:]
+        if any(after['open_time_ms'] <= before['open_time_ms'] for before, after in zip(rows, rows[1:])):
+            raise ValueError('Consumed closed candle order is invalid')
+        gaps = []
+        for before, after in zip(rows, rows[1:]):
+            if after['open_time_ms'] - before['open_time_ms'] > 60000:
+                gaps.append(dict(from_open_time_ms=before['open_time_ms'] + 60000,
+                                 through_open_time_ms=after['open_time_ms'] - 60000, reason='missing_closed_bars'))
+        expected_last = now_ms // 60000 * 60000 - 60000
+        if rows and rows[-1]['open_time_ms'] < expected_last:
+            gaps.append(dict(from_open_time_ms=rows[-1]['open_time_ms'] + 60000,
+                             through_open_time_ms=expected_last, reason='closed_tail_not_consumed'))
+        pages = []
+        before_ms = None
+        remaining = rows
+        while remaining:
+            page = remaining[-240:]
+            remaining = remaining[:-240]
+            next_before_ms = page[0]['open_time_ms'] if remaining else None
+            pages.append(dict(before_ms=before_ms, next_before_ms=next_before_ms, bars=page))
+            before_ms = next_before_ms
+        digest = hashlib.sha256(json.dumps(rows, sort_keys=True).encode()).hexdigest()
+        pairs[pair] = dict(state='collecting' if not rows else 'gap' if gaps else 'fresh',
+            reason='no_native_consumed_closed_candles' if not rows else 'missing_closed_bars' if gaps else None,
+            source_identity=dict(kind='private_okx_candle_service_controller_input' if source else 'native_consumed_controller_input',
+                connector='okx', trading_pair=pair, interval='1m', market_type='spot',
+                consumed_frame_publication=publication, upstream=source, retained_bars_sha256=digest),
+            source_at_ms=int(publication[1] * 1000) if publication else None,
+            retention_start_ms=rows[0]['open_time_ms'] if rows else None,
+            count=len(rows), gaps=gaps, pages=pages)
+    return dict(schema=SCHEMA + '.candles', interval='1m', closed_only=True,
+        retention='last_1440_consumed_closed_bars_per_pair; no_gap_filling', limit_per_pair=1440,
+        page_size=240, cursor_semantics='exclusive_before_open_time_ms; snapshot_bound', pairs=pairs)
+
+
+def companion_revision(candles, terminal):
+    candle_revision = {pair: (value['source_identity']['retained_bars_sha256'], value['state'], value['gaps'])
+                       for pair, value in candles['pairs'].items()}
+    terminal_revision = [[row.get(key) for key in ('executor_id', 'close_type', 'close_at_ms', 'quantity',
+        'remaining_basis_quote', 'cum_fees_quote', 'realized_pnl_quote')]
+        for page in terminal['pages'] for row in page['records']] if terminal else None
+    return hashlib.sha256(json.dumps([candle_revision, terminal_revision], default=encode, sort_keys=True).encode()).hexdigest()
+
+
+class PaperObservation:
+    def __init__(self, runtime, writer, *, controls: PaperControlAdapter | None = None):
+        self.runtime = runtime
+        self.writer = writer
+        self.controls = controls
+        self.sequence = 0
+        self.attempt_sequence = 0
+        self.path = runtime.config.status_path.with_name('paper_observation.v2.json')
+        self.segments = self.path.parent / 'paper_observation.v2.journal'
+        self.last_segment_ms = None
+        self.references = []
+        self.retention_start_ms = None
+        self.segment_count = 0
+        self.chain_path = self.path.with_name('paper_observation.v2.chain.json')
+        self.error_path = self.path.with_name('paper_observation.v2.error.json')
+        self.chain = []
+        self.companion = None
+        self._verified_checkpoint = None
+        self._segment_fingerprints = {}
+        self._legacy_fingerprints = {}
+        self._verify_chain()
+
+    def _verify_legacy_genesis(self, segment, reference, *, full):
+        legacy = segment['legacy']
+        receipt_path = self.path.with_name('paper_observation.v2.legacy-receipt.json')
+        if receipt_path.is_symlink():
+            raise ValueError('legacy receipt must not be a symlink')
+        info = receipt_path.stat()
+        if info.st_uid != os.geteuid() or stat.S_IMODE(info.st_mode) != 0o600 or not stat.S_ISREG(info.st_mode):
+            raise ValueError('legacy receipt owner, mode or type differs')
+        receipt = json.loads(receipt_path.read_text())
+        if (receipt['schema'] != SCHEMA + '.legacy-receipt' or receipt['bot_id'] != self.runtime.config.bot_name
+                or receipt['status'] != 'committed' or receipt['genesis'] != reference
+                or receipt['plan_sha256'] != legacy['plan_sha256'] or legacy['receipt_file'] != receipt_path.name):
+            raise ValueError('legacy migration receipt is uncommitted or differs')
+        plan = receipt['plan']
+        _legacy_plan_checked(self.runtime.config, plan, legacy['plan_sha256'])
+        expected = [dict(source_path=item['source_path'], preserved_path='paper_observation.v2.legacy/'
+            + legacy['plan_sha256'] + '/' + item['relative_path'],
+            **{key: item[key] for key in ('sha256', 'byte_count', 'time_range_ms')}) for item in plan['files']]
+        if legacy['files'] != expected:
+            raise ValueError('legacy genesis evidence differs from approved plan')
+        for item in expected:
+            path = self.path.parent / item['preserved_path']
+            if path.is_symlink() or not path.resolve().is_relative_to(self.path.parent.resolve()):
+                raise ValueError('legacy preserved path differs')
+            info = path.stat()
+            fingerprint = (info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_mode)
+            if stat.S_IMODE(info.st_mode) != 0o444:
+                raise ValueError('legacy original is not sealed read-only')
+            if full or self._legacy_fingerprints.get(str(path)) != fingerprint:
+                record = _legacy_record(path)
+                if record['sha256'] != item['sha256'] or record['byte_count'] != item['byte_count']:
+                    raise ValueError('legacy original digest or byte count differs')
+            self._legacy_fingerprints[str(path)] = fingerprint
+
+    def _verify_chain(self, *, full=True):
+        try:
+            names = {path.name for path in self.segments.glob('*.json')}
+            chain = []
+            checkpoint_digest = None
+            legacy_receipt = None
+            receipt_path = self.path.with_name('paper_observation.v2.legacy-receipt.json')
+            if receipt_path.exists():
+                legacy_receipt = json.loads(receipt_path.read_text())
+                if legacy_receipt.get('status') != 'committed' or not self.chain_path.exists():
+                    raise ValueError('legacy migration is incomplete; replay the reviewed owner operation')
+            if not self.chain_path.exists() and _legacy_sources(self.runtime.config):
+                raise ValueError('unsealed or legacy chainless journals require a reviewed legacy genesis migration')
+            if self.chain_path.exists():
+                if self.chain_path.is_symlink() or self.chain_path.stat().st_size > 2 * 1024 * 1024:
+                    raise ValueError('invalid chain checkpoint file')
+                raw_checkpoint = self.chain_path.read_bytes()
+                checkpoint_digest = hashlib.sha256(raw_checkpoint).hexdigest()
+                full = full or checkpoint_digest != self._verified_checkpoint
+                checkpoint = json.loads(raw_checkpoint)
+                if checkpoint['schema'] != SCHEMA + '.chain' or checkpoint['bot_id'] != self.runtime.config.bot_name:
+                    raise ValueError('chain checkpoint identity differs')
+                chain = checkpoint['segments']
+                if len(chain) > MAX_SEGMENTS or checkpoint['genesis_prev_sha256'] is not None:
+                    raise ValueError('invalid retained chain anchor or capacity')
+                if checkpoint['head_sha256'] != (chain[-1]['sha256'] if chain else None):
+                    raise ValueError('chain head differs')
+            if legacy_receipt is not None and (not chain or chain[0] != legacy_receipt['genesis']):
+                raise ValueError('legacy genesis differs from durable migration receipt')
+            if names != {reference['name'] for reference in chain} or len(names) != len(chain):
+                raise ValueError('unsealed, missing or duplicate retained segment')
+            predecessor = None
+            last = self.companion
+            fingerprints = {}
+            for index, reference in enumerate(chain):
+                name = reference['name']
+                if self.segments.joinpath(name).name != name or '/' in name or '\\' in name:
+                    raise ValueError('invalid chain segment pathname')
+                path = self.segments / name
+                info = path.stat()
+                fingerprint = (info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_mode)
+                fingerprints[name] = fingerprint
+                if path.is_symlink() or not stat.S_ISREG(info.st_mode) or stat.S_IMODE(info.st_mode) != 0o444 or info.st_size > MAX_SEGMENT_BYTES:
+                    raise ValueError('sealed segment mode, type or capacity differs')
+                if full or index == 0 or self._segment_fingerprints.get(name) != fingerprint:
+                    raw = path.read_bytes()
+                    if hashlib.sha256(raw).hexdigest() != reference['sha256']:
+                        raise ValueError('sealed segment digest differs: ' + name)
+                    segment = json.loads(raw)
+                    if (segment['schema'] != SCHEMA + '.journal' or segment['bot_id'] != self.runtime.config.bot_name
+                            or segment['prev_sha256'] != predecessor or segment['generated_at_ms'] != reference['generated_at_ms']
+                            or segment['boot_id'] != reference['boot_id'] or segment['sequence'] != reference['sequence']):
+                        raise ValueError('sealed segment predecessor or identity differs: ' + name)
+                    if segment.get('kind') == 'legacy_genesis':
+                        if index != 0 or predecessor is not None:
+                            raise ValueError('legacy genesis must be the first chain segment')
+                        self._verify_legacy_genesis(segment, reference, full=full)
+                    elif reference is chain[-1]:
+                        last = segment
+                if reference['prev_sha256'] != predecessor:
+                    raise ValueError('sealed segment predecessor or identity differs: ' + name)
+                predecessor = reference['sha256']
+            if self.path.exists():
+                previous = json.loads(self.path.read_text())
+                if previous['schema'] != SCHEMA or previous['bot_id'] != self.runtime.config.bot_name:
+                    raise ValueError('observation history owner or schema differs')
+                history = previous['history']['data']
+                references = history['segments']
+                if not references or references[-1] not in chain:
+                    raise ValueError('manifest head is not in retained chain')
+                end = chain.index(references[-1]) + 1
+                if references != chain[max(0, end - MAX_REFERENCES):end]:
+                    raise ValueError('manifest is not a contiguous authenticated chain window')
+                expected = chain[end - len(references) - 1]['sha256'] if end > len(references) else None
+                if history['manifest_predecessor_sha256'] != expected or history['chain_head_sha256'] != references[-1]['sha256']:
+                    raise ValueError('manifest predecessor anchor differs')
+                if (history['chain_checkpoint_file'] != self.chain_path.name
+                        or history['genesis_prev_sha256'] is not None or history['segment_count'] != end):
+                    raise ValueError('manifest checkpoint identity differs')
+                reference = references[-1]
+                for descriptor, key in ((previous['candles'], 'candles'),
+                                        (history['terminal_executors'], 'terminal_executors')):
+                    data = descriptor['data']
+                    if data is not None and (data['file'] != 'paper_observation.v2.journal/' + reference['name']
+                            or data['sha256'] != reference['sha256'] or data['section'] != key
+                            or data['snapshot_id'] != dict(boot_id=reference['boot_id'], sequence=reference['sequence'])):
+                        raise ValueError('manifest companion reference differs')
+            self.chain = chain
+            self.references = chain[-MAX_REFERENCES:]
+            self.segment_count = len(chain)
+            self.retention_start_ms = chain[0]['generated_at_ms'] if chain else None
+            self.companion = last
+            self._verified_checkpoint = checkpoint_digest
+            self._segment_fingerprints = fingerprints
+        except (ValueError, KeyError, TypeError, OSError) as error:
+            failure = dict(schema=SCHEMA + '.error', bot_id=self.runtime.config.bot_name,
+                code='journal_corrupt', reason=str(error), observed_at_ms=int(time.time() * 1000),
+                publication_held=True, bad_evidence_preserved=True)
+            try:
+                self.writer(self.error_path, failure, mode=0o644)
+            except OSError as export_error:
+                raise JournalCorrupt('journal_corrupt; error export failed: ' + str(export_error)) from error
+            raise JournalCorrupt('journal_corrupt: ' + str(error)) from error
+
+    def build(self, now, reasons):
+        runtime = self.runtime
+        now_ms = int(now * 1000)
+        native = runtime.session.observation_snapshot()
+        self.pending_terminal = decimal_tree(native.get('terminal_history'), field_path='$.terminal_executors')
+        self.pending_candles = decimal_tree(closed_candles(runtime, now_ms), field_path='$.candles')
+        assets = []
+        equity = Decimal('0')
+        unknown = []
+        mark_times = []
+        for asset, values in sorted(native['balances'].items()):
+            total, available = values['total'], values['available']
+            mark, source_ms = Decimal('1') if asset == 'USDC' else None, now_ms if asset == 'USDC' else None
+            if asset != 'USDC':
+                native_mark = native['marks'].get(asset + '-USDC')
+                if native_mark is not None:
+                    source_ms = native_mark['source_at_ms']
+                    if source_ms is not None and 0 <= now_ms - source_ms <= runtime.config.book_max_age_seconds * 1000:
+                        mark = native_mark['price']
+                if mark is None and total:
+                    unknown.append(asset)
+            value = total * mark if mark is not None else Decimal('0') if total == 0 else None
+            if value is not None:
+                equity += value
+            if source_ms is not None and total:
+                mark_times.append(source_ms)
+            assets.append({'asset': asset, 'total': total, 'available': available, 'reserved': total - available,
+                           'mark_quote': mark, 'mark_at_ms': source_ms, 'marked_value_quote': value})
+        configs = [controller.config.model_dump(mode='json') for controller in runtime.session.controllers.values()]
+        def canonical(value):
+            return json.dumps(value, sort_keys=True, default=encode).encode()
+        payload = {'schema': SCHEMA, 'bot_id': runtime.config.bot_name, 'execution_mode': 'paper', 'simulated': True,
+                   'source_sha256': hashlib.sha256((runtime.source_sha256 +
+                                                    native['session_identity']['source_runtime_sha256']).encode()).hexdigest(),
+                   'config_sha256': hashlib.sha256(canonical(runtime.config.model_dump(mode='json'))).hexdigest(),
+                   'recipe_sha256': hashlib.sha256(canonical(configs)).hexdigest(),
+                   'boot_id': runtime.boot_id, 'sequence': self.attempt_sequence + 1, 'generated_at_ms': now_ms}
+        payload['wallet'] = section({'quote_asset': 'USDC', 'unit': 'USDC', 'assets': assets,
+                                     'initial_funding_quote': runtime.config.simulated_quote,
+                                     'external_cash_flows_quote': '0', 'equity_quote': None if unknown else equity,
+                                     'valuation_policy': 'midpoint_fresh_book_only'}, now_ms,
+                                    source_ms=min(mark_times) if mark_times else None,
+                                    reason='missing_fresh_marks:' + ','.join(unknown) if unknown else None)
+        for fill in native['fills']:
+            fill['observed_at_ms'] = now_ms
+        payload['fills'] = section(native['fills'], now_ms, source_ms=now_ms,
+                                   reason='bounded_recent_fills' if native['fills_truncated'] else None)
+        payload['executors'] = section(native['executors'], now_ms, source_ms=now_ms,
+            reason='bounded_terminal_window_see_history_terminal_executors' if native.get('terminal_history', {}).get('total_count', 0) > 100 else None)
+        active_positions = [{'position_id': row['executor_id'], 'state': 'active',
+                             **{key: row[key] for key in ('executor_id', 'controller_id', 'trading_pair', 'quantity',
+                                                         'remaining_basis_quote', 'basis_reason', 'cum_fees_quote',
+                                                         'realized_pnl_quote', 'unrealized_pnl_quote', 'unit')},
+                             **{key: row[key] for key in ('target_price', 'target_basis', 'target_reason', 'target_restored_at_ms',
+                                 'protected_exit_order', 'remaining_target_amount') if key in row},
+                             'protected_exit': row.get('protected_exit', False),
+                             'protection_reason': row.get('protection_reason', 'native_owner_unproven')}
+                            for row in native['executors'] if row['quantity'] is not None and row['quantity'] > 0]
+        positions = native['positions'] if native.get('positions_include_executors') else native['positions'] + active_positions
+        for asset, values in native['balances'].items():
+            if asset == 'USDC':
+                continue
+            attributed = sum((row['quantity'] for row in positions if row['trading_pair'] == asset + '-USDC'),
+                             Decimal('0'))
+            residual = values['total'] - attributed
+            if residual < 0:
+                raise ValueError('Native position inventory exceeds the wallet; publication refused')
+            if residual > 0:
+                positions.append({'position_id': 'unproven:' + asset, 'executor_id': None, 'controller_id': None,
+                                  'trading_pair': asset + '-USDC', 'quantity': residual,
+                                  'remaining_basis_quote': None, 'basis_reason': 'native_owner_unproven',
+                                  'state': 'held_reconciliation', 'protected_exit': False})
+        from hummingbot.strategy_v2.paper_session import unavailable_protected_exit
+
+        for position in positions:
+            for field, value in unavailable_protected_exit('native_owner_unproven').items():
+                position.setdefault(field, value)
+        payload['positions'] = section(positions, now_ms, source_ms=now_ms,
+                                       reason='reconciliation_required' if native['recovery_required'] or any(
+                                           row['remaining_basis_quote'] is None for row in positions) else None)
+        accounting = native.get('accounting')
+        if accounting is not None and any(row['remaining_basis_quote'] is None for row in positions):
+            affected = {row.get('controller_id') for row in positions if row['remaining_basis_quote'] is None}
+            for scope in [accounting['program'], *(value for key, value in accounting['controllers'].items() if key in affected)]:
+                for field in ('realized_pnl_quote', 'unrealized_pnl_quote'):
+                    scope[field] = None
+                    scope['unavailable_reasons'][field] = 'native_inventory_basis_unproven'
+        payload['accounting'] = section(accounting, now_ms, source_ms=now_ms if accounting is not None else None,
+            reason='native_accounting_unavailable' if accounting is None else
+                   'native_accounting_partial' if accounting['program'].get('unavailable_reasons') else None)
+        payload['orders'] = section(native['orders'], now_ms, source_ms=now_ms)
+        payload['decisions'] = section({'controllers': [runtime._controller_row(controller)
+                                                       for controller in runtime.session.controllers.values()],
+                                        'trailing': {'applicable': False, 'reason': 'fixed_target_recipe'},
+                                        'dca': {'applicable': False, 'reason': 'no_active_plan'}}, now_ms,
+                                       source_ms=int(runtime.report_observed_at * 1000)
+                                       if runtime.report_observed_at is not None else None,
+                                       reason='collecting' if runtime.last_result is None else None)
+        risk = self.controls.risk_snapshot() if self.controls else None
+        hold_reason = None
+        if risk is not None:
+            explanations = dict(
+                stop_intent_log_damaged='New acquisitions are held because the stop intent log contains damaged or torn '
+                    'records. Original damaged bytes are quarantined for owner review. Protective exits remain enabled '
+                    'and stops remain accepted. Review retained intent evidence and use the owner-only emergency reset; '
+                    'resume_entries cannot clear this hold.',
+                stop_persistence_failed='New acquisitions are held because a stop is deferred or its durable application '
+                    'requires review. A deferred result is not an applied acknowledgement. '
+                    'Protective exits remain enabled. Review retained stop evidence and use the owner-only emergency reset; '
+                    'resume_entries cannot clear this hold.',
+                ingress_unreadable='New acquisitions are held because command ingress could not be read or enumerated. '
+                    'An unread stop cannot be excluded. Review retained ingress evidence, restore access, and use the '
+                    'owner-only ingress reset. Resume and clock acknowledgement cannot clear this hold.',
+                clock_persistence_failed='New acquisitions are held because owner clock continuity could not be persisted or proven. '
+                    'Protective exits remain enabled. Review retained clock evidence and use explicit owner maintenance '
+                    'acknowledgement before this hold can clear; resume_entries cannot clear it.',
+                clock_invalid='The owner clock sample is invalid or unavailable. Stops still apply, but clears are refused. '
+                    'An invalid driver clock does not advance the native session; its observation uses the last valid native '
+                    'checkpoint time. Review clock evidence before owner maintenance acknowledgement.',
+                clock_anomaly='New acquisitions are held while retained clock evidence conflicts with provider clock samples. '
+                    'Suspicious timestamps are quarantined, not adopted as clock authority. Review clock anomalies and use '
+                    'explicit owner clock maintenance; stops remain enabled and resume cannot clear this hold.')
+            clock = risk.get('clock_recovery', {})
+            invalid = 'clock_invalid' in reasons or 'clock_invalid' in str((clock.get('hold') or {}).get('detail', ''))
+            active = []
+            if (risk.get('emergency_recovery', {}).get('hold') or {}).get('stop_intent_log_damaged'):
+                active.append('stop_intent_log_damaged')
+            if risk.get('control_hold') == 'stop_persistence_failed' or risk.get('emergency_recovery', {}).get('required'):
+                active.append('stop_persistence_failed')
+            if risk.get('control_hold') == 'ingress_unreadable' or risk.get('ingress_recovery', {}).get('required'):
+                active.append('ingress_unreadable')
+            if risk.get('control_hold') == 'clock_persistence_failed' or clock.get('required'):
+                active.append('clock_persistence_failed')
+            if clock.get('required') and ('clock_anomaly' in str((clock.get('hold') or {}).get('detail', ''))
+                                          or clock.get('anomalies')):
+                active.append('clock_anomaly')
+            if invalid:
+                active.append('clock_invalid')
+            risk['holds'] = [dict(reason=reason, explanation=explanations[reason]) for reason in active]
+            hold_reason = ('stop_intent_log_damaged' if 'stop_intent_log_damaged' in active else
+                           'stop_persistence_failed' if 'stop_persistence_failed' in active else
+                           'ingress_unreadable' if 'ingress_unreadable' in active else
+                           'clock_invalid' if invalid else 'clock_anomaly' if 'clock_anomaly' in active else
+                           'clock_persistence_failed' if active else None)
+            if hold_reason:
+                risk.update(reason=hold_reason, explanation=explanations[hold_reason])
+        if isinstance(runtime.failure, dict) and runtime.failure.get('stage') == 'paper_controls':
+            hold_reason = 'paper_controls_unavailable'
+            explanation = ('Paper controls could not be acquired. The runtime refuses all native ticks and exits. '
+                           'Resolve the control-store failure before restarting. '
+                           + runtime.failure['reason'] + ': ' + runtime.failure['detail'])
+            risk = dict(reason=hold_reason, explanation=explanation,
+                        holds=[dict(reason=hold_reason, explanation=explanation)],
+                        native=None, unavailable_reason='paper_controls_not_acquired')
+        risk_incomplete = risk is not None and any(
+            not controller['native'].get('complete', False) for controller in risk.get('controllers', {}).values())
+        if risk is not None and risk.get('controllers'):
+            orchestrator = getattr(runtime.session, 'executor_orchestrator', None)
+            pending = {info.controller_id for info in
+                       getattr(orchestrator, '_pending_refusal_receipts', {}).values()}
+            pending.update(getattr(orchestrator, '_refusal_overflow_owners', set()))
+            ambiguous = getattr(orchestrator, '_refusal_ambiguous_owners', set())
+            recovery_failed = getattr(orchestrator, '_refusal_recovery_failed', False)
+            native_holds = []
+            for controller_id, owner in sorted(risk['controllers'].items()):
+                causes = []
+                if recovery_failed:
+                    causes.append(('native_refusal_recovery_unavailable',
+                        'Native refusal recovery is unavailable. All new entries are held until durable owner evidence is recovered.'))
+                if controller_id in ambiguous:
+                    causes.append(('native_refusal_owner_ambiguous',
+                        'Native activation evidence has ambiguous ownership. New entries for this owner require explicit evidence review.'))
+                if controller_id in pending:
+                    causes.append(('native_refusal_receipt_pending',
+                        'A native refusal receipt is pending durable reconciliation. All new entries for this owner are held.'))
+                if not owner['native'].get('complete', False):
+                    causes.append(('v5_risk_incomplete',
+                        'Native V5 risk evidence is incomplete. New entries are held until native risk evidence is complete.'))
+                native_holds.extend(dict(controller_id=controller_id, reason=reason, explanation=explanation,
+                    protected_exits='preserved') for reason, explanation in causes)
+            risk['native_entry_holds'] = native_holds
+            if native_holds and hold_reason is None:
+                hold_reason = native_holds[0]['reason']
+        payload['risk'] = section(risk, now_ms, source_ms=now_ms if risk is not None else None,
+                                  reason=hold_reason if hold_reason else
+                                  'native_risk_incomplete' if risk_incomplete else
+                                  None if risk is not None else 'controls_not_integrated')
+        payload['history'] = section({'retention_start_ms': self.retention_start_ms or now_ms,
+                                     'gaps': ['bounded_recent_fill_window'] if native['fills_truncated'] else [],
+                                     'segments': self.references, 'statistics': None,
+                                     'reason': 'insufficient_comparable_history',
+                                     'valuation_policy': 'midpoint_fresh_book_only',
+                                     'segment_count': self.segment_count, 'segment_limit': MAX_SEGMENTS,
+                                     'archival_policy': 'preserve_immutable_segments_hold_at_capacity'}, now_ms,
+                                    source_ms=now_ms)
+        payload['operations'] = section({'restored': runtime.restored, 'ready': not reasons and not runtime.failure,
+                                        'reasons': reasons, 'failure': runtime.failure,
+                                        'recovery_required': native['recovery_required'],
+                                        'session_identity': native['session_identity'],
+                                        'driver_source_sha256': runtime.source_sha256,
+                                        'journal_failures': runtime.journal_failures}, now_ms, source_ms=now_ms,
+                                       reason='runtime_stopped' if 'runtime_stopped' in reasons else None)
+        return decimal_tree(payload)
+
+    def publish(self, now, reasons):
+        try:
+            return self._publish(now, reasons)
+        except ObservationSerializationError as error:
+            failure = dict(schema=SCHEMA + '.error', bot_id=self.runtime.config.bot_name,
+                code=error.code, reason=str(error), field_path=error.field_path,
+                observed_at_ms=int(time.time() * 1000), publication_held=True, bad_evidence_preserved=True)
+            try:
+                self.writer(self.error_path, failure, mode=0o644)
+            except OSError as export_error:
+                raise ObservationSerializationError(str(error) + '; error export failed: ' + str(export_error),
+                                                    error.field_path) from export_error
+            raise
+
+    def _publish(self, now, reasons):
+        self._verify_chain(full=False)
+        payload = self.build(now, reasons)
+        assert_decimal_wire(payload)
+        assert_decimal_wire(self.pending_terminal)
+        assert_decimal_wire(self.pending_candles)
+        self.attempt_sequence = payload['sequence']
+        now_ms = payload['generated_at_ms']
+        revision = companion_revision(self.pending_candles, self.pending_terminal)
+        if (self.last_segment_ms is None or now_ms - self.last_segment_ms >= 60000
+                or revision != self.companion.get('companion_revision')
+                or next(float_paths(self.companion), None) is not None):
+            if self.segment_count >= MAX_SEGMENTS:
+                raise OSError('Observation journal capacity reached; preserve/archive evidence before continuation')
+            self.segments.mkdir(parents=True, exist_ok=True)
+            os.chmod(self.segments, 0o755)
+            name = f'{now_ms:016d}-{self.runtime.boot_id}-{payload["sequence"]:012d}-{uuid.uuid4().hex}.json'
+            segment = {'schema': SCHEMA + '.journal', 'bot_id': payload['bot_id'], 'boot_id': payload['boot_id'],
+                       'sequence': payload['sequence'], 'generated_at_ms': now_ms,
+                       'prev_sha256': self.chain[-1]['sha256'] if self.chain else None,
+                       'companion_revision': revision,
+                       'wallet': payload['wallet'], 'fills': payload['fills'],
+                       'positions': payload['positions'], 'executors': payload['executors'],
+                       'accounting': payload['accounting'], 'terminal_executors': self.pending_terminal,
+                       'candles': self.pending_candles}
+            segment = json.loads(json.dumps(segment, default=encode, allow_nan=False))
+            assert_decimal_wire(segment)
+            if len(json.dumps(segment).encode()) > MAX_SEGMENT_BYTES:
+                raise ValueError('Observation journal segment exceeds bounded capacity')
+            self.writer(self.segments / name, segment, mode=0o444)
+            digest = hashlib.sha256((self.segments / name).read_bytes()).hexdigest()
+            reference = dict(name=name, sha256=digest, generated_at_ms=now_ms, prev_sha256=segment['prev_sha256'],
+                             boot_id=payload['boot_id'], sequence=payload['sequence'])
+            chain = self.chain + [reference]
+            self.writer(self.chain_path, dict(schema=SCHEMA + '.chain', bot_id=payload['bot_id'],
+                genesis_prev_sha256=None, head_sha256=digest, segments=chain), mode=0o644)
+            self.chain = chain
+            self.companion = segment
+            self._verified_checkpoint = hashlib.sha256(self.chain_path.read_bytes()).hexdigest()
+            info = (self.segments / name).stat()
+            self._segment_fingerprints[name] = (info.st_ino, info.st_size, info.st_mtime_ns, info.st_ctime_ns, info.st_mode)
+            references = chain[-MAX_REFERENCES:]
+            payload['history']['data']['segments'] = references
+            payload['history']['data']['segment_count'] = self.segment_count + 1
+            companion = segment
+        else:
+            references = self.references
+            chain = self.chain
+            companion = self.companion
+        payload['history']['data'].update(chain_checkpoint_file=self.chain_path.name,
+            chain_head_sha256=chain[-1]['sha256'] if chain else None,
+            genesis_prev_sha256=None,
+            manifest_predecessor_sha256=chain[-len(references) - 1]['sha256'] if len(chain) > len(references) else None)
+        for field, key in (('candles', 'candles'), ('executor_history', 'terminal_executors')):
+            data = companion[key] if companion is not None else None
+            reference = references[-1] if references else None
+            partial = data is None or (field == 'candles' and any(pair['state'] != 'fresh' for pair in data['pairs'].values()))
+            descriptor = section(dict(file='paper_observation.v2.journal/' + reference['name'],
+                sha256=reference['sha256'], section=key,
+                snapshot_id=dict(boot_id=companion['boot_id'], sequence=companion['sequence']),
+                retention=data.get('retention'), page_size=data.get('page_size'),
+                retention_start_ms=data.get('retention_start_ms'),
+                **{key: data[key] for key in ('total_count', 'retained_count', 'truncated', 'limit_per_pair') if key in data}) if data is not None else None,
+                now_ms, source_ms=companion['generated_at_ms'] if companion else None,
+                reason='source_partial' if partial else None)
+            if field == 'executor_history':
+                payload['history']['data']['terminal_executors'] = descriptor
+            else:
+                payload[field] = descriptor
+        if len(json.dumps(payload, allow_nan=False).encode()) > MAX_PAYLOAD_BYTES:
+            raise ValueError('Observation exceeds bounded snapshot capacity')
+        assert_decimal_wire(payload)
+        self.writer(self.path, payload, mode=0o644)
+        self.sequence = payload['sequence']
+        if self.controls is not None:
+            self.controls.bind_observation(self.sequence)
+        if references is not self.references:
+            self.chain = chain
+            self.companion = companion
+            self.references = references
+            self.last_segment_ms = now_ms
+            self.segment_count += 1
+            self.retention_start_ms = self.retention_start_ms or now_ms
+        return payload

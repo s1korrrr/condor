@@ -438,7 +438,15 @@ def create_app(
                     raise HTTPException(
                         503, detail={"code": "HOST_OPERATIONS_INVALID"}
                     ) from None
-                payload = dict(payload, bot_id=paper.bot_name)
+                payload = dict(
+                    payload,
+                    bot_id=paper.bot_name,
+                    read_at_ms=clock(),
+                    observed_at_ms=payload.get("observed_at_ms"),
+                    source_at_ms=payload.get("generated_at_ms"),
+                    capabilities=[],
+                    source={"owner": "host_monitor_export"},
+                )
                 return read_compatibility_path(path, paper, paper_read=payload)
             try:
                 payload = await api.observation(result["source_route"])

@@ -1,0 +1,62 @@
+docs/evidence/2026-10-31-v5-dashboard-polish/eslint-baseline.log:7: new blank line at EOF.
+docs/evidence/2026-10-31-v5-dashboard-polish/eslint.log:7: new blank line at EOF.
+docs/evidence/2026-10-31-v5-dashboard-polish/independent-repro.log:39: trailing whitespace.
++[plugin builtin:vite-reporter]
+docs/evidence/2026-10-31-v5-dashboard-polish/independent-repro.log:84: trailing whitespace.
++[plugin builtin:vite-reporter]
+docs/evidence/2026-10-31-v5-dashboard-polish/node-before.log:35: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/node-before.log:37: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/presentation-before.log:41: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/presentation-before.log:43: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/presentation-before.log:62: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/presentation-before.log:64: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/presentation-before.log:83: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/presentation-before.log:85: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/presentation-before.log:104: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/presentation-before.log:106: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/presentation-before.log:125: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/presentation-before.log:127: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/python-verified-full.log:76: trailing whitespace.
++  /home/rsi/dev/rsibot/condor/.worktrees/v5-dashboard-polish/tests/test_web_compression.py:132: DeprecationWarning:
+docs/evidence/2026-10-31-v5-dashboard-polish/python-verified-full.log:78: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/python-verified-full.log:81: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/python-verified-full.log:85: trailing whitespace.
++  /home/rsi/dev/rsibot/condor/.venv/lib/python3.12/site-packages/fastapi/applications.py:4598: DeprecationWarning:
+docs/evidence/2026-10-31-v5-dashboard-polish/python-verified-full.log:87: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/python-verified-full.log:90: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/risk-before.log:16: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/risk-before.log:18: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/verified-repro.log:39: trailing whitespace.
++[plugin builtin:vite-reporter]
+docs/evidence/2026-10-31-v5-dashboard-polish/verified-repro.log:84: trailing whitespace.
++[plugin builtin:vite-reporter]
+docs/evidence/2026-10-31-v5-dashboard-polish/workspace-before.log:34: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/workspace-before.log:36: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/workspace-before.log:55: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/workspace-before.log:57: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/workspace-before.log:76: trailing whitespace.
++
+docs/evidence/2026-10-31-v5-dashboard-polish/workspace-before.log:78: trailing whitespace.
++

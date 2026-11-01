@@ -115,3 +115,27 @@ test('one shared clock interval serves all subscriptions and survives a zero-sub
     remounted(); assert.equal(cleared,2);
   } finally {globalThis.window = previousWindow; globalThis.document = previousDocument;}
 });
+
+test('render sampling stays precise and monotonic without changing the published store snapshot', () => {
+  const previousWindow = globalThis.window, previousDocument = globalThis.document;
+  const browser = new EventTarget();
+  browser.setInterval = () => 1;
+  browser.clearInterval = () => {};
+  globalThis.window = browser; globalThis.document = new EventTarget();
+  let now = 1793268000000;
+  try {
+    const clock = createPaperClock(() => now);
+    const unsubscribe = clock.subscribe(() => {});
+    const published = clock.getSnapshot();
+    now += 30001;
+    assert.equal(clock.observe(),now);
+    assert.equal(paperSnapshotPresentation(published,clock.observe(),false).stale,true);
+    assert.equal(clock.getSnapshot(),published);
+    now -= 6000;
+    assert.equal(clock.observe(),published + 30001);
+    assert.equal(clock.getSnapshot(),published);
+    window.dispatchEvent(new Event('focus'));
+    assert.equal(clock.getSnapshot(),published + 30001);
+    unsubscribe();
+  } finally {globalThis.window = previousWindow; globalThis.document = previousDocument;}
+});

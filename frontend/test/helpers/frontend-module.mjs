@@ -13,7 +13,7 @@ export function frontendModules(overrides = {}, privateExports = {}, transform =
   const modules = new Map();
   function load(relative) {
     const base = path.isAbsolute(relative) ? relative : path.join(sourceRoot, relative);
-    const filename = [base, `${base}.ts`, `${base}.tsx`].find(candidate => fs.existsSync(candidate));
+    const filename = [base, `${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.mjs`].find(candidate => fs.existsSync(candidate));
     if (!filename) throw new Error(`Cannot resolve ${relative}`);
     if (modules.has(filename)) return modules.get(filename).exports;
     const module = { exports: {} };

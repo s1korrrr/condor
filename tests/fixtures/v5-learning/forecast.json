@@ -1,0 +1,80 @@
+{
+  "available_at_ms": 1200,
+  "correlation_id": "stage1-20261029",
+  "created_at_ms": 1200,
+  "data": {
+    "calibration": "UNCALIBRATED",
+    "calibration_provenance": null,
+    "calibrator_ref": null,
+    "checkpoint_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "decision_at_ms": 1200,
+    "decision_cutoff_ms": 1000,
+    "expires_at_ms": 2000,
+    "generation_completed_at_ms": 1200,
+    "generation_started_at_ms": 1100,
+    "label_end_ms": 1800,
+    "label_policy_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "missingness": [],
+    "model_ref": null,
+    "ordered_input_hashes": [],
+    "output": {
+      "abstention_reason": null,
+      "kind": "PROBABILITY",
+      "path_at_ms": [],
+      "quantile_levels": [],
+      "values": [
+        {
+          "asset": null,
+          "kind": "probability",
+          "quote_currency": null,
+          "unit": "probability_0_1",
+          "value": "0"
+        }
+      ]
+    },
+    "prediction": {
+      "asset": null,
+      "kind": "probability",
+      "quote_currency": null,
+      "unit": "probability_0_1",
+      "value": "0"
+    },
+    "rights_policy_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "runtime_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "scope": {
+      "connector": "fixture",
+      "horizon_ms": 1,
+      "instruments": [
+        "fixture"
+      ],
+      "lane": "spot",
+      "mandate_id": "fixture",
+      "quote_currency": "USDC",
+      "regime_id": "fixture",
+      "timeframe": "fixture",
+      "venue": "fixture"
+    },
+    "settings_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "target_id": "fixture-target",
+    "target_ref": {
+      "available_at_ms": 900,
+      "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "owner": "quants_lab",
+      "record_id": "fixture-target",
+      "record_kind": "target",
+      "revision": "r1"
+    },
+    "target_version": "r1",
+    "tokenizer_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "training_overlap": "UNKNOWN"
+  },
+  "evidence_refs": [],
+  "execution_authorized": false,
+  "parent_refs": [],
+  "payload_sha256": "3093b82a0188f9a5eb7358013c3a4e1176aebf1fb449b722b802657c918bb00f",
+  "producer_owner": "quants_lab",
+  "producer_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "record_id": "fixture-forecast",
+  "schema_name": "forecast",
+  "schema_version": "1"
+}

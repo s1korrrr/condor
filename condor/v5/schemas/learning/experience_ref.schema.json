@@ -1,0 +1,391 @@
+{
+  "$defs": {
+    "Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "available_at_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "content_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "owner": {
+          "enum": [
+            "research_os",
+            "hummingbot",
+            "hummingbot_api",
+            "quants_lab"
+          ],
+          "title": "Owner",
+          "type": "string"
+        },
+        "record_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Record Id",
+          "type": "string"
+        },
+        "record_kind": {
+          "enum": [
+            "candidate_revision",
+            "opportunity",
+            "agent_job",
+            "agent_message",
+            "event",
+            "forecast",
+            "forecast_evaluation",
+            "experience_ref",
+            "lesson_revision",
+            "retraction",
+            "knowledge_release",
+            "adoption",
+            "evidence",
+            "input_snapshot",
+            "inventory",
+            "critic_receipt",
+            "model",
+            "calibrator",
+            "candidate_library",
+            "program",
+            "idea_revision",
+            "native_receipt",
+            "outcome",
+            "policy",
+            "experiment",
+            "run",
+            "assessment",
+            "metrics",
+            "report",
+            "artifact_bundle",
+            "campaign",
+            "job_admission",
+            "strategy_selection_proposal",
+            "feature",
+            "regime",
+            "target",
+            "prompt",
+            "skill",
+            "retrieval_index",
+            "rights_retraction",
+            "source"
+          ],
+          "title": "Record Kind",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Revision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "record_kind",
+        "record_id",
+        "revision",
+        "content_sha256",
+        "available_at_ms"
+      ],
+      "title": "Reference",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "available_at_ms": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Available At Ms",
+      "type": "integer"
+    },
+    "correlation_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "created_at_ms": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Created At Ms",
+      "type": "integer"
+    },
+    "data": {
+      "additionalProperties": false,
+      "properties": {
+        "admission": {
+          "enum": [
+            "NOT_REQUESTED",
+            "REFUSED",
+            "UNKNOWN",
+            "FIXTURE_ONLY",
+            "ADMITTED",
+            "EXECUTOR_BOUND",
+            "HELD",
+            "TERMINAL"
+          ],
+          "title": "Admission",
+          "type": "string"
+        },
+        "candidate_ref": {
+          "$ref": "#/$defs/Reference"
+        },
+        "candidate_revision": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Candidate Revision",
+          "type": "string"
+        },
+        "decision_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Decision Id",
+          "type": "string"
+        },
+        "executor_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Executor Id"
+        },
+        "fill_ids": {
+          "items": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Fill Ids",
+          "type": "array"
+        },
+        "native_receipt_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "opportunity_refs": {
+          "items": {
+            "$ref": "#/$defs/Reference"
+          },
+          "maxItems": 64,
+          "title": "Opportunity Refs",
+          "type": "array"
+        },
+        "order_ids": {
+          "items": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Order Ids",
+          "type": "array"
+        },
+        "outcome_type": {
+          "enum": [
+            "OBSERVED_EXECUTION",
+            "MARKED_OPEN",
+            "COUNTERFACTUAL",
+            "INDEPENDENT_SHADOW",
+            "PORTFOLIO_SIMULATION"
+          ],
+          "title": "Outcome Type",
+          "type": "string"
+        },
+        "owner_run_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Owner Run Id"
+        },
+        "owner_run_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "policy_ref": {
+          "$ref": "#/$defs/Reference"
+        },
+        "policy_revision": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Policy Revision",
+          "type": "string"
+        },
+        "proposal_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Proposal Id"
+        },
+        "proposal_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "receipt_hashes": {
+          "items": {
+            "pattern": "^[a-f0-9]{64}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Receipt Hashes",
+          "type": "array"
+        },
+        "reconciliation": {
+          "enum": [
+            "UNKNOWN",
+            "NO_FILL",
+            "PARTIAL_FILL",
+            "HELD_INVENTORY",
+            "TERMINAL_FLAT"
+          ],
+          "title": "Reconciliation",
+          "type": "string"
+        },
+        "release_id": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Release Id"
+        },
+        "release_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": [
+        "owner_run_id",
+        "decision_id",
+        "executor_id",
+        "order_ids",
+        "fill_ids",
+        "receipt_hashes",
+        "opportunity_refs",
+        "proposal_id",
+        "candidate_revision",
+        "policy_revision",
+        "release_id",
+        "admission",
+        "reconciliation",
+        "outcome_type",
+        "native_receipt_ref",
+        "candidate_ref",
+        "policy_ref",
+        "proposal_ref",
+        "release_ref",
+        "owner_run_ref"
+      ],
+      "title": "ExperienceRef",
+      "type": "object"
+    },
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "maxItems": 64,
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "execution_authorized": {
+      "const": false,
+      "title": "Execution Authorized",
+      "type": "boolean"
+    },
+    "parent_refs": {
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "maxItems": 64,
+      "title": "Parent Refs",
+      "type": "array"
+    },
+    "payload_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Payload Sha256",
+      "type": "string"
+    },
+    "producer_owner": {
+      "const": "research_os",
+      "type": "string"
+    },
+    "producer_revision": {
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$",
+      "title": "Producer Revision",
+      "type": "string"
+    },
+    "record_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Record Id",
+      "type": "string"
+    },
+    "schema_name": {
+      "const": "experience_ref",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_name",
+    "schema_version",
+    "record_id",
+    "producer_owner",
+    "producer_revision",
+    "created_at_ms",
+    "available_at_ms",
+    "payload_sha256",
+    "correlation_id",
+    "parent_refs",
+    "evidence_refs",
+    "execution_authorized",
+    "data"
+  ],
+  "title": "Envelope",
+  "type": "object"
+}

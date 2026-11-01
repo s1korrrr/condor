@@ -1,0 +1,48 @@
+
+> frontend@0.0.0 build
+> tsc -b && vite build
+
+vite v8.2.2 building client environment for production...
+transforming...
+✓ 3329 modules transformed.
+rendering chunks...
+computing gzip size...
+dist/index.html                                 0.86 kB │ gzip:   0.38 kB
+dist/assets/DataTable-DJQeG-hu.css              9.92 kB │ gzip:   2.46 kB
+dist/assets/Research-Bu9OmQoj.css              10.96 kB │ gzip:   2.46 kB
+dist/assets/NativeScreenerTools-TK9vw0in.css   20.37 kB │ gzip:   4.46 kB
+dist/assets/ActiveBotsTab-ByOu5BJg.css         40.02 kB │ gzip:   7.07 kB
+dist/assets/Screener-B7QnsIPv.css              49.49 kB │ gzip:  10.09 kB
+dist/assets/frontend-Cn4zDwhL.css              87.34 kB │ gzip:  14.56 kB
+dist/assets/index-cesGEn04.js                   0.04 kB │ gzip:   0.06 kB
+dist/assets/Overview-DBBxQT7G.js                0.16 kB │ gzip:   0.15 kB
+dist/assets/Tradepad-BshAQypz.js                0.17 kB │ gzip:   0.15 kB
+dist/assets/Operations-2xFoyx95.js              0.17 kB │ gzip:   0.15 kB
+dist/assets/TradingVisuals-xiixmvrv.js          0.17 kB │ gzip:   0.16 kB
+dist/assets/executor-volume-DhPt2HAw.js         0.53 kB │ gzip:   0.36 kB
+dist/assets/rsiSafety-CJqnGgNZ.js               0.55 kB │ gzip:   0.37 kB
+dist/assets/rolldown-runtime-8BhlS34s.js        0.80 kB │ gzip:   0.47 kB
+dist/assets/decimal-display-UE0u5lCy.js         1.76 kB │ gzip:   0.98 kB
+dist/assets/unavailable-CfF36Drv.js             2.03 kB │ gzip:   0.85 kB
+dist/assets/Bots-BIKQAk_T.js                    4.86 kB │ gzip:   1.88 kB
+dist/assets/BotDetail-VwW7_ebt.js               5.63 kB │ gzip:   1.98 kB
+dist/assets/BotRunsTab-DgQ9rimN.js              9.32 kB │ gzip:   2.93 kB
+dist/assets/CanonicalContext-Cfcta2LO.js       16.76 kB │ gzip:   5.23 kB
+dist/assets/EditorTab-BxPB1h95.js              17.35 kB │ gzip:   4.80 kB
+dist/assets/ArchivedBotsTab-_JurFGhu.js        21.90 kB │ gzip:   6.31 kB
+dist/assets/DataTable-CXLtx_Ry.js              26.89 kB │ gzip:  10.28 kB
+dist/assets/Portfolio-CrTh-mn6.js              42.04 kB │ gzip:  11.99 kB
+dist/assets/BacktestingTab-CAKAOtMY.js         45.58 kB │ gzip:  10.49 kB
+dist/assets/NativeScreenerTools-DAYD27TU.js    63.13 kB │ gzip:  18.56 kB
+dist/assets/StrategyDetail-DHIJ3OFV.js         71.59 kB │ gzip:  16.45 kB
+dist/assets/Research-BfVadaDu.js              103.68 kB │ gzip:  32.73 kB
+dist/assets/vendor-price-charts-Bkk6yAsU.js   186.66 kB │ gzip:  59.76 kB
+dist/assets/ActiveBotsTab-ODzZn-Tk.js         225.13 kB │ gzip:  63.31 kB
+dist/assets/vendor-react-Cz9lIwCl.js          230.30 kB │ gzip:  73.86 kB
+dist/assets/Screener-dp9cHhak.js              295.56 kB │ gzip:  85.72 kB
+dist/assets/vendor-DD4gFwth.js                318.75 kB │ gzip:  97.33 kB
+dist/assets/vendor-charts-Gfva2v8V.js         440.20 kB │ gzip: 127.90 kB
+dist/assets/frontend-CBNaXvvT.js              484.00 kB │ gzip: 113.45 kB
+dist/assets/editor-TwESVi34.js                504.13 kB │ gzip: 165.39 kB
+
+✓ built in 1.98s

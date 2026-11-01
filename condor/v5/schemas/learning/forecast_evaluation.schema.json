@@ -1,0 +1,403 @@
+{
+  "$defs": {
+    "Quantity": {
+      "additionalProperties": false,
+      "properties": {
+        "asset": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Asset"
+        },
+        "kind": {
+          "enum": [
+            "money",
+            "quantity",
+            "price",
+            "probability",
+            "ordinal",
+            "simple_return",
+            "log_return",
+            "ratio",
+            "rank",
+            "z"
+          ],
+          "title": "Kind",
+          "type": "string"
+        },
+        "quote_currency": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Quote Currency"
+        },
+        "unit": {
+          "enum": [
+            "quote_asset",
+            "base_asset",
+            "quote_per_base",
+            "probability_0_1",
+            "ordinal_score",
+            "simple_return_fraction",
+            "log_return",
+            "dimensionless_ratio",
+            "rank_index",
+            "z_score"
+          ],
+          "title": "Unit",
+          "type": "string"
+        },
+        "value": {
+          "pattern": "^-?(?:0|[1-9][0-9]{0,29})(?:\\.[0-9]{1,30})?$",
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "kind",
+        "unit",
+        "value",
+        "asset",
+        "quote_currency"
+      ],
+      "title": "Quantity",
+      "type": "object"
+    },
+    "Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "available_at_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "content_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "owner": {
+          "enum": [
+            "research_os",
+            "hummingbot",
+            "hummingbot_api",
+            "quants_lab"
+          ],
+          "title": "Owner",
+          "type": "string"
+        },
+        "record_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Record Id",
+          "type": "string"
+        },
+        "record_kind": {
+          "enum": [
+            "candidate_revision",
+            "opportunity",
+            "agent_job",
+            "agent_message",
+            "event",
+            "forecast",
+            "forecast_evaluation",
+            "experience_ref",
+            "lesson_revision",
+            "retraction",
+            "knowledge_release",
+            "adoption",
+            "evidence",
+            "input_snapshot",
+            "inventory",
+            "critic_receipt",
+            "model",
+            "calibrator",
+            "candidate_library",
+            "program",
+            "idea_revision",
+            "native_receipt",
+            "outcome",
+            "policy",
+            "experiment",
+            "run",
+            "assessment",
+            "metrics",
+            "report",
+            "artifact_bundle",
+            "campaign",
+            "job_admission",
+            "strategy_selection_proposal",
+            "feature",
+            "regime",
+            "target",
+            "prompt",
+            "skill",
+            "retrieval_index",
+            "rights_retraction",
+            "source"
+          ],
+          "title": "Record Kind",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Revision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "record_kind",
+        "record_id",
+        "revision",
+        "content_sha256",
+        "available_at_ms"
+      ],
+      "title": "Reference",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "available_at_ms": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Available At Ms",
+      "type": "integer"
+    },
+    "correlation_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "created_at_ms": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Created At Ms",
+      "type": "integer"
+    },
+    "data": {
+      "additionalProperties": false,
+      "properties": {
+        "ambiguous_count": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Ambiguous Count",
+          "type": "integer"
+        },
+        "baseline_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Baseline Id",
+          "type": "string"
+        },
+        "censored_count": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Censored Count",
+          "type": "integer"
+        },
+        "cohort_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Cohort Sha256",
+          "type": "string"
+        },
+        "dependence_method_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Dependence Method Id",
+          "type": "string"
+        },
+        "diagnostics_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Diagnostics Sha256",
+          "type": "string"
+        },
+        "evaluator_revision": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Evaluator Revision",
+          "type": "string"
+        },
+        "excluded_count": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Excluded Count",
+          "type": "integer"
+        },
+        "exposure_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Exposure Sha256",
+          "type": "string"
+        },
+        "forecast_refs": {
+          "items": {
+            "$ref": "#/$defs/Reference"
+          },
+          "maxItems": 64,
+          "title": "Forecast Refs",
+          "type": "array"
+        },
+        "invalid_count": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Invalid Count",
+          "type": "integer"
+        },
+        "label_available_at_ms": {
+          "anyOf": [
+            {
+              "maximum": 9223372036854775807,
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Label Available At Ms"
+        },
+        "label_end_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Label End Ms",
+          "type": "integer"
+        },
+        "label_state": {
+          "enum": [
+            "MATURE",
+            "DELAYED",
+            "CENSORED",
+            "INVALID",
+            "AMBIGUOUS"
+          ],
+          "title": "Label State",
+          "type": "string"
+        },
+        "matured_count": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Matured Count",
+          "type": "integer"
+        },
+        "proper_score": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Quantity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "scoring_cutoff_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Scoring Cutoff Ms",
+          "type": "integer"
+        },
+        "target_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Target Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "forecast_refs",
+        "cohort_sha256",
+        "target_sha256",
+        "scoring_cutoff_ms",
+        "label_end_ms",
+        "label_available_at_ms",
+        "label_state",
+        "evaluator_revision",
+        "matured_count",
+        "invalid_count",
+        "ambiguous_count",
+        "censored_count",
+        "excluded_count",
+        "proper_score",
+        "baseline_id",
+        "diagnostics_sha256",
+        "dependence_method_id",
+        "exposure_sha256"
+      ],
+      "title": "ForecastEvaluation",
+      "type": "object"
+    },
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "maxItems": 64,
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "execution_authorized": {
+      "const": false,
+      "title": "Execution Authorized",
+      "type": "boolean"
+    },
+    "parent_refs": {
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "maxItems": 64,
+      "title": "Parent Refs",
+      "type": "array"
+    },
+    "payload_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Payload Sha256",
+      "type": "string"
+    },
+    "producer_owner": {
+      "const": "quants_lab",
+      "type": "string"
+    },
+    "producer_revision": {
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$",
+      "title": "Producer Revision",
+      "type": "string"
+    },
+    "record_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Record Id",
+      "type": "string"
+    },
+    "schema_name": {
+      "const": "forecast_evaluation",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_name",
+    "schema_version",
+    "record_id",
+    "producer_owner",
+    "producer_revision",
+    "created_at_ms",
+    "available_at_ms",
+    "payload_sha256",
+    "correlation_id",
+    "parent_refs",
+    "evidence_refs",
+    "execution_authorized",
+    "data"
+  ],
+  "title": "Envelope",
+  "type": "object"
+}

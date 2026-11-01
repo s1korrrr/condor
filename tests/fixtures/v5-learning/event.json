@@ -1,0 +1,36 @@
+{
+  "available_at_ms": 1200,
+  "correlation_id": "stage1-20261029",
+  "created_at_ms": 1200,
+  "data": {
+    "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "event_at_ms": null,
+    "event_type": "OBSERVED_LIQUIDATION",
+    "expires_at_ms": 2000,
+    "first_observed_at_ms": 1100,
+    "generation_completed_at_ms": 1200,
+    "published_at_ms": null,
+    "resolution": "UNRESOLVED",
+    "rights_policy_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "source_id": "fixture-source",
+    "source_ref": {
+      "available_at_ms": 900,
+      "content_sha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "owner": "research_os",
+      "record_id": "fixture-source",
+      "record_kind": "source",
+      "revision": "r1"
+    },
+    "source_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "untrusted_external_text": "fixture"
+  },
+  "evidence_refs": [],
+  "execution_authorized": false,
+  "parent_refs": [],
+  "payload_sha256": "d1853cffcc9ec865b1bdd5636d373376a214d9794cf64bd49916757c4249cc08",
+  "producer_owner": "quants_lab",
+  "producer_revision": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+  "record_id": "fixture-event",
+  "schema_name": "event",
+  "schema_version": "1"
+}

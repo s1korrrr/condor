@@ -1,0 +1,500 @@
+{
+  "$defs": {
+    "Reference": {
+      "additionalProperties": false,
+      "properties": {
+        "available_at_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 0,
+          "title": "Available At Ms",
+          "type": "integer"
+        },
+        "content_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Content Sha256",
+          "type": "string"
+        },
+        "owner": {
+          "enum": [
+            "research_os",
+            "hummingbot",
+            "hummingbot_api",
+            "quants_lab"
+          ],
+          "title": "Owner",
+          "type": "string"
+        },
+        "record_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Record Id",
+          "type": "string"
+        },
+        "record_kind": {
+          "enum": [
+            "candidate_revision",
+            "opportunity",
+            "agent_job",
+            "agent_message",
+            "event",
+            "forecast",
+            "forecast_evaluation",
+            "experience_ref",
+            "lesson_revision",
+            "retraction",
+            "knowledge_release",
+            "adoption",
+            "evidence",
+            "input_snapshot",
+            "inventory",
+            "critic_receipt",
+            "model",
+            "calibrator",
+            "candidate_library",
+            "program",
+            "idea_revision",
+            "native_receipt",
+            "outcome",
+            "policy",
+            "experiment",
+            "run",
+            "assessment",
+            "metrics",
+            "report",
+            "artifact_bundle",
+            "campaign",
+            "job_admission",
+            "strategy_selection_proposal",
+            "feature",
+            "regime",
+            "target",
+            "prompt",
+            "skill",
+            "retrieval_index",
+            "rights_retraction",
+            "source"
+          ],
+          "title": "Record Kind",
+          "type": "string"
+        },
+        "revision": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Revision",
+          "type": "string"
+        }
+      },
+      "required": [
+        "owner",
+        "record_kind",
+        "record_id",
+        "revision",
+        "content_sha256",
+        "available_at_ms"
+      ],
+      "title": "Reference",
+      "type": "object"
+    },
+    "Scope": {
+      "additionalProperties": false,
+      "properties": {
+        "connector": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Connector",
+          "type": "string"
+        },
+        "horizon_ms": {
+          "maximum": 9223372036854775807,
+          "minimum": 1,
+          "title": "Horizon Ms",
+          "type": "integer"
+        },
+        "instruments": {
+          "items": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Instruments",
+          "type": "array"
+        },
+        "lane": {
+          "const": "spot",
+          "title": "Lane",
+          "type": "string"
+        },
+        "mandate_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Mandate Id",
+          "type": "string"
+        },
+        "quote_currency": {
+          "pattern": "^[A-Z0-9]{2,16}$",
+          "title": "Quote Currency",
+          "type": "string"
+        },
+        "regime_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Regime Id",
+          "type": "string"
+        },
+        "timeframe": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Timeframe",
+          "type": "string"
+        },
+        "venue": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Venue",
+          "type": "string"
+        }
+      },
+      "required": [
+        "lane",
+        "venue",
+        "connector",
+        "instruments",
+        "quote_currency",
+        "timeframe",
+        "horizon_ms",
+        "regime_id",
+        "mandate_id"
+      ],
+      "title": "Scope",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "available_at_ms": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Available At Ms",
+      "type": "integer"
+    },
+    "correlation_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Correlation Id",
+      "type": "string"
+    },
+    "created_at_ms": {
+      "maximum": 9223372036854775807,
+      "minimum": 0,
+      "title": "Created At Ms",
+      "type": "integer"
+    },
+    "data": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "candidate_revision": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Candidate Revision",
+          "type": "string"
+        },
+        "code_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Code Sha256",
+          "type": "string"
+        },
+        "config_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Config Sha256",
+          "type": "string"
+        },
+        "cost_model_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Cost Model Sha256",
+          "type": "string"
+        },
+        "dca_policy_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Dca Policy Id",
+          "type": "string"
+        },
+        "dependency_lock_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Dependency Lock Sha256",
+          "type": "string"
+        },
+        "economic_status": {
+          "enum": [
+            "UNAVAILABLE",
+            "V5_NOT_SUPPORTED"
+          ],
+          "title": "Economic Status",
+          "type": "string"
+        },
+        "eligibility_inputs": {
+          "items": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Eligibility Inputs",
+          "type": "array"
+        },
+        "entry_policy_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Entry Policy Id",
+          "type": "string"
+        },
+        "exit_policy_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Exit Policy Id",
+          "type": "string"
+        },
+        "exposure_refs": {
+          "items": {
+            "$ref": "#/$defs/Reference"
+          },
+          "maxItems": 64,
+          "title": "Exposure Refs",
+          "type": "array"
+        },
+        "family_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Family Id",
+          "type": "string"
+        },
+        "feature_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Feature Sha256",
+          "type": "string"
+        },
+        "forbidden_conditions": {
+          "items": {
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+            "type": "string"
+          },
+          "maxItems": 64,
+          "title": "Forbidden Conditions",
+          "type": "array"
+        },
+        "idea_revision_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Idea Revision Id",
+          "type": "string"
+        },
+        "idea_revision_ref": {
+          "$ref": "#/$defs/Reference"
+        },
+        "implementation_status": {
+          "enum": [
+            "UNQUALIFIED",
+            "FIXTURE_QUALIFIED"
+          ],
+          "title": "Implementation Status",
+          "type": "string"
+        },
+        "inventory_migration_policy_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Inventory Migration Policy Id",
+          "type": "string"
+        },
+        "lane": {
+          "const": "spot",
+          "title": "Lane",
+          "type": "string"
+        },
+        "owner_recipe": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Owner Recipe",
+          "type": "string"
+        },
+        "parent_revision": {
+          "anyOf": [
+            {
+              "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Parent Revision"
+        },
+        "parent_revision_ref": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Reference"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "permission_status": {
+          "const": "NONE",
+          "title": "Permission Status",
+          "type": "string"
+        },
+        "policy_refs": {
+          "items": {
+            "$ref": "#/$defs/Reference"
+          },
+          "maxItems": 64,
+          "minItems": 1,
+          "title": "Policy Refs",
+          "type": "array"
+        },
+        "program_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Program Id",
+          "type": "string"
+        },
+        "program_ref": {
+          "$ref": "#/$defs/Reference"
+        },
+        "provenance_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Provenance Sha256",
+          "type": "string"
+        },
+        "readiness_status": {
+          "const": "DISABLED",
+          "title": "Readiness Status",
+          "type": "string"
+        },
+        "retirement_policy_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Retirement Policy Id",
+          "type": "string"
+        },
+        "scope": {
+          "$ref": "#/$defs/Scope"
+        },
+        "sizing_policy_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Sizing Policy Id",
+          "type": "string"
+        },
+        "target_sha256": {
+          "pattern": "^[a-f0-9]{64}$",
+          "title": "Target Sha256",
+          "type": "string"
+        },
+        "trial_refs": {
+          "items": {
+            "$ref": "#/$defs/Reference"
+          },
+          "maxItems": 64,
+          "title": "Trial Refs",
+          "type": "array"
+        },
+        "variant_id": {
+          "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+          "title": "Variant Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "candidate_id",
+        "candidate_revision",
+        "family_id",
+        "variant_id",
+        "parent_revision",
+        "idea_revision_id",
+        "program_id",
+        "idea_revision_ref",
+        "program_ref",
+        "parent_revision_ref",
+        "scope",
+        "lane",
+        "owner_recipe",
+        "code_sha256",
+        "config_sha256",
+        "feature_sha256",
+        "target_sha256",
+        "cost_model_sha256",
+        "dependency_lock_sha256",
+        "provenance_sha256",
+        "entry_policy_id",
+        "dca_policy_id",
+        "sizing_policy_id",
+        "exit_policy_id",
+        "retirement_policy_id",
+        "inventory_migration_policy_id",
+        "policy_refs",
+        "eligibility_inputs",
+        "forbidden_conditions",
+        "implementation_status",
+        "economic_status",
+        "readiness_status",
+        "permission_status",
+        "trial_refs",
+        "exposure_refs"
+      ],
+      "title": "CandidateRevision",
+      "type": "object"
+    },
+    "evidence_refs": {
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "maxItems": 64,
+      "title": "Evidence Refs",
+      "type": "array"
+    },
+    "execution_authorized": {
+      "const": false,
+      "title": "Execution Authorized",
+      "type": "boolean"
+    },
+    "parent_refs": {
+      "items": {
+        "$ref": "#/$defs/Reference"
+      },
+      "maxItems": 64,
+      "title": "Parent Refs",
+      "type": "array"
+    },
+    "payload_sha256": {
+      "pattern": "^[a-f0-9]{64}$",
+      "title": "Payload Sha256",
+      "type": "string"
+    },
+    "producer_owner": {
+      "const": "research_os",
+      "type": "string"
+    },
+    "producer_revision": {
+      "pattern": "^(?:[a-f0-9]{40}|[a-f0-9]{64})$",
+      "title": "Producer Revision",
+      "type": "string"
+    },
+    "record_id": {
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9_.:-]{0,127}$",
+      "title": "Record Id",
+      "type": "string"
+    },
+    "schema_name": {
+      "const": "candidate_revision",
+      "type": "string"
+    },
+    "schema_version": {
+      "const": "1",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema_name",
+    "schema_version",
+    "record_id",
+    "producer_owner",
+    "producer_revision",
+    "created_at_ms",
+    "available_at_ms",
+    "payload_sha256",
+    "correlation_id",
+    "parent_refs",
+    "evidence_refs",
+    "execution_authorized",
+    "data"
+  ],
+  "title": "Envelope",
+  "type": "object"
+}

@@ -1,0 +1,90 @@
+vite v8.2.2 building client environment for production...
+transforming...
+✓ 2787 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/v5.html                                      0.85 kB │ gzip:   0.40 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/Research-Cvfp2KsA.css                17.22 kB │ gzip:   3.55 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/NativeScreenerTools-TK9vw0in.css     20.37 kB │ gzip:   4.46 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/MarketPicture-B7QnsIPv.css           49.49 kB │ gzip:  10.09 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/v5-Bwe1AIV1.css                     167.34 kB │ gzip:  28.31 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/src-BaNBn19l.css                    395.25 kB │ gzip:  52.83 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/ReportingDesk-DkDWLUPo.js             0.06 kB │ gzip:   0.07 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/history-DRWSxsha.js                   0.23 kB │ gzip:   0.19 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/refresh-cw-BqLEp1Rx.js                0.32 kB │ gzip:   0.22 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/trash-2-Du0wmDIz.js                   0.32 kB │ gzip:   0.21 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/plus-BVCjs_Ox.js                      0.33 kB │ gzip:   0.25 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/external-link-pe0BE9Ay.js             0.42 kB │ gzip:   0.28 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/heat-strip-CqgE5CwU.js                0.48 kB │ gzip:   0.28 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/BarChart-To4NMq4e.js                  0.55 kB │ gzip:   0.38 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/executor-volume-hPjuFCF6.js           0.69 kB │ gzip:   0.46 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/preload-helper-Czpn1I53.js            1.19 kB │ gzip:   0.67 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/auth-token-CijoHaBo.js                1.25 kB │ gzip:   0.64 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/Bots-CMhKdpaY.js                      5.89 kB │ gzip:   2.21 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/jsx-runtime-BaSZ_JNh.js               8.55 kB │ gzip:   3.26 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/BotRunsTab-0qcri_G7.js                9.12 kB │ gzip:   2.82 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/createLucideIcon-CGDrmTep.js         14.95 kB │ gzip:   5.31 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/CanonicalContext-Ap6oKWbp.js         16.56 kB │ gzip:   5.11 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/ArchivedBotsTab-CAwYSZ4q.js          28.66 kB │ gzip:   8.07 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/EditorTab-Do8aLhDe.js                36.10 kB │ gzip:   7.91 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/BacktestingTab-BWihmdWD.js           46.73 kB │ gzip:  10.78 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/NativeScreenerTools-CAiOnDsc.js      63.83 kB │ gzip:  18.75 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/Research-Dh1VGwD9.js                102.32 kB │ gzip:  31.71 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/MarketPicture-D_C9B_WZ.js           322.74 kB │ gzip:  93.67 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/src-e7yofG42.js                     507.71 kB │ gzip: 148.15 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-1/assets/v5-Bdm5jABw.js                    1,861.67 kB │ gzip: 566.96 kB
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../../../.worktrees/v5-workspace-polish/dashboard/hummingbot-reporting-next/app/components/ReportingDesk.tsx is dynamically imported by ../../../../.worktrees/v5-workspace-polish/dashboard/condor-workspace/src/features/strategy-charts/Records.tsx but also statically imported by ../../../../.worktrees/v5-workspace-polish/dashboard/condor-workspace/src/pages/TradingVisuals.tsx, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 600 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.70s
+{"build":1,"workspace":"/home/rsi/dev/rsibot/.worktrees/v5-workspace-polish","entry":"assets/v5-Bdm5jABw.js","sha256":"a4c8a33df4134044233e662d3709cf7697438cfed95e39d8b62b818af3b8c554","files":35}
+vite v8.2.2 building client environment for production...
+transforming...
+✓ 2787 modules transformed.
+rendering chunks...
+computing gzip size...
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/v5.html                                      0.85 kB │ gzip:   0.40 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/Research-Cvfp2KsA.css                17.22 kB │ gzip:   3.55 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/NativeScreenerTools-TK9vw0in.css     20.37 kB │ gzip:   4.46 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/MarketPicture-B7QnsIPv.css           49.49 kB │ gzip:  10.09 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/v5-Bwe1AIV1.css                     167.34 kB │ gzip:  28.31 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/src-BaNBn19l.css                    395.25 kB │ gzip:  52.83 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/ReportingDesk-DkDWLUPo.js             0.06 kB │ gzip:   0.07 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/history-DRWSxsha.js                   0.23 kB │ gzip:   0.19 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/refresh-cw-BqLEp1Rx.js                0.32 kB │ gzip:   0.22 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/trash-2-Du0wmDIz.js                   0.32 kB │ gzip:   0.21 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/plus-BVCjs_Ox.js                      0.33 kB │ gzip:   0.25 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/external-link-pe0BE9Ay.js             0.42 kB │ gzip:   0.28 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/heat-strip-CqgE5CwU.js                0.48 kB │ gzip:   0.28 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/BarChart-To4NMq4e.js                  0.55 kB │ gzip:   0.38 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/executor-volume-hPjuFCF6.js           0.69 kB │ gzip:   0.46 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/preload-helper-Czpn1I53.js            1.19 kB │ gzip:   0.67 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/auth-token-CijoHaBo.js                1.25 kB │ gzip:   0.64 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/Bots-CMhKdpaY.js                      5.89 kB │ gzip:   2.21 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/jsx-runtime-BaSZ_JNh.js               8.55 kB │ gzip:   3.26 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/BotRunsTab-0qcri_G7.js                9.12 kB │ gzip:   2.82 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/createLucideIcon-CGDrmTep.js         14.95 kB │ gzip:   5.31 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/CanonicalContext-Ap6oKWbp.js         16.56 kB │ gzip:   5.11 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/ArchivedBotsTab-CAwYSZ4q.js          28.66 kB │ gzip:   8.07 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/EditorTab-Do8aLhDe.js                36.10 kB │ gzip:   7.91 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/BacktestingTab-BWihmdWD.js           46.73 kB │ gzip:  10.78 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/NativeScreenerTools-CAiOnDsc.js      63.83 kB │ gzip:  18.75 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/Research-Dh1VGwD9.js                102.32 kB │ gzip:  31.71 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/MarketPicture-D_C9B_WZ.js           322.74 kB │ gzip:  93.67 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/src-e7yofG42.js                     507.71 kB │ gzip: 148.15 kB
+../../../../.workspace/scratch/v5-dashboard-polish/round2-repro/build-2/assets/v5-Bdm5jABw.js                    1,861.67 kB │ gzip: 566.96 kB
+
+[33m[INEFFECTIVE_DYNAMIC_IMPORT] [0m../../../../.workspace/scratch/v5-dashboard-polish/workspace-independent/dashboard/hummingbot-reporting-next/app/components/ReportingDesk.tsx is dynamically imported by ../../../../.workspace/scratch/v5-dashboard-polish/workspace-independent/dashboard/condor-workspace/src/features/strategy-charts/Records.tsx but also statically imported by ../../../../.workspace/scratch/v5-dashboard-polish/workspace-independent/dashboard/condor-workspace/src/pages/TradingVisuals.tsx, dynamic import will not move module into another chunk.
+
+[plugin builtin:vite-reporter]
+(!) Some chunks are larger than 600 kB after minification. Consider:
+- Using dynamic import() to code-split the application
+- Use build.rolldownOptions.output.codeSplitting to improve chunking: https://rolldown.rs/reference/OutputOptions.codeSplitting
+- Adjust chunk size limit for this warning via build.chunkSizeWarningLimit.
+✓ built in 2.36s
+{"build":2,"workspace":"/home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/workspace-independent","entry":"assets/v5-Bdm5jABw.js","sha256":"a4c8a33df4134044233e662d3709cf7697438cfed95e39d8b62b818af3b8c554","files":35}

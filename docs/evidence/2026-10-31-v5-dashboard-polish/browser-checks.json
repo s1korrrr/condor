@@ -1,0 +1,35 @@
+{
+  "host": "razer.tailb24ea3.ts.net",
+  "https_port": 30443,
+  "verification": "Real shared browser; exact Tailscale HTTPS routes",
+  "routes": ["/bots", "/capital", "/operations", "/settings"],
+  "fixture_only": true,
+  "bots_partial": {
+    "progress": "Reading one owner snapshot: 2/9 sections. Totals are withheld until the read completes.",
+    "first_eight_metric_values": ["Not published", "Not published", "Not published", "Not published", "Not published", "Not published", "Not published", "Not published"],
+    "strategy_charts_mounted": false
+  },
+  "capital_decimal": {
+    "display": "198,162.290652… USDC",
+    "exact_title": "198162.29065200662240123456789123456789 USDC"
+  },
+  "operation_checks": {
+    "risk.entry_paused": "New acquisitions paused",
+    "feed.fault": "Market feed health",
+    "feed.stale": "Market feed freshness",
+    "disk.low:/home": "Host disk space",
+    "docker.log_size_unavailable": "Service log size availability",
+    "feed.unreadable": "Market feed access",
+    "owner_witness.status_stale_or_unavailable": "Owner witness freshness"
+  },
+  "bots_doubled_risk_period": false,
+  "capital_doubled_history_period": false,
+  "settings_injected_503": "paper owner reads: unavailable",
+  "settings_heartbeat_during_fault": "Fresh · liveness only",
+  "cleanup": {
+    "fixture_process_stopped": true,
+    "browser_tabs_closed": true,
+    "own_serve_route_removed": true,
+    "all_original_serve_mappings_preserved": true
+  }
+}

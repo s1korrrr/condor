@@ -1,0 +1,75 @@
+{
+  "api_head": "5a24d9c25158f9740b846bdbdc4ad79a53e2af55",
+  "metadata": {
+    "ready": true,
+    "primary_bytes": 404074,
+    "rows": {
+      "fills": 344,
+      "executors": 45
+    },
+    "runtime": "/home/rsi/dev/rsibot/.workspace/scratch/v5-dashboard-polish/api73-benchmark-fvlbpd0x"
+  },
+  "transport": "in-process TestClient through stdio; no injected delay; one warmup per page/loader; retained immutable fixture snapshot",
+  "results": [
+    {
+      "page": "bots",
+      "before": {
+        "p50_s": 0.11737662999999975,
+        "p95_s": 0.14402319700000044,
+        "samples": 30,
+        "peak": 1
+      },
+      "after": {
+        "p50_s": 0.10266874199999984,
+        "p95_s": 0.12415954200000033,
+        "samples": 30,
+        "peak": 3
+      }
+    },
+    {
+      "page": "readiness",
+      "before": {
+        "p50_s": 0.053119989000000714,
+        "p95_s": 0.06776035400000001,
+        "samples": 30,
+        "peak": 1
+      },
+      "after": {
+        "p50_s": 0.040099118000000086,
+        "p95_s": 0.05722150899999906,
+        "samples": 30,
+        "peak": 3
+      }
+    },
+    {
+      "page": "settings",
+      "before": {
+        "p50_s": 0.04564242200000081,
+        "p95_s": 0.06207407899999998,
+        "samples": 30,
+        "peak": 1
+      },
+      "after": {
+        "p50_s": 0.0397781300000006,
+        "p95_s": 0.059006034,
+        "samples": 30,
+        "peak": 3
+      }
+    },
+    {
+      "page": "capital",
+      "before": {
+        "p50_s": 0.03098192399999971,
+        "p95_s": 0.04404026999999951,
+        "samples": 30,
+        "peak": 1
+      },
+      "after": {
+        "p50_s": 0.031844534999998356,
+        "p95_s": 0.03765209700000196,
+        "samples": 30,
+        "peak": 3
+      }
+    }
+  ]
+}

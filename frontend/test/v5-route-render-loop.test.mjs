@@ -40,6 +40,8 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const registered = [...routeSource.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1]).filter(pathname => pathname !== '*').map(pathname => pathname.replace('/agents/:id','/agents/decision_reviewer').replace('/sessions/:id','/sessions/fixture-session'));
   assert.deepEqual(routes.map(([pathname]) => pathname).sort(),registered.sort(),'every registered V5 route needs a real render case');
   let route = '/settings';
+  const journalRoutes = new Set(['/bots', '/operations', '/v5/readiness']);
+  const statusForRoute = () => journalRoutes.has(route) ? {...sections.status, state:'degraded', reason:'OWNER_JOURNAL_EXCEEDED', data:{...sections.status.data, journal_budget:{state:'exceeded',journal_evidence_held:true,native_execution_continues:true}}} : sections.status;
   const originalFetch = globalThis.fetch;
   const originalNow = Date.now;
   const originalError = console.error;
@@ -69,7 +71,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       const native = url.searchParams.get('path');
       const section = native.includes('native/status') ? 'status' : native.includes('account-balances') || native.includes('fleet/summary') ? 'wallet' : native.includes('holdings') ? 'positions' : native.includes('performance/history') ? 'history' : native.includes('operations/workspace') ? 'operations' : native.split('?')[0].split('/').at(-1);
       assert.ok(sections[section],`unmapped owner read: ${native}`);
-      body = sections[section];
+      body = section === 'status' ? statusForRoute() : sections[section];
     } else if (url.pathname === '/api/v5/auth') body = {authenticated:true};
     else if (url.pathname === '/api/v5/dashboard/profile') body = profile;
     else if (url.pathname === '/api/v5/settings') body = settings;
@@ -99,7 +101,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       client.setQueryData(['v5-auth'],{authenticated:true});
       client.setQueryData(['v5-profile'],profile);
       client.setQueryData(['v5-settings'],settings);
-      client.setQueryData(['v5-paper-observation-health',bot],['status','wallet','positions','executors','risk'].map(section => sections[section]));
+      client.setQueryData(['v5-paper-observation-health',bot],['status','wallet','positions','executors','risk'].map(section => section === 'status' ? statusForRoute() : sections[section]));
       try {
         await React.act(async () => {mount.render(React.createElement(Boundary,null,React.createElement(V5App)));});
         await React.act(async () => {await client.refetchQueries({type:'active'});});
@@ -108,6 +110,11 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         assert.deepEqual(warnings,[],'React must not warn about unstable snapshots or cross-component updates');
         assert.ok(container.querySelector('main'),`${pathname} must keep the app mounted`);
         assert.ok(container.textContent.includes(heading),`${pathname} must render ${heading}: ${container.textContent}`);
+        if (journalRoutes.has(pathname)) {
+          assert.ok(container.textContent.includes('OWNER_JOURNAL_EXCEEDED'));
+          assert.ok(container.textContent.includes('journal_evidence_held: true'));
+          assert.ok(container.textContent.includes('native_execution_continues: true'));
+        }
         if (pathname === '/settings') {
           const health = client.getQueryData(['v5-paper-observation-health',bot]);
           assert.deepEqual(health,['status','wallet','positions','executors','risk'].map(section => sections[section]));

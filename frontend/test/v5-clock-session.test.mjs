@@ -8,15 +8,27 @@ import {paperReadState, paperTime} from '../src/v5/policy.ts';
 import {createPaperClock} from '../src/v5/usePaperClock.ts';
 
 function clockSession() {
-  let slot;
+  let subscribe;
   const {load} = frontendModules({react:{...React,
-    useState:initial => { slot ??= typeof initial === 'function' ? initial() : initial; return [slot,() => {}]; },
-    useSyncExternalStore:(_subscribe,_snapshot,serverSnapshot) => serverSnapshot(),
+    useSyncExternalStore:(register,getSnapshot) => {subscribe = register; return getSnapshot();},
   }});
-  const {usePaperClock} = load('v5/usePaperClock.ts');
   return now => {
-    const realNow = Date.now; Date.now = () => now;
-    try { return usePaperClock(); } finally { Date.now = realNow; }
+    const realNow = Date.now, previousWindow = globalThis.window, previousDocument = globalThis.document;
+    const browser = new EventTarget();
+    browser.setInterval = () => 1;
+    browser.clearInterval = () => {};
+    globalThis.window = browser; globalThis.document = new EventTarget();
+    Date.now = () => now;
+    let unsubscribe;
+    try {
+      const {usePaperClock} = load('v5/usePaperClock.ts');
+      usePaperClock();
+      unsubscribe = subscribe(() => {});
+      return usePaperClock();
+    } finally {
+      unsubscribe?.();
+      Date.now = realNow; globalThis.window = previousWindow; globalThis.document = previousDocument;
+    }
   };
 }
 
@@ -116,26 +128,32 @@ test('one shared clock interval serves all subscriptions and survives a zero-sub
   } finally {globalThis.window = previousWindow; globalThis.document = previousDocument;}
 });
 
-test('render sampling stays precise and monotonic without changing the published store snapshot', () => {
+test('render reads only the published clock; lifecycle events advance its high-water mark', () => {
   const previousWindow = globalThis.window, previousDocument = globalThis.document;
   const browser = new EventTarget();
-  browser.setInterval = () => 1;
+  let tick;
+  browser.setInterval = callback => {tick = callback; return 1;};
   browser.clearInterval = () => {};
   globalThis.window = browser; globalThis.document = new EventTarget();
   let now = 1793268000000;
   try {
-    const clock = createPaperClock(() => now);
+    let samples = 0;
+    const clock = createPaperClock(() => {samples++; return now;});
     const unsubscribe = clock.subscribe(() => {});
     const published = clock.getSnapshot();
+    const beforeRender = samples;
     now += 30001;
-    assert.equal(clock.observe(),now);
-    assert.equal(paperSnapshotPresentation(published,clock.observe(),false).stale,true);
     assert.equal(clock.getSnapshot(),published);
+    assert.equal(clock.getSnapshot(),published);
+    assert.equal(samples,beforeRender,'snapshot reads must not sample wall time');
+    assert.equal(paperSnapshotPresentation(published,clock.getSnapshot(),false).stale,false);
+    tick();
+    assert.equal(clock.getSnapshot(),published + 30001);
+    assert.equal(paperSnapshotPresentation(published,clock.getSnapshot(),false).stale,true);
     now -= 6000;
-    assert.equal(clock.observe(),published + 30001);
-    assert.equal(clock.getSnapshot(),published);
     window.dispatchEvent(new Event('focus'));
     assert.equal(clock.getSnapshot(),published + 30001);
+    assert.equal(paperSnapshotPresentation(published,clock.getSnapshot(),false).stale,true);
     unsubscribe();
   } finally {globalThis.window = previousWindow; globalThis.document = previousDocument;}
 });

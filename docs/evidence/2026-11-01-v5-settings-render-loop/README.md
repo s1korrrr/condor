@@ -1,5 +1,16 @@
 # Settings render-loop repair — 2026-11-01
 
+## Current revision: frame-consistent publication
+
+The original repair below stopped the render loop but returned a separate
+wall-clock sample to each consumer. The parent accepted GPT's frame-consistency
+blocker at `74f777c9`. That design is superseded. See
+[revision2.md](revision2.md) for the repair, permanent boundary probe, exact
+commands, new bundle hashes and current validation. The earlier logs remain
+historical evidence, not approval of the rejected per-consumer sampling design.
+
+## Historical first revision
+
 The Settings loop is repaired at the shared paper clock boundary. The dev DOM
 renderer reproduces the original error before the repair and renders Settings
 after it. All 17 registered V5 route patterns now mount and settle with the real

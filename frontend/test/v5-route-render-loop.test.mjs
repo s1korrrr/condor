@@ -16,6 +16,8 @@ const {createRoot} = await import('react-dom/client');
 const fixture = relative => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/${relative}`,import.meta.url)));
 const baseline = fixture('v5_unbound_base_8284ffe7.json');
 const sections = Object.fromEntries(['status','wallet','positions','executors','risk','fills','decisions','history','accounting','operations'].map(section => [section,fixture(`paper-api-final3/native-replay/${section}.json`)]));
+sections.status.state = 'available';
+sections.status.reason = null;
 const bot = sections.status.bot_id;
 const identity = {name:'RSI V5',host:'razer',mode:'reports-only',execution_enabled:false,baseline_binding:null};
 const settings = {...baseline.settings,identity,budget:{enabled:false}};
@@ -37,18 +39,23 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const registered = [...routeSource.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1]).filter(pathname => pathname !== '*').map(pathname => pathname.replace('/agents/:id','/agents/decision_reviewer').replace('/sessions/:id','/sessions/fixture-session'));
   assert.deepEqual(routes.map(([pathname]) => pathname).sort(),registered.sort(),'every registered V5 route needs a real render case');
   let route = '/settings';
-  const overrides = {'lightweight-charts':await import('lightweight-charts'),'react-router-dom':{...Router,BrowserRouter:({children}) => React.createElement(Router.MemoryRouter,{initialEntries:[route]},children)}};
-  const {load} = frontendModules(overrides,{'v5/V5App.tsx':['client']});
-  overrides['@/lib/auth-token'] = load('v5/auth-token.ts');
-  const workspaceRoot = process.env.V5_WORKSPACE_ROOT ?? path.resolve(import.meta.dirname,'../../..');
-  overrides['@workspace-monitoring'] = load(path.join(workspaceRoot,'dashboard/condor-workspace/src/index.ts'));
-  const {V5App,client} = load('v5/V5App.tsx');
-  client.setDefaultOptions({queries:{retry:false,staleTime:Infinity,gcTime:Infinity}});
   const originalFetch = globalThis.fetch;
   const originalNow = Date.now;
   const originalError = console.error;
   let now = sections.status.read_at_ms;
   Date.now = () => ++now;
+  const overrides = {'lightweight-charts':await import('lightweight-charts'),'react-router-dom':{...Router,BrowserRouter:({children}) => React.createElement(Router.MemoryRouter,{initialEntries:[route]},children)}};
+  const {load} = frontendModules(overrides,{'v5/V5App.tsx':['client']},(filename,source) => {
+    if (!filename.endsWith('/v5/V5Pages.tsx')) return source;
+    const anchor = 'function PaperIdentity() {';
+    assert.equal(source.split(anchor).length - 1,1,'frame probe must target exactly one real PaperIdentity');
+    return source.replace(anchor,`${anchor} globalThis.__v5FrameBoundaryAdvance?.();`);
+  });
+  overrides['@/lib/auth-token'] = load('v5/auth-token.ts');
+  const workspaceRoot = process.env.V5_WORKSPACE_ROOT ?? path.resolve(import.meta.dirname,'../../..');
+  overrides['@workspace-monitoring'] = load(path.join(workspaceRoot,'dashboard/condor-workspace/src/index.ts'));
+  const {V5App,client} = load('v5/V5App.tsx');
+  client.setDefaultOptions({queries:{retry:false,staleTime:Infinity,gcTime:Infinity}});
   const requests = [];
   const unexpectedReads = [];
   globalThis.fetch = async (input, init = {}) => {
@@ -102,9 +109,29 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         if (pathname === '/settings') {
           const health = client.getQueryData(['v5-paper-observation-health',bot]);
           assert.deepEqual(health,['status','wallet','positions','executors','risk'].map(section => sections[section]));
-          now += 30001;
+          now = sections.status.generated_at_ms + 30000;
+          Date.now = () => now;
+          await React.act(async () => {window.dispatchEvent(new browser.Event('focus'));});
+          assert.match(container.textContent,/paper owner reads: available/,'the owner fixture must be available at exactly 30 seconds');
+          assert.match(container.textContent,/snapshot only/);
+          globalThis.__v5FrameBoundaryAdvance = () => {now = sections.status.generated_at_ms + 30001;};
+          try {
+            await React.act(async () => {
+              client.setQueryData(['v5-settings'],{...settings,frame_marker:'boundary'});
+              await new Promise(resolve => setTimeout(resolve,0));
+            });
+          } finally {delete globalThis.__v5FrameBoundaryAdvance;}
+          const text = container.textContent;
+          assert.ok(!(text.includes('paper owner reads: available') && text.includes('stale; not current')),'Settings must not call owner reads available while identity marks the same snapshot stale');
+          assert.match(text,/paper owner reads: available/,'render alone must not advance the published clock');
+          assert.doesNotMatch(text,/stale; not current/);
         }
         await React.act(async () => {window.dispatchEvent(new browser.Event('focus'));});
+        if (pathname === '/settings') {
+          assert.match(container.textContent,/stale; not current/,'focus must publish the stale flip at 30,001 ms');
+          assert.doesNotMatch(container.textContent,/snapshot only/);
+          assert.doesNotMatch(container.textContent,/paper owner reads: available/);
+        }
         assert.deepEqual(failures,[],'clock publication must settle');
         assert.deepEqual(warnings,[],'clock publication must not trigger React warnings');
         assert.deepEqual(unexpectedReads,[],'every requested owner response must have a fixture');

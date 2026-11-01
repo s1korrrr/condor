@@ -1,12 +1,10 @@
 import { useSyncExternalStore } from 'react';
 
 export function createPaperClock(readNow: () => number = Date.now) {
-  let highWater = readNow();
-  let published = highWater;
-  const observe = () => { highWater = Math.max(highWater, readNow()); return highWater; };
+  let published = readNow();
   const listeners = new Set<() => void>();
   let timer: number | undefined;
-  const update = () => { published = observe(); listeners.forEach(notify => notify()); };
+  const update = () => { published = Math.max(published, readNow()); listeners.forEach(notify => notify()); };
   const subscribe = (notify: () => void) => {
     listeners.add(notify);
     if (timer === undefined) {
@@ -25,13 +23,11 @@ export function createPaperClock(readNow: () => number = Date.now) {
       }
     };
   };
-  return {subscribe, getSnapshot:() => published, observe};
+  return {subscribe, getSnapshot:() => published};
 }
 
-let documentClock: ReturnType<typeof createPaperClock> | undefined;
+const documentClock = createPaperClock(() => Date.now());
 
 export function usePaperClock() {
-  const clock = documentClock ??= createPaperClock(() => Date.now());
-  useSyncExternalStore(clock.subscribe, clock.getSnapshot, clock.getSnapshot);
-  return clock.observe();
+  return useSyncExternalStore(documentClock.subscribe, documentClock.getSnapshot, documentClock.getSnapshot);
 }

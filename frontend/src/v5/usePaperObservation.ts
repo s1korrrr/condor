@@ -50,7 +50,11 @@ export function usePaperObservation(bot: string | null | undefined) {
   });
   const reads = query.reads;
   const summary = query.isError ? { label: "Unavailable", reason: query.error.message } : query.isPending || query.isFetching ? { label: "Checking", reason: `Reading one owner snapshot: ${reads.length}/5 sections. Process heartbeat is a separate signal.` } : paperObservationSummary(query.data ?? [], bot ?? "", now);
-  const status = (query.data ?? reads).find(read => read.section === "status");
+  const completedStatus = (query.data ?? reads).find(read => read.section === "status");
+  const journalStatus = query.journalReads.find(read => read.bot_id === bot);
+  const status = completedStatus;
+  const partialJournal = !!journalStatus && (journalStatus !== completedStatus || !query.complete || query.isFetching || query.isError);
   const snapshot = query.complete ? paperSnapshotPresentation(status?.generated_at_ms, now, query.isFetching || query.isError) : null;
-  return { ...query, summary, status, snapshot };
+  const journalSnapshotLabel = partialJournal ? 'Received / partial owner status; retained until a qualified newer owner status supersedes it.' : null;
+  return { ...query, summary, status, snapshot, journalStatus, journalSnapshotLabel };
 }

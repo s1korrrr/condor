@@ -15,6 +15,7 @@ import { LearningPage } from './LearningPanel';
 import { ResearchFactoryPage } from './ResearchFactoryPanel';
 import { DecisionLineagePage } from './DecisionLineagePanel';
 import { usePaperWorkspace } from "./usePaperObservation";
+import { PaperJournalNotice } from './OwnerJournalCondition';
 
 const client = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false, staleTime: 15_000 } } });
 const Capital = lazy(() => import("@workspace-monitoring").then(m => ({ default: function V5CapitalPage() {
@@ -73,7 +74,7 @@ function ProfileGate() {
   if (profile.isPending) return <main className="v5-loading-screen"><div className="v5-spinner" /><span>Loading fixed Razer workspace profile…</span></main>;
   if (profile.isError) return <main className="v5-loading-screen"><div className="v5-error-panel" role="alert"><strong>V5 profile unavailable</strong><span>{profile.error.message}</span><button className="v5-button" onClick={() => void profile.refetch()}>Retry</button></div></main>;
   if (profile.data.schema_version !== "v5-dashboard-profile.v1" || profile.data.server.server_id !== "rsibot-v5" || profile.data.server.host !== "razer" || profile.data.server.mode !== "reports-only" || profile.data.server.execution_enabled !== false || profile.data.condor.base_revision !== "ff8858df765cffe4d325fde384f7a2eecdf51641") return <main className="v5-loading-screen"><div className="v5-error-panel" role="alert"><strong>V5 profile rejected</strong><span>The server returned an unexpected identity, baseline, mode, or execution state.</span></div></main>;
-  return <V5Providers><V5AppShell><Suspense fallback={<p role="status">Loading page…</p>}><Outlet /></Suspense></V5AppShell></V5Providers>;
+  return <V5Providers><V5AppShell>{profile.data.readiness.paper_owner?.bot_name && <PaperJournalNotice bot={profile.data.readiness.paper_owner.bot_name} />}<Suspense fallback={<p role="status">Loading page…</p>}><Outlet /></Suspense></V5AppShell></V5Providers>;
 }
 
 function V5Providers({ children }: { children: React.ReactNode }) {

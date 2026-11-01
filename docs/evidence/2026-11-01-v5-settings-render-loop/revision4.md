@@ -53,13 +53,13 @@ simulated frame in the same JavaScript turn. A browser cannot pass real wall
 time between frames without a turn boundary. The parent authorized only a
 lifecycle correction, not new expectations.
 
-`revision4-harness-boundaries.patch` contains the exact complete rsibot diff.
+`revision4-harness-boundaries.patch.gz` contains the exact complete rsibot diff.
 Six existing test files gain helper imports, async callback markers and
 `await nextRenderTurn()` before clock steps. The new three-line helper awaits
 a microtask. After stripping only those additions and async markers, all six
 files are byte-identical to 6a408057. No case, assertion, expectation, minimum,
 mutation, fixture or owner state changes. See `revision4-harness-identity.txt`.
-The patch SHA256 is
+The uncompressed patch SHA256 is
 `07251583611e3aa9e727aec0ead86b9a904f1c823f7bb3d6ef7b217c3393286b`.
 
 The earlier incomplete-layout review was not a valid baseline. The reference

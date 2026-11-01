@@ -5,18 +5,32 @@ import fs from 'node:fs';
 import {frontendModules} from './helpers/frontend-module.mjs';
 import {PAPER_FUTURE_SKEW_MS, paperSnapshotPresentation} from '../src/v5/snapshot-presentation.ts';
 import {paperReadState, paperTime} from '../src/v5/policy.ts';
-import {createPaperClock} from '../src/v5/usePaperClock.ts';
+import {clockMutation} from './helpers/paper-clock-mutants.mjs';
+
+const {createPaperClock} = frontendModules({}, {}, clockMutation).load('v5/usePaperClock.ts');
 
 function clockSession() {
-  let slot;
+  let subscribe;
   const {load} = frontendModules({react:{...React,
-    useState:initial => { slot ??= typeof initial === 'function' ? initial() : initial; return [slot,() => {}]; },
-    useSyncExternalStore:(_subscribe,_snapshot,serverSnapshot) => serverSnapshot(),
+    useSyncExternalStore:(register,getSnapshot) => {subscribe = register; return getSnapshot();},
   }});
-  const {usePaperClock} = load('v5/usePaperClock.ts');
   return now => {
-    const realNow = Date.now; Date.now = () => now;
-    try { return usePaperClock(); } finally { Date.now = realNow; }
+    const realNow = Date.now, previousWindow = globalThis.window, previousDocument = globalThis.document;
+    const browser = new EventTarget();
+    browser.setInterval = () => 1;
+    browser.clearInterval = () => {};
+    globalThis.window = browser; globalThis.document = new EventTarget();
+    Date.now = () => now;
+    let unsubscribe;
+    try {
+      const {usePaperClock} = load('v5/usePaperClock.ts');
+      usePaperClock();
+      unsubscribe = subscribe(() => {});
+      return usePaperClock();
+    } finally {
+      unsubscribe?.();
+      Date.now = realNow; globalThis.window = previousWindow; globalThis.document = previousDocument;
+    }
   };
 }
 
@@ -113,5 +127,77 @@ test('one shared clock interval serves all subscriptions and survives a zero-sub
     assert.equal(intervals,2);
     assert.equal(clock.getSnapshot(),1793268045000);
     remounted(); assert.equal(cleared,2);
+  } finally {globalThis.window = previousWindow; globalThis.document = previousDocument;}
+});
+
+test('render reads share one time per turn and refresh without lifecycle events on the next turn', async () => {
+  const previousWindow = globalThis.window, previousDocument = globalThis.document;
+  const browser = new EventTarget();
+  let tick;
+  browser.setInterval = callback => {tick = callback; return 1;};
+  browser.clearInterval = () => {};
+  globalThis.window = browser; globalThis.document = new EventTarget();
+  let now = 1793268000000;
+  try {
+    let samples = 0;
+    const clock = createPaperClock(() => {samples++; return now;});
+    const unsubscribe = clock.subscribe(() => {});
+    const published = clock.getSnapshot();
+    const beforeRender = samples;
+    now += 30001;
+    assert.equal(clock.getSnapshot(),published);
+    assert.equal(clock.getSnapshot(),published);
+    assert.equal(samples,beforeRender,'later snapshot reads in one turn must not sample wall time');
+    assert.equal(paperSnapshotPresentation(published,clock.getSnapshot(),false).stale,false);
+    await Promise.resolve();
+    assert.equal(clock.getSnapshot(),published + 30001,'cache must not freeze time across turns');
+    assert.equal(paperSnapshotPresentation(published,clock.getSnapshot(),false).stale,true);
+    tick();
+    assert.equal(clock.getSnapshot(),published + 30001);
+    assert.equal(paperSnapshotPresentation(published,clock.getSnapshot(),false).stale,true);
+    now -= 6000;
+    window.dispatchEvent(new Event('focus'));
+    assert.equal(clock.getSnapshot(),published + 30001);
+    assert.equal(paperSnapshotPresentation(published,clock.getSnapshot(),false).stale,true);
+    unsubscribe();
+  } finally {globalThis.window = previousWindow; globalThis.document = previousDocument;}
+});
+
+test('clock refreshes once per turn before initial mount and each zero-subscriber remount', async () => {
+  const previousWindow = globalThis.window, previousDocument = globalThis.document;
+  const browser = new EventTarget();
+  browser.setInterval = () => 1;
+  browser.clearInterval = () => {};
+  globalThis.window = browser; globalThis.document = new EventTarget();
+  const at = 1793268000000;
+  let now = at, samples = 0;
+  try {
+    const clock = createPaperClock(() => {samples++; return now;});
+    now += 61000;
+    assert.equal(clock.getSnapshot(),now,'first read must refresh before any subscription');
+    const first = clock.getSnapshot(), sampled = samples;
+    now++;
+    assert.equal(clock.getSnapshot(),first,'later consumers in the same render must share the cached time');
+    assert.equal(samples,sampled,'later consumers must not sample wall time');
+    const firstUnsubscribe = clock.subscribe(() => {}), lastUnsubscribe = clock.subscribe(() => {});
+    const active = clock.getSnapshot(), activeSamples = samples;
+    firstUnsubscribe();
+    now += 60000;
+    assert.equal(clock.getSnapshot(),active,'one remaining subscriber must keep render reads cached');
+    assert.equal(samples,activeSamples);
+    lastUnsubscribe();
+    await Promise.resolve();
+    assert.equal(clock.getSnapshot(),now,'next render must refresh before resubscribing');
+    const resumed = clock.getSnapshot(), resumedSamples = samples;
+    now++;
+    assert.equal(clock.getSnapshot(),resumed);
+    assert.equal(samples,resumedSamples);
+    const unsubscribe = clock.subscribe(() => {});
+    const highWater = clock.getSnapshot();
+    unsubscribe();
+    now = at + 25000;
+    await Promise.resolve();
+    assert.equal(clock.getSnapshot(),highWater,'refresh must never regress after clock rollback');
+    assert.equal(paperSnapshotPresentation(at,clock.getSnapshot(),false).stale,true);
   } finally {globalThis.window = previousWindow; globalThis.document = previousDocument;}
 });

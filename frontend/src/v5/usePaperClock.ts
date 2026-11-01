@@ -2,10 +2,19 @@ import { useSyncExternalStore } from 'react';
 
 export function createPaperClock(readNow: () => number = Date.now) {
   let highWater = readNow();
-  const observe = () => { highWater = Math.max(highWater, readNow()); return highWater; };
+  let cached = false;
   const listeners = new Set<() => void>();
   let timer: number | undefined;
-  const update = () => { observe(); listeners.forEach(notify => notify()); };
+  const sample = () => { highWater = Math.max(highWater, readNow()); };
+  const update = () => { sample(); listeners.forEach(notify => notify()); };
+  const getSnapshot = () => {
+    if (!cached) {
+      clock.observe();
+      cached = true;
+      queueMicrotask(() => { cached = false; });
+    }
+    return highWater;
+  };
   const subscribe = (notify: () => void) => {
     listeners.add(notify);
     if (timer === undefined) {
@@ -24,13 +33,13 @@ export function createPaperClock(readNow: () => number = Date.now) {
       }
     };
   };
-  return {subscribe, getSnapshot:() => highWater, observe};
+  const clock = {subscribe, getSnapshot, observe:sample};
+  return clock;
 }
 
 let documentClock: ReturnType<typeof createPaperClock> | undefined;
 
 export function usePaperClock() {
   const clock = documentClock ??= createPaperClock(() => Date.now());
-  clock.observe();
-  return useSyncExternalStore(clock.subscribe, clock.getSnapshot, clock.observe);
+  return useSyncExternalStore(clock.subscribe, clock.getSnapshot, clock.getSnapshot);
 }

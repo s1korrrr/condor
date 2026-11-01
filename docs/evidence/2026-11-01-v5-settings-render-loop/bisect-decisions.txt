@@ -1,0 +1,12 @@
+# bad: [3dc5ab0798c0c21d9ad1e00f402b7d207a22f309] Merge pull request #87 from s1korrrr/feat/andrzej_v5_runtime_jsonschema_20261101
+# good: [be2a3365801d9d1ec3e12d79a365c07ef1c4fefd] Merge pull request #82 from s1korrrr/feat/andrzej_v5_operations_export_20261029
+git bisect start '3dc5ab0798c0c21d9ad1e00f402b7d207a22f309' 'be2a3365'
+# bad: [22f520f2222c0f87fff8886a50a0259d7f183f85] Merge pull request #85 from s1korrrr/feat/andrzej_v5_dashboard_polish_20261031
+git bisect bad 22f520f2222c0f87fff8886a50a0259d7f183f85
+# good: [d4f15a672d728ba715e4d7022231fd80858dffd5] fix(v5): retain document clock and received safety evidence
+git bisect good d4f15a672d728ba715e4d7022231fd80858dffd5
+# bad: [b599e5131b7ce905218e396ba4316b4c5257d006] fix(paper): supersede safety evidence on qualified risk
+git bisect bad b599e5131b7ce905218e396ba4316b4c5257d006
+# bad: [d81f105f8e1e571a2b1966f96894e84b74e4e021] fix(v5): sample render clock and qualify risk clearance
+git bisect bad d81f105f8e1e571a2b1966f96894e84b74e4e021
+# first 'bad' commit: [d81f105f8e1e571a2b1966f96894e84b74e4e021] fix(v5): sample render clock and qualify risk clearance

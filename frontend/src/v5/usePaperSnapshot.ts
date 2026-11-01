@@ -3,8 +3,15 @@ import { useRef, useState } from "react";
 import type { PaperRead } from "./contracts";
 import { paperSafetyReads } from "./paper-safety";
 import { paperSnapshotsAgree } from "./policy";
+import { paperJournalReads } from './paper-journal';
 
 const safetyByQuery = new WeakMap<object, {reads: PaperRead[]; completed: unknown}>();
+const journalByQuery = new WeakMap<object, {reads: PaperRead[]; completed: unknown}>();
+
+function journalCompletion(data: unknown, total: number): PaperRead | undefined {
+  if (!Array.isArray(data) || data.length !== total || !paperSnapshotsAgree(data)) return undefined;
+  return data.find(read => read.section === 'status');
+}
 
 function completionSnapshot(data: unknown): PaperRead | undefined {
   if (!Array.isArray(data)) return undefined;
@@ -29,6 +36,9 @@ export function usePaperSnapshot<Result>(queryKey: QueryKey, enabled: boolean, t
           const completed = ownerQuery.state.data;
           const retained = paperSafetyReads(previous?.reads ?? [], [], previous?.completed !== completed ? completionSnapshot(completed) : undefined);
           safetyByQuery.set(ownerQuery, {reads:paperSafetyReads(retained, reads), completed});
+          const journal = journalByQuery.get(ownerQuery);
+          journalByQuery.set(ownerQuery, {reads:paperJournalReads(journal?.reads ?? [], reads,
+            journal?.completed !== completed ? journalCompletion(completed, total) : undefined), completed});
         }
         setProgress({key, signal, reads});
       }
@@ -40,5 +50,9 @@ export function usePaperSnapshot<Result>(queryKey: QueryKey, enabled: boolean, t
   const previous = ownerQuery ? safetyByQuery.get(ownerQuery) : undefined;
   const safetyReads = paperSafetyReads(previous?.reads ?? [], reads, previous?.completed !== query.data ? completionSnapshot(query.data) : undefined);
   if (ownerQuery) safetyByQuery.set(ownerQuery, {reads:safetyReads, completed:query.data});
-  return {...query, complete, reads, safetyReads, progress:query.isFetching ? `${complete ? "Refreshing" : "Checking"}: ${reads.length}/${total} sections` : undefined};
+  const journal = ownerQuery ? journalByQuery.get(ownerQuery) : undefined;
+  const journalReads = paperJournalReads(journal?.reads ?? [], reads,
+    journal?.completed !== query.data ? journalCompletion(query.data, total) : undefined);
+  if (ownerQuery) journalByQuery.set(ownerQuery, {reads:journalReads, completed:query.data});
+  return {...query, complete, reads, safetyReads, journalReads, progress:query.isFetching ? `${complete ? "Refreshing" : "Checking"}: ${reads.length}/${total} sections` : undefined};
 }

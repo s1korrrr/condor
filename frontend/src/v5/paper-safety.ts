@@ -23,7 +23,7 @@ function signalKeys(read: PaperRead): string[] {
   ];
 }
 
-function newerSnapshot(candidate: PaperRead, prior: PaperRead): boolean {
+export function newerSnapshot(candidate: PaperRead, prior: PaperRead): boolean {
   const candidateSource = candidate.source, priorSource = prior.source;
   if (typeof candidateSource?.boot_id === 'string' && candidateSource.boot_id && typeof priorSource?.boot_id === 'string' && priorSource.boot_id &&
       Number.isSafeInteger(candidateSource.sequence) && Number(candidateSource.sequence) > 0 && Number.isSafeInteger(priorSource.sequence) && Number(priorSource.sequence) > 0) {

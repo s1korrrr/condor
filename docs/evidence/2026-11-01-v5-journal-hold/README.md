@@ -1,5 +1,28 @@
 # Journal hold visibility — local evidence
 
+## Dual-review repair (r2)
+
+The notice also recognizes `data.operations.reason` or `stale_reason` equal
+to `observation_journal_exceeded` under `OWNER_SECTION_DEGRADED`. Missing
+continuation booleans remain unavailable. A query-owned journal witness now
+retains received status holds when a later section fails, including after
+progress reset or remount. The notice labels this evidence received/partial.
+Only a qualified newer complete status with explicit healthy operations can
+supersede it. Other owner safety evidence remains independent. No clock code
+changed.
+
+Both parent component regressions failed before the repair. The permanent
+journal-focused tests now pass 20/20. The root-owned real QueryObserver test
+also failed before and passes after (1/1). The final V5 Node suite passes
+358/358; TypeScript and focused ESLint exit 0. Revision receipts retain exact
+commands and output. The old manifest rejects the changed build. Two builds
+against rsibot main `f0bd5de2b77a34d3b6b61bbf97fb94fcd1aef9d3` each match
+35/35 files, entry `assets/v5-BqByAl-m.js`, SHA256
+`7252699054fa47166ce94e9da6848ce8fbe37de16a968f4d828ed24c13702ab2`.
+
+The earlier evidence below remains historical. Parent re-review of the new
+head is required; earlier approval is not approval of this revision.
+
 Implemented and locally tested, not deployed. Base Condor
 `8f1494ed4faa3a2dd1836c0d231c5a0a3038ee43`. Dashboard integration source is
 rsibot main `f0bd5de2b77a34d3b6b61bbf97fb94fcd1aef9d3`; its dashboard tree is

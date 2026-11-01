@@ -25,5 +25,5 @@ export function OwnerJournalCondition({ status, snapshotLabel }: { status?: Pape
 
 export function PaperJournalNotice({ bot }: { bot: string }) {
   const observation = usePaperObservation(bot);
-  return <OwnerJournalCondition status={observation.status} snapshotLabel={observation.journalSnapshotLabel ?? observation.snapshot?.label ?? `${observation.summary.label}: ${observation.summary.reason}`} />;
+  return <OwnerJournalCondition status={observation.journalStatus ?? observation.status} snapshotLabel={observation.journalSnapshotLabel ?? observation.snapshot?.label ?? `${observation.summary.label}: ${observation.summary.reason}`} />;
 }

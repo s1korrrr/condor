@@ -1,5 +1,14 @@
 # Journal hold visibility — local evidence
 
+## Round-three correction
+
+Current completed owner identity and retained journal evidence now use
+separate reads. Only `PaperJournalNotice` selects `journalStatus`; Identity
+keeps the completed status and its As of presentation after a redeploy with
+unrelated degraded operations. Round-three validation uses physical Condor
+siblings. The earlier two clock failures came from duplicate module identity
+in the symlinked harness, not from main. See `round-three-validation.md`.
+
 ## Dual-review repair (r2)
 
 The notice also recognizes `data.operations.reason` or `stale_reason` equal

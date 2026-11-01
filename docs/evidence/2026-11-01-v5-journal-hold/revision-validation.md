@@ -1,7 +1,10 @@
 # Dual-review revision validation
 
-The owner hold regressions pass. Two existing root-main clock tests remain
-failed and reproduce on the pre-revision Condor head. No clock code changed.
+The owner hold regressions passed in round two. Correction: the reported two
+clock failures were harness errors, not baseline source failures. Symlinked
+Condor paths created duplicate clock module identities without
+`--preserve-symlinks`. Round three uses physical Condor siblings and records
+the corrected validation in `round-three-validation.md`. No clock code changed.
 No install, deploy, restart, live read or external notification was performed.
 
 `S=/home/rsi/dev/rsibot/.workspace/scratch/journal-hold`.
@@ -32,17 +35,11 @@ node --test --test-concurrency=2 test/*.test.mjs
 node --test test/v5-document-clock-claude.test.mjs
 ```
 
-The clock file has two passes and two failures, both on this revision and on
-pre-revision Condor `478ed147227c10aae3c0f845a1b6681585b8e7b6`:
-`remounts within the entire tolerated skew/fresh window cannot revive totals`
-and `pages first mounted at different wall-clock times share the document
-high-water mark`. The latter reports 15s rather than the expected retained
-45s. This is not a green dashboard qualification. Parent owns the separate
-clock repair; this task explicitly forbids changing that code.
-
-Final full rsibot-main dashboard result with all source fixtures present:
-573 tests, 571 passed, 2 failed, 0 skipped (234.61 seconds). Both failures are
-the baseline-reproduced clock cases above. No other test failed.
+The historical symlink-layout run reported 571 passed and 2 failed from 573
+tests (234.61 seconds). The same layout mistake affected its prior-head
+comparison. That comparison did not establish baseline clock failures.
+Keep its logs as evidence of the invalid setup, not a source defect. No
+separate clock repair is needed for those results.
 
 Initial dashboard attempts lacked frozen deploy fixtures and Python export
 modules in scratch. Restoring the exact main archive fixed those import

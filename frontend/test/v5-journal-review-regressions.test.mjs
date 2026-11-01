@@ -42,8 +42,12 @@ test('received new hold cannot disappear behind a prior complete healthy snapsho
   try {
     const observation = graph.load('v5/usePaperObservation.ts').usePaperObservation(status.bot_id);
     assert.equal(observation.reads[0].reason, 'OWNER_JOURNAL_EXCEEDED');
-    const html = render(observation.status);
+    assert.equal(observation.status, retained[0]);
+    assert.equal(observation.journalStatus.reason, 'OWNER_JOURNAL_EXCEEDED');
+    const Notice = graph.load('v5/OwnerJournalCondition.tsx').PaperJournalNotice;
+    const html = renderToStaticMarkup(React.createElement(Notice, {bot:status.bot_id}));
     assert.match(html,/Paper journal evidence held/);
+    assert.match(html,/received.*partial/i);
   } finally {
     client.clear();
   }

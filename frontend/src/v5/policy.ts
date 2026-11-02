@@ -131,8 +131,9 @@ export async function paperObservationPages(path: string, fetchPage: (path: stri
   const url = new URL(path, "https://paper.invalid");
   url.searchParams.set("limit", "200");
   let result = await fetchPage(url.pathname + url.search);
+  const pageLimit = result.section === "history" ? 16 : 5;
   const seen = new Set<string>();
-  for (let page = 1; result.next_cursor && page < 5; page++) {
+  for (let page = 1; result.next_cursor && page < pageLimit; page++) {
     if (seen.has(result.next_cursor)) throw new Error("Repeated owner history cursor was refused.");
     seen.add(result.next_cursor);
     url.searchParams.set("cursor", result.next_cursor);

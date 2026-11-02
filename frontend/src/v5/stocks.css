@@ -1,0 +1,25 @@
+.v5-stock-market { display: grid; gap: 1.25rem; min-width: 0; }
+.v5-stock-market > *, .v5-stock-selection > * { min-width: 0; }
+.v5-stock-heading { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: .75rem; }
+.v5-stock-market h2 { font-size: 1.25rem; font-weight: 600; }
+.v5-stock-market h3 { font-size: 1rem; font-weight: 600; margin-bottom: .5rem; }
+.v5-stock-heading p, .v5-stock-caption { color: var(--color-text-muted); font-size: .8rem; line-height: 1.6; }
+.v5-stock-controls { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; }
+.v5-stock-controls label { display: flex; flex-direction: column; gap: .35rem; max-width: 100%; font-size: .875rem; }
+.v5-stock-controls select { max-width: 100%; min-height: 2.75rem; padding: .5rem .65rem; border: 1px solid var(--color-border); border-radius: .4rem; background: var(--color-surface); color: var(--color-text); }
+.v5-stock-notice, .v5-stock-details { border: 1px solid var(--color-border); border-radius: .5rem; background: var(--color-surface); padding: 1rem; overflow-wrap: anywhere; font-size: .875rem; }
+.v5-stock-notice p + p { margin-top: .4rem; }
+.v5-stock-selection { display: grid; gap: 1rem; min-width: 0; }
+.v5-stock-select { color: var(--color-primary); text-decoration: underline; text-underline-offset: .2em; text-align: left; padding: .35rem 0; }
+.v5-stock-select:focus-visible, .v5-stock-details summary:focus-visible { outline: 2px solid var(--color-primary); outline-offset: 3px; }
+.v5-stock-observations, .v5-stock-metadata { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: .8rem; margin: .75rem 0; }
+.v5-stock-observation { min-width: 0; padding: .9rem; border: 1px solid var(--color-border); border-radius: .5rem; }
+.v5-stock-observation dt, .v5-stock-metadata dt { color: var(--color-text-muted); font-size: .75rem; margin-bottom: .35rem; }
+.v5-stock-observation dd, .v5-stock-metadata dd { overflow-wrap: anywhere; }
+.v5-stock-value { font-weight: 600; font-variant-numeric: tabular-nums; }
+.v5-stock-value small { display: block; font-weight: 400; color: var(--color-text-muted); margin: .2rem 0 .5rem; }
+.v5-stock-details { margin-top: .8rem; }
+.v5-stock-details summary { cursor: pointer; font-weight: 500; }
+.v5-stock-details[open] > summary { margin-bottom: .8rem; }
+.v5-stock-json { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: .75rem; font-size: .75rem; }
+.v5-stock-market th { white-space: normal; }

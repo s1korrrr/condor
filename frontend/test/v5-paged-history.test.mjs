@@ -59,6 +59,26 @@ test('history pagination merges terminal records in order without duplicating jo
   assert.equal(new URL(paths[1], 'https://fixture.invalid').searchParams.get('snapshot_id'), pages[0].snapshot_id);
 });
 
+test('history loads the full 500-row byte-split retained window and still stops at a bounded page budget', async () => {
+  const expected = Array.from({length:500}, (_,index) => ({executor_id:`terminal-${index}`}));
+  let calls = 0;
+  const read = await policy.paperObservationPages('/history',async () => {
+    const start = calls++ * 64;
+    const page = terminalPage(expected.slice(start,start+64),start+64 < 500 ? String(calls) : null);
+    page.data.terminal_executors.data.publication_record_count = 500;
+    return page;
+  });
+  assert.equal(calls,8);
+  assert.deepEqual(read.data.terminal_executors.data.records,expected);
+  assert.equal(read.next_cursor,null);
+  assert.equal(read.completeness,'partial');
+  calls = 0;
+  const bounded = await policy.paperObservationPages('/history',async () => terminalPage([{executor_id:String(calls)}],String(++calls)));
+  assert.equal(calls,16);
+  assert.equal(bounded.next_cursor,'16');
+  assert.equal(policy.paperCompleteRead(bounded,bounded.generated_at_ms),false);
+});
+
 test('terminal pagination refuses changed metadata, missing pages and changed source identity', async () => {
   for (const change of ['metadata','source','snapshot','missing']) {
     let calls = 0;

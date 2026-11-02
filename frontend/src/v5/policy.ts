@@ -205,6 +205,7 @@ export function paperSectionError(read: Partial<import("./contracts").PaperRead>
     }
     if (read.section === "risk" && "native_entry_holds" in read.data && (!records(read.data.native_entry_holds) || read.data.native_entry_holds.length > 20 || read.data.native_entry_holds.some(hold => typeof hold.controller_id !== "string" || !hold.controller_id || typeof hold.explanation !== "string" || !hold.explanation.trim() || !["native_refusal_receipt_pending", "native_refusal_owner_ambiguous", "native_refusal_recovery_unavailable", "v5_risk_incomplete"].includes(String(hold.reason)) || hold.protected_exits !== "preserved"))) return invalid();
     for (const key of ["assets", "conditions", "rails", "segments", "gaps", ...(read.section === "decisions" ? ["controllers"] : [])]) {
+      if (read.section === "history" && key === "gaps" && Array.isArray(read.data[key]) && read.data[key].every(value => object(value) || value === "bounded_recent_fill_window")) continue;
       if (key in read.data && !records(read.data[key])) return invalid();
     }
   }

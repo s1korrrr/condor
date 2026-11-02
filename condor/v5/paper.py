@@ -1091,6 +1091,16 @@ def _validate_section_data(section: str, data: Any) -> None:
             "gaps",
         ):
             if key in data:
+                if (
+                    section == "history"
+                    and key == "gaps"
+                    and isinstance(data[key], list)
+                    and all(
+                        isinstance(row, dict) or row == "bounded_recent_fill_window"
+                        for row in data[key]
+                    )
+                ):
+                    continue
                 if section in {"accounting", "risk"} and key == "controllers":
                     continue
                 if not isinstance(data[key], list) or any(

@@ -11,6 +11,13 @@ import {paperJournalReads} from '../src/v5/paper-journal.ts';
 const fixture = section => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
 const partial = section => ({...fixture(section), state:'degraded', completeness:'partial', reason:'primary_byte_budget_recent_window'});
 
+test('history preserves the native retained-fill gap but refuses unknown scalar gaps', () => {
+  for (const [gaps,accepted] of [[['bounded_recent_fill_window'],true], [[{reason:'owner_gap'}],true], [['unknown_window'],false], [[false],false], [[null],false]]) {
+    const read = partial('history');read.data.gaps = gaps;
+    assert.equal(policy.paperSectionError(read) === null,accepted);
+  }
+});
+
 test('partial retained rows stay visible without becoming complete totals or flatness evidence', () => {
   for (const section of ['fills', 'executors']) {
     const read = partial(section), now = read.generated_at_ms;

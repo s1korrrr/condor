@@ -247,7 +247,6 @@ def reload_handlers():
         "handlers.agents._shared",
         "handlers.memory",
         "handlers.admin",
-        "handlers.admin.update",
         "utils.auth",
         "utils.telegram_formatters",
         "config_manager",
@@ -271,7 +270,6 @@ def register_handlers(application: Application) -> None:
     """Register all command handlers."""
     # Import fresh versions after reload
     from handlers.admin import admin_command
-    from handlers.admin.update import update_command
     from handlers.agents import (
         agent_callback_handler,
         agent_command,
@@ -330,7 +328,6 @@ def register_handlers(application: Application) -> None:
     application.add_handler(CommandHandler("keys", keys_command))
     application.add_handler(CommandHandler("gateway", gateway_command))
     application.add_handler(CommandHandler("admin", admin_command))
-    application.add_handler(CommandHandler("update", update_command))
     application.add_handler(CommandHandler("web", web_command))
 
     # Add callback query handler for start menu navigation
@@ -481,7 +478,6 @@ async def register_bot_commands(application: Application) -> None:
     if ADMIN_USER_ID:
         admin_commands = commands + [
             BotCommand("admin", "Admin panel - manage users and access"),
-            BotCommand("update", "Check for updates and restart"),
         ]
         try:
             await application.bot.set_my_commands(
@@ -772,18 +768,7 @@ def main() -> None:
     application.add_error_handler(error_handler)
 
     # Run TG bot + web server concurrently in a manual event loop
-    try:
-        asyncio.run(_run_dual(application))
-    finally:
-        # /update asks for a restart by signalling a normal shutdown, so the
-        # re-exec happens here: after the loop is gone and teardown has flushed
-        # state and reaped subprocesses. In a `finally` because a restart is
-        # still the right outcome even if a shutdown step blew up on the way
-        # out. Replacing the image in place keeps the tmux pane alive.
-        from utils.updater import exec_restart, restart_pending
-
-        if restart_pending():
-            exec_restart()  # never returns
+    asyncio.run(_run_dual(application))
 
 
 async def _run_dual(application: Application) -> None:
@@ -823,17 +808,9 @@ async def _run_dual(application: Application) -> None:
 
     if ADMIN_USER_ID:
         try:
-            # Report the version we came up on: after a /update restart this is
-            # the confirmation that the new commit is the one actually running.
-            from utils.updater import get_current_branch, get_local_commit
-
-            branch, commit = await asyncio.gather(
-                get_current_branch(), get_local_commit()
-            )
-            version = f" ({branch} @ {commit})" if commit else ""
             await application.bot.send_message(
                 chat_id=int(ADMIN_USER_ID),
-                text=f"Condor is online and ready.{version}",
+                text="Condor is online and ready.",
             )
         except Exception as e:
             logger.warning(f"Failed to send startup notification to admin: {e}")

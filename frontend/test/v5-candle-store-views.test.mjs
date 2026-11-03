@@ -5,7 +5,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { frontendModules } from "./helpers/frontend-module.mjs";
 
-// Real owner output (hummingbot candle_store_dashboard 4282f87e5 over its fixture store), shared with the
+// Real owner output (hummingbot candle_store_dashboard 9ccf80087 over its fixture store), shared with the
 // Python consumer tests. The server validator keeps exactly these fields.
 const golden = name => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/candle_store_views/${name}.json`, import.meta.url), "utf8"));
 const model = () => frontendModules().load("v5/candle-store-model");
@@ -122,8 +122,8 @@ test("heatmap renders one inspectable strip per instrument with a text legend", 
 
 test("store facts show alerts for collector errors and no host path", () => {
   const store = golden("store");
-  const html = renderPanel("StoreFactsPanel", { "candle-store-facts": { ...store, status: { ...store.status, fatal_error: "OSError: <path>" } } });
-  assert.match(html, /role="alert"[^>]*>Collector fatal error: OSError: &lt;path&gt;/);
+  const html = renderPanel("StoreFactsPanel", { "candle-store-facts": { ...store, status: { ...store.status, fatal_error: "OSError (details withheld; read them on the owner host)" } } });
+  assert.match(html, /role="alert"[^>]*>Collector fatal error: OSError \(details withheld; read them on the owner host\)/);
   assert.doesNotMatch(html, /\/tmp\/|\/home\//);
   assert.match(html, /Candle store lanes on disk/);
 });

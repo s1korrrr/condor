@@ -1,7 +1,7 @@
 """Cross-venue, heatmap and store-facts reads: owner golden payloads pass, any drift is unavailable.
 
 Golden payloads in ``fixtures/candle_store_views`` are real owner output: hummingbot
-``services/candle-store/candle_store_dashboard`` at 4282f87e5 (``_v5_cross``, ``_v5_heatmap``,
+``services/candle-store/candle_store_dashboard`` at 9ccf80087 (``_v5_cross``, ``_v5_heatmap``,
 ``Dashboard.store_v5``) over its deterministic test fixture store, evaluated at 2026-10-24T06:00:30Z.
 """
 
@@ -173,28 +173,122 @@ def test_store_drift_or_path_disclosure_is_unavailable(edit):
         validate_payload("store", _mutated("store", edit), {})
 
 
-def test_store_keeps_redacted_and_ordinary_messages():
+WITHHELD = "(details withheld; read them on the owner host)"
+
+
+@pytest.mark.parametrize(
+    "message",
+    [
+        None,
+        "status.json not found",
+        "no lanes config given and status.json names none",
+        f"status.json is not valid JSON {WITHHELD}",
+        f"lanes config unreadable: FileNotFoundError {WITHHELD}",
+        f"OSError {WITHHELD}",
+        f"Message present {WITHHELD}",
+    ],
+)
+def test_store_accepts_only_the_owner_message_kinds(message):
     payload = golden("store")
-    payload["status"][
-        "fatal_error"
-    ] = "OSError: cannot write <path>; worker pid=<pid> exited; rate 5/s spot/perpetual"
+    payload["status"]["fatal_error"] = message
+    payload["status"]["error"] = message
+    payload["config"]["error"] = message
     safe = validate_payload("store", payload, {})
-    assert safe["status"]["fatal_error"] == payload["status"]["fatal_error"]
+    assert safe["status"]["fatal_error"] == safe["config"]["error"] == message
 
 
-def test_heatmap_cell_cannot_count_minutes_that_have_not_closed():
+@pytest.mark.parametrize(
+    "message",
+    [
+        "worker PID: 4242 exited",
+        "worker {'pid': 4242}",
+        "process ID: 4242 died",
+        "[Errno 13] Permission denied: '<path> Store/status.json.tmp.4242'",
+        "OSError: cannot write <path>",
+        f"OSError {WITHHELD} /home/rsi",
+        f"oserror {WITHHELD}",
+        "",
+    ],
+)
+def test_store_rejects_any_other_message_text(message):
+    for field in (("status", "fatal_error"), ("status", "error"), ("config", "error")):
+        payload = golden("store")
+        payload[field[0]][field[1]] = message
+        with pytest.raises(OwnerUnavailable):
+            validate_payload("store", payload, {})
+
+
+@pytest.mark.parametrize(
+    "edit",
+    [
+        lambda p: p["versions"]["found"].update(format="/home/rsi/x"),
+        lambda p: p["versions"]["mismatches"].append("format: x y (dashboard reads z)"),
+        lambda p: p.update(read_method="opened /home/rsi/store"),
+    ],
+)
+def test_store_versions_and_method_are_fixed_forms(edit):
+    payload = golden("store")
+    edit(payload)
+    with pytest.raises(OwnerUnavailable):
+        validate_payload("store", payload, {})
+
+
+def _heatmap_at(hour):
+    """The golden heatmap moved so that the newest hour starts at ``hour`` with one closed minute."""
     payload = golden("heatmap_spot")
-    # Move evaluation to 06:01:30: the newest hour (06:00) has exactly one closed minute.
-    hour = (payload["last_closed"] // 3600 + 1) * 3600
     payload["now"] = hour + 90
     payload["last_closed"] = hour
     payload["hours"] = [hour - 3600 * (167 - i) for i in range(168)]
     for row in payload["rows"]:
         row["cells"] = row["cells"][1:] + [[1, 0, 0, 0, 0]]
+        row["first_minute"] = max(row["first_minute"], payload["hours"][0])
+    return payload
+
+
+def test_heatmap_cell_cannot_count_minutes_that_have_not_closed():
+    hour = (golden("heatmap_spot")["last_closed"] // 3600 + 1) * 3600
+    payload = _heatmap_at(hour)
     assert validate_payload("heatmap", payload, HEAT_SPOT)["hours"][-1] == hour
     payload["rows"][0]["cells"][-1] = [60, 0, 0, 0, 0]
     with pytest.raises(OwnerUnavailable):
         validate_payload("heatmap", payload, HEAT_SPOT)
+
+
+def test_heatmap_cell_cannot_count_minutes_before_retention():
+    payload = golden("heatmap_spot")
+    row = payload["rows"][0]
+    row["first_minute"] = (
+        payload["hours"][0] + 46 * 60
+    )  # 14 retained minutes in the oldest hour
+    row["cells"][0] = [14, 0, 0, 0, 0]
+    assert (
+        validate_payload("heatmap", payload, HEAT_SPOT)["rows"][0]["first_minute"]
+        == row["first_minute"]
+    )
+    row["cells"][0] = [60, 0, 0, 0, 0]
+    with pytest.raises(OwnerUnavailable):
+        validate_payload("heatmap", payload, HEAT_SPOT)
+
+
+def test_heatmap_hours_before_retention_must_be_empty():
+    payload = golden("heatmap_spot")
+    row = payload["rows"][0]
+    row["first_minute"] = payload["hours"][2]
+    row["cells"][0] = row["cells"][1] = None
+    validate_payload("heatmap", payload, HEAT_SPOT)
+    row["cells"][0] = [0, 0, 0, 0, 0]
+    with pytest.raises(OwnerUnavailable):
+        validate_payload("heatmap", payload, HEAT_SPOT)
+    for bad in (
+        None,
+        payload["hours"][0] - 60,
+        payload["last_closed"] + 60,
+        payload["hours"][0] + 1,
+    ):
+        payload = golden("heatmap_spot")
+        payload["rows"][0]["first_minute"] = bad
+        with pytest.raises(OwnerUnavailable):
+            validate_payload("heatmap", payload, HEAT_SPOT)
 
 
 def test_routes_are_authenticated_and_validated(tmp_path):

@@ -20,7 +20,8 @@ export type CrossView = {
 
 /** final, no_trade, unrecoverable, missing, pending minutes in one UTC hour; null when the hour is outside the store window. */
 export type HeatCellCounts = [number, number, number, number, number] | null;
-export type HeatRow = { lane: string; venue: string; segment: string; pair: string; asset: string; cells: HeatCellCounts[] };
+/** `first_minute`: oldest minute inside retention; hours before it are null and the oldest partial hour counts only from it. */
+export type HeatRow = { lane: string; venue: string; segment: string; pair: string; asset: string; first_minute: number; cells: HeatCellCounts[] };
 export type HeatmapView = { now: number; segment: 'spot' | 'perpetual'; hours: number[]; fields: string[]; last_closed: number; rows: HeatRow[] };
 
 export type StoreLane = {

@@ -32,12 +32,25 @@ LAG_KEYS = ("p50", "p99", "max", "max_recent")
 FILE_KINDS = ("lanes", "sealed", "metrics")
 MAX_INTEGER = 2**53 - 1
 MAX_TIMESTAMP = 4_102_444_800
-# Any absolute POSIX, Windows or UNC path, or a process id ("pid 42", "process=42"), in a store message means the
-# owner failed to redact (it writes ``<path>`` and ``<pid>``).
-PATH_TEXT = re.compile(
-    r"(?<![\w./-])/[^\s'\"(),;]*|\b[A-Za-z]:[\\/]|\\\\[^\s'\"(),;]+"
-    r"|\b(?:pid|process)\s*[=:#]?\s*\d"
+# The owner never publishes message text (it can hold paths, file names, pids or arbitrary data). It publishes
+# one of these fixed phrases (hummingbot candle_store_dashboard ``views.message_kind``); anything else is
+# rejected, so no host text can reach the browser even if the owner regresses.
+_WITHHELD = r"\(details withheld; read them on the owner host\)"
+_EXCEPTION = r"[A-Z][A-Za-z0-9_]{0,63}(?:Error|Exception|Exit|Interrupt)"
+MESSAGE_KIND = re.compile(
+    r"status\.json not found"
+    r"|no lanes config given and status\.json names none"
+    rf"|status\.json is not valid JSON {_WITHHELD}"
+    rf"|lanes config unreadable: (?:{_EXCEPTION}|error) {_WITHHELD}"
+    rf"|{_EXCEPTION} {_WITHHELD}"
+    rf"|Message present {_WITHHELD}"
 )
+VERSION = re.compile(r"[a-z0-9][a-z0-9._-]{0,63}")
+VERSION_FOUND = re.compile(rf"{VERSION.pattern}|unrecognised")
+MISMATCH = re.compile(
+    rf"(?:format|store_format|metrics_format): (?:{VERSION_FOUND.pattern}) \(dashboard reads {VERSION.pattern}\)"
+)
+READ_METHOD = "file listing and status.json only; journal partitions are not opened"
 
 VIEWS = frozenset({"cross", "heatmap", "store"})
 
@@ -287,9 +300,15 @@ def validate_heatmap(payload: dict, query: dict[str, str]) -> dict:
         cells = row.get("cells")
         if not isinstance(cells, list) or len(cells) != HEAT_HOURS:
             raise ViewError("owner_invalid_heatmap")
+        first = row.get("first_minute")
+        if not _minute(first) or not hours[0] <= first <= last_closed:
+            raise ViewError("owner_invalid_heatmap")
         for hour, cell in zip(hours, cells):
-            # Only minutes that have closed can be counted: the newest hour is partial.
-            closed = min(60, (last_closed - hour) // 60 + 1)
+            # Only retained, closed minutes can be counted: the oldest and newest hours can be partial.
+            low, high = max(hour, first), min(hour + 3540, last_closed)
+            closed = (high - low) // 60 + 1 if high >= low else 0
+            if closed == 0 and cell is not None:
+                raise ViewError("owner_invalid_heatmap_cell")
             if cell is not None and (
                 not isinstance(cell, list)
                 or len(cell) != len(HEAT_FIELDS)
@@ -304,6 +323,7 @@ def validate_heatmap(payload: dict, query: dict[str, str]) -> dict:
                 "segment": segment,
                 "pair": row["pair"],
                 "asset": row["asset"],
+                "first_minute": first,
                 "cells": [None if c is None else list(c) for c in cells],
             }
         )
@@ -327,11 +347,12 @@ def _days(value: Any) -> list:
     return list(value)
 
 
-def _store_text(value: Any, limit: int = 512, optional: bool = True) -> Any:
-    if not _text(value, limit, optional):
-        raise ViewError("owner_invalid_store")
-    if isinstance(value, str) and PATH_TEXT.search(value):
-        raise ViewError("owner_path_disclosure")
+def _store_text(value: Any, pattern: re.Pattern, optional: bool = True) -> Any:
+    """An owner string that must be one of the owner's fixed forms; anything else may hold host text."""
+    if value is None and optional:
+        return None
+    if not isinstance(value, str) or not pattern.fullmatch(value):
+        raise ViewError("owner_unexpected_text")
     return value
 
 
@@ -429,11 +450,11 @@ def validate_store(payload: dict) -> dict:
         "now": now,
         "status": {
             "present": status["present"],
-            "error": _store_text(status.get("error")),
+            "error": _store_text(status.get("error"), MESSAGE_KIND),
             "age_s": status.get("age_s"),
             "started_at": status.get("started_at"),
             "uptime_s": status.get("uptime_s"),
-            "fatal_error": _store_text(status.get("fatal_error")),
+            "fatal_error": _store_text(status.get("fatal_error"), MESSAGE_KIND),
             "process": {
                 **{k: process[k] for k in PROCESS_KEYS},
                 "loop_lag_s": {k: lag[k] for k in LAG_KEYS},
@@ -445,22 +466,30 @@ def validate_store(payload: dict) -> dict:
             for k in ("window_s", "margin_s", "window_days", "keep_days")
         },
         "versions": {
-            "found": {k: _store_text(versions["found"][k], 64) for k in VERSION_KEYS},
+            "found": {
+                k: _store_text(versions["found"][k], VERSION_FOUND)
+                for k in VERSION_KEYS
+            },
             "expected": {
-                k: _store_text(expected[k], 64, optional=False) for k in VERSION_KEYS
+                k: _store_text(expected[k], VERSION, optional=False)
+                for k in VERSION_KEYS
             },
             "mismatches": [
-                _store_text(m, 512, optional=False) for m in versions["mismatches"]
+                _store_text(m, MISMATCH, optional=False) for m in versions["mismatches"]
             ],
         },
         "config": {
             "source": config["source"],
-            "error": _store_text(config.get("error")),
+            "error": _store_text(config.get("error"), MESSAGE_KIND),
             "assets": list(config["assets"]),
         },
         "bytes_total": payload["bytes_total"],
         "lanes": safe_lanes,
-        "read_method": _store_text(payload.get("read_method"), 256, optional=False),
+        "read_method": _store_text(
+            payload.get("read_method"),
+            re.compile(re.escape(READ_METHOD)),
+            optional=False,
+        ),
     }
 
 

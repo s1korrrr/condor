@@ -150,3 +150,53 @@ The browser aborts after fourteen seconds. These nested budgets include cold
 parallel private snapshots: a measured single cold overview took 3.37 seconds,
 and a four-second owner deadline rejected legitimate parallel reads. The
 process deadline is still hard; no retries or abandoned work extend it.
+
+## Cross-venue, coverage heatmap and store facts (2026-11-03)
+
+The Candle store page has four tabs built from the shared kit (`TileGrid`,
+`DataTable`, `TimeSeriesChart`, `HeatStrip`, `TooltipCard`) with V5 theme
+tokens: **Lanes & chart** (the views above), **Cross-venue**, **Coverage
+heatmap** and **Store facts**. They replace the standalone owner page on
+`127.0.0.1:8095` for V5 users. Only the open tab reads: overview, symbols and
+candles run on Lanes & chart only, so other tabs do not compete for the two
+owner slots. Strict validators live in `condor/v5/candle_views.py`.
+
+| Route | Query | Owner loads |
+|---|---|---|
+| `GET /api/v5/candle-store/cross` | `asset` (`[A-Za-z0-9]{1,24}`), `segment` (`spot`/`perpetual`), optional `range` (default 24h); always `res=auto` | that segment's lanes, `range` + 1 day |
+| `GET /api/v5/candle-store/heatmap` | `segment` | that segment's lanes, last 8 days |
+| `GET /api/v5/candle-store/store` | none | file listings and `status.json` only |
+
+`cross` returns per venue the bucketed final close and the mean deviation (bps)
+from the median of venues with a final close in that minute (at least two),
+plus statistics. The consumer re-derives `res`/`res_s` from the range (1m, 1m,
+5m, 15m), the window from owner `now`, and requires identical lane/pair
+identities and order in `series` and `table`, `n <= minutes_with_close`, the
+quote equal to the pair suffix, and ordered on-grid points. Quote currencies
+differ (USDT, USDC, USD); the page discloses this and converts nothing.
+Hyperliquid spot is the wrapped `UBTC-USDC`, so its deviation includes quote
+and wrapping basis.
+
+`heatmap` returns 168 consecutive UTC hours ending at the hour of the last
+closed minute, and per instrument five minute counts (final, no-trade,
+unrecoverable, missing, pending), or null outside the store window. Each cell
+sums to at most 60. Strips show the newest hour on the left (kit convention);
+colour is never the only signal (legend, per-row settled coverage, tooltip
+text, keyboard focus). Pending uses the neutral token so the colour-blind
+theme still separates it from complete hours.
+
+`store` publishes no path, pid, host or file-name list: owner messages are
+redacted to `<path>`, and the consumer rejects any message that still holds an
+absolute path segment (`owner_path_disclosure`). Process facts are an
+allowlist of finite numbers; lanes carry byte counts per kind, WAL bytes and
+journal/sealed day lists. Journal read errors stay on the overview tiles.
+
+Owner timing measured on razer (14 lanes, 9 journal days, load 9-14,
+2026-11-03): cross 1.1-3.7 s, heatmap 3.0-4.1 s, store 0.01-0.08 s. **Known
+limit, not changed here:** overview and symbols still load the whole store
+cold in each disposable worker. A single cold read now takes 6-7.5 s (it was
+3.37 s when the eight-second budget was set), and the two parallel reads of
+the Lanes & chart tab both reached the deadline (`owner_compute_timeout`)
+under load 10-14. The page then shows one timestamped alert and no stale
+values. A warm owner reader is the structural fix and needs a design decision
+on the "no retained worker cache" rule.

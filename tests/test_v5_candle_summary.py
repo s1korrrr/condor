@@ -156,3 +156,53 @@ async def test_warming_owner_is_reported_with_its_code_not_as_fallback():
     finally:
         await runner.cleanup()
     assert str(raised.value) == "owner_warming" and calls == ["summary"]
+
+
+@pytest.mark.asyncio
+async def test_older_owner_fallback_reads_both_views_concurrently():
+    import asyncio
+    import time
+
+    async def overview(request):
+        await asyncio.sleep(1.0)
+        return web.json_response(OVERVIEW)
+
+    async def symbols(request):
+        await asyncio.sleep(1.0)
+        return web.json_response({"now": 121, "rows": [ROW]})
+
+    runner, path = await _serve({"/api/overview": overview, "/api/symbols": symbols})
+    try:
+        started = time.monotonic()
+        data = await CandleOwner(path).read_summary()
+        elapsed = time.monotonic() - started
+    finally:
+        await runner.cleanup()
+    assert data["rows"][0]["pair"] == "BTC-USDT"
+    assert (
+        elapsed < 1.8
+    ), f"fallback took {elapsed:.2f} s; the two legacy reads must overlap"
+
+
+@pytest.mark.asyncio
+async def test_owner_error_body_split_across_writes_is_classified():
+    async def summary(request):
+        body = b'{"error":"owner_warming"}'
+        response = web.StreamResponse(
+            status=503, headers={"Content-Length": str(len(body))}
+        )
+        await response.prepare(request)
+        await response.write(body[:9])
+        await response.drain()
+        await __import__("asyncio").sleep(0.05)
+        await response.write(body[9:])
+        await response.write_eof()
+        return response
+
+    runner, path = await _serve({"/api/summary": summary})
+    try:
+        with pytest.raises(OwnerUnavailable) as raised:
+            await CandleOwner(path).read_summary()
+    finally:
+        await runner.cleanup()
+    assert str(raised.value) == "owner_warming"

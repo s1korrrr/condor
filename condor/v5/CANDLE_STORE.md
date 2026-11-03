@@ -215,5 +215,6 @@ Non-200 owner replies are classified from a bounded body (`{"error": "<code>"}`,
 `owner_http_error`; a 404 is `owner_view_unavailable`. The page names the state in its one timestamped alert, clears
 earlier tiles and rows, and retries every 5 s while the owner is warming (30 s otherwise).
 
-Deploy order: owner first. Against an owner that does not serve `summary` (404), the consumer reads `overview` and then
-`symbols` sequentially and combines them, so a Condor deployed first still works.
+Deploy order: owner first. Against an owner that does not serve `summary` (404), the consumer reads `overview` and
+`symbols` concurrently (each under its own deadline, as the page did before) and combines them, so a Condor deployed
+first still works within the browser's 14 s limit when each legacy read finishes.

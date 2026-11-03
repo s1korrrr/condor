@@ -84,8 +84,10 @@ def owner_error_code(status: int, raw: bytes) -> str:
     """The allowlisted code from a non-200 owner reply, read from a bounded body."""
     if status == 404:
         return "owner_view_unavailable"
+    if len(raw) > MAX_ERROR_BYTES:
+        return "owner_http_error"
     try:
-        body = json.loads(raw[:MAX_ERROR_BYTES].decode("utf-8"))
+        body = json.loads(raw.decode("utf-8"))
     except (ValueError, UnicodeDecodeError):
         return "owner_http_error"
     code = body.get("error") if isinstance(body, dict) else None
@@ -470,8 +472,14 @@ class CandleOwner:
         except OwnerUnavailable as exc:
             if str(exc) != "owner_view_unavailable":
                 raise
-        overview = await self.read("overview", {})
-        symbols = await self.read("symbols", {})
+        # Concurrently, as the page read them before `summary`: sequential reads of two cold whole-store views
+        # (7-7.5 s each) would exceed the browser's 14 s limit. Each read keeps its own bounded deadline.
+        overview, symbols = await asyncio.gather(
+            self.read("overview", {}), self.read("symbols", {}), return_exceptions=True
+        )
+        for result in (overview, symbols):
+            if isinstance(result, BaseException):
+                raise result
         return {**overview, "rows": symbols["rows"]}
 
     async def read(self, view: str, query: dict[str, str]) -> dict:
@@ -491,9 +499,14 @@ class CandleOwner:
                             allow_redirects=False,
                         ) as response:
                             if response.status != 200:
-                                raw = await response.content.read(MAX_ERROR_BYTES + 1)
+                                # Read through EOF (bounded): one read() can return only the part already received.
+                                body = bytearray()
+                                async for chunk in response.content.iter_chunked(1024):
+                                    body.extend(chunk)
+                                    if len(body) > MAX_ERROR_BYTES:
+                                        break
                                 raise OwnerUnavailable(
-                                    owner_error_code(response.status, raw)
+                                    owner_error_code(response.status, bytes(body))
                                 )
                             raw = bytearray()
                             async for chunk in response.content.iter_chunked(65536):

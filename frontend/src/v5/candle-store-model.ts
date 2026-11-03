@@ -43,8 +43,11 @@ export type StoreView = {
 export const SEGMENTS = ['spot', 'perpetual'] as const;
 export const RANGES = ['1h', '6h', '24h', '7d'] as const;
 
+/** Largest JavaScript Date offset in seconds; anything beyond cannot be shown as a time. */
+const MAX_TIME_S = 8.64e12;
+
 export function utcText(seconds: number | null | undefined): string {
-  if (seconds == null || !Number.isFinite(seconds)) return 'Unavailable';
+  if (seconds == null || !Number.isFinite(seconds) || Math.abs(seconds) > MAX_TIME_S) return 'Unavailable';
   return new Date(seconds * 1000).toISOString().replace('T', ' ').replace(/:\d\d\.\d+Z$/, ' UTC');
 }
 
@@ -108,11 +111,15 @@ export function heatStripOrder(view: HeatmapView): number[] {
   return view.hours.map((_hour, index) => view.hours.length - 1 - index);
 }
 
-/** Deviation from the cross-venue median, one line per venue, in basis points. Gaps stay null. */
+/**
+ * Deviation from the cross-venue median, one line per venue, in basis points. The time axis is every owner
+ * bucket from the first bucket to the window end, so a bucket where no venue has a comparison is a null on
+ * every line and the chart breaks there instead of joining the neighbours.
+ */
 export function crossDeviationSeries(view: CrossView): ChartSeries[] {
-  const times = new Set<number>();
-  view.series.forEach(line => line.deviation_bps.forEach(([t]) => times.add(t)));
-  const axis = [...times].sort((a, b) => a - b);
+  const first = Math.floor(view.start / view.res_s) * view.res_s;
+  const axis: number[] = [];
+  for (let t = first; t <= view.end; t += view.res_s) axis.push(t);
   return view.series.map(line => {
     const values = new Map(line.deviation_bps.map(([t, v]) => [t, v]));
     return {

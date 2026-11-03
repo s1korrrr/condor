@@ -5,7 +5,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { frontendModules } from "./helpers/frontend-module.mjs";
 
-// Real owner output (hummingbot candle_store_dashboard b28e4eafe over its fixture store), shared with the
+// Real owner output (hummingbot candle_store_dashboard 4282f87e5 over its fixture store), shared with the
 // Python consumer tests. The server validator keeps exactly these fields.
 const golden = name => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/candle_store_views/${name}.json`, import.meta.url), "utf8"));
 const model = () => frontendModules().load("v5/candle-store-model");
@@ -36,13 +36,32 @@ test("heat strips put the newest owner hour on the left", () => {
 
 test("cross deviation keeps gaps as null on a shared time axis and colours venues consistently", () => {
   const { crossDeviationSeries } = model();
-  const series = crossDeviationSeries({ series: [
+  const series = crossDeviationSeries({ start: 60, end: 120, res_s: 60, series: [
     { lane: "a__spot", venue: "a", pair: "BTC-USDT", deviation_bps: [[60, 1.5], [120, -0.5]] },
     { lane: "b__spot", venue: "b", pair: "BTC-USDC", deviation_bps: [[120, 0.5]] },
   ] });
   assert.deepEqual(series[1].points, [{ time: 60000, value: null }, { time: 120000, value: 0.5 }]);
   assert.equal(series[0].label, "a BTC-USDT");
   assert.notEqual(series[0].color, series[1].color);
+});
+
+test("a bucket where no venue has a comparison breaks every line instead of joining its neighbours", () => {
+  const { crossDeviationSeries } = model();
+  const { projectTimeSeries } = frontendModules().load("features/quant-ops/kit/series");
+  const series = crossDeviationSeries({ start: 60, end: 180, res_s: 60, series: [
+    { lane: "a__spot", venue: "a", pair: "BTC-USDT", deviation_bps: [[60, 1], [180, 2]] },
+    { lane: "b__spot", venue: "b", pair: "BTC-USDC", deviation_bps: [[60, -1], [180, -2]] },
+  ] });
+  assert.deepEqual(series[0].points.map(point => point.value), [1, null, 2]);
+  const projection = projectTimeSeries(series);
+  assert.ok(projection.rows.some(row => row[series[0].id] === null || row[series[0].id] === undefined), "gap row present");
+});
+
+test("times outside the Date range are unavailable, not a crash", () => {
+  const { utcText, storeTiles } = model();
+  assert.equal(utcText(9007199254740991), "Unavailable");
+  const store = golden("store");
+  assert.doesNotThrow(() => storeTiles({ ...store, status: { ...store.status, started_at: 9007199254740991 } }));
 });
 
 test("assets come from the owner config, else from instrument names with a derived label", () => {

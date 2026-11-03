@@ -32,8 +32,12 @@ LAG_KEYS = ("p50", "p99", "max", "max_recent")
 FILE_KINDS = ("lanes", "sealed", "metrics")
 MAX_INTEGER = 2**53 - 1
 MAX_TIMESTAMP = 4_102_444_800
-# An absolute path segment pair (``/a/b``) anywhere in a store message means the owner failed to redact.
-PATH_TEXT = re.compile(r"(?:^|[\s'\"(=:])/[^\s/]+/")
+# Any absolute POSIX, Windows or UNC path, or a process id ("pid 42", "process=42"), in a store message means the
+# owner failed to redact (it writes ``<path>`` and ``<pid>``).
+PATH_TEXT = re.compile(
+    r"(?<![\w./-])/[^\s'\"(),;]*|\b[A-Za-z]:[\\/]|\\\\[^\s'\"(),;]+"
+    r"|\b(?:pid|process)\s*[=:#]?\s*\d"
+)
 
 VIEWS = frozenset({"cross", "heatmap", "store"})
 
@@ -71,6 +75,11 @@ def _number(value: Any) -> bool:
 
 def _optional_number(value: Any, minimum: float | None = None) -> bool:
     return value is None or (_number(value) and (minimum is None or value >= minimum))
+
+
+def _integer_or_float(value: Any, maximum: float) -> bool:
+    """A finite number in [-5, maximum]; times and durations the browser formats as dates must stay in range."""
+    return _number(value) and -5 <= value <= maximum
 
 
 def _integer(value: Any, maximum: int = MAX_INTEGER) -> bool:
@@ -278,12 +287,14 @@ def validate_heatmap(payload: dict, query: dict[str, str]) -> dict:
         cells = row.get("cells")
         if not isinstance(cells, list) or len(cells) != HEAT_HOURS:
             raise ViewError("owner_invalid_heatmap")
-        for cell in cells:
+        for hour, cell in zip(hours, cells):
+            # Only minutes that have closed can be counted: the newest hour is partial.
+            closed = min(60, (last_closed - hour) // 60 + 1)
             if cell is not None and (
                 not isinstance(cell, list)
                 or len(cell) != len(HEAT_FIELDS)
                 or not all(_integer(v, 60) for v in cell)
-                or sum(cell) > 60
+                or sum(cell) > closed
             ):
                 raise ViewError("owner_invalid_heatmap_cell")
         safe.append(
@@ -340,13 +351,18 @@ def validate_store(payload: dict) -> dict:
         or set(lag) != set(LAG_KEYS)
         or not all(_optional_number(process[k], 0) for k in PROCESS_KEYS)
         or not all(_optional_number(lag[k], 0) for k in LAG_KEYS)
-        or not _optional_number(status.get("age_s"))
+        or not _optional_number(status.get("age_s"), -5)
+        or not all(
+            status.get(k) is None or _integer_or_float(status[k], MAX_TIMESTAMP)
+            for k in ("age_s", "started_at", "uptime_s")
+        )
         or not all(
             _optional_number(status.get(k), 0) for k in ("started_at", "uptime_s")
         )
         or not _integer(status.get("fault_injections"), 1_000_000)
         or not all(
             _optional_number(retention.get(k), 0)
+            and (retention.get(k) is None or retention[k] <= MAX_TIMESTAMP)
             for k in ("window_s", "margin_s", "window_days", "keep_days")
         )
         or versions.get("expected") is None

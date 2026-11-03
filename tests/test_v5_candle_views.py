@@ -1,7 +1,7 @@
 """Cross-venue, heatmap and store-facts reads: owner golden payloads pass, any drift is unavailable.
 
 Golden payloads in ``fixtures/candle_store_views`` are real owner output: hummingbot
-``services/candle-store/candle_store_dashboard`` at b28e4eafe (``_v5_cross``, ``_v5_heatmap``,
+``services/candle-store/candle_store_dashboard`` at 4282f87e5 (``_v5_cross``, ``_v5_heatmap``,
 ``Dashboard.store_v5``) over its deterministic test fixture store, evaluated at 2026-10-24T06:00:30Z.
 """
 
@@ -158,11 +158,43 @@ def test_heatmap_drift_is_unavailable(edit):
         lambda p: p.update(bytes_total=0),
         lambda p: p["config"].update(source="/etc"),
         lambda p: p["config"]["assets"].append("../x"),
+        lambda p: p["status"].update(fatal_error="cannot write /data"),
+        lambda p: p["status"].update(fatal_error="cannot write C:\\Users\\rsi\\store"),
+        lambda p: p["status"].update(fatal_error="worker pid=4242 exited"),
+        lambda p: p["status"].update(error="process 4242 died"),
+        lambda p: p["status"].update(started_at=9007199254740991),
+        lambda p: p["status"].update(uptime_s=9007199254740991),
+        lambda p: p["status"].update(age_s=-60),
+        lambda p: p["retention"].update(window_s=9007199254740991),
     ],
 )
 def test_store_drift_or_path_disclosure_is_unavailable(edit):
     with pytest.raises(OwnerUnavailable):
         validate_payload("store", _mutated("store", edit), {})
+
+
+def test_store_keeps_redacted_and_ordinary_messages():
+    payload = golden("store")
+    payload["status"][
+        "fatal_error"
+    ] = "OSError: cannot write <path>; worker pid=<pid> exited; rate 5/s spot/perpetual"
+    safe = validate_payload("store", payload, {})
+    assert safe["status"]["fatal_error"] == payload["status"]["fatal_error"]
+
+
+def test_heatmap_cell_cannot_count_minutes_that_have_not_closed():
+    payload = golden("heatmap_spot")
+    # Move evaluation to 06:01:30: the newest hour (06:00) has exactly one closed minute.
+    hour = (payload["last_closed"] // 3600 + 1) * 3600
+    payload["now"] = hour + 90
+    payload["last_closed"] = hour
+    payload["hours"] = [hour - 3600 * (167 - i) for i in range(168)]
+    for row in payload["rows"]:
+        row["cells"] = row["cells"][1:] + [[1, 0, 0, 0, 0]]
+    assert validate_payload("heatmap", payload, HEAT_SPOT)["hours"][-1] == hour
+    payload["rows"][0]["cells"][-1] = [60, 0, 0, 0, 0]
+    with pytest.raises(OwnerUnavailable):
+        validate_payload("heatmap", payload, HEAT_SPOT)
 
 
 def test_routes_are_authenticated_and_validated(tmp_path):

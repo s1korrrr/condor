@@ -19,9 +19,6 @@ import sys
 
 logger = logging.getLogger(__name__)
 
-# How often to check for updates (seconds)
-UPDATE_CHECK_INTERVAL = int(os.environ.get("UPDATE_CHECK_INTERVAL", "3600"))  # 1h default
-
 CONDOR_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 HUMMINGBOT_API_DIR = os.path.normpath(
     os.environ.get("HUMMINGBOT_API_DIR", os.path.join(CONDOR_DIR, "..", "hummingbot-api"))

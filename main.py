@@ -589,11 +589,6 @@ async def startup(application: Application) -> None:
     except Exception:
         logger.exception("Boot reconciliation failed; continuing startup")
 
-    # Schedule periodic update checks (notifies admin)
-    from handlers.admin.update import schedule_update_checks
-
-    schedule_update_checks(application)
-
     # Start file watcher
     asyncio.create_task(watch_and_reload(application))
 

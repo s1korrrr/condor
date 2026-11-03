@@ -345,7 +345,14 @@ def create_app(
         if not supplied or not hmac.compare_digest(supplied, expected):
             raise HTTPException(401, detail={"code": "authentication_required"})
 
-    app.include_router(learning_router(source=learning_source or FixtureLearningAPI(), require_auth=require_auth, check_origin=check_origin, now=clock))
+    app.include_router(
+        learning_router(
+            source=learning_source or FixtureLearningAPI(),
+            require_auth=require_auth,
+            check_origin=check_origin,
+            now=clock,
+        )
+    )
 
     @app.get("/health")
     async def health():
@@ -405,7 +412,11 @@ def create_app(
         except ValueError:
             raise HTTPException(422, detail={"code": "invalid_candle_query"}) from None
         try:
-            data = await candle_owner.read(view, query)
+            data = await (
+                candle_owner.read_summary()
+                if view == "summary"
+                else candle_owner.read(view, query)
+            )
             return JSONResponse(
                 {"state": "AVAILABLE", "reason": None, "data": data},
                 headers={"Cache-Control": "no-store"},

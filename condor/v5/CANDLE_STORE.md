@@ -200,3 +200,20 @@ the Lanes & chart tab both reached the deadline (`owner_compute_timeout`)
 under load 10-14. The page then shows one timestamped alert and no stale
 values. A warm owner reader is the structural fix and needs a design decision
 on the "no retained worker cache" rule.
+
+## Combined summary read and owner states (2026-11-03)
+
+`GET /api/v5/candle-store/summary` (no parameters) returns the overview object and the instrument rows from one owner
+pass: `{now, status_age_s, status_error, tiles, rows}`. Each part is validated exactly as `overview` and `symbols` are.
+The Lanes & chart tab makes this one read instead of two parallel whole-store reads. The owner serves it from one warm
+summary process (hummingbot `candle_store_dashboard`, design `docs/plans/active/2026-11-03-candle-store-warm-reader.md`
+in rsibot), so a refresh costs well under a second instead of a 6-7.5 s cold load.
+
+Non-200 owner replies are classified from a bounded body (`{"error": "<code>"}`, first 4 KiB) against an allowlist:
+`owner_warming`, `owner_warm_unavailable`, `owner_busy`, `owner_compute_timeout`, `owner_supervisor_unavailable`,
+`owner_read_unavailable`, `owner_response_limit`, `owner_invalid_request_or_data`. Anything else is
+`owner_http_error`; a 404 is `owner_view_unavailable`. The page names the state in its one timestamped alert, clears
+earlier tiles and rows, and retries every 5 s while the owner is warming (30 s otherwise).
+
+Deploy order: owner first. Against an owner that does not serve `summary` (404), the consumer reads `overview` and then
+`symbols` sequentially and combines them, so a Condor deployed first still works.

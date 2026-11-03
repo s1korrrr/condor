@@ -318,5 +318,9 @@ def test_routes_are_authenticated_and_validated(tmp_path):
             "cross?asset=BTC&segment=spot&res=1m",
         ):
             assert client.get(f"/api/v5/candle-store/{path}").status_code == 422, path
-        for path in ("lanes", "summary"):
-            assert client.get(f"/api/v5/candle-store/{path}").status_code == 404
+        assert client.get("/api/v5/candle-store/lanes").status_code == 404
+        # `summary` is a valid read (one owner pass for overview + symbols); unreachable owner → 503, never stale.
+        response = client.get("/api/v5/candle-store/summary")
+        assert response.status_code == 503
+        assert response.json()["reason"] == "owner_unreachable"
+        assert client.get("/api/v5/candle-store/summary?full=1").status_code == 422

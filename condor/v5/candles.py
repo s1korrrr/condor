@@ -10,6 +10,8 @@ from typing import Any
 
 import aiohttp
 
+from .candle_views import VIEWS as STORE_VIEWS
+from .candle_views import ViewError, validate_view_payload, validate_view_query
 from .stocks import STOCK_VIEWS, StockPayloadError, validate_stock_payload, validate_stock_query
 
 MAX_BYTES = 2_000_000
@@ -115,6 +117,8 @@ def validate_query(view: str, items: list[tuple[str, str]]) -> dict[str, str]:
     query = dict(items)
     if len(query) != len(items):
         raise ValueError("duplicate_query")
+    if view in STORE_VIEWS:
+        return validate_view_query(view, query)
     if view not in {"overview", "symbols", "candles"}:
         raise KeyError(view)
     if view != "candles":
@@ -277,7 +281,9 @@ def _rows(payload, key, limit, fields):
     return safe
 
 
-def validate_payload(view: str, payload: Any) -> dict:
+def validate_payload(
+    view: str, payload: Any, query: dict[str, str] | None = None
+) -> dict:
     _validate_tree(payload)
     if (
         not isinstance(payload, dict)
@@ -286,6 +292,13 @@ def validate_payload(view: str, payload: Any) -> dict:
         or payload["now"] > MAX_TIMESTAMP
     ):
         raise OwnerUnavailable("owner_invalid_payload")
+    if view in STORE_VIEWS:
+        if query is None:
+            raise OwnerUnavailable("owner_invalid_payload")
+        try:
+            return validate_view_payload(view, payload, query)
+        except ViewError as exc:
+            raise OwnerUnavailable(str(exc)) from None
     if view == "overview":
         age = payload.get("status_age_s")
         error = payload.get("status_error")
@@ -431,7 +444,7 @@ class CandleOwner:
             payload = _decode_payload(raw)
             if view in STOCK_VIEWS:
                 return validate_stock_payload(view, payload, query)
-            safe = validate_payload(view, payload)
+            safe = validate_payload(view, payload, query)
             if view == "candles" and any(
                 safe[name] != query[name] for name in ("lane", "pair", "range")
             ):

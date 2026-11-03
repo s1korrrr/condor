@@ -10,7 +10,7 @@ const row = (lane, pair) => ({ lane, pair, venue: lane.split("__")[0], segment: 
 function render(rows, failed = []) {
   const requests = [];
   const { load } = frontendModules({
-    "@tanstack/react-query": { useQuery: options => {
+    "@tanstack/react-query": { useQueryClient: () => ({ invalidateQueries() {} }), useQuery: options => {
       const view = options.queryKey[0];
       requests.push(options);
       const isError = failed.includes(view);

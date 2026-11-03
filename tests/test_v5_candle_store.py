@@ -47,7 +47,7 @@ def test_configured_is_authenticated_and_unavailable_not_zero(tmp_path):
             "reason": "owner_unreachable",
             "data": None,
         }
-        for path in ("store", "..", "cross"):
+        for path in ("lanes", "..", "cross"):
             assert client.get(f"/api/v5/candle-store/{path}").status_code in (404, 422)
         for query in (
             "lane=../../secrets&pair=BTC-USDT",

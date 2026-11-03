@@ -12,7 +12,12 @@ import aiohttp
 
 from .candle_views import VIEWS as STORE_VIEWS
 from .candle_views import ViewError, validate_view_payload, validate_view_query
-from .stocks import STOCK_VIEWS, StockPayloadError, validate_stock_payload, validate_stock_query
+from .stocks import (
+    STOCK_VIEWS,
+    StockPayloadError,
+    validate_stock_payload,
+    validate_stock_query,
+)
 
 MAX_BYTES = 2_000_000
 MAX_INTEGER = 2**53 - 1
@@ -56,6 +61,41 @@ TILE_KEYS = (ROW_KEYS - {"pair", "ws_state", "ws_last_message_age_s"}) | {
 
 class OwnerUnavailable(ValueError):
     pass
+
+
+# Owner error codes the consumer passes through (owner body ``{"error": "<code>"}``); anything else is
+# ``owner_http_error``. ``owner_view_unavailable`` is the consumer's own code for an owner that does not serve a view.
+OWNER_ERROR_CODES = frozenset(
+    {
+        "owner_busy",
+        "owner_warming",
+        "owner_warm_unavailable",
+        "owner_compute_timeout",
+        "owner_supervisor_unavailable",
+        "owner_read_unavailable",
+        "owner_response_limit",
+        "owner_invalid_request_or_data",
+    }
+)
+MAX_ERROR_BYTES = 4096
+
+
+def owner_error_code(status: int, raw: bytes) -> str:
+    """The allowlisted code from a non-200 owner reply, read from a bounded body."""
+    if status == 404:
+        return "owner_view_unavailable"
+    if len(raw) > MAX_ERROR_BYTES:
+        return "owner_http_error"
+    try:
+        body = json.loads(raw.decode("utf-8"))
+    except (ValueError, UnicodeDecodeError):
+        return "owner_http_error"
+    code = body.get("error") if isinstance(body, dict) else None
+    return (
+        code
+        if isinstance(code, str) and code in OWNER_ERROR_CODES
+        else "owner_http_error"
+    )
 
 
 def _reject_constant(value):
@@ -119,7 +159,7 @@ def validate_query(view: str, items: list[tuple[str, str]]) -> dict[str, str]:
         raise ValueError("duplicate_query")
     if view in STORE_VIEWS:
         return validate_view_query(view, query)
-    if view not in {"overview", "symbols", "candles"}:
+    if view not in {"overview", "symbols", "candles", "summary"}:
         raise KeyError(view)
     if view != "candles":
         if query:
@@ -314,6 +354,13 @@ def validate_payload(
         }
     if view == "symbols":
         return {"now": payload["now"], "rows": _rows(payload, "rows", 1024, ROW_KEYS)}
+    if view == "summary":
+        # One owner pass: the overview object plus the symbols rows, validated exactly as the two views are.
+        overview = validate_payload(
+            "overview", {k: v for k, v in payload.items() if k != "rows"}
+        )
+        rows = _rows(payload, "rows", 1024, ROW_KEYS)
+        return {**overview, "rows": rows}
     if view != "candles":
         raise OwnerUnavailable("owner_invalid_payload")
     buckets = payload.get("buckets")
@@ -418,6 +465,23 @@ class CandleOwner:
         self.session_factory = session_factory
         self._slots = asyncio.Semaphore(2)
 
+    async def read_summary(self) -> dict:
+        """Overview and symbols from one owner pass; an owner without ``summary`` is read view by view."""
+        try:
+            return await self.read("summary", {})
+        except OwnerUnavailable as exc:
+            if str(exc) != "owner_view_unavailable":
+                raise
+        # Concurrently, as the page read them before `summary`: sequential reads of two cold whole-store views
+        # (7-7.5 s each) would exceed the browser's 14 s limit. Each read keeps its own bounded deadline.
+        overview, symbols = await asyncio.gather(
+            self.read("overview", {}), self.read("symbols", {}), return_exceptions=True
+        )
+        for result in (overview, symbols):
+            if isinstance(result, BaseException):
+                raise result
+        return {**overview, "rows": symbols["rows"]}
+
     async def read(self, view: str, query: dict[str, str]) -> dict:
         try:
             async with asyncio.timeout(12):
@@ -435,7 +499,15 @@ class CandleOwner:
                             allow_redirects=False,
                         ) as response:
                             if response.status != 200:
-                                raise OwnerUnavailable("owner_http_error")
+                                # Read through EOF (bounded): one read() can return only the part already received.
+                                body = bytearray()
+                                async for chunk in response.content.iter_chunked(1024):
+                                    body.extend(chunk)
+                                    if len(body) > MAX_ERROR_BYTES:
+                                        break
+                                raise OwnerUnavailable(
+                                    owner_error_code(response.status, bytes(body))
+                                )
                             raw = bytearray()
                             async for chunk in response.content.iter_chunked(65536):
                                 raw.extend(chunk)

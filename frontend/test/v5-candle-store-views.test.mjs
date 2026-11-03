@@ -140,6 +140,30 @@ test("the candle store page offers four views and loads only the coverage reads 
   const html = renderToStaticMarkup(React.createElement(load("v5/V5CandleStore").V5CandleStore));
   assert.equal((html.match(/role="tab"/g) ?? []).length, 4);
   assert.match(html, /aria-selected="true"[^>]*>Lanes &amp; chart/);
-  assert.deepEqual(requests.map(request => request.queryKey[0]).sort(), ["candle-chart", "candle-overview", "candle-symbols"]);
+  assert.deepEqual(requests.map(request => request.queryKey[0]).sort(), ["candle-chart", "candle-summary"]);
   assert.ok(requests.filter(request => request.queryKey[0] !== "candle-chart").every(request => request.enabled === true));
+});
+
+test("a warming owner is one readable alert, retried every 5 s, and shows no earlier values", () => {
+  const requests = [];
+  const warming = new Error("owner_warming");
+  const { load } = frontendModules({
+    "@tanstack/react-query": {
+      useQueryClient: () => ({ invalidateQueries() {} }),
+      useQuery: options => {
+        requests.push(options);
+        const failed = options.queryKey[0] === "candle-summary";
+        return { isError: failed, error: failed ? warming : null, errorUpdatedAt: Date.parse("2026-11-03T12:00:00Z"), isPending: false, data: undefined, refetch() {} };
+      },
+    },
+    "@/components/charts/RecordedCandleChart": { RecordedCandleChart: () => null },
+  });
+  const html = renderToStaticMarkup(React.createElement(load("v5/V5CandleStore").V5CandleStore));
+  assert.equal((html.match(/role="alert"/g) ?? []).length, 1);
+  assert.match(html, /warming up after a restart; retrying every 5 s \(owner_warming\)/);
+  assert.doesNotMatch(html, /Instrument coverage · evaluated/);
+  const summary = requests.find(request => request.queryKey[0] === "candle-summary");
+  assert.equal(summary.refetchInterval({ state: { error: warming } }), 5000);
+  assert.equal(summary.refetchInterval({ state: { error: new Error("owner_unreachable") } }), 30000);
+  assert.equal(summary.refetchInterval({ state: { error: null } }), 30000);
 });

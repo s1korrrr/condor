@@ -14,7 +14,7 @@ function render(rows, failed = []) {
       const view = options.queryKey[0];
       requests.push(options);
       const isError = failed.includes(view);
-      return { isError, error: isError ? new Error("owner_unreachable") : null, errorUpdatedAt: isError ? checkedAt : 0, isPending: false, refetch() {}, data: view === "candle-overview" ? { now: checkedAt / 1000, tiles: [], status_age_s: 2, status_error: null } : view === "candle-symbols" ? { now: checkedAt / 1000, rows } : undefined };
+      return { isError, error: isError ? new Error("owner_unreachable") : null, errorUpdatedAt: isError ? checkedAt : 0, isPending: false, refetch() {}, data: view === "candle-summary" ? { now: checkedAt / 1000, tiles: [], status_age_s: 2, status_error: null, rows } : undefined };
     } },
     "@/components/charts/RecordedCandleChart": { RecordedCandleChart: () => null },
   });
@@ -22,7 +22,7 @@ function render(rows, failed = []) {
 }
 
 test("owner outage is one timestamped alert with no empty chart selectors", () => {
-  const { html } = render([], ["candle-overview", "candle-symbols"]);
+  const { html } = render([], ["candle-summary"]);
   assert.equal((html.match(/role="alert"/g) ?? []).length, 1);
   assert.match(html, /2026-10-29 10:20:30 UTC/);
   assert.match(html, /owner_unreachable/);

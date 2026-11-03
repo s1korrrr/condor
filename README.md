@@ -106,7 +106,6 @@ The following applies after **Install Condor**. If you used **Install only Hummi
 | `/gateway` | Gateway configuration for DEX |
 | `/web` | Time-limited link to the web dashboard |
 | `/admin` | Admin panel: users and access (admin role only) |
-| `/update` | Check for updates and restart (admin role only) |
 
 ## Architecture
 

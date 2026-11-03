@@ -16,6 +16,7 @@ from utils.telegram_formatters import escape_markdown_v2, escape_markdown_v2_cod
 
 logger = logging.getLogger(__name__)
 
+
 @admin_required
 async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Handle /update command - check for updates."""

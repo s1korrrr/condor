@@ -1216,6 +1216,7 @@ def create_app(
         "/settings",
         "/market/evidence",
         "/market/candles",
+        "/market/stocks",
         "/v5/readiness",
         "/agents",
         "/sessions",

@@ -1,8 +1,12 @@
 # Candle store Market view
 
 Opt in with `V5_CANDLE_STORE_SOCKET=/run/candle-store/api.sock`. With no setting,
-the existing profile JSON is unchanged, the Market tab is absent, and candle
+the existing profile JSON is unchanged, the Recorded candles tab is absent, and candle
 reads return 404 after authentication. Existing pages retain their bindings.
+
+The separate Market → Stocks page stays visible with an explicit unconfigured
+state. Its additional public-data views use the same authenticated transport
+and a separate strict contract documented in [STOCKS.md](STOCKS.md).
 
 The owner is hummingbot `services/candle-store/candle_store_dashboard`, served
 with `--v5-api-only` over a private Unix socket. The dashboard mounts only its
@@ -12,7 +16,7 @@ accepts a user URL, forwards credentials, follows redirects, or sends writes.
 The owner reads file bytes into private in-memory SQLite snapshots. A damaged
 partition can retain older observations; partition errors are shown explicitly.
 
-The consumer allowlists overview, symbols and candles, validates identities,
+The crypto consumer allowlists overview, symbols and candles, validates identities,
 limits responses to 2 MB, overview to 128 lanes, symbols to 1024 rows and
 charts to 10080 one-minute buckets. It accepts 1h, 6h, 24h and 7d, always 1m.
 Two in-flight consumer reads and a twelve-second total deadline bound reads;
@@ -98,7 +102,7 @@ HTTP 401: sign-in required. HTTP 404: unconfigured/unknown view. HTTP 422:
 invalid query. HTTP 503: `{state: "UNAVAILABLE", reason: <bounded stable code>,
 data: null}` (missing socket, timeout, owner HTTP failure or rejected schema).
 Responses are `Cache-Control: no-store`. Consumers must clear earlier success
-on a failed refresh. Hide the tab unless the profile has
+on a failed refresh. Hide the Recorded candles tab unless the profile has
 `candle_store: {configured: true}`; this property is absent when disabled.
 
 Shared-file reconciliation: app.py adds the candle import, owner construction,

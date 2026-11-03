@@ -10,6 +10,8 @@ from typing import Any
 
 import aiohttp
 
+from .stocks import STOCK_VIEWS, StockPayloadError, validate_stock_payload, validate_stock_query
+
 MAX_BYTES = 2_000_000
 MAX_INTEGER = 2**53 - 1
 MAX_TIMESTAMP = 4_102_444_800
@@ -108,6 +110,8 @@ def _decode_payload(raw):
 
 
 def validate_query(view: str, items: list[tuple[str, str]]) -> dict[str, str]:
+    if view in STOCK_VIEWS:
+        return validate_stock_query(view, items)
     query = dict(items)
     if len(query) != len(items):
         raise ValueError("duplicate_query")
@@ -425,6 +429,8 @@ class CandleOwner:
                                 if len(raw) > MAX_BYTES:
                                     raise OwnerUnavailable("owner_response_too_large")
             payload = _decode_payload(raw)
+            if view in STOCK_VIEWS:
+                return validate_stock_payload(view, payload, query)
             safe = validate_payload(view, payload)
             if view == "candles" and any(
                 safe[name] != query[name] for name in ("lane", "pair", "range")
@@ -433,6 +439,8 @@ class CandleOwner:
             return safe
         except OwnerUnavailable:
             raise
+        except StockPayloadError as exc:
+            raise OwnerUnavailable(str(exc)) from exc
         except (aiohttp.ClientError, OSError, TimeoutError) as exc:
             raise OwnerUnavailable("owner_unreachable") from exc
         except (ValueError, TypeError, RecursionError) as exc:

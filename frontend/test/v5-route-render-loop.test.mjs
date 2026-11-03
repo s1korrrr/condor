@@ -28,7 +28,7 @@ const routes = [
   ['/settings','Workspace settings'], ['/bots','Paper bots'], ['/capital','Capital'],
   ['/operations','Operations'], ['/v5/readiness','Paper readiness'],
   ['/backtests','Tradepad'], ['/','Market'], ['/market/evidence','Market Picture'],
-  ['/market/candles','Candle store'], ['/agents','Agents'],
+  ['/market/candles','Candle store'], ['/market/stocks','OKX stocks'], ['/agents','Agents'],
   ['/agents/decision_reviewer','Decision Reviewer'], ['/research','Research'],
   ['/learning','Learning'], ['/research-factory','Research factory'],
   ['/decision-lineage','Decision lineage'], ['/sessions','Sessions'],
@@ -86,6 +86,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   try {
     for (const [pathname,heading] of routes) await context.test(pathname,async () => {
       route = pathname;
+      const requestStart = requests.length;
       const failures = [];
       const warnings = [];
       console.error = (...args) => warnings.push(args.map(String).join(' '));
@@ -110,6 +111,13 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         assert.deepEqual(warnings,[],'React must not warn about unstable snapshots or cross-component updates');
         assert.ok(container.querySelector('main'),`${pathname} must keep the app mounted`);
         assert.ok(container.textContent.includes(heading),`${pathname} must render ${heading}: ${container.textContent}`);
+        if (pathname === '/market/stocks') {
+          assert.match(container.textContent,/Stock data is not configured/,'the unbound fixture must explain absent stock data');
+          assert.equal(container.querySelector('a[href="/market/stocks"]')?.getAttribute('aria-current'),'page');
+          assert.equal(container.querySelector('select[aria-label="Region"]')?.value,'eea');
+          assert.equal(container.querySelector('select[aria-label="Instrument"]'),null);
+          assert.ok(!requests.slice(requestStart).some(request => request.startsWith('/api/v5/candle-store/')),'unconfigured Stocks must not read the collector');
+        }
         if (journalRoutes.has(pathname)) {
           assert.ok(container.textContent.includes('OWNER_JOURNAL_EXCEEDED'));
           assert.ok(container.textContent.includes('journal_evidence_held: true'));

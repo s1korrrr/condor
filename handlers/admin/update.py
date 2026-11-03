@@ -1,7 +1,7 @@
 """
 Auto-update handler for Condor and Hummingbot API.
 
-Provides /update command (admin-only) and periodic update checks.
+Provides the /update command (admin-only). Condor never checks for updates on its own.
 """
 
 import asyncio
@@ -15,10 +15,6 @@ from utils.auth import admin_required
 from utils.telegram_formatters import escape_markdown_v2, escape_markdown_v2_code
 
 logger = logging.getLogger(__name__)
-
-# Job name for the periodic check
-UPDATE_CHECK_JOB = "update_check"
-
 
 @admin_required
 async def update_command(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -348,85 +344,3 @@ async def _do_update_all(query, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def _do_restart(query, context: ContextTypes.DEFAULT_TYPE) -> None:
     """Force restart without pulling."""
     await _restart_now(query)
-
-
-async def _periodic_update_check(context: ContextTypes.DEFAULT_TYPE) -> None:
-    """Periodic job that checks for updates and notifies admin."""
-    from utils.config import ADMIN_USER_ID
-    from utils.updater import check_for_updates, check_hb_api_updates
-
-    if not ADMIN_USER_ID:
-        return
-
-    condor_info, hb_info = await asyncio.gather(
-        check_for_updates(),
-        check_hb_api_updates(),
-    )
-
-    condor_update = not condor_info.get("error") and not condor_info["up_to_date"]
-    hb_update = (
-        hb_info["available"]
-        and not hb_info["git_info"].get("error")
-        and not hb_info["git_info"]["up_to_date"]
-    )
-
-    if not condor_update and not hb_update:
-        return
-
-    parts = []
-    if condor_update:
-        behind = condor_info["commits_behind"]
-        local = escape_markdown_v2(condor_info["local_commit"])
-        remote = escape_markdown_v2(condor_info["remote_commit"])
-        parts.append(
-            f"*Condor*: `{local}` → `{remote}` "
-            f"\\(*{behind} commit{'s' if behind != 1 else ''}*\\)"
-        )
-    if hb_update:
-        hb_git = hb_info["git_info"]
-        hb_behind = hb_git["commits_behind"]
-        hb_local = escape_markdown_v2(hb_git["local_commit"])
-        hb_remote = escape_markdown_v2(hb_git["remote_commit"])
-        parts.append(
-            f"*HB API*: `{hb_local}` → `{hb_remote}` "
-            f"\\(*{hb_behind} commit{'s' if hb_behind != 1 else ''}*\\)"
-        )
-
-    text = (
-        f"*Updates available\\!*\n\n"
-        + "\n".join(parts)
-        + f"\n\nUse /update to review and install\\."
-    )
-
-    try:
-        await context.bot.send_message(
-            chat_id=ADMIN_USER_ID,
-            text=text,
-            parse_mode="MarkdownV2",
-        )
-    except Exception as e:
-        logger.warning("Failed to send update notification: %s", e)
-
-
-def schedule_update_checks(application) -> None:
-    """Schedule periodic update checks. Call from post_init."""
-    from utils.updater import UPDATE_CHECK_INTERVAL
-
-    if UPDATE_CHECK_INTERVAL <= 0:
-        logger.info("Update checks disabled (UPDATE_CHECK_INTERVAL=0)")
-        return
-
-    # Remove existing job if any
-    existing = application.job_queue.get_jobs_by_name(UPDATE_CHECK_JOB)
-    for job in existing:
-        job.schedule_removal()
-
-    application.job_queue.run_repeating(
-        _periodic_update_check,
-        interval=UPDATE_CHECK_INTERVAL,
-        first=30,  # first check 30s after startup
-        name=UPDATE_CHECK_JOB,
-    )
-    logger.info(
-        "Scheduled update checks every %ds", UPDATE_CHECK_INTERVAL
-    )

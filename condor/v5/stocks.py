@@ -26,6 +26,7 @@ INSTRUMENT_ID = re.compile(r"[A-Z0-9][A-Z0-9._-]{1,79}")
 MAX_INTEGER = 2**53 - 1
 MAX_TIMESTAMP = 4_102_444_800
 MAX_ROWS = 1024
+MAX_CAPTURE = 64
 COMMON = {"format", "now", "region", "state", "catalog_at", "updated_at", "reason"}
 COUNTERS = ("final", "no_trade", "unrecoverable", "missing", "pending", "corrections")
 
@@ -220,6 +221,27 @@ def _discovery(value: Any) -> None:
         _fail("discovery")
 
 
+def _captured(value: Any) -> bool:
+    if type(value) is not bool:
+        _fail("captured")
+    return value
+
+
+def _capture(value: Any) -> list[tuple[str, str, bool]]:
+    """Operator allowlist: exact identities, strictly sorted, so no duplicates."""
+    if not isinstance(value, list) or len(value) > MAX_CAPTURE:
+        _fail("capture")
+    entries = []
+    for entry in value:
+        _shape(entry, {"instType", "instId", "listed"})
+        if not _enum(entry["instType"], PRODUCTS) or not _id(entry["instId"]) or type(entry["listed"]) is not bool:
+            _fail("capture")
+        entries.append((entry["instType"], entry["instId"], entry["listed"]))
+    if any(left[:2] >= right[:2] for left, right in zip(entries, entries[1:])):
+        _fail("capture")
+    return entries
+
+
 def _book(payload: dict) -> None:
     book, depth = payload["latest"]["books"], payload["book_depth"]
     if book is None:
@@ -277,14 +299,15 @@ def validate_stock_payload(view: str, payload: Any, query: dict[str, str]) -> di
     _identity(payload, query, instrument=view != "stocks")
     now = payload["now"]
     if view == "stock-candles":
-        _shape(payload, {"format", "now", "region", "state", "reason", "instId", "instType", "range", "res_s", "start", "end", "volume_unit", "price_basis", "adjustment", "buckets", "totals"}, {"catalog_at", "updated_at", "discovery"})
+        _shape(payload, {"format", "now", "region", "state", "reason", "instId", "instType", "range", "res_s", "start", "end", "volume_unit", "price_basis", "adjustment", "buckets", "totals", "captured"}, {"catalog_at", "updated_at", "discovery"})
+        _captured(payload["captured"])
         for key in ("catalog_at", "updated_at"):
             if key in payload:
                 _seconds(payload[key], now)
         _discovery(payload.get("discovery"))
         _candles(payload, query)
         return payload
-    _shape(payload, COMMON | ({"rows"} if view == "stocks" else {"instId", "instType", "latest", "channels", "coverage", "recent_trades", "book_depth"}), {"discovery"})
+    _shape(payload, COMMON | ({"rows", "capture"} if view == "stocks" else {"instId", "instType", "latest", "channels", "coverage", "recent_trades", "book_depth", "captured"}), {"discovery"})
     _discovery(payload.get("discovery"))
     _seconds(payload["catalog_at"], now)
     _seconds(payload["updated_at"], now)
@@ -296,19 +319,31 @@ def validate_stock_payload(view: str, payload: Any, query: dict[str, str]) -> di
         rows = payload["rows"]
         if not isinstance(rows, list) or len(rows) > MAX_ROWS or (payload["state"] in {"disabled", "empty"} and rows):
             _fail("rows")
+        capture = _capture(payload["capture"])
+        if payload["state"] == "disabled" and capture:
+            _fail("capture")
+        allowlisted = {(kind, inst_id) for kind, inst_id, _ in capture}
         identities = set()
         for row in rows:
-            _shape(row, {"instrument", "latest", "channels", "coverage"})
+            _shape(row, {"instrument", "latest", "channels", "coverage", "captured"})
             instrument = _instrument(row["instrument"])
             key = (instrument["instType"], instrument["instId"])
             if key in identities:
                 _fail("duplicate_identity")
             identities.add(key)
             identity = {"region": payload["region"], "instId": instrument["instId"], "instType": instrument["instType"]}
+            captured = _captured(row["captured"])
+            if captured != (key in allowlisted):
+                _fail("capture")
             _latest(row["latest"], identity, now, market=False)
             _channels(row["channels"], now)
+            if not captured and (row["channels"] or any(item is not None for item in row["latest"].values())):
+                _fail("captured")
             _coverage(row["coverage"], now)
+        if any(listed != ((kind, inst_id) in identities) for kind, inst_id, listed in capture):
+            _fail("capture")
     else:
+        _captured(payload["captured"])
         _latest(payload["latest"], query, now, market=True)
         _channels(payload["channels"], now)
         _coverage(payload["coverage"], now)

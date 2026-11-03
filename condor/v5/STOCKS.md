@@ -58,12 +58,40 @@ numeric `instIdCode`, string arrays and nested `upcChg` records. Every
 instrument requires an exact identity and `instCategory: "3"`.
 
 Catalog format is `okx-stocks-v1`, with `now`, `region`, `state`,
-`catalog_at`, `updated_at`, `reason`, and `rows`. Allowed collection states
+`catalog_at`, `updated_at`, `reason`, `rows`, and `capture`. Allowed collection states
 are `disabled`, `starting`, `empty`, `live`, `stale`, and `error`. Each row
-has raw `instrument` metadata, a `latest` object, `channels`, and `coverage`.
+has raw `instrument` metadata, a `latest` object, `channels`, `coverage`,
+and a boolean `captured`.
 `latest` always includes nullable `ticker`, `mark_price`, `index_price`,
 `funding`, and `open_interest` events. Catalog identities must be unique;
-the catalog is bounded to 1024 rows.
+the catalog is bounded to 1024 rows, the owner's per-region discovery limit.
+
+## Capture allowlist
+
+The owner discovers the whole regional stock catalog but captures public
+data only for the operator allowlist given by the owner option
+`--stocks-instruments`. Each entry is `region:instType:instId`, for example
+`eea:SWAP:AAPL-USDT-SWAP`, with at most 64 entries per region.
+
+`capture` lists this region's allowlist: at most 64 objects with exactly
+`instType`, `instId` (the same identity validation as queries), and boolean
+`listed`. Entries are strictly sorted by `(instType, instId)`, so duplicates
+are rejected. An empty list means discovery only. A disabled or unconfigured
+owner emits `capture: []`.
+
+Condor checks the cross-references and rejects the whole payload when they
+disagree: `listed` is true exactly when the entry's identity is a catalog row,
+and a row's `captured` is true exactly when its identity is on the
+allowlist. A row with `captured: false` has every `latest` value null and
+`channels: {}`; its `coverage` keeps the same shape. The selected
+`okx-stock-market-v1` and `okx-stock-candles-v1` envelopes carry a top-level
+boolean `captured`.
+
+The page adds a Capture column. A selected instrument that is listed but
+not captured shows a notice with the exact allowlist entry to add, and
+Condor issues no market or candle reads for it; it never renders empty
+charts as missing-data gaps. A region notice lists allowlist entries with
+`listed: false`, which are not in the current catalog.
 
 Optional `discovery` diagnostics identify complete or partial classification.
 A complete discovery must account for all three product families. Each
@@ -124,7 +152,8 @@ action adjustment.
 HTTP, timeout, schema and refresh failures clear the affected prior prices
 and charts. Catalog failure also clears previous instrument choices.
 Explicit owner `error` permits retained metadata but no current price
-observations. Stale data is labelled with its evaluation/source/receipt
+observations. A market or candle read whose `captured` is false is shown as
+the not-captured notice, not as data. Stale data is labelled with its evaluation/source/receipt
 times. A browser clock check also marks a successful snapshot stale after
 90 seconds without a fresh evaluation; a future evaluation beyond five
 seconds is treated as stale. Channel age is the age computed at owner

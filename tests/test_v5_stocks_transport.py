@@ -8,7 +8,7 @@ from pathlib import Path
 from aiohttp import web
 
 from condor.v5.candles import CandleOwner, OwnerUnavailable, validate_query
-from test_v5_stocks_contract import IDENTITY, catalog, candles
+from test_v5_stocks_contract import IDENTITY, catalog, candles, listed_only
 
 
 class StockTransportTests(unittest.IsolatedAsyncioTestCase):
@@ -51,6 +51,18 @@ class StockTransportTests(unittest.IsolatedAsyncioTestCase):
         self.status = 503
         with self.assertRaisesRegex(OwnerUnavailable, "owner_http_error"):
             await self.owner.read("stocks", {"region": "eea"})
+
+    async def test_capture_allowlist_round_trips_and_malformed_capture_fails_closed(self):
+        self.payload["rows"].append(listed_only())
+        result = await self.owner.read("stocks", {"region": "eea"})
+        self.assertEqual([item["captured"] for item in result["rows"]], [True, False])
+        self.assertEqual(result["capture"], [{"instType": "FUTURES", "instId": IDENTITY["instId"], "listed": True}])
+        self.payload["capture"][0]["listed"] = "yes"
+        with self.assertRaisesRegex(OwnerUnavailable, "owner_invalid_stock_capture"):
+            await self.owner.read("stocks", {"region": "eea"})
+        self.payload = {**candles(), "captured": None}
+        with self.assertRaisesRegex(OwnerUnavailable, "owner_invalid_stock_captured"):
+            await self.owner.read("stock-candles", validate_query("stock-candles", list({**IDENTITY, "range": "1h"}.items())))
 
     async def test_wrong_region_and_duplicate_json_are_rejected(self):
         self.payload["region"] = "global"

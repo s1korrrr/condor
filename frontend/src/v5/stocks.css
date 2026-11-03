@@ -23,3 +23,4 @@
 .v5-stock-details[open] > summary { margin-bottom: .8rem; }
 .v5-stock-json { max-height: 24rem; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: .75rem; font-size: .75rem; }
 .v5-stock-market th { white-space: normal; }
+.v5-stock-entry { display: inline-block; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .8rem; padding: .1rem .35rem; margin: .15rem .25rem; border: 1px solid var(--color-border); border-radius: .3rem; overflow-wrap: anywhere; user-select: all; }

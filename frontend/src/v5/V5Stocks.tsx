@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { RecordedCandleChart } from '@/components/charts/RecordedCandleChart';
 import { DataTable, type TableColumn } from '@/features/quant-ops/kit/DataTable';
 import { readStockOwner } from './stocks-api';
-import { effectiveState, filterStockRows, fundingApplicable, publicObservation, selectedStock, stockKey, stockProductLabel } from './stocks-model.mjs';
+import { captureEntry, effectiveState, filterStockRows, fundingApplicable, publicObservation, selectedStock, stockCaptured, stockKey, stockProductLabel, unlistedCapture } from './stocks-model.mjs';
 import type { PublicEvent, StockCatalog, StockCandles, StockChannel, StockFilter, StockInstrument, StockMarket, StockRange, StockRegion, StockRow } from './stocks-types';
 import './stocks.css';
 
@@ -64,6 +64,10 @@ function InstrumentMetadata({ instrument }: { instrument: StockInstrument }) {
   </dl><details><summary>All public instrument fields</summary><pre className="v5-stock-json">{JSON.stringify(instrument, null, 2)}</pre></details></details>;
 }
 
+function NotCaptured({ region, instrument }: { region: StockRegion; instrument: StockInstrument }) {
+  return <section className="v5-stock-notice" aria-label="Capture status"><h3>Listed but not captured</h3><p>{instrument.instId} is in the OKX {region.toUpperCase()} stock catalog, but the collector does not capture its public data. No prices, order book, trades or candles are recorded for it, so no chart is shown. This is not a data gap.</p><p>To capture it, add this exact entry to the collector's <code>--stocks-instruments</code> allowlist (region:instType:instId, at most 64 per region): <code className="v5-stock-entry">{captureEntry(region, instrument)}</code></p></section>;
+}
+
 export function V5Stocks({ configured, profilePending = false, profileError = null }: { configured: boolean; profilePending?: boolean; profileError?: Error | null }) {
   const [region, setRegion] = useState<StockRegion>('eea');
   const [product, setProduct] = useState<StockFilter>('ALL');
@@ -79,12 +83,19 @@ export function V5Stocks({ configured, profilePending = false, profileError = nu
   const selectedRow = selectedStock(rows, region, selected);
   const instrument = selectedRow?.instrument ?? null;
   const ownerReady = !!snapshot && readable(state);
+  // Listed-only instruments have no captured data, so they get no market or candle reads.
+  const captureReady = ownerReady && stockCaptured(selectedRow);
+  const unlisted = snapshot ? unlistedCapture(snapshot) : [];
   const identity = instrument ? { region, instId: instrument.instId, instType: instrument.instType } : null;
-  const market = useQuery({ queryKey: ['stock-market', region, instrument?.instType, instrument?.instId], queryFn: ({ signal }) => readStockOwner<StockMarket>('stock-market', identity!, signal), enabled: ownerReady && !!identity, retry: false, refetchInterval: 30000 });
-  const candles = useQuery({ queryKey: ['stock-candles', region, instrument?.instType, instrument?.instId, range], queryFn: ({ signal }) => readStockOwner<StockCandles>('stock-candles', { ...identity!, range }, signal), enabled: ownerReady && !!identity, retry: false, refetchInterval: 30000 });
+  const market = useQuery({ queryKey: ['stock-market', region, instrument?.instType, instrument?.instId], queryFn: ({ signal }) => readStockOwner<StockMarket>('stock-market', identity!, signal), enabled: captureReady && !!identity, retry: false, refetchInterval: 30000 });
+  const candles = useQuery({ queryKey: ['stock-candles', region, instrument?.instType, instrument?.instId, range], queryFn: ({ signal }) => readStockOwner<StockCandles>('stock-candles', { ...identity!, range }, signal), enabled: captureReady && !!identity, retry: false, refetchInterval: 30000 });
   const matches = (data: { region: StockRegion; instType: string; instId: string } | undefined) => !!identity && !!data && data.region === identity.region && data.instType === identity.instType && data.instId === identity.instId;
-  const detail = ownerReady && !market.isError && matches(market.data) ? market.data! : null;
-  const chart = ownerReady && !candles.isError && matches(candles.data) && candles.data?.range === range ? candles.data : null;
+  const marketRead = captureReady && !market.isError && matches(market.data) ? market.data! : null;
+  const chartRead = captureReady && !candles.isError && matches(candles.data) && candles.data?.range === range ? candles.data! : null;
+  // The selected read can also report that the owner no longer captures this identity.
+  const notCaptured = ownerReady && !!instrument && (!captureReady || marketRead?.captured === false || chartRead?.captured === false);
+  const detail = notCaptured || marketRead?.captured !== true ? null : marketRead;
+  const chart = notCaptured || chartRead?.captured !== true ? null : chartRead;
   const marketState = effectiveState(detail, market.isError, nowMs);
   const chartState = effectiveState(chart, candles.isError, nowMs);
   const ticker = publicObservation(detail, 'ticker', market.isError, nowMs);
@@ -92,17 +103,18 @@ export function V5Stocks({ configured, profilePending = false, profileError = nu
   const openInterest = publicObservation(detail, 'open_interest', market.isError, nowMs);
   const book = publicObservation(detail, 'books', market.isError, nowMs);
   const trades = detail && readable(marketState) && ['live', 'stale'].includes(detail.channels.trades?.state) ? detail.recent_trades : [];
-  const failures = [{ name: 'Catalog', query: catalog }, ...(ownerReady && instrument ? [{ name: 'Public observations', query: market }, { name: 'Candles', query: candles }] : [])].filter(item => item.query.isError);
-  const refresh = () => { void catalog.refetch(); if (ownerReady && instrument) { void market.refetch(); void candles.refetch(); } };
+  const failures = [{ name: 'Catalog', query: catalog }, ...(captureReady && instrument ? [{ name: 'Public observations', query: market }, { name: 'Candles', query: candles }] : [])].filter(item => item.query.isError);
+  const refresh = () => { void catalog.refetch(); if (captureReady && instrument) { void market.refetch(); void candles.refetch(); } };
 
   const columns: TableColumn<StockRow>[] = [
     { id: 'instrument', header: 'Exact instrument ID', rowHeader: true, value: row => row.instrument.instId, size: 210, cell: row => <button type="button" className="v5-stock-select" onClick={() => setSelected(stockKey(region, row.instrument))}>{row.instrument.instId}</button> },
     { id: 'product', header: 'Product', value: row => stockProductLabel(row.instrument), size: 165 },
+    { id: 'capture', header: 'Capture', value: row => stockCaptured(row) ? 'Captured' : 'Not captured', size: 110 },
     { id: 'rule', header: 'Rule type', value: row => row.instrument.ruleType, size: 95 },
     { id: 'state', header: 'Instrument state', value: row => row.instrument.state, size: 100 },
     { id: 'quote', header: 'Quote / settlement', value: row => `${value(row.instrument.quoteCcy)} / ${row.instrument.instType === 'SPOT' ? 'N/A' : value(row.instrument.settleCcy)}`, size: 140 },
     { id: 'last', header: 'Last recorded trade price', value: row => field(publicObservation(snapshot ? { ...row, now: snapshot.now, state: snapshot.state } : null, 'ticker', catalog.isError, nowMs), 'last'), size: 150 },
-    { id: 'channel', header: 'Ticker state', value: row => !ownerReady ? 'Unavailable' : row.channels.ticker?.state ?? 'Unavailable', size: 100 },
+    { id: 'channel', header: 'Ticker state', value: row => !ownerReady ? 'Unavailable' : !stockCaptured(row) ? 'Not captured' : row.channels.ticker?.state ?? 'Unavailable', size: 100 },
     { id: 'age', header: 'Ticker receipt age at evaluation (s)', value: row => ownerReady ? row.channels.ticker?.age_s : null, kind: 'number', size: 120 },
     { id: 'from', header: 'Candles from (UTC)', value: row => utc(row.coverage.candle_start), size: 180 },
     { id: 'through', header: 'Candles through (UTC)', value: row => utc(row.coverage.candle_end), size: 180 },
@@ -116,11 +128,12 @@ export function V5Stocks({ configured, profilePending = false, profileError = nu
       {failures.length > 0 && <p role="alert" className="v5-stock-notice">Stock data read unavailable: {failures.map(item => `${item.name}: ${item.query.error?.message ?? 'No owner response'}`).join('; ')}. Checked {utc(Math.max(...failures.map(item => item.query.errorUpdatedAt)) / 1000)} by the dashboard. Failed views clear previous price observations. Use Refresh to retry.</p>}
       {catalog.isPending && <p role="status">Loading {region.toUpperCase()} stock catalog…</p>}
       {snapshot && <>
-        <section className="v5-stock-notice" aria-label="Stock collection state"><h3>{state === 'live' ? 'Recorded public data' : state === 'stale' ? 'Stale observations' : state === 'empty' ? 'No classified stock instruments' : state === 'disabled' ? 'Stock collection is disabled' : state === 'starting' ? 'Stock collection is starting' : 'Stock collection is unavailable'} · {region.toUpperCase()}</h3><p>Collection state: {snapshot.state}. Evaluated {utc(snapshot.now)} · catalog {utc(snapshot.catalog_at)} · last collection update {utc(snapshot.updated_at)}.</p>{snapshot.reason && <p>Collection status: {snapshot.reason}</p>}{state === 'stale' && <p>These observations may be old. Check each source and receipt timestamp before use.</p>}{state === 'empty' && <p>The successful discovery returned no instruments classified by OKX as stocks for this region.</p>}{state === 'error' && <p>Any retained catalog rows are metadata only. Current prices and chart observations are unavailable.</p>}{snapshot.discovery && !snapshot.discovery.complete && <p role="alert">The catalog is incomplete. Missing or unclassified instruments are not evidence that a product is unavailable. {snapshot.discovery.warnings.join('; ')}</p>}</section>
-        {snapshot.rows.length > 0 && <section><h3>Instruments</h3><p className="v5-stock-caption">{rows.length} observed instruments match this product filter. Ages below are evaluated by the collector at {utc(snapshot.now)}; collector liveness is separate from candle coverage.</p><DataTable rows={rows} columns={columns} rowId={row => stockKey(region, row.instrument)} label="OKX stock instruments" emptyText="No observed instruments match the selected product. Choose another product or region." pinned={row => !!instrument && stockKey(region, row.instrument) === stockKey(region, instrument)} /></section>}
+        <section className="v5-stock-notice" aria-label="Stock collection state"><h3>{state === 'live' ? 'Recorded public data' : state === 'stale' ? 'Stale observations' : state === 'empty' ? 'No classified stock instruments' : state === 'disabled' ? 'Stock collection is disabled' : state === 'starting' ? 'Stock collection is starting' : 'Stock collection is unavailable'} · {region.toUpperCase()}</h3><p>Collection state: {snapshot.state}. Evaluated {utc(snapshot.now)} · catalog {utc(snapshot.catalog_at)} · last collection update {utc(snapshot.updated_at)}.</p>{snapshot.reason && <p>Collection status: {snapshot.reason}</p>}{state === 'stale' && <p>These observations may be old. Check each source and receipt timestamp before use.</p>}{state === 'empty' && <p>The successful discovery returned no instruments classified by OKX as stocks for this region.</p>}{state === 'error' && <p>Any retained catalog rows are metadata only. Current prices and chart observations are unavailable.</p>}{snapshot.discovery && !snapshot.discovery.complete && <p role="alert">The catalog is incomplete. Missing or unclassified instruments are not evidence that a product is unavailable. {snapshot.discovery.warnings.join('; ')}</p>}{snapshot.state !== 'disabled' && snapshot.capture.length === 0 && <p>Discovery only: the collector's capture allowlist has no {region.toUpperCase()} instruments, so no prices or candles are recorded.</p>}</section>
+        {unlisted.length > 0 && <section className="v5-stock-notice" aria-label="Capture allowlist"><p role="alert">{unlisted.length === 1 ? '1 capture allowlist entry is' : `${unlisted.length} capture allowlist entries are`} not in the current {region.toUpperCase()} catalog and record nothing: {unlisted.map(entry => <code key={captureEntry(region, entry)} className="v5-stock-entry">{captureEntry(region, entry)}</code>)}. Check the exact instrument ID and type.</p></section>}
+        {snapshot.rows.length > 0 && <section><h3>Instruments</h3><p className="v5-stock-caption">{rows.length} observed instruments match this product filter; {rows.filter(stockCaptured).length} are captured. Ages below are evaluated by the collector at {utc(snapshot.now)}; collector liveness is separate from candle coverage.</p><DataTable rows={rows} columns={columns} rowId={row => stockKey(region, row.instrument)} label="OKX stock instruments" emptyText="No observed instruments match the selected product. Choose another product or region." pinned={row => !!instrument && stockKey(region, row.instrument) === stockKey(region, instrument)} /></section>}
       </>}
-      {instrument && <section className="v5-stock-selection" aria-label="Selected stock instrument"><div className="v5-stock-controls"><label>Instrument<select aria-label="Instrument" value={stockKey(region, instrument)} onChange={event => setSelected(event.target.value)}>{rows.map(row => <option key={stockKey(region, row.instrument)} value={stockKey(region, row.instrument)}>{row.instrument.instId} · {stockProductLabel(row.instrument)}</option>)}</select></label><label>Candle range<select aria-label="Candle range" value={range} onChange={event => setRange(event.target.value as StockRange)}>{(['1h', '6h', '24h', '7d'] as const).map(span => <option key={span} value={span}>{span}</option>)}</select></label></div><h3>{instrument.instId}</h3><p className="v5-stock-caption">{stockProductLabel(instrument)} · rule type {value(instrument.ruleType)} · instrument state {value(instrument.state)} · price currency {value(instrument.quoteCcy)}</p>
-        {!ownerReady ? <p>Price observations are unavailable until the collector provides a valid catalog state.</p> : <>
+      {instrument && <section className="v5-stock-selection" aria-label="Selected stock instrument"><div className="v5-stock-controls"><label>Instrument<select aria-label="Instrument" value={stockKey(region, instrument)} onChange={event => setSelected(event.target.value)}>{rows.map(row => <option key={stockKey(region, row.instrument)} value={stockKey(region, row.instrument)}>{row.instrument.instId} · {stockProductLabel(row.instrument)}{stockCaptured(row) ? '' : ' · not captured'}</option>)}</select></label><label>Candle range<select aria-label="Candle range" value={range} onChange={event => setRange(event.target.value as StockRange)}>{(['1h', '6h', '24h', '7d'] as const).map(span => <option key={span} value={span}>{span}</option>)}</select></label></div><h3>{instrument.instId}</h3><p className="v5-stock-caption">{stockProductLabel(instrument)} · rule type {value(instrument.ruleType)} · instrument state {value(instrument.state)} · price currency {value(instrument.quoteCcy)}</p>
+        {!ownerReady ? <p>Price observations are unavailable until the collector provides a valid catalog state.</p> : notCaptured ? <NotCaptured region={region} instrument={instrument} /> : <>
           {candles.isPending && <p role="status">Loading recorded trade candles…</p>}
           {chart && (readable(chartState) || chartState === 'empty') && <><RecordedCandleChart buckets={chart.buckets} label={`OKX ${region.toUpperCase()} · ${stockProductLabel(instrument)} · ${instrument.instId} · raw trade price`} volumeUnit={chart.volume_unit} /><p className="v5-stock-caption">{chartState === 'stale' ? 'Stale read · ' : ''}Evaluated {utc(chart.now)} · 1m · raw, unadjusted trade prices · volume in {chart.volume_unit}. Selected range only: {Object.entries(chart.totals).map(([name, count]) => `${name}: ${count}`).join(' · ')}.</p>{chart.totals.final === 0 && <p>No recorded final trade prices in this range. Missing, pending and no-trade minutes remain gaps.</p>}</>}
           {chart && !readable(chartState) && chartState !== 'empty' && <p>Recorded candles unavailable: {chart.state}{chart.reason ? ` · ${chart.reason}` : ''}.</p>}

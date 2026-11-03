@@ -36,3 +36,16 @@ export function stockProductLabel(instrument) {
 export function fundingApplicable(instrument) {
   return instrument.instType === 'SWAP' || (instrument.instType === 'FUTURES' && instrument.ruleType === 'xperp');
 }
+
+// The collector's --stocks-instruments entry, exactly region:instType:instId.
+export function captureEntry(region, identity) {
+  return `${region}:${identity.instType}:${identity.instId}`;
+}
+
+export function stockCaptured(row) {
+  return row?.captured === true;
+}
+
+export function unlistedCapture(catalog) {
+  return (catalog?.capture ?? []).filter(entry => entry.listed === false);
+}

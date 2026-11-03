@@ -70,6 +70,16 @@ export interface StockRow {
   latest: Record<SummaryDataset, PublicEvent | null>;
   channels: Record<string, StockChannel>;
   coverage: StockCoverage;
+  /** False: listed in the catalog but not on the collector's capture allowlist; latest is all null and channels is empty. */
+  captured: boolean;
+}
+
+/** One entry of the collector's `region:instType:instId` capture allowlist for this region. */
+export interface StockCapture {
+  instType: StockProduct;
+  instId: string;
+  /** True when the allowlisted identity is in the current catalog. */
+  listed: boolean;
 }
 
 export interface StockEnvelope {
@@ -85,6 +95,8 @@ export interface StockEnvelope {
 export interface StockCatalog extends StockEnvelope {
   format: 'okx-stocks-v1';
   rows: StockRow[];
+  /** Sorted by (instType, instId), at most 64; empty means discovery only. */
+  capture: StockCapture[];
 }
 
 export interface StockMarket extends StockEnvelope {
@@ -96,6 +108,7 @@ export interface StockMarket extends StockEnvelope {
   book_depth: { bids: number; asks: number } | null;
   channels: Record<string, StockChannel>;
   coverage: StockCoverage;
+  captured: boolean;
 }
 
 export interface StockCandles {
@@ -115,6 +128,7 @@ export interface StockCandles {
   adjustment: 'raw';
   buckets: RecordedMinute[];
   totals: Record<'final' | 'no_trade' | 'unrecoverable' | 'missing' | 'pending' | 'corrections', number>;
+  captured: boolean;
 }
 
 export interface ObservationSource {

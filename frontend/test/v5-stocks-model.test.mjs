@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { effectiveState, filterStockRows, fundingApplicable, publicObservation, selectedStock, stockKey, stockProductLabel } from '../src/v5/stocks-model.mjs';
+import { captureEntry, effectiveState, filterStockRows, fundingApplicable, publicObservation, selectedStock, stockCaptured, stockKey, stockProductLabel, unlistedCapture } from '../src/v5/stocks-model.mjs';
 
 const now = 1793620800000;
 const instrument = (instType, instId, extra = {}) => ({ instCategory: '3', instType, instId, ...extra });
@@ -50,4 +50,16 @@ test('dated futures are never relabeled perpetual and xperp needs explicit metad
   assert.equal(fundingApplicable(instrument('FUTURES', 'EXAMPLE-USDT-270101')), false);
   assert.equal(fundingApplicable(instrument('FUTURES', 'EXAMPLE-USDT-270101', { ruleType: 'xperp' })), true);
   assert.equal(fundingApplicable(instrument('SWAP', 'EXAMPLE-USDT-SWAP')), true);
+});
+
+test('capture helpers use the exact collector allowlist entry and only an explicit true flag', () => {
+  assert.equal(captureEntry('eea', instrument('SWAP', 'AAPL-USDT-SWAP')), 'eea:SWAP:AAPL-USDT-SWAP');
+  assert.equal(captureEntry('global', { instType: 'FUTURES', instId: 'XBRK.B-USDT-270101' }), 'global:FUTURES:XBRK.B-USDT-270101');
+  assert.equal(stockCaptured({ captured: true }), true);
+  for (const value of [false, undefined, 'true', 1]) assert.equal(stockCaptured({ captured: value }), false);
+  assert.equal(stockCaptured(null), false);
+  const capture = [{ instType: 'SPOT', instId: 'A-USDT', listed: true }, { instType: 'SWAP', instId: 'B-USDT-SWAP', listed: false }];
+  assert.deepEqual(unlistedCapture({ capture }), [capture[1]]);
+  assert.deepEqual(unlistedCapture({ capture: [] }), []);
+  assert.deepEqual(unlistedCapture(null), []);
 });

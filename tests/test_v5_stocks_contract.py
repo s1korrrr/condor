@@ -175,7 +175,12 @@ class StockContractTests(unittest.TestCase):
         for market_captured in (True, False):
             for view, fixture, query in (("stock-market", market, IDENTITY), ("stock-candles", candles, {**IDENTITY, "range": "1h"})):
                 with self.subTest(view=view, captured=market_captured):
-                    self.assertIs(validate_stock_payload(view, {**fixture(), "captured": market_captured}, query)["captured"], market_captured)
+                    payload = {**fixture(), "captured": market_captured}
+                    if view == "stock-market" and not market_captured:
+                        # An uncaptured market detail carries no current observations.
+                        payload.update(channels={}, recent_trades=[], book_depth=None,
+                                       latest={name: None for name in payload["latest"]})
+                    self.assertIs(validate_stock_payload(view, payload, query)["captured"], market_captured)
 
     def test_catalog_accepts_owner_maximum_of_1024_rows(self):
         payload = catalog()
@@ -184,6 +189,31 @@ class StockContractTests(unittest.TestCase):
         payload["rows"].append(listed_only("OVER-USDT-SWAP"))
         with self.assertRaisesRegex(StockPayloadError, "owner_invalid_stock_rows"):
             validate_stock_payload("stocks", payload, {"region": "eea"})
+
+    def test_uncaptured_market_detail_carries_no_current_observations(self):
+        contradictory = market()
+        contradictory["captured"] = False
+        with self.assertRaisesRegex(StockPayloadError, "owner_invalid_stock_captured"):
+            validate_stock_payload("stock-market", contradictory, IDENTITY)
+        clean = market()
+        clean.update(captured=False, channels={}, recent_trades=[], book_depth=None,
+                     latest={name: None for name in clean["latest"]})
+        self.assertFalse(validate_stock_payload("stock-market", clean, IDENTITY)["captured"])
+
+    def test_node_bound_admits_metadata_heavy_catalog_within_the_byte_cap(self):
+        import json
+        from condor.v5 import candles as candle_module
+        from condor.v5.stocks import MAX_TREE_NODES, OWNER_MAX_BYTES
+        self.assertEqual(OWNER_MAX_BYTES, candle_module.MAX_BYTES)
+        payload = catalog()
+        for index in range(1023):
+            row = listed_only(f"R{index:04d}-USDT-SWAP")
+            row["instrument"].update({f"m{n}": "" for n in range(92)})
+            payload["rows"].append(row)
+        size = len(json.dumps(payload, separators=(",", ":")).encode())
+        self.assertLess(size, OWNER_MAX_BYTES)
+        self.assertGreater(MAX_TREE_NODES, 200_000)
+        self.assertEqual(len(validate_stock_payload("stocks", payload, {"region": "eea"})["rows"]), 1024)
 
     def test_malformed_capture_contract_fails_closed(self):
         extra = {"instType": "SWAP", "instId": "MISSING-USDT-SWAP", "listed": False}

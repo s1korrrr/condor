@@ -26,6 +26,11 @@ INSTRUMENT_ID = re.compile(r"[A-Z0-9][A-Z0-9._-]{1,79}")
 MAX_INTEGER = 2**53 - 1
 MAX_TIMESTAMP = 4_102_444_800
 MAX_ROWS = 1024
+# Owner response cap (equal to candles.MAX_BYTES; candles imports this module).
+OWNER_MAX_BYTES = 2_000_000
+# Every JSON node costs at least two bytes, so this never rejects a payload the
+# byte cap admits; the owner allows up to 4096 metadata nodes per catalog row.
+MAX_TREE_NODES = OWNER_MAX_BYTES // 2
 MAX_CAPTURE = 64
 COMMON = {"format", "now", "region", "state", "catalog_at", "updated_at", "reason"}
 COUNTERS = ("final", "no_trade", "unrecoverable", "missing", "pending", "corrections")
@@ -69,7 +74,7 @@ def _tree(payload: Any) -> None:
     while stack:
         value, depth = stack.pop()
         visited += 1
-        if depth > 24 or visited > 200_000:
+        if depth > 24 or visited > MAX_TREE_NODES:
             _fail("bounds")
         if isinstance(value, dict):
             if any(not isinstance(key, str) for key in value):
@@ -343,7 +348,7 @@ def validate_stock_payload(view: str, payload: Any, query: dict[str, str]) -> di
         if any(listed != ((kind, inst_id) in identities) for kind, inst_id, listed in capture):
             _fail("capture")
     else:
-        _captured(payload["captured"])
+        captured = _captured(payload["captured"])
         _latest(payload["latest"], query, now, market=True)
         _channels(payload["channels"], now)
         _coverage(payload["coverage"], now)
@@ -355,4 +360,8 @@ def validate_stock_payload(view: str, payload: Any, query: dict[str, str]) -> di
                 _fail("trades")
             _event(trade, "trades", query, now)
         _book(payload)
+        # Same invariant as overview rows: an uncaptured instrument carries no current observations.
+        if not captured and (payload["channels"] or trades or payload["book_depth"] is not None
+                             or any(item is not None for item in payload["latest"].values())):
+            _fail("captured")
     return payload

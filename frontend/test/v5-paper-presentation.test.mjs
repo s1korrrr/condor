@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import {createRequire} from 'node:module';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
+import {Window} from 'happy-dom';
 import {frontendModules} from './helpers/frontend-module.mjs';
 
 const sections = ['status','wallet','positions','fills','executors','risk','decisions','history','accounting'];
@@ -216,4 +217,23 @@ test('invalid displayed risk cannot remove any retained controller signals', () 
   assert.equal(controllerRows(aside,id),1);
   assert.match(aside,/Reported operator pause: Yes/);
   assert.match(aside,/Reported emergency halt: Yes/);
+});
+
+
+test('extracted paper container owns wrapping without the V5 page wrapper', () => {
+  const window = new Window();
+  try {
+    // Load only the extracted view's stylesheet: its boundary must not depend on page CSS.
+    const style = window.document.createElement('style');
+    style.textContent = fs.readFileSync(new URL('../src/v5/components/PaperWorkspace.css', import.meta.url), 'utf8');
+    window.document.head.append(style);
+    window.document.body.innerHTML = render(fixture());
+    const workspace = window.document.querySelector('[data-paper-workspace]');
+    assert.ok(workspace);
+    assert.equal(workspace.closest('.v5-paper-bots'), null);
+    assert.equal(window.getComputedStyle(workspace).overflowWrap, 'anywhere');
+    assert.equal(Number.parseFloat(window.getComputedStyle(workspace).minWidth), 0);
+    assert.equal(Number.parseFloat(window.getComputedStyle(workspace).marginBlock), 0);
+    assert.equal(Number.parseFloat(window.getComputedStyle(workspace).paddingBlock), 0);
+  } finally { window.close(); }
 });

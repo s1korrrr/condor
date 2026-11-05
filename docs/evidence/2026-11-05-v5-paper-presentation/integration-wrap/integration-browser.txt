@@ -1,0 +1,10 @@
+integration-long-ids-dark-390.png: PASS
+integration-long-ids-dark-768.png: PASS
+integration-long-ids-dark-1440.png: PASS
+integration-long-ids-light-390.png: PASS
+integration-long-ids-light-768.png: PASS
+integration-long-ids-light-1440.png: PASS
+integration-long-ids-colorblind-390.png: PASS
+integration-long-ids-colorblind-768.png: PASS
+integration-long-ids-colorblind-1440.png: PASS
+CAPTURES=9 PASS

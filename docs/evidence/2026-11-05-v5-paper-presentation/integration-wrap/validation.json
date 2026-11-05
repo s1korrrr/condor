@@ -1,0 +1,94 @@
+{
+  "recorded_at_utc": "2026-11-05T18:22:46.232391+00:00",
+  "inputs": {
+    "main": "d564695fb2a564b59e884743c1c7c28e056c68dd",
+    "r2": "e0005086169bd8b0ea9e1776f616e791d557cb48",
+    "presentation_before": "ce0fcc821603759653cc9046c66ccc0f15303fb5",
+    "integration_commit": "3f10b7306fbf7ac712e3cb0ca91f94cf61dca1f6",
+    "integration_tree": "56cc883b9b4fdce00a92cec1092da126dc7bfc0e",
+    "before_sha256": {
+      "frontend/src/v5/components/PaperWorkspace.tsx": "161a7ad5315f990d3f32e1f2eddc3e333d9ec5ddb0c85273b97477ef2354d783",
+      "frontend/src/v5/components/PaperWorkspace.css": "38ea644b6c917ae73405f6179a3a34b99032ad9712aa7de3e934322b264789f0",
+      "frontend/test/ui-baseline-findings.test.mjs": "ae4053670e8643c8dafb7bb594dc52287e549c0e8f7bcd5c70fac4f045d22d63"
+    },
+    "test_overlay": "Only the added standalone CSS-boundary regression is overlaid before the red probes; #99 baseline test and application source remain exactly the local merged tree."
+  },
+  "checks": {
+    "integration-before": {
+      "raw_path": "/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/integration-before.tap",
+      "raw_sha256": "3668f3697ff74145009c9f64169e08c9e0b8ab9dac8abca3b220ce2fd5017b79",
+      "published_file": "integration-before.tap",
+      "published_sha256": "8f827848116b9b386caf0102f842f66682f33e6205853236d9e835e74e4f922d",
+      "counts": {
+        "tests": 4,
+        "pass": 3,
+        "fail": 1,
+        "skipped": 0
+      },
+      "exit": 1
+    },
+    "integration-scope-before": {
+      "raw_path": "/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/integration-scope-before.tap",
+      "raw_sha256": "86c2bb38c47b34e95c2cb5674da09969de6a45cac77a978a47a50808bbed3665",
+      "published_file": "integration-scope-before.tap",
+      "published_sha256": "c1983f5212ab9b0842ad64796089bc6885defb4e2b73636f642289eb1716e1ab",
+      "counts": {
+        "tests": 1,
+        "pass": 0,
+        "fail": 1,
+        "skipped": 0
+      },
+      "exit": 1
+    },
+    "integration-after": {
+      "raw_path": "/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/integration-after.tap",
+      "raw_sha256": "0b5378f38031287084da10e778f30ea05f8c4b34e28882f7fcf64092b2f1267c",
+      "published_file": "integration-after.tap",
+      "published_sha256": "0b5378f38031287084da10e778f30ea05f8c4b34e28882f7fcf64092b2f1267c",
+      "counts": {
+        "tests": 250,
+        "pass": 250,
+        "fail": 0,
+        "skipped": 0
+      },
+      "exit": 0
+    },
+    "stacked-wrap-after": {
+      "raw_path": "/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/stacked-wrap-after.tap",
+      "raw_sha256": "b053401ff717d287604f4df5cbf089a258274f013eab384c2f7cbda94dc5e3ca",
+      "published_file": "stacked-wrap-after.tap",
+      "published_sha256": "b053401ff717d287604f4df5cbf089a258274f013eab384c2f7cbda94dc5e3ca",
+      "counts": {
+        "tests": 23,
+        "pass": 23,
+        "fail": 0,
+        "skipped": 0
+      },
+      "exit": 0
+    },
+    "integration-tsc": {
+      "raw_path": "/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/integration-tsc.tap",
+      "raw_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "published_file": "integration-tsc.txt",
+      "published_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "exit": 0
+    },
+    "integration-browser": {
+      "raw_path": "/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/integration-browser.tap",
+      "raw_sha256": "710940a36c5e3431c4eeea6de6528b4b29535ff3922521df0b3b2b21d8783eb9",
+      "published_file": "integration-browser.txt",
+      "published_sha256": "710940a36c5e3431c4eeea6de6528b4b29535ff3922521df0b3b2b21d8783eb9",
+      "exit": 0
+    }
+  },
+  "capture_count": 9,
+  "runner": "shared r3 v5 FIFO; nice 19 / ionice idle; 900-second limit; flag check before every phase",
+  "runner_sha256": "7ba727f84fd0af5eadc3afdf5398cc146d5b31d36b9edd01fdce387f6d0025f4",
+  "excluded_attempts": [
+    "Initial setup attempt could not import happy-dom from the older shared node_modules; no assertion red was claimed. Switched only task-owned dependency symlinks to an installed complete set.",
+    "First browser probe used controller IDs above the owner 128-character bound. The policy correctly rejected that read. Corrected the synthetic fixture to exactly 128 characters and reran only the browser phase."
+  ],
+  "batch_exit_before_fixture_correction": 1,
+  "final_browser_exit": 0,
+  "normalization": "Published text strips trailing whitespace; raw hashes refer to untouched scratch logs. Original 20 captures remain historical ce0fcc82 evidence."
+}

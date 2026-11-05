@@ -1,0 +1,13 @@
+{
+  "main": "d564695fb2a564b59e884743c1c7c28e056c68dd",
+  "r2": "e0005086169bd8b0ea9e1776f616e791d557cb48",
+  "presentation_before": "ce0fcc821603759653cc9046c66ccc0f15303fb5",
+  "integration_commit": "3f10b7306fbf7ac712e3cb0ca91f94cf61dca1f6",
+  "integration_tree": "56cc883b9b4fdce00a92cec1092da126dc7bfc0e",
+  "before_sha256": {
+    "frontend/src/v5/components/PaperWorkspace.tsx": "161a7ad5315f990d3f32e1f2eddc3e333d9ec5ddb0c85273b97477ef2354d783",
+    "frontend/src/v5/components/PaperWorkspace.css": "38ea644b6c917ae73405f6179a3a34b99032ad9712aa7de3e934322b264789f0",
+    "frontend/test/ui-baseline-findings.test.mjs": "ae4053670e8643c8dafb7bb594dc52287e549c0e8f7bcd5c70fac4f045d22d63"
+  },
+  "test_overlay": "Only the added standalone CSS-boundary regression is overlaid before the red probes; #99 baseline test and application source remain exactly the local merged tree."
+}

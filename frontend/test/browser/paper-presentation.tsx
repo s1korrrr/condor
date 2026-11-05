@@ -21,7 +21,12 @@ const theme = params.get('theme') ?? 'dark';
 document.documentElement.dataset.theme = ['dark','light','colorblind'].includes(theme) ? theme : 'dark';
 const state = params.get('state') ?? 'fresh';
 const retainedFills = await paperObservationPages('/fixture/fills', async path => (new URL(path, 'https://fixture.invalid').searchParams.has('cursor') ? nextFills : fills) as PaperRead);
-const reads = structuredClone([status,wallet,positions,retainedFills,executors,risk,decisions,history,accounting]) as PaperRead[];
+const longIds = params.get('longIds') === '1';
+let fixtureJson = JSON.stringify([status,wallet,positions,retainedFills,executors,risk,decisions,history,accounting]);
+if (longIds) for (const id of Object.keys(risk.data.controllers)) {
+  fixtureJson = fixtureJson.replaceAll(JSON.stringify(id), JSON.stringify(id.padEnd(128, 'x')));
+}
+const reads = JSON.parse(fixtureJson) as PaperRead[];
 const now = status.generated_at_ms + (state === 'stale' ? 120000 : 0);
 const displayedRisk = reads.find(read => read.section === 'risk')!;
 let additive: PaperRead | undefined;
@@ -34,7 +39,7 @@ if (state === 'additive-hold') {
   (additive.data as typeof data).controllers[id].operator = {paused:false,emergency:true};
 }
 const retained = {...risk, data:{...risk.data,holds:[{reason:'clock_persistence_failed',explanation:'Recorded retained hold fixture'}]}} as unknown as PaperRead;
-createRoot(document.getElementById('root')!).render(<div className="condor-shell condor-native flex min-h-dvh flex-col"><main className="v5-paper-bots relative flex-1 p-3 sm:p-6">
-  <h1>LOCAL VERIFICATION FIXTURES · NOT LIVE DATA</h1><p>meridian_v5_paper · {state} · {state === 'additive-hold' ? 'synthetic additive safety over recorded replay' : 'recorded replay at a fixed clock'}</p>
+createRoot(document.getElementById('root')!).render(<div className="condor-shell condor-native flex min-h-dvh flex-col"><main className={`${params.get('pageWrapper') === 'none' ? '' : 'v5-paper-bots '}relative flex-1 p-3 sm:p-6`}>
+  <h1>LOCAL VERIFICATION FIXTURES · NOT LIVE DATA</h1>{longIds && <p>Synthetic long controller IDs · standalone paper container</p>}<p>meridian_v5_paper · {state} · {state === 'additive-hold' ? 'synthetic additive safety over recorded replay' : 'recorded replay at a fixed clock'}</p>
   <PaperWorkspace reads={state === 'retained-hold' ? [reads[0]] : reads} safetyReads={state === 'retained-hold' ? [retained] : additive ? [additive] : []} complete={state !== 'retained-hold'} accountingRead={reads.at(-1)} now={now} reportAt={now} heartbeat="Fresh" bot="meridian_v5_paper" />
 </main></div>);

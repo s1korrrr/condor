@@ -1,0 +1,148 @@
+TAP version 13
+# Subtest: paper view retains simulated disclosure, independent heartbeat and exact owner exit detail
+ok 1 - paper view retains simulated disclosure, independent heartbeat and exact owner exit detail
+  ---
+  duration_ms: 1754.466401
+  type: 'test'
+  ...
+# Subtest: zero and unavailable accounting stay distinct; large and negative exact detail survives
+ok 2 - zero and unavailable accounting stay distinct; large and negative exact detail survives
+  ---
+  duration_ms: 1643.81047
+  type: 'test'
+  ...
+# Subtest: stale flat inventory never becomes current flatness when heartbeat is fresh
+ok 3 - stale flat inventory never becomes current flatness when heartbeat is fresh
+  ---
+  duration_ms: 640.794819
+  type: 'test'
+  ...
+# Subtest: received risk holds survive incomplete and failed snapshots
+ok 4 - received risk holds survive incomplete and failed snapshots
+  ---
+  duration_ms: 596.023848
+  type: 'test'
+  ...
+# Subtest: a recent status cannot summarize stale child records as fresh
+ok 5 - a recent status cannot summarize stale child records as fresh
+  ---
+  duration_ms: 710.944471
+  type: 'test'
+  ...
+# Subtest: metric exact owner decimal survives: -0.000001
+ok 6 - metric exact owner decimal survives: -0.000001
+  ---
+  duration_ms: 813.897785
+  type: 'test'
+  ...
+# Subtest: metric exact owner decimal survives: 9007199254740993.00001
+ok 7 - metric exact owner decimal survives: 9007199254740993.00001
+  ---
+  duration_ms: 747.828094
+  type: 'test'
+  ...
+# Subtest: metric exact owner decimal survives: 0
+ok 8 - metric exact owner decimal survives: 0
+  ---
+  duration_ms: 725.392489
+  type: 'test'
+  ...
+# Subtest: kit percent contract consumes 0.12 as 12 percent once
+ok 9 - kit percent contract consumes 0.12 as 12 percent once
+  ---
+  duration_ms: 65.025787
+  type: 'test'
+  ...
+# Subtest: paper rail maps percent points once and rejects a double-scaled producer value
+ok 10 - paper rail maps percent points once and rejects a double-scaled producer value
+  ---
+  duration_ms: 1598.124769
+  type: 'test'
+  ...
+# Subtest: summary retains wallet qualification
+ok 11 - summary retains wallet qualification
+  ---
+  duration_ms: 904.321916
+  type: 'test'
+  ...
+# Subtest: summary retains risk qualification
+ok 12 - summary retains risk qualification
+  ---
+  duration_ms: 811.651377
+  type: 'test'
+  ...
+# Subtest: summary retains accounting qualification
+ok 13 - summary retains accounting qualification
+  ---
+  duration_ms: 856.510241
+  type: 'test'
+  ...
+# Subtest: paper record export uses exact owner decimals, units and snapshot identity
+ok 14 - paper record export uses exact owner decimals, units and snapshot identity
+  ---
+  duration_ms: 700.995854
+  type: 'test'
+  ...
+# Subtest: retained journal notice remains visible beside a failed extracted workspace
+ok 15 - retained journal notice remains visible beside a failed extracted workspace
+  ---
+  duration_ms: 691.575566
+  type: 'test'
+  ...
+# Subtest: only all available sections produce the available summary; heartbeat stays independent
+ok 16 - only all available sections produce the available summary; heartbeat stays independent
+  ---
+  duration_ms: 754.584668
+  type: 'test'
+  ...
+# Subtest: old PaperWorkspace import resolves to the extracted component
+ok 17 - old PaperWorkspace import resolves to the extracted component
+  ---
+  duration_ms: 529.210218
+  type: 'test'
+  ...
+# Subtest: summary cannot be fresh when accounting belongs to another snapshot
+ok 18 - summary cannot be fresh when accounting belongs to another snapshot
+  ---
+  duration_ms: 717.59615
+  type: 'test'
+  ...
+# Subtest: held controller appears once with the union of displayed pause and retained emergency
+ok 19 - held controller appears once with the union of displayed pause and retained emergency
+  ---
+  duration_ms: 877.221775
+  type: 'test'
+  ...
+# Subtest: held controller is not duplicated by cloned repeated safety signals
+ok 20 - held controller is not duplicated by cloned repeated safety signals
+  ---
+  duration_ms: 673.323957
+  type: 'test'
+  ...
+# Subtest: held controller union preserves native entry reasons and latch alongside operator evidence
+ok 21 - held controller union preserves native entry reasons and latch alongside operator evidence
+  ---
+  duration_ms: 674.264922
+  type: 'test'
+  ...
+# Subtest: invalid displayed risk cannot remove any retained controller signals
+ok 22 - invalid displayed risk cannot remove any retained controller signals
+  ---
+  duration_ms: 688.353573
+  type: 'test'
+  ...
+# Subtest: extracted paper container owns wrapping without the V5 page wrapper
+ok 23 - extracted paper container owns wrapping without the V5 page wrapper
+  ---
+  duration_ms: 840.077059
+  type: 'test'
+  ...
+1..23
+# tests 23
+# suites 0
+# pass 23
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 19849.448485

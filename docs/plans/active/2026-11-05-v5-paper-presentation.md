@@ -66,3 +66,13 @@ Final evidence: `docs/evidence/2026-11-05-v5-paper-presentation/README.md`, `val
 - Existing risk and journal retention checks pass. Capture uses recorded/synthetic fixtures, not live state. No commands, providers, tokens, Docker, units, deployment or production build was used.
 
 Draft #98 stays stacked on #91's `e0005086` branch. #91 was rechecked and is unchanged. Coordinator owns independent review/merge and any rebase after #91/#97 changes. The task worktree remains for that review. Rollback remains a reviewed revert; no state operation is required.
+
+## #99 integration repair — 2026-11-05
+
+Objective: preserve #99's controller-ID wrapping contract after extraction. Acceptance: the unchanged #99 wrapping regression fails on main d564695f + #91 e0005086 + #98 ce0fcc82, then passes with the extraction repair. Add a scoped container regression and check long IDs in the browser without the V5 page wrapper. Keep #98 based on #91 until R2 rebases.
+
+Authority remains repository-process-only. Scope: the extracted presentation, its focused tests/fixture and this evidence. No live service, token, deployment, build/image, other worker branch or root checkout changes. Coordinator owns review and merge. Integration worktree: `.workspace/scratch/condor-task2-20261105/integration`, detached from main with local merge commits only. Scratch/TMPDIR stays under the task directory.
+
+Validation: before every test or browser check, require no LIVE_STEP_ACTIVE flag and use the shared runner with a 900-second limit. Run #99's combined baseline checks, the presentation/retention checks, focused tsc and a fixture browser boundary check. Exit 75 means NOT RUN. Rollback: revert this task's repair commit; retain scratch integration evidence for review. #99's safety-store changes remain untouched.
+
+Results: local merge `3f10b7306fbf7ac712e3cb0ca91f94cf61dca1f6` reproduced the unchanged #99 test (3 pass, 1 intended wrapping failure) and the added standalone regression (1 intended failure). The repaired root uses the shared `paper-section` class and owns scoped wrapping with zero outer block spacing. Integrated focused tests: 250/250, exit 0; integrated tsc: exit 0; stacked presentation tests: 23/23, exit 0. Final browser probe: nine cases, exit 0; all render five 128-character IDs without the page wrapper and keep the text contained. Initial missing-dependency and invalid synthetic-ID attempts are explicitly excluded. Evidence: `docs/evidence/2026-11-05-v5-paper-presentation/integration-wrap/README.md`. #99's safety policy and CSS files are untouched. #91 remains at e0005086; actual rebase waits for R2. Review remains coordinator-owned.

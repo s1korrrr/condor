@@ -1,5 +1,7 @@
 # V5 paper presentation — Task 2 evidence
 
+Update: [#99 integration wrapping repair](integration-wrap/README.md) records the newer source, 250 integrated tests, TypeScript and nine standalone long-ID captures. The original results and 20 captures below remain historical evidence for `ce0fcc82`.
+
 **Ready for coordinator review.** The focused suite passes 236/236, TypeScript passes, and 20 fixture captures pass. This is repository and fixture evidence. It does not describe a deployed dashboard or grant execution authority.
 
 Source base: Condor #91, `e0005086169bd8b0ea9e1776f616e791d557cb48`. Draft #98 stays based on `feat/andrzej_v5_r2_release_20261102`. The [manifest](manifest.json) binds the captured source files and every PNG by SHA-256. The [validation receipt](validation.json) records counts, exits, versions and raw-log hashes.

@@ -500,7 +500,12 @@ export function paperExitProjection(position: Record<string, unknown> | undefine
     const stale = paperReadState(issue, now) === "stale";
     const reportedAt = issue?.source_at_ms ?? issue?.generated_at_ms;
     const since = typeof reportedAt === "number" ? reportedAt + (stale && now - reportedAt > 30_000 ? 30_000 : 0) : null;
-    return { verified: false, targetPrice: null, basis: null, reason: `Protection status unknown · ${issue === positions ? "position" : "executor"} data ${stale ? "stale" : "incomplete"} since ${paperTime(since, now)}`, remainingAmount: null, order: null, protectedExit: null };
+    const missing = `${issue === positions ? "position" : "executor"} data ${stale ? "stale" : "incomplete"} since ${paperTime(since, now)}`;
+    // Only the executor cross-check is missing: the complete, current positions read still carries the owner's own
+    // per-position protection statement. Show it as owner-reported, never as an executor-verified exit.
+    const owned = issue !== positions && !!position && typeof position.protected_exit === "boolean" && !!paperCompleteRecords(positions, now)?.includes(position);
+    const statement = owned ? `Owner-reported: ${position!.protected_exit ? "protected exit present" : "no protected exit"}${typeof position!.protection_reason === "string" && position!.protection_reason ? ` · ${paperWords(position!.protection_reason)}` : ""} · executor cross-check unavailable (${missing})` : `Protection status unknown · ${missing}`;
+    return { verified: false, targetPrice: null, basis: null, reason: statement, remainingAmount: null, order: null, protectedExit: null };
   }
   const executor = matches[0];
   const record = position && "target_price" in position ? position : executor;

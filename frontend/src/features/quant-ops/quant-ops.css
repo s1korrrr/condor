@@ -310,6 +310,24 @@
   --color-red: var(--q-negative);
 }
 
+/* Light theme: the quant desk (Bots and Capital) follows the native light palette, index.css
+   `[data-theme="light"] .condor-native`; warning uses the app light yellow. Values are copied, not new colours.
+   Rules above that hard-code dark surfaces get tokenised light overrides here; dark output is unchanged. */
+[data-theme="light"] [data-quant-ops] {
+  --q-bg: #f6f6f3; --q-surface: #ffffff; --q-surface-raised: #efefea;
+  --q-border: #dce0da; --q-text: #202522; --q-muted: #606b65; --q-blue: #856924;
+  --q-positive: #15803d; --q-negative: #dc2626; --q-warning: #ca8a04;
+}
+[data-theme="light"] [data-quant-ops] .q-card,
+[data-theme="light"] [data-quant-ops="capital"] .q-card,
+[data-theme="light"] [data-quant-ops] .q-ranges { background: var(--q-surface); }
+[data-theme="light"] [data-quant-ops] .q-bot-mid > div,
+[data-theme="light"] [data-quant-ops] .q-bot-cols > .q-card,
+[data-theme="light"] [data-quant-ops] .q-tag { background: var(--q-surface-raised); }
+[data-theme="light"] [data-quant-ops="capital"] .q-kpi { border-top: 2px solid var(--q-border); }
+[data-theme="light"] [data-quant-ops] .q-ranges button[aria-pressed=true] { background: color-mix(in srgb, var(--q-blue) 14%, var(--q-surface)); border-color: var(--q-blue); }
+[data-theme="light"] [data-quant-ops] button:not(:disabled):hover { border-color: var(--q-blue); background-color: var(--q-surface-raised); }
+
 /* Fleet Capital: bots strip, footnote, skeleton and an auto-fitting row for panels that exist only when computed. */
 [data-quant-ops] .q-split-auto { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); gap: var(--q-gap); margin-bottom: var(--q-gap); }
 [data-quant-ops] .q-fleet-bots { display: inline-flex; flex-wrap: wrap; gap: 6px; }

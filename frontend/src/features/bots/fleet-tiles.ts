@@ -165,6 +165,35 @@ const coverage = (known: number, total: number, source: string): PanelState =>
   known >= total ? { kind: 'fresh' } : { kind: 'incomplete', reason: `${source} read for ${known} of ${total} bots; the value covers those bots only.` };
 const percent = (ratio: number, digits = 1) => `${(ratio * 100).toFixed(digits)}%`;
 
+/** Freshness window shared by bot cards and every summary over bots (matches the owner 30 second contract). */
+export const FLEET_FRESH_MS = 30_000;
+
+/**
+ * The one freshness rule for a bot: the owner quant summary is current, the runtime view is not stale, and both
+ * observations are inside the freshness window at `now`. A process heartbeat never substitutes for them.
+ */
+export function fleetBotFreshness(input: Pick<FleetBotInput, 'view' | 'quant'> | null, now: number): PanelState {
+  if (!input || (!input.view && !input.quant)) return { kind: 'collecting', reason: 'Reading owner observations' };
+  if (!input.view) return { kind: 'incomplete', reason: 'Runtime observation has not been read yet' };
+  const age = (value: string | null | undefined) => { const time = value ? Date.parse(value) : NaN; return Number.isFinite(time) ? now - time : null; };
+  const viewAge = age(input.view.observedAt), quantAge = age(input.quant?.observedAt);
+  const current = input.quant?.freshness === 'current' && !input.view.stale
+    && viewAge !== null && viewAge < FLEET_FRESH_MS && quantAge !== null && quantAge < FLEET_FRESH_MS;
+  return current ? { kind: 'fresh', observedAt: input.quant!.observedAt }
+    : { kind: 'stale', observedAt: input.quant?.observedAt ?? null, reason: 'Owner observation is not current; last-known values shown.' };
+}
+
+/** A summary over bots is never fresher than its members: any stale member keeps it stale, then missing evidence. */
+function fleetSummaryFreshness(members: readonly { name: string; state: PanelState }[]): PanelState {
+  const named = (kind: PanelState['kind']) => members.filter(member => member.state.kind === kind).map(member => member.name);
+  const stale = named('stale'), incomplete = named('incomplete'), collecting = named('collecting');
+  if (stale.length) return { kind: 'stale', reason: `Owner observation is not current for ${stale.join(', ')}; this summary is no fresher than its cards.` };
+  if (incomplete.length) return { kind: 'incomplete', reason: `Runtime observation not read for ${incomplete.join(', ')}.` };
+  if (collecting.length) return { kind: 'collecting', reason: `Reading owner observations for ${collecting.join(', ')}.` };
+  const observed = members.map(member => member.state.observedAt).filter((value): value is string => typeof value === 'string').sort();
+  return { kind: 'fresh', observedAt: observed[0] ?? null };
+}
+
 /** Tiles over the live bots, plus a separate paper count. Empty when no bot is registered. */
 export function projectFleetTiles(allInputs: readonly FleetBotInput[], now: number): FleetTile[] {
   const { live: inputs, paper } = splitPaper(allInputs);
@@ -172,7 +201,7 @@ export function projectFleetTiles(allInputs: readonly FleetBotInput[], now: numb
     id: 'B01-paper', title: 'Paper bots', value: `+${paper.length}`, unit: 'paper',
     basis: 'simulated lanes · listed below, not counted in these tiles',
     perBot: paper.length > 1 ? paper.map(input => ({ bot: input.bot, name: input.name, text: (input.status ?? 'unverified').replaceAll('_', ' ') })) : [],
-    state: { kind: 'fresh' },
+    state: fleetSummaryFreshness(paper.map(input => ({ name: input.name, state: fleetBotFreshness(input, now) }))),
   }] : [];
   const bots = inputs.map(input => projectBotStats(input, now));
   const total = bots.length;

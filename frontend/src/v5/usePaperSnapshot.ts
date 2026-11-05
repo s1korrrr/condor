@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import type { PaperRead } from "./contracts";
-import { paperSafetyReads } from "./paper-safety";
+import { paperSafetyBeyondDisplayed, paperSafetyReads } from "./paper-safety";
 import { paperSnapshotsAgree } from "./policy";
 import { paperJournalReads } from './paper-journal';
 
@@ -54,5 +54,8 @@ export function usePaperSnapshot<Result>(queryKey: QueryKey, enabled: boolean, t
   const journalReads = paperJournalReads(journal?.reads ?? [], reads,
     journal?.completed !== query.data ? journalCompletion(query.data, total) : undefined);
   if (ownerQuery) journalByQuery.set(ownerQuery, {reads:journalReads, completed:query.data});
-  return {...query, complete, reads, safetyReads, journalReads, progress:query.isFetching ? `${complete ? "Refreshing" : "Checking"}: ${reads.length}/${total} sections` : undefined};
+  // Retained evidence may repeat what the displayed snapshot already shows (same snapshot as new objects, or the next
+  // snapshot during a refresh). Hand the view only evidence that adds a signal; the retention store is unchanged.
+  const displayedSafety = paperSafetyBeyondDisplayed(safetyReads, Array.isArray(query.data) ? query.data as PaperRead[] : reads);
+  return {...query, complete, reads, safetyReads:displayedSafety, journalReads, progress:query.isFetching ? `${complete ? "Refreshing" : "Checking"}: ${reads.length}/${total} sections` : undefined};
 }

@@ -8,7 +8,7 @@ import { StateGlyph } from '@/features/quant-ops/primitives';
 import type { PanelState } from '@/features/quant-ops/panel-state';
 import type { OwnerReads } from './BotsRoster';
 import { winRateText } from '@/features/bots/bot-net';
-import { durationLabel, projectBotStats } from '@/features/bots/fleet-tiles';
+import { durationLabel, fleetBotFreshness, projectBotStats } from '@/features/bots/fleet-tiles';
 import { botChartsHref } from '@/features/bots/chart-links';
 import { inventoryStateLabel, inventoryValueText, projectBotInventory } from '@/features/bots/position-view';
 import { holdingsPair } from '@/lib/fleet-holdings';
@@ -42,7 +42,7 @@ function FleetBotCard({ source, reads, status, color, now, trading }: { source: 
   const pairs = (quant?.pairs.length ? quant.pairs.map(row => ({ controllerId: row.controllerId, pair: row.pair, state: row.state, planMode: row.planMode, planNext: row.planNext, nextCondition: row.nextCondition }))
     : (reads?.view?.pairs ?? []).map(row => ({ controllerId: row.controllerId, pair: row.pair, state: row.phase ?? 'UNKNOWN', planMode: null, planNext: row.planNext, nextCondition: row.reason })))
     .map(row => ({ ...row, unrealized: unrealized(row.controllerId, row.pair) }));
-  const freshness: PanelState = !reads ? { kind: 'collecting', reason: 'Reading owner observations' } : !reads.view ? { kind: 'incomplete', reason: 'Runtime observation has not been read yet' } : quant?.freshness === 'current' && !reads.view.stale ? { kind: 'fresh', observedAt: quant.observedAt } : { kind: 'stale', observedAt: quant?.observedAt ?? null, reason: 'Owner observation is not current; last-known values shown.' };
+  const freshness: PanelState = fleetBotFreshness(reads ? { view: reads.view, quant } : null, now);
   const net = reads?.controller.total ?? null;
   const cycles = reads?.cycles ?? null;
   const bps = stats?.fees != null && stats.volume ? (stats.fees / stats.volume) * 10_000 : null;

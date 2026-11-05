@@ -126,3 +126,20 @@ test('pair protection summary keeps omitted owner flags unknown', () => {
   assert.doesNotMatch(summary, /unprotected/, 'omitted flags are not unprotected');
   assert.match(summary, /0 of 9 position rows · protection not published: 9/);
 });
+
+// Rebased onto #99: a native latch (owner native-risk.v1 `latched`) must still raise safety evidence through
+// paperSafetyBeyondDisplayed; a repeated latch the displayed read already shows is not handed to the view twice.
+test('a native latch survives the displayed-evidence dedupe and is not duplicated', async () => {
+  const { paperSafetyBeyondDisplayed, paperSafetyReads } = await import('../src/v5/paper-safety.ts');
+  const risk = final3.risk;
+  const id = 'modular_spot_meridian_v5_paper_bnb';
+  const withLatch = (read, latched, snapshot) => ({...read, snapshot_id:snapshot, data:{...read.data, controllers:{...read.data.controllers, [id]:{...read.data.controllers[id], native:{...read.data.controllers[id].native, latched}}}}});
+  const displayed = withLatch(risk, false, risk.snapshot_id);
+  const retained = withLatch(risk, true, 'next:1');
+  const added = paperSafetyBeyondDisplayed([retained], [displayed]);
+  assert.equal(added.length, 1, 'the latch is new evidence');
+  assert.deepEqual(Object.keys(added[0].data.controllers), [id], 'only the latched controller is handed on');
+  assert.equal(added[0].data.controllers[id].native.latched, true);
+  assert.deepEqual(paperSafetyBeyondDisplayed([retained], [withLatch(risk, true, risk.snapshot_id)]), [], 'a latch already displayed is not repeated');
+  assert.ok(paperSafetyReads([], [final3.status, withLatch(risk, true, final3.status.snapshot_id)]).length > 0, 'retention keeps a latched read');
+});

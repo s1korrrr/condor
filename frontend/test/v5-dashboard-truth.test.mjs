@@ -105,3 +105,24 @@ test('protection falls back to the owner per-position statement when only the ex
   assert.match(paperExitProjection(row, positions, executors, now + 31_000).reason, /^Protection status unknown · position data stale/, 'a stale position read publishes no owner statement');
   assert.match(paperExitProjection({...row, protected_exit:'yes'}, {...positions, data:[{...row, protected_exit:'yes'}]}, executors, now).reason, /^Protection status unknown/, 'a malformed owner flag is not interpreted');
 });
+
+// Sol review R97-SOL-1: an omitted owner protected_exit flag is unknown, never "unprotected" or a counted zero.
+test('pair protection summary keeps omitted owner flags unknown', () => {
+  const omit = ({protected_exit, protection_reason, ...rest}) => rest;
+  const mixed = BNB_ROWS.map((row, index) => index === 0 ? {...row, protected_exit:true, protection_reason:null} : index === 1 ? row : omit(row));
+  const positions = {...livePositions, data:[...final3.positions.data.filter(row => row.trading_pair !== 'BNB-USDC'), ...mixed]};
+  const holdings = paperPairHoldings('BNB-USDC', positions, now);
+  assert.equal(holdings.protectedCount, 1);
+  assert.equal(holdings.unprotectedCount, 1);
+  assert.equal(holdings.unknownCount, 7);
+  assert.deepEqual(holdings.unprotectedReasons, ['no_active_fixed_target_executor'], 'reasons come only from explicit false rows');
+  const allOmitted = {...positions, data:[...final3.positions.data.filter(row => row.trading_pair !== 'BNB-USDC'), ...BNB_ROWS.map(omit)]};
+  assert.deepEqual([paperPairHoldings('BNB-USDC', allOmitted, now).unprotectedCount, paperPairHoldings('BNB-USDC', allOmitted, now).unknownCount], [0, 9]);
+  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values({...final3, positions:allOmitted}), now, reportAt:final3.status.generated_at_ms, heartbeat:'Fresh', bot:'meridian_v5_paper'}));
+  const card = html.match(/<h3>BNB-USDC<\/h3>[^]*?<\/article>/)?.[0] ?? '';
+  const summary = card.match(/Owner-reported protected exits:[^<]+/)?.[0] ?? '';
+  assert.doesNotMatch(summary, /unprotected/, 'omitted flags are not unprotected');
+  assert.match(summary, /0 of 9 position rows · protection not published: 9/);
+});

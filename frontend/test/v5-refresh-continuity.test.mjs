@@ -186,3 +186,23 @@ for (const kind of ['bots','capital']) test(`${kind} ignores progress from an ab
     await old.promise.catch(() => {});
   } finally {h.restore();}
 });
+
+// Live 2026-11-05 15:45Z (parent browser check): every paused controller was listed twice under "New acquisitions held".
+// A refresh that receives the displayed owner snapshot again (same snapshot, newly parsed objects) is one piece of
+// evidence, not two. Expected rows come from the owner risk read: one row per controller the owner reports as held.
+test('a refresh delivering the displayed owner snapshot lists each held controller exactly once', async () => {
+  const reads = completeReads(), h = harness('bots', reads);
+  try {
+    const risk = reads.find(read => read.section === 'risk');
+    const held = Object.entries(risk.data.controllers).filter(([, row]) => row.operator.paused === true || row.operator.emergency === true || row.native.latched === true || row.native.entry_hold === true).map(([id]) => id);
+    assert.ok(held.length > 0, 'fixture has owner-held controllers');
+    const pending = h.start();
+    while (h.requests.length) await h.deliver(h.requests.shift());
+    await pending.promise.catch(() => {});
+    const aside = h.render().match(/New acquisitions held[^]*?Received and retained safety evidence/)?.[0] ?? '';
+    for (const id of Object.keys(risk.data.controllers)) {
+      const rows = aside.split(`<h3>${id}</h3>`).length - 1;
+      assert.equal(rows, held.includes(id) ? 1 : 0, `${id} rows in the held list`);
+    }
+  } finally { h.restore(); }
+});

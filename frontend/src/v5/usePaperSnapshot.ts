@@ -54,5 +54,12 @@ export function usePaperSnapshot<Result>(queryKey: QueryKey, enabled: boolean, t
   const journalReads = paperJournalReads(journal?.reads ?? [], reads,
     journal?.completed !== query.data ? journalCompletion(query.data, total) : undefined);
   if (ownerQuery) journalByQuery.set(ownerQuery, {reads:journalReads, completed:query.data});
-  return {...query, complete, reads, safetyReads, journalReads, progress:query.isFetching ? `${complete ? "Refreshing" : "Checking"}: ${reads.length}/${total} sections` : undefined};
+  // Retained evidence holds the progress objects; the displayed snapshot is the (structurally shared) query data.
+  // The same owner snapshot with the same content is one piece of evidence: hand consumers the displayed object, so an
+  // identity merge cannot list it twice. Different snapshots or contents stay separate evidence.
+  const shown = Array.isArray(query.data) ? query.data as PaperRead[] : reads;
+  const sameEvidence = (left: PaperRead, right: PaperRead) => left.section === right.section && left.bot_id === right.bot_id
+    && left.snapshot_id === right.snapshot_id && left.generated_at_ms === right.generated_at_ms && JSON.stringify(left.data) === JSON.stringify(right.data);
+  const displayedSafety = [...new Set(safetyReads.map(read => shown.find(other => other === read || sameEvidence(other, read)) ?? read))];
+  return {...query, complete, reads, safetyReads:displayedSafety, journalReads, progress:query.isFetching ? `${complete ? "Refreshing" : "Checking"}: ${reads.length}/${total} sections` : undefined};
 }

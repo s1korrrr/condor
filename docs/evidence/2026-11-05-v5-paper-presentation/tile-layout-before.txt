@@ -1,0 +1,36 @@
+node:internal/modules/run_main:107
+    triggerUncaughtException(
+    ^
+
+AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:
++ actual - expected
+
++ [
++   'Exact Wallet equity',
++   'Exact Available cash',
++   'Exact Holdings value',
++   'Exact Realized PnL',
++   'Exact Unrealized PnL',
++   'Exact Fees paid',
++   'Exact Traded volume'
++ ]
+- []
+
+    at file:///home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/capture.mjs:33:191 {
+  generatedMessage: true,
+  code: 'ERR_ASSERTION',
+  actual: [
+    'Exact Wallet equity',
+    'Exact Available cash',
+    'Exact Holdings value',
+    'Exact Realized PnL',
+    'Exact Unrealized PnL',
+    'Exact Fees paid',
+    'Exact Traded volume'
+  ],
+  expected: [],
+  operator: 'deepStrictEqual',
+  diff: 'simple'
+}
+
+Node.js v24.21.0

@@ -23,12 +23,12 @@ Batch exit: **0**. Each phase checks the live-step flag. Node tests use `--test-
 | Phase inside the held runner slot | Exit | Observed result |
 | --- | --- | --- |
 | Pinned application source, candidate rendering tests with the explicit regression-name filter in `verify-final.sh` | 1, expected | 10 tests; 10 assertion failures; no setup/import failure. Exact decimal disclosures, qualified summary and raw export are absent on the old source. |
-| `node --test --test-concurrency=1 --test-reporter=tap` with the 17 explicit V5/kit/native files in `verify-final.sh` | 0 | 236 tests; 236 pass; 0 fail; 0 skipped. [Full TAP](focused.log). |
+| `node --test --test-concurrency=1 --test-reporter=tap` with the 17 explicit V5/kit/native files in `verify-final.sh` | 0 | 236 tests; 236 pass; 0 fail; 0 skipped. [Full TAP](focused.tap). |
 | `./node_modules/.bin/tsc -p tsconfig.app.json --incremental --tsBuildInfoFile "$TASK/tmp/tsconfig.app.tsbuildinfo"` | 0 | No diagnostics. |
 | `node "$TASK/capture-session.mjs"`, via `browser-capture.sh` | 0 | 20 captures and 3 interaction groups pass. |
-| Hold-union red probe, before the presentation repair | 1, expected | 4 tests; 4 fail. [Raw log](hold-union-before.log). |
-| Same hold-union probe after repair | 0 | 4 tests; 4 pass. [Raw log](hold-union-after.log). |
-| Single additive fixture with disclosure containment asserted, before layout repair | 1, expected | Seven exact-value disclosures escaped their tile. [Log](tile-layout-before.log), [before image](before/metric-details-overflow.png). |
+| Hold-union red probe, before the presentation repair | 1, expected | 4 tests; 4 fail. [Raw log](hold-union-before.tap). |
+| Same hold-union probe after repair | 0 | 4 tests; 4 pass. [Raw log](hold-union-after.tap). |
+| Single additive fixture with disclosure containment asserted, before layout repair | 1, expected | Seven exact-value disclosures escaped their tile. [Log](tile-layout-before.txt), [before image](before/metric-details-overflow.png). |
 
 The hold-union probe used this command from the task's Condor checkout, behind the shared runner or the parent's temporary slot-2 transition wrapper:
 

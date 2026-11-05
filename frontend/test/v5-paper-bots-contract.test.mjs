@@ -328,7 +328,10 @@ test('affirmative protection requires coherent fresh complete sections and an ex
     assert.equal(unknown.targetPrice,null);
     assert.equal(unknown.order,null);
     assert.equal(unknown.remainingAmount,null);
-    assert.match(unknown.reason,/Protection status unknown · executor data (stale|incomplete) since/);
+    // A partial/stale executor read leaves only the owner's per-position statement (never verified); a complete
+    // executor read that contradicts or misses the position keeps the status unknown.
+    const crossCheckMissing = 'completeness' in change || 'generated_at_ms' in change;
+    assert.match(unknown.reason,crossCheckMissing ? /^Owner-reported: (protected exit present|no protected exit).* · executor cross-check unavailable \(executor data (stale|incomplete) since/ : /^Protection status unknown · executor data (stale|incomplete) since/);
   }
   for (const change of [{completeness:'partial'},{generated_at_ms:now-31000},{snapshot_id:'other:1'}]) assert.equal(paperExitProjection(position,{...positions,...change},executors,now).protectedExit,null);
   assert.equal(paperExitProjection({...position,executor_id:undefined},positions,executors,now).targetPrice,null);

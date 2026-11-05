@@ -98,7 +98,9 @@ test('protection falls back to the owner per-position statement when only the ex
   const exit = paperExitProjection(row, positions, executors, now);
   assert.equal(exit.verified, false, 'an owner statement is not an executor-verified exit');
   assert.match(exit.reason, /^Owner-reported: no protected exit · No active fixed target executor · executor cross-check unavailable \(executor data incomplete since /);
-  assert.match(paperExitProjection({...row, protected_exit:true, protection_reason:null}, {...positions, data:[{...row, protected_exit:true, protection_reason:null}]}, executors, now).reason, /^Owner-reported: protected exit present · executor cross-check unavailable/);
+  const protectedRow = {...row, protected_exit:true, protection_reason:null};
+  assert.match(paperExitProjection(protectedRow, {...positions, data:[protectedRow]}, executors, now).reason, /^Owner-reported: protected exit present · executor cross-check unavailable/);
+  assert.match(paperExitProjection(row, positions, {...executors, completeness:'complete', stale_reason:null, data:[]}, now).reason, /^Protection status unknown/, 'a complete executor read without the position is a failed cross-check, not a missing one');
   assert.match(paperExitProjection(row, {...positions, completeness:'partial'}, executors, now).reason, /^Protection status unknown · position data incomplete/, 'an incomplete position read publishes no owner statement');
   assert.match(paperExitProjection(row, positions, executors, now + 31_000).reason, /^Protection status unknown · position data stale/, 'a stale position read publishes no owner statement');
   assert.match(paperExitProjection({...row, protected_exit:'yes'}, {...positions, data:[{...row, protected_exit:'yes'}]}, executors, now).reason, /^Protection status unknown/, 'a malformed owner flag is not interpreted');

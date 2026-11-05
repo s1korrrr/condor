@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { paperPairHoldings, paperPairBag, paperReadFailureMessage, paperRiskControllers, paperRiskUsage } from '../src/v5/policy.ts';
+import { paperExitProjection, paperPairHoldings, paperPairBag, paperReadFailureMessage, paperRiskControllers, paperRiskUsage } from '../src/v5/policy.ts';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
 const final3 = Object.fromEntries(['status','wallet','positions','executors','fills','risk','decisions','history','operations'].map(section => [section, JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/${section}.json`, import.meta.url)))]));
@@ -86,4 +86,20 @@ test('rendered pair card shows the exact pair total, bag, protection summary and
   assert.match(html, /Reported native entry hold: No|Native evidence complete/);
   assert.match(html, /Pair cap 40000 USDC/);
   assert.doesNotMatch(html, /Numeric rail limits are not published/);
+});
+
+// Live 2026-11-05 15:45Z: every position showed "Protection status unknown · executor data incomplete". The executors
+// read is a bounded terminal window (partial), but the complete positions read carries the owner's own per-position
+// protection statement. Risk-level protected_exits=preserved does not certify coverage (native risk says so).
+test('protection falls back to the owner per-position statement when only the executor cross-check is unavailable', () => {
+  const row = {...BNB_ROWS[0]};
+  const positions = {...livePositions, data:[row]};
+  const executors = {...final3.executors, completeness:'partial', stale_reason:'bounded_terminal_window_see_history_terminal_executors'};
+  const exit = paperExitProjection(row, positions, executors, now);
+  assert.equal(exit.verified, false, 'an owner statement is not an executor-verified exit');
+  assert.match(exit.reason, /^Owner-reported: no protected exit · No active fixed target executor · executor cross-check unavailable \(executor data incomplete since /);
+  assert.match(paperExitProjection({...row, protected_exit:true, protection_reason:null}, {...positions, data:[{...row, protected_exit:true, protection_reason:null}]}, executors, now).reason, /^Owner-reported: protected exit present · executor cross-check unavailable/);
+  assert.match(paperExitProjection(row, {...positions, completeness:'partial'}, executors, now).reason, /^Protection status unknown · position data incomplete/, 'an incomplete position read publishes no owner statement');
+  assert.match(paperExitProjection(row, positions, executors, now + 31_000).reason, /^Protection status unknown · position data stale/, 'a stale position read publishes no owner statement');
+  assert.match(paperExitProjection({...row, protected_exit:'yes'}, {...positions, data:[{...row, protected_exit:'yes'}]}, executors, now).reason, /^Protection status unknown/, 'a malformed owner flag is not interpreted');
 });

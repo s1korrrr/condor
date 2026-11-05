@@ -22,7 +22,7 @@ test('any other partial, stale, paged or unknown-state executor read publishes n
   for (const change of [
     {stale_reason:null}, {stale_reason:'bounded_recent_fills'}, {stale_reason:'some_future_reason'},
     {next_cursor:'more'}, {generated_at_ms:now - 31_000}, {state:'stale', reason:'Owner report expired'},
-    {completeness:'unavailable'}, {section:'fills'},
+    {completeness:'unavailable'}, {section:'fills'}, {generated_at_ms:now + 60_000}, {schema:'other'}, {simulated:false},
     {data:[{...running, state:'SOMETHING_NEW'}, ...terminal]},
   ]) assert.equal(paperOpenExecutorCount({...windowed, ...change}, now), null, JSON.stringify(change));
 });

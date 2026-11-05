@@ -1107,3 +1107,43 @@ def test_unconnected_export_is_explicit_and_extra_metadata_is_not_projected(tmp_
     assert result["state"] == "degraded" and result["data"] is None
     assert "extra_metadata" not in result
     assert result["source"] == {"owner": "hummingbot"}
+
+
+# The observation API serves `orders` (hummingbot-api feat/andrzej_v5_paper_orders_read_20261105); until then the
+# section was validated here without a route. Live owner row, 2026-11-05 (the open protective BTC exit order).
+LIVE_ORDER = {
+    "controller_id": "modular_spot_meridian_v5_paper_btc", "created_at_ms": 1793888061124,
+    "exchange_order_id": "paper-ce3544dc9f16488e8f0795e300a5ed97",
+    "executor_id": "77670298f523e81526636c14eede9d50e0cd12a88d564f5438d6598236fafb13", "fees": [],
+    "filled_quantity": "0", "order_id": "paper-c3828d588c5c4d8da1989cc185312413", "order_type": "LIMIT_MAKER",
+    "price": "80677.2", "quantity": "0.00247666", "remaining_quantity": "0.00247666", "side": "SELL",
+    "state": "OPEN", "trading_pair": "BTC-USDC", "updated_at_ms": 1793888061124,
+}
+
+
+def test_orders_route_maps_to_the_bound_owner_and_pages_like_executors():
+    from condor.v5.dashboard import paper_read_route
+
+    path = f"/api/v1/servers/rsibot-v5/bots/{BOT}/orders"
+    assert paper_read_route(path, "limit=200&snapshot_id=boot-a:7&cursor=abc", BOT) == ("orders", "limit=200&snapshot_id=boot-a%3A7&cursor=abc")
+    assert paper_read_route("/api/v1/servers/rsibot-v5/bots/other_bot/orders", "", BOT) is None
+    with pytest.raises(HTTPException):
+        paper_read_route(path, "start_ms=1&end_ms=2", BOT)  # order rows carry no event_at_ms; ranges stay refused
+
+
+def test_orders_read_validates_the_live_owner_row():
+    from condor.v5.paper import validate_paper_read
+
+    read = envelope("orders", data=[LIVE_ORDER], next_cursor=None)
+    result = validate_paper_read(read, section="orders", bot=BOT, now_ms=read["read_at_ms"])
+    assert result["section"] == "orders" and result["data"] == [LIVE_ORDER]
+
+
+@pytest.mark.asyncio
+async def test_upstream_allows_the_orders_paper_section(tmp_path):
+    from test_v5_workspace_upstream import Session, make_settings, requests
+    from condor.v5.upstream import V5Upstream
+
+    requests.clear()
+    await V5Upstream(make_settings(tmp_path), session_factory=Session).observation("/v1/paper/orders?limit=200")
+    assert requests[-1][1].endswith("/v1/paper/orders?limit=200")

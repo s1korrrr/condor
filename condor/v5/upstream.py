@@ -120,6 +120,7 @@ class V5Upstream:
                 "fills",
                 "positions",
                 "executors",
+                "orders",
                 "risk",
                 "decisions",
                 "history",

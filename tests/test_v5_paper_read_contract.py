@@ -16,6 +16,20 @@ API_ENVELOPES = json.loads(
 FINAL3 = Path(__file__).parent / "fixtures/paper-api-final3"
 
 
+@pytest.mark.parametrize('gaps,accepted', [(['bounded_recent_fill_window'], True),
+    ([{'reason':'owner_gap'}], True), (['unknown_window'], False), ([False], False), ([None], False)])
+def test_native_history_retention_gap_stays_explicit_and_strict(gaps, accepted):
+    from condor.v5.paper import validate_paper_read
+    value = json.loads((FINAL3 / 'native-replay/history.json').read_text())
+    value['data']['gaps'] = gaps
+    if accepted:
+        result = validate_paper_read(value, section='history', bot=value['bot_id'], now_ms=value['generated_at_ms'])
+        assert result['data']['gaps'] == gaps
+    else:
+        with pytest.raises(HTTPException):
+            validate_paper_read(value, section='history', bot=value['bot_id'], now_ms=value['generated_at_ms'])
+
+
 @pytest.mark.parametrize("section", ["wallet", "positions", "fills", "executors", "risk", "decisions", "history", "operations", "status"])
 def test_final3_authenticated_native_api_records_are_available(tmp_path, section):
     from test_v5_paper_binding import client_for

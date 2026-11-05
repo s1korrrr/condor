@@ -367,12 +367,15 @@ export function paperPairHoldings(pair: string, positions: import("./contracts")
   if (mine.some(row => !paperDecimal(row.quantity) || typeof row.state !== "string" || !row.state)) return null;
   const byState = new Map<string, string[]>();
   for (const row of mine) byState.set(row.state as string, [...(byState.get(row.state as string) ?? []), row.quantity as string]);
-  const unprotected = mine.filter(row => row.protected_exit !== true);
+  // Only an explicit owner flag counts either way; an omitted or malformed flag stays unknown (never "unprotected").
+  const unprotected = mine.filter(row => row.protected_exit === false);
   return {
     count: mine.length,
     total: paperDecimalSum(mine.map(row => row.quantity as string)),
     states: [...byState].map(([state, quantities]) => ({ state, count: quantities.length, quantity: paperDecimalSum(quantities) })),
-    protectedCount: mine.length - unprotected.length,
+    protectedCount: mine.filter(row => row.protected_exit === true).length,
+    unprotectedCount: unprotected.length,
+    unknownCount: mine.filter(row => typeof row.protected_exit !== "boolean").length,
     unprotectedReasons: [...new Set(unprotected.map(row => typeof row.protection_reason === "string" && row.protection_reason ? row.protection_reason : "protection_reason_not_published"))],
   };
 }

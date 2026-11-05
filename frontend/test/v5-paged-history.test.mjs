@@ -34,8 +34,8 @@ test('partial retained rows stay visible without becoming complete totals or fla
 
 test('Bots adaptive tables and exact details show partial fills and executor rows with bounded-window labels', () => {
   const stubs = Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}]));
-  const {load} = frontendModules(stubs, {'pages/tabs/ActiveBotsTab.tsx':['PaperRecords']});
-  const {PaperRecords} = load('pages/tabs/ActiveBotsTab.tsx');
+  const {load} = frontendModules(stubs, {'v5/components/PaperWorkspace.tsx':['PaperRecords']});
+  const {PaperRecords} = load('v5/components/PaperWorkspace.tsx');
   for (const kind of ['fills', 'executors']) {
     const read = partial(kind);
     const html = renderToStaticMarkup(React.createElement(PaperRecords, {read,kind,now:read.generated_at_ms}));

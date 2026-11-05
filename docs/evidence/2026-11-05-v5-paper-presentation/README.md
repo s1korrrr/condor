@@ -26,8 +26,8 @@ Batch exit: **0**. Each phase checks the live-step flag. Node tests use `--test-
 | `node --test --test-concurrency=1 --test-reporter=tap` with the 17 explicit V5/kit/native files in `verify-final.sh` | 0 | 236 tests; 236 pass; 0 fail; 0 skipped. [Full TAP](focused.tap). |
 | `./node_modules/.bin/tsc -p tsconfig.app.json --incremental --tsBuildInfoFile "$TASK/tmp/tsconfig.app.tsbuildinfo"` | 0 | No diagnostics. |
 | `node "$TASK/capture-session.mjs"`, via `browser-capture.sh` | 0 | 20 captures and 3 interaction groups pass. |
-| Hold-union red probe, before the presentation repair | 1, expected | 4 tests; 4 fail. [Raw log](hold-union-before.tap). |
-| Same hold-union probe after repair | 0 | 4 tests; 4 pass. [Raw log](hold-union-after.tap). |
+| Hold-union red probe, before the presentation repair | 1, expected | 4 tests; 4 fail. [TAP receipt](hold-union-before.tap). |
+| Same hold-union probe after repair | 0 | 4 tests; 4 pass. [TAP receipt](hold-union-after.tap). |
 | Single additive fixture with disclosure containment asserted, before layout repair | 1, expected | Seven exact-value disclosures escaped their tile. [Log](tile-layout-before.txt), [before image](before/metric-details-overflow.png). |
 
 The hold-union probe used this command from the task's Condor checkout, behind the shared runner or the parent's temporary slot-2 transition wrapper:
@@ -38,7 +38,7 @@ node --test --test-concurrency=1 --test-reporter=tap \
   frontend/test/v5-paper-presentation.test.mjs
 ```
 
-The base archive contains exact `e0005086` application source, its module harness and recorded fixtures, plus the candidate test file. It was created with `git archive`; dependencies resolve through the existing frontend installation. The complete base failure log stays at the path and hash in `validation.json` because it embeds large repeated HTML strings.
+The base archive contains exact `e0005086` application source, its module harness and recorded fixtures, plus the candidate test file. It was created with `git archive`; dependencies resolve through the existing frontend installation. Published text receipts strip trailing whitespace. Original byte hashes and paths remain in `validation.json`. The complete base failure log stays at the path and hash in `validation.json` because it embeds large repeated HTML strings.
 
 ## Confirmed causes and repairs
 

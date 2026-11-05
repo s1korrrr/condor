@@ -9,9 +9,9 @@ not ok 1 - held controller appears once with the union of displayed pause and re
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     2 !== 1
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 1
@@ -33,9 +33,9 @@ not ok 2 - held controller is not duplicated by cloned repeated safety signals
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     3 !== 1
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 1
@@ -59,9 +59,9 @@ not ok 3 - held controller union preserves native entry reasons and latch alongs
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     2 !== 1
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 1
@@ -85,9 +85,9 @@ not ok 4 - invalid displayed risk cannot remove any retained controller signals
   failureType: 'testCodeFailure'
   error: |-
     Expected values to be strictly equal:
-    
+
     2 !== 1
-    
+
   code: 'ERR_ASSERTION'
   name: 'AssertionError'
   expected: 1

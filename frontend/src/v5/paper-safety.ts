@@ -53,6 +53,29 @@ function uncoveredSafety(read: PaperRead, newer: PaperRead): PaperRead {
   }};
 }
 
+/**
+ * Safety evidence the displayed risk read does not already show. The same hold signal from another object or another
+ * snapshot (a refresh in flight, structural sharing) is one statement, so it is not handed to the view twice. A retained
+ * read keeps only the controllers and owner holds that add a signal. Retention itself (paperSafetyReads) is unchanged,
+ * and nothing is dropped when the displayed read is invalid or shows no signal.
+ */
+export function paperSafetyBeyondDisplayed(safety: PaperRead[], displayed: PaperRead[]): PaperRead[] {
+  const shown = new Set(displayed.filter(read => read.section === 'risk' && !paperSectionError(read)).flatMap(read => signalKeys(read).map(key => `${read.bot_id}:${key}`)));
+  if (!shown.size) return safety;
+  return safety.flatMap(read => {
+    if (displayed.includes(read)) return [read];
+    const extra = signalKeys(read).filter(key => !shown.has(`${read.bot_id}:${key}`));
+    if (!extra.length) return [];
+    const adds = (id: string) => extra.some(key => key.startsWith(`${id}:`));
+    const data = read.data as PaperRiskData & Record<string, unknown>;
+    return [{...read, data:{...data,
+      ...(extra.some(key => key.startsWith('owner:')) ? {} : {control_hold:null, holds:[]}),
+      ...(data.controllers ? {controllers:Object.fromEntries(Object.entries(data.controllers).filter(([id]) => adds(id)))} : {}),
+      ...(data.native_entry_holds ? {native_entry_holds:data.native_entry_holds.filter(hold => adds(hold.controller_id))} : {}),
+    }}];
+  });
+}
+
 export function paperSafetyReads(previous: PaperRead[], received: PaperRead[], complete?: PaperRead): PaperRead[] {
   const status = received.find(read => read.section === 'status');
   const incoming = received.filter(read => read.section === 'risk' && status && read.bot_id === status.bot_id && paperSnapshotsAgree([status, read]));

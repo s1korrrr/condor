@@ -188,21 +188,44 @@ for (const kind of ['bots','capital']) test(`${kind} ignores progress from an ab
 });
 
 // Live 2026-11-05 15:45Z (parent browser check): every paused controller was listed twice under "New acquisitions held".
-// A refresh that receives the displayed owner snapshot again (same snapshot, newly parsed objects) is one piece of
-// evidence, not two. Expected rows come from the owner risk read: one row per controller the owner reports as held.
-test('a refresh delivering the displayed owner snapshot lists each held controller exactly once', async () => {
-  const reads = completeReads(), h = harness('bots', reads);
+// Expected rows come from the owner risk read: one row per controller the owner reports as held, whether the refresh
+// redelivers the displayed snapshot (new objects) or delivers the next snapshot with the same holds.
+const heldRows = (html, ids) => {
+  const aside = html.match(/New acquisitions held[^]*?Received and retained safety evidence/)?.[0] ?? '';
+  return Object.fromEntries(ids.map(id => [id, aside.split(`<h3>${id}</h3>`).length - 1]));
+};
+const sameContent = read => read.section === 'risk' ? {...read, data:{...read.data, control_hold:'clock_anomaly'}} : read;
+const nextSnapshot = read => sameContent({...read, snapshot_id:'next:1', generated_at_ms:read.generated_at_ms + 1000, source:{...read.source, sequence:read.source.sequence + 1}});
+for (const [label, mutate] of [['the displayed snapshot again', sameContent], ['the next snapshot with the same holds', nextSnapshot]]) {
+  test(`a refresh delivering ${label} lists each held controller exactly once`, async () => {
+    const reads = completeReads(), h = harness('bots', reads);
+    try {
+      const risk = reads.find(read => read.section === 'risk');
+      const ids = Object.keys(risk.data.controllers);
+      const held = ids.filter(id => { const row = risk.data.controllers[id]; return row.operator.paused === true || row.operator.emergency === true || row.native.latched === true || row.native.entry_hold === true; });
+      assert.ok(held.length > 0, 'fixture has owner-held controllers');
+      const pending = h.start();
+      while (h.requests.length) await h.deliver(h.requests.shift(), mutate);
+      await pending.promise.catch(() => {});
+      assert.deepEqual(heldRows(h.render(), ids), Object.fromEntries(ids.map(id => [id, held.includes(id) ? 1 : 0])));
+    } finally { h.restore(); }
+  });
+}
+
+test('a newer snapshot that adds a hold signal keeps that evidence visible', async () => {
+  // The recorded fixture holds every controller with paused + emergency. The displayed snapshot shows one controller
+  // paused only; the next snapshot carries the owner's recorded emergency for it again (an added signal).
+  const reads = completeReads();
+  const risk = reads.find(read => read.section === 'risk');
+  const id = Object.keys(risk.data.controllers)[0];
+  assert.equal(risk.data.controllers[id].operator.emergency, true, 'fixture records the emergency halt');
+  risk.data.controllers[id] = {...risk.data.controllers[id], operator:{...risk.data.controllers[id].operator, emergency:false}};
+  const h = harness('bots', reads);
   try {
-    const risk = reads.find(read => read.section === 'risk');
-    const held = Object.entries(risk.data.controllers).filter(([, row]) => row.operator.paused === true || row.operator.emergency === true || row.native.latched === true || row.native.entry_hold === true).map(([id]) => id);
-    assert.ok(held.length > 0, 'fixture has owner-held controllers');
     const pending = h.start();
-    while (h.requests.length) await h.deliver(h.requests.shift());
+    while (h.requests.length) await h.deliver(h.requests.shift(), nextSnapshot);
     await pending.promise.catch(() => {});
     const aside = h.render().match(/New acquisitions held[^]*?Received and retained safety evidence/)?.[0] ?? '';
-    for (const id of Object.keys(risk.data.controllers)) {
-      const rows = aside.split(`<h3>${id}</h3>`).length - 1;
-      assert.equal(rows, held.includes(id) ? 1 : 0, `${id} rows in the held list`);
-    }
+    assert.match(aside, new RegExp(`<h3>${id}</h3><span[^>]*>New entries held</span><p>Reported operator pause: Yes · Reported emergency halt: Yes`), 'the added emergency halt is shown for that controller');
   } finally { h.restore(); }
 });

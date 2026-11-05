@@ -236,6 +236,7 @@ def paper_read_route(path: str, query: str, bot: str | None) -> tuple[str, str] 
         f"bots/{bot}/native/status": "status",
         f"bots/{bot}/quant-summary": "status",
         f"bots/{bot}/executors": "executors",
+        f"bots/{bot}/orders": "orders",
         f"bots/{bot}/risk": "risk",
         f"bots/{bot}/decisions": "decisions",
         f"bots/{bot}/decision-journal": "decisions",
@@ -294,7 +295,10 @@ def paper_read_route(path: str, query: str, bot: str | None) -> tuple[str, str] 
         raise HTTPException(400, detail="paper read range requires both bounds")
     if "start_ms" in bounds and int(bounds["end_ms"]) - int(bounds["start_ms"]) > 31 * 86400000:
         raise HTTPException(400, detail="paper read range exceeds owner maximum")
-    if section not in {"fills", "positions", "executors", "history"} and any(key in bounds for key in ("cursor", "start_ms", "end_ms")):
+    if section not in {"fills", "positions", "executors", "history", "orders"} and "cursor" in bounds:
+        raise HTTPException(400, detail="paper section is not pageable")
+    # Order rows carry no event_at_ms, so the owner cannot filter them by time; they page by cursor only.
+    if section not in {"fills", "positions", "executors", "history"} and any(key in bounds for key in ("start_ms", "end_ms")):
         raise HTTPException(400, detail="paper section is not pageable")
     if (
         "start_ms" in bounds

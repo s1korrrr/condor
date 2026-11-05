@@ -311,9 +311,27 @@ export function paperLifetimeTotals(read: import("./contracts").PaperRead | unde
   return data?.program && typeof data.program === "object" && !Array.isArray(data.program) ? data.program as Record<string, unknown> : null;
 }
 
+/**
+ * Owner executors read: every non-terminal executor plus the newest 100 terminal ones (hummingbot
+ * strategy_v2/paper_session.py). It is `partial` with this reason exactly when older terminal executors are left to
+ * history.terminal_executors, so the bound covers terminal rows only and the open set stays complete.
+ */
+export const PAPER_TERMINAL_WINDOW_REASON = "bounded_terminal_window_see_history_terminal_executors";
+
+/** Executor rows whose non-terminal set is complete: a complete read, or a fresh read bounded only by the terminal window. */
+function paperOpenSetRecords(read: import("./contracts").PaperRead, now: number): Record<string, unknown>[] | null {
+  const complete = paperCompleteRecords(read, now);
+  if (complete) return complete;
+  const fresh = read.schema === "rsibot.v5-paper.read.v1" && read.execution_mode === "paper" && read.simulated === true
+    && typeof read.generated_at_ms === "number" && !paperTimestampIssue(read.generated_at_ms, now) && now - read.generated_at_ms <= PAPER_SNAPSHOT_FRESH_MS;
+  const windowed = fresh && read.completeness === "partial" && read.stale_reason === PAPER_TERMINAL_WINDOW_REASON && !read.next_cursor
+    && ["available", "degraded"].includes(read.state) && !paperSectionError(read);
+  return windowed && Array.isArray(read.data) ? read.data as Record<string, unknown>[] : null;
+}
+
 export function paperOpenExecutorCount(read: import("./contracts").PaperRead | undefined, now: number): number | null {
   if (read?.section !== "executors") return null;
-  const rows = paperCompleteRecords(read, now);
+  const rows = paperOpenSetRecords(read, now);
   if (!rows) return null;
   const terminal = new Set(["closed", "completed", "terminated"]);
   const active = new Set(["active", "running", "partial_close", "open", "not_started", "shutting_down"]);

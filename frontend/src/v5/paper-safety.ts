@@ -17,7 +17,7 @@ function signalKeys(read: PaperRead): string[] {
     ...(paperRiskControllers(read, 0) ?? []).flatMap(controller => [
       ...(controller.operator.emergency === true ? [`${controller.id}:emergency`] : []),
       ...(controller.operator.paused === true ? [`${controller.id}:paused`] : []),
-      ...(controller.native.entry_hold === true ? [`${controller.id}:entry_hold`] : []),
+      ...(controller.native.entry_hold === true || controller.native.latched === true ? [`${controller.id}:entry_hold`] : []),
       ...controller.holds.map(hold => `${controller.id}:${hold.reason}`),
     ]),
   ];

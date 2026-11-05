@@ -1147,3 +1147,31 @@ async def test_upstream_allows_the_orders_paper_section(tmp_path):
     requests.clear()
     await V5Upstream(make_settings(tmp_path), session_factory=Session).observation("/v1/paper/orders?limit=200")
     assert requests[-1][1].endswith("/v1/paper/orders?limit=200")
+
+
+def test_paper_read_failure_keeps_allowlisted_owner_refusal(tmp_path):
+    from test_v5_paper_binding import client_for
+    from condor.v5.upstream import UpstreamError
+
+    class Source:
+        async def observation(self, path):
+            raise UpstreamError(
+                "upstream_unavailable",
+                http_status=503,
+                upstream_detail={
+                    "upstream_code": "PAPER_READ_CAPACITY",
+                    "upstream_reason": "wait_timeout",
+                },
+            )
+
+    with client_for(tmp_path, Source()) as client:
+        response = client.get(
+            "/api/v5/dashboard/read",
+            params={"path": "/api/v1/servers/rsibot-v5/fleet/holdings"},
+        )
+    assert response.status_code == 503
+    assert response.json()["detail"] == {
+        "code": "upstream_unavailable",
+        "upstream_code": "PAPER_READ_CAPACITY",
+        "upstream_reason": "wait_timeout",
+    }

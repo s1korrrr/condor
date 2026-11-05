@@ -1128,7 +1128,7 @@ def test_orders_route_maps_to_the_bound_owner_and_pages_like_executors():
     assert paper_read_route(path, "limit=200&snapshot_id=boot-a:7&cursor=abc", BOT) == ("orders", "limit=200&snapshot_id=boot-a%3A7&cursor=abc")
     assert paper_read_route("/api/v1/servers/rsibot-v5/bots/other_bot/orders", "", BOT) is None
     with pytest.raises(HTTPException):
-        paper_read_route(path, "start_ms=1", BOT)
+        paper_read_route(path, "start_ms=1&end_ms=2", BOT)  # order rows carry no event_at_ms; ranges stay refused
 
 
 def test_orders_read_validates_the_live_owner_row():

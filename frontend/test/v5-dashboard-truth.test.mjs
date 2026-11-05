@@ -136,10 +136,16 @@ test('a native latch survives the displayed-evidence dedupe and is not duplicate
   const withLatch = (read, latched, snapshot) => ({...read, snapshot_id:snapshot, data:{...read.data, controllers:{...read.data.controllers, [id]:{...read.data.controllers[id], native:{...read.data.controllers[id].native, latched}}}}});
   const displayed = withLatch(risk, false, risk.snapshot_id);
   const retained = withLatch(risk, true, 'next:1');
+  // Displayed read shows no hold signal at all: #99 hands retained evidence on unchanged (nothing dropped).
   const added = paperSafetyBeyondDisplayed([retained], [displayed]);
   assert.equal(added.length, 1, 'the latch is new evidence');
-  assert.deepEqual(Object.keys(added[0].data.controllers), [id], 'only the latched controller is handed on');
   assert.equal(added[0].data.controllers[id].native.latched, true);
+  // Displayed read already shows another controller's pause: the retained read is cut to the latch it adds.
+  const other = 'modular_spot_meridian_v5_paper_btc';
+  const paused = read => ({...read, data:{...read.data, controllers:{...read.data.controllers, [other]:{...read.data.controllers[other], operator:{...read.data.controllers[other].operator, paused:true}}}}});
+  const cut = paperSafetyBeyondDisplayed([paused(retained)], [paused(displayed)]);
+  assert.deepEqual(Object.keys(cut[0].data.controllers), [id], 'only the controller that adds the latch is handed on');
+  assert.equal(cut[0].data.controllers[id].native.latched, true);
   assert.deepEqual(paperSafetyBeyondDisplayed([retained], [withLatch(risk, true, risk.snapshot_id)]), [], 'a latch already displayed is not repeated');
   assert.ok(paperSafetyReads([], [final3.status, withLatch(risk, true, final3.status.snapshot_id)]).length > 0, 'retention keeps a latched read');
 });

@@ -18,14 +18,17 @@
 [data-paper-workspace] .q-card h2 { margin: 0; font-size: 19px; font-weight: 650; letter-spacing: -.025em; }
 [data-paper-workspace] .q-kicker { color: var(--q-muted); font-size: 11px; }
 [data-paper-workspace] .q-card-actions { display: flex; align-items: center; gap: 8px; }
+[data-paper-workspace] .paper-metric-view { display: flex; flex-direction: column; gap: 8px; }
+[data-paper-workspace] .q-tile-cell .paper-metric-view > .q-kpi { height: auto; flex: 1 1 auto; margin: 0; }
 [data-paper-workspace] .q-kpi { display: grid; align-content: start; gap: 8px; }
 [data-paper-workspace] .q-kpi-head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 4px; color: var(--q-muted); font-size: 12px; }
 [data-paper-workspace] .q-tile-cell .q-kpi > strong { display: block; white-space: normal; overflow-wrap: anywhere; font-size: clamp(16px, 8cqi, 23px); font-weight: 600; line-height: 1.4; font-variant-numeric: tabular-nums; }
-[data-paper-workspace] .q-kpi-foot .q-muted { display: block; -webkit-line-clamp: unset; color: var(--q-muted); font-size: 11px; line-height: 1.5; }
+[data-paper-workspace] .q-tile-cell .q-kpi[data-panel-id="paper-last-report"] > strong { font-size: 14px; line-height: 1.5; }
+[data-paper-workspace] .q-tile-cell .q-kpi-foot .q-muted { display: block; -webkit-line-clamp: unset; color: var(--q-muted); font-size: 11px; line-height: 1.5; }
 [data-paper-workspace] .q-state { font-size: 11px; color: var(--q-muted); }
 [data-paper-workspace] .q-state[data-state=stale], [data-paper-workspace] .q-state[data-state=incomplete] { text-decoration: underline dashed; text-underline-offset: 3px; }
 [data-paper-workspace] .q-tile-cell .q-state__text { display: inline; }
-[data-paper-workspace] .paper-exact { margin-block: 8px; font-size: 11px; color: var(--q-muted); overflow-wrap: anywhere; }
+[data-paper-workspace] .paper-exact { margin-block: 0; font-size: 11px; color: var(--q-muted); overflow-wrap: anywhere; }
 [data-paper-workspace] .paper-exact summary { cursor: pointer; }
 [data-paper-workspace] .paper-exact p { font-variant-numeric: tabular-nums; }
 [data-paper-workspace] .paper-exact-row { display: contents; }

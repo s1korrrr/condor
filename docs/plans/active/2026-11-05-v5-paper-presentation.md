@@ -15,9 +15,9 @@ Rollback: revert this task's commits after review. No state migration, restart o
 - [x] Add rendering tests before extraction. Fail-before execution is NOT RUN during strict quiet. Exact pinned base copy is retained in task scratch.
 - [x] Extract PaperWorkspace and view helpers, retain old-site export and polling.
 - [x] Adopt MetricCard/TileGrid/PanelFrame/StatStrip/DataTable where compatible.
-- [ ] Verify exact decimal detail and CSV; ratio scaling, null/zero and invalid percent.
-- [ ] Scope styles, compare Task 1 captures and check reduced motion.
-- [ ] Run focused checks; self-audit; one stacked draft PR and handoff.
+- [x] Verify exact decimal detail and CSV; ratio scaling, null/zero and invalid percent.
+- [x] Scope styles, compare Task 1 captures and check reduced motion.
+- [x] Run focused checks; self-audit; one stacked draft PR and handoff.
 
 ## Issue register
 
@@ -53,3 +53,16 @@ Expected visual changes: kit PanelFrame and adaptive TileGrid replace the bespok
 `ActiveBotsTab.tsx` extraction overlaps #91's PaperWorkspace region. Draft base is #91's task branch, never main. Rebase this diff if #91 changes; after #91 merges, retarget/rebase under coordinator control. No backend or #91 worker branch writes. Claude worker owns findings 1–4 on main, including fleet-tiles.ts and long-ID CSS. Reconcile its result when stacking/retargeting; this task deliberately makes no fleet-tiles fix.
 
 Tasks 3–4 still own native candle routing, C3 schema/page/source qualification, bounded history, private chart adapter and export. Pair charts retain the collecting fallback. Full public/private builds and cross-contract gates remain required before merge under parent authority; none ran in strict quiet.
+
+## Post-quiet completion — 2026-11-05
+
+Final evidence: `docs/evidence/2026-11-05-v5-paper-presentation/README.md`, `validation.json` and `manifest.json`. The prior strict-quiet section is historical; runtime validation is now complete for this slice.
+
+- Exact pinned-base rendering regression: exit 1, expected; 10 tests/10 assertion failures after tightening exact-zero disclosure checks. No import/setup error.
+- Candidate: exit 0; 236/236 focused tests, zero skipped. TypeScript: exit 0, no diagnostics.
+- Captures: exit 0; 20 images and 3 interaction groups. Zero overflow, clipped metric text, escaped disclosures, running reduced-motion animations, browser errors or API requests. Source and PNG hashes match.
+- Controller duplication handed off by the dashboard worker: four fail-before/four pass-after cases. Group one row per controller and preserve the union of received positive hold signals. Retention/supersession stay in existing selectors/hooks. Optional future adapter `entryHold` is consumed in the presentation union.
+- Manual inspection found exact disclosure overflow. A browser check reproduced seven escaped disclosures before the scoped flex/height/margin fix; all 20 final captures pass containment.
+- Existing risk and journal retention checks pass. Capture uses recorded/synthetic fixtures, not live state. No commands, providers, tokens, Docker, units, deployment or production build was used.
+
+Draft #98 stays stacked on #91's `e0005086` branch. #91 was rechecked and is unchanged. Coordinator owns independent review/merge and any rebase after #91/#97 changes. The task worktree remains for that review. Rollback remains a reviewed revert; no state operation is required.

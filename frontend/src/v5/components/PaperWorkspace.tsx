@@ -1,6 +1,6 @@
 import { Component, lazy, Suspense, useState, type ComponentType, type ReactNode } from 'react';
 import type { PaperRead } from '@/v5/contracts';
-import { paperAmount, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperPairObservation, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperTime, paperWalletInventory, paperWalletTotals, paperWords } from '@/v5/policy';
+import { paperAmount, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperPairObservation, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperSnapshotsAgree, paperTime, paperWalletInventory, paperWalletTotals, paperWords } from '@/v5/policy';
 import { PaperTerminalHistory } from '@/v5/PaperTerminalHistory';
 import { paperSnapshotPresentation } from '@/v5/snapshot-presentation';
 import { MetricCard, PanelFrame, StatStrip } from '@/features/quant-ops/primitives';
@@ -32,7 +32,7 @@ function paperPanelState(read: PaperRead | undefined, now: number): PanelState {
 }
 
 function PaperMetric({ label, value, note, exact, state }: { label: string; value: string; note?: string; exact?: string; state?: PanelState }) {
-  return <div><MetricCard panelId={`paper-${label.toLowerCase().replaceAll(' ', '-')}`} title={label} value={value} note={note} state={state} />
+  return <div className="paper-metric-view"><MetricCard panelId={`paper-${label.toLowerCase().replaceAll(' ', '-')}`} title={label} value={value} note={note} state={state} />
     {exact && exact !== 'Not published' && <details className="paper-exact"><summary>Exact {label}</summary><p>{exact}</p><p>Owner decimal · no rounding</p></details>}</div>;
 }
 
@@ -44,15 +44,18 @@ function PaperRailUsage({ value, label }: { value: unknown; label: string }) {
 }
 
 /** Summarize the displayed sections, never process liveness or HTTP receipt. */
-function PaperObservationSummary({ reads, accountingRead, now }: { reads: PaperRead[]; accountingRead?: PaperRead; now: number }) {
+function PaperObservationSummary({ reads, accountingRead, now, bot }: { reads: PaperRead[]; accountingRead?: PaperRead; now: number; bot: string }) {
   const sections = ['status', 'wallet', 'positions', 'fills', 'executors', 'risk', 'decisions', 'history'];
   const parts = [...sections.map(section => reads.find(read => read.section === section)), accountingRead];
+  const present = parts.filter((read): read is PaperRead => read !== undefined);
+  const bound = present.length === parts.length && paperSnapshotsAgree(present) && present.every(read => read.bot_id === bot && read.completeness === 'complete' && !read.next_cursor);
   const states = parts.map(read => paperPanelState(read, now));
-  const kind = states.some(state => state.kind === 'stale') ? 'stale' : states.some(state => state.kind !== 'fresh') ? 'incomplete' : 'fresh';
+  const kind = states.some(state => state.kind === 'stale') ? 'stale' : !bound || states.some(state => state.kind !== 'fresh') ? 'incomplete' : 'fresh';
   const label = kind === 'stale' ? 'Stale owner sections' : kind === 'incomplete' ? 'Incomplete owner sections' : 'Available owner sections';
   return <PanelFrame panelId="paper-observation-summary" title={label} state={{kind}}>
     <p className="paper-caption">{paperSnapshotPresentation(reads.find(read => read.section === 'status')?.generated_at_ms, now, false).label}. Section availability and process heartbeat remain separate.</p>
-    <details><summary>Inspect owner sections</summary><dl className="paper-detail">{parts.map((read,index) => <div className="paper-exact-row" key={sections[index] ?? 'accounting'}><dt>{paperWords(sections[index] ?? 'accounting')}</dt><dd>{paperWords(read ? paperReadState(read,now) : 'collecting')} · {paperTime(read?.source_at_ms ?? read?.generated_at_ms,now)}{read?.reason ? ` · ${paperWords(read.reason)}` : ''}</dd></div>)}</dl></details>
+    {!bound && <p className="paper-caption">Owner and snapshot binding is incomplete. No aggregate freshness is inferred.</p>}
+    <details><summary>Inspect owner sections</summary><dl className="paper-detail">{parts.map((read,index) => <div className="paper-exact-row" key={sections[index] ?? 'accounting'}><dt>{paperWords(sections[index] ?? 'accounting')}</dt><dd>{paperWords(read ? paperReadState(read,now) : 'collecting')} · {paperTime(read?.source_at_ms ?? read?.generated_at_ms,now)}{read?.reason ? ` · ${paperWords(read.reason)}` : ''}<br />Owner: {read?.bot_id ?? 'Not published'} · Snapshot: {read?.snapshot_id ?? 'Not published'}</dd></div>)}</dl></details>
   </PanelFrame>;
 }
 
@@ -101,6 +104,27 @@ function PaperIsolatedSection({ name, resetKey, render }: { name: string; resetK
   return <PaperSectionBoundary name={name} resetKey={resetKey}><PaperSectionContent render={render} /></PaperSectionBoundary>;
 }
 
+/** Render one controller row from all received safety evidence. Retention owns supersession. */
+function paperHeldControllers(reads: PaperRead[], now: number) {
+  type Controller = NonNullable<ReturnType<typeof paperRiskControllers>>[number];
+  const controllers = new Map<string, Controller>();
+  const flag = (left: unknown, right: unknown) => left === true || right === true ? true : left === false && right === false ? false : undefined;
+  for (const read of reads) for (const controller of paperRiskControllers(read, now) ?? []) {
+    // Newer owner adapters expose entryHold; preserve the pinned adapter's published field too.
+    const entryHold = (controller as Controller & { entryHold?: boolean | null }).entryHold;
+    const received: Controller = { ...controller, operator: { ...controller.operator }, native: { ...controller.native,
+      entry_hold: typeof entryHold === 'boolean' ? entryHold : controller.native.entry_hold } };
+    const prior = controllers.get(controller.id);
+    controllers.set(controller.id, !prior ? received : { ...received,
+      current: prior.current && received.current,
+      operator: { ...received.operator, paused: flag(prior.operator.paused, received.operator.paused), emergency: flag(prior.operator.emergency, received.operator.emergency) },
+      native: { ...received.native, entry_hold: flag(prior.native.entry_hold, received.native.entry_hold), latched: flag(prior.native.latched, received.native.latched) },
+      holds: [...new Map([...prior.holds, ...received.holds].map(hold => [JSON.stringify([hold.reason, hold.explanation, hold.protected_exits]), hold])).values()],
+    });
+  }
+  return [...controllers.values()];
+}
+
 export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accountingError = false, complete = true, readFailed = false, now, reportAt, heartbeat, bot }: { reads: PaperRead[]; safetyReads?: PaperRead[]; accountingRead?: PaperRead; accountingError?: boolean; complete?: boolean; readFailed?: boolean; now: number; reportAt: number | null; heartbeat: string; bot: string }) {
   const riskEvidence = [...new Set([...reads.filter(read => read.section === 'risk'), ...safetyReads])];
   const holds = [...new Map(riskEvidence.flatMap(read => paperRiskHolds(read)).map(hold => [hold.reason, hold])).values()];
@@ -120,12 +144,12 @@ export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accoun
   const risk = paperObject(bySection.risk?.data);
   const rails = complete ? paperRiskUsage(bySection.risk, now) ?? [] : [];
   const riskControllers = paperRiskControllers(bySection.risk, now);
-  const safetyControllers = riskEvidence.flatMap((read, evidence) => (paperRiskControllers(read, now) ?? []).map(controller => ({...controller, evidence})));
-  const entryHoldObserved = hold || safetyControllers.some(controller => controller.holds.length || controller.operator.paused === true || controller.operator.emergency === true || controller.native.entry_hold === true);
+  const safetyControllers = paperHeldControllers(riskEvidence, now);
+  const entryHoldObserved = hold || safetyControllers.some(controller => controller.holds.length || controller.operator.paused === true || controller.operator.emergency === true || controller.native.entry_hold === true || controller.native.latched === true);
   return <div data-paper-workspace>
-    {complete && <PaperObservationSummary reads={reads} accountingRead={accountingRead} now={now} />}
+    {complete && <PaperObservationSummary reads={reads} accountingRead={accountingRead} now={now} bot={bot} />}
     {errors.map(error => <section className="v5-error-panel" role="alert" key={error}>{error}</section>)}
-    {entryHoldObserved && <PaperIsolatedSection name="Entry hold" resetKey={resetKey} render={() => <aside className="paper-fleet" role="status"><div className="paper-section-heading"><h2>New acquisitions held</h2><PaperBadge state="degraded">{safetyControllers.some(controller => controller.operator.emergency === true) ? "Emergency halt reported" : "Owner action required"}</PaperBadge></div><div className="paper-rails">{holds.map(item => <article key={item.reason}><h3>{item.label}</h3><p>{item.explanation}</p><p className="paper-caption">{item.action}</p></article>)}</div>{safetyControllers.filter(controller => controller.holds.length || controller.operator.paused === true || controller.operator.emergency === true || controller.native.entry_hold === true).map(controller => <article key={`${controller.evidence}:${controller.id}`}><h3>{controller.id}</h3><PaperBadge state="degraded">New entries held</PaperBadge><p>Reported operator pause: {controller.operator.paused === true ? "Yes" : controller.operator.paused === false ? "No" : "Not published"} · Reported emergency halt: {controller.operator.emergency === true ? "Yes" : controller.operator.emergency === false ? "No" : "Not published"} · Reported native entry hold: {controller.native.entry_hold === true ? "Yes" : controller.native.entry_hold === false ? "No" : "Not published"}</p>{controller.holds.map(item => <p key={item.reason}>{item.explanation} Protective exits: preserved.</p>)}</article>)}<p className="paper-caption">Received and retained safety evidence can differ from the displayed data snapshot. Omitted controllers remain unknown, not cleared. Only qualified newer evidence for that controller or owner hold list can supersede a received hold.</p><p className="paper-caption">Clock high-water mark: {paperTime(paperObject(risk.clock_recovery).high_water_ms, now)}. Order protection is verified per position below.</p></aside>} /> }
+    {entryHoldObserved && <PaperIsolatedSection name="Entry hold" resetKey={resetKey} render={() => <aside className="paper-fleet" role="status"><div className="paper-section-heading"><h2>New acquisitions held</h2><PaperBadge state="degraded">{safetyControllers.some(controller => controller.operator.emergency === true) ? "Emergency halt reported" : "Owner action required"}</PaperBadge></div><div className="paper-rails">{holds.map(item => <article key={item.reason}><h3>{item.label}</h3><p>{item.explanation}</p><p className="paper-caption">{item.action}</p></article>)}</div>{safetyControllers.filter(controller => controller.holds.length || controller.operator.paused === true || controller.operator.emergency === true || controller.native.entry_hold === true || controller.native.latched === true).map(controller => <article key={controller.id}><h3>{controller.id}</h3><PaperBadge state="degraded">New entries held</PaperBadge><p>Reported operator pause: {controller.operator.paused === true ? "Yes" : controller.operator.paused === false ? "No" : "Not published"} · Reported emergency halt: {controller.operator.emergency === true ? "Yes" : controller.operator.emergency === false ? "No" : "Not published"} · Reported native entry hold: {controller.native.entry_hold === true ? "Yes" : controller.native.entry_hold === false ? "No" : "Not published"}{controller.native.latched === true && " · Reported native entry latch: Yes"}</p>{controller.holds.map(item => <p key={JSON.stringify([item.reason,item.explanation])}>{item.explanation} Protective exits: preserved.</p>)}</article>)}<p className="paper-caption">Received and retained safety evidence can differ from the displayed data snapshot. Omitted controllers remain unknown, not cleared. Only qualified newer evidence for that controller or owner hold list can supersede a received hold.</p><p className="paper-caption">Clock high-water mark: {paperTime(paperObject(risk.clock_recovery).high_water_ms, now)}. Order protection is verified per position below.</p></aside>} /> }
     {!complete ? readFailed ? <section className="paper-section" role="status"><h2>Owner snapshot unavailable</h2><p>The read failed before a complete owner snapshot arrived. Received safety evidence remains visible. No absent controls or capital totals are inferred.</p></section> : <section className="paper-section" role="status"><h2>Checking owner snapshot</h2><p>Risk controls and numeric rail limits are pending until the complete owner snapshot arrives. No absent controls or capital totals are inferred.</p><ul>{["status", "wallet", "positions", "fills", "executors", "risk", "decisions", "history", "accounting"].map(section => <li key={section}>{paperWords(section)}: {bySection[section] ? "Received · awaiting complete snapshot" : "Pending"}</li>)}</ul></section> : <>
     <PaperIsolatedSection name="Paper fleet" resetKey={resetKey} render={() => <PanelFrame panelId="paper-fleet" title="Paper fleet" scopeLabel="SIMULATED ACCOUNT" actions={<PaperBadge state={heartbeat === "Fresh" ? "available" : "stale"}>{heartbeat} · heartbeat</PaperBadge>}><p className="paper-caption">{bot} · Valuation: {paperWords(wallet.valuation_policy)}. Book freshness and completeness are separate from process heartbeat.</p><TileGrid label="Paper fleet metrics" min={230}>
       <PaperMetric label="Wallet equity" value={paperAmount(walletTotals?.equity, "USDC")} state={paperPanelState(bySection.wallet,now)} exact={paperExactAmount(walletTotals?.equity,"USDC")} note={walletTotals ? "Fresh complete owner wallet" : "Fresh complete wallet required"} />

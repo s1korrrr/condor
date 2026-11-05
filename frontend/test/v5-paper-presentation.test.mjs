@@ -27,14 +27,17 @@ test('paper view retains simulated disclosure, independent heartbeat and exact o
   assert.match(html,/Remaining basis/);
 });
 
+const metricMarkup=(html,id)=>html.match(new RegExp(`<article[^>]*data-panel-id="${id}"[^>]*>[\\s\\S]*?<\/article>`))?.[0]??'';
+
 test('zero and unavailable accounting stay distinct; large and negative exact detail survives', () => {
   const reads=fixture();
   Object.assign(reads.accounting.data.program,{realized_pnl_quote:'-0.000001',unrealized_pnl_quote:'0',fees_paid_quote:'9007199254740993.00001'});
   const html=render(reads);
-  assert.match(html,/0\.0000 USDC/);
+  assert.match(metricMarkup(html,'paper-unrealized-pnl'),/0\.0000 USDC/);
   assert.match(html,/9,007,199,254,740,993\.0000 USDC/);
   const missing=render(reads,{accountingRead:undefined});
-  assert.match(missing,/Not published/);
+  assert.match(metricMarkup(missing,'paper-unrealized-pnl'),/Not published/);
+  assert.doesNotMatch(metricMarkup(missing,'paper-unrealized-pnl'),/0\.0000 USDC/);
   assert.doesNotMatch(missing,/9,007,199,254,740,993/);
 });
 
@@ -70,7 +73,8 @@ test('a recent status cannot summarize stale child records as fresh', () => {
 for (const [field,value] of [['realized_pnl_quote','-0.000001'],['fees_paid_quote','9007199254740993.00001'],['unrealized_pnl_quote','0']]) test(`metric exact owner decimal survives: ${value}`, () => {
   const reads=fixture(); reads.accounting.data.program[field]=value;
   const html=render(reads);
-  assert.ok(html.includes(`${value} USDC`),'exact detail must preserve every owner digit and sign');
+  const label={realized_pnl_quote:'Realized PnL',fees_paid_quote:'Fees paid',unrealized_pnl_quote:'Unrealized PnL'}[field];
+  assert.ok(html.includes(`<summary>Exact ${label}</summary><p>${value} USDC</p>`),'the metric disclosure must preserve every owner digit and sign');
 });
 
 test('kit percent contract consumes 0.12 as 12 percent once', () => {
@@ -149,4 +153,67 @@ test('only all available sections produce the available summary; heartbeat stays
 test('old PaperWorkspace import resolves to the extracted component', () => {
   const {load}=frontendModules(overrides);
   assert.equal(load('pages/tabs/ActiveBotsTab.tsx').PaperWorkspace,load('v5/components/PaperWorkspace.tsx').PaperWorkspace);
+});
+
+test('summary cannot be fresh when accounting belongs to another snapshot', () => {
+  const reads=fixture();
+  for(const read of Object.values(reads)){read.state='available';read.completeness='complete';read.next_cursor=null;}
+  reads.accounting.snapshot_id='other-owner-snapshot';
+  const html=render(reads);
+  assert.match(html,/data-panel-id="paper-observation-summary"[^>]*data-state="incomplete"/);
+  assert.doesNotMatch(html,/Available owner sections/);
+});
+
+function heldEvidence() {
+  const reads=fixture();
+  const id=Object.keys(reads.risk.data.controllers)[0];
+  const controller=reads.risk.data.controllers[id];
+  controller.operator={...controller.operator,paused:true,emergency:false};
+  reads.risk.data.controllers={[id]:controller};
+  reads.risk.data.native_entry_holds=[];
+  reads.risk.data.control_hold='clock_anomaly';
+  const retained=structuredClone(reads.risk);
+  retained.snapshot_id='next:1';retained.generated_at_ms+=1000;retained.source.sequence+=1;
+  retained.data.controllers[id].operator={paused:false,emergency:true};
+  return {reads,id,retained};
+}
+const heldAside = html => html.match(/<aside\b[^>]*class="paper-fleet"[\s\S]*?<\/aside>/)?.[0] ?? '';
+const controllerRows = (html,id) => html.split(`<h3>${id}</h3>`).length-1;
+
+test('held controller appears once with the union of displayed pause and retained emergency', () => {
+  const {reads,id,retained}=heldEvidence();
+  const before=structuredClone({reads,retained});
+  const aside=heldAside(render(reads,{safetyReads:[retained]}));
+  assert.equal(controllerRows(aside,id),1);
+  assert.match(aside,/Reported operator pause: Yes/);
+  assert.match(aside,/Reported emergency halt: Yes/);
+  assert.match(aside,/Retained clock evidence|clock anomalies/i);
+  assert.deepEqual({reads,retained},before,'presentation does not mutate retained or displayed evidence');
+});
+
+test('held controller is not duplicated by cloned repeated safety signals', () => {
+  const {reads,id}=heldEvidence();
+  const aside=heldAside(render(reads,{safetyReads:[structuredClone(reads.risk),structuredClone(reads.risk)]}));
+  assert.equal(controllerRows(aside,id),1);
+  assert.match(aside,/Reported operator pause: Yes/);
+});
+
+test('held controller union preserves native entry reasons and latch alongside operator evidence', () => {
+  const {reads,id,retained}=heldEvidence();
+  reads.risk.data.native_entry_holds=[{controller_id:id,reason:'native_refusal_owner_ambiguous',explanation:'Displayed native ownership evidence',protected_exits:'preserved'}];
+  retained.data.native_entry_holds=[{controller_id:id,reason:'native_refusal_receipt_pending',explanation:'Retained native refusal evidence',protected_exits:'preserved'}];
+  retained.data.controllers[id].native={complete:false,entry_hold:true,latched:true};
+  const aside=heldAside(render(reads,{safetyReads:[retained]}));
+  assert.equal(controllerRows(aside,id),1);
+  for(const text of ['Reported operator pause: Yes','Reported emergency halt: Yes','Reported native entry hold: Yes','Displayed native ownership evidence','Retained native refusal evidence'])assert.ok(aside.includes(text),text);
+});
+
+test('invalid displayed risk cannot remove any retained controller signals', () => {
+  const {reads,id,retained}=heldEvidence();
+  const paused=structuredClone(reads.risk);
+  reads.risk.reason={invalid:true};
+  const aside=heldAside(render(reads,{safetyReads:[retained,paused]}));
+  assert.equal(controllerRows(aside,id),1);
+  assert.match(aside,/Reported operator pause: Yes/);
+  assert.match(aside,/Reported emergency halt: Yes/);
 });

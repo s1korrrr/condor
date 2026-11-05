@@ -352,7 +352,11 @@ export function paperRiskControllers(read: import("./contracts").PaperRead | und
   const risk = read.data as import("./contracts").PaperRiskData;
   return risk?.controllers ? Object.entries(risk.controllers).map(([id, controller]) => {
     const holds = risk.native_entry_holds?.filter(hold => hold.controller_id === id) ?? [];
-    return { id, ...controller, current: paperCompleteRead(read, now), holds, entryHold: paperNativeEntryHold(controller.native ?? {}, holds) };
+    const entryHold = paperNativeEntryHold(controller.native ?? {}, holds);
+    // A report can clear a retained hold only if it states every hold flag: both operator booleans and a known native
+    // entry hold (known "no hold" needs complete native evidence and latched === false). Unknown is never a clear.
+    const explicit = typeof controller.operator?.paused === "boolean" && typeof controller.operator?.emergency === "boolean" && entryHold !== null;
+    return { id, ...controller, current: paperCompleteRead(read, now), holds, entryHold, explicit };
   }) : null;
 }
 

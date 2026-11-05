@@ -17,7 +17,7 @@ function signalKeys(read: PaperRead): string[] {
     ...(paperRiskControllers(read, 0) ?? []).flatMap(controller => [
       ...(controller.operator.emergency === true ? [`${controller.id}:emergency`] : []),
       ...(controller.operator.paused === true ? [`${controller.id}:paused`] : []),
-      ...(controller.native.entry_hold === true || controller.native.latched === true ? [`${controller.id}:entry_hold`] : []),
+      ...(controller.entryHold === true ? [`${controller.id}:entry_hold`] : []),
       ...controller.holds.map(hold => `${controller.id}:${hold.reason}`),
     ]),
   ];
@@ -43,7 +43,8 @@ function riskSupersedes(read: PaperRead): boolean {
 }
 
 function uncoveredSafety(read: PaperRead, newer: PaperRead): PaperRead {
-  const covered = new Set((paperRiskControllers(newer, 0) ?? []).map(controller => controller.id));
+  // Only controllers whose newer report states every hold flag explicitly can clear retained signals (R97-SOL-2).
+  const covered = new Set((paperRiskControllers(newer, 0) ?? []).filter(controller => controller.explicit).map(controller => controller.id));
   const data = read.data as PaperRiskData & Record<string, unknown>;
   const ownerCovered = Array.isArray((newer.data as Record<string, unknown> | null)?.holds);
   return {...read, data:{...data,

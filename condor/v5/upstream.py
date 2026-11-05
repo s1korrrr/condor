@@ -14,16 +14,33 @@ from .config import Settings, read_secret_file
 
 MAX_RESPONSE_BYTES = 256_000
 MAX_REQUEST_BYTES = 2_048
+# The observation API bounds each paper read by its own deadline
+# (hummingbot-api v5_advisory READ_WAIT_SECONDS = 6.0) and then answers with a
+# typed PAPER_READ_CAPACITY refusal. The client deadline must exceed it so the
+# owner's answer or typed refusal arrives instead of an untyped client timeout.
+PAPER_READ_TIMEOUT_SECONDS = 8.0
+# Typed paper refusals the observation API publishes; anything else is dropped.
+PAPER_UPSTREAM_DETAIL = {
+    "PAPER_READ_CAPACITY": {"queue_full", "wait_timeout"},
+    "PAPER_SOURCE_UNREADABLE": {"corruption", "payload_too_complex"},
+    "PAPER_SOURCE_INVALID": {"corruption", "payload_too_complex"},
+}
 
 
 class UpstreamError(RuntimeError):
     def __init__(
-        self, code: str, *, http_status: int = 503, body: dict[str, Any] | None = None
+        self,
+        code: str,
+        *,
+        http_status: int = 503,
+        body: dict[str, Any] | None = None,
+        upstream_detail: dict[str, str] | None = None,
     ):
         super().__init__(code)
         self.code = code
         self.http_status = http_status
         self.body = body or {}
+        self.upstream_detail = upstream_detail or {}
 
 
 class V5Upstream:
@@ -91,6 +108,7 @@ class V5Upstream:
                                 code,
                                 http_status=response.status,
                                 body=_safe_refusal(result),
+                                upstream_detail=_safe_paper_detail(result),
                             )
                         return result
         except (asyncio.TimeoutError, TimeoutError) as exc:
@@ -172,6 +190,7 @@ class V5Upstream:
             base_url,
             path,
             token_file,
+            **({"timeout_sec": PAPER_READ_TIMEOUT_SECONDS} if paper_route else {}),
         )
 
     async def task_profiles(self) -> dict[str, Any]:
@@ -195,6 +214,19 @@ class V5Upstream:
             payload={"task_id": task_id, "snapshot_id": snapshot_id},
             timeout_sec=12.0,
         )
+
+
+def _safe_paper_detail(value: dict[str, Any]) -> dict[str, str]:
+    """Return only an allowlisted typed paper refusal code and reason."""
+    detail = value.get("detail")
+    if not isinstance(detail, dict):
+        return {}
+    code, reason = detail.get("code"), detail.get("reason")
+    if not isinstance(code, str) or not isinstance(reason, str):
+        return {}
+    if reason not in PAPER_UPSTREAM_DETAIL.get(code, ()):
+        return {}
+    return {"upstream_code": code, "upstream_reason": reason}
 
 
 def _safe_refusal(value: dict[str, Any]) -> dict[str, Any]:

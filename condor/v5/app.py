@@ -476,7 +476,10 @@ def create_app(
                         reason="Lifetime accounting export is not yet published by the observation API.",
                     )
                     return result
-                raise HTTPException(exc.http_status, detail={"code": exc.code}) from exc
+                raise HTTPException(
+                    exc.http_status,
+                    detail={"code": exc.code, **exc.upstream_detail},
+                ) from exc
             return read_compatibility_path(path, paper, paper_read=payload)
         return result
 

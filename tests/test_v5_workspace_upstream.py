@@ -159,3 +159,75 @@ async def test_valid_report_after_ten_second_provider_budget_fits_twelve_second_
     assert result["status"] == "ACCEPTED"
     assert result["effect"] == "NONE"
     assert timeouts[-1].total == 12
+
+
+# hummingbot-api v5_advisory paper_observation.READ_WAIT_SECONDS at c0c016d0.
+OBSERVATION_PAPER_READ_WAIT_SECONDS = 6.0
+
+
+class TypedRefusalAfterDeadline(Response):
+    async def __aenter__(self):
+        # The observation API answers just after its own six-second read deadline
+        # with a typed PAPER_READ_CAPACITY refusal; the client must still be
+        # waiting, or the owner's typed answer becomes an untyped client timeout.
+        assert OBSERVATION_PAPER_READ_WAIT_SECONDS + 0.5 < timeouts[-1].total
+        return self
+
+
+class PaperSession(Session):
+    body = (
+        b'{"detail":{"code":"PAPER_READ_CAPACITY","reason":"wait_timeout",'
+        b'"wait_seconds":6.0,"max_requests":1}}'
+    )
+
+    def request(self, method, url, **kwargs):
+        requests.append((method, url, kwargs))
+        if "/v1/paper/" in url:
+            return TypedRefusalAfterDeadline(503, self.body)
+        return Response(200, b'{"tasks":[]}')
+
+
+@pytest.mark.asyncio
+async def test_paper_read_outlasts_owner_deadline_and_keeps_typed_refusal(tmp_path):
+    requests.clear()
+    timeouts.clear()
+    upstream = V5Upstream(make_settings(tmp_path), session_factory=PaperSession)
+    with pytest.raises(UpstreamError) as caught:
+        await upstream.observation("/v1/paper/status")
+    assert caught.value.http_status == 503
+    assert caught.value.code == "upstream_unavailable"
+    assert caught.value.upstream_detail == {
+        "upstream_code": "PAPER_READ_CAPACITY",
+        "upstream_reason": "wait_timeout",
+    }
+    await upstream.task_profiles()
+    assert timeouts[-1].total == 5, "non-paper reads keep their own bound"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "body",
+    [
+        b'{"detail":{"code":"PAPER_READ_CAPACITY","reason":"anything else"}}',
+        b'{"detail":{"code":"OTHER","reason":"wait_timeout"}}',
+        b'{"detail":"PAPER_SNAPSHOT_CHANGED"}',
+        b'{"detail":{"code":"PAPER_SOURCE_INVALID","reason":"corruption","cause":"free text"}}',
+    ],
+)
+async def test_paper_refusal_detail_is_allowlisted(tmp_path, body):
+    class Refusing(PaperSession):
+        pass
+
+    Refusing.body = body
+    timeouts.clear()
+    upstream = V5Upstream(make_settings(tmp_path), session_factory=Refusing)
+    with pytest.raises(UpstreamError) as caught:
+        await upstream.observation("/v1/paper/status")
+    detail = caught.value.upstream_detail
+    if b"PAPER_SOURCE_INVALID" in body:
+        assert detail == {
+            "upstream_code": "PAPER_SOURCE_INVALID",
+            "upstream_reason": "corruption",
+        }
+    else:
+        assert detail == {}

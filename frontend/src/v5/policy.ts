@@ -293,16 +293,142 @@ export function paperWalletTotals(read: import("./contracts").PaperRead | undefi
   return { equity: wallet.equity_quote, cash: assets.find(asset => asset.asset === wallet.quote_asset)?.available };
 }
 
+const PAPER_DECIMAL = /^\d+(\.\d+)?$/;
+const paperDecimal = (value: unknown): value is string => typeof value === "string" && value.length <= 128 && PAPER_DECIMAL.test(value);
+
+/** Exact sum of non-negative decimal strings; the result keeps the longest fraction. */
+export function paperDecimalSum(values: readonly string[]): string {
+  const places = Math.max(0, ...values.map(value => value.split(".")[1]?.length ?? 0));
+  const total = values.reduce((sum, value) => {
+    const [whole, fraction = ""] = value.split(".");
+    return sum + BigInt(whole + fraction.padEnd(places, "0"));
+  }, 0n).toString().padStart(places + 1, "0");
+  return places ? `${total.slice(0, -places)}.${total.slice(-places)}` : total;
+}
+
+/**
+ * Native per-controller rails (owner native-risk.v1) when the owner publishes no flat `rails` list.
+ * Exposure use is marked exposure over the pair cap, both owner USDC amounts; nothing else is inferred.
+ */
+function paperNativeRails(risk: import("./contracts").PaperRiskData | null): Record<string, unknown>[] | null {
+  if (!risk?.controllers || typeof risk.controllers !== "object") return null;
+  return Object.entries(risk.controllers).map(([id, controller]) => {
+    const native = controller?.native ?? {};
+    const limits = native.configured_limits && typeof native.configured_limits === "object" ? native.configured_limits as Record<string, unknown> : {};
+    const complete = native.complete === true;
+    const used = complete && paperDecimal(native.marked_exposure) ? native.marked_exposure : null;
+    const limit = complete && paperDecimal(limits.pair_quote) && Number(limits.pair_quote) > 0 ? limits.pair_quote : null;
+    const latch = native.latched === true ? "Yes" : native.latched === false ? "No" : "Not published";
+    return {
+      label: `${id} marked exposure`,
+      used_quote: used,
+      limit_quote: limit,
+      used_percent: used !== null && limit !== null ? Number(used) / Number(limit) * 100 : null,
+      note: complete
+        ? `Pair cap ${paperExactAmount(limits.pair_quote, "USDC")} · program cap ${paperExactAmount(limits.program_quote, "USDC")} · reserved admission ${paperAmount(native.reserved_admission, "USDC")} · daily loss use ${paperAmount(native.daily_loss_use, "USDC")} · drawdown use ${paperAmount(native.drawdown_use, "USDC")} · native entry latch: ${latch} (${paperWords(native.reason)})`
+        : `Native risk evidence incomplete: ${paperWords(native.stale_reason ?? native.reason ?? "not published")}. No use is inferred.`,
+    };
+  });
+}
+
 export function paperRiskUsage(read: import("./contracts").PaperRead | undefined, now: number): Record<string, unknown>[] | null {
   if (!read || read.section !== "risk" || !paperCompleteRead(read, now)) return null;
-  const risk = read.data as { rails?: Record<string, unknown>[] } | null;
-  return Array.isArray(risk?.rails) ? risk.rails : null;
+  const risk = read.data as (import("./contracts").PaperRiskData & { rails?: Record<string, unknown>[] }) | null;
+  return Array.isArray(risk?.rails) ? risk.rails : paperNativeRails(risk);
+}
+
+/**
+ * Native entry hold per the owner native-risk.v1 contract: `latched` is the native loss-rail entry pause;
+ * `entry_hold` is published only on the unavailable path. Unknown stays null, never "No".
+ */
+export function paperNativeLatch(native: Record<string, unknown>): boolean | null {
+  if (native.entry_hold === true || native.latched === true) return true;
+  if (native.complete === true && native.latched === false) return false;
+  return null;
+}
+
+function paperNativeEntryHold(native: Record<string, unknown>, holds: readonly unknown[]): boolean | null {
+  const latch = paperNativeLatch(native);
+  if (latch === true || holds.length > 0) return true;
+  return latch === false ? false : null;
 }
 
 export function paperRiskControllers(read: import("./contracts").PaperRead | undefined, now: number) {
   if (!read || read.section !== "risk" || paperSectionError(read)) return null;
   const risk = read.data as import("./contracts").PaperRiskData;
-  return risk?.controllers ? Object.entries(risk.controllers).map(([id, controller]) => ({ id, ...controller, current: paperCompleteRead(read, now), holds: risk.native_entry_holds?.filter(hold => hold.controller_id === id) ?? [] })) : null;
+  return risk?.controllers ? Object.entries(risk.controllers).map(([id, controller]) => {
+    const holds = risk.native_entry_holds?.filter(hold => hold.controller_id === id) ?? [];
+    // latch: native latch evidence (true / explicit false / unknown); entryHold adds the owner's native hold list.
+    const latch = paperNativeLatch(controller.native ?? {});
+    return { id, ...controller, current: paperCompleteRead(read, now), holds, latch, entryHold: paperNativeEntryHold(controller.native ?? {}, holds) };
+  }) : null;
+}
+
+/**
+ * Pair totals over every owner position row (DCA tranches and dust), from a complete current read only.
+ * A pair holds many rows; showing one row's quantity misstates the holding.
+ */
+export function paperPairHoldings(pair: string, positions: import("./contracts").PaperRead | undefined, now: number) {
+  const rows = paperCompleteRecords(positions, now);
+  if (!rows) return null;
+  const mine = rows.filter(row => row.trading_pair === pair);
+  if (mine.some(row => !paperDecimal(row.quantity) || typeof row.state !== "string" || !row.state)) return null;
+  const byState = new Map<string, string[]>();
+  for (const row of mine) byState.set(row.state as string, [...(byState.get(row.state as string) ?? []), row.quantity as string]);
+  // Only an explicit owner flag counts either way; an omitted or malformed flag stays unknown (never "unprotected").
+  const unprotected = mine.filter(row => row.protected_exit === false);
+  return {
+    count: mine.length,
+    total: paperDecimalSum(mine.map(row => row.quantity as string)),
+    states: [...byState].map(([state, quantities]) => ({ state, count: quantities.length, quantity: paperDecimalSum(quantities) })),
+    protectedCount: mine.filter(row => row.protected_exit === true).length,
+    unprotectedCount: unprotected.length,
+    unknownCount: mine.filter(row => typeof row.protected_exit !== "boolean").length,
+    unprotectedReasons: [...new Set(unprotected.map(row => typeof row.protection_reason === "string" && row.protection_reason ? row.protection_reason : "protection_reason_not_published"))],
+  };
+}
+
+/** Owner bag state for a pair (decisions custom_info.bag), only from a complete read of the same snapshot as positions. */
+export function paperPairBag(pair: string, decisions: import("./contracts").PaperRead | undefined, positions: import("./contracts").PaperRead | undefined, now: number) {
+  if (!decisions || !positions || !paperCompleteRead(decisions, now) || !paperSnapshotsAgree([decisions, positions])) return null;
+  const controllers = (decisions.data as { controllers?: unknown } | null)?.controllers;
+  if (!Array.isArray(controllers)) return null;
+  const matches = controllers.filter(row => row && typeof row === "object" && (row as Record<string, unknown>).pair === pair) as Record<string, unknown>[];
+  if (matches.length !== 1) return null;
+  const info = matches[0].custom_info;
+  const bag = info && typeof info === "object" && !Array.isArray(info) ? (info as Record<string, unknown>).bag : null;
+  if (!bag || typeof bag !== "object" || Array.isArray(bag)) return null;
+  const value = bag as Record<string, unknown>;
+  return {
+    reason: typeof value.reason === "string" ? value.reason : null,
+    heldAmount: paperDecimal(value.held_amount) ? value.held_amount : null,
+    breakevenPrice: typeof value.breakeven_price === "string" && /^\d+(\.\d+)?$/.test(value.breakeven_price) ? value.breakeven_price : null,
+    trailArmed: typeof value.trail_armed === "boolean" ? value.trail_armed : null,
+    trailPeak: paperDecimal(value.trail_peak) ? value.trail_peak : null,
+    release: typeof value.release === "string" ? value.release : null,
+  };
+}
+
+const PAPER_TRANSIENT_UPSTREAM = new Set(["queue_full", "wait_timeout"]);
+
+/**
+ * Operator text for a failed paper read. A timeout or owner read-capacity refusal is typed as transient;
+ * an unreadable or invalid owner publication is not. Numbers are never substituted in either case.
+ */
+export function paperReadFailureMessage(status: number, body: unknown): string {
+  const detail = body && typeof body === "object" && !Array.isArray(body) ? (body as Record<string, unknown>).detail : null;
+  const field = (name: string) => detail && typeof detail === "object" && !Array.isArray(detail) && typeof (detail as Record<string, unknown>)[name] === "string" ? (detail as Record<string, unknown>)[name] as string : null;
+  const code = field("code"), upstreamCode = field("upstream_code"), upstreamReason = field("upstream_reason");
+  const typed = [`HTTP ${status}`, code, upstreamCode, upstreamReason].filter(Boolean).join(" · ");
+  if (status === 409) return "The owner snapshot changed. Refresh to read a coherent snapshot.";
+  if (status === 401) return "Your workspace session expired. Sign in again.";
+  if (status === 503 && (code === "upstream_timeout" || upstreamCode === "PAPER_READ_CAPACITY" && PAPER_TRANSIENT_UPSTREAM.has(upstreamReason ?? ""))) {
+    return `Transient: the observation service did not answer within its read deadline (${typed}). This happens under host CPU load; the next refresh retries. No numbers are shown from an incomplete read.`;
+  }
+  if (status === 503 && (upstreamCode === "PAPER_SOURCE_UNREADABLE" || upstreamCode === "PAPER_SOURCE_INVALID")) {
+    return `The owner publication could not be read or failed validation (${typed}). Check the observation diagnostics; no empty wallet is substituted.`;
+  }
+  return `Paper observations are unavailable (${typed}). Check the observation service and its retained read-contract evidence; no empty wallet is substituted.`;
 }
 
 export function paperLifetimeTotals(read: import("./contracts").PaperRead | undefined, snapshot: import("./contracts").PaperRead | undefined, now: number): Record<string, unknown> | null {
@@ -385,7 +511,13 @@ export function paperExitProjection(position: Record<string, unknown> | undefine
     const stale = paperReadState(issue, now) === "stale";
     const reportedAt = issue?.source_at_ms ?? issue?.generated_at_ms;
     const since = typeof reportedAt === "number" ? reportedAt + (stale && now - reportedAt > 30_000 ? 30_000 : 0) : null;
-    return { verified: false, targetPrice: null, basis: null, reason: `Protection status unknown · ${issue === positions ? "position" : "executor"} data ${stale ? "stale" : "incomplete"} since ${paperTime(since, now)}`, remainingAmount: null, order: null, protectedExit: null };
+    const missing = `${issue === positions ? "position" : "executor"} data ${stale ? "stale" : "incomplete"} since ${paperTime(since, now)}`;
+    // Only when the executor read itself is partial, stale or missing is the cross-check unavailable; the complete,
+    // current positions read then still carries the owner's own per-position statement. Show it as owner-reported,
+    // never as an executor-verified exit. A complete executor read that contradicts the position stays unknown.
+    const owned = !paperCompleteRead(executors, now) && !!position && typeof position.protected_exit === "boolean" && !!paperCompleteRecords(positions, now)?.includes(position);
+    const statement = owned ? `Owner-reported: ${position!.protected_exit ? "protected exit present" : "no protected exit"}${typeof position!.protection_reason === "string" && position!.protection_reason ? ` · ${paperWords(position!.protection_reason)}` : ""} · executor cross-check unavailable (${missing})` : `Protection status unknown · ${missing}`;
+    return { verified: false, targetPrice: null, basis: null, reason: statement, remainingAmount: null, order: null, protectedExit: null };
   }
   const executor = matches[0];
   const record = position && "target_price" in position ? position : executor;

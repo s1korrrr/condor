@@ -1,0 +1,102 @@
+{
+  "recorded_at_utc": "2026-11-05T17:43:34.946723+00:00",
+  "base": "e0005086169bd8b0ea9e1776f616e791d557cb48",
+  "base_red": {
+    "exit": 1,
+    "raw_log": "/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/before.log",
+    "raw_sha256": "320289da2bd9ac9186739f90fc5e6a60c1479430f5870c6669bed165b385bc4c",
+    "counts": {
+      "tests": 10,
+      "pass": 0,
+      "fail": 10,
+      "skipped": 0
+    },
+    "failed_cases": [
+      "a recent status cannot summarize stale child records as fresh",
+      "metric exact owner decimal survives: -0.000001",
+      "metric exact owner decimal survives: 9007199254740993.00001",
+      "metric exact owner decimal survives: 0",
+      "paper rail maps percent points once and rejects a double-scaled producer value",
+      "summary retains wallet qualification",
+      "summary retains risk qualification",
+      "summary retains accounting qualification",
+      "paper record export uses exact owner decimals, units and snapshot identity",
+      "only all available sections produce the available summary; heartbeat stays independent"
+    ],
+    "assertion_failures": 10
+  },
+  "controller_union_before": {
+    "exit": 1,
+    "raw_log": "/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/hold-union-before.log",
+    "raw_sha256": "e8220de9a541f0412991f075d56b7d8d290c42d5315c681802dfd569b9834f3e",
+    "counts": {
+      "tests": 4,
+      "pass": 0,
+      "fail": 4,
+      "skipped": 0
+    },
+    "failed_cases": [
+      "held controller appears once with the union of displayed pause and retained emergency",
+      "held controller is not duplicated by cloned repeated safety signals",
+      "held controller union preserves native entry reasons and latch alongside operator evidence",
+      "invalid displayed risk cannot remove any retained controller signals"
+    ],
+    "assertion_failures": 4
+  },
+  "controller_union_after": {
+    "exit": 0,
+    "raw_log": "/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/hold-union-after.log",
+    "raw_sha256": "ce1e052a85f876122811de24e73c2db6a94e18d784f422bd03ade082996bc2f3",
+    "counts": {
+      "tests": 4,
+      "pass": 4,
+      "fail": 0,
+      "skipped": 0
+    },
+    "failed_cases": [],
+    "assertion_failures": 0
+  },
+  "focused": {
+    "exit": 0,
+    "raw_log": "/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/focused.log",
+    "raw_sha256": "9aebb1e66f78c32cfd641ccf80fbd7bcc5f0651c9c696b9f2ace4409c103effd",
+    "counts": {
+      "tests": 236,
+      "pass": 236,
+      "fail": 0,
+      "skipped": 0
+    },
+    "failed_cases": [],
+    "assertion_failures": 0
+  },
+  "tsc": {
+    "exit": 0,
+    "diagnostics": ""
+  },
+  "capture": {
+    "exit": 0,
+    "count": 20,
+    "interaction_groups": 3,
+    "source_and_png_hashes": "MATCH",
+    "fresh_fill_window_rows": 344,
+    "note": "Final fixture uses paperObservationPages to join both recorded native fill pages; application source is unchanged from the 236-test and tsc pass.",
+    "manifest_sha256": "82c187ac3daea24e88549a02e50ecee938096644a3977a5bda2660b948cd33cc"
+  },
+  "layout_before": {
+    "exit": 1,
+    "escaped_disclosures": 7
+  },
+  "runner": "r3 v4; shared runner, nice19/ionice idle; one Node test-file worker",
+  "browser_version": "157.0.8103.38",
+  "node_version": "v24.21.0",
+  "typescript_version": "5.9.3",
+  "playwright_version": "1.64.1",
+  "packaged_at_utc": "2026-11-05T17:56:59.948061+00:00",
+  "published_receipt_sha256": {
+    "focused.tap": "9aebb1e66f78c32cfd641ccf80fbd7bcc5f0651c9c696b9f2ace4409c103effd",
+    "hold-union-before.tap": "0e00d157df7b61c5748e643f73a10ad6fd744ac1d6bc181034e36b5fb2947f6c",
+    "hold-union-after.tap": "ce1e052a85f876122811de24e73c2db6a94e18d784f422bd03ade082996bc2f3",
+    "tile-layout-before.txt": "54ee1cae93f94f9b8f9281ce5b5c617198b335e14cf11e28f9d677586b1b2792"
+  },
+  "receipt_normalization": "Published text strips trailing whitespace; raw_log/raw_sha256 fields refer to untouched scratch logs."
+}

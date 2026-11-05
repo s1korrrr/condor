@@ -1,0 +1,1426 @@
+TAP version 13
+# Subtest: quant roster keeps every pair in page flow including a mixed FLAT/HOLDING bot
+ok 1 - quant roster keeps every pair in page flow including a mixed FLAT/HOLDING bot
+  ---
+  duration_ms: 29.824505
+  type: 'test'
+  ...
+# Subtest: wrong owner withholds amounts instead of borrowing another bot
+ok 2 - wrong owner withholds amounts instead of borrowing another bot
+  ---
+  duration_ms: 0.43763
+  type: 'test'
+  ...
+# Subtest: partial multi-pair report renders unavailable position count rather than a flat bot
+ok 3 - partial multi-pair report renders unavailable position count rather than a flat bot
+  ---
+  duration_ms: 9.897437
+  type: 'test'
+  ...
+# Subtest: current controller conditions are never rendered as recorded decisions
+ok 4 - current controller conditions are never rendered as recorded decisions
+  ---
+  duration_ms: 9.495082
+  type: 'test'
+  ...
+# Subtest: bots page filters, New Bot draft control and fleet panels stay in flow; money PnL tiles belong to Capital
+ok 5 - bots page filters, New Bot draft control and fleet panels stay in flow; money PnL tiles belong to Capital
+  ---
+  duration_ms: 20.549374
+  type: 'test'
+  ...
+# Subtest: local New Bot draft cannot authorize execution
+ok 6 - local New Bot draft cannot authorize execution
+  ---
+  duration_ms: 1.275603
+  type: 'test'
+  ...
+# Subtest: missing or stale lifecycle page never becomes zero active bots
+ok 7 - missing or stale lifecycle page never becomes zero active bots
+  ---
+  duration_ms: 63.090635
+  type: 'test'
+  ...
+# Subtest: per-bot lifecycle controls supplied by the guarded caller reach the owner card
+ok 8 - per-bot lifecycle controls supplied by the guarded caller reach the owner card
+  ---
+  duration_ms: 23.004497
+  type: 'test'
+  ...
+# Subtest: fresh quant data cannot make unavailable lifecycle or performance look fresh
+ok 9 - fresh quant data cannot make unavailable lifecycle or performance look fresh
+  ---
+  duration_ms: 2.8858
+  type: 'test'
+  ...
+# Subtest: bot performance frame distinguishes current paper reporting from verified live lifecycle
+ok 10 - bot performance frame distinguishes current paper reporting from verified live lifecycle
+  ---
+  duration_ms: 6.647801
+  type: 'test'
+  ...
+# Subtest: missing quote evidence and conflicting quote currencies have distinct reasons
+ok 11 - missing quote evidence and conflicting quote currencies have distinct reasons
+  ---
+  duration_ms: 0.258332
+  type: 'test'
+  ...
+# Subtest: lifecycle diagnostics follows native status independently of quant summary
+ok 12 - lifecycle diagnostics follows native status independently of quant summary
+  ---
+  duration_ms: 29.219616
+  type: 'test'
+  ...
+# Subtest: weekly comparison admits matching historical quotes and counts observations, not gaps
+ok 13 - weekly comparison admits matching historical quotes and counts observations, not gaps
+  ---
+  duration_ms: 0.397538
+  type: 'test'
+  ...
+# Subtest: the card 24h change is the fleet summary pnl_day with its notes, not a client recomputation
+ok 14 - the card 24h change is the fleet summary pnl_day with its notes, not a client recomputation
+  ---
+  duration_ms: 25.740427
+  type: 'test'
+  ...
+# Subtest: a paper bot shows its simulated runtime PnL; a live bot never reads it
+ok 15 - a paper bot shows its simulated runtime PnL; a live bot never reads it
+  ---
+  duration_ms: 4.537041
+  type: 'test'
+  ...
+# Subtest: a paper bot renders the same position view as a live bot from the live runtime shape
+ok 16 - a paper bot renders the same position view as a live bot from the live runtime shape
+  ---
+  duration_ms: 0.901338
+  type: 'test'
+  ...
+# Subtest: simulated history parses for a paper id only; live ids still require the native observer
+ok 17 - simulated history parses for a paper id only; live ids still require the native observer
+  ---
+  duration_ms: 1.837031
+  type: 'test'
+  ...
+# Subtest: the paper fills feed is requested and rendered as its own labelled panel
+ok 18 - the paper fills feed is requested and rendered as its own labelled panel
+  ---
+  duration_ms: 29.716257
+  type: 'test'
+  ...
+# Subtest: decimal display preserves financial integers beyond Number precision
+ok 19 - decimal display preserves financial integers beyond Number precision
+  ---
+  duration_ms: 2.275479
+  type: 'test'
+  ...
+# Subtest: tiny holdings do not disappear through rounding; signed PnL shows at most three decimals
+ok 20 - tiny holdings do not disappear through rounding; signed PnL shows at most three decimals
+  ---
+  duration_ms: 0.331742
+  type: 'test'
+  ...
+# Subtest: invalid, nonfinite and zero remain distinct
+ok 21 - invalid, nonfinite and zero remain distinct
+  ---
+  duration_ms: 0.161936
+  type: 'test'
+  ...
+# Subtest: float-math numbers lose binary noise while exact strings are untouched
+ok 22 - float-math numbers lose binary noise while exact strings are untouched
+  ---
+  duration_ms: 0.20577
+  type: 'test'
+  ...
+# Subtest: portfolio formatValue is locale-independent and never rounds a small change to -0.00
+ok 23 - portfolio formatValue is locale-independent and never rounds a small change to -0.00
+  ---
+  duration_ms: 5.647136
+  type: 'test'
+  ...
+# Subtest: signed asset amounts keep their exact small units; only money changes are capped at three places
+ok 24 - signed asset amounts keep their exact small units; only money changes are capped at three places
+  ---
+  duration_ms: 0.200964
+  type: 'test'
+  ...
+# Subtest: sortGroup stays ascending while numeric values and nulls sort within each group
+ok 25 - sortGroup stays ascending while numeric values and nulls sort within each group
+  ---
+  duration_ms: 216.500237
+  type: 'test'
+  ...
+# Subtest: sortGroup preserves text sorting and nulls last inside each fixed group
+ok 26 - sortGroup preserves text sorting and nulls last inside each fixed group
+  ---
+  duration_ms: 93.610002
+  type: 'test'
+  ...
+# Subtest: controlled row checkboxes call selection while CSV still exports every filtered row
+ok 27 - controlled row checkboxes call selection while CSV still exports every filtered row
+  ---
+  duration_ms: 41.212937
+  type: 'test'
+  ...
+# Subtest: searchable false hides global search but leaves default search enabled
+ok 28 - searchable false hides global search but leaves default search enabled
+  ---
+  duration_ms: 38.76875
+  type: 'test'
+  ...
+# Subtest: onRowsChange runs after render with complete sorted filtered rows before pinning and pagination
+ok 29 - onRowsChange runs after render with complete sorted filtered rows before pinning and pagination
+  ---
+  duration_ms: 42.928926
+  type: 'test'
+  ...
+# Subtest: CSV export retains filtered and sorted rows beyond the page and appends escaped provenance
+ok 30 - CSV export retains filtered and sorted rows beyond the page and appends escaped provenance
+  ---
+  duration_ms: 155.983135
+  type: 'test'
+  ...
+# Subtest: CSV export without metadata keeps the existing header and row bytes
+ok 31 - CSV export without metadata keeps the existing header and row bytes
+  ---
+  duration_ms: 47.892739
+  type: 'test'
+  ...
+# Subtest: CSV export binds row-specific basis and capital provenance and protects formula-like values
+ok 32 - CSV export binds row-specific basis and capital provenance and protects formula-like values
+  ---
+  duration_ms: 40.663258
+  type: 'test'
+  ...
+# Subtest: tile grid fills rows instead of leaving a lone tile
+ok 33 - tile grid fills rows instead of leaving a lone tile
+  ---
+  duration_ms: 2.948089
+  type: 'test'
+  ...
+# Subtest: tile grid renders every child in its own size container
+ok 34 - tile grid renders every child in its own size container
+  ---
+  duration_ms: 7.792255
+  type: 'test'
+  ...
+# Subtest: time projection merges series on one axis without breaking the other series
+ok 35 - time projection merges series on one axis without breaking the other series
+  ---
+  duration_ms: 0.754625
+  type: 'test'
+  ...
+# Subtest: numeric column filters accept comparisons and ranges
+ok 36 - numeric column filters accept comparisons and ranges
+  ---
+  duration_ms: 0.347779
+  type: 'test'
+  ...
+# Subtest: data table sorts by the raw value and keeps formatted cells
+ok 37 - data table sorts by the raw value and keeps formatted cells
+  ---
+  duration_ms: 11.011769
+  type: 'test'
+  ...
+# Subtest: table search matches displayed text as well as raw values
+ok 38 - table search matches displayed text as well as raw values
+  ---
+  duration_ms: 2.884859
+  type: 'test'
+  ...
+# Subtest: a pinned row leads every sort and is never hidden behind Show all
+ok 39 - a pinned row leads every sort and is never hidden behind Show all
+  ---
+  duration_ms: 2.879942
+  type: 'test'
+  ...
+# Subtest: a grouped column sorts inside each group and never flips the group order
+ok 40 - a grouped column sorts inside each group and never flips the group order
+  ---
+  duration_ms: 6.676803
+  type: 'test'
+  ...
+# Subtest: selection adds a checkbox column whose header covers every filtered row
+ok 41 - selection adds a checkbox column whose header covers every filtered row
+  ---
+  duration_ms: 58.851188
+  type: 'test'
+  ...
+# Subtest: charts with an unsupported value range say so instead of handing Recharts an unusable axis
+ok 42 - charts with an unsupported value range say so instead of handing Recharts an unusable axis
+  ---
+  duration_ms: 274.047388
+  type: 'test'
+  ...
+# Subtest: control: the same cleared owner read without a retained anomaly clears the emergency
+ok 43 - control: the same cleared owner read without a retained anomaly clears the emergency
+  ---
+  duration_ms: 6.1446
+  type: 'test'
+  ...
+# Subtest: cleared owner read that still publishes the quarantined anomaly clears the retained emergency
+ok 44 - cleared owner read that still publishes the quarantined anomaly clears the retained emergency
+  ---
+  duration_ms: 1.270664
+  type: 'test'
+  ...
+# Subtest: the dashboard does not keep reporting an emergency the owner has cleared
+ok 45 - the dashboard does not keep reporting an emergency the owner has cleared
+  ---
+  duration_ms: 128.253165
+  type: 'test'
+  ...
+# Subtest: received owner clock_anomaly hold clears after owner clock maintenance (anomaly still published: false)
+ok 46 - received owner clock_anomaly hold clears after owner clock maintenance (anomaly still published: false)
+  ---
+  duration_ms: 70.534337
+  type: 'test'
+  ...
+# Subtest: received owner clock_anomaly hold clears after owner clock maintenance (anomaly still published: true)
+ok 47 - received owner clock_anomaly hold clears after owner clock maintenance (anomaly still published: true)
+  ---
+  duration_ms: 64.532297
+  type: 'test'
+  ...
+# Subtest: a NEW current emergency renders normally while reviewed clock anomalies remain published
+ok 48 - a NEW current emergency renders normally while reviewed clock anomalies remain published
+  ---
+  duration_ms: 67.700714
+  type: 'test'
+  ...
+# Subtest: Paper identity labels retained source IDs with age during errors
+ok 49 - Paper identity labels retained source IDs with age during errors
+  ---
+  duration_ms: 463.697207
+  type: 'test'
+  ...
+# Subtest: Paper identity labels retained source IDs with age during hours-old refocus
+ok 50 - Paper identity labels retained source IDs with age during hours-old refocus
+  ---
+  duration_ms: 188.845336
+  type: 'test'
+  ...
+# Subtest: journal exceeded keeps the named reason and explicit owner conditions
+ok 51 - journal exceeded keeps the named reason and explicit owner conditions
+  ---
+  duration_ms: 7.776839
+  type: 'test'
+  ...
+# Subtest: journal segment_capacity keeps the named reason and explicit owner conditions
+ok 52 - journal segment_capacity keeps the named reason and explicit owner conditions
+  ---
+  duration_ms: 0.503638
+  type: 'test'
+  ...
+# Subtest: journal inventory_unavailable keeps the named reason and explicit owner conditions
+ok 53 - journal inventory_unavailable keeps the named reason and explicit owner conditions
+  ---
+  duration_ms: 0.3698
+  type: 'test'
+  ...
+# Subtest: reason alone never infers native execution or held flags
+ok 54 - reason alone never infers native execution or held flags
+  ---
+  duration_ms: 0.363652
+  type: 'test'
+  ...
+# Subtest: budget state survives an unrelated stale reason and false flags remain false
+ok 55 - budget state survives an unrelated stale reason and false flags remain false
+  ---
+  duration_ms: 0.472838
+  type: 'test'
+  ...
+# Subtest: an explicit owner held condition remains visible without a known reason
+ok 56 - an explicit owner held condition remains visible without a known reason
+  ---
+  duration_ms: 0.439606
+  type: 'test'
+  ...
+# Subtest: unrelated owner status is not replaced by a journal banner
+ok 57 - unrelated owner status is not replaced by a journal banner
+  ---
+  duration_ms: 0.455509
+  type: 'test'
+  ...
+# Subtest: progress reset, error and missing completion cannot clear a received hold
+ok 58 - progress reset, error and missing completion cannot clear a received hold
+  ---
+  duration_ms: 9.383674
+  type: 'test'
+  ...
+# Subtest: only a qualified newer same-owner operations-clear completion supersedes a hold
+ok 59 - only a qualified newer same-owner operations-clear completion supersedes a hold
+  ---
+  duration_ms: 1.464753
+  type: 'test'
+  ...
+# Subtest: same sequence cannot supersede retained journal evidence
+ok 60 - same sequence cannot supersede retained journal evidence
+  ---
+  duration_ms: 0.769819
+  type: 'test'
+  ...
+# Subtest: older sequence cannot supersede retained journal evidence
+ok 61 - older sequence cannot supersede retained journal evidence
+  ---
+  duration_ms: 1.037145
+  type: 'test'
+  ...
+# Subtest: other bot cannot supersede retained journal evidence
+ok 62 - other bot cannot supersede retained journal evidence
+  ---
+  duration_ms: 0.760582
+  type: 'test'
+  ...
+# Subtest: partial status cannot supersede retained journal evidence
+ok 63 - partial status cannot supersede retained journal evidence
+  ---
+  duration_ms: 0.790548
+  type: 'test'
+  ...
+# Subtest: stale status cannot supersede retained journal evidence
+ok 64 - stale status cannot supersede retained journal evidence
+  ---
+  duration_ms: 0.775552
+  type: 'test'
+  ...
+# Subtest: unavailable operations cannot supersede retained journal evidence
+ok 65 - unavailable operations cannot supersede retained journal evidence
+  ---
+  duration_ms: 1.034823
+  type: 'test'
+  ...
+# Subtest: partial operations cannot supersede retained journal evidence
+ok 66 - partial operations cannot supersede retained journal evidence
+  ---
+  duration_ms: 1.172711
+  type: 'test'
+  ...
+# Subtest: still held diagnostic cannot supersede retained journal evidence
+ok 67 - still held diagnostic cannot supersede retained journal evidence
+  ---
+  duration_ms: 0.921628
+  type: 'test'
+  ...
+# Subtest: cursor incomplete cannot supersede retained journal evidence
+ok 68 - cursor incomplete cannot supersede retained journal evidence
+  ---
+  duration_ms: 0.579511
+  type: 'test'
+  ...
+# Subtest: old API diagnostic still exposes the named owner journal hold
+ok 69 - old API diagnostic still exposes the named owner journal hold
+  ---
+  duration_ms: 8.57831
+  type: 'test'
+  ...
+# Subtest: received new hold cannot disappear behind a prior complete healthy snapshot
+ok 70 - received new hold cannot disappear behind a prior complete healthy snapshot
+  ---
+  duration_ms: 95.653398
+  type: 'test'
+  ...
+# Subtest: history preserves the native retained-fill gap but refuses unknown scalar gaps
+ok 71 - history preserves the native retained-fill gap but refuses unknown scalar gaps
+  ---
+  duration_ms: 5.053718
+  type: 'test'
+  ...
+# Subtest: partial retained rows stay visible without becoming complete totals or flatness evidence
+ok 72 - partial retained rows stay visible without becoming complete totals or flatness evidence
+  ---
+  duration_ms: 42.527095
+  type: 'test'
+  ...
+# Subtest: Bots adaptive tables and exact details show partial fills and executor rows with bounded-window labels
+ok 73 - Bots adaptive tables and exact details show partial fills and executor rows with bounded-window labels
+  ---
+  duration_ms: 734.899781
+  type: 'test'
+  ...
+# Subtest: history pagination merges terminal records in order without duplicating journal segments or upgrading completeness
+ok 74 - history pagination merges terminal records in order without duplicating journal segments or upgrading completeness
+  ---
+  duration_ms: 2.786011
+  type: 'test'
+  ...
+# Subtest: history loads the full 500-row byte-split retained window and still stops at a bounded page budget
+ok 75 - history loads the full 500-row byte-split retained window and still stops at a bounded page budget
+  ---
+  duration_ms: 7.503196
+  type: 'test'
+  ...
+# Subtest: terminal pagination refuses changed metadata, missing pages and changed source identity
+ok 76 - terminal pagination refuses changed metadata, missing pages and changed source identity
+  ---
+  duration_ms: 3.584573
+  type: 'test'
+  ...
+# Subtest: terminal history uses the adaptive table, labels the retained window, and withholds stale or unavailable rows
+ok 77 - terminal history uses the adaptive table, labels the retained window, and withholds stale or unavailable rows
+  ---
+  duration_ms: 133.692534
+  type: 'test'
+  ...
+# Subtest: failed history page cannot erase received risk or retained journal holds
+ok 78 - failed history page cannot erase received risk or retained journal holds
+  ---
+  duration_ms: 110.132571
+  type: 'test'
+  ...
+# Subtest: FINAL3 real native API records render without losing metadata
+ok 79 - FINAL3 real native API records render without losing metadata
+  ---
+  duration_ms: 1855.068401
+  type: 'test'
+  ...
+# Subtest: real native API replay keeps available and degraded owner states distinct
+ok 80 - real native API replay keeps available and degraded owner states distinct
+  ---
+  duration_ms: 14.2906
+  type: 'test'
+  ...
+# Subtest: real native executors rejects malformed typed fields {"pnl_scope":1}
+ok 81 - real native executors rejects malformed typed fields {"pnl_scope":1}
+  ---
+  duration_ms: 2.357131
+  type: 'test'
+  ...
+# Subtest: real native executors rejects malformed typed fields {"pnl_scope":"bad scope"}
+ok 82 - real native executors rejects malformed typed fields {"pnl_scope":"bad scope"}
+  ---
+  duration_ms: 1.554227
+  type: 'test'
+  ...
+# Subtest: real native fills rejects malformed typed fields {"fee":{"fee_type":"invented","flat_fees":[],"percent":"0","percent_token":null}}
+ok 83 - real native fills rejects malformed typed fields {"fee":{"fee_type":"invented","flat_fees":[],"percent":"0","percent_token":null}}
+  ---
+  duration_ms: 1.354424
+  type: 'test'
+  ...
+# Subtest: real native fills rejects malformed typed fields {"fee":{"fee_type":"AddedToCost","flat_fees":[],"percent":0,"percent_token":null}}
+ok 84 - real native fills rejects malformed typed fields {"fee":{"fee_type":"AddedToCost","flat_fees":[],"percent":0,"percent_token":null}}
+  ---
+  duration_ms: 1.397902
+  type: 'test'
+  ...
+# Subtest: real native fills rejects malformed typed fields {"quantity":"not money"}
+ok 85 - real native fills rejects malformed typed fields {"quantity":"not money"}
+  ---
+  duration_ms: 1.378296
+  type: 'test'
+  ...
+# Subtest: real native fills rejects malformed typed fields {"quantity":false}
+ok 86 - real native fills rejects malformed typed fields {"quantity":false}
+  ---
+  duration_ms: 1.22755
+  type: 'test'
+  ...
+# Subtest: real native executors rejects malformed typed fields {"fees_paid":{"USDC":1}}
+ok 87 - real native executors rejects malformed typed fields {"fees_paid":{"USDC":1}}
+  ---
+  duration_ms: 1.491095
+  type: 'test'
+  ...
+# Subtest: history pages use the API73 limit and snapshot-bound next cursor
+ok 88 - history pages use the API73 limit and snapshot-bound next cursor
+  ---
+  duration_ms: 48.140002
+  type: 'test'
+  ...
+# Subtest: list paging stays bounded, pins epochs and cannot promote partial owner records
+ok 89 - list paging stays bounded, pins epochs and cannot promote partial owner records
+  ---
+  duration_ms: 48.376348
+  type: 'test'
+  ...
+# Subtest: real authenticated API fill pages join to the retained native record window
+ok 90 - real authenticated API fill pages join to the retained native record window
+  ---
+  duration_ms: 43.655813
+  type: 'test'
+  ...
+# Subtest: pinned API73 envelopes render owner reads without schema failures
+ok 91 - pinned API73 envelopes render owner reads without schema failures
+  ---
+  duration_ms: 627.485656
+  type: 'test'
+  ...
+# Subtest: numeric rail absence is stated only when usable rails are absent
+ok 92 - numeric rail absence is stated only when usable rails are absent
+  ---
+  duration_ms: 560.732066
+  type: 'test'
+  ...
+# Subtest: owner hold stop_intent_log_damaged renders a human label and clearing action
+ok 93 - owner hold stop_intent_log_damaged renders a human label and clearing action
+  ---
+  duration_ms: 560.121716
+  type: 'test'
+  ...
+# Subtest: owner hold ingress_unreadable renders a human label and clearing action
+ok 94 - owner hold ingress_unreadable renders a human label and clearing action
+  ---
+  duration_ms: 513.381958
+  type: 'test'
+  ...
+# Subtest: owner hold clock_anomaly renders a human label and clearing action
+ok 95 - owner hold clock_anomaly renders a human label and clearing action
+  ---
+  duration_ms: 650.835394
+  type: 'test'
+  ...
+# Subtest: owner hold paper_controls_unavailable renders a human label and clearing action
+ok 96 - owner hold paper_controls_unavailable renders a human label and clearing action
+  ---
+  duration_ms: 655.484141
+  type: 'test'
+  ...
+# Subtest: risk controllers are a keyed native map, while decisions remain a list
+ok 97 - risk controllers are a keyed native map, while decisions remain a list
+  ---
+  duration_ms: 1.531646
+  type: 'test'
+  ...
+# Subtest: C1 native target and protected exit remain exact owner values
+ok 98 - C1 native target and protected exit remain exact owner values
+  ---
+  duration_ms: 1.323664
+  type: 'test'
+  ...
+# Subtest: affirmative protection requires coherent fresh complete sections and an exact active executor ID
+ok 99 - affirmative protection requires coherent fresh complete sections and an exact active executor ID
+  ---
+  duration_ms: 2.540487
+  type: 'test'
+  ...
+# Subtest: hold presence never depends on explanation text, control_hold or envelope validity
+ok 100 - hold presence never depends on explanation text, control_hold or envelope validity
+  ---
+  duration_ms: 0.813124
+  type: 'test'
+  ...
+# Subtest: C1 risk hold explains the owner clearing action: clock-failure-hold
+ok 101 - C1 risk hold explains the owner clearing action: clock-failure-hold
+  ---
+  duration_ms: 0.194055
+  type: 'test'
+  ...
+# Subtest: C1 risk hold explains the owner clearing action: clock-invalid-hold
+ok 102 - C1 risk hold explains the owner clearing action: clock-invalid-hold
+  ---
+  duration_ms: 0.127103
+  type: 'test'
+  ...
+# Subtest: C1 risk hold explains the owner clearing action: stop-persistence-failure-hold
+ok 103 - C1 risk hold explains the owner clearing action: stop-persistence-failure-hold
+  ---
+  duration_ms: 0.074543
+  type: 'test'
+  ...
+# Subtest: holdings project complete wallet marks, excluding cash, with exact decimals and oldest mark time
+ok 104 - holdings project complete wallet marks, excluding cash, with exact decimals and oldest mark time
+  ---
+  duration_ms: 0.705213
+  type: 'test'
+  ...
+# Subtest: known flat requires complete coherent positions and executors, and projects latest pair decision
+ok 105 - known flat requires complete coherent positions and executors, and projects latest pair decision
+  ---
+  duration_ms: 2.147296
+  type: 'test'
+  ...
+# Subtest: malformed envelope fields are isolated in every state before rendering
+ok 106 - malformed envelope fields are isolated in every state before rendering
+  ---
+  duration_ms: 2.353478
+  type: 'test'
+  ...
+# Subtest: filled order counts use singular and plural labels without inventing missing counts
+ok 107 - filled order counts use singular and plural labels without inventing missing counts
+  ---
+  duration_ms: 0.209147
+  type: 'test'
+  ...
+# Subtest: an open position binds only its own active executor, never a terminal receipt target
+ok 108 - an open position binds only its own active executor, never a terminal receipt target
+  ---
+  duration_ms: 0.618851
+  type: 'test'
+  ...
+# Subtest: malformed record data never crashes or becomes a known empty position
+ok 109 - malformed record data never crashes or becomes a known empty position
+  ---
+  duration_ms: 0.253746
+  type: 'test'
+  ...
+# Subtest: expanded receipt values preserve all native decimal places
+ok 110 - expanded receipt values preserve all native decimal places
+  ---
+  duration_ms: 0.18671
+  type: 'test'
+  ...
+# Subtest: pair decision projection accepts native controller custom info without deriving identity
+ok 111 - pair decision projection accepts native controller custom info without deriving identity
+  ---
+  duration_ms: 0.258309
+  type: 'test'
+  ...
+# Subtest: paper freshness uses owner milliseconds and never a missing quant request
+ok 112 - paper freshness uses owner milliseconds and never a missing quant request
+  ---
+  duration_ms: 0.12861
+  type: 'test'
+  ...
+# Subtest: pair book degradation does not expire a current owner heartbeat
+ok 113 - pair book degradation does not expire a current owner heartbeat
+  ---
+  duration_ms: 0.089498
+  type: 'test'
+  ...
+# Subtest: no paper control button before a separately bound ingress
+ok 114 - no paper control button before a separately bound ingress
+  ---
+  duration_ms: 0.136311
+  type: 'test'
+  ...
+# Subtest: related sections must have the same boot and sequence before comparison
+ok 115 - related sections must have the same boot and sequence before comparison
+  ---
+  duration_ms: 0.076093
+  type: 'test'
+  ...
+# Subtest: a partial fill summary keeps exact native quantity and actual fee currency
+ok 116 - a partial fill summary keeps exact native quantity and actual fee currency
+  ---
+  duration_ms: 0.164215
+  type: 'test'
+  ...
+# Subtest: paper presentation uses readable reasons and boolean words
+ok 117 - paper presentation uses readable reasons and boolean words
+  ---
+  duration_ms: 0.151121
+  type: 'test'
+  ...
+# Subtest: amount display rounds decimal text without binary arithmetic or fake zero
+ok 118 - amount display rounds decimal text without binary arithmetic or fake zero
+  ---
+  duration_ms: 0.35683
+  type: 'test'
+  ...
+# Subtest: event time is UTC and relative, never an epoch or future observation
+ok 119 - event time is UTC and relative, never an epoch or future observation
+  ---
+  duration_ms: 0.132999
+  type: 'test'
+  ...
+# Subtest: native lifetime receipts require a fresh matching snapshot, not fill-page sums
+ok 120 - native lifetime receipts require a fresh matching snapshot, not fill-page sums
+  ---
+  duration_ms: 0.287365
+  type: 'test'
+  ...
+# Subtest: terminal receipts and proven dust are not open executors or discarded PnL
+ok 121 - terminal receipts and proven dust are not open executors or discarded PnL
+  ---
+  duration_ms: 0.345463
+  type: 'test'
+  ...
+# Subtest: an empty executor page without completeness cannot prove zero open executors
+ok 122 - an empty executor page without completeness cannot prove zero open executors
+  ---
+  duration_ms: 0.121541
+  type: 'test'
+  ...
+# Subtest: positions table row count never turns an incomplete page into a zero population
+ok 123 - positions table row count never turns an incomplete page into a zero population
+  ---
+  duration_ms: 0.121155
+  type: 'test'
+  ...
+# Subtest: fills table row count never turns an incomplete page into a zero population
+ok 124 - fills table row count never turns an incomplete page into a zero population
+  ---
+  duration_ms: 0.069271
+  type: 'test'
+  ...
+# Subtest: executors table row count never turns an incomplete page into a zero population
+ok 125 - executors table row count never turns an incomplete page into a zero population
+  ---
+  duration_ms: 0.06819
+  type: 'test'
+  ...
+# Subtest: orders table row count never turns an incomplete page into a zero population
+ok 126 - orders table row count never turns an incomplete page into a zero population
+  ---
+  duration_ms: 0.071402
+  type: 'test'
+  ...
+# Subtest: wallet equity total requires fresh complete unpaginated owner data
+ok 127 - wallet equity total requires fresh complete unpaginated owner data
+  ---
+  duration_ms: 0.230388
+  type: 'test'
+  ...
+# Subtest: wallet cash total requires fresh complete unpaginated owner data
+ok 128 - wallet cash total requires fresh complete unpaginated owner data
+  ---
+  duration_ms: 0.093805
+  type: 'test'
+  ...
+# Subtest: marked holdings aggregate does not sum stale, partial or paginated inventory
+ok 129 - marked holdings aggregate does not sum stale, partial or paginated inventory
+  ---
+  duration_ms: 0.176889
+  type: 'test'
+  ...
+# Subtest: risk used_quote aggregate requires fresh complete owner data
+ok 130 - risk used_quote aggregate requires fresh complete owner data
+  ---
+  duration_ms: 0.196991
+  type: 'test'
+  ...
+# Subtest: risk limit_quote aggregate requires fresh complete owner data
+ok 131 - risk limit_quote aggregate requires fresh complete owner data
+  ---
+  duration_ms: 0.132004
+  type: 'test'
+  ...
+# Subtest: risk used_percent aggregate requires fresh complete owner data
+ok 132 - risk used_percent aggregate requires fresh complete owner data
+  ---
+  duration_ms: 0.215704
+  type: 'test'
+  ...
+# Subtest: executor count and pair uniqueness require complete fresh unpaginated records
+ok 133 - executor count and pair uniqueness require complete fresh unpaginated records
+  ---
+  duration_ms: 0.86217
+  type: 'test'
+  ...
+# Subtest: paper fleet isolation publishes no rejected, entry, fill, holding or executor aggregates from legacy inputs
+ok 134 - paper fleet isolation publishes no rejected, entry, fill, holding or executor aggregates from legacy inputs
+  ---
+  duration_ms: 53.87563
+  type: 'test'
+  ...
+# Subtest: readiness gate count is checklist configuration, not an observation-derived execution total
+ok 135 - readiness gate count is checklist configuration, not an observation-derived execution total
+  ---
+  duration_ms: 0.212445
+  type: 'test'
+  ...
+# Subtest: fees_paid_quote is not a lifetime total without fresh complete unpaginated accounting
+ok 136 - fees_paid_quote is not a lifetime total without fresh complete unpaginated accounting
+  ---
+  duration_ms: 0.179346
+  type: 'test'
+  ...
+# Subtest: realized_pnl_quote is not a lifetime total without fresh complete unpaginated accounting
+ok 137 - realized_pnl_quote is not a lifetime total without fresh complete unpaginated accounting
+  ---
+  duration_ms: 0.1058
+  type: 'test'
+  ...
+# Subtest: unrealized_pnl_quote is not a lifetime total without fresh complete unpaginated accounting
+ok 138 - unrealized_pnl_quote is not a lifetime total without fresh complete unpaginated accounting
+  ---
+  duration_ms: 0.089023
+  type: 'test'
+  ...
+# Subtest: volume_traded_quote is not a lifetime total without fresh complete unpaginated accounting
+ok 139 - volume_traded_quote is not a lifetime total without fresh complete unpaginated accounting
+  ---
+  duration_ms: 0.078273
+  type: 'test'
+  ...
+# Subtest: entry_count is not a lifetime total without fresh complete unpaginated accounting
+ok 140 - entry_count is not a lifetime total without fresh complete unpaginated accounting
+  ---
+  duration_ms: 0.076686
+  type: 'test'
+  ...
+# Subtest: exit_count is not a lifetime total without fresh complete unpaginated accounting
+ok 141 - exit_count is not a lifetime total without fresh complete unpaginated accounting
+  ---
+  duration_ms: 0.155215
+  type: 'test'
+  ...
+# Subtest: clock durability hold explains entry-only protection and owner acknowledgement
+ok 142 - clock durability hold explains entry-only protection and owner acknowledgement
+  ---
+  duration_ms: 0.118088
+  type: 'test'
+  ...
+# Subtest: hold banner labels the clock high-water without an orphaned control sentence
+ok 143 - hold banner labels the clock high-water without an orphaned control sentence
+  ---
+  duration_ms: 671.119909
+  type: 'test'
+  ...
+# Subtest: risk map renders native holds even when the owner section is partial
+ok 144 - risk map renders native holds even when the owner section is partial
+  ---
+  duration_ms: 553.297093
+  type: 'test'
+  ...
+# Subtest: health actual query 409 retries once and publishes only a coherent result
+ok 145 - health actual query 409 retries once and publishes only a coherent result
+  ---
+  duration_ms: 251.547691
+  type: 'test'
+  ...
+# Subtest: health actual query 409 stops unavailable at the cap
+ok 146 - health actual query 409 stops unavailable at the cap
+  ---
+  duration_ms: 123.887767
+  type: 'test'
+  ...
+# Subtest: health actual query 503 retries once and publishes only a coherent result
+ok 147 - health actual query 503 retries once and publishes only a coherent result
+  ---
+  duration_ms: 299.362141
+  type: 'test'
+  ...
+# Subtest: health actual query 503 stops unavailable at the cap
+ok 148 - health actual query 503 stops unavailable at the cap
+  ---
+  duration_ms: 302.939381
+  type: 'test'
+  ...
+# Subtest: capital actual query 409 retries once and publishes only a coherent result
+ok 149 - capital actual query 409 retries once and publishes only a coherent result
+  ---
+  duration_ms: 82.453187
+  type: 'test'
+  ...
+# Subtest: capital actual query 409 stops unavailable at the cap
+ok 150 - capital actual query 409 stops unavailable at the cap
+  ---
+  duration_ms: 86.113629
+  type: 'test'
+  ...
+# Subtest: capital actual query 503 retries once and publishes only a coherent result
+ok 151 - capital actual query 503 retries once and publishes only a coherent result
+  ---
+  duration_ms: 273.849711
+  type: 'test'
+  ...
+# Subtest: capital actual query 503 stops unavailable at the cap
+ok 152 - capital actual query 503 stops unavailable at the cap
+  ---
+  duration_ms: 269.015343
+  type: 'test'
+  ...
+# Subtest: operations actual query 409 retries once and publishes only a coherent result
+ok 153 - operations actual query 409 retries once and publishes only a coherent result
+  ---
+  duration_ms: 84.206268
+  type: 'test'
+  ...
+# Subtest: operations actual query 409 stops unavailable at the cap
+ok 154 - operations actual query 409 stops unavailable at the cap
+  ---
+  duration_ms: 66.386381
+  type: 'test'
+  ...
+# Subtest: operations actual query 503 retries once and publishes only a coherent result
+ok 155 - operations actual query 503 retries once and publishes only a coherent result
+  ---
+  duration_ms: 270.130151
+  type: 'test'
+  ...
+# Subtest: operations actual query 503 stops unavailable at the cap
+ok 156 - operations actual query 503 stops unavailable at the cap
+  ---
+  duration_ms: 264.859277
+  type: 'test'
+  ...
+# Subtest: bots actual query 409 retries once and publishes only a coherent result
+ok 157 - bots actual query 409 retries once and publishes only a coherent result
+  ---
+  duration_ms: 1129.290035
+  type: 'test'
+  ...
+# Subtest: bots actual query 409 stops unavailable at the cap
+ok 158 - bots actual query 409 stops unavailable at the cap
+  ---
+  duration_ms: 681.613123
+  type: 'test'
+  ...
+# Subtest: bots actual query 503 retries once and publishes only a coherent result
+ok 159 - bots actual query 503 retries once and publishes only a coherent result
+  ---
+  duration_ms: 791.4035
+  type: 'test'
+  ...
+# Subtest: bots actual query 503 stops unavailable at the cap
+ok 160 - bots actual query 503 stops unavailable at the cap
+  ---
+  duration_ms: 695.561285
+  type: 'test'
+  ...
+# Subtest: whole paper read restarts coherently after 409
+ok 161 - whole paper read restarts coherently after 409
+  ---
+  duration_ms: 0.840329
+  type: 'test'
+  ...
+# Subtest: whole paper read restarts coherently after 503
+ok 162 - whole paper read restarts coherently after 503
+  ---
+  duration_ms: 0.213355
+  type: 'test'
+  ...
+# Subtest: paper retries stop at two whole attempts and never retry auth/schema failures
+ok 163 - paper retries stop at two whole attempts and never retry auth/schema failures
+  ---
+  duration_ms: 0.397926
+  type: 'test'
+  ...
+# Subtest: paper read refuses cross-snapshot success with bounded parallel owner reads
+ok 164 - paper read refuses cross-snapshot success with bounded parallel owner reads
+  ---
+  duration_ms: 0.225115
+  type: 'test'
+  ...
+# Subtest: unavailable Settings identity confines fresh times and reasons to heartbeat rows
+ok 165 - unavailable Settings identity confines fresh times and reasons to heartbeat rows
+  ---
+  duration_ms: 153.533979
+  type: 'test'
+  ...
+# Subtest: paper routes select native read-only exports, not live fleet discovery
+ok 166 - paper routes select native read-only exports, not live fleet discovery
+  ---
+  duration_ms: 0.237755
+  type: 'test'
+  ...
+# Subtest: heartbeat cannot label missing, invalid or incoherent paper reads fresh
+ok 167 - heartbeat cannot label missing, invalid or incoherent paper reads fresh
+  ---
+  duration_ms: 1.468678
+  type: 'test'
+  ...
+# Subtest: configured paper identity separates simulated execution from advisor authority
+ok 168 - configured paper identity separates simulated execution from advisor authority
+  ---
+  duration_ms: 0.097764
+  type: 'test'
+  ...
+# Subtest: paper uptime cannot clear program P0s or economic support
+ok 169 - paper uptime cannot clear program P0s or economic support
+  ---
+  duration_ms: 0.19272
+  type: 'test'
+  ...
+# Subtest: paper view retains simulated disclosure, independent heartbeat and exact owner exit detail
+ok 170 - paper view retains simulated disclosure, independent heartbeat and exact owner exit detail
+  ---
+  duration_ms: 1582.776362
+  type: 'test'
+  ...
+# Subtest: zero and unavailable accounting stay distinct; large and negative exact detail survives
+ok 171 - zero and unavailable accounting stay distinct; large and negative exact detail survives
+  ---
+  duration_ms: 1508.535842
+  type: 'test'
+  ...
+# Subtest: stale flat inventory never becomes current flatness when heartbeat is fresh
+ok 172 - stale flat inventory never becomes current flatness when heartbeat is fresh
+  ---
+  duration_ms: 556.098169
+  type: 'test'
+  ...
+# Subtest: received risk holds survive incomplete and failed snapshots
+ok 173 - received risk holds survive incomplete and failed snapshots
+  ---
+  duration_ms: 550.559887
+  type: 'test'
+  ...
+# Subtest: a recent status cannot summarize stale child records as fresh
+ok 174 - a recent status cannot summarize stale child records as fresh
+  ---
+  duration_ms: 665.219126
+  type: 'test'
+  ...
+# Subtest: metric exact owner decimal survives: -0.000001
+ok 175 - metric exact owner decimal survives: -0.000001
+  ---
+  duration_ms: 688.808826
+  type: 'test'
+  ...
+# Subtest: metric exact owner decimal survives: 9007199254740993.00001
+ok 176 - metric exact owner decimal survives: 9007199254740993.00001
+  ---
+  duration_ms: 671.927774
+  type: 'test'
+  ...
+# Subtest: metric exact owner decimal survives: 0
+ok 177 - metric exact owner decimal survives: 0
+  ---
+  duration_ms: 726.608378
+  type: 'test'
+  ...
+# Subtest: kit percent contract consumes 0.12 as 12 percent once
+ok 178 - kit percent contract consumes 0.12 as 12 percent once
+  ---
+  duration_ms: 53.412307
+  type: 'test'
+  ...
+# Subtest: paper rail maps percent points once and rejects a double-scaled producer value
+ok 179 - paper rail maps percent points once and rejects a double-scaled producer value
+  ---
+  duration_ms: 1309.827275
+  type: 'test'
+  ...
+# Subtest: summary retains wallet qualification
+ok 180 - summary retains wallet qualification
+  ---
+  duration_ms: 676.741831
+  type: 'test'
+  ...
+# Subtest: summary retains risk qualification
+ok 181 - summary retains risk qualification
+  ---
+  duration_ms: 783.739942
+  type: 'test'
+  ...
+# Subtest: summary retains accounting qualification
+ok 182 - summary retains accounting qualification
+  ---
+  duration_ms: 701.80089
+  type: 'test'
+  ...
+# Subtest: paper record export uses exact owner decimals, units and snapshot identity
+ok 183 - paper record export uses exact owner decimals, units and snapshot identity
+  ---
+  duration_ms: 596.876082
+  type: 'test'
+  ...
+# Subtest: retained journal notice remains visible beside a failed extracted workspace
+ok 184 - retained journal notice remains visible beside a failed extracted workspace
+  ---
+  duration_ms: 575.769194
+  type: 'test'
+  ...
+# Subtest: only all available sections produce the available summary; heartbeat stays independent
+ok 185 - only all available sections produce the available summary; heartbeat stays independent
+  ---
+  duration_ms: 815.214811
+  type: 'test'
+  ...
+# Subtest: old PaperWorkspace import resolves to the extracted component
+ok 186 - old PaperWorkspace import resolves to the extracted component
+  ---
+  duration_ms: 551.268
+  type: 'test'
+  ...
+# Subtest: summary cannot be fresh when accounting belongs to another snapshot
+ok 187 - summary cannot be fresh when accounting belongs to another snapshot
+  ---
+  duration_ms: 669.375047
+  type: 'test'
+  ...
+# Subtest: held controller appears once with the union of displayed pause and retained emergency
+ok 188 - held controller appears once with the union of displayed pause and retained emergency
+  ---
+  duration_ms: 691.766672
+  type: 'test'
+  ...
+# Subtest: held controller is not duplicated by cloned repeated safety signals
+ok 189 - held controller is not duplicated by cloned repeated safety signals
+  ---
+  duration_ms: 650.296189
+  type: 'test'
+  ...
+# Subtest: held controller union preserves native entry reasons and latch alongside operator evidence
+ok 190 - held controller union preserves native entry reasons and latch alongside operator evidence
+  ---
+  duration_ms: 651.524014
+  type: 'test'
+  ...
+# Subtest: invalid displayed risk cannot remove any retained controller signals
+ok 191 - invalid displayed risk cannot remove any retained controller signals
+  ---
+  duration_ms: 699.655702
+  type: 'test'
+  ...
+# Subtest: real hook retains received emergency: first load and late failure
+ok 192 - real hook retains received emergency: first load and late failure
+  ---
+  duration_ms: 1744.826656
+  type: 'test'
+  ...
+# Subtest: real hook retains received emergency: true and late failure
+ok 193 - real hook retains received emergency: true and late failure
+  ---
+  duration_ms: 1904.030793
+  type: 'test'
+  ...
+# Subtest: real hook retains received emergency: owner-clock-rollback and late failure
+ok 194 - real hook retains received emergency: owner-clock-rollback and late failure
+  ---
+  duration_ms: 1843.363653
+  type: 'test'
+  ...
+# Subtest: real hook retains received paused: first load and late failure
+ok 195 - real hook retains received paused: first load and late failure
+  ---
+  duration_ms: 760.23828
+  type: 'test'
+  ...
+# Subtest: real hook retains received paused: true and late failure
+ok 196 - real hook retains received paused: true and late failure
+  ---
+  duration_ms: 1848.591098
+  type: 'test'
+  ...
+# Subtest: real hook retains received paused: owner-clock-rollback and late failure
+ok 197 - real hook retains received paused: owner-clock-rollback and late failure
+  ---
+  duration_ms: 1929.392233
+  type: 'test'
+  ...
+# Subtest: real hook retains received entry_hold: first load and late failure
+ok 198 - real hook retains received entry_hold: first load and late failure
+  ---
+  duration_ms: 851.879981
+  type: 'test'
+  ...
+# Subtest: real hook retains received entry_hold: true and late failure
+ok 199 - real hook retains received entry_hold: true and late failure
+  ---
+  duration_ms: 1823.252157
+  type: 'test'
+  ...
+# Subtest: real hook retains received entry_hold: owner-clock-rollback and late failure
+ok 200 - real hook retains received entry_hold: owner-clock-rollback and late failure
+  ---
+  duration_ms: 1898.97477
+  type: 'test'
+  ...
+# Subtest: real hook retains received control_hold: first load and late failure
+ok 201 - real hook retains received control_hold: first load and late failure
+  ---
+  duration_ms: 805.646221
+  type: 'test'
+  ...
+# Subtest: real hook retains received control_hold: true and late failure
+ok 202 - real hook retains received control_hold: true and late failure
+  ---
+  duration_ms: 1808.671775
+  type: 'test'
+  ...
+# Subtest: real hook retains received control_hold: owner-clock-rollback and late failure
+ok 203 - real hook retains received control_hold: owner-clock-rollback and late failure
+  ---
+  duration_ms: 1741.949956
+  type: 'test'
+  ...
+# Subtest: real hook retains received native_refusal: first load and late failure
+ok 204 - real hook retains received native_refusal: first load and late failure
+  ---
+  duration_ms: 806.690959
+  type: 'test'
+  ...
+# Subtest: real hook retains received native_refusal: true and late failure
+ok 205 - real hook retains received native_refusal: true and late failure
+  ---
+  duration_ms: 1831.509128
+  type: 'test'
+  ...
+# Subtest: real hook retains received native_refusal: owner-clock-rollback and late failure
+ok 206 - real hook retains received native_refusal: owner-clock-rollback and late failure
+  ---
+  duration_ms: 1717.291572
+  type: 'test'
+  ...
+# Subtest: Bots retains held complete snapshot, as-of and totals during refresh and failed refresh
+ok 207 - Bots retains held complete snapshot, as-of and totals during refresh and failed refresh
+  ---
+  duration_ms: 990.110183
+  type: 'test'
+  ...
+# Subtest: Bots first load reports pending risk and rails, never absent controls or numeric limits
+ok 208 - Bots first load reports pending risk and rails, never absent controls or numeric limits
+  ---
+  duration_ms: 540.161933
+  type: 'test'
+  ...
+# Subtest: Capital hook retains the complete wallet, history and accounting while refreshing
+ok 209 - Capital hook retains the complete wallet, history and accounting while refreshing
+  ---
+  duration_ms: 68.270971
+  type: 'test'
+  ...
+# Subtest: bots ignores progress from an aborted orphaned refresh
+ok 210 - bots ignores progress from an aborted orphaned refresh
+  ---
+  duration_ms: 544.628645
+  type: 'test'
+  ...
+# Subtest: capital ignores progress from an aborted orphaned refresh
+ok 211 - capital ignores progress from an aborted orphaned refresh
+  ---
+  duration_ms: 72.125128
+  type: 'test'
+  ...
+# Subtest: owner scoped resume removes BNB pause while BTC retains a native entry hold
+ok 212 - owner scoped resume removes BNB pause while BTC retains a native entry hold
+  ---
+  duration_ms: 142.364024
+  type: 'test'
+  ...
+# Subtest: owner named durability reset removes only that hold while emergencies remain visible
+ok 213 - owner named durability reset removes only that hold while emergencies remain visible
+  ---
+  duration_ms: 77.730249
+  type: 'test'
+  ...
+# Subtest: mixed owner update removes the old BNB pause and retains the newly paused BTC read
+ok 214 - mixed owner update removes the old BNB pause and retains the newly paused BTC read
+  ---
+  duration_ms: 77.352999
+  type: 'test'
+  ...
+# Subtest: explicit emergency-clear risk supersedes old emergency while a pause remains
+ok 215 - explicit emergency-clear risk supersedes old emergency while a pause remains
+  ---
+  duration_ms: 71.323604
+  type: 'test'
+  ...
+# Subtest: unknown operator.paused cannot supersede prior safety: null
+ok 216 - unknown operator.paused cannot supersede prior safety: null
+  ---
+  duration_ms: 0.687359
+  type: 'test'
+  ...
+# Subtest: unknown operator.paused cannot supersede prior safety: undefined
+ok 217 - unknown operator.paused cannot supersede prior safety: undefined
+  ---
+  duration_ms: 0.560039
+  type: 'test'
+  ...
+# Subtest: unknown operator.paused cannot supersede prior safety: false
+ok 218 - unknown operator.paused cannot supersede prior safety: false
+  ---
+  duration_ms: 0.444334
+  type: 'test'
+  ...
+# Subtest: unknown operator.emergency cannot supersede prior safety: null
+ok 219 - unknown operator.emergency cannot supersede prior safety: null
+  ---
+  duration_ms: 0.549515
+  type: 'test'
+  ...
+# Subtest: unknown operator.emergency cannot supersede prior safety: undefined
+ok 220 - unknown operator.emergency cannot supersede prior safety: undefined
+  ---
+  duration_ms: 0.535061
+  type: 'test'
+  ...
+# Subtest: unknown operator.emergency cannot supersede prior safety: false
+ok 221 - unknown operator.emergency cannot supersede prior safety: false
+  ---
+  duration_ms: 0.788906
+  type: 'test'
+  ...
+# Subtest: unknown native.complete cannot supersede prior safety: null
+ok 222 - unknown native.complete cannot supersede prior safety: null
+  ---
+  duration_ms: 0.477406
+  type: 'test'
+  ...
+# Subtest: unknown native.complete cannot supersede prior safety: undefined
+ok 223 - unknown native.complete cannot supersede prior safety: undefined
+  ---
+  duration_ms: 0.449298
+  type: 'test'
+  ...
+# Subtest: unknown native.complete cannot supersede prior safety: false
+ok 224 - unknown native.complete cannot supersede prior safety: false
+  ---
+  duration_ms: 0.460302
+  type: 'test'
+  ...
+# Subtest: risk with an outstanding cursor cannot supersede prior safety
+ok 225 - risk with an outstanding cursor cannot supersede prior safety
+  ---
+  duration_ms: 0.529341
+  type: 'test'
+  ...
+# Subtest: partial risk for OWNER_MARK_UNAVAILABLE keeps prior evidence
+ok 226 - partial risk for OWNER_MARK_UNAVAILABLE keeps prior evidence
+  ---
+  duration_ms: 0.715273
+  type: 'test'
+  ...
+# Subtest: partial risk for native_risk_incomplete keeps prior evidence
+ok 227 - partial risk for native_risk_incomplete keeps prior evidence
+  ---
+  duration_ms: 0.363535
+  type: 'test'
+  ...
+# Subtest: partial risk for paper_controls_unavailable keeps prior evidence
+ok 228 - partial risk for paper_controls_unavailable keeps prior evidence
+  ---
+  duration_ms: 0.360835
+  type: 'test'
+  ...
+# Subtest: partial risk for unknown_hold keeps prior evidence
+ok 229 - partial risk for unknown_hold keeps prior evidence
+  ---
+  duration_ms: 0.326074
+  type: 'test'
+  ...
+# Subtest: recognized reason clock_anomaly without its own published hold keeps prior evidence
+ok 230 - recognized reason clock_anomaly without its own published hold keeps prior evidence
+  ---
+  duration_ms: 0.58356
+  type: 'test'
+  ...
+# Subtest: recognized reason native_refusal_owner_ambiguous without its own published hold keeps prior evidence
+ok 231 - recognized reason native_refusal_owner_ambiguous without its own published hold keeps prior evidence
+  ---
+  duration_ms: 0.585754
+  type: 'test'
+  ...
+# Subtest: partial risk with a monetary schema error keeps prior evidence
+ok 232 - partial risk with a monetary schema error keeps prior evidence
+  ---
+  duration_ms: 0.737515
+  type: 'test'
+  ...
+# Subtest: omitted controller stays retained when registry removal is false
+ok 233 - omitted controller stays retained when registry removal is false
+  ---
+  duration_ms: 6.710261
+  type: 'test'
+  ...
+# Subtest: omitted controller stays retained when registry removal is true
+ok 234 - omitted controller stays retained when registry removal is true
+  ---
+  duration_ms: 5.260814
+  type: 'test'
+  ...
+# Subtest: owner hold evidence stays retained when the newer risk omits its owner-hold list
+ok 235 - owner hold evidence stays retained when the newer risk omits its owner-hold list
+  ---
+  duration_ms: 71.553667
+  type: 'test'
+  ...
+# Subtest: quarantined clock anomaly does not block qualified newer risk evidence
+ok 236 - quarantined clock anomaly does not block qualified newer risk evidence
+  ---
+  duration_ms: 2.318856
+  type: 'test'
+  ...
+1..236
+# tests 236
+# suites 0
+# pass 236
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 71715.578372

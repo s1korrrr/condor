@@ -1,0 +1,59 @@
+TAP version 13
+# Subtest: light theme reaches the quant scope with the existing native light tokens
+ok 1 - light theme reaches the quant scope with the existing native light tokens
+  ---
+  duration_ms: 3.722538
+  type: 'test'
+  ...
+# Subtest: every hard-coded dark surface, border or hover colour in the quant scope has a tokenised light override
+ok 2 - every hard-coded dark surface, border or hover colour in the quant scope has a tokenised light override
+  ---
+  duration_ms: 11.367287
+  type: 'test'
+  ...
+# Subtest: colour-blind theme keeps its recorded dark quant surface and blue/orange pair
+ok 3 - colour-blind theme keeps its recorded dark quant surface and blue/orange pair
+  ---
+  duration_ms: 0.406786
+  type: 'test'
+  ...
+# Subtest: every PaperWorkspace top-level container wraps long controller IDs without relying on a page wrapper
+not ok 4 - every PaperWorkspace top-level container wraps long controller IDs without relying on a page wrapper
+  ---
+  duration_ms: 1717.365145
+  type: 'test'
+  location: '/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/integration/frontend/test/ui-baseline-findings.test.mjs:64:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly deep-equal:
+    + actual - expected
+
+    + [
+    +   'div.(no class)'
+    + ]
+    - []
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected:
+  actual:
+    0: 'div.(no class)'
+  operator: 'deepStrictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/integration/frontend/test/ui-baseline-findings.test.mjs:77:10)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1402:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+    Test.postRun (node:internal/test_runner/test:1542:19)
+    Test.run (node:internal/test_runner/test:1467:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 3
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 2568.842662

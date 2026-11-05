@@ -1,0 +1,113 @@
+runner=transition-slot-2 (shared legacy probe failed)
+TAP version 13
+# Subtest: held controller appears once with the union of displayed pause and retained emergency
+not ok 1 - held controller appears once with the union of displayed pause and retained emergency
+  ---
+  duration_ms: 1529.31515
+  type: 'test'
+  location: '/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/condor/frontend/test/v5-paper-presentation.test.mjs:179:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    2 !== 1
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/condor/frontend/test/v5-paper-presentation.test.mjs:183:10)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1402:25)
+    Test.start (node:internal/test_runner/test:1262:17)
+    startSubtestAfterBootstrap (node:internal/test_runner/harness:387:17)
+  ...
+# Subtest: held controller is not duplicated by cloned repeated safety signals
+not ok 2 - held controller is not duplicated by cloned repeated safety signals
+  ---
+  duration_ms: 1005.508503
+  type: 'test'
+  location: '/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/condor/frontend/test/v5-paper-presentation.test.mjs:190:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    3 !== 1
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 3
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/condor/frontend/test/v5-paper-presentation.test.mjs:193:10)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1402:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+    Test.postRun (node:internal/test_runner/test:1542:19)
+    Test.run (node:internal/test_runner/test:1467:12)
+    async startSubtestAfterBootstrap (node:internal/test_runner/harness:387:3)
+  ...
+# Subtest: held controller union preserves native entry reasons and latch alongside operator evidence
+not ok 3 - held controller union preserves native entry reasons and latch alongside operator evidence
+  ---
+  duration_ms: 712.719139
+  type: 'test'
+  location: '/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/condor/frontend/test/v5-paper-presentation.test.mjs:197:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    2 !== 1
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/condor/frontend/test/v5-paper-presentation.test.mjs:203:10)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1402:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+    Test.postRun (node:internal/test_runner/test:1542:19)
+    Test.run (node:internal/test_runner/test:1467:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+# Subtest: invalid displayed risk cannot remove any retained controller signals
+not ok 4 - invalid displayed risk cannot remove any retained controller signals
+  ---
+  duration_ms: 670.287422
+  type: 'test'
+  location: '/home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/condor/frontend/test/v5-paper-presentation.test.mjs:207:1'
+  failureType: 'testCodeFailure'
+  error: |-
+    Expected values to be strictly equal:
+
+    2 !== 1
+
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: 1
+  actual: 2
+  operator: 'strictEqual'
+  stack: |-
+    TestContext.<anonymous> (file:///home/rsi/dev/rsibot/.workspace/scratch/condor-task2-20261105/condor/frontend/test/v5-paper-presentation.test.mjs:212:10)
+    Test.runInAsyncScope (node:async_hooks:227:14)
+    Test.run (node:internal/test_runner/test:1402:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:974:18)
+    Test.postRun (node:internal/test_runner/test:1542:19)
+    Test.run (node:internal/test_runner/test:1467:12)
+    async Test.processPendingSubtests (node:internal/test_runner/test:974:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 0
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 4423.57939

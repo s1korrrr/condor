@@ -1,5 +1,5 @@
 import type { PaperRead, PaperRiskData } from './contracts';
-import { paperRiskControllers, paperRiskHolds, paperSectionError, paperSnapshotsAgree } from './policy.ts';
+import { paperNativeLatch, paperRiskControllers, paperRiskHolds, paperSectionError, paperSnapshotsAgree } from './policy.ts';
 
 export const PAPER_OWNER_HOLD_REASONS = [
   'stop_intent_log_damaged', 'stop_persistence_failed', 'ingress_unreadable',
@@ -17,7 +17,7 @@ function signalKeys(read: PaperRead): string[] {
     ...(paperRiskControllers(read, 0) ?? []).flatMap(controller => [
       ...(controller.operator.emergency === true ? [`${controller.id}:emergency`] : []),
       ...(controller.operator.paused === true ? [`${controller.id}:paused`] : []),
-      ...(controller.entryHold === true ? [`${controller.id}:entry_hold`] : []),
+      ...(controller.latch === true ? [`${controller.id}:latch`] : []),
       ...controller.holds.map(hold => `${controller.id}:${hold.reason}`),
     ]),
   ];
@@ -43,14 +43,44 @@ function riskSupersedes(read: PaperRead): boolean {
 }
 
 function uncoveredSafety(read: PaperRead, newer: PaperRead): PaperRead {
-  // Only controllers whose newer report states every hold flag explicitly can clear retained signals (R97-SOL-2).
-  const covered = new Set((paperRiskControllers(newer, 0) ?? []).filter(controller => controller.explicit).map(controller => controller.id));
+  // Per signal (R97-SOL-2): a retained hold signal is dropped only when the newer superseding read shows the same signal
+  // itself or clears it explicitly (operator flag === false; latch false with complete native evidence; a listed native
+  // hold set without this reason for a controller it reports). Omitted, null or malformed evidence keeps the signal.
+  const newerData = newer.data as (PaperRiskData & Record<string, unknown>) | null;
+  const reported = new Map((paperRiskControllers(newer, 0) ?? []).map(controller => [controller.id, controller]));
+  const shown = new Set(signalKeys(newer));
+  const holdsListed = Array.isArray(newerData?.native_entry_holds);
+  const settled = (id: string, signal: string) => {
+    if (shown.has(`${id}:${signal}`)) return true;
+    const next = reported.get(id);
+    if (!next) return false;
+    if (signal === 'paused') return next.operator.paused === false;
+    if (signal === 'emergency') return next.operator.emergency === false;
+    if (signal === 'latch') return next.latch === false;
+    return holdsListed;
+  };
   const data = read.data as PaperRiskData & Record<string, unknown>;
-  const ownerCovered = Array.isArray((newer.data as Record<string, unknown> | null)?.holds);
+  const ownerCovered = Array.isArray(newerData?.holds);
+  const keptHolds = (data.native_entry_holds ?? []).filter(hold => !settled(hold.controller_id, hold.reason));
+  const controllers = data.controllers && Object.fromEntries(Object.entries(data.controllers).flatMap(([id, row]) => {
+    const next = reported.get(id);
+    const operator = {...row.operator}, native = {...row.native};
+    const keep = {
+      paused: operator.paused === true && !settled(id, 'paused'),
+      emergency: operator.emergency === true && !settled(id, 'emergency'),
+      latch: paperNativeLatch(native) === true && !settled(id, 'latch'),
+    };
+    if (!keep.paused && !keep.emergency && !keep.latch && !keptHolds.some(hold => hold.controller_id === id)) return [];
+    // A kept controller shows the newer read's values for the flags that read has settled, never the stale ones.
+    if (next && operator.paused === true && !keep.paused) operator.paused = next.operator.paused;
+    if (next && operator.emergency === true && !keep.emergency) operator.emergency = next.operator.emergency;
+    if (next && paperNativeLatch(native) === true && !keep.latch) Object.assign(native, {latched:next.native.latched, entry_hold:next.native.entry_hold, complete:next.native.complete});
+    return [[id, {...row, operator, native}]];
+  }));
   return {...read, data:{...data,
     ...(ownerCovered ? {control_hold:null, holds:[]} : {}),
-    ...(data.controllers ? {controllers:Object.fromEntries(Object.entries(data.controllers).filter(([id]) => !covered.has(id)))} : {}),
-    ...(data.native_entry_holds ? {native_entry_holds:data.native_entry_holds.filter(hold => !covered.has(hold.controller_id))} : {}),
+    ...(controllers ? {controllers} : {}),
+    ...(data.native_entry_holds ? {native_entry_holds:keptHolds} : {}),
   }};
 }
 

@@ -341,10 +341,16 @@ export function paperRiskUsage(read: import("./contracts").PaperRead | undefined
  * Native entry hold per the owner native-risk.v1 contract: `latched` is the native loss-rail entry pause;
  * `entry_hold` is published only on the unavailable path. Unknown stays null, never "No".
  */
-function paperNativeEntryHold(native: Record<string, unknown>, holds: readonly unknown[]): boolean | null {
-  if (native.entry_hold === true || native.latched === true || holds.length > 0) return true;
+export function paperNativeLatch(native: Record<string, unknown>): boolean | null {
+  if (native.entry_hold === true || native.latched === true) return true;
   if (native.complete === true && native.latched === false) return false;
   return null;
+}
+
+function paperNativeEntryHold(native: Record<string, unknown>, holds: readonly unknown[]): boolean | null {
+  const latch = paperNativeLatch(native);
+  if (latch === true || holds.length > 0) return true;
+  return latch === false ? false : null;
 }
 
 export function paperRiskControllers(read: import("./contracts").PaperRead | undefined, now: number) {
@@ -352,11 +358,9 @@ export function paperRiskControllers(read: import("./contracts").PaperRead | und
   const risk = read.data as import("./contracts").PaperRiskData;
   return risk?.controllers ? Object.entries(risk.controllers).map(([id, controller]) => {
     const holds = risk.native_entry_holds?.filter(hold => hold.controller_id === id) ?? [];
-    const entryHold = paperNativeEntryHold(controller.native ?? {}, holds);
-    // A report can clear a retained hold only if it states every hold flag: both operator booleans and a known native
-    // entry hold (known "no hold" needs complete native evidence and latched === false). Unknown is never a clear.
-    const explicit = typeof controller.operator?.paused === "boolean" && typeof controller.operator?.emergency === "boolean" && entryHold !== null;
-    return { id, ...controller, current: paperCompleteRead(read, now), holds, entryHold, explicit };
+    // latch: native latch evidence (true / explicit false / unknown); entryHold adds the owner's native hold list.
+    const latch = paperNativeLatch(controller.native ?? {});
+    return { id, ...controller, current: paperCompleteRead(read, now), holds, latch, entryHold: paperNativeEntryHold(controller.native ?? {}, holds) };
   }) : null;
 }
 

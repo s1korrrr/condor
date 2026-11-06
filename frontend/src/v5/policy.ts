@@ -131,15 +131,16 @@ export async function paperObservationPages(path: string, fetchPage: (path: stri
   const url = new URL(path, "https://paper.invalid");
   url.searchParams.set("limit", "200");
   let result = await fetchPage(url.pathname + url.search);
+  const pageLimit = result.section === "history" ? 16 : 5;
   const seen = new Set<string>();
-  for (let page = 1; result.next_cursor && page < 5; page++) {
+  for (let page = 1; result.next_cursor && page < pageLimit; page++) {
     if (seen.has(result.next_cursor)) throw new Error("Repeated owner history cursor was refused.");
     seen.add(result.next_cursor);
     url.searchParams.set("cursor", result.next_cursor);
     if (!result.snapshot_id) throw new Error("Owner history snapshot is unavailable.");
     url.searchParams.set("snapshot_id", result.snapshot_id);
     const next = await fetchPage(url.pathname + url.search);
-    if (!paperSnapshotsAgree([result, next]) || result.section !== next.section || result.state !== next.state || result.completeness !== next.completeness) throw new Error("Mixed owner page snapshots or states were refused.");
+    if (!paperSnapshotsAgree([result, next]) || result.bot_id !== next.bot_id || result.source?.sha256 !== next.source?.sha256 || result.section !== next.section || result.state !== next.state || result.completeness !== next.completeness) throw new Error("Mixed owner page snapshots or states were refused.");
     if (Array.isArray(result.data) && Array.isArray(next.data)) {
       result = { ...next, data: [...result.data, ...next.data] };
       continue;
@@ -147,6 +148,14 @@ export async function paperObservationPages(path: string, fetchPage: (path: stri
     const previousData = result.data as Record<string, unknown> | null;
     const nextData = next.data as Record<string, unknown> | null;
     if (!Array.isArray(previousData?.segments) || !Array.isArray(nextData?.segments)) throw new Error("Owner history page is invalid.");
+    const terminal = (data: Record<string, unknown>) => (data.terminal_executors as { data?: Record<string, unknown> } | undefined)?.data;
+    const previousTerminal = terminal(previousData!), nextTerminal = terminal(nextData!);
+    if (previousTerminal?.delivery === "publication_pages" || nextTerminal?.delivery === "publication_pages") {
+      const metadata = (data: Record<string, unknown> | undefined) => JSON.stringify(Object.fromEntries(Object.entries(data ?? {}).filter(([key]) => key !== "records")));
+      if (!Array.isArray(previousTerminal?.records) || !Array.isArray(nextTerminal?.records) || metadata(previousTerminal) !== metadata(nextTerminal) || JSON.stringify(previousData!.segments) !== JSON.stringify(nextData!.segments)) throw new Error("Owner history page metadata changed.");
+      result = { ...next, data: { ...nextData, terminal_executors: { ...(nextData!.terminal_executors as Record<string, unknown>), data: { ...nextTerminal, records: [...previousTerminal.records, ...nextTerminal.records] } } } };
+      continue;
+    }
     result = { ...next, data: { ...nextData, segments: [...previousData.segments, ...nextData.segments] } };
   }
   return result;
@@ -196,6 +205,7 @@ export function paperSectionError(read: Partial<import("./contracts").PaperRead>
     }
     if (read.section === "risk" && "native_entry_holds" in read.data && (!records(read.data.native_entry_holds) || read.data.native_entry_holds.length > 20 || read.data.native_entry_holds.some(hold => typeof hold.controller_id !== "string" || !hold.controller_id || typeof hold.explanation !== "string" || !hold.explanation.trim() || !["native_refusal_receipt_pending", "native_refusal_owner_ambiguous", "native_refusal_recovery_unavailable", "v5_risk_incomplete"].includes(String(hold.reason)) || hold.protected_exits !== "preserved"))) return invalid();
     for (const key of ["assets", "conditions", "rails", "segments", "gaps", ...(read.section === "decisions" ? ["controllers"] : [])]) {
+      if (read.section === "history" && key === "gaps" && Array.isArray(read.data[key]) && read.data[key].every(value => object(value) || value === "bounded_recent_fill_window")) continue;
       if (key in read.data && !records(read.data[key])) return invalid();
     }
   }
@@ -284,6 +294,12 @@ export function paperCompleteRead(read: import("./contracts").PaperRead | undefi
 
 export function paperCompleteRecords(read: import("./contracts").PaperRead | undefined, now: number): Record<string, unknown>[] | null {
   return paperCompleteRead(read, now) && Array.isArray(read?.data) ? read.data : null;
+}
+
+export function paperRetainedRecords(read: import("./contracts").PaperRead | undefined, now: number): Record<string, unknown>[] | null {
+  if (paperCompleteRead(read, now) && Array.isArray(read?.data)) return read.data;
+  if (!read || !["fills", "executors"].includes(read.section) || read.completeness !== "partial" || paperSectionError(read) || !read.capabilities?.includes("read") || !["available", "degraded"].includes(read.state) || read.generated_at_ms == null || paperTimestampIssue(read.generated_at_ms, now) || now - read.generated_at_ms > PAPER_SNAPSHOT_FRESH_MS) return null;
+  return Array.isArray(read.data) ? read.data : null;
 }
 
 export function paperWalletTotals(read: import("./contracts").PaperRead | undefined, now: number): { equity: unknown; cash: unknown } | null {

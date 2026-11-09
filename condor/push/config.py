@@ -44,6 +44,7 @@ _KEYS = frozenset(
         "retention_days",
         "max_age_seconds",
         "poll_seconds",
+        "watch_incidents_path",
     }
 )
 _THRESHOLD_KEYS = frozenset(
@@ -116,6 +117,8 @@ class PushConfig:
     retention_days: int = 14
     max_age_seconds: int = 6 * 3600
     poll_seconds: int = 10
+    # The razer watch's incident log, read-only (docs/runbooks/push-alerts.md, "Watch findings"); None = source off.
+    watch_incidents_path: Path | None = None
 
     @property
     def registry_path(self) -> Path:
@@ -367,4 +370,9 @@ def parse_push_config(raw: Any) -> PushConfig:
             raw.get("max_age_seconds", 6 * 3600), "max_age_seconds", 300, 86400
         ),
         poll_seconds=_int(raw.get("poll_seconds", 10), "poll_seconds", 5, 120),
+        watch_incidents_path=(
+            None
+            if raw.get("watch_incidents_path") is None
+            else _absolute(raw["watch_incidents_path"], "watch_incidents_path")
+        ),
     )

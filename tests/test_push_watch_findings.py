@@ -367,7 +367,7 @@ def test_a_legacy_episode_keeps_its_identity_when_the_first_record_rotates_out()
     repeat = watch_record("2026-11-09T07:00:00Z")
     seen = Seen()
     one = ev.detect_watch_findings([first, repeat], started=0, seen=seen)
-    assert len(one.events) == 1 and one.carried == {"watch": {"NOT_RUNNING:v1": "2026-11-09T06:00:00Z"}}
+    assert len(one.events) == 1 and one.carried["open"] == {"watch": {"NOT_RUNNING:v1": "2026-11-09T06:00:00Z"}}
     seen.commit(one)
     rotated = ev.detect_watch_findings([repeat], started=0, seen=seen, carried=one.carried)
     assert rotated.events == () and rotated.carried == one.carried
@@ -415,3 +415,91 @@ def test_the_reader_fingerprints_an_unfinished_last_line_and_only_that(tmp_path)
     assert done.tail_sha is None and done.records == [{"a": 1}, {"b": 2}]
     path.write_bytes(b'{"a": 1}\n  \n')
     assert read_watch_records(path).tail_sha is None  # white space is not a record
+
+
+# ------------------------------------------------------------------ round 2: closed episodes, exact activation
+
+
+def resolved_record(stamp, file):
+    return {"kind": "watch", "utc": stamp, "file": file, "verdict": "RESOLVED"}
+
+
+def test_a_closed_legacy_episode_is_not_announced_again_when_its_opening_line_rotates_away():
+    """Round 2 (Sol F2): first, repeat, RESOLVED; then the first line rotates out and the repeat is replayed."""
+    first = watch_record("2026-11-09T12:00:00Z")
+    repeat = watch_record("2026-11-09T13:00:00Z")
+    records = [first, repeat, resolved_record("2026-11-09T13:05:00Z", repeat["file"])]
+    seen = Seen()
+    one = ev.detect_watch_findings(records, started=0, seen=seen)
+    assert [e.kind for e in one.events] == ["watch_finding", "watch_resolved"]
+    seen.commit(one)
+    rotated = ev.detect_watch_findings(records[1:], started=0, seen=seen, carried=one.carried)
+    assert rotated.events == (), [(e.kind, e.occurred_at) for e in rotated.events]
+
+
+def test_two_legacy_episodes_keep_both_identities_through_a_rotation():
+    first, repeat = watch_record("2026-11-09T12:00:00Z"), watch_record("2026-11-09T13:00:00Z")
+    resolved = resolved_record("2026-11-09T13:05:00Z", repeat["file"])
+    second, later = watch_record("2026-11-09T14:10:00Z"), watch_record("2026-11-09T15:10:00Z")
+    records = [first, repeat, resolved, second, later]
+    seen = Seen()
+    one = ev.detect_watch_findings(records, started=0, seen=seen)
+    assert [e.kind for e in one.events] == ["watch_finding", "watch_resolved", "watch_finding"]
+    seen.commit(one)
+    carried = one.carried
+    for tail in (records[1:], records[2:], records[3:], records[4:], records[1:3]):
+        again = ev.detect_watch_findings(tail, started=0, seen=seen, carried=carried)
+        assert again.events == (), (len(tail), [(e.kind, e.occurred_at) for e in again.events])
+        carried = again.carried
+        seen.commit(again)
+
+
+def test_a_new_legacy_line_after_the_ledgers_last_time_is_a_new_episode_not_a_replay():
+    first = watch_record("2026-11-09T12:00:00Z")
+    resolved = resolved_record("2026-11-09T12:05:00Z", first["file"])
+    seen = Seen()
+    one = ev.detect_watch_findings([first, resolved], started=0, seen=seen)
+    seen.commit(one)
+    new = watch_record("2026-11-09T12:30:00Z")
+    two = ev.detect_watch_findings([first, resolved, new], started=0, seen=seen, carried=one.carried)
+    assert [e.kind for e in two.events] == ["watch_finding"]
+
+
+def test_the_ledger_is_bounded_and_the_first_form_of_carried_state_is_still_read():
+    carried = None
+    seen = Seen()
+    records = []
+    for hour in range(40):  # forty one-line episodes of the same key
+        records.append(watch_record(f"2026-11-{1 + hour // 24:02d}T{hour % 24:02d}:00:00Z"))
+        records.append(resolved_record(f"2026-11-{1 + hour // 24:02d}T{hour % 24:02d}:05:00Z", records[-1]["file"]))
+    detection = ev.detect_watch_findings(records, started=0, seen=seen)
+    assert len(detection.carried["ledger"]["watch"]["NOT_RUNNING:v1"]) == ev.LEDGER_PER_KEY
+    flat = {"watch": {"NOT_RUNNING:v1": "2026-11-09T12:00:00Z"}}  # what the first reviewed head stored
+    detection = ev.detect_watch_findings(
+        [watch_record("2026-11-09T13:00:00Z")], started=0, seen=lambda key: True, carried=flat
+    )
+    assert detection.carried["open"] == flat
+    garbage = ev.detect_watch_findings([], started=0, seen=NEVER, carried={"open": 5, "ledger": [1], "x": None})
+    assert garbage.carried == {"open": {}, "ledger": {}}
+    assert carried is None
+
+
+def test_activation_is_judged_by_the_episode_start_not_by_the_line_that_names_it():
+    """Round 2 (Sol F3): first failed run 12:00 (below the threshold: no line), activation 12:02, line at 12:05."""
+    activated = epoch("2026-11-09T12:02:00Z")
+    line = watch_record("2026-11-09T12:05:00Z", "2026-11-09T12:00:00Z")
+    assert ev.detect_watch_findings([line], started=activated, seen=NEVER).events == ()
+    # ... and its hourly repeat, and its recovery, stay silent too
+    repeat = watch_record("2026-11-09T13:05:00Z", "2026-11-09T12:00:00Z")
+    done = resolved_record("2026-11-09T13:10:00Z", repeat["file"])
+    assert ev.detect_watch_findings([line, repeat, done], started=activated, seen=NEVER).events == ()
+    # an episode that begins after activation announces even though an older one of the same key was history
+    new = watch_record("2026-11-09T14:05:00Z", "2026-11-09T14:00:00Z")
+    got = ev.detect_watch_findings([line, repeat, done, new], started=activated, seen=NEVER)
+    assert [e.kind for e in got.events] == ["watch_finding"]
+
+
+def test_an_old_exact_episode_stays_silent_if_only_its_postactivation_repeat_is_available():
+    start = epoch("2026-11-09T12:00:00Z")
+    repeated = watch_record("2026-11-09T13:00:00Z", "2026-11-09T12:00:00Z")
+    assert ev.detect_watch_findings([repeated], started=start + 1800, seen=NEVER).events == ()

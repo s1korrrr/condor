@@ -225,7 +225,7 @@ class Detection:
     seen: tuple[str, ...] = ()  # dedup keys to record with the events, atomically
     primed: bool = False  # a first snapshot was absorbed silently
     skipped: int = 0  # rows that could not be deduplicated safely
-    carried: Mapping[str, Mapping[str, str]] | None = None  # watch source: open episodes to keep for the next scan
+    carried: Mapping[str, Any] | None = None  # watch source: open episodes and episode ledger for the next scan
 
 
 Seen = Callable[[str], bool]
@@ -1287,12 +1287,61 @@ def _watch_finding_event(kind: str, key: str, start: str, occurred: float) -> Al
     )
 
 
+LEDGER_PER_KEY = 20  # episode intervals kept per (kind, key); older ones can no longer be replayed from a rotated file
+
+
+def _ledger_add(ledger: dict[str, dict[str, list[list[str]]]], kind: str, key: str, start: str, last: str) -> None:
+    """Record that ``key`` was open from ``start`` to (at least) ``last``; extend the interval of the same start."""
+    intervals = ledger.setdefault(kind, {}).setdefault(key, [])
+    for interval in intervals:
+        if interval[0] == start:
+            if (_epoch(last) or 0.0) > (_epoch(interval[1]) or 0.0):
+                interval[1] = last
+            return
+    intervals.append([start, last])
+    intervals.sort(key=lambda item: _epoch(item[0]) or 0.0)
+    del intervals[:-LEDGER_PER_KEY]
+
+
+def _parse_carried(carried: Any) -> tuple[dict[str, dict[str, str]], dict[str, dict[str, list[list[str]]]]]:
+    """(open episodes, ledger) from what a previous scan returned; anything unusable is dropped, never trusted."""
+    if not isinstance(carried, Mapping):
+        return {}, {}
+    flat = "open" not in carried and "ledger" not in carried  # the first form: {kind: {key: start}}
+    raw_open = carried if flat else carried.get("open")
+    open_episodes: dict[str, dict[str, str]] = {}
+    if isinstance(raw_open, Mapping):
+        for kind, episodes in raw_open.items():
+            if isinstance(kind, str) and isinstance(episodes, Mapping):
+                open_episodes[kind] = {
+                    key: start
+                    for key, start in episodes.items()
+                    if isinstance(key, str) and isinstance(start, str)
+                }
+    ledger: dict[str, dict[str, list[list[str]]]] = {}
+    raw_ledger = {} if flat else carried.get("ledger")
+    if isinstance(raw_ledger, Mapping):
+        for kind, keyed in raw_ledger.items():
+            if not (isinstance(kind, str) and isinstance(keyed, Mapping)):
+                continue
+            for key, intervals in keyed.items():
+                if isinstance(key, str) and isinstance(intervals, list):
+                    for item in intervals:
+                        if (
+                            isinstance(item, list)
+                            and len(item) == 2
+                            and all(isinstance(part, str) and _epoch(part) is not None for part in item)
+                        ):
+                            _ledger_add(ledger, kind, key, item[0], item[1])
+    return open_episodes, ledger
+
+
 def detect_watch_findings(
     records: Sequence[Mapping[str, Any]],
     *,
     started: float,
     seen: Seen,
-    carried: Mapping[str, Mapping[str, str]] | None = None,
+    carried: Mapping[str, Any] | None = None,
 ) -> Detection:
     """One notification per new razer-watch finding key and episode, from the watch's incident log.
 
@@ -1302,18 +1351,22 @@ def detect_watch_findings(
     once, and a key that went away (even while another kept the watch failing) and came back alerts
     again.
 
-    Activation: a record older than ``started`` is history. Its episodes are recorded as seen and never
-    announced, and the same episode stays silent when the watch repeats it later (it repeats an open
-    incident every hour). Only an episode that begins at or after activation announces.
+    Activation: an episode that began before ``started`` is history, judged by the episode's own start
+    (``finding_since``), not by the time of the line that names it: a key first seen at 12:00 whose
+    threshold was crossed at 12:05, after activation at 12:02, is the same old episode. History is
+    recorded as seen and never announced, and the same episode stays silent when the watch repeats it
+    (it repeats an open incident every hour) and when it recovers. Only an episode that begins at or
+    after activation announces.
 
     Recovery: a RESOLVED record closes every episode of its kind and is announced only when the incident
     it closes was announced. The watch repeats an open incident under a new file name, and RESOLVED names
     the newest file, so a repeat of an announced episode inherits the announced-open marker.
 
-    Identity of old records: a record without ``finding_since`` (written before it existed, or by a crash)
-    takes the start of the same key in the record before it. ``carried`` is that state at the end of the
-    previous scan (the worker keeps it in the outbox and ``Detection.carried`` returns the new one), so the
-    identity does not change when the first retained record rotates out of the file or the read window.
+    Identity of old records: a record without ``finding_since`` (written before it existed) takes the start
+    of the same key in the record before it. ``carried`` is the state the previous scan ended with and
+    ``Detection.carried`` returns the new one (the worker keeps it in the outbox): the episodes open at the
+    end, and a ledger of every episode interval seen per key. A line replayed from a rotated file finds its
+    episode in the ledger, closed ones included, so rotation never gives an old line a new identity.
 
     Operator notes (REBASELINED) are not findings. A record that cannot be read is counted in ``skipped``
     (the worker reports it); the readable ones still alert.
@@ -1322,11 +1375,7 @@ def detect_watch_findings(
     keys: list[str] = []
     batch: set[str] = set()
     skipped = 0
-    open_episodes: dict[str, dict[str, str]] = {
-        kind: {key: start for key, start in episodes.items() if isinstance(key, str) and isinstance(start, str)}
-        for kind, episodes in (carried or {}).items()
-        if isinstance(kind, str) and isinstance(episodes, Mapping)
-    }
+    open_episodes, ledger = _parse_carried(carried)
 
     def known(key: str) -> bool:
         return key in batch or seen(key)
@@ -1337,6 +1386,16 @@ def detect_watch_findings(
         batch.add(key)
         keys.append(key)
         return True
+
+    def old_identity(kind: str, key: str, occurred: float, chain: Mapping[str, str]) -> str | None:
+        """The start of the episode a line without finding_since belongs to, or None when it begins a new one."""
+        earlier = chain.get(key)
+        if earlier is not None and (_epoch(earlier) or occurred + 1) <= occurred:
+            return earlier  # the key was in the line before it
+        for start, last in ledger.get(kind, {}).get(key, []):
+            if (_epoch(start) or occurred + 1) <= occurred <= (_epoch(last) or occurred - 1):
+                return start  # a line of a closed (or rotated-out) episode, replayed
+        return None
 
     for record in records:
         if not isinstance(record, Mapping):
@@ -1351,7 +1410,7 @@ def detect_watch_findings(
             continue
         incident_file = digest(record.get("file") if isinstance(record.get("file"), str) else "")
         if verdict == "RESOLVED":
-            open_episodes[kind] = {}
+            open_episodes[kind] = {}  # the ledger keeps the closed episodes
             opened, done = f"watch-open:{kind}:{incident_file}", f"watch-done:{kind}:{incident_file}"
             if known(opened) and not known(done):
                 remember(done)
@@ -1379,17 +1438,16 @@ def detect_watch_findings(
             skipped += 1
             continue
         exact = record.get("finding_since") is not None
-        previous = open_episodes.get(kind, {})
+        chain = open_episodes.get(kind, {})
         announced_open = False
         current: dict[str, str] = {}
         for key, start in sorted(found.items()):
             if not exact:
-                earlier = previous.get(key)
-                if earlier is not None and (_epoch(earlier) or occurred + 1) <= occurred:
-                    start = earlier  # the same episode as the record before it (or before the file's first record)
+                start = old_identity(kind, key, occurred, chain) or start
             current[key] = start
+            _ledger_add(ledger, kind, key, start, stamp_text)
             episode, announced = f"watch:{kind}:{key}@{start}", f"watch-ann:{kind}:{key}@{start}"
-            if occurred < started:
+            if (_epoch(start) if _epoch(start) is not None else occurred) < started:
                 remember(episode)  # history: seen, never announced, and silent when the watch repeats it
             elif remember(episode):
                 events.append(_watch_finding_event(kind, key, start, occurred))
@@ -1400,7 +1458,12 @@ def detect_watch_findings(
         open_episodes[kind] = current
         if announced_open:
             remember(f"watch-open:{kind}:{incident_file}")
-    return Detection(tuple(events), tuple(keys), skipped=skipped, carried=open_episodes)
+    return Detection(
+        tuple(events),
+        tuple(keys),
+        skipped=skipped,
+        carried={"open": open_episodes, "ledger": ledger},
+    )
 
 
 # --------------------------------------------------------------------------- summary

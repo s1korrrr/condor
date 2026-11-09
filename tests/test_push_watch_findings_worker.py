@@ -296,6 +296,37 @@ def test_an_episode_that_began_before_the_worker_was_activated_stays_silent_at_i
         rig.close()
 
 
+def test_a_closed_legacy_episode_is_not_announced_again_when_its_opening_line_rotates_away(watch_rig):
+    """Round 2 (Sol F2) through the real worker and outbox: four deliveries, and still four after the rotation."""
+    rig = watch_rig
+    start = rig.clock()
+    first = {"kind": "watch", "utc": iso(start), "file": "first",
+             "verdict": {"findings": [{"rule": "NOT_RUNNING", "bot": "v1"}]}}
+    repeat = dict(first, utc=iso(start + 300), file="repeat")
+    resolved = {"kind": "watch", "utc": iso(start + 600), "file": "repeat", "verdict": "RESOLVED"}
+    records = [first, repeat, resolved]
+    rig.watch.path.write_text("".join(json.dumps(r) + "\n" for r in records))
+    rig.clock.advance(600)
+    rig.cycle()
+    assert len(rig.pushes()) == 4  # a finding and its recovery, to the phone and the watch
+    rig.watch.path.write_text("".join(json.dumps(r) + "\n" for r in records[1:]))
+    rig.cycle()
+    rig.restart()
+    rig.cycle(60)
+    assert len(rig.pushes()) == 4, rig.pushes()[4:]
+
+
+def test_the_activation_between_a_first_failed_run_and_the_incident_line_stays_silent(watch_rig):
+    rig = watch_rig
+    first_failed = rig.clock() - 120  # the key's first failed run, before the worker activated
+    line = {"kind": "watch", "utc": iso(rig.clock() + 60), "file": "l.json",
+            "verdict": {"findings": [{"rule": "NOT_RUNNING", "bot": "v1"}]},
+            "finding_since": {"NOT_RUNNING:v1": iso(first_failed)}}
+    rig.watch.path.write_text(json.dumps(line) + "\n")
+    rig.cycle(120)
+    assert watch_pushes(rig) == []
+
+
 # ------------------------------------------------------------------ config
 
 

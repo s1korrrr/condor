@@ -204,6 +204,98 @@ def test_the_worker_only_reads_the_file(watch_rig):
     assert sorted(p.name for p in rig.watch.path.parent.iterdir()) == ["incidents.jsonl"]
 
 
+# ------------------------------------------------------------------ round 1 (torn tail, rotation, activation)
+
+
+def torn(rig, stamp="2026-11-09T07:00:00Z"):
+    record = {"kind": "watch", "utc": stamp, "file": "t.json",
+              "verdict": {"findings": [{"rule": "NOT_RUNNING", "bot": "v1"}]}}
+    return json.dumps(record).encode()[:-20]
+
+
+def test_a_record_that_stays_unfinished_is_degraded_after_one_watch_period(watch_rig):
+    """Sol F4 / Kestrel 5: a torn last line (no newline) is retried, then reported; never healthy forever."""
+    rig = watch_rig
+    rig.watch.path.write_bytes(torn(rig))
+    rig.cycle()
+    assert rig.worker.heartbeat_payload(rig.clock())["watch_findings"]["state"] == "ok"  # may still be in progress
+    rig.cycle(300)  # one watch period: still waiting
+    assert rig.worker.heartbeat_payload(rig.clock())["watch_findings"]["state"] == "ok"
+    rig.cycle(301)  # unchanged for more than 10 minutes
+    beat = rig.worker.heartbeat_payload(rig.clock())
+    assert beat["watch_findings"] == {"state": "corrupt", "bad_records": 1, "stalled_tail": True}
+    assert "watch_findings_corrupt" in beat["degraded_reasons"] and beat["status"] == "degraded"
+    assert watch_pushes(rig) == []
+
+
+def test_a_record_still_being_written_is_not_called_torn_while_it_grows(watch_rig):
+    rig = watch_rig
+    text = torn(rig)
+    for end in (10, 40, 70, 100):
+        rig.watch.path.write_bytes(text[:end])
+        rig.cycle(400)  # each cycle is later than the period, but the fragment is different every time
+        assert rig.worker.heartbeat_payload(rig.clock())["watch_findings"]["state"] == "ok"
+
+
+def test_the_stalled_tail_clock_survives_a_restart_and_a_finished_record_clears_it(watch_rig):
+    rig = watch_rig
+    rig.watch.path.write_bytes(torn(rig))
+    rig.cycle()
+    rig.restart()
+    rig.cycle(700)
+    assert rig.worker.heartbeat_payload(rig.clock())["watch_findings"]["state"] == "corrupt"  # the clock was kept
+    rig.watch.path.write_bytes(b"")  # the file is repaired by hand
+    rig.cycle()
+    assert rig.worker.heartbeat_payload(rig.clock())["watch_findings"] == {"state": "ok", "bad_records": 0}
+    rig.cycle(60)
+    assert rig.worker.heartbeat_payload(rig.clock())["status"] == "running"
+
+
+def test_a_legacy_episode_is_not_announced_again_when_the_first_record_rotates_out(watch_rig):
+    rig = watch_rig
+    now = rig.clock()
+    first = {"kind": "watch", "utc": iso(now), "file": "1.json",
+             "verdict": {"findings": [{"rule": "NOT_RUNNING", "bot": "v1"}]}}
+    repeat = dict(first, utc=iso(now + 3600), file="2.json")
+    rig.watch.append(json.dumps(first) + "\n")
+    rig.cycle()
+    rig.clock.advance(3600)
+    rig.watch.append(json.dumps(repeat) + "\n")
+    rig.cycle()
+    sent = len(rig.pushes())
+    assert sent == 2  # phone and watch, once
+    rig.watch.path.write_text(json.dumps(repeat) + "\n")  # the log rotated: only the repeat is left
+    rig.cycle()
+    rig.restart()
+    rig.cycle(60)
+    assert len(rig.pushes()) == sent
+
+
+def test_an_episode_that_began_before_the_worker_was_activated_stays_silent_at_its_repeat_and_recovery(tmp_path):
+    folder = tmp_path / "watch-state"
+    folder.mkdir()
+    path = folder / "incidents.jsonl"
+    rig = Rig(tmp_path, extra={"watch_incidents_path": str(path)})
+    try:
+        rig.devices()
+        old = iso(rig.clock() - 7200)
+        record = {"kind": "watch", "utc": old, "file": "old.json",
+                  "verdict": {"findings": [{"rule": "NOT_RUNNING", "bot": "v1"}]},
+                  "finding_since": {"NOT_RUNNING:v1": old}}
+        path.write_text(json.dumps(record) + "\n")
+        rig.cycle()  # activation: history is recorded as seen
+        rig.clock.advance(3600)
+        repeat = dict(record, utc=iso(rig.clock()), file="repeat.json")
+        path.write_text(path.read_text() + json.dumps(repeat) + "\n")
+        rig.cycle()
+        rig.watch = Watch(rig, path)
+        rig.watch.resolved(repeat)
+        rig.cycle()
+        assert watch_pushes(rig) == []
+    finally:
+        rig.close()
+
+
 # ------------------------------------------------------------------ config
 
 

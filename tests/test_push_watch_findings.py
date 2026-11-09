@@ -99,19 +99,39 @@ def test_the_same_key_after_the_watch_passed_is_a_new_episode():
 # ------------------------------------------------------------------ activation
 
 
-def test_history_before_activation_is_silent_and_an_ongoing_episode_is_announced_by_its_next_record():
+def test_history_before_activation_is_recorded_seen_and_only_new_episodes_announce():
     records = fixture_records()
-    # Activated at 06:20: records at 06:05 and 06:15 are history.
-    detection = ev.detect_watch_findings(records, started=epoch("2026-11-09T06:20:00Z"), seen=NEVER)
-    assert detection.events[0].occurred_at == epoch("2026-11-09T06:30:00Z")
-    got = {(e.title, e.kind) for e in detection.events}
-    # The 06:30 record repeats the open STATUS_STALE episode (begun 06:00): the phone has not heard of it yet.
-    assert ("V1 · status file is stale", "watch_finding") in got
-    assert ("V2 · container is not healthy", "watch_finding") in got
-    # Its RESOLVED (06:35) closes an incident that was announced.
-    assert ("razer watch · Recovered", "watch_resolved") in got
-    # Nothing from before activation was recorded as seen: nothing was announced for it, nothing to replay.
-    assert all("06:05" not in key for key in detection.seen)
+    # Activated at 06:20: the records at 06:05 and 06:15 are history, and so is the STATUS_STALE episode (begun 06:00).
+    seen = Seen()
+    detection = ev.detect_watch_findings(records, started=epoch("2026-11-09T06:20:00Z"), seen=seen)
+    got = [(e.title, e.kind) for e in detection.events]
+    # The 06:30 record repeats STATUS_STALE@06:00: silent. NOT_HEALTHY@06:25 began after activation: announced.
+    assert got == [
+        ("V2 · container is not healthy", "watch_finding"),
+        ("razer watch · Recovered", "watch_resolved"),  # the phone heard NOT_HEALTHY, so it hears the recovery
+        ("V1 · daily-loss rail paused new entries", "watch_finding"),
+    ]
+    assert "watch:watch:STATUS_STALE:v1@2026-11-09T06:00:00Z" in detection.seen  # recorded as seen at activation
+
+
+def test_a_pre_activation_episode_stays_silent_when_the_watch_repeats_it():
+    """Round 1 (Sol F3), as the reviewer's probe: an old open episode is seen at activation, silent at its hourly repeat."""
+    old = "2026-11-09T06:00:00Z"
+    activated = epoch("2026-11-09T06:30:00Z")
+    seen = Seen()
+    first = ev.detect_watch_findings([watch_record(old, old)], started=activated, seen=seen)
+    assert first.events == ()
+    seen.commit(first)
+    repeated = ev.detect_watch_findings(
+        [watch_record(old, old), watch_record("2026-11-09T07:00:00Z", old)], started=activated, seen=seen
+    )
+    assert repeated.events == ()
+    # ... and its recovery is silent too: the phone never heard of it.
+    resolved = {"kind": "watch", "utc": "2026-11-09T07:05:00Z", "file": "2026-11-09T07:00:00Z.json", "verdict": "RESOLVED"}
+    seen.commit(repeated)
+    assert ev.detect_watch_findings(
+        [watch_record(old, old), watch_record("2026-11-09T07:00:00Z", old), resolved], started=activated, seen=seen
+    ).events == ()
 
 
 def test_a_recovery_of_an_incident_the_phone_never_heard_of_is_silent():
@@ -121,12 +141,25 @@ def test_a_recovery_of_an_incident_the_phone_never_heard_of_is_silent():
     assert detection.events == ()  # only the RESOLVED (06:35) is after activation, and its incident was history
 
 
-def test_everything_before_activation_is_silent():
+def test_everything_before_activation_is_silent_and_recorded_as_seen():
     detection = ev.detect_watch_findings(fixture_records(), started=epoch("2026-11-09T09:00:00Z"), seen=NEVER)
-    assert detection.events == () and detection.seen == ()
+    assert detection.events == ()
+    assert len(detection.seen) == 4  # the four episodes of the fixture
 
 
 # ------------------------------------------------------------------ old and odd records
+
+
+def watch_record(stamp, start=None):
+    value = {
+        "kind": "watch",
+        "utc": stamp,
+        "file": stamp + ".json",
+        "verdict": {"status": "FAIL", "findings": [{"rule": "NOT_RUNNING", "bot": "v1"}]},
+    }
+    if start is not None:
+        value["finding_since"] = {"NOT_RUNNING:v1": start}
+    return value
 
 
 def legacy(utc, *rules, file="f.json", kind="watch"):
@@ -298,3 +331,87 @@ def test_a_huge_file_is_read_from_its_tail_without_its_cut_first_line(tmp_path):
 def test_the_real_fixture_reads_clean():
     read = read_watch_records(FIXTURE)
     assert len(read.records) == 5 and read.bad_lines == 0 and read.error is None
+
+
+# ------------------------------------------------------------------ recovery after a repeat, rotation (round 1)
+
+
+def test_an_hourly_repeat_inherits_the_announced_marker_so_its_recovery_is_sent():
+    """Sol F5: A announced; B repeats the episode under a new file; RESOLVED names B."""
+    first = watch_record("2026-11-09T06:00:00Z", "2026-11-09T06:00:00Z")
+    repeat = watch_record("2026-11-09T07:00:00Z", "2026-11-09T06:00:00Z")
+    resolved = {"kind": "watch", "utc": "2026-11-09T07:05:00Z", "file": repeat["file"], "verdict": "RESOLVED"}
+    detected = ev.detect_watch_findings([first, repeat, resolved], started=0, seen=NEVER)
+    assert [e.kind for e in detected.events] == ["watch_finding", "watch_resolved"]
+
+
+def test_the_same_across_scans_the_repeat_and_the_recovery_arrive_in_later_cycles():
+    seen = Seen()
+    first = watch_record("2026-11-09T06:00:00Z", "2026-11-09T06:00:00Z")
+    one = ev.detect_watch_findings([first], started=0, seen=seen)
+    seen.commit(one)
+    repeat = watch_record("2026-11-09T07:00:00Z", "2026-11-09T06:00:00Z")
+    two = ev.detect_watch_findings([first, repeat], started=0, seen=seen)
+    assert two.events == () and any(key.startswith("watch-open:") for key in two.seen)  # the marker moves to the new file
+    seen.commit(two)
+    resolved = {"kind": "watch", "utc": "2026-11-09T07:05:00Z", "file": repeat["file"], "verdict": "RESOLVED"}
+    three = ev.detect_watch_findings([first, repeat, resolved], started=0, seen=seen)
+    assert [e.kind for e in three.events] == ["watch_resolved"]
+    seen.commit(three)
+    assert ev.detect_watch_findings([first, repeat, resolved], started=0, seen=seen).events == ()  # once
+
+
+def test_a_legacy_episode_keeps_its_identity_when_the_first_record_rotates_out():
+    """Sol F6: the same persisting key must not be announced again because the file lost its older lines."""
+    first = watch_record("2026-11-09T06:00:00Z")
+    repeat = watch_record("2026-11-09T07:00:00Z")
+    seen = Seen()
+    one = ev.detect_watch_findings([first, repeat], started=0, seen=seen)
+    assert len(one.events) == 1 and one.carried == {"watch": {"NOT_RUNNING:v1": "2026-11-09T06:00:00Z"}}
+    seen.commit(one)
+    rotated = ev.detect_watch_findings([repeat], started=0, seen=seen, carried=one.carried)
+    assert rotated.events == () and rotated.carried == one.carried
+    # Without the carried state (the reviewer's probe passes none) the identity would be rebuilt from 07:00: that is
+    # exactly what the outbox keeps the state for.
+    assert len(ev.detect_watch_findings([repeat], started=0, seen=seen).events) == 1
+
+
+def test_carried_state_never_changes_what_a_full_rescan_sees():
+    records = [watch_record("2026-11-09T06:00:00Z"), watch_record("2026-11-09T07:00:00Z")]
+    seen = Seen()
+    one = ev.detect_watch_findings(records, started=0, seen=seen)
+    seen.commit(one)
+    again = ev.detect_watch_findings(records, started=0, seen=seen, carried=one.carried)
+    assert again.events == () and again.seen == () and again.carried == one.carried
+
+
+def test_a_start_that_would_be_after_the_record_is_never_carried_back():
+    """A carried start later than the record itself (a rescan of old lines) is ignored: the record's own time stands."""
+    old = watch_record("2026-11-09T06:00:00Z")
+    detection = ev.detect_watch_findings(
+        [old], started=0, seen=NEVER, carried={"watch": {"NOT_RUNNING:v1": "2026-11-09T09:00:00Z"}}
+    )
+    assert "watch:watch:NOT_RUNNING:v1@2026-11-09T06:00:00Z" in detection.seen
+
+
+def test_a_crash_record_after_a_rotation_continues_the_carried_episode():
+    crash = {"kind": "watch", "utc": "2026-11-09T07:10:00Z", "file": "c.json",
+             "verdict": {"status": "FAIL", "findings": [{"rule": "UNEXPECTED_ERROR", "item": "watch", "error": "E"}]}}
+    carried = {"watch": {"UNEXPECTED_ERROR:watch": "2026-11-09T06:55:00Z"}}
+    seen = {"watch:watch:UNEXPECTED_ERROR:watch@2026-11-09T06:55:00Z"}
+    assert ev.detect_watch_findings([crash], started=0, seen=seen.__contains__, carried=carried).events == ()
+
+
+def test_the_reader_fingerprints_an_unfinished_last_line_and_only_that(tmp_path):
+    path = tmp_path / "incidents.jsonl"
+    path.write_bytes(b'{"a": 1}\n{"b": ')
+    first = read_watch_records(path)
+    assert first.tail_sha and first.records == [{"a": 1}] and first.bad_lines == 0
+    assert read_watch_records(path).tail_sha == first.tail_sha  # unchanged fragment, same fingerprint
+    path.write_bytes(b'{"a": 1}\n{"b": 2')
+    assert read_watch_records(path).tail_sha != first.tail_sha  # still growing
+    path.write_bytes(b'{"a": 1}\n{"b": 2}\n')
+    done = read_watch_records(path)
+    assert done.tail_sha is None and done.records == [{"a": 1}, {"b": 2}]
+    path.write_bytes(b'{"a": 1}\n  \n')
+    assert read_watch_records(path).tail_sha is None  # white space is not a record

@@ -56,6 +56,7 @@ FILL_LIMIT = 1000
 EXECUTOR_LIMIT = 500
 PRUNE_EVERY_SECONDS = 3600.0
 BACKLOG_ALARM_SECONDS = 900.0
+WATCH_TAIL_STALE_SECONDS = 600.0  # longer than one watch period (5 min): an unfinished last record is torn, not in progress
 VERSION = 1
 GLOBAL_SOURCES = ("stack", "test", "summary", "market")
 
@@ -527,10 +528,12 @@ class PushWorker:
                 return
             started = self.outbox.started(ev.WATCH_SOURCE)
             assert started is not None
+            carried = self.outbox.get_kv("watch_open_episodes") or {}
             detection = ev.detect_watch_findings(
                 read.records,
                 started=started,
                 seen=self.outbox.seen_checker(ev.WATCH_SOURCE),
+                carried=carried,
             )
             if detection.events or detection.seen:
                 self.outbox.commit(
@@ -540,16 +543,42 @@ class PushWorker:
                     devices=devices,
                     now=now,
                 )
+            if detection.carried is not None and detection.carried != carried:
+                self.outbox.set_kv("watch_open_episodes", detection.carried)
             bad = read.bad_lines + detection.skipped
+            stalled = self._stalled_tail(read.tail_sha, now)
             self.watch_status = {
-                "state": "corrupt" if bad else "ok",
-                "bad_records": bad,
+                "state": "corrupt" if bad or stalled else "ok",
+                "bad_records": bad + (1 if stalled else 0),
+                **({"stalled_tail": True} if stalled else {}),
             }
-            if bad:
-                logger.warning("watch findings: %d unreadable record(s)", bad)
+            if bad or stalled:
+                logger.warning(
+                    "watch findings: %d unreadable record(s)%s",
+                    bad,
+                    ", last record unfinished" if stalled else "",
+                )
         except Exception as exc:  # noqa: BLE001 - one bad file must not stop delivery for the fleet
             self.watch_status = {"state": "error", "error": exc.__class__.__name__}
             logger.warning("watch findings failed error=%s", exc.__class__.__name__)
+
+    def _stalled_tail(self, tail_sha: str | None, now: float) -> bool:
+        """True when the same unfinished last record has been there for longer than one watch period.
+
+        A write in progress finishes in moments, so a fragment is only retried. One that does not change for
+        ``WATCH_TAIL_STALE_SECONDS`` is a torn record (a partial write, e.g. after ENOSPC): it can never become an
+        alert, so it is counted as corrupt and shown in the heartbeat. The fragment's fingerprint and the time it
+        was first seen are kept in the outbox, so a restart does not start the clock again.
+        """
+        previous = self.outbox.get_kv("watch_tail")
+        if tail_sha is None:
+            if previous is not None:
+                self.outbox.set_kv("watch_tail", None)
+            return False
+        if not isinstance(previous, dict) or previous.get("sha") != tail_sha:
+            previous = {"sha": tail_sha, "since": now}
+            self.outbox.set_kv("watch_tail", previous)
+        return now - float(previous.get("since", now)) > WATCH_TAIL_STALE_SECONDS
 
     def _test_requests(self, now: float) -> None:
         for request in self.registry.requests("pending"):

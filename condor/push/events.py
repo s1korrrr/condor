@@ -225,6 +225,7 @@ class Detection:
     seen: tuple[str, ...] = ()  # dedup keys to record with the events, atomically
     primed: bool = False  # a first snapshot was absorbed silently
     skipped: int = 0  # rows that could not be deduplicated safely
+    carried: Mapping[str, Mapping[str, str]] | None = None  # watch source: open episodes to keep for the next scan
 
 
 Seen = Callable[[str], bool]
@@ -1287,7 +1288,11 @@ def _watch_finding_event(kind: str, key: str, start: str, occurred: float) -> Al
 
 
 def detect_watch_findings(
-    records: Sequence[Mapping[str, Any]], *, started: float, seen: Seen
+    records: Sequence[Mapping[str, Any]],
+    *,
+    started: float,
+    seen: Seen,
+    carried: Mapping[str, Mapping[str, str]] | None = None,
 ) -> Detection:
     """One notification per new razer-watch finding key and episode, from the watch's incident log.
 
@@ -1295,19 +1300,33 @@ def detect_watch_findings(
     record names the finding keys of one watch run with the start of each key's episode
     (``finding_since``); the dedup key is kind + key + episode start, so a key that stays open alerts
     once, and a key that went away (even while another kept the watch failing) and came back alerts
-    again. A RESOLVED record closes every episode of its kind and is announced only when the incident
-    it closes was announced. A record older than ``started`` never announces, and records nothing: an
-    episode it opened that is still going is announced by its first record at or after activation (the
-    watch repeats an open incident every hour), because the phone has never heard of it. Replays of
-    old history are therefore silent and idempotent. Operator notes (REBASELINED) are not findings. A
-    record that cannot be read is counted in ``skipped`` (the worker reports it); the readable ones
-    still alert.
+    again.
+
+    Activation: a record older than ``started`` is history. Its episodes are recorded as seen and never
+    announced, and the same episode stays silent when the watch repeats it later (it repeats an open
+    incident every hour). Only an episode that begins at or after activation announces.
+
+    Recovery: a RESOLVED record closes every episode of its kind and is announced only when the incident
+    it closes was announced. The watch repeats an open incident under a new file name, and RESOLVED names
+    the newest file, so a repeat of an announced episode inherits the announced-open marker.
+
+    Identity of old records: a record without ``finding_since`` (written before it existed, or by a crash)
+    takes the start of the same key in the record before it. ``carried`` is that state at the end of the
+    previous scan (the worker keeps it in the outbox and ``Detection.carried`` returns the new one), so the
+    identity does not change when the first retained record rotates out of the file or the read window.
+
+    Operator notes (REBASELINED) are not findings. A record that cannot be read is counted in ``skipped``
+    (the worker reports it); the readable ones still alert.
     """
     events: list[AlertEvent] = []
     keys: list[str] = []
     batch: set[str] = set()
     skipped = 0
-    open_episodes: dict[str, dict[str, str]] = {}
+    open_episodes: dict[str, dict[str, str]] = {
+        kind: {key: start for key, start in episodes.items() if isinstance(key, str) and isinstance(start, str)}
+        for kind, episodes in (carried or {}).items()
+        if isinstance(kind, str) and isinstance(episodes, Mapping)
+    }
 
     def known(key: str) -> bool:
         return key in batch or seen(key)
@@ -1336,21 +1355,20 @@ def detect_watch_findings(
             opened, done = f"watch-open:{kind}:{incident_file}", f"watch-done:{kind}:{incident_file}"
             if known(opened) and not known(done):
                 remember(done)
-                if occurred >= started:  # (an announced incident is, by definition, at or after activation)
-                    events.append(
-                        AlertEvent(
-                            id="watchok:" + digest(kind, incident_file),
-                            cls="incident",
-                            severity="info",
-                            title=clean_text("razer watch · Recovered", 100),
-                            body=clean_text("The razer watch passed; its findings are cleared.", 300),
-                            deep_link=link("operations"),
-                            collapse_key="watch-ok:" + digest(kind),
-                            thread_id="stack",
-                            occurred_at=occurred,
-                            kind="watch_resolved",
-                        )
+                events.append(
+                    AlertEvent(
+                        id="watchok:" + digest(kind, incident_file),
+                        cls="incident",
+                        severity="info",
+                        title=clean_text("razer watch · Recovered", 100),
+                        body=clean_text("The razer watch passed; its findings are cleared.", 300),
+                        deep_link=link("operations"),
+                        collapse_key="watch-ok:" + digest(kind),
+                        thread_id="stack",
+                        occurred_at=occurred,
+                        kind="watch_resolved",
                     )
+                )
             continue
         if not isinstance(verdict, Mapping):
             skipped += 1
@@ -1360,20 +1378,29 @@ def detect_watch_findings(
         if found is None:
             skipped += 1
             continue
+        exact = record.get("finding_since") is not None
         previous = open_episodes.get(kind, {})
-        announced = False
+        announced_open = False
         current: dict[str, str] = {}
         for key, start in sorted(found.items()):
-            # A key in the run before keeps its episode when the record gives none (a crash record).
-            start = start if record.get("finding_since") is not None else previous.get(key, start)
+            if not exact:
+                earlier = previous.get(key)
+                if earlier is not None and (_epoch(earlier) or occurred + 1) <= occurred:
+                    start = earlier  # the same episode as the record before it (or before the file's first record)
             current[key] = start
-            if occurred >= started and remember(f"watch:{kind}:{key}@{start}"):
+            episode, announced = f"watch:{kind}:{key}@{start}", f"watch-ann:{kind}:{key}@{start}"
+            if occurred < started:
+                remember(episode)  # history: seen, never announced, and silent when the watch repeats it
+            elif remember(episode):
                 events.append(_watch_finding_event(kind, key, start, occurred))
-                announced = True
+                remember(announced)
+                announced_open = True
+            elif known(announced):
+                announced_open = True  # a repeat of an episode the phone heard about
         open_episodes[kind] = current
-        if announced:
+        if announced_open:
             remember(f"watch-open:{kind}:{incident_file}")
-    return Detection(tuple(events), tuple(keys), skipped=skipped)
+    return Detection(tuple(events), tuple(keys), skipped=skipped, carried=open_episodes)
 
 
 # --------------------------------------------------------------------------- summary

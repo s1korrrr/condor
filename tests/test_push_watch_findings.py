@@ -503,3 +503,27 @@ def test_an_old_exact_episode_stays_silent_if_only_its_postactivation_repeat_is_
     start = epoch("2026-11-09T12:00:00Z")
     repeated = watch_record("2026-11-09T13:00:00Z", "2026-11-09T12:00:00Z")
     assert ev.detect_watch_findings([repeated], started=start + 1800, seen=NEVER).events == ()
+
+
+def test_parsing_work_does_not_grow_with_the_ledger(monkeypatch):
+    """Round 3 (Sonnet): the ledger code read every interval's two stamps again for every record of every scan."""
+    calls = []
+    real = ev.views.stamp
+
+    def counting(value):
+        calls.append(value)
+        return real(value)
+
+    monkeypatch.setattr(ev.views, "stamp", counting)
+    ev._stamp.cache_clear()
+    records = []
+    for index in range(600):  # six hundred lines of five keys, each key's episodes recorded many times over
+        stamp = f"2026-11-09T{(index // 60) % 24:02d}:{index % 60:02d}:00Z"
+        records.append({
+            "kind": "watch", "utc": stamp, "file": f"f{index}",
+            "verdict": {"findings": [{"rule": "NOT_RUNNING", "bot": f"v{index % 5}"}]},
+        })
+    detection = ev.detect_watch_findings(records, started=0, seen=NEVER)
+    assert detection.events  # it did the work
+    assert len(calls) < 6 * len(records), len(calls)  # one parse per distinct stamp, not one per comparison
+    ev._stamp.cache_clear()

@@ -535,16 +535,18 @@ class PushWorker:
                 seen=self.outbox.seen_checker(ev.WATCH_SOURCE),
                 carried=carried,
             )
-            if detection.events or detection.seen:
+            changed = detection.carried is not None and detection.carried != carried
+            if detection.events or detection.seen or changed:
+                # One transaction: the dedup keys, the events and the episode ledger they depend on. A ledger that lags
+                # behind committed keys would give a replayed line a new identity and announce it again.
                 self.outbox.commit(
                     ev.WATCH_SOURCE,
                     seen=detection.seen,
                     events=detection.events,
                     devices=devices,
+                    kv={"watch_open_episodes": detection.carried} if changed else None,
                     now=now,
                 )
-            if detection.carried is not None and detection.carried != carried:
-                self.outbox.set_kv("watch_open_episodes", detection.carried)
             bad = read.bad_lines + detection.skipped
             stalled = self._stalled_tail(read.tail_sha, now)
             self.watch_status = {

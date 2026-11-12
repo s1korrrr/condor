@@ -606,3 +606,28 @@ def test_failed_commit_rolls_back_everything(outbox, registry):
         outbox.commit("s", seen=["k1"], events=[_event()], devices=[device], now=NOW)
     assert not outbox.is_seen("s", "k1")
     assert outbox.db.execute("SELECT COUNT(*) FROM events").fetchone()[0] == 0
+
+
+def test_commit_writes_dedup_keys_events_and_kv_in_one_transaction(tmp_path):
+    """Round 3: state the dedup keys depend on (the watch source's episode ledger) lands with them or not at all."""
+    from condor.push.events import AlertEvent
+
+    outbox = Outbox(tmp_path / "outbox.sqlite")
+    try:
+        event = AlertEvent(
+            id="e1", cls="incident", severity="info", title="t", body="b", deep_link="rsibot://operations",
+            collapse_key="c", thread_id="stack", occurred_at=1.0,
+        )
+        outbox.commit("watch", seen=["k1"], events=[event], kv={"ledger": {"a": 1}}, now=5.0)
+        assert outbox.is_seen("watch", "k1") and outbox.get_kv("ledger") == {"a": 1}
+        # a value that cannot be stored aborts the whole commit: no key, no event, no earlier kv row changes
+        try:
+            outbox.commit("watch", seen=["k2"], events=[], kv={"ledger": {"a": 2}, "bad": {1, 2}}, now=6.0)
+        except TypeError:
+            pass
+        else:  # pragma: no cover
+            raise AssertionError("the unserialisable value must abort the commit")
+        assert not outbox.is_seen("watch", "k2")
+        assert outbox.get_kv("ledger") == {"a": 1}
+    finally:
+        outbox.close()

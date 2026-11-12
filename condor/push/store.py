@@ -1075,9 +1075,13 @@ class Outbox:
         devices: Sequence[Device] = (),
         primed: str | None = None,
         conditions: Mapping[str, Condition | None] | None = None,
+        kv: Mapping[str, Any] | None = None,
         now: float | None = None,
     ) -> int:
         """Record dedup keys, events and their per-device deliveries atomically.
+
+        ``kv`` rows are written in the same transaction, last: state that the dedup keys depend on (the watch source's
+        episode ledger) lands with them or not at all, never half-way.
 
         Returns the number of delivery rows created. An event id that already
         exists creates nothing, so a replayed commit is harmless.
@@ -1131,6 +1135,11 @@ class Outbox:
                                 device.recipient_server_id,
                             ),
                         ).rowcount
+            for key, value in (kv or {}).items():
+                self.db.execute(
+                    "INSERT INTO kv(key,value) VALUES(?,?) ON CONFLICT(key) DO UPDATE SET value=excluded.value",
+                    (key, json.dumps(value, sort_keys=True)),
+                )
         return created
 
     def conditions(self) -> dict[str, Condition]:

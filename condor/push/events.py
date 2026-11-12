@@ -18,6 +18,7 @@ import math
 import re
 from collections import defaultdict
 from dataclasses import dataclass
+from functools import lru_cache
 from datetime import date, datetime, timedelta, timezone
 from decimal import Decimal
 from typing import Any, Callable, Collection, Iterable, Mapping, Sequence
@@ -1249,7 +1250,7 @@ def _watch_record_keys(record: Mapping[str, Any], fallback_start: str) -> dict[s
             if (
                 not isinstance(key, str)
                 or not _WATCH_KEY.fullmatch(key)
-                or _epoch(start) is None
+                or (_stamp(start) if isinstance(start, str) else _epoch(start)) is None
             ):
                 return None
             found[key] = str(start)
@@ -1290,16 +1291,22 @@ def _watch_finding_event(kind: str, key: str, start: str, occurred: float) -> Al
 LEDGER_PER_KEY = 20  # episode intervals kept per (kind, key); older ones can no longer be replayed from a rotated file
 
 
+@lru_cache(maxsize=8192)
+def _stamp(text: str) -> float | None:
+    """Epoch of an ISO time, parsed once: a scan reads the same few thousand stamps again and again."""
+    return _epoch(text)
+
+
 def _ledger_add(ledger: dict[str, dict[str, list[list[str]]]], kind: str, key: str, start: str, last: str) -> None:
     """Record that ``key`` was open from ``start`` to (at least) ``last``; extend the interval of the same start."""
     intervals = ledger.setdefault(kind, {}).setdefault(key, [])
     for interval in intervals:
         if interval[0] == start:
-            if (_epoch(last) or 0.0) > (_epoch(interval[1]) or 0.0):
+            if (_stamp(last) or 0.0) > (_stamp(interval[1]) or 0.0):
                 interval[1] = last
             return
     intervals.append([start, last])
-    intervals.sort(key=lambda item: _epoch(item[0]) or 0.0)
+    intervals.sort(key=lambda item: _stamp(item[0]) or 0.0)
     del intervals[:-LEDGER_PER_KEY]
 
 
@@ -1330,7 +1337,7 @@ def _parse_carried(carried: Any) -> tuple[dict[str, dict[str, str]], dict[str, d
                         if (
                             isinstance(item, list)
                             and len(item) == 2
-                            and all(isinstance(part, str) and _epoch(part) is not None for part in item)
+                            and all(isinstance(part, str) and _stamp(part) is not None for part in item)
                         ):
                             _ledger_add(ledger, kind, key, item[0], item[1])
     return open_episodes, ledger
@@ -1390,10 +1397,10 @@ def detect_watch_findings(
     def old_identity(kind: str, key: str, occurred: float, chain: Mapping[str, str]) -> str | None:
         """The start of the episode a line without finding_since belongs to, or None when it begins a new one."""
         earlier = chain.get(key)
-        if earlier is not None and (_epoch(earlier) or occurred + 1) <= occurred:
+        if earlier is not None and (_stamp(earlier) or occurred + 1) <= occurred:
             return earlier  # the key was in the line before it
         for start, last in ledger.get(kind, {}).get(key, []):
-            if (_epoch(start) or occurred + 1) <= occurred <= (_epoch(last) or occurred - 1):
+            if (_stamp(start) or occurred + 1) <= occurred <= (_stamp(last) or occurred - 1):
                 return start  # a line of a closed (or rotated-out) episode, replayed
         return None
 
@@ -1402,7 +1409,8 @@ def detect_watch_findings(
             skipped += 1
             continue
         kind, verdict = record.get("kind"), record.get("verdict")
-        occurred = _epoch(record.get("utc"))
+        stamp_value = record.get("utc")
+        occurred = _stamp(stamp_value) if isinstance(stamp_value, str) else _epoch(stamp_value)
         if not isinstance(kind, str) or not _WATCH_KIND.fullmatch(kind) or occurred is None:
             skipped += 1
             continue
@@ -1447,7 +1455,7 @@ def detect_watch_findings(
             current[key] = start
             _ledger_add(ledger, kind, key, start, stamp_text)
             episode, announced = f"watch:{kind}:{key}@{start}", f"watch-ann:{kind}:{key}@{start}"
-            if (_epoch(start) if _epoch(start) is not None else occurred) < started:
+            if (_stamp(start) if _stamp(start) is not None else occurred) < started:
                 remember(episode)  # history: seen, never announced, and silent when the watch repeats it
             elif remember(episode):
                 events.append(_watch_finding_event(kind, key, start, occurred))

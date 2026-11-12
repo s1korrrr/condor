@@ -327,6 +327,39 @@ def test_the_activation_between_a_first_failed_run_and_the_incident_line_stays_s
     assert watch_pushes(rig) == []
 
 
+def test_a_failed_ledger_write_cannot_split_from_the_committed_notifications(watch_rig):
+    """Round 3 (Sol F2): one SQLite transaction holds the dedup keys, the events and the episode ledger.
+
+    The fault is injected inside the database (a trigger that aborts the ledger row), so it hits whatever order the code
+    uses: with separate transactions the events were already committed and a rotated replay announced them again.
+    """
+    rig = watch_rig
+    start = rig.clock()
+    first = {"kind": "watch", "utc": iso(start), "file": "first",
+             "verdict": {"findings": [{"rule": "NOT_RUNNING", "bot": "v1"}]}}
+    repeat = dict(first, utc=iso(start + 300), file="repeat")
+    resolved = {"kind": "watch", "utc": iso(start + 600), "file": "repeat", "verdict": "RESOLVED"}
+    records = [first, repeat, resolved]
+    rig.watch.path.write_text("".join(json.dumps(r) + "\n" for r in records))
+    rig.clock.advance(600)
+    rig.outbox.db.execute(
+        "CREATE TRIGGER block_ledger BEFORE INSERT ON kv WHEN NEW.key = 'watch_open_episodes' "
+        "BEGIN SELECT RAISE(ABORT, 'synthetic ledger failure'); END"
+    )
+    rig.outbox.db.commit()
+    rig.cycle()
+    assert rig.worker.watch_status["state"] == "error"
+    assert rig.pushes() == []  # nothing committed without the ledger: the whole transaction rolled back
+    assert not rig.outbox.is_seen("watch", "watch:watch:NOT_RUNNING:v1@" + iso(start))
+    rig.outbox.db.execute("DROP TRIGGER block_ledger")
+    rig.outbox.db.commit()
+    rig.cycle()
+    assert len(rig.pushes()) == 4  # announced once, after the fault is gone
+    rig.watch.path.write_text("".join(json.dumps(r) + "\n" for r in records[1:]))  # the opening line rotates away
+    rig.cycle()
+    assert len(rig.pushes()) == 4, rig.pushes()[4:]
+
+
 # ------------------------------------------------------------------ config
 
 

@@ -47,6 +47,7 @@ from condor.push.heartbeat import ExternalPing
 from condor.push.heartbeat import healthcheck as heartbeat_healthcheck
 from condor.push.heartbeat import write_heartbeat_file
 from condor.push.store import Device, Outbox, Registry
+from condor.push.watch_source import read_watch_records
 
 logger = logging.getLogger("condor.push")
 
@@ -55,6 +56,7 @@ FILL_LIMIT = 1000
 EXECUTOR_LIMIT = 500
 PRUNE_EVERY_SECONDS = 3600.0
 BACKLOG_ALARM_SECONDS = 900.0
+WATCH_TAIL_STALE_SECONDS = 600.0  # longer than one watch period (5 min): an unfinished last record is torn, not in progress
 VERSION = 1
 GLOBAL_SOURCES = ("stack", "test", "summary", "market")
 
@@ -259,8 +261,11 @@ class PushWorker:
         self.source_status: dict[str, dict[str, str]] = {}
         self._all_unreadable = False
         now = clock()
+        self.watch_status: dict[str, Any] | None = None
         for name in GLOBAL_SOURCES:
             outbox.start_source(name, now)
+        if config.watch_incidents_path is not None:
+            outbox.start_source(ev.WATCH_SOURCE, now)
         for source in self.fleet_sources.sources:
             outbox.start_source(source_key(source), now)
 
@@ -333,6 +338,7 @@ class PushWorker:
             self.source_status[info.tag] = self._ingest(info, reads, devices, now)
         self._all_unreadable = bool(infos) and not any(r.runtime_ok for _, r in infos)
         self._incidents(infos, devices, now)
+        self._watch_findings(devices, now)
         self._test_requests(now)
         self._summary(infos, devices, now)
         await self._market(devices, now)
@@ -504,6 +510,76 @@ class PushWorker:
                     now=now,
                 )
 
+    def _watch_findings(self, devices: Sequence[Device], now: float) -> None:
+        """The razer watch's incident log: one push per new finding key and episode.
+
+        Isolated from the rest of the cycle, and never silent: an unreadable file keeps the
+        checkpoint and degrades the heartbeat, a line that is not a record is counted and degrades it,
+        and an unexpected error degrades it too. The other sources and delivery carry on.
+        """
+        path = self.config.watch_incidents_path
+        if path is None:
+            return
+        try:
+            read = read_watch_records(path)
+            if read.error:
+                self.watch_status = {"state": "unreadable", "error": read.error}
+                logger.warning("watch findings unreadable reason=%s", read.error)
+                return
+            started = self.outbox.started(ev.WATCH_SOURCE)
+            assert started is not None
+            carried = self.outbox.get_kv("watch_open_episodes") or {}
+            detection = ev.detect_watch_findings(
+                read.records,
+                started=started,
+                seen=self.outbox.seen_checker(ev.WATCH_SOURCE),
+                carried=carried,
+            )
+            if detection.events or detection.seen:
+                self.outbox.commit(
+                    ev.WATCH_SOURCE,
+                    seen=detection.seen,
+                    events=detection.events,
+                    devices=devices,
+                    now=now,
+                )
+            if detection.carried is not None and detection.carried != carried:
+                self.outbox.set_kv("watch_open_episodes", detection.carried)
+            bad = read.bad_lines + detection.skipped
+            stalled = self._stalled_tail(read.tail_sha, now)
+            self.watch_status = {
+                "state": "corrupt" if bad or stalled else "ok",
+                "bad_records": bad + (1 if stalled else 0),
+                **({"stalled_tail": True} if stalled else {}),
+            }
+            if bad or stalled:
+                logger.warning(
+                    "watch findings: %d unreadable record(s)%s",
+                    bad,
+                    ", last record unfinished" if stalled else "",
+                )
+        except Exception as exc:  # noqa: BLE001 - one bad file must not stop delivery for the fleet
+            self.watch_status = {"state": "error", "error": exc.__class__.__name__}
+            logger.warning("watch findings failed error=%s", exc.__class__.__name__)
+
+    def _stalled_tail(self, tail_sha: str | None, now: float) -> bool:
+        """True when the same unfinished last record has been there for longer than one watch period.
+
+        A write in progress finishes in moments, so a fragment is only retried. One that does not change for
+        ``WATCH_TAIL_STALE_SECONDS`` is a torn record (a partial write, e.g. after ENOSPC): it can never become an
+        alert, so it is counted as corrupt and shown in the heartbeat. The fragment's fingerprint and the time it
+        was first seen are kept in the outbox, so a restart does not start the clock again.
+        """
+        previous = self.outbox.get_kv("watch_tail")
+        if tail_sha is None:
+            if previous is not None:
+                self.outbox.set_kv("watch_tail", None)
+            return False
+        if not isinstance(previous, dict) or previous.get("sha") != tail_sha:
+            previous = {"sha": tail_sha, "since": now}
+            self.outbox.set_kv("watch_tail", previous)
+        return now - float(previous.get("since", now)) > WATCH_TAIL_STALE_SECONDS
+
     def _test_requests(self, now: float) -> None:
         for request in self.registry.requests("pending"):
             wanted = set(request["device_ids"])
@@ -608,6 +684,13 @@ class PushWorker:
             reasons.append("sources_unreadable")
         if self.last_cycle_error:
             reasons.append("cycle_error")
+        if self.watch_status and self.watch_status["state"] != "ok":
+            reasons.append(
+                {
+                    "unreadable": "watch_findings_unreadable",
+                    "corrupt": "watch_findings_corrupt",
+                }.get(self.watch_status["state"], "watch_findings_error")
+            )
         oldest = self.outbox.db.execute(
             "SELECT MIN(created) FROM deliveries WHERE state='pending'"
         ).fetchone()[0]
@@ -632,6 +715,11 @@ class PushWorker:
                 "auth_ok": apns.auth_ok,
             },
             "sources": self.source_status,
+            **(
+                {"watch_findings": self.watch_status}
+                if self.watch_status is not None
+                else {}
+            ),
             **(
                 {"refresh": self.refresh.heartbeat()}
                 if self.refresh is not None

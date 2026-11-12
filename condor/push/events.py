@@ -225,6 +225,7 @@ class Detection:
     seen: tuple[str, ...] = ()  # dedup keys to record with the events, atomically
     primed: bool = False  # a first snapshot was absorbed silently
     skipped: int = 0  # rows that could not be deduplicated safely
+    carried: Mapping[str, Any] | None = None  # watch source: open episodes and episode ledger for the next scan
 
 
 Seen = Callable[[str], bool]
@@ -1152,6 +1153,317 @@ def detect_incidents(
                 )
             )
     return Detection(tuple(events), tuple(keys))
+
+
+# --------------------------------------------------------------------------- razer watch findings
+
+WATCH_SOURCE = "watch"  # the outbox source for the razer watch's incident log
+_WATCH_KIND = re.compile(r"[a-z][a-z0-9_]{0,19}")
+# rule, then the bot / service / item the watch names, then an optional field: always_on.py ``finding_key``.
+_WATCH_KEY = re.compile(
+    r"[A-Z][A-Z0-9_]{1,63}:[A-Za-z0-9_.@/-]{0,80}(?::[A-Za-z0-9_.-]{1,40})?"
+)
+# Findings about the watch itself and its read path. They are loud in the journal and on hc-ping,
+# but they do not say that a bot, a container, the loss rail or the disk is in trouble: "warning".
+# Everything else, and every rule this table has never heard of, is "critical": a new check of the
+# watch must not arrive quieter than the faults it exists to catch.
+WATCH_WARNING_RULES = frozenset(
+    {
+        "CHECK_ERROR", "CHECKS_WRITE_FAILED", "CONFIG_INVALID", "CONFIG_OR_IO_ERROR", "CONFIG_UNREADABLE",
+        "CONFIG_WINDOW_START_INVALID", "INCIDENT_WRITE_FAILED", "LOGS_UNAVAILABLE", "MAC_DISK_LOW",
+        "MAC_DISK_UNKNOWN", "MAC_READ_FAILED", "MAC_READ_TIMEOUT", "MAC_RECEIPT_STALE",
+        "MAC_RECEIPT_TIME_INVALID", "MAC_RECEIPT_WRITE_FAILED", "NO_LOG_SOURCE", "STATE_DIR_MISMATCH",
+        "STATE_INVALID", "STATE_WRITE_FAILED", "UNEXPECTED_ERROR", "WATCHDOG_CONFIG_WRITE_FAILED",
+        "WATCHDOG_OUTPUT_INVALID", "WATCHDOG_STATUS_FAIL", "WATCHDOG_TIMEOUT",
+    }
+)
+WATCH_RULE_WORDS = {
+    "NOT_RUNNING": "container is not running",
+    "NOT_HEALTHY": "container is not healthy",
+    "CONTAINER_MISSING": "container is missing",
+    "CONTAINER_UNREADABLE": "container cannot be read",
+    "DUPLICATE_CONTAINER": "two containers for one service",
+    "UNEXPECTED_RUNNING_SERVICE": "an unexpected service is running",
+    "LIVE_RESTART_POLICY_NOT_NO": "restart policy is not 'no'",
+    "RESTARTED": "container restarted",
+    "RESTARTED_SINCE_BASELINE": "restarted since the baseline",
+    "DOCKER_UNAVAILABLE": "Docker cannot be read",
+    "STATUS_STALE": "status file is stale",
+    "STATUS_UNREADABLE": "status file cannot be read",
+    "STATUS_INVALID": "status file has an invalid field",
+    "STATUS_TIME_INVALID": "status file has an invalid time",
+    "NOT_READY_TO_TRADE": "bot is not ready to trade",
+    "ORDER_COUNT_UNKNOWN": "open order count is unknown",
+    "PERSISTENCE_FAILURES": "state persistence is failing",
+    "PERSISTENCE_UNKNOWN": "state persistence is unknown",
+    "RECONCILIATION_NEEDED": "reconciliation is needed",
+    "EVENT_LOOP_STALL": "event loop stalled",
+    "LOGS_UNAVAILABLE": "logs cannot be read",
+    "NO_LOG_SOURCE": "no log source",
+    "LOSS_RAIL_PAUSED": "daily-loss rail paused new entries",
+    "LOSS_RAIL_UNKNOWN": "daily-loss rail cannot be read",
+    "DISK_BELOW_FLOOR": "free disk space is below the floor",
+    "DISK_UNKNOWN": "free disk space cannot be read",
+    "WATCH_SILENT": "the watch has gone silent",
+    "WATCH_NEVER_RAN": "the watch has never run",
+    "WATCH_TIME_INVALID": "the watch time is invalid",
+    "STATE_DIR_MISMATCH": "watch state folder differs from the unit's",
+    "MAC_TWIN_RUNNING": "a Mac twin is running",
+    "MAC_TWIN_RESTART_POLICY": "a Mac twin can restart",
+    "MAC_TWIN_NOT_FENCED": "a Mac twin is not fenced",
+    "MAC_TWIN_UNKNOWN": "a Mac twin cannot be read",
+    "MAC_TWINS_UNKNOWN": "the Mac twins cannot be read",
+}
+_BOT_WORDS = {"v1": "V1", "v2": "V2", "v3": "V3", "sell-ada": "sell-ADA", "api": "API"}
+
+
+def watch_finding_key(finding: Mapping[str, Any]) -> str | None:
+    """The same key as ``always_on.finding_key`` (rule, bot/service/item, optional field), or None if unusable."""
+    rule = finding.get("rule")
+    subject = finding.get("bot") or finding.get("service") or finding.get("item") or ""
+    field = finding.get("field")
+    if not isinstance(rule, str) or not isinstance(subject, str) or not (
+        field is None or isinstance(field, str)
+    ):
+        return None
+    key = f"{rule}:{subject}" + (f":{field}" if field else "")
+    return key if _WATCH_KEY.fullmatch(key) else None
+
+
+def watch_finding_severity(rule: str) -> str:
+    return "warning" if rule in WATCH_WARNING_RULES else "critical"
+
+
+def _watch_record_keys(record: Mapping[str, Any], fallback_start: str) -> dict[str, str] | None:
+    """{finding key: episode start} for one incident record, or None if the record is unusable.
+
+    The watch writes ``finding_since`` (the exact start of each key's episode). A record from before
+    that field existed has only ``verdict.findings``; its keys then start at the record's own time.
+    """
+    since = record.get("finding_since")
+    if since is not None:
+        if not isinstance(since, Mapping) or len(since) > 200:
+            return None
+        found: dict[str, str] = {}
+        for key, start in since.items():
+            if (
+                not isinstance(key, str)
+                or not _WATCH_KEY.fullmatch(key)
+                or _epoch(start) is None
+            ):
+                return None
+            found[key] = str(start)
+        return found
+    verdict = record.get("verdict")
+    findings = verdict.get("findings") if isinstance(verdict, Mapping) else None
+    if not isinstance(findings, list) or len(findings) > 200:
+        return None
+    found = {}
+    for finding in findings:
+        key = watch_finding_key(finding) if isinstance(finding, Mapping) else None
+        if key is None:
+            return None
+        found[key] = fallback_start
+    return found
+
+
+def _watch_finding_event(kind: str, key: str, start: str, occurred: float) -> AlertEvent:
+    rule, _, rest = key.partition(":")
+    subject = rest.split(":", 1)[0]
+    headline = WATCH_RULE_WORDS.get(rule) or rule.lower().replace("_", " ")
+    label = _BOT_WORDS.get(subject.lower(), subject) if subject else "razer watch"
+    detail = f"{label}: {headline}." if subject else f"{headline[:1].upper()}{headline[1:]}."
+    return AlertEvent(
+        id="watchfind:" + digest(kind, key, start),
+        cls="incident",
+        severity=watch_finding_severity(rule),
+        title=clean_text(f"{label} · {headline}", 100),
+        body=clean_text(f"{detail} Raised by the razer watch ({rule}); open Operations.", 300),
+        deep_link=link("operations"),
+        collapse_key="watch:" + digest(kind, key),
+        thread_id="stack",
+        occurred_at=occurred,
+        kind="watch_finding",
+    )
+
+
+LEDGER_PER_KEY = 20  # episode intervals kept per (kind, key); older ones can no longer be replayed from a rotated file
+
+
+def _ledger_add(ledger: dict[str, dict[str, list[list[str]]]], kind: str, key: str, start: str, last: str) -> None:
+    """Record that ``key`` was open from ``start`` to (at least) ``last``; extend the interval of the same start."""
+    intervals = ledger.setdefault(kind, {}).setdefault(key, [])
+    for interval in intervals:
+        if interval[0] == start:
+            if (_epoch(last) or 0.0) > (_epoch(interval[1]) or 0.0):
+                interval[1] = last
+            return
+    intervals.append([start, last])
+    intervals.sort(key=lambda item: _epoch(item[0]) or 0.0)
+    del intervals[:-LEDGER_PER_KEY]
+
+
+def _parse_carried(carried: Any) -> tuple[dict[str, dict[str, str]], dict[str, dict[str, list[list[str]]]]]:
+    """(open episodes, ledger) from what a previous scan returned; anything unusable is dropped, never trusted."""
+    if not isinstance(carried, Mapping):
+        return {}, {}
+    flat = "open" not in carried and "ledger" not in carried  # the first form: {kind: {key: start}}
+    raw_open = carried if flat else carried.get("open")
+    open_episodes: dict[str, dict[str, str]] = {}
+    if isinstance(raw_open, Mapping):
+        for kind, episodes in raw_open.items():
+            if isinstance(kind, str) and isinstance(episodes, Mapping):
+                open_episodes[kind] = {
+                    key: start
+                    for key, start in episodes.items()
+                    if isinstance(key, str) and isinstance(start, str)
+                }
+    ledger: dict[str, dict[str, list[list[str]]]] = {}
+    raw_ledger = {} if flat else carried.get("ledger")
+    if isinstance(raw_ledger, Mapping):
+        for kind, keyed in raw_ledger.items():
+            if not (isinstance(kind, str) and isinstance(keyed, Mapping)):
+                continue
+            for key, intervals in keyed.items():
+                if isinstance(key, str) and isinstance(intervals, list):
+                    for item in intervals:
+                        if (
+                            isinstance(item, list)
+                            and len(item) == 2
+                            and all(isinstance(part, str) and _epoch(part) is not None for part in item)
+                        ):
+                            _ledger_add(ledger, kind, key, item[0], item[1])
+    return open_episodes, ledger
+
+
+def detect_watch_findings(
+    records: Sequence[Mapping[str, Any]],
+    *,
+    started: float,
+    seen: Seen,
+    carried: Mapping[str, Any] | None = None,
+) -> Detection:
+    """One notification per new razer-watch finding key and episode, from the watch's incident log.
+
+    ``records`` are the parsed lines of the watch's ``incidents.jsonl`` in file order. An incident
+    record names the finding keys of one watch run with the start of each key's episode
+    (``finding_since``); the dedup key is kind + key + episode start, so a key that stays open alerts
+    once, and a key that went away (even while another kept the watch failing) and came back alerts
+    again.
+
+    Activation: an episode that began before ``started`` is history, judged by the episode's own start
+    (``finding_since``), not by the time of the line that names it: a key first seen at 12:00 whose
+    threshold was crossed at 12:05, after activation at 12:02, is the same old episode. History is
+    recorded as seen and never announced, and the same episode stays silent when the watch repeats it
+    (it repeats an open incident every hour) and when it recovers. Only an episode that begins at or
+    after activation announces.
+
+    Recovery: a RESOLVED record closes every episode of its kind and is announced only when the incident
+    it closes was announced. The watch repeats an open incident under a new file name, and RESOLVED names
+    the newest file, so a repeat of an announced episode inherits the announced-open marker.
+
+    Identity of old records: a record without ``finding_since`` (written before it existed) takes the start
+    of the same key in the record before it. ``carried`` is the state the previous scan ended with and
+    ``Detection.carried`` returns the new one (the worker keeps it in the outbox): the episodes open at the
+    end, and a ledger of every episode interval seen per key. A line replayed from a rotated file finds its
+    episode in the ledger, closed ones included, so rotation never gives an old line a new identity.
+
+    Operator notes (REBASELINED) are not findings. A record that cannot be read is counted in ``skipped``
+    (the worker reports it); the readable ones still alert.
+    """
+    events: list[AlertEvent] = []
+    keys: list[str] = []
+    batch: set[str] = set()
+    skipped = 0
+    open_episodes, ledger = _parse_carried(carried)
+
+    def known(key: str) -> bool:
+        return key in batch or seen(key)
+
+    def remember(key: str) -> bool:
+        if known(key):
+            return False
+        batch.add(key)
+        keys.append(key)
+        return True
+
+    def old_identity(kind: str, key: str, occurred: float, chain: Mapping[str, str]) -> str | None:
+        """The start of the episode a line without finding_since belongs to, or None when it begins a new one."""
+        earlier = chain.get(key)
+        if earlier is not None and (_epoch(earlier) or occurred + 1) <= occurred:
+            return earlier  # the key was in the line before it
+        for start, last in ledger.get(kind, {}).get(key, []):
+            if (_epoch(start) or occurred + 1) <= occurred <= (_epoch(last) or occurred - 1):
+                return start  # a line of a closed (or rotated-out) episode, replayed
+        return None
+
+    for record in records:
+        if not isinstance(record, Mapping):
+            skipped += 1
+            continue
+        kind, verdict = record.get("kind"), record.get("verdict")
+        occurred = _epoch(record.get("utc"))
+        if not isinstance(kind, str) or not _WATCH_KIND.fullmatch(kind) or occurred is None:
+            skipped += 1
+            continue
+        if kind == "rebaseline" or verdict == "REBASELINED":
+            continue
+        incident_file = digest(record.get("file") if isinstance(record.get("file"), str) else "")
+        if verdict == "RESOLVED":
+            open_episodes[kind] = {}  # the ledger keeps the closed episodes
+            opened, done = f"watch-open:{kind}:{incident_file}", f"watch-done:{kind}:{incident_file}"
+            if known(opened) and not known(done):
+                remember(done)
+                events.append(
+                    AlertEvent(
+                        id="watchok:" + digest(kind, incident_file),
+                        cls="incident",
+                        severity="info",
+                        title=clean_text("razer watch · Recovered", 100),
+                        body=clean_text("The razer watch passed; its findings are cleared.", 300),
+                        deep_link=link("operations"),
+                        collapse_key="watch-ok:" + digest(kind),
+                        thread_id="stack",
+                        occurred_at=occurred,
+                        kind="watch_resolved",
+                    )
+                )
+            continue
+        if not isinstance(verdict, Mapping):
+            skipped += 1
+            continue
+        stamp_text = str(record.get("utc"))
+        found = _watch_record_keys(record, stamp_text)
+        if found is None:
+            skipped += 1
+            continue
+        exact = record.get("finding_since") is not None
+        chain = open_episodes.get(kind, {})
+        announced_open = False
+        current: dict[str, str] = {}
+        for key, start in sorted(found.items()):
+            if not exact:
+                start = old_identity(kind, key, occurred, chain) or start
+            current[key] = start
+            _ledger_add(ledger, kind, key, start, stamp_text)
+            episode, announced = f"watch:{kind}:{key}@{start}", f"watch-ann:{kind}:{key}@{start}"
+            if (_epoch(start) if _epoch(start) is not None else occurred) < started:
+                remember(episode)  # history: seen, never announced, and silent when the watch repeats it
+            elif remember(episode):
+                events.append(_watch_finding_event(kind, key, start, occurred))
+                remember(announced)
+                announced_open = True
+            elif known(announced):
+                announced_open = True  # a repeat of an episode the phone heard about
+        open_episodes[kind] = current
+        if announced_open:
+            remember(f"watch-open:{kind}:{incident_file}")
+    return Detection(
+        tuple(events),
+        tuple(keys),
+        skipped=skipped,
+        carried={"open": open_episodes, "ledger": ledger},
+    )
 
 
 # --------------------------------------------------------------------------- summary

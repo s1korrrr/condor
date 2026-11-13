@@ -48,11 +48,11 @@ export function V5MarketDetail({ coin, color, onClose }: { coin: string; color: 
   const stats = candles.data ? coinStats(candles.data.spot as unknown as CandleRead, candles.data.perpetual as unknown as CandleRead) : null;
   const tiles: [string, string, string?][] = stats ? [
     [`Return, ${range}`, signed(stats.returnWindowPct, 2, "%")],
-    ["Return, last hour", signed(stats.return1hPct, 2, "%")],
-    ["Return, last 6 hours", signed(stats.return6hPct, 2, "%"), range === "1h" ? "needs the 6h range or longer" : undefined],
+    ["Return, last hour", signed(stats.return1hPct, 2, "%"), stats.return1hPct == null ? "no close exactly one hour earlier" : undefined],
+    ["Return, last 6 hours", signed(stats.return6hPct, 2, "%"), stats.return6hPct == null ? (range === "1h" ? "needs the 6h range or longer" : "no close exactly six hours earlier") : undefined],
     ["High–low range", `${stats.rangePct.toFixed(2)}%`],
     ["Largest drop from a peak", signed(stats.maxDrawdownPct, 2, "%")],
-    ["Traded value", `${compact(stats.volumeQuote)} ${REFERENCE.quote}`, `${venueName(REFERENCE.venue)} spot only`],
+    ["Traded value", stats.volumeQuote == null ? "—" : `${compact(stats.volumeQuote)} ${REFERENCE.quote}`, stats.volumeQuote == null ? `volume missing for ${stats.volumeMissingMinutes} minute(s)` : `${venueName(REFERENCE.venue)} spot only`],
     ["Perpetual premium, mean", stats.premium ? signed(stats.premium.mean, 1, " bp") : "—", stats.premium ? `min ${signed(stats.premium.min, 1)} · max ${signed(stats.premium.max, 1)} bp` : "no minute with both legs"],
     ["Minutes held", `${stats.minutes} / ${stats.windowMinutes}`, "closed minutes in the window"],
   ] : [];

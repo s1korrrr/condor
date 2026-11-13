@@ -26,6 +26,28 @@ export function closes(read) {
     .map(row => ({ t: row[t], close: row[close], high: Number.isFinite(row[high]) ? row[high] : row[close], low: Number.isFinite(row[low]) ? row[low] : row[close] }));
 }
 
+/** The owner window's last closed minute (seconds); the newest close is current only when it is this minute. */
+export function windowEnd(read) {
+  return read && Number.isFinite(read.end) ? read.end : null;
+}
+
+/**
+ * Time-bucketed samples over the read window: one point per `step`-minute bucket holding the bucket's last close,
+ * and an explicit null for a bucket with no close, so charts break across missing time instead of joining it.
+ */
+export function sampled(rows, step, value) {
+  if (!rows.length) return [];
+  const width = step * 60, first = Math.floor(rows[0].t / width) * width, last = rows[rows.length - 1].t;
+  const byBucket = new Map();
+  for (const row of rows) byBucket.set(Math.floor(row.t / width) * width, row);
+  const out = [];
+  for (let bucket = first; bucket <= last; bucket += width) {
+    const row = byBucket.get(bucket);
+    out.push(row ? { time: row.t * 1000, value: value(row) } : { time: (bucket + width - 60) * 1000, value: null });
+  }
+  return out;
+}
+
 /** Price tile for one coin from its reference spot candles; null when fewer than two closes exist. */
 export function coinTile(coin, spotRead, perpetualRead) {
   const spot = closes(spotRead);
@@ -38,29 +60,33 @@ export function coinTile(coin, spotRead, perpetualRead) {
   }
   const mean = returns.reduce((sum, value) => sum + value, 0) / (returns.length || 1);
   const variance = returns.reduce((sum, value) => sum + (value - mean) ** 2, 0) / (returns.length || 1);
-  const premium = premiumSeries(spotRead, perpetualRead);
+  // The premium is shown only for the same minute as the shown price; an older overlap is not current.
+  const perpetual = closes(perpetualRead).find(row => row.t === last.t);
+  const end = windowEnd(spotRead);
+  // Last-hour move from the close exactly one hour before the shown price; unknown when that minute is missing.
+  const hourAgo = spot.find(row => row.t === last.t - 3600);
   return {
     coin,
     last: last.close,
     lastTime: last.t,
     firstTime: first.t,
+    current: end == null || last.t >= end,
     changePct: (last.close / first.close - 1) * 100,
+    change1hPct: hourAgo ? (last.close / hourAgo.close - 1) * 100 : null,
     high: Math.max(...spot.map(row => row.high)),
     low: Math.min(...spot.map(row => row.low)),
     volatilityPct: returns.length >= 30 ? Math.sqrt(variance * MINUTES_PER_YEAR) * 100 : null,
-    premiumBps: premium.length ? premium[premium.length - 1].value : null,
-    spark: spot.filter((_row, index) => index % 5 === 0 || index === spot.length - 1).map(row => ({ time: row.t * 1000, value: row.close })),
+    premiumBps: perpetual ? (perpetual.close / last.close - 1) * 10_000 : null,
+    spark: sampled(spot, 5, row => row.close),
   };
 }
 
-/** Each coin's return since the first close in the window, in percent, sampled every `step` minutes. */
+/** Each coin's return since the first close in the window, in percent, one point per `step` minutes, null in gaps. */
 export function indexedReturns(spotRead, step = 5) {
   const spot = closes(spotRead);
   if (!spot.length) return [];
   const base = spot[0].close;
-  return spot
-    .filter((_row, index) => index % step === 0 || index === spot.length - 1)
-    .map(row => ({ time: row.t * 1000, value: (row.close / base - 1) * 100 }));
+  return sampled(spot, step, row => (row.close / base - 1) * 100);
 }
 
 /** Perpetual over spot on the same venue and quote, in basis points, only where both legs closed that minute. */
@@ -71,26 +97,32 @@ export function premiumSeries(spotRead, perpetualRead) {
     .map(row => ({ time: row.t * 1000, value: (row.close / spot.get(row.t) - 1) * 10_000 }));
 }
 
-/** Mean of consecutive `bucket`-minute windows, stamped at each window's last minute. */
-export function averaged(points, bucket = 30) {
+/**
+ * Mean per fixed `minutes`-wide clock window (stamped at the window's last minute). A window with no value is an
+ * explicit null, so an average never spans more clock time than its label says and charts break across gaps.
+ */
+export function averaged(points, minutes = 30) {
+  const values = points.filter(point => point.value != null);
+  if (!values.length) return [];
+  const width = minutes * 60_000, first = Math.floor(values[0].time / width) * width, last = values[values.length - 1].time;
+  const sums = new Map();
+  for (const point of values) {
+    const bucket = Math.floor(point.time / width) * width;
+    const entry = sums.get(bucket) ?? { sum: 0, count: 0 };
+    entry.sum += point.value; entry.count += 1; sums.set(bucket, entry);
+  }
   const out = [];
-  for (let index = 0; index < points.length; index += bucket) {
-    const window = points.slice(index, index + bucket).filter(point => point.value != null);
-    if (window.length) out.push({ time: window[window.length - 1].time, value: window.reduce((sum, point) => sum + point.value, 0) / window.length });
+  for (let bucket = first; bucket <= last; bucket += width) {
+    const entry = sums.get(bucket);
+    out.push({ time: bucket + width - 60_000, value: entry ? entry.sum / entry.count : null });
   }
   return out;
 }
 
-/** How many coins rose over the full window and over the last hour of their own closes. */
-export function breadth(tiles, returnsByCoin) {
+/** How many coins rose over the full window and over the last hour (from each coin's exact hour-ago close). */
+export function breadth(tiles) {
   const present = tiles.filter(Boolean);
-  const lastHour = MARKET_COINS.map(coin => {
-    const points = returnsByCoin[coin] ?? [];
-    if (points.length < 2) return null;
-    const end = points[points.length - 1];
-    const start = [...points].reverse().find(point => end.time - point.time >= 3_600_000);
-    return start ? (1 + end.value / 100) / (1 + start.value / 100) - 1 : null;
-  }).filter(value => value != null);
+  const lastHour = present.map(tile => tile.change1hPct).filter(value => value != null);
   return {
     coins: present.length,
     up24h: present.filter(tile => tile.changePct > 0).length,
@@ -122,18 +154,23 @@ export function venueGrid(tiles) {
   }));
 }
 
-/** Store-wide health numbers; null where no lane reports the field. */
+/**
+ * Store-wide health numbers. A total is shown only when every lane reports the field; otherwise it is null and
+ * `unreported` names how many lanes left it out, so a partial sum is never labelled as all lanes.
+ */
 export function storeHealth(tiles) {
-  const known = (key) => tiles.map(tile => tile[key]).filter(value => Number.isFinite(value));
-  const coverage = known('coverage_7d'), ages = known('last_minute_age_s'), gaps = known('gaps_7d');
+  const all = key => tiles.length > 0 && tiles.every(tile => Number.isFinite(tile[key]));
+  const sum = key => all(key) ? tiles.reduce((total, tile) => total + tile[key], 0) : null;
+  const unreported = key => tiles.filter(tile => !Number.isFinite(tile[key])).length;
   return {
     lanes: tiles.length,
     lanesLive: tiles.filter(tile => tile.available === true).length,
-    pairsHeld: tiles.reduce((sum, tile) => sum + (Number.isFinite(tile.pairs_held) ? tile.pairs_held : 0), 0),
-    pairsListed: tiles.reduce((sum, tile) => sum + (Number.isFinite(tile.pairs_listed) ? tile.pairs_listed : 0), 0),
-    coverage7d: coverage.length ? coverage.reduce((sum, value) => sum + value, 0) / coverage.length : null,
-    gaps7d: gaps.length ? gaps.reduce((sum, value) => sum + value, 0) : null,
-    oldestMinuteAge: ages.length ? Math.max(...ages) : null,
+    pairsHeld: sum('pairs_held'),
+    pairsListed: sum('pairs_listed'),
+    coverage7d: all('coverage_7d') ? sum('coverage_7d') / tiles.length : null,
+    gaps7d: sum('gaps_7d'),
+    oldestMinuteAge: all('last_minute_age_s') ? Math.max(...tiles.map(tile => tile.last_minute_age_s)) : null,
+    unreported: { pairs: Math.max(unreported('pairs_held'), unreported('pairs_listed')), coverage: unreported('coverage_7d'), gaps: unreported('gaps_7d'), age: unreported('last_minute_age_s') },
   };
 }
 
@@ -147,11 +184,11 @@ export function coinStats(spotRead, perpetualRead) {
   const volumeIndex = columnIndex(spotRead.columns, 'volume'), timeIndex = columnIndex(spotRead.columns, 't');
   const volumeByTime = new Map(spotRead.buckets.filter(row => Array.isArray(row) && Number.isFinite(row[volumeIndex])).map(row => [row[timeIndex], row[volumeIndex]]));
   const last = spot[spot.length - 1];
+  const byTime = new Map(spot.map(row => [row.t, row]));
   const since = seconds => {
-    // A horizon longer than the data held is unknown, not the whole-window return.
-    if (spot[0].t > last.t - seconds) return null;
-    const start = spot.find(row => row.t >= last.t - seconds);
-    return start && start !== last ? (last.close / start.close - 1) * 100 : null;
+    // The horizon starts at exactly that minute; if it has no close the return over that horizon is unknown.
+    const start = byTime.get(last.t - seconds);
+    return start ? (last.close / start.close - 1) * 100 : null;
   };
   let peak = spot[0].close, drawdown = 0;
   for (const row of spot) { peak = Math.max(peak, row.close); drawdown = Math.min(drawdown, row.close / peak - 1); }
@@ -165,7 +202,9 @@ export function coinStats(spotRead, perpetualRead) {
     returnWindowPct: (last.close / spot[0].close - 1) * 100,
     rangePct: (high / low - 1) * 100,
     maxDrawdownPct: drawdown * 100,
-    volumeQuote: spot.reduce((sum, row) => sum + (volumeByTime.get(row.t) ?? 0) * row.close, 0),
+    // Traded value only when every closed minute carries a volume; a partial sum would read as the whole window.
+    volumeQuote: spot.every(row => Number.isFinite(volumeByTime.get(row.t))) ? spot.reduce((sum, row) => sum + volumeByTime.get(row.t) * row.close, 0) : null,
+    volumeMissingMinutes: spot.filter(row => !Number.isFinite(volumeByTime.get(row.t))).length,
     premium: premium.length ? { mean: premium.reduce((sum, value) => sum + value, 0) / premium.length, min: Math.min(...premium), max: Math.max(...premium), minutes: premium.length } : null,
   };
 }

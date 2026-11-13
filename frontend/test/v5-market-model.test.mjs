@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { averaged, breadth, closes, coinStats, coinTile, crossLatest, featureRows, featureText, indexedReturns, premiumSeries, storeHealth, venueGrid } from '../src/v5/market-model.mjs';
+import { averaged, breadth, closes, coinStats, sampled, coinTile, crossLatest, featureRows, featureText, indexedReturns, premiumSeries, storeHealth, venueGrid } from '../src/v5/market-model.mjs';
 
 // Owner bucket order without a `columns` field (the server forwards only these fields): t, open, high, low, close, volume, ...
 const minute = (t, close, high = close, low = close) => [t, close, high, low, close, 1, 1, 0, 0, 0, 0, 0];
@@ -36,14 +36,17 @@ test('premium uses only minutes where both legs closed', () => {
 test('indexed returns start at zero and averaging keeps window ends', () => {
   const returns = indexedReturns(read([minute(T0, 50), minute(T0 + 60, 55), minute(T0 + 120, 45)]), 1);
   assert.deepEqual(returns.map(point => Math.round(point.value)), [0, 10, -10]);
-  assert.deepEqual(averaged([{ time: 1, value: 1 }, { time: 2, value: 3 }, { time: 3, value: null }], 2), [{ time: 2, value: 2 }]);
+  // Averages are per clock window: two points 30 minutes apart in 2-minute windows leave null windows between them.
+  const minuteMs = 60_000;
+  const averages = averaged([{ time: 0, value: 1 }, { time: minuteMs, value: 3 }, { time: 30 * minuteMs, value: 5 }], 2);
+  assert.deepEqual(averages[0], { time: minuteMs, value: 2 });
+  assert.equal(averages.at(-1).value, 5);
+  assert.ok(averages.slice(1, -1).every(point => point.value === null));
 });
 
 test('breadth counts coins up over the window and over the last hour', () => {
-  const hour = 3_600_000;
-  const returnsByCoin = { BTC: [{ time: 0, value: 0 }, { time: hour, value: 1 }], ETH: [{ time: 0, value: 0 }, { time: hour, value: -1 }], BNB: [{ time: 0, value: 0 }] };
-  const tiles = [{ changePct: 2 }, { changePct: -1 }, null, { changePct: -3 }, null];
-  const result = breadth(tiles, returnsByCoin);
+  const tiles = [{ changePct: 2, change1hPct: 1 }, { changePct: -1, change1hPct: -1 }, null, { changePct: -3, change1hPct: null }, null];
+  const result = breadth(tiles);
   assert.equal(result.coins, 3);
   assert.equal(result.up24h, 1);
   assert.equal(result.up1h, 1);
@@ -72,9 +75,15 @@ test('venue grid and store health keep unknown values unknown', () => {
   const health = storeHealth(tiles);
   assert.equal(health.lanesLive, 2);
   assert.equal(health.pairsHeld, 13);
-  assert.ok(Math.abs(health.coverage7d - 0.95) < 1e-9);
-  assert.equal(health.gaps7d, 12);
-  assert.equal(health.oldestMinuteAge, 90);
+  // One lane did not report coverage, gaps or age: no total claims to cover all lanes.
+  assert.equal(health.coverage7d, null);
+  assert.equal(health.gaps7d, null);
+  assert.equal(health.oldestMinuteAge, null);
+  assert.deepEqual(health.unreported, { pairs: 0, coverage: 1, gaps: 1, age: 1 });
+  const reported = storeHealth(tiles.slice(0, 2));
+  assert.ok(Math.abs(reported.coverage7d - 0.95) < 1e-9);
+  assert.equal(reported.gaps7d, 12);
+  assert.equal(reported.oldestMinuteAge, 90);
   assert.equal(storeHealth([]).coverage7d, null);
 });
 
@@ -108,4 +117,28 @@ test('features keep owner units and say when a value is not qualified', () => {
   assert.equal(rows.find(row => row.id === 'baseline.composite_score').numeric, null);
   assert.equal(featureText(0.0216, 'percent'), '+0.022%');
   assert.equal(featureText(null, 'percent'), '—');
+});
+
+test('gaps stay gaps: charts get explicit nulls, a stale price and premium are not shown as current', () => {
+  // 100 at 00:00, nothing until 01:00, then 120.
+  const spot = { buckets: [minute(T0, 100), minute(T0 + 3600, 120)], end: T0 + 3600 + 120 };
+  const returns = indexedReturns(spot, 5);
+  assert.equal(returns[0].value, 0);
+  assert.ok(Math.abs(returns.at(-1).value - 20) < 1e-9);
+  assert.ok(returns.slice(1, -1).length >= 11 && returns.slice(1, -1).every(point => point.value === null));
+  const tile = coinTile('BTC', spot, read([minute(T0, 101), minute(T0 + 3540, 119)]));
+  assert.equal(tile.current, false);
+  assert.equal(tile.premiumBps, null);
+  assert.ok(Math.abs(tile.change1hPct - 20) < 1e-9);
+  assert.ok(tile.spark.some(point => point.value === null));
+  assert.deepEqual(sampled([], 5, row => row.close), []);
+});
+
+test('horizons need their exact boundary minute and totals need every minute', () => {
+  const stats = coinStats(read([minute(T0, 100), minute(T0 + 7140, 110), minute(T0 + 7200, 120)]), null);
+  assert.equal(stats.return1hPct, null);
+  const noVolume = [T0, T0 + 60].map(t => [t, 100, 100, 100, 100, null, 1, 0, 0, 0, 0, 0]);
+  const partial = coinStats(read(noVolume), null);
+  assert.equal(partial.volumeQuote, null);
+  assert.equal(partial.volumeMissingMinutes, 2);
 });

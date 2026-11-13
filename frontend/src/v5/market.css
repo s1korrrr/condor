@@ -35,6 +35,7 @@
 .v5m-change.is-down { background: color-mix(in srgb, var(--color-red) 13%, transparent); }
 .v5m-change.is-up { background: color-mix(in srgb, var(--color-green) 13%, transparent); }
 .v5m-price { font-size: clamp(18px, 9cqi, 24px); font-weight: 600; margin: 6px 0 4px; letter-spacing: -0.01em; }
+.v5m-asof { display: block; margin: -2px 0 4px; color: var(--color-yellow); font-size: 11px; }
 .v5m-range > div { position: relative; height: 4px; border-radius: 2px; background: var(--color-border); margin: 8px 0 4px; }
 .v5m-range > div span { position: absolute; top: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--color-text); border: 2px solid var(--color-surface); transform: translateX(-50%); }
 .v5m-range small { display: flex; justify-content: space-between; gap: 6px; color: var(--color-text-muted); font-size: 11px; }

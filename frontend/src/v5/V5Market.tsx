@@ -65,13 +65,14 @@ export function V5Market() {
   const workspace = useQuery({ queryKey: ["v5-workspace"], queryFn: v5Api.workspace, refetchInterval: 30_000 });
   const [selected, setSelected] = useState<string | null>(null);
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
+  const [detailsOpen, setDetailsOpen] = useState(false);
   const select = (coin: string) => setSelected(current => current === coin ? null : coin);
   const toggleSeries = (coin: string) => setHidden(current => { const next = new Set(current); if (next.has(coin)) next.delete(coin); else next.add(coin); return next; });
 
   const reads = coins.data ?? {};
   const tiles = MARKET_COINS.map(coin => coinTile(coin, reads[coin]?.spot, reads[coin]?.perpetual));
   const returns: Record<string, ReturnType<typeof indexedReturns>> = Object.fromEntries(MARKET_COINS.map(coin => [coin, indexedReturns(reads[coin]?.spot)]));
-  const width = breadth(tiles, returns);
+  const width = breadth(tiles);
   const returnSeries: ChartSeries[] = MARKET_COINS.filter(coin => returns[coin].length).map(coin => ({ id: coin, label: coin, color: COIN_COLOR[coin], points: returns[coin], unit: "%", format: value => `${signed(value)}%` }));
   const premium: ChartSeries[] = MARKET_COINS.map(coin => ({ coin, points: averaged(premiumSeries(reads[coin]?.spot, reads[coin]?.perpetual), 30) }))
     .filter(item => item.points.length).map(({ coin, points }) => ({ id: coin, label: coin, color: COIN_COLOR[coin], points, unit: "bp", format: value => `${signed(value, 1)} bp` }));
@@ -84,11 +85,10 @@ export function V5Market() {
   const feedCurrent = refresh?.feed_freshness === "FRESH" && refresh.feed_fresh_until_ms != null && Date.now() <= refresh.feed_fresh_until_ms;
   const failed = MARKET_COINS.filter(coin => reads[coin]?.error);
   const crossVenues = [...new Set((cross.data ?? []).map(cell => cell.venue))].sort();
-  const lastTime = Math.max(0, ...tiles.map(tile => tile?.lastTime ?? 0)) || null;
 
   return <div className="v5m">
     <header className="v5m-head">
-      <div><h1>Market</h1><p>Five coins across {grid.length || "the"} venues, spot and perpetual · prices, breadth, premium, venue coverage and data health on one page. Prices: {venueName(REFERENCE.venue)} {REFERENCE.quote} 1-minute candles, last closed minute {utc(lastTime)}.</p></div>
+      <div><h1>Market</h1><p>Five coins across {grid.length || "the"} venues, spot and perpetual · prices, breadth, premium, venue coverage and data health on one page. Prices: {venueName(REFERENCE.venue)} {REFERENCE.quote} 1-minute candles; a price older than the last closed minute says so on its tile.</p></div>
       <div className="v5m-chips">
         <span className={`v5m-chip ${summary.isError ? "is-bad" : health.lanesLive === health.lanes && health.lanes ? "" : "is-warn"}`}><i />Candle store <b>{summary.isError ? "unavailable" : `${health.lanesLive}/${health.lanes} lanes live`}</b></span>
         <span className={`v5m-chip ${feedCurrent ? "" : "is-warn"}`}><i />V5 feed <b>{refresh ? (feedCurrent ? "current" : "not current") : "unknown"}</b></span>
@@ -103,10 +103,10 @@ export function V5Market() {
 
     <TileGrid label="Coins" min={200}>{tiles.map((tile, index) => tile ? <article key={tile.coin} className={`v5m-card v5m-coin is-clickable${selected === tile.coin ? " is-selected" : ""}`} role="button" tabIndex={0} aria-pressed={selected === tile.coin} aria-label={`${tile.coin}: open statistics, candles and venue detail`} onClick={() => select(tile.coin)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(tile.coin); } }}>
       <div className="v5m-coin-top"><span className="v5m-sym"><i style={{ background: COIN_COLOR[tile.coin] }} />{tile.coin}</span><span className={`v5m-change ${tile.changePct < 0 ? "is-down" : "is-up"}`}>{tile.changePct < 0 ? "▼" : "▲"} {signed(tile.changePct)}%</span></div>
-      <strong className="v5m-price">${price(tile.last)}</strong>
+      <strong className="v5m-price">${price(tile.last)}</strong>{!tile.current && <small className="v5m-asof" role="note">last close {utc(tile.lastTime)} · newer minutes missing</small>}
       <SparkChart points={tile.spark} color={COIN_COLOR[tile.coin]} height={44} format={price} unit={REFERENCE.quote} ariaLabel={`${tile.coin} price, last 24 hours`} />
       <div className="v5m-range" title="Where the last price sits between the 24-hour low and high"><div><span style={{ left: `${((tile.last - tile.low) / ((tile.high - tile.low) || 1)) * 100}%` }} /></div><small><span>24h low {price(tile.low)}</span><span>high {price(tile.high)}</span></small></div>
-      <dl className="v5m-kv"><dt>Perpetual premium</dt><dd>{tile.premiumBps == null ? "no perpetual close" : `${signed(tile.premiumBps, 1)} bp`}</dd><dt>Volatility (annualised)</dt><dd>{tile.volatilityPct == null ? "too few minutes" : `${tile.volatilityPct.toFixed(0)}%`}</dd></dl>
+      <dl className="v5m-kv"><dt>Perpetual premium</dt><dd>{tile.premiumBps == null ? "no perpetual close that minute" : `${signed(tile.premiumBps, 1)} bp`}</dd><dt>Volatility (annualised)</dt><dd>{tile.volatilityPct == null ? "too few minutes" : `${tile.volatilityPct.toFixed(0)}%`}</dd></dl>
     </article> : <article key={MARKET_COINS[index]} className="v5m-card v5m-coin is-empty"><span className="v5m-sym">{MARKET_COINS[index]}</span><p>{coins.isPending ? "Loading…" : "No closed minutes in the last 24 hours."}</p></article>)}</TileGrid>
     {selected ? <V5MarketDetail key={selected} coin={selected} color={COIN_COLOR[selected]} onClose={() => setSelected(null)} /> : <p className="v5m-hint v5m-tip">Click a coin for its candles, window statistics and venue-by-venue price gaps.</p>}
 
@@ -155,10 +155,10 @@ export function V5Market() {
         </Card>
         <Card title="Candle store health" hint="One store feeds V5, Helm and research">
           <div className="v5m-stats">
-            <Stat label="Lanes live" value={summary.isSuccess ? `${health.lanesLive}/${health.lanes}` : "—"} note={`${health.pairsHeld}/${health.pairsListed} pairs held`} />
-            <Stat label="7-day coverage" value={health.coverage7d == null ? "—" : `${(health.coverage7d * 100).toFixed(1)}%`} note="final 1-minute candles" />
-            <Stat label="Missing minutes, 7 days" value={health.gaps7d == null ? "—" : String(health.gaps7d)} note="all lanes" />
-            <Stat label="Newest minute" value={health.oldestMinuteAge == null ? "—" : `${Math.round(health.oldestMinuteAge)} s`} note="oldest lane" />
+            <Stat label="Lanes live" value={summary.isSuccess ? `${health.lanesLive}/${health.lanes}` : "—"} note={health.pairsHeld == null || health.pairsListed == null ? `pair counts: ${health.unreported.pairs} lane(s) unreported` : `${health.pairsHeld}/${health.pairsListed} pairs held`} />
+            <Stat label="7-day coverage" value={health.coverage7d == null ? "—" : `${(health.coverage7d * 100).toFixed(1)}%`} note={health.coverage7d == null && health.unreported.coverage ? `${health.unreported.coverage} lane(s) unreported` : "final 1-minute candles, all lanes"} />
+            <Stat label="Missing minutes, 7 days" value={health.gaps7d == null ? "—" : String(health.gaps7d)} note={health.gaps7d == null && health.unreported.gaps ? `${health.unreported.gaps} lane(s) unreported` : "all lanes"} />
+            <Stat label="Newest minute" value={health.oldestMinuteAge == null ? "—" : `${Math.round(health.oldestMinuteAge)} s`} note={health.oldestMinuteAge == null && health.unreported.age ? `${health.unreported.age} lane(s) unreported` : "oldest lane"} />
           </div>
           <h3 className="v5m-subhead">V5 market-context feed</h3>
           <p className="v5m-hint">What the V5 engine receives every 20 seconds · last success {refresh?.last_success_at_ms ? utc(refresh.last_success_at_ms / 1000) : "unknown"}</p>
@@ -168,7 +168,7 @@ export function V5Market() {
       </div>
     </Section>
 
-    <details className="v5m-details"><summary>Candle store details: every lane and instrument, candle chart, coverage heatmap, store facts</summary><V5CandleStore /></details>
+    <details className="v5m-details" onToggle={event => setDetailsOpen(event.currentTarget.open)}><summary>Candle store details: every lane and instrument, candle chart, coverage heatmap, store facts</summary>{detailsOpen && <V5CandleStore />}</details>
   </div>;
 }
 

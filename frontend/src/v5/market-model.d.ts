@@ -5,9 +5,9 @@ export const MARKET_COINS: MarketCoin[];
 export const REFERENCE: { venue: string; quote: string; spot: string; perpetual: string };
 export const MINUTES_PER_YEAR: number;
 
-export type CandleRead = { buckets: (number | null)[][]; columns?: string[] } | null | undefined;
+export type CandleRead = { buckets: (number | null)[][]; columns?: string[]; end?: number } | null | undefined;
 export type CoinTile = {
-  coin: string; last: number; lastTime: number; firstTime: number; changePct: number; high: number; low: number;
+  coin: string; last: number; lastTime: number; firstTime: number; current: boolean; changePct: number; change1hPct: number | null; high: number; low: number;
   volatilityPct: number | null; premiumBps: number | null; spark: SeriesPoint[];
 };
 export type CrossCell = { venue: string; coin: string; pair: string; bps: number; time: number; close: number | null };
@@ -17,16 +17,19 @@ export type LaneTile = {
   unavailable_reason?: string | null;
 };
 export type StoreHealth = {
-  lanes: number; lanesLive: number; pairsHeld: number; pairsListed: number;
+  lanes: number; lanesLive: number; pairsHeld: number | null; pairsListed: number | null;
   coverage7d: number | null; gaps7d: number | null; oldestMinuteAge: number | null;
+  unreported: { pairs: number; coverage: number; gaps: number; age: number };
 };
 
+export function windowEnd(read: CandleRead): number | null;
+export function sampled<R extends { t: number }>(rows: R[], step: number, value: (row: R) => number): SeriesPoint[];
 export function closes(read: CandleRead): { t: number; close: number; high: number; low: number }[];
 export function coinTile(coin: string, spotRead: CandleRead, perpetualRead: CandleRead): CoinTile | null;
 export function indexedReturns(spotRead: CandleRead, step?: number): SeriesPoint[];
 export function premiumSeries(spotRead: CandleRead, perpetualRead: CandleRead): SeriesPoint[];
 export function averaged(points: SeriesPoint[], bucket?: number): SeriesPoint[];
-export function breadth(tiles: (CoinTile | null)[], returnsByCoin: Record<string, SeriesPoint[]>): {
+export function breadth(tiles: (CoinTile | null)[]): {
   coins: number; up24h: number; up1h: number; measured1h: number; averagePct: number | null;
 };
 export function crossLatest(coin: string, view: { series: { venue: string; pair: string; close: [number, number][]; deviation_bps: [number, number][] }[] } | null | undefined): CrossCell[];
@@ -35,7 +38,7 @@ export function storeHealth(tiles: LaneTile[]): StoreHealth;
 
 export type CoinStats = {
   minutes: number; windowMinutes: number; return1hPct: number | null; return6hPct: number | null; returnWindowPct: number;
-  rangePct: number; maxDrawdownPct: number; volumeQuote: number;
+  rangePct: number; maxDrawdownPct: number; volumeQuote: number | null; volumeMissingMinutes: number;
   premium: { mean: number; min: number; max: number; minutes: number } | null;
 };
 export function coinStats(spotRead: CandleRead, perpetualRead: CandleRead): CoinStats | null;

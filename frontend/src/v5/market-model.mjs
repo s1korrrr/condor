@@ -31,10 +31,22 @@ export function ageSeconds(minuteT, read, receivedAtMs, nowMs) {
   return read.now - (minuteT + 60) + Math.max(0, nowMs - receivedAtMs) / 1000;
 }
 
-/** Every fifth minute of the grid (and the last), keeping nulls so charts break across missing time. */
+/**
+ * Every fifth minute of the grid (and the last). A minute with no value anywhere since the previous sample adds
+ * an explicit null at that minute, so a chart breaks across missing time even between sample positions.
+ */
 function samples(minutes, value) {
-  return minutes.filter((_minute, index) => index % SAMPLE === SAMPLE - 1 || index === minutes.length - 1)
-    .map(minute => ({ time: minute.t * 1000, value: value(minute) }));
+  const out = [];
+  let missingSince = null;
+  minutes.forEach((minute, index) => {
+    const current = minute.close == null ? null : value(minute);
+    if (current == null && missingSince == null) missingSince = minute.t;
+    if (index % SAMPLE !== SAMPLE - 1 && index !== minutes.length - 1) return;
+    if (missingSince != null && current != null) out.push({ time: missingSince * 1000, value: null });
+    out.push({ time: minute.t * 1000, value: current });
+    missingSince = null;
+  });
+  return out;
 }
 
 /** Price tile for one coin; null when the window holds no close at all. */

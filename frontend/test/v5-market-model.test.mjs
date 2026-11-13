@@ -57,6 +57,11 @@ test('premium only for the same minute as the shown price; charts keep nulls', (
   assert.ok(series.some(point => point.value != null));
   const returns = indexedReturns(dense(30, i => (i >= 10 && i < 20 ? null : 50 + i)));
   assert.deepEqual(returns.map(point => point.value === null), [false, false, true, true, false, false]);
+  // A gap strictly between two sample positions (minute 6, samples at 4 and 9) still breaks the line.
+  const between = indexedReturns(dense(10, i => (i === 6 ? null : 100 + i)));
+  assert.deepEqual(between.map(point => [(point.time / 1000 - T0) / 60, point.value === null]), [[4, false], [6, true], [9, false]]);
+  const premiumGap = premiumSeries(dense(10, () => 100), dense(10, i => (i === 7 ? null : 101)));
+  assert.deepEqual(premiumGap.map(point => point.value === null), [false, true, false]);
   assert.deepEqual(indexedReturns(dense(10, i => (i === 0 ? null : 1))), []);
 });
 

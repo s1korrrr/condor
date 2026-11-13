@@ -25,7 +25,7 @@ const settings = {...baseline.settings,identity,budget:{enabled:false}};
 const profile = {...baseline.profile.body,readiness:{...baseline.profile.body.readiness,paper_owner:{bot_name:bot,state:'FRESH',generated_at:sections.status.generated_at_ms / 1000,reason:'fixture',mode:'PAPER'}}};
 const workspace = {schema_version:'v5-workspace.v1',identity,context:null,advisor:settings.budget,agents:Object.values(baseline.workspace_agents),sessions:[],source_error:null};
 const routes = [
-  ['/settings','Workspace settings'], ['/bots','Paper bots'], ['/capital','Capital'],
+  ['/settings','Workspace settings'], ['/bots','Paper bots'], ['/helm','Helm paper bot'], ['/capital','Capital'],
   ['/operations','Operations'], ['/v5/readiness','Paper readiness'],
   ['/backtests','Tradepad'], ['/','Market'],
   ['/market/stocks','OKX stocks'], ['/agents','Agents'],
@@ -79,6 +79,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
     else if (url.pathname === '/api/v5/sessions') body = {sessions:[]};
     else if (url.pathname === '/api/v5/sessions/fixture-session') body = {...baseline['inspect:decision_reviewer'],id:'fixture-session',agent_id:'decision_reviewer',loop_id:null,started_at_ms:sections.status.read_at_ms,finished_at_ms:sections.status.read_at_ms,effect:'NONE',journal:'',ticks:baseline['inspect:decision_reviewer'].ticks.map((tick,index) => ({...tick,id:`tick-${index}`,at_ms:sections.status.read_at_ms,evidence_refs:[]}))};
     else if (url.pathname === '/api/v5/agents/decision_reviewer') body = baseline['agent:decision_reviewer'].body;
+    else if (url.pathname === '/api/v5/helm') body = {state:'STALE',reason:'HELM_STATUS_STALE',bot:'helm_v5_paper',status:{generated_at:1793929882.6,age_s:600000,ready:false,failure:null,failure_reported:true,reasons:null,steps:5086,actions:0,phase:'P1',profile_id:null,entries_held:'operator_entry_pause',operator_entry_paused:true,kill_switch:null,adaptive_actions:'off',funding:'finite_wallet',image_tag:null,shutdown:{checkpoint:true,clean:null},mandate:{mandate_id:'helm-v5-paper-20261105',state:'active',valid_until_ms:1e18},risk:null,control_rejections:null,symbols:[{pair:'BNB-USDC',status:null,candidate_hold:'low_volatility',bag:null,last_decision:{at:-1e21,reason:null}}],withheld:2}};
     else if (url.pathname.startsWith('/api/v5/learning/')) body = {effect:'NONE',status:'DISABLED',roles:[],reason:'Stage1 disabled'};
     else {unexpectedReads.push(url.pathname + url.search); throw new Error(`unmapped read: ${url}`);}
     return new Response(JSON.stringify(body),{status:200,headers:{'Content-Type':'application/json'}});
@@ -117,6 +118,16 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           assert.equal(container.querySelector('select[aria-label="Region"]')?.value,'eea');
           assert.equal(container.querySelector('select[aria-label="Instrument"]'),null);
           assert.ok(!requests.slice(requestStart).some(request => request.startsWith('/api/v5/candle-store/')),'unconfigured Stocks must not read the collector');
+        }
+        if (pathname === '/helm') {
+          // A hostile but schema-shaped Helm read: unknowns stay unknown and unrepresentable times never throw.
+          assert.match(container.textContent,/No status update since .*; current state unknown/);
+          assert.match(container.textContent,/shutdown not published/);
+          assert.match(container.textContent,/a failure was reported but cannot be shown safely/);
+          assert.match(container.textContent,/as last published at/);
+          assert.match(container.textContent,/until unknown time/);
+          assert.match(container.textContent,/2 published value\(s\) did not match/);
+          assert.doesNotMatch(container.textContent,/Running/);
         }
         if (journalRoutes.has(pathname)) {
           assert.ok(container.textContent.includes('OWNER_JOURNAL_EXCEEDED'));

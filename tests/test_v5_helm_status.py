@@ -63,10 +63,12 @@ def test_fresh_status_projects_only_shown_fields(tmp_path):
     assert status["reasons"] == ["runtime_stopped"] and status["ready"] is False
     assert status["mandate"]["state"] == "active" and status["risk"]["latched"] is False
     assert status["control_rejections"]["recent"] == [{"action": "resume_entries", "at_ms": 1793926101828, "reason": "stop_persistence_failed: explicit emergency reset required"}]
+    assert status["withheld"] == 0 and status["failure_reported"] is False
     symbol = status["symbols"][0]
     assert symbol["pair"] == "BNB-USDC" and symbol["candidate_hold"] == "low_volatility"
     # Decimal text stays text, flags stay flags; container paths and command ids are not projected.
-    assert symbol["bag"] == {"held_amount": "0", "breakeven_price": "0", "trail_armed": False, "trail_peak": None, "reason": "no_bag"}
+    assert symbol["bag"] == {"held_amount": "0", "breakeven_price": "0"}
+    assert symbol["last_decision"] == {"at": NOW - 20, "reason": "operator_entry_pause"}
     assert "/home/hummingbot" not in json.dumps(result) and "command_id" not in json.dumps(result)
 
 
@@ -136,23 +138,39 @@ def test_route_requires_sign_in_and_reports_unbound(tmp_path, bound):
         assert client.post("/api/v5/helm", headers={"Origin": ORIGIN}).status_code == 405
 
 
-def test_per_coin_fields_are_allowlisted_and_typed(tmp_path):
-    value = helm_status()
+def test_path_like_and_out_of_range_values_are_withheld_and_counted(tmp_path):
+    value = helm_status(failure="/home/hummingbot/data/private failed")
     info = value["controllers"][0]["custom_info"]["symbols"]["BNB-USDC"]
-    info["last_decision"] = {"command_id": "x", "token": "secret", "path": "/home/hummingbot/data/private", "reason": True, "at": NOW}
-    info["bag"]["secret_path"] = "/home/hummingbot/x"
+    info["last_decision"] = {"command_id": "x", "token": "secret", "path": "/home/hummingbot/data/private", "reason": "/home/hummingbot/data/private", "at": NOW}
     info["bag"]["held_amount"] = True
+    info["bag"]["breakeven_price"] = "1e999"
+    value["helm"]["mandate"]["valid_until_ms"] = 999999999999999999
     result = read_helm_status(write(tmp_path, value), now=NOW)
-    symbol = result["status"]["symbols"][0]
-    assert symbol["last_decision"] == {"at": NOW, "candle": None, "reason": None}
-    assert symbol["bag"]["held_amount"] is None and "secret_path" not in symbol["bag"]
-    assert "secret" not in json.dumps(result) and "/home/hummingbot" not in json.dumps(result)
+    status = result["status"]
+    symbol = status["symbols"][0]
+    assert symbol["last_decision"] == {"at": NOW, "reason": None}
+    assert symbol["bag"] == {"held_amount": None, "breakeven_price": None}
+    assert status["mandate"]["valid_until_ms"] is None
+    assert status["failure"] is None and status["failure_reported"] is True
+    assert status["withheld"] == 5
+    text = json.dumps(result)
+    assert "secret" not in text and "/home/hummingbot" not in text and "command_id" not in text
 
 
-def test_unpublished_blocks_stay_unknown(tmp_path):
+@pytest.mark.parametrize("generated", [-1e300, 1e300, 0, "1793929890"])
+def test_generated_time_must_be_a_real_epoch(tmp_path, generated):
+    result = read_helm_status(write(tmp_path, helm_status(generated_at=generated)), now=NOW)
+    assert (result["state"], result["status"]) == ("UNAVAILABLE", None)
+
+
+def test_unpublished_blocks_stay_unknown_and_rejections_sort_newest_first(tmp_path):
     value = helm_status()
     for name in ("control_rejections", "operator_entry_paused", "entries_held"):
         value["helm"].pop(name)
     status = read_helm_status(write(tmp_path, value), now=NOW)["status"]
-    assert status["control_rejections"] == {"published": False, "count": None, "recent": []}
+    assert status["control_rejections"] is None
     assert status["operator_entry_paused"] is None and status["entries_held"] is None
+    value = helm_status()
+    value["helm"]["control_rejections"]["recent"] = [{"action": "a", "at_ms": 1000}, {"action": "b", "at_ms": 3000}, {"action": "c", "at_ms": 2000}]
+    recent = read_helm_status(write(tmp_path, value), now=NOW)["status"]["control_rejections"]["recent"]
+    assert [row["action"] for row in recent] == ["b", "c", "a"]

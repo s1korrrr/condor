@@ -2,60 +2,82 @@
 
 Helm writes its own runtime schema (``helm_v5_paper_runtime_v1`` with a ``helm`` block), so the V5 paper
 validator does not apply. This module reads the file through the same pinned, size-bounded reader as the V5
-paper status, checks the identity and schema fields it shows, and returns only those fields. It never writes,
-never sends a control command and never fills a missing value: a field the runtime did not publish stays null.
+paper status, checks identity and schema, and projects only the fields the page shows. Every field has a
+converter by meaning (code, sentence, amount, epoch time, flag); a value that does not fit is dropped and counted
+in ``withheld``, so nothing path-like, oversized or out of range reaches the browser and a dropped value is never
+shown as absent. It never writes, never sends a control command and never fills a missing value.
 """
 
 from __future__ import annotations
 
+import math
+import re
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
+from .candles import MAX_TIMESTAMP
 from .paper import FUTURE_SKEW_SECONDS, STATUS_NAME, PaperStatusError, _parse, _read_regular
 
 HELM_RUNTIME_SCHEMA = "helm_v5_paper_runtime_v1"
 HELM_BLOCK_SCHEMA = "rsibot.helm-v5-paper.status.helm.v2"
 STALE_AFTER_SECONDS = 30
-TEXT_LIMIT = 256
+
+CODE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}")  # states, reason codes, ids, image tag
+PLAIN = re.compile(r"[A-Za-z0-9 _.,:;()'%+=-]{1,256}")  # sentences: no / \ @ ~ $ or quotes
+DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,18})?")
+PAIR = re.compile(r"[A-Z0-9]{1,16}-[A-Z0-9]{1,16}")
+MAX_SAFE = 2**53 - 1
 
 
-def _text(value: Any) -> str | None:
-    return value[:TEXT_LIMIT] if isinstance(value, str) else None
+def _code(value: Any) -> str | None:
+    return value if isinstance(value, str) and CODE.fullmatch(value) else None
 
 
-def _number(value: Any) -> int | float | str | None:
-    """Numbers pass as JSON numbers; decimal strings stay strings (no float conversion)."""
-    if isinstance(value, bool):
-        return None
-    if isinstance(value, (int, float)):
-        return value
-    if isinstance(value, str) and len(value) <= 64:
-        try:
-            float(value)
-        except ValueError:
-            return None
-        return value
-    return None
+def _plain(value: Any) -> str | None:
+    return value if isinstance(value, str) and PLAIN.fullmatch(value) else None
 
 
 def _flag(value: Any) -> bool | None:
     return value if isinstance(value, bool) else None
 
 
-def _label(value: Any) -> str | None:
-    """Short identifier-like text (reasons, states); anything else is not shown."""
-    return value if isinstance(value, str) and 0 < len(value) <= 128 else None
+def _amount(value: Any) -> int | float | str | None:
+    """A finite JSON number within the safe integer range, or decimal text kept as text."""
+    if type(value) is int and abs(value) <= MAX_SAFE:
+        return value
+    if type(value) is float and math.isfinite(value) and abs(value) <= MAX_SAFE:
+        return value
+    if isinstance(value, str) and DECIMAL.fullmatch(value):
+        return value
+    return None
 
 
-def _pick(source: Any, fields: dict[str, Any]) -> dict[str, Any] | None:
-    if not isinstance(source, dict):
-        return None
-    return {name: convert(source.get(name)) for name, convert in fields.items()}
+def _epoch_ms(value: Any) -> int | None:
+    return value if type(value) is int and 0 < value <= MAX_TIMESTAMP * 1000 else None
 
 
-# Only the per-coin fields the Helm page shows, each with its own type; unknown keys are never projected.
-BAG_FIELDS = {"held_amount": _number, "breakeven_price": _number, "trail_armed": _flag, "trail_peak": _number, "reason": _label}
-DECISION_FIELDS = {"at": _number, "candle": _number, "reason": _label}
+def _epoch_s(value: Any) -> int | float | None:
+    if type(value) is int or (type(value) is float and math.isfinite(value)):
+        return value if 0 < value <= MAX_TIMESTAMP else None
+    return None
+
+
+class _Projection:
+    """Applies converters and counts published values that could not be shown."""
+
+    def __init__(self) -> None:
+        self.withheld = 0
+
+    def one(self, value: Any, convert: Callable[[Any], Any]) -> Any:
+        result = convert(value)
+        if result is None and value is not None:
+            self.withheld += 1
+        return result
+
+    def pick(self, source: Any, fields: dict[str, Callable[[Any], Any]]) -> dict[str, Any] | None:
+        if not isinstance(source, dict):
+            return None
+        return {name: self.one(source.get(name), convert) for name, convert in fields.items()}
 
 
 def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
@@ -70,7 +92,7 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
     except PaperStatusError as exc:
         return {**base, "state": "UNAVAILABLE", "reason": exc.code.replace("PAPER_", "HELM_")}
     helm = payload.get("helm") if isinstance(payload, dict) else None
-    generated = payload.get("generated_at") if isinstance(payload, dict) else None
+    generated = _epoch_s(payload.get("generated_at")) if isinstance(payload, dict) else None
     if (
         not isinstance(payload, dict)
         or payload.get("schema_version") != 1
@@ -79,57 +101,63 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
         or payload.get("execution_mode") != "paper"
         or not isinstance(helm, dict)
         or helm.get("schema") != HELM_BLOCK_SCHEMA
-        or isinstance(generated, bool)
-        or not isinstance(generated, (int, float))
+        or generated is None
     ):
         return {**base, "state": "UNAVAILABLE", "reason": "HELM_STATUS_SCHEMA"}
     if generated > now + FUTURE_SKEW_SECONDS:
         return {**base, "state": "UNAVAILABLE", "reason": "HELM_STATUS_CLOCK_SKEW"}
-    controllers = payload.get("controllers") if isinstance(payload.get("controllers"), list) else []
+    shown = _Projection()
     symbols: list[dict[str, Any]] = []
+    controllers = payload.get("controllers") if isinstance(payload.get("controllers"), list) else []
     for controller in controllers[:4]:
         info = controller.get("custom_info") if isinstance(controller, dict) else None
-        portfolio = info.get("portfolio") if isinstance(info, dict) else None
-        holds = portfolio.get("candidate_holds") if isinstance(portfolio, dict) else None
-        for pair, row in list((info.get("symbols") or {}).items())[:16] if isinstance(info, dict) and isinstance(info.get("symbols"), dict) else []:
-            if not isinstance(pair, str) or len(pair) > 32 or not isinstance(row, dict):
+        if not isinstance(info, dict) or not isinstance(info.get("symbols"), dict):
+            continue
+        portfolio = info.get("portfolio") if isinstance(info.get("portfolio"), dict) else {}
+        holds = portfolio.get("candidate_holds") if isinstance(portfolio.get("candidate_holds"), dict) else {}
+        for pair, row in list(info["symbols"].items())[:16]:
+            if not isinstance(pair, str) or not PAIR.fullmatch(pair) or not isinstance(row, dict):
+                shown.withheld += 1
                 continue
-            bag = row.get("bag") if isinstance(row.get("bag"), dict) else {}
-            decision = row.get("last_decision") if isinstance(row.get("last_decision"), dict) else {}
             symbols.append({
                 "pair": pair,
-                "status": _label(row.get("status")),
-                "candidate_hold": _label(holds.get(pair)) if isinstance(holds, dict) else None,
-                "bag": _pick(bag, BAG_FIELDS),
-                "last_decision": _pick(decision, DECISION_FIELDS),
+                "status": shown.one(row.get("status"), _code),
+                "candidate_hold": shown.one(holds.get(pair), _code),
+                "bag": shown.pick(row.get("bag"), {"held_amount": _amount, "breakeven_price": _amount}),
+                "last_decision": shown.pick(row.get("last_decision"), {"at": _epoch_s, "reason": _code}),
             })
-    rejections = helm.get("control_rejections") if isinstance(helm.get("control_rejections"), dict) else {}
+    rejections = helm.get("control_rejections") if isinstance(helm.get("control_rejections"), dict) else None
+    recent = rejections.get("recent") if rejections and isinstance(rejections.get("recent"), list) else []
+    # Newest first by the runtime's own time, whatever order the file keeps.
+    recent = sorted((row for row in recent if isinstance(row, dict)), key=lambda row: _epoch_ms(row.get("at_ms")) or 0, reverse=True)
+    reasons = payload.get("reasons") if isinstance(payload.get("reasons"), list) else None
+    image = helm.get("image") if isinstance(helm.get("image"), dict) else {}
     status = {
         "generated_at": generated,
         "age_s": max(0.0, now - generated),
-        "ready": _flag(payload.get("ready")),
-        "failure": _text(payload.get("failure")),
-        "reasons": [_text(reason) for reason in payload.get("reasons", [])[:16] if isinstance(reason, str)] if isinstance(payload.get("reasons"), list) else [],
-        "controller_kind": _text(payload.get("controller_kind")),
-        "steps": _number(payload.get("steps")),
-        "actions": _number(payload.get("actions")),
-        "phase": _text(helm.get("phase")),
-        "profile_id": _text(helm.get("profile_id")),
-        "entries_held": _text(helm.get("entries_held")),
-        "operator_entry_paused": _flag(helm.get("operator_entry_paused")),
-        "kill_switch": _flag(helm.get("kill_switch")),
-        "adaptive_actions": _text(helm.get("adaptive_actions")),
-        "funding": _text(helm.get("funding")),
-        "image_tag": _text((helm.get("image") or {}).get("tag")) if isinstance(helm.get("image"), dict) else None,
-        "shutdown": _pick(helm.get("shutdown"), {"checkpoint": _flag, "clean": _flag, "closed": _flag}),
-        "mandate": _pick(helm.get("mandate"), {"mandate_id": _text, "state": _text, "reason": _text, "valid_from_ms": _number, "valid_until_ms": _number, "days_to_expiry": _number, "observed_at_ms": _number}),
-        "risk": _pick(helm.get("native_risk"), {"reason": _text, "latched": _flag, "complete": _flag, "daily_loss_use": _number, "drawdown_use": _number, "native_marked_pnl": _number, "peak_pnl": _number, "risk_reference_quote": _number, "unit": _text, "protected_exits": _text, "scope_of_latch": _text, "observed_at_ms": _number}),
-        "control_rejections": {
-            "published": isinstance(helm.get("control_rejections"), dict),
-            "count": _number(rejections.get("count")),
-            "recent": [_pick(row, {"action": _text, "at_ms": _number, "reason": _text}) for row in rejections.get("recent", [])[:5]] if isinstance(rejections.get("recent"), list) else [],
+        "ready": shown.one(payload.get("ready"), _flag),
+        "failure": shown.one(payload.get("failure"), _plain),
+        "failure_reported": payload.get("failure") is not None,
+        "reasons": None if reasons is None else [value for value in (shown.one(reason, _code) for reason in reasons[:16]) if value is not None],
+        "steps": shown.one(payload.get("steps"), _amount),
+        "actions": shown.one(payload.get("actions"), _amount),
+        "phase": shown.one(helm.get("phase"), _code),
+        "profile_id": shown.one(helm.get("profile_id"), _code),
+        "entries_held": shown.one(helm.get("entries_held"), _code),
+        "operator_entry_paused": shown.one(helm.get("operator_entry_paused"), _flag),
+        "kill_switch": shown.one(helm.get("kill_switch"), _flag),
+        "adaptive_actions": shown.one(helm.get("adaptive_actions"), _code),
+        "funding": shown.one(helm.get("funding"), _code),
+        "image_tag": shown.one(image.get("tag"), _code),
+        "shutdown": shown.pick(helm.get("shutdown"), {"checkpoint": _flag, "clean": _flag}),
+        "mandate": shown.pick(helm.get("mandate"), {"mandate_id": _code, "state": _code, "valid_until_ms": _epoch_ms}),
+        "risk": shown.pick(helm.get("native_risk"), {"reason": _code, "latched": _flag, "daily_loss_use": _amount, "risk_reference_quote": _amount, "unit": _code}),
+        "control_rejections": None if rejections is None else {
+            "count": shown.one(rejections.get("count"), _amount),
+            "recent": [shown.pick(row, {"action": _code, "at_ms": _epoch_ms, "reason": _plain}) for row in recent[:5]],
         },
         "symbols": symbols,
     }
+    status["withheld"] = shown.withheld
     stale = now - generated > STALE_AFTER_SECONDS
     return {**base, "state": "STALE" if stale else "FRESH", "reason": "HELM_STATUS_STALE" if stale else "HELM_STATUS_FRESH", "status": status}

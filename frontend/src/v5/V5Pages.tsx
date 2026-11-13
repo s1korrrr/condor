@@ -378,23 +378,6 @@ function NotesEditor({ initial, onSave, saving }: { initial: string; onSave: (va
   return <div className="v5-notes-editor"><label htmlFor="agent-notes">Operator notes</label><p>Notes are stored by the V5 owner and are not sent to a model unless the owner includes them in a report task.</p><textarea id="agent-notes" maxLength={8000} value={text} onChange={(event) => setText(event.target.value)} /><div className="v5-notes-footer"><span>{text.length} / 8,000</span><button className="v5-button v5-button-primary" disabled={!changed || saving} onClick={() => onSave(text)}><Save size={15} />{saving ? "Saving…" : "Save notes"}</button></div></div>;
 }
 
-export function MarketPage() {
-  const query = useWorkspace();
-  const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 10_000); return () => window.clearInterval(timer); }, []);
-  if (query.isPending) return <Loading label="Loading market evidence" />;
-  if (query.isError && !query.data) return <QueryError query={query} retry={() => void query.refetch()} />;
-  const evidence = query.data.context;
-  const cohortCoverage = evidence ? selectedCohortCoverage(evidence) : null;
-  const refresh = query.data.source_refresh;
-  const freshness = refresh?.feed_freshness === "FRESH" && refresh.feed_fresh_until_ms != null && now <= refresh.feed_fresh_until_ms ? "CURRENT" : refresh?.feed_freshness === "UNAVAILABLE" || refresh?.feed_freshness === "FRESH" ? "STALE" : "UNKNOWN";
-  return <><PageHeading title="Market evidence" description="Source status, coverage, timestamps, units, and market type stay explicit." actions={<button className="v5-button" onClick={() => void query.refetch()}><RotateCw size={15} />Refresh evidence</button>} />
-    <section className="v5-market-refresh" aria-label="Feed refresh status"><div><strong>Feed status</strong><Status state={freshness === "CURRENT" ? "ready" : freshness === "STALE" ? "blocked" : "unknown"} label={`Publisher: ${paperWords(refresh?.state ?? "unknown")} · Data: ${paperWords(freshness)}`} /></div><span>Refresh health does not imply complete market coverage.</span><span>Last refresh attempt: {formatTime(refresh?.last_attempt_at_ms)}</span><span>Last successful publication: {formatTime(refresh?.last_success_at_ms)}</span><span>Published cutoff: {formatTime(refresh?.last_success_cutoff_ms)}</span><span>Dashboard last successful read: {query.dataUpdatedAt ? formatTime(query.dataUpdatedAt) : "Unavailable"}</span>{refresh?.error && <span role="alert">Feed refresh issue: {refresh.error}</span>}{query.error && <span role="alert">Dashboard refresh failed: showing last successful response · {query.error.message}</span>}</section>
-    {query.data.source_error && <div className="v5-source-warning"><AlertTriangle size={16} />{query.data.source_error}</div>}
-    {!evidence ? <div className="v5-panel v5-market-page-empty"><EvidenceSummary evidence={null} /><p>{query.data.identity.baseline_binding ? "A baseline is reported as bound, but no market source evidence was returned." : "Baseline and market context are both unavailable. No comparison or market conclusion can be drawn."}</p></div> : <div className="v5-market-page"><section className="v5-panel"><div className="v5-section-heading"><div><h2>Source record</h2><p>Values are displayed from the owner response without conversion.</p></div><Status state={cohortCoverage?.complete ? "ready" : "blocked"} label={cohortCoverage?.complete ? "Complete observed cohort" : "PARTIAL SOURCE"} /></div><EvidenceSummary evidence={evidence} /></section><section className="v5-market-limits"><ShieldAlert size={17} /><div><strong>Interpretation limits</strong><p>Refresh health and feature validity do not certify full cohort coverage. Native position state is unavailable in this reports-only workspace. V5 does not infer composite scores, strategy baselines, or performance from market context. Missing fields remain unavailable.</p></div></section></div>}
-  </>;
-}
-
 export function SessionsPage() {
   const query = useQuery({ queryKey: ["v5-sessions"], queryFn: v5Api.sessions, refetchInterval: 20_000 });
   if (query.isPending) return <Loading label="Loading session journal" />;

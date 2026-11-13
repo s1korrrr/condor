@@ -32,6 +32,8 @@ class Settings:
     paper_status_file: Path | None = None
     candle_store_socket: Path | None = None
     host_operations_file: Path | None = None
+    # Optional read-only Helm paper runtime status file for the Helm page; None hides the page's data.
+    helm_status_file: Path | None = None
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
@@ -170,6 +172,19 @@ class Settings:
                     "V5_HOST_OPERATIONS_FILE must be an absolute normalized path"
                 )
 
+        helm_status_file = None
+        configured_helm = values.get("V5_HELM_STATUS_FILE", "").strip()
+        if configured_helm:
+            helm_status_file = Path(configured_helm)
+            if (
+                not helm_status_file.is_absolute()
+                or os.path.normpath(configured_helm) != configured_helm
+                or not status_file_name_valid(helm_status_file)
+            ):
+                raise ConfigurationError(
+                    "V5_HELM_STATUS_FILE must be an absolute normalized <bot>_paper.status.json path"
+                )
+
         return cls(
             runtime_root=runtime_root,
             dashboard_token_file=dashboard_token_file,
@@ -185,6 +200,7 @@ class Settings:
             paper_status_file=paper_status_file,
             candle_store_socket=candle_store_socket,
             host_operations_file=host_operations_file,
+            helm_status_file=helm_status_file,
         )
 
 

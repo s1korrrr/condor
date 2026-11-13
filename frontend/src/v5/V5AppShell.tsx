@@ -11,6 +11,7 @@ const nav = [
   { to: "/", label: "Market", icon: ScanSearch, end: true },
   { to: "/capital", label: "Capital", icon: ChartNoAxesCombined },
   { to: "/bots", label: "Bots", icon: Bot },
+  { to: "/helm", label: "Helm", icon: ShieldCheck },
   { to: "/operations", label: "Operations", icon: Activity },
   { to: "/research", label: "Research", icon: Network },
   { to: "/learning", label: "Learning", icon: Eye },

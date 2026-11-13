@@ -66,7 +66,7 @@ def test_fresh_status_projects_only_shown_fields(tmp_path):
     symbol = status["symbols"][0]
     assert symbol["pair"] == "BNB-USDC" and symbol["candidate_hold"] == "low_volatility"
     # Decimal text stays text, flags stay flags; container paths and command ids are not projected.
-    assert symbol["bag"] == {"held_amount": "0", "breakeven_price": "0", "trail_armed": False, "reason": "no_bag"}
+    assert symbol["bag"] == {"held_amount": "0", "breakeven_price": "0", "trail_armed": False, "trail_peak": None, "reason": "no_bag"}
     assert "/home/hummingbot" not in json.dumps(result) and "command_id" not in json.dumps(result)
 
 
@@ -134,3 +134,25 @@ def test_route_requires_sign_in_and_reports_unbound(tmp_path, bound):
         assert response.status_code == 200 and response.headers["cache-control"] == "no-store"
         assert response.json()["state"] == ("FRESH" if bound else "UNBOUND")
         assert client.post("/api/v5/helm", headers={"Origin": ORIGIN}).status_code == 405
+
+
+def test_per_coin_fields_are_allowlisted_and_typed(tmp_path):
+    value = helm_status()
+    info = value["controllers"][0]["custom_info"]["symbols"]["BNB-USDC"]
+    info["last_decision"] = {"command_id": "x", "token": "secret", "path": "/home/hummingbot/data/private", "reason": True, "at": NOW}
+    info["bag"]["secret_path"] = "/home/hummingbot/x"
+    info["bag"]["held_amount"] = True
+    result = read_helm_status(write(tmp_path, value), now=NOW)
+    symbol = result["status"]["symbols"][0]
+    assert symbol["last_decision"] == {"at": NOW, "candle": None, "reason": None}
+    assert symbol["bag"]["held_amount"] is None and "secret_path" not in symbol["bag"]
+    assert "secret" not in json.dumps(result) and "/home/hummingbot" not in json.dumps(result)
+
+
+def test_unpublished_blocks_stay_unknown(tmp_path):
+    value = helm_status()
+    for name in ("control_rejections", "operator_entry_paused", "entries_held"):
+        value["helm"].pop(name)
+    status = read_helm_status(write(tmp_path, value), now=NOW)["status"]
+    assert status["control_rejections"] == {"published": False, "count": None, "recent": []}
+    assert status["operator_entry_paused"] is None and status["entries_held"] is None

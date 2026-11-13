@@ -42,19 +42,20 @@ def _flag(value: Any) -> bool | None:
     return value if isinstance(value, bool) else None
 
 
-def _scalar(value: Any) -> bool | int | float | str | None:
-    """Flags stay flags, numbers stay numbers, decimal text stays text; anything nested is dropped."""
-    if isinstance(value, bool) or value is None:
-        return value
-    if isinstance(value, (int, float)):
-        return value
-    return _text(value)
+def _label(value: Any) -> str | None:
+    """Short identifier-like text (reasons, states); anything else is not shown."""
+    return value if isinstance(value, str) and 0 < len(value) <= 128 else None
 
 
 def _pick(source: Any, fields: dict[str, Any]) -> dict[str, Any] | None:
     if not isinstance(source, dict):
         return None
     return {name: convert(source.get(name)) for name, convert in fields.items()}
+
+
+# Only the per-coin fields the Helm page shows, each with its own type; unknown keys are never projected.
+BAG_FIELDS = {"held_amount": _number, "breakeven_price": _number, "trail_armed": _flag, "trail_peak": _number, "reason": _label}
+DECISION_FIELDS = {"at": _number, "candle": _number, "reason": _label}
 
 
 def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
@@ -97,10 +98,10 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
             decision = row.get("last_decision") if isinstance(row.get("last_decision"), dict) else {}
             symbols.append({
                 "pair": pair,
-                "status": _text(row.get("status")),
-                "candidate_hold": _text(holds.get(pair)) if isinstance(holds, dict) else None,
-                "bag": {name: _scalar(value) for name, value in list(bag.items())[:12] if isinstance(name, str)},
-                "last_decision": {name: _scalar(value) for name, value in list(decision.items())[:8] if isinstance(name, str)},
+                "status": _label(row.get("status")),
+                "candidate_hold": _label(holds.get(pair)) if isinstance(holds, dict) else None,
+                "bag": _pick(bag, BAG_FIELDS),
+                "last_decision": _pick(decision, DECISION_FIELDS),
             })
     rejections = helm.get("control_rejections") if isinstance(helm.get("control_rejections"), dict) else {}
     status = {
@@ -124,6 +125,7 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
         "mandate": _pick(helm.get("mandate"), {"mandate_id": _text, "state": _text, "reason": _text, "valid_from_ms": _number, "valid_until_ms": _number, "days_to_expiry": _number, "observed_at_ms": _number}),
         "risk": _pick(helm.get("native_risk"), {"reason": _text, "latched": _flag, "complete": _flag, "daily_loss_use": _number, "drawdown_use": _number, "native_marked_pnl": _number, "peak_pnl": _number, "risk_reference_quote": _number, "unit": _text, "protected_exits": _text, "scope_of_latch": _text, "observed_at_ms": _number}),
         "control_rejections": {
+            "published": isinstance(helm.get("control_rejections"), dict),
             "count": _number(rejections.get("count")),
             "recent": [_pick(row, {"action": _text, "at_ms": _number, "reason": _text}) for row in rejections.get("recent", [])[:5]] if isinstance(rejections.get("recent"), list) else [],
         },

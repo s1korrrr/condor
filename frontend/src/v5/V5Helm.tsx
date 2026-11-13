@@ -10,8 +10,8 @@ type HelmStatus = {
   shutdown: { checkpoint: boolean | null; clean: boolean | null; closed: boolean | null } | null;
   mandate: { mandate_id: string | null; state: string | null; reason: string | null; valid_from_ms: Scalar; valid_until_ms: Scalar; days_to_expiry: Scalar; observed_at_ms: Scalar } | null;
   risk: Record<string, Scalar> | null;
-  control_rejections: { count: Scalar; recent: ({ action: string | null; at_ms: Scalar; reason: string | null } | null)[] };
-  symbols: { pair: string; status: string | null; candidate_hold: string | null; bag: Record<string, Scalar>; last_decision: Record<string, Scalar> }[];
+  control_rejections: { published: boolean; count: Scalar; recent: ({ action: string | null; at_ms: Scalar; reason: string | null } | null)[] };
+  symbols: { pair: string; status: string | null; candidate_hold: string | null; bag: Record<string, Scalar> | null; last_decision: Record<string, Scalar> | null }[];
 };
 type HelmRead = { state: "FRESH" | "STALE" | "UNAVAILABLE" | "UNBOUND"; reason: string; bot: string | null; status: HelmStatus | null };
 
@@ -21,7 +21,8 @@ async function readHelm(): Promise<HelmRead> {
   return response.json() as Promise<HelmRead>;
 }
 
-const words = (value: string | null | undefined) => value ? value.replaceAll("_", " ") : "—";
+/** Owner identifiers as words; anything that is not text is shown as missing, never coerced. */
+const words = (value: unknown) => typeof value === "string" && value ? value.replaceAll("_", " ") : "—";
 const utc = (ms: number | null | undefined) => ms == null || !Number.isFinite(ms) ? "unknown" : `${new Date(ms).toISOString().slice(0, 16).replace("T", " ")}Z`;
 const ms = (value: Scalar) => typeof value === "number" ? value : null;
 function duration(seconds: number) {
@@ -36,8 +37,12 @@ const yesNo = (value: boolean | null | undefined, yes = "yes", no = "no") => val
 export function V5Helm() {
   const helm = useQuery({ queryKey: ["v5-helm"], queryFn: readHelm, retry: false, refetchInterval: 15_000 });
   const read = helm.data, status = read?.status;
-  const running = read?.state === "FRESH" && !status?.reasons.includes("runtime_stopped");
-  const headline = !read ? "" : read.state === "UNBOUND" ? "Not connected to this dashboard" : read.state === "UNAVAILABLE" ? `Status file unreadable (${words(read.reason)})` : running ? "Running" : `Stopped since ${utc(status ? status.generated_at * 1000 : null)}`;
+  const stopped = !!status?.reasons.includes("runtime_stopped");
+  const running = read?.state === "FRESH" && !stopped;
+  const lastAt = utc(status ? status.generated_at * 1000 : null);
+  // Only the runtime's own "runtime_stopped" reason says it stopped; an old status alone means the state is unknown.
+  const headline = !read ? "" : read.state === "UNBOUND" ? "Not connected to this dashboard" : read.state === "UNAVAILABLE" ? `Status file unreadable (${words(read.reason)})`
+    : running ? "Running" : stopped ? `Stopped (last status ${lastAt})` : `No status update since ${lastAt}; current state unknown`;
   return <div className="v5m">
     <header className="v5m-head">
       <div><h1>Helm</h1><p>Helm paper bot ({read?.bot ?? "helm_v5_paper"}) · its own published runtime state · read-only, no controls on this page.</p></div>
@@ -52,24 +57,24 @@ export function V5Helm() {
       </section>
       {status && <>
         <div className="v5m-stats v5m-stats--wide">
-          <Stat label="New entries" value={status.operator_entry_paused ? "Paused" : status.entries_held ? "Held" : "Allowed"} note={words(status.entries_held)} warn={!!status.entries_held} />
+          <Stat label="New entries" value={status.operator_entry_paused ? "Paused" : status.entries_held ? "Held" : status.operator_entry_paused === false ? "Not paused" : "Not published"} note={status.entries_held ? words(status.entries_held) : status.operator_entry_paused === false ? "no entry hold published" : "pause state not published"} warn={!!status.entries_held || status.operator_entry_paused !== false} />
           <Stat label="Mandate" value={words(status.mandate?.state)} note={status.mandate ? `${status.mandate.mandate_id ?? "?"} · until ${utc(ms(status.mandate.valid_until_ms))}` : "not published"} />
-          <Stat label="Risk latch" value={yesNo(status.risk?.latched as boolean | null, "Latched", "Clear")} note={words(status.risk?.reason as string | null)} warn={status.risk?.latched === true} />
+          <Stat label="Risk latch" value={yesNo(status.risk?.latched as boolean | null, "Latched", "Clear")} note={words(status.risk?.reason)} warn={status.risk?.latched === true} />
           <Stat label="Daily loss used" value={status.risk?.daily_loss_use == null ? "—" : String(status.risk.daily_loss_use)} note={`of the ${status.risk?.risk_reference_quote ?? "?"} ${status.risk?.unit ?? ""} risk reference`} />
           <Stat label="Kill switch" value={yesNo(status.kill_switch, "On", "Off")} warn={status.kill_switch === true} />
           <Stat label="Phase · profile" value={status.phase ?? "—"} note={status.profile_id ?? undefined} />
-          <Stat label="Orders placed" value={String(status.actions ?? "—")} note={`${status.steps ?? "?"} engine steps`} />
+          <Stat label="Runtime actions" value={String(status.actions ?? "—")} note={`${status.steps ?? "?"} engine steps`} />
           <Stat label="Funding" value={words(status.funding)} note={`adaptive actions ${words(status.adaptive_actions)}`} />
         </div>
         <section className="v5m-section"><header><h2>Coins</h2><span>Why each coin is or is not buying, and its bag</span></header>
           <div className="v5m-card"><table className="v5m-heat"><thead><tr><th>Pair</th><th>State</th><th>Entry candidate</th><th>Held</th><th>Breakeven</th><th>Last decision</th></tr></thead><tbody>{status.symbols.map(row => <tr key={row.pair}>
             <td>{row.pair}</td><td>{words(row.status)}</td><td>{words(row.candidate_hold)}</td>
-            <td>{String(row.bag.held_amount ?? "—")}</td><td>{String(row.bag.breakeven_price ?? "—")}</td>
-            <td title={row.last_decision.at ? utc(Number(row.last_decision.at) * 1000) : undefined}>{words(row.last_decision.reason as string | null)}</td>
+            <td>{String(row.bag?.held_amount ?? "—")}</td><td>{String(row.bag?.breakeven_price ?? "—")}</td>
+            <td title={typeof row.last_decision?.at === "number" ? utc(row.last_decision.at * 1000) : undefined}>{words(row.last_decision?.reason)}</td>
           </tr>)}</tbody></table>{!status.symbols.length && <p className="v5m-hint">No per-coin state published.</p>}</div>
         </section>
-        <section className="v5m-section"><header><h2>Refused control commands</h2><span>{String(status.control_rejections.count ?? 0)} in total · the runtime's own reasons</span></header>
-          <div className="v5m-card">{status.control_rejections.recent.filter(Boolean).length ? <ul className="v5m-list">{status.control_rejections.recent.filter(Boolean).map((row, index) => <li key={index}><b>{words(row!.action)}</b> at {utc(ms(row!.at_ms))}: {row!.reason}</li>)}</ul> : <p className="v5m-hint">None recorded.</p>}</div>
+        <section className="v5m-section"><header><h2>Refused control commands</h2><span>{status.control_rejections.count == null ? "count not published" : `${status.control_rejections.count} in total`} · the runtime's own reasons</span></header>
+          <div className="v5m-card">{status.control_rejections.recent.filter(Boolean).length ? <ul className="v5m-list">{status.control_rejections.recent.filter(Boolean).map((row, index) => <li key={index}><b>{words(row!.action)}</b> at {utc(ms(row!.at_ms))}: {row!.reason ?? "no reason published"}</li>)}</ul> : <p className="v5m-hint">{status.control_rejections.published && status.control_rejections.count === 0 ? "None recorded." : "Not published by this runtime."}</p>}</div>
         </section>
         <p className="v5m-hint">Image {status.image_tag ?? "not published"} · status written {utc(status.generated_at * 1000)}.</p>
       </>}

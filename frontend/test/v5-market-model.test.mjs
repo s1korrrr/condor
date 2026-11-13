@@ -1,107 +1,120 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { averaged, breadth, closes, coinStats, sampled, coinTile, crossLatest, featureRows, featureText, indexedReturns, premiumSeries, storeHealth, venueGrid } from '../src/v5/market-model.mjs';
+import { ageSeconds, breadth, coinStats, coinTile, featureRows, featureText, grid, indexedReturns, premiumSeries, STALE_AFTER_S, storeHealth, venueGrid } from '../src/v5/market-model.mjs';
+import { tri, utcMinute } from '../src/v5/shown.mjs';
 
-// Owner bucket order without a `columns` field (the server forwards only these fields): t, open, high, low, close, volume, ...
-const minute = (t, close, high = close, low = close) => [t, close, high, low, close, 1, 1, 0, 0, 0, 0, 0];
-const read = rows => ({ buckets: rows });
-const T0 = 1_794_474_120;
+const T0 = 1_794_474_120; // a minute boundary
 
-test('missing minutes are dropped, never read as zero prices', () => {
-  const rows = closes(read([minute(T0, 100), [T0 + 60, null, null, null, null, null, 0, 0, 0, 1, 0, 0], minute(T0 + 120, 101)]));
-  assert.deepEqual(rows.map(row => row.close), [100, 101]);
+/**
+ * A contract-valid owner window (condor/v5/candles.py): one row per minute from `start`, prices and volume only on
+ * final minutes, `end` = last minute, `now` just after it, `totals` matching the rows. `close(i)` returns a price or
+ * null (missing minute); `volume(i)` defaults to 1.
+ */
+function dense(count, close, volume = () => 1) {
+  const buckets = [];
+  const totals = { final: 0, no_trade: 0, unrecoverable: 0, missing: 0, pending: 0, corrections: 0 };
+  for (let i = 0; i < count; i += 1) {
+    const value = close(i);
+    if (value == null) { buckets.push([T0 + i * 60, null, null, null, null, null, 0, 0, 0, 1, 0, 0]); totals.missing += 1; }
+    else { buckets.push([T0 + i * 60, value, value, value, value, volume(i), 1, 0, 0, 0, 0, 0]); totals.final += 1; }
+  }
+  const end = T0 + (count - 1) * 60;
+  return { buckets, start: T0, end, now: end + 70, totals };
+}
+const near = (actual, expected) => assert.ok(Math.abs(actual - expected) < 1e-9, `${actual} != ${expected}`);
+
+test('grid keeps every owner minute; a non-final minute has no price', () => {
+  const minutes = grid(dense(3, i => (i === 1 ? null : 100 + i)));
+  assert.equal(minutes.length, 3);
+  assert.deepEqual(minutes[1], { t: T0 + 60, high: null, low: null, close: null, volume: null });
+  assert.equal(grid(null), null);
 });
 
-test('coin tile: change, range, premium and volatility only over adjacent minutes', () => {
-  const spot = read([minute(T0, 100, 102, 99), minute(T0 + 60, 101), minute(T0 + 180, 99, 99, 95)]);
-  const perpetual = read([minute(T0, 100.1), minute(T0 + 180, 98.95)]);
-  const tile = coinTile('BTC', spot, perpetual);
-  assert.equal(tile.last, 99);
-  assert.ok(Math.abs(tile.changePct - -1) < 1e-9);
-  assert.equal(tile.high, 102);
-  assert.equal(tile.low, 95);
-  assert.ok(Math.abs(tile.premiumBps - (98.95 / 99 - 1) * 1e4) < 1e-9);
-  // Two returns exist but one spans a gap, so fewer than 30 adjacent returns: no volatility claim.
-  assert.equal(tile.volatilityPct, null);
-  assert.equal(coinTile('BTC', read([minute(T0, 1)]), null), null);
+test('tile: window and hour returns need their exact boundary minute', () => {
+  // 24h window; the first 23 hours are missing, then a price.
+  const late = dense(1440, i => (i >= 1380 ? 100 + (i - 1380) : null));
+  const tile = coinTile('BTC', late, null);
+  assert.equal(tile.changePct, null);
+  assert.equal(tile.change1hPct, null); // the minute 60 before the last close (index 1379) is missing
+  assert.equal(tile.heldMinutes, 60);
+  assert.equal(tile.windowMinutes, 1440);
+  assert.equal(breadth([tile, null]).measured, 0);
+  const whole = coinTile('ETH', dense(1440, i => 100 + i / 100), null);
+  near(whole.changePct, ((100 + 14.39) / 100 - 1) * 100);
+  near(whole.change1hPct, ((100 + 14.39) / (100 + 13.79) - 1) * 100);
+  assert.equal(coinTile('X', dense(5, () => null), null), null);
 });
 
-test('premium uses only minutes where both legs closed', () => {
-  const points = premiumSeries(read([minute(T0, 100), minute(T0 + 60, 100)]), read([minute(T0 + 60, 101), minute(T0 + 120, 102)]));
-  assert.equal(points.length, 1);
-  assert.equal(points[0].time, (T0 + 60) * 1000);
-  assert.ok(Math.abs(points[0].value - 100) < 1e-9);
+test('premium only for the same minute as the shown price; charts keep nulls', () => {
+  const spot = dense(120, i => (i < 110 ? 100 : null)); // last ten minutes missing
+  const perpetual = dense(120, () => 101);
+  const tile = coinTile('BNB', spot, perpetual);
+  assert.equal(tile.lastTime, T0 + 109 * 60);
+  near(tile.premiumBps, 100);
+  assert.equal(coinTile('BNB', spot, dense(120, i => (i === 109 ? null : 101))).premiumBps, null);
+  const series = premiumSeries(spot, perpetual);
+  assert.equal(series.at(-1).value, null);
+  assert.ok(series.some(point => point.value != null));
+  const returns = indexedReturns(dense(30, i => (i >= 10 && i < 20 ? null : 50 + i)));
+  assert.deepEqual(returns.map(point => point.value === null), [false, false, true, true, false, false]);
+  assert.deepEqual(indexedReturns(dense(10, i => (i === 0 ? null : 1))), []);
 });
 
-test('indexed returns start at zero and averaging keeps window ends', () => {
-  const returns = indexedReturns(read([minute(T0, 50), minute(T0 + 60, 55), minute(T0 + 120, 45)]), 1);
-  assert.deepEqual(returns.map(point => Math.round(point.value)), [0, 10, -10]);
-  // Averages are per clock window: two points 30 minutes apart in 2-minute windows leave null windows between them.
-  const minuteMs = 60_000;
-  const averages = averaged([{ time: 0, value: 1 }, { time: minuteMs, value: 3 }, { time: 30 * minuteMs, value: 5 }], 2);
-  assert.deepEqual(averages[0], { time: minuteMs, value: 2 });
-  assert.equal(averages.at(-1).value, 5);
-  assert.ok(averages.slice(1, -1).every(point => point.value === null));
+test('age follows the owner clock plus time since the read arrived', () => {
+  const read = dense(10, () => 1);
+  const received = 1_000_000;
+  assert.equal(ageSeconds(read.end, read, received, received), 10);
+  assert.ok(ageSeconds(read.end, read, received, received + 10 * 60_000) > STALE_AFTER_S);
+  // A local clock behind the read time never makes the price younger than the owner said.
+  assert.equal(ageSeconds(read.end, read, received, received - 60_000), 10);
 });
 
-test('breadth counts coins up over the window and over the last hour', () => {
-  const tiles = [{ changePct: 2, change1hPct: 1 }, { changePct: -1, change1hPct: -1 }, null, { changePct: -3, change1hPct: null }, null];
-  const result = breadth(tiles);
-  assert.equal(result.coins, 3);
-  assert.equal(result.up24h, 1);
-  assert.equal(result.up1h, 1);
-  assert.equal(result.measured1h, 2);
-  assert.ok(Math.abs(result.averagePct - -2 / 3) < 1e-9);
+test('window statistics: volume and minutes from the full window', () => {
+  const sparse = coinStats(dense(60, i => (i >= 58 ? 100 + (i - 58) * 10 : null)), null);
+  assert.equal(sparse.volumeQuote, null);
+  assert.equal(sparse.volumeMissingMinutes, 58);
+  assert.equal(sparse.heldMinutes, 2);
+  assert.equal(sparse.windowMinutes, 60);
+  assert.equal(sparse.returnWindowPct, null);
+  const prices = i => (i <= 60 ? 100 + i : 160 - (i - 60) * 2);
+  const full = coinStats(dense(121, prices), dense(121, () => 200));
+  near(full.returnWindowPct, (40 / 100 - 1) * 100);
+  near(full.return1hPct, (40 / 160 - 1) * 100);
+  near(full.maxDrawdownPct, (40 / 160 - 1) * 100);
+  assert.equal(full.volumeQuote, dense(121, prices).buckets.reduce((sum, row) => sum + row[4], 0));
+  assert.equal(full.premium.minutes, 121);
+  const noVolume = coinStats(dense(3, () => 100, () => null), null);
+  assert.equal(noVolume.volumeQuote, null);
+  assert.equal(noVolume.volumeMissingMinutes, 3);
 });
 
-test('cross-venue cell is the last owner deviation; a venue with none is absent', () => {
-  const view = { series: [
-    { venue: 'okx', pair: 'BNB-USDT', close: [[1, 600], [2, 601]], deviation_bps: [[1, 0.5], [2, -1.25]] },
-    { venue: 'kucoin', pair: 'BNB-USDT', close: [], deviation_bps: [] },
-  ] };
-  assert.deepEqual(crossLatest('BNB', view), [{ venue: 'okx', coin: 'BNB', pair: 'BNB-USDT', bps: -1.25, time: 2, close: 601 }]);
-  assert.deepEqual(crossLatest('BNB', null), []);
+test('breadth counts only measured coins', () => {
+  const result = breadth([{ changePct: 2, change1hPct: 1 }, { changePct: -1, change1hPct: null }, null, { changePct: null, change1hPct: -3 }]);
+  assert.deepEqual({ ...result, averagePct: Math.round(result.averagePct * 10) / 10 }, { measured: 2, up: 1, measured1h: 2, up1h: 1, averagePct: 0.5 });
 });
 
 test('venue grid and store health keep unknown values unknown', () => {
   const tiles = [
     { lane: 'okx__spot', venue: 'okx', segment: 'spot', available: true, pairs_listed: 5, pairs_held: 5, coverage_7d: 1, gaps_7d: 0, last_minute_age_s: 30 },
     { lane: 'okx__perpetual', venue: 'okx', segment: 'perpetual', available: false, pairs_listed: 5, pairs_held: 3, coverage_7d: 0.9, gaps_7d: 12, last_minute_age_s: 90 },
-    { lane: 'hyperliquid__perpetual', venue: 'hyperliquid', segment: 'perpetual', available: true, pairs_listed: 5, pairs_held: 5, coverage_7d: null, gaps_7d: null, last_minute_age_s: null },
+    { lane: 'hyperliquid__perpetual', venue: 'hyperliquid', segment: 'perpetual', available: null, pairs_listed: 5, pairs_held: 5, coverage_7d: null, gaps_7d: null, last_minute_age_s: null },
   ];
-  const grid = venueGrid(tiles);
-  assert.deepEqual(grid.map(row => row.venue), ['hyperliquid', 'okx']);
-  assert.equal(grid[0].spot, null);
+  const lanes = venueGrid(tiles);
+  assert.deepEqual(lanes.map(row => row.venue), ['hyperliquid', 'okx']);
+  assert.equal(lanes[0].spot, null);
   const health = storeHealth(tiles);
-  assert.equal(health.lanesLive, 2);
+  assert.equal(health.lanesLive, 1);
+  assert.equal(health.lanesUnknown, 1);
   assert.equal(health.pairsHeld, 13);
-  // One lane did not report coverage, gaps or age: no total claims to cover all lanes.
   assert.equal(health.coverage7d, null);
   assert.equal(health.gaps7d, null);
   assert.equal(health.oldestMinuteAge, null);
   assert.deepEqual(health.unreported, { pairs: 0, coverage: 1, gaps: 1, age: 1 });
   const reported = storeHealth(tiles.slice(0, 2));
-  assert.ok(Math.abs(reported.coverage7d - 0.95) < 1e-9);
+  near(reported.coverage7d, 0.95);
   assert.equal(reported.gaps7d, 12);
   assert.equal(reported.oldestMinuteAge, 90);
   assert.equal(storeHealth([]).coverage7d, null);
-});
-
-test('window statistics: returns by elapsed time, drawdown from a running peak, traded value', () => {
-  const rows = [];
-  for (let i = 0; i <= 120; i += 1) rows.push(minute(T0 + i * 60, i <= 60 ? 100 + i : 160 - (i - 60) * 2));
-  const stats = coinStats(read(rows), read([minute(T0, 101), minute(T0 + 60, 100)]));
-  assert.equal(stats.minutes, 121);
-  assert.equal(stats.windowMinutes, 121);
-  assert.ok(Math.abs(stats.returnWindowPct - (40 / 100 - 1) * 100) < 1e-9);
-  assert.ok(Math.abs(stats.return1hPct - (40 / 160 - 1) * 100) < 1e-9);
-  assert.equal(stats.return6hPct, null);
-  assert.ok(Math.abs(stats.maxDrawdownPct - (40 / 160 - 1) * 100) < 1e-9);
-  // Volume column is 1 base unit per minute, so traded value is the sum of closes.
-  assert.equal(stats.volumeQuote, rows.reduce((sum, row) => sum + row[4], 0));
-  assert.equal(stats.premium.minutes, 2);
-  assert.ok(Math.abs(stats.premium.max - 100) < 1e-9);
-  assert.equal(coinStats(read([]), null), null);
 });
 
 test('features keep owner units and say when a value is not qualified', () => {
@@ -119,26 +132,14 @@ test('features keep owner units and say when a value is not qualified', () => {
   assert.equal(featureText(null, 'percent'), '—');
 });
 
-test('gaps stay gaps: charts get explicit nulls, a stale price and premium are not shown as current', () => {
-  // 100 at 00:00, nothing until 01:00, then 120.
-  const spot = { buckets: [minute(T0, 100), minute(T0 + 3600, 120)], end: T0 + 3600 + 120 };
-  const returns = indexedReturns(spot, 5);
-  assert.equal(returns[0].value, 0);
-  assert.ok(Math.abs(returns.at(-1).value - 20) < 1e-9);
-  assert.ok(returns.slice(1, -1).length >= 11 && returns.slice(1, -1).every(point => point.value === null));
-  const tile = coinTile('BTC', spot, read([minute(T0, 101), minute(T0 + 3540, 119)]));
-  assert.equal(tile.current, false);
-  assert.equal(tile.premiumBps, null);
-  assert.ok(Math.abs(tile.change1hPct - 20) < 1e-9);
-  assert.ok(tile.spark.some(point => point.value === null));
-  assert.deepEqual(sampled([], 5, row => row.close), []);
-});
-
-test('horizons need their exact boundary minute and totals need every minute', () => {
-  const stats = coinStats(read([minute(T0, 100), minute(T0 + 7140, 110), minute(T0 + 7200, 120)]), null);
-  assert.equal(stats.return1hPct, null);
-  const noVolume = [T0, T0 + 60].map(t => [t, 100, 100, 100, 100, null, 1, 0, 0, 0, 0, 0]);
-  const partial = coinStats(read(noVolume), null);
-  assert.equal(partial.volumeQuote, null);
-  assert.equal(partial.volumeMissingMinutes, 2);
+test('shared display helpers never throw and keep three states', () => {
+  assert.equal(utcMinute(Date.UTC(2026, 10, 13, 9, 5)), '2026-11-13 09:05Z');
+  assert.equal(utcMinute(1e18), null);
+  assert.equal(utcMinute(-1e21), null);
+  assert.equal(utcMinute('1'), null);
+  assert.equal(utcMinute(NaN), null);
+  assert.equal(tri(true, 'clean', 'not clean'), 'clean');
+  assert.equal(tri(false, 'clean', 'not clean'), 'not clean');
+  assert.equal(tri(null, 'clean', 'not clean'), 'not published');
+  assert.equal(tri(undefined, 'a', 'b', 'unknown'), 'unknown');
 });

@@ -13,7 +13,7 @@ export function V5MarketHome() {
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, retry: false });
   const candleConfigured = profile.data?.candle_store?.configured === true;
   if (location.pathname === "/market/stocks") return <section>
-    <nav aria-label="Market views" className="mb-4 text-sm"><NavLink to="/" className="underline">← Market</NavLink></nav>
+    <nav aria-label="Market views" className="v5m-seg mb-4">{[["/", "Market"], ["/market/stocks", "OKX stocks"]].map(([to, label]) => <NavLink key={to} end to={to} className={({ isActive }) => `rounded-md px-3 py-1.5 text-sm ${isActive ? "bg-[var(--color-surface-hover)] text-[var(--color-text)]" : "text-[var(--color-text-muted)]"}`}>{label}</NavLink>)}</nav>
     <V5Stocks configured={candleConfigured} profilePending={profile.isPending} profileError={profile.error} />
   </section>;
   if (profile.isPending) return <p role="status">Loading market…</p>;

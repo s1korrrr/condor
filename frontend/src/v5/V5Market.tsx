@@ -12,7 +12,8 @@ import { V5MarketDetail, type DetailRead } from "./V5MarketDetail";
 import { V5MarketFeatures } from "./V5MarketFeatures";
 import { v5Api } from "./api";
 import { ageSeconds, breadth, coinTile, indexedReturns, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
-import { tri, utcMinute } from "./shown.mjs";
+import { age as ageShort, fixed, pct, price, signed, utcMin } from "./format.mjs";
+import { tri } from "./shown.mjs";
 import "./market.css";
 
 /** Fixed coin identity colours (validated categorical order, dark steps); a coin keeps its colour on every chart. */
@@ -23,10 +24,8 @@ type Summary = { now: number; status_age_s: number | null; tiles: LaneTile[] };
 type CoinRead = { spot: CandleRead | null; perpetual: CandleRead | null; error: string | null; perpetualError: string | null; receivedAt: number };
 type CrossRead = { coin: string; table: CrossStats[] | null; error: string | null };
 
-const signed = (value: number, digits = 2) => `${value > 0 ? "+" : ""}${value.toFixed(digits)}`;
-const price = (value: number) => value >= 1000 ? value.toLocaleString("en-US", { maximumFractionDigits: 0 }) : value >= 10 ? value.toFixed(2) : value.toFixed(4);
-const minuteText = (seconds: number | null | undefined) => utcMinute(seconds == null ? null : seconds * 1000) ?? "unknown";
-const ageText = (seconds: number | null) => seconds == null ? "age unknown" : seconds < 120 ? `${Math.round(seconds)} s ago` : `${Math.round(seconds / 60)} min ago`;
+const minuteText = (seconds: number | null | undefined) => utcMin(seconds == null ? null : seconds * 1000) ?? "unknown";
+const ageText = (seconds: number | null) => seconds == null ? "age unknown" : `${ageShort(seconds)} ago`;
 const venueName = (venue: string) => venue.replace("_io", ".io");
 const failure = (cause: unknown) => cause instanceof Error ? cause.message : "owner read unavailable";
 
@@ -85,9 +84,9 @@ export function V5Market() {
   const age = (coin: string, minuteT: number) => reads[coin]?.spot ? ageSeconds(minuteT, reads[coin].spot!, reads[coin].receivedAt, now) : null;
   const returns: Record<string, ReturnType<typeof indexedReturns>> = Object.fromEntries(MARKET_COINS.map(coin => [coin, indexedReturns(reads[coin]?.spot)]));
   const width = breadth(tiles);
-  const returnSeries: ChartSeries[] = MARKET_COINS.filter(coin => returns[coin].length).map(coin => ({ id: coin, label: coin, color: COIN_COLOR[coin], points: returns[coin], unit: "%", format: value => `${signed(value)}%` }));
+  const returnSeries: ChartSeries[] = MARKET_COINS.filter(coin => returns[coin].length).map(coin => ({ id: coin, label: coin, color: COIN_COLOR[coin], points: returns[coin], format: value => pct(value) }));
   const premium: ChartSeries[] = MARKET_COINS.map(coin => ({ coin, points: premiumSeries(reads[coin]?.spot, reads[coin]?.perpetual) }))
-    .filter(item => item.points.some(point => point.value != null)).map(({ coin, points }) => ({ id: coin, label: coin, color: COIN_COLOR[coin], points, unit: "bp", format: value => `${signed(value, 1)} bp` }));
+    .filter(item => item.points.some(point => point.value != null)).map(({ coin, points }) => ({ id: coin, label: coin, color: COIN_COLOR[coin], points, format: value => `${signed(value, 1)} bp` }));
   // After a failed refetch TanStack keeps the old data; only a successful read is shown as the store's state.
   const lanes = summary.isSuccess ? summary.data.tiles : [];
   const health = storeHealth(lanes);
@@ -107,7 +106,7 @@ export function V5Market() {
       <div className="v5m-chips">
         <span className={`v5m-chip ${summary.isError ? "is-bad" : summary.isSuccess && health.lanesLive === health.lanes && health.lanes ? "" : "is-warn"}`}><i />Candle store <b>{summary.isError ? "unavailable" : summary.isSuccess ? `${health.lanesLive}/${health.lanes} lanes live` : "reading"}</b></span>
         <span className={`v5m-chip ${feedCurrent ? "" : "is-warn"}`}><i />V5 feed <b>{refresh ? (feedCurrent ? "current" : "not current") : "unknown"}</b></span>
-        <span className={`v5m-chip ${slowestAge != null && slowestAge > STALE_AFTER_S ? "is-warn" : ""}`} title={`Seconds since the newest final minute closed, on the slowest of ${health.lanes || "the"} lanes. A minute is final some seconds after it closes (perpetuals later than spot), so up to about 95 s is normal; above ${STALE_AFTER_S} s is marked.`}><i />Slowest lane <b>{slowestAge == null ? "unknown" : `${Math.round(slowestAge)} s behind`}</b></span>
+        <span className={`v5m-chip ${slowestAge != null && slowestAge > STALE_AFTER_S ? "is-warn" : ""}`} title={`Seconds since the newest final minute closed, on the slowest of ${health.lanes || "the"} lanes. A minute is final some seconds after it closes (perpetuals later than spot), so up to about 95 s is normal; above ${STALE_AFTER_S} s is marked.`}><i />Slowest lane <b>{slowestAge == null ? "unknown" : `${ageShort(slowestAge)} behind`}</b></span>
         <button className="v5m-refresh" onClick={() => { void summary.refetch(); void coins.refetch(); void workspace.refetch(); }}><RotateCw size={14} />Refresh</button>
       </div>
     </header>
@@ -116,7 +115,7 @@ export function V5Market() {
     {failed.length > 0 && <p role="alert" className="v5m-status">No candles for {failed.map(coin => `${coin} (${reads[coin].error})`).join(", ")}. Those tiles are left out.</p>}
 
     <TileGrid label="Coins" min={200}>{tiles.map((tile, index) => tile ? <article key={tile.coin} className={`v5m-card v5m-coin is-clickable${selected === tile.coin ? " is-selected" : ""}`} role="button" tabIndex={0} aria-pressed={selected === tile.coin} aria-label={`${tile.coin}: open statistics, candles and venue detail`} onClick={() => select(tile.coin)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(tile.coin); } }}>
-      <div className="v5m-coin-top"><span className="v5m-sym"><i style={{ background: COIN_COLOR[tile.coin] }} />{tile.coin}</span>{tile.changePct == null ? <span className="v5m-change" title="No close at the window's first minute">24h —</span> : <span className={`v5m-change ${tile.changePct < 0 ? "is-down" : "is-up"}`}>{tile.changePct < 0 ? "▼" : "▲"} {signed(tile.changePct)}%</span>}</div>
+      <div className="v5m-coin-top"><span className="v5m-sym"><i style={{ background: COIN_COLOR[tile.coin] }} />{tile.coin}</span>{tile.changePct == null ? <span className="v5m-change" title="No close at the window's first minute">24h —</span> : <span className={`v5m-change ${tile.changePct < 0 ? "is-down" : "is-up"}`}>{tile.changePct < 0 ? "▼" : "▲"} {pct(tile.changePct)}</span>}</div>
       <strong className="v5m-price">${price(tile.last)}</strong>{(() => { const seconds = age(tile.coin, tile.lastTime); const old = seconds == null || seconds > STALE_AFTER_S; return <small className={`v5m-asof${old ? " is-old" : ""}`} title="Seconds since this minute closed, by the candle store's clock plus time since this page read it">close of {minuteText(tile.lastTime)} · {ageText(seconds)}</small>; })()}
       <SparkChart points={tile.spark} color={COIN_COLOR[tile.coin]} height={44} format={price} unit={REFERENCE.quote} ariaLabel={`${tile.coin} price, last 24 hours, breaks where minutes are missing`} />
       <div className="v5m-range" title={`Where the last price sits between the low and high of ${tile.heldMinutes} held minutes (of ${tile.windowMinutes})`}><div><span style={{ left: `${((tile.last - tile.low) / ((tile.high - tile.low) || 1)) * 100}%` }} /></div><small><span>{tile.heldMinutes < tile.windowMinutes ? "held" : "24h"} low {price(tile.low)}</span><span>high {price(tile.high)}</span></small></div>
@@ -127,12 +126,12 @@ export function V5Market() {
     <Section title="Moves" note={`${venueName(REFERENCE.venue)} spot, 1-minute candles sampled every 5 minutes`}>
       <div className="v5m-row v5m-row--wide">
         <Card title="Return over the last 24 hours" hint="Each coin starts at 0% at the window's first minute (a coin without that minute is left out) · lines break where minutes are missing · hover for values">
-          <TimeSeriesChart series={returnSeries.filter(item => !hidden.has(item.id))} height={260} zeroLine includeZero signed ariaLabel="Return of each coin over the last 24 hours" leftFormat={value => `${signed(value)}%`} emptyText="No candles to plot yet." />
+          <TimeSeriesChart series={returnSeries.filter(item => !hidden.has(item.id))} height={260} zeroLine includeZero signed ariaLabel="Return of each coin over the last 24 hours" leftFormat={value => pct(value)} emptyText="No candles to plot yet." />
           <Legend series={returnSeries} hidden={hidden} onToggle={toggleSeries} />
         </Card>
         <Card title="Breadth" hint="How many of the five coins are up" className="v5m-breadth">
           <div className="v5m-big"><div><strong>{width.up}<small> of {width.measured} up</small></strong><span>over 24 hours</span></div><div><strong>{width.up1h}<small> of {width.measured1h} up</small></strong><span>over the last hour</span></div></div>
-          <p className="v5m-hint">Average 24-hour return <b className={width.averagePct != null && width.averagePct < 0 ? "is-down" : "is-up"}>{width.averagePct == null ? "unavailable" : `${signed(width.averagePct)}%`}</b></p>
+          <p className="v5m-hint">Average 24-hour return <b className={width.averagePct != null && width.averagePct < 0 ? "is-down" : "is-up"}>{width.averagePct == null ? "unavailable" : pct(width.averagePct)}</b></p>
           <ReturnBars tiles={tiles.flatMap(tile => tile?.changePct != null ? [{ coin: tile.coin, changePct: tile.changePct }] : [])} selected={selected} onSelect={select} />
         </Card>
       </div>
@@ -150,14 +149,14 @@ export function V5Market() {
               const row = read.table?.find(item => item.venue === venue);
               if (!row || row.mean_bps == null || !row.n) return <td key={read.coin} className="is-none" title={read.error ? "read failed" : row ? "no minute compared" : "no row from the owner for this venue"}>—</td>;
               const bps = row.mean_bps, strength = Math.min(Math.abs(bps) / 12, 1) * 0.45;
-              return <td key={read.coin} className={`is-clickable${selected === read.coin ? " is-selected" : ""}`} onClick={() => select(read.coin)} title={`${venueName(venue)} ${row.pair}: mean ${signed(bps, 2)} bp over ${row.n} minutes · p95 |gap| ${row.p95_abs_bps == null ? "—" : row.p95_abs_bps.toFixed(1)} bp · click for ${read.coin} detail`} style={{ background: Math.abs(bps) < 0.5 ? undefined : `color-mix(in srgb, ${bps < 0 ? "var(--color-red)" : "var(--color-green)"} ${Math.round(strength * 100)}%, transparent)` }}>{signed(bps, 1)}</td>;
+              return <td key={read.coin} className={`is-clickable${selected === read.coin ? " is-selected" : ""}`} onClick={() => select(read.coin)} title={`${venueName(venue)} ${row.pair}: mean ${signed(bps, 2)} bp over ${row.n} minutes · p95 |gap| ${row.p95_abs_bps == null ? "—" : fixed(row.p95_abs_bps, 1)} bp · click for ${read.coin} detail`} style={{ background: Math.abs(bps) < 0.5 ? undefined : `color-mix(in srgb, ${bps < 0 ? "var(--color-red)" : "var(--color-green)"} ${Math.round(strength * 100)}%, transparent)` }}>{signed(bps, 1)}</td>;
             })}</tr>)}</tbody></table>}
           <p className="v5m-hint">Green: above the median of venues, red: below. Quotes can differ (USDT, USD, USDC), so part of a gap can be the quote currency, not the venue.</p>
         </Card>
       </div>
     </Section>
 
-    <Section title="V5 market features" note={`What the V5 engine computes from all venues every 20 seconds · packet cut at ${utcMinute(evidence?.cutoff_ms) ?? "unknown"}`}>
+    <Section title="V5 market features" note={`What the V5 engine computes from all venues every 20 seconds · packet cut at ${utcMin(evidence?.cutoff_ms) ?? "unknown"}`}>
       <div className="v5m-card">{workspace.isPending ? <p role="status" className="v5m-hint">Reading the V5 feed…</p> : workspace.isError ? <p role="alert" className="v5m-hint">Workspace read failed: {workspace.error.message}.</p> : !evidence ? <p className="v5m-hint">The V5 feed returned no market evidence. No feature is inferred.</p> : <V5MarketFeatures features={evidence.features} />}</div>
     </Section>
 
@@ -172,10 +171,10 @@ export function V5Market() {
             <Stat label="Lanes live" value={summary.isSuccess ? `${health.lanesLive}/${health.lanes}` : "—"} warn={health.lanesUnknown > 0} note={health.lanesUnknown ? `${health.lanesUnknown} lane(s) did not report availability` : health.pairsHeld == null || health.pairsListed == null ? `pair counts: ${health.unreported.pairs} lane(s) unreported` : `${health.pairsHeld}/${health.pairsListed} pairs held`} />
             <Stat label="7-day coverage" value={health.coverage7d == null ? "—" : `${(health.coverage7d * 100).toFixed(1)}%`} note={health.coverage7d == null && health.unreported.coverage ? `${health.unreported.coverage} lane(s) unreported` : "final 1-minute candles, all lanes"} />
             <Stat label="Missing minutes, 7 days" value={health.gaps7d == null ? "—" : String(health.gaps7d)} note={health.gaps7d == null && health.unreported.gaps ? `${health.unreported.gaps} lane(s) unreported` : "all lanes"} />
-            <Stat label="Slowest lane" value={slowestAge == null ? "—" : `${Math.round(slowestAge)} s`} note={health.oldestMinuteAge == null && health.unreported.age ? `${health.unreported.age} lane(s) unreported` : "since its newest final minute closed; up to ~95 s is normal"} />
+            <Stat label="Slowest lane" value={slowestAge == null ? "—" : ageShort(slowestAge)} note={health.oldestMinuteAge == null && health.unreported.age ? `${health.unreported.age} lane(s) unreported` : "since its newest final minute closed; up to ~95 s is normal"} />
           </div>
           <h3 className="v5m-subhead">V5 market-context feed</h3>
-          <p className="v5m-hint">What the V5 engine receives every 20 seconds · last success {utcMinute(refresh?.last_success_at_ms) ?? "unknown"}</p>
+          <p className="v5m-hint">What the V5 engine receives every 20 seconds · last success {utcMin(refresh?.last_success_at_ms) ?? "unknown"}</p>
           {workspace.isError ? <p role="alert" className="v5m-hint">Workspace read failed: {workspace.error.message}.</p> : !cohort ? <p className="v5m-hint">{workspace.isPending ? "Reading the feed…" : "The feed returned no market evidence. No coverage is inferred."}</p> :
             <div className="v5m-stats">{cohort.dimensions.map(item => <Stat key={item.key} label={item.label} value={item.valid == null || item.expected == null ? "—" : `${item.valid}/${item.expected}`} note={item.fraction == null ? "not qualified" : `${(item.fraction * 100).toFixed(0)}% this minute`} title="Pairs that passed the V5 feed's qualification rule for its newest minute, out of the pairs the feed expects (the owner's own counts). The candle store panel counts pairs present in the store, a different and larger count." warn={item.fraction != null && item.fraction < 1} />)}</div>}
         </Card>
@@ -193,14 +192,14 @@ function Legend({ series, hidden, onToggle }: { series: ChartSeries[]; hidden: R
 function ReturnBars({ tiles, selected, onSelect }: { tiles: { coin: string; changePct: number }[]; selected: string | null; onSelect: (coin: string) => void }) {
   const sorted = [...tiles].sort((a, b) => b.changePct - a.changePct);
   const max = Math.max(...sorted.map(tile => Math.abs(tile.changePct)), 0.01);
-  return <div className="v5m-bars">{sorted.map(tile => <button type="button" key={tile.coin} className={`v5m-bar${selected === tile.coin ? " is-selected" : ""}`} aria-pressed={selected === tile.coin} onClick={() => onSelect(tile.coin)} title={`${tile.coin}: ${signed(tile.changePct)}% over 24 hours · click for detail`}><span>{tile.coin}</span><div><i className={tile.changePct < 0 ? "is-down" : "is-up"} style={{ width: `${(Math.abs(tile.changePct) / max) * 50}%`, [tile.changePct < 0 ? "right" : "left"]: "50%" }} /></div><b>{signed(tile.changePct)}%</b></button>)}</div>;
+  return <div className="v5m-bars">{sorted.map(tile => <button type="button" key={tile.coin} className={`v5m-bar${selected === tile.coin ? " is-selected" : ""}`} aria-pressed={selected === tile.coin} onClick={() => onSelect(tile.coin)} title={`${tile.coin}: ${pct(tile.changePct)} over 24 hours · click for detail`}><span>{tile.coin}</span><div><i className={tile.changePct < 0 ? "is-down" : "is-up"} style={{ width: `${(Math.abs(tile.changePct) / max) * 50}%`, [tile.changePct < 0 ? "right" : "left"]: "50%" }} /></div><b>{pct(tile.changePct)}</b></button>)}</div>;
 }
 
 function Venue({ row }: { row: ReturnType<typeof venueGrid<LaneTile>>[number] }) {
   const cell = (lane: LaneTile | null) => lane ? <span className="v5m-lane" title={`${lane.lane} · 7-day coverage ${lane.coverage_7d == null ? "unknown" : `${(lane.coverage_7d * 100).toFixed(1)}%`} · missing minutes ${lane.gaps_7d ?? "unknown"}${lane.unavailable_reason ? ` · ${lane.unavailable_reason}` : ""}`}>
     <span className={lane.available === true ? "is-up" : lane.available === false ? "is-down" : "v5m-muted"} title={tri(lane.available, "available", "unavailable", "availability not reported")}>{lane.available === true ? "●" : lane.available === false ? "○" : "?"} {lane.pairs_held ?? "?"}/{lane.pairs_listed ?? "?"}</span>
     <span>{lane.coverage_24h == null ? "—" : `${(lane.coverage_24h * 100).toFixed(0)}%`}</span>
-    <span className="v5m-muted">{lane.last_minute_age_s == null ? "—" : `${Math.round(lane.last_minute_age_s)} s`}</span>
+    <span className="v5m-muted">{lane.last_minute_age_s == null ? "—" : ageShort(lane.last_minute_age_s)}</span>
   </span> : <span className="v5m-lane is-none">not held</span>;
   return <><span className="v5m-venue">{venueName(row.venue)}</span>{cell(row.spot)}{cell(row.perpetual)}</>;
 }

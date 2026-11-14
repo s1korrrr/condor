@@ -1,0 +1,13 @@
+export const MINUS: string;
+export function fixed(value: unknown, digits?: number): string;
+export function signed(value: unknown, digits?: number): string;
+export function usdc(value: unknown, unit?: string): string;
+export function pnl(value: unknown, digits?: number): { text: string; tone: 'up' | 'down' | 'zero' | 'none' };
+export function price(value: unknown): string;
+export function coin(value: unknown, asset?: string): string;
+export function pct(value: unknown, digits?: number): string;
+export function count(value: unknown): string;
+export function utc(ms: unknown, nowMs?: number): string | null;
+export function utcMin(ms: unknown, nowMs?: number): string | null;
+export function age(seconds: unknown): string;
+export function when(ms: unknown, nowMs?: number): string | null;

@@ -27,7 +27,8 @@ test('pair holdings sum every owner tranche exactly instead of showing the first
   assert.equal(holdings.count, 9);
   assert.deepEqual(holdings.states, [{state:'held_reconciliation',count:6,quantity:'0.3615174'},{state:'terminal_dust',count:3,quantity:'0.0000016'}]);
   assert.equal(holdings.protectedCount, 0);
-  assert.deepEqual(holdings.unprotectedReasons, ['no_active_fixed_target_executor']);
+  // Every row is a held bag stamped no_active_fixed_target_executor by the engine: bag-managed, not unprotected.
+  assert.deepEqual([holdings.bagManagedCount, holdings.unprotectedCount, holdings.unprotectedReasons], [9, 0, []]);
   assert.equal(paperPairHoldings('BNB-USDC', {...livePositions, completeness:'partial'}, now), null, 'partial read publishes no total');
   assert.equal(paperPairHoldings('BNB-USDC', {...livePositions, next_cursor:'more'}, now), null, 'unread pages publish no total');
   assert.equal(paperPairHoldings('BNB-USDC', livePositions, now + 31_000), null, 'stale read publishes no total');
@@ -81,7 +82,7 @@ test('rendered pair card shows the exact pair total, bag, protection summary and
   assert.match(html, /<dt>Position<\/dt><dd>0\.3615190 BNB/);
   assert.doesNotMatch(html, /<dt>Position<\/dt><dd>0\.141193 BNB/);
   assert.match(html, /Held reconciliation: 6 · 0\.3615174 BNB · Terminal dust: 3 · 0\.0000016 BNB/);
-  assert.match(html, /Owner-reported protected exits: 0 of 9 position rows/);
+  assert.match(html, /Owner-reported exits over 9 position rows: 0 resting exit orders/);
   assert.match(html, /<dt>Bag<\/dt><dd>Below target · breakeven 748\.1700 USDC/);
   assert.match(html, /Reported native entry hold: No|Native evidence complete/);
   assert.match(html, /Pair cap 40000 USDC/);
@@ -113,18 +114,22 @@ test('pair protection summary keeps omitted owner flags unknown', () => {
   const positions = {...livePositions, data:[...final3.positions.data.filter(row => row.trading_pair !== 'BNB-USDC'), ...mixed]};
   const holdings = paperPairHoldings('BNB-USDC', positions, now);
   assert.equal(holdings.protectedCount, 1);
-  assert.equal(holdings.unprotectedCount, 1);
+  // The engine stamps a held bag row false / no_active_fixed_target_executor by definition: bag-managed, not unprotected.
+  assert.equal(holdings.bagManagedCount, 1);
+  assert.equal(holdings.unprotectedCount, 0);
   assert.equal(holdings.unknownCount, 7);
-  assert.deepEqual(holdings.unprotectedReasons, ['no_active_fixed_target_executor'], 'reasons come only from explicit false rows');
+  assert.deepEqual(holdings.unprotectedReasons, []);
+  const other = {...positions, data: positions.data.map(row => row === mixed[1] ? {...row, protection_reason: 'executor_missing'} : row)};
+  assert.deepEqual([paperPairHoldings('BNB-USDC', other, now).unprotectedCount, paperPairHoldings('BNB-USDC', other, now).unprotectedReasons], [1, ['executor_missing']], 'any other explicit false is unprotected, with its reason');
   const allOmitted = {...positions, data:[...final3.positions.data.filter(row => row.trading_pair !== 'BNB-USDC'), ...BNB_ROWS.map(omit)]};
   assert.deepEqual([paperPairHoldings('BNB-USDC', allOmitted, now).unprotectedCount, paperPairHoldings('BNB-USDC', allOmitted, now).unknownCount], [0, 9]);
   const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
   const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values({...final3, positions:allOmitted}), now, reportAt:final3.status.generated_at_ms, heartbeat:'Fresh', bot:'meridian_v5_paper'}));
   const card = html.match(/<h3>BNB-USDC<\/h3>[^]*?<\/article>/)?.[0] ?? '';
-  const summary = card.match(/Owner-reported protected exits:[^<]+/)?.[0] ?? '';
+  const summary = card.match(/Owner-reported exits over[^<]+/)?.[0] ?? '';
   assert.doesNotMatch(summary, /unprotected/, 'omitted flags are not unprotected');
-  assert.match(summary, /0 of 9 position rows · protection not published: 9/);
+  assert.match(summary, /over 9 position rows: 0 resting exit orders · protection not published: 9/);
 });
 
 // Rebased onto #99: a native latch (owner native-risk.v1 `latched`) must still raise safety evidence through

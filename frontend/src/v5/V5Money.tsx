@@ -41,10 +41,10 @@ const at = (ms: number | null | undefined) => utcMin(ms) ?? "unknown time";
 
 const dailyColumns: TableColumn<DailyRow>[] = [
   { id: "day", header: "Day (UTC)", value: row => new Date(row.day).toISOString().slice(0, 10), rowHeader: true, size: 100 },
-  { id: "start", header: "Equity, first sample", value: row => num(row.equity_start), kind: "number", size: 120, cell: row => fixed(num(row.equity_start)), title: row => row.first_at_ms ? `at ${at(row.first_at_ms)}` : undefined },
-  { id: "end", header: "Equity, last sample", value: row => num(row.equity_end), kind: "number", size: 120, cell: row => fixed(num(row.equity_end)), title: row => row.last_at_ms ? `at ${at(row.last_at_ms)}` : undefined },
-  { id: "change", header: "Equity change", value: row => num(row.equity_change), kind: "number", size: 110, cell: row => pnl(num(row.equity_change)).text, className: row => num(row.equity_change) == null ? undefined : num(row.equity_change)! < 0 ? "is-down" : "is-up" },
-  { id: "realized", header: "Closed-trade profit", value: row => num(row.realized_change), kind: "number", size: 120, cell: row => pnl(num(row.realized_change)).text, title: () => "Change in lifetime realized P&L between the day's first and last sample with values" },
+  { id: "start", header: "Equity, first sample", value: row => num(row.equity_start), kind: "number", size: 120, cell: row => fixed(row.equity_start), title: row => row.first_at_ms ? `at ${at(row.first_at_ms)}` : undefined },
+  { id: "end", header: "Equity, last sample", value: row => num(row.equity_end), kind: "number", size: 120, cell: row => fixed(row.equity_end), title: row => row.last_at_ms ? `at ${at(row.last_at_ms)}` : undefined },
+  { id: "change", header: "Equity change", value: row => num(row.equity_change), kind: "number", size: 110, cell: row => pnl(row.equity_change).text, className: row => num(row.equity_change) == null ? undefined : num(row.equity_change)! < 0 ? "is-down" : "is-up" },
+  { id: "realized", header: "Closed-trade profit", value: row => num(row.realized_change), kind: "number", size: 120, cell: row => pnl(row.realized_change).text, title: () => "Change in lifetime realized P&L between the day's first and last sample with values" },
   { id: "coverage", header: "Day with values", value: row => dayCoverage(row), kind: "number", size: 100, cell: row => share(dayCoverage(row)), title: row => `${row.valid} of 288 five-minute slots hold values · ${row.samples} samples recorded, ${row.gaps} of them gaps` },
 ];
 
@@ -88,10 +88,10 @@ export function V5Money() {
 
       <section className="v5m-section"><header><h2>V5 paper bot</h2><span>{now ? `as of ${at(now.at_ms)} · ${now.unit ?? "USDC"}` : "no sample with values yet"}</span></header>
         <div className="v5m-stats v5m-stats--wide">
-          <Stat label="Wallet equity" value={usdc(equity, unit)} note={funding != null && equity != null ? `${pnl(equity - funding).text} vs the ${usdc(funding, unit)} start (${pct((equity / funding - 1) * 100)})` : "start funding not published"} warn={equity != null && funding != null && equity < funding} />
-          <Stat label="Profit from closed trades" value={pnl(num(now?.realized)).text} note="lifetime, owner accounting" />
-          <Stat label="Gain or loss on coins still held" value={pnl(num(now?.unrealized)).text} note="marked at the owner's fresh book midpoint" warn={(num(now?.unrealized) ?? 0) < 0} />
-          <Stat label="Fees paid" value={usdc(num(now?.fees), unit)} note="lifetime" />
+          <Stat label="Wallet equity" value={usdc(now?.equity, unit)} note={funding != null && equity != null ? `${pnl(equity - funding).text} vs the ${usdc(now?.initial_funding, unit)} start (${pct((equity / funding - 1) * 100)})` : "start funding not published"} warn={equity != null && funding != null && equity < funding} />
+          <Stat label="Profit from closed trades" value={pnl(now?.realized).text} note="lifetime, owner accounting" />
+          <Stat label="Gain or loss on coins still held" value={pnl(now?.unrealized).text} note="marked at the owner's fresh book midpoint" warn={(num(now?.unrealized) ?? 0) < 0} />
+          <Stat label="Fees paid" value={usdc(now?.fees, unit)} note="lifetime" />
         </div>
       </section>
 
@@ -119,8 +119,8 @@ export function V5Money() {
 
       <section className="v5m-section"><header><h2>Helm paper bot</h2><span>{helm.newest ? `latest sample ${at(helm.newest.at_ms)}` : "no sample yet"}</span></header>
         <div className="v5m-card">{!helm.withValues ? <p className="v5m-hint">No Helm money yet{helm.newest?.gap ? `: ${helm.newest.gap.replaceAll("_", " ").toLowerCase()}` : ""}. Helm publishes profit and loss once it runs and has reports.</p> : <div className="v5m-stats">
-          <Stat label="Profit from closed trades" value={pnl(num(helm.withValues.realized)).text} note={`as of ${at(helm.withValues.at_ms)}`} />
-          <Stat label="Gain or loss on coins still held" value={pnl(num(helm.withValues.unrealized)).text} />
+          <Stat label="Profit from closed trades" value={pnl(helm.withValues.realized).text} note={`as of ${at(helm.withValues.at_ms)}`} />
+          <Stat label="Gain or loss on coins still held" value={pnl(helm.withValues.unrealized).text} />
         </div>}</div>
       </section>
       <p className="v5m-hint">Limits: values come from the owners' own reads; the record starts when this dashboard's recorder started (no backfill); a missing sample stays a gap; nothing here is a trading signal.</p>

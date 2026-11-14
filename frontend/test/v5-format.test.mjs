@@ -137,3 +137,22 @@ test('when: time and age together', () => {
   assert.equal(when(base, base + 24_000), '14 Nov 11:34:22 UTC · 24 s ago');
   assert.equal(when(base, base + 11_400_000), '14 Nov 11:34:22 UTC · 3 h 10 min ago');
 });
+
+test('exact decimals through exponent text, dust and price buckets (Sol R1)', () => {
+  // Exponent text is expanded as digits, never through a float.
+  assert.equal(fixed('1.004999999999999999999999999999e0'), '1.00');
+  assert.equal(fixed('1.005e0'), '1.01');
+  assert.equal(fixed('1.5e3'), '1,500.00');
+  assert.equal(fixed('1e999'), '—');
+  // Dust that cannot keep 3 significant digits within 18 decimals is scientific, never 0.
+  assert.equal(coin('0.00000000000000000049', 'BTC'), '4.9e−19 BTC');
+  assert.equal(coin('0.000000000000000999', 'BTC'), '0.000000000000000999 BTC');
+  assert.equal(coin('0.016245819000000000', 'BTC'), '0.016246 BTC');
+  // The price bucket comes from the integer digits exactly.
+  assert.equal(price('999.999999999999999999999999999999'), '1,000.00');
+  assert.equal(price('1000'), '1,000');
+  assert.equal(price('606.0664533048061761145551148'), '606.07');
+  // Owner decimal strings stay exact all the way to the display (Money passes the strings, not Number()).
+  assert.equal(pnl('1.004999999999999999999999999999').text, '▲ +1.00');
+  assert.equal(fixed('36.35232624569440000000000003'), '36.35');
+});

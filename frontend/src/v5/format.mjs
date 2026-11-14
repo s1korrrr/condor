@@ -10,7 +10,21 @@ const DASH = '—';
 const MAX_DATE_MS = 8.64e15;
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const PLAIN = /^([+-]?)(\d*)\.?(\d*)$/;
-const EXPONENT = /^[+-]?(?:\d+\.?\d*|\.\d+)[eE][+-]?\d+$/;
+const EXPONENT = /^([+-]?)(\d*)\.?(\d*)[eE]([+-]?\d+)$/;
+const MAX_EXPONENT = 400;
+
+/** Exact {neg, int, frac} for exponent text ("1.0049e0", "4.9e-19") by moving the decimal point in the digit string. */
+function expand(match) {
+  const [, sign, intDigits, fracDigits, exp] = match;
+  if (intDigits === '' && fracDigits === '') return null;
+  const shift = Number(exp);
+  if (!Number.isSafeInteger(shift) || Math.abs(shift) > MAX_EXPONENT) return null;
+  const digits = intDigits + fracDigits;
+  const point = intDigits.length + shift;
+  const int = point <= 0 ? '0' : digits.slice(0, point).padEnd(point, '0');
+  const frac = point <= 0 ? '0'.repeat(-point) + digits : digits.slice(point);
+  return { neg: sign === '-', int: int.replace(/^0+(?=\d)/, '') || '0', frac };
+}
 
 /** {neg, int, frac} digit strings for a finite number or a decimal string, or null. */
 function parse(value) {
@@ -22,7 +36,8 @@ function parse(value) {
   }
   if (typeof value !== 'string') return null;
   const text = value.trim();
-  if (EXPONENT.test(text)) return parse(Number(text));
+  const exponent = EXPONENT.exec(text);
+  if (exponent) return expand(exponent);
   const match = PLAIN.exec(text);
   if (!match || (match[2] === '' && match[3] === '')) return null;
   return { neg: match[1] === '-', int: match[2].replace(/^0+(?=\d)/, '') || '0', frac: match[3] };
@@ -91,8 +106,9 @@ export function pnl(value, digits = 2) {
 export function price(value) {
   const parts = parse(value);
   if (!parts) return DASH;
-  const size = Number(`${parts.int}.${parts.frac || '0'}`);
-  return render(round(parts, size >= 1000 ? 0 : size >= 10 ? 2 : 4));
+  // The bucket comes from the integer digits, exactly (999.99… stays below 1,000).
+  const intDigits = parts.int === '0' ? 0 : parts.int.length;
+  return render(round(parts, intDigits >= 4 ? 0 : intDigits >= 2 ? 2 : 4));
 }
 
 /**
@@ -107,7 +123,15 @@ export function coin(value, asset) {
   if (parts.int !== '0') digits = Math.max(0, 6 - parts.int.length);
   else {
     const lead = parts.frac.search(/[1-9]/);
-    digits = lead < 0 ? 0 : Math.min(18, Math.max(6, lead + 3));
+    // Dust that cannot keep 3 significant digits within 18 decimals is shown in bounded scientific form, never as 0.
+    if (lead >= 16) {
+      const sig = round({ neg: false, int: parts.frac[lead], frac: parts.frac.slice(lead + 1) }, 2);
+      const mantissa = sig.int.length > 1 ? `1.${sig.int.slice(1, 2)}${sig.frac[0]}` : `${sig.int}.${sig.frac}`;
+      const power = sig.int.length > 1 ? lead : lead + 1;
+      const text = `${parts.neg ? MINUS : ''}${mantissa.replace(/\.?0+$/, '')}e${MINUS}${power}`;
+      return asset ? `${text} ${asset}` : text;
+    }
+    digits = lead < 0 ? 0 : Math.max(6, lead + 3);
   }
   const rounded = round(parts, digits);
   const frac = rounded.frac.replace(/0+$/, '');

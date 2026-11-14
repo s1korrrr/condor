@@ -82,7 +82,9 @@ function dataChip(data, nowMs) {
   if (!data.configured) return { ...base, tone: 'grey', text: 'No candle store on this deployment', short: 'Data n/a' };
   if (data.pending) return { ...base, tone: 'grey', text: 'Reading the candle store', short: 'Data …' };
   const lanes = data.lanes;
-  if (data.failed || !lanes || !lanes.total || !Number.isFinite(lanes.lagS)) return { ...base, tone: 'grey', text: noReport(data.lastOkMs), short: 'Data no report' };
+  if (data.failed || !lanes || !lanes.total) return { ...base, tone: 'grey', text: noReport(data.lastOkMs), short: 'Data no report' };
+  // A successful summary in which no lane is live is an explicit outage, not "no report" (Sol R2 W4 S2).
+  if (!Number.isFinite(lanes.lagS)) return { ...base, tone: 'amber', text: `${lanes.total - lanes.live} of ${lanes.total} lanes not live`, short: 'Data partial' };
   // The owner's age at read time plus local time since the read arrived, so the chip ages between polls.
   const elapsedS = Number.isFinite(data.receivedAtMs) ? Math.max(0, (nowMs - data.receivedAtMs) / 1000) : 0;
   const lagS = lanes.lagS + elapsedS, lag = Math.max(0, Math.round(lagS));

@@ -57,7 +57,8 @@ test('market data is amber above 180 s, grey when the read failed or no lane pub
   assert.deepEqual([late.tone, late.text], ['amber', 'Late · slowest lane 181 s']);
   const failed = chip(statusStrip(input({ data: { configured: true, pending: false, failed: true, lanes: { total: 14, live: 14, lagS: 5 }, lastOkMs: Date.parse('2026-11-14T11:58:10Z'), receivedAtMs: NOW } })), 'data');
   assert.deepEqual([failed.tone, failed.text], ['grey', 'No report since 11:58:10 UTC']);
-  assert.equal(chip(statusStrip(input({ data: { ...input().data, lanes: { total: 14, live: 0, lagS: null } } })), 'data').tone, 'grey');
+  assert.deepEqual([chip(statusStrip(input({ data: { ...input().data, lanes: { total: 2, live: 0, lagS: null } } })), 'data').tone, chip(statusStrip(input({ data: { ...input().data, lanes: { total: 2, live: 0, lagS: null } } })), 'data').text], ['amber', '2 of 2 lanes not live']);
+  assert.equal(chip(statusStrip(input({ data: { ...input().data, lanes: { total: 0, live: 0, lagS: null } } })), 'data').tone, 'grey');
   assert.equal(chip(statusStrip(input({ data: { configured: false, pending: false, failed: false, lanes: null, lastOkMs: null } })), 'data').text, 'No candle store on this deployment');
 });
 

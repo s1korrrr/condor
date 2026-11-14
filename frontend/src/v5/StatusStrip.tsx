@@ -24,7 +24,10 @@ export function StatusStrip({ bot, candleConfigured }: { bot: string | null; can
   const current = !!bot && !!reads && paperObservationSummary(reads, bot, now).label === "Available";
   // Owner holds from the current risk read AND newer retained safety evidence (a hold received during a refresh):
   // operator pause, emergency halt, native latch / entry hold, or a published hold. A hold is never hidden.
-  const riskEvidence: PaperRead[] = [...(current ? reads!.filter(read => read.section === "risk") : []), ...((paper.safetyReads ?? []) as PaperRead[])];
+  // The displayed risk read counts for holds whatever the whole snapshot's freshness (safetyReads only carries signals
+  // BEYOND the displayed snapshot), scoped to this bot, as the Bots page does (Sol R2 W4 B1).
+  const displayedRisk = (paper.data ?? []).filter(read => read.section === "risk" && read.bot_id === bot) as PaperRead[];
+  const riskEvidence: PaperRead[] = [...displayedRisk, ...((paper.safetyReads ?? []) as PaperRead[])];
   const controllers = riskEvidence.flatMap(read => paperRiskControllers(read, now) ?? []);
   const emergency = controllers.some(controller => controller.operator.emergency === true);
   const held = emergency || riskEvidence.some(read => paperRiskHolds(read).length > 0)

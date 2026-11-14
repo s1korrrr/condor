@@ -27,14 +27,9 @@ test('pair holdings sum every owner tranche exactly instead of showing the first
   assert.equal(holdings.count, 9);
   assert.deepEqual(holdings.states, [{state:'held_reconciliation',count:6,quantity:'0.3615174'},{state:'terminal_dust',count:3,quantity:'0.0000016'}]);
   assert.equal(holdings.protectedCount, 0);
-  // Without a published bag for the pair nothing is called bag-managed: all 9 explicit-false rows stay unprotected.
-  assert.deepEqual([holdings.bagManagedCount, holdings.unprotectedCount], [0, 9]);
-  // With a bag published: held, controller-owned, basis-proven rows are bag-managed; the 3 terminal-dust rows keep their reason.
-  const withBag = paperPairHoldings('BNB-USDC', livePositions, now, true);
-  assert.deepEqual([withBag.bagManagedCount, withBag.unprotectedCount, withBag.unprotectedReasons], [6, 3, ['no_active_fixed_target_executor']]);
-  // A held row without a controller executor, or with an unproven cost basis, is not sold by the bag policy (Sonnet R1).
-  const foreign = {...livePositions, data: livePositions.data.map(row => row.position_id === 'bnb-0' ? {...row, executor_id: null} : row.position_id === 'bnb-4' ? {...row, basis_reason: 'native_cost_basis_unproven'} : row)};
-  assert.deepEqual([paperPairHoldings('BNB-USDC', foreign, now, true).bagManagedCount, paperPairHoldings('BNB-USDC', foreign, now, true).unprotectedCount], [4, 5]);
+  // The engine's own words: all 9 rows are explicit false with no_active_fixed_target_executor, i.e. without a
+  // fixed-target exit order. Nothing is inferred about the bag policy selling them; no other reason is published.
+  assert.deepEqual([holdings.noFixedTargetCount, holdings.unprotectedCount, holdings.unprotectedReasons], [9, 0, []]);
   assert.equal(paperPairHoldings('BNB-USDC', {...livePositions, completeness:'partial'}, now), null, 'partial read publishes no total');
   assert.equal(paperPairHoldings('BNB-USDC', {...livePositions, next_cursor:'more'}, now), null, 'unread pages publish no total');
   assert.equal(paperPairHoldings('BNB-USDC', livePositions, now + 31_000), null, 'stale read publishes no total');
@@ -88,7 +83,8 @@ test('rendered pair card shows the exact pair total, bag, protection summary and
   assert.match(html, /<dt>Position<\/dt><dd>0\.3615190 BNB/);
   assert.doesNotMatch(html, /<dt>Position<\/dt><dd>0\.141193 BNB/);
   assert.match(html, /Held reconciliation: 6 · 0\.3615174 BNB · Terminal dust: 3 · 0\.0000016 BNB/);
-  assert.match(html, /Owner-reported exits over 9 position rows: 0 resting exit orders/);
+  assert.match(html, /Owner-reported exits over 9 position rows: 0 with a fixed-target exit order · 9 without a fixed-target exit order/);
+  assert.doesNotMatch(html, /bag-managed|sold by the bag policy|no resting order/);
   assert.match(html, /<dt>Bag<\/dt><dd>Below target · breakeven 748\.1700 USDC/);
   assert.match(html, /Reported native entry hold: No|Native evidence complete/);
   assert.match(html, /Pair cap 40000 USDC/);
@@ -120,11 +116,10 @@ test('pair protection summary keeps omitted owner flags unknown', () => {
   const positions = {...livePositions, data:[...final3.positions.data.filter(row => row.trading_pair !== 'BNB-USDC'), ...mixed]};
   const holdings = paperPairHoldings('BNB-USDC', positions, now);
   assert.equal(holdings.protectedCount, 1);
-  // Row 1 is terminal dust: the reason alone does not make it bag-managed, so it stays unprotected with its reason.
-  assert.equal(holdings.bagManagedCount, 0);
-  assert.equal(holdings.unprotectedCount, 1);
+  assert.equal(holdings.noFixedTargetCount, 1);
+  assert.equal(holdings.unprotectedCount, 0);
   assert.equal(holdings.unknownCount, 7);
-  assert.deepEqual(holdings.unprotectedReasons, ['no_active_fixed_target_executor']);
+  assert.deepEqual(holdings.unprotectedReasons, []);
   const other = {...positions, data: positions.data.map(row => row === mixed[1] ? {...row, protection_reason: 'executor_missing'} : row)};
   assert.deepEqual([paperPairHoldings('BNB-USDC', other, now).unprotectedCount, paperPairHoldings('BNB-USDC', other, now).unprotectedReasons], [1, ['executor_missing']], 'any other explicit false is unprotected, with its reason');
   const allOmitted = {...positions, data:[...final3.positions.data.filter(row => row.trading_pair !== 'BNB-USDC'), ...BNB_ROWS.map(omit)]};
@@ -135,7 +130,7 @@ test('pair protection summary keeps omitted owner flags unknown', () => {
   const card = html.match(/<h3>BNB-USDC<\/h3>[^]*?<\/article>/)?.[0] ?? '';
   const summary = card.match(/Owner-reported exits over[^<]+/)?.[0] ?? '';
   assert.doesNotMatch(summary, /unprotected/, 'omitted flags are not unprotected');
-  assert.match(summary, /over 9 position rows: 0 resting exit orders · protection not published: 9/);
+  assert.match(summary, /over 9 position rows: 0 with a fixed-target exit order · protection not published: 9/);
 });
 
 // Rebased onto #99: a native latch (owner native-risk.v1 `latched`) must still raise safety evidence through

@@ -403,7 +403,7 @@ export function paperRiskControllers(read: import("./contracts").PaperRead | und
  * Pair totals over every owner position row (DCA tranches and dust), from a complete current read only.
  * A pair holds many rows; showing one row's quantity misstates the holding.
  */
-export function paperPairHoldings(pair: string, positions: import("./contracts").PaperRead | undefined, now: number, bagPublished = false) {
+export function paperPairHoldings(pair: string, positions: import("./contracts").PaperRead | undefined, now: number) {
   const rows = paperCompleteRecords(positions, now);
   if (!rows) return null;
   const mine = rows.filter(row => row.trading_pair === pair);
@@ -411,21 +411,17 @@ export function paperPairHoldings(pair: string, positions: import("./contracts")
   const byState = new Map<string, string[]>();
   for (const row of mine) byState.set(row.state as string, [...(byState.get(row.state as string) ?? []), row.quantity as string]);
   // Only an explicit owner flag counts either way; an omitted or malformed flag stays unknown (never "unprotected").
-  // A held bag row is stamped protected_exit false / no_active_fixed_target_executor by the engine by definition: its
-  // exit is the bag policy (a market barrier, no resting order), so it is bag-managed, not an unprotected exit.
-  // Bag-managed only when the bag policy can actually sell the row: held inventory of a controller-owned executor
-  // (executor_id published), with a proven cost basis, and a bag published for this pair in the same snapshot.
-  // Terminal dust (Sol R1 S1), foreign or basis-unproven rows (Sonnet R1 S1) keep their explicit protection reason.
-  const bagManaged = bagPublished ? mine.filter(row => row.state === "held_reconciliation" && row.protected_exit === false
-    && row.protection_reason === "no_active_fixed_target_executor" && typeof row.executor_id === "string" && row.executor_id !== ""
-    && row.basis_reason !== "native_cost_basis_unproven") : [];
-  const unprotected = mine.filter(row => row.protected_exit === false && !bagManaged.includes(row));
+  // The engine's own words only: protected_exit false with reason no_active_fixed_target_executor means "no fixed-target
+  // exit order", true by definition for any row. Whether the bag policy will sell it is NOT inferred here (it needed four
+  // corrections: dust, foreign rows, unproven basis, live recovery sells); the bag's own published state is shown beside it.
+  const noFixedTarget = mine.filter(row => row.protected_exit === false && row.protection_reason === "no_active_fixed_target_executor");
+  const unprotected = mine.filter(row => row.protected_exit === false && !noFixedTarget.includes(row));
   return {
     count: mine.length,
     total: paperDecimalSum(mine.map(row => row.quantity as string)),
     states: [...byState].map(([state, quantities]) => ({ state, count: quantities.length, quantity: paperDecimalSum(quantities) })),
     protectedCount: mine.filter(row => row.protected_exit === true).length,
-    bagManagedCount: bagManaged.length,
+    noFixedTargetCount: noFixedTarget.length,
     unprotectedCount: unprotected.length,
     unknownCount: mine.filter(row => typeof row.protected_exit !== "boolean").length,
     unprotectedReasons: [...new Set(unprotected.map(row => typeof row.protection_reason === "string" && row.protection_reason ? row.protection_reason : "protection_reason_not_published"))],

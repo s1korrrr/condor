@@ -67,7 +67,7 @@ def test_fresh_status_projects_only_shown_fields(tmp_path):
     assert status["mandate"]["state"] == "active" and status["risk"]["latched"] is False
     assert (status["mandate"]["mandate_id"], status["mandate"]["revision"]) == ("helm-v5-paper-20261105", 1)
     assert status["recipe_version"] == "helm_v5_dca_trailing_bag_v1"
-    assert status["gates"] == [{"id": "modular_spot_helm_v5_paper", "gate": "ready", "note": ""}]
+    assert status["gates"] == [{"gate": "ready", "note": ""}]
     assert status["mandate"]["revocation_id"] == "helm-v5-paper-revocation-6811db1570c14ee99e0d9ad7d0812c49"
     assert status["control_rejections"]["recent"] == [{"action": "resume_entries", "at_ms": 1793926101828, "reason": "stop_persistence_failed: explicit emergency reset required"}]
     assert status["withheld"] == 0 and status["failure_reported"] is False

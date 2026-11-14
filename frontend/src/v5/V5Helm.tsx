@@ -15,7 +15,7 @@ type HelmStatus = {
   risk: { reason: string | null; latched: boolean | null; daily_loss_use: Amount; risk_reference_quote: Amount; unit: string | null } | null;
   control_rejections: { count: Amount; recent: ({ action: string | null; at_ms: number | null; reason: string | null } | null)[] } | null;
   recipe_version: string | null;
-  gates: ({ id: string | null; gate: string | null; note: string | null } | null)[];
+  gates: ({ gate: string | null; note: string | null } | null)[];
   symbols: { pair: string; status: string | null; candidate_hold: string | null; bag: { held_amount: Amount; breakeven_price: Amount } | null; last_decision: { at: number | null; reason: string | null } | null }[];
   withheld: number;
 };
@@ -63,7 +63,7 @@ export function V5Helm() {
       <div className="v5m-chips"><button className="v5m-refresh" onClick={() => void helm.refetch()}><RotateCw size={14} />Refresh</button></div>
     </header>
     {helm.isPending ? <p role="status" className="v5m-status">Reading Helm status…</p> : helm.isError ? <p role="alert" className="v5m-status">{helm.error.message}. Nothing older is shown.</p> : <>
-      <section className={`v5m-card v5m-helm-head ${good ? "is-up" : "is-down"}`}>
+      <section className={`v5m-card v5m-helm-head ${good === true ? "is-up" : good === false ? "is-down" : ""}`}>
         <strong>Helm paper bot: {headline}</strong>
         {detail && <p>{detail}{status?.recipe_version && ENTRY_RULES[status.recipe_version] ? ` Recipe ${status.recipe_version}: ${ENTRY_RULES[status.recipe_version]} Current RSI values are not published.` : " Helm's status does not name its entry rule."}</p>}
         {read!.state === "UNBOUND" ? <p>{read!.reason}. The Helm status file has to be mounted read-only into the dashboard; no state is inferred.</p> : read!.reason === "HELM_STATUS_MISSING" ? <p>No Helm status file exists in its state directory. The runtime may be stopped or still starting; nothing is shown until it publishes.</p> : status && <p>

@@ -3,8 +3,8 @@ import { tri, utcMinute } from './shown.mjs';
 
 /**
  * Entry-check results that mean "no entry signal yet" in the engine's signal policies (modular_spot_core/signals.py).
- * Any other hold (symbol_fault, observation_checkpoint_required, fee_reserve_exceeded, atr_unavailable, unknown codes)
- * is not normal waiting and is reported as not buying.
+ * Only these upgrade a ready gate to "waiting for a signal"; any other coin hold (planner codes such as bag_gap_not_met,
+ * same_candle, cooldown; atr_unavailable; unknown) leaves the headline neutral with the coin named.
  */
 const SIGNAL_WAIT = new Set(['no_rebound', 'low_volatility', 'high_volatility', 'no_turn', 'score_below_minimum', 'no_breakout']);
 
@@ -23,27 +23,22 @@ export function helmHeadline(read) {
     const words = code => String(code).replaceAll('_', ' ');
     if (status.operator_entry_paused === true) return { text: 'Running, not buying: new entries paused by the operator', good: false };
     if (status.entries_held) return { text: `Running, not buying: ${words(status.entries_held)}`, good: false };
-    // The controllers' own acquisition gates come first: a gate other than 'ready' (e.g. symbol_fault for a latched
-    // coin) holds new buys whatever each coin's entry check says. Unknown or missing gates never count as ready.
+    // Red comes only from owner gate fields: a controller gate other than 'ready' holds new buys (e.g. symbol_fault
+    // with the faulted pairs in its note). Coin holds are the first "no" of a per-coin preview, not a gate: they can
+    // only upgrade the text to "waiting for a signal", never turn it red.
     const gates = Array.isArray(status.gates) ? status.gates : [];
     const closed = gates.filter(row => row?.gate !== 'ready');
     if (closed.length) {
       const named = closed.map(row => `${words(row?.gate ?? 'gate not published')}${row?.note ? ` (${row.note})` : ''}`).join('; ');
       return { text: `Running, not buying: ${named}`, good: false };
     }
+    if (!gates.length) return { text: 'Running; entry gate not published', good: null };
     const symbols = Array.isArray(status.symbols) ? status.symbols : [];
-    // A hold that is not a signal wait (a fault, a missing checkpoint, an unknown code) is never shown as normal idle.
-    const blocked = symbols.filter(row => row?.candidate_hold && !SIGNAL_WAIT.has(row.candidate_hold));
-    if (blocked.length) {
-      const codes = [...new Set(blocked.map(row => row.candidate_hold))].map(words).join(', ');
-      return { text: `Running, not buying ${blocked.length === symbols.length ? 'on any coin' : `on ${blocked.map(row => row.pair ?? 'a coin').join(', ')}`}: ${codes}`, good: false };
+    const other = symbols.filter(row => !SIGNAL_WAIT.has(row?.candidate_hold));
+    if (symbols.length && !other.length) {
+      return { text: 'Running, waiting for a signal', good: true, detail: `Every coin idle: ${[...new Set(symbols.map(row => row.candidate_hold))].map(words).join(', ')}.` };
     }
-    // Every coin held only by its entry signal is Helm's normal idle state: it is waiting for a signal.
-    if (gates.length && symbols.length && symbols.every(row => row?.candidate_hold)) {
-      const holds = [...new Set(symbols.map(row => row.candidate_hold))], statuses = [...new Set(symbols.map(row => row?.status).filter(Boolean))];
-      return { text: 'Running, waiting for a signal', good: true, detail: `Every coin idle: ${holds.map(words).join(', ')}${statuses.length ? ` · coin status ${statuses.map(words).join(', ')}` : ''}.` };
-    }
-    return { text: 'Running', good: true };
+    return { text: 'Running, entry gate ready', good: null, detail: other.map(row => `${row?.pair ?? 'a coin'}: ${row?.candidate_hold ? words(row.candidate_hold) : 'no entry check published this tick'}`).join(' · ') || undefined };
   }
   return { text: `Publishing status, ready: ${tri(status?.ready, 'yes', 'no')}`, good: false };
 }

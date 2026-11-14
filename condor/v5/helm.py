@@ -74,7 +74,6 @@ def _epoch_s(value: Any) -> int | float | None:
     return None
 
 
-LONG_DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,30})?")
 
 
 def _money(payload: dict) -> dict[str, str | None] | None:
@@ -88,7 +87,7 @@ def _money(payload: dict) -> dict[str, str | None] | None:
         for report in reports.values():
             performance = report.get("performance") if isinstance(report, dict) else None
             value = performance.get(field) if isinstance(performance, dict) and performance.get("pnl_available") is True else None
-            if not isinstance(value, str) or not LONG_DECIMAL.fullmatch(value):
+            if not isinstance(value, str) or not DECIMAL.fullmatch(value):
                 total = None
                 break
             try:
@@ -151,8 +150,9 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
     controllers = payload.get("controllers") if isinstance(payload.get("controllers"), list) else []
     for controller in controllers[:4]:
         if isinstance(controller, dict):
-            # The controller's own acquisition gate: 'ready' only when nothing holds new buys (e.g. symbol_fault + pairs).
-            gates.append(shown.pick(controller, {"id": _code, "gate": _code, "note": _note}))
+            # The controller's own acquisition gate (helm_v5.get_status_summary): 'ready' only when nothing holds new
+            # buys, else e.g. symbol_fault with the faulted pairs in the note.
+            gates.append(shown.pick(controller, {"gate": _code, "note": _note}))
         info = controller.get("custom_info") if isinstance(controller, dict) else None
         if not isinstance(info, dict) or not isinstance(info.get("symbols"), dict):
             continue

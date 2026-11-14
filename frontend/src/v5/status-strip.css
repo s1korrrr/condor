@@ -1,0 +1,22 @@
+/* Status strip: one row of chips under the header. Desktop wraps if it must; a phone keeps one row of short chips. */
+.v5-strip { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 8px; padding: 6px 16px; border-bottom: 1px solid var(--color-border); background: var(--color-surface); font-size: 12px; color: var(--color-text-muted); }
+.v5-strip-chip, .v5-strip-count { display: inline-flex; align-items: center; gap: 6px; max-width: 100%; padding: 3px 10px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-bg, var(--color-surface)); color: var(--color-text-muted); white-space: nowrap; text-decoration: none; }
+.v5-strip-chip:hover, .v5-strip-count:hover { background: var(--color-surface-hover); color: var(--color-text); }
+.v5-strip-chip i { flex: none; width: 8px; height: 8px; border-radius: 50%; background: var(--color-text-muted); }
+.v5-strip-chip.is-green i { background: var(--color-green); }
+.v5-strip-chip.is-amber i { background: var(--color-yellow); }
+.v5-strip-chip.is-red i { background: var(--color-red); }
+.v5-strip-chip.is-amber, .v5-strip-count.has-items { border-color: var(--color-yellow); }
+.v5-strip-chip.is-red { border-color: var(--color-red); }
+.v5-strip-chip b { color: var(--color-text); font-weight: 600; }
+.v5-strip-long { overflow: hidden; text-overflow: ellipsis; }
+.v5-strip-short { display: none; }
+.v5-strip-updated { margin-left: auto; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.v5-strip-link { text-decoration: underline; white-space: nowrap; }
+@media (max-width: 640px) {
+  .v5-strip { flex-wrap: nowrap; overflow: hidden; gap: 6px; padding: 6px 12px; }
+  .v5-strip-long, .v5-strip-chip.is-equity, .v5-strip-updated, .v5-strip-link { display: none; }
+  .v5-strip-short { display: inline; }
+  .v5-strip-chip, .v5-strip-count { padding: 3px 8px; font-size: 11.5px; flex: 0 1 auto; min-width: 0; }
+  .v5-strip-count { margin-left: auto; }
+}

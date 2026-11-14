@@ -8,7 +8,7 @@ import { V5CandleStore } from "./V5CandleStore";
 import { readCandleStore } from "./candle-store-api";
 import type { CrossStats } from "./candle-store-model";
 import { selectedCohortCoverage } from "./evidence";
-import { V5MarketDetail } from "./V5MarketDetail";
+import { V5MarketDetail, type DetailRead } from "./V5MarketDetail";
 import { V5MarketFeatures } from "./V5MarketFeatures";
 import { v5Api } from "./api";
 import { ageSeconds, breadth, coinTile, indexedReturns, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
@@ -56,7 +56,7 @@ async function readCross(): Promise<CrossRead[]> {
 /** Wall clock for ages, advanced every 15 seconds. */
 function useNow() {
   const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 15_000); return () => window.clearInterval(timer); }, []);
+  useEffect(() => { const timer = window.setInterval(() => setNow(Date.now()), 5_000); return () => window.clearInterval(timer); }, []);
   return now;
 }
 
@@ -91,6 +91,8 @@ export function V5Market() {
   // After a failed refetch TanStack keeps the old data; only a successful read is shown as the store's state.
   const lanes = summary.isSuccess ? summary.data.tiles : [];
   const health = storeHealth(lanes);
+  // The owner's age at read time plus local time since the read arrived, so the chip ticks between reads.
+  const slowestAge = health.oldestMinuteAge == null || !summary.dataUpdatedAt ? null : health.oldestMinuteAge + Math.max(0, now - summary.dataUpdatedAt) / 1000;
   const grid = venueGrid(lanes);
   const evidence = workspace.data?.context ?? null;
   const cohort = evidence ? selectedCohortCoverage(evidence) : null;
@@ -105,7 +107,7 @@ export function V5Market() {
       <div className="v5m-chips">
         <span className={`v5m-chip ${summary.isError ? "is-bad" : summary.isSuccess && health.lanesLive === health.lanes && health.lanes ? "" : "is-warn"}`}><i />Candle store <b>{summary.isError ? "unavailable" : summary.isSuccess ? `${health.lanesLive}/${health.lanes} lanes live` : "reading"}</b></span>
         <span className={`v5m-chip ${feedCurrent ? "" : "is-warn"}`}><i />V5 feed <b>{refresh ? (feedCurrent ? "current" : "not current") : "unknown"}</b></span>
-        <span className={`v5m-chip ${health.oldestMinuteAge != null && health.oldestMinuteAge > STALE_AFTER_S ? "is-warn" : ""}`} title={`Seconds since the newest final minute closed, on the slowest of ${health.lanes || "the"} lanes. A minute is final some seconds after it closes (perpetuals later than spot), so up to about 95 s is normal; above ${STALE_AFTER_S} s is marked.`}><i />Slowest lane <b>{health.oldestMinuteAge == null ? "unknown" : `${Math.round(health.oldestMinuteAge)} s behind`}</b></span>
+        <span className={`v5m-chip ${slowestAge != null && slowestAge > STALE_AFTER_S ? "is-warn" : ""}`} title={`Seconds since the newest final minute closed, on the slowest of ${health.lanes || "the"} lanes. A minute is final some seconds after it closes (perpetuals later than spot), so up to about 95 s is normal; above ${STALE_AFTER_S} s is marked.`}><i />Slowest lane <b>{slowestAge == null ? "unknown" : `${Math.round(slowestAge)} s behind`}</b></span>
         <button className="v5m-refresh" onClick={() => { void summary.refetch(); void coins.refetch(); void workspace.refetch(); }}><RotateCw size={14} />Refresh</button>
       </div>
     </header>
@@ -120,7 +122,7 @@ export function V5Market() {
       <div className="v5m-range" title={`Where the last price sits between the low and high of ${tile.heldMinutes} held minutes (of ${tile.windowMinutes})`}><div><span style={{ left: `${((tile.last - tile.low) / ((tile.high - tile.low) || 1)) * 100}%` }} /></div><small><span>{tile.heldMinutes < tile.windowMinutes ? "held" : "24h"} low {price(tile.low)}</span><span>high {price(tile.high)}</span></small></div>
       <dl className="v5m-kv"><dt>Perpetual premium</dt><dd title="Perpetual close over spot close for the newest minute where both are final; perpetual minutes finalize later than spot">{reads[tile.coin]?.perpetualError ? "perpetual read failed" : tile.premiumBps == null || tile.premiumTime == null ? "no minute with both closes" : `${signed(tile.premiumBps, 1)} bp · ${minuteText(tile.premiumTime)}`}</dd><dt>Minutes held</dt><dd>{tile.heldMinutes} / {tile.windowMinutes}</dd></dl>
     </article> : <article key={MARKET_COINS[index]} className="v5m-card v5m-coin is-empty"><span className="v5m-sym">{MARKET_COINS[index]}</span><p>{coins.isPending ? "Loading…" : reads[MARKET_COINS[index]]?.error ? `Candle read failed: ${reads[MARKET_COINS[index]].error}` : "No closed minute in the last 24 hours."}</p></article>)}</TileGrid>
-    {selected ? <V5MarketDetail key={selected} coin={selected} color={COIN_COLOR[selected]} onClose={() => setSelected(null)} /> : <p className="v5m-hint v5m-tip">Click a coin for its candles, window statistics and venue-by-venue price gaps.</p>}
+    {selected ? <V5MarketDetail key={selected} coin={selected} color={COIN_COLOR[selected]} onClose={() => setSelected(null)} tileRead={reads[selected]?.spot ? reads[selected] as unknown as DetailRead : null} /> : <p className="v5m-hint v5m-tip">Click a coin for its candles, window statistics and venue-by-venue price gaps.</p>}
 
     <Section title="Moves" note={`${venueName(REFERENCE.venue)} spot, 1-minute candles sampled every 5 minutes`}>
       <div className="v5m-row v5m-row--wide">
@@ -170,12 +172,12 @@ export function V5Market() {
             <Stat label="Lanes live" value={summary.isSuccess ? `${health.lanesLive}/${health.lanes}` : "—"} warn={health.lanesUnknown > 0} note={health.lanesUnknown ? `${health.lanesUnknown} lane(s) did not report availability` : health.pairsHeld == null || health.pairsListed == null ? `pair counts: ${health.unreported.pairs} lane(s) unreported` : `${health.pairsHeld}/${health.pairsListed} pairs held`} />
             <Stat label="7-day coverage" value={health.coverage7d == null ? "—" : `${(health.coverage7d * 100).toFixed(1)}%`} note={health.coverage7d == null && health.unreported.coverage ? `${health.unreported.coverage} lane(s) unreported` : "final 1-minute candles, all lanes"} />
             <Stat label="Missing minutes, 7 days" value={health.gaps7d == null ? "—" : String(health.gaps7d)} note={health.gaps7d == null && health.unreported.gaps ? `${health.unreported.gaps} lane(s) unreported` : "all lanes"} />
-            <Stat label="Slowest lane" value={health.oldestMinuteAge == null ? "—" : `${Math.round(health.oldestMinuteAge)} s`} note={health.oldestMinuteAge == null && health.unreported.age ? `${health.unreported.age} lane(s) unreported` : "since its newest final minute closed; up to ~95 s is normal"} />
+            <Stat label="Slowest lane" value={slowestAge == null ? "—" : `${Math.round(slowestAge)} s`} note={health.oldestMinuteAge == null && health.unreported.age ? `${health.unreported.age} lane(s) unreported` : "since its newest final minute closed; up to ~95 s is normal"} />
           </div>
           <h3 className="v5m-subhead">V5 market-context feed</h3>
           <p className="v5m-hint">What the V5 engine receives every 20 seconds · last success {utcMinute(refresh?.last_success_at_ms) ?? "unknown"}</p>
           {workspace.isError ? <p role="alert" className="v5m-hint">Workspace read failed: {workspace.error.message}.</p> : !cohort ? <p className="v5m-hint">{workspace.isPending ? "Reading the feed…" : "The feed returned no market evidence. No coverage is inferred."}</p> :
-            <div className="v5m-stats">{cohort.dimensions.map(item => <Stat key={item.key} label={item.label} value={item.valid == null || item.expected == null ? "—" : `${item.valid}/${item.expected}`} note={item.fraction == null ? "not qualified" : `${(item.fraction * 100).toFixed(0)}%`} warn={item.fraction != null && item.fraction < 1} />)}</div>}
+            <div className="v5m-stats">{cohort.dimensions.map(item => <Stat key={item.key} label={item.label} value={item.valid == null || item.expected == null ? "—" : `${item.valid}/${item.expected}`} note={item.fraction == null ? "not qualified" : `${(item.fraction * 100).toFixed(0)}% this minute`} title="Pairs that passed the V5 feed's qualification rule for its newest minute, out of the pairs the feed expects (the owner's own counts). The candle store panel counts pairs present in the store, a different and larger count." warn={item.fraction != null && item.fraction < 1} />)}</div>}
         </Card>
       </div>
     </Section>
@@ -203,6 +205,6 @@ function Venue({ row }: { row: ReturnType<typeof venueGrid<LaneTile>>[number] })
   return <><span className="v5m-venue">{venueName(row.venue)}</span>{cell(row.spot)}{cell(row.perpetual)}</>;
 }
 
-function Stat({ label, value, note, warn }: { label: string; value: string; note?: string; warn?: boolean }) {
-  return <div className={`v5m-stat${warn ? " is-warn" : ""}`}><span>{label}</span><strong>{value}</strong>{note && <small>{note}</small>}</div>;
+function Stat({ label, value, note, warn, title }: { label: string; value: string; note?: string; warn?: boolean; title?: string }) {
+  return <div className={`v5m-stat${warn ? " is-warn" : ""}`} title={title}><span>{label}</span><strong>{value}</strong>{note && <small>{note}</small>}</div>;
 }

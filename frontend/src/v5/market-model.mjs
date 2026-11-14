@@ -32,16 +32,18 @@ export function ageSeconds(minuteT, read, receivedAtMs, nowMs) {
 }
 
 /**
- * Every fifth minute of the grid (and the last). A minute with no value anywhere since the previous sample adds
- * an explicit null at that minute, so a chart breaks across missing time even between sample positions.
+ * Every fifth minute of the grid, the newest minute with a value (so a chart ends where its tile does, even while
+ * the window's last minute is still pending) and the last minute. A minute with no value anywhere since the
+ * previous sample adds an explicit null at that minute, so a chart breaks across missing time even between samples.
  */
 function samples(minutes, value) {
   const out = [];
   let missingSince = null;
+  const newest = minutes.findLastIndex(minute => minute.close != null && value(minute) != null);
   minutes.forEach((minute, index) => {
     const current = minute.close == null ? null : value(minute);
     if (current == null && missingSince == null) missingSince = minute.t;
-    if (index % SAMPLE !== SAMPLE - 1 && index !== minutes.length - 1) return;
+    if (index % SAMPLE !== SAMPLE - 1 && index !== minutes.length - 1 && index !== newest) return;
     if (missingSince != null && current != null) out.push({ time: missingSince * 1000, value: null });
     out.push({ time: minute.t * 1000, value: current });
     missingSince = null;
@@ -186,11 +188,11 @@ const FEATURE_LABELS = {
   'spot.assets_valid': ['Coverage', 'Spot coins with data'],
   'spot.assets_expected': ['Coverage', 'Spot coins expected'],
   'spot.asset_coverage_fraction': ['Coverage', 'Spot coin coverage'],
-  'spot.venues_valid': ['Coverage', 'Spot venue pairs with data'],
-  'spot.venues_expected': ['Coverage', 'Spot venue pairs expected'],
+  'spot.venues_valid': ['Coverage', 'Spot venue pairs qualified this minute (V5 feed rule)'],
+  'spot.venues_expected': ['Coverage', 'Spot venue pairs the V5 feed expects'],
   'spot.venue_coverage_fraction': ['Coverage', 'Spot venue coverage'],
-  'derivatives.venues_valid': ['Coverage', 'Perpetual venue pairs with data'],
-  'derivatives.venues_expected': ['Coverage', 'Perpetual venue pairs expected'],
+  'derivatives.venues_valid': ['Coverage', 'Perpetual venue pairs qualified this minute (V5 feed rule)'],
+  'derivatives.venues_expected': ['Coverage', 'Perpetual venue pairs the V5 feed expects'],
   'derivatives.venue_coverage_fraction': ['Coverage', 'Perpetual venue coverage'],
   'derivatives.matched_assets': ['Coverage', 'Coins with spot and perpetual'],
 };

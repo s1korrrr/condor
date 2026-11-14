@@ -71,6 +71,11 @@ test('premium from the newest minute both legs closed, named with that minute; c
   const premiumGap = premiumSeries(dense(10, () => 100), dense(10, i => (i === 7 ? null : 101)));
   assert.deepEqual(premiumGap.map(point => point.value === null), [false, true, false]);
   assert.deepEqual(indexedReturns(dense(10, i => (i === 0 ? null : 1))), []);
+  // The window's last minute still pending: the line ends at the newest minute with a close, as the tile does.
+  const pending = indexedReturns(dense(12, i => (i === 11 ? null : 100 + i)));
+  assert.deepEqual(pending.map(point => [(point.time / 1000 - T0) / 60, point.value === null]), [[4, false], [9, false], [10, false], [11, true]]);
+  near(pending.find(point => (point.time / 1000 - T0) / 60 === 10).value, 10);
+  near(coinTile('X', dense(12, i => (i === 11 ? null : 100 + i)), null).changePct, 10);
 });
 
 test('age follows the owner clock plus time since the read arrived', () => {

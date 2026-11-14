@@ -139,11 +139,15 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
         return {**base, "state": "UNAVAILABLE", "reason": "HELM_STATUS_CLOCK_SKEW"}
     shown = _Projection()
     symbols: list[dict[str, Any]] = []
+    recipes: list[str] = []
     controllers = payload.get("controllers") if isinstance(payload.get("controllers"), list) else []
     for controller in controllers[:4]:
         info = controller.get("custom_info") if isinstance(controller, dict) else None
         if not isinstance(info, dict) or not isinstance(info.get("symbols"), dict):
             continue
+        recipe = shown.one(info.get("recipe_version"), _code)
+        if recipe is not None and recipe not in recipes:
+            recipes.append(recipe)
         portfolio = info.get("portfolio") if isinstance(info.get("portfolio"), dict) else {}
         holds = portfolio.get("candidate_holds") if isinstance(portfolio.get("candidate_holds"), dict) else {}
         for pair, row in list(info["symbols"].items())[:16]:
@@ -188,6 +192,8 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
             "recent": [shown.pick(row, {"action": _code, "at_ms": _epoch_ms, "reason": _plain}) for row in recent[:5]],
         },
         "symbols": symbols,
+        # One recipe across controllers, or None when none or several are published (never a guess).
+        "recipe_version": recipes[0] if len(recipes) == 1 else None,
         "money": _money(payload),
     }
     status["withheld"] = shown.withheld

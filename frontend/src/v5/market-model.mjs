@@ -58,6 +58,9 @@ export function coinTile(coin, spotRead, perpetualRead) {
   const last = minutes[index];
   const perpetual = new Map((grid(perpetualRead) ?? []).map(minute => [minute.t, minute.close]));
   const held = minutes.filter(minute => minute.close != null);
+  // Perpetual minutes finalize later than spot, so the newest spot minute often has no perpetual close yet. The premium
+  // uses the newest minute where BOTH legs are final, and that minute is returned with it; nothing is substituted.
+  const both = minutes.findLastIndex(minute => minute.close != null && perpetual.get(minute.t) != null);
   return {
     coin,
     last: last.close,
@@ -69,8 +72,8 @@ export function coinTile(coin, spotRead, perpetualRead) {
     low: Math.min(...held.map(minute => minute.low)),
     heldMinutes: held.length,
     windowMinutes: minutes.length,
-    // The premium is shown only for the same minute as the price.
-    premiumBps: perpetual.get(last.t) != null ? (perpetual.get(last.t) / last.close - 1) * 10_000 : null,
+    premiumBps: both < 0 ? null : (perpetual.get(minutes[both].t) / minutes[both].close - 1) * 10_000,
+    premiumTime: both < 0 ? null : minutes[both].t,
     spark: samples(minutes, minute => minute.close),
   };
 }

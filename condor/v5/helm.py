@@ -53,6 +53,10 @@ def _amount(value: Any) -> int | float | str | None:
     return None
 
 
+def _revision(value: Any) -> int | None:
+    return value if type(value) is int and 0 < value <= MAX_SAFE else None
+
+
 def _epoch_ms(value: Any) -> int | None:
     return value if type(value) is int and 0 < value <= MAX_TIMESTAMP * 1000 else None
 
@@ -177,7 +181,7 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
         "funding": shown.one(helm.get("funding"), _code),
         "image_tag": shown.one(image.get("tag"), _code),
         "shutdown": shown.pick(helm.get("shutdown"), {"checkpoint": _flag, "clean": _flag}),
-        "mandate": shown.pick(helm.get("mandate"), {"mandate_id": _code, "state": _code, "valid_until_ms": _epoch_ms}),
+        "mandate": shown.pick(helm.get("mandate"), {"mandate_id": _code, "revision": _revision, "revocation_id": _code, "state": _code, "valid_until_ms": _epoch_ms}),
         "risk": shown.pick(helm.get("native_risk"), {"reason": _code, "latched": _flag, "daily_loss_use": _amount, "risk_reference_quote": _amount, "unit": _code}),
         "control_rejections": None if rejections is None else {
             "count": shown.one(rejections.get("count"), _amount),

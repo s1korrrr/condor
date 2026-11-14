@@ -33,7 +33,7 @@ def helm_status(**overrides):
             "operator_entry_paused": True,
             "kill_switch": False,
             "shutdown": {"checkpoint": True, "clean": True, "closed": True},
-            "mandate": {"mandate_id": "helm-v5-paper-20261105", "state": "active", "days_to_expiry": 29.708, "valid_until_ms": 1796496650500},
+            "mandate": {"mandate_id": "helm-v5-paper-20261105", "revision": 1, "revocation_id": "helm-v5-paper-revocation-6811db1570c14ee99e0d9ad7d0812c49", "state": "active", "days_to_expiry": 29.708, "valid_until_ms": 1796496650500},
             "native_risk": {"reason": "risk_clear", "latched": False, "daily_loss_use": 0, "risk_reference_quote": 200000, "unit": "USDC"},
             "control_rejections": {"count": 1, "recent": [{"action": "resume_entries", "at_ms": 1793926101828, "reason": "stop_persistence_failed: explicit emergency reset required", "command_id": "x"}]},
             "controls": {"path": "/home/hummingbot/data/runtime_status/helm_v5_paper.controls.json"},
@@ -62,6 +62,8 @@ def test_fresh_status_projects_only_shown_fields(tmp_path):
     status = result["status"]
     assert status["reasons"] == ["runtime_stopped"] and status["ready"] is False
     assert status["mandate"]["state"] == "active" and status["risk"]["latched"] is False
+    assert (status["mandate"]["mandate_id"], status["mandate"]["revision"]) == ("helm-v5-paper-20261105", 1)
+    assert status["mandate"]["revocation_id"] == "helm-v5-paper-revocation-6811db1570c14ee99e0d9ad7d0812c49"
     assert status["control_rejections"]["recent"] == [{"action": "resume_entries", "at_ms": 1793926101828, "reason": "stop_persistence_failed: explicit emergency reset required"}]
     assert status["withheld"] == 0 and status["failure_reported"] is False
     symbol = status["symbols"][0]

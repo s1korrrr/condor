@@ -45,13 +45,21 @@ test('tile: window and hour returns need their exact boundary minute', () => {
   assert.equal(coinTile('X', dense(5, () => null), null), null);
 });
 
-test('premium only for the same minute as the shown price; charts keep nulls', () => {
+test('premium from the newest minute both legs closed, named with that minute; charts keep nulls', () => {
   const spot = dense(120, i => (i < 110 ? 100 : null)); // last ten minutes missing
   const perpetual = dense(120, () => 101);
   const tile = coinTile('BNB', spot, perpetual);
   assert.equal(tile.lastTime, T0 + 109 * 60);
   near(tile.premiumBps, 100);
-  assert.equal(coinTile('BNB', spot, dense(120, i => (i === 109 ? null : 101))).premiumBps, null);
+  assert.equal(tile.premiumTime, T0 + 109 * 60);
+  // The perpetual has not finalized the newest spot minute yet: the premium is from the minute before, and says so.
+  const lagging = coinTile('BNB', spot, dense(120, i => (i === 108 ? 102 : i === 109 ? null : 101)));
+  assert.equal(lagging.lastTime, T0 + 109 * 60);
+  assert.equal(lagging.premiumTime, T0 + 108 * 60);
+  near(lagging.premiumBps, 200);
+  const none = coinTile('BNB', spot, dense(120, () => null));
+  assert.equal(none.premiumBps, null);
+  assert.equal(none.premiumTime, null);
   const series = premiumSeries(spot, perpetual);
   assert.equal(series.at(-1).value, null);
   assert.ok(series.some(point => point.value != null));

@@ -10,7 +10,7 @@ type HelmStatus = {
   steps: Amount; actions: Amount; phase: string | null; profile_id: string | null; entries_held: string | null; operator_entry_paused: boolean | null;
   kill_switch: boolean | null; adaptive_actions: string | null; funding: string | null; image_tag: string | null;
   shutdown: { checkpoint: boolean | null; clean: boolean | null } | null;
-  mandate: { mandate_id: string | null; state: string | null; valid_until_ms: number | null } | null;
+  mandate: { mandate_id: string | null; revision: number | null; revocation_id: string | null; state: string | null; valid_until_ms: number | null } | null;
   risk: { reason: string | null; latched: boolean | null; daily_loss_use: Amount; risk_reference_quote: Amount; unit: string | null } | null;
   control_rejections: { count: Amount; recent: ({ action: string | null; at_ms: number | null; reason: string | null } | null)[] } | null;
   symbols: { pair: string; status: string | null; candidate_hold: string | null; bag: { held_amount: Amount; breakeven_price: Amount } | null; last_decision: { at: number | null; reason: string | null } | null }[];
@@ -61,7 +61,7 @@ export function V5Helm() {
         {status.withheld > 0 && <p className="v5m-hint" role="note">{status.withheld} published value(s) did not match their expected form and are not shown.</p>}
         <div className="v5m-stats v5m-stats--wide">
           <Stat label="New entries" value={status.operator_entry_paused === true ? "Paused" : status.entries_held ? "Held" : status.operator_entry_paused === false ? "Not paused" : "Not published"} note={status.entries_held ? words(status.entries_held) : status.operator_entry_paused === false ? "no entry hold published" : "pause state not published"} warn={!!status.entries_held || status.operator_entry_paused !== false} />
-          <Stat label="Mandate" value={words(status.mandate?.state)} note={status.mandate ? `${status.mandate.mandate_id ?? "id not published"} · until ${at(status.mandate.valid_until_ms)}` : "not published"} />
+          <Stat label="Mandate" value={words(status.mandate?.state)} note={status.mandate ? `${status.mandate.mandate_id ?? "id not published"} · revision ${status.mandate.revision ?? "not published"} · until ${at(status.mandate.valid_until_ms)}` : "not published"} title={status.mandate?.revocation_id ? `Revocation id ${status.mandate.revocation_id} (shared by the mandate and its authorization)` : undefined} />
           <Stat label="Risk latch" value={tri(status.risk?.latched, "Latched", "Clear")} note={words(status.risk?.reason)} warn={status.risk?.latched !== false} />
           <Stat label="Daily loss used" value={amount(status.risk?.daily_loss_use)} note={`of the ${amount(status.risk?.risk_reference_quote)} ${status.risk?.unit ?? ""} risk reference`} />
           <Stat label="Kill switch" value={tri(status.kill_switch, "On", "Off")} warn={status.kill_switch !== false} />
@@ -85,6 +85,6 @@ export function V5Helm() {
   </div>;
 }
 
-function Stat({ label, value, note, warn }: { label: string; value: string; note?: string; warn?: boolean }) {
-  return <div className={`v5m-stat${warn ? " is-warn" : ""}`}><span>{label}</span><strong>{value}</strong>{note && <small>{note}</small>}</div>;
+function Stat({ label, value, note, warn, title }: { label: string; value: string; note?: string; warn?: boolean; title?: string }) {
+  return <div className={`v5m-stat${warn ? " is-warn" : ""}`} title={title}><span>{label}</span><strong>{value}</strong>{note && <small>{note}</small>}</div>;
 }

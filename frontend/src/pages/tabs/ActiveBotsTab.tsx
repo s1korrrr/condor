@@ -18,15 +18,7 @@ import type { PaperRead } from "@/v5/contracts";
 import { usePaperSnapshot } from "@/v5/usePaperSnapshot";
 import { usePaperClock } from "@/v5/usePaperClock";
 import { parsePaperReadText } from "@/v5/paper-json";
-import { paperAge, paperSnapshotPresentation, PAPER_SNAPSHOT_FRESH_MS } from "@/v5/snapshot-presentation";
-
-/**
- * How long Bots keeps the last complete owner snapshot on screen while the next one loads. Owner snapshots advance
- * every ~8 s and a full read takes 6-50 s under load, so judging every section against the wall clock made complete
- * numbers flap to "stale" mid-load. A complete snapshot is judged as of its own time (plus 1 s) for this long, with
- * its true age shown; after that the normal stale rules withhold it.
- */
-const PAPER_SNAPSHOT_HOLD_MS = 120_000;
+import { paperSnapshotPresentation } from "@/v5/snapshot-presentation";
 import { paperPairBag, paperPairHoldings, paperReadFailureMessage } from "@/v5/policy";
 import { paperAmount, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperPairObservation, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperTime, paperWalletInventory, paperWalletTotals, paperWords } from "@/v5/policy";
 import { PaperTerminalHistory } from "@/v5/PaperTerminalHistory";
@@ -713,7 +705,8 @@ export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accoun
   // When a mark is missing the owner withholds equity; show the last complete equity with its time, never a guess.
   const lastWallet = useRef<{ bot: string; equity: unknown; cash: unknown; asOf: number } | null>(null);
   if (walletTotals && typeof bySection.wallet?.generated_at_ms === "number") lastWallet.current = { bot, ...walletTotals, asOf: bySection.wallet.generated_at_ms };
-  const previousWallet = !walletTotals && lastWallet.current?.bot === bot ? lastWallet.current : null;
+  // Only for a current wallet read the owner marked degraded (e.g. a missing mark); a stale read is never revived.
+  const previousWallet = !walletTotals && complete && paperReadState(bySection.wallet, now) === "degraded" && lastWallet.current?.bot === bot ? lastWallet.current : null;
   const walletWhy = paperWords(String(bySection.wallet?.reason ?? paperObject(bySection.wallet?.data).reason ?? "incomplete"));
   const inventory = complete ? paperWalletInventory(bySection.wallet, now) : null;
   const accounting = complete ? paperLifetimeTotals(accountingRead, reads[0], now) : null;
@@ -807,19 +800,15 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
   });
   const complete = query.complete;
   const reads = query.data ?? query.reads;
-  const snapshotAt = complete && typeof reads[0]?.generated_at_ms === "number" ? reads[0].generated_at_ms : null;
-  const held = snapshotAt !== null && now >= snapshotAt && now - snapshotAt <= PAPER_SNAPSHOT_HOLD_MS;
-  const judgedAt = held ? snapshotAt + 1_000 : now;
   const accounting = complete ? reads.find(read => read.section === "accounting") : undefined;
   const clock = paperHeartbeat(generatedAt === null ? null : Math.floor(generatedAt * 1000), ownerState, now);
   const heartbeat = clock.current ? "Fresh" : ownerState === "UNAVAILABLE" ? "Unavailable" : "Stale";
   return <div className="v5-paper-bots" data-layout={layout}>
     <header className="v5-page-heading"><div><h1>Paper bots</h1><p>{bot} · simulated wallet · live disabled</p></div><div className="v5-button-row"><button className="v5-button" aria-pressed={layout === "grid"} onClick={() => setLayout("grid")}>Grid</button><button className="v5-button" aria-pressed={layout === "compact"} onClick={() => setLayout("compact")}>Compact</button><button className="v5-button" onClick={() => void query.refetch()}>Refresh paper data</button></div></header>
     {complete && <p>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}</p>}
-    {held && now - snapshotAt > PAPER_SNAPSHOT_FRESH_MS && <p role="status">Showing the last complete owner snapshot, {paperAge(now - snapshotAt)} old: values are as of {paperTime(snapshotAt, now)}{query.isFetching ? "; a newer snapshot is loading" : ""}.</p>}
     {query.progress && <p role="status">{query.progress}</p>}
     {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
-    <PaperWorkspace reads={reads} safetyReads={query.safetyReads} complete={complete} readFailed={query.isError} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={judgedAt} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} />
+    <PaperWorkspace reads={reads} safetyReads={query.safetyReads} complete={complete} readFailed={query.isError} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} />
   </div>;
 }
 

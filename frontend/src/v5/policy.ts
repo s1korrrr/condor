@@ -402,7 +402,7 @@ export function paperRiskControllers(read: import("./contracts").PaperRead | und
  * Pair totals over every owner position row (DCA tranches and dust), from a complete current read only.
  * A pair holds many rows; showing one row's quantity misstates the holding.
  */
-export function paperPairHoldings(pair: string, positions: import("./contracts").PaperRead | undefined, now: number) {
+export function paperPairHoldings(pair: string, positions: import("./contracts").PaperRead | undefined, now: number, bagPublished = false) {
   const rows = paperCompleteRecords(positions, now);
   if (!rows) return null;
   const mine = rows.filter(row => row.trading_pair === pair);
@@ -412,8 +412,12 @@ export function paperPairHoldings(pair: string, positions: import("./contracts")
   // Only an explicit owner flag counts either way; an omitted or malformed flag stays unknown (never "unprotected").
   // A held bag row is stamped protected_exit false / no_active_fixed_target_executor by the engine by definition: its
   // exit is the bag policy (a market barrier, no resting order), so it is bag-managed, not an unprotected exit.
-  // Only held bag inventory qualifies; terminal dust and other rows keep their explicit protection reason (Sol R1 S1).
-  const bagManaged = mine.filter(row => row.state === "held_reconciliation" && row.protected_exit === false && row.protection_reason === "no_active_fixed_target_executor");
+  // Bag-managed only when the bag policy can actually sell the row: held inventory of a controller-owned executor
+  // (executor_id published), with a proven cost basis, and a bag published for this pair in the same snapshot.
+  // Terminal dust (Sol R1 S1), foreign or basis-unproven rows (Sonnet R1 S1) keep their explicit protection reason.
+  const bagManaged = bagPublished ? mine.filter(row => row.state === "held_reconciliation" && row.protected_exit === false
+    && row.protection_reason === "no_active_fixed_target_executor" && typeof row.executor_id === "string" && row.executor_id !== ""
+    && row.basis_reason !== "native_cost_basis_unproven") : [];
   const unprotected = mine.filter(row => row.protected_exit === false && !bagManaged.includes(row));
   return {
     count: mine.length,

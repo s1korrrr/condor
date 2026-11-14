@@ -737,8 +737,8 @@ export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accoun
     <PaperIsolatedSection name="Pair workspace" resetKey={resetKey} render={() => <section className="paper-section"><div className="paper-section-heading"><h2>Pair workspace</h2><span className="paper-caption">5 pairs · same fixed-target recipe</span></div><div className="paper-pairs">{["BNB-USDC", "BTC-USDC", "ETH-USDC", "SOL-USDC", "XRP-USDC"].map(pair => {
       const { position, executor, knownFlat, lastReportedFlat, staleSince, decision } = paperPairObservation(pair, bySection.positions, bySection.executors, bySection.decisions, now);
       const exit = paperExitProjection(position, bySection.positions, bySection.executors, now);
-      const holdings = paperPairHoldings(pair, bySection.positions, now);
       const bag = paperPairBag(pair, bySection.decisions, bySection.positions, now);
+      const holdings = paperPairHoldings(pair, bySection.positions, now, bag !== null);
       const base = pair.split("-")[0];
       const pairStates = [paperReadState(bySection.positions, now), paperReadState(bySection.executors, now)];
       const pairState = pairStates.includes("stale") ? "stale" : pairStates.every(state => state === "available") ? "available" : "degraded";

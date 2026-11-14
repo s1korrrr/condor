@@ -27,8 +27,14 @@ test('pair holdings sum every owner tranche exactly instead of showing the first
   assert.equal(holdings.count, 9);
   assert.deepEqual(holdings.states, [{state:'held_reconciliation',count:6,quantity:'0.3615174'},{state:'terminal_dust',count:3,quantity:'0.0000016'}]);
   assert.equal(holdings.protectedCount, 0);
-  // Held rows stamped no_active_fixed_target_executor are bag-managed; the 3 terminal-dust rows keep their reason.
-  assert.deepEqual([holdings.bagManagedCount, holdings.unprotectedCount, holdings.unprotectedReasons], [6, 3, ['no_active_fixed_target_executor']]);
+  // Without a published bag for the pair nothing is called bag-managed: all 9 explicit-false rows stay unprotected.
+  assert.deepEqual([holdings.bagManagedCount, holdings.unprotectedCount], [0, 9]);
+  // With a bag published: held, controller-owned, basis-proven rows are bag-managed; the 3 terminal-dust rows keep their reason.
+  const withBag = paperPairHoldings('BNB-USDC', livePositions, now, true);
+  assert.deepEqual([withBag.bagManagedCount, withBag.unprotectedCount, withBag.unprotectedReasons], [6, 3, ['no_active_fixed_target_executor']]);
+  // A held row without a controller executor, or with an unproven cost basis, is not sold by the bag policy (Sonnet R1).
+  const foreign = {...livePositions, data: livePositions.data.map(row => row.position_id === 'bnb-0' ? {...row, executor_id: null} : row.position_id === 'bnb-4' ? {...row, basis_reason: 'native_cost_basis_unproven'} : row)};
+  assert.deepEqual([paperPairHoldings('BNB-USDC', foreign, now, true).bagManagedCount, paperPairHoldings('BNB-USDC', foreign, now, true).unprotectedCount], [4, 5]);
   assert.equal(paperPairHoldings('BNB-USDC', {...livePositions, completeness:'partial'}, now), null, 'partial read publishes no total');
   assert.equal(paperPairHoldings('BNB-USDC', {...livePositions, next_cursor:'more'}, now), null, 'unread pages publish no total');
   assert.equal(paperPairHoldings('BNB-USDC', livePositions, now + 31_000), null, 'stale read publishes no total');

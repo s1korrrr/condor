@@ -37,9 +37,12 @@ function duration(seconds: number) {
   return `${(seconds / 86_400).toFixed(1)} days`;
 }
 
-/** Entry rule per published recipe, as the engine defines it (rsibot Helm paper controller); unknown recipes show none. */
+/**
+ * The recipe's DEFAULT entry rule. Each pair's own signal settings may differ and Helm's status does not publish them,
+ * so the page says "default" and never presents this as the live per-pair parameters.
+ */
 const ENTRY_RULES: Record<string, string> = {
-  helm_v5_dca_trailing_bag_v1: "buys only when RSI(17) crosses up through 29 inside the ATR band.",
+  helm_v5_dca_trailing_bag_v1: "by default it buys when RSI(17) crosses up through 29 inside the ATR band (per-pair settings are not in Helm's status).",
 };
 
 /** Helm page: the Helm paper bot's own published runtime state, read-only. Nothing here sends a control command. */
@@ -61,7 +64,7 @@ export function V5Helm() {
     {helm.isPending ? <p role="status" className="v5m-status">Reading Helm status…</p> : helm.isError ? <p role="alert" className="v5m-status">{helm.error.message}. Nothing older is shown.</p> : <>
       <section className={`v5m-card v5m-helm-head ${good ? "is-up" : "is-down"}`}>
         <strong>Helm paper bot: {headline}</strong>
-        {detail && <p>{detail}{status?.recipe_version && ENTRY_RULES[status.recipe_version] ? ` Entry rule (${status.recipe_version}): ${ENTRY_RULES[status.recipe_version]} RSI values are not in Helm's status.` : " Helm's status does not name its entry rule."}</p>}
+        {detail && <p>{detail}{status?.recipe_version && ENTRY_RULES[status.recipe_version] ? ` Recipe ${status.recipe_version}: ${ENTRY_RULES[status.recipe_version]} Current RSI values are not published.` : " Helm's status does not name its entry rule."}</p>}
         {read!.state === "UNBOUND" ? <p>{read!.reason}. The Helm status file has to be mounted read-only into the dashboard; no state is inferred.</p> : read!.reason === "HELM_STATUS_MISSING" ? <p>No Helm status file exists in its state directory. The runtime may be stopped or still starting; nothing is shown until it publishes.</p> : status && <p>
           Last status {duration(ageS ?? status.age_s)} ago{status.reasons == null ? " · reasons not published" : status.reasons.length ? ` · ${status.reasons.map(words).join(", ")}` : ""}
           {status.shutdown ? ` · shutdown ${tri(status.shutdown.clean, "clean", "not clean")}, checkpoint ${tri(status.shutdown.checkpoint, "saved", "missing")}` : ""}

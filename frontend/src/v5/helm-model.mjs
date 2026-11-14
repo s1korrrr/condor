@@ -1,6 +1,13 @@
 /** Helm page headline from the read state alone: what the runtime itself published, never inferred. */
 import { tri, utcMinute } from './shown.mjs';
 
+/**
+ * Entry-check results that mean "no entry signal yet" in the engine's signal policies (modular_spot_core/signals.py).
+ * Any other hold (symbol_fault, observation_checkpoint_required, fee_reserve_exceeded, atr_unavailable, unknown codes)
+ * is not normal waiting and is reported as not buying.
+ */
+const SIGNAL_WAIT = new Set(['no_rebound', 'low_volatility', 'high_volatility', 'no_turn', 'score_below_minimum', 'no_breakout']);
+
 export function helmHeadline(read) {
   if (!read) return { text: '', good: false };
   if (read.state === 'UNBOUND') return { text: 'Not connected to this dashboard', good: false };
@@ -16,8 +23,14 @@ export function helmHeadline(read) {
     const words = code => String(code).replaceAll('_', ' ');
     if (status.operator_entry_paused === true) return { text: 'Running, not buying: new entries paused by the operator', good: false };
     if (status.entries_held) return { text: `Running, not buying: ${words(status.entries_held)}`, good: false };
-    // Every coin held by its own entry check is Helm's normal idle state: it is waiting for its entry signal.
     const symbols = Array.isArray(status.symbols) ? status.symbols : [];
+    // A hold that is not a signal wait (a fault, a missing checkpoint, an unknown code) is never shown as normal idle.
+    const blocked = symbols.filter(row => row?.candidate_hold && !SIGNAL_WAIT.has(row.candidate_hold));
+    if (blocked.length) {
+      const codes = [...new Set(blocked.map(row => row.candidate_hold))].map(words).join(', ');
+      return { text: `Running, not buying ${blocked.length === symbols.length ? 'on any coin' : `on ${blocked.map(row => row.pair ?? 'a coin').join(', ')}`}: ${codes}`, good: false };
+    }
+    // Every coin held only by its entry signal is Helm's normal idle state: it is waiting for a signal.
     if (symbols.length && symbols.every(row => row?.candidate_hold)) {
       const holds = [...new Set(symbols.map(row => row.candidate_hold))], statuses = [...new Set(symbols.map(row => row?.status).filter(Boolean))];
       return { text: 'Running, waiting for a signal', good: true, detail: `Every coin idle: ${holds.map(words).join(', ')}${statuses.length ? ` · coin status ${statuses.map(words).join(', ')}` : ''}.` };

@@ -26,3 +26,13 @@ test('running with every coin idle says it is waiting for a signal; held entries
   assert.deepEqual(helmHeadline({ state: 'FRESH', status: status({ entries_held: 'operator_entry_pause', symbols: coins }) }), { text: 'Running, not buying: operator entry pause', good: false });
   assert.equal(helmHeadline({ state: 'FRESH', status: status({ operator_entry_paused: true }) }).text, 'Running, not buying: new entries paused by the operator');
 });
+
+test('a fault or unknown hold is never shown as normal waiting', () => {
+  const coin = (pair, hold) => ({ pair, status: 'portfolio_grant_required', candidate_hold: hold });
+  assert.deepEqual(helmHeadline({ state: 'FRESH', status: status({ symbols: [coin('BNB-USDC', 'symbol_fault'), coin('BTC-USDC', 'symbol_fault')] }) }),
+    { text: 'Running, not buying on any coin: symbol fault', good: false });
+  assert.deepEqual(helmHeadline({ state: 'FRESH', status: status({ symbols: [coin('BNB-USDC', 'no_rebound'), coin('BTC-USDC', 'observation_checkpoint_required')] }) }),
+    { text: 'Running, not buying on BTC-USDC: observation checkpoint required', good: false });
+  assert.equal(helmHeadline({ state: 'FRESH', status: status({ symbols: [coin('BNB-USDC', 'something_new')] }) }).good, false);
+  assert.equal(helmHeadline({ state: 'FRESH', status: status({ symbols: [coin('BNB-USDC', 'low_volatility'), coin('BTC-USDC', 'no_rebound')] }) }).text, 'Running, waiting for a signal');
+});

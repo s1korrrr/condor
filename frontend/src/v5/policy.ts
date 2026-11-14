@@ -309,6 +309,17 @@ export function paperRetainedRecords(read: import("./contracts").PaperRead | und
   return Array.isArray(read.data) ? read.data : null;
 }
 
+/**
+ * True only for a validated, current wallet read that the OWNER marked degraded (e.g. a missing mark withholds equity):
+ * not a synthetic section that replaced a client validation failure, not a future timestamp, not a stale read.
+ */
+export function paperWalletOwnerDegraded(read: import("./contracts").PaperRead | undefined, now: number): boolean {
+  if (!read || read.section !== "wallet" || paperSectionError(read) || read.state !== "degraded") return false;
+  if (read.completeness === "unavailable" || !read.data || typeof read.data !== "object" || Array.isArray(read.data)) return false;
+  const at = read.generated_at_ms;
+  return typeof at === "number" && paperTimestampIssue(at, now) === null && now - at <= PAPER_SNAPSHOT_FRESH_MS;
+}
+
 export function paperWalletTotals(read: import("./contracts").PaperRead | undefined, now: number): { equity: unknown; cash: unknown } | null {
   if (!read || read.section !== "wallet" || !paperCompleteRead(read, now) || !read.data || typeof read.data !== "object" || Array.isArray(read.data)) return null;
   const wallet = read.data as Record<string, unknown>;
@@ -401,7 +412,8 @@ export function paperPairHoldings(pair: string, positions: import("./contracts")
   // Only an explicit owner flag counts either way; an omitted or malformed flag stays unknown (never "unprotected").
   // A held bag row is stamped protected_exit false / no_active_fixed_target_executor by the engine by definition: its
   // exit is the bag policy (a market barrier, no resting order), so it is bag-managed, not an unprotected exit.
-  const bagManaged = mine.filter(row => row.protected_exit === false && row.protection_reason === "no_active_fixed_target_executor");
+  // Only held bag inventory qualifies; terminal dust and other rows keep their explicit protection reason (Sol R1 S1).
+  const bagManaged = mine.filter(row => row.state === "held_reconciliation" && row.protected_exit === false && row.protection_reason === "no_active_fixed_target_executor");
   const unprotected = mine.filter(row => row.protected_exit === false && !bagManaged.includes(row));
   return {
     count: mine.length,

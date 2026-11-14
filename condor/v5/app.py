@@ -27,7 +27,7 @@ from .candles import CandleOwner, OwnerUnavailable, validate_query
 from .config import Settings, read_secret_file
 from .dashboard import dashboard_profile, read_compatibility_path
 from .helm import read_helm_status
-from .money import SAMPLE_INTERVAL_S, MoneyLedger, helm_row, v5_row
+from .money import SAMPLE_INTERVAL_S, MoneyLedger, daily as money_daily, helm_row, thin_hourly, v5_row
 from .learning import FixtureLearningAPI, learning_router
 from .paper import PaperObservation, read_paper_status
 from .state import StateCapacityError, WorkspaceState
@@ -274,6 +274,8 @@ def create_app(
     )
     money = MoneyLedger(config.runtime_root)
     money_task: asyncio.Task | None = None
+    # The recorder's own last failure, shown by the money route; a failure never stops the loop.
+    money_errors: dict[str, Any] = {"count": 0, "last": None, "at_ms": None}
     active_loop_task: asyncio.Task | None = None
     active_loop_stop: asyncio.Event | None = None
     login_failures: dict[str, list[float]] = {}
@@ -311,8 +313,12 @@ def create_app(
         while True:
             try:
                 await money_sample()
-            except Exception as exc:  # recorded as a gap row so the page shows the hole and its cause
-                await run_in_threadpool(money.append, [{"bot": "sampler", "at_ms": clock(), "gap": f"sampler_error:{type(exc).__name__}"}])
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                # Counted and shown on the page (the missing sample is itself the gap). Writing a gap row could fail
+                # the same way (for example a full disk), so the failure is kept in memory, not retried here.
+                money_errors.update(count=money_errors["count"] + 1, last=type(exc).__name__, at_ms=clock())
             await asyncio.sleep(SAMPLE_INTERVAL_S)
 
     @asynccontextmanager
@@ -327,7 +333,7 @@ def create_app(
                 money_task.cancel()
                 try:
                     await money_task
-                except asyncio.CancelledError:
+                except BaseException:  # noqa: BLE001 - shutdown continues to the other cleanup whatever the task ended with
                     pass
             if active_loop_task is not None and not active_loop_task.done():
                 active_loop_task.cancel()
@@ -459,13 +465,14 @@ def create_app(
         rows = await run_in_threadpool(money.read, 0)
         started = rows[0]["at_ms"] if rows else None
         rows = [row for row in rows if row["at_ms"] >= now - span]
+        # Daily figures always come from every sample; only the chart rows are thinned for 30 days.
+        days = {bot: money_daily(rows, bot) for bot in ("v5", "helm")}
+        step_ms = 3_600_000 if range == "30d" else SAMPLE_INTERVAL_S * 1000
         if range == "30d":
-            hourly: dict[tuple, dict] = {}
-            for row in rows:
-                hourly[(row.get("bot"), row["at_ms"] // 3_600_000)] = row
-            rows = sorted(hourly.values(), key=lambda row: row["at_ms"])
+            rows = thin_hourly(rows)
         return JSONResponse(
-            {"sampler": config.money_sampler, "interval_s": SAMPLE_INTERVAL_S, "started_at_ms": started, "now_ms": now, "range": range, "rows": rows},
+            {"sampler": config.money_sampler, "interval_s": SAMPLE_INTERVAL_S, "step_ms": step_ms, "started_at_ms": started, "now_ms": now, "range": range,
+             "rows": rows, "daily": days, "recorder_errors": dict(money_errors)},
             headers={"Cache-Control": "no-store"},
         )
 

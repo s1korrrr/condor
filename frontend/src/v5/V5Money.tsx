@@ -6,13 +6,14 @@ import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable"
 import { CHART, type ChartSeries } from "@/features/quant-ops/kit/series";
 import { readCandleStore } from "./candle-store-api";
 import { v5Api } from "./api";
-import { daily, equityChangeSince, holdReturn, latest, series, type DailyRow, type MoneyRow } from "./money-model.mjs";
+import { dayCoverage, equityChangeSince, holdReturn, latest, series, type DailyRow, type MoneyRow } from "./money-model.mjs";
 import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
 import { utcMinute } from "./shown.mjs";
 import "./market.css";
 
-type MoneyRead = { sampler: boolean; interval_s: number; started_at_ms: number | null; now_ms: number; range: string; rows: MoneyRow[] };
+type MoneyRead = { sampler: boolean; interval_s: number; step_ms: number; started_at_ms: number | null; now_ms: number; range: string; rows: MoneyRow[]; daily: Record<string, DailyRow[]>; recorder_errors: { count: number; last: string | null; at_ms: number | null } };
 type CrossLine = { venue: string; lane: string; close: [number, number][] };
+type Hold = { closes: Record<string, [number, number][] | undefined>; startS: number; endS: number };
 const RANGES = ["24h", "7d", "30d"] as const;
 
 async function readMoney(range: string): Promise<MoneyRead> {
@@ -22,31 +23,34 @@ async function readMoney(range: string): Promise<MoneyRead> {
 }
 
 /** The reference spot lane's closes for each coin over the candle store's 7 days, read one after another. */
-async function readHold(): Promise<{ closes: Record<string, [number, number][] | undefined>; startS: number }> {
+async function readHold(): Promise<Hold> {
   const closes: Record<string, [number, number][] | undefined> = {};
-  let startS = Number.POSITIVE_INFINITY;
+  // The common window of all reads: the latest start and the earliest end.
+  let startS = Number.NEGATIVE_INFINITY, endS = Number.POSITIVE_INFINITY;
   for (const coin of MARKET_COINS) {
     try {
-      const view = await readCandleStore<{ start: number; series: CrossLine[] }>("cross", { asset: coin, segment: "spot", range: "7d" });
-      startS = Math.min(startS, view.start);
+      const view = await readCandleStore<{ start: number; end: number; series: CrossLine[] }>("cross", { asset: coin, segment: "spot", range: "7d" });
+      startS = Math.max(startS, view.start);
+      endS = Math.min(endS, view.end);
       closes[coin] = view.series.find(line => line.lane === REFERENCE.spot)?.close;
     } catch { closes[coin] = undefined; }
   }
-  return { closes, startS };
+  return { closes, startS, endS };
 }
 
 const amount = (value: number | null | undefined, digits = 2) => value == null ? "—" : value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 const signed = (value: number | null | undefined, digits = 2) => value == null ? "—" : `${value > 0 ? "+" : ""}${amount(value, digits)}`;
 const num = (value: string | null | undefined) => value != null && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
+const pct = (value: number | null) => value == null ? "—" : `${Math.round(value * 100)}%`;
 const at = (ms: number | null | undefined) => utcMinute(ms) ?? "unknown time";
 
 const dailyColumns: TableColumn<DailyRow>[] = [
   { id: "day", header: "Day (UTC)", value: row => new Date(row.day).toISOString().slice(0, 10), rowHeader: true, size: 100 },
-  { id: "start", header: "Equity, first sample", value: row => row.equityStart, kind: "number", size: 120, cell: row => amount(row.equityStart) },
-  { id: "end", header: "Equity, last sample", value: row => row.equityEnd, kind: "number", size: 120, cell: row => amount(row.equityEnd) },
-  { id: "change", header: "Equity change", value: row => row.equityChange, kind: "number", size: 110, cell: row => signed(row.equityChange), className: row => row.equityChange == null ? undefined : row.equityChange < 0 ? "is-down" : "is-up" },
-  { id: "realized", header: "Closed-trade profit", value: row => row.realizedChange, kind: "number", size: 120, cell: row => signed(row.realizedChange), title: () => "Change in lifetime realized P&L between the day's first and last sample" },
-  { id: "coverage", header: "Day covered", value: row => Math.round(row.coverage * 100), kind: "number", size: 90, cell: row => `${Math.round(row.coverage * 100)}%`, title: row => `${row.samples} samples, ${row.gaps} gaps; a full day is 288 samples` },
+  { id: "start", header: "Equity, first sample", value: row => num(row.equity_start), kind: "number", size: 120, cell: row => amount(num(row.equity_start)), title: row => row.first_at_ms ? `at ${at(row.first_at_ms)}` : undefined },
+  { id: "end", header: "Equity, last sample", value: row => num(row.equity_end), kind: "number", size: 120, cell: row => amount(num(row.equity_end)), title: row => row.last_at_ms ? `at ${at(row.last_at_ms)}` : undefined },
+  { id: "change", header: "Equity change", value: row => num(row.equity_change), kind: "number", size: 110, cell: row => signed(num(row.equity_change)), className: row => num(row.equity_change) == null ? undefined : num(row.equity_change)! < 0 ? "is-down" : "is-up" },
+  { id: "realized", header: "Closed-trade profit", value: row => num(row.realized_change), kind: "number", size: 120, cell: row => signed(num(row.realized_change)), title: () => "Change in lifetime realized P&L between the day's first and last sample with values" },
+  { id: "coverage", header: "Day with values", value: row => dayCoverage(row), kind: "number", size: 100, cell: row => pct(dayCoverage(row)), title: row => `${row.valid} of 288 five-minute slots hold values · ${row.samples} samples recorded, ${row.gaps} of them gaps` },
 ];
 
 export function V5Money() {
@@ -60,16 +64,19 @@ export function V5Money() {
   const v5 = latest(rows, "v5"), helm = latest(rows, "helm");
   const now = v5.withValues;
   const equity = num(now?.equity), funding = num(now?.initial_funding);
-  const equitySeries: ChartSeries[] = [{ id: "equity", label: "V5 wallet equity", color: CHART.blue, points: series(rows, "v5", "equity"), unit: now?.unit ?? "USDC", format: value => amount(value) }];
+  const step = money.data?.step_ms;
+  const equitySeries: ChartSeries[] = [{ id: "equity", label: "V5 wallet equity", color: CHART.blue, points: series(rows, "v5", "equity", step), unit: now?.unit ?? "USDC", format: value => amount(value) }];
   const pnlSeries: ChartSeries[] = [
-    { id: "realized", label: "Profit from closed trades", color: CHART.positive, points: series(rows, "v5", "realized"), format: value => signed(value) },
-    { id: "unrealized", label: "Gain or loss on coins still held", color: CHART.negative, points: series(rows, "v5", "unrealized"), format: value => signed(value) },
+    { id: "realized", label: "Profit from closed trades", color: CHART.positive, points: series(rows, "v5", "realized", step), format: value => signed(value) },
+    { id: "unrealized", label: "Gain or loss on coins still held", color: CHART.negative, points: series(rows, "v5", "unrealized", step), format: value => signed(value) },
   ];
   const coins = (now?.coins ?? {}) as Record<string, { realized: string | null; unrealized: string | null }>;
   const coinRows = Object.entries(coins).map(([coin, values]) => ({ label: coin, realized: num(values.realized), unrealized: num(values.unrealized) }));
-  const days = daily(rows, "v5");
-  const holdView = hold.data ? holdReturn(hold.data.closes, hold.data.startS) : null;
-  const v5Since = hold.data && Number.isFinite(hold.data.startS) ? equityChangeSince(rows, "v5", hold.data.startS * 1000) : null;
+  const days = money.data?.daily?.v5 ?? [];
+  const span = hold.data && Number.isFinite(hold.data.startS) && Number.isFinite(hold.data.endS) ? hold.data : null;
+  const holdView = span ? holdReturn(span.closes, span.startS, span.endS) : null;
+  // Equity over the same window needs raw five-minute rows; the 30-day view is thinned, so it is not used for this.
+  const v5Since = span && money.data?.range !== "30d" ? equityChangeSince(rows, "v5", span.startS * 1000, span.endS * 1000) : null;
 
   return <div className="v5m">
     <header className="v5m-head">
@@ -81,6 +88,7 @@ export function V5Money() {
     </header>
     {money.isPending ? <p role="status" className="v5m-status">Reading money samples…</p> : money.isError ? <p role="alert" className="v5m-status">{money.error.message}. Nothing older is shown.</p> : <>
       {!money.data.sampler && <p role="note" className="v5m-status">The money recorder is off in this deployment, so no new samples are being taken.</p>}
+      {(money.data.recorder_errors?.count ?? 0) > 0 && <p role="alert" className="v5m-status">The recorder failed {money.data.recorder_errors.count} time(s), last at {at(money.data.recorder_errors.at_ms)} ({money.data.recorder_errors.last}); those samples are missing and show as gaps.</p>}
       {v5.newest?.gap && <p role="note" className="v5m-status">Latest V5 sample at {at(v5.newest.at_ms)} is a gap: {v5.newest.gap}. Tiles show the last sample with values{now ? ` (${at(now.at_ms)})` : ""}.</p>}
 
       <section className="v5m-section"><header><h2>V5 paper bot</h2><span>{now ? `as of ${at(now.at_ms)} · ${now.unit ?? "USDC"}` : "no sample with values yet"}</span></header>
@@ -103,9 +111,9 @@ export function V5Money() {
         <article className="v5m-card"><h3>By coin</h3><p className="v5m-hint">Lifetime closed-trade profit and held-coin gain or loss per coin, latest sample</p>
           <BarsChart rows={coinRows} bars={[{ id: "realized", label: "Closed-trade profit", color: CHART.positive }, { id: "unrealized", label: "Held-coin gain or loss", color: CHART.negative }]} height={200} ariaLabel="V5 P&L by coin" emptyText="No per-coin values in the latest sample." /></article>
         <article className="v5m-card"><h3>Against holding the five coins</h3><p className="v5m-hint">Equal weights in {MARKET_COINS.join(", ")} over the candle store's 7 days ({REFERENCE.venue} spot {REFERENCE.quote})</p>
-          {!candleConfigured ? <p className="v5m-hint">{profile.isPending ? "Checking for the candle store…" : "No candle store in this deployment, so holding the coins cannot be priced."}</p> : hold.isPending ? <p role="status" className="v5m-hint">Reading 7 days of prices…</p> : !holdView || holdView.pct == null ? <p className="v5m-hint">Holding comparison unavailable: no 7-day prices.</p> : <div className="v5m-stats">
-            <Stat label="Holding the five coins" value={`${signed(holdView.pct)}%`} note={`since ${at(hold.data!.startS * 1000)}${holdView.missing.length ? ` · without ${holdView.missing.join(", ")}` : ""}`} />
-            <Stat label="V5 wallet equity" value={v5Since == null ? "—" : `${signed(v5Since)}%`} note={v5Since == null ? "needs samples back to the same start; the record is younger" : "same window"} />
+          {!candleConfigured ? <p className="v5m-hint">{profile.isPending ? "Checking for the candle store…" : "No candle store in this deployment, so holding the coins cannot be priced."}</p> : hold.isPending ? <p role="status" className="v5m-hint">Reading 7 days of prices…</p> : !holdView || holdView.pct == null ? <p className="v5m-hint">Holding comparison unavailable{holdView?.missing.length ? `: no close at the window start or end for ${holdView.missing.join(", ")}` : ": no 7-day prices"}. The basket is never reduced to fewer coins.</p> : <div className="v5m-stats">
+            <Stat label="Holding the five coins" value={`${signed(holdView.pct)}%`} note={`${at(span!.startS * 1000)} → ${at(span!.endS * 1000)}`} />
+            <Stat label="V5 wallet equity" value={v5Since == null ? "—" : `${signed(v5Since)}%`} note={v5Since == null ? (money.data.range === "30d" ? "pick 7d to compare" : "needs samples at both ends of the same window; the record is younger") : "same window"} />
           </div>}
           <p className="v5m-hint">Only the candle store's 7 days can be priced, so the comparison never reaches the trial start (2026-10-29).</p></article>
       </div>

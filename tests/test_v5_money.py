@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from condor.v5.app import create_app
 from condor.v5.helm import _money
-from condor.v5.money import MAX_ROWS, MoneyLedger, helm_row, v5_row
+from condor.v5.money import MAX_ROWS, MoneyLedger, daily, helm_row, thin_hourly, v5_row
 from test_v5_dashboard_bridge import ORIGIN, TOKEN, make_settings
 from test_v5_paper_binding import NOW, status, write_status
 from test_v5_paper_read_contract import envelope
@@ -53,11 +53,30 @@ def test_ledger_appends_skips_torn_lines_and_trims(tmp_path):
     with open(ledger.path, "a") as handle:
         handle.write('{"bot": "v5", "at_')  # torn tail from a crash
     assert [row["at_ms"] for row in ledger.read(0)] == [1, 2]
-    assert [row["at_ms"] for row in ledger.read(2)] == [2]
+    ledger.append([{"bot": "v5", "at_ms": 3}])  # the next row starts on its own line, not inside the torn one
+    assert [row["at_ms"] for row in ledger.read(0)] == [1, 2, 3]
+    assert [row["at_ms"] for row in ledger.read(2)] == [2, 3]
     ledger.path.write_text("".join(json.dumps({"bot": "v5", "at_ms": i, "pad": "x" * 600}) + "\n" for i in range(MAX_ROWS + 5)))
     ledger.append([{"bot": "v5", "at_ms": MAX_ROWS + 5}])
     rows = ledger.read(0)
     assert len(rows) == MAX_ROWS and rows[-1]["at_ms"] == MAX_ROWS + 5
+
+
+HOUR = 3_600_000
+
+
+def test_daily_uses_every_sample_and_thinning_keeps_gaps():
+    day = NOW_MS // 86_400_000 * 86_400_000
+    rows = [
+        {"bot": "v5", "at_ms": day + 8 * HOUR, "equity": "100", "realized": "1"},
+        {"bot": "v5", "at_ms": day + 8 * HOUR + 300_000, "gap": "wallet: stale"},
+        {"bot": "v5", "at_ms": day + 8 * HOUR + 55 * 60_000, "equity": "110", "realized": "3"},
+    ]
+    [entry] = daily(rows, "v5")
+    assert (entry["equity_change"], entry["realized_change"], entry["samples"], entry["gaps"], entry["valid"]) == ("10", "2", 3, 1, 2)
+    thinned = thin_hourly(rows)
+    assert [row.get("gap") for row in thinned] == ["wallet: stale", None]
+    assert daily([{"bot": "v5", "at_ms": day, "gap": "x"}], "v5")[0]["equity_change"] is None
 
 
 class PaperUpstream:
@@ -100,3 +119,22 @@ def test_sampler_is_off_by_default_and_30d_is_hourly(tmp_path):
         assert body["sampler"] is False
         hours = [row["at_ms"] // 3_600_000 for row in body["rows"]]
         assert len(hours) == len(set(hours)) and body["rows"][-1]["equity"] == "0"
+
+
+def test_recorder_failure_is_counted_and_never_stops_the_app(tmp_path, monkeypatch):
+    settings = replace(make_settings(tmp_path), paper_status_file=write_status(tmp_path, status()), money_sampler=True)
+    app = create_app(settings=settings, upstream=PaperUpstream(), static_dir=tmp_path / "dist", clock=lambda: NOW_MS)
+
+    def full_disk(self, rows):
+        raise OSError("no space left")
+
+    monkeypatch.setattr(MoneyLedger, "append", full_disk)
+    with TestClient(app) as client:
+        signed_in(client)
+        body = None
+        for _ in range(50):
+            body = client.get("/api/v5/money").json()
+            if body["recorder_errors"]["count"]:
+                break
+        assert body["recorder_errors"]["last"] == "OSError" and body["rows"] == []
+    # Leaving the client ran the shutdown; reaching here means cleanup did not raise.

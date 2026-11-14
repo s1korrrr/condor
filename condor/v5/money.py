@@ -13,10 +13,12 @@ import json
 import os
 import re
 import threading
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any
 
 SAMPLE_INTERVAL_S = 300
+DAY_MS = 86_400_000
 MAX_ROWS = 2 * 24 * 12 * 31  # two bots, five-minute samples, about a month
 DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,24})?")
 
@@ -84,9 +86,15 @@ class MoneyLedger:
 
     def append(self, rows: list[dict[str, Any]]) -> None:
         with self._lock:
-            with open(self.path, "a", encoding="utf-8") as handle:
+            with open(self.path, "ab+") as handle:
+                # A crash can leave an unterminated last line; start on a fresh line so the next row stays whole.
+                end = handle.seek(0, os.SEEK_END)
+                if end:
+                    handle.seek(end - 1)
+                    if handle.read(1) != b"\n":
+                        handle.write(b"\n")
                 for row in rows:
-                    handle.write(json.dumps(row, separators=(",", ":"), allow_nan=False) + "\n")
+                    handle.write((json.dumps(row, separators=(",", ":"), allow_nan=False) + "\n").encode())
             if self.path.stat().st_size > MAX_ROWS * 600:
                 kept = self._lines()[-MAX_ROWS:]
                 temporary = self.path.with_suffix(".tmp")
@@ -111,3 +119,56 @@ class MoneyLedger:
             if isinstance(row, dict) and type(row.get("at_ms")) is int and row["at_ms"] >= since_ms:
                 rows.append(row)
         return rows
+
+
+def _value(row: dict[str, Any], field: str) -> Decimal | None:
+    value = row.get(field)
+    if row.get("gap") or not isinstance(value, str) or not DECIMAL.fullmatch(value):
+        return None
+    try:
+        return Decimal(value)
+    except InvalidOperation:
+        return None
+
+
+def daily(rows: list[dict[str, Any]], bot: str) -> list[dict[str, Any]]:
+    """Per UTC day from every sample (never from thinned rows): first and last values, changes, samples and gaps."""
+    days: dict[int, dict[str, Any]] = {}
+    for row in sorted((row for row in rows if row.get("bot") == bot), key=lambda row: row["at_ms"]):
+        day = row["at_ms"] // DAY_MS * DAY_MS
+        entry = days.setdefault(day, {"day": day, "samples": 0, "gaps": 0, "valid": 0, "first": None, "last": None})
+        entry["samples"] += 1
+        if row.get("gap"):
+            entry["gaps"] += 1
+        elif _value(row, "equity") is not None or _value(row, "realized") is not None:
+            entry["valid"] += 1
+            entry["first"] = entry["first"] or row
+            entry["last"] = row
+    out = []
+    for entry in sorted(days.values(), key=lambda entry: entry["day"], reverse=True):
+        first, last = entry.pop("first"), entry.pop("last")
+
+        def pair(field: str) -> tuple[str | None, str | None, str | None]:
+            start = _value(first, field) if first else None
+            end = _value(last, field) if last else None
+            change = None if start is None or end is None else format(end - start, "f")
+            return (None if start is None else format(start, "f"), None if end is None else format(end, "f"), change)
+
+        equity_start, equity_end, equity_change = pair("equity")
+        _, _, realized_change = pair("realized")
+        out.append({**entry, "equity_start": equity_start, "equity_end": equity_end, "equity_change": equity_change, "realized_change": realized_change,
+                    "first_at_ms": first["at_ms"] if first else None, "last_at_ms": last["at_ms"] if last else None})
+    return out
+
+
+def thin_hourly(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """For long charts: per bot and hour keep the last row, plus the first gap row of that hour so the line still breaks."""
+    kept: dict[tuple, dict[str, Any]] = {}
+    gaps: dict[tuple, dict[str, Any]] = {}
+    for row in rows:
+        key = (row.get("bot"), row["at_ms"] // 3_600_000)
+        kept[key] = row
+        if row.get("gap") and key not in gaps:
+            gaps[key] = row
+    out = list(kept.values()) + [row for key, row in gaps.items() if kept[key] is not row]
+    return sorted(out, key=lambda row: row["at_ms"])

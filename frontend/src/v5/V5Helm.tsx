@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { RotateCw } from "lucide-react";
 import { tri, utcMinute } from "./shown.mjs";
+import { helmHeadline } from "./helm-model.mjs";
 import "./market.css";
 
 type Amount = number | string | null;
@@ -39,13 +40,8 @@ export function V5Helm() {
   const helm = useQuery({ queryKey: ["v5-helm"], queryFn: readHelm, retry: false, refetchInterval: 15_000 });
   const read = helm.data, status = read?.status;
   const fresh = read?.state === "FRESH";
-  const stopped = !!status?.reasons?.includes("runtime_stopped");
   const lastAt = at(status ? status.generated_at * 1000 : null);
-  // Only the runtime's own "runtime_stopped" reason says it stopped; an old status alone means the state is unknown.
-  const headline = !read ? "" : read.state === "UNBOUND" ? "Not connected to this dashboard" : read.state === "UNAVAILABLE" ? `Status file unreadable (${words(read.reason)})`
-    : stopped ? `Stopped (last status ${lastAt})` : !fresh ? `No status update since ${lastAt}; current state unknown`
-    : status?.ready === true ? "Running" : `Publishing status, ready: ${tri(status?.ready, "yes", "no")}`;
-  const good = fresh && !stopped && status?.ready === true;
+  const { text: headline, good } = helmHeadline(read);
   return <div className="v5m">
     <header className="v5m-head">
       <div><h1>Helm</h1><p>Helm paper bot ({read?.bot ?? "helm_v5_paper"}) · its own published runtime state · read-only, no controls on this page.</p></div>
@@ -54,7 +50,7 @@ export function V5Helm() {
     {helm.isPending ? <p role="status" className="v5m-status">Reading Helm status…</p> : helm.isError ? <p role="alert" className="v5m-status">{helm.error.message}. Nothing older is shown.</p> : <>
       <section className={`v5m-card v5m-helm-head ${good ? "is-up" : "is-down"}`}>
         <strong>Helm paper bot: {headline}</strong>
-        {read!.state === "UNBOUND" ? <p>{read!.reason}. The Helm status file has to be mounted read-only into the dashboard; no state is inferred.</p> : status && <p>
+        {read!.state === "UNBOUND" ? <p>{read!.reason}. The Helm status file has to be mounted read-only into the dashboard; no state is inferred.</p> : read!.reason === "HELM_STATUS_MISSING" ? <p>The Helm paper runtime has not written a status file in its state directory yet. Nothing else is shown until it does.</p> : status && <p>
           Last status {duration(status.age_s)} ago{status.reasons == null ? " · reasons not published" : status.reasons.length ? ` · ${status.reasons.map(words).join(", ")}` : ""}
           {status.shutdown ? ` · shutdown ${tri(status.shutdown.clean, "clean", "not clean")}, checkpoint ${tri(status.shutdown.checkpoint, "saved", "missing")}` : ""}
           {status.failure ? ` · failure: ${status.failure}` : status.failure_reported ? " · a failure was reported but cannot be shown safely" : ""}.

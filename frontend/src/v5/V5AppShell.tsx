@@ -1,4 +1,4 @@
-import { Activity, Bot, LogOut, Menu, Moon, Network, ScanSearch, Settings, ShieldCheck, Sun, Wallet, X } from "lucide-react";
+import { Activity, Bot, Eye, LogOut, Menu, Moon, Network, ScanSearch, Settings, ShieldCheck, Sun, Wallet, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -11,16 +11,18 @@ import { useAuth } from "@/lib/auth";
  * Five menu groups (Fable UI review, Falco 12:08Z). Each group owns the older pages it replaces; they stay reachable
  * from the group's sub-row, so no address stops working.
  */
-const nav = [
-  { to: "/", label: "Overview", icon: Wallet, end: true, pages: [["/", "Overview"], ["/capital", "Capital"]] },
+type NavGroup = { to: string; label: string; icon: typeof Wallet; pages: [to: string, label: string][] };
+
+const nav: NavGroup[] = [
+  { to: "/", label: "Overview", icon: Wallet, pages: [["/", "Overview"], ["/capital", "Capital"]] },
   { to: "/bots", label: "Bots", icon: Bot, pages: [["/bots", "V5"], ["/helm", "Helm"]] },
   { to: "/market", label: "Market", icon: ScanSearch, pages: [["/market", "Market"], ["/market/stocks", "OKX stocks"]] },
   { to: "/operations", label: "System", icon: Activity, pages: [["/operations", "Operations"], ["/v5/readiness", "Readiness"], ["/settings", "Settings"]] },
   { to: "/research", label: "Research", icon: Network, pages: [["/research", "Research"], ["/backtests", "Tradepad"], ["/learning", "Learning"], ["/research-factory", "Research factory"], ["/decision-lineage", "Decision history"], ["/agents", "Agents"], ["/sessions", "Sessions"]] },
-] as const;
+];
 
 /** The group a path belongs to: its own page, or a sub-page (e.g. /agents/x under Research). */
-function groupOf(pathname: string) {
+function groupOf(pathname: string): NavGroup | null {
   return nav.find(group => group.pages.some(([to]) => to === "/" ? pathname === "/" : pathname === to || pathname.startsWith(`${to}/`))) ?? null;
 }
 

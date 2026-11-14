@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { dayCoverage, equityChange, holdReturn, latest, series } from '../src/v5/money-model.mjs';
+import { utcExact } from '../src/v5/shown.mjs';
 
 const T0 = Date.UTC(2026, 10, 14, 0, 0);
 const row = (minutes, extra = {}) => ({ bot: 'v5', at_ms: T0 + minutes * 60_000, equity: '100', realized: '1', ...extra });
@@ -45,4 +46,12 @@ test('V5 equity change uses its own first and last sample with values', () => {
   assert.deepEqual([result.startMs, result.endMs], [T0, T0 + 55 * 60_000]);
   assert.ok(Math.abs(result.pct - 5) < 1e-9);
   assert.equal(equityChange([row(0)], 'v5').pct, null);
+});
+
+test('V5 endpoints keep their exact sample times, not rounded to the minute', () => {
+  const rows = [{ bot: 'v5', at_ms: Date.parse('2026-11-14T00:00:59.250Z'), equity: '100' }, { bot: 'v5', at_ms: Date.parse('2026-11-14T00:05:00.125Z'), equity: '110' }];
+  const result = equityChange(rows, 'v5');
+  assert.equal(utcExact(result.startMs), '2026-11-14 00:00:59.250Z');
+  assert.equal(utcExact(result.endMs), '2026-11-14 00:05:00.125Z');
+  assert.equal(utcExact(1e18), null);
 });

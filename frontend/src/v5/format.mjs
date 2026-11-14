@@ -32,7 +32,13 @@ function parse(value) {
     if (!Number.isFinite(value) || Math.abs(value) >= 1e21) return null;
     const abs = Math.abs(value);
     const text = String(abs);
-    return split(value < 0, text.includes('e') ? abs.toFixed(20) : text);
+    // A number printed in exponent form ("4.9e-21") is expanded as digits, exactly as the same string would be,
+    // never rounded through toFixed() first (Sol R2 W1).
+    if (text.includes('e')) {
+      const parts = expand(EXPONENT.exec(text));
+      return parts && { ...parts, neg: value < 0 };
+    }
+    return split(value < 0, text);
   }
   if (typeof value !== 'string') return null;
   const text = value.trim();

@@ -156,3 +156,12 @@ test('exact decimals through exponent text, dust and price buckets (Sol R1)', ()
   assert.equal(pnl('1.004999999999999999999999999999').text, '▲ +1.00');
   assert.equal(fixed('36.35232624569440000000000003'), '36.35');
 });
+
+test('numbers and the same decimal strings format identically, including exponent-form dust (Sol R2)', () => {
+  for (const [number, text] of [[4.9e-21, '4.9e-21'], [1.234e-19, '1.234e-19'], [-3.5e-7, '-3.5e-7'], [0.016245819, '0.016245819'], [1390.5632, '1390.5632']]) {
+    assert.equal(coin(number, 'BTC'), coin(text, 'BTC'), String(number));
+  }
+  assert.equal(coin(4.9e-21, 'BTC'), '4.9e−21 BTC');
+  assert.equal(coin(1.234e-19, 'BTC'), '1.23e−19 BTC');
+  assert.equal(fixed(-3.5e-7, 8), '−0.00000035');
+});

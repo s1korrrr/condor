@@ -154,3 +154,13 @@ test('a native latch survives the displayed-evidence dedupe and is not duplicate
   assert.deepEqual(paperSafetyBeyondDisplayed([retained], [withLatch(risk, true, risk.snapshot_id)]), [], 'a latch already displayed is not repeated');
   assert.ok(paperSafetyReads([], [final3.status, withLatch(risk, true, final3.status.snapshot_id)]).length > 0, 'retention keeps a latched read');
 });
+
+test('the entry hold opens with one sentence from what the owner published (Fable UI item 5)', () => {
+  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {paperHoldSentence} = load('pages/tabs/ActiveBotsTab.tsx');
+  assert.equal(paperHoldSentence([{operator:{paused:true, emergency:false}}], []), 'V5 is running, but buying is paused by an operator. Selling still works.');
+  // An emergency halt's effect on exits is not published: no claim about selling.
+  assert.equal(paperHoldSentence([{operator:{paused:false, emergency:true}}], []), 'V5 reports an emergency halt: buying is stopped. See the details for exits.');
+  assert.equal(paperHoldSentence([{operator:{paused:null, emergency:null}}], [{label:'Daily loss rail'}, {label:'Daily loss rail'}]), 'V5 is running, but buying is held: Daily loss rail. Selling still works.');
+  assert.equal(paperHoldSentence([], []), 'V5 is running, but buying is held by an owner hold. Selling still works.');
+});

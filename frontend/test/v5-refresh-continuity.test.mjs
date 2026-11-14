@@ -124,7 +124,7 @@ test('Bots retains held complete snapshot, as-of and totals during refresh and f
     const mid = h.render();
     assert.match(mid,/New acquisitions held/);
     assert.match(mid,/Held by owner/);
-    assert.match(mid,/Last complete owner snapshot.*As of/);
+    assert.match(mid,/Last coherent owner snapshot.*As of/);
     assert.match(mid,/Refreshing: 0\/9 sections/);
     const riskCaption = html => html.match(/Risk rails &amp; entry latch[^]*?Decisions &amp; paper control/)?.[0];
     assert.ok(riskCaption(full));

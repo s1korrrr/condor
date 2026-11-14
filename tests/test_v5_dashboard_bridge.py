@@ -261,6 +261,7 @@ def test_full_dashboard_deep_links_serve_only_known_ui_paths(tmp_path):
         for path in (
             "/capital",
             "/bots",
+            "/helm",
             "/operations",
             "/research",
             "/backtests",

@@ -1,0 +1,170 @@
+"""Money samples for the V5 dashboard Money page (read-only, paper).
+
+No owner publishes equity or P&L over time, so the dashboard keeps its own small record: every few minutes it
+reads the same validated owner sections the pages already read (V5 wallet and lifetime accounting, the Helm
+runtime status) and appends one row per bot to a JSON-lines file in its own runtime state. A failed or stale read
+is recorded as a gap row with its reason, never as a number. There is no backfill: the record starts when the
+sampler first runs. Nothing here writes anywhere but the dashboard's own state directory.
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import threading
+from decimal import Decimal, InvalidOperation
+from pathlib import Path
+from typing import Any
+
+SAMPLE_INTERVAL_S = 300
+SLOT_MS = SAMPLE_INTERVAL_S * 1000
+DAY_MS = 86_400_000
+
+
+def seconds_to_next_slot(now_ms: int) -> float:
+    """Sleep to the next 5-minute UTC slot boundary, so samples sit on one grid instead of drifting."""
+    return SAMPLE_INTERVAL_S - (now_ms / 1000) % SAMPLE_INTERVAL_S
+MAX_ROWS = 2 * 24 * 12 * 31  # two bots, five-minute samples, about a month
+# The owner's accounting publishes exact Decimal text with 25-28 fraction digits
+# (realized_pnl_quote "114.1396691483993272381433853"); 24 recorded them as unknown.
+DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,30})?")
+
+
+def _decimal(value: Any) -> str | None:
+    """Owner decimal text passes as text; anything else is unknown (never converted to float here)."""
+    return value if isinstance(value, str) and DECIMAL.fullmatch(value) else None
+
+
+def v5_row(wallet: dict | None, accounting: dict | None, now_ms: int) -> dict[str, Any]:
+    """One V5 row from validated wallet and accounting reads (as returned by the paper read bridge)."""
+    row: dict[str, Any] = {"bot": "v5", "at_ms": now_ms}
+    usable = lambda read: isinstance(read, dict) and read.get("state") == "available" and isinstance(read.get("data"), dict)  # noqa: E731
+    if not usable(wallet) or not usable(accounting):
+        reasons = [
+            f"{name}: {read.get('state') if isinstance(read, dict) else 'unavailable'}"
+            for name, read in (("wallet", wallet), ("accounting", accounting))
+            if not usable(read)
+        ]
+        return {**row, "gap": "; ".join(reasons)[:200]}
+    data, totals = wallet["data"], accounting["data"]
+    program = totals.get("program") if isinstance(totals.get("program"), dict) else {}
+    coins = {}
+    controllers = totals.get("controllers") if isinstance(totals.get("controllers"), dict) else {}
+    for controller, values in list(controllers.items())[:16]:
+        coin = controller.rsplit("_", 1)[-1].upper()
+        if isinstance(values, dict) and re.fullmatch(r"[A-Z0-9]{2,10}", coin):
+            coins[coin] = {"realized": _decimal(values.get("realized_pnl_quote")), "unrealized": _decimal(values.get("unrealized_pnl_quote"))}
+    return {
+        **row,
+        "snapshot_at_ms": wallet.get("generated_at_ms") if type(wallet.get("generated_at_ms")) is int else None,
+        "unit": data.get("unit") if isinstance(data.get("unit"), str) and len(data["unit"]) <= 12 else None,
+        "equity": _decimal(data.get("equity_quote")),
+        "initial_funding": _decimal(data.get("initial_funding_quote")),
+        "external_flows": _decimal(data.get("external_cash_flows_quote")),
+        "realized": _decimal(program.get("realized_pnl_quote")),
+        "unrealized": _decimal(program.get("unrealized_pnl_quote")),
+        "fees": _decimal(program.get("fees_paid_quote")),
+        "coins": coins,
+    }
+
+
+def helm_row(helm: dict | None, now_ms: int) -> dict[str, Any]:
+    """One Helm row from the Helm status projection; no published money is a gap, not zero."""
+    row: dict[str, Any] = {"bot": "helm", "at_ms": now_ms}
+    if not isinstance(helm, dict) or helm.get("state") != "FRESH" or not isinstance(helm.get("status"), dict):
+        state = helm.get("reason") if isinstance(helm, dict) else "unavailable"
+        return {**row, "gap": str(state)[:200]}
+    money = helm["status"].get("money")
+    if not isinstance(money, dict) or money.get("realized") is None and money.get("unrealized") is None:
+        return {**row, "gap": "HELM_MONEY_NOT_PUBLISHED"}
+    return {**row, "realized": money.get("realized"), "unrealized": money.get("unrealized")}
+
+
+class MoneyLedger:
+    """Append-only JSON-lines record in the dashboard's runtime state, trimmed to MAX_ROWS."""
+
+    def __init__(self, root: Path):
+        self.dir = root / "money"
+        self.dir.mkdir(mode=0o700, parents=True, exist_ok=True)
+        if self.dir.is_symlink():
+            raise ValueError("money state directory may not be a symlink")
+        self.path = self.dir / "samples.jsonl"
+        self._lock = threading.Lock()
+
+    def append(self, rows: list[dict[str, Any]]) -> None:
+        with self._lock:
+            with open(self.path, "ab+") as handle:
+                # A crash can leave an unterminated last line; start on a fresh line so the next row stays whole.
+                end = handle.seek(0, os.SEEK_END)
+                if end:
+                    handle.seek(end - 1)
+                    if handle.read(1) != b"\n":
+                        handle.write(b"\n")
+                for row in rows:
+                    handle.write((json.dumps(row, separators=(",", ":"), allow_nan=False) + "\n").encode())
+            if self.path.stat().st_size > MAX_ROWS * 600:
+                kept = self._lines()[-MAX_ROWS:]
+                temporary = self.path.with_suffix(".tmp")
+                temporary.write_text("".join(line + "\n" for line in kept), encoding="utf-8")
+                os.replace(temporary, self.path)
+
+    def _lines(self) -> list[str]:
+        try:
+            return [line for line in self.path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        except FileNotFoundError:
+            return []
+
+    def read(self, since_ms: int) -> list[dict[str, Any]]:
+        rows = []
+        with self._lock:
+            lines = self._lines()
+        for line in lines:
+            try:
+                row = json.loads(line)
+            except ValueError:
+                continue  # a torn last line from a crash is skipped, never repaired into a value
+            if isinstance(row, dict) and type(row.get("at_ms")) is int and row["at_ms"] >= since_ms:
+                rows.append(row)
+        return rows
+
+
+def _value(row: dict[str, Any], field: str) -> Decimal | None:
+    value = row.get(field)
+    if row.get("gap") or not isinstance(value, str) or not DECIMAL.fullmatch(value):
+        return None
+    try:
+        return Decimal(value)
+    except InvalidOperation:
+        return None
+
+
+def daily(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """V5 per UTC day from the whole record: first and last values, changes, samples, gaps and slots with values."""
+    days: dict[int, dict[str, Any]] = {}
+    for row in sorted((row for row in rows if row.get("bot") == "v5"), key=lambda row: row["at_ms"]):
+        day = row["at_ms"] // DAY_MS * DAY_MS
+        entry = days.setdefault(day, {"day": day, "samples": 0, "gaps": 0, "slots": set(), "first": None, "last": None})
+        entry["samples"] += 1
+        if row.get("gap"):
+            entry["gaps"] += 1
+        elif _value(row, "equity") is not None or _value(row, "realized") is not None:
+            entry["slots"].add(row["at_ms"] // SLOT_MS)  # a restart can sample one slot twice
+            entry["first"] = entry["first"] or row
+            entry["last"] = row
+    out = []
+    for entry in sorted(days.values(), key=lambda entry: entry["day"], reverse=True):
+        first, last = entry.pop("first"), entry.pop("last")
+        entry["valid"] = len(entry.pop("slots"))
+
+        def pair(field: str) -> tuple[str | None, str | None, str | None]:
+            start = _value(first, field) if first else None
+            end = _value(last, field) if last else None
+            change = None if start is None or end is None else format(end - start, "f")
+            return (None if start is None else format(start, "f"), None if end is None else format(end, "f"), change)
+
+        equity_start, equity_end, equity_change = pair("equity")
+        _, _, realized_change = pair("realized")
+        out.append({**entry, "equity_start": equity_start, "equity_end": equity_end, "equity_change": equity_change, "realized_change": realized_change,
+                    "first_at_ms": first["at_ms"] if first else None, "last_at_ms": last["at_ms"] if last else None})
+    return out

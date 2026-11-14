@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { paperExitProjection, paperPairHoldings, paperPairBag, paperReadFailureMessage, paperRiskControllers, paperRiskUsage } from '../src/v5/policy.ts';
+import { paperWalletOwnerDegraded, paperLastWalletToKeep, paperLastWalletToShow, paperExitProjection, paperPairHoldings, paperPairBag, paperReadFailureMessage, paperRiskControllers, paperRiskUsage } from '../src/v5/policy.ts';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
 const final3 = Object.fromEntries(['status','wallet','positions','executors','fills','risk','decisions','history','operations'].map(section => [section, JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/${section}.json`, import.meta.url)))]));
@@ -27,7 +27,9 @@ test('pair holdings sum every owner tranche exactly instead of showing the first
   assert.equal(holdings.count, 9);
   assert.deepEqual(holdings.states, [{state:'held_reconciliation',count:6,quantity:'0.3615174'},{state:'terminal_dust',count:3,quantity:'0.0000016'}]);
   assert.equal(holdings.protectedCount, 0);
-  assert.deepEqual(holdings.unprotectedReasons, ['no_active_fixed_target_executor']);
+  // The engine's own words: all 9 rows are explicit false with no_active_fixed_target_executor, i.e. without a
+  // fixed-target exit order. Nothing is inferred about the bag policy selling them; no other reason is published.
+  assert.deepEqual([holdings.noFixedTargetCount, holdings.unprotectedCount, holdings.unprotectedReasons], [9, 0, []]);
   assert.equal(paperPairHoldings('BNB-USDC', {...livePositions, completeness:'partial'}, now), null, 'partial read publishes no total');
   assert.equal(paperPairHoldings('BNB-USDC', {...livePositions, next_cursor:'more'}, now), null, 'unread pages publish no total');
   assert.equal(paperPairHoldings('BNB-USDC', livePositions, now + 31_000), null, 'stale read publishes no total');
@@ -81,7 +83,8 @@ test('rendered pair card shows the exact pair total, bag, protection summary and
   assert.match(html, /<dt>Position<\/dt><dd>0\.3615190 BNB/);
   assert.doesNotMatch(html, /<dt>Position<\/dt><dd>0\.141193 BNB/);
   assert.match(html, /Held reconciliation: 6 · 0\.3615174 BNB · Terminal dust: 3 · 0\.0000016 BNB/);
-  assert.match(html, /Owner-reported protected exits: 0 of 9 position rows/);
+  assert.match(html, /Owner-reported exits over 9 position rows: 0 with a fixed-target exit order · 9 without a fixed-target exit order/);
+  assert.doesNotMatch(html, /bag-managed|sold by the bag policy|no resting order/);
   assert.match(html, /<dt>Bag<\/dt><dd>Below target · breakeven 748\.1700 USDC/);
   assert.match(html, /Reported native entry hold: No|Native evidence complete/);
   assert.match(html, /Pair cap 40000 USDC/);
@@ -113,18 +116,21 @@ test('pair protection summary keeps omitted owner flags unknown', () => {
   const positions = {...livePositions, data:[...final3.positions.data.filter(row => row.trading_pair !== 'BNB-USDC'), ...mixed]};
   const holdings = paperPairHoldings('BNB-USDC', positions, now);
   assert.equal(holdings.protectedCount, 1);
-  assert.equal(holdings.unprotectedCount, 1);
+  assert.equal(holdings.noFixedTargetCount, 1);
+  assert.equal(holdings.unprotectedCount, 0);
   assert.equal(holdings.unknownCount, 7);
-  assert.deepEqual(holdings.unprotectedReasons, ['no_active_fixed_target_executor'], 'reasons come only from explicit false rows');
+  assert.deepEqual(holdings.unprotectedReasons, []);
+  const other = {...positions, data: positions.data.map(row => row === mixed[1] ? {...row, protection_reason: 'executor_missing'} : row)};
+  assert.deepEqual([paperPairHoldings('BNB-USDC', other, now).unprotectedCount, paperPairHoldings('BNB-USDC', other, now).unprotectedReasons], [1, ['executor_missing']], 'any other explicit false is unprotected, with its reason');
   const allOmitted = {...positions, data:[...final3.positions.data.filter(row => row.trading_pair !== 'BNB-USDC'), ...BNB_ROWS.map(omit)]};
   assert.deepEqual([paperPairHoldings('BNB-USDC', allOmitted, now).unprotectedCount, paperPairHoldings('BNB-USDC', allOmitted, now).unknownCount], [0, 9]);
   const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
   const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values({...final3, positions:allOmitted}), now, reportAt:final3.status.generated_at_ms, heartbeat:'Fresh', bot:'meridian_v5_paper'}));
   const card = html.match(/<h3>BNB-USDC<\/h3>[^]*?<\/article>/)?.[0] ?? '';
-  const summary = card.match(/Owner-reported protected exits:[^<]+/)?.[0] ?? '';
+  const summary = card.match(/Owner-reported exits over[^<]+/)?.[0] ?? '';
   assert.doesNotMatch(summary, /unprotected/, 'omitted flags are not unprotected');
-  assert.match(summary, /0 of 9 position rows · protection not published: 9/);
+  assert.match(summary, /over 9 position rows: 0 with a fixed-target exit order · protection not published: 9/);
 });
 
 // Rebased onto #99: a native latch (owner native-risk.v1 `latched`) must still raise safety evidence through
@@ -148,4 +154,34 @@ test('a native latch survives the displayed-evidence dedupe and is not duplicate
   assert.equal(cut[0].data.controllers[id].native.latched, true);
   assert.deepEqual(paperSafetyBeyondDisplayed([retained], [withLatch(risk, true, risk.snapshot_id)]), [], 'a latch already displayed is not repeated');
   assert.ok(paperSafetyReads([], [final3.status, withLatch(risk, true, final3.status.snapshot_id)]).length > 0, 'retention keeps a latched read');
+});
+
+test('the last-complete-equity fallback needs a current wallet the owner itself marked degraded (Sol R1 S2)', () => {
+  const at = 1794669611428;
+  const wallet = { schema: 'rsibot.v5-paper.read.v1', section: 'wallet', state: 'degraded', execution_mode: 'paper', simulated: true, bot_id: 'meridian_v5_paper', snapshot_id: 'b:1', generated_at_ms: at, observed_at_ms: at, read_at_ms: at, source_at_ms: at, completeness: 'complete', reason: 'missing_fresh_marks:BTC', capabilities: ['read'], source: {}, next_cursor: null, data: { equity_quote: null } };
+  assert.equal(paperWalletOwnerDegraded(wallet, at + 5_000), true);
+  // The synthetic section that replaces a client schema failure (data null, unavailable) is not owner degradation.
+  assert.equal(paperWalletOwnerDegraded({ ...wallet, data: null, completeness: 'unavailable', reason: 'Wallet owner schema invalid; this section is unavailable.' }, at + 5_000), false);
+  assert.equal(paperWalletOwnerDegraded(wallet, at + 31_000), false, 'a stale read is never revived');
+  assert.equal(paperWalletOwnerDegraded({ ...wallet, generated_at_ms: at + 60_000 }, at), false, 'a future timestamp is not current');
+  assert.equal(paperWalletOwnerDegraded({ ...wallet, generated_at_ms: at + 1_000 }, at), false, 'even 1 s ahead (inside the 5 s skew tolerance) is not current (Sol R2 S3)');
+  assert.equal(paperWalletOwnerDegraded({ ...wallet, state: 'available' }, at + 5_000), false);
+  assert.equal(paperWalletOwnerDegraded({ ...wallet, section: 'positions' }, at + 5_000), false);
+});
+
+test('the remembered wallet is never a future value and is shown only when older than the degraded read (Terra R2)', () => {
+  const now = 100_000;
+  const read = (state, at) => ({ schema: 'rsibot.v5-paper.read.v1', section: 'wallet', state, execution_mode: 'paper', simulated: true, bot_id: 'meridian_v5_paper', snapshot_id: 'b:1', generated_at_ms: at, observed_at_ms: at, read_at_ms: at, source_at_ms: at, completeness: 'complete', reason: state === 'degraded' ? 'missing_fresh_marks:BTC' : null, capabilities: ['read'], source: {}, next_cursor: null, data: { equity_quote: state === 'degraded' ? null : '199000' } });
+  const totals = { equity: '199000', cash: '193000' };
+  // A complete wallet 4 s ahead (inside the 5 s skew tolerance) is not remembered.
+  assert.equal(paperLastWalletToKeep('v5', totals, read('available', now + 4_000), now), null);
+  const kept = paperLastWalletToKeep('v5', totals, read('available', now - 10_000), now);
+  assert.deepEqual(kept, { bot: 'v5', equity: '199000', cash: '193000', asOf: now - 10_000 });
+  // Shown for a newer owner-degraded read of the same bot...
+  assert.equal(paperLastWalletToShow(kept, 'v5', read('degraded', now - 2_000), now), kept);
+  // ...never when the remembered value is newer than (or as new as) the degraded read, for another bot, or a stale read.
+  assert.equal(paperLastWalletToShow(kept, 'v5', read('degraded', now - 10_000), now), null);
+  assert.equal(paperLastWalletToShow({ ...kept, asOf: now - 1_000 }, 'v5', read('degraded', now - 2_000), now), null);
+  assert.equal(paperLastWalletToShow(kept, 'other', read('degraded', now - 2_000), now), null);
+  assert.equal(paperLastWalletToShow(kept, 'v5', read('degraded', now - 40_000), now), null);
 });

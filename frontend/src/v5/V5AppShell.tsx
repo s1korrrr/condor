@@ -1,4 +1,4 @@
-import { Activity, Bot, ChartCandlestick, ChartNoAxesCombined, Clock3, Eye, LogOut, Menu, Moon, Network, ScanSearch, Settings, ShieldCheck, Sun, X } from "lucide-react";
+import { Activity, Bot, ChartCandlestick, ChartNoAxesCombined, Clock3, Eye, LogOut, Menu, Moon, Network, ScanSearch, Settings, ShieldCheck, Sun, Wallet, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,8 +9,10 @@ import { useAuth } from "@/lib/auth";
 
 const nav = [
   { to: "/", label: "Market", icon: ScanSearch, end: true },
+  { to: "/money", label: "Money", icon: Wallet },
   { to: "/capital", label: "Capital", icon: ChartNoAxesCombined },
   { to: "/bots", label: "Bots", icon: Bot },
+  { to: "/helm", label: "Helm", icon: ShieldCheck },
   { to: "/operations", label: "Operations", icon: Activity },
   { to: "/research", label: "Research", icon: Network },
   { to: "/learning", label: "Learning", icon: Eye },
@@ -30,7 +32,7 @@ export function V5AppShell({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, refetchInterval: 15_000 });
   const paperLabel = paperWorkspaceLabel(profile.data);
-  const heading = nav.find(item => item.to === pathname)?.label ?? (pathname.startsWith("/agents/") ? "Agent workspace" : pathname.startsWith("/sessions/") ? "Session record" : pathname === "/market/stocks" ? "Stocks" : pathname === "/market/candles" ? "Candle store" : pathname === "/market/evidence" ? "V5 market evidence" : pathname === "/v5/readiness" ? "V5 readiness" : "RSI V5");
+  const heading = nav.find(item => item.to === pathname)?.label ?? (pathname.startsWith("/agents/") ? "Agent workspace" : pathname.startsWith("/sessions/") ? "Session record" : pathname === "/market/stocks" ? "Stocks" : pathname === "/v5/readiness" ? "V5 readiness" : "RSI V5");
   useEffect(() => {
     setNavOpen(false);
     const el = navRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
@@ -48,7 +50,7 @@ export function V5AppShell({ children }: { children: React.ReactNode }) {
       </nav>
       <div className="v5-shell-tools"><span className="v5-shell-route text-sm text-[var(--color-text-muted)]">{heading}</span><NavLink to="/settings" aria-label="V5 settings" title="V5 settings" className={({ isActive }) => `rounded p-1.5 ${isActive ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)]" : "text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"}`}><Settings className="h-4 w-4" /></NavLink><button onClick={toggleTheme} className="rounded p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]" title={theme === "dark" ? "Switch to light mode" : theme === "light" ? "Switch to color-blind mode" : "Switch to dark mode"}>{theme === "dark" ? <Sun className="h-4 w-4" /> : theme === "light" ? <Eye className="h-4 w-4" /> : <Moon className="h-4 w-4" />}</button><button aria-label="Refresh V5 workspace" title="Refresh V5 workspace" onClick={() => { void query.invalidateQueries({ queryKey: ["v5-workspace"] }); void query.invalidateQueries({ queryKey: ["v5-sessions"] }); }} className="rounded px-2 py-1 text-sm text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]">Refresh</button><button aria-label="Sign out of RSI V5" title="Sign out" onClick={logout} className="rounded p-1.5 text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)]"><LogOut className="h-4 w-4" /></button></div>
     </header>
-    <div role="status" className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)]"><ShieldCheck className="h-3.5 w-3.5 text-[var(--color-primary)]" />{pathname === "/market/stocks" ? "OKX stocks · public market observations · execution disabled" : pathname === "/market/candles" ? "Candle store · read-only owner observations · execution disabled" : paperLabel ?? "V5 profile · separate Razer service · execution disabled · baseline and account owners unbound"}<NavLink to="/v5/readiness" className="underline">Readiness and open gates</NavLink></div>
+    <div role="status" className="flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)]"><ShieldCheck className="h-3.5 w-3.5 text-[var(--color-primary)]" />{pathname === "/market/stocks" ? "OKX stocks · public market observations · execution disabled" : paperLabel ?? "V5 profile · separate Razer service · execution disabled · baseline and account owners unbound"}<NavLink to="/v5/readiness" className="underline">Readiness and open gates</NavLink></div>
     <main className="relative flex-1 overflow-auto p-3 sm:p-6"><div className="mx-auto w-full max-w-[1600px]">{children}</div></main>
   </div>;
 }

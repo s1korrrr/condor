@@ -169,6 +169,7 @@ test('the last-complete-equity fallback needs a current wallet the owner itself 
   assert.equal(paperWalletOwnerDegraded({ ...wallet, data: null, completeness: 'unavailable', reason: 'Wallet owner schema invalid; this section is unavailable.' }, at + 5_000), false);
   assert.equal(paperWalletOwnerDegraded(wallet, at + 31_000), false, 'a stale read is never revived');
   assert.equal(paperWalletOwnerDegraded({ ...wallet, generated_at_ms: at + 60_000 }, at), false, 'a future timestamp is not current');
+  assert.equal(paperWalletOwnerDegraded({ ...wallet, generated_at_ms: at + 1_000 }, at), false, 'even 1 s ahead (inside the 5 s skew tolerance) is not current (Sol R2 S3)');
   assert.equal(paperWalletOwnerDegraded({ ...wallet, state: 'available' }, at + 5_000), false);
   assert.equal(paperWalletOwnerDegraded({ ...wallet, section: 'positions' }, at + 5_000), false);
 });

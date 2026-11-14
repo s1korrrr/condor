@@ -317,7 +317,8 @@ export function paperWalletOwnerDegraded(read: import("./contracts").PaperRead |
   if (!read || read.section !== "wallet" || paperSectionError(read) || read.state !== "degraded") return false;
   if (read.completeness === "unavailable" || !read.data || typeof read.data !== "object" || Array.isArray(read.data)) return false;
   const at = read.generated_at_ms;
-  return typeof at === "number" && paperTimestampIssue(at, now) === null && now - at <= PAPER_SNAPSHOT_FRESH_MS;
+  // Not in the future at all (paperTimestampIssue alone tolerates 5 s of skew), and within the 30 s line.
+  return typeof at === "number" && paperTimestampIssue(at, now) === null && now >= at && now - at <= PAPER_SNAPSHOT_FRESH_MS;
 }
 
 export function paperWalletTotals(read: import("./contracts").PaperRead | undefined, now: number): { equity: unknown; cash: unknown } | null {

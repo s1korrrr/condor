@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { dayCoverage, equityChangeSince, holdReturn, latest, series } from '../src/v5/money-model.mjs';
+import { dayCoverage, equityChange, holdReturn, latest, series } from '../src/v5/money-model.mjs';
 
 const T0 = Date.UTC(2026, 10, 14, 0, 0);
 const row = (minutes, extra = {}) => ({ bot: 'v5', at_ms: T0 + minutes * 60_000, equity: '100', realized: '1', ...extra });
@@ -28,23 +28,21 @@ test('day coverage counts only slots with values', () => {
   assert.equal(dayCoverage(null), null);
 });
 
-test('holding needs the whole basket at both window ends', () => {
-  const start = 1_000_000, end = start + 7 * 86_400;
-  const full = { BTC: [[start, 100], [end, 110]], ETH: [[start + 60, 50], [end - 60, 45]] };
-  assert.ok(Math.abs(holdReturn(full, start, end).pct - 0) < 1e-9);
-  // A coin with only a start close, or one starting late, makes the comparison unavailable, never a smaller basket.
-  const onlyStart = holdReturn({ ...full, SOL: [[start, 10]] }, start, end);
-  assert.deepEqual([onlyStart.pct, onlyStart.missing], [null, ['SOL']]);
-  assert.equal(holdReturn({ ...full, XRP: [[start + 7200, 1], [end, 2]] }, start, end).pct, null);
-  assert.equal(holdReturn({ ...full, BNB: undefined }, start, end).pct, null);
-  assert.equal(holdReturn({}, start, end).pct, null);
+test('holding uses only minutes every coin shares, and names them', () => {
+  const s = 1_000_000;
+  // ETH lacks the first minute: the shared first minute is s+300, never a substitute for s.
+  const result = holdReturn({ BTC: [[s, 100], [s + 300, 100], [s + 600, 110]], ETH: [[s + 300, 50], [s + 600, 45]] });
+  assert.deepEqual([result.startS, result.endS], [s + 300, s + 600]);
+  assert.ok(Math.abs(result.pct - 0) < 1e-9);
+  assert.deepEqual(holdReturn({ BTC: [[s, 1], [s + 300, 2]], SOL: undefined }).missing, ['SOL']);
+  assert.equal(holdReturn({ BTC: [[s, 1], [s + 300, 2]], ETH: [[s + 600, 1]] }).pct, null);  // no shared minute
+  assert.equal(holdReturn({}).pct, null);
 });
 
-test('equity change needs samples at both ends of the same window', () => {
-  const rows = [row(0, { equity: '100' }), row(60, { equity: '110' }), row(120, { gap: 'x' })];
-  assert.ok(Math.abs(equityChangeSince(rows, 'v5', T0, T0 + 60 * 60_000) - 10) < 1e-9);
-  // The window ends 3 hours after the last valid sample: trailing gaps do not silently shorten it.
-  assert.equal(equityChangeSince(rows, 'v5', T0, T0 + 4 * 3_600_000), null);
-  assert.equal(equityChangeSince(rows, 'v5', T0 - 3 * 3_600_000, T0 + 60 * 60_000), null);
-  assert.equal(equityChangeSince([row(0)], 'v5', T0, T0), null);
+test('V5 equity change uses its own first and last sample with values', () => {
+  const rows = [row(0, { equity: '100' }), row(55, { equity: '105' }), row(60, { gap: 'x' })];
+  const result = equityChange(rows, 'v5');
+  assert.deepEqual([result.startMs, result.endMs], [T0, T0 + 55 * 60_000]);
+  assert.ok(Math.abs(result.pct - 5) < 1e-9);
+  assert.equal(equityChange([row(0)], 'v5').pct, null);
 });

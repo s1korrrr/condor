@@ -42,28 +42,26 @@ export function dayCoverage(entry) {
 }
 
 /**
- * Equal-weight return of holding the whole basket over one window, from owner close series ([seconds, close][]).
- * Every coin needs a close within `toleranceS` of both the window start and end; otherwise the comparison is
- * unavailable and the coins that lack a boundary are named. The basket is never silently reduced.
+ * Equal-weight return of holding the whole basket between the first and last minute at which EVERY coin has a close
+ * ([seconds, close][] per coin). Those exact minutes are returned with the figure; a coin without closes withholds it.
+ * Nothing is substituted: a minute where one coin lacks a close is not a shared boundary.
  */
-export function holdReturn(closesByCoin, startS, endS, toleranceS = 3600) {
-  const returns = [];
-  const missing = [];
-  for (const [coin, points] of Object.entries(closesByCoin)) {
-    const valid = (points ?? []).filter(point => Array.isArray(point) && Number.isFinite(point[1]) && point[1] > 0);
-    const first = valid[0], last = valid[valid.length - 1];
-    if (!first || first[0] - startS > toleranceS || endS - last[0] > toleranceS || last === first) { missing.push(coin); continue; }
-    returns.push(last[1] / first[1] - 1);
-  }
-  const complete = missing.length === 0 && returns.length > 0;
-  return { pct: complete ? (returns.reduce((sum, value) => sum + value, 0) / returns.length) * 100 : null, coins: returns.length, missing };
+export function holdReturn(closesByCoin) {
+  const coins = Object.keys(closesByCoin);
+  const byCoin = coins.map(coin => new Map((closesByCoin[coin] ?? []).filter(point => Array.isArray(point) && Number.isFinite(point[0]) && Number.isFinite(point[1]) && point[1] > 0).map(point => [point[0], point[1]])));
+  const missing = coins.filter((_coin, index) => byCoin[index].size === 0);
+  if (!coins.length || missing.length) return { pct: null, startS: null, endS: null, missing };
+  const shared = [...byCoin[0].keys()].filter(time => byCoin.every(closes => closes.has(time))).sort((a, b) => a - b);
+  if (shared.length < 2) return { pct: null, startS: null, endS: null, missing: [] };
+  const startS = shared[0], endS = shared[shared.length - 1];
+  const pct = (byCoin.reduce((sum, closes) => sum + (closes.get(endS) / closes.get(startS) - 1), 0) / byCoin.length) * 100;
+  return { pct, startS, endS, missing: [] };
 }
 
-/** Equity change over the same window: values within `toleranceMs` of both its start and its end, else null. */
-export function equityChangeSince(rows, bot, startMs, endMs, toleranceMs = 3_600_000) {
+/** V5 equity change between its own first and last sample with a value in the given rows, with those exact times. */
+export function equityChange(rows, bot) {
   const ordered = botRows(rows, bot).filter(row => !row.gap && number(row.equity) !== null);
-  const first = ordered.find(row => row.at_ms >= startMs - toleranceMs);
-  const last = [...ordered].reverse().find(row => row.at_ms <= endMs + toleranceMs);
-  if (!first || !last || first === last || first.at_ms - startMs > toleranceMs || endMs - last.at_ms > toleranceMs) return null;
-  return (number(last.equity) / number(first.equity) - 1) * 100;
+  const first = ordered[0], last = ordered[ordered.length - 1];
+  if (!first || first === last) return { pct: null, startMs: null, endMs: null };
+  return { pct: (number(last.equity) / number(first.equity) - 1) * 100, startMs: first.at_ms, endMs: last.at_ms };
 }

@@ -6,14 +6,14 @@ import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable"
 import { CHART, type ChartSeries } from "@/features/quant-ops/kit/series";
 import { readCandleStore } from "./candle-store-api";
 import { v5Api } from "./api";
-import { dayCoverage, equityChangeSince, holdReturn, latest, series, type DailyRow, type MoneyRow } from "./money-model.mjs";
+import { dayCoverage, equityChange, holdReturn, latest, series, type DailyRow, type MoneyRow } from "./money-model.mjs";
 import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
 import { utcMinute } from "./shown.mjs";
 import "./market.css";
 
 type MoneyRead = { sampler: boolean; started_at_ms: number | null; now_ms: number; range: string; rows: MoneyRow[]; daily: DailyRow[]; recorder_errors: { count: number; last: string | null; at_ms: number | null } };
 type CrossLine = { venue: string; lane: string; close: [number, number][] };
-type Hold = { closes: Record<string, [number, number][] | undefined>; startS: number; endS: number };
+type Hold = { closes: Record<string, [number, number][] | undefined> };
 const RANGES = ["24h", "7d"] as const;
 
 async function readMoney(range: string): Promise<MoneyRead> {
@@ -25,17 +25,13 @@ async function readMoney(range: string): Promise<MoneyRead> {
 /** The reference spot lane's closes for each coin over the candle store's 7 days, read one after another. */
 async function readHold(): Promise<Hold> {
   const closes: Record<string, [number, number][] | undefined> = {};
-  // The common window of all reads: the latest start and the earliest end.
-  let startS = Number.NEGATIVE_INFINITY, endS = Number.POSITIVE_INFINITY;
   for (const coin of MARKET_COINS) {
     try {
-      const view = await readCandleStore<{ start: number; end: number; series: CrossLine[] }>("cross", { asset: coin, segment: "spot", range: "7d" });
-      startS = Math.max(startS, view.start);
-      endS = Math.min(endS, view.end);
+      const view = await readCandleStore<{ series: CrossLine[] }>("cross", { asset: coin, segment: "spot", range: "7d" });
       closes[coin] = view.series.find(line => line.lane === REFERENCE.spot)?.close;
     } catch { closes[coin] = undefined; }
   }
-  return { closes, startS, endS };
+  return { closes };
 }
 
 const amount = (value: number | null | undefined, digits = 2) => value == null ? "—" : value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
@@ -72,10 +68,10 @@ export function V5Money() {
   const coins = (now?.coins ?? {}) as Record<string, { realized: string | null; unrealized: string | null }>;
   const coinRows = Object.entries(coins).map(([coin, values]) => ({ label: coin, realized: num(values.realized), unrealized: num(values.unrealized) }));
   const days = money.data?.daily ?? [];
-  const span = hold.data && Number.isFinite(hold.data.startS) && Number.isFinite(hold.data.endS) ? hold.data : null;
-  const holdView = span ? holdReturn(span.closes, span.startS, span.endS) : null;
-  // The holding window is the candle store's 7 days; only the 7d rows can cover it.
-  const v5Since = span && money.data?.range === "7d" ? equityChangeSince(rows, "v5", span.startS * 1000, span.endS * 1000) : null;
+  const holdView = hold.data ? holdReturn(hold.data.closes) : null;
+  // V5 over its own first and last sample in the 7-day rows; it is "the same window" only if both ends match exactly.
+  const v5View = money.data?.range === "7d" ? equityChange(rows, "v5") : null;
+  const sameWindow = holdView?.pct != null && v5View?.pct != null && holdView.startS! * 1000 === v5View.startMs && holdView.endS! * 1000 === v5View.endMs;
 
   return <div className="v5m">
     <header className="v5m-head">
@@ -110,9 +106,9 @@ export function V5Money() {
         <article className="v5m-card"><h3>By coin</h3><p className="v5m-hint">Lifetime closed-trade profit and held-coin gain or loss per coin, latest sample</p>
           <BarsChart rows={coinRows} bars={[{ id: "realized", label: "Closed-trade profit", color: CHART.positive }, { id: "unrealized", label: "Held-coin gain or loss", color: CHART.negative }]} height={200} ariaLabel="V5 P&L by coin" emptyText="No per-coin values in the latest sample." /></article>
         <article className="v5m-card"><h3>Against holding the five coins</h3><p className="v5m-hint">Equal weights in {MARKET_COINS.join(", ")} over the candle store's 7 days ({REFERENCE.venue} spot {REFERENCE.quote})</p>
-          {!candleConfigured ? <p className="v5m-hint">{profile.isPending ? "Checking for the candle store…" : "No candle store in this deployment, so holding the coins cannot be priced."}</p> : hold.isPending ? <p role="status" className="v5m-hint">Reading 7 days of prices…</p> : !holdView || holdView.pct == null ? <p className="v5m-hint">Holding comparison unavailable{holdView?.missing.length ? `: no close at the window start or end for ${holdView.missing.join(", ")}` : ": no 7-day prices"}. The basket is never reduced to fewer coins.</p> : <div className="v5m-stats">
-            <Stat label="Holding the five coins" value={`${signed(holdView.pct)}%`} note={`${at(span!.startS * 1000)} → ${at(span!.endS * 1000)}`} />
-            <Stat label="V5 wallet equity" value={v5Since == null ? "—" : `${signed(v5Since)}%`} note={v5Since == null ? (money.data.range !== "7d" ? "pick 7d to compare" : "needs samples at both ends of the same window; the record is younger") : "same window"} />
+          {!candleConfigured ? <p className="v5m-hint">{profile.isPending ? "Checking for the candle store…" : "No candle store in this deployment, so holding the coins cannot be priced."}</p> : hold.isPending ? <p role="status" className="v5m-hint">Reading 7 days of prices…</p> : !holdView || holdView.pct == null ? <p className="v5m-hint">Holding comparison unavailable{holdView?.missing.length ? `: no 7-day closes for ${holdView.missing.join(", ")}` : ": the five coins share no first and last minute"}. The basket is never reduced to fewer coins.</p> : <div className="v5m-stats">
+            <Stat label="Holding the five coins" value={`${signed(holdView.pct)}%`} note={`from ${at(holdView.startS! * 1000)} to ${at(holdView.endS! * 1000)}`} />
+            <Stat label="V5 wallet equity" value={v5View?.pct == null ? "—" : `${signed(v5View.pct)}%`} note={money.data.range !== "7d" ? "pick 7d to compare" : v5View?.pct == null ? "fewer than two samples with values in 7 days" : `from ${at(v5View.startMs)} to ${at(v5View.endMs)}${sameWindow ? " · same window" : " · its own record, not the same window"}`} />
           </div>}
           <p className="v5m-hint">Only the candle store's 7 days can be priced, so the comparison never reaches the trial start (2026-10-29).</p></article>
       </div>

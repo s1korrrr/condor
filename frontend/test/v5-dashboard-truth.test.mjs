@@ -3,7 +3,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { paperWalletOwnerDegraded, paperExitProjection, paperPairHoldings, paperPairBag, paperReadFailureMessage, paperRiskControllers, paperRiskUsage } from '../src/v5/policy.ts';
+import { paperWalletOwnerDegraded, paperLastWalletToKeep, paperLastWalletToShow, paperExitProjection, paperPairHoldings, paperPairBag, paperReadFailureMessage, paperRiskControllers, paperRiskUsage } from '../src/v5/policy.ts';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
 const final3 = Object.fromEntries(['status','wallet','positions','executors','fills','risk','decisions','history','operations'].map(section => [section, JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/${section}.json`, import.meta.url)))]));
@@ -167,4 +167,21 @@ test('the last-complete-equity fallback needs a current wallet the owner itself 
   assert.equal(paperWalletOwnerDegraded({ ...wallet, generated_at_ms: at + 1_000 }, at), false, 'even 1 s ahead (inside the 5 s skew tolerance) is not current (Sol R2 S3)');
   assert.equal(paperWalletOwnerDegraded({ ...wallet, state: 'available' }, at + 5_000), false);
   assert.equal(paperWalletOwnerDegraded({ ...wallet, section: 'positions' }, at + 5_000), false);
+});
+
+test('the remembered wallet is never a future value and is shown only when older than the degraded read (Terra R2)', () => {
+  const now = 100_000;
+  const read = (state, at) => ({ schema: 'rsibot.v5-paper.read.v1', section: 'wallet', state, execution_mode: 'paper', simulated: true, bot_id: 'meridian_v5_paper', snapshot_id: 'b:1', generated_at_ms: at, observed_at_ms: at, read_at_ms: at, source_at_ms: at, completeness: 'complete', reason: state === 'degraded' ? 'missing_fresh_marks:BTC' : null, capabilities: ['read'], source: {}, next_cursor: null, data: { equity_quote: state === 'degraded' ? null : '199000' } });
+  const totals = { equity: '199000', cash: '193000' };
+  // A complete wallet 4 s ahead (inside the 5 s skew tolerance) is not remembered.
+  assert.equal(paperLastWalletToKeep('v5', totals, read('available', now + 4_000), now), null);
+  const kept = paperLastWalletToKeep('v5', totals, read('available', now - 10_000), now);
+  assert.deepEqual(kept, { bot: 'v5', equity: '199000', cash: '193000', asOf: now - 10_000 });
+  // Shown for a newer owner-degraded read of the same bot...
+  assert.equal(paperLastWalletToShow(kept, 'v5', read('degraded', now - 2_000), now), kept);
+  // ...never when the remembered value is newer than (or as new as) the degraded read, for another bot, or a stale read.
+  assert.equal(paperLastWalletToShow(kept, 'v5', read('degraded', now - 10_000), now), null);
+  assert.equal(paperLastWalletToShow({ ...kept, asOf: now - 1_000 }, 'v5', read('degraded', now - 2_000), now), null);
+  assert.equal(paperLastWalletToShow(kept, 'other', read('degraded', now - 2_000), now), null);
+  assert.equal(paperLastWalletToShow(kept, 'v5', read('degraded', now - 40_000), now), null);
 });

@@ -321,6 +321,23 @@ export function paperWalletOwnerDegraded(read: import("./contracts").PaperRead |
   return typeof at === "number" && paperTimestampIssue(at, now) === null && now >= at && now - at <= PAPER_SNAPSHOT_FRESH_MS;
 }
 
+export type PaperLastWallet = { bot: string; equity: unknown; cash: unknown; asOf: number };
+
+/** The complete wallet to remember as "last complete": only one that is not in the future at all. */
+export function paperLastWalletToKeep(bot: string, totals: { equity: unknown; cash: unknown } | null, read: import("./contracts").PaperRead | undefined, now: number): PaperLastWallet | null {
+  const at = read?.generated_at_ms;
+  return totals && typeof at === "number" && at <= now ? { bot, ...totals, asOf: at } : null;
+}
+
+/**
+ * The remembered wallet to show while the owner withholds the current one: same bot, current owner-degraded read
+ * (paperWalletOwnerDegraded), and strictly older than that read, so a newer value is never shown as "last".
+ */
+export function paperLastWalletToShow(kept: PaperLastWallet | null, bot: string, read: import("./contracts").PaperRead | undefined, now: number): PaperLastWallet | null {
+  if (!kept || kept.bot !== bot || !paperWalletOwnerDegraded(read, now)) return null;
+  return kept.asOf < (read!.generated_at_ms as number) ? kept : null;
+}
+
 export function paperWalletTotals(read: import("./contracts").PaperRead | undefined, now: number): { equity: unknown; cash: unknown } | null {
   if (!read || read.section !== "wallet" || !paperCompleteRead(read, now) || !read.data || typeof read.data !== "object" || Array.isArray(read.data)) return null;
   const wallet = read.data as Record<string, unknown>;

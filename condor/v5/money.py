@@ -26,7 +26,9 @@ def seconds_to_next_slot(now_ms: int) -> float:
     """Sleep to the next 5-minute UTC slot boundary, so samples sit on one grid instead of drifting."""
     return SAMPLE_INTERVAL_S - (now_ms / 1000) % SAMPLE_INTERVAL_S
 MAX_ROWS = 2 * 24 * 12 * 31  # two bots, five-minute samples, about a month
-DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,24})?")
+# The owner's accounting publishes exact Decimal text with 25-28 fraction digits
+# (realized_pnl_quote "114.1396691483993272381433853"); 24 recorded them as unknown.
+DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,30})?")
 
 
 def _decimal(value: Any) -> str | None:

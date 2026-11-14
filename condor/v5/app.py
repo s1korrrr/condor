@@ -304,7 +304,9 @@ def create_app(
             accounting = await money_section(prefix + "fleet/accounting")
             rows.append(v5_row(wallet, accounting, now))
         if config.helm_status_file is not None:
-            helm = await run_in_threadpool(read_helm_status, config.helm_status_file, now=now / 1000)
+            # Judge Helm's file against the time it is read, not the slot time taken before the paper reads (those
+            # can take seconds, and Helm rewrites its status every second, which read as clock skew).
+            helm = await run_in_threadpool(read_helm_status, config.helm_status_file, now=clock() / 1000)
             rows.append(helm_row(helm, now))
         if rows:
             await run_in_threadpool(money.append, rows)

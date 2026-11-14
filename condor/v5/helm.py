@@ -38,6 +38,11 @@ def _plain(value: Any) -> str | None:
     return value if isinstance(value, str) and PLAIN.fullmatch(value) else None
 
 
+def _note(value: Any) -> str | None:
+    """A sentence, or the empty note a controller publishes when nothing is held."""
+    return "" if value == "" else _plain(value)
+
+
 def _flag(value: Any) -> bool | None:
     return value if isinstance(value, bool) else None
 
@@ -140,8 +145,12 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
     shown = _Projection()
     symbols: list[dict[str, Any]] = []
     recipes: list[str] = []
+    gates: list[dict[str, Any]] = []
     controllers = payload.get("controllers") if isinstance(payload.get("controllers"), list) else []
     for controller in controllers[:4]:
+        if isinstance(controller, dict):
+            # The controller's own acquisition gate: 'ready' only when nothing holds new buys (e.g. symbol_fault + pairs).
+            gates.append(shown.pick(controller, {"id": _code, "gate": _code, "note": _note}))
         info = controller.get("custom_info") if isinstance(controller, dict) else None
         if not isinstance(info, dict) or not isinstance(info.get("symbols"), dict):
             continue
@@ -192,6 +201,7 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
             "recent": [shown.pick(row, {"action": _code, "at_ms": _epoch_ms, "reason": _plain}) for row in recent[:5]],
         },
         "symbols": symbols,
+        "gates": gates,
         # One recipe across controllers, or None when none or several are published (never a guess).
         "recipe_version": recipes[0] if len(recipes) == 1 else None,
         "money": _money(payload),

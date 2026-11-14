@@ -23,6 +23,14 @@ export function helmHeadline(read) {
     const words = code => String(code).replaceAll('_', ' ');
     if (status.operator_entry_paused === true) return { text: 'Running, not buying: new entries paused by the operator', good: false };
     if (status.entries_held) return { text: `Running, not buying: ${words(status.entries_held)}`, good: false };
+    // The controllers' own acquisition gates come first: a gate other than 'ready' (e.g. symbol_fault for a latched
+    // coin) holds new buys whatever each coin's entry check says. Unknown or missing gates never count as ready.
+    const gates = Array.isArray(status.gates) ? status.gates : [];
+    const closed = gates.filter(row => row?.gate !== 'ready');
+    if (closed.length) {
+      const named = closed.map(row => `${words(row?.gate ?? 'gate not published')}${row?.note ? ` (${row.note})` : ''}`).join('; ');
+      return { text: `Running, not buying: ${named}`, good: false };
+    }
     const symbols = Array.isArray(status.symbols) ? status.symbols : [];
     // A hold that is not a signal wait (a fault, a missing checkpoint, an unknown code) is never shown as normal idle.
     const blocked = symbols.filter(row => row?.candidate_hold && !SIGNAL_WAIT.has(row.candidate_hold));
@@ -31,7 +39,7 @@ export function helmHeadline(read) {
       return { text: `Running, not buying ${blocked.length === symbols.length ? 'on any coin' : `on ${blocked.map(row => row.pair ?? 'a coin').join(', ')}`}: ${codes}`, good: false };
     }
     // Every coin held only by its entry signal is Helm's normal idle state: it is waiting for a signal.
-    if (symbols.length && symbols.every(row => row?.candidate_hold)) {
+    if (gates.length && symbols.length && symbols.every(row => row?.candidate_hold)) {
       const holds = [...new Set(symbols.map(row => row.candidate_hold))], statuses = [...new Set(symbols.map(row => row?.status).filter(Boolean))];
       return { text: 'Running, waiting for a signal', good: true, detail: `Every coin idle: ${holds.map(words).join(', ')}${statuses.length ? ` · coin status ${statuses.map(words).join(', ')}` : ''}.` };
     }

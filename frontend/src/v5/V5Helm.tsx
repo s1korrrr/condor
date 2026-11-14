@@ -15,6 +15,7 @@ type HelmStatus = {
   risk: { reason: string | null; latched: boolean | null; daily_loss_use: Amount; risk_reference_quote: Amount; unit: string | null } | null;
   control_rejections: { count: Amount; recent: ({ action: string | null; at_ms: number | null; reason: string | null } | null)[] } | null;
   recipe_version: string | null;
+  gates: ({ id: string | null; gate: string | null; note: string | null } | null)[];
   symbols: { pair: string; status: string | null; candidate_hold: string | null; bag: { held_amount: Amount; breakeven_price: Amount } | null; last_decision: { at: number | null; reason: string | null } | null }[];
   withheld: number;
 };

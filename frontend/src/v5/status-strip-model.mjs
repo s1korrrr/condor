@@ -42,8 +42,9 @@ function helmChip(helm) {
   const { text, good } = helmHeadline(helm.read);
   const stopped = !!helm.read.status?.reasons?.includes('runtime_stopped');
   const fresh = helm.read.state === 'FRESH';
-  const tone = good && fresh ? 'green' : stopped ? 'red' : fresh ? 'amber' : 'grey';
-  const short = tone === 'green' ? (text === 'Running' ? 'Helm running' : 'Helm waiting') : tone === 'red' ? 'Helm stopped' : tone === 'amber' ? 'Helm not buying' : 'Helm unknown';
+  // Helm's headline is tri-state: green only when it says so, amber when it says not buying, neutral (grey) otherwise.
+  const tone = stopped ? 'red' : !fresh ? 'grey' : good === true ? 'green' : good === false ? 'amber' : 'grey';
+  const short = tone === 'green' ? 'Helm waiting' : tone === 'red' ? 'Helm stopped' : tone === 'amber' ? 'Helm not buying' : fresh && good === null ? 'Helm running' : 'Helm unknown';
   return { ...base, tone, text, short };
 }
 

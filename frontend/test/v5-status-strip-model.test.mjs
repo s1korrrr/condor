@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import { slowestLaneAge, statusStrip, utcClock } from '../src/v5/status-strip-model.mjs';
 
 const NOW = Date.parse('2026-11-14T12:00:30Z');
-const status = (extra = {}) => ({ generated_at: NOW / 1000 - 5, reasons: [], ready: true, symbols: [], ...extra });
+const status = (extra = {}) => ({ generated_at: NOW / 1000 - 5, reasons: [], ready: true, gates: [{ gate: 'ready', note: '' }], symbols: [{ pair: 'BTC-USDC', candidate_hold: 'no_rebound' }], ...extra });
 const input = (over = {}) => ({
   nowMs: NOW,
   v5: { bound: true, pending: false, current: true, entryHold: null, lastOkMs: NOW - 4000 },
@@ -39,6 +39,9 @@ test('Helm reuses helmHeadline: waiting is green, not buying is amber, stopped i
   assert.deepEqual([green.tone, green.text, green.short], ['green', 'Running, waiting for a signal', 'Helm waiting']);
   const paused = chip(statusStrip(input({ helm: { read: { state: 'FRESH', status: status({ operator_entry_paused: true }) }, failed: false, lastOkMs: NOW } })), 'helm');
   assert.deepEqual([paused.tone, paused.text], ['amber', 'Running, not buying: new entries paused by the operator']);
+  // Neutral headline (ready gate, a planner code on a coin): plain grey dot, never green or amber, still 'running'.
+  const neutral = chip(statusStrip(input({ helm: { read: { state: 'FRESH', status: status({ symbols: [{ pair: 'BTC-USDC', candidate_hold: 'bag_gap_not_met' }] }) }, failed: false, lastOkMs: NOW } })), 'helm');
+  assert.deepEqual([neutral.tone, neutral.text, neutral.short], ['grey', 'Running, entry gate ready', 'Helm running']);
   assert.equal(chip(statusStrip(input({ helm: { read: { state: 'STALE', status: status({ reasons: ['runtime_stopped'] }) }, failed: false, lastOkMs: NOW } })), 'helm').tone, 'red');
   assert.equal(chip(statusStrip(input({ helm: { read: { state: 'STALE', status: status() }, failed: false, lastOkMs: NOW } })), 'helm').tone, 'grey');
   const failed = chip(statusStrip(input({ helm: { read: null, failed: true, lastOkMs: Date.parse('2026-11-14T11:59:00Z') } })), 'helm');

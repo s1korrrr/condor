@@ -79,7 +79,7 @@ test('review probe: first commit after a zero-subscriber gap', async () => {
     await React.act(async () => {mount.render(React.createElement(V5App));});
     await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
     console.log('ON SETTINGS:', container.textContent.match(/Last coherent owner snapshot · [^·]+· [a-z ;]+/)?.[0]);
-    const agents = [...container.querySelectorAll('a')].find(a => a.getAttribute('href') === '/agents');
+    const agents = [...container.querySelectorAll('a')].find(a => a.getAttribute('href') === '/research');
     await React.act(async () => {agents.dispatchEvent(new browser.MouseEvent('click',{bubbles:true,cancelable:true,button:0}));});
     await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
     console.log('ON AGENTS, identity mounted:', container.textContent.includes('Paper owner identity'));

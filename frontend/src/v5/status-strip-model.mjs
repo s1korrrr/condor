@@ -15,9 +15,30 @@ export function utcClock(ms) {
   return typeof ms === 'number' && Number.isFinite(ms) && ms > 0 && ms <= MAX_DATE_MS ? `${new Date(ms).toISOString().slice(11, 19)} UTC` : null;
 }
 
-const DECIMAL = /^-?\d+(\.\d+)?$/;
-const decimal = value => (typeof value === 'string' && value.length <= 64 && DECIMAL.test(value) ? Number(value) : null);
-const money = (value, digits = 2) => value.toLocaleString('en-US', { minimumFractionDigits: digits, maximumFractionDigits: digits });
+/** Helm's own freshness line (condor/v5/helm.py STALE_AFTER_SECONDS). */
+export const HELM_STALE_S = 30;
+
+const DECIMAL = /^(-?)(\d+)(?:\.(\d+))?$/;
+/** Exact decimal text as {neg, digits: BigInt, scale}, or null. */
+function decimal(value) {
+  const match = typeof value === 'string' && value.length <= 64 ? DECIMAL.exec(value) : null;
+  return match ? { neg: match[1] === '-', digits: BigInt(match[2] + (match[3] ?? '')), scale: (match[3] ?? '').length } : null;
+}
+const scaled = (d, scale) => (d.neg ? -1n : 1n) * d.digits * 10n ** BigInt(scale - d.scale);
+/** Exact a - b as cents, rounded half away from zero. */
+function centsOf(value, scale) {
+  const unit = 10n ** BigInt(Math.max(0, scale - 2));
+  if (scale <= 2) return value * 10n ** BigInt(2 - scale);
+  const neg = value < 0n, abs = neg ? -value : value;
+  const cents = (abs + unit / 2n) / unit;
+  return neg ? -cents : cents;
+}
+/** "1,234.56" from cents (BigInt), true minus for negatives. */
+function money(cents) {
+  const neg = cents < 0n, abs = neg ? -cents : cents;
+  const int = (abs / 100n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ','), frac = (abs % 100n).toString().padStart(2, '0');
+  return `${neg ? '−' : ''}${int}.${frac}`;
+}
 
 /** "No report since HH:MM:SS UTC", or "No report yet" when nothing has ever been read. */
 function noReport(lastOkMs) {
@@ -28,33 +49,46 @@ function noReport(lastOkMs) {
 function v5Chip(v5) {
   const base = { id: 'v5', label: 'V5', to: '/bots' };
   if (!v5.bound) return { ...base, tone: 'grey', text: 'No paper bot bound', short: 'V5 n/a' };
+  // A received owner hold (operator pause, emergency halt, native latch or entry hold), from the current snapshot or
+  // newer retained safety evidence, is shown even while the next snapshot is still loading; it is never hidden.
+  if (v5.entryHold === true) return { ...base, tone: 'amber', text: v5.emergency ? 'Emergency halt reported: buying stopped' : 'Buying paused by an owner hold', short: 'V5 paused' };
   if (v5.pending) return { ...base, tone: 'grey', text: 'Reading the owner report', short: 'V5 …' };
   if (!v5.current) return { ...base, tone: 'grey', text: noReport(v5.lastOkMs), short: 'V5 no report' };
-  if (v5.entryHold === true) return { ...base, tone: 'amber', text: 'Buying paused by an owner hold', short: 'V5 paused' };
   return { ...base, tone: 'green', text: 'Running', short: 'V5 running' };
 }
 
-function helmChip(helm) {
+function helmChip(helm, nowMs) {
   const base = { id: 'helm', label: 'Helm', to: '/helm' };
   if (!helm.read) return { ...base, tone: 'grey', text: helm.failed ? noReport(helm.lastOkMs) : 'Reading Helm', short: helm.failed ? 'Helm no report' : 'Helm …' };
   // A failed refresh keeps no value as current: only the last-report time is shown.
   if (helm.failed) return { ...base, tone: 'grey', text: noReport(helm.lastOkMs), short: 'Helm no report' };
-  const { text, good } = helmHeadline(helm.read);
-  const stopped = !!helm.read.status?.reasons?.includes('runtime_stopped');
-  const fresh = helm.read.state === 'FRESH';
+  // Age Helm's status with the clock since the read arrived, so a cached FRESH read expires at Helm's own 30 s line.
+  const elapsedS = Number.isFinite(helm.receivedAtMs) ? Math.max(0, (nowMs - helm.receivedAtMs) / 1000) : Infinity;
+  const status = helm.read.status;
+  const ageS = Number.isFinite(status?.age_s) ? status.age_s + elapsedS
+    : Number.isFinite(status?.generated_at) ? Math.max(0, nowMs / 1000 - status.generated_at) : Infinity;
+  const read = helm.read.state === 'FRESH' && ageS > HELM_STALE_S ? { ...helm.read, state: 'STALE' } : helm.read;
+  const { text, good } = helmHeadline(read);
+  const stopped = !!read.status?.reasons?.includes('runtime_stopped');
+  const fresh = read.state === 'FRESH';
   // Helm's headline is tri-state: green only when it says so, amber when it says not buying, neutral (grey) otherwise.
   const tone = stopped ? 'red' : !fresh ? 'grey' : good === true ? 'green' : good === false ? 'amber' : 'grey';
   const short = tone === 'green' ? 'Helm waiting' : tone === 'red' ? 'Helm stopped' : tone === 'amber' ? 'Helm not buying' : fresh && good === null ? 'Helm running' : 'Helm unknown';
   return { ...base, tone, text, short };
 }
 
-function dataChip(data) {
+function dataChip(data, nowMs) {
   const base = { id: 'data', label: 'Market data', to: '/' };
   if (!data.configured) return { ...base, tone: 'grey', text: 'No candle store on this deployment', short: 'Data n/a' };
   if (data.pending) return { ...base, tone: 'grey', text: 'Reading the candle store', short: 'Data …' };
-  if (data.failed || !Number.isFinite(data.slowestLagS)) return { ...base, tone: 'grey', text: noReport(data.lastOkMs), short: 'Data no report' };
-  const lag = Math.max(0, Math.round(data.slowestLagS));
-  const late = data.slowestLagS > DATA_LAG_AMBER_S;
+  const lanes = data.lanes;
+  if (data.failed || !lanes || !lanes.total || !Number.isFinite(lanes.lagS)) return { ...base, tone: 'grey', text: noReport(data.lastOkMs), short: 'Data no report' };
+  // The owner's age at read time plus local time since the read arrived, so the chip ages between polls.
+  const elapsedS = Number.isFinite(data.receivedAtMs) ? Math.max(0, (nowMs - data.receivedAtMs) / 1000) : 0;
+  const lagS = lanes.lagS + elapsedS, lag = Math.max(0, Math.round(lagS));
+  // A lane that is unavailable or does not report its age is never read as live.
+  if (lanes.live < lanes.total) return { ...base, tone: 'amber', text: `${lanes.total - lanes.live} of ${lanes.total} lanes not live · slowest live lane ${lag} s`, short: 'Data partial' };
+  const late = lagS > DATA_LAG_AMBER_S;
   return { ...base, tone: late ? 'amber' : 'green', text: `${late ? 'Late' : 'Live'} · slowest lane ${lag} s`, short: late ? 'Data late' : 'Data live' };
 }
 
@@ -64,10 +98,14 @@ function equityChip(wallet) {
   if (equity === null) return { ...base, tone: 'grey', text: '—', short: '—' };
   const unit = typeof wallet.unit === 'string' && wallet.unit ? ` ${wallet.unit}` : '';
   const funding = decimal(wallet.funding), flows = decimal(wallet.flows);
-  // Change since start only when the start funding is published and no external cash moved in or out.
-  const change = funding !== null && flows === 0 ? equity - funding : null;
-  const delta = change === null ? 'change since start —' : `${change > 0 ? '+' : ''}${money(change)} since start`;
-  return { ...base, tone: 'green', text: `${money(equity)}${unit} · ${delta}`, short: money(equity) };
+  const equityText = money(centsOf(scaled(equity, equity.scale), equity.scale));
+  // Change since start only when the start funding is published and no external cash moved in or out; exact.
+  let delta = 'change since start —';
+  if (funding !== null && flows !== null && flows.digits === 0n) {
+    const scale = Math.max(equity.scale, funding.scale), cents = centsOf(scaled(equity, scale) - scaled(funding, scale), scale);
+    delta = `${cents > 0n ? '+' : ''}${money(cents)} since start`;
+  }
+  return { ...base, tone: 'green', text: `${equityText}${unit} · ${delta}`, short: equityText };
 }
 
 /**
@@ -79,7 +117,7 @@ function equityChip(wallet) {
  *   updatedMs: number | null }} input
  */
 export function statusStrip(input) {
-  const chips = [v5Chip(input.v5), helmChip(input.helm), dataChip(input.data), equityChip(input.wallet)];
+  const chips = [v5Chip(input.v5), helmChip(input.helm, input.nowMs), dataChip(input.data, input.nowMs), equityChip(input.wallet)];
   // Things to check: every state-bearing chip that is not green (the equity figure carries no judgement).
   const toCheck = chips.filter(chip => chip.id !== 'equity' && chip.tone !== 'green').length;
   const at = utcClock(input.updatedMs);
@@ -93,9 +131,12 @@ export function statusStrip(input) {
   };
 }
 
-/** Slowest lane age in seconds across lanes that published one, or null when no lane did. */
-export function slowestLaneAge(tiles) {
+/**
+ * Candle lanes: how many there are, how many are live (available === true with a published age), and the slowest live
+ * lane's age in seconds (null when none). An unavailable or unknown lane is counted, never dropped.
+ */
+export function laneHealth(tiles) {
   if (!Array.isArray(tiles)) return null;
-  const ages = tiles.filter(tile => tile && tile.available !== false).map(tile => tile.last_minute_age_s).filter(age => typeof age === 'number' && Number.isFinite(age) && age >= 0);
-  return ages.length ? Math.max(...ages) : null;
+  const live = tiles.filter(tile => tile && tile.available === true && typeof tile.last_minute_age_s === 'number' && Number.isFinite(tile.last_minute_age_s) && tile.last_minute_age_s >= 0);
+  return { total: tiles.length, live: live.length, lagS: live.length ? Math.max(...live.map(tile => tile.last_minute_age_s)) : null };
 }

@@ -52,7 +52,7 @@ export function V5Overview() {
         {helm.isPending ? <p role="status" className="v5m-hint">Reading Helm status…</p>
           : helm.isError ? <p role="alert" className="v5m-hint">Helm status unavailable: {helm.error.message}.</p>
           : <><p><strong>{headline.text}</strong></p>{headline.detail && <p className="v5m-hint">{headline.detail}</p>}</>}
-        <p className="v5m-hint">{helmMoney ? `Closed trades ${signed(num(helmMoney.realized))} · still held ${signed(num(helmMoney.unrealized))} USDC · as of ${utcExact(helmMoney.at_ms)}` : helmRow.newest?.gap ? `Money not published: ${String(helmRow.newest.gap).replaceAll("_", " ").toLowerCase()}.` : "Money not recorded yet."}</p>
+        <p className="v5m-hint">{money.isPending ? "Reading the money record…" : money.isError ? `Money record unavailable: ${money.error.message}.` : helmMoney ? `Closed trades ${signed(num(helmMoney.realized))} · still held ${signed(num(helmMoney.unrealized))} USDC · as of ${utcExact(helmMoney.at_ms)}` : helmRow.newest?.gap ? `Money not published: ${String(helmRow.newest.gap).replaceAll("_", " ").toLowerCase()}.` : "Money not recorded yet."}</p>
         <p className="v5m-hint"><NavLink to="/helm">Helm status and coins →</NavLink></p>
       </article>
     </div>

@@ -27,6 +27,7 @@ from .candles import CandleOwner, OwnerUnavailable, validate_query
 from .config import Settings, read_secret_file
 from .dashboard import dashboard_profile, read_compatibility_path
 from .helm import read_helm_status
+from .money import MoneyLedger, daily as money_daily, helm_row, seconds_to_next_slot, v5_row
 from .learning import FixtureLearningAPI, learning_router
 from .paper import PaperObservation, read_paper_status
 from .state import StateCapacityError, WorkspaceState
@@ -271,15 +272,69 @@ def create_app(
         if config.candle_store_socket
         else None
     )
+    money = MoneyLedger(config.runtime_root)
+    money_task: asyncio.Task | None = None
+    # The recorder's own last failure, shown by the money route; a failure never stops the loop.
+    money_errors: dict[str, Any] = {"count": 0, "last": None, "at_ms": None}
     active_loop_task: asyncio.Task | None = None
     active_loop_stop: asyncio.Event | None = None
     login_failures: dict[str, list[float]] = {}
 
+    async def money_section(path: str) -> dict | None:
+        """The same validated paper read the pages use; None when the owner read is refused or fails."""
+        paper = await current_paper()
+        if paper is None:
+            return None
+        try:
+            result = read_compatibility_path(path, paper, resolve_paper_reads=True)
+            if not (isinstance(result, dict) and "source_route" in result):
+                return result if isinstance(result, dict) else None
+            payload = await api.observation(result["source_route"])
+            read = read_compatibility_path(path, paper, paper_read=payload)
+            return read if isinstance(read, dict) else None
+        except (HTTPException, UpstreamError):
+            return None
+
+    async def money_sample() -> None:
+        now = clock()
+        rows = []
+        if config.paper_status_file is not None:
+            prefix = "/api/v1/servers/rsibot-v5/"
+            wallet = await money_section(prefix + "account-balances")
+            accounting = await money_section(prefix + "fleet/accounting")
+            rows.append(v5_row(wallet, accounting, now))
+        if config.helm_status_file is not None:
+            helm = await run_in_threadpool(read_helm_status, config.helm_status_file, now=now / 1000)
+            rows.append(helm_row(helm, now))
+        if rows:
+            await run_in_threadpool(money.append, rows)
+
+    async def money_loop() -> None:
+        while True:
+            try:
+                await money_sample()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                # Counted and shown on the page (the missing sample is itself the gap). Writing a gap row could fail
+                # the same way (for example a full disk), so the failure is kept in memory, not retried here.
+                money_errors.update(count=money_errors["count"] + 1, last=type(exc).__name__, at_ms=clock())
+            await asyncio.sleep(seconds_to_next_slot(clock()))
+
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
+        nonlocal money_task
+        if config.money_sampler:
+            money_task = asyncio.create_task(money_loop())
         try:
             yield
         finally:
+            if money_task is not None:
+                money_task.cancel()
+                try:
+                    await money_task
+                except asyncio.CancelledError:
+                    pass
             if active_loop_task is not None and not active_loop_task.done():
                 active_loop_task.cancel()
                 try:
@@ -401,6 +456,19 @@ def create_app(
         if candle_owner is not None:
             profile["candle_store"] = {"configured": True}
         return profile
+
+    @app.get("/api/v5/money", dependencies=[Depends(require_auth)])
+    async def money_read(range: str = Query(default="7d", pattern="^(24h|7d)$")):
+        """Recorded money samples (read-only): raw rows for the range, and the V5 daily table from the whole record."""
+        now = clock()
+        span = {"24h": 86_400_000, "7d": 7 * 86_400_000}[range]
+        record = await run_in_threadpool(money.read, 0)
+        started = record[0]["at_ms"] if record else None
+        return JSONResponse(
+            {"sampler": config.money_sampler, "started_at_ms": started, "now_ms": now, "range": range,
+             "rows": [row for row in record if row["at_ms"] >= now - span], "daily": money_daily(record), "recorder_errors": dict(money_errors)},
+            headers={"Cache-Control": "no-store"},
+        )
 
     @app.get("/api/v5/helm", dependencies=[Depends(require_auth)])
     async def helm_status():
@@ -1231,6 +1299,7 @@ def create_app(
         "/capital",
         "/bots",
         "/helm",
+        "/money",
         "/operations",
         "/research",
         "/learning",

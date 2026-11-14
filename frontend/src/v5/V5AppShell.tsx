@@ -1,4 +1,4 @@
-import { Activity, Bot, ChartCandlestick, ChartNoAxesCombined, Clock3, Eye, LogOut, Menu, Moon, Network, ScanSearch, Settings, ShieldCheck, Sun, X } from "lucide-react";
+import { Activity, Bot, ChartCandlestick, ChartNoAxesCombined, Clock3, Eye, LogOut, Menu, Moon, Network, ScanSearch, Settings, ShieldCheck, Sun, Wallet, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { NavLink, useLocation } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -9,6 +9,7 @@ import { useAuth } from "@/lib/auth";
 
 const nav = [
   { to: "/", label: "Market", icon: ScanSearch, end: true },
+  { to: "/money", label: "Money", icon: Wallet },
   { to: "/capital", label: "Capital", icon: ChartNoAxesCombined },
   { to: "/bots", label: "Bots", icon: Bot },
   { to: "/helm", label: "Helm", icon: ShieldCheck },

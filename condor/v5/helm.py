@@ -66,16 +66,17 @@ def _epoch_s(value: Any) -> int | float | None:
 LONG_DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,30})?")
 
 
-def _money(reports: Any) -> dict[str, str | None] | None:
-    """Realized and unrealized P&L summed exactly over the native reports; any unreadable part makes it unknown."""
-    if not isinstance(reports, dict) or not reports:
+def _money(payload: dict) -> dict[str, str | None] | None:
+    """Realized and unrealized P&L summed exactly over every controller; a partial set or any unreadable part is unknown."""
+    reports = payload.get("native_reports")
+    if not isinstance(reports, dict) or not reports or payload.get("unavailable_controller_ids") or len(reports) > 16:
         return None
     totals: dict[str, str | None] = {}
     for key, field in (("realized", "realized_pnl_quote"), ("unrealized", "unrealized_pnl_quote")):
         total = Decimal(0)
-        for report in list(reports.values())[:16]:
+        for report in reports.values():
             performance = report.get("performance") if isinstance(report, dict) else None
-            value = performance.get(field) if isinstance(performance, dict) else None
+            value = performance.get(field) if isinstance(performance, dict) and performance.get("pnl_available") is True else None
             if not isinstance(value, str) or not LONG_DECIMAL.fullmatch(value):
                 total = None
                 break
@@ -183,7 +184,7 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
             "recent": [shown.pick(row, {"action": _code, "at_ms": _epoch_ms, "reason": _plain}) for row in recent[:5]],
         },
         "symbols": symbols,
-        "money": _money(payload.get("native_reports")),
+        "money": _money(payload),
     }
     status["withheld"] = shown.withheld
     stale = now - generated > STALE_AFTER_SECONDS

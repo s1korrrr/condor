@@ -5,15 +5,14 @@ import { dayCoverage, equityChangeSince, holdReturn, latest, series } from '../s
 const T0 = Date.UTC(2026, 10, 14, 0, 0);
 const row = (minutes, extra = {}) => ({ bot: 'v5', at_ms: T0 + minutes * 60_000, equity: '100', realized: '1', ...extra });
 
-test('series break at gap rows and at one missed five-minute slot', () => {
+test('series break at gap rows, rows without the field, and one missed five-minute slot', () => {
   const rows = [row(0), row(5, { gap: 'wallet: stale' }), row(10), row(20), { bot: 'helm', at_ms: T0, gap: 'x' }];
   const points = series(rows, 'v5', 'equity');
   // 10 → 20 misses the 15-minute slot: a null at 15 breaks the line.
   assert.deepEqual(points.map(point => point.value), [100, null, 100, null, 100]);
   assert.equal(points[3].time, T0 + 15 * 60_000);
-  // Hourly rows (30 days) use the hourly step: no false breaks between consecutive hours.
-  const hourly = [row(0), row(60), row(180)];
-  assert.deepEqual(series(hourly, 'v5', 'equity', 3_600_000).map(point => point.value), [100, 100, null, 100]);
+  // Fable's case: a missing :10–:20 and a row with no equity both stay gaps.
+  assert.deepEqual(series([row(0), row(5), row(25, { equity: null }), row(30)], 'v5', 'equity').map(point => point.value), [100, 100, null, null, 100]);
 });
 
 test('latest names a gap as newest while keeping the last values', () => {

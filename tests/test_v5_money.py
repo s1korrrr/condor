@@ -5,7 +5,7 @@ from fastapi.testclient import TestClient
 
 from condor.v5.app import create_app
 from condor.v5.helm import _money
-from condor.v5.money import MAX_ROWS, MoneyLedger, daily, helm_row, thin_hourly, v5_row
+from condor.v5.money import MAX_ROWS, MoneyLedger, daily, helm_row, seconds_to_next_slot, v5_row
 from test_v5_dashboard_bridge import ORIGIN, TOKEN, make_settings
 from test_v5_paper_binding import NOW, status, write_status
 from test_v5_paper_read_contract import envelope
@@ -39,12 +39,18 @@ def test_helm_rows_say_why_there_is_no_money():
     assert (row["realized"], row["unrealized"], "gap" in row) == ("1.5", "-2", False)
 
 
-def test_helm_money_sums_exactly_or_is_unknown():
-    reports = {"a": {"performance": {"realized_pnl_quote": "0.1", "unrealized_pnl_quote": "-1.25"}}, "b": {"performance": {"realized_pnl_quote": "0.2", "unrealized_pnl_quote": "0"}}}
-    assert _money(reports) == {"realized": "0.30000000", "unrealized": "-1.25000000"}
+def test_helm_money_sums_every_controller_or_is_unknown():
+    ok = lambda realized, unrealized: {"performance": {"pnl_available": True, "realized_pnl_quote": realized, "unrealized_pnl_quote": unrealized}}  # noqa: E731
+    reports = {"a": ok("0.1", "-1.25"), "b": ok("0.2", "0")}
+    assert _money({"native_reports": reports}) == {"realized": "0.30000000", "unrealized": "-1.25000000"}
     reports["b"]["performance"]["unrealized_pnl_quote"] = "nan"
-    assert _money(reports) == {"realized": "0.30000000", "unrealized": None}
-    assert _money({}) is None and _money(None) is None
+    assert _money({"native_reports": reports}) == {"realized": "0.30000000", "unrealized": None}
+    # A partial set of controllers is never Helm's total.
+    assert _money({"native_reports": {"a": ok("0.1", "-1")}, "unavailable_controller_ids": ["b"]}) is None
+    unavailable = {"a": {"performance": {"pnl_available": False, "realized_pnl_quote": "0.1", "unrealized_pnl_quote": "-1"}}}
+    assert _money({"native_reports": unavailable}) == {"realized": None, "unrealized": None}
+    assert _money({"native_reports": {str(i): ok("1", "1") for i in range(17)}}) is None
+    assert _money({"native_reports": {}}) is None and _money({}) is None
 
 
 def test_ledger_appends_skips_torn_lines_and_trims(tmp_path):
@@ -65,18 +71,28 @@ def test_ledger_appends_skips_torn_lines_and_trims(tmp_path):
 HOUR = 3_600_000
 
 
-def test_daily_uses_every_sample_and_thinning_keeps_gaps():
+def test_daily_counts_distinct_slots_from_every_sample():
     day = NOW_MS // 86_400_000 * 86_400_000
     rows = [
         {"bot": "v5", "at_ms": day + 8 * HOUR, "equity": "100", "realized": "1"},
         {"bot": "v5", "at_ms": day + 8 * HOUR + 300_000, "gap": "wallet: stale"},
         {"bot": "v5", "at_ms": day + 8 * HOUR + 55 * 60_000, "equity": "110", "realized": "3"},
+        {"bot": "helm", "at_ms": day + 8 * HOUR, "gap": "HELM_STATUS_MISSING"},
     ]
-    [entry] = daily(rows, "v5")
+    [entry] = daily(rows)
     assert (entry["equity_change"], entry["realized_change"], entry["samples"], entry["gaps"], entry["valid"]) == ("10", "2", 3, 1, 2)
-    thinned = thin_hourly(rows)
-    assert [row.get("gap") for row in thinned] == ["wallet: stale", None]
-    assert daily([{"bot": "v5", "at_ms": day, "gap": "x"}], "v5")[0]["equity_change"] is None
+    assert daily([{"bot": "v5", "at_ms": day, "gap": "x"}])[0]["equity_change"] is None
+    # 288 slots, slot 7 missing, a restart sampling slot 3 twice: 288 samples but 287 slots with values.
+    full = [{"bot": "v5", "at_ms": day + s * 300_000 + 1_000, "equity": "1"} for s in range(288) if s != 7]
+    full.append({"bot": "v5", "at_ms": day + 3 * 300_000 + 60_000, "equity": "1"})
+    [entry] = daily(full)
+    assert (entry["samples"], entry["valid"]) == (288, 287)
+
+
+def test_sampler_sleeps_to_the_next_slot_boundary():
+    day = NOW_MS // 86_400_000 * 86_400_000
+    assert seconds_to_next_slot(day + 2_000) == 298
+    assert seconds_to_next_slot(day) == 300
 
 
 class PaperUpstream:
@@ -100,25 +116,28 @@ def test_sampler_records_on_start_and_route_serves_rows(tmp_path):
             body = client.get("/api/v5/money", params={"range": "24h"}).json()
             if len(body["rows"]) >= 2:
                 break
-        assert body["sampler"] is True and body["interval_s"] == 300 and body["started_at_ms"] == NOW_MS
+        assert body["sampler"] is True and body["started_at_ms"] == NOW_MS and "step_ms" not in body
         v5 = next(row for row in body["rows"] if row["bot"] == "v5")
         helm = next(row for row in body["rows"] if row["bot"] == "helm")
         assert v5["equity"] == "199318.98" and helm["gap"] == "HELM_STATUS_MISSING"
         assert client.get("/api/v5/money", params={"range": "1y"}).status_code == 422
+        assert client.get("/api/v5/money", params={"range": "30d"}).status_code == 422
         assert client.post("/api/v5/money", headers={"Origin": ORIGIN}).status_code == 405
 
 
-def test_sampler_is_off_by_default_and_30d_is_hourly(tmp_path):
+def test_sampler_is_off_by_default_and_daily_does_not_depend_on_range(tmp_path):
     settings = make_settings(tmp_path)
     ledger = MoneyLedger(settings.runtime_root)
-    ledger.append([{"bot": "v5", "at_ms": NOW_MS - minute * 60_000, "equity": str(minute)} for minute in range(120, -1, -5)])
+    yesterday = NOW_MS // 86_400_000 * 86_400_000 - 86_400_000
+    ledger.append([{"bot": "v5", "at_ms": at, "equity": "100"} for at in range(yesterday, NOW_MS + 1, 300_000)])
     app = create_app(settings=settings, static_dir=tmp_path / "dist", clock=lambda: NOW_MS)
     with TestClient(app) as client:
         signed_in(client)
-        body = client.get("/api/v5/money", params={"range": "30d"}).json()
-        assert body["sampler"] is False
-        hours = [row["at_ms"] // 3_600_000 for row in body["rows"]]
-        assert len(hours) == len(set(hours)) and body["rows"][-1]["equity"] == "0"
+        short, week = (client.get("/api/v5/money", params={"range": span}).json() for span in ("24h", "7d"))
+        assert short["sampler"] is False
+        assert short["daily"] == week["daily"]
+        assert week["daily"][-1]["valid"] == 288  # yesterday, in full, whatever the range
+        assert len(week["rows"]) > len(short["rows"]) and all(row["at_ms"] >= NOW_MS - 86_400_000 for row in short["rows"])
 
 
 def test_recorder_failure_is_counted_and_never_stops_the_app(tmp_path, monkeypatch):

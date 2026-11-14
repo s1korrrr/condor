@@ -14,14 +14,14 @@ export function botRows(rows, bot) {
 }
 
 /**
- * One field over time at the server's step (5 minutes, or 1 hour for 30 days). A gap row, or one missed step
- * (more than 1.5 steps between rows), becomes an explicit null so a chart never joins across missing time.
+ * One field over time from raw five-minute rows. A gap row, a row without the field, or one missed slot (more than
+ * 1.5 slots between rows) becomes an explicit null, so a chart never joins across missing time.
  */
-export function series(rows, bot, field, stepMs = SAMPLE_MS) {
+export function series(rows, bot, field) {
   const out = [];
   let previous = null;
   for (const row of botRows(rows, bot)) {
-    if (previous !== null && row.at_ms - previous > 1.5 * stepMs) out.push({ time: previous + stepMs, value: null });
+    if (previous !== null && row.at_ms - previous > 1.5 * SAMPLE_MS) out.push({ time: previous + SAMPLE_MS, value: null });
     out.push({ time: row.at_ms, value: row.gap ? null : number(row[field]) });
     previous = row.at_ms;
   }

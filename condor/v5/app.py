@@ -27,7 +27,7 @@ from .candles import CandleOwner, OwnerUnavailable, validate_query
 from .config import Settings, read_secret_file
 from .dashboard import dashboard_profile, read_compatibility_path
 from .helm import read_helm_status
-from .money import SAMPLE_INTERVAL_S, MoneyLedger, daily as money_daily, helm_row, thin_hourly, v5_row
+from .money import MoneyLedger, daily as money_daily, helm_row, seconds_to_next_slot, v5_row
 from .learning import FixtureLearningAPI, learning_router
 from .paper import PaperObservation, read_paper_status
 from .state import StateCapacityError, WorkspaceState
@@ -319,7 +319,7 @@ def create_app(
                 # Counted and shown on the page (the missing sample is itself the gap). Writing a gap row could fail
                 # the same way (for example a full disk), so the failure is kept in memory, not retried here.
                 money_errors.update(count=money_errors["count"] + 1, last=type(exc).__name__, at_ms=clock())
-            await asyncio.sleep(SAMPLE_INTERVAL_S)
+            await asyncio.sleep(seconds_to_next_slot(clock()))
 
     @asynccontextmanager
     async def lifespan(_app: FastAPI):
@@ -333,7 +333,7 @@ def create_app(
                 money_task.cancel()
                 try:
                     await money_task
-                except BaseException:  # noqa: BLE001 - shutdown continues to the other cleanup whatever the task ended with
+                except asyncio.CancelledError:
                     pass
             if active_loop_task is not None and not active_loop_task.done():
                 active_loop_task.cancel()
@@ -458,21 +458,15 @@ def create_app(
         return profile
 
     @app.get("/api/v5/money", dependencies=[Depends(require_auth)])
-    async def money_read(range: str = Query(default="7d", pattern="^(24h|7d|30d)$")):
-        """Recorded money samples (read-only). 30 days are thinned to the last row per bot per hour."""
+    async def money_read(range: str = Query(default="7d", pattern="^(24h|7d)$")):
+        """Recorded money samples (read-only): raw rows for the range, and the V5 daily table from the whole record."""
         now = clock()
-        span = {"24h": 86_400_000, "7d": 7 * 86_400_000, "30d": 30 * 86_400_000}[range]
-        rows = await run_in_threadpool(money.read, 0)
-        started = rows[0]["at_ms"] if rows else None
-        rows = [row for row in rows if row["at_ms"] >= now - span]
-        # Daily figures always come from every sample; only the chart rows are thinned for 30 days.
-        days = {bot: money_daily(rows, bot) for bot in ("v5", "helm")}
-        step_ms = 3_600_000 if range == "30d" else SAMPLE_INTERVAL_S * 1000
-        if range == "30d":
-            rows = thin_hourly(rows)
+        span = {"24h": 86_400_000, "7d": 7 * 86_400_000}[range]
+        record = await run_in_threadpool(money.read, 0)
+        started = record[0]["at_ms"] if record else None
         return JSONResponse(
-            {"sampler": config.money_sampler, "interval_s": SAMPLE_INTERVAL_S, "step_ms": step_ms, "started_at_ms": started, "now_ms": now, "range": range,
-             "rows": rows, "daily": days, "recorder_errors": dict(money_errors)},
+            {"sampler": config.money_sampler, "started_at_ms": started, "now_ms": now, "range": range,
+             "rows": [row for row in record if row["at_ms"] >= now - span], "daily": money_daily(record), "recorder_errors": dict(money_errors)},
             headers={"Cache-Control": "no-store"},
         )
 

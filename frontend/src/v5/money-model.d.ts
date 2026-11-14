@@ -11,7 +11,7 @@ export type DailyRow = {
   equity_change: string | null; realized_change: string | null; first_at_ms: number | null; last_at_ms: number | null;
 };
 export function botRows(rows: MoneyRow[], bot: string): MoneyRow[];
-export function series(rows: MoneyRow[], bot: string, field: keyof MoneyRow, stepMs?: number): SeriesPoint[];
+export function series(rows: MoneyRow[], bot: string, field: keyof MoneyRow): SeriesPoint[];
 export function latest(rows: MoneyRow[], bot: string): { newest: MoneyRow | null; withValues: MoneyRow | null };
 export function dayCoverage(entry: DailyRow | null | undefined): number | null;
 export function holdReturn(closesByCoin: Record<string, [number, number][] | undefined>, startS: number, endS: number, toleranceS?: number): { pct: number | null; coins: number; missing: string[] };

@@ -18,7 +18,13 @@ from pathlib import Path
 from typing import Any
 
 SAMPLE_INTERVAL_S = 300
+SLOT_MS = SAMPLE_INTERVAL_S * 1000
 DAY_MS = 86_400_000
+
+
+def seconds_to_next_slot(now_ms: int) -> float:
+    """Sleep to the next 5-minute UTC slot boundary, so samples sit on one grid instead of drifting."""
+    return SAMPLE_INTERVAL_S - (now_ms / 1000) % SAMPLE_INTERVAL_S
 MAX_ROWS = 2 * 24 * 12 * 31  # two bots, five-minute samples, about a month
 DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,24})?")
 
@@ -70,7 +76,7 @@ def helm_row(helm: dict | None, now_ms: int) -> dict[str, Any]:
     money = helm["status"].get("money")
     if not isinstance(money, dict) or money.get("realized") is None and money.get("unrealized") is None:
         return {**row, "gap": "HELM_MONEY_NOT_PUBLISHED"}
-    return {**row, "unit": "USDC", "realized": money.get("realized"), "unrealized": money.get("unrealized")}
+    return {**row, "realized": money.get("realized"), "unrealized": money.get("unrealized")}
 
 
 class MoneyLedger:
@@ -131,22 +137,23 @@ def _value(row: dict[str, Any], field: str) -> Decimal | None:
         return None
 
 
-def daily(rows: list[dict[str, Any]], bot: str) -> list[dict[str, Any]]:
-    """Per UTC day from every sample (never from thinned rows): first and last values, changes, samples and gaps."""
+def daily(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """V5 per UTC day from the whole record: first and last values, changes, samples, gaps and slots with values."""
     days: dict[int, dict[str, Any]] = {}
-    for row in sorted((row for row in rows if row.get("bot") == bot), key=lambda row: row["at_ms"]):
+    for row in sorted((row for row in rows if row.get("bot") == "v5"), key=lambda row: row["at_ms"]):
         day = row["at_ms"] // DAY_MS * DAY_MS
-        entry = days.setdefault(day, {"day": day, "samples": 0, "gaps": 0, "valid": 0, "first": None, "last": None})
+        entry = days.setdefault(day, {"day": day, "samples": 0, "gaps": 0, "slots": set(), "first": None, "last": None})
         entry["samples"] += 1
         if row.get("gap"):
             entry["gaps"] += 1
         elif _value(row, "equity") is not None or _value(row, "realized") is not None:
-            entry["valid"] += 1
+            entry["slots"].add(row["at_ms"] // SLOT_MS)  # a restart can sample one slot twice
             entry["first"] = entry["first"] or row
             entry["last"] = row
     out = []
     for entry in sorted(days.values(), key=lambda entry: entry["day"], reverse=True):
         first, last = entry.pop("first"), entry.pop("last")
+        entry["valid"] = len(entry.pop("slots"))
 
         def pair(field: str) -> tuple[str | None, str | None, str | None]:
             start = _value(first, field) if first else None
@@ -159,16 +166,3 @@ def daily(rows: list[dict[str, Any]], bot: str) -> list[dict[str, Any]]:
         out.append({**entry, "equity_start": equity_start, "equity_end": equity_end, "equity_change": equity_change, "realized_change": realized_change,
                     "first_at_ms": first["at_ms"] if first else None, "last_at_ms": last["at_ms"] if last else None})
     return out
-
-
-def thin_hourly(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """For long charts: per bot and hour keep the last row, plus the first gap row of that hour so the line still breaks."""
-    kept: dict[tuple, dict[str, Any]] = {}
-    gaps: dict[tuple, dict[str, Any]] = {}
-    for row in rows:
-        key = (row.get("bot"), row["at_ms"] // 3_600_000)
-        kept[key] = row
-        if row.get("gap") and key not in gaps:
-            gaps[key] = row
-    out = list(kept.values()) + [row for key, row in gaps.items() if kept[key] is not row]
-    return sorted(out, key=lambda row: row["at_ms"])

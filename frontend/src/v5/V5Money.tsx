@@ -11,10 +11,10 @@ import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
 import { utcMinute } from "./shown.mjs";
 import "./market.css";
 
-type MoneyRead = { sampler: boolean; interval_s: number; step_ms: number; started_at_ms: number | null; now_ms: number; range: string; rows: MoneyRow[]; daily: Record<string, DailyRow[]>; recorder_errors: { count: number; last: string | null; at_ms: number | null } };
+type MoneyRead = { sampler: boolean; started_at_ms: number | null; now_ms: number; range: string; rows: MoneyRow[]; daily: DailyRow[]; recorder_errors: { count: number; last: string | null; at_ms: number | null } };
 type CrossLine = { venue: string; lane: string; close: [number, number][] };
 type Hold = { closes: Record<string, [number, number][] | undefined>; startS: number; endS: number };
-const RANGES = ["24h", "7d", "30d"] as const;
+const RANGES = ["24h", "7d"] as const;
 
 async function readMoney(range: string): Promise<MoneyRead> {
   const response = await fetch(`/api/v5/money?range=${range}`, { credentials: "include", cache: "no-store", signal: AbortSignal.timeout(14_000) });
@@ -64,19 +64,18 @@ export function V5Money() {
   const v5 = latest(rows, "v5"), helm = latest(rows, "helm");
   const now = v5.withValues;
   const equity = num(now?.equity), funding = num(now?.initial_funding);
-  const step = money.data?.step_ms;
-  const equitySeries: ChartSeries[] = [{ id: "equity", label: "V5 wallet equity", color: CHART.blue, points: series(rows, "v5", "equity", step), unit: now?.unit ?? "USDC", format: value => amount(value) }];
+  const equitySeries: ChartSeries[] = [{ id: "equity", label: "V5 wallet equity", color: CHART.blue, points: series(rows, "v5", "equity"), unit: now?.unit ?? "USDC", format: value => amount(value) }];
   const pnlSeries: ChartSeries[] = [
-    { id: "realized", label: "Profit from closed trades", color: CHART.positive, points: series(rows, "v5", "realized", step), format: value => signed(value) },
-    { id: "unrealized", label: "Gain or loss on coins still held", color: CHART.negative, points: series(rows, "v5", "unrealized", step), format: value => signed(value) },
+    { id: "realized", label: "Profit from closed trades", color: CHART.positive, points: series(rows, "v5", "realized"), format: value => signed(value) },
+    { id: "unrealized", label: "Gain or loss on coins still held", color: CHART.negative, points: series(rows, "v5", "unrealized"), format: value => signed(value) },
   ];
   const coins = (now?.coins ?? {}) as Record<string, { realized: string | null; unrealized: string | null }>;
   const coinRows = Object.entries(coins).map(([coin, values]) => ({ label: coin, realized: num(values.realized), unrealized: num(values.unrealized) }));
-  const days = money.data?.daily?.v5 ?? [];
+  const days = money.data?.daily ?? [];
   const span = hold.data && Number.isFinite(hold.data.startS) && Number.isFinite(hold.data.endS) ? hold.data : null;
   const holdView = span ? holdReturn(span.closes, span.startS, span.endS) : null;
-  // Equity over the same window needs raw five-minute rows; the 30-day view is thinned, so it is not used for this.
-  const v5Since = span && money.data?.range !== "30d" ? equityChangeSince(rows, "v5", span.startS * 1000, span.endS * 1000) : null;
+  // The holding window is the candle store's 7 days; only the 7d rows can cover it.
+  const v5Since = span && money.data?.range === "7d" ? equityChangeSince(rows, "v5", span.startS * 1000, span.endS * 1000) : null;
 
   return <div className="v5m">
     <header className="v5m-head">
@@ -113,7 +112,7 @@ export function V5Money() {
         <article className="v5m-card"><h3>Against holding the five coins</h3><p className="v5m-hint">Equal weights in {MARKET_COINS.join(", ")} over the candle store's 7 days ({REFERENCE.venue} spot {REFERENCE.quote})</p>
           {!candleConfigured ? <p className="v5m-hint">{profile.isPending ? "Checking for the candle store…" : "No candle store in this deployment, so holding the coins cannot be priced."}</p> : hold.isPending ? <p role="status" className="v5m-hint">Reading 7 days of prices…</p> : !holdView || holdView.pct == null ? <p className="v5m-hint">Holding comparison unavailable{holdView?.missing.length ? `: no close at the window start or end for ${holdView.missing.join(", ")}` : ": no 7-day prices"}. The basket is never reduced to fewer coins.</p> : <div className="v5m-stats">
             <Stat label="Holding the five coins" value={`${signed(holdView.pct)}%`} note={`${at(span!.startS * 1000)} → ${at(span!.endS * 1000)}`} />
-            <Stat label="V5 wallet equity" value={v5Since == null ? "—" : `${signed(v5Since)}%`} note={v5Since == null ? (money.data.range === "30d" ? "pick 7d to compare" : "needs samples at both ends of the same window; the record is younger") : "same window"} />
+            <Stat label="V5 wallet equity" value={v5Since == null ? "—" : `${signed(v5Since)}%`} note={v5Since == null ? (money.data.range !== "7d" ? "pick 7d to compare" : "needs samples at both ends of the same window; the record is younger") : "same window"} />
           </div>}
           <p className="v5m-hint">Only the candle store's 7 days can be priced, so the comparison never reaches the trial start (2026-10-29).</p></article>
       </div>

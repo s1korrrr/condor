@@ -27,12 +27,13 @@ export function helmHeadline(read) {
     // with the faulted pairs in its note). Coin holds are the first "no" of a per-coin preview, not a gate: they can
     // only upgrade the text to "waiting for a signal", never turn it red.
     const gates = Array.isArray(status.gates) ? status.gates : [];
-    const closed = gates.filter(row => row?.gate !== 'ready');
+    // A published gate other than 'ready' is closed (red); a missing or withheld gate is unknown (neutral), never closed.
+    const closed = gates.filter(row => typeof row?.gate === 'string' && row.gate !== 'ready');
     if (closed.length) {
-      const named = closed.map(row => `${words(row?.gate ?? 'gate not published')}${row?.note ? ` (${row.note})` : ''}`).join('; ');
+      const named = closed.map(row => `${words(row.gate)}${row?.note ? ` (${row.note})` : ''}`).join('; ');
       return { text: `Running, not buying: ${named}`, good: false };
     }
-    if (!gates.length) return { text: 'Running; entry gate not published', good: null };
+    if (!gates.length || gates.some(row => typeof row?.gate !== 'string')) return { text: 'Running; entry gate not published', good: null };
     const symbols = Array.isArray(status.symbols) ? status.symbols : [];
     const other = symbols.filter(row => !SIGNAL_WAIT.has(row?.candidate_hold));
     if (symbols.length && !other.length) {

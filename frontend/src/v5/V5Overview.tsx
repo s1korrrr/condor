@@ -47,7 +47,7 @@ export function V5Overview() {
           </>}
         <p className="v5m-hint"><NavLink to="/bots">Positions, trades and controls status →</NavLink></p>
       </article>
-      <article className={`v5m-card ${headline.good ? "is-up" : "is-down"}`}>
+      <article className={`v5m-card ${headline.good === true ? "is-up" : headline.good === false ? "is-down" : ""}`}>
         <h3><NavLink to="/helm">Helm paper bot</NavLink></h3>
         {helm.isPending ? <p role="status" className="v5m-hint">Reading Helm status…</p>
           : helm.isError ? <p role="alert" className="v5m-hint">Helm status unavailable: {helm.error.message}.</p>

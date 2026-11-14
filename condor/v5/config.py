@@ -34,6 +34,8 @@ class Settings:
     host_operations_file: Path | None = None
     # Optional read-only Helm paper runtime status file for the Helm page; None hides the page's data.
     helm_status_file: Path | None = None
+    # Five-minute money samples into the runtime state; off unless V5_MONEY_SAMPLER=1 (deployments only).
+    money_sampler: bool = False
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
@@ -201,6 +203,7 @@ class Settings:
             candle_store_socket=candle_store_socket,
             host_operations_file=host_operations_file,
             helm_status_file=helm_status_file,
+            money_sampler=values.get("V5_MONEY_SAMPLER", "").strip() == "1",
         )
 
 

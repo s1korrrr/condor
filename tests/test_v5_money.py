@@ -1,0 +1,102 @@
+import json
+from dataclasses import replace
+
+from fastapi.testclient import TestClient
+
+from condor.v5.app import create_app
+from condor.v5.helm import _money
+from condor.v5.money import MAX_ROWS, MoneyLedger, helm_row, v5_row
+from test_v5_dashboard_bridge import ORIGIN, TOKEN, make_settings
+from test_v5_paper_binding import NOW, status, write_status
+from test_v5_paper_read_contract import envelope
+
+NOW_MS = int(NOW * 1000)
+WALLET = {"equity_quote": "199318.98", "initial_funding_quote": "200000", "external_cash_flows_quote": "0", "unit": "USDC", "quote_asset": "USDC", "valuation_policy": "midpoint_fresh_book_only", "assets": []}
+PROGRAM = {**envelope("accounting")["data"]["program"], "realized_pnl_quote": "114.13", "unrealized_pnl_quote": "-795.15", "fees_paid_quote": "23.11"}
+ACCOUNTING = {**envelope("accounting")["data"], "program": PROGRAM, "controllers": {"modular_spot_meridian_v5_paper_bnb": {**PROGRAM, "realized_pnl_quote": "14.80", "unrealized_pnl_quote": "-77.86"}}}
+
+
+def read(section, data, **changes):
+    return {**envelope(section), "data": data, **changes}
+
+
+def test_v5_row_keeps_owner_decimals_and_records_gaps():
+    row = v5_row(read("wallet", WALLET), read("accounting", ACCOUNTING), NOW_MS)
+    assert row["equity"] == "199318.98" and row["initial_funding"] == "200000"
+    assert (row["realized"], row["unrealized"], row["fees"]) == ("114.13", "-795.15", "23.11")
+    assert row["coins"] == {"BNB": {"realized": "14.80", "unrealized": "-77.86"}}
+    gap = v5_row(read("wallet", WALLET, state="stale"), read("accounting", ACCOUNTING), NOW_MS)
+    assert gap == {"bot": "v5", "at_ms": NOW_MS, "gap": "wallet: stale"}
+    assert "equity" not in v5_row(None, None, NOW_MS)
+    # A non-decimal owner value is unknown, never coerced.
+    assert v5_row(read("wallet", {**WALLET, "equity_quote": "1e9"}), read("accounting", ACCOUNTING), NOW_MS)["equity"] is None
+
+
+def test_helm_rows_say_why_there_is_no_money():
+    assert helm_row({"state": "UNAVAILABLE", "reason": "HELM_STATUS_MISSING", "status": None}, NOW_MS)["gap"] == "HELM_STATUS_MISSING"
+    assert helm_row({"state": "FRESH", "status": {"money": None}}, NOW_MS)["gap"] == "HELM_MONEY_NOT_PUBLISHED"
+    row = helm_row({"state": "FRESH", "status": {"money": {"realized": "1.5", "unrealized": "-2"}}}, NOW_MS)
+    assert (row["realized"], row["unrealized"], "gap" in row) == ("1.5", "-2", False)
+
+
+def test_helm_money_sums_exactly_or_is_unknown():
+    reports = {"a": {"performance": {"realized_pnl_quote": "0.1", "unrealized_pnl_quote": "-1.25"}}, "b": {"performance": {"realized_pnl_quote": "0.2", "unrealized_pnl_quote": "0"}}}
+    assert _money(reports) == {"realized": "0.30000000", "unrealized": "-1.25000000"}
+    reports["b"]["performance"]["unrealized_pnl_quote"] = "nan"
+    assert _money(reports) == {"realized": "0.30000000", "unrealized": None}
+    assert _money({}) is None and _money(None) is None
+
+
+def test_ledger_appends_skips_torn_lines_and_trims(tmp_path):
+    ledger = MoneyLedger(tmp_path)
+    ledger.append([{"bot": "v5", "at_ms": 1}, {"bot": "helm", "at_ms": 2}])
+    with open(ledger.path, "a") as handle:
+        handle.write('{"bot": "v5", "at_')  # torn tail from a crash
+    assert [row["at_ms"] for row in ledger.read(0)] == [1, 2]
+    assert [row["at_ms"] for row in ledger.read(2)] == [2]
+    ledger.path.write_text("".join(json.dumps({"bot": "v5", "at_ms": i, "pad": "x" * 600}) + "\n" for i in range(MAX_ROWS + 5)))
+    ledger.append([{"bot": "v5", "at_ms": MAX_ROWS + 5}])
+    rows = ledger.read(0)
+    assert len(rows) == MAX_ROWS and rows[-1]["at_ms"] == MAX_ROWS + 5
+
+
+class PaperUpstream:
+    async def observation(self, path):
+        section = path.split("?")[0].rsplit("/", 1)[-1]
+        return read(section, WALLET if section == "wallet" else ACCOUNTING)
+
+
+def signed_in(client):
+    assert client.post("/api/v5/auth/login", json={"token": TOKEN}, headers={"Origin": ORIGIN}).status_code == 200
+
+
+def test_sampler_records_on_start_and_route_serves_rows(tmp_path):
+    settings = replace(make_settings(tmp_path), paper_status_file=write_status(tmp_path, status()), helm_status_file=tmp_path / "helm" / "helm_v5_paper.status.json", money_sampler=True)
+    app = create_app(settings=settings, upstream=PaperUpstream(), static_dir=tmp_path / "dist", clock=lambda: NOW_MS)
+    with TestClient(app) as client:
+        assert client.get("/api/v5/money").status_code == 401
+        signed_in(client)
+        body = None
+        for _ in range(50):
+            body = client.get("/api/v5/money", params={"range": "24h"}).json()
+            if len(body["rows"]) >= 2:
+                break
+        assert body["sampler"] is True and body["interval_s"] == 300 and body["started_at_ms"] == NOW_MS
+        v5 = next(row for row in body["rows"] if row["bot"] == "v5")
+        helm = next(row for row in body["rows"] if row["bot"] == "helm")
+        assert v5["equity"] == "199318.98" and helm["gap"] == "HELM_STATUS_MISSING"
+        assert client.get("/api/v5/money", params={"range": "1y"}).status_code == 422
+        assert client.post("/api/v5/money", headers={"Origin": ORIGIN}).status_code == 405
+
+
+def test_sampler_is_off_by_default_and_30d_is_hourly(tmp_path):
+    settings = make_settings(tmp_path)
+    ledger = MoneyLedger(settings.runtime_root)
+    ledger.append([{"bot": "v5", "at_ms": NOW_MS - minute * 60_000, "equity": str(minute)} for minute in range(120, -1, -5)])
+    app = create_app(settings=settings, static_dir=tmp_path / "dist", clock=lambda: NOW_MS)
+    with TestClient(app) as client:
+        signed_in(client)
+        body = client.get("/api/v5/money", params={"range": "30d"}).json()
+        assert body["sampler"] is False
+        hours = [row["at_ms"] // 3_600_000 for row in body["rows"]]
+        assert len(hours) == len(set(hours)) and body["rows"][-1]["equity"] == "0"

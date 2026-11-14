@@ -25,7 +25,9 @@ STALE_AFTER_SECONDS = 30
 
 CODE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}")  # states, reason codes, ids, image tag
 PLAIN = re.compile(r"[A-Za-z0-9 _.,:;()'%+=-]{1,256}")  # sentences: no / \ @ ~ $ or quotes
-DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,18})?")
+# Helm publishes exact Decimal text with up to 28 fraction digits (e.g. native_risk.daily_loss_use
+# "13.71580913935440000000000000"); 18 made the page withhold it as "did not match its expected form".
+DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,30})?")
 PAIR = re.compile(r"[A-Z0-9]{1,16}-[A-Z0-9]{1,16}")
 MAX_SAFE = 2**53 - 1
 

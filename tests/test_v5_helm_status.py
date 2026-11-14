@@ -181,3 +181,13 @@ def test_unpublished_blocks_stay_unknown_and_rejections_sort_newest_first(tmp_pa
     value["helm"]["control_rejections"]["recent"] = [{"action": "a", "at_ms": 1000}, {"action": "b", "at_ms": 3000}, {"action": "c", "at_ms": 2000}]
     recent = read_helm_status(write(tmp_path, value), now=NOW)["status"]["control_rejections"]["recent"]
     assert [row["action"] for row in recent] == ["b", "c", "a"]
+
+
+def test_helm_long_exact_decimals_are_shown_not_withheld(tmp_path):
+    value = helm_status()
+    value["helm"]["native_risk"]["daily_loss_use"] = "13.71580913935440000000000000"
+    status = read_helm_status(write(tmp_path, value), now=NOW)["status"]
+    assert status["risk"]["daily_loss_use"] == "13.71580913935440000000000000"
+    assert status["withheld"] == 0
+    value["helm"]["native_risk"]["daily_loss_use"] = "1." + "0" * 31
+    assert read_helm_status(write(tmp_path, value), now=NOW)["status"]["withheld"] == 1

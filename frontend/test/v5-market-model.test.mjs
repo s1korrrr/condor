@@ -45,13 +45,21 @@ test('tile: window and hour returns need their exact boundary minute', () => {
   assert.equal(coinTile('X', dense(5, () => null), null), null);
 });
 
-test('premium only for the same minute as the shown price; charts keep nulls', () => {
+test('premium from the newest minute both legs closed, named with that minute; charts keep nulls', () => {
   const spot = dense(120, i => (i < 110 ? 100 : null)); // last ten minutes missing
   const perpetual = dense(120, () => 101);
   const tile = coinTile('BNB', spot, perpetual);
   assert.equal(tile.lastTime, T0 + 109 * 60);
   near(tile.premiumBps, 100);
-  assert.equal(coinTile('BNB', spot, dense(120, i => (i === 109 ? null : 101))).premiumBps, null);
+  assert.equal(tile.premiumTime, T0 + 109 * 60);
+  // The perpetual has not finalized the newest spot minute yet: the premium is from the minute before, and says so.
+  const lagging = coinTile('BNB', spot, dense(120, i => (i === 108 ? 102 : i === 109 ? null : 101)));
+  assert.equal(lagging.lastTime, T0 + 109 * 60);
+  assert.equal(lagging.premiumTime, T0 + 108 * 60);
+  near(lagging.premiumBps, 200);
+  const none = coinTile('BNB', spot, dense(120, () => null));
+  assert.equal(none.premiumBps, null);
+  assert.equal(none.premiumTime, null);
   const series = premiumSeries(spot, perpetual);
   assert.equal(series.at(-1).value, null);
   assert.ok(series.some(point => point.value != null));
@@ -63,6 +71,11 @@ test('premium only for the same minute as the shown price; charts keep nulls', (
   const premiumGap = premiumSeries(dense(10, () => 100), dense(10, i => (i === 7 ? null : 101)));
   assert.deepEqual(premiumGap.map(point => point.value === null), [false, true, false]);
   assert.deepEqual(indexedReturns(dense(10, i => (i === 0 ? null : 1))), []);
+  // The window's last minute still pending: the line ends at the newest minute with a close, as the tile does.
+  const pending = indexedReturns(dense(12, i => (i === 11 ? null : 100 + i)));
+  assert.deepEqual(pending.map(point => [(point.time / 1000 - T0) / 60, point.value === null]), [[4, false], [9, false], [10, false], [11, true]]);
+  near(pending.find(point => (point.time / 1000 - T0) / 60 === 10).value, 10);
+  near(coinTile('X', dense(12, i => (i === 11 ? null : 100 + i)), null).changePct, 10);
 });
 
 test('age follows the owner clock plus time since the read arrived', () => {

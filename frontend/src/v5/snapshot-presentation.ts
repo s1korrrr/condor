@@ -21,5 +21,5 @@ export function paperSnapshotPresentation(asOfMs: number | null | undefined, now
   const stale = ageMs === null || ageMs > PAPER_SNAPSHOT_FRESH_MS;
   const age = ageMs === null ? 'age unknown' : `${paperAge(ageMs)} old`;
   const state = issue === 'future' ? 'owner clock ahead; not current' : stale ? 'stale; not current' : 'snapshot only; not current';
-  return { stale, ageMs, retained, clockAhead:issue === 'future', label:`Last complete owner snapshot · ${age} · ${state}` };
+  return { stale, ageMs, retained, clockAhead:issue === 'future', label:`Last coherent owner snapshot · ${age} · ${state}` };
 }

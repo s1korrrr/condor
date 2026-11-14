@@ -18,8 +18,8 @@ export interface CohortCoverageDimension {
 
 const COHORT_DIMENSIONS = [
   { key: "spot-assets", label: "Spot assets", valid: "spot.assets_valid", expected: "spot.assets_expected", fraction: "spot.asset_coverage_fraction" },
-  { key: "spot-venues", label: "Spot venue pairs", valid: "spot.venues_valid", expected: "spot.venues_expected", fraction: "spot.venue_coverage_fraction" },
-  { key: "perpetual-venues", label: "Perpetual venue pairs", valid: "derivatives.venues_valid", expected: "derivatives.venues_expected", fraction: "derivatives.venue_coverage_fraction" },
+  { key: "spot-venues", label: "Spot venue pairs qualified", valid: "spot.venues_valid", expected: "spot.venues_expected", fraction: "spot.venue_coverage_fraction" },
+  { key: "perpetual-venues", label: "Perpetual venue pairs qualified", valid: "derivatives.venues_valid", expected: "derivatives.venues_expected", fraction: "derivatives.venue_coverage_fraction" },
   { key: "matched-assets", label: "Matched spot / perpetual assets", valid: "derivatives.matched_assets", expected: "spot.assets_expected", fraction: null },
 ] as const;
 

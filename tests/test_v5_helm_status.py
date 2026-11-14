@@ -33,14 +33,17 @@ def helm_status(**overrides):
             "operator_entry_paused": True,
             "kill_switch": False,
             "shutdown": {"checkpoint": True, "clean": True, "closed": True},
-            "mandate": {"mandate_id": "helm-v5-paper-20261105", "state": "active", "days_to_expiry": 29.708, "valid_until_ms": 1796496650500},
+            "mandate": {"mandate_id": "helm-v5-paper-20261105", "revision": 1, "revocation_id": "helm-v5-paper-revocation-6811db1570c14ee99e0d9ad7d0812c49", "state": "active", "days_to_expiry": 29.708, "valid_until_ms": 1796496650500},
             "native_risk": {"reason": "risk_clear", "latched": False, "daily_loss_use": 0, "risk_reference_quote": 200000, "unit": "USDC"},
             "control_rejections": {"count": 1, "recent": [{"action": "resume_entries", "at_ms": 1793926101828, "reason": "stop_persistence_failed: explicit emergency reset required", "command_id": "x"}]},
             "controls": {"path": "/home/hummingbot/data/runtime_status/helm_v5_paper.controls.json"},
         },
         "controllers": [{
             "id": "modular_spot_helm_v5_paper",
+            "gate": "ready",
+            "note": "",
             "custom_info": {
+                "recipe_version": "helm_v5_dca_trailing_bag_v1",
                 "portfolio": {"candidate_holds": {"BNB-USDC": "low_volatility"}},
                 "symbols": {"BNB-USDC": {"status": "operator_entry_pause", "bag": {"held_amount": "0", "breakeven_price": "0", "trail_armed": False, "reason": "no_bag"}, "last_decision": {"at": NOW - 20, "reason": "operator_entry_pause"}}},
             },
@@ -62,6 +65,10 @@ def test_fresh_status_projects_only_shown_fields(tmp_path):
     status = result["status"]
     assert status["reasons"] == ["runtime_stopped"] and status["ready"] is False
     assert status["mandate"]["state"] == "active" and status["risk"]["latched"] is False
+    assert (status["mandate"]["mandate_id"], status["mandate"]["revision"]) == ("helm-v5-paper-20261105", 1)
+    assert status["recipe_version"] == "helm_v5_dca_trailing_bag_v1"
+    assert status["gates"] == [{"gate": "ready", "note": ""}]
+    assert status["mandate"]["revocation_id"] == "helm-v5-paper-revocation-6811db1570c14ee99e0d9ad7d0812c49"
     assert status["control_rejections"]["recent"] == [{"action": "resume_entries", "at_ms": 1793926101828, "reason": "stop_persistence_failed: explicit emergency reset required"}]
     assert status["withheld"] == 0 and status["failure_reported"] is False
     symbol = status["symbols"][0]
@@ -174,3 +181,13 @@ def test_unpublished_blocks_stay_unknown_and_rejections_sort_newest_first(tmp_pa
     value["helm"]["control_rejections"]["recent"] = [{"action": "a", "at_ms": 1000}, {"action": "b", "at_ms": 3000}, {"action": "c", "at_ms": 2000}]
     recent = read_helm_status(write(tmp_path, value), now=NOW)["status"]["control_rejections"]["recent"]
     assert [row["action"] for row in recent] == ["b", "c", "a"]
+
+
+def test_helm_long_exact_decimals_are_shown_not_withheld(tmp_path):
+    value = helm_status()
+    value["helm"]["native_risk"]["daily_loss_use"] = "13.71580913935440000000000000"
+    status = read_helm_status(write(tmp_path, value), now=NOW)["status"]
+    assert status["risk"]["daily_loss_use"] == "13.71580913935440000000000000"
+    assert status["withheld"] == 0
+    value["helm"]["native_risk"]["daily_loss_use"] = "1." + "0" * 31
+    assert read_helm_status(write(tmp_path, value), now=NOW)["status"]["withheld"] == 1

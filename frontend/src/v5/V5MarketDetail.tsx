@@ -30,16 +30,24 @@ const columns: TableColumn<VenueRow>[] = [
   { id: "quote", header: "Quote", value: row => row.quote, size: 65 },
 ];
 
-/** Drill-down for one coin: candles with a range picker, window statistics and per-venue price-gap statistics. */
-export function V5MarketDetail({ coin, color, onClose }: { coin: string; color: string; onClose: () => void }) {
+/** The same owner candle response the Market page reads for a tile (both legs of one fetch). */
+export type DetailRead = { spot: Candles; perpetual: Candles | null; perpetualError: string | null };
+
+/**
+ * Drill-down for one coin: candles with a range picker, window statistics and per-venue price-gap statistics.
+ * For 24h it uses the very read behind the coin's tile (`tileRead`), so tile and detail show the same minutes.
+ */
+export function V5MarketDetail({ coin, color, onClose, tileRead }: { coin: string; color: string; onClose: () => void; tileRead?: DetailRead | null }) {
   const [range, setRange] = useState<Range>("24h");
   const pair = `${coin}-${REFERENCE.quote}`;
-  const candles = useQuery({ queryKey: ["v5-market", "detail", coin, range], retry: false, refetchInterval: 60_000, queryFn: async () => {
+  const shared = range === "24h" && tileRead ? tileRead : null;
+  const fetched = useQuery({ queryKey: ["v5-market", "detail", coin, range], enabled: !shared, retry: false, refetchInterval: 60_000, queryFn: async (): Promise<DetailRead> => {
     const spot = await readCandleStore<Candles>("candles", { lane: REFERENCE.spot, pair, range });
     let perpetual: Candles | null = null, perpetualError: string | null = null;
     try { perpetual = await readCandleStore<Candles>("candles", { lane: REFERENCE.perpetual, pair, range }); } catch (cause) { perpetualError = cause instanceof Error ? cause.message : "owner read unavailable"; }
     return { spot, perpetual, perpetualError };
   } });
+  const candles = shared ? { isPending: false as const, isError: false as const, error: null, data: shared } : fetched;
   const venues = useQuery({ queryKey: ["v5-market", "venues", coin, range], retry: false, refetchInterval: 60_000, queryFn: async () => {
     const reads: CrossRead[] = [];
     for (const segment of ["spot", "perpetual"] as const) {

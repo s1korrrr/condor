@@ -9,6 +9,7 @@ from condor.v5.money import MAX_ROWS, MoneyLedger, daily, helm_row, seconds_to_n
 from test_v5_dashboard_bridge import ORIGIN, TOKEN, make_settings
 from test_v5_paper_binding import NOW, status, write_status
 from test_v5_paper_read_contract import envelope
+from test_v5_helm_status import helm_status, write as write_helm
 
 NOW_MS = int(NOW * 1000)
 WALLET = {"equity_quote": "199318.98", "initial_funding_quote": "200000", "external_cash_flows_quote": "0", "unit": "USDC", "quote_asset": "USDC", "valuation_policy": "midpoint_fresh_book_only", "assets": []}
@@ -157,3 +158,40 @@ def test_recorder_failure_is_counted_and_never_stops_the_app(tmp_path, monkeypat
                 break
         assert body["recorder_errors"]["last"] == "OSError" and body["rows"] == []
     # Leaving the client ran the shutdown; reaching here means cleanup did not raise.
+
+
+def test_v5_row_keeps_the_owners_long_exact_decimals():
+    # Live 15:20Z: realized/unrealized carry 25 fraction digits; a 24-digit limit recorded them as unknown.
+    long = {**PROGRAM, "realized_pnl_quote": "114.1396691483993272381433853", "unrealized_pnl_quote": "-924.5333730858411272381433853"}
+    controllers = {"modular_spot_meridian_v5_paper_btc": {**long, "realized_pnl_quote": "19.44857363037838614196480000", "unrealized_pnl_quote": "-139.1412407036821861419648000"}}
+    row = v5_row(read("wallet", WALLET), read("accounting", {**ACCOUNTING, "program": long, "controllers": controllers}), NOW_MS)
+    assert (row["realized"], row["unrealized"]) == ("114.1396691483993272381433853", "-924.5333730858411272381433853")
+    assert row["coins"] == {"BTC": {"realized": "19.44857363037838614196480000", "unrealized": "-139.1412407036821861419648000"}}
+
+
+def test_sampler_judges_helm_against_the_time_it_reads_the_file(tmp_path):
+    # Live 15:20Z the Helm row read HELM_STATUS_CLOCK_SKEW: the slot time was taken before the paper reads, which
+    # take seconds, while Helm rewrites its status every second. Here each paper read takes 10 s of clock time.
+    clock = {"ms": NOW_MS}
+
+    class SlowUpstream(PaperUpstream):
+        async def observation(self, path):
+            clock["ms"] += 10_000
+            return await super().observation(path)
+
+    helm_dir = tmp_path / "helm"
+    helm_dir.mkdir()
+    value = helm_status()
+    value["generated_at"] = NOW + 8  # written while the paper reads ran
+    helm_file = write_helm(helm_dir, value)
+    settings = replace(make_settings(tmp_path), paper_status_file=write_status(tmp_path, status()), helm_status_file=helm_file, money_sampler=True)
+    app = create_app(settings=settings, upstream=SlowUpstream(), static_dir=tmp_path / "dist", clock=lambda: clock["ms"])
+    with TestClient(app) as client:
+        signed_in(client)
+        body = None
+        for _ in range(50):
+            body = client.get("/api/v5/money").json()
+            if any(row["bot"] == "helm" for row in body["rows"]):
+                break
+        helm = next(row for row in body["rows"] if row["bot"] == "helm")
+        assert helm.get("gap") != "HELM_STATUS_CLOCK_SKEW", helm

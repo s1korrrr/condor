@@ -78,7 +78,7 @@ test('review probe: first commit after a zero-subscriber gap', async () => {
     client.setQueryData(['v5-paper-observation-health',bot],['status','wallet','positions','executors','risk'].map(section => sections[section]));
     await React.act(async () => {mount.render(React.createElement(V5App));});
     await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
-    console.log('ON SETTINGS:', container.textContent.match(/Last complete owner snapshot · [^·]+· [a-z ;]+/)?.[0]);
+    console.log('ON SETTINGS:', container.textContent.match(/Last coherent owner snapshot · [^·]+· [a-z ;]+/)?.[0]);
     const agents = [...container.querySelectorAll('a')].find(a => a.getAttribute('href') === '/agents');
     await React.act(async () => {agents.dispatchEvent(new browser.MouseEvent('click',{bubbles:true,cancelable:true,button:0}));});
     await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
@@ -89,7 +89,7 @@ test('review probe: first commit after a zero-subscriber gap', async () => {
     await React.act(async () => {settingsLink.dispatchEvent(new browser.MouseEvent('click',{bubbles:true,cancelable:true,button:0}));});
     await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
     console.log('COMMITS AFTER RETURN:', JSON.stringify(globalThis.__commits.map(c => ({...c, wallMinusGenerated:c.wall - sections.status.generated_at_ms}))));
-    console.log('FINAL:', container.textContent.match(/Last complete owner snapshot · [^·]+· [a-z ;]+/)?.[0]);
+    console.log('FINAL:', container.textContent.match(/Last coherent owner snapshot · [^·]+· [a-z ;]+/)?.[0]);
     assert.ok(!globalThis.__commits.some(c => c.label && !/stale/.test(c.label)),'a 90 s old snapshot must never commit as non-stale');
   } finally {
     await React.act(async () => mount.unmount());

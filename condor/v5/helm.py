@@ -25,7 +25,9 @@ STALE_AFTER_SECONDS = 30
 
 CODE = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.:-]{0,95}")  # states, reason codes, ids, image tag
 PLAIN = re.compile(r"[A-Za-z0-9 _.,:;()'%+=-]{1,256}")  # sentences: no / \ @ ~ $ or quotes
-DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,18})?")
+# Helm publishes exact Decimal text with up to 28 fraction digits (e.g. native_risk.daily_loss_use
+# "13.71580913935440000000000000"); 18 made the page withhold it as "did not match its expected form".
+DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,30})?")
 PAIR = re.compile(r"[A-Z0-9]{1,16}-[A-Z0-9]{1,16}")
 MAX_SAFE = 2**53 - 1
 
@@ -36,6 +38,11 @@ def _code(value: Any) -> str | None:
 
 def _plain(value: Any) -> str | None:
     return value if isinstance(value, str) and PLAIN.fullmatch(value) else None
+
+
+def _note(value: Any) -> str | None:
+    """A sentence, or the empty note a controller publishes when nothing is held."""
+    return "" if value == "" else _plain(value)
 
 
 def _flag(value: Any) -> bool | None:
@@ -53,6 +60,10 @@ def _amount(value: Any) -> int | float | str | None:
     return None
 
 
+def _revision(value: Any) -> int | None:
+    return value if type(value) is int and 0 < value <= MAX_SAFE else None
+
+
 def _epoch_ms(value: Any) -> int | None:
     return value if type(value) is int and 0 < value <= MAX_TIMESTAMP * 1000 else None
 
@@ -63,7 +74,6 @@ def _epoch_s(value: Any) -> int | float | None:
     return None
 
 
-LONG_DECIMAL = re.compile(r"-?\d{1,18}(?:\.\d{1,30})?")
 
 
 def _money(payload: dict) -> dict[str, str | None] | None:
@@ -77,7 +87,7 @@ def _money(payload: dict) -> dict[str, str | None] | None:
         for report in reports.values():
             performance = report.get("performance") if isinstance(report, dict) else None
             value = performance.get(field) if isinstance(performance, dict) and performance.get("pnl_available") is True else None
-            if not isinstance(value, str) or not LONG_DECIMAL.fullmatch(value):
+            if not isinstance(value, str) or not DECIMAL.fullmatch(value):
                 total = None
                 break
             try:
@@ -135,11 +145,20 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
         return {**base, "state": "UNAVAILABLE", "reason": "HELM_STATUS_CLOCK_SKEW"}
     shown = _Projection()
     symbols: list[dict[str, Any]] = []
+    recipes: list[str] = []
+    gates: list[dict[str, Any]] = []
     controllers = payload.get("controllers") if isinstance(payload.get("controllers"), list) else []
     for controller in controllers[:4]:
+        if isinstance(controller, dict):
+            # The controller's own acquisition gate (helm_v5.get_status_summary): 'ready' only when nothing holds new
+            # buys, else e.g. symbol_fault with the faulted pairs in the note.
+            gates.append(shown.pick(controller, {"gate": _code, "note": _note}))
         info = controller.get("custom_info") if isinstance(controller, dict) else None
         if not isinstance(info, dict) or not isinstance(info.get("symbols"), dict):
             continue
+        recipe = shown.one(info.get("recipe_version"), _code)
+        if recipe is not None and recipe not in recipes:
+            recipes.append(recipe)
         portfolio = info.get("portfolio") if isinstance(info.get("portfolio"), dict) else {}
         holds = portfolio.get("candidate_holds") if isinstance(portfolio.get("candidate_holds"), dict) else {}
         for pair, row in list(info["symbols"].items())[:16]:
@@ -177,13 +196,16 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
         "funding": shown.one(helm.get("funding"), _code),
         "image_tag": shown.one(image.get("tag"), _code),
         "shutdown": shown.pick(helm.get("shutdown"), {"checkpoint": _flag, "clean": _flag}),
-        "mandate": shown.pick(helm.get("mandate"), {"mandate_id": _code, "state": _code, "valid_until_ms": _epoch_ms}),
+        "mandate": shown.pick(helm.get("mandate"), {"mandate_id": _code, "revision": _revision, "revocation_id": _code, "state": _code, "valid_until_ms": _epoch_ms}),
         "risk": shown.pick(helm.get("native_risk"), {"reason": _code, "latched": _flag, "daily_loss_use": _amount, "risk_reference_quote": _amount, "unit": _code}),
         "control_rejections": None if rejections is None else {
             "count": shown.one(rejections.get("count"), _amount),
             "recent": [shown.pick(row, {"action": _code, "at_ms": _epoch_ms, "reason": _plain}) for row in recent[:5]],
         },
         "symbols": symbols,
+        "gates": gates,
+        # One recipe across controllers, or None when none or several are published (never a guess).
+        "recipe_version": recipes[0] if len(recipes) == 1 else None,
         "money": _money(payload),
     }
     status["withheld"] = shown.withheld

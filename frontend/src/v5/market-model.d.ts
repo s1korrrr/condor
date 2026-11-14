@@ -10,7 +10,7 @@ export type CandleRead = { buckets: (number | null)[][]; start: number; end: num
 export type Minute = { t: number; high: number | null; low: number | null; close: number | null; volume: number | null };
 export type CoinTile = {
   coin: string; last: number; lastTime: number; changePct: number | null; change1hPct: number | null;
-  high: number; low: number; heldMinutes: number; windowMinutes: number; premiumBps: number | null; spark: SeriesPoint[];
+  high: number; low: number; heldMinutes: number; windowMinutes: number; premiumBps: number | null; premiumTime: number | null; spark: SeriesPoint[];
 };
 export type LaneTile = {
   lane: string; venue: string; segment: string; available: boolean | null; pairs_listed: number | null; pairs_held: number | null;

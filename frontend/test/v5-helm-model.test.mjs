@@ -4,8 +4,8 @@ import { helmHeadline } from '../src/v5/helm-model.mjs';
 
 const status = (extra = {}) => ({ generated_at: 1793929882.6, reasons: [], ready: true, ...extra });
 
-test('a missing status file reads as not running, other unreadable files as unreadable', () => {
-  assert.deepEqual(helmHeadline({ state: 'UNAVAILABLE', reason: 'HELM_STATUS_MISSING', status: null }), { text: 'Not running (no status published yet)', good: false });
+test('a missing status file says only that, other unreadable files stay unreadable', () => {
+  assert.deepEqual(helmHeadline({ state: 'UNAVAILABLE', reason: 'HELM_STATUS_MISSING', status: null }), { text: 'No status file published; current state unknown', good: false });
   assert.equal(helmHeadline({ state: 'UNAVAILABLE', reason: 'HELM_STATUS_SCHEMA', status: null }).text, 'Status file unreadable (HELM STATUS SCHEMA)');
   assert.equal(helmHeadline({ state: 'UNBOUND', reason: 'x', status: null }).text, 'Not connected to this dashboard');
 });

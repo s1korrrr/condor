@@ -4,8 +4,8 @@ import { tri, utcMinute } from './shown.mjs';
 export function helmHeadline(read) {
   if (!read) return { text: '', good: false };
   if (read.state === 'UNBOUND') return { text: 'Not connected to this dashboard', good: false };
-  // No status file yet: the runtime has not published (not started in this state directory). Not an error.
-  if (read.state === 'UNAVAILABLE' && read.reason === 'HELM_STATUS_MISSING') return { text: 'Not running (no status published yet)', good: false };
+  // No status file: only absence is known. The runtime may be stopped or still starting; neither is claimed.
+  if (read.state === 'UNAVAILABLE' && read.reason === 'HELM_STATUS_MISSING') return { text: 'No status file published; current state unknown', good: false };
   if (read.state === 'UNAVAILABLE') return { text: `Status file unreadable (${String(read.reason ?? 'unknown').replaceAll('_', ' ')})`, good: false };
   const status = read.status;
   const lastAt = utcMinute(status ? status.generated_at * 1000 : null) ?? 'unknown time';

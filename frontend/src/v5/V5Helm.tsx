@@ -50,7 +50,7 @@ export function V5Helm() {
     {helm.isPending ? <p role="status" className="v5m-status">Reading Helm status…</p> : helm.isError ? <p role="alert" className="v5m-status">{helm.error.message}. Nothing older is shown.</p> : <>
       <section className={`v5m-card v5m-helm-head ${good ? "is-up" : "is-down"}`}>
         <strong>Helm paper bot: {headline}</strong>
-        {read!.state === "UNBOUND" ? <p>{read!.reason}. The Helm status file has to be mounted read-only into the dashboard; no state is inferred.</p> : read!.reason === "HELM_STATUS_MISSING" ? <p>The Helm paper runtime has not written a status file in its state directory yet. Nothing else is shown until it does.</p> : status && <p>
+        {read!.state === "UNBOUND" ? <p>{read!.reason}. The Helm status file has to be mounted read-only into the dashboard; no state is inferred.</p> : read!.reason === "HELM_STATUS_MISSING" ? <p>No Helm status file exists in its state directory. The runtime may be stopped or still starting; nothing is shown until it publishes.</p> : status && <p>
           Last status {duration(status.age_s)} ago{status.reasons == null ? " · reasons not published" : status.reasons.length ? ` · ${status.reasons.map(words).join(", ")}` : ""}
           {status.shutdown ? ` · shutdown ${tri(status.shutdown.clean, "clean", "not clean")}, checkpoint ${tri(status.shutdown.checkpoint, "saved", "missing")}` : ""}
           {status.failure ? ` · failure: ${status.failure}` : status.failure_reported ? " · a failure was reported but cannot be shown safely" : ""}.

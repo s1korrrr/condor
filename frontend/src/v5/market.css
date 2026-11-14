@@ -123,3 +123,11 @@
 .v5m-feature-label { color: var(--color-text-muted); font-size: 12px; }
 .v5m-feature strong { font-size: 18px; font-weight: 600; }
 .v5m-feature-meta { color: var(--color-text-muted); font-size: 11px; word-break: break-all; }
+
+/* Helm page */
+.v5m-helm-head { border-left-width: 4px; }
+.v5m-helm-head.is-up { border-left-color: var(--color-green); }
+.v5m-helm-head.is-down { border-left-color: var(--color-yellow); }
+.v5m-helm-head strong { font-size: 1.05rem; }
+.v5m-helm-head p { margin: 6px 0 0; color: var(--color-text-muted); font-size: 0.875rem; }
+.v5m-list { margin: 0; padding-left: 18px; font-size: 13px; display: flex; flex-direction: column; gap: 4px; }

@@ -26,6 +26,7 @@ from .agents import AgentCatalog, AgentDefinition
 from .candles import CandleOwner, OwnerUnavailable, validate_query
 from .config import Settings, read_secret_file
 from .dashboard import dashboard_profile, read_compatibility_path
+from .helm import read_helm_status
 from .learning import FixtureLearningAPI, learning_router
 from .paper import PaperObservation, read_paper_status
 from .state import StateCapacityError, WorkspaceState
@@ -400,6 +401,14 @@ def create_app(
         if candle_owner is not None:
             profile["candle_store"] = {"configured": True}
         return profile
+
+    @app.get("/api/v5/helm", dependencies=[Depends(require_auth)])
+    async def helm_status():
+        """Read-only Helm paper runtime status; never a control path."""
+        if config.helm_status_file is None:
+            return JSONResponse({"state": "UNBOUND", "reason": "V5_HELM_STATUS_FILE is not configured", "bot": None, "status": None}, headers={"Cache-Control": "no-store"})
+        result = await run_in_threadpool(read_helm_status, config.helm_status_file, now=clock() / 1000)
+        return JSONResponse(result, headers={"Cache-Control": "no-store"})
 
     @app.get("/api/v5/candle-store/{view}", dependencies=[Depends(require_auth)])
     async def candle_store_read(view: str, request: Request):
@@ -1221,6 +1230,7 @@ def create_app(
     for ui_path in (
         "/capital",
         "/bots",
+        "/helm",
         "/operations",
         "/research",
         "/learning",

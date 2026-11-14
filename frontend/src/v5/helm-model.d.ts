@@ -1,0 +1,1 @@
+export function helmHeadline(read: { state: string; reason?: string | null; status?: { generated_at: number; reasons?: string[] | null; ready?: boolean | null } | null } | null | undefined): { text: string; good: boolean };

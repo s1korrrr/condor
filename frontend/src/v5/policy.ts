@@ -22,7 +22,7 @@ export async function paperBoundedRead<Result>(attempt: () => Promise<Result>, w
   }
 }
 
-export async function paperCoherentRead(statusPath: string, sections: { section: string; path: string; paginate?: boolean }[], read: (path: string, section: string, status?: import("./contracts").PaperRead) => Promise<import("./contracts").PaperRead>, wait?: (milliseconds: number) => Promise<void>, progress: (reads: import("./contracts").PaperRead[]) => void = () => {}) {
+export async function paperCoherentRead(statusPath: string, sections: { section: string; path: string; paginate?: boolean; maxPages?: number }[], read: (path: string, section: string, status?: import("./contracts").PaperRead) => Promise<import("./contracts").PaperRead>, wait?: (milliseconds: number) => Promise<void>, progress: (reads: import("./contracts").PaperRead[]) => void = () => {}) {
   return paperBoundedRead(async () => {
     progress([]);
     try {
@@ -38,7 +38,7 @@ export async function paperCoherentRead(statusPath: string, sections: { section:
           const section = sections[index];
           const path = section.path + `${section.path.includes("?") ? "&" : "?"}snapshot_id=${encodeURIComponent(status.snapshot_id!)}`;
           try {
-            const value = section.paginate ? await paperObservationPages(path, page => read(page, section.section, status)) : await read(path, section.section, status);
+            const value = section.paginate ? await paperObservationPages(path, page => read(page, section.section, status), section.maxPages) : await read(path, section.section, status);
             if (!paperSnapshotsAgree([status, value])) throw new Error("Mixed owner snapshots were refused. Refresh; totals are not combined.");
             reads[index + 1] = value;
             progress(reads.filter(Boolean));
@@ -67,7 +67,12 @@ export function paperObservationSummary(reads: import("./contracts").PaperRead[]
   if (reads.length !== required.length || required.some(section => reads.filter(read => read.section === section && read.bot_id === bot).length !== 1) || reads.some(read => paperSectionError(read)) || !paperSnapshotsAgree(reads)) return { label: "Unavailable", reason: "A complete, validated set of paper reads from one owner snapshot is not available." };
   const states = reads.map(read => paperReadState(read, now));
   if (states.includes("stale")) return { label: "Stale", reason: "The retained paper report has expired. Process heartbeat does not refresh its data." };
-  if (!reads.every(read => paperCompleteRead(read, now))) return { label: "Incomplete", reason: "One or more owner sections are incomplete or unavailable. No qualification pass is inferred." };
+  const partial = reads.filter(read => !paperCompleteRead(read, now));
+  if (partial.length) {
+    // Name each section and the owner's own reason, so a by-design recent window reads differently from a real gap.
+    const named = partial.map(read => `${read.section} (${String(read.reason ?? read.completeness ?? read.state).replaceAll("_", " ")})`).join(", ");
+    return { label: "Incomplete", reason: `Owner sections not complete: ${named}. No qualification pass is inferred.` };
+  }
   return { label: "Available", reason: "Required paper sections passed their read contracts at one snapshot. This is not production qualification." };
 }
 
@@ -127,11 +132,13 @@ function paperNativeRecordValid(value: unknown, key = "", depth = 0, nativeFee =
   return typeof value !== "number" || Number.isSafeInteger(value);
 }
 
-export async function paperObservationPages(path: string, fetchPage: (path: string) => Promise<import("./contracts").PaperRead>): Promise<import("./contracts").PaperRead> {
+export async function paperObservationPages(path: string, fetchPage: (path: string) => Promise<import("./contracts").PaperRead>, maxPages?: number): Promise<import("./contracts").PaperRead> {
   const url = new URL(path, "https://paper.invalid");
   url.searchParams.set("limit", "200");
   let result = await fetchPage(url.pathname + url.search);
-  const pageLimit = result.section === "history" ? 16 : 5;
+  // A caller that shows only the newest records asks for fewer pages; the read keeps its owner next_cursor, so it is
+  // never presented as complete.
+  const pageLimit = Math.min(result.section === "history" ? 16 : 5, maxPages ?? Infinity);
   const seen = new Set<string>();
   for (let page = 1; result.next_cursor && page < pageLimit; page++) {
     if (seen.has(result.next_cursor)) throw new Error("Repeated owner history cursor was refused.");
@@ -392,12 +399,16 @@ export function paperPairHoldings(pair: string, positions: import("./contracts")
   const byState = new Map<string, string[]>();
   for (const row of mine) byState.set(row.state as string, [...(byState.get(row.state as string) ?? []), row.quantity as string]);
   // Only an explicit owner flag counts either way; an omitted or malformed flag stays unknown (never "unprotected").
-  const unprotected = mine.filter(row => row.protected_exit === false);
+  // A held bag row is stamped protected_exit false / no_active_fixed_target_executor by the engine by definition: its
+  // exit is the bag policy (a market barrier, no resting order), so it is bag-managed, not an unprotected exit.
+  const bagManaged = mine.filter(row => row.protected_exit === false && row.protection_reason === "no_active_fixed_target_executor");
+  const unprotected = mine.filter(row => row.protected_exit === false && !bagManaged.includes(row));
   return {
     count: mine.length,
     total: paperDecimalSum(mine.map(row => row.quantity as string)),
     states: [...byState].map(([state, quantities]) => ({ state, count: quantities.length, quantity: paperDecimalSum(quantities) })),
     protectedCount: mine.filter(row => row.protected_exit === true).length,
+    bagManagedCount: bagManaged.length,
     unprotectedCount: unprotected.length,
     unknownCount: mine.filter(row => typeof row.protected_exit !== "boolean").length,
     unprotectedReasons: [...new Set(unprotected.map(row => typeof row.protection_reason === "string" && row.protection_reason ? row.protection_reason : "protection_reason_not_published"))],

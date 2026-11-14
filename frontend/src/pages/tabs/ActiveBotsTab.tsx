@@ -704,9 +704,12 @@ export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accoun
   const walletTotals = complete ? paperWalletTotals(bySection.wallet, now) : null;
   // When a mark is missing the owner withholds equity; show the last complete equity with its time, never a guess.
   const lastWallet = useRef<{ bot: string; equity: unknown; cash: unknown; asOf: number } | null>(null);
-  if (walletTotals && typeof bySection.wallet?.generated_at_ms === "number") lastWallet.current = { bot, ...walletTotals, asOf: bySection.wallet.generated_at_ms };
+  // Cache only a complete wallet that is not in the future at all (the shared check tolerates 5 s of skew).
+  if (walletTotals && typeof bySection.wallet?.generated_at_ms === "number" && bySection.wallet.generated_at_ms <= now) lastWallet.current = { bot, ...walletTotals, asOf: bySection.wallet.generated_at_ms };
   // Only for a current wallet read the owner marked degraded (e.g. a missing mark); a stale read is never revived.
-  const previousWallet = !walletTotals && complete && paperWalletOwnerDegraded(bySection.wallet, now) && lastWallet.current?.bot === bot ? lastWallet.current : null;
+  // ...and show it only when it is older than the degraded read it stands in for (never a newer value as "last").
+  const previousWallet = !walletTotals && complete && paperWalletOwnerDegraded(bySection.wallet, now) && lastWallet.current?.bot === bot
+    && lastWallet.current.asOf < (bySection.wallet?.generated_at_ms ?? -Infinity) ? lastWallet.current : null;
   const walletWhy = paperWords(String(bySection.wallet?.reason ?? paperObject(bySection.wallet?.data).reason ?? "incomplete"));
   const inventory = complete ? paperWalletInventory(bySection.wallet, now) : null;
   const accounting = complete ? paperLifetimeTotals(accountingRead, reads[0], now) : null;

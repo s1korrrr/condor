@@ -6,7 +6,7 @@ import { helmHeadline } from "./helm-model.mjs";
 import "./market.css";
 
 type Amount = number | string | null;
-type HelmStatus = {
+export type HelmStatus = {
   generated_at: number; age_s: number; ready: boolean | null; failure: string | null; failure_reported: boolean; reasons: string[] | null;
   steps: Amount; actions: Amount; phase: string | null; profile_id: string | null; entries_held: string | null; operator_entry_paused: boolean | null;
   kill_switch: boolean | null; adaptive_actions: string | null; funding: string | null; image_tag: string | null;
@@ -19,9 +19,9 @@ type HelmStatus = {
   symbols: { pair: string; status: string | null; candidate_hold: string | null; bag: { held_amount: Amount; breakeven_price: Amount } | null; last_decision: { at: number | null; reason: string | null } | null }[];
   withheld: number;
 };
-type HelmRead = { state: "FRESH" | "STALE" | "UNAVAILABLE" | "UNBOUND"; reason: string; bot: string | null; status: HelmStatus | null };
+export type HelmRead = { state: "FRESH" | "STALE" | "UNAVAILABLE" | "UNBOUND"; reason: string; bot: string | null; status: HelmStatus | null };
 
-async function readHelm(): Promise<HelmRead> {
+export async function readHelm(): Promise<HelmRead> {
   const response = await fetch("/api/v5/helm", { credentials: "include", cache: "no-store", signal: AbortSignal.timeout(14_000) });
   if (!response.ok) throw new Error(`Helm read failed (HTTP ${response.status})`);
   return response.json() as Promise<HelmRead>;

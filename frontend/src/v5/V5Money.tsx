@@ -11,12 +11,12 @@ import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
 import { utcExact, utcMinute } from "./shown.mjs";
 import "./market.css";
 
-type MoneyRead = { sampler: boolean; started_at_ms: number | null; now_ms: number; range: string; rows: MoneyRow[]; daily: DailyRow[]; recorder_errors: { count: number; last: string | null; at_ms: number | null } };
+export type MoneyRead = { sampler: boolean; started_at_ms: number | null; now_ms: number; range: string; rows: MoneyRow[]; daily: DailyRow[]; recorder_errors: { count: number; last: string | null; at_ms: number | null } };
 type CrossLine = { venue: string; lane: string; close: [number, number][] };
 type Hold = { closes: Record<string, [number, number][] | undefined> };
 const RANGES = ["24h", "7d"] as const;
 
-async function readMoney(range: string): Promise<MoneyRead> {
+export async function readMoney(range: string): Promise<MoneyRead> {
   const response = await fetch(`/api/v5/money?range=${range}`, { credentials: "include", cache: "no-store", signal: AbortSignal.timeout(14_000) });
   if (!response.ok) throw new Error(`Money read failed (HTTP ${response.status})`);
   return response.json() as Promise<MoneyRead>;
@@ -49,7 +49,8 @@ const dailyColumns: TableColumn<DailyRow>[] = [
   { id: "coverage", header: "Day with values", value: row => dayCoverage(row), kind: "number", size: 100, cell: row => pct(dayCoverage(row)), title: row => `${row.valid} of 288 five-minute slots hold values · ${row.samples} samples recorded, ${row.gaps} of them gaps` },
 ];
 
-export function V5Money() {
+/** The Money view; on Overview it is embedded under the bot cards (`embedded` turns its title into a section heading). */
+export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
   const [range, setRange] = useState<(typeof RANGES)[number]>("7d");
   const money = useQuery({ queryKey: ["v5-money", range], queryFn: () => readMoney(range), retry: false, refetchInterval: 60_000 });
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, retry: false });
@@ -75,7 +76,7 @@ export function V5Money() {
 
   return <div className="v5m">
     <header className="v5m-head">
-      <div><h1>Money</h1><p>Paper money for V5 and Helm at a glance. Recorded by this dashboard every 5 minutes{money.data?.started_at_ms ? ` since ${at(money.data.started_at_ms)}` : ""}; there is no record before that.</p></div>
+      <div>{embedded ? <h2>Money</h2> : <h1>Money</h1>}<p>Paper money for V5 and Helm at a glance. Recorded by this dashboard every 5 minutes{money.data?.started_at_ms ? ` since ${at(money.data.started_at_ms)}` : ""}; there is no record before that.</p></div>
       <div className="v5m-chips">
         <div role="group" aria-label="Range" className="v5m-seg">{RANGES.map(item => <button key={item} type="button" aria-pressed={range === item} onClick={() => setRange(item)}>{item}</button>)}</div>
         <button className="v5m-refresh" onClick={() => { void money.refetch(); void hold.refetch(); }}><RotateCw size={14} />Refresh</button>

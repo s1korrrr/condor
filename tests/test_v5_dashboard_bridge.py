@@ -259,6 +259,7 @@ def test_full_dashboard_deep_links_serve_only_known_ui_paths(tmp_path):
         assert logo.status_code == 200 and logo.content == b"test-logo"
         assert logo.headers["content-type"] == "image/jpeg"
         for path in (
+            "/market",
             "/capital",
             "/bots",
             "/helm",

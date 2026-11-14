@@ -1298,6 +1298,7 @@ def create_app(
         return FileResponse(image, media_type="image/jpeg")
 
     for ui_path in (
+        "/market",
         "/capital",
         "/bots",
         "/helm",

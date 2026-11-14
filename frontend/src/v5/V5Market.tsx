@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { RotateCw } from "lucide-react";
 import { SparkChart, TimeSeriesChart } from "@/features/quant-ops/kit/charts";
@@ -73,10 +74,14 @@ export function V5Market() {
   const coins = useQuery({ queryKey: ["v5-market", "coins"], queryFn: readCoins, retry: false, refetchInterval: REFRESH_MS });
   const cross = useQuery({ queryKey: ["v5-market", "cross"], queryFn: readCross, retry: false, refetchInterval: REFRESH_MS, enabled: coins.isSuccess });
   const workspace = useQuery({ queryKey: ["v5-workspace"], queryFn: v5Api.workspace, refetchInterval: 30_000 });
-  const [selected, setSelected] = useState<string | null>(null);
+  // The open coin detail lives in the address (/market/BTC), so it can be linked and Back closes it.
+  const { coin: routeCoin } = useParams();
+  const navigate = useNavigate();
+  const selected = routeCoin && MARKET_COINS.includes(routeCoin) ? routeCoin : null;
+  const setSelected = (coin: string | null) => navigate(coin ? `/market/${coin}` : "/market");
   const [hidden, setHidden] = useState<ReadonlySet<string>>(new Set());
   const [detailsOpen, setDetailsOpen] = useState(false);
-  const select = (coin: string) => setSelected(current => current === coin ? null : coin);
+  const select = (coin: string) => setSelected(selected === coin ? null : coin);
   const now = useNow();
   const toggleSeries = (coin: string) => setHidden(current => { const next = new Set(current); if (next.has(coin)) next.delete(coin); else next.add(coin); return next; });
 

@@ -1,4 +1,6 @@
-import { NavLink, useLocation } from "react-router-dom";
+import { NavLink, useLocation, useParams } from "react-router-dom";
+import { MARKET_COINS } from "./market-model.mjs";
+import { V5NotFound } from "./V5NotFound";
 import { useQuery } from "@tanstack/react-query";
 import { v5Api } from "./api";
 import { V5Market } from "./V5Market";
@@ -10,8 +12,10 @@ import { V5Stocks } from "./V5Stocks";
  */
 export function V5MarketHome() {
   const location = useLocation();
+  const { coin } = useParams();
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, retry: false });
   const candleConfigured = profile.data?.candle_store?.configured === true;
+  if (coin && !MARKET_COINS.includes(coin)) return <V5NotFound />;
   if (location.pathname === "/market/stocks") return <section>
     <nav aria-label="Market views" className="v5m-seg mb-4">{[["/market", "Market"], ["/market/stocks", "OKX stocks"]].map(([to, label]) => <NavLink key={to} end to={to} className={({ isActive }) => `rounded-md px-3 py-1.5 text-sm ${isActive ? "bg-[var(--color-surface-hover)] text-[var(--color-text)]" : "text-[var(--color-text-muted)]"}`}>{label}</NavLink>)}</nav>
     <V5Stocks configured={candleConfigured} profilePending={profile.isPending} profileError={profile.error} />

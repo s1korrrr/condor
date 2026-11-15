@@ -20,6 +20,7 @@ import { PAIRS, hasPaperCandlePair, paperCandleQuery, usePaperCandleSymbols, typ
 import { readMoney, type MoneyRead } from "@/v5/money-api";
 import type { PaperRead } from "@/v5/contracts";
 import { usePaperSnapshot } from "@/v5/usePaperSnapshot";
+import { paperSafetyReads } from "@/v5/paper-safety";
 import { usePaperClock } from "@/v5/usePaperClock";
 import { newerSnapshot, riskSupersedes } from "@/v5/paper-safety";
 import { parsePaperReadText } from "@/v5/paper-json";
@@ -746,11 +747,13 @@ function PaperIsolatedSection({ name, resetKey, render }: { name: string; resetK
 
 type PaperMarket = { prices: Record<string, Candles | undefined>; money?: MoneyRead; pair: string; range: string; setPair: (pair: string) => void; setRange: (range: string) => void; view?: Candles; reason: string };
 
-export function PaperWorkspace({ reads, safetyReads = [], receivedReads = [], accountingRead, accountingError = false, money, complete = true, readFailed = false, now, valuesAt = now, reportAt, heartbeat, bot, asOf = null, snapshotStamp, market }: { reads: PaperRead[]; safetyReads?: PaperRead[]; receivedReads?: PaperRead[]; accountingRead?: PaperRead; accountingError?: boolean; money?: PaperMoney; complete?: boolean; readFailed?: boolean; now: number; valuesAt?: number; reportAt: number | null; heartbeat: string; bot: string; asOf?: number | null; snapshotStamp?: ReactNode; market?: PaperMarket }) {
+export function PaperWorkspace({ reads, safetyReads = [], receivedReads = [], reconcileSafety, accountingRead, accountingError = false, money, complete = true, readFailed = false, now, valuesAt = now, reportAt, heartbeat, bot, asOf = null, snapshotStamp, market }: { reads: PaperRead[]; safetyReads?: PaperRead[]; receivedReads?: PaperRead[]; reconcileSafety?: (reads: PaperRead[]) => PaperRead[]; accountingRead?: PaperRead; accountingError?: boolean; money?: PaperMoney; complete?: boolean; readFailed?: boolean; now: number; valuesAt?: number; reportAt: number | null; heartbeat: string; bot: string; asOf?: number | null; snapshotStamp?: ReactNode; market?: PaperMarket }) {
   // asOf labels retained values, not current state. The separate valuesAt admits only display values;
   // states, safety evidence and timestamps still use now.
   const notCurrent = asOf === null ? null : `Not current · values from ${paperTime(asOf, now)}`;
-  const riskEvidence = [...new Set([...reads.filter(read => read.section === 'risk'), ...safetyReads])];
+  const displayedRisk = reads.filter(read => read.section === 'risk');
+  const clearReports = reconcileSafety ? displayedRisk.filter(read => paperSafetyReads([read], []).length === 0) : [];
+  const riskEvidence = [...new Set([...(reconcileSafety ? reconcileSafety(displayedRisk) : displayedRisk), ...clearReports, ...safetyReads])];
   const holds = [...new Map(riskEvidence.flatMap(read => paperRiskHolds(read).map(hold => ({...hold, receivedAt: read.generated_at_ms}))).map(hold => [hold.reason, hold])).values()];
   const hold = holds.length > 0;
   const errors = reads.map(read => paperSectionError(read) ?? (typeof read.reason === "string" && read.reason.includes("schema invalid") ? read.reason : null)).filter(Boolean);
@@ -903,7 +906,7 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
 
     {query.progress && <p role="status">{query.progress}</p>}
     {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
-    <PaperWorkspace snapshotStamp={complete && <p role={dimmed ? "status" : undefined} className={dimmed ? "paper-dimmed-stamp" : undefined}>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}{dimmed ? " · snapshot values are from that time, dimmed until a new report" : ""}</p>} asOf={dimmed ? snapshotAt : null} reads={reads} safetyReads={query.safetyReads} receivedReads={query.reads} complete={complete} readFailed={query.isError} money={money.isError ? undefined : money.data} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} valuesAt={valuesAt} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} market={market} />
+    <PaperWorkspace snapshotStamp={complete && <p role={dimmed ? "status" : undefined} className={dimmed ? "paper-dimmed-stamp" : undefined}>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}{dimmed ? " · snapshot values are from that time, dimmed until a new report" : ""}</p>} asOf={dimmed ? snapshotAt : null} reads={reads} safetyReads={query.safetyReads} receivedReads={query.reads} reconcileSafety={query.reconcileSafety} complete={complete} readFailed={query.isError} money={money.isError ? undefined : money.data} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} valuesAt={valuesAt} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} market={market} />
   </div>;
 }
 

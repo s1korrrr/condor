@@ -60,6 +60,12 @@ test('an owner entry hold is amber "buying paused"; a failed or stale V5 read is
   assert.equal(chip(statusStrip(input({ v5: { bound: false, pending: false, current: false, entryHold: null, lastOkMs: null } })), 'v5').text, 'No paper bot bound');
 });
 
+test('cross-boot safety conflict is unknown rather than running', () => {
+  const item = chip(statusStrip(input({v5:{...input().v5,restartOrderUnknown:true}})), 'v5');
+  assert.equal(item.tone, 'grey');
+  assert.match(item.text, /restart order unknown/i);
+});
+
 test('Helm reuses helmHeadline: waiting is green, not buying is amber, stopped is red, unknown or failed is grey', () => {
   const waiting = status({ symbols: [{ pair: 'BTC-USDC', candidate_hold: 'no_rebound' }] });
   const green = chip(statusStrip(input({ helm: { read: { state: 'FRESH', status: waiting }, failed: false, lastOkMs: NOW } })), 'helm');
@@ -69,7 +75,14 @@ test('Helm reuses helmHeadline: waiting is green, not buying is amber, stopped i
   // Neutral headline (ready gate, a planner code on a coin): plain grey dot, never green or amber, still 'running'.
   const neutral = chip(statusStrip(input({ helm: { read: { state: 'FRESH', status: status({ symbols: [{ pair: 'BTC-USDC', candidate_hold: 'bag_gap_not_met' }] }) }, failed: false, lastOkMs: NOW } })), 'helm');
   assert.deepEqual([neutral.tone, neutral.text, neutral.short], ['grey', 'Running, entry gate ready', 'Helm running']);
-  assert.equal(chip(statusStrip(input({ helm: { read: { state: 'STALE', status: status({ reasons: ['runtime_stopped'] }) }, failed: false, lastOkMs: NOW } })), 'helm').tone, 'red');
+  const stopped = status({ reasons: ['runtime_stopped'], age_s: 29 });
+  const read = {state:'FRESH', status:stopped};
+  assert.equal(chip(statusStrip(input({helm:{read, failed:false, lastOkMs:NOW, requestedAtMs:NOW}})), 'helm').tone, 'red');
+  for (const helm of [{read, failed:false, lastOkMs:NOW, requestedAtMs:NOW - 2000}, {read:{...read,state:'STALE'}, failed:false, lastOkMs:NOW, requestedAtMs:NOW}]) {
+    const staleStop = chip(statusStrip(input({helm})), 'helm');
+    assert.equal(staleStop.tone, 'grey');
+    assert.equal(staleStop.text, 'No current report · last report (12:00:25 UTC) said: stopped');
+  }
   assert.equal(chip(statusStrip(input({ helm: { read: { state: 'STALE', status: status() }, failed: false, lastOkMs: NOW } })), 'helm').tone, 'grey');
   const failed = chip(statusStrip(input({ helm: { read: null, failed: true, lastOkMs: Date.parse('2026-11-14T11:59:00Z') } })), 'helm');
   assert.deepEqual([failed.tone, failed.text], ['grey', 'No report since 11:59:00 UTC']);

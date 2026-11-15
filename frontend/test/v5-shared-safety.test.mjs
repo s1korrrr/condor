@@ -5,6 +5,7 @@ import React from 'react';
 import { create, act } from 'react-test-renderer';
 import * as reactQuery from '@tanstack/react-query';
 import { frontendModules } from './helpers/frontend-module.mjs';
+import { renderToStaticMarkup } from 'react-dom/server';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 const { QueryClient, QueryClientProvider } = reactQuery;
@@ -67,11 +68,18 @@ test('different query keys share ordered bot safety, including failed strip refr
   await act(async () => { await states.bots.refetch(); });
   assert.equal(emergency(states.strip.safetyEvidence), false, 'Bots clear supersedes strip hold after failure');
   assert.equal(emergency(states.strip.reconcileSafety(pair(45, true).slice(1))), false, 'displayed strip hold is superseded too');
+  const overrides = Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}]));
+  const {PaperWorkspace} = frontendModules(overrides).load('pages/tabs/ActiveBotsTab');
+  const old = pair(45, true);
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:old,safetyReads:states.strip.safetyReads,reconcileSafety:states.strip.reconcileSafety,complete:false,now:risk.generated_at_ms,reportAt:null,heartbeat:'Fresh',bot}));
+  assert.doesNotMatch(html,/New acquisitions held|Emergency halt reported/);
+  const clearHtml = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:pair(46, false),safetyReads:[],reconcileSafety:states.strip.reconcileSafety,complete:false,now:risk.generated_at_ms,reportAt:null,heartbeat:'Fresh',bot}));
+  assert.match(clearHtml,/Entry controls/);
   await act(async () => root.unmount());
   client.clear();
 });
 
-test('either query retains a new-boot emergency against a delayed old-boot clear', async () => {
+test('different boot hold versus clear leaves strip restart order unknown', async () => {
   for (const clearKey of ['strip', 'bots']) {
     const client = new QueryClient({defaultOptions:{queries:{retry:false, gcTime:Infinity}}});
     const bot = risk.bot_id, states = {};
@@ -87,22 +95,30 @@ test('either query retains a new-boot emergency against a delayed old-boot clear
       React.createElement(Observer, {name:'bots', queryKey:['v5-paper-bots', bot]}))); });
     inputs[clearKey] = withBoot(pair(99, false), 'boot-a');
     await act(async () => { await states[clearKey].refetch(); });
-    for (const name of ['strip', 'bots']) assert.ok(states[name].safetyEvidence.some(read => read.source.boot_id === 'boot-b' && read.data.controllers[controller].operator.emergency === true));
-    inputs[clearKey] = withBoot(pair(3, false), 'boot-b');
-    await act(async () => { await states[clearKey].refetch(); });
-    assert.equal(states.strip.safetyEvidence.length, 0, 'a newer clear from the same boot can clear');
+    assert.equal(states.strip.restartOrderUnknown, true);
     await act(async () => root.unmount());
     client.clear();
   }
 });
 
-test('independent boot holds survive a clear of only one boot', () => {
-  const { PaperSafetyStore } = frontendModules().load('v5/paper-safety-store');
+test('same-boot clear before restart does not create a restart conflict', () => {
+  const {PaperSafetyStore} = frontendModules().load('v5/paper-safety-store');
   const store = new PaperSafetyStore();
-  const withBoot = (reads, boot) => reads.map(read => ({...read, source:{...read.source, boot_id:boot}}));
-  const first = withBoot(pair(2, true), 'a'), second = withBoot(pair(2, true), 'b');
-  store.receive(first, first[1]); store.receive(second, second[1]);
-  const clear = withBoot(pair(3, false), 'a');
-  store.receive(clear, clear[1]);
-  assert.ok(store.snapshot().some(read => read.source.boot_id === 'b'));
+  const held = pair(41, true), cleared = pair(42, false);
+  store.receive(held, held[1]);
+  store.receive(cleared, cleared[1]);
+  const nextBoot = pair(1, false).map(read => ({...read,source:{...read.source,boot_id:'replacement'}}));
+  store.receive(nextBoot, nextBoot[1]);
+  assert.equal(store.restartOrderUnknown, false);
+});
+
+test('reconciling an unavailable displayed risk never crashes or clears a retained hold', () => {
+  const {PaperSafetyStore} = frontendModules().load('v5/paper-safety-store');
+  const store = new PaperSafetyStore();
+  const initial = pair(40, false), held = pair(41, true);
+  store.receive(initial, initial[1]);
+  store.receive(held);
+  const unavailable = {...pair(42, false)[1],source:{...held[1].source,boot_id:'replacement'},state:'degraded',completeness:'unavailable',data:null};
+  assert.deepEqual(store.reconcile([unavailable]), []);
+  assert.equal(store.snapshot().length, 1);
 });

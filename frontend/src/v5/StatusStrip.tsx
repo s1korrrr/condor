@@ -3,7 +3,7 @@ import { NavLink } from "react-router-dom";
 import { candleRequestedAt, candleSummaryQuery } from "./candle-store-api";
 import { helmRequestedAt, readHelm } from "./V5Helm";
 import type { PaperRead } from "./contracts";
-import { paperObservationSummary, paperRiskControllers, paperRiskHolds } from "./policy";
+import { paperNativeHolds, paperObservationSummary, paperRiskControllers, paperRiskHolds } from "./policy";
 import { laneHealth, statusStrip } from "./status-strip-model.mjs";
 import { usePaperClock } from "./usePaperClock";
 import { usePaperObservation } from "./usePaperObservation";
@@ -28,7 +28,7 @@ export function StatusStrip({ bot, candleConfigured }: { bot: string | null; can
   const riskEvidence: PaperRead[] = [...paper.reconcileSafety(displayedRisk), ...paper.safetyEvidence];
   const controllers = riskEvidence.flatMap(read => paperRiskControllers(read, now) ?? []);
   const emergency = controllers.some(controller => controller.operator.emergency === true);
-  const held = emergency || riskEvidence.some(read => paperRiskHolds(read).length > 0)
+  const held = emergency || riskEvidence.some(read => paperRiskHolds(read).length > 0 || paperNativeHolds(read).length > 0)
     || controllers.some(controller => controller.entryHold === true || controller.operator.paused === true || controller.holds.length > 0);
   // "Running" needs the owner's affirmative word from the displayed current risk read: at least one controller, each with
   // operator pause and emergency explicitly false and native evidence complete with no latch or entry hold (Terra R3 B1).
@@ -40,10 +40,10 @@ export function StatusStrip({ bot, candleConfigured }: { bot: string | null; can
   const helmLastUsableMs = helm.data?._lastUsableAtMs ?? null;
   const candleSentMs = candles.data ? candleRequestedAt(candles.data) ?? null : null;
   const wallet = current ? reads!.find(read => read.section === "wallet")?.data as Record<string, unknown> | undefined : undefined;
-  const stamps = [paper.dataUpdatedAt, helmLastUsableMs ?? 0, candleConfigured ? candles.dataUpdatedAt : 0].filter(ms => ms > 0);
+  const stamps = [paper.lastUsableAtMs ?? 0, helmLastUsableMs ?? 0, candleConfigured ? candles.dataUpdatedAt : 0].filter(ms => ms > 0);
   const strip = statusStrip({
     nowMs: now,
-    v5: { bound: !!bot, pending: !!bot && !paper.data && !paper.isError, current, runKnown, entryHold: held ? true : null, emergency, lastOkMs: paper.dataUpdatedAt || null },
+    v5: { bound: !!bot, pending: !!bot && !paper.data && !paper.isError, current, runKnown, entryHold: held ? true : null, emergency, restartOrderUnknown:paper.restartOrderUnknown, lastOkMs: paper.lastUsableAtMs },
     helm: { read: helm.isError ? null : helm.data ?? null, failed: helm.isError, lastOkMs: helmLastUsableMs, receivedAtMs: helm.dataUpdatedAt || null, requestedAtMs: helmSentMs },
     data: { configured: candleConfigured, pending: candleConfigured && !candles.data && !candles.isError, failed: candles.isError, lanes: candles.isError ? null : laneHealth((candles.data as { tiles?: unknown } | undefined)?.tiles), lastOkMs: candles.dataUpdatedAt || null, receivedAtMs: candles.dataUpdatedAt || null, requestedAtMs: candleSentMs },
     wallet: { current, equity: wallet?.equity_quote, funding: wallet?.initial_funding_quote, flows: wallet?.external_cash_flows_quote, unit: wallet?.quote_asset },

@@ -174,7 +174,7 @@ function renderMarket({ expired = false, failed = false, range = '24h', summaryD
     '@tanstack/react-query': { useQuery: options => {
       queries.push(options);
       const key = options.queryKey.join('/');
-      const data = key === 'v5-profile' ? { readiness: { paper_owner: { bot_name: reads[0].bot_id } } } : key === 'v5-workspace' ? {} : key.includes('/coins/') ? coinReads : key.includes('/paper/') ? reads : key.endsWith('/summary') ? summaryData : [];
+      const data = key === 'v5-profile' ? { readiness: { paper_owner: { bot_name: reads[0].bot_id } } } : key === 'v5-workspace' ? {} : key.includes('/coins/') ? coinReads : key.includes('/paper/') ? reads : key === 'candle-summary' ? summaryData : [];
       const isError = failed && (key.includes('/coins/') || key.includes('/paper/'));
       return { data, isSuccess: !isError, isPending: false, isError, error: isError ? new Error('Read failed') : null, dataUpdatedAt: spot.now * 1000 };
     } },

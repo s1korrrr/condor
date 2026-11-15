@@ -67,6 +67,6 @@ export function usePaperSnapshot<Result>(queryKey: QueryKey, enabled: boolean, t
   if (ownerQuery) journalByQuery.set(ownerQuery, {reads:journalReads, completed:query.data});
   // Retained evidence may repeat what the displayed snapshot already shows (same snapshot as new objects, or the next
   // snapshot during a refresh). Hand the view only evidence that adds a signal; the retention store is unchanged.
-  const displayedSafety = paperSafetyBeyondDisplayed(effectiveSafety, Array.isArray(query.data) ? query.data as PaperRead[] : reads);
-  return {...query, complete, reads, safetyReads:displayedSafety, safetyEvidence:effectiveSafety, reconcileSafety:safetyStore.reconcile, journalReads, progress:query.isFetching ? `${complete ? "Refreshing" : "Checking"}: ${reads.length}/${total} sections` : undefined};
+  const displayedSafety = paperSafetyBeyondDisplayed(effectiveSafety, safetyStore.reconcile(Array.isArray(query.data) ? query.data as PaperRead[] : reads));
+  return {...query, complete, reads, safetyReads:displayedSafety, safetyEvidence:effectiveSafety, reconcileSafety:safetyStore.reconcile, restartOrderUnknown:safetyStore.restartOrderUnknown, journalReads, progress:query.isFetching ? `${complete ? "Refreshing" : "Checking"}: ${reads.length}/${total} sections` : undefined};
 }

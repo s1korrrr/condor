@@ -49,6 +49,7 @@ function noReport(lastOkMs) {
 function v5Chip(v5) {
   const base = { id: 'v5', label: 'V5', to: '/bots' };
   if (!v5.bound) return { ...base, tone: 'grey', text: 'No paper bot bound', short: 'V5 n/a' };
+  if (v5.restartOrderUnknown) return { ...base, tone: 'grey', text: 'Restart order unknown · see Bots', short: 'V5 unknown' };
   // A received owner hold (operator pause, emergency halt, native latch or entry hold), from the current snapshot or
   // newer retained safety evidence, is shown even while the next snapshot is still loading; it is never hidden.
   if (v5.entryHold === true) return { ...base, tone: 'amber', text: v5.emergency ? 'Emergency halt reported: buying stopped' : 'Buying paused by an owner hold', short: 'V5 paused' };
@@ -76,8 +77,9 @@ function helmChip(helm, nowMs) {
   const { text, good } = helmHeadline(read);
   const stopped = !!read.status?.reasons?.includes('runtime_stopped');
   const fresh = read.state === 'FRESH';
+  if (!fresh && stopped) return { ...base, tone: 'grey', text: `No current report · last report (${utcClock(status?.generated_at * 1000) ?? 'unknown time'}) said: stopped`, short: 'Helm no report' };
   // Helm's headline is tri-state: green only when it says so, amber when it says not buying, neutral (grey) otherwise.
-  const tone = stopped ? 'red' : !fresh ? 'grey' : good === true ? 'green' : good === false ? 'amber' : 'grey';
+  const tone = !fresh ? 'grey' : stopped ? 'red' : good === true ? 'green' : good === false ? 'amber' : 'grey';
   const short = tone === 'green' ? 'Helm waiting' : tone === 'red' ? 'Helm stopped' : tone === 'amber' ? 'Helm not buying' : fresh && good === null ? 'Helm running' : 'Helm unknown';
   return { ...base, tone, text, short };
 }

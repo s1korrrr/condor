@@ -4,6 +4,7 @@ import { usePaperSnapshot } from "./usePaperSnapshot";
 import { paperSnapshotPresentation } from "./snapshot-presentation";
 import { usePaperClock } from "./usePaperClock";
 import { parsePaperReadText } from "./paper-json";
+import { useRef } from "react";
 
 async function readPaperSection(path: string, section: string, bot: string | null | undefined, signal: AbortSignal) {
   signal.throwIfAborted();
@@ -52,6 +53,11 @@ export function usePaperObservation(bot: string | null | undefined, refetchInter
     ], (path,section) => readPaperSection(path,section,bot,signal), undefined, progress);
   }, refetchInterval);
   const reads = query.reads;
+  const lastUsable = useRef<{bot: string | null | undefined; at: number | null} | null>(null);
+  if (!lastUsable.current || lastUsable.current.bot !== bot) lastUsable.current = {bot, at:null};
+  if (query.data && query.dataUpdatedAt && paperObservationSummary(query.data, bot ?? "", query.dataUpdatedAt).label === "Available") {
+    lastUsable.current.at = Math.max(lastUsable.current.at ?? 0, query.dataUpdatedAt);
+  }
   const summary = query.isError ? { label: "Unavailable", reason: query.error.message } : query.isPending || query.isFetching ? { label: "Checking", reason: `Reading one owner snapshot: ${reads.length}/5 sections. Process heartbeat is a separate signal.` } : paperObservationSummary(query.data ?? [], bot ?? "", now);
   const completedStatus = (query.data ?? reads).find(read => read.section === "status");
   const journalStatus = query.journalReads.find(read => read.bot_id === bot);
@@ -59,5 +65,5 @@ export function usePaperObservation(bot: string | null | undefined, refetchInter
   const partialJournal = !!journalStatus && (journalStatus !== completedStatus || !query.complete || query.isFetching || query.isError);
   const snapshot = query.complete ? paperSnapshotPresentation(status?.generated_at_ms, now, query.isFetching || query.isError) : null;
   const journalSnapshotLabel = partialJournal ? 'Received / partial owner status; retained until a qualified newer owner status supersedes it.' : null;
-  return { ...query, summary, status, snapshot, journalStatus, journalSnapshotLabel };
+  return { ...query, summary, status, snapshot, journalStatus, journalSnapshotLabel, lastUsableAtMs:lastUsable.current.at };
 }

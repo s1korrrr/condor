@@ -14,7 +14,7 @@ import { v5Api } from "./api";
 import { candleCurrent, hourlyReturns, marketHolding, marketSentence, windowChange } from "./market-header";
 import { readMarketPaper } from "./market-paper";
 import { usePaperClock } from "./usePaperClock";
-import { ageSeconds, breadth, coinTile, indexedReturns, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
+import { ageSeconds, breadth, coinTile, indexedReturns, laneHealthClass, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
 import { age as ageShort, fixed, pct, price, signed, utcMin } from "./format.mjs";
 import { tri } from "./shown.mjs";
 import "./market.css";
@@ -116,7 +116,7 @@ export function V5Market() {
       <h1>Market</h1>
       <div role="group" aria-label="Market range" className="v5m-seg">{RANGES.map(item => <button key={item} type="button" aria-pressed={range === item} onClick={() => setRange(item)}>{item}</button>)}</div>
       <div className="v5m-chips">
-        <span className={`v5m-chip ${summary.isError ? "is-warn" : summary.isPending || !health.lanes || health.lanesUnknown || statusAge == null ? "is-unknown" : health.lanesLive !== health.lanes || !storeCurrent ? "is-warn" : ""}`}><i />Candle store <b>{summary.isError ? "unavailable" : summary.isPending ? "reading" : !health.lanes || health.lanesUnknown || statusAge == null ? "— data incomplete" : storeCurrent ? `${health.lanesLive}/${health.lanes} lanes available` : "— not current"}</b></span>
+        <span className={`v5m-chip ${summary.isError ? "is-warn" : summary.isPending || !health.lanes || statusAge == null ? "is-unknown" : !storeCurrent ? "is-warn" : health.ownerHealth === "red" ? "is-bad" : health.ownerHealth === "amber" ? "is-warn" : health.ownerHealth === "unknown" ? "is-unknown" : ""}`}><i />Candle store <b>{summary.isError ? "unavailable" : summary.isPending ? "reading" : !health.lanes || statusAge == null ? "— data incomplete" : !storeCurrent ? "— not current" : `${health.lanesUnknown ? "— · lane availability incomplete" : `${health.lanesAvailable}/${health.lanes} lanes available`} · owner health ${health.ownerHealth}`}</b></span>
         <span className={`v5m-chip ${feedCurrent ? "" : workspace.isError || refresh ? "is-warn" : "is-unknown"}`}><i />V5 feed <b>{feedCurrent ? "current" : workspace.isError ? "unavailable" : refresh ? "not current" : "no data"}</b></span>
       </div>
     </header>
@@ -185,7 +185,7 @@ export function V5Market() {
         </Card>
         <Card title="Candle store health" hint="One store feeds V5, Helm and research">
           <div className="v5m-stats">
-            <Stat label="Lanes live" value={summary.isSuccess ? `${health.lanesLive}/${health.lanes}` : "—"} warn={health.lanesUnknown > 0} note={health.lanesUnknown ? `${health.lanesUnknown} lane(s) did not report availability` : health.pairsHeld == null || health.pairsListed == null ? `pair counts: ${health.unreported.pairs} lane(s) unreported` : `${health.pairsHeld}/${health.pairsListed} pairs held`} />
+            <Stat label="Lanes available" value={summary.isSuccess && health.lanes && !health.lanesUnknown ? `${health.lanesAvailable}/${health.lanes}` : "—"} warn={health.lanesUnknown > 0} note={health.lanesUnknown ? `${health.lanesUnknown} lane(s) did not report availability` : health.pairsHeld == null || health.pairsListed == null ? `pair counts: ${health.unreported.pairs} lane(s) unreported` : `${health.pairsHeld}/${health.pairsListed} pairs held`} />
             <Stat label="7-day coverage" value={health.coverage7d == null ? "—" : `${(health.coverage7d * 100).toFixed(1)}%`} note={health.coverage7d == null && health.unreported.coverage ? `${health.unreported.coverage} lane(s) unreported` : "final 1-minute candles, all lanes"} />
             <Stat label="Missing minutes, 7 days" value={health.gaps7d == null ? "—" : String(health.gaps7d)} note={health.gaps7d == null && health.unreported.gaps ? `${health.unreported.gaps} lane(s) unreported` : "all lanes"} />
             <Stat label="Slowest lane" value={slowestAge == null ? "—" : ageShort(slowestAge)} note={health.oldestMinuteAge == null && health.unreported.age ? `${health.unreported.age} lane(s) unreported` : "since its newest final minute closed; up to ~95 s is normal"} />
@@ -232,7 +232,7 @@ function ReturnBars({ tiles, range, selected, onSelect }: { tiles: { coin: strin
 
 function Venue({ row }: { row: ReturnType<typeof venueGrid<LaneTile>>[number] }) {
   const cell = (lane: LaneTile | null) => lane ? <span className="v5m-lane" title={`${lane.lane} · 7-day coverage ${lane.coverage_7d == null ? "unknown" : `${(lane.coverage_7d * 100).toFixed(1)}%`} · missing minutes ${lane.gaps_7d ?? "unknown"}${lane.unavailable_reason ? ` · ${lane.unavailable_reason}` : ""}`}>
-    <span className={lane.available === true ? "is-up" : lane.available === false ? "is-down" : "v5m-muted"} title={tri(lane.available, "available", "unavailable", "availability not reported")}>{lane.available === true ? "●" : lane.available === false ? "○" : "?"} {lane.pairs_held ?? "?"}/{lane.pairs_listed ?? "?"}</span>
+    <span className={laneHealthClass(lane.health)} title={`Owner health: ${lane.health ?? "not reported"} · ${tri(lane.available, "available", "unavailable", "availability not reported")}`}>● {lane.pairs_held ?? "?"}/{lane.pairs_listed ?? "?"}</span>
     <span>{lane.coverage_24h == null ? "—" : `${(lane.coverage_24h * 100).toFixed(0)}%`}</span>
     <span className="v5m-muted">{lane.last_minute_age_s == null ? "—" : ageShort(lane.last_minute_age_s)}</span>
   </span> : <span className="v5m-lane is-none">not held</span>;

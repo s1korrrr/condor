@@ -199,6 +199,7 @@ export interface V5AgentDetail extends V5Agent {
 export interface V5Settings {
   identity: V5Workspace["identity"];
   budget: V5Workspace["advisor"];
+  advisor_enabled_error?: "not a boolean" | null;
   task_profiles?: AdvisorTaskProfile[];
   budget_policy?: V5BudgetPolicy;
   scheduler?: V5Scheduler;

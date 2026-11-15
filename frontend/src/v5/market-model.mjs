@@ -109,6 +109,10 @@ export function breadth(tiles) {
 }
 
 /** Venue × segment grid from candle-store lane tiles; a lane the store does not hold stays absent. */
+export function laneHealthClass(health) {
+  return health === 'green' ? 'is-up' : health === 'amber' ? 'is-amber' : health === 'red' ? 'is-down' : 'v5m-muted';
+}
+
 export function venueGrid(tiles) {
   const venues = [...new Set(tiles.map(tile => tile.venue))].sort();
   return venues.map(venue => ({
@@ -126,9 +130,13 @@ export function storeHealth(tiles) {
   const all = key => tiles.length > 0 && tiles.every(tile => Number.isFinite(tile[key]));
   const sum = key => all(key) ? tiles.reduce((total, tile) => total + tile[key], 0) : null;
   const unreported = key => tiles.filter(tile => !Number.isFinite(tile[key])).length;
+  const ownerHealth = tiles.some(tile => tile.health === 'red') ? 'red'
+    : tiles.some(tile => tile.health === 'amber') ? 'amber'
+      : tiles.length === 0 || tiles.some(tile => tile.health !== 'green') ? 'unknown' : 'green';
   return {
+    ownerHealth,
     lanes: tiles.length,
-    lanesLive: tiles.filter(tile => tile.available === true).length,
+    lanesAvailable: tiles.filter(tile => tile.available === true).length,
     lanesUnknown: tiles.filter(tile => typeof tile.available !== 'boolean').length,
     pairsHeld: sum('pairs_held'),
     pairsListed: sum('pairs_listed'),

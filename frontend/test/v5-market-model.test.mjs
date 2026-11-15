@@ -2,6 +2,25 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import { ageSeconds, breadth, coinStats, coinTile, featureRows, featureText, grid, indexedReturns, premiumSeries, STALE_AFTER_S, storeHealth, venueGrid } from '../src/v5/market-model.mjs';
 import { tri, utcMinute } from '../src/v5/shown.mjs';
+import { laneHealthClass } from '../src/v5/market-model.mjs';
+
+test('venue colour follows owner health, not availability', () => {
+  assert.equal(laneHealthClass('green'), 'is-up');
+  assert.equal(laneHealthClass('amber'), 'is-amber');
+  assert.equal(laneHealthClass('red'), 'is-down');
+  assert.equal(laneHealthClass(null), 'v5m-muted');
+});
+
+test('store health takes the worst owner health independently of availability', () => {
+  const lanes = (...values) => values.map(health => ({ available: true, health }));
+  assert.equal(storeHealth(lanes('red')).ownerHealth, 'red');
+  assert.equal(storeHealth(lanes('green', 'amber')).ownerHealth, 'amber');
+  assert.equal(storeHealth(lanes('green', null)).ownerHealth, 'unknown');
+  assert.equal(storeHealth(lanes('green', 'green')).ownerHealth, 'green');
+  assert.equal(storeHealth(lanes('amber', null, 'red')).ownerHealth, 'red');
+  assert.equal(storeHealth(lanes('amber', null)).ownerHealth, 'amber');
+  assert.equal(storeHealth([]).ownerHealth, 'unknown');
+});
 
 const T0 = 1_794_474_120; // a minute boundary
 
@@ -121,7 +140,7 @@ test('venue grid and store health keep unknown values unknown', () => {
   assert.deepEqual(lanes.map(row => row.venue), ['hyperliquid', 'okx']);
   assert.equal(lanes[0].spot, null);
   const health = storeHealth(tiles);
-  assert.equal(health.lanesLive, 1);
+  assert.equal(health.lanesAvailable, 1);
   assert.equal(health.lanesUnknown, 1);
   assert.equal(health.pairsHeld, 13);
   assert.equal(health.coverage7d, null);

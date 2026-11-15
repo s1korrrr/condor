@@ -10,7 +10,7 @@ import {frontendModules} from './helpers/frontend-module.mjs';
 const sections = ['status', 'wallet', 'positions', 'fills', 'executors', 'risk', 'decisions', 'history', 'accounting'];
 const fixture = section => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
 const stubs = Object.fromEntries(['@/components/bots/AggregatedPnlChart', '@/components/bots/ControllerBrowser', '@/components/bots/DeployBotDialog', '@/components/bots/PnlSparkline', '@/hooks/useWebSocket', '@/hooks/useRates'].map(name => [name, {}]));
-const metrics = html => [...html.matchAll(/class="paper-metric"><dt>([^]*?)<\/dt><dd>([^]*?)<\/dd>/g)];
+const metrics = html => [...html.matchAll(/class="paper-metric"><dt>([^]*?)<\/dt><dd(?: [^>]*)?>([^]*?)<\/dd>/g)];
 const metric = (html, label) => metrics(html).find(match => match[1] === label)?.[2];
 
 function harness({cached = true} = {}) {
@@ -96,7 +96,8 @@ test('dimmed Bots admits values but uses real stale states, safety qualification
     const html = current.render();
     assert.match(html, /class="paper-dimmed"/);
     assert.equal((html.match(/Last coherent owner snapshot/g) ?? []).length, 1);
-    for (const label of ['Wallet equity', 'Since start', 'Today', 'Profit from closed trades', 'Coins still held', 'Fees paid']) assert.equal(metric(html, label), '—');
+    for (const label of ['Wallet equity', 'Since start', 'Profit from closed trades', 'Coins still held', 'Fees paid']) assert.match(metric(html, label), /USDC/);
+    assert.equal(metric(html, 'Today'), '—');
     assert.match(metric(html, 'Available cash'), /USDC/);
     assert.notEqual(metric(html, 'Open executors'), 'Not published');
     for (const kind of ['positions', 'fills', 'executors']) assert.match(html, new RegExp(`aria-label="Paper ${kind}"`));
@@ -132,11 +133,11 @@ test('flat position cards retain zero under the dimmed snapshot stamp without in
       read.next_cursor = null;
     }
     current.setNow(current.at + 1_000);
-    assert.match(current.render(), /<dt>Holding<\/dt><dd>0 BNB<\/dd>/);
+    assert.match(current.render(), /<dt>Holding<\/dt><dd><span title="0">0 BNB<\/span><\/dd>/);
     current.setNow(current.at + 60_000);
     const html = current.render();
     assert.match(html, /snapshot values are from that time, dimmed until a new report/);
-    assert.match(html, /<dt>Holding<\/dt><dd>0 BNB<\/dd>/);
+    assert.match(html, /<dt>Holding<\/dt><dd><span title="0">0 BNB<\/span><\/dd>/);
     assert.doesNotMatch(html, /waiting for entry signal/);
   } finally {current.close();}
 });
@@ -213,7 +214,7 @@ test('newer retained emergency stays outside the dimmed snapshot with its own re
     assert.equal(stamp.nextElementSibling, dimmed);
     assert.ok(alert.compareDocumentPosition(stamp) & browser.Node.DOCUMENT_POSITION_FOLLOWING);
     assert.equal(browser.document.querySelectorAll('.paper-dimmed-stamp').length, 1);
-    assert.equal(metric(dimmed.innerHTML, 'Wallet equity'), '—');
+    assert.match(metric(dimmed.innerHTML, 'Wallet equity'), /USDC/);
     assert.match(metric(dimmed.innerHTML, 'Available cash'), /USDC/);
     assert.equal(browser.document.querySelector('[aria-label="Paper money summary"]').closest('.paper-dimmed'), dimmed);
   } finally {
@@ -251,7 +252,7 @@ test('Bots admits values at the 120 s cap and withholds them beyond it', () => {
   try {
     current.setNow(current.at + 120_000);
     const retained = current.render();
-    assert.equal(metric(retained, 'Wallet equity'), '—');
+    assert.match(metric(retained, 'Wallet equity'), /USDC/);
     assert.match(metric(retained, 'Available cash'), /USDC/);
     current.setNow(current.at + 120_001);
     const html = current.render();

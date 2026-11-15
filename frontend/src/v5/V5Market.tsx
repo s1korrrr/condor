@@ -177,7 +177,7 @@ export function V5Market() {
 }
 
 function HoldingLine({ holding, error, now }: { holding: ReturnType<typeof marketHolding>; error: string | null; now: number }) {
-  return <><p className="v5m-holding">{holding.text}</p><small className="v5m-asof">{error ?? holding.reason}{holding.asOf != null && <> · Paper {utcMin(holding.asOf)} · {ageText((now - holding.asOf) / 1000)}</>}</small></>;
+  return <><p className="v5m-holding" title={holding.exact}>{holding.text}</p><small className="v5m-asof">{error ?? holding.reason}{holding.asOf != null && <> · Paper {utcMin(holding.asOf)} · {ageText((now - holding.asOf) / 1000)}</>}</small></>;
 }
 
 function HourStrip({ reads }: { reads: Record<string, CoinRead> }) {

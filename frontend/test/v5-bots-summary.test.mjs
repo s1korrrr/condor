@@ -5,6 +5,7 @@ import React from 'react';
 import * as ReactQuery from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { frontendModules } from './helpers/frontend-module.mjs';
+import { usdc } from '../src/v5/format.mjs';
 
 const overrides = Object.fromEntries(['@/components/bots/AggregatedPnlChart', '@/components/bots/ControllerBrowser', '@/components/bots/DeployBotDialog', '@/components/bots/PnlSparkline', '@/hooks/useWebSocket', '@/hooks/useRates'].map(name => [name, {}]));
 const { load } = frontendModules(overrides);
@@ -17,6 +18,38 @@ const controller = (id, extra = {}) => ({ id, current: true, operator: { paused:
 const day = Math.floor(now / 86_400_000) * 86_400_000;
 const money = { range: '7d', now_ms: now, daily: [{ day, samples: 2, valid: 2, gaps: 0, first_at_ms: now - 300_000, last_at_ms: now, equity_change: '-12.000000000000000000000000000001' }] };
 const tiles = (changes = {}) => paperMoneyTiles({ walletRead: fixture.wallet, accountingRead: fixture.accounting, snapshot: fixture.status, complete: true, now, money, ...changes });
+
+test('money tiles format values while retaining exact source and arithmetic results', () => {
+  const result = tiles({walletRead:{...fixture.wallet,data:{...fixture.wallet.data,equity_quote:'199087.84807014005820',initial_funding_quote:'200000',external_cash_flows_quote:'0'}}});
+  assert.deepEqual(result.slice(0,3).map(tile => tile.value), ['199,087.85 USDC','−912.15 USDC','−12.00 USDC']);
+  assert.deepEqual(result.slice(0,3).map(tile => tile.exact), ['199087.84807014005820','-912.15192985994180','-12.000000000000000000000000000001']);
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values(fixture),accountingRead:fixture.accounting,money,now,reportAt:now,heartbeat:'Fresh',bot:fixture.status.bot_id}));
+  for (const tile of tiles()) {
+    assert.match(html, new RegExp(`title="${tile.exact}"`));
+    assert.ok(html.includes(tile.value));
+  }
+});
+
+test('money tiles follow snapshot dimming at 25, 45 and 125 seconds', () => {
+  const {paperDimmedSnapshot} = load('v5/snapshot-presentation.ts');
+  for (const [seconds, visible, dimmed] of [[25,true,false],[45,true,true],[125,false,false]]) {
+    const clock = now + seconds * 1000;
+    const view = paperDimmedSnapshot(fixture.status.generated_at_ms,clock);
+    const result = tiles({now:clock,valuesAt:view.valuesAt});
+    assert.equal(result.every(tile => tile.value !== '—'), visible, `${seconds}s`);
+    assert.equal(view.dimmed, dimmed);
+    const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values(fixture),accountingRead:fixture.accounting,money,now:clock,valuesAt:view.valuesAt,asOf:view.snapshotAt,reportAt:now,heartbeat:'Fresh',bot:fixture.status.bot_id}));
+    assert.equal(html.includes('class="paper-dimmed"'),dimmed);
+  }
+});
+
+test('Today reports missing samples but refuses unqualified rows', () => {
+  assert.match(tiles()[2].note, /As of/);
+  const gaps = {...money,daily:[{...money.daily[0],samples:186,valid:182,gaps:4}]};
+  assert.equal(tiles({money:gaps})[2].value,'−12.00 USDC');
+  assert.match(tiles({money:gaps})[2].note,/4 of 186 samples missing/);
+  assert.equal(tiles({money:{...gaps,daily:[{...gaps.daily[0],valid:1}]}})[2].value,'—');
+});
 
 test('operator pause always names the observed scope, including a partial controller report', () => {
   const paused = controller('BNB', { operator: { paused: true, emergency: false } });
@@ -122,17 +155,19 @@ test('six tiles use exact owner strings and only zero-flow equity minus funding'
   Object.assign(walletRead.data, { equity_quote: '199999.999999999999999999999999999999', initial_funding_quote: '200000', external_cash_flows_quote: '-0.000' });
   const result = tiles({ walletRead });
   assert.deepEqual(result.map(tile => tile.label), ['Wallet equity', 'Since start', 'Today', 'Profit from closed trades', 'Coins still held', 'Fees paid']);
-  assert.equal(result[0].value, '199999.999999999999999999999999999999 USDC');
-  assert.equal(result[1].value, '-0.000000000000000000000000000001 USDC');
-  assert.equal(result[2].value, '-12.000000000000000000000000000001 USDC');
-  assert.deepEqual(result.slice(3).map(tile => tile.value), ['realized_pnl_quote', 'unrealized_pnl_quote', 'fees_paid_quote'].map(key => `${fixture.accounting.data.program[key]} USDC`));
+  assert.equal(result[0].value, '200,000.00 USDC');
+  assert.equal(result[0].exact, '199999.999999999999999999999999999999');
+  assert.equal(result[1].exact, '-0.000000000000000000000000000001');
+  assert.equal(result[2].value, '−12.00 USDC');
+  assert.deepEqual(result.slice(3).map(tile => tile.value), ['realized_pnl_quote', 'unrealized_pnl_quote', 'fees_paid_quote'].map(key => usdc(fixture.accounting.data.program[key])));
+  assert.deepEqual(result.slice(3).map(tile => tile.exact), ['realized_pnl_quote', 'unrealized_pnl_quote', 'fees_paid_quote'].map(key => fixture.accounting.data.program[key]));
   for (const flows of ['0.000000000000000000000000000001', null, 0, 'bad']) {
     walletRead.data.external_cash_flows_quote = flows;
     assert.equal(tiles({ walletRead })[1].value, '—');
   }
   walletRead.data.external_cash_flows_quote = '0';
   walletRead.data.equity_quote = '200000.000000000000000000000000000001';
-  assert.equal(tiles({ walletRead })[1].value, '0.000000000000000000000000000001 USDC');
+  assert.equal(tiles({ walletRead })[1].exact, '0.000000000000000000000000000001');
 });
 
 test('incomplete, stale, future, incoherent and failed owner reads withhold money', () => {
@@ -160,7 +195,8 @@ test('Today uses current wallet and accounting, not the aggregate degraded statu
   assert.equal(fixture.status.state, 'degraded');
   assert.equal(fixture.wallet.state, 'available');
   assert.equal(fixture.accounting.state, 'available');
-  assert.equal(tiles()[2].value, `${money.daily[0].equity_change} USDC`);
+  assert.equal(tiles()[2].value, '−12.00 USDC');
+  assert.equal(tiles()[2].exact, money.daily[0].equity_change);
   for (const section of ['wallet', 'accounting']) {
     const readKey = section === 'wallet' ? 'walletRead' : 'accountingRead';
     assert.equal(tiles({ [readKey]: { ...fixture[section], state: 'degraded' } })[2].value, '—');
@@ -169,9 +205,9 @@ test('Today uses current wallet and accounting, not the aggregate degraded statu
   }
 });
 
-test('Today is only the current UTC-day Money row, never an older or gap value', () => {
-  assert.equal(tiles({ money: { ...money, daily: [money.daily[0], { ...money.daily[0], day: day - 86_400_000, equity_change: '999' }] } })[2].value, '-12.000000000000000000000000000001 USDC');
-  for (const change of [{ day: day - 86_400_000 }, { gaps: 1 }, { equity_change: null }, { last_at_ms: now + 1 }, { last_at_ms: now - 400_000 }]) {
+test('Today requires a qualified current UTC-day Money row', () => {
+  assert.equal(tiles({ money: { ...money, daily: [money.daily[0], { ...money.daily[0], day: day - 86_400_000, equity_change: '999' }] } })[2].value, '−12.00 USDC');
+  for (const change of [{ day: day - 86_400_000 }, { gaps: -1 }, { equity_change: null }, { last_at_ms: now + 1 }, { last_at_ms: now - 400_000 }]) {
     assert.equal(tiles({ money: { ...money, daily: [{ ...money.daily[0], ...change }] } })[2].value, '—');
   }
   assert.equal(tiles({ money: { ...money, now_ms: now - 91_000 } })[2].value, '—');
@@ -189,7 +225,7 @@ test('Bots uses the Money view reader and shared 7d cache key and withholds fail
   });
   const { V5PaperBots } = load('pages/tabs/ActiveBotsTab.tsx');
   const render = () => renderToStaticMarkup(React.createElement(V5PaperBots, { bot: 'meridian_v5_paper', ownerState: 'AVAILABLE', generatedAt: now / 1000 }));
-  assert.match(render(), /-12\.000000000000000000000000000001 USDC/);
+  assert.match(render(), /title="-12\.000000000000000000000000000001">−12\.00 USDC/);
   const moneyQueries = queries.filter(query => query.queryKey[0] === 'v5-money');
   assert.equal(moneyQueries.length, 1);
   assert.deepEqual(moneyQueries[0].queryKey, ['v5-money', '7d']);
@@ -202,7 +238,7 @@ test('Bots uses the Money view reader and shared 7d cache key and withholds fail
     assert.equal(reads[0].options.credentials, 'include');
   } finally { globalThis.fetch = original; }
   failed = true;
-  assert.doesNotMatch(render(), /-12\.000000000000000000000000000001 USDC/);
+  assert.doesNotMatch(render(), /title="-12\.000000000000000000000000000001">−12\.00 USDC/);
 });
 
 test('hold evidence stays rendered in closed Details above the six money tiles', () => {

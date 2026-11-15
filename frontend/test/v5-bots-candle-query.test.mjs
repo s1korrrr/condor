@@ -44,7 +44,7 @@ test('last final close survives later gaps but expires after 180 seconds', () =>
   assert.equal(latestFinalCandle([[540,null,null,null,null,null,0]]), null);
   const {PaperPositions} = load('v5/PaperPositions.tsx');
   const prices = {'BNB-USDC':{buckets}};
-  assert.match(renderToStaticMarkup(React.createElement(PaperPositions,{now:600000,prices})), /Price: 1.5 USDC/);
+  assert.match(renderToStaticMarkup(React.createElement(PaperPositions,{now:600000,prices})), /Price: <span title="1.5">1.5000 USDC/);
   assert.match(renderToStaticMarkup(React.createElement(PaperPositions,{now:600001,prices})), /latest closed candle unavailable or old/);
   const {PaperPriceChart} = load('v5/PaperPriceChart.tsx');
   const chart = renderToStaticMarkup(React.createElement(PaperPriceChart,{now:600000,view:{pair:'BNB-USDC',venue:'OKX',volume_unit:'base',start:360,end:540,buckets}}));
@@ -58,8 +58,8 @@ test('money and candle price stay outside the dimmed snapshot values', () => {
   const browser = new Window();
   browser.document.body.innerHTML = renderToStaticMarkup(React.createElement(PaperPositions,{now:600000,asOf:540000,prices,money}));
   const card = browser.document.querySelector('.paper-pair');
-  assert.match(card.textContent, /3 USDC.*profit or loss/);
-  assert.match(card.textContent, /Price: 1.5 USDC/);
+  assert.match(card.textContent, /3.00 USDC.*profit or loss/);
+  assert.match(card.textContent, /Price: 1.5000 USDC/);
   assert.doesNotMatch(card.querySelector('.paper-dimmed-position').textContent, /profit or loss|Price: 1.5/);
   assert.match(card.querySelector('.paper-dimmed-position').textContent, /Holding/);
   assert.match(card.textContent, /not current/);

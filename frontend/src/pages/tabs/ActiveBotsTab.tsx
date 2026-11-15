@@ -18,7 +18,14 @@ import type { PaperRead } from "@/v5/contracts";
 import { usePaperSnapshot } from "@/v5/usePaperSnapshot";
 import { usePaperClock } from "@/v5/usePaperClock";
 import { parsePaperReadText } from "@/v5/paper-json";
-import { paperSnapshotPresentation } from "@/v5/snapshot-presentation";
+import { paperAge, paperSnapshotPresentation, PAPER_SNAPSHOT_FRESH_MS } from "@/v5/snapshot-presentation";
+
+/**
+ * Hard cap for dimmed values (Falco 14 Nov option B). Today a full Bots read takes ~9 s (up to ~50 s under load) and
+ * refreshes every 15 s, so a healthy owner always produces a complete snapshot well within 120 s (= 4x the 30 s line,
+ * about 2x the worst observed gap). Older than that means the owner or the read path is failing: values are withheld.
+ */
+const PAPER_DIMMED_MAX_MS = 120_000;
 import { paperPairBag, paperPairHoldings, paperReadFailureMessage } from "@/v5/policy";
 import { paperAmount, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperPairObservation, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
 import { PaperTerminalHistory } from "@/v5/PaperTerminalHistory";
@@ -692,7 +699,10 @@ function PaperIsolatedSection({ name, resetKey, render }: { name: string; resetK
   return <PaperSectionBoundary name={name} resetKey={resetKey}><PaperSectionContent render={render} /></PaperSectionBoundary>;
 }
 
-export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accountingError = false, complete = true, readFailed = false, now, reportAt, heartbeat, bot }: { reads: PaperRead[]; safetyReads?: PaperRead[]; accountingRead?: PaperRead; accountingError?: boolean; complete?: boolean; readFailed?: boolean; now: number; reportAt: number | null; heartbeat: string; bot: string }) {
+export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accountingError = false, complete = true, readFailed = false, now, reportAt, heartbeat, bot, asOf = null }: { reads: PaperRead[]; safetyReads?: PaperRead[]; accountingRead?: PaperRead; accountingError?: boolean; complete?: boolean; readFailed?: boolean; now: number; reportAt: number | null; heartbeat: string; bot: string; asOf?: number | null }) {
+  // asOf: the page is showing the last complete snapshot DIMMED (older than the 30 s line, inside the hard cap); nothing
+  // below may call itself fresh or current.
+  const notCurrent = asOf === null ? null : `Not current · values from ${paperTime(asOf, now)}`;
   const riskEvidence = [...new Set([...reads.filter(read => read.section === 'risk'), ...safetyReads])];
   const holds = [...new Map(riskEvidence.flatMap(read => paperRiskHolds(read)).map(hold => [hold.reason, hold])).values()];
   const hold = holds.length > 0;
@@ -724,10 +734,10 @@ export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accoun
     {entryHoldObserved && <PaperIsolatedSection name="Entry hold" resetKey={resetKey} render={() => <aside className="paper-fleet" role="status"><div className="paper-section-heading"><h2>New acquisitions held</h2><PaperBadge state="degraded">{safetyControllers.some(controller => controller.operator.emergency === true) ? "Emergency halt reported" : "Owner action required"}</PaperBadge></div><div className="paper-rails">{holds.map(item => <article key={item.reason}><h3>{item.label}</h3><p>{item.explanation}</p><p className="paper-caption">{item.action}</p></article>)}</div>{safetyControllers.filter(controller => controller.holds.length || controller.operator.paused === true || controller.operator.emergency === true || controller.entryHold === true).map(controller => <article key={`${controller.evidence}:${controller.id}`}><h3>{controller.id}</h3><PaperBadge state="degraded">New entries held</PaperBadge><p>Reported operator pause: {controller.operator.paused === true ? "Yes" : controller.operator.paused === false ? "No" : "Not published"} · Reported emergency halt: {controller.operator.emergency === true ? "Yes" : controller.operator.emergency === false ? "No" : "Not published"} · Reported native entry hold: {controller.entryHold === true ? "Yes" : controller.entryHold === false ? "No" : "Not published"}</p>{riskEvidence[controller.evidence] !== bySection.risk && controller.latch === true && riskControllers?.find(row => row.id === controller.id)?.latch === null && <p className="paper-caption">Hold retained: the newer owner read did not publish the native latch.</p>}{controller.holds.map(item => <p key={item.reason}>{item.explanation} Protective exits: preserved.</p>)}</article>)}<p className="paper-caption">Received and retained safety evidence can differ from the displayed data snapshot. Omitted controllers remain unknown, not cleared. Only qualified newer evidence for that controller or owner hold list can supersede a received hold.</p><p className="paper-caption">Clock high-water mark: {paperTime(paperObject(risk.clock_recovery).high_water_ms, now)}. Order protection is verified per position below.</p></aside>} /> }
     {!complete ? readFailed ? <section className="paper-section" role="status"><h2>Owner snapshot unavailable</h2><p>The read failed before a complete owner snapshot arrived. Received safety evidence remains visible. No absent controls or capital totals are inferred.</p></section> : <section className="paper-section" role="status"><h2>Checking owner snapshot</h2><p>Risk controls and numeric rail limits are pending until the complete owner snapshot arrives. No absent controls or capital totals are inferred.</p><ul>{["status", "wallet", "positions", "fills", "executors", "risk", "decisions", "history", "accounting"].map(section => <li key={section}>{paperWords(section)}: {bySection[section] ? "Received · awaiting complete snapshot" : "Pending"}</li>)}</ul></section> : <>
     <PaperIsolatedSection name="Paper fleet" resetKey={resetKey} render={() => <section className="paper-fleet"><div className="paper-section-heading"><div><span className="paper-eyebrow">SIMULATED ACCOUNT</span><h2>Paper fleet</h2></div><PaperBadge state={heartbeat === "Fresh" ? "available" : "stale"}>{heartbeat} · heartbeat</PaperBadge></div><p className="paper-caption">{bot} · Valuation: {paperWords(wallet.valuation_policy)}. Book freshness and completeness are separate from process heartbeat.</p><dl className="paper-metrics">
-      <PaperMetric label="Wallet equity" value={paperAmount(walletTotals?.equity ?? previousWallet?.equity, "USDC")} note={walletTotals ? "Fresh complete owner wallet" : previousWallet ? `Last complete equity, as of ${paperTime(previousWallet.asOf, now)} · now withheld by the owner: ${walletWhy}` : "Fresh complete wallet required"} />
+      <PaperMetric label="Wallet equity" value={paperAmount(walletTotals?.equity ?? previousWallet?.equity, "USDC")} note={walletTotals ? notCurrent ?? "Fresh complete owner wallet" : previousWallet ? `Last complete equity, as of ${paperTime(previousWallet.asOf, now)} · now withheld by the owner: ${walletWhy}` : "Fresh complete wallet required"} />
       <PaperMetric label="Available cash" value={paperAmount(walletTotals?.cash ?? previousWallet?.cash, "USDC")} note={!walletTotals && previousWallet ? `As of ${paperTime(previousWallet.asOf, now)}` : undefined} />
       <PaperMetric label="Holdings value" value={inventory ? paperAmount(inventory.value, inventory.unit, 2) : "Not published"} note={inventory ? `${paperReadState(bySection.wallet, now) === "stale" ? "Stale valuation · " : ""}Valuation: ${inventory.basis} · As of ${paperTime(inventory.asOf, now)} · Wallet marks, excluding cash` : "Complete current wallet marks not published"} />
-      <PaperMetric label="Open executors" value={openExecutors ?? "Not published"} note={openExecutors === null ? "Incomplete or stale owner read · count not inferred" : "Fresh complete owner snapshot · excludes terminal receipts"} />
+      <PaperMetric label="Open executors" value={openExecutors ?? "Not published"} note={openExecutors === null ? "Incomplete or stale owner read · count not inferred" : notCurrent ? `${notCurrent} · excludes terminal receipts` : "Fresh complete owner snapshot · excludes terminal receipts"} />
       <PaperMetric label="Realized PnL" value={paperAmount(accounting?.realized_pnl_quote, "USDC")} note={accountingNote} />
       <PaperMetric label="Unrealized PnL" value={paperAmount(accounting?.unrealized_pnl_quote, "USDC")} note={accountingNote} />
       <PaperMetric label="Fees paid" value={paperAmount(accounting?.fees_paid_quote, "USDC")} note={accountingNote} />
@@ -800,15 +810,23 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
   });
   const complete = query.complete;
   const reads = query.data ?? query.reads;
+  // Dimmed values (Falco 14 Nov, option B): between the 30 s freshness line and the hard cap, the last complete
+  // snapshot stays on screen, judged as of its own time, dimmed, with ONE stamp saying it is not current. Past the cap
+  // the normal stale rules withhold it, as before.
+  const snapshotAt = complete && typeof reads[0]?.generated_at_ms === "number" ? reads[0].generated_at_ms : null;
+  const ageMs = snapshotAt === null ? null : now - snapshotAt;
+  const dimmed = ageMs !== null && ageMs > PAPER_SNAPSHOT_FRESH_MS && ageMs <= PAPER_DIMMED_MAX_MS;
+  const judgedAt = dimmed ? snapshotAt! + 1_000 : now;
   const accounting = complete ? reads.find(read => read.section === "accounting") : undefined;
   const clock = paperHeartbeat(generatedAt === null ? null : Math.floor(generatedAt * 1000), ownerState, now);
   const heartbeat = clock.current ? "Fresh" : ownerState === "UNAVAILABLE" ? "Unavailable" : "Stale";
   return <div className="v5-paper-bots" data-layout={layout}>
     <header className="v5-page-heading"><div><h1>Paper bots</h1><p>{bot} · simulated wallet · live disabled</p></div><div className="v5-button-row"><button className="v5-button" aria-pressed={layout === "grid"} onClick={() => setLayout("grid")}>Grid</button><button className="v5-button" aria-pressed={layout === "compact"} onClick={() => setLayout("compact")}>Compact</button><button className="v5-button" onClick={() => void query.refetch()}>Refresh paper data</button></div></header>
     {complete && <p>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}</p>}
+    {dimmed && <p role="status" className="paper-dimmed-stamp">Values from {paperTime(snapshotAt, now)} · {paperAge(ageMs!)} ago · not current. Waiting for a new report.</p>}
     {query.progress && <p role="status">{query.progress}</p>}
     {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
-    <PaperWorkspace reads={reads} safetyReads={query.safetyReads} complete={complete} readFailed={query.isError} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} />
+    <div className={dimmed ? "paper-dimmed" : undefined} style={dimmed ? { opacity: 0.6 } : undefined} aria-label={dimmed ? "Last complete owner snapshot, not current" : undefined}><PaperWorkspace asOf={dimmed ? snapshotAt : null} reads={reads} safetyReads={query.safetyReads} complete={complete} readFailed={query.isError} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={judgedAt} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} /></div>
   </div>;
 }
 

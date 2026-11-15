@@ -3,14 +3,23 @@
 .v5m-head { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: flex-end; gap: 12px; border-bottom: 1px solid var(--color-border); padding-bottom: 14px; }
 .v5m-head h1 { margin: 0; font-size: 1.5rem; font-weight: 600; letter-spacing: -0.01em; }
 .v5m-head p { margin: 4px 0 0; color: var(--color-text-muted); font-size: 0.875rem; max-width: 70ch; }
+.v5m-summary { margin: 0; font-size: 0.875rem; }
 .v5m-chips { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
 .v5m-chip { display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border: 1px solid var(--color-border); border-radius: 999px; background: var(--color-surface); color: var(--color-text-muted); font-size: 12px; }
 .v5m-chip i { width: 7px; height: 7px; border-radius: 50%; background: var(--color-green); }
 .v5m-chip.is-warn i { background: var(--color-yellow); }
 .v5m-chip.is-bad i { background: var(--color-red); }
+.v5m-chip.is-unknown i { background: var(--color-text-muted); }
 .v5m-chip b { color: var(--color-text); font-weight: 600; }
 .v5m-refresh { display: inline-flex; align-items: center; gap: 6px; min-height: 30px; padding: 4px 10px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); color: var(--color-text-muted); font-size: 12px; }
 .v5m-refresh:hover { background: var(--color-surface-hover); color: var(--color-text); }
+.v5m-holding { margin: 8px 0 4px; font-size: 12px; overflow-wrap: anywhere; }
+.v5m-hour-scroll { overflow-x: auto; }
+.v5m-hour-strip { display: table; border-spacing: 3px; min-width: 100%; }
+.v5m-hour-strip th, .v5m-hour { padding: 5px; font-size: 11px; white-space: nowrap; }
+.v5m-hour-strip th:first-child { position: sticky; left: 0; background: var(--color-surface); }
+.v5m-hour { border-radius: 3px; text-align: center; }
+.v5m-hour.is-gap { background: var(--color-surface-hover); color: var(--color-text-muted); }
 .v5m-status { margin: 0; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); font-size: 0.875rem; }
 .v5m-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 14px; min-width: 0; }
 .v5m-card h3 { margin: 0; font-size: 0.8125rem; font-weight: 600; }
@@ -37,9 +46,6 @@
 .v5m-price { font-size: clamp(18px, 9cqi, 24px); font-weight: 600; margin: 6px 0 4px; letter-spacing: -0.01em; }
 .v5m-asof { display: block; margin: -2px 0 4px; color: var(--color-text-muted); font-size: 11px; }
 .v5m-asof.is-old { color: var(--color-yellow); }
-.v5m-range > div { position: relative; height: 4px; border-radius: 2px; background: var(--color-border); margin: 8px 0 4px; }
-.v5m-range > div span { position: absolute; top: -3px; width: 10px; height: 10px; border-radius: 50%; background: var(--color-text); border: 2px solid var(--color-surface); transform: translateX(-50%); }
-.v5m-range small { display: flex; justify-content: space-between; gap: 6px; color: var(--color-text-muted); font-size: 11px; }
 .v5m-kv { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; margin: 8px 0 0; font-size: 12px; }
 .v5m-kv dt { color: var(--color-text-muted); }
 .v5m-kv dd { margin: 0; font-weight: 600; text-align: right; }

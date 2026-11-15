@@ -627,7 +627,14 @@ def create_app(
             profile = {"task_id": row["task_id"]}
             if isinstance(row.get("model"), str):
                 profile["model"] = row["model"][:128]
-            profile["enabled"] = row.get("enabled") is True
+            if isinstance(row.get("enabled"), bool):
+                profile["enabled"] = row["enabled"]
+            else:
+                profile["enablement_error"] = (
+                    "task_enablement_invalid"
+                    if "enabled" in row
+                    else "task_enablement_not_published"
+                )
             if isinstance(row.get("reason"), str):
                 profile["reason"] = row["reason"][:200]
             if credential_status in {"READY", "API_KEY_REQUIRED"}:
@@ -639,7 +646,13 @@ def create_app(
         profile = next((item for item in rows if item.get("task_id") == task_id), None)
         if profile is None:
             return False, "task_profile_unavailable"
-        if profile.get("enabled") is not True:
+        if profile.get("enabled") is not True and profile.get("enabled") is not False:
+            return False, (
+                "task_enablement_invalid"
+                if profile.get("enablement_error") == "task_enablement_invalid"
+                else "task_enablement_not_published"
+            )
+        if profile.get("enabled") is False:
             reason = profile.get("reason")
             return False, (
                 str(reason)[:200]
@@ -671,7 +684,7 @@ def create_app(
         value = agent.summary()
         if agent.task_id:
             ready, reason = task_ready(agent.task_id, rows)
-            blockers = [] if ready else [reason or "task_disabled"]
+            blockers = [] if ready else [reason or "task_enablement_not_published"]
             if agent.id in agents.paper_roles:
                 owner = paper_blocker(paper)
                 blockers = ([owner] if owner else []) + blockers
@@ -958,7 +971,7 @@ def create_app(
                 raise UpstreamError("source_unavailable")
             enabled, reason = task_ready(agent.task_id, rows)
             if not enabled:
-                detail = reason or "task_disabled"
+                detail = reason or "task_enablement_not_published"
                 store.add_tick(
                     session_id,
                     status="BLOCKED",
@@ -1140,7 +1153,9 @@ def create_app(
             raise HTTPException(409, detail={"code": "source_unavailable"})
         enabled, reason = task_ready(agent.task_id, rows)
         if not enabled:
-            raise HTTPException(409, detail={"code": reason or "task_disabled"})
+            raise HTTPException(
+                409, detail={"code": reason or "task_enablement_not_published"}
+            )
         if active_loop_task is not None and not active_loop_task.done():
             raise HTTPException(409, detail={"code": "active_loop_exists"})
         if store.active_loop() is not None:

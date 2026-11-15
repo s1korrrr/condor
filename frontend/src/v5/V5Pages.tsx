@@ -8,6 +8,8 @@ import { usePaperObservation } from "./usePaperObservation";
 import type { MarketEvidence, V5Agent, V5Session, V5SessionDetail, V5TaskReport, V5Workspace } from "./contracts";
 import { formatUsdAmount, marketFeatures, qualifiedFeatureValue, selectedCohortCoverage, strategyAssessmentLabel, timestampAgeMs } from "./evidence";
 import { boundedLoopParameters, canRequestReport, paperReadiness, paperWorkspaceLabel, paperWords } from "./policy";
+import { advisorAvailability, advisorTaskProfile, scheduledAgentLines, type WorkspaceRead } from "./agent-status";
+import { usePaperClock } from "./usePaperClock";
 
 function useWorkspace() {
   return useQuery({ queryKey: ["v5-workspace"], queryFn: v5Api.workspace, refetchInterval: 30_000 });
@@ -69,7 +71,12 @@ function duration(seconds: number) {
 }
 
 function reasonList(agent: V5Agent) {
-  if (agent.blockers.length) return agent.blockers;
+  const labels: Record<string, string> = {
+    task_disabled: "Task disabled by the owner service.",
+    task_enablement_not_published: "Task enablement not published by the owner service.",
+    task_enablement_invalid: "Task enablement invalid in the owner response.",
+  };
+  if (agent.blockers.length) return agent.blockers.map(reason => labels[reason] ?? reason);
   if (agent.status === "blocked") return ["Owner reported this agent is blocked; no blocker details were supplied."];
   return [];
 }
@@ -259,9 +266,19 @@ export function AgentsPage() {
   if (query.isPending) return <Loading label="Loading agent catalog" />;
   if (query.isError) return <QueryError query={query} retry={() => void query.refetch()} />;
   return <><PageHeading title="Agent catalog" description="The workspace roles and their owner-reported readiness." />
+    <ScheduledAgents read={query} />
     {query.data.agents.length ? <div className="v5-agent-catalog">{query.data.agents.map((agent) => <AgentCatalogRow agent={agent} key={agent.id} />)}</div> : <EmptyState title="No agents are registered" body="The service returned an empty catalog. No demo or placeholder agents are shown." />}
     {query.data.source_error && <div className="v5-source-warning"><AlertTriangle size={16} />Some catalog sources are unavailable: {query.data.source_error}</div>}
   </>;
+}
+
+function ScheduledAgents({ read, agentId }: { read: WorkspaceRead; agentId?: string }) {
+  const now = usePaperClock();
+  const lines = scheduledAgentLines(read, now).filter(line => !agentId || line.id === agentId);
+  return <section className="v5-panel" aria-label="Scheduled agents"><h2>Scheduled agents</h2>
+    {lines.map(line => <p key={line.id}><Link to={`/agents/${line.id}`}>{line.name}</Link> · <strong>{line.state}</strong> · {line.reason} · Last report: {line.reportTime ? <time dateTime={line.reportTime}>{line.reportTime.replace("T", " ").replace("Z", " UTC")}</time> : "not published"} ({line.reportAge}) · Owner report: {line.reportState} / {line.reportStatus} · {line.expiry}{line.expiryTime && <> · Owner expiry: <time dateTime={line.expiryTime}>{line.expiryTime.replace("T", " ").replace("Z", " UTC")}</time> ({line.expiryRelative})</>} · {line.overdue} · {line.schedule}</p>)}
+    <p className="v5-muted">Report times, task state and shared scheduler state come from owner reads. Cadence, role rotation and overdue rules are not published. A loop recipe alone is not scheduling evidence.</p>
+  </section>;
 }
 
 function AgentCatalogRow({ agent }: { agent: V5Agent }) {
@@ -293,12 +310,13 @@ export function AgentDetailPage() {
   }, onSuccess: (session) => { cacheSession(queryClient, session); navigate(`/sessions/${encodeURIComponent(session.id)}`); } });
   const saveNotes = useMutation({ mutationFn: (text: string) => v5Api.saveNotes(id, text), onSuccess: (result) => { setNotes(result.notes); void queryClient.invalidateQueries({ queryKey: ["v5-agent", id] }); } });
   const actionError = inspect.error ?? report.error ?? startLoop.error ?? saveNotes.error;
-  const profile = detailQuery.data?.task_id == null ? undefined : workspace.data?.advisor.task_profiles.find((row) => row.task_id === detailQuery.data?.task_id);
-  const effectiveModel = profile?.model ?? workspace.data?.advisor.model ?? null;
+  const profile = advisorTaskProfile(workspace, detailQuery.data?.task_id);
+  const configuredModel = profile?.model ?? workspace.data?.advisor?.model;
+  const effectiveModel = typeof configuredModel === "string" ? configuredModel : null;
   const canRequest = !!detailQuery.data && !!workspace.data && canRequestReport({
     agentReady: detailQuery.data.status === "ready",
-    advisorEnabled: workspace.data.advisor.enabled,
-    taskEnabled: !!profile?.enabled,
+    advisorEnabled: advisorAvailability(workspace).state === "enabled",
+    taskEnabled: profile?.enabled === true,
     modelAvailable: !!effectiveModel,
     mode: workspace.data.identity.mode,
     executionEnabled: workspace.data.identity.execution_enabled,
@@ -315,15 +333,16 @@ export function AgentDetailPage() {
   return <>
     <div className="v5-back-row"><Link to="/agents">Agents</Link><ChevronRight size={14} /><span>{agent.name}</span></div>
     <PageHeading title={agent.name} description={agent.description} actions={<Status state={agent.status} label={agent.status === "ready" ? "Ready" : "Blocked"} />} />
+    <ScheduledAgents read={workspace} agentId={agent.id} />
     <div className="v5-agent-meta-line"><span>Task <b>{agent.task_id ?? "Unavailable"}</b></span><span>Model <b>{agent.model || "Unavailable"}</b></span><span>Mode <b>{agent.mode}</b></span><span>Policy <b>{agent.policy.execution_enabled ? "Execution enabled" : "Execution disabled"}</b></span></div>
     {blockers.length > 0 && <section className="v5-blocker-panel"><AlertTriangle size={18} /><div><strong>Agent readiness is blocked</strong><ul>{blockers.map((reason) => <li key={reason}>{reason}</li>)}</ul></div></section>}
     {actionError && <div className="v5-action-error" role="alert"><AlertTriangle size={15} />{actionError.message}</div>}
     <section className="v5-agent-actions" aria-label="Agent actions">
       <div className="v5-safe-action"><button className="v5-button v5-button-primary" onClick={() => inspect.mutate()} disabled={inspect.isPending}><FileSearch size={16} />{inspect.isPending ? "Inspecting sources…" : "Inspect sources"}</button><span>Deterministic owner inspection; no model call.</span></div>
-      <div className="v5-safe-action"><button className="v5-button" onClick={() => report.mutate()} disabled={!canRequest || report.isPending}><FileText size={16} />{report.isPending ? "Requesting report…" : "Request report"}</button><span>{canRequest ? `Bounded to ${effectiveModel} and this agent’s configured task profile.` : unavailableReason(agent, workspace.data?.advisor.enabled, profile?.enabled, !!effectiveModel)}</span></div>
+      <div className="v5-safe-action"><button className="v5-button" onClick={() => report.mutate()} disabled={!canRequest || report.isPending}><FileText size={16} />{report.isPending ? "Requesting report…" : "Request report"}</button><span>{canRequest ? `Bounded to ${effectiveModel} and this agent’s configured task profile.` : unavailableReason(agent, workspace, profile?.enabled, !!effectiveModel)}</span></div>
       <div className="v5-safe-action"><button className="v5-button" onClick={() => startLoop.mutate()} disabled={!canStartLoop || startLoop.isPending}><Play size={16} />{startLoop.isPending ? "Starting report loop…" : "Start report loop"}</button><span>{agent.loops[0] ? `${agent.loops[0].name}: ≥ ${duration(boundedLoopParameters(agent.loops[0].frequency_sec, agent.loops[0].max_ticks)?.frequency_sec ?? 900)}, ≤ ${boundedLoopParameters(agent.loops[0].frequency_sec, agent.loops[0].max_ticks)?.max_ticks ?? 1} ticks` : "No report loop is configured."}</span></div>
     </section>
-    {agent.task_id && <TaskLatestReports reports={workspace.data?.advisor.latest_by_task} agents={[agent]} taskId={agent.task_id} />}
+    {agent.task_id && <TaskLatestReports reports={workspace.data?.advisor?.latest_by_task} agents={[agent]} taskId={agent.task_id} />}
     <div className="v5-agent-layout">
       <section className="v5-panel v5-agent-content-panel">
         <div className="v5-tabs" role="tablist" aria-label="Agent details">{tabs.map((key) => <button key={key} role="tab" aria-selected={tab === key} className={tab === key ? "is-selected" : ""} onClick={() => setTab(key)}>{key === "playbook" ? "Playbook" : key === "skills" ? `Skills (${agent.skills.length})` : key === "tools" ? "Tools & policy" : "Notes"}</button>)}</div>
@@ -342,10 +361,12 @@ export function AgentDetailPage() {
   </>;
 }
 
-function unavailableReason(agent: V5Agent, advisorEnabled?: boolean, profileEnabled?: boolean, modelAvailable = false) {
+function unavailableReason(agent: V5Agent, workspace: WorkspaceRead, profileEnabled?: boolean, modelAvailable = false) {
+  const advisor = advisorAvailability(workspace);
+  if (advisor.state !== "enabled") return advisor.message;
   if (agent.status !== "ready") return "Unavailable while this agent is blocked.";
-  if (!advisorEnabled) return "Advisor is disabled by the owner service.";
-  if (!profileEnabled) return "This task profile is unavailable or disabled.";
+  if (profileEnabled === false) return "This task profile is disabled by the owner service.";
+  if (profileEnabled !== true) return "This task profile is unavailable: enabled state not published.";
   if (!modelAvailable) return "No task-specific or configured advisor model is available.";
   return "Report actions require a reports-only workspace.";
 }

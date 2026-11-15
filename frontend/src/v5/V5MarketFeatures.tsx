@@ -22,7 +22,7 @@ function FeatureTile({ row, open, onToggle }: { row: FeatureRow; open: boolean; 
   const qualified = row.status === "QUALIFIED";
   return <button type="button" className={`v5m-feature${qualified ? "" : " is-unqualified"}${open ? " is-open" : ""}`} aria-expanded={open} onClick={onToggle} title={`${row.id} · ${row.unit} · ${row.status}`}>
     <span className="v5m-feature-label">{row.label}</span>
-    <strong>{qualified ? row.text : row.status.toLowerCase().replaceAll("_", " ")}</strong>
+    <strong>{qualified ? row.text : `— · ${row.status.toLowerCase().replaceAll("_", " ")}`}</strong>
     {open && <span className="v5m-feature-meta">{row.id} · unit {row.unit || "none"} · {row.status.toLowerCase()}</span>}
   </button>;
 }

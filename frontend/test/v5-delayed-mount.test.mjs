@@ -17,7 +17,7 @@ const fixture = relative => JSON.parse(fs.readFileSync(new URL(`../../tests/fixt
 
 test('first committed Settings remount rejects expired cached owner data before subscription refresh', async () => {
   const baseline = fixture('v5_unbound_base_8284ffe7.json');
-  const sections = Object.fromEntries(['status','wallet','positions','executors','risk'].map(section => [section,fixture(`paper-api-final3/native-replay/${section}.json`)]));
+  const sections = Object.fromEntries(['status','wallet','positions','executors','risk','operations'].map(section => [section,fixture(`paper-api-final3/native-replay/${section}.json`)]));
   sections.status.state = 'available';
   sections.status.reason = null;
   const bot = sections.status.bot_id;
@@ -43,7 +43,7 @@ test('first committed Settings remount rejects expired cached owner data before 
     let body;
     if (url.pathname === '/api/v5/dashboard/read') {
       const native = url.searchParams.get('path');
-      const section = native.includes('native/status') ? 'status' : native.includes('account-balances') || native.includes('fleet/summary') ? 'wallet' : native.includes('holdings') ? 'positions' : native.split('?')[0].split('/').at(-1);
+      const section = native.includes('native/status') ? 'status' : native.includes('account-balances') || native.includes('fleet/summary') ? 'wallet' : native.includes('holdings') ? 'positions' : native.includes('operations/workspace') ? 'operations' : native.split('?')[0].split('/').at(-1);
       assert.ok(sections[section],`unmapped owner read: ${native}`);
       body = sections[section];
     } else if (url.pathname === '/api/v5/auth') body = {authenticated:true};

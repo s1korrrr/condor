@@ -40,9 +40,9 @@ export function usePaperWorkspace(page: "capital" | "operations", bot?: string |
   return {data:query.data ?? (query.isError ? null : partial), complete:query.complete, progress:page === "capital" ? query.progress : undefined, error:query.isError ? query.error.message : null, pending:query.isPending || query.isFetching, refresh:() => {void query.refetch();}};
 }
 
-export function usePaperObservation(bot: string | null | undefined) {
+export function usePaperObservation(bot: string | null | undefined, refetchInterval: number | false = 15_000, scope?: string) {
   const now = usePaperClock();
-  const query = usePaperSnapshot<PaperRead[]>(["v5-paper-observation-health", bot], Boolean(bot), 5, async (progress, signal) => {
+  const query = usePaperSnapshot<PaperRead[]>(scope ? ["v5-paper-observation-health", bot, scope] : ["v5-paper-observation-health", bot], Boolean(bot), 5, async (progress, signal) => {
     const prefix = "/api/v1/servers/rsibot-v5/";
     return paperCoherentRead(`${prefix}bots/${encodeURIComponent(bot!)}/native/status`, [
       {section:"wallet",path:`${prefix}account-balances`},
@@ -50,7 +50,7 @@ export function usePaperObservation(bot: string | null | undefined) {
       {section:"executors",path:`${prefix}bots/${encodeURIComponent(bot!)}/executors`,paginate:true},
       {section:"risk",path:`${prefix}bots/${encodeURIComponent(bot!)}/risk`},
     ], (path,section) => readPaperSection(path,section,bot,signal), undefined, progress);
-  });
+  }, refetchInterval);
   const reads = query.reads;
   const summary = query.isError ? { label: "Unavailable", reason: query.error.message } : query.isPending || query.isFetching ? { label: "Checking", reason: `Reading one owner snapshot: ${reads.length}/5 sections. Process heartbeat is a separate signal.` } : paperObservationSummary(query.data ?? [], bot ?? "", now);
   const completedStatus = (query.data ?? reads).find(read => read.section === "status");

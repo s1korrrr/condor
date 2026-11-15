@@ -34,6 +34,7 @@
 .v5m .is-up { color: var(--color-green); }
 .v5m .is-amber { color: var(--color-yellow); }
 .v5m .is-down { color: var(--color-red); }
+.v5m .is-unavailable { color: var(--color-yellow); }
 .v5m-muted { color: var(--color-text-muted); }
 
 .v5m-coin { display: flex; flex-direction: column; }

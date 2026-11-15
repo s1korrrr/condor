@@ -26,7 +26,7 @@ const profile = {...baseline.profile.body,readiness:{...baseline.profile.body.re
 const workspace = {schema_version:'v5-workspace.v1',identity,context:null,advisor:settings.budget,agents:Object.values(baseline.workspace_agents),sessions:[],source_error:null};
 const routes = [
   ['/settings','Workspace settings'], ['/bots','Paper bots'], ['/helm','Helm paper bot'], ['/money','Money'], ['/capital','Capital'],
-  ['/operations','Operations'], ['/v5/readiness','Paper readiness'],
+  ['/operations','Operations'], ['/v5/readiness','Paper readiness'], ['/system','Operations'], ['/system/checks','Operations'],
   ['/backtests','Tradepad'], ['/','Overview'], ['/market','Market'], ['/market/BTC','Market'], ['/market/evidence','Market'], ['/market/candles','Market'],
   ['/market/stocks','OKX stocks'], ['/agents','Agents'],
   ['/agents/decision_reviewer','Decision Reviewer'], ['/research','Research'],
@@ -37,7 +37,7 @@ const routes = [
 
 test('real V5 routes settle with shared providers and an advancing paper clock', async context => {
   const routeSource = fs.readFileSync(new URL('../src/v5/V5App.tsx',import.meta.url),'utf8');
-  const registered = [...routeSource.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1]).filter(pathname => pathname !== '*').map(pathname => pathname.replace('/market/:coin','/market/BTC').replace('/agents/:id','/agents/decision_reviewer').replace('/sessions/:id','/sessions/fixture-session'));
+  const registered = [...routeSource.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1]).filter(pathname => pathname !== '*').map(pathname => pathname.replace('/system/:tab','/system/checks').replace('/market/:coin','/market/BTC').replace('/agents/:id','/agents/decision_reviewer').replace('/sessions/:id','/sessions/fixture-session'));
   assert.deepEqual(routes.map(([pathname]) => pathname).sort(),registered.sort(),'every registered V5 route needs a real render case');
   let route = '/settings';
   const journalRoutes = new Set(['/bots', '/operations', '/v5/readiness']);
@@ -51,7 +51,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const {load} = frontendModules(overrides,{'v5/V5App.tsx':['client']},(filename,source) => {
     source = clockMutation(filename,source);
     if (!filename.endsWith('/v5/V5Pages.tsx')) return source;
-    const anchor = 'function PaperIdentity() {';
+    const anchor = 'function PaperIdentity({ paused = false }: { paused?: boolean }) {';
     assert.equal(source.split(anchor).length - 1,1,'frame probe must target exactly one real PaperIdentity');
     return source.replace(anchor,`${anchor} globalThis.__v5FrameBoundaryAdvance?.();`);
   });

@@ -12,10 +12,16 @@
 .paper-badge { display: inline-flex; align-items: center; width: fit-content; padding: 4px 8px; border: 1px solid var(--color-border); border-radius: 5px; font-size: 11px; font-weight: 550; line-height: 1.3; color: var(--color-text-muted); white-space: normal; }
 .paper-badge[data-state=available] { color: var(--color-primary); border-color: var(--color-primary); }
 .paper-badge[data-state=stale], .paper-badge[data-state=degraded] { border-style: dashed; color: var(--color-text); }
+.paper-entry-controls[data-state=degraded] { border-top-color: var(--color-yellow); }
+.paper-entry-controls[data-state=stopped] { border-top-color: var(--color-red); }
+.paper-entry-controls[data-state=unknown] { border-top-color: var(--color-text-muted); }
+.paper-entry-controls .paper-badge[data-state=degraded] { color: var(--color-yellow); border-color: var(--color-yellow); }
+.paper-entry-controls .paper-badge[data-state=stopped] { color: var(--color-red); border-color: var(--color-red); }
 .paper-metrics { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1px; margin: 20px 0 0; background: var(--color-border); border: 1px solid var(--color-border); border-radius: 7px; overflow: hidden; }
 .v5-paper-bots .paper-metrics { grid-template-columns: repeat(4, minmax(0, 1fr)); }
-.v5-paper-bots .paper-metric:last-child { grid-column: 1 / -1; }
-.v5-paper-bots .paper-metric:last-child dd { font-size: 14px; letter-spacing: 0; }
+.v5-paper-bots .paper-money-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.v5-paper-bots .paper-metrics:not(.paper-money-summary) .paper-metric:last-child { grid-column: 1 / -1; }
+.v5-paper-bots .paper-metrics:not(.paper-money-summary) .paper-metric:last-child dd { font-size: 14px; letter-spacing: 0; }
 .paper-metric { min-width: 0; padding: 16px; background: var(--color-surface); }
 .paper-metric dt { margin-bottom: 8px; color: var(--color-text-muted); font-size: 12px; }
 .paper-metric dd { margin: 0; font-size: clamp(16px, 1.6vw, 23px); font-weight: 600; font-variant-numeric: tabular-nums; overflow-wrap: anywhere; line-height: 1.4; letter-spacing: -.025em; }

@@ -28,6 +28,7 @@ function harness(kind, initial) {
     return [slots[index], next => { slots[index] = typeof next === 'function' ? next(slots[index]) : next; }];
   };
   const {load} = frontendModules({...stubs, '@/v5/usePaperClock':{usePaperClock:() => owner.read_at_ms}, react:{...React,useState,useRef:initial => useState(() => ({current:initial}))[0],useEffect() {}}, '@tanstack/react-query':{...ReactQuery,useQueryClient:() => client,useQuery:options => {
+    if (options.queryKey[0] === 'v5-money') return {data:undefined,isError:false};
     if (options.enabled === false) return {isPending:true,isFetching:false,isError:false,refetch() {}};
     spec = options;
     const cached = client.getQueryCache().build(client, options);

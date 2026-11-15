@@ -37,7 +37,9 @@ test('owner scoped resume removes BNB pause while BTC retains a native entry hol
   assert.deepEqual(paperSafetyReads([older], [], newer), []);
   const html = render(newer, older);
   assert.equal(pausedCards(html, bnb), 0);
-  assert.equal(pausedCards(html, btc), 2);
+  assert.equal(pausedCards(html, btc), 1);
+  assert.doesNotMatch(html, /Controller entry controls/);
+  assert.match(html, /<details class="paper-hold-details"><summary>/);
   assert.match(html, /New acquisitions held/);
 });
 
@@ -64,7 +66,7 @@ test('owner named durability reset removes only that hold while emergencies rema
   assert.match(html, /Command ingress is unreadable/);
   assert.match(html, /Emergency halt reported/);
   assert.match(html, /Omitted controllers remain unknown, not cleared/);
-  assert.equal((html.match(/Reported emergency halt: Yes/g) ?? []).length, 2 * Object.keys(base.data.controllers).length);
+  assert.equal((html.match(/Reported emergency halt: Yes/g) ?? []).length, Object.keys(base.data.controllers).length);
 });
 
 test('mixed owner update removes the old BNB pause and retains the newly paused BTC read', () => {
@@ -75,7 +77,7 @@ test('mixed owner update removes the old BNB pause and retains the newly paused 
   assert.deepEqual(paperSafetyReads([older], received(newer), newer), [newer]);
   const html = render(newer, older);
   assert.equal(pausedCards(html, bnb), 0);
-  assert.equal(pausedCards(html, btc), 2);
+  assert.equal(pausedCards(html, btc), 1);
   assert.match(html, /New acquisitions held/);
 });
 
@@ -88,7 +90,7 @@ test('explicit emergency-clear risk supersedes old emergency while a pause remai
   const html = render(newer, older);
   assert.doesNotMatch(html, /Emergency halt reported|Reported emergency halt: Yes/);
   assert.match(html, /New acquisitions held/);
-  assert.equal(pausedCards(html, btc), 2);
+  assert.equal(pausedCards(html, btc), 1);
 });
 
 for (const [group, field] of [['operator', 'paused'], ['operator', 'emergency'], ['native', 'complete']]) {

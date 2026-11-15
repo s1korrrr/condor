@@ -107,5 +107,5 @@ function CoinSignal({ row }: { row: ReturnType<typeof helmCoinRow> }) {
 }
 
 function Stat({ label, value, note, warn, title }: { label: string; value: string; note?: ReactNode; warn?: boolean; title?: string }) {
-  return <div className={`v5m-stat${warn ? " is-warn" : ""}`} title={title}><span>{label}</span><strong>{value}</strong>{note && <small>{note}</small>}</div>;
+  return <div className={`v5m-stat${warn ? " is-warn" : ""}`} title={title}><span>{label}</span><strong>{value}</strong>{note && <> <small>{note}</small></>}</div>;
 }

@@ -30,9 +30,10 @@ const instrumentDisplays = (filename, source) => {
     source = source.replace(original, 'const ageText = (seconds: number | null) => globalThis.__v5RecordDisplayOutput(seconds == null ? "age unknown" : `${ageShort(seconds)} ago`);');
   }
   if (!/\/v5\/(?:format|shown)\.mjs$/.test(filename)) return source;
-  return `${source}\n;for (const [name, original] of Object.entries(module.exports)) { if (typeof original === 'function') module.exports[name] = (...args) => globalThis.__v5RecordDisplayOutput(original(...args)); }`;
+  const timeOnly = filename.endsWith('/v5/shown.mjs');
+  return `${source}\n;for (const [name, original] of Object.entries(module.exports)) { if (typeof original === 'function' && (!${timeOnly} || ['utcExact','utcMinute'].includes(name))) module.exports[name] = (...args) => globalThis.__v5RecordDisplayOutput(original(...args)); }`;
 };
-const baselineFiles = new Set(['components/charts/RecordedCandleChart.tsx','features/quant-ops/kit/Rows.tsx','pages/tabs/ActiveBotsTab.tsx','v5/format.mjs','v5/policy.ts','v5/V5Stocks.tsx','v5/bots-position-model.mjs','v5/V5CandleStore.tsx','v5/CandleStorePanels.tsx','v5/candle-store-model.ts','v5/V5Helm.tsx','v5/V5Pages.tsx','v5/OwnerJournalCondition.tsx']);
+const baselineFiles = new Set(['components/charts/RecordedCandleChart.tsx','features/quant-ops/kit/Rows.tsx','pages/tabs/ActiveBotsTab.tsx','v5/format.mjs','v5/policy.ts','v5/V5Stocks.tsx','v5/bots-position-model.mjs','v5/V5CandleStore.tsx','v5/CandleStorePanels.tsx','v5/candle-store-model.ts','v5/V5Helm.tsx','v5/V5MarketDetail.tsx','v5/V5Pages.tsx','v5/OwnerJournalCondition.tsx']);
 const baselineSource = (filename, source) => {
   if (!process.env.DISPLAY_SCAN_BASELINE) return source;
   const relative = path.relative(path.resolve(import.meta.dirname,'../src'), filename);
@@ -58,6 +59,7 @@ sections.status.state = 'available';
 sections.status.reason = null;
 const bot = sections.status.bot_id;
 const fixtureMinute = Math.floor(sections.status.read_at_ms / 60_000) * 60 - 60;
+const fixtureClose = 101.123456789;
 const fixtureFill = sections.fills.data.find(row => row.trading_pair === 'BNB-USDC' && row.side === 'BUY');
 fixtureFill.event_at_ms = fixtureMinute * 1000;
 const laneFixture = {lane:'binance__spot',venue:'binance',segment:'spot',pair:'BTC-USDT',health:'green',health_rules:[{level:'info',rule:'fixture',detail:'owner evidence'}],volume_unit:'base',last_minute:1793403200,last_minute_age_s:1,coverage_1h:0.876543217317,coverage_24h:0.876543217317,coverage_7d:0.876543217317,gaps_7d:1,pending:0,unrecoverable_7d:0,no_trade_7d:0,ws_state:'connected',grace_s:30,pairs_listed:1,pairs_held:1,available:true,unavailable_reason:null,partition_errors:[]};
@@ -109,7 +111,7 @@ function longVisibleDecimals(container) {
   return findings;
 }
 
-const numericMatches = text => [...String(text).matchAll(/(?<![\p{L}\p{N}_.])[-−+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[eE][−+-]?\d+)?(?![\p{N}_])/gu)];
+const numericMatches = text => [...String(text).matchAll(/(?<![\p{N}_.])[-−+]?(?:\d{1,3}(?:,\d{3})+|\d+)\.\d+(?:[eE][−+-]?\d+)?(?![\p{N}_])|(?<![\p{L}\p{N}_.])[-−+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:[eE][−+-]?\d+)?(?![\p{N}_])/gu)];
 const within = (context, pattern) => [...context.text.matchAll(pattern)].some(match => context.offset >= match.index && context.offset + context.token.length <= match.index + match[0].length);
 const numericAllowlist = [
   {name:'marked-owner-id', reason:'Owner identifiers are displayed verbatim, not as quantities.', accepts: (token, context) => context.kind === 'id'},
@@ -127,7 +129,12 @@ function unprovenNumbers(container, outputs = formatterOutputs) {
   let text = '';
   const flush = () => { if (text) segments.push({text, kind:'text'}); text = ''; };
   const walk = node => {
-    if (node.nodeType === browser.Node.TEXT_NODE) { text += node.textContent ?? ''; return; }
+    if (node.nodeType === browser.Node.TEXT_NODE) {
+      const part = node.textContent ?? '';
+      if (/\p{L}$/u.test(text) && /^[-−+]?\d/.test(part) && !/\d[eE]$/.test(text)) text += ' ';
+      text += part;
+      return;
+    }
     if (node.nodeType !== browser.Node.ELEMENT_NODE || node.matches('script, style, [hidden], [aria-hidden="true"]')) return;
     if (node.matches('details > pre[data-exact-record]') && node.parentElement.querySelector(':scope > summary')?.textContent === 'Exact record') { flush(); segments.push({text:node.textContent ?? '',kind:'exact-record'}); return; }
     if (node.matches('[data-display-id], button.paper-copy, .capital-paper-source > code') || node.matches('.paper-detail > dd') && ['Executor','Controller'].includes(node.previousElementSibling?.textContent)) { flush(); segments.push({text:node.textContent ?? '',kind:'id'}); return; }
@@ -141,16 +148,24 @@ function unprovenNumbers(container, outputs = formatterOutputs) {
   walk(container); flush();
   for (const element of container.querySelectorAll('[aria-label], [aria-description], [aria-valuenow], [aria-valuetext], input, textarea, select, progress')) {
     for (const attribute of ['aria-label','aria-description','aria-valuenow','aria-valuetext']) if (element.hasAttribute(attribute)) segments.push({text:element.getAttribute(attribute),kind:attribute === 'aria-valuenow' && element.matches('[role="separator"].q-dt__resize') ? 'column-width' : 'text'});
-    if ('value' in element) segments.push({text:String(element.value),kind:element.matches('progress') ? 'progress' : 'text'});
+    if ('value' in element && (!element.matches('progress') || element.hasAttribute('value'))) segments.push({text:String(element.value),kind:element.matches('progress') ? 'progress' : 'text'});
   }
   return [...new Set(segments.flatMap(segment => numericMatches(segment.text).filter(match => ![...outputs].some(output => output.includes(match[0])) && !numericAllowlist.some(entry => entry.accepts(match[0], {...segment, token:match[0], offset:match.index}))).map(match => match[0])))];
 }
 
 test('numeric provenance rejects unformatted owner values even across element boundaries', () => {
   const fixture = document.createElement('div');
-  fixture.innerHTML = '<div>99.7800793 USDC</div><div>99.7800793USDC</div><div>1234567890123e-20</div><div><span>198961.1707</span><span>7127617</span></div><div></div>';
+  fixture.innerHTML = '<div>99.7800793 USDC</div><div>99.7800793USDC</div><div><span>label</span><span>99.7800793</span></div><div><span>balance</span><span>123456</span></div><div>1234567890123e-20</div><div><span>198961.1707</span><span>7127617</span></div><div></div>';
   fixture.lastChild.textContent = String(147258.1234567);
-  assert.deepEqual(unprovenNumbers(fixture, new Set()), ['99.7800793', '1234567890123e-20', '198961.17077127617', '147258.1234567']);
+  assert.deepEqual(unprovenNumbers(fixture, new Set()), ['99.7800793', '123456', '1234567890123e-20', '198961.17077127617', '147258.1234567']);
+});
+
+test('three-state text does not certify an unformatted owner number', () => {
+  const {load} = frontendModules({}, {}, instrumentDisplays);
+  const raw = '876543.9876543';
+  const fixture = document.createElement('div');
+  fixture.textContent = load('v5/shown.mjs').tri(true, raw, 'no');
+  assert.ok(unprovenNumbers(fixture).includes(raw));
 });
 
 test('numeric provenance exceptions are bound to marked ids, counters and progress attributes', () => {
@@ -213,9 +228,9 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
     decimalFindings.push(...longVisibleDecimals(container).map(finding => `${label}: ${finding}`));
     provenanceFindings.push(...unprovenNumbers(container).map(finding => `${label}: ${finding}`));
     const negative = document.createElement('div');
-    negative.textContent = String(876543.1234567);
+    negative.textContent = String(fixtureClose);
     container.append(negative);
-    assert.ok(unprovenNumbers(container).includes('876543.1234567'), `${label}: a raw numeric owner value must be rejected`);
+    assert.ok(unprovenNumbers(container).includes(String(fixtureClose)), `${label}: a raw numeric owner value must be rejected`);
     negative.remove();
   };
   const openDisclosures = async container => {
@@ -246,7 +261,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
     else if (url.pathname === '/api/v5/candle-store/symbols') body = {state:'AVAILABLE',reason:null,data:{rows:[{lane:'okx__spot',pair:'BNB-USDC'}]}};
     else if (url.pathname === '/api/v5/candle-store/candles') {
       const end = Math.floor(sections.status.read_at_ms / 60_000) * 60 - 60;
-      body = {state:'AVAILABLE',reason:null,data:{pair:url.searchParams.get('pair') ?? 'BNB-USDC',venue:'binance',volume_unit:'base',start:end-60,end,now:end+65,buckets:[[end-60,100,101,99,100,2,1],[end,101,102,100,101.123456789,2,1]],totals:{}}};
+      body = {state:'AVAILABLE',reason:null,data:{pair:url.searchParams.get('pair') ?? 'BNB-USDC',venue:'binance',volume_unit:'base',start:end-60,end,now:end+65,buckets:[[end-60,100,101,99,100,2,1],[end,101,102,100,fixtureClose,2,1]],totals:{}}};
     }
     else if (url.pathname === '/api/v5/candle-store/summary') body = {state:'AVAILABLE',reason:null,data:{now:Math.floor(sections.status.read_at_ms/1000),status_age_s:1,tiles:[laneFixture],rows:[laneFixture]}};
     else if (url.pathname === '/api/v5/candle-store/cross') body = {state:'AVAILABLE',reason:null,data:{now:1793403300,asset:'BTC',segment:'spot',range:'24h',res:'1h',res_s:3600,start:1793401200,end:1793401200,minutes:1,minutes_with_median:1,venues_per_minute_max:2,note:'fixture',table:[{lane:'binance__spot',venue:'binance',pair:'BTC-USDT',quote:'USDT',n:1,minutes_with_close:1,mean_bps:0.123456787317,mean_abs_bps:0.123456787317,p95_abs_bps:0.123456787317,max_abs_bps:0.123456787317,max_at:1793401200}],series:[{lane:'binance__spot',venue:'binance',pair:'BTC-USDT',close:[[1793401200,101.123456787317]],deviation_bps:[[1793401200,0.123456787317]]}]}};
@@ -261,7 +276,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       const channels = Object.fromEntries(['ticker','mark_price','index_price','funding','open_interest','books','trades'].map(name => [name,channel]));
       const catalog = {...identity,format:'okx-stocks-v1',now:seconds,state:'live',catalog_at:seconds,updated_at:seconds,reason:null,rows:[{instrument,latest,channels,coverage,captured:true}],capture:[{instType:'SWAP',instId:identity.instId,listed:true}]};
       const trades = [observation('trades',{tradeId:'fixture-trade',px:'105.123456787317',sz:'2.123456787317',side:'buy'})];
-      const data = url.pathname.endsWith('/stocks') ? catalog : url.pathname.endsWith('/stock-market') ? {...catalog,format:'okx-stock-market-v1',latest,channels,coverage,recent_trades:trades,book_depth:{bids:1,asks:0},captured:true} : {...identity,range:'24h',now:seconds,state:'live',captured:true,buckets:[[fixtureMinute,101,102,99,101.123456789,2,1,0,0,0,0,0]],totals:{final:1},volume_unit:'contracts'};
+      const data = url.pathname.endsWith('/stocks') ? catalog : url.pathname.endsWith('/stock-market') ? {...catalog,format:'okx-stock-market-v1',latest,channels,coverage,recent_trades:trades,book_depth:{bids:1,asks:0},captured:true} : {...identity,range:'24h',now:seconds,state:'live',captured:true,buckets:[[fixtureMinute,101,102,99,fixtureClose,2,1,0,0,0,0,0]],totals:{final:1},volume_unit:'contracts'};
       body = {state:'AVAILABLE',reason:null,data};
     }
     else if (url.pathname === '/api/v5/candle-store/heatmap') body = {state:'AVAILABLE',reason:null,data:{now:1793403300,segment:'spot',hours:[1793401200],fields:['final','no_trade','unrecoverable','missing','pending'],last_closed:1793403200,rows:[{lane:'binance__spot',venue:'binance',segment:'spot',pair:'BTC-USDT',asset:'BTC',first_minute:1793401200,cells:[[59,0,0,1,0]]}]}};
@@ -341,7 +356,10 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
             await React.act(async () => { button.click(); await client.refetchQueries({type:'active'}); await new Promise(resolve => setTimeout(resolve,0)); });
             await openDisclosures(container);
             assert.match(container.textContent,new RegExp(heading));
-            if (tab === 'Cross-venue') assert.ok(container.querySelector('figure[aria-label="BTC spot deviation from the cross-venue median, basis points"]'), 'the populated cross-venue series must mount its chart');
+            if (tab === 'Cross-venue') {
+              assert.ok(container.querySelector('figure[aria-label="BTC spot deviation from the cross-venue median, basis points"]'), 'the populated cross-venue series must mount its chart');
+              assert.match(container.querySelector('[aria-label="Venues in the chart"]')?.textContent ?? '', /binance BTC-USDT/, 'the fixture series must appear in the chart legend');
+            }
             scan(container, `${pathname} / ${tab}`);
           }
         }
@@ -351,8 +369,11 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
             assert.ok(button, `agent tab ${tab} must exist`);
             await React.act(async () => { button.click(); });
             await openDisclosures(container);
-            if (tab === 'Skills') assert.match(container.textContent,/Native Decision Trace/);
-            if (tab === 'Tools & policy') assert.match(container.textContent,/fixture_reader/);
+            if (tab === 'Skills') assert.match(container.querySelector('[role="tabpanel"]')?.textContent ?? '',/Native Decision Trace/);
+            if (tab === 'Tools & policy') {
+              const panel = container.querySelector('[role="tabpanel"]')?.textContent ?? '';
+              assert.match(panel,/fixture_reader/); assert.match(panel,/Listed/); assert.match(panel,/Allowed/);
+            }
             if (tab === 'Notes') assert.equal(container.querySelector('#agent-notes')?.value,'Fixture operator notes');
             scan(container, `${pathname} / ${tab}`);
           }
@@ -372,6 +393,8 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           assert.match(container.textContent,/Best bid/,'configured Stocks must show public observations');
           for (const value of ['Mark price','Index price','Funding rate','Open interest','Public order book','Recent captured trades','fixture-trade','Contract value / multiplier']) assert.ok(container.textContent.includes(value), `configured Stocks must mount ${value}`);
           for (const value of ['101.12','102.12','0.0123','103.12','104.12','105.12','1.1235']) assert.ok(container.textContent.includes(value), `configured Stocks must mount formatted value ${value}`);
+          assert.match(container.querySelector('[aria-label="Selected stock public order book"]')?.textContent ?? '', /104\.12/, 'the book level must render');
+          assert.match(container.querySelector('[aria-label="Selected stock recent trades"]')?.textContent ?? '', /105\.12/, 'the trade price must render');
           assert.ok(charts.slice(chartStart).some(chart => chart.data.some(row => row.close === 101.123456789)), 'configured Stocks must mount its final candle');
           scan(container, `${pathname} / configured`);
         }

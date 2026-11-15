@@ -14,7 +14,7 @@ type Candles = { buckets: RecordedMinute[]; volume_unit: string; pair: string; v
 type CrossRead = { segment: "spot" | "perpetual"; rows: VenueRow[]; error: string | null };
 type VenueRow = CrossStats & { segment: "spot" | "perpetual" };
 
-const compact = (value: number) => value >= 1e9 ? `${(value / 1e9).toFixed(2)} B` : value >= 1e6 ? `${(value / 1e6).toFixed(1)} M` : value >= 1e3 ? `${(value / 1e3).toFixed(1)} k` : value.toFixed(0);
+const compact = (value: number) => value >= 1e9 ? `${fixed(value / 1e9, 2)} B` : value >= 1e6 ? `${fixed(value / 1e6, 1)} M` : value >= 1e3 ? `${fixed(value / 1e3, 1)} k` : fixed(value, 0);
 const venueName = (venue: string) => venue.replace("_io", ".io");
 
 const columns: TableColumn<VenueRow>[] = [

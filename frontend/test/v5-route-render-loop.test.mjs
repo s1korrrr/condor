@@ -27,6 +27,7 @@ const workspace = {schema_version:'v5-workspace.v1',identity,context:null,adviso
 const routes = [
   ['/settings','Workspace settings'], ['/bots','Paper bots'], ['/helm','Helm paper bot'], ['/money','Money'], ['/capital','Capital'],
   ['/operations','Operations'], ['/v5/readiness','Paper readiness'], ['/system','Operations'], ['/system/checks','Operations'],
+  ['/system/data-feeds','Venues and data health'], ['/system/engine-inputs','V5 market features'], ['/system/readiness','Paper readiness'], ['/system/settings','Workspace settings'],
   ['/backtests','Tradepad'], ['/','Overview'], ['/market','Market'], ['/market/BTC','Market'], ['/market/evidence','Market'], ['/market/candles','Market'],
   ['/market/stocks','OKX stocks'], ['/agents','Agents'],
   ['/agents/decision_reviewer','Decision Reviewer'], ['/research','Research'],
@@ -35,10 +36,32 @@ const routes = [
   ['/sessions/fixture-session','Session'],
 ];
 
+function longVisibleDecimals(container) {
+  const findings = [];
+  const walker = document.createTreeWalker(container, browser.NodeFilter.SHOW_TEXT);
+  while (walker.nextNode()) {
+    const node = walker.currentNode, parent = node.parentElement;
+    if (!parent || parent.closest('script, style')) continue;
+    for (const match of node.textContent.matchAll(/(?<![\w.])[-−+]?\d+\.\d{9,}(?!\d)/g)) {
+      // Position-card dust: coin() preserves three significant digits rather than hiding a real holding.
+      const dustLine = parent.closest('.paper-positions dd > div');
+      const dust = dustLine?.textContent.trim().endsWith('dust') && match[0].replace(/^[-−+]?0\.0*/, '').replace(/0+$/, '').length <= 3;
+      if (!dust) findings.push(`${parent.tagName.toLowerCase()}: ${match[0]}`);
+    }
+  }
+  return findings;
+}
+
+test('decimal scan excludes exact titles and only allows three-significant-digit position dust', () => {
+  const fixture = document.createElement('div');
+  fixture.innerHTML = '<span title="1.123456789">1.12</span><span>2.123456789</span><div class="paper-positions"><dd><div>+ <span>0.0000000000123 BTC</span> dust</div><div>+ <span>0.00000000001234 BTC</span> dust</div></dd></div>';
+  assert.deepEqual(longVisibleDecimals(fixture), ['span: 2.123456789', 'span: 0.00000000001234']);
+});
+
 test('real V5 routes settle with shared providers and an advancing paper clock', async context => {
   const routeSource = fs.readFileSync(new URL('../src/v5/V5App.tsx',import.meta.url),'utf8');
   const registered = [...routeSource.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1]).filter(pathname => pathname !== '*').map(pathname => pathname.replace('/system/:tab','/system/checks').replace('/market/:coin','/market/BTC').replace('/agents/:id','/agents/decision_reviewer').replace('/sessions/:id','/sessions/fixture-session'));
-  assert.deepEqual(routes.map(([pathname]) => pathname).sort(),registered.sort(),'every registered V5 route needs a real render case');
+  assert.deepEqual([...new Set(routes.map(([pathname]) => pathname.replace(/^\/system\/(data-feeds|engine-inputs|readiness|settings)$/, '/system/checks')))].sort(),registered.sort(),'every registered V5 route needs a real render case');
   let route = '/settings';
   const journalRoutes = new Set(['/bots', '/operations', '/v5/readiness']);
   const statusForRoute = () => journalRoutes.has(route) ? {...sections.status, state:'degraded', reason:'OWNER_JOURNAL_EXCEEDED', data:{...sections.status.data, journal_budget:{state:'exceeded',journal_evidence_held:true,native_execution_continues:true}}} : sections.status;
@@ -62,6 +85,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   client.setDefaultOptions({queries:{retry:false,staleTime:Infinity,gcTime:Infinity}});
   const requests = [];
   const unexpectedReads = [];
+  const decimalFindings = [];
   globalThis.fetch = async (input, init = {}) => {
     assert.equal(init.method ?? 'GET','GET','render tests must not invoke actions');
     const url = new URL(String(input),'https://fixture.invalid');
@@ -131,6 +155,8 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         assert.deepEqual(warnings,[],'React must not warn about unstable snapshots or cross-component updates');
         assert.ok(container.querySelector('main'),`${pathname} must keep the app mounted`);
         assert.ok(container.textContent.includes(heading),`${pathname} must render ${heading}: ${container.textContent}`);
+        for (const details of container.querySelectorAll('details')) details.open = true;
+        decimalFindings.push(...longVisibleDecimals(container).map(finding => `${pathname}: ${finding}`));
         if (pathname === '/market/stocks') {
           assert.match(container.textContent,/Stock data is not configured/,'the unbound fixture must explain absent stock data');
           assert.equal(container.querySelector('a[href="/market/stocks"]')?.getAttribute('aria-current'),'page');
@@ -197,6 +223,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         client.clear();
       }
     });
+    assert.deepEqual(decimalFindings, [], `Visible decimals over eight places:\n${decimalFindings.join('\n')}`);
     assert.ok(requests.some(request => request.includes('native%2Fstatus')),'real snapshot query must read owner fixtures');
   } finally {
     client.clear();

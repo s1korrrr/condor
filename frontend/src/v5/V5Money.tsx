@@ -34,13 +34,14 @@ async function readHold(): Promise<Hold> {
 const num = (value: string | null | undefined) => value != null && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
 const share = (value: number | null) => value == null ? "—" : `${Math.round(value * 100)}%`;
 const at = (ms: number | null | undefined) => utcMin(ms) ?? "unknown time";
+const exactCell = (value: string | null | undefined, text: string) => <span title={value ?? undefined}>{text}</span>;
 
 const dailyColumns: TableColumn<DailyRow>[] = [
   { id: "day", header: "Day (UTC)", value: row => new Date(row.day).toISOString().slice(0, 10), rowHeader: true, size: 100 },
-  { id: "start", header: "Equity, first sample", value: row => num(row.equity_start), kind: "number", size: 120, cell: row => fixed(row.equity_start), title: row => row.equity_first_at_ms != null ? `at ${at(row.equity_first_at_ms)}` : undefined },
-  { id: "end", header: "Equity, last sample", value: row => num(row.equity_end), kind: "number", size: 120, cell: row => fixed(row.equity_end), title: row => row.equity_last_at_ms != null ? `at ${at(row.equity_last_at_ms)}` : undefined },
-  { id: "change", header: "Equity change", value: row => num(row.equity_change), kind: "number", size: 110, cell: row => pnl(row.equity_change).text, className: row => num(row.equity_change) == null ? undefined : num(row.equity_change)! < 0 ? "is-down" : "is-up" },
-  { id: "realized", header: "Closed-trade profit", value: row => num(row.realized_change), kind: "number", size: 120, cell: row => pnl(row.realized_change).text, title: () => "Change in lifetime realized P&L between the day's first and last sample with values" },
+  { id: "start", header: "Equity, first sample", value: row => num(row.equity_start), kind: "number", size: 120, cell: row => exactCell(row.equity_start, fixed(row.equity_start)), title: row => row.equity_first_at_ms != null ? `at ${at(row.equity_first_at_ms)}` : undefined },
+  { id: "end", header: "Equity, last sample", value: row => num(row.equity_end), kind: "number", size: 120, cell: row => exactCell(row.equity_end, fixed(row.equity_end)), title: row => row.equity_last_at_ms != null ? `at ${at(row.equity_last_at_ms)}` : undefined },
+  { id: "change", header: "Equity change", value: row => num(row.equity_change), kind: "number", size: 110, cell: row => exactCell(row.equity_change, pnl(row.equity_change).text), className: row => num(row.equity_change) == null ? undefined : num(row.equity_change)! < 0 ? "is-down" : "is-up" },
+  { id: "realized", header: "Closed-trade profit", value: row => num(row.realized_change), kind: "number", size: 120, cell: row => exactCell(row.realized_change, pnl(row.realized_change).text), title: () => "Change in lifetime realized P&L between the day's first and last sample with values" },
   { id: "coverage", header: "Day with values", value: row => dayCoverage(row), kind: "number", size: 100, cell: row => share(dayCoverage(row)), title: row => `${row.valid} of 288 five-minute slots hold values · ${row.samples} samples recorded, ${row.gaps} of them gaps` },
 ];
 

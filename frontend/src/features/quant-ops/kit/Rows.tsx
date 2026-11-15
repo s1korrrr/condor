@@ -7,10 +7,6 @@ function expandedCell(content: ReactNode) {
   return Children.toArray(content.props.children).filter(child => !isValidElement(child) || child.type !== 'summary');
 }
 
-function cellText(content: ReactNode): string {
-  return Children.toArray(content).map(child => isValidElement<{ children?: ReactNode }>(child) ? cellText(child.props.children) : String(child)).join('');
-}
-
 export function Rows<T>({ rows, columns, rowId, label, rowState, controls }: {
   rows: T[];
   columns: RowField<T>[];
@@ -27,9 +23,8 @@ export function Rows<T>({ rows, columns, rowId, label, rowState, controls }: {
       <dl>{columns.map(column => {
         const raw = column.value(row);
         const content = column.cell ? expandedCell(column.cell(row)) : String(raw ?? '—');
-        const rawText = raw == null ? '' : String(raw);
-        const note = [column.title?.(row), column.cell && rawText !== '' && cellText(content) !== rawText ? `Raw value: ${rawText}` : undefined].filter(Boolean).join(' · ');
-        return <div key={column.id}><dt>{column.header}</dt><dd className={column.className?.(row)}>{content}{note && <small className="v5-phone-row-note">{note}</small>}</dd></div>;
+        const note = column.title?.(row);
+        return <div key={column.id}><dt>{column.header}</dt><dd className={column.className?.(row)} title={note ?? (raw == null ? undefined : String(raw))}>{content}{note && <small className="v5-phone-row-note">{note}</small>}</dd></div>;
       })}</dl>
     </details>
   </div>)}</div>;

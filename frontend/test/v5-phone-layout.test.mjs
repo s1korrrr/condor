@@ -296,7 +296,7 @@ test('phone typography floors cover Bots, System, Helm and Market without shrink
   assert.match(css, /:is\(\.v5m-hour-strip th, \.v5m-hour\)[^}]*font-size:\s*12px !important/);
 });
 
-test('review regression: phone daily money rows retain raw accessor precision and explicit titles', () => {
+test('phone daily money rows retain exact values in titles without raw notes', () => {
   const { load } = frontendModules({}, { 'v5/V5Money.tsx': ['dailyColumns'] });
   const { DataTable } = load('features/quant-ops/kit/DataTable.tsx');
   const { Rows } = load('features/quant-ops/kit/Rows.tsx');
@@ -307,7 +307,8 @@ test('review regression: phone daily money rows retain raw accessor precision an
   assert.equal(window.document.querySelectorAll('.v5-desktop-table td')[2].title, '1.2345');
   const change = [...window.document.querySelectorAll('.v5-phone-rows dt')].find(field => field.textContent === 'Equity change').nextElementSibling;
   assert.match(change.textContent, /1\.23/);
-  assert.match(change.textContent, /Raw value: 1\.2345/);
+  assert.doesNotMatch(change.textContent, /Raw value:/);
+  assert.equal(change.querySelector('[title]').title, '1.2345');
   window.document.body.innerHTML = renderToStaticMarkup(React.createElement(Rows, { rows: [row], rowId: () => 'day', label: 'Explicit title', columns: [
     { id: 'amount', header: 'Amount', value: () => '1.2345', cell: () => React.createElement('strong', null, '1.23'), title: () => 'Exact owner amount 1.2345' },
     { id: 'zero', header: 'Zero', value: () => 0, cell: () => React.createElement('span', null, 'Zero') },
@@ -316,7 +317,8 @@ test('review regression: phone daily money rows retain raw accessor precision an
     { id: 'same', header: 'Unformatted', value: () => '1.23', cell: () => React.createElement('span', null, '1.23') },
   ] }));
   const notes = [...window.document.querySelectorAll('.v5-phone-row-note')].map(note => note.textContent);
-  assert.deepEqual(notes, ['Exact owner amount 1.2345 · Raw value: 1.2345', 'Raw value: 0', 'Raw value: 1.2']);
+  assert.deepEqual(notes, ['Exact owner amount 1.2345']);
+  assert.equal(window.document.querySelector('dd[title="Exact owner amount 1.2345"]').title, 'Exact owner amount 1.2345');
   window.close();
 });
 
@@ -354,7 +356,7 @@ test('review regression: phone execution-disabled disclosure retains unbound and
   assert.match(css, /\.v5-phone-safety-body\s*\{[^}]*white-space:\s*normal/);
 });
 
-test('round two: tooltip and raw precision both survive the phone money disclosure', () => {
+test('tooltip and exact title survive the phone money disclosure', () => {
   const { load } = frontendModules({}, { 'v5/V5Money.tsx': ['dailyColumns'] });
   const { Rows } = load('features/quant-ops/kit/Rows.tsx');
   const columns = load('v5/V5Money.tsx').dailyColumns;
@@ -364,9 +366,32 @@ test('round two: tooltip and raw precision both survive the phone money disclosu
   for (const id of ['start', 'realized']) {
     const column = columns.find(item => item.id === id);
     const field = [...window.document.querySelectorAll('dt')].find(item => item.textContent === column.header).nextElementSibling;
-    assert.ok(field.textContent.includes(column.cell(row)));
+    assert.ok(field.textContent.includes(column.cell(row).props.children));
     assert.ok(field.textContent.includes(column.title(row)));
-    assert.ok(field.textContent.includes(`Raw value: ${column.value(row)}`));
+    assert.doesNotMatch(field.textContent, /Raw value:/);
+    assert.equal(field.querySelector('span').title, String(column.value(row)));
+  }
+  window.close();
+});
+
+test('agent catalog metadata reaches 12px on small phones without changing laptop rules', () => {
+  const desktop = fs.readFileSync(new URL('../design-system/v5/app.css', import.meta.url), 'utf8');
+  assert.match(desktop, /\.v5-catalog-meta\s*\{[^}]*font-size:\s*9px/);
+  assert.match(css, /@media \(max-width: 430px\)\s*\{\s*\.condor-native \.v5-catalog-meta\s*\{\s*font-size:\s*12px/);
+});
+
+test('executor details format owner amounts and preserve exact titles', () => {
+  const stubs = Object.fromEntries(['@/components/bots/AggregatedPnlChart', '@/components/bots/ControllerBrowser', '@/components/bots/DeployBotDialog', '@/components/bots/PnlSparkline', '@/hooks/useWebSocket', '@/hooks/useRates'].map(name => [name, {}]));
+  const { PaperRecords } = frontendModules(stubs, { 'pages/tabs/ActiveBotsTab.tsx': ['PaperRecords'] }).load('pages/tabs/ActiveBotsTab.tsx');
+  const fixture = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-api-final3/native-replay/executors.json', import.meta.url)));
+  const row = { ...fixture.data[0], remaining_basis_quote: '44.19171445147200000000000000', realized_pnl_quote: '-0.00001351276800000000000000000000', remaining_close_quantity: '0.001277020' };
+  const read = { ...fixture, data: [row], generated_at_ms: now };
+  const window = new Window();
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(PaperRecords, { read, kind: 'executors', now }));
+  for (const [exact, displayed] of [['44.19171445147200000000000000', '44.19 USDC'], ['-0.00001351276800000000000000000000', '−0.0000135 USDC'], ['0.001277020', '0.001277 BTC']]) {
+    const values = [...window.document.querySelectorAll('span[title]')].filter(span => span.title === exact);
+    assert.ok(values.length, exact);
+    assert.ok(values.every(span => span.textContent === displayed));
   }
   window.close();
 });

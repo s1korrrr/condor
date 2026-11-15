@@ -33,6 +33,28 @@ function pausedCards(html, controller) {
   return [...html.matchAll(new RegExp(`<h3>${controller}</h3><span[^>]*>[^<]*</span><p>Reported operator pause: Yes`, 'g'))].length;
 }
 
+test('mixed earlier emergency and displayed pause keep separate owner wording and times', () => {
+  const older = fixture('risk');
+  const [first, second] = Object.keys(older.data.controllers);
+  older.data.controllers[first].operator.emergency = true;
+  const newer = advance(structuredClone(older));
+  delete newer.data.controllers[first];
+  newer.data.controllers[second].operator.paused = true;
+  const html = render(newer, older);
+  const statements = [...html.matchAll(/<p class="paper-hold-sentence">([^]*?)<\/p>/g)].map(match => match[1]);
+  const emergency = statements.find(statement => statement.includes(`emergency halt for ${first}`));
+  const pause = statements.find(statement => statement.includes(`Buying is paused by an operator for ${second}`));
+  assert.ok(emergency && pause);
+  assert.match(emergency, /Earlier report: The owner reports an emergency halt/);
+  assert.ok(emergency.includes(new Date(older.generated_at_ms).toISOString().replace('T', ' ')));
+  assert.doesNotMatch(emergency, /Buying is paused by an operator/);
+  assert.doesNotMatch(pause, /Earlier report:|emergency halt/);
+  assert.ok(pause.includes(new Date(newer.generated_at_ms).toISOString().replace('T', ' ')));
+  assert.match(html, /Retained hold/);
+  assert.doesNotMatch(html, /Emergency halt reported/);
+  assert.match(html, /Reported emergency halt: Yes/);
+});
+
 test('retained-only emergency is explicitly labelled with its earlier time and age outside dimming', () => {
   const older = fixture('risk');
   delete older.source.boot_epoch;
@@ -67,6 +89,19 @@ test('displayed owner confirmation is not labelled as a retained-only hold', () 
   const html = render(newer, older);
   assert.match(html, /Emergency halt reported/);
   assert.doesNotMatch(html, /paper-retained-hold|Earlier report:/);
+});
+
+test('unqualified later partial risk does not relabel the latest emergency as an unconfirmed earlier report', () => {
+  const older = fixture('risk');
+  Object.values(older.data.controllers)[0].operator.emergency = true;
+  const newer = advance(fixture('risk'));
+  newer.state = 'degraded';
+  newer.completeness = 'partial';
+  newer.reason = 'unknown_hold';
+  const html = render(newer, older);
+  assert.match(html, /Emergency halt reported/);
+  assert.match(html, /Reported emergency halt: Yes/);
+  assert.doesNotMatch(html, /Retained hold|Earlier report:/);
 });
 
 test('owner scoped resume removes BNB pause while BTC retains a native entry hold', () => {
@@ -191,7 +226,10 @@ for (const registryRemoved of [false, true]) test(`omitted controller stays reta
   const prior = retained.find(read => read.snapshot_id === older.snapshot_id);
   assert.deepEqual(Object.keys(prior.data.controllers), [bnb]);
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace, {reads:received(newer), safetyReads:retained, complete:false, now:newer.generated_at_ms, reportAt:null, heartbeat:'Fresh', bot:base.bot_id}));
-  assert.match(html, /Emergency halt reported/);
+  assert.match(html, /Retained hold/);
+  assert.match(html, new RegExp(`Earlier report: The owner reports an emergency halt for ${bnb}`));
+  assert.match(html, /Reported emergency halt: Yes/);
+  assert.doesNotMatch(html, /Emergency halt reported/);
   assert.equal(pausedCards(html, btc), 0);
   const restored = advance(structuredClone(newer));
   restored.data.controllers[bnb] = structuredClone(base.data.controllers[bnb]);

@@ -36,7 +36,7 @@ export function newerSnapshot(candidate: PaperRead, prior: PaperRead): boolean {
   return false;
 }
 
-function riskSupersedes(read: PaperRead): boolean {
+export function riskSupersedes(read: PaperRead): boolean {
   const controllers = paperRiskControllers(read, 0);
   const holdOnly = read.state === 'degraded' && read.completeness === 'partial' && (
     PAPER_OWNER_HOLD_REASONS.some(reason => reason === read.reason) && paperRiskHolds(read).some(hold => hold.reason === read.reason) ||

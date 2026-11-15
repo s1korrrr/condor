@@ -20,6 +20,8 @@ The app requires these process settings:
 | `V5_FRONTEND_DIST` | Separate frontend build root; defaults to `frontend/dist-v5/`. |
 | `V5_COOKIE_SECURE` | Defaults to `true`; use `false` only for an isolated local development browser. |
 | `V5_PAPER_STATUS_FILE` | Optional. Absolute `<bot>.status.json` of the native paper runtime, mounted read-only. Unset keeps every projection unbound and unchanged. |
+| `V5_TRADEPAD_URL` | Optional fixed HTTP(S) base URL for the read-only Tradepad owner. Unset reports not connected. |
+| `V5_TRADEPAD_CAMPAIGN_ID` | Optional exact tested-window campaign ID, for example `w1772323200-1790812800`. Required to open a campaign; other campaign IDs are refused. |
 
 The stock agent definitions live in the repository-level `agents_v5/`. Runtime notes and optional
 local agent overlays live under `$V5_RUNTIME_ROOT/agents/`; local files override

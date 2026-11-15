@@ -31,7 +31,9 @@ const Capital = lazy(() => import("@workspace-monitoring").then(m => ({ default:
 } })));
 const Tradepad = lazy(() => import("@workspace-monitoring").then(m => ({ default: function V5TradepadPage() {
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile });
-  return <m.Tradepad {...(profile.data?.readiness.paper_owner ? paperWorkspaceReads("tradepad") : {})} />;
+  if (profile.isPending) return <main role="status">Loading Tradepad configuration…</main>;
+  if (profile.isError) return <main role="alert">Not connected: dashboard configuration is unavailable.</main>;
+  return <m.Tradepad {...paperWorkspaceReads("tradepad", profile.data?.tradepad_campaign_id)} />;
 } })));
 const Bots = lazy(() => import("@/pages/Bots").then(m => ({ default: function V5BotsPage() {
   // Only a fresh read-only paper status lifts the unbound notice; capabilities stay read-only.

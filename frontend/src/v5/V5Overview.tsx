@@ -28,7 +28,7 @@ export function V5Overview() {
   const realized = num(v5Values?.realized), unrealized = num(v5Values?.unrealized);
   const headline = helmHeadline(helm.data);
   const helmMoney = helmRow.withValues;
-  return <div className="v5m">
+  return <div className="v5m v5-overview">
     <header className="v5m-head"><div><h1>Overview</h1><p>Both paper bots and their money. Simulated wallets only; nothing here places orders.</p></div></header>
     <div className="v5m-row">
       <article className="v5m-card">
@@ -38,7 +38,7 @@ export function V5Overview() {
           : !v5Values ? <p className="v5m-hint">{v5.newest?.gap ? `No values recorded yet: ${String(v5.newest.gap).replaceAll("_", " ")}.` : "Nothing recorded yet."}</p>
           : <>
             <div className="v5m-stats">
-              <div className="v5m-stat"><span>Wallet equity</span><strong>{usdc(equity)}</strong><small>{`as of ${utcExact(v5Values.at_ms)}`}</small></div>
+              <div className="v5m-stat"><span>Wallet equity<em className="v5-phone-unit hidden not-italic"> (USDC)</em></span><strong>{equity == null ? "—" : <>{usdc(equity).slice(0, -5)}<em className="v5-desktop-unit not-italic"> USDC</em></>}</strong><small>{`as of ${utcExact(v5Values.at_ms)}`}</small></div>
               <div className={`v5m-stat${tone(sinceStart)}`}><span>Since start</span><strong>{signed(sinceStart)}</strong><small>{funding == null ? "start funding not published" : `against ${usdc(funding)} start funding`}</small></div>
               <div className={`v5m-stat${tone(realized)}`}><span>Profit from closed trades</span><strong>{signed(realized)}</strong><small>lifetime, owner accounting</small></div>
               <div className={`v5m-stat${tone(unrealized)}`}><span>Coins still held</span><strong>{signed(unrealized)}</strong><small>gain or loss at current marks</small></div>

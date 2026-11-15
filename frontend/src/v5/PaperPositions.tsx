@@ -12,7 +12,7 @@ export function PaperPositions({ positions, executors, decisions, wallet, now, v
   const rows = paperCompleteRecords(positions, valuesAt);
   const walletData = paperCompleteRead(wallet, valuesAt) && wallet?.data && typeof wallet.data === "object" && !Array.isArray(wallet.data) ? wallet.data as Record<string, unknown> : null;
   const assets = Array.isArray(walletData?.assets) ? walletData.assets as Record<string, unknown>[] : [];
-  return <section className="paper-section"><div className="paper-section-heading"><h2>Positions</h2></div><div className="paper-pairs">{PAIRS.map(pair => {
+  return <section className="paper-section paper-positions"><div className="paper-section-heading"><h2>Positions</h2></div><div className="paper-pairs">{PAIRS.map(pair => {
     const coin = pair.split("-")[0];
     const holdings = paperPairHoldings(pair, positions, valuesAt);
     const lots = rows && holdings ? activeLots(rows.filter(row => row.trading_pair === pair)) : null;

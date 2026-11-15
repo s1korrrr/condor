@@ -65,8 +65,6 @@ def v5_row(wallet: dict | None, accounting: dict | None, now_ms: int) -> dict[st
         "realized": _decimal(program.get("realized_pnl_quote")),
         "unrealized": _decimal(program.get("unrealized_pnl_quote")),
         "fees": _decimal(program.get("fees_paid_quote")),
-        "accounting_since_ms": program.get("accounting_since_ms")
-        if type(program.get("accounting_since_ms")) is int and 0 <= program["accounting_since_ms"] <= now_ms else None,
         "coins": coins,
     }
 
@@ -141,13 +139,21 @@ def _value(row: dict[str, Any], field: str) -> Decimal | None:
         return None
 
 
+def common_unit(rows: list[dict[str, Any]]) -> str | None:
+    """A nonempty identical unit in every sample, including gap samples."""
+    unit = rows[0].get("unit") if rows else None
+    return unit if (isinstance(unit, str) and unit.strip()
+                    and all(row.get("unit") == unit for row in rows)) else None
+
+
 def daily(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     """V5 per UTC day from the whole record: first and last values, changes, samples, gaps and slots with values."""
     days: dict[int, dict[str, Any]] = {}
     for row in sorted((row for row in rows if row.get("bot") == "v5"), key=lambda row: row["at_ms"]):
         day = row["at_ms"] // DAY_MS * DAY_MS
-        entry = days.setdefault(day, {"day": day, "samples": 0, "gaps": 0, "slots": set(), "first": None, "last": None})
+        entry = days.setdefault(day, {"day": day, "samples": 0, "gaps": 0, "slots": set(), "first": None, "last": None, "rows": []})
         entry["samples"] += 1
+        entry["rows"].append(row)
         if row.get("gap"):
             entry["gaps"] += 1
         elif _value(row, "equity") is not None or _value(row, "realized") is not None:
@@ -158,15 +164,17 @@ def daily(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     for entry in sorted(days.values(), key=lambda entry: entry["day"], reverse=True):
         first, last = entry.pop("first"), entry.pop("last")
         entry["valid"] = len(entry.pop("slots"))
+        unit = common_unit(entry.pop("rows"))
 
         def pair(field: str) -> tuple[str | None, str | None, str | None]:
             start = _value(first, field) if first else None
             end = _value(last, field) if last else None
-            change = None if start is None or end is None else format(end - start, "f")
+            change = None if unit is None or start is None or end is None else format(end - start, "f")
             return (None if start is None else format(start, "f"), None if end is None else format(end, "f"), change)
 
         equity_start, equity_end, equity_change = pair("equity")
-        _, _, realized_change = pair("realized")
-        out.append({**entry, "equity_start": equity_start, "equity_end": equity_end, "equity_change": equity_change, "realized_change": realized_change,
+        # Preserve the nullable legacy schema, but never infer interval PnL
+        # from lifetime counters without restore-aware owner accounting.
+        out.append({**entry, "equity_start": equity_start, "equity_end": equity_end, "equity_change": equity_change, "realized_change": None,
                     "first_at_ms": first["at_ms"] if first else None, "last_at_ms": last["at_ms"] if last else None})
     return out

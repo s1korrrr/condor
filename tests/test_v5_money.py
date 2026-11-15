@@ -4,6 +4,7 @@ from dataclasses import replace
 from fastapi.testclient import TestClient
 
 from condor.v5.app import create_app
+from condor.v5.daily_money import daily_report
 from condor.v5.helm import _money
 from condor.v5.money import MAX_ROWS, MoneyLedger, daily, helm_row, seconds_to_next_slot, v5_row
 from test_v5_dashboard_bridge import ORIGIN, TOKEN, make_settings
@@ -33,17 +34,35 @@ def test_v5_row_keeps_owner_decimals_and_records_gaps():
     assert v5_row(read("wallet", {**WALLET, "equity_quote": "1e9"}), read("accounting", ACCOUNTING), NOW_MS)["equity"] is None
 
 
-def test_v5_sampler_retains_only_valid_owner_accounting_identity():
-    for identity in (0, NOW_MS - 1):
-        accounting = {**ACCOUNTING, "program": {**PROGRAM, "accounting_since_ms": identity}}
-        row = v5_row(read("wallet", WALLET), read("accounting", accounting), NOW_MS)
-        assert row["accounting_since_ms"] == identity
-    for identity in (None, True, "1234", -1, NOW_MS + 1):
-        accounting = {**ACCOUNTING, "program": {**PROGRAM, "accounting_since_ms": identity}}
-        row = v5_row(read("wallet", WALLET), read("accounting", accounting), NOW_MS)
-        assert row["accounting_since_ms"] is None
-    accounting = {**ACCOUNTING, "program": {key: value for key, value in PROGRAM.items() if key != "accounting_since_ms"}}
-    assert v5_row(read("wallet", WALLET), read("accounting", accounting), NOW_MS)["accounting_since_ms"] is None
+def test_daily_report_withholds_restore_deltas_with_same_oldest_fill_and_matching_fees():
+    # A restore retains the oldest fill (and its 0.1 fee), drops later profit,
+    # then replacement trades earn +20 and charge 0.9. The owner lifetime fee
+    # counter catches up to 1.0 and the oldest retained fill timestamp survives.
+    day_ms, slot_ms = 86_400_000, 300_000
+    day = NOW_MS // day_ms * day_ms
+    before = {**PROGRAM, "accounting_since_ms": day - day_ms,
+              "realized_pnl_quote": "100", "fees_paid_quote": "1.0"}
+    restored = {**before, "realized_pnl_quote": "20", "fees_paid_quote": "1.0"}
+    samples = [v5_row(read("wallet", WALLET), read("accounting", {**ACCOUNTING, "program": program}), at)
+               for at, program in ((day, before), (day + day_ms - slot_ms, restored))]
+    assert before["accounting_since_ms"] == restored["accounting_since_ms"]
+    assert [sample["realized"] for sample in samples] == ["100", "20"]
+    assert [sample["fees"] for sample in samples] == ["1.0", "1.0"]
+    report = daily_report(samples, day, day + day_ms)[0]
+    assert report["realized_pnl"] == "UNAVAILABLE"
+    assert report["fees"] == "UNAVAILABLE"
+    assert "restore-aware accounting lineage" in report["data_quality"]
+    assert daily(samples)[0]["realized_change"] is None
+
+
+def test_legacy_daily_withholds_changes_without_a_unit_in_every_sample():
+    day = NOW_MS // 86_400_000 * 86_400_000
+    first = {"bot": "v5", "at_ms": day, "equity": "100", "unit": "USDC"}
+    last = {**first, "at_ms": day + 600_000, "equity": "110"}
+    assert daily([first, last])[0]["equity_change"] == "10"
+    for unit in (None, "", "   ", "USDT"):
+        assert daily([first, {**last, "unit": unit}])[0]["equity_change"] is None
+        assert daily([first, {**first, "at_ms": day + 300_000, "unit": unit}, last])[0]["equity_change"] is None
 
 
 def test_helm_rows_say_why_there_is_no_money():
@@ -94,7 +113,7 @@ def test_daily_counts_distinct_slots_from_every_sample():
         {"bot": "helm", "at_ms": day + 8 * HOUR, "gap": "HELM_STATUS_MISSING"},
     ]
     [entry] = daily(rows)
-    assert (entry["equity_change"], entry["realized_change"], entry["samples"], entry["gaps"], entry["valid"]) == ("10", "2", 3, 1, 2)
+    assert (entry["equity_change"], entry["realized_change"], entry["samples"], entry["gaps"], entry["valid"]) == (None, None, 3, 1, 2)
     assert daily([{"bot": "v5", "at_ms": day, "gap": "x"}])[0]["equity_change"] is None
     # 288 slots, slot 7 missing, a restart sampling slot 3 twice: 288 samples but 287 slots with values.
     full = [{"bot": "v5", "at_ms": day + s * 300_000 + 1_000, "equity": "1"} for s in range(288) if s != 7]

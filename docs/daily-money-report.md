@@ -8,8 +8,9 @@ added. Base: `feat/andrzej_v5_r2_release_20261102` at `6110ed66`.
 The existing sampler writes `V5_RUNTIME_ROOT/money/samples.jsonl`. Read
 `condor/v5/money.py` for the source schema. `daily_money.daily_report` is a pure
 projection shared by `GET /api/v5/money` (`daily_report`) and the export CLI.
-The legacy `daily` response remains compatible. Daily rows use the whole
-retained record, independently of the chart's 24h/7d filter.
+The legacy `daily` response retains its nullable schema; unsupported realized
+changes and equity deltas without consistent units are null. Daily rows use the
+whole retained record, independently of the chart's 24h/7d filter.
 
 Each retained UTC day has one V5 row and one Helm row, including days with no
 samples. Without any record the API returns today's two unavailable rows. The
@@ -19,14 +20,25 @@ CLI exports a requested date, defaulting to yesterday UTC.
 
 - Start: first recorded sample at or after 00:00Z inside the day. End: last
   recorded sample before the next 00:00Z. Gap endpoints are not replaced.
-- Equity change, realized PnL and fees cover that first-to-last sample window.
-  Realized PnL and fees are differences of the recorded lifetime counters.
-  One sample cannot establish a change and produces `UNAVAILABLE`.
-  Daily realized PnL and fees additionally require every sample to carry the
-  same valid owner `accounting_since_ms`, established strictly before that UTC
-  day. A missing identity, gap, identity change, or accounting start/reset at
-  midnight or during the day withholds those two fields. The existing sampler
-  now retains V5's published identity; it does not backfill historical rows.
+- Equity change covers that first-to-last sample window. One sample cannot
+  establish a change and produces `UNAVAILABLE`. A nonempty, identical unit
+  must appear in every sample, including gap samples, before an equity delta
+  or percentage can be calculated. Missing, blank or differing units withhold
+  all monetary deltas, with an explicit quality note.
+- Daily realized PnL and fees are always `UNAVAILABLE` with the current owner
+  contract. At engine pin `ee8ca6ad`, `paper_session.py:507` computes
+  `accounting_since_ms` as the minimum retained fill timestamp. A recorder
+  restore can preserve that timestamp, drop later profit, and replace trades
+  until cumulative fees catch up. Equal timestamps and nondecreasing fees
+  therefore cannot establish accounting continuity. Historical timestamp
+  fields in the record are ignored; the sampler does not add this field.
+- Enabling these counter deltas needs a separate owner contract: for example,
+  a restore-aware `accounting_lineage_id` bound to the counter scope/receipt
+  and changed on every restore, reset or history replacement; alternatively,
+  authoritative realized-PnL and fee interval totals with explicit time bounds,
+  unit and complete-coverage evidence. These are required capabilities, not
+  fields exported by this engine pin. This PR does not invent or accept a
+  lineage field or attempt to reconstruct interval accounting from counters.
 - Equity change includes external cash flows. It must not be called trading
   profit. Unrealized PnL is the last sample's owner value.
 - Money is exact decimal text, calculated with Decimal precision 120 for the
@@ -38,13 +50,9 @@ CLI exports a requested date, defaulting to yesterday UTC.
   not imply equity is available. Endpoint timestamps are exported and shown.
 - A day is partial while it is ongoing or lacks its first/last slot. Missing
   interior slots and gap samples remain visible even if both boundaries exist.
-- A decrease in the cumulative fee counter withholds daily realized PnL and
-  fees even when the recorded identity is stable. Historical V5 samples and
-  Helm samples without an accounting identity always withhold these deltas.
 - The source does not record cash, held value or BUY/SELL/fill counts. Both
   bots get `UNAVAILABLE` for those fields. Helm also lacks equity, fees and a
-  quote-unit field. Helm has no accounting identity, so its daily realized PnL
-  is unavailable too. Missing money is never inferred from PnL or sample counts.
+  quote-unit field. Missing money is never inferred from PnL or sample counts.
 - The table uses the existing adaptive DataTable. Amounts use exact decimal
   sorting and text filters to retain every decimal digit in cells and CSV exports.
 
@@ -72,8 +80,9 @@ malformed lines are counted in the export, and cannot become money values.
 
 - [x] One shared pure projection; no second sampler.
 - [x] UTC boundaries, missing days, gaps, sampler restart duplicates, exact
-  decimals, no-data behavior and owner counter decrease covered by Node tests
-  that invoke the real Python function/CLI.
+  decimals, no-data behavior, missing/changed units and all prior continuity
+  cases covered by Node tests that invoke the real Python function/CLI. A
+  Python regression projects a restore counterexample through the real sampler.
 - [x] Exact Daily values rendered through the actual DataTable in a fixture.
 - [x] API test confirms daily rows do not depend on chart range.
 - [x] Mac V5 typecheck and focused tests; command receipts in the draft PR.

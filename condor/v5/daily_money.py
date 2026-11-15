@@ -8,10 +8,14 @@ from datetime import datetime, timezone
 from decimal import Decimal, ROUND_HALF_EVEN, localcontext
 from typing import Any
 
-from .money import DAY_MS, DECIMAL, SLOT_MS
+from .money import DAY_MS, DECIMAL, SLOT_MS, common_unit
 
 UNAVAILABLE = "UNAVAILABLE"
 BOTS = ("v5", "helm")
+COUNTER_UNAVAILABLE_REASON = (
+    "realized PnL and fees unavailable: owner provides neither restore-aware "
+    "accounting lineage nor authoritative interval totals"
+)
 
 
 def _value(row: dict, field: str) -> Decimal | None:
@@ -55,42 +59,25 @@ def daily_report(rows: list[dict], start_ms: int, end_ms: int, as_of_ms: int | N
                           and any(_value(row, field) is not None for field in ("equity", "realized", "unrealized", "fees"))
                           for slot in [(row["at_ms"] - day) // SLOT_MS]}
                 partial = 0 not in slots or 287 not in slots or as_of_ms < day + DAY_MS
-                fee_values = [_value(row, "fees") for row in samples if _value(row, "fees") is not None]
-                counter_reset = any(b < a for a, b in zip(fee_values, fee_values[1:]))
-                # A counter decrease is not a continuity test: resets can leave
-                # fees flat or higher, and Helm has no fee counter at all.
-                # Require the owner's accounting identity in EVERY sample, and
-                # an identity established before this day (including boundary
-                # resets). Historical/Helm rows without it stay unavailable.
-                accounting_since = first.get("accounting_since_ms")
-                accounting_continuity = (
-                    type(accounting_since) is int and 0 <= accounting_since < day
-                    and all(type(row.get("accounting_since_ms")) is int
-                            and row["accounting_since_ms"] == accounting_since
-                            and not row.get("gap") for row in samples)
-                )
-                unit = first.get("unit")
-                stable_unit = (bool(samples) and isinstance(unit, str) and bool(unit)
-                               and all(row.get("unit") == unit for row in samples if not row.get("gap")))
+                # accounting_since_ms is the minimum retained fill timestamp
+                # (engine ee8ca6ad), not restore-aware accounting lineage. A
+                # restore can preserve it while replacement fees catch up.
+                # Neither bot's record carries a sufficient owner contract for
+                # daily counter deltas, so do not infer them from any counters.
+                unit = common_unit(samples)
+                stable_unit = unit is not None
                 unit_changed = len({row["unit"] for row in samples
-                                    if isinstance(row.get("unit"), str)}) > 1
+                                    if isinstance(row.get("unit"), str) and row["unit"].strip()}) > 1
 
                 def endpoint(row: dict, field: str) -> str:
                     value = _value(row, field)
                     return format(value, "f") if value is not None and not unit_changed else UNAVAILABLE
 
-                def delta(field: str) -> str:
-                    start, end = _value(first, field), _value(last, field)
-                    if len(samples) < 2 or first["at_ms"] == last["at_ms"] or start is None or end is None or unit_changed:
-                        return UNAVAILABLE
-                    # A decreasing cumulative fee counter invalidates lifetime
-                    # PnL/fee differences even if the counter later catches up.
-                    if field in ("fees", "realized") and (not accounting_continuity or counter_reset):
-                        return UNAVAILABLE
-                    return format(end - start, "f")
-
-                change = delta("equity")
-                start = _value(first, "equity")
+                change = UNAVAILABLE
+                start, end = _value(first, "equity"), _value(last, "equity")
+                if (stable_unit and len(samples) > 1 and first["at_ms"] != last["at_ms"]
+                        and start is not None and end is not None):
+                    change = format(end - start, "f")
                 change_pct = UNAVAILABLE
                 if change != UNAVAILABLE and start is not None and start > 0:
                     change_pct = format((Decimal(change) * 100 / start).quantize(
@@ -104,10 +91,9 @@ def daily_report(rows: list[dict], start_ms: int, end_ms: int, as_of_ms: int | N
                     note += "; " + "; ".join(reasons)
                 if unit_changed:
                     note += "; unit changed: amounts unavailable"
-                if not accounting_continuity:
-                    note += "; accounting continuity unverified: realized PnL and fees unavailable"
-                if counter_reset:
-                    note += "; cumulative fees decreased: possible owner reset; realized PnL and fees unavailable"
+                elif not stable_unit:
+                    note += "; unit missing or blank in sample: monetary deltas unavailable"
+                note += "; " + COUNTER_UNAVAILABLE_REASON
                 # The record has no cash, held value, or execution counts. Never
                 # derive these from equity/PnL or confuse samples with fills.
                 out.append({
@@ -116,7 +102,7 @@ def daily_report(rows: list[dict], start_ms: int, end_ms: int, as_of_ms: int | N
                     "first_at_ms": first.get("at_ms"), "last_at_ms": last.get("at_ms"),
                     "equity_start": endpoint(first, "equity"), "equity_end": endpoint(last, "equity"),
                     "equity_change": change, "equity_change_pct": change_pct,
-                    "realized_pnl": delta("realized"), "fees": delta("fees"),
+                    "realized_pnl": UNAVAILABLE, "fees": UNAVAILABLE,
                     "unrealized_pnl_end": endpoint(last, "unrealized"),
                     "buys": UNAVAILABLE, "sells": UNAVAILABLE, "fills": UNAVAILABLE,
                     "cash_end": UNAVAILABLE, "held_value_end": UNAVAILABLE,

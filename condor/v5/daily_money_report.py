@@ -43,7 +43,7 @@ def main() -> None:
                "source": str(args.input.resolve()), "source_state": source_state, "malformed_lines": malformed,
                "notes": ["Changes, realized PnL and fees cover first-to-last recorded sample, not an exact midnight valuation.",
                          "Equity change includes external cash flows; it is not trading profit.",
-                         "Realized PnL and fees require one stable accounting identity established before the UTC day; otherwise UNAVAILABLE.",
+                         "Realized PnL and fees are UNAVAILABLE: owner restore-aware accounting lineage or authoritative interval totals are not published. Equity change requires a nonempty identical unit in every sample.",
                          "Money is exact decimal text; percentage rounds half-even to 12 decimal places.",
                          "Cash, held value and buys/sells/fills are not recorded: UNAVAILABLE."],
                "rows": report}

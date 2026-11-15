@@ -30,8 +30,8 @@ test('UTC boundaries select first/last recorded samples, exclude next midnight, 
   assert.equal(v5.equity_end, '110');
   assert.equal(v5.equity_change, '10');
   assert.equal(v5.equity_change_pct, '10.000000000000');
-  assert.equal(v5.realized_pnl, '3');
-  assert.equal(v5.fees, '0.2');
+  assert.equal(v5.realized_pnl, U);
+  assert.equal(v5.fees, U);
   assert.equal(v5.unrealized_pnl_end, '-2');
   assert.equal(v5.partial, false);
   assert.equal(v5.missing_slots, 286);
@@ -84,8 +84,8 @@ test('sampler restart duplicates never inflate coverage or synthesize midnight v
 test('money arithmetic retains 18 integer and 30 fraction digits without Decimal default-context rounding', () => {
   const [v5] = report([row(0, { equity: '999999999999999999.000000000000000000000000000001', realized: '0.000000000000000000000000000001', fees: '1.000000000000000000000000000001' }), row(1435, { equity: '999999999999999999.000000000000000000000000000003', realized: '0.000000000000000000000000000003', fees: '1.000000000000000000000000000004' })]);
   assert.equal(v5.equity_change, '0.000000000000000000000000000002');
-  assert.equal(v5.realized_pnl, '0.000000000000000000000000000002');
-  assert.equal(v5.fees, '0.000000000000000000000000000003');
+  assert.equal(v5.realized_pnl, U);
+  assert.equal(v5.fees, U);
   assert.equal(v5.equity_end, '999999999999999999.000000000000000000000000000003');
 });
 
@@ -102,7 +102,7 @@ test('an observed lifetime-counter reset withholds PnL and fees even after fees 
   assert.equal(v5.fees, U);
   assert.equal(v5.realized_pnl, U);
   assert.equal(v5.equity_change, '0');
-  assert.match(v5.data_quality, /possible owner reset/);
+  assert.match(v5.data_quality, /owner provides neither restore-aware accounting lineage nor authoritative interval totals/);
 });
 
 test('numbers, scientific notation, lone samples, zero bases and unit changes do not become guessed money', () => {
@@ -171,17 +171,17 @@ test('Money page renders exact daily strings through the real adaptive DataTable
 });
 
 
-test('daily realized PnL and fees require a stable valid accounting identity predating the UTC day', () => {
+test('oldest retained fill timestamps never establish accounting lineage for daily counter deltas', () => {
   const first = row(0, { realized: '100', fees: '1' });
   const last = row(1435, { realized: '20', fees: '1' });
   const [continuous] = report([first, last]);
-  assert.equal(continuous.realized_pnl, '-80');
-  assert.equal(continuous.fees, '0');
-  for (const identity of [null, undefined, '1234', true, -1, day, day + 1]) {
-    const [unverified] = report([{ ...first, accounting_since_ms: identity }, { ...last, accounting_since_ms: identity }]);
-    assert.equal(unverified.realized_pnl, U, `identity ${identity}`);
-    assert.equal(unverified.fees, U, `identity ${identity}`);
-    assert.match(unverified.data_quality, /accounting continuity unverified/);
+  assert.equal(continuous.realized_pnl, U);
+  assert.equal(continuous.fees, U);
+  for (const since of [0, day - dayMs, day - 1, null, undefined, '1234', true, -1, day, day + 1]) {
+    const [unverified] = report([{ ...first, accounting_since_ms: since }, { ...last, accounting_since_ms: since }]);
+    assert.equal(unverified.realized_pnl, U, `oldest retained fill ${since}`);
+    assert.equal(unverified.fees, U, `oldest retained fill ${since}`);
+    assert.match(unverified.data_quality, /owner provides neither restore-aware accounting lineage nor authoritative interval totals/);
   }
   for (const samples of [[first, { ...last, accounting_since_ms: null }], [first, row(60, { accounting_since_ms: null }), last]]) {
     const [oneMissing] = report(samples);
@@ -205,6 +205,23 @@ test('accounting resets inside a day or at its boundary withhold counter deltas 
   const [, helm] = report([row(0, { bot: 'helm', accounting_since_ms: null, realized: '100', fees: null }), row(1435, { bot: 'helm', accounting_since_ms: null, realized: '20', fees: null })]);
   assert.equal(helm.realized_pnl, U);
   assert.equal(helm.fees, U);
+});
+
+test('missing or blank units at either endpoint or inside the day withhold monetary deltas', () => {
+  for (const unit of [null, undefined, '', '   ']) {
+    for (const samples of [
+      [row(0, { unit }), row(1435, { unit, equity: '110' })],
+      [row(0), row(1435, { unit, equity: '110' })],
+      [row(0, { unit }), row(1435, { equity: '110' })],
+      [row(0), row(60, { unit }), row(1435, { equity: '110' })],
+      [row(0), row(60, { unit, gap: 'wallet: stale' }), row(1435, { equity: '110' })],
+    ]) {
+      const [daily] = report(samples);
+      assert.equal(daily.unit, U);
+      for (const field of ['equity_change', 'equity_change_pct', 'realized_pnl', 'fees']) assert.equal(daily[field], U, field);
+      assert.match(daily.data_quality, /unit missing or blank/);
+    }
+  }
 });
 
 test('interactive Daily sorting orders every decimal digit through the real DataTable', async () => {

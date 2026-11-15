@@ -12,6 +12,7 @@ const { paperHoldSentence, paperMoneyTiles, PaperWorkspace } = load('pages/tabs/
 const policy = load('v5/policy.ts');
 const { paperSafetyReads, paperSafetyBeyondDisplayed } = load('v5/paper-safety.ts');
 const fixture = Object.fromEntries(['status', 'wallet', 'positions', 'executors', 'fills', 'risk', 'decisions', 'history', 'operations', 'accounting'].map(section => [section, JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)))]));
+for (const read of Object.values(fixture)) read.source.boot_epoch = 1;
 const now = fixture.wallet.generated_at_ms;
 const controller = (id, extra = {}) => ({ id, current: true, operator: { paused: false, emergency: false }, native: { protected_exits: 'preserved' }, entryHold: false, holds: [], ...extra });
 const day = Math.floor(now / 86_400_000) * 86_400_000;

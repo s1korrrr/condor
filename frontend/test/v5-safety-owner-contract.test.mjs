@@ -8,6 +8,7 @@ import {ownerRisk} from './helpers/owner-risk.mjs';
 
 const source = fs.readFileSync(new URL('../../tests/fixtures/paper-c1-1e131c74/owner-observation.py.txt', import.meta.url), 'utf8');
 const envelope = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-api-final3/risk.json', import.meta.url)));
+envelope.source.boot_epoch = 1;
 const sorted = values => [...values].sort();
 
 test('hold qualification constants match the pinned owner source', () => {

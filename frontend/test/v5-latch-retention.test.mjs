@@ -10,6 +10,7 @@ import { frontendModules, paperVisualStubs } from './helpers/frontend-module.mjs
 // hold and "New acquisitions held" stay, and the view says the newer read did not publish the latch. Only an explicit
 // boolean `latched === false` (with complete native evidence) in a qualified newer read clears it.
 const fixture = Object.fromEntries(['status','wallet','positions','executors','fills','risk','decisions','history','operations'].map(section => [section, JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/${section}.json`, import.meta.url)))]));
+for (const read of Object.values(fixture)) read.source.boot_epoch = 1;
 const now = fixture.status.read_at_ms;
 const stubs = Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}]));
 const {load} = frontendModules({...stubs, ...paperVisualStubs});

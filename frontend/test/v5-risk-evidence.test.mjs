@@ -4,7 +4,11 @@ import fs from 'node:fs';
 import {paperCoherentRead} from '../src/v5/policy.ts';
 import {paperSafetyReads} from '../src/v5/paper-safety.ts';
 
-const fixture = section => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
+const fixture = section => {
+  const read = JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
+  read.source.boot_epoch = 1;
+  return read;
+};
 const clearRisk = read => {
   const cleared = structuredClone(read);
   cleared.data.control_hold = null;
@@ -38,7 +42,7 @@ test('equal or lower owner sequence cannot clear safety even with a later timest
 
 test('a replacement boot clears superseded safety; unknown ordering stays fail-safe', () => {
   const risk = fixture('risk'), status = fixture('status');
-  const reboot = {...clearRisk(risk), source:{...status.source, boot_id:'different-boot'}, generated_at_ms:status.generated_at_ms - 60_000};
+  const reboot = {...clearRisk(risk), source:{...status.source, boot_id:'different-boot', boot_epoch:2}, generated_at_ms:status.generated_at_ms - 60_000};
   assert.equal(paperSafetyReads([risk], [], reboot).length, 0);
   const unsequenced = {...risk, data:{...risk.data, control_hold:'clock_anomaly'}, source:{}, generated_at_ms:null};
   assert.equal(paperSafetyReads([unsequenced], [], {...clearRisk(risk), source:{}}).length, 1);

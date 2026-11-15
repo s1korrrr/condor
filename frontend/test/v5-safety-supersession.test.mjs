@@ -7,7 +7,11 @@ import {paperSafetyReads} from '../src/v5/paper-safety.ts';
 import {frontendModules, paperVisualStubs} from './helpers/frontend-module.mjs';
 import {ownerRisk} from './helpers/owner-risk.mjs';
 
-const fixture = section => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/${section}.json`, import.meta.url)));
+const fixture = section => {
+  const read = JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/${section}.json`, import.meta.url)));
+  read.source.boot_epoch = 1;
+  return read;
+};
 const base = ownerRisk('native-entry-holds', fixture('risk'));
 const [bnb, btc] = Object.keys(base.data.controllers);
 const stubs = {
@@ -28,6 +32,42 @@ function render(newer, older) {
 function pausedCards(html, controller) {
   return [...html.matchAll(new RegExp(`<h3>${controller}</h3><span[^>]*>[^<]*</span><p>Reported operator pause: Yes`, 'g'))].length;
 }
+
+test('retained-only emergency is explicitly labelled with its earlier time and age outside dimming', () => {
+  const older = fixture('risk');
+  delete older.source.boot_epoch;
+  older.source.sequence = 100;
+  older.snapshot_id = `${older.source.boot_id}:100`;
+  Object.values(older.data.controllers)[0].operator.emergency = true;
+  const newer = advance(structuredClone(older));
+  newer.data.holds = [];
+  newer.data.native_entry_holds = [];
+  newer.data.control_hold = null;
+  for (const controller of Object.values(newer.data.controllers)) {
+    controller.operator.emergency = false;
+    controller.operator.paused = false;
+    controller.native.entry_hold = false;
+  }
+  const retained = paperSafetyReads([older], [], newer);
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace, {reads:[newer], safetyReads:retained, complete:true, now:newer.generated_at_ms, asOf:older.generated_at_ms, reportAt:null, heartbeat:'Fresh', bot:older.bot_id}));
+  const aside = html.match(/<aside class="paper-fleet paper-entry-controls"[^]*?<\/aside>/)[0];
+  const stamp = new Date(older.generated_at_ms).toISOString().replace('T', ' ');
+  const label = `Hold kept from an earlier report (As of ${stamp}, 15s ago) · the latest owner report does not confirm it; a qualified newer clear is unavailable.`;
+  assert.ok(aside.includes(`<p class="paper-retained-hold"><strong>${label}</strong></p>`), aside);
+  assert.match(aside, /Earlier report: The owner reports an emergency halt/);
+  assert.match(aside, /Reported emergency halt: Yes[^<]* · As of /);
+  assert.doesNotMatch(aside, /paper-dimmed/);
+  assert.ok(html.indexOf(aside) < html.indexOf('paper-dimmed'));
+});
+
+test('displayed owner confirmation is not labelled as a retained-only hold', () => {
+  const older = fixture('risk');
+  Object.values(older.data.controllers)[0].operator.emergency = true;
+  const newer = advance(structuredClone(older));
+  const html = render(newer, older);
+  assert.match(html, /Emergency halt reported/);
+  assert.doesNotMatch(html, /paper-retained-hold|Earlier report:/);
+});
 
 test('owner scoped resume removes BNB pause while BTC retains a native entry hold', () => {
   const older = structuredClone(base);

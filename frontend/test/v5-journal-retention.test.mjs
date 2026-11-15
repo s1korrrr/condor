@@ -3,7 +3,11 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {paperJournalReads} from '../src/v5/paper-journal.ts';
 
-const fixture = () => JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-api-final3/native-replay/status.json',import.meta.url)));
+const fixture = () => {
+  const read = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-api-final3/native-replay/status.json',import.meta.url)));
+  read.source.boot_epoch = 1;
+  return read;
+};
 function held() {
   const read = fixture();
   read.reason = 'OWNER_JOURNAL_EXCEEDED';

@@ -27,9 +27,6 @@ export function newerSnapshot(candidate: PaperRead, prior: PaperRead): boolean {
   const candidateSource = candidate.source, priorSource = prior.source;
   if (typeof candidateSource?.boot_id === 'string' && candidateSource.boot_id && typeof priorSource?.boot_id === 'string' && priorSource.boot_id &&
       Number.isSafeInteger(candidateSource.sequence) && Number(candidateSource.sequence) > 0 && Number.isSafeInteger(priorSource.sequence) && Number(priorSource.sequence) > 0) {
-    if (!Object.hasOwn(candidateSource, 'boot_epoch') && !Object.hasOwn(priorSource, 'boot_epoch')) {
-      return candidateSource.boot_id === priorSource.boot_id && Number(candidateSource.sequence) > Number(priorSource.sequence);
-    }
     const candidateEpoch = candidateSource.boot_epoch, priorEpoch = priorSource.boot_epoch;
     if (!Number.isSafeInteger(candidateEpoch) || Number(candidateEpoch) < 1 || Number(candidateEpoch) > 1025 ||
         !Number.isSafeInteger(priorEpoch) || Number(priorEpoch) < 1 || Number(priorEpoch) > 1025) return false;

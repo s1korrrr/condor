@@ -6,7 +6,11 @@ import {QueryClient} from '@tanstack/react-query';
 import * as queryLibrary from '@tanstack/react-query';
 import {frontendModules} from './helpers/frontend-module.mjs';
 
-const fixture = section => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
+const fixture = section => {
+  const read = JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
+  read.source.boot_epoch = 1;
+  return read;
+};
 const sections = ['status','wallet','positions','executors','risk'];
 
 test('retained journal status never replaces newer complete engine identity', () => {
@@ -16,7 +20,7 @@ test('retained journal status never replaces newer complete engine identity', ()
   held.state = 'degraded'; held.reason = 'OWNER_JOURNAL_EXCEEDED';
   held.data.journal_budget = {state:'exceeded',journal_evidence_held:true,native_execution_continues:true};
   const newer = sections.map(fixture).map(read => ({...read, snapshot_id:'newboot:1', generated_at_ms:read.generated_at_ms + 600000,
-    source:{...read.source, boot_id:'newboot', sequence:1, source_sha256:'NEW_ENGINE_SOURCE'}}));
+    source:{...read.source, boot_id:'newboot', boot_epoch:2, sequence:1, source_sha256:'NEW_ENGINE_SOURCE'}}));
   const client = new QueryClient({defaultOptions:{queries:{retry:false,gcTime:Infinity}}});
   const queryKey = ['v5-paper-observation-health', held.bot_id];
   client.setQueryData(queryKey, old);

@@ -7,7 +7,11 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { setImmediate } from 'node:timers/promises';
 import { frontendModules, paperVisualStubs } from './helpers/frontend-module.mjs';
 
-const fixture = section => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
+const fixture = section => {
+  const read = JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
+  read.source.boot_epoch = 1;
+  return read;
+};
 const sections = ['status','wallet','positions','fills','executors','risk','decisions','history','accounting'];
 const owner = fixture('wallet');
 const candleSymbols = {state:'AVAILABLE',reason:null,data:{rows:[]}};

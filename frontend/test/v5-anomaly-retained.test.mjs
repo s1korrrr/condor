@@ -18,7 +18,11 @@ const {paperSectionError} = await import(`${FE}/src/v5/policy.ts`);
 const {frontendModules, paperVisualStubs} = await import(`${FE}/test/helpers/frontend-module.mjs`);
 const {ownerRisk} = await import(`${FE}/test/helpers/owner-risk.mjs`);
 
-const fixture = section => JSON.parse(fs.readFileSync(`${FE}/../tests/fixtures/paper-api-final3/${section}.json`));
+const fixture = section => {
+  const read = JSON.parse(fs.readFileSync(`${FE}/../tests/fixtures/paper-api-final3/${section}.json`));
+  read.source.boot_epoch = 1;
+  return read;
+};
 const anomaly = JSON.parse(fs.readFileSync(`${FE}/../tests/fixtures/paper-c1-1e131c74/clock-anomaly-hold.json`)).risk.data.clock_recovery.anomalies;
 const stubs = {
   ...paperVisualStubs,

@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import {newerSnapshot, paperSafetyReads} from '../src/v5/paper-safety.ts';
+import {paperJournalReads} from '../src/v5/paper-journal.ts';
 
 const base = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-api-final3/risk.json', import.meta.url)));
 function read(epoch, sequence = 1, boot = 'boot-a') {
@@ -20,7 +21,7 @@ for (const [name, candidate, prior, expected] of [
   ['equal epoch different boot', read(1, 2, 'boot-b'), read(1), false],
   ['same boot higher epoch', read(2), read(1, 100), true],
   ['maximum known epoch', read(1025, 1, 'boot-b'), read(1024), true],
-  ['legacy same boot', read(undefined, 2), read(undefined), true],
+  ['legacy same boot', read(undefined, 2), read(undefined), false],
   ['legacy different boot', read(undefined, 2, 'boot-b'), read(undefined), false],
 ]) test(`owner boot order: ${name}`, () => assert.equal(newerSnapshot(candidate, prior), expected));
 
@@ -72,4 +73,24 @@ test('legacy different-boot clear retains the received emergency', () => {
   const held = emergency(read(undefined, 100), true);
   const clear = emergency(read(undefined, 1, 'boot-b'), false);
   assert.deepEqual(paperSafetyReads([held], [], clear), [held]);
+});
+
+test('legacy same-boot sequence 101 cannot clear sequence 100 emergency', () => {
+  const held = emergency(read(undefined, 100), true);
+  const clear = emergency(read(undefined, 101), false);
+  assert.deepEqual(paperSafetyReads([held], [], clear), [held]);
+});
+
+test('legacy same-boot sequence 101 cannot clear sequence 100 journal condition', () => {
+  const status = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-api-final3/status.json', import.meta.url)));
+  const held = {...status, source:{...status.source, boot_id:'boot-a', sequence:100}, snapshot_id:'boot-a:100', state:'degraded', reason:'OWNER_JOURNAL_EXCEEDED'};
+  held.data.journal_budget = {state:'exceeded', journal_evidence_held:true};
+  const clear = structuredClone(held);
+  clear.source.sequence = 101;
+  clear.snapshot_id = 'boot-a:101';
+  clear.state = 'available';
+  clear.reason = null;
+  delete clear.data.journal_budget;
+  clear.data.operations = {...clear.data.operations, state:'available', completeness:'complete', reason:null, stale_reason:null};
+  assert.deepEqual(paperJournalReads([held], [], clear), [held]);
 });

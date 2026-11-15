@@ -27,7 +27,11 @@ export interface PaperRead {
   capabilities?: string[];
   data: unknown;
   next_cursor?: string | null;
-  source?: Record<string, unknown>;
+  source?: Record<string, unknown> & {
+    boot_epoch?: number;
+    previous_boot_id?: string | null;
+    boot_started_at_ms?: number;
+  };
 }
 
 export interface V5Skill {

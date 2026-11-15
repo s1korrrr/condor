@@ -892,6 +892,27 @@ def validate_paper_read(
         raise _paper_schema_error(section, payload)
     try:
         encoded = json.dumps(payload, allow_nan=False)
+        source = payload["source"]
+        if (
+            "boot_epoch" in source
+            and (type(source["boot_epoch"]) is not int or not 1 <= source["boot_epoch"] <= 1025)
+            or "previous_boot_id" in source
+            and source["previous_boot_id"] is not None
+            and (
+                not isinstance(source["previous_boot_id"], str)
+                or re.fullmatch(r"[A-Za-z0-9_.-]{1,128}", source["previous_boot_id"]) is None
+            )
+            or "boot_started_at_ms" in source
+            and (type(source["boot_started_at_ms"]) is not int or not 0 <= source["boot_started_at_ms"] <= 2**53 - 1)
+            or unbound and any(key in source for key in ("boot_epoch", "previous_boot_id", "boot_started_at_ms"))
+            or "companion_sha256" in source
+            and (
+                section != "candles"
+                or source["companion_sha256"] is not None
+                and (not isinstance(source["companion_sha256"], str) or HEX64.fullmatch(source["companion_sha256"]) is None)
+            )
+        ):
+            raise ValueError("invalid paper source ordering")
         _validate_read_tree(payload.get("data"))
         _validate_section_data(section, payload.get("data"))
         if section == "accounting" and payload.get("data") is not None:
@@ -974,7 +995,11 @@ def validate_paper_read(
                 "schema",
                 "sha256",
                 "boot_id",
+                "boot_epoch",
+                "previous_boot_id",
+                "boot_started_at_ms",
                 "sequence",
+                "companion_sha256",
                 "source_sha256",
                 "config_sha256",
                 "recipe_sha256",

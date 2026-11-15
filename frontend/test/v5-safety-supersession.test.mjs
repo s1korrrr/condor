@@ -142,7 +142,10 @@ for (const registryRemoved of [false, true]) test(`omitted controller stays reta
   const newer = advance(structuredClone(base));
   delete newer.data.controllers[bnb];
   newer.data.native_entry_holds = newer.data.native_entry_holds.filter(hold => hold.controller_id !== bnb);
-  if (registryRemoved) newer.source = {...newer.source, boot_id:'replacement-without-bnb', sequence:1};
+  if (registryRemoved) {
+    older.source.boot_epoch = 1;
+    newer.source = {...newer.source, boot_id:'replacement-without-bnb', boot_epoch:2, sequence:1};
+  }
   const retained = paperSafetyReads([older], received(newer), newer);
   assert.equal(retained.filter(read => read.snapshot_id === older.snapshot_id).length, 1);
   const prior = retained.find(read => read.snapshot_id === older.snapshot_id);

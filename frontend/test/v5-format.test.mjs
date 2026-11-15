@@ -7,14 +7,28 @@ import { age, coin, count, fixed, pct, pnl, price, signed, usdc, utc, utcMin, wh
 const M = '−';
 const base = Date.UTC(2026, 10, 14, 11, 34, 22);
 
-test('axis ticks bound tiny and ordinary values without changing full text', () => {
+test('axis ticks preserve ordinary values and bound tiny values', () => {
+  assert.equal(format.axis(199330.7), '199,330.70');
+  assert.equal(format.axis(199330.7, 2, true), '+199,330.70');
+  assert.equal(format.axis(12345.6, 2, true), '+12,345.60');
+  assert.equal(format.axis(99999.99, 2, true), '+99,999.99');
+  assert.equal(format.axis(-35.52, 2, true), '−35.52');
   assert.equal(format.axis(1e-30), '1e−30');
   assert.equal(format.axis(-0.004), '−4e−3');
   assert.equal(format.axis(1234.5), '1,234.50');
   assert.equal(format.axis(1234.5, 2, true), '+1,234.50');
-  assert.equal(format.axis(1e30), '1e+30');
+  assert.equal(format.axis(1e30), '—');
   assert.equal(format.axis(0), '0');
   assert.equal(fixed('1e-30'), '1e−30');
+});
+
+test('ordinary axis ticks match the existing text formatter', () => {
+  for (const value of [-99999.99, -35.52, -0.1, 0.1, 12.345, 12345.6, 199330.7, 200000, 1e9]) {
+    for (const digits of [1, 2, 4]) {
+      assert.equal(format.axis(value, digits), fixed(value, digits));
+      assert.equal(format.axis(value, digits, true), signed(value, digits));
+    }
+  }
 });
 
 test('Money and Market use bounded ticks but retain full tooltip formatters', () => {

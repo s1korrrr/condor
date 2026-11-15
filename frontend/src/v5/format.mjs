@@ -110,8 +110,7 @@ export function axis(value, digits = 2, plus = false) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return DASH;
   if (value === 0) return '0';
   const rounded = round(parse(String(value)), digits);
-  const text = render(rounded, plus);
-  if (!rounded.zero && text.length <= 9) return text;
+  if (!rounded.zero) return plus ? signed(value, digits) : fixed(value, digits);
   const scientific = value.toExponential(1).replace(/\.0e/, 'e').replace(/-/g, MINUS);
   return `${plus && value > 0 ? '+' : ''}${scientific}`;
 }

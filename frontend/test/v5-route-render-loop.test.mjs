@@ -23,6 +23,7 @@ const bot = sections.status.bot_id;
 const identity = {name:'RSI V5',host:'razer',mode:'reports-only',execution_enabled:false,baseline_binding:null};
 const settings = {...baseline.settings,identity,budget:{enabled:false}};
 const profile = {...baseline.profile.body,readiness:{...baseline.profile.body.readiness,paper_owner:{bot_name:bot,state:'FRESH',generated_at:sections.status.generated_at_ms / 1000,reason:'fixture',mode:'PAPER'}}};
+sections.history.data.terminal_executors.data = {delivery:'publication_pages',records:[{executor_id:'terminal-fixture',trading_pair:'BNB-USDC',controller_id:'v5-bnb',close_type:'completed',close_at_ms:sections.status.generated_at_ms - 1000}],publication_record_count:1};
 const workspace = {schema_version:'v5-workspace.v1',identity,context:null,advisor:settings.budget,agents:Object.values(baseline.workspace_agents),sessions:[],source_error:null};
 const routes = [
   ['/settings','Workspace settings'], ['/bots','Paper bots'], ['/helm','Helm paper bot'], ['/money','Money'], ['/capital','Capital'],
@@ -63,6 +64,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const registered = [...routeSource.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1]).filter(pathname => pathname !== '*').map(pathname => pathname.replace('/system/:tab','/system/checks').replace('/market/:coin','/market/BTC').replace('/agents/:id','/agents/decision_reviewer').replace('/sessions/:id','/sessions/fixture-session'));
   assert.deepEqual([...new Set(routes.map(([pathname]) => pathname.replace(/^\/system\/(data-feeds|engine-inputs|readiness|settings)$/, '/system/checks')))].sort(),registered.sort(),'every registered V5 route needs a real render case');
   let route = '/settings';
+  const profileForRoute = () => route.startsWith('/market') && route !== '/market/stocks' ? {...profile,candle_store:{configured:true}} : profile;
   const journalRoutes = new Set(['/bots', '/operations', '/v5/readiness']);
   const statusForRoute = () => journalRoutes.has(route) ? {...sections.status, state:'degraded', reason:'OWNER_JOURNAL_EXCEEDED', data:{...sections.status.data, journal_budget:{state:'exceeded',journal_evidence_held:true,native_execution_continues:true}}} : sections.status;
   const originalFetch = globalThis.fetch;
@@ -97,14 +99,19 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       assert.ok(sections[section],`unmapped owner read: ${native}`);
       body = section === 'status' ? statusForRoute() : sections[section];
     } else if (url.pathname === '/api/v5/auth') body = {authenticated:true};
-    else if (url.pathname === '/api/v5/dashboard/profile') body = profile;
+    else if (url.pathname === '/api/v5/dashboard/profile') body = profileForRoute();
     else if (url.pathname === '/api/v5/settings') body = settings;
     else if (url.pathname === '/api/v5/workspace') body = workspace;
     else if (url.pathname === '/api/v5/sessions') body = {sessions:[]};
     else if (url.pathname === '/api/v5/sessions/fixture-session') body = {...baseline['inspect:decision_reviewer'],id:'fixture-session',agent_id:'decision_reviewer',loop_id:null,started_at_ms:sections.status.read_at_ms,finished_at_ms:sections.status.read_at_ms,effect:'NONE',journal:'',ticks:baseline['inspect:decision_reviewer'].ticks.map((tick,index) => ({...tick,id:`tick-${index}`,at_ms:sections.status.read_at_ms,evidence_refs:[]}))};
     else if (url.pathname === '/api/v5/agents/decision_reviewer') body = baseline['agent:decision_reviewer'].body;
     else if (url.pathname === '/api/v5/candle-store/symbols') body = {state:'AVAILABLE',reason:null,data:{rows:[{lane:'okx__spot',pair:'BNB-USDC'}]}};
-    else if (url.pathname === '/api/v5/candle-store/candles') body = {state:'AVAILABLE',reason:null,data:{pair:'BNB-USDC',venue:'OKX',volume_unit:'base',start:1793929800,end:1793929860,buckets:[]}};
+    else if (url.pathname === '/api/v5/candle-store/candles') {
+      const end = Math.floor(sections.status.read_at_ms / 60_000) * 60 - 60;
+      body = {state:'AVAILABLE',reason:null,data:{pair:url.searchParams.get('pair') ?? 'BNB-USDC',venue:'binance',volume_unit:'base',start:end-60,end,now:end+65,buckets:[[end-60,100,101,99,100,2,1],[end,101,102,100,101.123456789,2,1]],totals:{}}};
+    }
+    else if (url.pathname === '/api/v5/candle-store/summary') body = {state:'AVAILABLE',reason:null,data:{now:Math.floor(sections.status.read_at_ms/1000),status_age_s:1,tiles:[],rows:[]}};
+    else if (url.pathname === '/api/v5/candle-store/cross') body = {state:'AVAILABLE',reason:null,data:{table:[],series:[]}};
     else if (url.pathname === '/api/v5/money') body = {sampler:true,daily:[{day:1793923200000,samples:2,gaps:1,valid:1,equity_start:'199318.98',equity_end:'199318.98',equity_change:'0',realized_change:'0',first_at_ms:1793929000000,last_at_ms:1793929000000}],recorder_errors:{count:0,last:null,at_ms:null},started_at_ms:1793929000000,now_ms:1793929900000,range:'7d',rows:[{bot:'v5',at_ms:1793929000000,unit:'USDC',equity:'199318.98',initial_funding:'200000',realized:'114.13',unrealized:'-795.15',fees:'23.11',coins:{BNB:{realized:'14.8',unrealized:null}}},{bot:'v5',at_ms:1793929600000,gap:'wallet: stale'},{bot:'helm',at_ms:1793929600000,gap:'HELM_STATUS_MISSING'}]};
     else if (url.pathname === '/api/v5/helm') body = {state:'STALE',reason:'HELM_STATUS_STALE',bot:'helm_v5_paper',status:{generated_at:1793929882.6,age_s:600000,ready:false,failure:null,failure_reported:true,reasons:null,steps:5086,actions:0,phase:'P1',profile_id:null,entries_held:'operator_entry_pause',operator_entry_paused:true,kill_switch:null,adaptive_actions:'off',funding:'finite_wallet',image_tag:null,shutdown:{checkpoint:true,clean:null},mandate:{mandate_id:'helm-v5-paper-20261105',state:'active',valid_until_ms:1e18},risk:null,control_rejections:null,symbols:[{pair:'BNB-USDC',status:null,candidate_hold:'low_volatility',bag:null,last_decision:{at:-1e21,reason:null}}],withheld:2}};
     else if (url.pathname.startsWith('/api/v5/learning/')) body = {effect:'NONE',status:'DISABLED',roles:[],reason:'Stage1 disabled'};
@@ -129,7 +136,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       const mount = createRoot(container);
       if (pathname === '/bots') context.mock.timers.enable({apis:['setInterval']});
       client.setQueryData(['v5-auth'],{authenticated:true});
-      client.setQueryData(['v5-profile'],profile);
+      client.setQueryData(['v5-profile'],profileForRoute());
       client.setQueryData(['v5-settings'],settings);
       client.setQueryData(['v5-paper-observation-health',bot],['status','wallet','positions','executors','risk'].map(section => section === 'status' ? statusForRoute() : sections[section]));
       if (pathname === '/bots') client.setQueryData(['v5-paper-bots',bot],['status','wallet','positions','fills','executors','risk','decisions','history','accounting'].map(section => section === 'status' ? statusForRoute() : sections[section]));
@@ -139,6 +146,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         await React.act(async () => {await client.refetchQueries({type:'active'});});
         await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
         if (pathname === '/bots') {
+          assert.match(container.textContent,/terminal-fixture/,'terminal history must render a published record');
           assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 1, 'explicit refresh must not reload the symbols list');
           const candlesBefore = requests.slice(requestStart).filter(request => request.startsWith('/api/v5/candle-store/candles?')).length;
           assert.ok(candlesBefore > 0, 'listed BNB must load candles before the interval');
@@ -155,7 +163,12 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         assert.deepEqual(warnings,[],'React must not warn about unstable snapshots or cross-component updates');
         assert.ok(container.querySelector('main'),`${pathname} must keep the app mounted`);
         assert.ok(container.textContent.includes(heading),`${pathname} must render ${heading}: ${container.textContent}`);
-        for (const details of container.querySelectorAll('details')) details.open = true;
+        await React.act(async () => { for (const details of container.querySelectorAll('details')) { details.open = true; details.dispatchEvent(new browser.Event('toggle')); } await new Promise(resolve => setTimeout(resolve,0)); });
+        if (pathname === '/market') await React.act(async () => { await client.refetchQueries({type:'active'}); await new Promise(resolve => setTimeout(resolve,0)); });
+        if (pathname === '/market') {
+          assert.match(container.textContent,/101\.12/,'configured Market must show a fixture candle close');
+          assert.match(container.textContent,/Instrument coverage/,'open candle-store details must render the fixture view');
+        }
         decimalFindings.push(...longVisibleDecimals(container).map(finding => `${pathname}: ${finding}`));
         if (pathname === '/market/stocks') {
           assert.match(container.textContent,/Stock data is not configured/,'the unbound fixture must explain absent stock data');

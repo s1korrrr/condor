@@ -213,6 +213,21 @@ def client(tmp_path, url):
     return test_client
 
 
+@pytest.mark.parametrize("pack_kind", [[], {}])
+def test_unhashable_pack_kind_returns_503(tmp_path, monkeypatch, pack_kind):
+    asset = json.loads(ASSET)
+    asset["d"]["$pack"] = pack_kind
+    raw = json.dumps(asset, separators=(",", ":")).encode()
+    digest = hashlib.sha256(raw).hexdigest()
+    path = f"/api/v1/tradepad/bundles/example/asset?source={'a' * 64}&dataset=example&pair=BNBUSDC&kind=candles&sha256={digest}"
+    monkeypatch.setattr(read_bridge.aiohttp, "ClientSession", lambda **kwargs: FakeSession(raw, []))
+    with client(tmp_path, "http://owner.invalid") as test_client:
+        test_client._transport.raise_server_exceptions = False
+        result = test_client.get("/api/v5/dashboard/read", params={"path": path})
+        assert result.status_code == 503
+        assert result.json()["detail"].startswith("Not connected:")
+
+
 @pytest.mark.parametrize("path,payload", ROUTES)
 def test_tradepad_failures_and_passthrough(tmp_path, monkeypatch, path, payload):
     calls = []

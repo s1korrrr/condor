@@ -30,7 +30,7 @@ def _number(value):
 
 def _pack(value, kinds, count=None):
     formats = {"f64": ("d", 8), "f32": ("f", 4), "i32": ("i", 4), "u16": ("H", 2), "u8": ("B", 1)}
-    if not isinstance(value, dict) or value.get("$pack") not in kinds or type(value.get("n")) is not int or value["n"] < 0 or not isinstance(value.get("z"), str):
+    if not isinstance(value, dict) or not isinstance(value.get("$pack"), str) or value["$pack"] not in kinds or type(value.get("n")) is not int or value["n"] < 0 or not isinstance(value.get("z"), str):
         raise ValueError("bad pack")
     size = formats[value["$pack"]][1] * value["n"]
     if size > MAX_BYTES or (count is not None and value["n"] != count):
@@ -357,6 +357,8 @@ def valid_research(kind: str, value: object) -> bool:
         freshness = value.get("freshness")
         if freshness is not None:
             if not isinstance(freshness, dict) or not all(_optional(freshness, key, str) for key in ("state", "freshness_basis", "last_sync", "verification_checked_at")):
+                return False
+            if freshness.get("state") is not None and freshness["state"] not in {"CURRENT", "PENDING", "UNAVAILABLE"}:
                 return False
             if freshness.get("verification_checked_at") is not None and not _timestamp(freshness["verification_checked_at"]):
                 return False

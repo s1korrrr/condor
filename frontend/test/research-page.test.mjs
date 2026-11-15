@@ -244,6 +244,11 @@ test("mounted Research rejects an expired owner deadline despite a recent scan",
     const html = document.body.innerHTML;
     assert.doesNotMatch(html, /Index current|verified as of scan/);
     assert.match(container.textContent, /Index unavailable/);
+    queries["research-overview"].data.data.freshness.state = "current";
+    renderResearch(queries, { render: value => { element = value; return ""; } });
+    await React.act(async () => root.render(element));
+    assert.doesNotMatch(container.textContent, /Index current|verified as of scan/);
+    assert.match(container.textContent, /Index unavailable/);
   } finally {
     await React.act(async () => root.unmount());
     for (const [name, descriptor] of previous) descriptor ? Object.defineProperty(globalThis, name, descriptor) : delete globalThis[name];

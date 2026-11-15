@@ -119,7 +119,6 @@ function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) 
   const available = overviewState === "available",
     data = available ? object(overview.data?.data) : {},
     freshness = object(data.freshness);
-  const freshnessState = text(freshness.state, "unknown").toLowerCase();
   const verificationCheckedAt = text(freshness.verification_checked_at, "");
   const verificationAgeSeconds = verificationCheckedAt && Number.isFinite(Date.parse(verificationCheckedAt)) && now >= Date.parse(verificationCheckedAt)
     ? (now - Date.parse(verificationCheckedAt)) / 1000 : null;
@@ -130,8 +129,8 @@ function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) 
     !!verificationCheckedAt && Number.isFinite(Date.parse(verificationCheckedAt)) &&
     verificationAgeSeconds !== null && maxVerificationAgeSeconds !== null &&
     verificationAgeSeconds < maxVerificationAgeSeconds && researchFreshnessDecision(data, now) === "within owner freshness deadline";
-  const displayedFreshnessState = freshness.state === "CURRENT" && !verifiedEventScan
-    ? "unavailable" : freshnessState;
+  const displayedFreshnessState = freshness.state === "CURRENT" && verifiedEventScan
+    ? "current" : freshness.state === "PENDING" ? "pending" : "unavailable";
   const revision = text(overview.data?.data.revision, "");
   const networkVisible = state.view === "graph";
   const networkQuery = useQuery({

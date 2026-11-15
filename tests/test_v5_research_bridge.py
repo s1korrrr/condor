@@ -13,6 +13,16 @@ OVERVIEW = {"revision": "r1", "generated_at": "2026-10-29T12:00:00Z", "counts": 
 NETWORK = {"revision": "r1", "node_fields": ["id", "kind", "title", "family", "lane"], "edge_fields": ["source", "target", "relation", "basis"], "nodes": [], "edges": [], "unresolved_edges": 0, "total_nodes": 0, "total_edges": 0, "stats": {"kinds": [], "families": [], "lanes": [], "relations": []}}
 
 
+@pytest.mark.parametrize("state", ["current", "OTHER"])
+def test_unknown_owner_freshness_state_fails_closed(state):
+    assert not read_bridge.valid_research("overview", {**OVERVIEW, "freshness": {"state": state}})
+
+
+@pytest.mark.parametrize("state", ["CURRENT", "PENDING", "UNAVAILABLE"])
+def test_documented_owner_freshness_states_are_accepted(state):
+    assert read_bridge.valid_research("overview", {**OVERVIEW, "freshness": {"state": state}})
+
+
 @pytest.mark.parametrize("field,value", [("counts", {"ideas": -1}), ("facets", {"kinds": False}), ("facets", {"kinds": [None]}), ("limitations", [{}]), ("freshness", {"pending_events": False}), ("freshness", {"max_verification_age_seconds": []})])
 def test_overview_rejects_bad_nested_records(field, value):
     assert not read_bridge.valid_research("overview", {**OVERVIEW, field: value})

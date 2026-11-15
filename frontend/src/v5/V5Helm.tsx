@@ -28,10 +28,17 @@ export type HelmStatus = {
 };
 export type HelmRead = { state: "FRESH" | "STALE" | "UNAVAILABLE" | "UNBOUND"; reason: string; bot: string | null; status: HelmStatus | null };
 
+const helmSent = new WeakMap<object, number>();
+/** When the request that returned this Helm read was sent (epoch ms), so ages include delivery time. */
+export const helmRequestedAt = (read: object) => helmSent.get(read);
+
 export async function readHelm(): Promise<HelmRead> {
+  const sentMs = Date.now();
   const response = await fetch("/api/v5/helm", { credentials: "include", cache: "no-store", signal: AbortSignal.timeout(14_000) });
   if (!response.ok) throw new Error(`Helm read failed (HTTP ${response.status})`);
-  return response.json() as Promise<HelmRead>;
+  const read = await response.json() as HelmRead;
+  if (read && typeof read === "object") helmSent.set(read, sentMs);
+  return read;
 }
 
 /** Owner codes as words; anything that is not text is shown as missing, never coerced. */

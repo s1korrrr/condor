@@ -54,6 +54,8 @@ function v5Chip(v5) {
   if (v5.entryHold === true) return { ...base, tone: 'amber', text: v5.emergency ? 'Emergency halt reported: buying stopped' : 'Buying paused by an owner hold', short: 'V5 paused' };
   if (v5.pending) return { ...base, tone: 'grey', text: 'Reading the owner report', short: 'V5 …' };
   if (!v5.current) return { ...base, tone: 'grey', text: noReport(v5.lastOkMs), short: 'V5 no report' };
+  // A complete current report is not proof of running: the owner must publish pause, emergency and latch as clear.
+  if (v5.runKnown !== true) return { ...base, tone: 'grey', text: 'Report current · run state not published', short: 'V5 unknown' };
   return { ...base, tone: 'green', text: 'Running', short: 'V5 running' };
 }
 
@@ -63,7 +65,9 @@ function helmChip(helm, nowMs) {
   // A failed refresh keeps no value as current: only the last-report time is shown.
   if (helm.failed) return { ...base, tone: 'grey', text: noReport(helm.lastOkMs), short: 'Helm no report' };
   // Age Helm's status with the clock since the read arrived, so a cached FRESH read expires at Helm's own 30 s line.
-  const elapsedS = Number.isFinite(helm.receivedAtMs) ? Math.max(0, (nowMs - helm.receivedAtMs) / 1000) : Infinity;
+  // Counted from when the request was sent when known (delivery time is age too), else from arrival (Terra R3 B3).
+  const sinceMs = Number.isFinite(helm.requestedAtMs) ? helm.requestedAtMs : helm.receivedAtMs;
+  const elapsedS = Number.isFinite(sinceMs) ? Math.max(0, (nowMs - sinceMs) / 1000) : Infinity;
   const status = helm.read.status;
   const ageS = Number.isFinite(status?.age_s) ? status.age_s + elapsedS
     : Number.isFinite(status?.generated_at) ? Math.max(0, nowMs / 1000 - status.generated_at) : Infinity;
@@ -86,10 +90,13 @@ function dataChip(data, nowMs) {
   // A successful summary in which no lane is live is an explicit outage, not "no report" (Sol R2 W4 S2).
   if (!Number.isFinite(lanes.lagS)) return { ...base, tone: 'amber', text: `${lanes.total - lanes.live} of ${lanes.total} lanes not live`, short: 'Data partial' };
   // The owner's age at read time plus local time since the read arrived, so the chip ages between polls.
-  const elapsedS = Number.isFinite(data.receivedAtMs) ? Math.max(0, (nowMs - data.receivedAtMs) / 1000) : 0;
+  const sinceMs = Number.isFinite(data.requestedAtMs) ? data.requestedAtMs : data.receivedAtMs;
+  const elapsedS = Number.isFinite(sinceMs) ? Math.max(0, (nowMs - sinceMs) / 1000) : 0;
   const lagS = lanes.lagS + elapsedS, lag = Math.max(0, Math.round(lagS));
   // A lane that is unavailable or does not report its age is never read as live.
   if (lanes.live < lanes.total) return { ...base, tone: 'amber', text: `${lanes.total - lanes.live} of ${lanes.total} lanes not live · slowest live lane ${lag} s`, short: 'Data partial' };
+  // A recent candle is not "Live" when the owner's own lane health is amber/red or it lists partition errors (Terra R3 B2).
+  if (lanes.healthy < lanes.total) return { ...base, tone: 'amber', text: `${lanes.total - lanes.healthy} of ${lanes.total} lanes not green in owner health · slowest lane ${lag} s`, short: 'Data partial' };
   const late = lagS > DATA_LAG_AMBER_S;
   return { ...base, tone: late ? 'amber' : 'green', text: `${late ? 'Late' : 'Live'} · slowest lane ${lag} s`, short: late ? 'Data late' : 'Data live' };
 }
@@ -112,9 +119,9 @@ function equityChip(wallet) {
 
 /**
  * @param {{ nowMs: number,
- *   v5: { bound: boolean, pending: boolean, current: boolean, entryHold: boolean | null, lastOkMs: number | null },
- *   helm: { read: object | null, failed: boolean, lastOkMs: number | null },
- *   data: { configured: boolean, pending: boolean, failed: boolean, slowestLagS: number | null, lastOkMs: number | null },
+ *   v5: { bound: boolean, pending: boolean, current: boolean, runKnown?: boolean, entryHold: boolean | null, lastOkMs: number | null },
+ *   helm: { read: object | null, failed: boolean, lastOkMs: number | null, receivedAtMs?: number | null, requestedAtMs?: number | null },
+ *   data: { configured: boolean, pending: boolean, failed: boolean, lanes: { total: number, live: number, healthy: number, lagS: number | null } | null, lastOkMs: number | null, receivedAtMs?: number | null, requestedAtMs?: number | null },
  *   wallet: { current: boolean, equity: unknown, funding: unknown, flows: unknown, unit: unknown },
  *   updatedMs: number | null }} input
  */
@@ -134,11 +141,13 @@ export function statusStrip(input) {
 }
 
 /**
- * Candle lanes: how many there are, how many are live (available === true with a published age), and the slowest live
- * lane's age in seconds (null when none). An unavailable or unknown lane is counted, never dropped.
+ * Candle lanes: how many there are, how many are live (available === true with a published age), how many of those are
+ * healthy by the owner (health "green" and an empty partition_errors list), and the slowest live lane's age in seconds
+ * (null when none). An unavailable or unknown lane is counted, never dropped.
  */
 export function laneHealth(tiles) {
   if (!Array.isArray(tiles)) return null;
   const live = tiles.filter(tile => tile && tile.available === true && typeof tile.last_minute_age_s === 'number' && Number.isFinite(tile.last_minute_age_s) && tile.last_minute_age_s >= 0);
-  return { total: tiles.length, live: live.length, lagS: live.length ? Math.max(...live.map(tile => tile.last_minute_age_s)) : null };
+  const healthy = live.filter(tile => tile.health === 'green' && Array.isArray(tile.partition_errors) && tile.partition_errors.length === 0);
+  return { total: tiles.length, live: live.length, healthy: healthy.length, lagS: live.length ? Math.max(...live.map(tile => tile.last_minute_age_s)) : null };
 }

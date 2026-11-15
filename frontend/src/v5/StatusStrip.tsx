@@ -1,7 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
-import { readCandleStore } from "./candle-store-api";
-import { readHelm } from "./V5Helm";
+import { candleRequestedAt, readCandleStore } from "./candle-store-api";
+import { helmRequestedAt, readHelm } from "./V5Helm";
 import type { PaperRead } from "./contracts";
 import { paperObservationSummary, paperRiskControllers, paperRiskHolds } from "./policy";
 import { laneHealth, statusStrip } from "./status-strip-model.mjs";
@@ -32,13 +32,21 @@ export function StatusStrip({ bot, candleConfigured }: { bot: string | null; can
   const emergency = controllers.some(controller => controller.operator.emergency === true);
   const held = emergency || riskEvidence.some(read => paperRiskHolds(read).length > 0)
     || controllers.some(controller => controller.entryHold === true || controller.operator.paused === true || controller.holds.length > 0);
+  // "Running" needs the owner's affirmative word from the displayed current risk read: at least one controller, each with
+  // operator pause and emergency explicitly false and native evidence complete with no latch or entry hold (Terra R3 B1).
+  const currentRisk = current ? displayedRisk.flatMap(read => paperRiskControllers(read, now) ?? []) : [];
+  const runKnown = current && currentRisk.length > 0 && displayedRisk.every(read => paperRiskHolds(read).length === 0)
+    && currentRisk.every(controller => controller.operator.paused === false && controller.operator.emergency === false && controller.entryHold === false);
+  // Ages are counted from when each request was SENT (owner age at read time + delivery + time since), never from arrival.
+  const helmSentMs = helm.data ? helmRequestedAt(helm.data) ?? null : null;
+  const candleSentMs = candles.data ? candleRequestedAt(candles.data) ?? null : null;
   const wallet = current ? reads!.find(read => read.section === "wallet")?.data as Record<string, unknown> | undefined : undefined;
   const stamps = [paper.dataUpdatedAt, helm.dataUpdatedAt, candleConfigured ? candles.dataUpdatedAt : 0].filter(ms => ms > 0);
   const strip = statusStrip({
     nowMs: now,
-    v5: { bound: !!bot, pending: !!bot && !paper.data && !paper.isError, current, entryHold: held ? true : null, emergency, lastOkMs: paper.dataUpdatedAt || null },
-    helm: { read: helm.isError ? null : helm.data ?? null, failed: helm.isError, lastOkMs: helm.dataUpdatedAt || null, receivedAtMs: helm.dataUpdatedAt || null },
-    data: { configured: candleConfigured, pending: candleConfigured && !candles.data && !candles.isError, failed: candles.isError, lanes: candles.isError ? null : laneHealth((candles.data as { tiles?: unknown } | undefined)?.tiles), lastOkMs: candles.dataUpdatedAt || null, receivedAtMs: candles.dataUpdatedAt || null },
+    v5: { bound: !!bot, pending: !!bot && !paper.data && !paper.isError, current, runKnown, entryHold: held ? true : null, emergency, lastOkMs: paper.dataUpdatedAt || null },
+    helm: { read: helm.isError ? null : helm.data ?? null, failed: helm.isError, lastOkMs: helm.dataUpdatedAt || null, receivedAtMs: helm.dataUpdatedAt || null, requestedAtMs: helmSentMs },
+    data: { configured: candleConfigured, pending: candleConfigured && !candles.data && !candles.isError, failed: candles.isError, lanes: candles.isError ? null : laneHealth((candles.data as { tiles?: unknown } | undefined)?.tiles), lastOkMs: candles.dataUpdatedAt || null, receivedAtMs: candles.dataUpdatedAt || null, requestedAtMs: candleSentMs },
     wallet: { current, equity: wallet?.equity_quote, funding: wallet?.initial_funding_quote, flows: wallet?.external_cash_flows_quote, unit: wallet?.quote_asset },
     updatedMs: stamps.length ? Math.max(...stamps) : null,
   });

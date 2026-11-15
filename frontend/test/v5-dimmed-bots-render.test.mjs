@@ -95,6 +95,7 @@ test('dimmed Bots admits values but uses real stale states, safety qualification
   try {
     const html = current.render();
     assert.match(html, /class="paper-dimmed"/);
+    assert.match(html, /stale; not current[^<]*snapshot values are from that time, dimmed until a new report/);
     assert.equal((html.match(/Last coherent owner snapshot/g) ?? []).length, 1);
     for (const label of ['Wallet equity', 'Since start', 'Profit from closed trades', 'Coins still held', 'Fees paid']) assert.match(metric(html, label), /USDC/);
     assert.equal(metric(html, 'Today'), '—');

@@ -16,7 +16,8 @@ const fixture = Object.fromEntries(['status', 'wallet', 'positions', 'executors'
 const now = fixture.wallet.generated_at_ms;
 const controller = (id, extra = {}) => ({ id, current: true, operator: { paused: false, emergency: false }, native: { protected_exits: 'preserved' }, entryHold: false, holds: [], ...extra });
 const day = Math.floor(now / 86_400_000) * 86_400_000;
-const money = { range: '7d', now_ms: now, daily: [{ day, samples: 2, valid: 2, gaps: 0, first_at_ms: now - 300_000, last_at_ms: now, equity_change: '-12.000000000000000000000000000001' }] };
+const slots = Math.floor((now - day) / 300_000) + 1;
+const money = { range: '7d', now_ms: now, daily: [{ day, samples: slots, valid: slots, gaps: 0, first_at_ms: day, last_at_ms: now, equity_start: '200000', equity_end: '199988', equity_change: '-12.000000000000000000000000000001' }] };
 const tiles = (changes = {}) => paperMoneyTiles({ walletRead: fixture.wallet, accountingRead: fixture.accounting, snapshot: fixture.status, complete: true, now, money, ...changes });
 
 test('money tiles format values while retaining exact source and arithmetic results', () => {
@@ -45,10 +46,54 @@ test('money tiles follow snapshot dimming at 25, 45 and 125 seconds', () => {
 
 test('Today reports missing samples but refuses unqualified rows', () => {
   assert.match(tiles()[2].note, /As of/);
-  const gaps = {...money,daily:[{...money.daily[0],samples:186,valid:182,gaps:4}]};
+  const gaps = {...money,daily:[{...money.daily[0],valid:slots-4,gaps:4}]};
   assert.equal(tiles({money:gaps})[2].value,'−12.00 USDC');
-  assert.match(tiles({money:gaps})[2].note,/4 of 186 samples missing/);
+  assert.match(tiles({money:gaps})[2].note,new RegExp(`4 of ${slots} samples missing`));
   assert.equal(tiles({money:{...gaps,daily:[{...gaps.daily[0],valid:1}]}})[2].value,'—');
+});
+
+test('Today withholds a day missing its 00:00 UTC slot', () => {
+  const row = {...money.daily[0], first_at_ms:day+300_000};
+  const result = tiles({money:{...money,daily:[row]}})[2];
+  assert.equal(result.value,'—');
+  assert.equal(result.note,"Today's 00:00 UTC sample is missing, so the change cannot cover the whole day");
+});
+
+test('Today counts flagged gaps against the elapsed UTC grid', () => {
+  const row = {...money.daily[0], valid:slots-4, gaps:4};
+  const result = tiles({money:{...money,daily:[row]}})[2];
+  assert.equal(result.value,'−12.00 USDC');
+  assert.match(result.note,new RegExp(`4 of ${slots} samples missing`));
+});
+
+test('Today counts missing slots that have no gap row', () => {
+  const row = {...money.daily[0], samples:slots-3, valid:slots-3, gaps:0};
+  const result = tiles({money:{...money,daily:[row]}})[2];
+  assert.equal(result.value,'−12.00 USDC');
+  assert.match(result.note,new RegExp(`3 of ${slots} samples missing`));
+});
+
+test('Today withholds a last sample older than six minutes', () => {
+  const row = {...money.daily[0], last_at_ms:now-360_001};
+  assert.equal(tiles({money:{...money,daily:[row]}})[2].value,'—');
+});
+
+test('Today withholds an impossible valid sample count', () => {
+  const row = {...money.daily[0], samples:slots+1, valid:slots+1};
+  assert.equal(tiles({money:{...money,daily:[row]}})[2].value,'—');
+});
+
+test('Today with complete grid coverage has no missing-samples suffix', () => {
+  const result = tiles()[2];
+  assert.equal(result.value,'−12.00 USDC');
+  assert.doesNotMatch(result.note,/samples missing/);
+});
+
+test('Today requires both published equity endpoints', () => {
+  for (const field of ['equity_start','equity_end']) {
+    const row = {...money.daily[0], [field]:null};
+    assert.equal(tiles({money:{...money,daily:[row]}})[2].value,'—');
+  }
 });
 
 test('operator pause always names the observed scope, including a partial controller report', () => {

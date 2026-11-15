@@ -4,7 +4,7 @@
  * and a comparison is shown only when both sides cover the same window.
  */
 
-const SAMPLE_MS = 300_000;
+export const SAMPLE_MS = 300_000;
 
 const number = value => (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : null);
 

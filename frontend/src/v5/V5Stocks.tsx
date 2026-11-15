@@ -11,8 +11,19 @@ import './stocks.css';
 const utc = (seconds: number | null | undefined) => seconds == null ? 'Unavailable' : new Date(seconds * 1000).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
 const value = (item: unknown) => typeof item === 'string' && item !== '' ? item : typeof item === 'number' && Number.isFinite(item) ? String(item) : 'Unavailable';
 const field = (event: PublicEvent | null, name: string) => value(event?.data[name]);
-const formatted = (item: unknown) => typeof item === 'string' && /^-?\d+\.\d+$/.test(item) || typeof item === 'number' && Number.isFinite(item) && !Number.isInteger(item) ? price(item) : value(item);
-const formattedRecord = (item: unknown) => JSON.stringify(item, (_key, entry) => typeof entry === 'string' && /^-?\d+\.\d+$/.test(entry) || typeof entry === 'number' && Number.isFinite(entry) && !Number.isInteger(entry) ? formatted(entry) : entry, 2);
+const formatted = (item: unknown) => {
+  const result = price(item);
+  return result === '—' ? value(item) : result;
+};
+const formattedRecord = (item: unknown) => JSON.stringify(item, function (key, entry) {
+  if (Array.isArray(this)) return entry;
+  if (/id(?:code)?$|(?:time|timestamp)(?:_ms)?$|_at_ms$|^ts$|checksum$/i.test(key) || ['instCategory', 'state', 'ruleType', 'side'].includes(key)) return entry;
+  if ((key === 'bids' || key === 'asks') && Array.isArray(entry)) return entry.map(level => Array.isArray(level) ? level.map((part, index) => index < 2 ? formatted(part) : part) : level);
+  if (key === 'bids' || key === 'asks') return entry;
+  const numericString = typeof entry === 'string' && price(entry) !== '—';
+  const numericNumber = typeof entry === 'number' && Number.isFinite(entry);
+  return numericString || numericNumber ? formatted(entry) : entry;
+}, 2);
 const readable = (state: string) => state === 'live' || state === 'stale';
 
 function metadataTime(stamp: unknown) {

@@ -84,6 +84,42 @@ test('selected public fields format venue decimals while titles retain exact rec
   assert.doesNotMatch(failed, /All recorded market fields|9876\.000000000000001|1234567\.890123456789/);
 });
 
+test('configured Stocks formats exponent, signed and integer numeric fields without changing identifiers or times', () => {
+  const ticker = { ...event('1.234567890123e-20'), data: { last: '1.234567890123e-20', bidPx: '+99.78007932', askPx: '198961', vol24h: 12345 } };
+  const instrumentWithValues = { ...instrument, tickSz: '+99.78007932', lotSz: '1.234567890123e-20', minSz: '198961', ctVal: null, maxLmtSz: '198961', maxMktSz: 198961, instIdCode: '123456789', listTime: '1700000000000' };
+  const book = { ...event('0'), dataset: 'books', data: { bids: [['+99.78007932', '198961', '0', '3']], asks: [] } };
+  const trade = { ...event('0'), dataset: 'trades', data: { tradeId: '1234567890123', px: '1.234567890123e-20', sz: '+99.78007932', side: 'buy' } };
+  const marketWithValues = { ...market, latest: { ...market.latest, ticker, books: book }, channels: { ticker: channel, books: channel, trades: channel }, recent_trades: [trade], book_depth: { bids: 1, asks: 0 } };
+  const data = { ...catalog, rows: [{ ...catalog.rows[0], instrument: instrumentWithValues, latest: { ...latest, ticker } }] };
+  const { html } = render({ data, marketData: marketWithValues });
+  const window = new Window();
+  window.document.body.innerHTML = html;
+  const document = window.document;
+  for (const [exact, display] of [['1.234567890123e-20', '1.23e−20'], ['+99.78007932', '99.78'], ['198961', '198,961'], ['12345', '12,345']]) {
+    assert.ok([...document.querySelectorAll('[title]')].some(element => element.title === exact && element.textContent === display), `${exact} is formatted and retains its exact title`);
+  }
+  const records = [...document.querySelectorAll('pre')];
+  const publicRecord = records.find(record => record.title.includes('1.234567890123e-20'));
+  const metadataRecord = records.find(record => record.title.includes('1700000000000'));
+  assert.ok(publicRecord && metadataRecord);
+  assert.match(publicRecord.textContent, /1\.23e−20/);
+  assert.match(publicRecord.textContent, /99\.78/);
+  assert.match(publicRecord.textContent, /198,961/);
+  assert.match(publicRecord.textContent, /12,345/);
+  assert.match(publicRecord.textContent, /1234567890123/);
+  assert.match(publicRecord.textContent, new RegExp(`"event_time_ms": ${ticker.event_time_ms}`));
+  assert.match(publicRecord.textContent, /"3"/);
+  assert.match(publicRecord.title, /\+99\.78007932/);
+  assert.match(metadataRecord.textContent, /198,961/);
+  assert.match(metadataRecord.textContent, /"maxLmtSz": "198,961"/);
+  assert.match(metadataRecord.textContent, /"maxMktSz": "198,961"/);
+  assert.match(metadataRecord.textContent, /"ctVal": null/);
+  assert.match(metadataRecord.textContent, /"instIdCode": "123456789"/);
+  assert.match(metadataRecord.textContent, /1700000000000/);
+  assert.match(metadataRecord.textContent, /EXAMPLE-USDT/);
+  window.close();
+});
+
 test('captured column labels captured and listed-only rows', () => {
   const { html } = render({ data: { ...catalog, rows: [...catalog.rows, listedOnly] } });
   assert.match(html, /Sort by Capture"><span>Capture<\/span>/);

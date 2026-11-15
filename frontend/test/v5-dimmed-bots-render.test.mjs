@@ -40,7 +40,7 @@ function harness({cached = true} = {}) {
     react: {...React, useState: state, useRef: initial => state(() => ({current: initial}))[0], useEffect() {}},
     '@/v5/usePaperClock': {usePaperClock: () => now},
     '@tanstack/react-query': {...ReactQuery, useQueryClient: () => client, useQuery: incoming => {
-      options = incoming;
+      if (incoming.queryKey[0] !== 'v5-money') options = incoming;
       return {data: client.getQueryData(incoming.queryKey), isPending: !cached, isFetching: false, isError: failed, error: failed ? new Error('Refresh failed') : null, refetch() {}};
     }},
   });
@@ -83,8 +83,8 @@ test('dimmed Bots admits values but uses real stale states, safety qualification
     const html = current.render();
     assert.match(html, /class="paper-dimmed"/);
     assert.equal((html.match(/Last coherent owner snapshot/g) ?? []).length, 1);
-    assert.match(metric(html, 'Wallet equity'), /USDC/);
-    assert.match(metric(html, 'Realized PnL'), /USDC/);
+    for (const label of ['Wallet equity', 'Since start', 'Today', 'Profit from closed trades', 'Coins still held', 'Fees paid']) assert.equal(metric(html, label), '—');
+    assert.match(metric(html, 'Available cash'), /USDC/);
     assert.notEqual(metric(html, 'Open executors'), 'Not published');
     for (const kind of ['positions', 'fills', 'executors']) assert.match(html, new RegExp(`aria-label="Paper ${kind}"`));
     assert.match(html, /<h2>Holdings<\/h2><span class="paper-badge" data-state="stale">Stale/);
@@ -161,7 +161,7 @@ test('a failed refresh retains a newer emergency without presenting the dimmed N
     assert.match(html, /class="paper-dimmed"/);
     assert.match(html, /Emergency halt reported/);
     assert.match(html, /Reported emergency halt: Yes/);
-    assert.match(html, /Reported emergency halt: No · As of [^<]*UTC · 1m ago/);
+    assert.match(html, /Reported emergency halt: No[^<]* · As of [^<]*UTC · 1m ago/);
     assert.doesNotMatch(html, /Native evidence complete/);
   } finally {current.close();}
 });
@@ -193,7 +193,9 @@ test('newer retained emergency stays outside the dimmed snapshot with its own re
     assert.equal(stamp.nextElementSibling, dimmed);
     assert.ok(alert.compareDocumentPosition(stamp) & browser.Node.DOCUMENT_POSITION_FOLLOWING);
     assert.equal(browser.document.querySelectorAll('.paper-dimmed-stamp').length, 1);
-    assert.match(metric(dimmed.innerHTML, 'Wallet equity'), /USDC/);
+    assert.equal(metric(dimmed.innerHTML, 'Wallet equity'), '—');
+    assert.match(metric(dimmed.innerHTML, 'Available cash'), /USDC/);
+    assert.equal(browser.document.querySelector('[aria-label="Paper money summary"]').closest('.paper-dimmed'), dimmed);
   } finally {
     current.close();
     await browser.happyDOM.close();
@@ -207,7 +209,7 @@ test('switching Bots does not carry the dimmed snapshot to an uncached bot', () 
     const html = current.render({bot: 'another-paper-bot'});
     assert.doesNotMatch(html, /class="paper-dimmed"|Last coherent owner snapshot/);
     assert.match(html, /Checking owner snapshot/);
-    assert.equal(metrics(html).length, 0);
+    assert.deepEqual(metrics(html).map(match => match[2]), Array(6).fill('—'));
   } finally {current.close();}
 });
 
@@ -220,7 +222,7 @@ test('an incomplete first snapshot is never dimmed or admitted as complete value
     const html = current.render();
     assert.doesNotMatch(html, /class="paper-dimmed"|Last coherent owner snapshot/);
     assert.match(html, /Owner snapshot unavailable/);
-    assert.equal(metrics(html).length, 0);
+    assert.deepEqual(metrics(html).map(match => match[2]), Array(6).fill('—'));
   } finally {current.close();}
 });
 
@@ -228,7 +230,9 @@ test('Bots admits values at the 120 s cap and withholds them beyond it', () => {
   const current = harness();
   try {
     current.setNow(current.at + 120_000);
-    assert.match(metric(current.render(), 'Wallet equity'), /USDC/);
+    const retained = current.render();
+    assert.equal(metric(retained, 'Wallet equity'), '—');
+    assert.match(metric(retained, 'Available cash'), /USDC/);
     current.setNow(current.at + 120_001);
     const html = current.render();
     assert.doesNotMatch(html, /class="paper-dimmed"/);

@@ -87,6 +87,19 @@ test('all six tiles expire strictly beyond 30000 ms, including a freshly recorde
   assert.equal(tiles({ now: now + 30_001, money: freshMoney })[2].value, '—');
 });
 
+test('Today uses current wallet and accounting, not the aggregate degraded status', () => {
+  assert.equal(fixture.status.state, 'degraded');
+  assert.equal(fixture.wallet.state, 'available');
+  assert.equal(fixture.accounting.state, 'available');
+  assert.equal(tiles()[2].value, `${money.daily[0].equity_change} USDC`);
+  for (const section of ['wallet', 'accounting']) {
+    const readKey = section === 'wallet' ? 'walletRead' : 'accountingRead';
+    assert.equal(tiles({ [readKey]: { ...fixture[section], state: 'degraded' } })[2].value, '—');
+    assert.equal(tiles({ [readKey]: { ...fixture[section], snapshot_id: 'other' } })[2].value, '—');
+    assert.equal(tiles({ [readKey]: { ...fixture[section], completeness: 'partial' } })[2].value, '—');
+  }
+});
+
 test('Today is only the current UTC-day Money row, never an older or gap value', () => {
   assert.equal(tiles({ money: { ...money, daily: [money.daily[0], { ...money.daily[0], day: day - 86_400_000, equity_change: '999' }] } })[2].value, '-12.000000000000000000000000000001 USDC');
   for (const change of [{ day: day - 86_400_000 }, { gaps: 1 }, { equity_change: null }, { last_at_ms: now + 1 }, { last_at_ms: now - 400_000 }]) {

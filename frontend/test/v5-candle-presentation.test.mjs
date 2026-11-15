@@ -76,7 +76,7 @@ test("recorded candle time scale keeps the left boundary label inside the chart"
     react: { useRef: () => ({ current: {} }), useState: () => [null, () => {}], useEffect: effect => effect() },
     "@/hooks/useTheme": { useTheme: () => ({ theme: "dark" }) },
     "@/lib/theme-colors": { getThemeColors: () => ({}) },
-    "lightweight-charts": { ColorType: { Solid: "solid" }, CandlestickSeries: {}, createChart: (_container, config) => {
+    "lightweight-charts": { ColorType: { Solid: "solid" }, CandlestickSeries: {}, createSeriesMarkers: () => {}, createChart: (_container, config) => {
       options = config;
       return { addSeries: () => ({ setData() {} }), subscribeCrosshairMove() {}, timeScale: () => ({ fitContent() { fitted = true; } }), remove() {} };
     } },

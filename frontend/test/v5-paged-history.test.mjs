@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import * as policy from '../src/v5/policy.ts';
-import {frontendModules} from './helpers/frontend-module.mjs';
+import {frontendModules, paperVisualStubs} from './helpers/frontend-module.mjs';
 import {paperSafetyReads} from '../src/v5/paper-safety.ts';
 import {paperJournalReads} from '../src/v5/paper-journal.ts';
 
@@ -34,7 +34,7 @@ test('partial retained rows stay visible without becoming complete totals or fla
 
 test('Bots adaptive tables and exact details show partial fills and executor rows with bounded-window labels', () => {
   const stubs = Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}]));
-  const {load} = frontendModules(stubs, {'pages/tabs/ActiveBotsTab.tsx':['PaperRecords']});
+  const {load} = frontendModules({...stubs, ...paperVisualStubs}, {'pages/tabs/ActiveBotsTab.tsx':['PaperRecords']});
   const {PaperRecords} = load('pages/tabs/ActiveBotsTab.tsx');
   for (const kind of ['fills', 'executors']) {
     const read = partial(kind);

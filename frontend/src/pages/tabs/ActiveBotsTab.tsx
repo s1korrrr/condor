@@ -13,18 +13,20 @@ import {
   TrendingUp,
   Volume2,
 } from "lucide-react";
-import { Component, lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type ComponentType, type ReactNode } from "react";
+import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { PaperPriceChart } from "@/v5/PaperPriceChart";
+import { PaperPositions } from "@/v5/PaperPositions";
 import type { PaperRead } from "@/v5/contracts";
 import { usePaperSnapshot } from "@/v5/usePaperSnapshot";
 import { usePaperClock } from "@/v5/usePaperClock";
 import { parsePaperReadText } from "@/v5/paper-json";
 import { paperDimmedSnapshot, paperSnapshotPresentation } from "@/v5/snapshot-presentation";
-import { paperPairBag, paperPairHoldings, paperReadFailureMessage } from "@/v5/policy";
+import { paperReadFailureMessage } from "@/v5/policy";
 import { paperCompleteRead, paperNativeHolds, paperSnapshotsAgree } from "@/v5/policy";
 import { readMoney, type MoneyRead } from "@/v5/V5Money";
 import { utcExact } from "@/v5/shown.mjs";
 import { paperAge } from "@/v5/snapshot-presentation";
-import { paperAmount, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperPairObservation, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
+import { paperAmount, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
 import { PaperTerminalHistory } from "@/v5/PaperTerminalHistory";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
 import { paperHeartbeat } from "@/features/bots/fleet-health";
@@ -635,14 +637,6 @@ const PAPER_SECTIONS = {
 
 type PaperRow = Record<string, unknown>;
 const paperObject = (value: unknown): PaperRow => value && typeof value === "object" && !Array.isArray(value) ? value as PaperRow : {};
-type PaperChartsProps = { bot: string; server: string; observations: PaperRead[] };
-function CollectingPaperCharts() {
-  return <div className="paper-chart-collecting"><PaperBadge state="collecting">Collecting</PaperBadge><h3>Closed one-minute price series</h3><p>Waiting for the bounded paper candle export and its chart binding. Fill and executor records remain available below. Empty charts are not zero trades.</p></div>;
-}
-const PaperStrategyCharts = lazy<ComponentType<PaperChartsProps>>(async () => {
-  const workspace = await import("@workspace-monitoring") as { PaperStrategyCharts?: ComponentType<PaperChartsProps> };
-  return { default: workspace.PaperStrategyCharts ?? CollectingPaperCharts };
-});
 
 function PaperBadge({ children, state }: { children: React.ReactNode; state?: string }) {
   return <span className="paper-badge" data-state={state}>{children}</span>;
@@ -795,17 +789,8 @@ export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accoun
       <PaperMetric label="Traded volume" value={paperAmount(accounting?.volume_traded_quote, "USDC")} note={accounting ? `Lifetime · native receipts · As of ${paperTime(accountingRead?.generated_at_ms, now)}` : "Lifetime · complete current owner accounting required"} />
       <PaperMetric label="Last report" value={paperTime(reportAt, now)} note="Native process heartbeat" />
     </dl><p className="paper-caption">{accounting ? <>Filled orders: {paperOrderCount(accounting.entry_count, "entry")} · {paperOrderCount(accounting.exit_count, "exit")}. Accounting since: {paperTime(accounting.accounting_since_ms, now)}. Counts are distinct filled orders, not actions.</> : <>Lifetime accounting: {accountingError ? "Owner read unavailable; no totals are inferred from recent fills." : paperWords(accountingRead?.reason ?? "Collecting the snapshot-bound owner aggregate; no totals are inferred from recent fills.")}</>}</p></section>} />
-    <PaperIsolatedSection name="Pair workspace" resetKey={resetKey} render={() => <section className="paper-section"><div className="paper-section-heading"><h2>Pair workspace</h2><span className="paper-caption">5 pairs · same fixed-target recipe</span></div><div className="paper-pairs">{["BNB-USDC", "BTC-USDC", "ETH-USDC", "SOL-USDC", "XRP-USDC"].map(pair => {
-      const { position, executor, knownFlat, lastReportedFlat, staleSince, decision } = paperPairObservation(pair, bySection.positions, bySection.executors, bySection.decisions, now);
-      const exit = paperExitProjection(position, bySection.positions, bySection.executors, now);
-      const bag = paperPairBag(pair, bySection.decisions, bySection.positions, now);
-      const holdings = paperPairHoldings(pair, bySection.positions, valuesAt);
-      const base = pair.split("-")[0];
-      const pairStates = [paperReadState(bySection.positions, now), paperReadState(bySection.executors, now)];
-      const pairState = pairStates.includes("stale") ? "stale" : pairStates.every(state => state === "available") ? "available" : "degraded";
-      return <article className="paper-pair" key={pair}><div className="paper-section-heading"><h3>{pair}</h3><PaperBadge state={pairState}>{pairState === "stale" ? "Stale · " : pairState === "degraded" ? "Incomplete · " : ""}{position ? holdings && holdings.count > 1 ? `${holdings.count} positions` : paperWords(position.state) : knownFlat ? "No position" : lastReportedFlat ? "No position in last report" : executor ? paperWords(executor.state) : "Not published"}</PaperBadge></div><p className="paper-caption">Position as of {paperTime(bySection.positions?.source_at_ms ?? bySection.positions?.generated_at_ms, now)}</p>{knownFlat ? <p className="paper-caption">No position · waiting for entry signal</p> : lastReportedFlat ? <p className="paper-caption">No position in last report · stale since {paperTime(staleSince, now)}</p> : <><dl className="paper-detail"><dt>Position</dt><dd>{holdings ? <>{paperExactAmount(holdings.total, base)}<span className="paper-caption" style={{ display: "block" }}>{holdings.states.map(item => `${paperWords(item.state)}: ${item.count} · ${item.quantity} ${base}`).join(" · ")}</span></> : position ? "Pair total not published · incomplete or stale position read" : "Not published"}</dd>{bag && <><dt>Bag</dt><dd>{paperWords(bag.reason ?? "not published")}{bag.breakevenPrice ? ` · breakeven ${paperAmount(bag.breakevenPrice, "USDC")}` : ""}{bag.trailArmed === true ? ` · trailing armed${bag.trailPeak ? `, peak ${paperAmount(bag.trailPeak, "USDC")}` : ""}` : ""}{bag.release ? ` · release ${bag.release}` : ""}</dd></>}</dl>{holdings && (holdings.count > 1 || holdings.noFixedTargetCount > 0) ? <p className="paper-caption">Owner-reported exits over {holdings.count} position row{holdings.count === 1 ? "" : "s"}: {holdings.protectedCount} with a fixed-target exit order{holdings.noFixedTargetCount ? ` · ${holdings.noFixedTargetCount} without a fixed-target exit order` : ""}{holdings.unprotectedCount ? ` · unprotected: ${holdings.unprotectedCount} (${holdings.unprotectedReasons.map(paperWords).join(", ")})` : ""}{holdings.unknownCount ? ` · protection not published: ${holdings.unknownCount}` : ""}. Per-row detail is in Holdings below.</p> : !exit.verified ? <p className="paper-caption">{exit.reason}</p> : <dl className="paper-detail"><dt>Target price</dt><dd>{exit.targetPrice != null ? <>{paperAmount(exit.targetPrice, "USDC")}<span className="paper-caption" style={{ display: "block" }}>{exit.basis}</span></> : exit.reason}</dd><dt>Exit progress</dt><dd>{exit.order ? <>{paperWords(exit.order.state)} · {paperExactAmount(exit.remainingAmount, pair.split("-")[0])} remaining<span className="paper-caption" style={{ display: "block" }}>Order {String(exit.order.order_id ?? "pending")} · LIMIT {paperExactAmount(exit.order.price, "USDC")}<br />Placed {paperTime(exit.order.placed_at_ms, now)}</span></> : "Owner protected exit order not published"}</dd><dt>Protected exit</dt><dd>{paperWords(exit.protectedExit)}</dd></dl>}</>}{decision && <p className="paper-caption">Latest decision: {paperWords(decision.status)}{decision.reason ? ` · ${paperWords(decision.reason)}` : ""}{decision.event_at_ms != null ? ` · ${paperTime(decision.event_at_ms, now)}` : ""}</p>}</article>;
-    })}</div></section>} />
-    {complete && <PaperIsolatedSection name="Pair charts" resetKey={resetKey} render={() => <section className="paper-section" id={`paper-charts-${bot}`} aria-label="Paper strategy charts"><div className="paper-section-heading"><h2>Pair charts</h2><span className="paper-caption">Native closed candles only · no inferred prices</span></div><Suspense fallback={<p role="status">Loading paper chart workspace…</p>}><PaperStrategyCharts bot={bot} server="rsibot-v5" observations={reads} /></Suspense></section>} />}
+    <PaperIsolatedSection name="Position cards" resetKey={resetKey} render={() => <PaperPositions positions={bySection.positions} decisions={bySection.decisions} wallet={bySection.wallet} now={now} />} />
+    {complete && <PaperIsolatedSection name="Price and trades" resetKey={resetKey} render={() => <PaperPriceChart fills={bySection.fills} positions={bySection.positions} decisions={bySection.decisions} now={now} />} />}
     <PaperIsolatedSection name="Positions" resetKey={resetKey} render={() => <PaperRecords read={bySection.positions} positions={bySection.positions} executors={bySection.executors} kind="positions" now={now} valuesAt={valuesAt} />} />
     <PaperIsolatedSection name="Fills" resetKey={resetKey} render={() => <PaperRecords read={bySection.fills} kind="fills" now={now} valuesAt={valuesAt} />} />
     <PaperIsolatedSection name="Executors" resetKey={resetKey} render={() => <PaperRecords read={bySection.executors} kind="executors" now={now} valuesAt={valuesAt} />} />
@@ -838,7 +823,6 @@ class PaperSectionSchemaError extends Error {
 }
 
 export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; generatedAt: number | null; ownerState: string }) {
-  const [layout, setLayout] = useState<"grid" | "compact">("grid");
   const now = usePaperClock();
   const query = usePaperSnapshot<PaperRead[]>(["v5-paper-bots", bot], true, 9, (progress, signal) => {
       const prefix = `/api/v1/servers/rsibot-v5/`;
@@ -869,8 +853,9 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
   const money = useQuery({ queryKey: ["v5-money", "7d"], queryFn: () => readMoney("7d"), retry: false, refetchInterval: 60_000 });
   const clock = paperHeartbeat(generatedAt === null ? null : Math.floor(generatedAt * 1000), ownerState, now);
   const heartbeat = clock.current ? "Fresh" : ownerState === "UNAVAILABLE" ? "Unavailable" : "Stale";
-  return <div className="v5-paper-bots" data-layout={layout}>
-    <header className="v5-page-heading"><div><h1>Paper bots</h1><p>{bot} · simulated wallet · live disabled</p></div><div className="v5-button-row"><button className="v5-button" aria-pressed={layout === "grid"} onClick={() => setLayout("grid")}>Grid</button><button className="v5-button" aria-pressed={layout === "compact"} onClick={() => setLayout("compact")}>Compact</button><button className="v5-button" onClick={() => void query.refetch()}>Refresh paper data</button></div></header>
+  return <div className="v5-paper-bots">
+    <header className="v5-page-heading"><div><h1>Paper bots</h1><p>{bot} · simulated wallet · live disabled</p></div><div className="v5-button-row"><button className="v5-button" onClick={() => void query.refetch()}>Refresh paper data</button></div></header>
+
     {query.progress && <p role="status">{query.progress}</p>}
     {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
     <PaperWorkspace snapshotStamp={complete && <p role={dimmed ? "status" : undefined} className={dimmed ? "paper-dimmed-stamp" : undefined}>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}{dimmed ? " · values below are from that time, dimmed until a new report" : ""}</p>} asOf={dimmed ? snapshotAt : null} reads={reads} safetyReads={query.safetyReads} complete={complete} readFailed={query.isError} money={money.isError ? undefined : money.data} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} valuesAt={valuesAt} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} />

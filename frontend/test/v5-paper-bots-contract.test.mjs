@@ -5,13 +5,13 @@ import { paperRiskControllers } from '../src/v5/policy.ts';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { paperReadState, paperCompleteRecords, paperControlState, paperRecordSummary, paperSnapshotsAgree, paperWords, paperAmount, paperExactAmount, paperSectionError, paperTime, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadiness, paperRiskHold, paperRiskHolds, paperExitProjection, paperRiskUsage, paperWalletInventory, paperWalletTotals, paperPairObservation } from '../src/v5/policy.ts';
-import { frontendModules } from './helpers/frontend-module.mjs';
+import { frontendModules, paperWorkspaceModules } from './helpers/frontend-module.mjs';
 
 const final3 = Object.fromEntries(['status','wallet','positions','executors','fills','risk','decisions','history','operations'].map(section => [section, JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/${section}.json`, import.meta.url)))]));
 
 test('FINAL3 real native API records render without losing metadata', () => {
   for (const read of Object.values(final3)) assert.equal(paperSectionError(read),null,read.section);
-  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {load} = paperWorkspaceModules();
   const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values(final3),now:final3.status.read_at_ms,reportAt:final3.status.generated_at_ms,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
   assert.doesNotMatch(html,/owner schema invalid|Paper observations are unavailable/);
@@ -95,7 +95,7 @@ test('pinned API73 envelopes render owner reads without schema failures', () => 
     assert.equal(paperSectionError(read), null, read.section);
     assert.equal(paperReadState(read, now), read.state, read.section);
   }
-  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {load} = paperWorkspaceModules();
   const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.entries(apiEnvelopes).filter(([name])=>name!=='collecting').map(([,read])=>read),now,reportAt:now,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
   assert.doesNotMatch(html, /owner schema invalid/);
@@ -107,7 +107,7 @@ test('pinned API73 envelopes render owner reads without schema failures', () => 
 });
 
 test('numeric rail absence is stated only when usable rails are absent', () => {
-  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {load} = paperWorkspaceModules();
   const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
   for (const rails of [[], [{label:'Program exposure',used_quote:'1',limit_quote:'2',used_percent:50}]]) {
     const risk = {...fresh,section:'risk',data:{controllers:{bnb:{operator:{},native:{}}},rails}};
@@ -127,7 +127,7 @@ for (const [reason,label,action] of [
   assert.equal(hold.label, label);
   assert.match(hold.action, new RegExp(action));
   assert.ok(hold.explanation.length > 20);
-  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {load} = paperWorkspaceModules();
   const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:[risk],now,reportAt:now,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
   assert.ok(html.includes(label));
@@ -637,7 +637,7 @@ test('clock durability hold explains entry-only protection and owner acknowledge
 });
 
 test('hold banner labels the clock high-water without an orphaned control sentence', () => {
-  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {load} = paperWorkspaceModules();
   const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
   for (const highWater of [undefined, now]) {
     const risk = {...fresh,section:'risk',data:{control_hold:null,holds:[{reason:'clock_persistence_failed',explanation:''}],clock_recovery:{high_water_ms:highWater}}};
@@ -648,7 +648,7 @@ test('hold banner labels the clock high-water without an orphaned control senten
 });
 
 test('risk map renders native holds even when the owner section is partial', () => {
-  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {load} = paperWorkspaceModules();
   const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
   const fixture = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-c1-1e131c74/native-entry-holds.json', import.meta.url)));
   const risk = {...fresh,section:'risk',completeness:'partial',data:fixture.risk.data};

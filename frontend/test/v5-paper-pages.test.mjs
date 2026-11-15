@@ -4,7 +4,7 @@ import { paperWorkspaceLabel, paperReadiness } from '../src/v5/policy.ts';
 import * as policy from '../src/v5/policy.ts';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { frontendModules } from './helpers/frontend-module.mjs';
+import { frontendModules, paperVisualStubs } from './helpers/frontend-module.mjs';
 import fs from 'node:fs';
 import * as ReactQuery from '@tanstack/react-query';
 
@@ -23,6 +23,7 @@ for (const page of ['health','capital','operations','bots']) for (const failure 
   };
   try {
     const overrides={
+      ...paperVisualStubs,
       '@tanstack/react-query':{...ReactQuery,useQueryClient:() => new ReactQuery.QueryClient(),useQuery:options=>{queries.push(options);return {isPending:true,refetch(){}};}},
       ...Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name=>[name,{}])),
     };

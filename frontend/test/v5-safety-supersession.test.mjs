@@ -4,13 +4,14 @@ import fs from 'node:fs';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import {paperSafetyReads} from '../src/v5/paper-safety.ts';
-import {frontendModules} from './helpers/frontend-module.mjs';
+import {frontendModules, paperVisualStubs} from './helpers/frontend-module.mjs';
 import {ownerRisk} from './helpers/owner-risk.mjs';
 
 const fixture = section => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/${section}.json`, import.meta.url)));
 const base = ownerRisk('native-entry-holds', fixture('risk'));
 const [bnb, btc] = Object.keys(base.data.controllers);
 const stubs = {
+  ...paperVisualStubs,
   ...Object.fromEntries(['@/components/bots/AggregatedPnlChart', '@/components/bots/ControllerBrowser', '@/components/bots/DeployBotDialog', '@/components/bots/PnlSparkline', '@/hooks/useWebSocket', '@/hooks/useRates'].map(name => [name, {}])),
   '@/features/quant-ops/kit/DataTable': {DataTable:() => null},
   '@workspace-monitoring': {PaperStrategyCharts:() => null, StrategyCharts:() => null},

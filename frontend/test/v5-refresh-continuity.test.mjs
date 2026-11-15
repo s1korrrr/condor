@@ -5,7 +5,7 @@ import React from 'react';
 import * as ReactQuery from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { setImmediate } from 'node:timers/promises';
-import { frontendModules } from './helpers/frontend-module.mjs';
+import { frontendModules, paperVisualStubs } from './helpers/frontend-module.mjs';
 
 const fixture = section => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
 const sections = ['status','wallet','positions','fills','executors','risk','decisions','history','accounting'];
@@ -27,7 +27,7 @@ function harness(kind, initial) {
     if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial === Date.now ? owner.read_at_ms : initial() : initial;
     return [slots[index], next => { slots[index] = typeof next === 'function' ? next(slots[index]) : next; }];
   };
-  const {load} = frontendModules({...stubs, '@/v5/usePaperClock':{usePaperClock:() => owner.read_at_ms}, react:{...React,useState,useRef:initial => useState(() => ({current:initial}))[0],useEffect() {}}, '@tanstack/react-query':{...ReactQuery,useQueryClient:() => client,useQuery:options => {
+  const {load} = frontendModules({...stubs, ...paperVisualStubs, '@/v5/usePaperClock':{usePaperClock:() => owner.read_at_ms}, react:{...React,useState,useRef:initial => useState(() => ({current:initial}))[0],useEffect() {}}, '@tanstack/react-query':{...ReactQuery,useQueryClient:() => client,useQuery:options => {
     if (options.queryKey[0] === 'v5-money') return {data:undefined,isError:false};
     if (options.enabled === false) return {isPending:true,isFetching:false,isError:false,refetch() {}};
     spec = options;

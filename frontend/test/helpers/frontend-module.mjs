@@ -3,9 +3,11 @@ import path from 'node:path';
 import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
+import * as ReactQuery from '@tanstack/react-query';
 
 const require = createRequire(import.meta.url);
 const sourceRoot = fileURLToPath(new URL('../../src/', import.meta.url));
+export const paperVisualStubs = { '@/v5/PaperPriceChart': { PaperPriceChart: () => null }, '@/v5/PaperPositions': { PaperPositions: () => null } };
 
 // Fresh module graph per scenario. Actual TS/TSX and dependencies run unchanged;
 // callers replace only browser I/O or a component's external context boundary.
@@ -36,6 +38,15 @@ export function frontendModules(overrides = {}, privateExports = {}, transform =
     return module.exports;
   }
   return { load };
+}
+
+export function paperWorkspaceModules() {
+  const overrides = Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}]));
+  return frontendModules({ ...overrides,
+    '@tanstack/react-query': { ...ReactQuery, useQuery: () => ({ data: undefined, isError: false, isPending: true }) },
+    '@/components/charts/RecordedCandleChart': { RecordedCandleChart: () => null },
+    './V5Money': { readMoney: () => { throw new Error('Unexpected Money read in static rendering'); } },
+  });
 }
 
 export function memoryStorage(initial = {}) {

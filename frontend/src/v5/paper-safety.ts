@@ -46,6 +46,20 @@ export function riskSupersedes(read: PaperRead): boolean {
     !!controllers?.length && controllers.every(controller => typeof controller.native.complete === 'boolean' && typeof controller.operator.emergency === 'boolean' && typeof controller.operator.paused === 'boolean');
 }
 
+export function paperSafetyCoverage(read: PaperRead): string[] {
+  if (!riskSupersedes(read)) return [];
+  const data = read.data as PaperRiskData & Record<string, unknown>;
+  const holdsListed = Array.isArray(data.native_entry_holds);
+  return [
+    ...(Array.isArray(data.holds) ? ['owner'] : []),
+    ...(paperRiskControllers(read, 0) ?? []).flatMap(controller => [
+      `${controller.id}:paused`, `${controller.id}:emergency`,
+      ...(controller.latch !== null ? [`${controller.id}:latch`] : []),
+      ...(holdsListed ? [`${controller.id}:holds`] : []),
+    ]),
+  ];
+}
+
 function uncoveredSafety(read: PaperRead, newer: PaperRead): PaperRead {
   // Per signal (R97-SOL-2): a retained hold signal is dropped only when the newer superseding read shows the same signal
   // itself or clears it explicitly (operator flag === false; latch false with complete native evidence; a listed native

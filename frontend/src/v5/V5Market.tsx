@@ -5,7 +5,7 @@ import { SparkChart, TimeSeriesChart } from "@/features/quant-ops/kit/charts";
 import { TileGrid } from "@/features/quant-ops/kit/grid";
 import type { ChartSeries } from "@/features/quant-ops/kit/series";
 import { V5CandleStore } from "./V5CandleStore";
-import { readCandleStore } from "./candle-store-api";
+import { candleSummaryQuery, readCandleStore } from "./candle-store-api";
 import type { CrossStats } from "./candle-store-model";
 import { selectedCohortCoverage } from "./evidence";
 import { V5MarketDetail, type DetailRead } from "./V5MarketDetail";
@@ -67,7 +67,7 @@ function Card({ title, hint, children, className }: { title: string; hint?: stri
 
 export function V5Market() {
   const [range, setRange] = useState<(typeof RANGES)[number]>("24h");
-  const summary = useQuery({ queryKey: ["v5-market", "summary"], queryFn: () => readCandleStore<Summary>("summary"), retry: false, refetchInterval: REFRESH_MS });
+  const summary = useQuery({ ...candleSummaryQuery<Summary>(), retry: false, refetchInterval: REFRESH_MS });
   const coins = useQuery({ queryKey: ["v5-market", "coins", range], queryFn: () => readCoins(range), retry: false, refetchInterval: REFRESH_MS });
   const cross = useQuery({ queryKey: ["v5-market", "cross"], queryFn: readCross, retry: false, refetchInterval: REFRESH_MS, enabled: coins.isSuccess });
   const workspace = useQuery({ queryKey: ["v5-workspace"], queryFn: v5Api.workspace, refetchInterval: 30_000 });

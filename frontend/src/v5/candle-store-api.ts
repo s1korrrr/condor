@@ -12,3 +12,10 @@ export async function readCandleStore<T>(view: string, params?: Record<string, s
   if (typeof body.data === "object") candleSent.set(body.data as object, sentMs);
   return body.data;
 }
+
+const readCandleSummary = () => readCandleStore<unknown>("summary");
+export const candleSummaryQuery = <T,>() => ({
+  queryKey: ["candle-summary"] as const,
+  queryFn: readCandleSummary as () => Promise<T>,
+  structuralSharing: false as const,
+});

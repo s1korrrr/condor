@@ -4,7 +4,7 @@ import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable"
 import { TileGrid } from "@/features/quant-ops/kit/grid";
 import { RecordedCandleChart, type RecordedMinute } from "@/components/charts/RecordedCandleChart";
 import { CoverageHeatmapPanel, CrossVenuePanel, StoreFactsPanel } from "./CandleStorePanels";
-import { readCandleStore } from "./candle-store-api";
+import { candleSummaryQuery, readCandleStore } from "./candle-store-api";
 import "./candle-store.css";
 
 type Row = { health_rules: { level: string; rule: string; detail: string }[]; lane: string; venue: string; segment: string; pair: string; health: string; volume_unit: string; last_minute: number | null; last_minute_age_s: number | null; coverage_1h: number | null; coverage_24h: number | null; coverage_7d: number | null; gaps_7d: number | null; pending: number | null; unrecoverable_7d: number | null; no_trade_7d: number | null; ws_state: string | null; grace_s: number | null };
@@ -60,7 +60,7 @@ export function V5CandleStore() {
   // One `summary` read returns lane tiles and instrument rows from one owner pass; other tabs leave both owner
   // read slots free for their own, narrower reads.
   const coverageTab = tab === "coverage";
-  const summary = useQuery({ queryKey: ["candle-summary"], queryFn: () => readCandleStore<Summary>("summary"), retry: false, refetchInterval: query => isWarming(query.state.error) ? 5000 : 30000, enabled: coverageTab });
+  const summary = useQuery({ ...candleSummaryQuery<Summary>(), retry: false, refetchInterval: query => isWarming(query.state.error) ? 5000 : 30000, enabled: coverageTab });
   const rows = summary.isError ? [] : summary.data?.rows ?? [];
   const heldOkx = rows.filter(row => row.lane === "okx__spot" && row.last_minute !== null);
   const v5Pairs = ["BNB-USDC", "BTC-USDC", "ETH-USDC", "SOL-USDC", "XRP-USDC"];

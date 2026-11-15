@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
-import { candleRequestedAt, readCandleStore } from "./candle-store-api";
+import { candleRequestedAt, candleSummaryQuery } from "./candle-store-api";
 import { helmRequestedAt, readHelm } from "./V5Helm";
 import type { PaperRead } from "./contracts";
 import { paperObservationSummary, paperRiskControllers, paperRiskHolds } from "./policy";
@@ -10,24 +10,22 @@ import { usePaperObservation } from "./usePaperObservation";
 import "./status-strip.css";
 
 /**
- * Status strip shown by the shell on every V5 page. It reads nothing of its own that a page does not already read:
- * the paper observation (Bots/Settings), Helm (Helm page) and the candle-store summary (Market) share their
- * react-query keys, so one request serves both. Polling is TanStack's default: it pauses in hidden tabs.
+ * Status strip shown by the shell on every V5 page. Paper observations have a separate query from Bots but share
+ * bot-scoped safety evidence; Helm and candle summary use their pages' query keys. Polling pauses in hidden tabs.
  */
 export function StatusStrip({ bot, candleConfigured }: { bot: string | null; candleConfigured: boolean }) {
   const now = usePaperClock();
   const paper = usePaperObservation(bot);
   const helm = useQuery({ queryKey: ["v5-helm"], queryFn: readHelm, retry: false, refetchInterval: 15_000 });
-  const candles = useQuery({ queryKey: ["candle-summary"], queryFn: () => readCandleStore<{ tiles: unknown }>("summary"), retry: false, refetchInterval: 30_000, enabled: candleConfigured });
+  const candles = useQuery({ ...candleSummaryQuery<{ tiles: unknown }>(), retry: false, refetchInterval: 30_000, enabled: candleConfigured });
   // Current only when the last read succeeded and the whole set passes the paper read contracts at this moment.
   const reads = paper.isError ? null : paper.data ?? null;
   const current = !!bot && !!reads && paperObservationSummary(reads, bot, now).label === "Available";
   // Owner holds from the current risk read AND newer retained safety evidence (a hold received during a refresh):
   // operator pause, emergency halt, native latch / entry hold, or a published hold. A hold is never hidden.
-  // The displayed risk read counts for holds whatever the whole snapshot's freshness (safetyReads only carries signals
-  // BEYOND the displayed snapshot), scoped to this bot, as the Bots page does (Sol R2 W4 B1).
+  // The displayed risk contributes holds even when stale, unless newer qualified shared evidence supersedes them.
   const displayedRisk = (paper.data ?? []).filter(read => read.section === "risk" && read.bot_id === bot) as PaperRead[];
-  const riskEvidence: PaperRead[] = [...displayedRisk, ...((paper.safetyReads ?? []) as PaperRead[])];
+  const riskEvidence: PaperRead[] = [...paper.reconcileSafety(displayedRisk), ...paper.safetyEvidence];
   const controllers = riskEvidence.flatMap(read => paperRiskControllers(read, now) ?? []);
   const emergency = controllers.some(controller => controller.operator.emergency === true);
   const held = emergency || riskEvidence.some(read => paperRiskHolds(read).length > 0)

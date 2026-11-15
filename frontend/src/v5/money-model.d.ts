@@ -16,3 +16,14 @@ export function latest(rows: MoneyRow[], bot: string): { newest: MoneyRow | null
 export function dayCoverage(entry: DailyRow | null | undefined): number | null;
 export function holdReturn(closesByCoin: Record<string, [number, number][] | undefined>): { pct: number | null; startS: number | null; endS: number | null; missing: string[] };
 export function equityChange(rows: MoneyRow[], bot: string): { pct: number | null; startMs: number | null; endMs: number | null };
+
+/** Exact strings returned by the shared Python daily report and export CLI. */
+export type DailyMoneyRow = {
+  day: number; date: string; bot: "v5" | "helm"; unit: string;
+  first_at_ms: number | null; last_at_ms: number | null;
+  equity_start: string; equity_end: string; equity_change: string; equity_change_pct: string;
+  realized_pnl: string; fees: string; unrealized_pnl_end: string;
+  buys: string; sells: string; fills: string; cash_end: string; held_value_end: string;
+  samples: number; expected_samples: number; present_slots: number; value_slots: number;
+  missing_slots: number; gaps: number; partial: boolean; data_quality: string;
+};

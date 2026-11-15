@@ -6,12 +6,12 @@ import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable"
 import { CHART, type ChartSeries } from "@/features/quant-ops/kit/series";
 import { readCandleStore } from "./candle-store-api";
 import { v5Api } from "./api";
-import { dayCoverage, equityChange, holdReturn, latest, series, type DailyRow, type MoneyRow } from "./money-model.mjs";
+import { equityChange, holdReturn, latest, series, type DailyMoneyRow, type MoneyRow } from "./money-model.mjs";
 import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
 import { utcExact, utcMinute } from "./shown.mjs";
 import "./market.css";
 
-type MoneyRead = { sampler: boolean; started_at_ms: number | null; now_ms: number; range: string; rows: MoneyRow[]; daily: DailyRow[]; recorder_errors: { count: number; last: string | null; at_ms: number | null } };
+type MoneyRead = { sampler: boolean; started_at_ms: number | null; now_ms: number; range: string; rows: MoneyRow[]; daily_report?: DailyMoneyRow[]; recorder_errors: { count: number; last: string | null; at_ms: number | null } };
 type CrossLine = { venue: string; lane: string; close: [number, number][] };
 type Hold = { closes: Record<string, [number, number][] | undefined> };
 const RANGES = ["24h", "7d"] as const;
@@ -37,16 +37,27 @@ async function readHold(): Promise<Hold> {
 const amount = (value: number | null | undefined, digits = 2) => value == null ? "—" : value.toLocaleString("en-US", { minimumFractionDigits: digits, maximumFractionDigits: digits });
 const signed = (value: number | null | undefined, digits = 2) => value == null ? "—" : `${value > 0 ? "+" : ""}${amount(value, digits)}`;
 const num = (value: string | null | undefined) => value != null && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
-const pct = (value: number | null) => value == null ? "—" : `${Math.round(value * 100)}%`;
 const at = (ms: number | null | undefined) => utcMinute(ms) ?? "unknown time";
 
-const dailyColumns: TableColumn<DailyRow>[] = [
-  { id: "day", header: "Day (UTC)", value: row => new Date(row.day).toISOString().slice(0, 10), rowHeader: true, size: 100 },
-  { id: "start", header: "Equity, first sample", value: row => num(row.equity_start), kind: "number", size: 120, cell: row => amount(num(row.equity_start)), title: row => row.first_at_ms ? `at ${at(row.first_at_ms)}` : undefined },
-  { id: "end", header: "Equity, last sample", value: row => num(row.equity_end), kind: "number", size: 120, cell: row => amount(num(row.equity_end)), title: row => row.last_at_ms ? `at ${at(row.last_at_ms)}` : undefined },
-  { id: "change", header: "Equity change", value: row => num(row.equity_change), kind: "number", size: 110, cell: row => signed(num(row.equity_change)), className: row => num(row.equity_change) == null ? undefined : num(row.equity_change)! < 0 ? "is-down" : "is-up" },
-  { id: "realized", header: "Closed-trade profit", value: row => num(row.realized_change), kind: "number", size: 120, cell: row => signed(num(row.realized_change)), title: () => "Change in lifetime realized P&L between the day's first and last sample with values" },
-  { id: "coverage", header: "Day with values", value: row => dayCoverage(row), kind: "number", size: 100, cell: row => pct(dayCoverage(row)), title: row => `${row.valid} of 288 five-minute slots hold values · ${row.samples} samples recorded, ${row.gaps} of them gaps` },
+// Decimal strings stay text in cells, filters, sorting and CSV exports. Numeric
+// table columns coerce to binary floats, so they are unsuitable for this report.
+const dailyColumns: TableColumn<DailyMoneyRow>[] = [
+  { id: "date", header: "Day (UTC)", value: row => row.date, rowHeader: true, size: 110 },
+  { id: "bot", header: "Bot", value: row => row.bot.toUpperCase(), size: 70 },
+  { id: "unit", header: "Unit", value: row => row.unit, size: 100 },
+  ...([
+    ["equity_start", "Start equity"], ["equity_end", "End equity"],
+    ["equity_change", "Change"], ["equity_change_pct", "Change %"],
+    ["realized_pnl", "Realized PnL"], ["fees", "Fees"],
+    ["unrealized_pnl_end", "Unrealized at end"], ["buys", "Buys"],
+    ["sells", "Sells"], ["fills", "Fills"], ["cash_end", "Cash at end"],
+    ["held_value_end", "Held value at end"],
+  ] as const).map(([id, header]): TableColumn<DailyMoneyRow> => ({
+    id, header, value: row => row[id], size: 155,
+  })),
+  { id: "first", header: "First sample (UTC)", value: row => utcExact(row.first_at_ms) ?? "UNAVAILABLE", size: 210 },
+  { id: "last", header: "Last sample (UTC)", value: row => utcExact(row.last_at_ms) ?? "UNAVAILABLE", size: 210 },
+  { id: "quality", header: "Data quality", value: row => row.data_quality, wrap: true, size: 330 },
 ];
 
 export function V5Money() {
@@ -67,7 +78,7 @@ export function V5Money() {
   ];
   const coins = (now?.coins ?? {}) as Record<string, { realized: string | null; unrealized: string | null }>;
   const coinRows = Object.entries(coins).map(([coin, values]) => ({ label: coin, realized: num(values.realized), unrealized: num(values.unrealized) }));
-  const days = money.data?.daily ?? [];
+  const days = money.data?.daily_report ?? [];
   const holdView = hold.data ? holdReturn(hold.data.closes) : null;
   // V5 over its own first and last sample in the 7-day rows; it is "the same window" only if both ends match exactly.
   const v5View = money.data?.range === "7d" ? equityChange(rows, "v5") : null;
@@ -113,8 +124,9 @@ export function V5Money() {
           <p className="v5m-hint">Only the candle store's 7 days can be priced, so the comparison never reaches the trial start (2026-10-29).</p></article>
       </div>
 
-      <section className="v5m-section"><header><h2>Day by day</h2><span>UTC days · first and last sample of each day · sort or filter any column</span></header>
-        <div className="v5m-card">{days.length ? <DataTable rows={days} columns={dailyColumns} rowId={row => String(row.day)} label="V5 daily money" initialSort={{ id: "day", desc: true }} pageSize={14} dense exportName={`v5-money-daily-${range}`} /> : <p className="v5m-hint">No samples yet.</p>}</div>
+      <section className="v5m-section"><header><h2>Daily</h2><span>V5 and Helm · simulated spot money · all retained UTC days, independent of chart range</span></header>
+        <div className="v5m-card">{days.length ? <DataTable rows={days} columns={dailyColumns} rowId={row => `${row.date}-${row.bot}`} label="Daily simulated money" initialSort={{ id: "date", desc: true }} pageSize={14} dense exportName="daily-paper-money" /> : <p className="v5m-hint">UNAVAILABLE: daily report not returned by this dashboard.</p>}</div>
+        <p className="v5m-hint">Start and end are the first and last recorded sample inside each UTC day, including gaps. Changes, realized PnL and fees cover that sample window. Equity change includes external cash flows. Counter resets cannot be fully identified. Percentages round half-even to 12 decimal places; amounts stay exact. Cash, held value and trade/fill counts are not recorded and stay UNAVAILABLE. Partial days and missing slots are marked. Amount columns use text sorting and text filters to preserve decimals.</p>
       </section>
 
       <section className="v5m-section"><header><h2>Helm paper bot</h2><span>{helm.newest ? `latest sample ${at(helm.newest.at_ms)}` : "no sample yet"}</span></header>

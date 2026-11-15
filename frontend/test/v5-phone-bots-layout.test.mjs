@@ -92,11 +92,35 @@ test('recorded chart keeps a 360px canvas, 12px axis labels and dimmed breakeven
     assert.equal(line.title, 'Breakeven');
     assert.match(line.color, /0\.55/);
     assert.match(markers[0].color, /0\.55/);
-    assert.equal(markers[0].text, 'BUY 0.1234567890123456789 @ 700');
+    assert.equal(markers[0].text, 'BUY 0.123457 @ 700.00');
   } finally {
     await act(async () => renderer?.unmount());
     delete globalThis.IS_REACT_ACT_ENVIRONMENT;
   }
+});
+
+test('recorded chart formats marker labels and hovered candle values', async () => {
+  let markers, crosshair;
+  const { RecordedCandleChart } = frontendModules({
+    'lightweight-charts': { CandlestickSeries:{}, ColorType:{Solid:'solid'}, LineStyle:{Dashed:2},
+      createChart:() => ({addSeries:() => ({setData(){}}),subscribeCrosshairMove(callback){crosshair=callback;},timeScale:() => ({fitContent(){}}),remove(){}}),
+      createSeriesMarkers:(_series, value) => { markers=value; } },
+    '@/hooks/useTheme':{useTheme:() => ({theme:'dark'})},
+    '@/lib/theme-colors':{getThemeColors:() => ({})},
+  }).load('components/charts/RecordedCandleChart.tsx');
+  let renderer;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  try {
+    const candle = [60,101.123456789,102.123456789,100.123456789,101.123456789,0.123456789,1,0,0,0,0,0];
+    await act(async () => { renderer=create(React.createElement(RecordedCandleChart,{buckets:[candle],label:'BNB',volumeUnit:'BNB',markers:[{time:60,side:'BUY',quantity:'0.00000000',price:'101.123456789'}]}),{createNodeMock: node => node.type === 'div' ? {} : null}); });
+    assert.equal(markers[0].text, 'BUY 0 @ 101.12');
+    await act(async () => crosshair({time:60}));
+    const readout=renderer.root.findByProps({'aria-live':'polite'});
+    const close = readout.findAllByType('span').find(span => span.props.title === '101.123456789');
+    assert.ok(close);
+    assert.match(close.children.join(''), /101\.12/);
+    assert.doesNotMatch(close.children.join(''), /101\.123456789/);
+  } finally { await act(async () => renderer?.unmount()); delete globalThis.IS_REACT_ACT_ENVIRONMENT; }
 });
 
 function positionProps() {

@@ -10,6 +10,20 @@ import { frontendModules } from './helpers/frontend-module.mjs';
 const css = fs.readFileSync(new URL('../src/v5/phone.css', import.meta.url), 'utf8');
 const now = Date.UTC(2026, 10, 15, 12, 34, 56);
 
+test('collapsed phone summary shows the formatted owner cell with exact title', () => {
+  const { Rows } = frontendModules().load('features/quant-ops/kit/Rows.tsx');
+  const window = new Window();
+  const row = { day:'Today', value:'198961.17077127617' };
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(Rows, { rows:[row], rowId:() => 'day', label:'Money', columns:[
+    { id:'day', header:'Day', rowHeader:true, value: item => item.day },
+    { id:'amount', header:'Equity', value: item => item.value, cell: item => React.createElement('span', {title:item.value}, '198,961.17') },
+  ] }));
+  const value = window.document.querySelectorAll('summary strong')[1];
+  assert.equal(value.textContent, '198,961.17');
+  assert.equal(value.querySelector('[title]').title, row.value);
+  window.close();
+});
+
 function shell(pathname, paper = true) {
   const { load } = frontendModules({
     '@tanstack/react-query': { useQueryClient: () => ({ invalidateQueries() {} }), useQuery: () => ({ data: paper ? { readiness: { paper_owner: { bot_name: 'fixture', mode: 'PAPER' } } } : {} }) },
@@ -319,6 +333,8 @@ test('phone daily money rows retain exact values in titles without raw notes', (
   const notes = [...window.document.querySelectorAll('.v5-phone-row-note')].map(note => note.textContent);
   assert.deepEqual(notes, ['Exact owner amount 1.2345']);
   assert.equal(window.document.querySelector('dd[title="Exact owner amount 1.2345"]').title, 'Exact owner amount 1.2345');
+  assert.equal([...window.document.querySelectorAll('dt')].find(node => node.textContent === 'Zero').nextElementSibling.title, '0');
+  assert.equal([...window.document.querySelectorAll('dt')].find(node => node.textContent === 'Rounded up').nextElementSibling.title, '1.2');
   window.close();
 });
 

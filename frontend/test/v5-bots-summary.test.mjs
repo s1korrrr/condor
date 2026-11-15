@@ -20,6 +20,18 @@ const slots = Math.floor((now - day) / 300_000) + 1;
 const money = { range: '7d', now_ms: now, daily: [{ day, samples: slots, valid: slots, equity_valid: slots, gaps: 0, first_at_ms: day, last_at_ms: now, equity_first_at_ms: day, equity_last_at_ms: now, equity_start: '200000', equity_end: '199988', equity_change: '-12.000000000000000000000000000001' }] };
 const tiles = (changes = {}) => paperMoneyTiles({ walletRead: fixture.wallet, accountingRead: fixture.accounting, snapshot: fixture.status, complete: true, now, money, ...changes });
 
+test('native risk rail limits are formatted with their exact owner strings in titles', () => {
+  const risk = structuredClone(fixture.risk);
+  const native = Object.values(risk.data.controllers)[0].native;
+  native.configured_limits.pair_quote = '99.780079327317';
+  native.configured_limits.program_quote = '200000.000000007317';
+  const reads = Object.values(fixture).map(read => read.section === 'risk' ? risk : read);
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace, {reads, accountingRead:fixture.accounting, money, now, reportAt:now, heartbeat:'Fresh', bot:fixture.status.bot_id}));
+  assert.match(html, /Pair cap 99\.78 USDC/);
+  assert.match(html, /title="[^"]*99\.780079327317/);
+  assert.doesNotMatch(html, />[^<]*99\.780079327317/);
+});
+
 test('money tiles format values while retaining exact source and arithmetic results', () => {
   const result = tiles({walletRead:{...fixture.wallet,data:{...fixture.wallet.data,equity_quote:'199087.84807014005820',initial_funding_quote:'200000',external_cash_flows_quote:'0'}}});
   assert.deepEqual(result.slice(0,3).map(tile => tile.value), ['199,087.85 USDC','−912.15 USDC','−12.00 USDC']);

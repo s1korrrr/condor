@@ -154,7 +154,7 @@ test('coin: 6 significant digits at most, trailing zeros removed, no 18 decimals
   assert.equal(coin('2.50000', 'ETH'), '2.5 ETH');
   assert.equal(coin('100.000000', 'SOL'), '100 SOL');
   assert.equal(coin(1234567.891, 'XRP'), '1,234,568 XRP');
-  assert.equal(coin('0.00000049'), '0.00000049');
+  assert.equal(coin('0.00000049'), '4.9e−7');
   assert.equal(coin('-0.5', 'BTC'), `${M}0.5 BTC`);
   assert.equal(coin(0), '0');
   assert.equal(coin(1.5), '1.5');
@@ -222,7 +222,7 @@ test('exact decimals through exponent text, dust and price buckets (Sol R1)', ()
   assert.equal(fixed('1e999'), '—');
   // Dust that cannot keep 3 significant digits within 18 decimals is scientific, never 0.
   assert.equal(coin('0.00000000000000000049', 'BTC'), '4.9e−19 BTC');
-  assert.equal(coin('0.000000000000000999', 'BTC'), '0.000000000000000999 BTC');
+  assert.equal(coin('0.000000000000000999', 'BTC'), '9.99e−16 BTC');
   assert.equal(coin('0.016245819000000000', 'BTC'), '0.016246 BTC');
   // The price bucket comes from the integer digits exactly.
   assert.equal(price('999.999999999999999999999999999999'), '1,000.00');

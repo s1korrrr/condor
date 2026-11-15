@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { Window } from 'happy-dom';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
 const now = Math.floor(Date.now() / 1000);
@@ -65,13 +66,19 @@ test('default region is EEA and spot derivative metrics are explicitly not appli
   assert.doesNotMatch(html, /Place order|Buy stock|Sell stock/);
 });
 
-test('selected public fields keep exact venue decimals and expose the full recorded record', () => {
+test('selected public fields format venue decimals while titles retain exact records', () => {
   const { html } = render();
-  assert.match(html, /Best bid[\s\S]{0,180}9876\.000000000000001/);
-  assert.match(html, /Best ask[\s\S]{0,180}9877\.000000000000001/);
-  assert.match(html, /24h volume[\s\S]{0,180}456\.000000000000001/);
+  assert.match(html, /title="9876\.000000000000001">9,876/);
+  assert.match(html, /title="9877\.000000000000001">9,877/);
+  assert.match(html, /title="456\.000000000000001">456\.00/);
   assert.match(html, /All recorded market fields/);
   assert.match(html, /1234567\.890123456789/);
+  const window = new Window();
+  window.document.body.innerHTML = html;
+  const record = [...window.document.querySelectorAll('pre')].find(pre => pre.title.includes('1234567.890123456789'));
+  assert.ok(record);
+  assert.doesNotMatch(record.textContent, /\d\.\d{9}/);
+  window.close();
   assert.match(html, /Funding settlement \(UTC\)/);
   const { html: failed } = render({ failed: ['stock-market'] });
   assert.doesNotMatch(failed, /All recorded market fields|9876\.000000000000001|1234567\.890123456789/);

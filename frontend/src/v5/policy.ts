@@ -1,5 +1,6 @@
 import { PAPER_SNAPSHOT_FRESH_MS, paperAge, paperTimestampIssue } from './snapshot-presentation.ts';
 import { paperOpaqueClockNumber } from './paper-json.ts';
+import { usdc } from './format.mjs';
 
 export interface ReportPermissionInput {
   agentReady: boolean;
@@ -377,8 +378,9 @@ function paperNativeRails(risk: import("./contracts").PaperRiskData | null): Rec
       limit_quote: limit,
       used_percent: used !== null && limit !== null ? Number(used) / Number(limit) * 100 : null,
       note: complete
-        ? `Pair cap ${paperExactAmount(limits.pair_quote, "USDC")} · program cap ${paperExactAmount(limits.program_quote, "USDC")} · reserved admission ${paperAmount(native.reserved_admission, "USDC")} · daily loss use ${paperAmount(native.daily_loss_use, "USDC")} · drawdown use ${paperAmount(native.drawdown_use, "USDC")} · native entry latch: ${latch} (${paperWords(native.reason)})`
+        ? `Pair cap ${paperDecimal(limits.pair_quote) ? usdc(limits.pair_quote) : "Not published"} · program cap ${paperDecimal(limits.program_quote) ? usdc(limits.program_quote) : "Not published"} · reserved admission ${paperAmount(native.reserved_admission, "USDC")} · daily loss use ${paperAmount(native.daily_loss_use, "USDC")} · drawdown use ${paperAmount(native.drawdown_use, "USDC")} · native entry latch: ${latch} (${paperWords(native.reason)})`
         : `Native risk evidence incomplete: ${paperWords(native.stale_reason ?? native.reason ?? "not published")}. No use is inferred.`,
+      note_exact: complete ? `Pair cap ${paperExactAmount(limits.pair_quote, "USDC")} · program cap ${paperExactAmount(limits.program_quote, "USDC")} · reserved admission ${paperExactAmount(native.reserved_admission, "USDC")} · daily loss use ${paperExactAmount(native.daily_loss_use, "USDC")} · drawdown use ${paperExactAmount(native.drawdown_use, "USDC")}` : undefined,
     };
   });
 }

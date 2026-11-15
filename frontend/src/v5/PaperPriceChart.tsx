@@ -7,16 +7,16 @@ import { PAIRS, paperCandleQuery, usePaperCandleSymbols } from "./paper-candles"
 
 const RecordedCandleChart = lazy(() => import("@/components/charts/RecordedCandleChart").then(module => ({ default: module.RecordedCandleChart })));
 
-export function PaperPriceChart({ fills, positions, decisions, now }: { fills?: PaperRead; positions?: PaperRead; decisions?: PaperRead; now: number }) {
+export function PaperPriceChart({ fills, positions, decisions, now, valuesAt = now }: { fills?: PaperRead; positions?: PaperRead; decisions?: PaperRead; now: number; valuesAt?: number }) {
   const [pair, setPair] = useState(PAIRS[0]);
   const [range, setRange] = useState("24h");
   const symbols = usePaperCandleSymbols();
   const listed = !symbols.isError && symbols.data?.rows.some(row => row.lane === "okx__spot" && row.pair === pair);
   const candles = useQuery(paperCandleQuery(pair, range, !!listed));
   const view = !candles.isError && listed ? candles.data : undefined;
-  const records = paperRetainedRecords(fills, now);
+  const records = paperRetainedRecords(fills, valuesAt);
   const mapped = useMemo(() => view && records ? tradeMarkers(records, pair, view.start, view.end, view.buckets) : null, [view, records, pair]);
-  const bag = paperPairBag(pair, decisions, positions, now);
+  const bag = paperPairBag(pair, decisions, positions, valuesAt);
   return <section className="paper-section"><div className="paper-section-heading"><h2>Price and trades</h2></div>
     <div className="v5-button-row">{PAIRS.map(item => <button className="v5-button" key={item} aria-pressed={pair === item} onClick={() => setPair(item)}>{item.split("-")[0]}</button>)}</div>
     <div className="v5-button-row">{[["24h", "1D"], ["7d", "7D"]].map(([value, label]) => <button className="v5-button" key={value} aria-pressed={range === value} onClick={() => setRange(value)}>{label}</button>)}</div>

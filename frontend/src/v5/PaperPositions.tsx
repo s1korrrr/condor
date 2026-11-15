@@ -7,20 +7,20 @@ import { PAIRS, paperCandleQuery, usePaperCandleSymbols } from "./paper-candles"
 import { readMoney } from "./money-api";
 import { utcMinute } from "./shown.mjs";
 
-export function PaperPositions({ positions, decisions, wallet, now }: { positions?: PaperRead; decisions?: PaperRead; wallet?: PaperRead; now: number }) {
+export function PaperPositions({ positions, decisions, wallet, now, valuesAt = now }: { positions?: PaperRead; decisions?: PaperRead; wallet?: PaperRead; now: number; valuesAt?: number }) {
   const symbols = usePaperCandleSymbols();
   const prices = useQueries({ queries: PAIRS.map(pair => paperCandleQuery(pair, "24h", !symbols.isError && !!symbols.data?.rows.some(row => row.lane === "okx__spot" && row.pair === pair))) });
   const money = useQuery({ queryKey: ["v5-money", "7d"], queryFn: () => readMoney("7d"), retry: false, refetchInterval: 60_000 });
   const newest = !money.isError ? latest(money.data?.rows ?? [], "v5").newest : null;
   const sample = moneySampleState(newest, now);
-  const rows = paperCompleteRecords(positions, now);
-  const walletData = paperCompleteRead(wallet, now) && wallet?.data && typeof wallet.data === "object" && !Array.isArray(wallet.data) ? wallet.data as Record<string, unknown> : null;
+  const rows = paperCompleteRecords(positions, valuesAt);
+  const walletData = paperCompleteRead(wallet, valuesAt) && wallet?.data && typeof wallet.data === "object" && !Array.isArray(wallet.data) ? wallet.data as Record<string, unknown> : null;
   const assets = Array.isArray(walletData?.assets) ? walletData.assets as Record<string, unknown>[] : [];
   return <section className="paper-section"><div className="paper-section-heading"><h2>Positions</h2></div><div className="paper-pairs">{PAIRS.map((pair, index) => {
     const coin = pair.split("-")[0];
-    const holdings = paperPairHoldings(pair, positions, now);
+    const holdings = paperPairHoldings(pair, positions, valuesAt);
     const lots = rows && holdings ? activeLots(rows.filter(row => row.trading_pair === pair)) : null;
-    const bag = paperPairBag(pair, decisions, positions, now);
+    const bag = paperPairBag(pair, decisions, positions, valuesAt);
     const candle = !prices[index].isError && !symbols.isError ? prices[index].data?.buckets.at(-1) : null;
     const observed = candle && candle[6] === 1 && typeof candle[4] === "number" ? { close: candle[4], at: (candle[0] + 60) * 1000 } : null;
     const price = observed && observed.at <= now && now - observed.at <= 180_000 ? observed : null;

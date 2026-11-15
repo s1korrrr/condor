@@ -64,3 +64,54 @@ def test_existing_owner_expiry_is_published_but_no_cadence_is_fabricated(tmp_pat
             "last_attempt_ms": 123456,
             "task_id": "market_context",
         }
+
+
+@pytest.mark.parametrize(
+    ("enabled", "expected"),
+    [
+        ("absent", "task_enablement_not_published"),
+        (None, "task_enablement_invalid"),
+        ("false", "task_enablement_invalid"),
+        (0, "task_enablement_invalid"),
+        ({}, "task_enablement_invalid"),
+        ([], "task_enablement_invalid"),
+        (False, "task_disabled"),
+    ],
+)
+def test_task_readiness_distinguishes_unknown_invalid_and_disabled(
+    tmp_path, enabled, expected
+):
+    api = FakeUpstream()
+    if enabled == "absent":
+        del api.task_rows[0]["enabled"]
+    else:
+        api.task_rows[0]["enabled"] = enabled
+    api.task_rows[0]["reason"] = "task_disabled"
+    app = create_app(
+        settings=settings(tmp_path), upstream=api, static_dir=tmp_path / "dist"
+    )
+    with TestClient(app) as client:
+        login(client)
+        workspace = client.get("/api/v5/workspace").json()
+        assert workspace["agents"][0]["status"] == "blocked"
+        assert workspace["agents"][0]["blockers"] == [expected]
+        detail = client.get("/api/v5/agents/market_analyst").json()
+        assert detail["status"] == "blocked"
+        assert detail["blockers"] == [expected]
+        report = client.post(
+            "/api/v5/agents/market_analyst/report", headers={"Origin": ORIGIN}
+        ).json()
+        assert report["status"] == "BLOCKED"
+        assert report["ticks"][0]["error"] == expected
+        loop = client.post(
+            "/api/v5/agents/market_analyst/loops/start",
+            headers={"Origin": ORIGIN},
+            json={
+                "loop_id": "market_analyst_monitor",
+                "frequency_sec": 900,
+                "max_ticks": 1,
+            },
+        )
+        assert loop.status_code == 409
+        assert loop.json()["detail"]["code"] == expected
+        assert api.report_calls == []

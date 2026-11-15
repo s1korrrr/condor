@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
+import { act, create } from "react-test-renderer";
 import { frontendModules } from "./helpers/frontend-module.mjs";
 import { advisorAvailability, scheduledAgentLines } from "../src/v5/agent-status.ts";
 
@@ -17,7 +18,7 @@ const workspace = {
   advisor: { task_profiles: [{ task_id: "market_context", enabled: true, model: "owner-model" }] },
 };
 
-function renderPage(page, read) {
+function pageModules(read) {
   const { load } = frontendModules({
     "@tanstack/react-query": {
       useQuery: ({ queryKey }) => queryKey[0] === "v5-agent" ? { data: agent } : read,
@@ -30,7 +31,11 @@ function renderPage(page, read) {
     },
     "react-markdown": {},
   });
-  return renderToStaticMarkup(React.createElement(load("v5/V5Pages.tsx")[page]));
+  return load("v5/V5Pages.tsx");
+}
+
+function renderPage(page, read) {
+  return renderToStaticMarkup(React.createElement(pageModules(read)[page]));
 }
 
 test("agent action calls the advisor disabled only on explicit owner false", () => {
@@ -331,5 +336,132 @@ test("line model keeps loading, unavailable and upstream errors distinct without
       assert.match(line.reason, /^Advisor state not read: /);
       assert.notEqual(line.state, "Disabled");
     }
+  }
+});
+
+test("round2 current report expires between owner refreshes and becomes historical", () => {
+  const data = scheduledWorkspace();
+  const read = { data };
+  const current = scheduledAgentLines(read, now)[0];
+  assert.equal(current.state, "Last report accepted");
+  assert.equal(current.reportState, "CURRENT_REPORT");
+  for (const [offset, age] of [[1000, "0s ago"], [2000, "1s ago"]]) {
+    const expired = scheduledAgentLines(read, now + offset)[0];
+    assert.equal(expired.state, `Last report expired at 2026-11-15 12:00:01.000 UTC (${age})`);
+    assert.equal(expired.reportState, "was CURRENT_REPORT");
+    assert.equal(expired.reportStatus, "ACCEPTED");
+  }
+  assert.equal(data.advisor.latest_by_task.market_context.status, "CURRENT_REPORT");
+});
+
+test("round2 owner expiry includes its UTC instant and relative time", context => {
+  context.mock.method(Date, "now", () => now);
+  const data = scheduledWorkspace();
+  const current = scheduledAgentLines({ data }, now)[0];
+  assert.equal(current.expiryTime, "2026-11-15T12:00:01.000Z");
+  assert.equal(current.expiryRelative, "in 1s");
+  const expired = scheduledAgentLines({ data }, now + 2000)[0];
+  assert.equal(expired.expiryTime, current.expiryTime);
+  assert.equal(expired.expiryRelative, "1s ago");
+  assert.match(renderPage("AgentsPage", { data }), /Owner expiry:.*2026-11-15 12:00:01.000 UTC.*in 1s/);
+});
+
+for (const [code, wording] of [
+  ["task_enablement_not_published", "Task enablement not published by the owner service"],
+  ["task_enablement_invalid", "Task enablement invalid in the owner response"],
+  ["task_disabled", "Task disabled by the owner service"],
+]) {
+  test(`round2 catalog explains ${code} in plain words`, () => {
+    const data = scheduledWorkspace();
+    data.agents[0] = { ...agent, status: "blocked", blockers: [code] };
+    const html = renderPage("AgentsPage", { data });
+    assert.ok(html.includes(wording));
+    assert.ok(!html.includes(code));
+    if (code !== "task_disabled") assert.doesNotMatch(html, /Task disabled by the owner service/);
+  });
+}
+
+for (const [name, change] of [
+  ["null advisor", data => { data.advisor = null; }],
+  ["missing advisor", data => { delete data.advisor; }],
+  ["object task profiles", data => { data.advisor.task_profiles = {}; }],
+  ["null task profiles", data => { data.advisor.task_profiles = null; }],
+  ["null profile row", data => { data.advisor.task_profiles = [null]; }],
+]) {
+  test(`round2 malformed ${name} stays unavailable without crashing`, () => {
+    const data = scheduledWorkspace();
+    change(data);
+    const read = { data };
+    assert.equal(advisorAvailability(read).state, "unavailable");
+    for (const line of scheduledAgentLines(read, now)) {
+      assert.equal(line.state, "Unavailable");
+      assert.match(line.reason, /^Advisor state not read: /);
+    }
+    for (const page of ["AgentsPage", "AgentDetailPage"]) {
+      const html = renderPage(page, read);
+      assert.match(html, /Advisor state not read: /);
+      assert.doesNotMatch(html, /Advisor is disabled|Bounded to/);
+      if (page === "AgentDetailPage") assert.match(html, /disabled=""[^>]*>.*?Request report/);
+    }
+  });
+}
+
+for (const [name, record] of [["missing result", {}], ["null result", { result: null }], ["array result", { result: [] }]]) {
+  test(`round2 malformed report with ${name} stays unavailable without crashing`, () => {
+    const data = scheduledWorkspace();
+    data.advisor.latest_by_task.market_context.record = record;
+    const lines = scheduledAgentLines({ data }, now);
+    assert.equal(lines[0].state, "Unavailable");
+    assert.match(lines[0].reason, /^Advisor state not read: .*record.result/);
+    assert.equal(lines[0].reportTime, null);
+    assert.equal(lines[1].state, "Last report accepted");
+    assert.match(renderPage("AgentsPage", { data }), /Advisor state not read: .*record.result/);
+  });
+}
+
+test("round2 mounted agent panels advance age and expiry without a new query result", async context => {
+  let clockNow = now;
+  context.mock.method(Date, "now", () => clockNow);
+  const previousWindow = globalThis.window;
+  const previousDocument = globalThis.document;
+  const previousAct = globalThis.IS_REACT_ACT_ENVIRONMENT;
+  const browser = new EventTarget();
+  const intervals = new Map();
+  let nextInterval = 0;
+  browser.setInterval = (callback, delay) => {
+    intervals.set(++nextInterval, { callback, delay });
+    return nextInterval;
+  };
+  browser.clearInterval = timer => intervals.delete(timer);
+  globalThis.window = browser;
+  globalThis.document = new EventTarget();
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  const data = scheduledWorkspace();
+  const { AgentsPage, AgentDetailPage } = pageModules({ data });
+  let renderer;
+  function textContent(node) {
+    return typeof node === "string" ? node : node.children.map(textContent).join("");
+  }
+  const panelText = () => renderer.root.findAllByProps({ "aria-label": "Scheduled agents" }).map(textContent).join("\n");
+  try {
+    await act(async () => {
+      renderer = create(React.createElement(React.Fragment, null, React.createElement(AgentsPage), React.createElement(AgentDetailPage)));
+    });
+    assert.match(panelText(), /2m 0s ago/);
+    clockNow = now + 2000;
+    await act(async () => { for (const { callback, delay } of intervals.values()) if (delay <= 2000) callback(); });
+    const text = panelText();
+    assert.ok(text.includes("2m 2s ago"), "mounted panel must advance age with unchanged query data");
+    assert.match(text, /Last report expired at 2026-11-15 12:00:01.000 UTC \(1s ago\)/);
+    assert.match(text, /was CURRENT_REPORT/);
+    assert.doesNotMatch(text, /Last report accepted|not expired/);
+    assert.equal([...intervals.values()].filter(timer => timer.delay === 1000).length, 1, "both panels share one clock interval");
+    assert.equal(data.advisor.latest_by_task.market_context.status, "CURRENT_REPORT");
+  } finally {
+    await act(async () => renderer?.unmount());
+    assert.equal(intervals.size, 0, "clock interval is removed on unmount");
+    if (previousWindow === undefined) delete globalThis.window; else globalThis.window = previousWindow;
+    if (previousDocument === undefined) delete globalThis.document; else globalThis.document = previousDocument;
+    if (previousAct === undefined) delete globalThis.IS_REACT_ACT_ENVIRONMENT; else globalThis.IS_REACT_ACT_ENVIRONMENT = previousAct;
   }
 });

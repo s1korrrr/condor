@@ -8,7 +8,8 @@ import { usePaperObservation } from "./usePaperObservation";
 import type { MarketEvidence, V5Agent, V5Session, V5SessionDetail, V5TaskReport, V5Workspace } from "./contracts";
 import { formatUsdAmount, marketFeatures, qualifiedFeatureValue, selectedCohortCoverage, strategyAssessmentLabel, timestampAgeMs } from "./evidence";
 import { boundedLoopParameters, canRequestReport, paperReadiness, paperWorkspaceLabel, paperWords } from "./policy";
-import { advisorAvailability, scheduledAgentLines, type WorkspaceRead } from "./agent-status";
+import { advisorAvailability, advisorTaskProfile, scheduledAgentLines, type WorkspaceRead } from "./agent-status";
+import { usePaperClock } from "./usePaperClock";
 
 function useWorkspace() {
   return useQuery({ queryKey: ["v5-workspace"], queryFn: v5Api.workspace, refetchInterval: 30_000 });
@@ -70,7 +71,12 @@ function duration(seconds: number) {
 }
 
 function reasonList(agent: V5Agent) {
-  if (agent.blockers.length) return agent.blockers;
+  const labels: Record<string, string> = {
+    task_disabled: "Task disabled by the owner service.",
+    task_enablement_not_published: "Task enablement not published by the owner service.",
+    task_enablement_invalid: "Task enablement invalid in the owner response.",
+  };
+  if (agent.blockers.length) return agent.blockers.map(reason => labels[reason] ?? reason);
   if (agent.status === "blocked") return ["Owner reported this agent is blocked; no blocker details were supplied."];
   return [];
 }
@@ -267,9 +273,10 @@ export function AgentsPage() {
 }
 
 function ScheduledAgents({ read, agentId }: { read: WorkspaceRead; agentId?: string }) {
-  const lines = scheduledAgentLines(read).filter(line => !agentId || line.id === agentId);
+  const now = usePaperClock();
+  const lines = scheduledAgentLines(read, now).filter(line => !agentId || line.id === agentId);
   return <section className="v5-panel" aria-label="Scheduled agents"><h2>Scheduled agents</h2>
-    {lines.map(line => <p key={line.id}><Link to={`/agents/${line.id}`}>{line.name}</Link> · <strong>{line.state}</strong> · {line.reason} · Last report: {line.reportTime ? <time dateTime={line.reportTime}>{line.reportTime.replace("T", " ").replace("Z", " UTC")}</time> : "not published"} ({line.reportAge}) · Owner report: {line.reportState} / {line.reportStatus} · {line.expiry} · {line.overdue} · {line.schedule}</p>)}
+    {lines.map(line => <p key={line.id}><Link to={`/agents/${line.id}`}>{line.name}</Link> · <strong>{line.state}</strong> · {line.reason} · Last report: {line.reportTime ? <time dateTime={line.reportTime}>{line.reportTime.replace("T", " ").replace("Z", " UTC")}</time> : "not published"} ({line.reportAge}) · Owner report: {line.reportState} / {line.reportStatus} · {line.expiry}{line.expiryTime && <> · Owner expiry: <time dateTime={line.expiryTime}>{line.expiryTime.replace("T", " ").replace("Z", " UTC")}</time> ({line.expiryRelative})</>} · {line.overdue} · {line.schedule}</p>)}
     <p className="v5-muted">Report times, task state and shared scheduler state come from owner reads. Cadence, role rotation and overdue rules are not published. A loop recipe alone is not scheduling evidence.</p>
   </section>;
 }
@@ -303,12 +310,13 @@ export function AgentDetailPage() {
   }, onSuccess: (session) => { cacheSession(queryClient, session); navigate(`/sessions/${encodeURIComponent(session.id)}`); } });
   const saveNotes = useMutation({ mutationFn: (text: string) => v5Api.saveNotes(id, text), onSuccess: (result) => { setNotes(result.notes); void queryClient.invalidateQueries({ queryKey: ["v5-agent", id] }); } });
   const actionError = inspect.error ?? report.error ?? startLoop.error ?? saveNotes.error;
-  const profile = detailQuery.data?.task_id == null ? undefined : workspace.data?.advisor.task_profiles?.find((row) => row.task_id === detailQuery.data?.task_id);
-  const effectiveModel = profile?.model ?? workspace.data?.advisor.model ?? null;
+  const profile = advisorTaskProfile(workspace, detailQuery.data?.task_id);
+  const configuredModel = profile?.model ?? workspace.data?.advisor?.model;
+  const effectiveModel = typeof configuredModel === "string" ? configuredModel : null;
   const canRequest = !!detailQuery.data && !!workspace.data && canRequestReport({
     agentReady: detailQuery.data.status === "ready",
     advisorEnabled: advisorAvailability(workspace).state === "enabled",
-    taskEnabled: !!profile?.enabled,
+    taskEnabled: profile?.enabled === true,
     modelAvailable: !!effectiveModel,
     mode: workspace.data.identity.mode,
     executionEnabled: workspace.data.identity.execution_enabled,
@@ -334,7 +342,7 @@ export function AgentDetailPage() {
       <div className="v5-safe-action"><button className="v5-button" onClick={() => report.mutate()} disabled={!canRequest || report.isPending}><FileText size={16} />{report.isPending ? "Requesting report…" : "Request report"}</button><span>{canRequest ? `Bounded to ${effectiveModel} and this agent’s configured task profile.` : unavailableReason(agent, workspace, profile?.enabled, !!effectiveModel)}</span></div>
       <div className="v5-safe-action"><button className="v5-button" onClick={() => startLoop.mutate()} disabled={!canStartLoop || startLoop.isPending}><Play size={16} />{startLoop.isPending ? "Starting report loop…" : "Start report loop"}</button><span>{agent.loops[0] ? `${agent.loops[0].name}: ≥ ${duration(boundedLoopParameters(agent.loops[0].frequency_sec, agent.loops[0].max_ticks)?.frequency_sec ?? 900)}, ≤ ${boundedLoopParameters(agent.loops[0].frequency_sec, agent.loops[0].max_ticks)?.max_ticks ?? 1} ticks` : "No report loop is configured."}</span></div>
     </section>
-    {agent.task_id && <TaskLatestReports reports={workspace.data?.advisor.latest_by_task} agents={[agent]} taskId={agent.task_id} />}
+    {agent.task_id && <TaskLatestReports reports={workspace.data?.advisor?.latest_by_task} agents={[agent]} taskId={agent.task_id} />}
     <div className="v5-agent-layout">
       <section className="v5-panel v5-agent-content-panel">
         <div className="v5-tabs" role="tablist" aria-label="Agent details">{tabs.map((key) => <button key={key} role="tab" aria-selected={tab === key} className={tab === key ? "is-selected" : ""} onClick={() => setTab(key)}>{key === "playbook" ? "Playbook" : key === "skills" ? `Skills (${agent.skills.length})` : key === "tools" ? "Tools & policy" : "Notes"}</button>)}</div>

@@ -98,6 +98,7 @@ export interface AdvisorTaskProfile {
   task_id: string | null;
   model: string | null;
   enabled?: boolean;
+  enablement_error?: "task_enablement_not_published" | "task_enablement_invalid";
   reason: string;
   credential_status?: "READY" | "API_KEY_REQUIRED";
 }

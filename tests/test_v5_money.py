@@ -137,6 +137,11 @@ def test_sampler_is_off_by_default_and_daily_does_not_depend_on_range(tmp_path):
         short, week = (client.get("/api/v5/money", params={"range": span}).json() for span in ("24h", "7d"))
         assert short["sampler"] is False
         assert short["daily"] == week["daily"]
+        assert short["daily_report"] == week["daily_report"]
+        reports = {(row["day"], row["bot"]): row for row in short["daily_report"]}
+        assert reports[yesterday, "v5"]["present_slots"] == 288
+        assert reports[yesterday, "helm"]["equity_end"] == "UNAVAILABLE"
+        assert reports[yesterday, "v5"]["cash_end"] == "UNAVAILABLE"
         assert week["daily"][-1]["valid"] == 288  # yesterday, in full, whatever the range
         assert len(week["rows"]) > len(short["rows"]) and all(row["at_ms"] >= NOW_MS - 86_400_000 for row in short["rows"])
 

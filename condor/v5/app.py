@@ -27,7 +27,8 @@ from .candles import CandleOwner, OwnerUnavailable, validate_query
 from .config import Settings, read_secret_file
 from .dashboard import dashboard_profile, read_compatibility_path
 from .helm import read_helm_status
-from .money import MoneyLedger, daily as money_daily, helm_row, seconds_to_next_slot, v5_row
+from .money import DAY_MS, MoneyLedger, daily as money_daily, helm_row, seconds_to_next_slot, v5_row
+from .daily_money import daily_report
 from .learning import FixtureLearningAPI, learning_router
 from .paper import PaperObservation, read_paper_status
 from .state import StateCapacityError, WorkspaceState
@@ -466,9 +467,12 @@ def create_app(
         span = {"24h": 86_400_000, "7d": 7 * 86_400_000}[range]
         record = await run_in_threadpool(money.read, 0)
         started = record[0]["at_ms"] if record else None
+        report_record = [row for row in record if 0 <= row["at_ms"] <= now]
+        report_start = min((row["at_ms"] for row in report_record), default=now) // DAY_MS * DAY_MS
+        report = await run_in_threadpool(daily_report, report_record, report_start, now // DAY_MS * DAY_MS + DAY_MS, now)
         return JSONResponse(
             {"sampler": config.money_sampler, "started_at_ms": started, "now_ms": now, "range": range,
-             "rows": [row for row in record if row["at_ms"] >= now - span], "daily": money_daily(record), "recorder_errors": dict(money_errors)},
+             "rows": [row for row in record if row["at_ms"] >= now - span], "daily": money_daily(record), "daily_report": report, "recorder_errors": dict(money_errors)},
             headers={"Cache-Control": "no-store"},
         )
 

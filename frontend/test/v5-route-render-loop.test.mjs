@@ -16,6 +16,17 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 globalThis.getComputedStyle = browser.getComputedStyle.bind(browser);
 const {frontendModules} = await import('./helpers/frontend-module.mjs');
 const {createRoot} = await import('react-dom/client');
+const formatterOutputs = new Set();
+const recordOutput = output => {
+  if (typeof output === 'string') formatterOutputs.add(output);
+  else if (output && typeof output === 'object') Object.values(output).forEach(recordOutput);
+  return output;
+};
+globalThis.__v5RecordDisplayOutput = recordOutput;
+const instrumentDisplays = (filename, source) => {
+  if (!/\/v5\/(?:format|shown)\.mjs$/.test(filename)) return source;
+  return `${source}\n;for (const [name, original] of Object.entries(module.exports)) { if (typeof original === 'function') module.exports[name] = (...args) => globalThis.__v5RecordDisplayOutput(original(...args)); }`;
+};
 const baselineFiles = new Set(['components/charts/RecordedCandleChart.tsx','features/quant-ops/kit/Rows.tsx','pages/tabs/ActiveBotsTab.tsx','v5/format.mjs','v5/policy.ts','v5/V5Stocks.tsx']);
 const baselineSource = (filename, source) => {
   if (!process.env.DISPLAY_SCAN_BASELINE) return source;
@@ -86,6 +97,28 @@ function longVisibleDecimals(container) {
   return findings;
 }
 
+const numericTokens = text => [...String(text).matchAll(/(?<![\p{L}\p{N}_.])[-−+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?(?:[eE][−+-]?\d+)?(?![\p{L}\p{N}_])/gu)].map(match => match[0]);
+const numericAllowlist = [
+  {name:'small-integer', reason:'Counts, labels and UTC date/time components use whole numbers below 10,000.', accepts: token => /^\d+$/.test(token) && Number(token) < 10000},
+];
+function unprovenNumbers(container, outputs = formatterOutputs) {
+  const text = node => {
+    if (node.nodeType === browser.Node.TEXT_NODE) return node.textContent ?? '';
+    if (node.nodeType !== browser.Node.ELEMENT_NODE || node.matches('script, style, [hidden], [aria-hidden="true"]')) return '';
+    const contents = [...node.childNodes].map(text).join('');
+    return node.matches('div, p, section, article, header, footer, main, aside, li, tr, td, th, dd, dt, summary, h1, h2, h3, h4, pre') ? ` ${contents} ` : contents;
+  };
+  const values = [text(container), ...[...container.querySelectorAll('[aria-label], input, textarea, select')].flatMap(element => [element.getAttribute('aria-label') ?? '', 'value' in element ? element.value : ''])];
+  return [...new Set(values.flatMap(numericTokens).filter(token => ![...outputs].some(output => output.includes(token)) && !numericAllowlist.some(entry => entry.accepts(token))))];
+}
+
+test('numeric provenance rejects unformatted owner values even across element boundaries', () => {
+  const fixture = document.createElement('div');
+  fixture.innerHTML = '<div>99.7800793 USDC</div><div>1234567890123e-20</div><div><span>198961.1707</span><span>7127617</span></div><div></div>';
+  fixture.lastChild.textContent = String(147258.1234567);
+  assert.deepEqual(unprovenNumbers(fixture, new Set()), ['99.7800793', '1234567890123e-20', '198961.17077127617', '147258.1234567']);
+});
+
 test('decimal scan excludes exact titles and only allows three-significant-digit position dust', () => {
   const fixture = document.createElement('div');
   fixture.innerHTML = '<span title="1.123456789">1.12</span><span>2.123456789</span><span>8.7317</span><span>1.234567890123e-20</span><span>0.00000000 BTC</span><span>99.78007932 USDC</span><p><span>198961.1707</span><span>7127617</span></p><div class="paper-positions"><dd><div>+ <span title="0.0000000000123">0.0000000000123 BTC</span> dust</div><div>+ <span title="0.00000000001234">0.00000000001234 BTC</span> dust</div><div>+ <span title="1.000000000">1.000000000 BTC</span> dust</div><div>+ <span title="99.000000000">99.000000000 BTC</span> dust</div></dd></div>';
@@ -117,7 +150,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   Date.now = () => ++now;
   const overrides = {'lightweight-charts':{CandlestickSeries:{},ColorType:{Solid:'solid'},LineStyle:{Dashed:2},createChart:() => ({addSeries:() => ({setData(){},createPriceLine(){}}),subscribeCrosshairMove(){},timeScale:() => ({fitContent(){}}),remove(){}}),createSeriesMarkers(){}},'react-router-dom':{...Router,BrowserRouter:({children}) => React.createElement(Router.MemoryRouter,{initialEntries:[route]},children)}};
   const {load} = frontendModules(overrides,{'v5/V5App.tsx':['client']},(filename,source) => {
-    source = clockMutation(filename,baselineSource(filename,source));
+    source = instrumentDisplays(filename,clockMutation(filename,baselineSource(filename,source)));
     if (!filename.endsWith('/v5/V5Pages.tsx')) return source;
     const anchor = 'function PaperIdentity({ paused = false }: { paused?: boolean }) {';
     assert.equal(source.split(anchor).length - 1,1,'frame probe must target exactly one real PaperIdentity');
@@ -131,6 +164,11 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const requests = [];
   const unexpectedReads = [];
   const decimalFindings = [];
+  const provenanceFindings = [];
+  const scan = (container, label) => {
+    decimalFindings.push(...longVisibleDecimals(container).map(finding => `${label}: ${finding}`));
+    provenanceFindings.push(...unprovenNumbers(container).map(finding => `${label}: ${finding}`));
+  };
   const openDisclosures = async container => {
     while (container.querySelector('details:not([open])')) {
       await React.act(async () => {
@@ -234,14 +272,14 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         if (pathname === '/market') {
           assert.match(container.textContent,/101\.12/,'configured Market must show a fixture candle close');
           assert.match(container.textContent,/Instrument coverage/,'open candle-store details must render the fixture view');
-          decimalFindings.push(...longVisibleDecimals(container).map(finding => `${pathname} / Instrument coverage: ${finding}`));
+          scan(container, `${pathname} / Instrument coverage`);
           for (const [tab, heading] of [['Cross-venue','Cross-venue price deviation'],['Coverage heatmap','Hourly coverage'],['Store facts','Store facts']]) {
             const button = [...container.querySelectorAll('[role="tab"]')].find(node => node.textContent === tab);
             assert.ok(button, `market tab ${tab} must exist`);
             await React.act(async () => { button.click(); await client.refetchQueries({type:'active'}); await new Promise(resolve => setTimeout(resolve,0)); });
             await openDisclosures(container);
             assert.match(container.textContent,new RegExp(heading));
-            decimalFindings.push(...longVisibleDecimals(container).map(finding => `${pathname} / ${tab}: ${finding}`));
+            scan(container, `${pathname} / ${tab}`);
           }
         }
         if (pathname === '/agents/decision_reviewer') {
@@ -250,10 +288,10 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
             assert.ok(button, `agent tab ${tab} must exist`);
             await React.act(async () => { button.click(); });
             await openDisclosures(container);
-            decimalFindings.push(...longVisibleDecimals(container).map(finding => `${pathname} / ${tab}: ${finding}`));
+            scan(container, `${pathname} / ${tab}`);
           }
         }
-        decimalFindings.push(...longVisibleDecimals(container).map(finding => `${pathname}: ${finding}`));
+        scan(container, pathname);
         if (pathname === '/market/stocks') {
           assert.match(container.textContent,/Stock data is not configured/,'the unbound fixture must explain absent stock data');
           assert.equal(container.querySelector('a[href="/market/stocks"]')?.getAttribute('aria-current'),'page');
@@ -266,7 +304,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           await openDisclosures(container);
           assert.match(container.textContent,/EXAMPLE-USDT/,'configured Stocks must show its fixture');
           assert.match(container.textContent,/Best bid/,'configured Stocks must show public observations');
-          decimalFindings.push(...longVisibleDecimals(container).map(finding => `${pathname} / configured: ${finding}`));
+          scan(container, `${pathname} / configured`);
         }
         if (pathname === '/money') {
           // A gap as the latest sample is said, the last values stay labelled with their time, Helm says why it has none.
@@ -279,7 +317,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
             await new Promise(resolve => setTimeout(resolve,0));
           });
           assert.match(container.textContent,/\+1\.23/,'Helm Money fixture must render');
-          decimalFindings.push(...longVisibleDecimals(container).map(finding => `${pathname} / Helm money: ${finding}`));
+          scan(container, `${pathname} / Helm money`);
         }
         if (pathname === '/helm') {
           // A hostile but schema-shaped Helm read: unknowns stay unknown and unrepresentable times never throw.
@@ -295,7 +333,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
             await new Promise(resolve => setTimeout(resolve,0));
           });
           assert.match(container.textContent,/fixture rejection/,'current Helm risk, bag and rejection fixture must render');
-          decimalFindings.push(...longVisibleDecimals(container).map(finding => `${pathname} / current: ${finding}`));
+          scan(container, `${pathname} / current`);
         }
         if (journalRoutes.has(pathname)) {
           assert.ok(container.textContent.includes('OWNER_JOURNAL_EXCEEDED'));
@@ -340,6 +378,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       }
     });
     assert.deepEqual(decimalFindings, [], `Visible decimals over eight places:\n${decimalFindings.join('\n')}`);
+    assert.deepEqual(provenanceFindings, [], `Numbers without display provenance:\n${provenanceFindings.join('\n')}`);
     assert.ok(requests.some(request => request.includes('native%2Fstatus')),'real snapshot query must read owner fixtures');
   } finally {
     client.clear();

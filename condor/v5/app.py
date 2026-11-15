@@ -1249,6 +1249,7 @@ def create_app(
                     "effect",
                 )
                 if key in advisor
+                and (key != "enabled" or isinstance(advisor[key], bool))
             },
             "task_profiles": rows,
             "budget_policy": source.get("budget_policy", {}),

@@ -271,6 +271,38 @@ def test_login_cookie_is_v5_scoped_and_same_origin_only(tmp_path):
         ).json() == {"authenticated": False}
 
 
+def test_settings_keeps_advisor_and_scheduler_sources_separate(tmp_path):
+    class ConflictingUpstream(FakeUpstream):
+        async def observation(self, path):
+            result = await super().observation(path)
+            if path == "/v1/advice/status":
+                result["enabled"] = False
+            return result
+
+    app = create_app(settings=settings(tmp_path), upstream=ConflictingUpstream())
+    with TestClient(app) as client:
+        login(client)
+        result = client.get("/api/v5/settings").json()
+        assert result["budget"]["enabled"] is False
+        assert result["scheduler"]["enabled"] is True
+        assert result["budget_policy"]["authorized_ceiling_usd"] == "200.00"
+        assert "secret" not in result["scheduler"]
+
+    class InvalidAdvisor(ConflictingUpstream):
+        async def observation(self, path):
+            result = await super().observation(path)
+            if path == "/v1/advice/status":
+                result["enabled"] = "false"
+            return result
+
+    app = create_app(settings=settings(tmp_path), upstream=InvalidAdvisor())
+    with TestClient(app) as client:
+        login(client)
+        result = client.get("/api/v5/settings").json()
+        assert "enabled" not in result["budget"]
+        assert result["scheduler"]["enabled"] is True
+
+
 def test_workspace_is_scoped_to_v5_roots_and_sanitizes_upstream(tmp_path):
     api = FakeUpstream()
     config = settings(tmp_path)

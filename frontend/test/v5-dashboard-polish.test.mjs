@@ -75,3 +75,32 @@ for (const label of ['Checking','Unavailable','Stale','Incomplete','Available'])
   assert.match(html, new RegExp(`Read-only configuration · paper owner reads: ${label.toLowerCase()}`));
   if (label !== 'Available') assert.doesNotMatch(html, /current owner-reported readiness/);
 });
+
+test('Settings names independent advisor sources, exact policy and unpublished identity', () => {
+  const profile = {readiness:{paper_owner:{mode:'PAPER',bot_name:'paper'}}};
+  const settings = {identity:{}, budget:{enabled:false}, scheduler:{enabled:true}, budget_policy:{authorized_ceiling_usd:'200.000000000000000000000000000001'}};
+  const {load} = frontendModules({
+    '@tanstack/react-query':{useQueryClient:() => new ReactQuery.QueryClient(),useQuery:({queryKey}) => ({data:queryKey[0]==='v5-profile'?profile:settings,refetch(){}})},
+    './usePaperObservation':{usePaperObservation:() => ({summary:{label:'Available',reason:'Fixture state'}})},
+    'react-markdown':{},
+  });
+  const page = load('v5/V5Pages.tsx').SettingsPage;
+  const html = renderToStaticMarkup(React.createElement(page));
+  assert.match(html, /Advisor enabled/);
+  assert.match(html, /No · source: v5_advisory \/v1\/advice\/status enabled · time not published/);
+  assert.match(html, /Enabled · source: v5_advisory \/v1\/tasks scheduler.enabled · time not published/);
+  assert.match(html, /200\.000000000000000000000000000001 USD/);
+  assert.match(html, /budget_policy\.authorized_ceiling_usd/);
+  assert.match(html, /Not published · Hummingbot paper owner identity image digest field/);
+  delete settings.budget.enabled;
+  const missing = renderToStaticMarkup(React.createElement(page));
+  assert.match(missing, /— · advisor enabled not published/);
+  assert.doesNotMatch(missing, /No · source: v5_advisory/);
+  delete settings.scheduler.enabled;
+  delete settings.budget_policy.authorized_ceiling_usd;
+  settings.source_error = 'advisor:unavailable;task_profiles:unavailable';
+  const failed = renderToStaticMarkup(React.createElement(page));
+  assert.match(failed, /— · advisor source unavailable/);
+  assert.match(failed, /— · task profiles source unavailable/);
+  assert.doesNotMatch(failed, /policy ceiling not published/);
+});

@@ -32,13 +32,28 @@ CLI exports a requested date, defaulting to yesterday UTC.
   until cumulative fees catch up. Equal timestamps and nondecreasing fees
   therefore cannot establish accounting continuity. Historical timestamp
   fields in the record are ignored; the sampler does not add this field.
-- Enabling these counter deltas needs a separate owner contract: for example,
-  a restore-aware `accounting_lineage_id` bound to the counter scope/receipt
-  and changed on every restore, reset or history replacement; alternatively,
-  authoritative realized-PnL and fee interval totals with explicit time bounds,
-  unit and complete-coverage evidence. These are required capabilities, not
-  fields exported by this engine pin. This PR does not invent or accept a
-  lineage field or attempt to reconstruct interval accounting from counters.
+- Future engine field required: `accounting.program.accounting_lineage_id`
+  in the engine observation (Condor accounting-read path:
+  `data.program.accounting_lineage_id`). Type: JSON `string | null`; a string
+  must be a nonempty opaque accounting-generation token, while null means the
+  owner cannot prove continuity. Publisher: the program accounting projection
+  in `hummingbot/strategy_v2/paper_session.py::_observation_lifetime`.
+- Required semantics: a non-null token binds the complete retained native-fill
+  history and its exact realized-PnL/fee counters to one recorder/program scope
+  and quote unit, in the same consistent owner observation. It remains stable
+  for ordinary append-only fills and restarts that preserve that history. It
+  must change before the first accounting publication after every restore,
+  reset, truncation, history replacement or counter-scope/unit change, even if
+  the oldest fill timestamp survives and cumulative fees catch up. A token
+  copied back from a restored database is not continuity proof; the owner must
+  prevent generation reuse across restores or publish null. Condor must not
+  mint this token or derive it from timestamps/counter values.
+- This field and its restore-safe generation/validation are a **separate future
+  engine change**, followed by explicit bridge/sampler integration. It is not
+  exported at `ee8ca6ad`, and this PR neither invents nor accepts it. A separately
+  specified authoritative interval-totals contract with bounds, unit and full
+  coverage could be an alternative. Until an owner contract is implemented and
+  integrated, daily realized PnL and fees remain `UNAVAILABLE` for every record.
 - Equity change includes external cash flows. It must not be called trading
   profit. Unrealized PnL is the last sample's owner value.
 - Money is exact decimal text, calculated with Decimal precision 120 for the

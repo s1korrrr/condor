@@ -12,6 +12,7 @@ export async function readCandleStore<T>(view: string, params?: Record<string, s
 }
 
 const readCandleSummary = () => readCandleStore<unknown>("summary");
+export const candleSummaryInterval = (query: { state: { error: Error | null } }) => query.state.error?.message === "owner_warming" ? 5_000 : 30_000;
 export const candleSummaryQuery = <T,>() => ({
   queryKey: ["candle-summary"] as const,
   queryFn: readCandleSummary as () => Promise<T>,

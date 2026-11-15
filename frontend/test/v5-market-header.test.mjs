@@ -174,7 +174,7 @@ function renderMarket({ expired = false, failed = false, range = '24h', summaryD
     '@tanstack/react-query': { useQuery: options => {
       queries.push(options);
       const key = options.queryKey.join('/');
-      const data = key === 'v5-profile' ? { readiness: { paper_owner: { bot_name: reads[0].bot_id } } } : key === 'v5-workspace' ? {} : key.includes('/coins/') ? coinReads : key.includes('/paper/') ? reads : key === 'candle-summary' ? summaryData : [];
+      const data = key === 'v5-profile' ? { readiness: { paper_owner: { bot_name: reads[0].bot_id } } } : key === 'v5-workspace' ? {} : key.includes('/coins/') ? coinReads : key.includes('/paper/') ? reads : key === 'candle-summary' ? {now: now / 1000, _requestedAtMs: now, ...summaryData} : [];
       const isError = failed && (key.includes('/coins/') || key.includes('/paper/'));
       return { data, isSuccess: !isError, isPending: false, isError, error: isError ? new Error('Read failed') : null, dataUpdatedAt: spot.now * 1000 };
     } },
@@ -188,6 +188,16 @@ function renderMarket({ expired = false, failed = false, range = '24h', summaryD
   });
   return { html: renderToStaticMarkup(React.createElement(load('v5/V5Market.tsx').V5Market)), queries };
 }
+
+test('Market rejects old, future, and delivery-expired owner summaries', () => {
+  const now = dense(180).now * 1000;
+  const lane = {lane:'okx__spot',venue:'okx',segment:'spot',available:true,health:'green',last_minute_age_s:20};
+  for (const summary of [{now:now / 1000 - 600}, {now:now / 1000 + 1}, {now:now / 1000, status_age_s:59, _requestedAtMs:now - 10_000}]) {
+    const html = renderMarket({summaryData:{tiles:[lane],status_age_s:1,...summary}}).html.split('</header>')[0];
+    assert.match(html, /— not current/);
+    assert.doesNotMatch(html, /1\/1 lanes available/);
+  }
+});
 
 test('Market renders a small header, selected range, two chips, holds and hourly returns', () => {
   const { html, queries } = renderMarket({ range: '6h' });

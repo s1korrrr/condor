@@ -1,6 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { NavLink } from "react-router-dom";
-import { candleRequestedAt, candleSummaryQuery } from "./candle-store-api";
+import { candleRequestedAt, candleSummaryInterval, candleSummaryQuery } from "./candle-store-api";
 import { helmRequestedAt, readHelm } from "./V5Helm";
 import type { PaperRead } from "./contracts";
 import { paperNativeHolds, paperObservationSummary, paperRiskControllers, paperRiskHolds } from "./policy";
@@ -17,7 +17,7 @@ export function StatusStrip({ bot, candleConfigured }: { bot: string | null; can
   const now = usePaperClock();
   const paper = usePaperObservation(bot);
   const helm = useQuery({ queryKey: ["v5-helm"], queryFn: readHelm, retry: false, refetchInterval: 15_000 });
-  const candles = useQuery({ ...candleSummaryQuery<{ tiles: unknown; now?: number | null; status_age_s?: number | null }>(), retry: false, refetchInterval: 30_000, enabled: candleConfigured });
+  const candles = useQuery({ ...candleSummaryQuery<{ tiles: unknown; now?: number | null; status_age_s?: number | null }>(), retry: false, refetchInterval: candleSummaryInterval, enabled: candleConfigured });
   // Current only when the last read succeeded and the whole set passes the paper read contracts at this moment.
   const reads = paper.isError ? null : paper.data ?? null;
   const current = !!bot && !!reads && paperObservationSummary(reads, bot, now).label === "Available";

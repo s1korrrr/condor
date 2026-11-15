@@ -12,6 +12,8 @@ test('strip, Market, System and candle details share one summary query and refre
     assert.match(source, /\.\.\.candleSummaryQuery</, `${file} uses canonical query`);
   }
   const marketSource = fs.readFileSync(new URL('../src/v5/V5Market.tsx', import.meta.url), 'utf8');
+  const stripSource = fs.readFileSync(new URL('../src/v5/StatusStrip.tsx', import.meta.url), 'utf8');
+  assert.match(stripSource, /refetchInterval: candleSummaryInterval/, 'strip owns the shared warming retry');
   assert.equal((marketSource.match(/\.\.\.candleSummaryQuery</g) ?? []).length, 2, 'Market and System use the canonical query');
   assert.equal((marketSource.match(/\.\.\.candleSummaryQuery<Summary>\(\)[^\n]*refetchInterval: false/g) ?? []).length, 2, 'Market and System do not poll the summary');
   const detailSource = fs.readFileSync(new URL('../src/v5/V5CandleStore.tsx', import.meta.url), 'utf8');

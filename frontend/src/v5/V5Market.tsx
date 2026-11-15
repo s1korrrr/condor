@@ -5,7 +5,7 @@ import { SparkChart, TimeSeriesChart } from "@/features/quant-ops/kit/charts";
 import { TileGrid } from "@/features/quant-ops/kit/grid";
 import type { ChartSeries } from "@/features/quant-ops/kit/series";
 import { V5CandleStore } from "./V5CandleStore";
-import { candleSummaryQuery, readCandleStore } from "./candle-store-api";
+import { candleRequestedAt, candleSummaryQuery, readCandleStore } from "./candle-store-api";
 import type { CrossStats } from "./candle-store-model";
 import { selectedCohortCoverage } from "./evidence";
 import { V5MarketDetail, type DetailRead } from "./V5MarketDetail";
@@ -100,10 +100,12 @@ export function V5Market() {
   // After a failed refetch TanStack keeps the old data; only a successful read is shown as the store's state.
   const lanes = summary.isSuccess ? summary.data.tiles : [];
   const health = storeHealth(lanes);
-  // The owner's age at read time plus local time since the read arrived, so the chip ticks between reads.
-  const slowestAge = health.oldestMinuteAge == null || !summary.dataUpdatedAt ? null : health.oldestMinuteAge + Math.max(0, now - summary.dataUpdatedAt) / 1000;
-  const statusAge = summary.isSuccess && summary.data.status_age_s != null ? summary.data.status_age_s + Math.max(0, now - summary.dataUpdatedAt) / 1000 : null;
-  const storeCurrent = statusAge != null && statusAge >= 0 && statusAge <= STALE_AFTER_S && slowestAge != null && slowestAge <= STALE_AFTER_S;
+  const sentAt = summary.data ? candleRequestedAt(summary.data) : undefined;
+  const requestedAt = Number.isFinite(sentAt) ? sentAt : summary.dataUpdatedAt;
+  const elapsed = summary.data && requestedAt != null ? Math.max(now - summary.data.now * 1000, now - requestedAt) / 1000 : null;
+  const slowestAge = health.oldestMinuteAge == null || elapsed == null ? null : health.oldestMinuteAge + elapsed;
+  const statusAge = summary.isSuccess ? summary.data.status_age_s : null;
+  const storeCurrent = summary.isSuccess && systemStoreCurrent(summary.data, requestedAt ?? 0, now) && slowestAge != null && slowestAge <= STALE_AFTER_S;
   const refresh = workspace.data?.source_refresh;
   const feedCurrent = workspace.isSuccess && refresh?.feed_freshness === "FRESH" && refresh.feed_fresh_until_ms != null && now <= refresh.feed_fresh_until_ms;
   const failed = MARKET_COINS.filter(coin => reads[coin]?.error);
@@ -228,12 +230,14 @@ export function V5SystemMarket({ tab, paused }: { tab: 'data-feeds' | 'engine-in
   const workspace = useQuery({ queryKey: ['v5-system', 'market-workspace'], queryFn: v5Api.workspace, retry: false, refetchInterval: paused ? false : 15_000 });
   const now = usePaperClock();
   const invalidLanes = summary.isSuccess && (!summary.data || !Array.isArray(summary.data.tiles) || !summary.data.tiles.every(lane => lane && typeof lane === 'object' && typeof lane.lane === 'string' && typeof lane.venue === 'string' && typeof lane.segment === 'string'));
-  const storeCurrent = !invalidLanes && summary.isSuccess && systemStoreCurrent(summary.data, summary.dataUpdatedAt, now);
+  const sentAt = summary.data ? candleRequestedAt(summary.data) : undefined;
+  const requestedAt = Number.isFinite(sentAt) ? sentAt : summary.dataUpdatedAt;
+  const storeCurrent = !invalidLanes && summary.isSuccess && systemStoreCurrent(summary.data, requestedAt ?? 0, now);
   const lanes = storeCurrent && summary.data ? summary.data.tiles : [];
   const lanesUnknown = lanes.filter(lane => typeof lane.available !== 'boolean').length;
   const allLanesAvailable = lanes.length > 0 && lanes.every(lane => lane.available === true);
   const oldestAge = allLanesAvailable && lanes.every(lane => typeof lane.last_minute_age_s === 'number' && Number.isFinite(lane.last_minute_age_s)) ? Math.max(...lanes.map(lane => lane.last_minute_age_s!)) : null;
-  const slowestAge = oldestAge == null ? null : oldestAge + Math.max(0, now - summary.dataUpdatedAt) / 1000;
+  const slowestAge = oldestAge == null || !summary.data || requestedAt == null ? null : oldestAge + Math.max(now - summary.data.now * 1000, now - requestedAt) / 1000;
   const gaps = allLanesAvailable ? exactSystemCount(lanes.map(lane => lane.gaps_7d)) : null;
   const coverage = systemCoverage(lanes);
   const refresh = workspace.data?.source_refresh;

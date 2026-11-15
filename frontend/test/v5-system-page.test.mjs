@@ -46,7 +46,7 @@ test('market system tabs show only current owner inputs and the selected view', 
   let now = 1_000_000;
   Date.now = () => now;
   try {
-    const summary = {now:1000,status_age_s:10,tiles:[{lane:'okx__spot',venue:'okx',segment:'spot',available:true,health:'red',pairs_held:1,pairs_listed:1,coverage_24h:1,coverage_7d:1,gaps_7d:5,last_minute_age_s:30}]};
+    const summary = {now:1000,_requestedAtMs:1_000_000,status_age_s:10,tiles:[{lane:'okx__spot',venue:'okx',segment:'spot',available:true,health:'red',pairs_held:1,pairs_listed:1,coverage_24h:1,coverage_7d:1,gaps_7d:5,last_minute_age_s:30}]};
     const workspace = {source_refresh:{feed_freshness:'FRESH',feed_fresh_until_ms:1_030_000,last_success_at_ms:999_000},context:{cutoff_ms:999_000,features:{}}};
     const overrides = {
       '@tanstack/react-query': {useQuery: ({queryKey}) => queryKey[0] === 'v5-profile' ? {data:{candle_store:{configured:true}}} : queryKey[0] === 'candle-summary' ? {isSuccess:true,data:summary,dataUpdatedAt:1_000_000} : {isSuccess:true,data:workspace}},
@@ -56,6 +56,9 @@ test('market system tabs show only current owner inputs and the selected view', 
     };
     const {V5SystemMarket} = frontendModules(overrides).load('v5/V5Market.tsx');
     const feeds = renderToStaticMarkup(React.createElement(V5SystemMarket,{tab:'data-feeds',paused:false}));
+    summary.status_age_s = 55; summary.now = 993; summary._requestedAtMs = 993_000;
+    assert.match(renderToStaticMarkup(React.createElement(V5SystemMarket,{tab:'data-feeds',paused:false})), /Candle store data is not current/);
+    summary.status_age_s = 10; summary.now = 1000; summary._requestedAtMs = 1_000_000;
     assert.match(feeds, /Venue coverage/); assert.match(feeds, /okx/); assert.match(feeds, /class="is-down" title="Owner health: red · available"/); assert.doesNotMatch(feeds, /FEATURE PACKET/);
     assert.match(feeds, /7-day coverage<\/span><strong>100\.0%/);
     assert.match(feeds, /7-day coverage 100\.0% · missing minutes 5/);

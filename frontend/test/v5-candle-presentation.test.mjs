@@ -7,19 +7,29 @@ import { frontendModules } from "./helpers/frontend-module.mjs";
 const checkedAt = Date.parse("2026-10-29T10:20:30Z");
 const row = (lane, pair) => ({ lane, pair, venue: lane.split("__")[0], segment: lane.split("__")[1], health: "green", health_rules: [], last_minute: checkedAt / 1000 - 90, last_minute_age_s: 30, grace_s: 600, volume_unit: "base", coverage_1h: 1, coverage_24h: 1, coverage_7d: 1, gaps_7d: 0, pending: 1, unrecoverable_7d: 0, no_trade_7d: 0, ws_state: "connected" });
 
-function render(rows, failed = []) {
+function render(rows, failed = [], summaryFields = {}, now = checkedAt) {
   const requests = [];
   const { load } = frontendModules({
     "@tanstack/react-query": { useQueryClient: () => ({ invalidateQueries() {} }), useQuery: options => {
       const view = options.queryKey[0];
       requests.push(options);
       const isError = failed.includes(view);
-      return { isError, error: isError ? new Error("owner_unreachable") : null, errorUpdatedAt: isError ? checkedAt : 0, isPending: false, refetch() {}, data: view === "candle-summary" ? { now: checkedAt / 1000, tiles: [], status_age_s: 2, status_error: null, rows } : undefined };
+      return { isError, error: isError ? new Error("owner_unreachable") : null, errorUpdatedAt: isError ? checkedAt : 0, isPending: false, refetch() {}, data: view === "candle-summary" ? { now: checkedAt / 1000, _requestedAtMs: checkedAt, tiles: [], status_age_s: 2, status_error: null, rows, ...summaryFields } : undefined };
     } },
     "@/components/charts/RecordedCandleChart": { RecordedCandleChart: () => null },
+    "./usePaperClock": { usePaperClock: () => now },
   });
   return { html: renderToStaticMarkup(React.createElement(load("v5/V5CandleStore").V5CandleStore)), requests };
 }
+
+test("heartbeat is not current for old, future or delivery-expired evaluations", () => {
+  assert.match(render([]).html, /Collector heartbeat current/);
+  for (const fields of [{now:checkedAt / 1000 - 600}, {now:checkedAt / 1000 + 600}, {status_age_s:59, _requestedAtMs:checkedAt - 10_000}]) {
+    assert.doesNotMatch(render([], [], fields).html, /Collector heartbeat current/);
+    assert.doesNotMatch(render([], [], fields, checkedAt + 1000).html, /Collector heartbeat current/);
+  }
+  assert.doesNotMatch(render([], [], {}, checkedAt + 60_000).html, /Collector heartbeat current/);
+});
 
 test("owner outage is one timestamped alert with no empty chart selectors", () => {
   const { html } = render([], ["candle-summary"]);

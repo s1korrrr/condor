@@ -163,7 +163,9 @@ test("a warming owner is one readable alert, retried every 5 s, and shows no ear
   assert.match(html, /warming up after a restart; retrying every 5 s \(owner_warming\)/);
   assert.doesNotMatch(html, /Instrument coverage · evaluated/);
   const summary = requests.find(request => request.queryKey[0] === "candle-summary");
-  assert.equal(summary.refetchInterval({ state: { error: warming } }), 5000);
-  assert.equal(summary.refetchInterval({ state: { error: new Error("owner_unreachable") } }), 30000);
-  assert.equal(summary.refetchInterval({ state: { error: null } }), 30000);
+  assert.equal(summary.refetchInterval, false);
+  const { candleSummaryInterval } = load("v5/candle-store-api");
+  assert.equal(candleSummaryInterval({ state: { error: warming } }), 5000);
+  assert.equal(candleSummaryInterval({ state: { error: new Error("owner_unreachable") } }), 30000);
+  assert.equal(candleSummaryInterval({ state: { error: null } }), 30000);
 });

@@ -627,7 +627,8 @@ def create_app(
             profile = {"task_id": row["task_id"]}
             if isinstance(row.get("model"), str):
                 profile["model"] = row["model"][:128]
-            profile["enabled"] = row.get("enabled") is True
+            if isinstance(row.get("enabled"), bool):
+                profile["enabled"] = row["enabled"]
             if isinstance(row.get("reason"), str):
                 profile["reason"] = row["reason"][:200]
             if credential_status in {"READY", "API_KEY_REQUIRED"}:

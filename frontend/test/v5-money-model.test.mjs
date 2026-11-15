@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
-import { dayCoverage, equityChange, holdReturn, latest, series } from '../src/v5/money-model.mjs';
+import { compareMoneyText, dayCoverage, equityChange, holdReturn, latest, series } from '../src/v5/money-model.mjs';
 import { utcExact } from '../src/v5/shown.mjs';
 
 const T0 = Date.UTC(2026, 10, 14, 0, 0);
@@ -54,4 +54,16 @@ test('V5 endpoints keep their exact sample times, not rounded to the minute', ()
   assert.equal(utcExact(result.startMs), '2026-11-14 00:00:59.250Z');
   assert.equal(utcExact(result.endMs), '2026-11-14 00:05:00.125Z');
   assert.equal(utcExact(1e18), null);
+});
+
+
+test('exact money comparison normalizes signs, leading zeros and trailing fractional zeros', () => {
+  for (const [a, b] of [['-0', '0.00'], ['0001.2300', '1.23'], ['-01.000', '-1']]) {
+    assert.equal(compareMoneyText(a, b), 0, `${a} equals ${b}`);
+  }
+  for (const [a, b] of [['0.11', '0.2'], ['-0.2', '-0.11'], ['999999999999999998', '999999999999999999'], ['0.000000000000000000000000000001', '0.000000000000000000000000000002']]) {
+    assert.ok(compareMoneyText(a, b) < 0, `${a} before ${b}`);
+    assert.ok(compareMoneyText(b, a) > 0, `${b} after ${a}`);
+  }
+  assert.equal(compareMoneyText('UNAVAILABLE', 'UNAVAILABLE'), 0);
 });

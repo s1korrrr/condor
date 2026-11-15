@@ -33,6 +33,19 @@ def test_v5_row_keeps_owner_decimals_and_records_gaps():
     assert v5_row(read("wallet", {**WALLET, "equity_quote": "1e9"}), read("accounting", ACCOUNTING), NOW_MS)["equity"] is None
 
 
+def test_v5_sampler_retains_only_valid_owner_accounting_identity():
+    for identity in (0, NOW_MS - 1):
+        accounting = {**ACCOUNTING, "program": {**PROGRAM, "accounting_since_ms": identity}}
+        row = v5_row(read("wallet", WALLET), read("accounting", accounting), NOW_MS)
+        assert row["accounting_since_ms"] == identity
+    for identity in (None, True, "1234", -1, NOW_MS + 1):
+        accounting = {**ACCOUNTING, "program": {**PROGRAM, "accounting_since_ms": identity}}
+        row = v5_row(read("wallet", WALLET), read("accounting", accounting), NOW_MS)
+        assert row["accounting_since_ms"] is None
+    accounting = {**ACCOUNTING, "program": {key: value for key, value in PROGRAM.items() if key != "accounting_since_ms"}}
+    assert v5_row(read("wallet", WALLET), read("accounting", accounting), NOW_MS)["accounting_since_ms"] is None
+
+
 def test_helm_rows_say_why_there_is_no_money():
     assert helm_row({"state": "UNAVAILABLE", "reason": "HELM_STATUS_MISSING", "status": None}, NOW_MS)["gap"] == "HELM_STATUS_MISSING"
     assert helm_row({"state": "FRESH", "status": {"money": None}}, NOW_MS)["gap"] == "HELM_MONEY_NOT_PUBLISHED"

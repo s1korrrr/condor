@@ -20,6 +20,8 @@ export type TableColumn<T> = {
   cell?: (row: T) => ReactNode;
   /** `number` right-aligns, sorts numerically and accepts comparison filters. */
   kind?: 'text' | 'number';
+  /** Optional exact ordering within sort groups, without coercing cell values. */
+  compare?: (left: T, right: T) => number;
   size?: number;
   minSize?: number;
   /** Row header cell (`<th scope="row">`). */
@@ -107,7 +109,8 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
   const definitions = useMemo<ColumnDef<T>[]>(() => [
     ...(selectable ? [{ id: SELECT_COLUMN, header: '', size: 36, minSize: 36, enableSorting: false, enableResizing: false, enableColumnFilter: false } satisfies ColumnDef<T>] : []),
     ...columns.map((column): ColumnDef<T> => {
-      const compare: SortingFn<T> = column.kind === 'number' ? (a, b, id) => {
+      const customCompare = column.compare;
+      const compare: SortingFn<T> = customCompare ? (a, b) => customCompare(a.original, b.original) : column.kind === 'number' ? (a, b, id) => {
         const x = numeric(a.getValue(id)), y = numeric(b.getValue(id));
         return x !== null && y !== null ? x - y : x !== null ? 1 : y !== null ? -1 : 0;
       } : sortingFns.alphanumeric;

@@ -6,7 +6,7 @@ import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable"
 import { CHART, type ChartSeries } from "@/features/quant-ops/kit/series";
 import { readCandleStore } from "./candle-store-api";
 import { v5Api } from "./api";
-import { equityChange, holdReturn, latest, series, type DailyMoneyRow, type MoneyRow } from "./money-model.mjs";
+import { compareMoneyText, equityChange, holdReturn, latest, series, type DailyMoneyRow, type MoneyRow } from "./money-model.mjs";
 import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
 import { utcExact, utcMinute } from "./shown.mjs";
 import "./market.css";
@@ -39,8 +39,8 @@ const signed = (value: number | null | undefined, digits = 2) => value == null ?
 const num = (value: string | null | undefined) => value != null && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
 const at = (ms: number | null | undefined) => utcMinute(ms) ?? "unknown time";
 
-// Decimal strings stay text in cells, filters, sorting and CSV exports. Numeric
-// table columns coerce to binary floats, so they are unsuitable for this report.
+// Decimal strings stay exact in cells, filters and exports. Use a custom
+// comparator: both numeric and alphanumeric table sorting lose decimal digits.
 const dailyColumns: TableColumn<DailyMoneyRow>[] = [
   { id: "date", header: "Day (UTC)", value: row => row.date, rowHeader: true, size: 110 },
   { id: "bot", header: "Bot", value: row => row.bot.toUpperCase(), size: 70 },
@@ -54,6 +54,8 @@ const dailyColumns: TableColumn<DailyMoneyRow>[] = [
     ["held_value_end", "Held value at end"],
   ] as const).map(([id, header]): TableColumn<DailyMoneyRow> => ({
     id, header, value: row => row[id], size: 155,
+    compare: (left, right) => compareMoneyText(left[id], right[id]),
+    sortGroup: row => row[id] === "UNAVAILABLE" ? 1 : 0,
   })),
   { id: "first", header: "First sample (UTC)", value: row => utcExact(row.first_at_ms) ?? "UNAVAILABLE", size: 210 },
   { id: "last", header: "Last sample (UTC)", value: row => utcExact(row.last_at_ms) ?? "UNAVAILABLE", size: 210 },
@@ -126,7 +128,7 @@ export function V5Money() {
 
       <section className="v5m-section"><header><h2>Daily</h2><span>V5 and Helm · simulated spot money · all retained UTC days, independent of chart range</span></header>
         <div className="v5m-card">{days.length ? <DataTable rows={days} columns={dailyColumns} rowId={row => `${row.date}-${row.bot}`} label="Daily simulated money" initialSort={{ id: "date", desc: true }} pageSize={14} dense exportName="daily-paper-money" /> : <p className="v5m-hint">UNAVAILABLE: daily report not returned by this dashboard.</p>}</div>
-        <p className="v5m-hint">Start and end are the first and last recorded sample inside each UTC day, including gaps. Changes, realized PnL and fees cover that sample window. Equity change includes external cash flows. Counter resets cannot be fully identified. Percentages round half-even to 12 decimal places; amounts stay exact. Cash, held value and trade/fill counts are not recorded and stay UNAVAILABLE. Partial days and missing slots are marked. Amount columns use text sorting and text filters to preserve decimals.</p>
+        <p className="v5m-hint">Start and end are the first and last recorded sample inside each UTC day, including gaps. Changes, realized PnL and fees cover that sample window. Equity change includes external cash flows. Realized PnL and fees require the same accounting identity in every sample, established before the UTC day; otherwise they stay UNAVAILABLE. Percentages round half-even to 12 decimal places; amounts stay exact. Cash, held value and trade/fill counts are not recorded and stay UNAVAILABLE. Partial days and missing slots are marked. Amount columns use exact decimal sorting and text filters.</p>
       </section>
 
       <section className="v5m-section"><header><h2>Helm paper bot</h2><span>{helm.newest ? `latest sample ${at(helm.newest.at_ms)}` : "no sample yet"}</span></header>

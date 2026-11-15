@@ -4,14 +4,15 @@ import { spawnSync } from 'node:child_process';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import React from 'react';
+import React, { act } from 'react';
+import { Window } from 'happy-dom';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
 const root = path.resolve(import.meta.dirname, '../..');
 const day = Date.UTC(2026, 10, 14), slot = 300_000, dayMs = 86_400_000;
 const U = 'UNAVAILABLE';
-const row = (minute, fields = {}) => ({ bot: 'v5', at_ms: day + minute * 60_000, unit: 'USDC', equity: '100', realized: '10', fees: '1', unrealized: '-2', ...fields });
+const row = (minute, fields = {}) => ({ bot: 'v5', at_ms: day + minute * 60_000, unit: 'USDC', accounting_since_ms: day - dayMs, equity: '100', realized: '10', fees: '1', unrealized: '-2', ...fields });
 function python(args, input) {
   return spawnSync(process.env.PYTHON ?? 'python3', args, { cwd: root, input, encoding: 'utf8', env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1' } });
 }
@@ -117,8 +118,8 @@ test('numbers, scientific notation, lone samples, zero bases and unit changes do
 });
 
 test('Helm exposes only its published PnL, never substitutes equity or cash', () => {
-  const [, helm] = report([row(0, { bot: 'helm', unit: null, equity: null, fees: null }), row(1435, { bot: 'helm', unit: null, equity: null, fees: null, realized: '11.01' })]);
-  assert.equal(helm.realized_pnl, '1.01');
+  const [, helm] = report([row(0, { bot: 'helm', unit: null, accounting_since_ms: null, equity: null, fees: null }), row(1435, { bot: 'helm', unit: null, accounting_since_ms: null, equity: null, fees: null, realized: '11.01' })]);
+  assert.equal(helm.realized_pnl, U);
   assert.equal(helm.unrealized_pnl_end, '-2');
   for (const key of ['unit', 'equity_start', 'equity_end', 'fees', 'buys', 'sells', 'fills', 'cash_end', 'held_value_end']) assert.equal(helm[key], U);
 });
@@ -167,4 +168,84 @@ test('Money page renders exact daily strings through the real adaptive DataTable
   assert.match(html, /partial day/);
   assert.match(html, /Cash at end/);
   assert.match(html, /Held value at end/);
+});
+
+
+test('daily realized PnL and fees require a stable valid accounting identity predating the UTC day', () => {
+  const first = row(0, { realized: '100', fees: '1' });
+  const last = row(1435, { realized: '20', fees: '1' });
+  const [continuous] = report([first, last]);
+  assert.equal(continuous.realized_pnl, '-80');
+  assert.equal(continuous.fees, '0');
+  for (const identity of [null, undefined, '1234', true, -1, day, day + 1]) {
+    const [unverified] = report([{ ...first, accounting_since_ms: identity }, { ...last, accounting_since_ms: identity }]);
+    assert.equal(unverified.realized_pnl, U, `identity ${identity}`);
+    assert.equal(unverified.fees, U, `identity ${identity}`);
+    assert.match(unverified.data_quality, /accounting continuity unverified/);
+  }
+  for (const samples of [[first, { ...last, accounting_since_ms: null }], [first, row(60, { accounting_since_ms: null }), last]]) {
+    const [oneMissing] = report(samples);
+    assert.equal(oneMissing.realized_pnl, U);
+    assert.equal(oneMissing.fees, U);
+  }
+});
+
+test('accounting resets inside a day or at its boundary withhold counter deltas even with unchanged fees', () => {
+  const first = row(0, { realized: '100', fees: '1' });
+  const reset = row(60, { realized: '0', fees: '1', accounting_since_ms: day + 60 * 60_000 });
+  const last = row(1435, { realized: '20', fees: '1', accounting_since_ms: reset.accounting_since_ms });
+  for (const rows of [[first, reset, last], [first, reset, { ...last, accounting_since_ms: first.accounting_since_ms }]]) {
+    const [v5] = report(rows);
+    assert.equal(v5.realized_pnl, U);
+    assert.equal(v5.fees, U);
+  }
+  const [boundary] = report([row(-5), row(0, { accounting_since_ms: day, realized: '0' }), row(1435, { accounting_since_ms: day, realized: '20' })]);
+  assert.equal(boundary.realized_pnl, U);
+  assert.equal(boundary.fees, U);
+  const [, helm] = report([row(0, { bot: 'helm', accounting_since_ms: null, realized: '100', fees: null }), row(1435, { bot: 'helm', accounting_since_ms: null, realized: '20', fees: null })]);
+  assert.equal(helm.realized_pnl, U);
+  assert.equal(helm.fees, U);
+});
+
+test('interactive Daily sorting orders every decimal digit through the real DataTable', async () => {
+  const browser = new Window({ url: 'https://fixture.invalid/' });
+  const names = ['window', 'document', 'navigator', 'HTMLElement', 'Element', 'Node', 'MutationObserver', 'IS_REACT_ACT_ENVIRONMENT'];
+  const previous = new Map(names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
+  for (const name of names) Object.defineProperty(globalThis, name, { value: name === 'window' ? browser : name === 'IS_REACT_ACT_ENVIRONMENT' ? true : browser[name], configurable: true });
+  const { createRoot } = await import('react-dom/client');
+  const container = browser.document.createElement('div');
+  browser.document.body.append(container);
+  const mounted = createRoot(container);
+  try {
+    const { load } = frontendModules({}, { 'v5/V5Money.tsx': ['dailyColumns'] });
+    const { dailyColumns } = load('v5/V5Money.tsx');
+    const { DataTable } = load('features/quant-ops/kit/DataTable.tsx');
+    const moneyIds = ['equity_start', 'equity_end', 'equity_change', 'equity_change_pct', 'realized_pnl', 'fees', 'unrealized_pnl_end', 'buys', 'sells', 'fills', 'cash_end', 'held_value_end'];
+    // Independently listed exact numerical order. parseInt/Number lose the
+    // discriminating integer/fraction digits in these cases.
+    const ascending = ['-999999999999999999', '-999999999999999998', '-0.2', '-0.11', '0', '0.000000000000000000000000000001', '0.000000000000000000000000000002', '0.11', '0.2', '999999999999999998', '999999999999999999'];
+    const values = [...ascending].reverse();
+    values.splice(3, 0, U);
+    const fixtures = values.map((value, index) => ({ date: `case-${index}`, bot: 'v5', ...Object.fromEntries(moneyIds.map(id => [id, value])) }));
+    await act(async () => mounted.render(React.createElement(DataTable, { rows: fixtures, columns: dailyColumns, rowId: item => item.date, label: 'Daily exact sorting', pageSize: 30 })));
+    for (const id of moneyIds) {
+      const index = dailyColumns.findIndex(column => column.id === id);
+      const button = container.querySelectorAll('thead th > button')[index];
+      assert.ok(button, `real header for ${id}`);
+      await act(async () => button.click());
+      assert.equal(button.closest('th').getAttribute('aria-sort'), 'ascending', id);
+      const shown = () => [...container.querySelectorAll('tbody tr')].map(tr => tr.children[index].textContent);
+      assert.deepEqual(shown(), [...ascending, U], `${id} ascending`);
+      await act(async () => button.click());
+      assert.equal(button.closest('th').getAttribute('aria-sort'), 'descending', id);
+      assert.deepEqual(shown(), [...ascending].reverse().concat(U), `${id} descending`);
+    }
+  } finally {
+    await act(async () => mounted.unmount());
+    await browser.happyDOM.close();
+    for (const [name, descriptor] of previous) {
+      if (descriptor) Object.defineProperty(globalThis, name, descriptor);
+      else Reflect.deleteProperty(globalThis, name);
+    }
+  }
 });

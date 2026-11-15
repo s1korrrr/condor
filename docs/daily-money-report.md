@@ -22,6 +22,11 @@ CLI exports a requested date, defaulting to yesterday UTC.
 - Equity change, realized PnL and fees cover that first-to-last sample window.
   Realized PnL and fees are differences of the recorded lifetime counters.
   One sample cannot establish a change and produces `UNAVAILABLE`.
+  Daily realized PnL and fees additionally require every sample to carry the
+  same valid owner `accounting_since_ms`, established strictly before that UTC
+  day. A missing identity, gap, identity change, or accounting start/reset at
+  midnight or during the day withholds those two fields. The existing sampler
+  now retains V5's published identity; it does not backfill historical rows.
 - Equity change includes external cash flows. It must not be called trading
   profit. Unrealized PnL is the last sample's owner value.
 - Money is exact decimal text, calculated with Decimal precision 120 for the
@@ -34,13 +39,14 @@ CLI exports a requested date, defaulting to yesterday UTC.
 - A day is partial while it is ongoing or lacks its first/last slot. Missing
   interior slots and gap samples remain visible even if both boundaries exist.
 - A decrease in the cumulative fee counter withholds daily realized PnL and
-  fees as a possible owner reset. The record lacks owner-run IDs, so resets
-  without a detectable counter decrease cannot be established.
+  fees even when the recorded identity is stable. Historical V5 samples and
+  Helm samples without an accounting identity always withhold these deltas.
 - The source does not record cash, held value or BUY/SELL/fill counts. Both
   bots get `UNAVAILABLE` for those fields. Helm also lacks equity, fees and a
-  quote-unit field. Missing money is never inferred from PnL or sample counts.
-- The table uses the existing adaptive DataTable. Amounts use text sorting and
-  text filters to retain every decimal digit in cells and CSV exports.
+  quote-unit field. Helm has no accounting identity, so its daily realized PnL
+  is unavailable too. Missing money is never inferred from PnL or sample counts.
+- The table uses the existing adaptive DataTable. Amounts use exact decimal
+  sorting and text filters to retain every decimal digit in cells and CSV exports.
 
 ## Offline export
 
@@ -75,4 +81,4 @@ malformed lines are counted in the export, and cannot become money values.
 
 Install: goes in a dashboard install set (owner-approved set or card).
 Rollback before install: omit/revert this commit. No source record migration
-or sampler changes are needed. No deployment is performed by this task.
+or sampler configuration changes are needed. No deployment is performed by this task.

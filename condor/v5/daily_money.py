@@ -57,6 +57,18 @@ def daily_report(rows: list[dict], start_ms: int, end_ms: int, as_of_ms: int | N
                 partial = 0 not in slots or 287 not in slots or as_of_ms < day + DAY_MS
                 fee_values = [_value(row, "fees") for row in samples if _value(row, "fees") is not None]
                 counter_reset = any(b < a for a, b in zip(fee_values, fee_values[1:]))
+                # A counter decrease is not a continuity test: resets can leave
+                # fees flat or higher, and Helm has no fee counter at all.
+                # Require the owner's accounting identity in EVERY sample, and
+                # an identity established before this day (including boundary
+                # resets). Historical/Helm rows without it stay unavailable.
+                accounting_since = first.get("accounting_since_ms")
+                accounting_continuity = (
+                    type(accounting_since) is int and 0 <= accounting_since < day
+                    and all(type(row.get("accounting_since_ms")) is int
+                            and row["accounting_since_ms"] == accounting_since
+                            and not row.get("gap") for row in samples)
+                )
                 unit = first.get("unit")
                 stable_unit = (bool(samples) and isinstance(unit, str) and bool(unit)
                                and all(row.get("unit") == unit for row in samples if not row.get("gap")))
@@ -73,7 +85,7 @@ def daily_report(rows: list[dict], start_ms: int, end_ms: int, as_of_ms: int | N
                         return UNAVAILABLE
                     # A decreasing cumulative fee counter invalidates lifetime
                     # PnL/fee differences even if the counter later catches up.
-                    if field in ("fees", "realized") and counter_reset:
+                    if field in ("fees", "realized") and (not accounting_continuity or counter_reset):
                         return UNAVAILABLE
                     return format(end - start, "f")
 
@@ -92,6 +104,8 @@ def daily_report(rows: list[dict], start_ms: int, end_ms: int, as_of_ms: int | N
                     note += "; " + "; ".join(reasons)
                 if unit_changed:
                     note += "; unit changed: amounts unavailable"
+                if not accounting_continuity:
+                    note += "; accounting continuity unverified: realized PnL and fees unavailable"
                 if counter_reset:
                     note += "; cumulative fees decreased: possible owner reset; realized PnL and fees unavailable"
                 # The record has no cash, held value, or execution counts. Never

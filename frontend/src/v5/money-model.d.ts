@@ -3,7 +3,7 @@ import type { SeriesPoint } from "@/features/quant-ops/kit/series";
 export type MoneyRow = {
   bot: string; at_ms: number; gap?: string; unit?: string | null; snapshot_at_ms?: number | null;
   equity?: string | null; initial_funding?: string | null; external_flows?: string | null;
-  realized?: string | null; unrealized?: string | null; fees?: string | null;
+  realized?: string | null; unrealized?: string | null; fees?: string | null; accounting_since_ms?: number | null;
   coins?: Record<string, { realized: string | null; unrealized: string | null }>;
 };
 export type DailyRow = {
@@ -27,3 +27,5 @@ export type DailyMoneyRow = {
   samples: number; expected_samples: number; present_slots: number; value_slots: number;
   missing_slots: number; gaps: number; partial: boolean; data_quality: string;
 };
+
+export function compareMoneyText(left: string, right: string): number;

@@ -65,6 +65,8 @@ def v5_row(wallet: dict | None, accounting: dict | None, now_ms: int) -> dict[st
         "realized": _decimal(program.get("realized_pnl_quote")),
         "unrealized": _decimal(program.get("unrealized_pnl_quote")),
         "fees": _decimal(program.get("fees_paid_quote")),
+        "accounting_since_ms": program.get("accounting_since_ms")
+        if type(program.get("accounting_since_ms")) is int and 0 <= program["accounting_since_ms"] <= now_ms else None,
         "coins": coins,
     }
 

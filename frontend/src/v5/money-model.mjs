@@ -65,3 +65,24 @@ export function equityChange(rows, bot) {
   if (!first || first === last) return { pct: null, startMs: null, endMs: null };
   return { pct: (number(last.equity) / number(first.equity) - 1) * 100, startMs: first.at_ms, endMs: last.at_ms };
 }
+
+
+/** Exact decimal ordering for Daily cells. No parseInt, Number or float math. */
+export function compareMoneyText(left, right) {
+  const parts = value => {
+    if (typeof value !== 'string' || !/^-?\d+(?:\.\d+)?$/.test(value)) return null;
+    const [whole, fraction = ''] = value.replace(/^-/, '').split('.');
+    const integer = whole.replace(/^0+(?=\d)/, '');
+    const decimal = fraction.replace(/0+$/, '');
+    return { negative: value.startsWith('-') && (integer !== '0' || decimal !== ''), integer, fraction: decimal };
+  };
+  const a = parts(left), b = parts(right);
+  if (!a || !b) return a ? -1 : b ? 1 : 0;
+  if (a.negative !== b.negative) return a.negative ? -1 : 1;
+  const sign = a.negative ? -1 : 1;
+  if (a.integer.length !== b.integer.length) return (a.integer.length < b.integer.length ? -1 : 1) * sign;
+  if (a.integer !== b.integer) return (a.integer < b.integer ? -1 : 1) * sign;
+  const length = Math.max(a.fraction.length, b.fraction.length);
+  const x = a.fraction.padEnd(length, '0'), y = b.fraction.padEnd(length, '0');
+  return x === y ? 0 : x < y ? -sign : sign;
+}

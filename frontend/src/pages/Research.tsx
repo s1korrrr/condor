@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
@@ -20,9 +20,11 @@ import {
 } from "@/features/research/lab-state";
 import {
   loadConsistentLabNetwork,
+  boundedLabNetwork,
   type LabNetwork,
 } from "@/features/research/lab-network-data";
 import { ResearchNetwork } from "@/features/research/ResearchNetwork";
+import { readV5Research, researchFreshnessDecision, researchOwnerFreshness } from "@/features/research/v5-read";
 import type { Camera } from "@/features/research/lab-network-engine";
 import {
   LabCharts,
@@ -41,6 +43,7 @@ import "@/features/research/workspace.css";
 import "@/features/research/lab.css";
 
 const read = readResearch(authFetch);
+const readV5 = readV5Research(authFetch);
 export function Research({ v5Paper = false }: { v5Paper?: boolean } = {}) {
   const { server } = useServer();
   const [params, setParams] = useSearchParams();
@@ -54,8 +57,8 @@ export function Research({ v5Paper = false }: { v5Paper?: boolean } = {}) {
   }, [server, serverChanged, params, setParams]);
   return (
     <div className="quant-workspace research-lab">
-      {v5Paper ? <><header className="quant-heading"><div><h1>Research</h1><p>Paper operating test · economic support remains V5_NOT_SUPPORTED.</p></div></header><section className="quant-notice" role="status"><h2>Not connected to this paper workspace</h2><p>The Research OS read export is not connected. Existing owner records and decisions remain authoritative; this page does not infer strategy support from paper uptime.</p><p>Next step: bind the existing V5 Research OS record IDs, hashes and decisions through a read-only export. No backtest or model call is started by viewing this page.</p></section></> : server && !serverChanged ? (
-        <ResearchLab key={server} server={server} />
+      {server && !serverChanged ? (
+        <ResearchLab key={server} server={server} v5Paper={v5Paper} />
       ) : (
         <>
           <header className="quant-heading">
@@ -79,7 +82,8 @@ export function Research({ v5Paper = false }: { v5Paper?: boolean } = {}) {
     </div>
   );
 }
-function ResearchLab({ server }: { server: string }) {
+function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) {
+  const ownerRead = v5Paper ? readV5 : read;
   const [params, setParams] = useSearchParams(),
     state = readLabState(params);
   const pendingParams = useRef(params);
@@ -102,7 +106,7 @@ function ResearchLab({ server }: { server: string }) {
   }, [state.q]);
   const overview = useQuery({
     queryKey: ["research-overview", server],
-    queryFn: ({ signal }) => read("overview", server, {}, signal),
+    queryFn: ({ signal }) => ownerRead("overview", server, {}, signal),
     refetchInterval: 30000,
     retry: 1,
   });
@@ -115,31 +119,25 @@ function ResearchLab({ server }: { server: string }) {
   const available = overviewState === "available",
     data = available ? object(overview.data?.data) : {},
     freshness = object(data.freshness);
-  const freshnessState = text(freshness.state, "unknown").toLowerCase();
   const verificationCheckedAt = text(freshness.verification_checked_at, "");
-  const reportedVerificationAgeSeconds = typeof freshness.verification_age_seconds === "number" &&
-    Number.isFinite(freshness.verification_age_seconds) && freshness.verification_age_seconds >= 0
-    ? freshness.verification_age_seconds : null;
-  const verificationAgeSeconds = reportedVerificationAgeSeconds !== null &&
-    Number.isFinite(overview.dataUpdatedAt) && overview.dataUpdatedAt > 0
-    ? reportedVerificationAgeSeconds + Math.max(0, now - overview.dataUpdatedAt) / 1000
-    : null;
+  const verificationAgeSeconds = verificationCheckedAt && Number.isFinite(Date.parse(verificationCheckedAt)) && now >= Date.parse(verificationCheckedAt)
+    ? (now - Date.parse(verificationCheckedAt)) / 1000 : null;
   const maxVerificationAgeSeconds = typeof freshness.max_verification_age_seconds === "number" &&
     Number.isFinite(freshness.max_verification_age_seconds) && freshness.max_verification_age_seconds > 0
     ? freshness.max_verification_age_seconds : null;
   const verifiedEventScan = freshness.freshness_basis === "verified_event_scan" &&
     !!verificationCheckedAt && Number.isFinite(Date.parse(verificationCheckedAt)) &&
     verificationAgeSeconds !== null && maxVerificationAgeSeconds !== null &&
-    verificationAgeSeconds <= maxVerificationAgeSeconds;
-  const displayedFreshnessState = freshness.state === "CURRENT" && !verifiedEventScan
-    ? "unavailable" : freshnessState;
+    verificationAgeSeconds < maxVerificationAgeSeconds && researchFreshnessDecision(data, now) === "within owner freshness deadline";
+  const displayedFreshnessState = freshness.state === "CURRENT" && verifiedEventScan
+    ? "current" : freshness.state === "PENDING" ? "pending" : "unavailable";
   const revision = text(overview.data?.data.revision, "");
   const networkVisible = state.view === "graph";
   const networkQuery = useQuery({
     queryKey: ["research-network", server, revision],
     enabled: available && networkVisible && !!revision,
     queryFn: ({ signal }) =>
-      loadConsistentLabNetwork(read, server, revision, signal),
+      loadConsistentLabNetwork(ownerRead, server, revision, signal),
     staleTime: Infinity,
     gcTime: 5 * 60 * 1000,
     retry: 1,
@@ -200,9 +198,12 @@ function ResearchLab({ server }: { server: string }) {
   };
   const filter = (values: Record<string, string>) =>
     change(values, { resetPage: true, clearSelection: true }, true);
-  const graph = network ? (
+  const visibleNetwork = useMemo(() => network ? boundedLabNetwork(network) : null, [network]);
+  const graph = network && visibleNetwork ? (
+    <>
+    {(network.nodes.length > visibleNetwork.nodes.length || network.edges.length > visibleNetwork.edges.length) && <p>Showing first {visibleNetwork.nodes.length} of {network.nodes.length} nodes and {visibleNetwork.edges.length} of {network.edges.length} connections within that subset.</p>}
     <ResearchNetwork
-      data={network}
+      data={visibleNetwork}
       selected={state.selected}
       query={state.network_q}
       kind={state.network_kind}
@@ -224,6 +225,7 @@ function ResearchLab({ server }: { server: string }) {
       cameraStore={cameraStore}
       cameraKey={`${revision}:${state.view}:${state.network_topology}`}
     />
+    </>
   ) : (
     <LabReadNotice
       state={
@@ -244,6 +246,7 @@ function ResearchLab({ server }: { server: string }) {
         <div>
           <h1>Research</h1>
           <p>Ideas, experiments and evidence from Research OS.</p>
+          {v5Paper && <p>Read-only overview and network only; other Research views are not connected in V5.</p>}
         </div>
         <button onClick={refresh} disabled={overview.isFetching}>
           <RefreshCw
@@ -264,6 +267,7 @@ function ResearchLab({ server }: { server: string }) {
             : `Research connection ${overviewState}`}
         </span>
         {available && <span>Last index sync · {labTimestamp(freshness.last_sync)}</span>}
+        {available && v5Paper && <span>{researchOwnerFreshness(data, now)}</span>}
         {available && verifiedEventScan ? (
           <span title="Native events may have changed after this scan; changes are detected within the stated verification age bound.">
             Event scan · {labTimestamp(verificationCheckedAt)} · {Math.floor(verificationAgeSeconds)}s old / ≤{maxVerificationAgeSeconds}s detection bound

@@ -1,5 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import React from "react";
+import { createRequire } from "node:module";
 import {
   envelope,
   renderResearch,
@@ -157,7 +159,8 @@ test("all research panels remain visible with a skewed host clock", () => {
   }
 });
 
-test("canonical event-scan freshness is shown with its as-of age and bound", () => {
+test("canonical event-scan freshness is shown with its as-of age and bound", (t) => {
+  t.mock.method(Date, "now", () => Date.parse("2026-09-30T12:00:05Z"));
   const queries = selectedIdeaQueries();
   queries["research-overview"].data.data.freshness = {
     state: "CURRENT",
@@ -218,6 +221,39 @@ test("event-scan proof expires while a query response is still readable", (t) =>
   assert.match(result.html, /Index unavailable/);
   assert.match(result.html, /Event-scan verification unavailable/);
   assert.doesNotMatch(result.html, /verified as of scan|Event scan ·/);
+});
+
+test("mounted Research rejects an expired owner deadline despite a recent scan", async (t) => {
+  const now = Date.parse("2026-09-30T12:01:00Z");
+  t.mock.method(Date, "now", () => now);
+  const queries = selectedIdeaQueries();
+  Object.assign(queries["research-overview"].data.data, { generated_at: "2026-09-30T12:00:00Z", fresh_until: "2026-09-30T12:00:30Z", freshness: { state: "CURRENT", freshness_basis: "verified_event_scan", verification_checked_at: "2026-09-30T12:00:55Z", max_verification_age_seconds: 90 } });
+  const { Window } = await import("happy-dom");
+  const window = new Window({ url: "https://fixture.invalid/" });
+  const names = ["window", "document", "navigator", "HTMLElement", "Node", "IS_REACT_ACT_ENVIRONMENT"];
+  const previous = new Map(names.map(name => [name, Object.getOwnPropertyDescriptor(globalThis, name)]));
+  for (const name of names) Object.defineProperty(globalThis, name, { configurable: true, value: name === "IS_REACT_ACT_ENVIRONMENT" ? true : name === "window" ? window : window[name] });
+  const require = createRequire(import.meta.url);
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+  const root = require("react-dom/client").createRoot(container);
+  let element;
+  renderResearch(queries, { render: value => { element = value; return ""; } });
+  try {
+    await React.act(async () => root.render(element));
+    const html = document.body.innerHTML;
+    assert.doesNotMatch(html, /Index current|verified as of scan/);
+    assert.match(container.textContent, /Index unavailable/);
+    queries["research-overview"].data.data.freshness.state = "current";
+    renderResearch(queries, { render: value => { element = value; return ""; } });
+    await React.act(async () => root.render(element));
+    assert.doesNotMatch(container.textContent, /Index current|verified as of scan/);
+    assert.match(container.textContent, /Index unavailable/);
+  } finally {
+    await React.act(async () => root.unmount());
+    for (const [name, descriptor] of previous) descriptor ? Object.defineProperty(globalThis, name, descriptor) : delete globalThis[name];
+    window.happyDOM.abort();
+  }
 });
 
 test("each library filter clears the previously selected record", () => {

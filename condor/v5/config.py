@@ -4,12 +4,20 @@ from __future__ import annotations
 
 import hmac
 import os
+import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlparse
 
 from .paper import status_file_name_valid
+
+MAX_STRATEGIES = 10000
+MAX_SOURCES = 10000
+MAX_NODES = 20000
+MAX_EDGES = 100000
+MAX_STATS_ROWS = 10000
+READ_BYTE_LIMITS = {"catalog": 16 * 1024 * 1024, "campaigns": 16 * 1024 * 1024, "snapshot": 32 * 1024 * 1024, "campaign": 32 * 1024 * 1024, "bundle": 64 * 1024 * 1024, "provenance": 4 * 1024 * 1024, "asset": 64 * 1024 * 1024, "overview": 16 * 1024 * 1024, "network": 64 * 1024 * 1024}
 
 
 class ConfigurationError(ValueError):
@@ -36,6 +44,9 @@ class Settings:
     helm_status_file: Path | None = None
     # Five-minute money samples into the runtime state; off unless V5_MONEY_SAMPLER=1 (deployments only).
     money_sampler: bool = False
+    tradepad_url: str | None = None
+    research_url: str | None = None
+    tradepad_campaign_id: str | None = None
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
@@ -187,6 +198,9 @@ class Settings:
                     "V5_HELM_STATUS_FILE must be an absolute normalized <bot>_paper.status.json path"
                 )
 
+        campaign_id = values.get("V5_TRADEPAD_CAMPAIGN_ID", "").strip()
+        if campaign_id and not re.fullmatch(r"w[0-9]+-[0-9]+", campaign_id):
+            raise ConfigurationError("V5_TRADEPAD_CAMPAIGN_ID must be a tested-window campaign id")
         return cls(
             runtime_root=runtime_root,
             dashboard_token_file=dashboard_token_file,
@@ -204,6 +218,9 @@ class Settings:
             host_operations_file=host_operations_file,
             helm_status_file=helm_status_file,
             money_sampler=values.get("V5_MONEY_SAMPLER", "").strip() == "1",
+            tradepad_url=_validate_base_url(values["V5_TRADEPAD_URL"], "V5_TRADEPAD_URL") if values.get("V5_TRADEPAD_URL", "").strip() else None,
+            research_url=_validate_base_url(values["V5_RESEARCH_URL"], "V5_RESEARCH_URL") if values.get("V5_RESEARCH_URL", "").strip() else None,
+            tradepad_campaign_id=campaign_id or None,
         )
 
 

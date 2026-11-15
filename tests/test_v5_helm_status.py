@@ -191,3 +191,96 @@ def test_helm_long_exact_decimals_are_shown_not_withheld(tmp_path):
     assert status["withheld"] == 0
     value["helm"]["native_risk"]["daily_loss_use"] = "1." + "0" * 31
     assert read_helm_status(write(tmp_path, value), now=NOW)["status"]["withheld"] == 1
+
+
+def signal():
+    return {
+        "at": NOW - 11.25,
+        "candle_open": int(NOW - 60),
+        "close": "643.123456789012345678901234567890",
+        "rsi": "41.200000000000000000000000000001",
+        "previous_rsi": "28.999999999999999999999999999999",
+        "rsi_length": 17,
+        "oversold": "29",
+        "atr_fraction": "0.001234567890123456789012345678",
+        "atr_length": 14,
+        "min_atr_fraction": ".0002",
+        "max_atr_fraction": ".01",
+        "decision": {"enter": True, "reason": "rsi_rebound"},
+    }
+
+
+def with_signal(value):
+    payload = helm_status()
+    payload["controllers"][0]["custom_info"]["symbols"]["BNB-USDC"]["signal"] = value
+    return payload
+
+
+def test_unpublished_signal_is_null(tmp_path):
+    status = read_helm_status(write(tmp_path, helm_status()), now=NOW)["status"]
+    assert status["symbols"][0]["signal"] is None
+    assert status["withheld"] == 0
+
+
+def test_signal_projects_exact_owner_fields_and_omits_unknown_fields(tmp_path):
+    published = signal()
+    published["private_path"] = "/private/engine"
+    published["decision"]["command_id"] = "not-for-the-browser"
+    status = read_helm_status(write(tmp_path, with_signal(published)), now=NOW)["status"]
+    assert status["symbols"][0]["signal"] == signal()
+    assert status["withheld"] == 0
+
+
+@pytest.mark.parametrize("field,bad", [
+    ("at", True), ("at", "1793929889"), ("at", -1), ("at", 1e300),
+    ("candle_open", True), ("candle_open", NOW - 60.5), ("candle_open", 1e300),
+    ("close", True), ("close", 643.1), ("close", "1e3"), ("close", "-1"),
+    ("close", "1." + "0" * 31), ("close", "1" * 19),
+    ("rsi", True), ("rsi", "-0.1"), ("rsi", "100.000000000000000000000000000001"),
+    ("previous_rsi", {}), ("previous_rsi", "-1"), ("previous_rsi", "101"),
+    ("rsi_length", True), ("rsi_length", "17"), ("rsi_length", 17.5), ("rsi_length", 0), ("rsi_length", 2**53),
+    ("oversold", "101"), ("oversold", "-1"), ("oversold", "/private/engine"),
+    ("atr_fraction", False), ("atr_fraction", "-0.1"), ("atr_fraction", "0." + "1" * 31),
+    ("atr_length", True), ("atr_length", "14"), ("atr_length", -1), ("atr_length", 2**53),
+    ("min_atr_fraction", []), ("min_atr_fraction", "-0.1"), ("min_atr_fraction", "." + "1" * 31),
+    ("max_atr_fraction", {}), ("max_atr_fraction", "-1"), ("max_atr_fraction", "1e999"),
+    ("decision", []), ("decision", "rsi_rebound"),
+])
+def test_malformed_signal_fields_are_withheld_and_counted(tmp_path, field, bad):
+    published = signal()
+    published[field] = bad
+    status = read_helm_status(write(tmp_path, with_signal(published)), now=NOW)["status"]
+    expected = signal()
+    expected[field] = None
+    assert status["symbols"][0]["signal"] == expected
+    assert status["withheld"] == 1
+
+
+@pytest.mark.parametrize("field,bad", [("enter", "true"), ("enter", 1), ("reason", "/private/engine"), ("reason", "x" * 97)])
+def test_malformed_signal_decision_fields_are_withheld_and_counted(tmp_path, field, bad):
+    published = signal()
+    published["decision"][field] = bad
+    status = read_helm_status(write(tmp_path, with_signal(published)), now=NOW)["status"]
+    expected = signal()
+    expected["decision"][field] = None
+    assert status["symbols"][0]["signal"] == expected
+    assert status["withheld"] == 1
+
+
+@pytest.mark.parametrize("bad", [[], False, "private", 1])
+def test_malformed_signal_object_is_withheld_and_counted(tmp_path, bad):
+    status = read_helm_status(write(tmp_path, with_signal(bad)), now=NOW)["status"]
+    assert status["symbols"][0]["signal"] is None
+    assert status["withheld"] == 1
+
+
+def test_nullable_and_missing_signal_fields_stay_unknown_without_counting(tmp_path):
+    published = signal()
+    for field in ("atr_fraction", "min_atr_fraction", "max_atr_fraction"):
+        published[field] = None
+    status = read_helm_status(write(tmp_path, with_signal(published)), now=NOW)["status"]
+    assert status["symbols"][0]["signal"] == published
+    assert status["withheld"] == 0
+    status = read_helm_status(write(tmp_path, with_signal({})), now=NOW)["status"]
+    assert status["symbols"][0]["signal"] == dict.fromkeys(signal())
+    assert status["withheld"] == 0

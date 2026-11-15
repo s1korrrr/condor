@@ -11,8 +11,9 @@ test('a missing status file says only that, other unreadable files stay unreadab
   assert.equal(helmHeadline({ state: 'UNBOUND', reason: 'x', status: null }).text, 'Not connected to this dashboard');
 });
 
-test('only the runtime says stopped; an old status is unknown; running needs fresh and ready', () => {
-  assert.equal(helmHeadline({ state: 'STALE', status: status({ reasons: ['runtime_stopped'] }) }).text, 'Stopped (last status 2026-11-06 01:51Z)');
+test('only the runtime says stopped; an old status is unknown; running needs fresh and ready', context => {
+  context.mock.method(Date, 'now', () => 1793929900000);
+  assert.equal(helmHeadline({ state: 'STALE', status: status({ reasons: ['runtime_stopped'] }) }).text, 'Stopped (last status 6 Nov 01:51 UTC)');
   assert.match(helmHeadline({ state: 'STALE', status: status() }).text, /current state unknown/);
   assert.deepEqual(helmHeadline({ state: 'FRESH', status: status({ gates: READY }) }), { text: 'Running, entry gate ready', good: null, detail: undefined });
   assert.equal(helmHeadline({ state: 'FRESH', status: status({ ready: null }) }).text, 'Publishing status, ready: not published');

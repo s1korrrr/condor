@@ -84,7 +84,7 @@ function longVisibleDecimals(container) {
   const walker = document.createTreeWalker(container, browser.NodeFilter.SHOW_TEXT);
   while (walker.nextNode()) {
     const node = walker.currentNode, parent = node.parentElement;
-    if (!parent || parent.closest('script, style')) continue;
+    if (!parent || parent.closest('script, style, [data-exact-record]')) continue;
     scan(node.textContent, parent.tagName.toLowerCase(), parent);
   }
   for (const block of container.querySelectorAll('p, dd, dt, td, th, li, summary')) {
@@ -104,7 +104,7 @@ const numericAllowlist = [
 function unprovenNumbers(container, outputs = formatterOutputs) {
   const text = node => {
     if (node.nodeType === browser.Node.TEXT_NODE) return node.textContent ?? '';
-    if (node.nodeType !== browser.Node.ELEMENT_NODE || node.matches('script, style, [hidden], [aria-hidden="true"]')) return '';
+    if (node.nodeType !== browser.Node.ELEMENT_NODE || node.matches('script, style, [hidden], [aria-hidden="true"], [data-exact-record]')) return '';
     const contents = [...node.childNodes].map(text).join('');
     return node.matches('div, p, section, article, header, footer, main, aside, li, tr, td, th, dd, dt, summary, h1, h2, h3, h4, pre') ? ` ${contents} ` : contents;
   };

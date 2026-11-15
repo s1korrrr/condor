@@ -102,6 +102,10 @@ test('configured Stocks formats exponent, signed and integer numeric fields with
   const publicRecord = records.find(record => record.title.includes('1.234567890123e-20'));
   const metadataRecord = records.find(record => record.title.includes('1700000000000'));
   assert.ok(publicRecord && metadataRecord);
+  const exactRecords = [...document.querySelectorAll('details')].filter(details => details.querySelector(':scope > summary')?.textContent === 'Exact record');
+  assert.equal(exactRecords.length, 2, 'both market and metadata records have a keyboard and touch disclosure');
+  assert.ok(exactRecords.some(details => details.querySelector('pre')?.textContent.includes('1.234567890123e-20')));
+  assert.ok(exactRecords.some(details => details.querySelector('pre')?.textContent.includes('"instrumentCode": "001234"')));
   assert.match(publicRecord.textContent, /1\.23e−20/);
   assert.match(publicRecord.textContent, /99\.78/);
   assert.match(publicRecord.textContent, /198,961/);

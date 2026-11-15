@@ -1,6 +1,6 @@
 import { PAPER_SNAPSHOT_FRESH_MS, paperAge, paperTimestampIssue } from './snapshot-presentation.ts';
 import { paperOpaqueClockNumber } from './paper-json.ts';
-import { usdc } from './format.mjs';
+import { fixed, usdc } from './format.mjs';
 
 export interface ReportPermissionInput {
   agentReady: boolean;
@@ -274,13 +274,7 @@ export function paperWords(value: unknown): string {
 
 export function paperAmount(value: unknown, unit: string, places = 4): string {
   if (typeof value !== "string" || !/^-?\d+(\.\d+)?$/.test(value) || value.length > 128) return "Not published";
-  const negative = value.startsWith("-");
-  const [whole, fraction = ""] = value.replace(/^-/, "").split(".");
-  const digits = fraction.padEnd(places + 1, "0");
-  const scaled = BigInt(whole + digits.slice(0, places)) + (digits[places] >= "5" ? 1n : 0n);
-  const rounded = scaled.toString().padStart(places + 1, "0");
-  const integer = places ? rounded.slice(0, -places) : rounded;
-  return `${negative && scaled !== 0n ? "−" : ""}${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${places ? "." + rounded.slice(-places) : ""} ${unit}`;
+  return `${fixed(value, places)} ${unit}`;
 }
 
 export function paperExactAmount(value: unknown, unit: string): string {

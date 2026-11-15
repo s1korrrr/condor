@@ -38,8 +38,6 @@ export function V5AppShell({ children }: { children: React.ReactNode }) {
   const { logout } = useAuth();
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, refetchInterval: 15_000 });
   const paperLabel = paperWorkspaceLabel(profile.data);
-  const now = usePaperClock();
-  const utc = new Date(now).toISOString();
   const group = groupOf(pathname);
   const safety = <><ShieldCheck className="h-3.5 w-3.5 text-[var(--color-primary)]" />{pathname === "/market/stocks" ? "OKX stocks · public market observations · execution disabled" : paperLabel ?? "V5 profile · separate Razer service · execution disabled · baseline and account owners unbound"}<NavLink to="/system/readiness" className="underline">Readiness and open gates</NavLink></>;
   // The one most specific sub-page that matches (exact, else the longest prefix): /market/stocks marks only OKX stocks,
@@ -55,8 +53,8 @@ export function V5AppShell({ children }: { children: React.ReactNode }) {
     <header className="condor-topbar v5-shell-header">
       <div className="v5-shell-primary">
         <NavLink to="/" className="v5-shell-brand flex shrink-0 items-center gap-2 font-bold tracking-tight"><img src="/condor_old.jpeg" alt="RSIBOT" className="h-6 w-6 rounded-full" /><span className="text-sm">RSIBOT <span className="text-[var(--color-primary)]">V5</span></span></NavLink>
-        <span className="v5-shell-scope" title={paperLabel ?? "Razer · advisor reports only · live disabled"}><span className="v5-shell-scope-long">{paperLabel ? "PAPER · live disabled" : "ADVISOR · live disabled"}</span><span className="v5-shell-scope-short hidden">{paperLabel ? "PAPER" : "ADVISOR"}</span></span>
-        <time className="v5-shell-clock hidden" dateTime={utc}>{utc.slice(11, 19)} UTC</time>
+        <div className="v5-shell-scope" title={paperLabel ?? "Razer · advisor reports only · live disabled"}><span className="v5-shell-scope-long">{paperLabel ? "PAPER · live disabled" : "ADVISOR · live disabled"}</span><details className="v5-shell-scope-short v5-phone-safety hidden"><summary><span className="v5-shell-mode">{paperLabel ? "PAPER" : "ADVISOR"}</span><small>execution disabled</small></summary><div className="v5-phone-safety-body">{safety}</div></details></div>
+        <PhoneClock />
         <button className="v5-shell-menu" aria-label={navOpen ? "Close navigation" : "Open navigation"} aria-expanded={navOpen} aria-controls="v5-main-navigation" onClick={() => setNavOpen(open => !open)}>{navOpen ? <X size={16} /> : <Menu size={16} />}Menu</button>
       </div>
       <nav ref={navRef} id="v5-main-navigation" aria-label="Main navigation" className={`v5-shell-nav${navOpen ? " is-open" : ""}`}>
@@ -71,4 +69,9 @@ export function V5AppShell({ children }: { children: React.ReactNode }) {
       {group?.label === "System" && <nav aria-label="System tools" className="v5-phone-tools hidden"><Link to="/settings">Settings</Link><button onClick={toggleTheme}>Theme: {theme}</button><button onClick={() => { void query.invalidateQueries({ queryKey: ["v5-workspace"] }); void query.invalidateQueries({ queryKey: ["v5-sessions"] }); }}>Refresh workspace</button><button onClick={logout}>Sign out</button></nav>}
       {children}</div></main>
   </div>;
+}
+
+function PhoneClock() {
+  const utc = new Date(usePaperClock()).toISOString();
+  return <time className="v5-shell-clock hidden" dateTime={utc}>{utc.slice(11, 19)} UTC</time>;
 }

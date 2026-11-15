@@ -38,15 +38,15 @@ test('phone chrome keeps a UTC clock, truthful scope, System tools and a vacant 
   const document = shell('/operations');
   assert.equal(document.querySelector('.v5-shell-clock').textContent, '12:34:56 UTC');
   assert.equal(document.querySelector('time').getAttribute('datetime'), new Date(now).toISOString());
-  assert.equal(document.querySelector('.v5-shell-scope-short').textContent, 'PAPER');
-  assert.equal(shell('/', false).querySelector('.v5-shell-scope-short').textContent, 'ADVISOR');
+  assert.equal(document.querySelector('.v5-shell-mode').textContent, 'PAPER');
+  assert.equal(shell('/', false).querySelector('.v5-shell-mode').textContent, 'ADVISOR');
   const header = document.querySelector('header');
   assert.equal(header.nextElementSibling.id, 'v5-shell-status-slot');
   assert.equal(header.nextElementSibling.childNodes.length, 0);
   assert.equal(document.querySelector('[aria-label="System tools"] a').getAttribute('href'), '/settings');
   assert.match(document.querySelector('[aria-label="System tools"]').textContent, /Theme: dark/);
   assert.equal(shell('/bots').querySelector('[aria-label="System tools"]'), null);
-  assert.equal(document.querySelector('.v5-phone-safety'), null);
+  assert.match(document.querySelector('.v5-phone-safety summary').textContent, /execution disabled/);
   assert.equal(document.querySelector('main a[href="/v5/readiness"]'), null);
   assert.ok(document.querySelector('[aria-label="System pages"] a[href="/v5/readiness"]'));
   assert.match(document.querySelector('.v5-shell-safety').textContent, /live disabled/);
@@ -191,11 +191,11 @@ for (const kind of ['fills', 'positions']) test(`phone ${kind} preserve the owne
 
 test('phone records use published millisecond times, never manufacture missing chronology', () => {
   const { phoneRecordTime } = frontendModules().load('v5/phone-records.ts');
-  assert.equal(phoneRecordTime({ event_at_ms: 30, close_at_ms: 20, created_at_ms: 10 }), 30);
-  assert.equal(phoneRecordTime({ close_at_ms: 20, created_at_ms: 10 }), 20);
-  assert.equal(phoneRecordTime({ close_at_ms: null, created_at_ms: 10 }), 10);
-  assert.equal(phoneRecordTime({ created_at_ms: 0 }), 0);
-  for (const value of [undefined, null, '', '30', NaN, Infinity, -1]) assert.equal(phoneRecordTime({ created_at_ms: value }), null);
+  assert.equal(phoneRecordTime({ event_at_ms: 30, close_at_ms: 20, created_at_ms: 10 }, now), 30);
+  assert.equal(phoneRecordTime({ close_at_ms: 20, created_at_ms: 10 }, now), 20);
+  assert.equal(phoneRecordTime({ close_at_ms: null, created_at_ms: 10 }, now), 10);
+  assert.equal(phoneRecordTime({ created_at_ms: 0 }, now), 0);
+  for (const value of [undefined, null, '', '30', NaN, Infinity, -1]) assert.equal(phoneRecordTime({ created_at_ms: value }, now), null);
 });
 
 test('phone newest-first ordering happens before pagination without changing desktop order or explicit sorts', () => {
@@ -243,7 +243,15 @@ for (const kind of ['positions', 'fills', 'executors']) test(`phone ${kind} sort
     assert.equal(mobile.querySelector('details').open, false);
     assert.doesNotMatch(mobile.querySelector('summary').textContent, /private-|executor-/);
     assert.equal(mobile.querySelectorAll('details details').length, 0);
-    const values = [...mobile.querySelector('details > dl').children].map(field => field.querySelector('dd').textContent);
+    const values = [...mobile.querySelector('details > dl').children].map((field, index) => {
+      const value = field.querySelector('dd').cloneNode(true);
+      const note = value.querySelector('.v5-phone-row-note');
+      if (note) {
+        assert.equal(note.textContent, `Raw value: ${desktop.children[index].title}`);
+        note.remove();
+      }
+      return value.textContent;
+    });
     [...desktop.children].forEach((cell, index) => assert.equal(values[index], cell.textContent.replace('Expand record', '')));
   }
   if (kind === 'positions') {
@@ -281,4 +289,62 @@ test('phone typography floors cover Bots, System, Helm and Market without shrink
   assert.match(css, /\.paper-copy\)[^}]*overflow:\s*visible[^}]*overflow-wrap:\s*anywhere/);
   assert.match(css, /\.v5m-stat\[title\]::after[^}]*content:\s*attr\(title\)/);
   assert.match(css, /:is\(\.v5m-hour-strip th, \.v5m-hour\)[^}]*font-size:\s*12px !important/);
+});
+
+test('review regression: phone daily money rows retain raw accessor precision and explicit titles', () => {
+  const { load } = frontendModules({}, { 'v5/V5Money.tsx': ['dailyColumns'] });
+  const { DataTable } = load('features/quant-ops/kit/DataTable.tsx');
+  const { Rows } = load('features/quant-ops/kit/Rows.tsx');
+  const columns = load('v5/V5Money.tsx').dailyColumns;
+  const row = { day: now, equity_start: '100', equity_end: '101.2345', equity_change: '1.2345', realized_change: '0', valid: 288, samples: 288, gaps: 0 };
+  const window = new Window();
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(DataTable, { rows: [row], columns, rowId: () => 'day', label: 'Money daily' }));
+  assert.equal(window.document.querySelectorAll('.v5-desktop-table td')[2].title, '1.2345');
+  const change = [...window.document.querySelectorAll('.v5-phone-rows dt')].find(field => field.textContent === 'Equity change').nextElementSibling;
+  assert.match(change.textContent, /1\.23/);
+  assert.match(change.textContent, /Raw value: 1\.2345/);
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(Rows, { rows: [row], rowId: () => 'day', label: 'Explicit title', columns: [
+    { id: 'amount', header: 'Amount', value: () => '1.2345', cell: () => React.createElement('strong', null, '1.23'), title: () => 'Exact owner amount 1.2345' },
+    { id: 'zero', header: 'Zero', value: () => 0, cell: () => React.createElement('span', null, 'Zero') },
+    { id: 'missing', header: 'Missing', value: () => null, cell: () => 'Unavailable' },
+    { id: 'substring', header: 'Rounded up', value: () => '1.2', cell: () => '1.23' },
+    { id: 'same', header: 'Unformatted', value: () => '1.23', cell: () => React.createElement('span', null, '1.23') },
+  ] }));
+  const notes = [...window.document.querySelectorAll('.v5-phone-row-note')].map(note => note.textContent);
+  assert.deepEqual(notes, ['Exact owner amount 1.2345', 'Raw value: 0', 'Raw value: 1.2']);
+  window.close();
+});
+
+test('review regression: future and invalid fill times are undated after qualified records in owner order', () => {
+  const { phoneRecordTime } = frontendModules().load('v5/phone-records.ts');
+  for (const value of [now + 86_400_000, 1.5, Number.MAX_SAFE_INTEGER + 1]) assert.equal(phoneRecordTime({ event_at_ms: value, created_at_ms: now }, now), null);
+  assert.equal(phoneRecordTime({ event_at_ms: now + 5000 }, now), now + 5000);
+  assert.equal(phoneRecordTime({ event_at_ms: now + 5001 }, now), null);
+  const stubs = Object.fromEntries(['@/components/bots/AggregatedPnlChart', '@/components/bots/ControllerBrowser', '@/components/bots/DeployBotDialog', '@/components/bots/PnlSparkline', '@/hooks/useWebSocket', '@/hooks/useRates'].map(name => [name, {}]));
+  const { PaperRecords } = frontendModules(stubs, { 'pages/tabs/ActiveBotsTab.tsx': ['PaperRecords'] }).load('pages/tabs/ActiveBotsTab.tsx');
+  const fixture = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-api-final3/native-replay/fills.json', import.meta.url)));
+  const data = [['FUTURE', now + 86_400_000], ['VALID', now - 1000], ['UNDATED', null]].map(([pair, event_at_ms]) => ({ ...fixture.data[0], trading_pair: `${pair}-USDC`, trade_id: pair, event_at_ms, created_at_ms: undefined }));
+  const read = { ...fixture, generated_at_ms: now, next_cursor: null, data };
+  const window = new Window();
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(PaperRecords, { read, kind: 'fills', now }));
+  assert.deepEqual([...window.document.querySelectorAll('.v5-phone-rows summary strong:first-of-type')].map(cell => cell.textContent).filter(text => text.endsWith('-USDC')), ['VALID-USDC', 'FUTURE-USDC', 'UNDATED-USDC']);
+  assert.match(window.document.querySelector('.v5-phone-order').textContent, /undated records follow in owner order/);
+  assert.match(window.document.querySelectorAll('.v5-phone-rows details')[1].textContent, /Not published/);
+  window.close();
+});
+
+test('review regression: phone execution-disabled disclosure retains unbound and paper authority sentences', () => {
+  for (const paper of [false, true]) {
+    const document = shell('/', paper);
+    const disclosure = document.querySelector('header details.v5-phone-safety');
+    assert.ok(disclosure);
+    assert.equal(disclosure.open, false);
+    assert.match(disclosure.querySelector('summary').textContent, /execution disabled/);
+    const body = disclosure.querySelector('.v5-phone-safety-body');
+    assert.match(body.textContent, paper ? /PAPER.*live disabled/ : /execution disabled · baseline and account owners unbound/);
+    assert.equal(body.querySelector('a').getAttribute('href'), '/v5/readiness');
+  }
+  assert.match(shell('/market/stocks', false).querySelector('.v5-phone-safety-body').textContent, /public market observations · execution disabled/);
+  assert.match(css, /\.v5-phone-safety summary\s*\{[^}]*min-height:\s*44px/);
+  assert.match(css, /\.v5-phone-safety-body\s*\{[^}]*white-space:\s*normal/);
 });

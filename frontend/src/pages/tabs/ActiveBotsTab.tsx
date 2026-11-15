@@ -705,7 +705,7 @@ function PaperRecords({ read, positions, executors, now, valuesAt = now, kind }:
   const completeRows = paperRetainedRecords(read, valuesAt);
   const rows = completeRows ?? [];
   const orderingExecutors = kind === "positions" && executors?.snapshot_id === read?.snapshot_id ? paperRetainedRecords(executors, now) ?? [] : [];
-  const phoneNewestAt = (row: PaperRow) => phoneRecordTime(kind === "positions" ? orderingExecutors.find(executor => executor.executor_id === row.executor_id) ?? row : row);
+  const phoneNewestAt = (row: PaperRow) => phoneRecordTime(kind === "positions" ? orderingExecutors.find(executor => executor.executor_id === row.executor_id) ?? row : row, now);
   const idKey = kind === "fills" ? "trade_id" : kind === "positions" ? "position_id" : "executor_id";
   const unit = (row: PaperRow) => typeof row.unit === "string" ? row.unit : "USDC";
   const base = (row: PaperRow) => String(row.trading_pair ?? "").split("-")[0] || "base units";

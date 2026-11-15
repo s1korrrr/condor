@@ -7,6 +7,10 @@ function expandedCell(content: ReactNode) {
   return Children.toArray(content.props.children).filter(child => !isValidElement(child) || child.type !== 'summary');
 }
 
+function cellText(content: ReactNode): string {
+  return Children.toArray(content).map(child => isValidElement<{ children?: ReactNode }>(child) ? cellText(child.props.children) : String(child)).join('');
+}
+
 export function Rows<T>({ rows, columns, rowId, label, rowState, controls }: {
   rows: T[];
   columns: RowField<T>[];
@@ -20,7 +24,13 @@ export function Rows<T>({ rows, columns, rowId, label, rowState, controls }: {
   return <div className="v5-phone-rows hidden" role="list" aria-label={label}>{rows.map((row, index) => <div role="listitem" key={rowId(row, index)} data-state={rowState?.(row)}>
     {controls?.(row, index)}
     <details><summary>{[primary, secondary].filter(column => column != null).map(column => <span key={column.id}><small>{column.header}</small><strong>{String(column.value(row) ?? '—')}</strong></span>)}</summary>
-      <dl>{columns.map(column => <div key={column.id}><dt>{column.header}</dt><dd className={column.className?.(row)}>{column.cell ? expandedCell(column.cell(row)) : String(column.value(row) ?? '—')}{column.title?.(row) && <small className="v5-phone-row-note">{column.title(row)}</small>}</dd></div>)}</dl>
+      <dl>{columns.map(column => {
+        const raw = column.value(row);
+        const content = column.cell ? expandedCell(column.cell(row)) : String(raw ?? '—');
+        const rawText = raw == null ? '' : String(raw);
+        const note = column.title?.(row) ?? (column.cell && rawText !== '' && cellText(content) !== rawText ? `Raw value: ${rawText}` : undefined);
+        return <div key={column.id}><dt>{column.header}</dt><dd className={column.className?.(row)}>{content}{note && <small className="v5-phone-row-note">{note}</small>}</dd></div>;
+      })}</dl>
     </details>
   </div>)}</div>;
 }

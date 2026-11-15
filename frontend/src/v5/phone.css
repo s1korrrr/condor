@@ -1,11 +1,15 @@
 @media (width < 640px) {
   .condor-native.condor-shell { min-width: 0; max-width: 100%; }
-  .condor-native.condor-shell .v5-shell-header { display: block; min-height: 48px; height: 48px; padding: 0 8px; }
+  .condor-native.condor-shell .v5-shell-header { position: relative; display: block; min-height: 48px; height: 48px; padding: 0 8px; }
   .condor-native.condor-shell .v5-shell-primary { height: 48px; gap: 6px; }
   .condor-native.condor-shell .v5-shell-brand { min-height: 44px; }
   .condor-native.condor-shell .v5-shell-brand > span { font-size: 12px; }
-  .condor-native.condor-shell .v5-shell-scope { padding: 3px 5px; font-size: 12px; }
-  .condor-native.condor-shell .v5-shell-scope-short { display: inline; }
+  .condor-native.condor-shell .v5-shell-scope { padding: 0 5px; font-size: 12px; }
+  .condor-native.condor-shell .v5-shell-scope-short { display: block; }
+  .condor-native.condor-shell .v5-phone-safety summary { display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 44px; line-height: 14px; }
+  .condor-native.condor-shell .v5-phone-safety .v5-shell-mode::after { content: "⌄"; margin-left: 4px; }
+  .condor-native.condor-shell .v5-phone-safety-body { position: absolute; z-index: 60; top: 100%; left: 8px; right: 8px; padding: 12px; border: 1px solid var(--color-border); border-radius: 6px; background: var(--color-surface); white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
+  .condor-native.condor-shell .v5-phone-safety:not([open]) > .v5-phone-safety-body { display: none; }
   .condor-native.condor-shell :is(.v5-shell-scope-long, .v5-shell-menu, .v5-shell-tools, .v5-shell-safety) { display: none; }
   .condor-native.condor-shell .v5-shell-clock { display: block; margin-left: auto; white-space: nowrap; font-size: 12px; font-variant-numeric: tabular-nums; }
   .condor-native.condor-shell .v5-shell-nav, .condor-native.condor-shell .v5-shell-nav.is-open { position: fixed; z-index: 50; inset: auto 0 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; padding: 0 4px env(safe-area-inset-bottom, 0px); border: 0; border-top: 1px solid var(--color-border); background: var(--color-surface); }
@@ -77,4 +81,15 @@
   .condor-native :is(.v5m-hour-strip th, .v5m-hour) { font-size: 12px !important; }
   .condor-native :is(.v5-feature-row, .v5-quality-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .condor-native :is(.v5-feature-row > *, .v5-readiness-row b, .paper-copy) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  .condor-native .paper-price-chart .paper-chart-coins { display: grid; grid-template-columns: repeat(5, minmax(44px, 1fr)); gap: 4px; }
+  .condor-native .paper-price-chart .v5-button { min-width: 44px; min-height: 44px; padding: 8px; font-size: 12px; }
+  .condor-native .paper-price-chart .paper-chart-ranges { flex-wrap: wrap; margin-top: 8px; }
+  .condor-native .paper-price-chart .paper-chart-legend { display: flex; flex-wrap: wrap; gap: 4px 8px; }
+  .condor-native .paper-price-chart :is(p, figcaption, .paper-chart-legend > span) { min-width: 0; max-width: 100%; overflow-wrap: anywhere; font-size: 12px; }
+  .condor-native .paper-price-chart .recorded-candle-chart { min-width: 0; max-width: 100%; margin: 12px 0 0; padding: 8px; }
+  .condor-native .paper-price-chart .recorded-candle-canvas { min-width: 0; width: 100%; height: 360px; }
+  .condor-native .paper-positions .paper-pairs { grid-template-columns: minmax(0, 1fr) !important; }
+  .condor-native .paper-positions :is(p, dt, dd, summary) { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
+  .condor-native .paper-positions progress { display: block; width: 100%; max-width: 100%; }
+  .condor-native .paper-positions summary { min-height: 44px; padding: 8px 0; }
 }

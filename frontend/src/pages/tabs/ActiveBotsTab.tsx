@@ -650,17 +650,17 @@ function PaperBadge({ children, state }: { children: React.ReactNode; state?: st
 
 export function paperHoldSentence(controllers: { id?: string; current?: boolean; operator: { paused?: unknown; emergency?: unknown }; native?: { protected_exits?: unknown }; entryHold?: boolean | null }[], holds: { label: string }[]): string | null {
   const emergency = controllers.filter(controller => controller.operator.emergency === true);
-  if (emergency.length) return `The owner reports an emergency halt${emergency.some(controller => controller.id) ? ` for ${[...new Set(emergency.map(controller => controller.id).filter(Boolean))].join(", ")}` : ""}: buying is stopped.`;
   const paused = controllers.filter(controller => controller.operator.paused === true);
   const latched = controllers.filter(controller => controller.entryHold === true);
   const reasons = [...new Set(holds.map(item => item.label))];
-  if (!paused.length && !latched.length && !reasons.length) return null;
+  if (!emergency.length && !paused.length && !latched.length && !reasons.length) return null;
   const names = (rows: typeof controllers) => [...new Set(rows.map(controller => controller.id).filter(Boolean))].join(", ");
+  const halt = emergency.length ? `The owner reports an emergency halt${names(emergency) ? ` for ${names(emergency)}` : ""}: buying is stopped.` : "";
   const pause = paused.length ? `Buying is paused by an operator${(paused.length < controllers.length || controllers.some(controller => controller.current !== true)) && names(paused) ? ` for ${names(paused)}` : ""}.` : "";
   const native = latched.length ? `Buying is held${names(latched) ? ` for ${names(latched)}` : " by the native entry latch"}.` : "";
   const owner = reasons.length ? `Buying is held: ${reasons.join(", ")}.` : "";
-  const exits = !reasons.length && controllers.length > 0 && controllers.every(controller => controller.current === true && controller.native?.protected_exits === "preserved") ? "Selling is not paused." : "";
-  return [pause, native, owner, exits].filter(Boolean).join(" ");
+  const exits = !emergency.length && !reasons.length && controllers.length > 0 && controllers.every(controller => controller.current === true && controller.native?.protected_exits === "preserved") ? "The owner reports protective exits are preserved by entry controls." : "";
+  return [halt, pause, native, owner, exits].filter(Boolean).join(" ");
 }
 
 const paperMoneyDecimal = (value: unknown): value is string => typeof value === "string" && value.length <= 128 && /^-?\d+(\.\d{1,30})?$/.test(value);
@@ -683,7 +683,7 @@ export function paperMoneyTiles({ walletRead, accountingRead, snapshot, complete
   }
   const day = Math.floor(now / 86_400_000) * 86_400_000;
   const today = Array.isArray(money?.daily) ? money.daily.find(row => row?.day === day) : undefined;
-  const moneyCurrent = complete && money?.range === "7d" && typeof money.now_ms === "number" && money.now_ms <= now && now - money.now_ms <= 90_000;
+  const moneyCurrent = current(snapshot) && money?.range === "7d" && typeof money.now_ms === "number" && money.now_ms <= now && !paperSnapshotPresentation(money.now_ms, now, false).stale;
   const todayComplete = moneyCurrent && today?.day === day && today.gaps === 0 && Number.isInteger(today.valid) && today.valid >= 2 && typeof today.first_at_ms === "number" && today.first_at_ms >= day && typeof today.last_at_ms === "number" && today.first_at_ms < today.last_at_ms && today.last_at_ms <= now && now - today.last_at_ms <= 360_000;
   const walletWhy = `Complete current owner wallet required${walletRead?.reason ? `: ${paperWords(walletRead.reason)}` : ""}`;
   const accountingWhy = "Complete current owner lifetime accounting required";

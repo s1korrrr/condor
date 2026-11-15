@@ -18,7 +18,7 @@ const tiles = (changes = {}) => paperMoneyTiles({ walletRead: fixture.wallet, ac
 
 test('operator pause names only the paused controllers unless all are paused', () => {
   const paused = controller('BNB', { operator: { paused: true, emergency: false } });
-  assert.equal(paperHoldSentence([paused], []), 'Buying is paused by an operator. Selling is not paused.');
+  assert.equal(paperHoldSentence([paused], []), 'Buying is paused by an operator. The owner reports protective exits are preserved by entry controls.');
   assert.match(paperHoldSentence([paused, controller('BTC')], []), /Buying is paused by an operator for BNB\./);
   assert.doesNotMatch(paperHoldSentence([paused, controller('BTC')], []), /for BTC/);
 });
@@ -30,6 +30,22 @@ test('emergency, native latch, owner list and no hold never invent state or exit
   assert.equal(paperHoldSentence([], []), null);
   assert.doesNotMatch(paperHoldSentence([controller('BNB', { entryHold: true })], [{ label: 'Controls unavailable' }]), /Selling|running/);
   assert.doesNotMatch(paperHoldSentence([controller('BNB', { current: false, operator: { paused: true } })], []), /Selling/);
+});
+
+test('emergency sentence retains every received hold and its controller scope without an exit claim', () => {
+  const controllers = [controller('BNB', { operator: { emergency: true } }), controller('BTC', { entryHold: true }), controller('ETH', { operator: { paused: true } })];
+  const sentence = paperHoldSentence(controllers, [{ label: 'Paper controls unavailable' }]);
+  assert.match(sentence, /emergency halt for BNB: buying is stopped/);
+  assert.match(sentence, /Buying is held for BTC/);
+  assert.match(sentence, /Buying is paused by an operator for ETH/);
+  assert.match(sentence, /Paper controls unavailable/);
+  assert.doesNotMatch(sentence, /Selling|exits|running/);
+});
+
+test('entry controls never certify the general selling state or exit coverage', () => {
+  const sentence = paperHoldSentence([controller('BNB', { operator: { paused: true }, native: { protected_exits: 'preserved', protected_exit_state: null } })], []);
+  assert.match(sentence, /The owner reports protective exits are preserved by entry controls/);
+  assert.doesNotMatch(sentence, /Selling|exit coverage|selling works/i);
 });
 
 test('six tiles use exact owner strings and only zero-flow equity minus funding', () => {
@@ -62,6 +78,13 @@ test('incomplete, stale, future, incoherent and failed owner reads withhold mone
   assert.equal(tiles({ walletRead: { ...fixture.wallet, bot_id: 'other' } })[0].value, '—');
   assert.equal(tiles({ accountingRead: { ...fixture.accounting, bot_id: 'other' } })[3].value, '—');
   assert.equal(tiles({ money: undefined })[2].value, '—');
+});
+
+test('all six tiles expire strictly beyond 30000 ms, including a freshly recorded Today row', () => {
+  assert.ok(tiles({ now: now + 30_000 }).every(tile => tile.value !== '—'));
+  assert.ok(tiles({ now: now + 30_001 }).every(tile => tile.value === '—'));
+  const freshMoney = { ...money, now_ms: now + 30_001, daily: [{ ...money.daily[0], last_at_ms: now + 30_001 }] };
+  assert.equal(tiles({ now: now + 30_001, money: freshMoney })[2].value, '—');
 });
 
 test('Today is only the current UTC-day Money row, never an older or gap value', () => {

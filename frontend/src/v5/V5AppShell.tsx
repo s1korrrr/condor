@@ -51,7 +51,7 @@ export function V5AppShell({ children }: { children: React.ReactNode }) {
     <header className="condor-topbar v5-shell-header">
       <div className="v5-shell-primary">
         <NavLink to="/" className="v5-shell-brand flex shrink-0 items-center gap-2 font-bold tracking-tight"><img src="/condor_old.jpeg" alt="RSIBOT" className="h-6 w-6 rounded-full" /><span className="text-sm">RSIBOT <span className="text-[var(--color-primary)]">V5</span></span></NavLink>
-        <span className="v5-shell-scope" title={paperLabel ?? "Razer · advisor reports only · live disabled"}>{paperLabel ? "PAPER" : "ADVISOR"}</span>
+        <span className="v5-shell-scope" title={paperLabel ?? "Razer · advisor reports only · live disabled"}>{paperLabel ? "PAPER · live disabled" : "ADVISOR · live disabled"}</span>
         <button className="v5-shell-menu" aria-label={navOpen ? "Close navigation" : "Open navigation"} aria-expanded={navOpen} aria-controls="v5-main-navigation" onClick={() => setNavOpen(open => !open)}>{navOpen ? <X size={16} /> : <Menu size={16} />}Menu</button>
       </div>
       <nav ref={navRef} id="v5-main-navigation" aria-label="Main navigation" className={`v5-shell-nav${navOpen ? " is-open" : ""}`}>

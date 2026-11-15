@@ -82,7 +82,7 @@ function helmChip(helm, nowMs) {
 }
 
 function dataChip(data, nowMs) {
-  const base = { id: 'data', label: 'Market data', to: '/' };
+  const base = { id: 'data', label: 'Market data', to: '/market' };
   if (!data.configured) return { ...base, tone: 'grey', text: 'No candle store on this deployment', short: 'Data n/a' };
   if (data.pending) return { ...base, tone: 'grey', text: 'Reading the candle store', short: 'Data …' };
   const lanes = data.lanes;
@@ -102,7 +102,7 @@ function dataChip(data, nowMs) {
 }
 
 function equityChip(wallet) {
-  const base = { id: 'equity', label: 'V5 equity', to: '/money' };
+  const base = { id: 'equity', label: 'V5 equity', to: '/' };
   const equity = wallet.current ? decimal(wallet.equity) : null;
   if (equity === null) return { ...base, tone: 'grey', text: '—', short: '—' };
   const unit = typeof wallet.unit === 'string' && wallet.unit ? ` ${wallet.unit}` : '';

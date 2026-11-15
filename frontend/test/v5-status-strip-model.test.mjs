@@ -15,6 +15,12 @@ const input = (over = {}) => ({
 });
 const chip = (strip, id) => strip.chips.find(item => item.id === id);
 
+test('market data and equity chips point to their release navigation pages', () => {
+  const strip = statusStrip(input());
+  assert.equal(chip(strip, 'data').to, '/market');
+  assert.equal(chip(strip, 'equity').to, '/');
+});
+
 test('everything current is green, counts nothing to check and stamps the update with a ticking age', () => {
   const strip = statusStrip(input());
   assert.deepEqual(strip.chips.map(item => [item.id, item.tone]), [['v5', 'green'], ['helm', 'green'], ['data', 'green'], ['equity', 'green']]);

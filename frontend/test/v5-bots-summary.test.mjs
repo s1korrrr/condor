@@ -9,6 +9,8 @@ import { frontendModules } from './helpers/frontend-module.mjs';
 const overrides = Object.fromEntries(['@/components/bots/AggregatedPnlChart', '@/components/bots/ControllerBrowser', '@/components/bots/DeployBotDialog', '@/components/bots/PnlSparkline', '@/hooks/useWebSocket', '@/hooks/useRates'].map(name => [name, {}]));
 const { load } = frontendModules(overrides);
 const { paperHoldSentence, paperMoneyTiles, PaperWorkspace } = load('pages/tabs/ActiveBotsTab.tsx');
+const policy = load('v5/policy.ts');
+const { paperSafetyReads, paperSafetyBeyondDisplayed } = load('v5/paper-safety.ts');
 const fixture = Object.fromEntries(['status', 'wallet', 'positions', 'executors', 'fills', 'risk', 'decisions', 'history', 'operations', 'accounting'].map(section => [section, JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)))]));
 const now = fixture.wallet.generated_at_ms;
 const controller = (id, extra = {}) => ({ id, current: true, operator: { paused: false, emergency: false }, native: { protected_exits: 'preserved' }, entryHold: false, holds: [], ...extra });
@@ -16,12 +18,79 @@ const day = Math.floor(now / 86_400_000) * 86_400_000;
 const money = { range: '7d', now_ms: now, daily: [{ day, samples: 2, valid: 2, gaps: 0, first_at_ms: now - 300_000, last_at_ms: now, equity_change: '-12.000000000000000000000000000001' }] };
 const tiles = (changes = {}) => paperMoneyTiles({ walletRead: fixture.wallet, accountingRead: fixture.accounting, snapshot: fixture.status, complete: true, now, money, ...changes });
 
-test('operator pause names only the paused controllers unless all are paused', () => {
+test('operator pause always names the observed scope, including a partial controller report', () => {
   const paused = controller('BNB', { operator: { paused: true, emergency: false } });
-  assert.equal(paperHoldSentence([paused], []), 'Buying is paused by an operator. The owner reports protective exits are preserved by entry controls.');
+  assert.equal(paperHoldSentence([paused], []), 'Buying is paused by an operator for BNB. The owner reports protective exits are preserved by entry controls.');
   assert.match(paperHoldSentence([paused, controller('BTC')], []), /Buying is paused by an operator for BNB\./);
   assert.doesNotMatch(paperHoldSentence([paused, controller('BTC')], []), /for BTC/);
+  const risk = structuredClone(fixture.risk);
+  const received = Object.keys(risk.data.controllers)[0];
+  risk.data.controllers = { [received]: { operator: { paused: true }, native: {} } };
+  risk.completeness = 'partial';
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace, { reads: [risk], now, bot: risk.bot_id }));
+  assert.match(html.match(/<p class="paper-hold-sentence">(.*?)<\/p>/s)[1], new RegExp(`Buying is paused by an operator for ${received}\\.`));
 });
+
+test('native hold projection retains omitted controller scopes without fabricating controller flags', () => {
+  const risk = structuredClone(fixture.risk);
+  risk.data.controllers = { BNB: { operator: { emergency: true }, native: {} } };
+  const hold = { controller_id: 'BTC', reason: 'native_refusal_receipt_pending', explanation: 'BTC owner refusal receipt pending', protected_exits: 'preserved' };
+  risk.data.native_entry_holds = [hold];
+  assert.equal(policy.paperSectionError(risk), null);
+  assert.deepEqual(policy.paperNativeHolds(risk), [{ ...hold, controllerPublished: false }]);
+  const render = read => renderToStaticMarkup(React.createElement(PaperWorkspace, { reads: [read], now, bot: read.bot_id }));
+  const html = render(risk);
+  const sentence = html.match(/<p class="paper-hold-sentence">(.*?)<\/p>/s)[1];
+  const details = html.match(/<details class="paper-hold-details">(.*?)<\/details>/s)[1];
+  assert.match(sentence, /emergency halt for BNB: buying is stopped/);
+  for (const text of [sentence, details]) assert.match(text, /BTC: Native refusal receipt pending \(controller details not published\)/);
+  assert.match(details, /BTC owner refusal receipt pending/);
+  assert.doesNotMatch(sentence, /Selling|exits|running/);
+  assert.equal((details.match(/Reported operator pause:/g) ?? []).length, 1);
+  risk.data.controllers = {};
+  assert.match(render(risk), /New acquisitions held/);
+  assert.match(render(risk), /BTC: Native refusal receipt pending/);
+  risk.state = 'stale';
+  risk.completeness = 'partial';
+  assert.deepEqual(policy.paperNativeHolds(risk), [{ ...hold, controllerPublished: false }]);
+  risk.data.controllers.BTC = { operator: {}, native: {} };
+  assert.deepEqual(policy.paperNativeHolds(risk), [{ ...hold, controllerPublished: true }]);
+  assert.deepEqual(policy.paperNativeHolds(undefined), []);
+  assert.deepEqual(policy.paperNativeHolds({ ...risk, section: 'wallet' }), []);
+  risk.data.native_entry_holds[0].protected_exits = 'unknown';
+  assert.deepEqual(policy.paperNativeHolds(risk), []);
+});
+
+test('controls-unavailable exit restriction stays visible alongside an emergency', () => {
+  const risk = structuredClone(fixture.risk);
+  risk.data.controllers = { BNB: { operator: { emergency: true }, native: {} } };
+  risk.data.holds = [{ reason: 'paper_controls_unavailable', explanation: 'Owner control store unavailable' }];
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace, { reads: [risk], now, bot: risk.bot_id }));
+  const sentence = html.match(/<p class="paper-hold-sentence">(.*?)<\/p>/s)[1];
+  assert.match(sentence, /emergency halt for BNB: buying is stopped/);
+  assert.match(sentence, /The owner reports paper controls are unavailable: the runtime refuses all native ticks and exits until the control-store failure is resolved\./);
+  assert.doesNotMatch(sentence, /Selling|protective exits are preserved/);
+});
+
+test('native holds without controller rows survive safety retention and displayed-signal filtering', () => {
+  const risk = structuredClone(fixture.risk);
+  const id = Object.keys(risk.data.controllers)[0];
+  risk.data.controllers = { [id]: risk.data.controllers[id] };
+  risk.data.controllers[id].operator = { emergency: false, paused: false };
+  risk.data.native_entry_holds = [{ controller_id: 'BTC', reason: 'native_refusal_receipt_pending', explanation: 'BTC owner refusal receipt pending', protected_exits: 'preserved' }];
+  const retained = paperSafetyReads([], [fixture.status, risk]);
+  assert.deepEqual(retained, [risk]);
+  const newer = structuredClone(risk);
+  newer.generated_at_ms += 1_000;
+  newer.source.sequence += 1;
+  newer.snapshot_id = `${newer.source.boot_id}:${newer.source.sequence}`;
+  newer.data.native_entry_holds = [];
+  assert.deepEqual(paperNativeReasons(paperSafetyReads(retained, [], newer)), ['native_refusal_receipt_pending']);
+  newer.data.controllers[id].operator.emergency = true;
+  assert.deepEqual(paperNativeReasons(paperSafetyBeyondDisplayed(retained, [newer])), ['native_refusal_receipt_pending']);
+});
+
+const paperNativeReasons = reads => reads.flatMap(read => policy.paperNativeHolds(read).map(hold => hold.reason));
 
 test('emergency, native latch, owner list and no hold never invent state or exits', () => {
   assert.equal(paperHoldSentence([controller('BNB', { operator: { emergency: true } })], []), 'The owner reports an emergency halt for BNB: buying is stopped.');

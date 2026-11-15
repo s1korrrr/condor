@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, sortingFns, useReactTable, type ColumnDef, type ColumnFiltersState, type FilterFn, type SortingFn, type SortingState } from '@tanstack/react-table';
 import { numericFilterMatch, searchMatch } from './table-filter';
 import { cleanFloat } from '../decimal-display';
+import { Rows } from './Rows';
 import './kit.css';
 
 /**
@@ -197,7 +198,14 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
       <span className="q-dt__count">{filtered ? `${visible.length} of ${rows.length}` : rows.length} row{rows.length === 1 ? '' : 's'}</span>
       {exportName && <button type="button" className="q-chip" disabled={!visible.length} onClick={exportCsv}>Export CSV</button>}
     </div>
-    <div className="q-dt__scroll" role="region" aria-label={label} tabIndex={0} style={{ maxHeight }}>
+    <details className="v5-phone-table-tools hidden"><summary>Sort and column filters</summary>{table.getVisibleLeafColumns().filter(column => column.id !== SELECT_COLUMN).map(column => {
+      const meta = column.columnDef.meta as TableColumn<T>;
+      const sorted = column.getIsSorted();
+      return <div key={column.id}><button type="button" onClick={column.getToggleSortingHandler()} aria-label={`Sort by ${meta.header}`}>{meta.header} {sorted === 'asc' ? '▲ ascending' : sorted === 'desc' ? '▼ descending' : '↕ unsorted'}</button>{showFilters && <input value={String(column.getFilterValue() ?? '')} onChange={event => column.setFilterValue(event.target.value || undefined)} aria-label={`Filter ${meta.header}`} placeholder={meta.kind === 'number' ? '>0, 1..5' : 'contains'} />}</div>;
+    })}{selection && <button type="button" disabled={!visible.length} onClick={() => selection.onSelect(visible.map(row => row.id), !allSelected)}>{allSelected ? 'Clear selection' : 'Select all filtered rows'}</button>}</details>
+    <Rows rows={shown.map(row => row.original)} columns={columns} rowId={(_row, index) => shown[index].id} label={label} rowState={rowState} controls={selection ? (_row, index) => <input type="checkbox" checked={selection.selected.has(shown[index].id)} aria-label={`Select ${selection.label?.(shown[index].original) ?? shown[index].id}`} onChange={event => selection.onSelect([shown[index].id], event.target.checked)} /> : undefined} />
+    {!visible.length && <p className="v5-phone-empty hidden">{rows.length ? 'No rows match the search or filters.' : emptyText}</p>}
+    <div className="q-dt__scroll v5-desktop-table" role="region" aria-label={label} tabIndex={0} style={{ maxHeight }}>
       <table style={{ width: `max(100%, ${table.getTotalSize()}px)` }}>
         <colgroup>{table.getVisibleLeafColumns().map(column => <col key={column.id} style={{ width: column.getSize() }} />)}</colgroup>
         <thead>

@@ -26,7 +26,7 @@ const workspace = {schema_version:'v5-workspace.v1',identity,context:null,adviso
 const routes = [
   ['/settings','Workspace settings'], ['/bots','Paper bots'], ['/capital','Capital'],
   ['/operations','Operations'], ['/v5/readiness','Paper readiness'],
-  ['/backtests','Tradepad'], ['/','Market'],
+  ['/backtests','Tradepad'], ['/','Overview'], ['/market','Market'],
   ['/agents','Agents'],
   ['/agents/decision_reviewer','Decision Reviewer'], ['/research','Research'],
   ['/learning','Learning'], ['/research-factory','Research factory'],
@@ -80,12 +80,15 @@ test('review probe: capital first commit after a zero-subscriber gap', async () 
     await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
     await React.act(async () => {await client.refetchQueries({type:'active'});}); await React.act(async () => {await new Promise(resolve => setTimeout(resolve,50));});
     console.log('ON CAPITAL:', container.textContent.match(/Last coherent owner snapshot · [^·]+· [a-z ;]+/)?.[0]);
-    const agents = [...container.querySelectorAll('a')].find(a => a.getAttribute('href') === '/agents'); if (!agents) throw new Error('no agents link');
+    const agents = [...container.querySelectorAll('a')].find(a => a.getAttribute('href') === '/research'); if (!agents) throw new Error('no research link');
     await React.act(async () => {agents.dispatchEvent(new browser.MouseEvent('click',{bubbles:true,cancelable:true,button:0}));});
     await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
     console.log('ON AGENTS, capital mounted:', container.textContent.includes('Initial simulated funding'));
     now += 90_000;
     globalThis.__commits = [];
+    // Back to Capital through the five-item menu: Overview, then its Capital sub-page.
+    const overviewLink = [...container.querySelectorAll('nav[aria-label="Main navigation"] a')].find(a => a.getAttribute('href') === '/');
+    await React.act(async () => {overviewLink.dispatchEvent(new browser.MouseEvent('click',{bubbles:true,cancelable:true,button:0}));});
     const settingsLink = [...container.querySelectorAll('a')].find(a => a.getAttribute('href') === '/capital');
     await React.act(async () => {settingsLink.dispatchEvent(new browser.MouseEvent('click',{bubbles:true,cancelable:true,button:0}));});
     await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});

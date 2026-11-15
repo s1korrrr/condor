@@ -21,6 +21,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, ConfigDict, Field
 from starlette.concurrency import run_in_threadpool
+from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .agents import AgentCatalog, AgentDefinition
 from .candles import CandleOwner, OwnerUnavailable, validate_query
@@ -36,6 +37,7 @@ from .upstream import UpstreamError, V5Upstream
 logger = logging.getLogger(__name__)
 COOKIE_NAME = "rsi_v5_session"
 SESSION_ID_RE = re.compile(r"^[a-f0-9]{32}$")
+MARKET_PAGE_COINS = frozenset({"BTC", "ETH", "BNB", "SOL", "XRP"})
 MAX_JSON_BODY_BYTES = 16_384
 MAX_TICKS_PER_LOOP = 96
 MIN_LOOP_FREQUENCY_SEC = 900
@@ -1298,6 +1300,7 @@ def create_app(
         return FileResponse(image, media_type="image/jpeg")
 
     for ui_path in (
+        "/market",
         "/capital",
         "/bots",
         "/helm",
@@ -1335,5 +1338,28 @@ def create_app(
         if not SESSION_ID_RE.fullmatch(session_id):
             raise HTTPException(404)
         return await root_page()
+
+    @app.get("/market/{coin}", response_class=HTMLResponse)
+    async def market_coin_page(coin: str):
+        # A linkable coin detail (/market/BTC); only the coins the Market page shows.
+        if coin not in MARKET_PAGE_COINS:
+            raise HTTPException(404)
+        return await root_page()
+
+    @app.exception_handler(StarletteHTTPException)
+    async def not_found_page(request: Request, exc: StarletteHTTPException):
+        # A browser asking for an unknown page gets the app (status 404), which shows "Page not found" with a way back,
+        # instead of raw JSON. API, asset and non-GET requests keep the JSON error unchanged.
+        page = (
+            exc.status_code == 404
+            and request.method == "GET"
+            and not request.url.path.startswith(("/api/", "/assets/"))
+            and "text/html" in request.headers.get("accept", "")
+            and html_path.is_file()
+            and not html_path.is_symlink()
+        )
+        if page:
+            return FileResponse(html_path, media_type="text/html", status_code=404)
+        return JSONResponse({"detail": exc.detail}, status_code=exc.status_code, headers=getattr(exc, "headers", None))
 
     return app

@@ -259,6 +259,7 @@ def test_full_dashboard_deep_links_serve_only_known_ui_paths(tmp_path):
         assert logo.status_code == 200 and logo.content == b"test-logo"
         assert logo.headers["content-type"] == "image/jpeg"
         for path in (
+            "/market",
             "/capital",
             "/bots",
             "/helm",
@@ -286,3 +287,16 @@ def test_full_dashboard_deep_links_serve_only_known_ui_paths(tmp_path):
             response = client.get(path)
             assert response.status_code == 404
             assert "full V5 dashboard" not in response.text
+        # A linkable coin detail; only the Market page's coins.
+        assert client.get("/market/BTC").status_code == 200 and "full V5 dashboard" in client.get("/market/BTC").text
+        # A browser asking for an unknown page gets the app with 404 (it shows "Page not found"), never raw JSON;
+        # API and asset paths, and non-HTML clients, keep the JSON 404.
+        html = {"Accept": "text/html,application/xhtml+xml"}
+        for path in ("/nope", "/market/DOGE", "/agents/unknown", "/sessions/wrong"):
+            response = client.get(path, headers=html)
+            assert response.status_code == 404 and "full V5 dashboard" in response.text, path
+        for path in ("/api/unknown", "/api/v1/servers", "/assets/missing.js"):
+            response = client.get(path, headers=html)
+            assert response.status_code == 404 and "full V5 dashboard" not in response.text, path
+            assert response.headers["content-type"].startswith("application/json"), path
+        assert client.get("/market/DOGE").json() == {"detail": "Not Found"}

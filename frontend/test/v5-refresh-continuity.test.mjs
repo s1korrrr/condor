@@ -5,11 +5,12 @@ import React from 'react';
 import * as ReactQuery from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { setImmediate } from 'node:timers/promises';
-import { frontendModules } from './helpers/frontend-module.mjs';
+import { frontendModules, paperVisualStubs } from './helpers/frontend-module.mjs';
 
 const fixture = section => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
 const sections = ['status','wallet','positions','fills','executors','risk','decisions','history','accounting'];
 const owner = fixture('wallet');
+const candleSymbols = {state:'AVAILABLE',reason:null,data:{rows:[]}};
 const completeReads = () => sections.map(section => {
   const read = fixture(section);
   if (section === 'risk') read.data.control_hold = 'clock_anomaly';
@@ -27,9 +28,10 @@ function harness(kind, initial) {
     if (!(index in slots)) slots[index] = typeof initial === 'function' ? initial === Date.now ? owner.read_at_ms : initial() : initial;
     return [slots[index], next => { slots[index] = typeof next === 'function' ? next(slots[index]) : next; }];
   };
-  const {load} = frontendModules({...stubs, '@/v5/usePaperClock':{usePaperClock:() => owner.read_at_ms}, react:{...React,useState,useRef:initial => useState(() => ({current:initial}))[0],useEffect() {}}, '@tanstack/react-query':{...ReactQuery,useQueryClient:() => client,useQuery:options => {
+  const {load} = frontendModules({...stubs, ...paperVisualStubs, '@/v5/usePaperClock':{usePaperClock:() => owner.read_at_ms}, react:{...React,useState,useRef:initial => useState(() => ({current:initial}))[0],useEffect() {}}, '@tanstack/react-query':{...ReactQuery,useQueryClient:() => client,useQuery:options => {
     if (options.queryKey[0] === 'v5-money') return {data:undefined,isError:false};
     if (options.enabled === false) return {isPending:true,isFetching:false,isError:false,refetch() {}};
+    if (kind === 'bots' && options.queryKey[0] !== 'v5-paper-bots') return {data:undefined,isPending:false,isFetching:false,isError:true,refetch() {}};
     spec = options;
     const cached = client.getQueryCache().build(client, options);
     if (cached.state.data !== query.data) cached.setState({data:query.data});
@@ -41,7 +43,10 @@ function harness(kind, initial) {
     return kind === 'bots' ? renderToStaticMarkup(component({bot:owner.bot_id,ownerState:'AVAILABLE',generatedAt:owner.generated_at_ms / 1000})) : component('capital',owner.bot_id);
   };
   const original = global.fetch;
-  global.fetch = (url, options) => new Promise(resolve => requests.push({url,signal:options.signal,resolve}));
+  global.fetch = (url, options) => new Promise(resolve => {
+    if (new URL(url,'https://fixture.invalid').pathname === '/api/v5/candle-store/symbols') {resolve({ok:true,json:async () => candleSymbols});return;}
+    requests.push({url,signal:options.signal,resolve});
+  });
   function start() {
     render(); query.isFetching = true;
     const controller = new AbortController();

@@ -5,7 +5,7 @@ import fs from 'node:fs';
 import { paperCoherentRead, paperSectionError } from '../src/v5/policy.ts';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
-import { frontendModules } from './helpers/frontend-module.mjs';
+import { frontendModules, paperWorkspaceModules } from './helpers/frontend-module.mjs';
 
 const fixture = section => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
 
@@ -55,7 +55,7 @@ test('blank capability members remain owner-compatible', () => {
 });
 
 test('Bots risk caption normalizes owner punctuation and hides partial totals', () => {
-  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {load} = paperWorkspaceModules();
   const risk = fixture('risk'); risk.reason = 'Paper section completeness is not complete.'; risk.data = {};
   const wallet = fixture('wallet');
   const html = renderToStaticMarkup(React.createElement(load('pages/tabs/ActiveBotsTab.tsx').PaperWorkspace, {reads:[wallet,risk],complete:false,now:wallet.read_at_ms,reportAt:wallet.generated_at_ms,heartbeat:'Fresh',bot:wallet.bot_id}));

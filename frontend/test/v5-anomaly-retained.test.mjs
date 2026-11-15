@@ -15,12 +15,13 @@ const React = require('react');
 const {renderToStaticMarkup} = require('react-dom/server');
 const {paperSafetyReads} = await import(`${FE}/src/v5/paper-safety.ts`);
 const {paperSectionError} = await import(`${FE}/src/v5/policy.ts`);
-const {frontendModules} = await import(`${FE}/test/helpers/frontend-module.mjs`);
+const {frontendModules, paperVisualStubs} = await import(`${FE}/test/helpers/frontend-module.mjs`);
 const {ownerRisk} = await import(`${FE}/test/helpers/owner-risk.mjs`);
 
 const fixture = section => JSON.parse(fs.readFileSync(`${FE}/../tests/fixtures/paper-api-final3/${section}.json`));
 const anomaly = JSON.parse(fs.readFileSync(`${FE}/../tests/fixtures/paper-c1-1e131c74/clock-anomaly-hold.json`)).risk.data.clock_recovery.anomalies;
 const stubs = {
+  ...paperVisualStubs,
   ...Object.fromEntries(['@/components/bots/AggregatedPnlChart', '@/components/bots/ControllerBrowser', '@/components/bots/DeployBotDialog', '@/components/bots/PnlSparkline', '@/hooks/useWebSocket', '@/hooks/useRates'].map(name => [name, {}])),
   '@/features/quant-ops/kit/DataTable': {DataTable:() => null},
   '@workspace-monitoring': {PaperStrategyCharts:() => null, StrategyCharts:() => null},

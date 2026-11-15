@@ -29,7 +29,7 @@ function harness({cached = true} = {}) {
   const owner = reads[0].bot_id;
   const client = new ReactQuery.QueryClient({defaultOptions: {queries: {retry: false, gcTime: Infinity}}});
   if (cached) client.setQueryData(['v5-paper-bots', owner], reads);
-  let now = at + 60_000, cursor = 0, options, failed = false;
+  let now = at + 60_000, cursor = 0, options, failed = false, symbolOptions;
   const slots = [];
   const state = initial => {
     const index = cursor++;
@@ -39,13 +39,14 @@ function harness({cached = true} = {}) {
   const {load} = frontendModules({...stubs,
     react: {...React, useState: state, useRef: initial => state(() => ({current: initial}))[0], useEffect() {}},
     '@/v5/usePaperClock': {usePaperClock: () => now},
-    '@tanstack/react-query': {...ReactQuery, useQueryClient: () => client, useQuery: incoming => {
-      if (incoming.queryKey[0] !== 'v5-money') options = incoming;
+    '@tanstack/react-query': {...ReactQuery, useQueryClient: () => client, useQueries: ({queries}) => queries.map(() => ({data: undefined, isPending: true, isError: false})), useQuery: incoming => {
+      if (incoming.queryKey[0] === 'v5-paper-bots') options = incoming;
+      if (incoming.queryKey[0] === 'v5-bots-candle-symbols') symbolOptions = incoming;
       return {data: client.getQueryData(incoming.queryKey), isPending: !cached, isFetching: false, isError: failed, error: failed ? new Error('Refresh failed') : null, refetch() {}};
     }},
   });
   const {V5PaperBots} = load('pages/tabs/ActiveBotsTab.tsx');
-  return {at, owner, reads, load,
+  return {at, owner, reads, load, symbols: () => symbolOptions,
     render({bot = owner, heartbeatAt = at} = {}) {
       cursor = 0;
       return renderToStaticMarkup(React.createElement(V5PaperBots, {bot, generatedAt: heartbeatAt / 1000, ownerState: 'AVAILABLE'}));
@@ -76,6 +77,18 @@ function harness({cached = true} = {}) {
     close() {client.clear();},
   };
 }
+
+test('Bots enables one symbols query only after a complete owner snapshot', () => {
+  const pending = harness({cached:false}), complete = harness();
+  try {
+    pending.render();
+    assert.equal(pending.symbols().enabled({state:{status:'pending'}}), false);
+    complete.render();
+    assert.equal(complete.symbols().enabled({state:{status:'pending'}}), true);
+    assert.equal(complete.symbols().enabled({state:{status:'success'}}), false);
+    assert.deepEqual(complete.symbols().queryKey, ['v5-bots-candle-symbols']);
+  } finally {pending.close();complete.close();}
+});
 
 test('dimmed Bots admits values but uses real stale states, safety qualification and one top stamp', () => {
   const current = harness();
@@ -110,7 +123,7 @@ test('dimmed Bots keeps real ages advancing and accepts a newer heartbeat', () =
   } finally {current.close();}
 });
 
-test('a flat dimmed pair describes the last report, not a current wait for entry', () => {
+test('flat position cards retain zero under the dimmed snapshot stamp without inferring entry state', () => {
   const current = harness();
   try {
     for (const read of current.reads.filter(read => ['positions', 'executors'].includes(read.section))) {
@@ -119,11 +132,12 @@ test('a flat dimmed pair describes the last report, not a current wait for entry
       read.next_cursor = null;
     }
     current.setNow(current.at + 1_000);
-    assert.match(current.render(), /No position · waiting for entry signal/);
+    assert.match(current.render(), /<dt>Holding<\/dt><dd>0 BNB<\/dd>/);
     current.setNow(current.at + 60_000);
     const html = current.render();
-    assert.match(html, /No position in last report/);
-    assert.doesNotMatch(html, /No position · waiting for entry signal/);
+    assert.match(html, /snapshot values are from that time, dimmed until a new report/);
+    assert.match(html, /<dt>Holding<\/dt><dd>0 BNB<\/dd>/);
+    assert.doesNotMatch(html, /waiting for entry signal/);
   } finally {current.close();}
 });
 
@@ -177,6 +191,12 @@ test('newer retained emergency stays outside the dimmed snapshot with its own re
     const stamp = browser.document.querySelector('.paper-dimmed-stamp');
     const alert = [...browser.document.querySelectorAll('aside')].find(element => element.querySelector('h2')?.textContent === 'New acquisitions held');
     assert.ok(dimmed && stamp && alert);
+    const cards = [...browser.document.querySelectorAll('.paper-section')].find(section => section.querySelector('h2')?.textContent === 'Positions');
+    const chart = [...browser.document.querySelectorAll('.paper-section')].find(section => section.querySelector('h2')?.textContent === 'Price and trades');
+    assert.ok(cards && chart);
+    assert.equal(cards.closest('.paper-dimmed'), null);
+    assert.equal(chart.closest('.paper-dimmed'), null);
+    assert.ok(cards.querySelector('.paper-dimmed-position'));
     assert.equal(alert.closest('.paper-dimmed'), null);
     assert.equal(alert.parentElement, dimmed.parentElement);
     for (let ancestor = alert; ancestor; ancestor = ancestor.parentElement) {
@@ -189,7 +209,7 @@ test('newer retained emergency stays outside the dimmed snapshot with its own re
     assert.doesNotMatch(dimmed.textContent, /Reported emergency halt: Yes/);
     const snapshotAt = new Date(current.at).toISOString().slice(0, 19).replace('T', ' ');
     assert.ok(stamp.textContent.includes(`As of ${snapshotAt} UTC · 1m ago`));
-    assert.match(stamp.textContent, /values below are from that time/);
+    assert.match(stamp.textContent, /snapshot values are from that time/);
     assert.equal(stamp.nextElementSibling, dimmed);
     assert.ok(alert.compareDocumentPosition(stamp) & browser.Node.DOCUMENT_POSITION_FOLLOWING);
     assert.equal(browser.document.querySelectorAll('.paper-dimmed-stamp').length, 1);

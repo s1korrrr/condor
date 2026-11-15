@@ -190,12 +190,14 @@ test('Bots uses the Money view reader and shared 7d cache key and withholds fail
   const { V5PaperBots } = load('pages/tabs/ActiveBotsTab.tsx');
   const render = () => renderToStaticMarkup(React.createElement(V5PaperBots, { bot: 'meridian_v5_paper', ownerState: 'AVAILABLE', generatedAt: now / 1000 }));
   assert.match(render(), /-12\.000000000000000000000000000001 USDC/);
-  assert.deepEqual(queries[0].queryKey, ['v5-money', '7d']);
+  const moneyQueries = queries.filter(query => query.queryKey[0] === 'v5-money');
+  assert.equal(moneyQueries.length, 1);
+  assert.deepEqual(moneyQueries[0].queryKey, ['v5-money', '7d']);
   const original = globalThis.fetch;
   const reads = [];
   globalThis.fetch = async (path, options) => { reads.push({ path, options }); return { ok: true, json: async () => money }; };
   try {
-    assert.equal(await queries[0].queryFn(), money);
+    assert.equal(await moneyQueries[0].queryFn(), money);
     assert.deepEqual(reads.map(read => read.path), ['/api/v5/money?range=7d']);
     assert.equal(reads[0].options.credentials, 'include');
   } finally { globalThis.fetch = original; }

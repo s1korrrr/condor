@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { paperWalletOwnerDegraded, paperLastWalletToKeep, paperLastWalletToShow, paperExitProjection, paperPairHoldings, paperPairBag, paperReadFailureMessage, paperRiskControllers, paperRiskUsage } from '../src/v5/policy.ts';
-import { frontendModules } from './helpers/frontend-module.mjs';
+import { frontendModules, paperWorkspaceModules } from './helpers/frontend-module.mjs';
 
 const final3 = Object.fromEntries(['status','wallet','positions','executors','fills','risk','decisions','history','operations'].map(section => [section, JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/${section}.json`, import.meta.url)))]));
 const now = final3.status.read_at_ms;
@@ -75,20 +75,56 @@ test('paper read failures are typed: timeouts are transient, invalid publication
   assert.match(paperReadFailureMessage(409, null), /snapshot changed/);
 });
 
-test('rendered pair card shows the exact pair total, bag, protection summary and native rails', () => {
-  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+test('rendered position card shows exact holdings, excludes dust and retains native rails', () => {
+  const {load} = paperWorkspaceModules();
   const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
   const reads = Object.values({...final3, positions: livePositions});
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads, now, reportAt:final3.status.generated_at_ms, heartbeat:'Fresh', bot:'meridian_v5_paper'}));
-  assert.match(html, /<dt>Position<\/dt><dd>0\.3615190 BNB/);
-  assert.doesNotMatch(html, /<dt>Position<\/dt><dd>0\.141193 BNB/);
-  assert.match(html, /Held reconciliation: 6 · 0\.3615174 BNB · Terminal dust: 3 · 0\.0000016 BNB/);
-  assert.match(html, /Owner-reported exits over 9 position rows: 0 with a fixed-target exit order · 9 without a fixed-target exit order/);
+  assert.match(html, /<dt>Holding<\/dt><dd>0\.3615174 BNB/);
+  assert.match(html, /\+ 0\.0000016 BNB dust/);
+  assert.match(html, /<dt>Lots<\/dt><dd>6<\/dd>/);
+  assert.match(html, /<dt>Sell orders placed<\/dt><dd>— · protection unknown for 6 lot\(s\)/);
   assert.doesNotMatch(html, /bag-managed|sold by the bag policy|no resting order/);
-  assert.match(html, /<dt>Bag<\/dt><dd>Below target · breakeven 748\.1700 USDC/);
+  assert.match(html, /Breakeven:.*748\.17 USDC/);
+  assert.match(html, /Bag reason<\/dt><dd>Below target/);
+  assert.match(html, /Trailing armed<\/dt><dd>No/);
+  assert.match(html, /Trailing peak<\/dt><dd>— · not published/);
+  assert.match(html, /Release<\/dt><dd>— · not published/);
   assert.match(html, /Reported native entry hold: No|Native evidence complete/);
   assert.match(html, /Pair cap 40000 USDC/);
   assert.doesNotMatch(html, /Numeric rail limits are not published/);
+});
+
+test('position cards cross-check protections and retain the snapshot buy decision', () => {
+  const row = {...BNB_ROWS[0], protected_exit:true};
+  const positions = {...livePositions, data:[row, BNB_ROWS[1]]};
+  const executor = {executor_id:row.executor_id, controller_id:row.controller_id, trading_pair:row.trading_pair, state:'active', protected_exit:true};
+  const decisions = {...final3.decisions, data:{...final3.decisions.data, conditions:[{trading_pair:'BNB-USDC', status:'held', reason:'candle_gap', event_at_ms:now}]}};
+  const {PaperPositions} = frontendModules().load('v5/PaperPositions.tsx');
+  const render = executors => renderToStaticMarkup(React.createElement(PaperPositions,{positions,executors,decisions,now,asOf:now,valuesAt:now}));
+  const verified = {...final3.executors, data:[executor]};
+  assert.match(render(verified), /1 of 1 · verified protected exits/);
+  assert.match(render({...verified,data:[{...executor,protected_exit:false}]}), /— · protection unknown for 1 lot\(s\)/);
+  assert.match(render({...verified,completeness:'partial'}), /1 of 1 · owner-reported · executor cross-check unavailable/);
+  assert.match(render(undefined), /1 of 1 · owner-reported · executor cross-check unavailable/);
+  const unknownPositions = {...positions, data:[{...row, protected_exit:null}]};
+  assert.match(renderToStaticMarkup(React.createElement(PaperPositions,{positions:unknownPositions,executors:{...verified,completeness:'partial'},now})), /— · protection unknown for 1 lot\(s\)/);
+  assert.match(render(verified), /Buy decision: Held · Candle gap · .*UTC/);
+  assert.match(render(verified), /class="paper-dimmed-position"[^]*?Buy decision: Held · Candle gap/);
+  const otherSnapshot = {...decisions, snapshot_id:'other:1'};
+  assert.doesNotMatch(renderToStaticMarkup(React.createElement(PaperPositions,{positions,executors:verified,decisions:otherSnapshot,now})), /Buy decision: Held · Candle gap/);
+});
+
+test('position details retain the owner trailing and release facts', () => {
+  const decisions = structuredClone(final3.decisions);
+  const bag = decisions.data.controllers.find(row => row.pair === 'BNB-USDC').custom_info.bag;
+  Object.assign(bag, { reason:'below_target', trail_armed:true, trail_peak:'800.123456789123456789', release:'trailing_exit' });
+  const {PaperWorkspace} = paperWorkspaceModules().load('pages/tabs/ActiveBotsTab.tsx');
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values({...final3, decisions}), now, reportAt:final3.status.generated_at_ms, heartbeat:'Fresh', bot:'meridian_v5_paper'}));
+  assert.match(html, /Bag reason<\/dt><dd>Below target/);
+  assert.match(html, /Trailing armed<\/dt><dd>Yes/);
+  assert.match(html, /Trailing peak<\/dt><dd>800\.123456789123456789 USDC/);
+  assert.match(html, /Release<\/dt><dd>Trailing exit/);
 });
 
 // Live 2026-11-05 15:45Z: every position showed "Protection status unknown · executor data incomplete". The executors
@@ -124,13 +160,12 @@ test('pair protection summary keeps omitted owner flags unknown', () => {
   assert.deepEqual([paperPairHoldings('BNB-USDC', other, now).unprotectedCount, paperPairHoldings('BNB-USDC', other, now).unprotectedReasons], [1, ['executor_missing']], 'any other explicit false is unprotected, with its reason');
   const allOmitted = {...positions, data:[...final3.positions.data.filter(row => row.trading_pair !== 'BNB-USDC'), ...BNB_ROWS.map(omit)]};
   assert.deepEqual([paperPairHoldings('BNB-USDC', allOmitted, now).unprotectedCount, paperPairHoldings('BNB-USDC', allOmitted, now).unknownCount], [0, 9]);
-  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {load} = paperWorkspaceModules();
   const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values({...final3, positions:allOmitted}), now, reportAt:final3.status.generated_at_ms, heartbeat:'Fresh', bot:'meridian_v5_paper'}));
-  const card = html.match(/<h3>BNB-USDC<\/h3>[^]*?<\/article>/)?.[0] ?? '';
-  const summary = card.match(/Owner-reported exits over[^<]+/)?.[0] ?? '';
-  assert.doesNotMatch(summary, /unprotected/, 'omitted flags are not unprotected');
-  assert.match(summary, /over 9 position rows: 0 with a fixed-target exit order · protection not published: 9/);
+  const card = html.match(/<h3>BNB<\/h3>[^]*?<\/article>/)?.[0] ?? '';
+  assert.doesNotMatch(card, /unprotected/, 'omitted flags are not unprotected');
+  assert.match(card, /Sell orders placed<\/dt><dd>— · protection unknown for 6 lot\(s\)/);
 });
 
 // Rebased onto #99: a native latch (owner native-risk.v1 `latched`) must still raise safety evidence through

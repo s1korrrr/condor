@@ -1,0 +1,1 @@
+export function tradeMarkers(fills: Record<string, unknown>[], pair: string, start: number, end: number, buckets: (number | null)[][]): { entries: number; exits: number; markers: { time: number; side: unknown; price: unknown; quantity: unknown }[] };

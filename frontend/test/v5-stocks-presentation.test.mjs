@@ -86,9 +86,9 @@ test('selected public fields format venue decimals while titles retain exact rec
 
 test('configured Stocks formats exponent, signed and integer numeric fields without changing identifiers or times', () => {
   const ticker = { ...event('1.234567890123e-20'), data: { last: '1.234567890123e-20', bidPx: '+99.78007932', askPx: '198961', vol24h: 12345 } };
-  const instrumentWithValues = { ...instrument, tickSz: '+99.78007932', lotSz: '1.234567890123e-20', minSz: '198961', ctVal: null, maxLmtSz: '198961', maxMktSz: 198961, instIdCode: '123456789', listTime: '1700000000000' };
+  const instrumentWithValues = { ...instrument, tickSz: '+99.78007932', lotSz: '1.234567890123e-20', minSz: '198961', ctVal: null, maxLmtSz: '198961', maxMktSz: 198961, instIdCode: '123456789', instrumentCode: '001234', version: '001', listTime: '1700000000000' };
   const book = { ...event('0'), dataset: 'books', data: { bids: [['+99.78007932', '198961', '0', '3']], asks: [] } };
-  const trade = { ...event('0'), dataset: 'trades', data: { tradeId: '1234567890123', px: '1.234567890123e-20', sz: '+99.78007932', side: 'buy' } };
+  const trade = { ...event('0'), dataset: 'trades', data: { tradeId: '1234567890123', count: '3', px: '1.234567890123e-20', sz: '+99.78007932', side: 'buy' } };
   const marketWithValues = { ...market, latest: { ...market.latest, ticker, books: book }, channels: { ticker: channel, books: channel, trades: channel }, recent_trades: [trade], book_depth: { bids: 1, asks: 0 } };
   const data = { ...catalog, rows: [{ ...catalog.rows[0], instrument: instrumentWithValues, latest: { ...latest, ticker } }] };
   const { html } = render({ data, marketData: marketWithValues });
@@ -107,6 +107,7 @@ test('configured Stocks formats exponent, signed and integer numeric fields with
   assert.match(publicRecord.textContent, /198,961/);
   assert.match(publicRecord.textContent, /12,345/);
   assert.match(publicRecord.textContent, /1234567890123/);
+  assert.match(publicRecord.textContent, /"count": "3"/);
   assert.match(publicRecord.textContent, new RegExp(`"event_time_ms": ${ticker.event_time_ms}`));
   assert.match(publicRecord.textContent, /"3"/);
   assert.match(publicRecord.title, /\+99\.78007932/);
@@ -115,6 +116,8 @@ test('configured Stocks formats exponent, signed and integer numeric fields with
   assert.match(metadataRecord.textContent, /"maxMktSz": "198,961"/);
   assert.match(metadataRecord.textContent, /"ctVal": null/);
   assert.match(metadataRecord.textContent, /"instIdCode": "123456789"/);
+  assert.match(metadataRecord.textContent, /"instrumentCode": "001234"/);
+  assert.match(metadataRecord.textContent, /"version": "001"/);
   assert.match(metadataRecord.textContent, /1700000000000/);
   assert.match(metadataRecord.textContent, /EXAMPLE-USDT/);
   window.close();

@@ -15,14 +15,11 @@ const formatted = (item: unknown) => {
   const result = price(item);
   return result === '—' ? value(item) : result;
 };
+const numericFields = new Set(['last', 'lastSz', 'bidPx', 'askPx', 'bidSz', 'askSz', 'open24h', 'high24h', 'low24h', 'vol24h', 'volCcy24h', 'sodUtc0', 'sodUtc8', 'markPx', 'idxPx', 'fundingRate', 'nextFundingRate', 'oi', 'oiCcy', 'oiUsd', 'px', 'sz', 'ctVal', 'ctMult', 'tickSz', 'lotSz', 'minSz', 'maxLmtSz', 'maxMktSz']);
 const formattedRecord = (item: unknown) => JSON.stringify(item, function (key, entry) {
   if (Array.isArray(this)) return entry;
-  if (/id(?:code)?$|(?:time|timestamp)(?:_ms)?$|_at_ms$|^ts$|checksum$/i.test(key) || ['instCategory', 'state', 'ruleType', 'side'].includes(key)) return entry;
   if ((key === 'bids' || key === 'asks') && Array.isArray(entry)) return entry.map(level => Array.isArray(level) ? level.map((part, index) => index < 2 ? formatted(part) : part) : level);
-  if (key === 'bids' || key === 'asks') return entry;
-  const numericString = typeof entry === 'string' && price(entry) !== '—';
-  const numericNumber = typeof entry === 'number' && Number.isFinite(entry);
-  return numericString || numericNumber ? formatted(entry) : entry;
+  return numericFields.has(key) && entry != null && (typeof entry === 'string' || typeof entry === 'number') && price(entry) !== '—' ? formatted(entry) : entry;
 }, 2);
 const readable = (state: string) => state === 'live' || state === 'stale';
 

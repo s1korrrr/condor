@@ -191,11 +191,16 @@ for (const kind of ['fills', 'positions']) test(`phone ${kind} preserve the owne
 
 test('phone records use published millisecond times, never manufacture missing chronology', () => {
   const { phoneRecordTime } = frontendModules().load('v5/phone-records.ts');
-  assert.equal(phoneRecordTime({ event_at_ms: 30, close_at_ms: 20, created_at_ms: 10 }, now), 30);
-  assert.equal(phoneRecordTime({ close_at_ms: 20, created_at_ms: 10 }, now), 20);
-  assert.equal(phoneRecordTime({ close_at_ms: null, created_at_ms: 10 }, now), 10);
-  assert.equal(phoneRecordTime({ created_at_ms: 0 }, now), 0);
-  for (const value of [undefined, null, '', '30', NaN, Infinity, -1]) assert.equal(phoneRecordTime({ created_at_ms: value }, now), null);
+  assert.equal(phoneRecordTime({ event_at_ms: 30, close_at_ms: 20, created_at_ms: 10 }, now, now), 30);
+  assert.equal(phoneRecordTime({ close_at_ms: 20, created_at_ms: 10 }, now, now), 20);
+  assert.equal(phoneRecordTime({ close_at_ms: null, created_at_ms: 10 }, now, now), 10);
+  assert.equal(phoneRecordTime({ created_at_ms: 0 }, now, now), 0);
+  for (const value of [undefined, null, '', '30', NaN, Infinity, -1]) assert.equal(phoneRecordTime({ created_at_ms: value }, now, now), null);
+  for (const snapshotAt of [undefined, null, '', '30', NaN, Infinity, -1, 1.5, now + 5001]) assert.equal(phoneRecordTime({ created_at_ms: 0 }, now, snapshotAt), null);
+  assert.equal(phoneRecordTime({ created_at_ms: now }, now, now + 5000), now);
+  assert.equal(phoneRecordTime({ created_at_ms: now + 1 }, now, now + 5000), null);
+  assert.equal(phoneRecordTime({ created_at_ms: now }, now, now - 1), null);
+  assert.equal(phoneRecordTime({ created_at_ms: now - 1 }, now, now - 1), now - 1);
 });
 
 test('phone newest-first ordering happens before pagination without changing desktop order or explicit sorts', () => {
@@ -311,15 +316,15 @@ test('review regression: phone daily money rows retain raw accessor precision an
     { id: 'same', header: 'Unformatted', value: () => '1.23', cell: () => React.createElement('span', null, '1.23') },
   ] }));
   const notes = [...window.document.querySelectorAll('.v5-phone-row-note')].map(note => note.textContent);
-  assert.deepEqual(notes, ['Exact owner amount 1.2345', 'Raw value: 0', 'Raw value: 1.2']);
+  assert.deepEqual(notes, ['Exact owner amount 1.2345 · Raw value: 1.2345', 'Raw value: 0', 'Raw value: 1.2']);
   window.close();
 });
 
 test('review regression: future and invalid fill times are undated after qualified records in owner order', () => {
   const { phoneRecordTime } = frontendModules().load('v5/phone-records.ts');
-  for (const value of [now + 86_400_000, 1.5, Number.MAX_SAFE_INTEGER + 1]) assert.equal(phoneRecordTime({ event_at_ms: value, created_at_ms: now }, now), null);
-  assert.equal(phoneRecordTime({ event_at_ms: now + 5000 }, now), now + 5000);
-  assert.equal(phoneRecordTime({ event_at_ms: now + 5001 }, now), null);
+  for (const value of [now + 86_400_000, 1.5, Number.MAX_SAFE_INTEGER + 1]) assert.equal(phoneRecordTime({ event_at_ms: value, created_at_ms: now }, now, now), null);
+  assert.equal(phoneRecordTime({ event_at_ms: now + 5000 }, now, now), null);
+  assert.equal(phoneRecordTime({ event_at_ms: now + 5001 }, now, now), null);
   const stubs = Object.fromEntries(['@/components/bots/AggregatedPnlChart', '@/components/bots/ControllerBrowser', '@/components/bots/DeployBotDialog', '@/components/bots/PnlSparkline', '@/hooks/useWebSocket', '@/hooks/useRates'].map(name => [name, {}]));
   const { PaperRecords } = frontendModules(stubs, { 'pages/tabs/ActiveBotsTab.tsx': ['PaperRecords'] }).load('pages/tabs/ActiveBotsTab.tsx');
   const fixture = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-api-final3/native-replay/fills.json', import.meta.url)));
@@ -347,4 +352,46 @@ test('review regression: phone execution-disabled disclosure retains unbound and
   assert.match(shell('/market/stocks', false).querySelector('.v5-phone-safety-body').textContent, /public market observations · execution disabled/);
   assert.match(css, /\.v5-phone-safety summary\s*\{[^}]*min-height:\s*44px/);
   assert.match(css, /\.v5-phone-safety-body\s*\{[^}]*white-space:\s*normal/);
+});
+
+test('round two: tooltip and raw precision both survive the phone money disclosure', () => {
+  const { load } = frontendModules({}, { 'v5/V5Money.tsx': ['dailyColumns'] });
+  const { Rows } = load('features/quant-ops/kit/Rows.tsx');
+  const columns = load('v5/V5Money.tsx').dailyColumns;
+  const row = { day: now, equity_start: '101.2345', equity_end: '102.469', equity_change: '1.2345', realized_change: '1.2345', first_at_ms: now - 1000, valid: 288, samples: 288, gaps: 0 };
+  const window = new Window();
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(Rows, { rows: [row], columns, rowId: () => 'day', label: 'Money precision' }));
+  for (const id of ['start', 'realized']) {
+    const column = columns.find(item => item.id === id);
+    const field = [...window.document.querySelectorAll('dt')].find(item => item.textContent === column.header).nextElementSibling;
+    assert.ok(field.textContent.includes(column.cell(row)));
+    assert.ok(field.textContent.includes(column.title(row)));
+    assert.ok(field.textContent.includes(`Raw value: ${column.value(row)}`));
+  }
+  window.close();
+});
+
+for (const scenario of [
+  { name: 'four seconds ahead of observation', snapshotAt: now, recordAt: now + 4000, validAt: now - 1000 },
+  { name: 'after its snapshot but before observation', snapshotAt: now - 10_000, recordAt: now - 9000, validAt: now - 11_000 },
+]) for (const kind of ['fills', 'positions', 'history']) test(`round two: ${kind} reject ordering time ${scenario.name}`, () => {
+  const stubs = Object.fromEntries(['@/components/bots/AggregatedPnlChart', '@/components/bots/ControllerBrowser', '@/components/bots/DeployBotDialog', '@/components/bots/PnlSparkline', '@/hooks/useWebSocket', '@/hooks/useRates'].map(name => [name, {}]));
+  const { load } = frontendModules(stubs, { 'pages/tabs/ActiveBotsTab.tsx': ['PaperRecords'] });
+  const fixture = section => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
+  const records = section => [['UNQUALIFIED', scenario.recordAt], ['VALID', scenario.validAt], ['UNDATED', null]].map(([pair, time]) => ({
+    ...fixture(section).data[0], trading_pair: `${pair}-USDC`, trade_id: pair, position_id: pair, executor_id: pair,
+    event_at_ms: section === 'fills' ? time : undefined, close_at_ms: section === 'history' ? time : null, created_at_ms: section === 'executors' ? time : undefined,
+  }));
+  const window = new Window();
+  if (kind === 'history') {
+    const read = { ...fixture('history'), generated_at_ms: scenario.snapshotAt, completeness: 'partial', data: { terminal_executors: { data: { delivery: 'publication_pages', records: records('history'), publication_record_count: 3 } } } };
+    window.document.body.innerHTML = renderToStaticMarkup(React.createElement(load('v5/PaperTerminalHistory.tsx').PaperTerminalHistory, { read, now }));
+  } else {
+    const read = { ...fixture(kind), generated_at_ms: kind === 'positions' ? now : scenario.snapshotAt, next_cursor: null, data: records(kind) };
+    const executors = { ...fixture('executors'), snapshot_id: read.snapshot_id, generated_at_ms: scenario.snapshotAt, next_cursor: null, data: records('executors') };
+    window.document.body.innerHTML = renderToStaticMarkup(React.createElement(load('pages/tabs/ActiveBotsTab.tsx').PaperRecords, { read, executors, kind, now }));
+  }
+  assert.deepEqual([...window.document.querySelectorAll('.v5-phone-rows summary strong:first-of-type')].map(cell => cell.textContent).filter(text => text.endsWith('-USDC')), ['VALID-USDC', 'UNQUALIFIED-USDC', 'UNDATED-USDC']);
+  assert.match(window.document.querySelector('.v5-phone-order').textContent, /undated records follow in owner order/);
+  window.close();
 });

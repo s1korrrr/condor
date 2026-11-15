@@ -28,7 +28,7 @@ export function Rows<T>({ rows, columns, rowId, label, rowState, controls }: {
         const raw = column.value(row);
         const content = column.cell ? expandedCell(column.cell(row)) : String(raw ?? '—');
         const rawText = raw == null ? '' : String(raw);
-        const note = column.title?.(row) ?? (column.cell && rawText !== '' && cellText(content) !== rawText ? `Raw value: ${rawText}` : undefined);
+        const note = [column.title?.(row), column.cell && rawText !== '' && cellText(content) !== rawText ? `Raw value: ${rawText}` : undefined].filter(Boolean).join(' · ');
         return <div key={column.id}><dt>{column.header}</dt><dd className={column.className?.(row)}>{content}{note && <small className="v5-phone-row-note">{note}</small>}</dd></div>;
       })}</dl>
     </details>

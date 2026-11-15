@@ -12,7 +12,7 @@ export function PaperTerminalHistory({read, now, valuesAt = now}: {read?: PaperR
   if (data.delivery !== 'publication_pages') return null;
   const snapshot = paperSnapshotPresentation(read?.generated_at_ms, valuesAt, false);
   const valid = read && !paperSectionError(read) && !snapshot.stale && !snapshot.clockAhead && ['complete', 'partial'].includes(read.completeness ?? '') && read.capabilities?.includes('read') && ['available', 'degraded'].includes(read.state) && Array.isArray(data.records) && data.records.every(row => typeof object(row).executor_id === 'string');
-  const phoneNewestAt = (row: Row) => phoneRecordTime(row, now);
+  const phoneNewestAt = (row: Row) => phoneRecordTime(row, now, read?.generated_at_ms);
   const columns: TableColumn<Row>[] = [
     {id:'id',header:'Executor ID',value:row => String(row.executor_id),size:180},
     {id:'pair',header:'Pair',value:row => String(row.trading_pair ?? 'Not published'),size:130},

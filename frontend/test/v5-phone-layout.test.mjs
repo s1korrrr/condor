@@ -143,20 +143,30 @@ test('adaptive table phone rows share the desktop bounded sorted row set and emp
   assert.match(render([]).querySelector('.v5-phone-empty').textContent, /Owner records unavailable, not zero/);
 });
 
-test('Helm phone disclosures retain desktop coin fields, decision time and the stale-value warning', () => {
-  const status = { generated_at: now / 1000 - 60, age_s: 60, ready: false, reasons: [], actions: 0, steps: 1, withheld: 0,
-    symbols: [{ pair: 'BNB-USDC', status: 'held', candidate_hold: 'operator_entry_pause', bag: { held_amount: '123.456789', breakeven_price: '432.10' }, last_decision: { at: now / 1000 - 120, reason: 'owner_journal_held' } }] };
-  const { load } = frontendModules({ '@tanstack/react-query': { useQuery: () => ({ data: { state: 'STALE', reason: 'HELM_STATUS_STALE', bot: 'helm_v5_paper', status }, dataUpdatedAt: now, refetch() {} }) } });
+test('Helm native phone cards retain every desktop coin field and withhold stale signal and bag values', context => {
+  context.mock.method(Date, 'now', () => now);
+  const status = { generated_at: now / 1000, age_s: 0, ready: false, reasons: [], actions: 0, steps: 1, withheld: 0,
+    symbols: [{ pair: 'BNB-USDC', status: 'held', candidate_hold: 'operator_entry_pause', bag: { held_amount: '123.456789', breakeven_price: '432.10' },
+      signal: { at: now / 1000 - 10, rsi: '40.5', oversold: '31', rsi_length: 21, atr_fraction: null, decision: { enter: false, reason: 'owner_journal_held' } } }] };
+  let state = 'FRESH';
+  const { load } = frontendModules({ '@tanstack/react-query': { useQuery: () => ({ data: { state, reason: state === 'STALE' ? 'HELM_STATUS_STALE' : null, bot: 'helm_v5_paper', status }, dataUpdatedAt: now, refetch() {} }) } });
   const window = new Window();
-  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(load('v5/V5Helm.tsx').V5Helm));
-  const phone = window.document.querySelector('.v5-phone-rows');
-  const desktop = window.document.querySelector('.v5-desktop-table');
-  const fields = [...phone.querySelectorAll('dd')];
-  assert.equal(fields.length, 6);
-  [...desktop.querySelectorAll('tbody td')].forEach((cell, index) => assert.ok(fields[index].textContent.includes(cell.textContent)));
-  assert.ok(fields.at(-1).textContent.includes(desktop.querySelector('td[title]').title));
-  assert.match(phone.textContent, /operator entry pause/);
-  assert.match(phone.textContent, /owner journal held/);
+  const Helm = load('v5/V5Helm.tsx').V5Helm;
+  const render = () => {
+    window.document.body.innerHTML = renderToStaticMarkup(React.createElement(Helm));
+    const phone = window.document.querySelector('.v5m-helm-mobile');
+    const cells = window.document.querySelectorAll('.v5m-helm-table tbody td');
+    assert.equal(cells.length, 5);
+    for (const cell of cells) assert.ok(phone.textContent.includes(cell.textContent), cell.textContent);
+    return phone;
+  };
+  const phone = render();
+  for (const text of [/operator entry pause/, /owner journal held/, /RSI 40\.5/, /123\.457 BNB/, /432\.1/, /15 Nov 12:34 UTC · 10 s ago/]) assert.match(phone.textContent, text);
+  state = 'STALE';
+  const stale = render();
+  assert.match(stale.textContent, /Helm status is stale/);
+  assert.match(stale.textContent, /15 Nov 12:34 UTC · 10 s ago · stale/);
+  assert.doesNotMatch(stale.textContent, /operator entry pause|owner journal held|RSI 40\.5|123\.457|432\.1/);
   assert.match(window.document.body.textContent, /Values below are as last published[^]*not the current state/);
 });
 
@@ -172,8 +182,103 @@ for (const kind of ['fills', 'positions']) test(`phone ${kind} preserve the owne
   assert.ok(phone);
   assert.equal(phone.querySelectorAll('details details').length, 0);
   if (kind === 'fills') assert.match(window.document.body.textContent, /Partial retained window/);
-  assert.ok(phone.textContent.includes(String(read.data[0][kind === 'fills' ? 'trade_id' : 'position_id'])));
+  const ordered = kind === 'fills' ? [...read.data].sort((left, right) => right.event_at_ms - left.event_at_ms) : read.data;
+  assert.ok(phone.textContent.includes(String(ordered[0][kind === 'fills' ? 'trade_id' : 'position_id'])));
   window.document.body.innerHTML = renderToStaticMarkup(React.createElement(PaperRecords, { read, kind, now: read.generated_at_ms + 60_000 }));
   assert.equal(window.document.querySelector('.v5-phone-rows'), null);
   assert.match(window.document.body.textContent, /Incomplete or stale owner read/);
+});
+
+test('phone records use published millisecond times, never manufacture missing chronology', () => {
+  const { phoneRecordTime } = frontendModules().load('v5/phone-records.ts');
+  assert.equal(phoneRecordTime({ event_at_ms: 30, close_at_ms: 20, created_at_ms: 10 }), 30);
+  assert.equal(phoneRecordTime({ close_at_ms: 20, created_at_ms: 10 }), 20);
+  assert.equal(phoneRecordTime({ close_at_ms: null, created_at_ms: 10 }), 10);
+  assert.equal(phoneRecordTime({ created_at_ms: 0 }), 0);
+  for (const value of [undefined, null, '', '30', NaN, Infinity, -1]) assert.equal(phoneRecordTime({ created_at_ms: value }), null);
+});
+
+test('phone newest-first ordering happens before pagination without changing desktop order or explicit sorts', () => {
+  const { DataTable } = frontendModules().load('features/quant-ops/kit/DataTable.tsx');
+  const rows = Array.from({ length: 12 }, (_, index) => ({ id: `id-${index}`, pair: `pair-${index}`, time: index === 0 ? null : index }));
+  const columns = [{ id: 'id', header: 'Owner ID', value: row => row.id }, { id: 'pair', header: 'Pair', value: row => row.pair }];
+  const window = new Window();
+  const render = props => {
+    window.document.body.innerHTML = renderToStaticMarkup(React.createElement(DataTable, { rows, columns, rowId: row => row.id, label: 'Phone ordering', pageSize: 2, phoneNewestAt: row => row.time, ...props }));
+    return window.document;
+  };
+  let document = render();
+  assert.deepEqual([...document.querySelectorAll('.v5-phone-rows summary strong')].map(cell => cell.textContent), ['pair-11', 'pair-10']);
+  assert.match(document.querySelector('.v5-desktop-table tbody tr').textContent, /id-0/);
+  assert.doesNotMatch(document.querySelector('.v5-phone-rows summary').textContent, /id-/);
+  assert.match(document.querySelector('.v5-phone-order').textContent, /undated records follow in owner order/);
+  assert.match(document.querySelector('.q-dt__more').textContent, /Show all 12/);
+  document = render({ pageSize: 20 });
+  assert.match([...document.querySelectorAll('.v5-phone-rows summary')].at(-1).textContent, /pair-0/);
+  document = render({ initialSort: { id: 'pair' } });
+  assert.equal(document.querySelector('.v5-phone-order'), null);
+  assert.match(document.querySelector('.v5-phone-rows summary').textContent, /pair-0/);
+});
+
+for (const kind of ['positions', 'fills', 'executors']) test(`phone ${kind} sort newest first with IDs and all desktop facts one disclosure away`, () => {
+  const stubs = Object.fromEntries(['@/components/bots/AggregatedPnlChart', '@/components/bots/ControllerBrowser', '@/components/bots/DeployBotDialog', '@/components/bots/PnlSparkline', '@/hooks/useWebSocket', '@/hooks/useRates'].map(name => [name, {}]));
+  const { load } = frontendModules(stubs, { 'pages/tabs/ActiveBotsTab.tsx': ['PaperRecords'] });
+  const { PaperRecords } = load('pages/tabs/ActiveBotsTab.tsx');
+  const fixture = JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${kind}.json`, import.meta.url)));
+  const idKey = kind === 'fills' ? 'trade_id' : kind === 'positions' ? 'position_id' : 'executor_id';
+  const rows = [1, 3, 2].map(order => ({ ...fixture.data[0], [idKey]: `private-${order}`, executor_id: `executor-${order}`, trading_pair: `COIN${order}-USDC`, event_at_ms: kind === 'fills' ? now - order * 1000 : undefined, created_at_ms: kind === 'positions' ? undefined : now - order * 1000, close_at_ms: null }));
+  const read = { ...fixture, data: rows, state: kind === 'positions' ? 'available' : 'degraded', completeness: kind === 'positions' ? 'complete' : 'partial', reason: kind === 'positions' ? null : 'primary_byte_budget_recent_window', generated_at_ms: now };
+  const executors = { ...read, section: 'executors', data: rows.map((row, index) => ({ ...row, created_at_ms: now - [1, 3, 2][index] * 1000 })) };
+  const window = new Window();
+  const render = executorRead => {
+    window.document.body.innerHTML = renderToStaticMarkup(React.createElement(PaperRecords, { read, positions: kind === 'positions' ? read : undefined, executors: executorRead, kind, now }));
+    return window.document;
+  };
+  const document = render(executors);
+  const phone = [...document.querySelectorAll('.v5-phone-rows > div')];
+  assert.deepEqual(phone.map(row => row.querySelector('summary strong').textContent), ['COIN1-USDC', 'COIN2-USDC', 'COIN3-USDC']);
+  assert.deepEqual([...document.querySelectorAll('.v5-desktop-table tbody tr')].map(row => row.children[1].textContent), ['COIN1-USDC', 'COIN3-USDC', 'COIN2-USDC']);
+  for (const desktop of document.querySelectorAll('.v5-desktop-table tbody tr')) {
+    const mobile = phone.find(row => row.textContent.includes(desktop.children[1].textContent));
+    assert.equal(mobile.querySelector('details').open, false);
+    assert.doesNotMatch(mobile.querySelector('summary').textContent, /private-|executor-/);
+    assert.equal(mobile.querySelectorAll('details details').length, 0);
+    const values = [...mobile.querySelector('details > dl').children].map(field => field.querySelector('dd').textContent);
+    [...desktop.children].forEach((cell, index) => assert.equal(values[index], cell.textContent.replace('Expand record', '')));
+  }
+  if (kind === 'positions') {
+    const stale = render({ ...executors, generated_at_ms: now - 60_000 });
+    assert.deepEqual([...stale.querySelectorAll('.v5-phone-rows summary strong:first-of-type')].map(cell => cell.textContent).filter(text => text.startsWith('COIN')), ['COIN1-USDC', 'COIN3-USDC', 'COIN2-USDC']);
+  }
+});
+
+test('phone terminal history keeps owner IDs inside one-tap details and the stale history gate', () => {
+  const { PaperTerminalHistory } = frontendModules().load('v5/PaperTerminalHistory.tsx');
+  const fixture = JSON.parse(fs.readFileSync(new URL('../../tests/fixtures/paper-api-final3/native-replay/history.json', import.meta.url)));
+  const records = [1, 3, 2].map(order => ({ executor_id: `executor-${order}`, trading_pair: `COIN${order}-USDC`, controller_id: `controller-${order}`, close_type: 'owner_hold', close_at_ms: now - order * 1000 }));
+  const read = { ...fixture, generated_at_ms: now, completeness: 'partial', data: { ...fixture.data, terminal_executors: { data: { delivery: 'publication_pages', records, publication_record_count: 3 } } } };
+  const window = new Window();
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(PaperTerminalHistory, { read, now }));
+  const phone = window.document.querySelector('.v5-phone-rows');
+  assert.deepEqual([...phone.querySelectorAll('summary strong:first-of-type')].map(cell => cell.textContent).filter(text => text.startsWith('COIN')), ['COIN1-USDC', 'COIN2-USDC', 'COIN3-USDC']);
+  for (const row of phone.querySelectorAll('details')) {
+    assert.doesNotMatch(row.querySelector('summary').textContent, /executor-|controller-/);
+    assert.match(row.querySelector('dl').textContent, /executor-.*controller-.*owner_hold/);
+    assert.equal(row.querySelectorAll('details').length, 0);
+  }
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(PaperTerminalHistory, { read, now: now + 60_000 }));
+  assert.equal(window.document.querySelector('.v5-phone-rows'), null);
+  assert.match(window.document.body.textContent, /Terminal records are unavailable or stale/);
+});
+
+test('phone typography floors cover Bots, System, Helm and Market without shrinking touch targets', () => {
+  assert.doesNotMatch(css, /font-size:\s*(?:\d|1[01])(?:\.\d+)?px[;\s]/);
+  for (const selector of ['paper-badge', 'fs-stats dt', 'v5m-asof', 'q-tooltip', 'q-kpi span', 'q-state', 'q-stat > span', 'op-hcell p', 'op-hrow__id em', 'v5-status', 'v5-profile-row', 'v5-feature-row > *', 'v5m-hour-strip th', 'v5m-hour']) {
+    assert.ok(css.includes(selector));
+  }
+  assert.match(css, /:is\(a, button,[^}]*min-width:\s*44px; min-height:\s*44px/s);
+  assert.match(css, /\.v5-phone-rows :is\(summary small, dt\)[^}]*font-size:\s*12px/);
+  assert.match(css, /\.paper-copy\)[^}]*overflow:\s*visible[^}]*overflow-wrap:\s*anywhere/);
+  assert.match(css, /\.v5m-stat\[title\]::after[^}]*content:\s*attr\(title\)/);
+  assert.match(css, /:is\(\.v5m-hour-strip th, \.v5m-hour\)[^}]*font-size:\s*12px !important/);
 });

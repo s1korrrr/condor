@@ -40,14 +40,14 @@
   .condor-native .q-dt__search { flex-basis: 100%; }
   .condor-native :is(.v5m-stat small, .v5m-stat span, .v5m-feature, .paper-copy, .paper-caption, .fs-stats dt) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
   .condor-native :is(.v5-desktop-table, .q-dt__scroll.v5-desktop-table) { display: none; }
-  .condor-native :is(.v5-phone-rows, .v5-phone-table-tools, .v5-phone-empty) { display: block; }
+  .condor-native :is(.v5-phone-rows, .v5-phone-table-tools, .v5-phone-empty, .v5-phone-order) { display: block; }
   .condor-native .v5-phone-rows > div { border-bottom: 1px solid var(--color-border); padding: 4px 0; }
   .condor-native .v5-phone-rows summary { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; padding: 8px 20px 8px 0; position: relative; }
   .condor-native .v5-phone-rows summary::after { content: "+"; position: absolute; right: 0; top: 12px; }
   .condor-native .v5-phone-rows details[open] > summary::after { content: "−"; }
   .condor-native .v5-phone-rows :is(summary span, dd, dt) { min-width: 0; overflow-wrap: anywhere; white-space: normal; }
   .condor-native .v5-phone-rows :is(summary small, summary strong) { display: block; }
-  .condor-native .v5-phone-rows :is(summary small, dt) { font-size: 11px; color: var(--color-text-muted); }
+  .condor-native .v5-phone-rows :is(summary small, dt) { font-size: 12px; color: var(--color-text-muted); }
   .condor-native .v5-phone-rows summary strong { font-size: 12px; font-variant-numeric: tabular-nums; }
   .condor-native .v5-phone-rows dl { display: grid; gap: 8px; margin: 8px 0; }
   .condor-native .v5-phone-rows dl > div { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.5fr); gap: 8px; }
@@ -67,4 +67,14 @@
   .condor-native .operations-workspace[data-scope="paper"] .op-section > p:has(> strong) > small { display: inline !important; margin-left: 6px; }
   .condor-native .operations-workspace[data-scope="paper"] .op-section > p:has(> strong) > small::after { content: ""; display: block; }
   .condor-native :is(.op-hrow__id strong, .op-log-list summary p, .fs-pairs em) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
+  .condor-native :is(small, button, input, select, summary, time, pre, .paper-eyebrow, .paper-badge, .fs-id p, .fs-pairs a, .fs-stats dt, .v5m-asof, .v5m-feature-meta, .q-tooltip, .q-tooltip__title, .q-dt__count, .q-chip, .q-pill, .q-dt__more, .q-donut-chart__legend li, .q-legend, .q-chart-legend, .v5-phone-order, svg text) { font-size: 12px !important; }
+  .condor-native :is(.q-kpi span, .q-state, .q-stat > span, .q-state-ribbon span, .q-kicker, .q-empty, .q-footer, .q-tag, .q-context-strip, .q-bar-meta, .q-source-details, .q-diag, .q-coverage, .q-warn-chip, .q-open-risk span, [data-panel-id="S01"]) { font-size: 12px !important; }
+  .condor-native :is(.op-muted, .op-services th, .op-services td, .op-services article strong, .op-bot-checks table, .op-hlegend, .op-hfoot, .op-hcell p, .op-hrow__id em, .op-haxis) { font-size: 12px !important; }
+  .condor-native :is(.v5-status, .v5-text-link, .v5-section-heading p, .v5-readiness-row strong, .v5-readiness-row span, .v5-readiness-row b, .v5-no-secret, .v5-profile-row, .v5-profile-row > span, .v5-policy-row, .v5-policy-row > *, .v5-policy-note, .v5-settings-note strong, .v5-settings-note p, .v5-feature-row > *, .v5-domain-label, .v5-coverage > *, .v5-quality-title > *, .v5-cohort-coverage-row span, .v5-cohort-coverage-row strong, .v5-qualified-note, .v5-market-limits > *, .v5-evidence-raw dt, .v5-evidence-raw dd) { font-size: 12px !important; }
+  .condor-native .v5-phone-order { color: var(--color-text-muted); margin: 4px 0 8px; }
+  .condor-native :is(.v5-data-value > strong, .v5-page-heading p, .v5-empty p, .v5-error-panel span, .v5-source-warning, .v5-blocker-panel strong, .v5-blocker-panel p, .v5-market-unavailable > strong, .v5-market-unavailable > p) { font-size: 12px !important; }
+  .condor-native .v5m-stat[title]::after { content: attr(title); display: block; margin-top: 4px; color: var(--color-text-muted); font-size: 12px; overflow-wrap: anywhere; }
+  .condor-native :is(.v5m-hour-strip th, .v5m-hour) { font-size: 12px !important; }
+  .condor-native :is(.v5-feature-row, .v5-quality-grid) { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .condor-native :is(.v5-feature-row > *, .v5-readiness-row b, .paper-copy) { white-space: normal; overflow: visible; text-overflow: clip; overflow-wrap: anywhere; }
 }

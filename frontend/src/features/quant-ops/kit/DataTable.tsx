@@ -71,12 +71,13 @@ const csvCell = (value: unknown) => {
 };
 const RESIZE_STEP = 16;
 
-export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSize = 12, emptyText = 'No rows.', exportName, exportMetadata, maxHeight = 480, rowState, pinned, dense = false, selection, onRowsChange, searchable = true }: {
+export function DataTable<T>({ rows, columns, rowId, label, initialSort, phoneNewestAt, pageSize = 12, emptyText = 'No rows.', exportName, exportMetadata, maxHeight = 480, rowState, pinned, dense = false, selection, onRowsChange, searchable = true }: {
   rows: T[];
   columns: TableColumn<T>[];
   rowId: (row: T, index: number) => string;
   label: string;
   initialSort?: { id: string; desc?: boolean };
+  phoneNewestAt?: (row: T) => number | null;
   /** Rows shown before "Show all"; filters and sort apply to the full set. */
   pageSize?: number;
   emptyText?: ReactNode;
@@ -169,6 +170,9 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
   const visible = pinned ? [...sortedRows.filter(row => pinned(row.original)), ...sortedRows.filter(row => !pinned(row.original))] : sortedRows;
   const pinnedCount = pinned ? visible.filter(row => pinned(row.original)).length : 0;
   const shown = expanded ? visible : visible.slice(0, Math.max(pageSize, pinnedCount));
+  const phoneSorted = phoneNewestAt && !sorting.length ? [...sortedRows].sort((left, right) => (phoneNewestAt(right.original) ?? -Infinity) - (phoneNewestAt(left.original) ?? -Infinity) || 0) : sortedRows;
+  const phoneVisible = pinned ? [...phoneSorted.filter(row => pinned(row.original)), ...phoneSorted.filter(row => !pinned(row.original))] : phoneSorted;
+  const phoneShown = expanded ? phoneVisible : phoneVisible.slice(0, Math.max(pageSize, pinnedCount));
   const filtered = effectiveSearch.trim() !== '' || filters.length > 0;
   const selectedVisible = selection ? visible.filter(row => selection.selected.has(row.id)).length : 0;
   const allSelected = visible.length > 0 && selectedVisible === visible.length;
@@ -203,7 +207,8 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, pageSiz
       const sorted = column.getIsSorted();
       return <div key={column.id}><button type="button" onClick={column.getToggleSortingHandler()} aria-label={`Sort by ${meta.header}`}>{meta.header} {sorted === 'asc' ? '▲ ascending' : sorted === 'desc' ? '▼ descending' : '↕ unsorted'}</button>{showFilters && <input value={String(column.getFilterValue() ?? '')} onChange={event => column.setFilterValue(event.target.value || undefined)} aria-label={`Filter ${meta.header}`} placeholder={meta.kind === 'number' ? '>0, 1..5' : 'contains'} />}</div>;
     })}{selection && <button type="button" disabled={!visible.length} onClick={() => selection.onSelect(visible.map(row => row.id), !allSelected)}>{allSelected ? 'Clear selection' : 'Select all filtered rows'}</button>}</details>
-    <Rows rows={shown.map(row => row.original)} columns={columns} rowId={(_row, index) => shown[index].id} label={label} rowState={rowState} controls={selection ? (_row, index) => <input type="checkbox" checked={selection.selected.has(shown[index].id)} aria-label={`Select ${selection.label?.(shown[index].original) ?? shown[index].id}`} onChange={event => selection.onSelect([shown[index].id], event.target.checked)} /> : undefined} />
+    {phoneNewestAt && !sorting.length && <p className="v5-phone-order hidden">Newest first where owner time is published; undated records follow in owner order.</p>}
+    <Rows rows={phoneShown.map(row => row.original)} columns={columns} rowId={(_row, index) => phoneShown[index].id} label={label} rowState={rowState} controls={selection ? (_row, index) => <input type="checkbox" checked={selection.selected.has(phoneShown[index].id)} aria-label={`Select ${selection.label?.(phoneShown[index].original) ?? phoneShown[index].id}`} onChange={event => selection.onSelect([phoneShown[index].id], event.target.checked)} /> : undefined} />
     {!visible.length && <p className="v5-phone-empty hidden">{rows.length ? 'No rows match the search or filters.' : emptyText}</p>}
     <div className="q-dt__scroll v5-desktop-table" role="region" aria-label={label} tabIndex={0} style={{ maxHeight }}>
       <table style={{ width: `max(100%, ${table.getTotalSize()}px)` }}>

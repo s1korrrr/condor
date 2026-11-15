@@ -4,6 +4,7 @@ import {test} from 'node:test';
 import React from 'react';
 import {renderToStaticMarkup} from 'react-dom/server';
 import * as ReactQuery from '@tanstack/react-query';
+import {Window} from 'happy-dom';
 import {frontendModules} from './helpers/frontend-module.mjs';
 
 const sections = ['status', 'wallet', 'positions', 'fills', 'executors', 'risk', 'decisions', 'history', 'accounting'];
@@ -163,6 +164,40 @@ test('a failed refresh retains a newer emergency without presenting the dimmed N
     assert.match(html, /Reported emergency halt: No · As of [^<]*UTC · 1m ago/);
     assert.doesNotMatch(html, /Native evidence complete/);
   } finally {current.close();}
+});
+
+test('newer retained emergency stays outside the dimmed snapshot with its own received time', async () => {
+  const current = harness();
+  const browser = new Window();
+  try {
+    current.render();
+    await current.failRefresh({emergency: true});
+    browser.document.body.innerHTML = current.render();
+    const dimmed = browser.document.querySelector('.paper-dimmed');
+    const stamp = browser.document.querySelector('.paper-dimmed-stamp');
+    const alert = [...browser.document.querySelectorAll('aside')].find(element => element.querySelector('h2')?.textContent === 'New acquisitions held');
+    assert.ok(dimmed && stamp && alert);
+    assert.equal(alert.closest('.paper-dimmed'), null);
+    assert.equal(alert.parentElement, dimmed.parentElement);
+    for (let ancestor = alert; ancestor; ancestor = ancestor.parentElement) {
+      assert.ok(!ancestor.style.opacity || ancestor.style.opacity === '1');
+    }
+    const receivedAt = new Date(current.at + 45_000).toISOString().slice(0, 19).replace('T', ' ');
+    assert.ok(alert.textContent.includes(`Safety evidence received ${receivedAt} UTC · 15s ago`));
+    assert.match(alert.textContent, /Emergency halt reported/);
+    assert.match(alert.textContent, /Reported emergency halt: Yes/);
+    assert.doesNotMatch(dimmed.textContent, /Reported emergency halt: Yes/);
+    const snapshotAt = new Date(current.at).toISOString().slice(0, 19).replace('T', ' ');
+    assert.ok(stamp.textContent.includes(`As of ${snapshotAt} UTC · 1m ago`));
+    assert.match(stamp.textContent, /values below are from that time/);
+    assert.equal(stamp.nextElementSibling, dimmed);
+    assert.ok(alert.compareDocumentPosition(stamp) & browser.Node.DOCUMENT_POSITION_FOLLOWING);
+    assert.equal(browser.document.querySelectorAll('.paper-dimmed-stamp').length, 1);
+    assert.match(metric(dimmed.innerHTML, 'Wallet equity'), /USDC/);
+  } finally {
+    current.close();
+    await browser.happyDOM.close();
+  }
 });
 
 test('switching Bots does not carry the dimmed snapshot to an uncached bot', () => {

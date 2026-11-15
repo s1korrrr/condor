@@ -10,8 +10,19 @@ export function hasPaperCandlePair(symbols: Symbols | undefined, pair: string) {
   return Array.isArray(symbols?.rows) && symbols.rows.some(row => row?.lane === "okx__spot" && row?.pair === pair);
 }
 
-export function usePaperCandleSymbols() {
-  return useQuery({ queryKey: ["v5-bots-candle-symbols"], queryFn: () => readCandleStore<Symbols>("symbols"), retry: false, refetchInterval: 60_000 });
+export function latestFinalCandle(buckets: RecordedMinute[] | undefined) {
+  if (!Array.isArray(buckets)) return null;
+  let latest: { close: number; at: number } | null = null;
+  for (const row of buckets) {
+    if (!Array.isArray(row) || row[6] !== 1 || typeof row[4] !== "number" || !Number.isFinite(row[4]) || row[4] <= 0 || !Number.isSafeInteger(row[0])) continue;
+    const at = (row[0] + 60) * 1000;
+    if (Number.isSafeInteger(at) && (!latest || at > latest.at)) latest = { close: row[4], at };
+  }
+  return latest;
+}
+
+export function usePaperCandleSymbols(enabled: boolean) {
+  return useQuery({ queryKey: ["v5-bots-candle-symbols"], queryFn: () => readCandleStore<Symbols>("symbols"), enabled, retry: false, staleTime: 55_000, refetchInterval: 60_000 });
 }
 
 export function paperCandleQuery(pair: string, range: string, enabled: boolean) {

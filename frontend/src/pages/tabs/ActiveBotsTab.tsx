@@ -792,8 +792,6 @@ export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accoun
       <PaperMetric label="Traded volume" value={paperAmount(accounting?.volume_traded_quote, "USDC")} note={accounting ? `Lifetime · native receipts · As of ${paperTime(accountingRead?.generated_at_ms, now)}` : "Lifetime · complete current owner accounting required"} />
       <PaperMetric label="Last report" value={paperTime(reportAt, now)} note="Native process heartbeat" />
     </dl><p className="paper-caption">{accounting ? <>Filled orders: {paperOrderCount(accounting.entry_count, "entry")} · {paperOrderCount(accounting.exit_count, "exit")}. Accounting since: {paperTime(accounting.accounting_since_ms, now)}. Counts are distinct filled orders, not actions.</> : <>Lifetime accounting: {accountingError ? "Owner read unavailable; no totals are inferred from recent fills." : paperWords(accountingRead?.reason ?? "Collecting the snapshot-bound owner aggregate; no totals are inferred from recent fills.")}</>}</p></section>} />
-    <PaperIsolatedSection name="Position cards" resetKey={resetKey} render={() => <PaperPositions positions={bySection.positions} decisions={bySection.decisions} wallet={bySection.wallet} now={now} valuesAt={valuesAt} prices={market?.prices} money={market?.money} />} />
-    {complete && <PaperIsolatedSection name="Price and trades" resetKey={resetKey} render={() => <PaperPriceChart fills={bySection.fills} positions={bySection.positions} decisions={bySection.decisions} now={now} valuesAt={valuesAt} {...market} />} />}
     <PaperIsolatedSection name="Positions" resetKey={resetKey} render={() => <PaperRecords read={bySection.positions} positions={bySection.positions} executors={bySection.executors} kind="positions" now={now} valuesAt={valuesAt} />} />
     <PaperIsolatedSection name="Fills" resetKey={resetKey} render={() => <PaperRecords read={bySection.fills} kind="fills" now={now} valuesAt={valuesAt} />} />
     <PaperIsolatedSection name="Executors" resetKey={resetKey} render={() => <PaperRecords read={bySection.executors} kind="executors" now={now} valuesAt={valuesAt} />} />
@@ -802,6 +800,8 @@ export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accoun
     <PaperIsolatedSection name="Decisions and paper control" resetKey={resetKey} render={() => <section className="paper-section"><h2>Decisions & paper control</h2><div className="paper-rails"><article><h3>Exit policy</h3><p>{paperWords(paperObject(decisions.trailing).reason)}</p><p>Underwater positions remain held. Protective exits must survive entry halt.</p></article><article><h3>Acquisition plan</h3><p>{paperWords(paperObject(decisions.dca).reason)}</p><p>Comparable history: {paperWords(paperObject(bySection.history?.data).reason)}</p></article><article><h3>{paperControlState(null)}</h3><p>Read-only dashboard. A separately authenticated owner path must acknowledge paper commands before controls can appear here.</p></article></div><details className="paper-provenance"><summary>Observation provenance</summary><p>Snapshot: {reads[0]?.snapshot_id ?? "Not published"}</p><p>Observed: {paperTime(reads[0]?.generated_at_ms, now)}</p></details></section>} />
     </>}
     </div>
+    {complete && <><PaperIsolatedSection name="Position cards" resetKey={resetKey} render={() => <PaperPositions positions={bySection.positions} decisions={bySection.decisions} wallet={bySection.wallet} now={now} valuesAt={valuesAt} asOf={asOf} prices={market?.prices} money={market?.money} />} />
+    <PaperIsolatedSection name="Price and trades" resetKey={resetKey} render={() => <PaperPriceChart fills={bySection.fills} positions={bySection.positions} decisions={bySection.decisions} now={now} valuesAt={valuesAt} asOf={asOf} {...market} />} /></>}
   </>;
 }
 
@@ -848,8 +848,8 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
       }, undefined, progress);
   });
   const [range, setRange] = useState("24h");
-  const symbols = usePaperCandleSymbols();
-  const listed = (item: string) => !symbols.isError && hasPaperCandlePair(symbols.data, item);
+  const symbols = usePaperCandleSymbols(query.complete);
+  const listed = (item: string) => query.complete && !symbols.isError && hasPaperCandlePair(symbols.data, item);
   const bnb = useQuery(paperCandleQuery(PAIRS[0], "24h", listed(PAIRS[0])));
   const btc = useQuery(paperCandleQuery(PAIRS[1], "24h", listed(PAIRS[1])));
   const eth = useQuery(paperCandleQuery(PAIRS[2], "24h", listed(PAIRS[2])));
@@ -874,7 +874,7 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
 
     {query.progress && <p role="status">{query.progress}</p>}
     {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
-    <PaperWorkspace snapshotStamp={complete && <p role={dimmed ? "status" : undefined} className={dimmed ? "paper-dimmed-stamp" : undefined}>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}{dimmed ? " · values below are from that time, dimmed until a new report" : ""}</p>} asOf={dimmed ? snapshotAt : null} reads={reads} safetyReads={query.safetyReads} complete={complete} readFailed={query.isError} money={money.isError ? undefined : money.data} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} valuesAt={valuesAt} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} market={market} />
+    <PaperWorkspace snapshotStamp={complete && <p role={dimmed ? "status" : undefined} className={dimmed ? "paper-dimmed-stamp" : undefined}>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}{dimmed ? " · snapshot values are from that time, dimmed until a new report" : ""}</p>} asOf={dimmed ? snapshotAt : null} reads={reads} safetyReads={query.safetyReads} complete={complete} readFailed={query.isError} money={money.isError ? undefined : money.data} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} valuesAt={valuesAt} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} market={market} />
   </div>;
 }
 

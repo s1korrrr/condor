@@ -85,3 +85,18 @@ test("recorded candle time scale keeps the left boundary label inside the chart"
   assert.equal(options.timeScale.fixLeftEdge, true);
   assert.equal(fitted, true);
 });
+
+test("dimmed snapshot overlays do not dim current candle colors", () => {
+  let options, markers, line;
+  const {load} = frontendModules({
+    react:{useRef:() => ({current:{}}),useState:() => [null,() => {}],useEffect:effect => effect()},
+    "@/hooks/useTheme":{useTheme:() => ({theme:"dark"})},
+    "@/lib/theme-colors":{getThemeColors:() => ({up:"green",down:"red",text:"white"})},
+    "lightweight-charts":{ColorType:{Solid:"solid"},CandlestickSeries:{},LineStyle:{Dashed:1},createSeriesMarkers:(_series,value) => {markers=value;},createChart:() => ({addSeries:(_kind,value) => {options=value;return {setData(){},createPriceLine(value){line=value;}};},subscribeCrosshairMove(){},timeScale:() => ({fitContent(){}}),remove(){}})},
+  });
+  renderToStaticMarkup(React.createElement(load("components/charts/RecordedCandleChart").RecordedCandleChart,{buckets:[],label:"BNB",volumeUnit:"base",markers:[{time:60,side:"BUY",quantity:"1",price:"2"}],breakeven:"2",snapshotDimmed:true}));
+  assert.equal(options.upColor, "green");
+  assert.equal(options.downColor, "red");
+  assert.equal(markers[0].color, "rgba(128, 128, 128, 0.55)");
+  assert.equal(line.color, markers[0].color);
+});

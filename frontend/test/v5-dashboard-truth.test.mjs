@@ -80,9 +80,10 @@ test('rendered position card shows exact holdings, excludes dust and retains nat
   const {PaperWorkspace} = load('pages/tabs/ActiveBotsTab.tsx');
   const reads = Object.values({...final3, positions: livePositions});
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads, now, reportAt:final3.status.generated_at_ms, heartbeat:'Fresh', bot:'meridian_v5_paper'}));
-  assert.match(html, /<dt>Holding<\/dt><dd>0\.3615190 BNB/);
+  assert.match(html, /<dt>Holding<\/dt><dd>0\.3615174 BNB/);
+  assert.match(html, /\+ 0\.0000016 BNB dust/);
   assert.match(html, /<dt>Lots<\/dt><dd>6<\/dd>/);
-  assert.match(html, /<dt>Sell orders placed<\/dt><dd>0 of 6 · owner-reported protected exits/);
+  assert.match(html, /<dt>Sell orders placed<\/dt><dd>— · protection unknown for 6 lot\(s\)/);
   assert.doesNotMatch(html, /bag-managed|sold by the bag policy|no resting order/);
   assert.match(html, /Breakeven:.*748\.17 USDC/);
   assert.match(html, /Bag reason<\/dt><dd>Below target/);
@@ -92,6 +93,26 @@ test('rendered position card shows exact holdings, excludes dust and retains nat
   assert.match(html, /Reported native entry hold: No|Native evidence complete/);
   assert.match(html, /Pair cap 40000 USDC/);
   assert.doesNotMatch(html, /Numeric rail limits are not published/);
+});
+
+test('position cards cross-check protections and retain the snapshot buy decision', () => {
+  const row = {...BNB_ROWS[0], protected_exit:true};
+  const positions = {...livePositions, data:[row, BNB_ROWS[1]]};
+  const executor = {executor_id:row.executor_id, controller_id:row.controller_id, trading_pair:row.trading_pair, state:'active', protected_exit:true};
+  const decisions = {...final3.decisions, data:{...final3.decisions.data, conditions:[{trading_pair:'BNB-USDC', status:'held', reason:'candle_gap', event_at_ms:now}]}};
+  const {PaperPositions} = frontendModules().load('v5/PaperPositions.tsx');
+  const render = executors => renderToStaticMarkup(React.createElement(PaperPositions,{positions,executors,decisions,now,asOf:now,valuesAt:now}));
+  const verified = {...final3.executors, data:[executor]};
+  assert.match(render(verified), /1 of 1 · verified protected exits/);
+  assert.match(render({...verified,data:[{...executor,protected_exit:false}]}), /— · protection unknown for 1 lot\(s\)/);
+  assert.match(render({...verified,completeness:'partial'}), /1 of 1 · owner-reported · executor cross-check unavailable/);
+  assert.match(render(undefined), /1 of 1 · owner-reported · executor cross-check unavailable/);
+  const unknownPositions = {...positions, data:[{...row, protected_exit:null}]};
+  assert.match(renderToStaticMarkup(React.createElement(PaperPositions,{positions:unknownPositions,executors:{...verified,completeness:'partial'},now})), /— · protection unknown for 1 lot\(s\)/);
+  assert.match(render(verified), /Buy decision: Held · Candle gap · .*UTC/);
+  assert.match(render(verified), /class="paper-dimmed-position"[^]*?Buy decision: Held · Candle gap/);
+  const otherSnapshot = {...decisions, snapshot_id:'other:1'};
+  assert.doesNotMatch(renderToStaticMarkup(React.createElement(PaperPositions,{positions,executors:verified,decisions:otherSnapshot,now})), /Buy decision: Held · Candle gap/);
 });
 
 test('position details retain the owner trailing and release facts', () => {
@@ -144,7 +165,7 @@ test('pair protection summary keeps omitted owner flags unknown', () => {
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values({...final3, positions:allOmitted}), now, reportAt:final3.status.generated_at_ms, heartbeat:'Fresh', bot:'meridian_v5_paper'}));
   const card = html.match(/<h3>BNB<\/h3>[^]*?<\/article>/)?.[0] ?? '';
   assert.doesNotMatch(card, /unprotected/, 'omitted flags are not unprotected');
-  assert.match(card, /Sell orders placed<\/dt><dd>— · owner protection incomplete/);
+  assert.match(card, /Sell orders placed<\/dt><dd>— · protection unknown for 6 lot\(s\)/);
 });
 
 // Rebased onto #99: a native latch (owner native-risk.v1 `latched`) must still raise safety evidence through

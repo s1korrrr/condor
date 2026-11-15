@@ -22,7 +22,7 @@ export function latestFinalCandle(buckets: RecordedMinute[] | undefined) {
 }
 
 export function usePaperCandleSymbols(enabled: boolean) {
-  return useQuery({ queryKey: ["v5-bots-candle-symbols"], queryFn: () => readCandleStore<Symbols>("symbols"), enabled, retry: false, staleTime: 55_000, refetchInterval: 60_000 });
+  return useQuery({ queryKey: ["v5-bots-candle-symbols"], queryFn: () => readCandleStore<Symbols>("symbols"), enabled: query => enabled && query.state.status === "pending", retry: false, staleTime: Infinity, refetchOnWindowFocus: false });
 }
 
 export function paperCandleQuery(pair: string, range: string, enabled: boolean) {

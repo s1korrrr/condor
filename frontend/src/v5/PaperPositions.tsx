@@ -1,12 +1,12 @@
 import type { PaperRead } from "./contracts";
 import { latest } from "./money-model.mjs";
-import { paperCompleteRead, paperCompleteRecords, paperExactAmount, paperPairBag, paperPairHoldings, paperTime, paperWords } from "./policy";
-import { activeLots, breakEvenDistance, exactSignedSum, sellOrderCount, moneySampleState } from "./bots-position-model.mjs";
+import { paperCompleteRead, paperCompleteRecords, paperDecimalSum, paperExactAmount, paperExitProjection, paperPairBag, paperPairHoldings, paperPairObservation, paperTime, paperWords } from "./policy";
+import { activeLots, breakEvenDistance, exactSignedSum, moneySampleState } from "./bots-position-model.mjs";
 import { PAIRS, latestFinalCandle, type Candles } from "./paper-candles";
 import type { MoneyRead } from "./money-api";
 import { utcMinute } from "./shown.mjs";
 
-export function PaperPositions({ positions, decisions, wallet, now, valuesAt = now, asOf = null, prices = {}, money }: { positions?: PaperRead; decisions?: PaperRead; wallet?: PaperRead; now: number; valuesAt?: number; asOf?: number | null; prices?: Record<string, Candles | undefined>; money?: MoneyRead }) {
+export function PaperPositions({ positions, executors, decisions, wallet, now, valuesAt = now, asOf = null, prices = {}, money }: { positions?: PaperRead; executors?: PaperRead; decisions?: PaperRead; wallet?: PaperRead; now: number; valuesAt?: number; asOf?: number | null; prices?: Record<string, Candles | undefined>; money?: MoneyRead }) {
   const newest = latest(Array.isArray(money?.rows) ? money.rows : [], "v5").newest;
   const sample = moneySampleState(newest, now);
   const rows = paperCompleteRecords(positions, valuesAt);
@@ -16,7 +16,10 @@ export function PaperPositions({ positions, decisions, wallet, now, valuesAt = n
     const coin = pair.split("-")[0];
     const holdings = paperPairHoldings(pair, positions, valuesAt);
     const lots = rows && holdings ? activeLots(rows.filter(row => row.trading_pair === pair)) : null;
+    const holding = holdings && paperDecimalSum(holdings.states.filter(item => item.state !== "terminal_dust").map(item => item.quantity));
+    const dust = holdings?.states.find(item => item.state === "terminal_dust");
     const bag = paperPairBag(pair, decisions, positions, valuesAt);
+    const decision = paperPairObservation(pair, positions, executors, decisions, valuesAt).decision;
     const observed = latestFinalCandle(prices[pair]?.buckets);
     const price = observed && observed.at <= now && now - observed.at <= 180_000 ? observed : null;
     const distance = breakEvenDistance(bag?.breakevenPrice, price?.close);
@@ -25,16 +28,21 @@ export function PaperPositions({ positions, decisions, wallet, now, valuesAt = n
     const asset = assets.find(item => item && item.asset === coin);
     const markAt = asset?.mark_at_ms;
     const worth = walletData?.quote_asset === "USDC" && typeof markAt === "number" && markAt <= now && now - markAt <= 30_000 && typeof asset?.marked_value_quote === "string" && /^\d+(\.\d+)?$/.test(asset.marked_value_quote) ? asset.marked_value_quote : null;
-    const sellOrders = sellOrderCount(lots);
+    const projections = lots?.map(lot => paperExitProjection(lot, positions, executors, valuesAt));
+    const protection = projections?.map(item => item.verified ? item.protectedExit : item.ownerProtectedExit);
+    const unknown = protection?.filter(item => item === null).length ?? 0;
+    const ownerReported = !paperCompleteRead(executors, valuesAt);
+    const sellOrders = !protection ? "— · position read unavailable" : unknown ? `— · protection unknown for ${unknown} lot(s)` : `${protection.filter(Boolean).length} of ${protection.length} · ${ownerReported ? "owner-reported · executor cross-check unavailable" : "verified protected exits"}`;
     return <article className="paper-pair" key={pair}><h3>{coin}</h3><p><strong>{profit === null ? "—" : paperExactAmount(profit, "USDC")}</strong> · profit or loss</p><p className="paper-caption">{profit === null ? "— · per-coin profit sample not published" : `Realized plus unrealized · sample as of ${paperTime(newest?.at_ms, now)} · ${sample?.state === "late" ? "late; next sample was due" : "next sample due"} ${utcMinute(sample?.next) ?? "unknown"}`}</p>
       <p className="paper-caption">Price: {price ? `${price.close} USDC · ${paperTime(price.at, now)}` : "— · latest closed candle unavailable or old"}</p>
       {asOf !== null && <p className="paper-caption">Position and breakeven below are not current · {paperTime(asOf, now)}</p>}
       <div className={asOf !== null ? "paper-dimmed-position" : undefined} style={asOf !== null ? {opacity: 0.6} : undefined}>
       <p>{distance === "—" ? "— · current price or breakeven unavailable" : distance}</p><p className="paper-caption">Breakeven: {bag?.breakevenPrice ? `${bag.breakevenPrice} USDC` : "— · not published"}</p>
       {price && bag?.breakevenPrice && distance !== "—" && <progress max={100} value={Math.min(100, price.close / Number(bag.breakevenPrice) * 100)} aria-label={`${coin} price relative to breakeven`} />}
-      <dl className="paper-detail"><dt>Holding</dt><dd>{holdings ? paperExactAmount(holdings.total, coin) : "— · position read unavailable"}</dd><dt>Worth now</dt><dd>{typeof worth === "string" ? paperExactAmount(worth, "USDC") : "— · current owner mark unavailable"}</dd><dt>Lots</dt><dd>{lots ? lots.length : "— · position read unavailable"}</dd><dt>Sell orders placed</dt><dd>{sellOrders === null ? "— · owner protection incomplete" : `${sellOrders} · owner-reported protected exits`}</dd></dl>
+      {decision && <p>Buy decision: {paperWords(decision.status)} · {paperWords(decision.reason)} · {paperTime(decision.event_at_ms, now)}</p>}
+      <dl className="paper-detail"><dt>Holding</dt><dd>{holding !== null ? paperExactAmount(holding, coin) : "— · position read unavailable"}{dust && <div>+ {paperExactAmount(dust.quantity, coin)} dust</div>}</dd><dt>Worth now</dt><dd>{typeof worth === "string" ? paperExactAmount(worth, "USDC") : "— · current owner mark unavailable"}</dd><dt>Lots</dt><dd>{lots ? lots.length : "— · position read unavailable"}</dd><dt>Sell orders placed</dt><dd>{sellOrders}</dd></dl>
       <details><summary>Details</summary><dl className="paper-detail"><dt>Bag reason</dt><dd>{bag?.reason ? paperWords(bag.reason) : "— · not published"}</dd><dt>Trailing armed</dt><dd>{bag?.trailArmed == null ? "— · not published" : bag.trailArmed ? "Yes" : "No"}</dd><dt>Trailing peak</dt><dd>{bag?.trailPeak ? paperExactAmount(bag.trailPeak, "USDC") : "— · not published"}</dd><dt>Release</dt><dd>{bag?.release ? paperWords(bag.release) : "— · not published"}</dd></dl></details>
       </div>
     </article>;
-  })}</div><details><summary>Details</summary><p>Terminal dust is excluded from lot and sell-order counts. Holding includes owner-reported dust.</p></details></section>;
+  })}</div><details><summary>Details</summary><p>Terminal dust is excluded from holding and lot and sell-order counts; it is shown separately.</p></details></section>;
 }

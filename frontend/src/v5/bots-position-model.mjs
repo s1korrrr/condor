@@ -16,11 +16,6 @@ export function activeLots(rows) {
   return rows.filter(row => row.state !== 'terminal_dust');
 }
 
-export function sellOrderCount(rows) {
-  if (!rows || rows.some(row => typeof row.protected_exit !== 'boolean')) return null;
-  return `${rows.filter(row => row.protected_exit).length} of ${rows.length}`;
-}
-
 export function exactSignedSum(left, right) {
   const valid = value => typeof value === 'string' && value.length <= 128 && /^-?\d+(\.\d+)?$/.test(value);
   if (!valid(left) || !valid(right)) return null;

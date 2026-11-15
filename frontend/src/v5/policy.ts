@@ -581,13 +581,14 @@ export function paperExitProjection(position: Record<string, unknown> | undefine
     // never as an executor-verified exit. A complete executor read that contradicts the position stays unknown.
     const owned = !paperCompleteRead(executors, now) && !!position && typeof position.protected_exit === "boolean" && !!paperCompleteRecords(positions, now)?.includes(position);
     const statement = owned ? `Owner-reported: ${position!.protected_exit ? "protected exit present" : "no protected exit"}${typeof position!.protection_reason === "string" && position!.protection_reason ? ` · ${paperWords(position!.protection_reason)}` : ""} · executor cross-check unavailable (${missing})` : `Protection status unknown · ${missing}`;
-    return { verified: false, targetPrice: null, basis: null, reason: statement, remainingAmount: null, order: null, protectedExit: null };
+    return { verified: false, ownerProtectedExit: owned ? position!.protected_exit as boolean : null, targetPrice: null, basis: null, reason: statement, remainingAmount: null, order: null, protectedExit: null };
   }
   const executor = matches[0];
   const record = position && "target_price" in position ? position : executor;
   const order = record?.protected_exit_order;
   return {
     verified: true,
+    ownerProtectedExit: null,
     targetPrice: record?.target_price ?? null,
     basis: record?.target_basis ? paperWords(record.target_basis) : null,
     reason: record?.target_reason ? paperWords(record.target_reason) : "Owner exit target not published",

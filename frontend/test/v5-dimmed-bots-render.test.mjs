@@ -82,9 +82,10 @@ test('Bots enables one symbols query only after a complete owner snapshot', () =
   const pending = harness({cached:false}), complete = harness();
   try {
     pending.render();
-    assert.equal(pending.symbols().enabled, false);
+    assert.equal(pending.symbols().enabled({state:{status:'pending'}}), false);
     complete.render();
-    assert.equal(complete.symbols().enabled, true);
+    assert.equal(complete.symbols().enabled({state:{status:'pending'}}), true);
+    assert.equal(complete.symbols().enabled({state:{status:'success'}}), false);
     assert.deepEqual(complete.symbols().queryKey, ['v5-bots-candle-symbols']);
   } finally {pending.close();complete.close();}
 });

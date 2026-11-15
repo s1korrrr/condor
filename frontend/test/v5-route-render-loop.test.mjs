@@ -112,6 +112,15 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, pathname === '/bots' ? 1 : 0, 'only Bots reads symbols once on initial mount with a complete snapshot');
         await React.act(async () => {await client.refetchQueries({type:'active'});});
         await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
+        if (pathname === '/bots') {
+          assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 1, 'explicit refresh must not reload the symbols list');
+          const symbols = client.getQueryCache().find({queryKey:['v5-bots-candle-symbols']});
+          assert.equal(symbols.options.refetchInterval, undefined, 'symbols must not schedule an interval');
+          now += 60_001;
+          await React.act(async () => {window.dispatchEvent(new browser.Event('focus'));});
+          assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 1, 'symbols stay loaded after an interval and focus');
+          now -= 60_001;
+        }
         if (pathname !== '/bots') assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 0, 'other routes never read Bots symbols');
         assert.deepEqual(failures,[],'real route must not enter a render loop');
         assert.deepEqual(warnings,[],'React must not warn about unstable snapshots or cross-component updates');

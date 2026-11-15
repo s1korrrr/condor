@@ -26,8 +26,8 @@ const fixture = relative => JSON.parse(fs.readFileSync(new URL(`../../tests/fixt
 const poisonDecimals = value => {
   if (Array.isArray(value)) return value.map(poisonDecimals);
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, poisonDecimals(item)]));
-  if (typeof value === 'string' && /^-?\d+\.\d+$/.test(value)) {
-    const [whole, fraction] = value.split('.');
+  if (typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value)) {
+    const [whole, fraction = ''] = value.split('.');
     return `${whole}.${fraction.slice(0, 26).padEnd(8, '0')}7317`;
   }
   return value;

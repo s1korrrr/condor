@@ -39,9 +39,11 @@ test('sentence names every missing coin and averages only published changes exac
   assert.match(marketSentence(changes([]), '24h'), /No current changes published over 24 hours/);
 });
 
-test('sentence uses the shared percent format for grouped exact decimals and rounded zero', () => {
+test('sentence uses the shared percent format for grouped exact decimals and tiny values', () => {
   assert.match(marketSentence(changes(['1234.565']), '24h'), /on average \+1,234\.57%\. BTC is strongest at \+1,234\.57%\./);
-  assert.match(marketSentence(changes(['-0.004']), '24h'), /on average 0\.00%\. BTC is weakest at 0\.00%\./);
+  assert.match(marketSentence(changes(['-0.004']), '24h'), /on average −0\.004%\. BTC is weakest at −0\.004%\./);
+  assert.match(marketSentence(changes(['-0.004', '-0.002']), '24h'), /on average −0\.003%/);
+  assert.match(marketSentence(changes(['0.000000000000000000000000000001']), '24h'), /on average \+1e−30%/);
 });
 
 test('window return rounds exact candle decimals, not binary floating point; no substituted boundary', () => {
@@ -70,7 +72,8 @@ test('current candle reads expire by owner age plus elapsed time and refuse futu
 test('holds uses complete same-bot snapshots and exact 30-place totals; gap uses the tile close', () => {
   const reads = paper(), now = reads[0].generated_at_ms;
   const holding = marketHolding('BTC', reads, reads[0].bot_id, 90.8, 'USDT', now);
-  assert.equal(holding.text, 'V5 holds 0.016200000000000000000000000010 · −9.2% to breakeven');
+  assert.equal(holding.text, 'V5 holds 0.0162 · −9.2% to breakeven');
+  assert.equal(holding.exact, '0.016200000000000000000000000010');
   assert.equal(holding.reason, null);
   assert.equal(holding.asOf, now);
   assert.match(marketHolding('BTC', reads, reads[0].bot_id, 109.2, 'USDT', now).text, /\+9.2% to breakeven/);
@@ -197,7 +200,8 @@ test('Market renders a small header, selected range, two chips, holds and hourly
   assert.doesNotMatch(header, /Refresh|Five coins across|Slowest lane/);
   assert.match(header, /aria-label="Market range"/);
   assert.match(html, /All five coins are up over 6 hours/);
-  assert.match(html, /V5 holds 0.016200000000000000000000000010/);
+  assert.match(html, /title="0\.016200000000000000000000000010"/);
+  assert.match(html, /V5 holds 0\.0162/);
   assert.match(html, /Hour-by-hour returns/);
   assert.doesNotMatch(html, /<dt>Minutes held<\/dt>|v5m-range/);
   assert.ok(queries.some(query => JSON.stringify(query.queryKey) === '["v5-market","coins","6h"]'));

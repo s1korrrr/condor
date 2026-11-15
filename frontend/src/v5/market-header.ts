@@ -1,5 +1,5 @@
 import type { PaperRead } from './contracts';
-import { pct } from './format.mjs';
+import { coin as formatCoin, pct } from './format.mjs';
 import { ageSeconds, MARKET_COINS, STALE_AFTER_S, type CandleRead } from './market-model.mjs';
 import { paperCompleteRead, paperPairBag, paperPairHoldings, paperSectionError, paperSnapshotsAgree } from './policy.ts';
 
@@ -51,7 +51,7 @@ export function marketSentence(changes: Record<string, string | null>, range: st
   const subject = measured.length === 1 ? measured[0].coin : missing.length ? `All ${measured.length} published coins` : 'All five coins';
   const verb = measured.length === 1 ? 'is' : 'are';
   const direction = up === measured.length ? `${subject} ${verb} up` : down === measured.length ? `${subject} ${verb} down` : !up && !down ? `${subject} ${verb} unchanged` : `${up} up, ${down} down, ${measured.length - up - down} unchanged`;
-  const mean = rounded(measured.reduce((sum, row) => sum + row.value, 0n), BigInt(measured.length) * SCALE, 2);
+  const mean = rounded(measured.reduce((sum, row) => sum + row.value, 0n), BigInt(measured.length) * SCALE, 35);
   const weakest = [...measured].sort((left, right) => left.value < right.value ? -1 : left.value > right.value ? 1 : 0)[0];
   const strongest = [...measured].sort((left, right) => left.value > right.value ? -1 : left.value < right.value ? 1 : 0)[0];
   const extreme = down ? `${weakest.coin} is weakest at ${pct(weakest.text)}.` : up ? `${strongest.coin} is strongest at ${pct(strongest.text)}.` : '';
@@ -71,7 +71,7 @@ export function hourlyReturns(read: CandleRead | null | undefined): { from: numb
   return result;
 }
 
-export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot: string | null | undefined, last: number | null, quote: string, now: number): { text: string; reason: string | null; asOf: number | null } {
+export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot: string | null | undefined, last: number | null, quote: string, now: number): { text: string; exact?: string; reason: string | null; asOf: number | null } {
   const unavailable = (reason: string) => ({ text: 'V5 holds —', reason, asOf: null });
   if (!bot || !reads || reads.length !== 3 || !['status', 'positions', 'decisions'].every(section => reads.some(read => read.section === section)) ||
       reads.some(read => read.bot_id !== bot || paperSectionError(read) || read.section !== 'status' && !paperCompleteRead(read, now)) || !paperSnapshotsAgree(reads)) return unavailable('Complete current V5 paper snapshot required.');
@@ -89,5 +89,5 @@ export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot:
   else if (decimal(bag.breakevenPrice) == null || decimal(bag.breakevenPrice)! <= 0n) reason = 'Owner breakeven is not published.';
   else gap = change(last, bag.breakevenPrice!, 1);
   if (!gap && !reason) reason = 'A complete price comparison is unavailable.';
-  return { text: `V5 holds ${holdings.total} · ${gap ? pct(gap, 1) : '—'} to breakeven`, reason, asOf: positions.generated_at_ms };
+  return { text: `V5 holds ${formatCoin(holdings.total)} · ${gap ? pct(gap, 1) : '—'} to breakeven`, exact: holdings.total, reason, asOf: positions.generated_at_ms };
 }

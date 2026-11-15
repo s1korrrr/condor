@@ -15,7 +15,7 @@ import { candleCurrent, hourlyReturns, marketHolding, marketSentence, windowChan
 import { readMarketPaper } from "./market-paper";
 import { usePaperClock } from "./usePaperClock";
 import { ageSeconds, breadth, coinTile, indexedReturns, laneHealthClass, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
-import { age as ageShort, fixed, pct, price, signed, utcMin } from "./format.mjs";
+import { age as ageShort, axis, fixed, pct, price, signed, utcMin } from "./format.mjs";
 import { tri, utcMinute } from "./shown.mjs";
 import "./market.css";
 
@@ -141,7 +141,7 @@ export function V5Market() {
     <Section title="Moves" note={`${venueName(REFERENCE.venue)} spot, 1-minute candles sampled every 5 minutes`}>
       <div className="v5m-row v5m-row--wide">
         <Card title={`Return over ${range}`} hint="Each coin starts at 0% at the window's first minute (a coin without that minute is left out) · lines break where minutes are missing · hover for values">
-          <TimeSeriesChart series={returnSeries.filter(item => !hidden.has(item.id))} height={260} zeroLine includeZero signed ariaLabel={`Return of each coin over ${range}`} leftFormat={value => pct(value)} emptyText="No candles to plot yet." />
+          <TimeSeriesChart series={returnSeries.filter(item => !hidden.has(item.id))} height={260} zeroLine includeZero signed ariaLabel={`Return of each coin over ${range}`} leftFormat={value => pct(value)} leftTickFormat={value => `${axis(value, 2, true)}%`} emptyText="No candles to plot yet." />
           <Legend series={returnSeries} hidden={hidden} onToggle={toggleSeries} />
         </Card>
         <Card title="Breadth" hint="How many of the five coins are up" className="v5m-breadth">
@@ -154,7 +154,7 @@ export function V5Market() {
     <Section title="Spot versus perpetual" note={`${venueName(REFERENCE.venue)} perpetual over spot, same quote · 100 bp = 1%`}>
       <div className="v5m-row">
         <Card title={`Perpetual premium, ${range}`} hint="Every fifth minute where both legs closed · above 0: the perpetual trades above spot · hover for values">
-          <TimeSeriesChart series={premium.filter(item => !hidden.has(item.id))} height={240} zeroLine includeZero signed ariaLabel="Perpetual premium over spot by coin" leftFormat={value => `${signed(value, 1)} bp`} emptyText="No minute where both spot and perpetual closed." />
+          <TimeSeriesChart series={premium.filter(item => !hidden.has(item.id))} height={240} zeroLine includeZero signed ariaLabel="Perpetual premium over spot by coin" leftFormat={value => `${signed(value, 1)} bp`} leftTickFormat={value => `${axis(value, 1, true)} bp`} emptyText="No minute where both spot and perpetual closed." />
           <Legend series={premium} hidden={hidden} onToggle={toggleSeries} />
         </Card>
         <Card title="Same coin, different venue" hint="Average gap of each venue's spot close from the median of venues over the last hour, basis points (owner-computed; hover for minutes compared)">
@@ -177,7 +177,7 @@ export function V5Market() {
 }
 
 function HoldingLine({ holding, error, now }: { holding: ReturnType<typeof marketHolding>; error: string | null; now: number }) {
-  return <><p className="v5m-holding">{holding.text}</p><small className="v5m-asof">{error ?? holding.reason}{holding.asOf != null && <> · Paper {utcMin(holding.asOf)} · {ageText((now - holding.asOf) / 1000)}</>}</small></>;
+  return <><p className="v5m-holding" title={holding.exact}>{holding.text}</p><small className="v5m-asof">{error ?? holding.reason}{holding.asOf != null && <> · Paper {utcMin(holding.asOf)} · {ageText((now - holding.asOf) / 1000)}</>}</small></>;
 }
 
 function HourStrip({ reads }: { reads: Record<string, CoinRead> }) {

@@ -358,7 +358,7 @@ test('round two: tooltip and raw precision both survive the phone money disclosu
   const { load } = frontendModules({}, { 'v5/V5Money.tsx': ['dailyColumns'] });
   const { Rows } = load('features/quant-ops/kit/Rows.tsx');
   const columns = load('v5/V5Money.tsx').dailyColumns;
-  const row = { day: now, equity_start: '101.2345', equity_end: '102.469', equity_change: '1.2345', realized_change: '1.2345', first_at_ms: now - 1000, valid: 288, samples: 288, gaps: 0 };
+  const row = { day: now, equity_start: '101.2345', equity_end: '102.469', equity_change: '1.2345', realized_change: '1.2345', first_at_ms: now - 1000, equity_first_at_ms: now - 1000, valid: 288, equity_valid: 288, samples: 288, gaps: 0 };
   const window = new Window();
   window.document.body.innerHTML = renderToStaticMarkup(React.createElement(Rows, { rows: [row], columns, rowId: () => 'day', label: 'Money precision' }));
   for (const id of ['start', 'realized']) {

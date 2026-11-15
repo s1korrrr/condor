@@ -1,5 +1,7 @@
 import type { SeriesPoint } from "@/features/quant-ops/kit/series";
 
+export const SAMPLE_MS: number;
+
 export type MoneyRow = {
   bot: string; at_ms: number; gap?: string; unit?: string | null; snapshot_at_ms?: number | null;
   equity?: string | null; initial_funding?: string | null; external_flows?: string | null;
@@ -9,6 +11,7 @@ export type MoneyRow = {
 export type DailyRow = {
   day: number; samples: number; gaps: number; valid: number; equity_start: string | null; equity_end: string | null;
   equity_change: string | null; realized_change: string | null; first_at_ms: number | null; last_at_ms: number | null;
+  equity_valid: number; equity_first_at_ms: number | null; equity_last_at_ms: number | null;
 };
 export function botRows(rows: MoneyRow[], bot: string): MoneyRow[];
 export function series(rows: MoneyRow[], bot: string, field: keyof MoneyRow): SeriesPoint[];

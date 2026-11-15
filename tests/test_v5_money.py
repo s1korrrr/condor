@@ -17,6 +17,36 @@ PROGRAM = {**envelope("accounting")["data"]["program"], "realized_pnl_quote": "1
 ACCOUNTING = {**envelope("accounting")["data"], "program": PROGRAM, "controllers": {"modular_spot_meridian_v5_paper_bnb": {**PROGRAM, "realized_pnl_quote": "14.80", "unrealized_pnl_quote": "-77.86"}}}
 
 
+def test_daily_equity_coverage_excludes_realized_only_slots():
+    day = 1_792_800_000_000 // 86_400_000 * 86_400_000
+    rows = [
+        {"bot": "v5", "at_ms": day, "equity": "100", "realized": "1"},
+        {"bot": "v5", "at_ms": day + 300_000, "realized": "2"},
+        {"bot": "v5", "at_ms": day + 600_000, "equity": "103", "realized": "3"},
+        {"bot": "v5", "at_ms": day + 900_000, "realized": "4"},
+    ]
+    [entry] = daily(rows)
+    assert entry["valid"] == 4
+    assert entry["equity_valid"] == 2
+    assert (entry["equity_first_at_ms"], entry["equity_last_at_ms"]) == (day, day + 600_000)
+    assert (entry["equity_start"], entry["equity_end"], entry["equity_change"]) == ("100", "103", "3")
+    assert entry["realized_change"] == "3"
+
+
+def test_daily_equity_endpoints_do_not_use_realized_only_boundary_rows():
+    day = 1_792_800_000_000 // 86_400_000 * 86_400_000
+    rows = [
+        {"bot": "v5", "at_ms": day, "realized": "1"},
+        {"bot": "v5", "at_ms": day + 300_000, "equity": "100", "realized": "2"},
+        {"bot": "v5", "at_ms": day + 600_000, "equity": "103", "realized": "3"},
+    ]
+    [entry] = daily(rows)
+    assert entry["first_at_ms"] == day
+    assert entry["equity_first_at_ms"] == day + 300_000
+    assert entry["equity_valid"] == 2
+    assert entry["equity_change"] == "3"
+
+
 def read(section, data, **changes):
     return {**envelope(section), "data": data, **changes}
 

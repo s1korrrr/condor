@@ -92,4 +92,11 @@
   .condor-native .paper-positions :is(p, dt, dd, summary) { min-width: 0; max-width: 100%; white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
   .condor-native .paper-positions progress { display: block; width: 100%; max-width: 100%; }
   .condor-native .paper-positions summary { min-height: 44px; padding: 8px 0; }
+  .condor-native .v5-system { min-width: 0; max-width: 100%; overflow-wrap: anywhere; }
+  .condor-native .v5-system :is(p, span, small, dt, dd, label, button, a, summary, th, td) { min-width: 0; overflow-wrap: anywhere; font-size: 12px !important; }
+  .condor-native .v5-system .v5m-venues { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .condor-native .v5-system .v5m-venues > :is(:first-child, .v5m-venue) { grid-column: 1 / -1; }
+  .condor-native .v5-system :is(.v5m-lane, .v5m-lane > span, .op-hrow__pct)[title]::after { content: attr(title); display: block; flex-basis: 100%; margin-top: 4px; white-space: normal; overflow-wrap: anywhere; font-size: 12px; }
+  .condor-native .v5-system .op-hrow__pct { grid-column: 1 / -1; grid-row: 3; text-align: left; }
+  body:has(.condor-native .v5-system) .q-heat-tip :is(p, span, small, dt, dd) { overflow-wrap: anywhere; font-size: 12px !important; }
 }

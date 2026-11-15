@@ -74,6 +74,13 @@ def _epoch_s(value: Any) -> int | float | None:
     return None
 
 
+def _signal_decimal(value: Any, *, maximum: int | None = None) -> str | None:
+    if not isinstance(value, str) or _amount(f"0{value}" if value.startswith(".") else value) is None:
+        return None
+    number = Decimal(value)
+    return value if number >= 0 and (maximum is None or number <= maximum) else None
+
+
 
 
 def _money(payload: dict) -> dict[str, str | None] | None:
@@ -171,6 +178,20 @@ def read_helm_status(path: Path, *, now: float) -> dict[str, Any]:
                 "candidate_hold": shown.one(holds.get(pair), _code),
                 "bag": shown.pick(row.get("bag"), {"held_amount": _amount, "breakeven_price": _amount}),
                 "last_decision": shown.pick(row.get("last_decision"), {"at": _epoch_s, "reason": _code}),
+                "signal": shown.one(row.get("signal"), lambda signal: shown.pick(signal, {
+                    "at": _epoch_s,
+                    "candle_open": lambda value: _epoch_s(value) if type(value) is int else None,
+                    "close": _signal_decimal,
+                    "rsi": lambda value: _signal_decimal(value, maximum=100),
+                    "previous_rsi": lambda value: _signal_decimal(value, maximum=100),
+                    "rsi_length": _revision,
+                    "oversold": lambda value: _signal_decimal(value, maximum=100),
+                    "atr_fraction": _signal_decimal,
+                    "atr_length": _revision,
+                    "min_atr_fraction": _signal_decimal,
+                    "max_atr_fraction": _signal_decimal,
+                    "decision": lambda value: shown.pick(value, {"enter": _flag, "reason": _code}),
+                })),
             })
     rejections = helm.get("control_rejections") if isinstance(helm.get("control_rejections"), dict) else None
     recent = rejections.get("recent") if rejections and isinstance(rejections.get("recent"), list) else []

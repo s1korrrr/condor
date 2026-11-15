@@ -110,3 +110,42 @@ test('Settings names independent advisor sources, exact policy and unpublished i
   assert.match(failed, /— · task profiles source unavailable/);
   assert.doesNotMatch(failed, /policy ceiling not published/);
 });
+
+test('Settings identifies each advisor and policy field with its owning endpoint', () => {
+  const profile = {readiness:{paper_owner:{mode:'PAPER',bot_name:'paper'}}};
+  const settings = {identity:{}, budget:{enabled:true,model:'fixture-model',calls_today:3,spent_usd:'1.23',reserved_usd:'0.25'}, scheduler:{enabled:false}, budget_policy:{pilot_usd:'10',daily_usd:'2',remaining_pilot_usd:'8',authorized_ceiling_usd:'200'}};
+  const {load} = frontendModules({
+    '@tanstack/react-query':{useQueryClient:() => new ReactQuery.QueryClient(),useQuery:({queryKey}) => ({data:queryKey[0]==='v5-profile'?profile:settings,refetch(){}})},
+    './usePaperObservation':{usePaperObservation:() => ({summary:{label:'Available',reason:'Fixture state'}})},
+    'react-markdown':{},
+  });
+  const html = renderToStaticMarkup(React.createElement(load('v5/V5Pages.tsx').SettingsPage));
+  const advisor = html.indexOf('Advisor configuration and usage · v5_advisory /v1/advice/status · time not published');
+  const tasks = html.indexOf('Advisor scheduler and policy · v5_advisory /v1/tasks · time not published');
+  assert.ok(advisor >= 0 && tasks > advisor);
+  for (const field of ['model','calls_today','spent_usd','reserved_usd']) assert.ok(html.indexOf(`(${field})`) > advisor && html.indexOf(`(${field})`) < tasks, field);
+  for (const field of ['pilot_usd','daily_usd','remaining_pilot_usd']) assert.ok(html.indexOf(`(budget_policy.${field})`) > tasks, field);
+  assert.ok(html.indexOf('budget_policy.authorized_ceiling_usd') > tasks);
+});
+
+test('invalid scheduler times cannot blank Settings and identify their owner field', () => {
+  const profile = {readiness:{paper_owner:{mode:'PAPER',bot_name:'paper'}}};
+  const settings = {identity:{}, budget:{enabled:false,model:'fixture-model'}, scheduler:{enabled:true,last_attempt_ms:100000000000000000000}, budget_policy:{}};
+  const {load} = frontendModules({
+    '@tanstack/react-query':{useQueryClient:() => new ReactQuery.QueryClient(),useQuery:({queryKey}) => ({data:queryKey[0]==='v5-profile'?profile:settings,refetch(){}})},
+    './usePaperObservation':{usePaperObservation:() => ({summary:{label:'Available',reason:'Fixture state'}})},
+    'react-markdown':{},
+  }, {'v5/V5Pages.tsx':['formatTime']});
+  const {SettingsPage, formatTime} = load('v5/V5Pages.tsx');
+  for (const value of [1e20, 0, -1, NaN, Infinity]) {
+    settings.scheduler.last_attempt_ms = value;
+    const html = renderToStaticMarkup(React.createElement(SettingsPage));
+    assert.match(html, /invalid time from v5_advisory \/v1\/tasks scheduler\.last_attempt_ms/);
+    assert.match(html, /fixture-model/);
+    assert.match(html, /Enabled · source: v5_advisory \/v1\/tasks scheduler.enabled/);
+    assert.equal(formatTime(value), 'Unavailable');
+  }
+  assert.match(formatTime(8640000000000000), / UTC$/);
+  assert.equal(formatTime(8640000000000001), 'Unavailable');
+  assert.equal(formatTime(null), 'Unavailable');
+});

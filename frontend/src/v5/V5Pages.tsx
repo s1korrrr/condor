@@ -56,8 +56,9 @@ function Status({ state, label }: { state: "ready" | "blocked" | "completed" | "
   return <span className={`v5-status is-${state}`}><i />{label ?? state}</span>;
 }
 
-function formatTime(ms: number | null | undefined) {
-  if (ms == null || !Number.isFinite(ms)) return "Unavailable";
+function formatTime(ms: number | null | undefined, invalid = "Unavailable") {
+  if (ms == null) return "Unavailable";
+  if (typeof ms !== "number" || !Number.isFinite(ms) || ms <= 0 || ms > 8.64e15) return invalid;
   return new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(ms) + " UTC";
 }
 
@@ -442,7 +443,29 @@ export function SettingsPage() {
   return <><PageHeading title="Workspace settings" description={paper ? `Read-only configuration · paper owner reads: ${observation.summary.label.toLowerCase()}. ${observation.summary.reason}` : "Read-only configuration. Owner readiness is reported separately."} actions={<button className="v5-button" onClick={() => void query.refetch()}><RotateCw size={15} />Refresh settings</button>} />
     <PaperIdentity />
     <div className="v5-settings-grid"><section className="v5-panel"><div className="v5-section-heading"><div><h2>{paper ? "Advisor runtime identity" : "Runtime identity"}</h2><p>Server-supplied workspace binding</p></div></div><div className="v5-settings-list"><DataValue label="Workspace" value={settings.identity.name} /><DataValue label="Host" value={settings.identity.host} /><DataValue label="Mode" value={settings.identity.mode} /><DataValue label={paper ? "Advisor execution" : "Execution"} value={settings.identity.execution_enabled ? "Enabled" : "Disabled"} /><DataValue label="Baseline binding" value={settings.identity.baseline_binding} /><DataValue label="Upstream revision" value={settings.identity.upstream_revision} /></div></section>
-      <section className="v5-panel"><div className="v5-section-heading"><div><h2>Model budget</h2><p>Usage reported by the advisor service</p></div><Sparkles size={16} /></div><div className="v5-budget-grid"><DataValue label="Advisor enabled" value={typeof settings.budget.enabled === "boolean" ? `${settings.budget.enabled ? "Yes" : "No"} · source: v5_advisory /v1/advice/status enabled · time not published` : `— · ${advisorMissing}`} /><DataValue label="Automatic advisor polling" value={typeof settings.scheduler?.enabled === "boolean" ? `${settings.scheduler.enabled ? "Enabled" : "Disabled"} · source: v5_advisory /v1/tasks scheduler.enabled · time not published` : `— · ${tasksMissing}`} /><DataValue label="Configured model" value={settings.budget.model} /><DataValue label="Calls today" value={settings.budget.calls_today} /><DataValue label="Spent" value={money(settings.budget.spent_usd)} /><DataValue label="Reserved" value={money(settings.budget.reserved_usd)} /><DataValue label="Pilot cap" value={money(settings.budget_policy?.pilot_usd)} /><DataValue label="Daily cap" value={money(settings.budget_policy?.daily_usd)} /><DataValue label="Remaining pilot cap" value={money(settings.budget_policy?.remaining_pilot_usd)} /><DataValue label="Advisor policy ceiling" value={settings.budget_policy?.authorized_ceiling_usd == null ? `— · ${errors.some(error => error.startsWith("task_profiles:")) ? "task profiles source unavailable" : "policy ceiling not published"}` : `${settings.budget_policy.authorized_ceiling_usd} USD · source: v5_advisory service policy budget_policy.authorized_ceiling_usd · time not published`} /><DataValue label="Provider billing balance" value="Unavailable" /></div><div className="v5-no-secret"><LockKeyhole size={15} /><span>Provider credentials are not exposed or editable in this dashboard.</span></div><p className="v5-muted">Provider access is managed by the advisor service owner on Razer. Never enter credentials in this browser.</p><p className="v5-muted">Polling last attempt: {formatTime(settings.scheduler?.last_attempt_ms)} · {settings.scheduler?.last_status ?? "No status"} · source: v5_advisory /v1/tasks scheduler</p></section>
+      <section className="v5-panel">
+        <div className="v5-section-heading"><div><h2>Model budget</h2><p>Read-only advisor service data</p></div><Sparkles size={16} /></div>
+        <h3>Advisor configuration and usage · v5_advisory /v1/advice/status · time not published</h3>
+        <div className="v5-budget-grid">
+          <DataValue label="Advisor enabled" value={typeof settings.budget.enabled === "boolean" ? `${settings.budget.enabled ? "Yes" : "No"} · source: v5_advisory /v1/advice/status enabled · time not published` : `— · ${advisorMissing}`} />
+          <DataValue label="Configured model (model)" value={settings.budget.model} />
+          <DataValue label="Calls today (calls_today)" value={settings.budget.calls_today} />
+          <DataValue label="Spent (spent_usd)" value={money(settings.budget.spent_usd)} />
+          <DataValue label="Reserved (reserved_usd)" value={money(settings.budget.reserved_usd)} />
+        </div>
+        <h3>Advisor scheduler and policy · v5_advisory /v1/tasks · time not published</h3>
+        <div className="v5-budget-grid">
+          <DataValue label="Automatic advisor polling" value={typeof settings.scheduler?.enabled === "boolean" ? `${settings.scheduler.enabled ? "Enabled" : "Disabled"} · source: v5_advisory /v1/tasks scheduler.enabled · time not published` : `— · ${tasksMissing}`} />
+          <DataValue label="Pilot cap (budget_policy.pilot_usd)" value={money(settings.budget_policy?.pilot_usd)} />
+          <DataValue label="Daily cap (budget_policy.daily_usd)" value={money(settings.budget_policy?.daily_usd)} />
+          <DataValue label="Remaining pilot cap (budget_policy.remaining_pilot_usd)" value={money(settings.budget_policy?.remaining_pilot_usd)} />
+          <DataValue label="Advisor policy ceiling" value={settings.budget_policy?.authorized_ceiling_usd == null ? `— · ${errors.some(error => error.startsWith("task_profiles:")) ? "task profiles source unavailable" : "policy ceiling not published"}` : `${settings.budget_policy.authorized_ceiling_usd} USD · source: v5_advisory service policy budget_policy.authorized_ceiling_usd · time not published`} />
+        </div>
+        <DataValue label="Provider billing balance" value="Unavailable" />
+        <div className="v5-no-secret"><LockKeyhole size={15} /><span>Provider credentials are not exposed or editable in this dashboard.</span></div>
+        <p className="v5-muted">Provider access is managed by the advisor service owner on Razer. Never enter credentials in this browser.</p>
+        <p className="v5-muted">Polling last attempt: {formatTime(settings.scheduler?.last_attempt_ms, "invalid time from v5_advisory /v1/tasks scheduler.last_attempt_ms")} · {settings.scheduler?.last_status ?? "No status"} · source: v5_advisory /v1/tasks scheduler</p>
+      </section>
     </div>
     <section className="v5-panel v5-task-profiles"><div className="v5-section-heading"><div><h2>Task profiles</h2><p>Model selection follows the configured task profile.</p></div></div>
       {tasks.length ? <div className="v5-profile-table"><div className="v5-profile-row v5-profile-head"><span>Task</span><span>Model</span><span>Enabled</span><span>Credential</span><span>Owner reason</span></div>{tasks.map((task, index) => <div className="v5-profile-row" key={task.task_id ?? `task-${index}`}><strong>{task.task_id ?? "Unavailable"}</strong><span>{task.model || "Unavailable"}</span><Status state={task.enabled ? "ready" : "blocked"} label={task.enabled ? "Enabled" : "Disabled"} /><span>{task.credential_status ?? "Unavailable"}</span><span>{task.reason || "No reason supplied"}</span></div>)}</div> : <EmptyState title="No task profiles returned" body="The advisor service did not provide task-specific models. No model or usage values are inferred." />}

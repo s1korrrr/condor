@@ -5,7 +5,6 @@ import path from 'node:path';
 import React from 'react';
 import * as Router from 'react-router-dom';
 import {Window} from 'happy-dom';
-import {frontendModules} from './helpers/frontend-module.mjs';
 import {clockMutation} from './helpers/paper-clock-mutants.mjs';
 
 const browser = new Window({url:'https://fixture.invalid/'});
@@ -13,6 +12,7 @@ for (const name of ['window','document','navigator','HTMLElement','Element','Nod
   Object.defineProperty(globalThis,name,{value:name === 'window' ? browser : browser[name],configurable:true});
 }
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+const {frontendModules} = await import('./helpers/frontend-module.mjs');
 const {createRoot} = await import('react-dom/client');
 const fixture = relative => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/${relative}`,import.meta.url)));
 const baseline = fixture('v5_unbound_base_8284ffe7.json');
@@ -47,7 +47,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const originalError = console.error;
   let now = sections.status.read_at_ms;
   Date.now = () => ++now;
-  const overrides = {'lightweight-charts':await import('lightweight-charts'),'react-router-dom':{...Router,BrowserRouter:({children}) => React.createElement(Router.MemoryRouter,{initialEntries:[route]},children)}};
+  const overrides = {'lightweight-charts':await import('lightweight-charts'),'@/components/charts/RecordedCandleChart':{RecordedCandleChart:() => null},'react-router-dom':{...Router,BrowserRouter:({children}) => React.createElement(Router.MemoryRouter,{initialEntries:[route]},children)}};
   const {load} = frontendModules(overrides,{'v5/V5App.tsx':['client']},(filename,source) => {
     source = clockMutation(filename,source);
     if (!filename.endsWith('/v5/V5Pages.tsx')) return source;
@@ -79,7 +79,8 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
     else if (url.pathname === '/api/v5/sessions') body = {sessions:[]};
     else if (url.pathname === '/api/v5/sessions/fixture-session') body = {...baseline['inspect:decision_reviewer'],id:'fixture-session',agent_id:'decision_reviewer',loop_id:null,started_at_ms:sections.status.read_at_ms,finished_at_ms:sections.status.read_at_ms,effect:'NONE',journal:'',ticks:baseline['inspect:decision_reviewer'].ticks.map((tick,index) => ({...tick,id:`tick-${index}`,at_ms:sections.status.read_at_ms,evidence_refs:[]}))};
     else if (url.pathname === '/api/v5/agents/decision_reviewer') body = baseline['agent:decision_reviewer'].body;
-    else if (url.pathname === '/api/v5/candle-store/symbols') body = {state:'AVAILABLE',reason:null,data:{rows:[]}};
+    else if (url.pathname === '/api/v5/candle-store/symbols') body = {state:'AVAILABLE',reason:null,data:{rows:[{lane:'okx__spot',pair:'BNB-USDC'}]}};
+    else if (url.pathname === '/api/v5/candle-store/candles') body = {state:'AVAILABLE',reason:null,data:{pair:'BNB-USDC',venue:'OKX',volume_unit:'base',start:1793929800,end:1793929860,buckets:[]}};
     else if (url.pathname === '/api/v5/money') body = {sampler:true,daily:[{day:1793923200000,samples:2,gaps:1,valid:1,equity_start:'199318.98',equity_end:'199318.98',equity_change:'0',realized_change:'0',first_at_ms:1793929000000,last_at_ms:1793929000000}],recorder_errors:{count:0,last:null,at_ms:null},started_at_ms:1793929000000,now_ms:1793929900000,range:'7d',rows:[{bot:'v5',at_ms:1793929000000,unit:'USDC',equity:'199318.98',initial_funding:'200000',realized:'114.13',unrealized:'-795.15',fees:'23.11',coins:{BNB:{realized:'14.8',unrealized:null}}},{bot:'v5',at_ms:1793929600000,gap:'wallet: stale'},{bot:'helm',at_ms:1793929600000,gap:'HELM_STATUS_MISSING'}]};
     else if (url.pathname === '/api/v5/helm') body = {state:'STALE',reason:'HELM_STATUS_STALE',bot:'helm_v5_paper',status:{generated_at:1793929882.6,age_s:600000,ready:false,failure:null,failure_reported:true,reasons:null,steps:5086,actions:0,phase:'P1',profile_id:null,entries_held:'operator_entry_pause',operator_entry_paused:true,kill_switch:null,adaptive_actions:'off',funding:'finite_wallet',image_tag:null,shutdown:{checkpoint:true,clean:null},mandate:{mandate_id:'helm-v5-paper-20261105',state:'active',valid_until_ms:1e18},risk:null,control_rejections:null,symbols:[{pair:'BNB-USDC',status:null,candidate_hold:'low_volatility',bag:null,last_decision:{at:-1e21,reason:null}}],withheld:2}};
     else if (url.pathname.startsWith('/api/v5/learning/')) body = {effect:'NONE',status:'DISABLED',roles:[],reason:'Stage1 disabled'};
@@ -102,6 +103,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       const container = document.createElement('div');
       document.body.append(container);
       const mount = createRoot(container);
+      if (pathname === '/bots') context.mock.timers.enable({apis:['setInterval']});
       client.setQueryData(['v5-auth'],{authenticated:true});
       client.setQueryData(['v5-profile'],profile);
       client.setQueryData(['v5-settings'],settings);
@@ -114,11 +116,14 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
         if (pathname === '/bots') {
           assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 1, 'explicit refresh must not reload the symbols list');
+          const candlesBefore = requests.slice(requestStart).filter(request => request.startsWith('/api/v5/candle-store/candles?')).length;
+          assert.ok(candlesBefore > 0, 'listed BNB must load candles before the interval');
+          now += 60_001;
+          await React.act(async () => {context.mock.timers.tick(60_001); await new Promise(resolve => setTimeout(resolve,0));});
+          assert.ok(requests.slice(requestStart).filter(request => request.startsWith('/api/v5/candle-store/candles?')).length > candlesBefore, 'candles must poll after an elapsed interval');
+          assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 1, 'symbols stay loaded after an elapsed interval');
           const symbols = client.getQueryCache().find({queryKey:['v5-bots-candle-symbols']});
           assert.equal(symbols.options.refetchInterval, undefined, 'symbols must not schedule an interval');
-          now += 60_001;
-          await React.act(async () => {window.dispatchEvent(new browser.Event('focus'));});
-          assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 1, 'symbols stay loaded after an interval and focus');
           now -= 60_001;
         }
         if (pathname !== '/bots') assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 0, 'other routes never read Bots symbols');
@@ -187,6 +192,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         assert.deepEqual(unexpectedReads,[],'every requested owner response must have a fixture');
       } finally {
         await React.act(async () => mount.unmount());
+        if (pathname === '/bots') context.mock.timers.reset();
         container.remove();
         client.clear();
       }

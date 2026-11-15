@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RotateCw } from "lucide-react";
-import { tri, utcMinute } from "./shown.mjs";
+import { age, coin, count, fixed, price, usdc, utcMin } from "./format.mjs";
+import { tri } from "./shown.mjs";
 import { helmHeadline } from "./helm-model.mjs";
 import "./market.css";
 
@@ -29,15 +30,7 @@ async function readHelm(): Promise<HelmRead> {
 
 /** Owner codes as words; anything that is not text is shown as missing, never coerced. */
 const words = (value: unknown) => typeof value === "string" && value ? value.replaceAll("_", " ") : "—";
-const at = (ms: number | null | undefined) => utcMinute(ms) ?? "unknown time";
-const amount = (value: Amount | undefined) => value == null ? "—" : String(value);
-function duration(seconds: number) {
-  if (seconds < 120) return `${Math.round(seconds)} s`;
-  if (seconds < 7200) return `${Math.round(seconds / 60)} min`;
-  if (seconds < 172_800) return `${(seconds / 3600).toFixed(1)} h`;
-  return `${(seconds / 86_400).toFixed(1)} days`;
-}
-
+const at = (ms: number | null | undefined) => utcMin(ms) ?? "unknown time";
 /**
  * The recipe's DEFAULT entry rule. Each pair's own signal settings may differ and Helm's status does not publish them,
  * so the page says "default" and never presents this as the live per-pair parameters.
@@ -67,7 +60,7 @@ export function V5Helm() {
         <strong>Helm paper bot: {headline}</strong>
         {detail && <p>{detail}{status?.recipe_version && ENTRY_RULES[status.recipe_version] ? ` Recipe ${status.recipe_version}: ${ENTRY_RULES[status.recipe_version]} Current RSI values are not published.` : " Helm's status does not name its entry rule."}</p>}
         {read!.state === "UNBOUND" ? <p>{read!.reason}. The Helm status file has to be mounted read-only into the dashboard; no state is inferred.</p> : read!.reason === "HELM_STATUS_MISSING" ? <p>No Helm status file exists in its state directory. The runtime may be stopped or still starting; nothing is shown until it publishes.</p> : status && <p>
-          Last status {duration(ageS ?? status.age_s)} ago{status.reasons == null ? " · reasons not published" : status.reasons.length ? ` · ${status.reasons.map(words).join(", ")}` : ""}
+          Last status {age(ageS ?? status.age_s)} ago{status.reasons == null ? " · reasons not published" : status.reasons.length ? ` · ${status.reasons.map(words).join(", ")}` : ""}
           {status.shutdown ? ` · shutdown ${tri(status.shutdown.clean, "clean", "not clean")}, checkpoint ${tri(status.shutdown.checkpoint, "saved", "missing")}` : ""}
           {status.failure ? ` · failure: ${status.failure}` : status.failure_reported ? " · a failure was reported but cannot be shown safely" : ""}.
         </p>}
@@ -79,20 +72,20 @@ export function V5Helm() {
           <Stat label="New entries" value={status.operator_entry_paused === true ? "Paused" : status.entries_held ? "Held" : status.operator_entry_paused === false ? "Not paused" : "Not published"} note={status.entries_held ? words(status.entries_held) : status.operator_entry_paused === false ? "no entry hold published" : "pause state not published"} warn={!!status.entries_held || status.operator_entry_paused !== false} />
           <Stat label="Mandate" value={words(status.mandate?.state)} note={status.mandate ? `${status.mandate.mandate_id ?? "id not published"} · revision ${status.mandate.revision ?? "not published"} · until ${at(status.mandate.valid_until_ms)}` : "not published"} title={status.mandate?.revocation_id ? `Revocation id ${status.mandate.revocation_id} (shared by the mandate and its authorization)` : undefined} />
           <Stat label="Risk latch" value={tri(status.risk?.latched, "Latched", "Clear")} note={words(status.risk?.reason)} warn={status.risk?.latched !== false} />
-          <Stat label="Daily loss used" value={amount(status.risk?.daily_loss_use)} note={`of the ${amount(status.risk?.risk_reference_quote)} ${status.risk?.unit ?? ""} risk reference`} />
+          <Stat label="Daily loss used" value={fixed(status.risk?.daily_loss_use)} note={`of the ${usdc(status.risk?.risk_reference_quote, status.risk?.unit ?? "")} risk reference`} />
           <Stat label="Kill switch" value={tri(status.kill_switch, "On", "Off")} warn={status.kill_switch !== false} />
           <Stat label="Phase · profile" value={status.phase ?? "—"} note={status.profile_id ?? undefined} />
-          <Stat label="Runtime actions" value={amount(status.actions)} note={`${amount(status.steps)} engine steps`} />
+          <Stat label="Runtime actions" value={count(status.actions)} note={`${count(status.steps)} engine steps`} />
           <Stat label="Funding" value={words(status.funding)} note={`adaptive actions ${words(status.adaptive_actions)}`} />
         </div>
         <section className="v5m-section"><header><h2>Coins</h2><span>Why each coin is or is not buying, and its bag</span></header>
           <div className="v5m-card"><table className="v5m-heat"><thead><tr><th>Pair</th><th>State</th><th>Entry candidate</th><th>Held</th><th>Breakeven</th><th>Last decision</th></tr></thead><tbody>{status.symbols.map(row => <tr key={row.pair}>
             <td>{row.pair}</td><td>{words(row.status)}</td><td>{words(row.candidate_hold)}</td>
-            <td>{amount(row.bag?.held_amount)}</td><td>{amount(row.bag?.breakeven_price)}</td>
+            <td>{coin(row.bag?.held_amount, row.pair.split("-")[0])}</td><td>{price(row.bag?.breakeven_price)}</td>
             <td title={row.last_decision?.at != null ? at(row.last_decision.at * 1000) : undefined}>{words(row.last_decision?.reason)}</td>
           </tr>)}</tbody></table>{!status.symbols.length && <p className="v5m-hint">No per-coin state published.</p>}</div>
         </section>
-        <section className="v5m-section"><header><h2>Refused control commands</h2><span>{status.control_rejections == null ? "not published" : status.control_rejections.count == null ? "count not published" : `${status.control_rejections.count} in total`} · newest first · the runtime's own reasons</span></header>
+        <section className="v5m-section"><header><h2>Refused control commands</h2><span>{status.control_rejections == null ? "not published" : status.control_rejections.count == null ? "count not published" : `${count(status.control_rejections.count)} in total`} · newest first · the runtime's own reasons</span></header>
           <div className="v5m-card">{status.control_rejections?.recent.filter(Boolean).length ? <ul className="v5m-list">{status.control_rejections.recent.filter(Boolean).map((row, index) => <li key={index}><b>{words(row!.action)}</b> at {at(row!.at_ms)}: {row!.reason ?? "reason not shown"}</li>)}</ul> : <p className="v5m-hint">{status.control_rejections?.count === 0 ? "None recorded." : "Not published by this runtime."}</p>}</div>
         </section>
         <p className="v5m-hint">Image {status.image_tag ?? "not published"} · status written {lastAt}.</p>

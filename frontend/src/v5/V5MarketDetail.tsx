@@ -6,7 +6,7 @@ import { RecordedCandleChart, type RecordedMinute } from "@/components/charts/Re
 import type { CrossStats, CrossView } from "./candle-store-model";
 import { readCandleStore } from "./candle-store-api";
 import { coinStats, REFERENCE, type CandleRead } from "./market-model.mjs";
-import { utcMinute } from "./shown.mjs";
+import { fixed, pct, signed, utcMin } from "./format.mjs";
 
 const RANGES = ["1h", "6h", "24h", "7d"] as const;
 type Range = (typeof RANGES)[number];
@@ -14,7 +14,6 @@ type Candles = { buckets: RecordedMinute[]; volume_unit: string; pair: string; v
 type CrossRead = { segment: "spot" | "perpetual"; rows: VenueRow[]; error: string | null };
 type VenueRow = CrossStats & { segment: "spot" | "perpetual" };
 
-const signed = (value: number | null | undefined, digits = 2, unit = "") => value == null ? "—" : `${value > 0 ? "+" : ""}${value.toFixed(digits)}${unit}`;
 const compact = (value: number) => value >= 1e9 ? `${(value / 1e9).toFixed(2)} B` : value >= 1e6 ? `${(value / 1e6).toFixed(1)} M` : value >= 1e3 ? `${(value / 1e3).toFixed(1)} k` : value.toFixed(0);
 const venueName = (venue: string) => venue.replace("_io", ".io");
 
@@ -22,10 +21,10 @@ const columns: TableColumn<VenueRow>[] = [
   { id: "venue", header: "Venue", value: row => venueName(row.venue), rowHeader: true, size: 95 },
   { id: "segment", header: "Market", value: row => row.segment, size: 85 },
   { id: "pair", header: "Pair", value: row => row.pair, size: 95 },
-  { id: "mean", header: "Mean gap (bp)", value: row => row.mean_bps == null ? null : Number(row.mean_bps.toFixed(2)), kind: "number", size: 85, title: () => "Average signed distance from the median of venues; positive means this venue trades above the others" },
-  { id: "abs", header: "Mean |gap| (bp)", value: row => row.mean_abs_bps == null ? null : Number(row.mean_abs_bps.toFixed(2)), kind: "number", size: 90 },
-  { id: "p95", header: "p95 |gap| (bp)", value: row => row.p95_abs_bps == null ? null : Number(row.p95_abs_bps.toFixed(2)), kind: "number", size: 85 },
-  { id: "max", header: "Max |gap| (bp)", value: row => row.max_abs_bps == null ? null : Number(row.max_abs_bps.toFixed(2)), kind: "number", size: 85, title: row => row.max_at == null ? undefined : `At ${utcMinute(row.max_at * 1000) ?? "an unknown time"}` },
+  { id: "mean", header: "Mean gap (bp)", value: row => row.mean_bps == null ? null : Number(row.mean_bps.toFixed(2)), kind: "number", cell: row => signed(row.mean_bps, 2), size: 85, title: () => "Average signed distance from the median of venues; positive means this venue trades above the others" },
+  { id: "abs", header: "Mean |gap| (bp)", value: row => row.mean_abs_bps == null ? null : Number(row.mean_abs_bps.toFixed(2)), kind: "number", cell: row => fixed(row.mean_abs_bps, 2), size: 90 },
+  { id: "p95", header: "p95 |gap| (bp)", value: row => row.p95_abs_bps == null ? null : Number(row.p95_abs_bps.toFixed(2)), kind: "number", cell: row => fixed(row.p95_abs_bps, 2), size: 85 },
+  { id: "max", header: "Max |gap| (bp)", value: row => row.max_abs_bps == null ? null : Number(row.max_abs_bps.toFixed(2)), kind: "number", cell: row => fixed(row.max_abs_bps, 2), size: 85, title: row => row.max_at == null ? undefined : `At ${utcMin(row.max_at * 1000) ?? "an unknown time"}` },
   { id: "minutes", header: "Minutes compared", value: row => row.n, kind: "number", size: 90 },
   { id: "quote", header: "Quote", value: row => row.quote, size: 65 },
 ];
@@ -59,12 +58,12 @@ export function V5MarketDetail({ coin, color, onClose, tileRead }: { coin: strin
   const stats = candles.data ? coinStats(candles.data.spot as unknown as CandleRead, candles.data.perpetual as unknown as CandleRead) : null;
   const partial = stats ? stats.heldMinutes < stats.windowMinutes : false;
   const tiles: [string, string, string?][] = stats ? [
-    [`Return, ${range}`, signed(stats.returnWindowPct, 2, "%"), stats.returnWindowPct == null ? "no close at the window's first minute" : undefined],
-    ["Return, last hour", signed(stats.return1hPct, 2, "%"), stats.return1hPct == null ? (range === "1h" ? "needs a range longer than 1h" : "no close exactly one hour earlier") : undefined],
-    ["High–low range", `${stats.rangePct.toFixed(2)}%`, partial ? `over ${stats.heldMinutes} held minutes only` : undefined],
-    ["Largest drop from a peak", signed(stats.maxDrawdownPct, 2, "%"), partial ? `over ${stats.heldMinutes} held minutes only` : undefined],
+    [`Return, ${range}`, pct(stats.returnWindowPct), stats.returnWindowPct == null ? "no close at the window's first minute" : undefined],
+    ["Return, last hour", pct(stats.return1hPct), stats.return1hPct == null ? (range === "1h" ? "needs a range longer than 1h" : "no close exactly one hour earlier") : undefined],
+    ["High–low range", `${fixed(stats.rangePct)}%`, partial ? `over ${stats.heldMinutes} held minutes only` : undefined],
+    ["Largest drop from a peak", pct(stats.maxDrawdownPct), partial ? `over ${stats.heldMinutes} held minutes only` : undefined],
     ["Traded value", stats.volumeQuote == null ? "—" : `${compact(stats.volumeQuote)} ${REFERENCE.quote}`, stats.volumeQuote == null ? `volume missing for ${stats.volumeMissingMinutes} minute(s)` : `${venueName(REFERENCE.venue)} spot only`],
-    ["Perpetual premium, mean", stats.premium ? signed(stats.premium.mean, 1, " bp") : "—", candles.data!.perpetualError ? "perpetual read failed" : stats.premium ? `${stats.premium.minutes} minutes with both legs · min ${signed(stats.premium.min, 1)} · max ${signed(stats.premium.max, 1)} bp` : "no minute with both legs"],
+    ["Perpetual premium, mean", stats.premium ? `${signed(stats.premium.mean, 1)} bp` : "—", candles.data!.perpetualError ? "perpetual read failed" : stats.premium ? `${stats.premium.minutes} minutes with both legs · min ${signed(stats.premium.min, 1)} · max ${signed(stats.premium.max, 1)} bp` : "no minute with both legs"],
     ["Minutes held", `${stats.heldMinutes} / ${stats.windowMinutes}`, "final 1-minute candles in the window"],
   ] : [];
   return <section className="v5m-card v5m-detail" aria-label={`${coin} detail`}>

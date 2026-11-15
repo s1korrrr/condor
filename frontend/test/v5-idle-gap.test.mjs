@@ -58,7 +58,7 @@ test('review probe: first commit after a zero-subscriber gap', async () => {
     let body;
     if (url.pathname === '/api/v5/dashboard/read') {
       const native = url.searchParams.get('path');
-      const section = native.includes('native/status') ? 'status' : native.includes('account-balances') || native.includes('fleet/summary') ? 'wallet' : native.includes('holdings') ? 'positions' : native.includes('performance/history') ? 'history' : native.split('?')[0].split('/').at(-1);
+      const section = native.includes('native/status') ? 'status' : native.includes('account-balances') || native.includes('fleet/summary') ? 'wallet' : native.includes('holdings') ? 'positions' : native.includes('performance/history') ? 'history' : native.includes('operations/workspace') ? 'operations' : native.split('?')[0].split('/').at(-1);
       body = sections[section];
     } else if (url.pathname === '/api/v5/auth') body = {authenticated:true};
     else if (url.pathname === '/api/v5/dashboard/profile') body = profile;
@@ -90,6 +90,7 @@ test('review probe: first commit after a zero-subscriber gap', async () => {
     await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
     console.log('COMMITS AFTER RETURN:', JSON.stringify(globalThis.__commits.map(c => ({...c, wallMinusGenerated:c.wall - sections.status.generated_at_ms}))));
     console.log('FINAL:', container.textContent.match(/Last coherent owner snapshot · [^·]+· [a-z ;]+/)?.[0]);
+    assert.ok(globalThis.__commits.some(c => c.label?.includes('Last coherent owner snapshot')),'the retained snapshot must commit before freshness is checked');
     assert.ok(!globalThis.__commits.some(c => c.label && !/stale/.test(c.label)),'a 90 s old snapshot must never commit as non-stale');
   } finally {
     await React.act(async () => mount.unmount());

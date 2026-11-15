@@ -208,6 +208,7 @@ export const FEATURE_GROUPS = ['Breadth', 'Returns', 'Dispersion', 'Coverage', '
 
 /** Display text for one feature value in its owner unit; a non-numeric or unqualified value is said, not guessed. */
 export function featureText(value, unit) {
+  if (typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value)) return `${value}${unit === 'percent' ? '%' : unit === 'percentage_points' ? ' pp' : unit === 'fraction_0_1' ? ' (fraction)' : ''}`;
   const number = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
   if (!Number.isFinite(number)) return value == null ? '—' : String(value);
   if (unit === 'fraction_0_1') return `${(number * 100).toFixed(0)}%`;

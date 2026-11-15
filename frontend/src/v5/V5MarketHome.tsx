@@ -21,6 +21,6 @@ export function V5MarketHome() {
     <V5Stocks configured={candleConfigured} profilePending={profile.isPending} profileError={profile.error} />
   </section>;
   if (profile.isPending) return <p role="status">Loading market…</p>;
-  if (!candleConfigured) return <section className="v5-panel"><h1>Market</h1><p>The candle store is not configured for this deployment, so no prices, coverage or market moves can be shown. No values are inferred.</p></section>;
+  if (!candleConfigured) return <section className="v5-panel"><h1>Market</h1><p>The candle store is not configured for this deployment, so no prices, coverage or market moves can be shown. No values are inferred.</p><p>Venue health and engine inputs are in <NavLink to="/system/data-feeds">System</NavLink>.</p></section>;
   return <><V5Market /><p className="mt-4 text-sm text-[var(--color-text-muted)]"><NavLink to="/market/stocks" className="underline">OKX stocks capture</NavLink> · separate instruments, kept on their own page.</p></>;
 }

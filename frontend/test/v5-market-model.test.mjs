@@ -167,6 +167,7 @@ test('features keep owner units and say when a value is not qualified', () => {
   assert.equal(rows.find(row => row.id === 'baseline.composite_score').numeric, null);
   assert.equal(featureText(0.0216, 'percent'), '+0.022%');
   assert.equal(featureText(null, 'percent'), '—');
+  assert.equal(featureText('0.123456789012345678901234567890', 'fraction_0_1'), '0.123456789012345678901234567890 (fraction)');
 });
 
 test('shared display helpers never throw and keep three states', () => {

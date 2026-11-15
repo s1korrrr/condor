@@ -25,7 +25,7 @@ const profile = {...baseline.profile.body,readiness:{...baseline.profile.body.re
 const workspace = {schema_version:'v5-workspace.v1',identity,context:null,advisor:settings.budget,agents:Object.values(baseline.workspace_agents),sessions:[],source_error:null};
 const routes = [
   ['/settings','Workspace settings'], ['/bots','Paper bots'], ['/helm','Helm paper bot'], ['/money','Money'], ['/capital','Capital'],
-  ['/operations','Operations'], ['/v5/readiness','Paper readiness'],
+  ['/operations','Operations'], ['/v5/readiness','Paper readiness'], ['/system','Operations'], ['/system/checks','Operations'],
   ['/backtests','Tradepad'], ['/','Overview'], ['/market','Market'], ['/market/BTC','Market'], ['/market/evidence','Market'], ['/market/candles','Market'],
   ['/market/stocks','OKX stocks'], ['/agents','Agents'],
   ['/agents/decision_reviewer','Decision Reviewer'], ['/research','Research'],
@@ -36,14 +36,14 @@ const routes = [
 
 test('real V5 routes settle with shared providers and an advancing paper clock', async context => {
   const routeSource = fs.readFileSync(new URL('../src/v5/V5App.tsx',import.meta.url),'utf8');
-  const registered = [...routeSource.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1]).filter(pathname => pathname !== '*').map(pathname => pathname.replace('/market/:coin','/market/BTC').replace('/agents/:id','/agents/decision_reviewer').replace('/sessions/:id','/sessions/fixture-session'));
+  const registered = [...routeSource.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1]).filter(pathname => pathname !== '*').map(pathname => pathname.replace('/system/:tab','/system/checks').replace('/market/:coin','/market/BTC').replace('/agents/:id','/agents/decision_reviewer').replace('/sessions/:id','/sessions/fixture-session'));
   assert.deepEqual(routes.map(([pathname]) => pathname).sort(),registered.sort(),'every registered V5 route needs a real render case');
   let route = '/settings';
   const originalNow = Date.now;
   let now = sections.status.read_at_ms;
   Date.now = () => ++now;
   const overrides = {'lightweight-charts':await import('lightweight-charts'),'react-router-dom':{...Router,BrowserRouter:({children}) => React.createElement(Router.MemoryRouter,{initialEntries:[route]},children)}};
-  const {load} = frontendModules(overrides,{'v5/V5App.tsx':['client']},(filename,source) => filename.endsWith('/v5/V5Pages.tsx') ? source.replace('function PaperIdentity() {','function PaperIdentity() { globalThis.__reviewAdvance?.();') : source);
+  const {load} = frontendModules(overrides,{'v5/V5App.tsx':['client']},(filename,source) => filename.endsWith('/v5/V5Pages.tsx') ? source.replace('function PaperIdentity({ paused = false }: { paused?: boolean }) {','function PaperIdentity({ paused = false }: { paused?: boolean }) { globalThis.__reviewAdvance?.();') : source);
   overrides['@/lib/auth-token'] = load('v5/auth-token.ts');
   const workspaceRoot = process.env.V5_WORKSPACE_ROOT ?? path.resolve(import.meta.dirname,'../../..');
   overrides['@workspace-monitoring'] = load(path.join(workspaceRoot,'dashboard/condor-workspace/src/index.ts'));
@@ -114,6 +114,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         if (pathname === '/settings') {
           const health = client.getQueryData(['v5-paper-observation-health',bot]);
           assert.deepEqual(health,['status','wallet','positions','executors','risk'].map(section => sections[section]));
+          assert.ok(container.textContent.includes(sections.status.snapshot_id),'the retained identity snapshot must commit before freshness is checked');
           now = sections.status.generated_at_ms + 30000;
           Date.now = () => now;
           globalThis.__reviewAdvance = () => {now = sections.status.generated_at_ms + 30001;};

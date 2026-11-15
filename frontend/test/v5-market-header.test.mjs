@@ -170,7 +170,7 @@ function renderMarket({ expired = false, failed = false, range = '24h', summaryD
   const queries = [];
   const { load } = frontendModules({
     react: { ...React, useState: initial => React.useState(initial === '24h' ? range : initial) },
-    'react-router-dom': { useParams: () => ({}), useNavigate: () => () => {} },
+    'react-router-dom': { useParams: () => ({}), useNavigate: () => () => {}, Link: ({to, children}) => React.createElement('a', {href:to}, children) },
     '@tanstack/react-query': { useQuery: options => {
       queries.push(options);
       const key = options.queryKey.join('/');
@@ -191,6 +191,7 @@ function renderMarket({ expired = false, failed = false, range = '24h', summaryD
 
 test('Market renders a small header, selected range, two chips, holds and hourly returns', () => {
   const { html, queries } = renderMarket({ range: '6h' });
+  assert.match(html, /href="\/system\/data-feeds"/);
   const header = html.slice(html.indexOf('<header'), html.indexOf('</header>'));
   assert.equal((header.match(/class="v5m-chip /g) ?? []).length, 2);
   assert.doesNotMatch(header, /Refresh|Five coins across|Slowest lane/);
@@ -200,7 +201,8 @@ test('Market renders a small header, selected range, two chips, holds and hourly
   assert.match(html, /Hour-by-hour returns/);
   assert.doesNotMatch(html, /<dt>Minutes held<\/dt>|v5m-range/);
   assert.ok(queries.some(query => JSON.stringify(query.queryKey) === '["v5-market","coins","6h"]'));
-  assert.ok(html.indexOf('V5 market features') < html.indexOf('Venues and data health'));
+  assert.match(html, /Venue and data health and V5 engine inputs are in/);
+  assert.doesNotMatch(html, /<h2>V5 market features<\/h2>|<h2>Venues and data health<\/h2>/);
 });
 
 test('Market never displays retained failed or expired prices and holdings as current', () => {

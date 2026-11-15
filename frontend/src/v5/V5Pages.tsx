@@ -13,10 +13,10 @@ function useWorkspace() {
   return useQuery({ queryKey: ["v5-workspace"], queryFn: v5Api.workspace, refetchInterval: 30_000 });
 }
 
-export function PaperReadinessPage() {
-  const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, refetchInterval: 15_000 });
-  const observation = usePaperObservation(profile.data?.readiness.paper_owner?.bot_name);
-  if (!profile.data?.readiness.paper_owner) return <OverviewPage />;
+export function PaperReadinessPage({ paused = false }: { paused?: boolean } = {}) {
+  const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, refetchInterval: paused ? false : 15_000 });
+  const observation = usePaperObservation(profile.data?.readiness.paper_owner?.bot_name, false);
+  if (!profile.data?.readiness.paper_owner) return <section><h2>Paper readiness</h2><p>Paper readiness is unavailable: the paper owner is not bound.</p></section>;
   const owner = profile.data.readiness.paper_owner;
   const gates = paperReadiness(owner);
   return <><PageHeading title="Paper readiness" description="Paper operation, production qualification, economic support and live authority are separate gates." />
@@ -25,10 +25,10 @@ export function PaperReadinessPage() {
   </>;
 }
 
-function PaperIdentity() {
-  const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, refetchInterval: 15_000 });
+function PaperIdentity({ paused = false }: { paused?: boolean }) {
+  const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, refetchInterval: paused ? false : 15_000 });
   const bot = profile.data?.readiness.paper_owner?.bot_name;
-  const identity = usePaperObservation(bot);
+  const identity = usePaperObservation(bot, false);
   if (!profile.data?.readiness.paper_owner) return null;
   const owner = profile.data.readiness.paper_owner;
   const source = identity.status?.source;
@@ -428,11 +428,11 @@ export function SessionDetailPage() {
   </>;
 }
 
-export function SettingsPage() {
+export function SettingsPage({ paused = false }: { paused?: boolean } = {}) {
   const query = useQuery({ queryKey: ["v5-settings"], queryFn: v5Api.settings });
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile });
   const paper = Boolean(paperWorkspaceLabel(profile.data));
-  const observation = usePaperObservation(paper ? profile.data?.readiness.paper_owner?.bot_name : null);
+  const observation = usePaperObservation(paper ? profile.data?.readiness.paper_owner?.bot_name : null, false);
   if (query.isPending) return <Loading label="Loading workspace settings" />;
   if (query.isError) return <QueryError query={query} retry={() => void query.refetch()} />;
   const settings = query.data;
@@ -441,7 +441,7 @@ export function SettingsPage() {
   const advisorMissing = errors.some(error => error.startsWith("advisor:")) ? "advisor source unavailable" : settings.advisor_enabled_error === "not a boolean" ? "v5_advisory /v1/advice/status enabled is invalid: not a boolean" : "advisor enabled not published";
   const tasksMissing = errors.some(error => error.startsWith("task_profiles:")) ? "task profiles source unavailable" : "polling state not published";
   return <><PageHeading title="Workspace settings" description={paper ? `Read-only configuration · paper owner reads: ${observation.summary.label.toLowerCase()}. ${observation.summary.reason}` : "Read-only configuration. Owner readiness is reported separately."} actions={<button className="v5-button" onClick={() => void query.refetch()}><RotateCw size={15} />Refresh settings</button>} />
-    <PaperIdentity />
+    <PaperIdentity paused={paused} />
     <div className="v5-settings-grid"><section className="v5-panel"><div className="v5-section-heading"><div><h2>{paper ? "Advisor runtime identity" : "Runtime identity"}</h2><p>Server-supplied workspace binding</p></div></div><div className="v5-settings-list"><DataValue label="Workspace" value={settings.identity.name} /><DataValue label="Host" value={settings.identity.host} /><DataValue label="Mode" value={settings.identity.mode} /><DataValue label={paper ? "Advisor execution" : "Execution"} value={settings.identity.execution_enabled ? "Enabled" : "Disabled"} /><DataValue label="Baseline binding" value={settings.identity.baseline_binding} /><DataValue label="Upstream revision" value={settings.identity.upstream_revision} /></div></section>
       <section className="v5-panel">
         <div className="v5-section-heading"><div><h2>Model budget</h2><p>Read-only advisor service data</p></div><Sparkles size={16} /></div>

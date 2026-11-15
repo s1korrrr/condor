@@ -85,10 +85,10 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
 
       <section className="v5m-section"><header><h2>V5 paper bot</h2><span>{now ? `as of ${at(now.at_ms)} · ${now.unit ?? "USDC"}` : "no sample with values yet"}</span></header>
         <div className="v5m-stats v5m-stats--wide">
-          <Stat label="Wallet equity" value={usdc(now?.equity, unit)} note={funding != null && equity != null ? `${pnl(equity - funding).text} vs the ${usdc(now?.initial_funding, unit)} start (${pct((equity / funding - 1) * 100)})` : "start funding not published"} warn={equity != null && funding != null && equity < funding} />
+          <Stat label="Wallet equity" value={fixed(now?.equity)} unit={unit} note={funding != null && equity != null ? `${pnl(equity - funding).text} vs the ${usdc(now?.initial_funding, unit)} start (${pct((equity / funding - 1) * 100)})` : "start funding not published"} warn={equity != null && funding != null && equity < funding} />
           <Stat label="Profit from closed trades" value={pnl(now?.realized).text} note="lifetime, owner accounting" />
           <Stat label="Gain or loss on coins still held" value={pnl(now?.unrealized).text} note="marked at the owner's fresh book midpoint" warn={(num(now?.unrealized) ?? 0) < 0} />
-          <Stat label="Fees paid" value={usdc(now?.fees, unit)} note="lifetime" />
+          <Stat label="Fees paid" value={fixed(now?.fees)} unit={unit} note="lifetime" />
         </div>
       </section>
 
@@ -125,6 +125,6 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
   </div>;
 }
 
-function Stat({ label, value, note, warn }: { label: string; value: string; note?: string; warn?: boolean }) {
-  return <div className={`v5m-stat${warn ? " is-warn" : ""}`}><span>{label}</span><strong>{value}</strong>{note && <small>{note}</small>}</div>;
+function Stat({ label, value, unit, note, warn }: { label: string; value: string; unit?: string; note?: string; warn?: boolean }) {
+  return <div className={`v5m-stat${warn ? " is-warn" : ""}`}><span>{label}{unit && <em className="v5-phone-unit hidden not-italic"> ({unit})</em>}</span><strong>{value}{unit && value !== "—" && <em className="v5-desktop-unit not-italic"> {unit}</em>}</strong>{note && <small>{note}</small>}</div>;
 }

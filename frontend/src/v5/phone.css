@@ -4,17 +4,18 @@
   .condor-native.condor-shell .v5-shell-primary { height: 48px; gap: 6px; }
   .condor-native.condor-shell .v5-shell-brand { min-height: 44px; }
   .condor-native.condor-shell .v5-shell-brand > span { font-size: 12px; }
-  .condor-native.condor-shell .v5-shell-scope { padding: 3px 5px; font-size: 10px; }
+  .condor-native.condor-shell .v5-shell-scope { padding: 3px 5px; font-size: 12px; }
   .condor-native.condor-shell .v5-shell-scope-short { display: inline; }
   .condor-native.condor-shell :is(.v5-shell-scope-long, .v5-shell-menu, .v5-shell-tools, .v5-shell-safety) { display: none; }
-  .condor-native.condor-shell .v5-shell-clock { display: block; margin-left: auto; white-space: nowrap; font-size: 11px; font-variant-numeric: tabular-nums; }
+  .condor-native.condor-shell .v5-shell-clock { display: block; margin-left: auto; white-space: nowrap; font-size: 12px; font-variant-numeric: tabular-nums; }
   .condor-native.condor-shell .v5-shell-nav, .condor-native.condor-shell .v5-shell-nav.is-open { position: fixed; z-index: 50; inset: auto 0 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 0; padding: 0 4px env(safe-area-inset-bottom, 0px); border: 0; border-top: 1px solid var(--color-border); background: var(--color-surface); }
-  .condor-native.condor-shell .v5-shell-link { flex-direction: column; justify-content: center; gap: 3px; min-width: 44px; min-height: 56px; padding: 5px 0; font-size: 11px; }
+  .condor-native.condor-shell .v5-shell-link { flex-direction: column; justify-content: center; gap: 3px; min-width: 44px; min-height: 56px; padding: 5px 0; font-size: 12px; }
   .condor-native.condor-shell .v5-shell-subnav { flex-shrink: 0; flex-wrap: nowrap; min-width: 0; overflow-x: auto; overscroll-behavior-x: contain; padding: 2px 8px; }
   .condor-native.condor-shell .v5-shell-subnav > a { display: inline-flex; align-items: center; flex-shrink: 0; white-space: nowrap; }
   .condor-native.condor-shell .v5-shell-main { min-height: 0; min-width: 0; padding: 10px 10px calc(66px + env(safe-area-inset-bottom, 0px)); }
-  .condor-native .v5-phone-safety { display: block; margin-bottom: 10px; font-size: 12px; color: var(--color-text-muted); }
-  .condor-native .v5-phone-safety > div { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding-bottom: 10px; }
+  .condor-native .v5-phone-unit { display: inline; }
+  .condor-native .v5-desktop-unit { display: none; }
+  .condor-native .v5-overview :is(small, button, input, select, summary, .q-tooltip, .q-tooltip__title, .q-legend, .q-chart-legend, .q-dt__bar, .q-dt, .v5-phone-rows dt, svg text) { font-size: 12px !important; }
   .condor-native .v5-phone-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
   .condor-native .v5-phone-tools > * { padding: 8px; border: 1px solid var(--color-border); border-radius: 6px; }
   .condor-native.condor-shell :is(a, button, input:not([type="hidden"]), select, textarea, summary, [role="button"], [role="checkbox"], [role="tab"]) { min-width: 44px; min-height: 44px; max-width: 100%; }

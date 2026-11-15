@@ -46,11 +46,37 @@ test('phone chrome keeps a UTC clock, truthful scope, System tools and a vacant 
   assert.equal(document.querySelector('[aria-label="System tools"] a').getAttribute('href'), '/settings');
   assert.match(document.querySelector('[aria-label="System tools"]').textContent, /Theme: dark/);
   assert.equal(shell('/bots').querySelector('[aria-label="System tools"]'), null);
-  const safety = document.querySelector('.v5-phone-safety');
-  assert.equal(safety.open, false);
-  assert.match(safety.textContent, /live disabled/);
-  assert.equal(safety.querySelector('a').getAttribute('href'), '/v5/readiness');
+  assert.equal(document.querySelector('.v5-phone-safety'), null);
+  assert.equal(document.querySelector('main a[href="/v5/readiness"]'), null);
+  assert.ok(document.querySelector('[aria-label="System pages"] a[href="/v5/readiness"]'));
+  assert.match(document.querySelector('.v5-shell-safety').textContent, /live disabled/);
   assert.ok(document.querySelector('main h1'));
+});
+
+test('phone frame and Overview have legible type and units in labels without altering desktop amounts', () => {
+  for (const selector of ['v5-shell-scope', 'v5-shell-clock', 'v5-shell-link']) {
+    assert.match(css, new RegExp(`\\.${selector}\\s*\\{[^}]*font-size:\\s*12px`));
+  }
+  assert.match(css, /\.v5-overview :is\([^}]*svg text\)[^}]*font-size:\s*12px !important/);
+  assert.match(css, /\.v5-phone-unit\s*\{\s*display:\s*inline/);
+  assert.match(css, /\.v5-desktop-unit\s*\{\s*display:\s*none/);
+  const { load } = frontendModules({
+    '@tanstack/react-query': { useQuery: ({ queryKey }) => ({ data: queryKey[0] === 'v5-money' ? { rows: [{ bot: 'v5', at_ms: now, equity: '199133.37', initial_funding: '200000.00' }] } : undefined }) },
+    './V5Money': { V5Money: () => null, readMoney() {} },
+    './V5Helm': { readHelm() {} },
+  }, { 'v5/V5Money.tsx': ['Stat'] });
+  const window = new Window();
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(MemoryRouter, null, React.createElement(load('v5/V5Overview.tsx').V5Overview)));
+  const wallet = window.document.querySelector('.v5m-stat');
+  assert.match(wallet.querySelector('span').textContent, /Wallet equity \(USDC\)/);
+  assert.equal(wallet.querySelector('strong').textContent, '199,133.37 USDC');
+  assert.equal(wallet.querySelector('.v5-phone-unit').textContent, ' (USDC)');
+  const { Stat } = load('v5/V5Money.tsx');
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(Stat, { label: 'Wallet equity', value: '199,133.37', unit: 'USDC' }));
+  assert.equal(window.document.querySelector('strong').textContent, '199,133.37 USDC');
+  assert.equal(window.document.querySelector('span').textContent, 'Wallet equity (USDC)');
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(Stat, { label: 'Wallet equity', value: '—', unit: 'USDC' }));
+  assert.equal(window.document.querySelector('strong').textContent, '—');
 });
 
 test('phone CSS confines layout changes, keeps chips independently scrollable and reserves bottom safe area', () => {

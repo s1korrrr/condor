@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RotateCw } from "lucide-react";
 import { age, count, fixed, usdc, utcMin } from "./format.mjs";
@@ -72,7 +72,7 @@ export function V5Helm() {
         {status.withheld > 0 && <p className="v5m-hint" role="note">{count(status.withheld)} published value(s) did not match their expected form and are not shown.</p>}
         <div className="v5m-stats v5m-stats--wide">
           <Stat label="New entries" value={status.operator_entry_paused === true ? "Paused" : status.entries_held ? "Held" : status.operator_entry_paused === false ? "Not paused" : "Not published"} note={status.entries_held ? words(status.entries_held) : status.operator_entry_paused === false ? "no entry hold published" : "pause state not published"} warn={!!status.entries_held || status.operator_entry_paused !== false} />
-          <Stat label="Mandate" value={words(status.mandate?.state)} note={status.mandate ? `${status.mandate.mandate_id ?? "id not published"} · revision ${status.mandate.revision == null ? "not published" : count(status.mandate.revision)} · until ${at(status.mandate.valid_until_ms)}` : "not published"} title={status.mandate?.revocation_id ? `Revocation id ${status.mandate.revocation_id} (shared by the mandate and its authorization)` : undefined} />
+          <Stat label="Mandate" value={words(status.mandate?.state)} note={status.mandate ? <><span data-display-id>{status.mandate.mandate_id ?? "id not published"}</span> · revision {status.mandate.revision == null ? "not published" : count(status.mandate.revision)} · until {at(status.mandate.valid_until_ms)}</> : "not published"} title={status.mandate?.revocation_id ? `Revocation id ${status.mandate.revocation_id} (shared by the mandate and its authorization)` : undefined} />
           <Stat label="Risk latch" value={tri(status.risk?.latched, "Latched", "Clear")} note={words(status.risk?.reason)} warn={status.risk?.latched !== false} />
           <Stat label="Daily loss used" value={fixed(status.risk?.daily_loss_use)} note={`of the ${usdc(status.risk?.risk_reference_quote, status.risk?.unit ?? "")} risk reference`} />
           <Stat label="Kill switch" value={tri(status.kill_switch, "On", "Off")} warn={status.kill_switch !== false} />
@@ -106,6 +106,6 @@ function CoinSignal({ row }: { row: ReturnType<typeof helmCoinRow> }) {
   return <div className="v5m-helm-signal"><span className={row.rsi.startsWith("—") ? "v5m-muted" : undefined}>{row.rsi}</span><span className={row.atr.startsWith("—") ? "v5m-muted" : undefined}>{row.atr}</span><small>{row.decision}</small><small>{row.owner}</small><small>{row.sample}</small></div>;
 }
 
-function Stat({ label, value, note, warn, title }: { label: string; value: string; note?: string; warn?: boolean; title?: string }) {
+function Stat({ label, value, note, warn, title }: { label: string; value: string; note?: ReactNode; warn?: boolean; title?: string }) {
   return <div className={`v5m-stat${warn ? " is-warn" : ""}`} title={title}><span>{label}</span><strong>{value}</strong>{note && <small>{note}</small>}</div>;
 }

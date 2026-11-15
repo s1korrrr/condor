@@ -9,6 +9,7 @@ import {
   type CrossStats, type CrossView, type HeatRow, type HeatmapView, type StoreLane, type StoreView,
 } from "./candle-store-model";
 import { readCandleStore } from "./candle-store-api";
+import { fixed } from "./format.mjs";
 
 
 const control = "rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-[var(--color-text)]";
@@ -92,7 +93,7 @@ export function CoverageHeatmapPanel() {
         const coverage = heatRowCoverage(row);
         const name = `${row.venue} · ${row.pair}`;
         return <div key={`${row.lane}/${row.pair}`} className="grid grid-cols-1 items-center gap-x-3 gap-y-0.5 sm:grid-cols-[minmax(150px,220px)_minmax(0,1fr)]">
-          <div className="min-w-0 text-xs"><span className="font-medium">{name}</span> <span className="text-[var(--color-text-muted)]">· {coverage == null ? "no settled minutes" : `${(coverage * 100).toFixed(2)}% settled`}</span></div>
+          <div className="min-w-0 text-xs"><span className="font-medium">{name}</span> <span className="text-[var(--color-text-muted)]">· {coverage == null ? "no settled minutes" : `${fixed(coverage * 100, 2)}% settled`}</span></div>
           <HeatStrip ariaLabel={`${name} hourly coverage`} maxCellWidth={12} height={16} cells={order.map(ownerIndex => { const cell = heatCell(row.cells[ownerIndex], view.hours[ownerIndex]); return { key: String(view.hours[ownerIndex]), color: cell.color, empty: cell.state === "outside", label: `${name} · ${cell.label}` }; })} renderTooltip={index => heatTooltip(row, view, order[index])} />
         </div>;
       })}</div>

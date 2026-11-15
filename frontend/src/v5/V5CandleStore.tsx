@@ -5,6 +5,7 @@ import { TileGrid } from "@/features/quant-ops/kit/grid";
 import { RecordedCandleChart, type RecordedMinute } from "@/components/charts/RecordedCandleChart";
 import { CoverageHeatmapPanel, CrossVenuePanel, StoreFactsPanel } from "./CandleStorePanels";
 import { readCandleStore } from "./candle-store-api";
+import { fixed } from "./format.mjs";
 import "./candle-store.css";
 
 type Row = { health_rules: { level: string; rule: string; detail: string }[]; lane: string; venue: string; segment: string; pair: string; health: string; volume_unit: string; last_minute: number | null; last_minute_age_s: number | null; coverage_1h: number | null; coverage_24h: number | null; coverage_7d: number | null; gaps_7d: number | null; pending: number | null; unrecoverable_7d: number | null; no_trade_7d: number | null; ws_state: string | null; grace_s: number | null };
@@ -31,7 +32,7 @@ const columns: TableColumn<Row>[] = [
   { id: "last", header: "Last open (UTC)", value: row => utc(row.last_minute), size: 170 },
   { id: "age", header: "Age since close (s)", value: row => row.last_minute_age_s, kind: "number", size: 85 },
   { id: "grace", header: "Settle grace (s)", value: row => row.grace_s, kind: "number", size: 75 },
-  ...(["1h", "24h", "7d"] as const).map(span => ({ id: `coverage_${span}`, header: `Settled coverage ${span} (%)`, value: (row: Row) => row[`coverage_${span}`] == null ? null : Number((row[`coverage_${span}`]! * 100).toFixed(2)), kind: "number" as const, size: 85 })),
+  ...(["1h", "24h", "7d"] as const).map(span => ({ id: `coverage_${span}`, header: `Settled coverage ${span} (%)`, value: (row: Row) => row[`coverage_${span}`] == null ? null : Number((row[`coverage_${span}`]! * 100).toFixed(2)), cell: (row: Row) => row[`coverage_${span}`] == null ? "—" : fixed(row[`coverage_${span}`]! * 100, 2), kind: "number" as const, size: 85 })),
   { id: "gaps", header: "Missing 7d (min)", value: row => row.gaps_7d, kind: "number", size: 75 },
   { id: "pending", header: "Pending (min)", value: row => row.pending, kind: "number", size: 75 },
   { id: "unrecoverable", header: "Unrecoverable 7d (min)", value: row => row.unrecoverable_7d, kind: "number", size: 115 },

@@ -1,9 +1,11 @@
+import { fixed, signed } from './format.mjs';
+
 export function breakEvenDistance(breakeven, close) {
   if (typeof breakeven !== 'string' || !/^\d+(\.\d+)?$/.test(breakeven) || typeof close !== 'number' || !Number.isFinite(close) || close <= 0) return '—';
   // Candles are owner JSON numbers: this display percentage uses Number and rounds to 0.1%; money totals remain exact decimals.
   const price = Number(breakeven);
   if (!Number.isFinite(price) || price <= 0) return '—';
-  return close < price ? `Needs +${((price / close - 1) * 100).toFixed(1)}% to break even` : `Above breakeven by ${((close / price - 1) * 100).toFixed(1)}%`;
+  return close < price ? `Needs ${signed((price / close - 1) * 100, 1)}% to break even` : `Above breakeven by ${fixed((close / price - 1) * 100, 1)}%`;
 }
 
 export function moneySampleState(row, now) {

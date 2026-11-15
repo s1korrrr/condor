@@ -14,7 +14,7 @@ import { v5Api } from "./api";
 import { candleCurrent, hourlyReturns, marketHolding, marketSentence, windowChange } from "./market-header";
 import { readMarketPaper } from "./market-paper";
 import { usePaperClock } from "./usePaperClock";
-import { ageSeconds, breadth, coinTile, indexedReturns, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
+import { ageSeconds, breadth, coinTile, indexedReturns, laneHealthClass, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
 import { age as ageShort, fixed, pct, price, signed, utcMin } from "./format.mjs";
 import { tri } from "./shown.mjs";
 import "./market.css";
@@ -232,7 +232,7 @@ function ReturnBars({ tiles, range, selected, onSelect }: { tiles: { coin: strin
 
 function Venue({ row }: { row: ReturnType<typeof venueGrid<LaneTile>>[number] }) {
   const cell = (lane: LaneTile | null) => lane ? <span className="v5m-lane" title={`${lane.lane} · 7-day coverage ${lane.coverage_7d == null ? "unknown" : `${(lane.coverage_7d * 100).toFixed(1)}%`} · missing minutes ${lane.gaps_7d ?? "unknown"}${lane.unavailable_reason ? ` · ${lane.unavailable_reason}` : ""}`}>
-    <span className={lane.available === true ? "is-up" : lane.available === false ? "is-down" : "v5m-muted"} title={tri(lane.available, "available", "unavailable", "availability not reported")}>{lane.available === true ? "●" : lane.available === false ? "○" : "?"} {lane.pairs_held ?? "?"}/{lane.pairs_listed ?? "?"}</span>
+    <span className={laneHealthClass(lane.health)} title={`Owner health: ${lane.health ?? "not reported"} · ${tri(lane.available, "available", "unavailable", "availability not reported")}`}>● {lane.pairs_held ?? "?"}/{lane.pairs_listed ?? "?"}</span>
     <span>{lane.coverage_24h == null ? "—" : `${(lane.coverage_24h * 100).toFixed(0)}%`}</span>
     <span className="v5m-muted">{lane.last_minute_age_s == null ? "—" : ageShort(lane.last_minute_age_s)}</span>
   </span> : <span className="v5m-lane is-none">not held</span>;

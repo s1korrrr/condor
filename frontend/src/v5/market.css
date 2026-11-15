@@ -32,6 +32,7 @@
 .v5m-row--wide { grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); }
 @media (max-width: 1100px) { .v5m-row, .v5m-row--wide { grid-template-columns: minmax(0, 1fr); } }
 .v5m .is-up { color: var(--color-green); }
+.v5m .is-amber { color: var(--color-yellow); }
 .v5m .is-down { color: var(--color-red); }
 .v5m-muted { color: var(--color-text-muted); }
 

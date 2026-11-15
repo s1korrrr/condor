@@ -13,7 +13,7 @@ export type CoinTile = {
   high: number; low: number; heldMinutes: number; windowMinutes: number; premiumBps: number | null; premiumTime: number | null; spark: SeriesPoint[];
 };
 export type LaneTile = {
-  lane: string; venue: string; segment: string; available: boolean | null; pairs_listed: number | null; pairs_held: number | null;
+  lane: string; venue: string; segment: string; health: string; available: boolean | null; pairs_listed: number | null; pairs_held: number | null;
   coverage_24h: number | null; coverage_7d: number | null; gaps_7d: number | null; last_minute_age_s: number | null; ws_connected?: number | null;
   unavailable_reason?: string | null;
 };
@@ -36,6 +36,7 @@ export function indexedReturns(spotRead: CandleRead | null | undefined): SeriesP
 export function premiumSeries(spotRead: CandleRead | null | undefined, perpetualRead: CandleRead | null | undefined): SeriesPoint[];
 export function breadth(tiles: (CoinTile | null)[]): { measured: number; up: number; measured1h: number; up1h: number; averagePct: number | null };
 export function venueGrid<T extends LaneTile>(tiles: T[]): { venue: string; spot: T | null; perpetual: T | null }[];
+export function laneHealthClass(health: string | null | undefined): string;
 export function storeHealth(tiles: LaneTile[]): StoreHealth;
 export function coinStats(spotRead: CandleRead | null | undefined, perpetualRead: CandleRead | null | undefined): CoinStats | null;
 export const FEATURE_GROUPS: string[];

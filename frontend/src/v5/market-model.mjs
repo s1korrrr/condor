@@ -109,6 +109,10 @@ export function breadth(tiles) {
 }
 
 /** Venue × segment grid from candle-store lane tiles; a lane the store does not hold stays absent. */
+export function laneHealthClass(health) {
+  return health === 'green' ? 'is-up' : health === 'amber' ? 'is-amber' : health === 'red' ? 'is-down' : 'v5m-muted';
+}
+
 export function venueGrid(tiles) {
   const venues = [...new Set(tiles.map(tile => tile.venue))].sort();
   return venues.map(venue => ({

@@ -201,9 +201,12 @@ def test_financial_research_tradepad_and_market_picture_reads_fail_closed(tmp_pa
     with client:
         for path in paths:
             response = client.get("/api/v5/dashboard/read", params={"path": path})
-            assert response.status_code == 503, path
+            assert response.status_code == (404 if path == "/api/v1/tradepad/sessions" else 503), path
             assert isinstance(response.json()["detail"], str), path
-            assert "unbound" in response.json()["detail"].lower(), path
+            if path == "/api/v1/research/overview":
+                assert response.json()["detail"] == "Not connected: V5_RESEARCH_URL is unset"
+            elif path != "/api/v1/tradepad/sessions":
+                assert "unbound" in response.json()["detail"].lower(), path
             assert "0" not in response.json()["detail"], path
     assert upstream.calls == []
 

@@ -30,6 +30,8 @@ test('owner deadline expires with the clock and is not renewed by a repeat', () 
   assert.match(researchOwnerFreshness({ generated_at: data.generated_at }, Date.parse(data.fresh_until)), /freshness deadline not published/);
   const scan = { generated_at: data.generated_at, freshness: { state: 'CURRENT', freshness_basis: 'verified_event_scan', verification_checked_at: data.generated_at, max_verification_age_seconds: 60 } };
   assert.match(researchOwnerFreshness(scan, Date.parse('2026-10-29T12:01:01Z')), /not current.*expired/);
+  assert.match(researchOwnerFreshness(scan, Date.parse('2026-10-29T11:59:59Z')), /freshness unknown.*owner clock ahead/);
+  assert.match(researchOwnerFreshness({ fresh_until: data.fresh_until }, Date.parse(data.generated_at)), /freshness unknown.*not published/);
 });
 
 test('Research V5 reports upstream and malformed responses as not connected', async () => {

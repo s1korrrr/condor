@@ -56,7 +56,7 @@ function childText(value) {
 // are replaced; button handlers are captured from the actual JSX being rendered.
 export function renderResearch(
   queries,
-  { search = "view=ideas&id=idea:one", server = "fixture" } = {},
+  { search = "view=ideas&id=idea:one", server = "fixture", render = renderToStaticMarkup } = {},
 ) {
   const requests = [],
     refetches = [],
@@ -151,6 +151,6 @@ export function renderResearch(
     return module.exports;
   }
   const { Research } = load(path.join(sourceRoot, "pages/Research.tsx"));
-  const html = renderToStaticMarkup(React.createElement(Research));
+  const html = render(React.createElement(Research));
   return { html, requests, refetches, buttons, selects, searchUpdates, networks };
 }

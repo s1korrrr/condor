@@ -3,22 +3,76 @@
 from __future__ import annotations
 
 import asyncio
+import base64
 import hashlib
 import json
 import math
 import re
+import struct
+import zlib
 from urllib.parse import parse_qsl, urlencode, urlsplit
 from datetime import datetime
 
 import aiohttp
 from fastapi import HTTPException
-from .config import MAX_STRATEGIES, MAX_SOURCES, MAX_NODES, MAX_EDGES, MAX_STATS_ROWS
+from .config import MAX_STRATEGIES, MAX_SOURCES, MAX_NODES, MAX_EDGES, MAX_STATS_ROWS, READ_BYTE_LIMITS
 
 MAX_BYTES = 64 * 1024 * 1024
 TIMEOUT_SECONDS = 20
 ID = r"[a-z0-9][a-z0-9._-]{0,95}"
 CAMPAIGN = re.compile(r"/api/v1/tradepad/campaigns/(w[0-9]+-[0-9]+)\Z")
 BUNDLE = re.compile(rf"/api/v1/tradepad/bundles/({ID})/(asset|bundle|provenance)\Z")
+
+
+def _number(value):
+    return type(value) is int or type(value) is float and math.isfinite(value)
+
+
+def _pack(value, kinds, count=None):
+    formats = {"f64": ("d", 8), "f32": ("f", 4), "i32": ("i", 4), "u16": ("H", 2), "u8": ("B", 1)}
+    if not isinstance(value, dict) or value.get("$pack") not in kinds or type(value.get("n")) is not int or value["n"] < 0 or not isinstance(value.get("z"), str):
+        raise ValueError("bad pack")
+    size = formats[value["$pack"]][1] * value["n"]
+    if size > MAX_BYTES or (count is not None and value["n"] != count):
+        raise ValueError("bad pack length")
+    try:
+        decoder = zlib.decompressobj()
+        raw = decoder.decompress(base64.b64decode(value["z"], validate=True), size + 1)
+        if not decoder.eof or decoder.unused_data or len(raw) != size:
+            raise ValueError("bad pack stream")
+        numbers = struct.iter_unpack("<" + formats[value["$pack"]][0], raw)
+        if any(not math.isfinite(number[0]) for number in numbers):
+            raise ValueError("nonfinite pack")
+    except (ValueError, zlib.error, struct.error) as error:
+        raise ValueError("bad pack") from error
+
+
+def _asset(value, kind):
+    if kind == "candles":
+        if any(type(value.get(key)) is not int for key in ("t0", "step", "n", "o0")) or value["step"] != 60 or value["n"] < 1 or not _number(value.get("scale")) or value["scale"] <= 0 or not _number(value.get("vk")):
+            raise ValueError("bad candle header")
+        _pack(value.get("d"), {"i32"}, 4 * value["n"])
+        _pack(value.get("qv"), {"u16"}, value["n"])
+        check = value.get("check")
+        if not isinstance(check, dict) or any(not isinstance(check.get(key), list) or len(check[key]) != 4 or not all(_number(item) for item in check[key]) for key in ("first", "last")) or not _number(check.get("sum_close")):
+            raise ValueError("bad candle check")
+        return
+    metrics, fills, curve = (value.get(key) for key in ("metrics", "fills", "curve"))
+    if not all(isinstance(item, dict) for item in (metrics, fills, curve)) or type(fills.get("n")) is not int or fills["n"] < 0 or type(curve.get("t0")) is not int or type(curve.get("step")) is not int or curve["step"] <= 0:
+        raise ValueError("bad pair header")
+    _pack(curve.get("pnl"), {"f32", "f64"})
+    _pack(curve.get("invested"), {"f32", "f64"}, curve["pnl"]["n"])
+    if fills["n"]:
+        if not isinstance(fills.get("tags"), list) or not fills["tags"] or not all(isinstance(tag, str) for tag in fills["tags"]):
+            raise ValueError("bad fill tags")
+        for key, kinds in (("t", {"i32"}), ("side", {"u8"}), ("px", {"f64"}), ("qty", {"f64"}), ("fee", {"f64"}), ("tag", {"u8", "u16", "i32"}), ("maker", {"u8"})):
+            _pack(fills.get(key), kinds, fills["n"])
+        if "owner" in fills:
+            owner = fills["owner"]
+            if not isinstance(owner, dict) or owner.get("schema") != "original_lot_allocations.v1" or not isinstance(owner.get("ids"), list) or len(owner["ids"]) != fills["n"] or not isinstance(value.get("owner_raw_fills"), list) or len(value["owner_raw_fills"]) != fills["n"] or not isinstance(value.get("owner_buy_fills"), list) or len(value["owner_buy_fills"]) > fills["n"]:
+                raise ValueError("bad owner fills")
+            for key in ("cost", "realized"):
+                _pack(owner.get(key), {"f64"}, fills["n"])
 
 
 def tradepad_route(raw_path: str, campaign_id: str | None = None) -> tuple[str, str] | None:
@@ -125,6 +179,23 @@ def _cap(rows: object, limit: int, label: str) -> None:
 def _check_caps(kind: str, value: object) -> None:
     if not isinstance(value, dict):
         return
+    if kind in ("snapshot", "catalog", "campaigns", "campaign", "bundle"):
+        totals = {"strategies": 0, "sources": 0, "datasets": 0}
+        pending = [value]
+        while pending:
+            item = pending.pop()
+            if isinstance(item, dict):
+                for key, rows in item.items():
+                    if isinstance(rows, list):
+                        category = {"strategies": "strategies", "metrics_only": "strategies", "sources": "sources", "source_index": "sources", "datasets": "datasets"}.get(key)
+                        if category:
+                            totals[category] += len(rows)
+                        pending.extend(rows)
+                    elif isinstance(rows, dict):
+                        pending.append(rows)
+        for category, limit in (("strategies", MAX_STRATEGIES), ("sources", MAX_SOURCES), ("datasets", MAX_SOURCES)):
+            if totals[category] > limit:
+                raise HTTPException(503, detail=f"Not connected: owner payload exceeds {limit} {category}")
     if kind == "snapshot":
         _check_caps("catalog", value.get("catalog"))
         _check_caps("campaigns", value.get("campaigns"))
@@ -161,23 +232,33 @@ def _check_caps(kind: str, value: object) -> None:
             _cap(campaign.get("sources"), MAX_SOURCES, "sources")
         datasets = value.get("datasets")
         _cap(datasets, MAX_SOURCES, "datasets")
+        source_count = 0
+        strategy_count = 0
         if isinstance(datasets, list):
             for dataset in datasets:
                 if isinstance(dataset, dict):
                     _cap(dataset.get("source_index"), MAX_SOURCES, "sources")
-                    groups = [dataset.get("strategies"), dataset.get("metrics_only")]
-                    if all(isinstance(group, list) for group in groups) and sum(map(len, groups)) > MAX_STRATEGIES:
-                        raise HTTPException(503, detail=f"Not connected: owner payload exceeds {MAX_STRATEGIES} strategies")
+                    if isinstance(dataset.get("source_index"), list):
+                        source_count += len(dataset["source_index"])
+                    strategy_count += sum(len(dataset[key]) for key in ("strategies", "metrics_only") if isinstance(dataset.get(key), list))
+        if source_count > MAX_SOURCES:
+            raise HTTPException(503, detail=f"Not connected: owner payload exceeds {MAX_SOURCES} sources")
+        if strategy_count > MAX_STRATEGIES:
+            raise HTTPException(503, detail=f"Not connected: owner payload exceeds {MAX_STRATEGIES} strategies")
     if kind == "network":
         _cap(value.get("nodes"), MAX_NODES, "nodes")
         _cap(value.get("edges"), MAX_EDGES, "edges")
         stats = value.get("stats")
         if isinstance(stats, dict):
+            if sum(len(rows) for rows in stats.values() if isinstance(rows, list)) > MAX_STATS_ROWS:
+                raise HTTPException(503, detail=f"Not connected: owner payload exceeds {MAX_STATS_ROWS} stats rows")
             for rows in stats.values():
                 _cap(rows, MAX_STATS_ROWS, "stats rows")
     if kind == "overview":
         facets = value.get("facets")
         if isinstance(facets, dict):
+            if sum(len(rows) for rows in facets.values() if isinstance(rows, list)) > MAX_STATS_ROWS:
+                raise HTTPException(503, detail=f"Not connected: owner payload exceeds {MAX_STATS_ROWS} facet rows")
             for rows in facets.values():
                 _cap(rows, MAX_STATS_ROWS, "facet rows")
         _cap(value.get("limitations"), MAX_STATS_ROWS, "limitations")
@@ -207,7 +288,7 @@ def valid_tradepad(kind: str, value: object) -> bool:
     return bool(value)
 
 
-async def _bounded_read(base_url: str | None, path: str, owner: str, setting: str) -> bytes:
+async def _bounded_read(base_url: str | None, path: str, owner: str, setting: str, kind: str) -> bytes:
     if not base_url:
         raise HTTPException(503, detail=f"Not connected: {setting} is unset")
     try:
@@ -218,7 +299,7 @@ async def _bounded_read(base_url: str | None, path: str, owner: str, setting: st
                         raise HTTPException(503, detail=f"Not connected: {owner} upstream returned HTTP {response.status}")
                     content = bytearray()
                     async for chunk in response.content.iter_chunked(65536):
-                        if len(content) + len(chunk) > MAX_BYTES:
+                        if len(content) + len(chunk) > min(MAX_BYTES, READ_BYTE_LIMITS[kind]):
                             raise HTTPException(503, detail=f"Not connected: {owner} response too large")
                         content.extend(chunk)
         return bytes(content)
@@ -227,7 +308,7 @@ async def _bounded_read(base_url: str | None, path: str, owner: str, setting: st
 
 
 async def read_tradepad(base_url: str | None, path: str, kind: str) -> bytes:
-    raw = await _bounded_read(base_url, path, "Tradepad", "V5_TRADEPAD_URL")
+    raw = await _bounded_read(base_url, path, "Tradepad", "V5_TRADEPAD_URL", kind)
     try:
         value = json.loads(raw, parse_constant=_reject_constant)
         _check_caps(kind, value)
@@ -239,11 +320,7 @@ async def read_tradepad(base_url: str | None, path: str, kind: str) -> bytes:
             params = dict(parse_qsl(urlsplit(path).query))
             if hashlib.sha256(raw).hexdigest() != params["sha256"]:
                 raise ValueError("asset hash mismatch")
-            if params["kind"] == "candles":
-                if any(type(value.get(key)) is not int for key in ("t0", "step", "n", "o0")) or value["step"] != 60 or value["n"] < 1 or any(not isinstance(value.get(key), dict) for key in ("d", "qv", "check")):
-                    raise ValueError("bad candle asset shape")
-            elif any(not isinstance(value.get(key), dict) for key in ("metrics", "fills", "curve")):
-                raise ValueError("bad pair asset shape")
+            _asset(value, params["kind"])
         return raw
     except (ValueError, UnicodeError, RecursionError):
         raise HTTPException(503, detail="Not connected: Tradepad response has bad shape") from None
@@ -315,7 +392,7 @@ def valid_research(kind: str, value: object) -> bool:
 
 
 async def read_research(base_url: str | None, path: str, kind: str) -> bytes:
-    raw = await _bounded_read(base_url, path, "Research", "V5_RESEARCH_URL")
+    raw = await _bounded_read(base_url, path, "Research", "V5_RESEARCH_URL", kind)
     try:
         value = json.loads(raw, parse_constant=_reject_constant)
         _check_caps(kind, value)

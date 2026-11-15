@@ -2,7 +2,10 @@ from dataclasses import replace
 import hashlib
 import json
 import asyncio
+import base64
 import io
+import struct
+import zlib
 from http.client import HTTPResponse
 
 import aiohttp
@@ -120,11 +123,42 @@ def test_real_http_redirect_is_refused_without_following(tmp_path, monkeypatch):
         assert result.status_code == 503 and "HTTP 302" in result.json()["detail"]
         assert len(calls) == 1 and calls[0][1]["allow_redirects"] is False
 CAMPAIGNS = {"schema": "condor.tradepad.campaigns.v1", "campaigns": [], "errors": []}
-ASSET = b'{"t0":0,"step":60,"n":1,"o0":1,"d":{},"qv":{},"check":{}}'
+def packed(kind, values):
+    code = {"i32": "i", "u16": "H", "f64": "d"}[kind]
+    raw = struct.pack("<" + code * len(values), *values)
+    return {"$pack": kind, "n": len(values), "z": base64.b64encode(zlib.compress(raw)).decode()}
+
+
+ASSET = json.dumps({"t0": 0, "step": 60, "n": 1, "o0": 1, "scale": 1, "vk": 1, "d": packed("i32", [0, 0, 0, 0]), "qv": packed("u16", [0]), "check": {"first": [1, 1, 1, 1], "last": [1, 1, 1, 1], "sum_close": 1}}, separators=(",", ":")).encode()
 DIGEST = hashlib.sha256(ASSET).hexdigest()
-PAIR = {"metrics": {}, "fills": {"n": 0}, "curve": {}}
+PAIR = {"metrics": {}, "fills": {"n": 0}, "curve": {"t0": 0, "step": 60, "pnl": packed("f64", [0]), "invested": packed("f64", [0])}}
 PAIR_RAW = json.dumps(PAIR, separators=(",", ":")).encode()
 PAIR_DIGEST = hashlib.sha256(PAIR_RAW).hexdigest()
+
+
+def test_rejects_malformed_nested_assets():
+    malformed_candles = [{"t0": 0, "step": 60, "n": 1, "o0": 0, "d": {}, "qv": {}, "check": {}}, {**json.loads(ASSET), "qv": packed("u16", [])}]
+    malformed_pairs = [{"metrics": {}, "fills": {"n": 0}, "curve": {}}, {**PAIR, "curve": {**PAIR["curve"], "pnl": packed("f64", [float("nan")])}}, {**PAIR, "fills": {"n": 1}}]
+    for value, kind in [(item, "candles") for item in malformed_candles] + [(item, "pair") for item in malformed_pairs]:
+        with pytest.raises(ValueError):
+            read_bridge._asset(value, kind)
+
+
+def test_bundle_strategy_cap_is_response_wide():
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as error:
+        read_bridge._check_caps("bundle", {"datasets": [{"strategies": [None] * 6000}, {"strategies": [None] * 6000}]})
+    assert "10000 strategies" in error.value.detail
+
+
+def test_byte_limit_rejects_before_json_decode(monkeypatch, tmp_path):
+    monkeypatch.setitem(read_bridge.READ_BYTE_LIMITS, "catalog", 2)
+    monkeypatch.setattr(read_bridge.aiohttp, "ClientSession", lambda **kwargs: FakeSession(b"xxx", []))
+    monkeypatch.setattr(read_bridge.json, "loads", lambda *args, **kwargs: pytest.fail("decode must not run"))
+    from fastapi import HTTPException
+    with pytest.raises(HTTPException) as error:
+        asyncio.run(read_bridge.read_tradepad("http://owner.invalid", "/api/v1/tradepad/catalog", "catalog"))
+    assert "too large" in error.value.detail
 ROUTES = [
     ("/api/v1/tradepad/catalog", CATALOG),
     ("/api/v1/tradepad/campaigns", CAMPAIGNS),

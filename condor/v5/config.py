@@ -17,6 +17,7 @@ MAX_SOURCES = 10000
 MAX_NODES = 20000
 MAX_EDGES = 100000
 MAX_STATS_ROWS = 10000
+READ_BYTE_LIMITS = {"catalog": 16 * 1024 * 1024, "campaigns": 16 * 1024 * 1024, "snapshot": 32 * 1024 * 1024, "campaign": 32 * 1024 * 1024, "bundle": 64 * 1024 * 1024, "provenance": 4 * 1024 * 1024, "asset": 64 * 1024 * 1024, "overview": 16 * 1024 * 1024, "network": 64 * 1024 * 1024}
 
 
 class ConfigurationError(ValueError):

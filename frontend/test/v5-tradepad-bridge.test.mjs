@@ -94,3 +94,9 @@ test('no deadline is not presented as current and long lists are bounded', () =>
   assert.match(html, /first 100 of 101/i);
   assert.doesNotMatch(html, /row-100/);
 });
+
+test('future or missing owner generation never claims a deadline is current', () => {
+  const now = Date.parse('2026-10-29T12:00:00Z');
+  assert.match(paperOwnerFreshness({ generated_at: '2026-10-29T12:00:01Z', fresh_until: '2026-10-29T12:01:00Z' }, now), /freshness unknown.*owner clock ahead/);
+  assert.match(paperOwnerFreshness({ fresh_until: '2026-10-29T12:01:00Z' }, now), /freshness unknown.*not published/);
+});

@@ -59,7 +59,7 @@ export async function paperCoherentRead(statusPath: string, sections: { section:
 export function paperWorkspaceReads(page: "capital" | "operations" | "tradepad", campaignId?: string) {
   if (page === "capital") return { presentation: "paper" as const, paperReadUrl: "/api/v1/servers/rsibot-v5/account-balances", paperHistoryReadUrl: "/api/v1/servers/rsibot-v5/controller-performance/history", paperAccountingReadUrl: "/api/v1/servers/rsibot-v5/fleet/accounting" };
   if (page === "operations") return { presentation: "paper" as const, paperReadUrl: "/api/v1/operations/workspace" };
-  return { presentation: "paper" as const, paperReadUrl: campaignId ? `/api/v1/tradepad/campaigns/${encodeURIComponent(campaignId)}?delivery=deferred-assets-v1` : undefined, paperPublicationId: campaignId };
+  return campaignId ? { presentation: "paper" as const, paperReadUrl: `/api/v1/tradepad/campaigns/${encodeURIComponent(campaignId)}?delivery=deferred-assets-v1`, paperPublicationId: campaignId } : { presentation: "paper" as const };
 }
 
 export function paperObservationSummary(reads: import("./contracts").PaperRead[], bot: string, now: number) {

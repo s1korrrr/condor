@@ -24,7 +24,7 @@ import {
   type LabNetwork,
 } from "@/features/research/lab-network-data";
 import { ResearchNetwork } from "@/features/research/ResearchNetwork";
-import { readV5Research, researchOwnerFreshness } from "@/features/research/v5-read";
+import { readV5Research, researchFreshnessDecision, researchOwnerFreshness } from "@/features/research/v5-read";
 import type { Camera } from "@/features/research/lab-network-engine";
 import {
   LabCharts,
@@ -129,7 +129,7 @@ function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) 
   const verifiedEventScan = freshness.freshness_basis === "verified_event_scan" &&
     !!verificationCheckedAt && Number.isFinite(Date.parse(verificationCheckedAt)) &&
     verificationAgeSeconds !== null && maxVerificationAgeSeconds !== null &&
-    verificationAgeSeconds < maxVerificationAgeSeconds;
+    verificationAgeSeconds < maxVerificationAgeSeconds && researchFreshnessDecision(data, now) === "within owner freshness deadline";
   const displayedFreshnessState = freshness.state === "CURRENT" && !verifiedEventScan
     ? "unavailable" : freshnessState;
   const revision = text(overview.data?.data.revision, "");

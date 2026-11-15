@@ -590,8 +590,8 @@ export function paperExitProjection(position: Record<string, unknown> | undefine
   };
 }
 
-export function paperWalletInventory(read: import("./contracts").PaperRead | undefined, now: number): { value: string; unit: string; basis: string; asOf: number } | null {
-  if (!read || read.section !== "wallet" || !paperCompleteRead(read, now)) return null;
+export function paperWalletInventory(read: import("./contracts").PaperRead | undefined, now: number, valuesAt = now): { value: string; unit: string; basis: string; asOf: number } | null {
+  if (!read || read.section !== "wallet" || !paperCompleteRead(read, valuesAt)) return null;
   const wallet = read.data as Record<string, unknown> | null;
   if (!wallet || typeof wallet.quote_asset !== "string" || !Array.isArray(wallet.assets)) return null;
   const inventory = (wallet.assets as Record<string, unknown>[]).filter(asset => asset.asset !== wallet.quote_asset);

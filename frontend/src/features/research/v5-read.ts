@@ -1,0 +1,34 @@
+import { readResearch } from './read';
+
+export function readV5Research(fetcher: (path: string, init: RequestInit) => Promise<Response>) {
+  const read = readResearch(async (path, init) => {
+    const response = await fetcher(path, init);
+    if (!response.ok) return response;
+    const data: unknown = await response.json();
+    const server = new URLSearchParams(path.split('?', 2)[1]).get('server');
+    const record = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {};
+    const generated_at = typeof record.generated_at === 'string' ? record.generated_at : undefined;
+    return new Response(JSON.stringify({ data, source: { owner: 'research_os', server, generated_at, read_only: true } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }, 15_000, true);
+  return async (...args: Parameters<typeof read>) => {
+    try {
+      return await read(...args);
+    } catch (error) {
+      const reason = error instanceof Error ? error.message : 'Research read failed';
+      throw new Error(reason.startsWith('Not connected:') ? reason : `Not connected: ${reason}`);
+    }
+  };
+}
+
+export function researchOwnerFreshness(data: Record<string, unknown>, now: number): string {
+  const generated = typeof data.generated_at === 'string' ? data.generated_at : '';
+  const stamp = Date.parse(generated);
+  const age = Number.isFinite(stamp) && now >= stamp ? `${Math.floor((now - stamp) / 1000)}s old` : 'age unavailable';
+  const freshness = data.freshness && typeof data.freshness === 'object' && !Array.isArray(data.freshness) ? data.freshness as Record<string, unknown> : {};
+  const scan = typeof freshness.verification_checked_at === 'string' ? Date.parse(freshness.verification_checked_at) : NaN;
+  const maxAge = typeof freshness.max_verification_age_seconds === 'number' && freshness.max_verification_age_seconds > 0 ? freshness.max_verification_age_seconds : NaN;
+  const explicit = typeof data.fresh_until === 'string' ? Date.parse(data.fresh_until) : NaN;
+  const deadline = Number.isFinite(explicit) ? explicit : freshness.freshness_basis === 'verified_event_scan' ? scan + maxAge * 1000 : NaN;
+  const status = !Number.isFinite(deadline) ? 'not current · freshness deadline not published' : now >= deadline ? 'not current · owner deadline expired' : freshness.state !== undefined && freshness.state !== 'CURRENT' ? `not current · owner state ${String(freshness.state)}` : 'within owner freshness deadline';
+  return `Projection generated · ${generated || 'not published'} · ${age} · ${status}`;
+}

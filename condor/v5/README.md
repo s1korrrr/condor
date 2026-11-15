@@ -22,6 +22,9 @@ The app requires these process settings:
 | `V5_PAPER_STATUS_FILE` | Optional. Absolute `<bot>.status.json` of the native paper runtime, mounted read-only. Unset keeps every projection unbound and unchanged. |
 | `V5_TRADEPAD_URL` | Optional fixed HTTP(S) base URL for the read-only Tradepad owner. Unset reports not connected. |
 | `V5_TRADEPAD_CAMPAIGN_ID` | Optional exact tested-window campaign ID, for example `w1772323200-1790812800`. Required to open a campaign; other campaign IDs are refused. |
+| `V5_RESEARCH_URL` | Optional fixed HTTP(S) base URL for the Research OS owner. Only its overview and network are read; unset reports not connected. The displayed generation time and age describe the owner projection, not its choice of source tree. |
+
+Tradepad's owner publishes numeric PnL as a float; numeric values are shown as published, not as exact accounting. Decimal strings, when supplied, retain their text. Browsers without lossless JSON primitive source access fail closed rather than display a rounded number. The campaign owner may publish no generation time or freshness deadline; neither a successful refresh nor the Research tree selection establishes freshness. Bridge limits in `config.py` reject oversized collections without truncating them: 10,000 strategies or sources, 20,000 network nodes, 100,000 network edges, and 10,000 statistics, facet or limitation rows. Responses are limited to 64 MiB and 20 seconds. The pages label display subsets.
 
 The stock agent definitions live in the repository-level `agents_v5/`. Runtime notes and optional
 local agent overlays live under `$V5_RUNTIME_ROOT/agents/`; local files override

@@ -43,8 +43,7 @@ const Bots = lazy(() => import("@/pages/Bots").then(m => ({ default: function V5
   return <m.Bots allowDrafts={false} ownerUnavailableReason={botsOwnerUnavailableReason(profile.data)} />;
 } })));
 const Research = lazy(() => import("@/pages/Research").then(m => ({ default: function V5ResearchPage() {
-  const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile });
-  return <m.Research v5Paper={Boolean(profile.data?.readiness.paper_owner)} />;
+  return <m.Research v5Paper />;
 } })));
 
 function LoginPage() {

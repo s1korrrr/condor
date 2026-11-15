@@ -12,6 +12,12 @@ from urllib.parse import urlparse
 
 from .paper import status_file_name_valid
 
+MAX_STRATEGIES = 10000
+MAX_SOURCES = 10000
+MAX_NODES = 20000
+MAX_EDGES = 100000
+MAX_STATS_ROWS = 10000
+
 
 class ConfigurationError(ValueError):
     """Raised when the V5 process is missing an isolation boundary."""
@@ -38,6 +44,7 @@ class Settings:
     # Five-minute money samples into the runtime state; off unless V5_MONEY_SAMPLER=1 (deployments only).
     money_sampler: bool = False
     tradepad_url: str | None = None
+    research_url: str | None = None
     tradepad_campaign_id: str | None = None
 
     @classmethod
@@ -211,6 +218,7 @@ class Settings:
             helm_status_file=helm_status_file,
             money_sampler=values.get("V5_MONEY_SAMPLER", "").strip() == "1",
             tradepad_url=_validate_base_url(values["V5_TRADEPAD_URL"], "V5_TRADEPAD_URL") if values.get("V5_TRADEPAD_URL", "").strip() else None,
+            research_url=_validate_base_url(values["V5_RESEARCH_URL"], "V5_RESEARCH_URL") if values.get("V5_RESEARCH_URL", "").strip() else None,
             tradepad_campaign_id=campaign_id or None,
         )
 

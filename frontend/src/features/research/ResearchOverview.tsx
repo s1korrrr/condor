@@ -11,9 +11,10 @@ export function LabCharts({
   expanded?: boolean;
   onFilter(key: string, value: string): void;
 }) {
-  const kinds = [...(data.stats?.kinds ?? [])].sort(
+  const allKinds = [...(data.stats?.kinds ?? [])].sort(
     (a, b) => b.count - a.count,
   );
+  const kinds = allKinds.slice(0, 100);
   return (
     <div className="lab-chart-grid">
       <section className="quant-panel">
@@ -23,6 +24,7 @@ export function LabCharts({
             <p className="quant-muted">
               All indexed nodes, including source and evidence records.
             </p>
+            {allKinds.length > kinds.length && <p>Showing the first {kinds.length} of {allKinds.length} kinds.</p>}
           </div>
         </header>
         <div className="lab-composition">
@@ -218,14 +220,15 @@ export function LabCounts({
   );
 }
 export function LabLimitations({ data }: { data: RecordData }) {
+  const limitations = (Array.isArray(data.limitations) ? data.limitations : []).filter((value): value is string => typeof value === "string");
   return (
     <section className="quant-panel">
       <header className="quant-panel-heading">
         <h2>Reading this research</h2>
       </header>
+      {limitations.length > 100 && <p>Showing the first 100 of {limitations.length} limitations.</p>}
       <ul className="lab-limitations">
-        {(Array.isArray(data.limitations) ? data.limitations : [])
-          .filter((v): v is string => typeof v === "string")
+        {limitations.slice(0, 100)
           .map((value) => (
             <li key={value}>{value}</li>
           ))}

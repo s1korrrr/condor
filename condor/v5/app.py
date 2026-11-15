@@ -31,7 +31,7 @@ from .helm import read_helm_status
 from .money import MoneyLedger, daily as money_daily, helm_row, seconds_to_next_slot, v5_row
 from .learning import FixtureLearningAPI, learning_router
 from .paper import PaperObservation, read_paper_status
-from .read_bridge import read_tradepad, tradepad_route
+from .read_bridge import read_research, read_tradepad, research_route, tradepad_route
 from .state import StateCapacityError, WorkspaceState
 from .upstream import UpstreamError, V5Upstream
 
@@ -458,6 +458,8 @@ def create_app(
     async def dashboard_compatibility_profile():
         paper = await current_paper()
         profile = dashboard_profile() if paper is None else dashboard_profile(paper)
+        if config.research_url:
+            profile["readiness"].update(research_owner="CONFIGURED", research_owner_reason="Configured; owner reachability is not yet checked.")
         if config.tradepad_url and config.tradepad_campaign_id:
             profile["readiness"].update(tradepad_owner="CONFIGURED", tradepad_owner_reason="Configured; owner reachability is not yet checked.")
         if config.tradepad_campaign_id:
@@ -521,6 +523,10 @@ def create_app(
         tradepad = tradepad_route(path, config.tradepad_campaign_id)
         if tradepad is not None:
             raw = await read_tradepad(config.tradepad_url, *tradepad)
+            return Response(raw, media_type="application/json", headers={"Cache-Control": "no-store"})
+        research = research_route(path)
+        if research is not None:
+            raw = await read_research(config.research_url, *research)
             return Response(raw, media_type="application/json", headers={"Cache-Control": "no-store"})
         paper = await current_paper()
         result = (

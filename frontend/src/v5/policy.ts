@@ -405,11 +405,18 @@ function paperNativeEntryHold(native: Record<string, unknown>, holds: readonly u
   return latch === false ? false : null;
 }
 
+export function paperNativeHolds(read: import("./contracts").PaperRead | undefined) {
+  if (!read || read.section !== "risk" || paperSectionError(read)) return [];
+  const risk = read.data as import("./contracts").PaperRiskData | null;
+  return (risk?.native_entry_holds ?? []).map(hold => ({ ...hold, controllerPublished: Object.hasOwn(risk?.controllers ?? {}, hold.controller_id) }));
+}
+
 export function paperRiskControllers(read: import("./contracts").PaperRead | undefined, now: number) {
   if (!read || read.section !== "risk" || paperSectionError(read)) return null;
   const risk = read.data as import("./contracts").PaperRiskData;
+  const nativeHolds = paperNativeHolds(read);
   return risk?.controllers ? Object.entries(risk.controllers).map(([id, controller]) => {
-    const holds = risk.native_entry_holds?.filter(hold => hold.controller_id === id) ?? [];
+    const holds = nativeHolds.filter(hold => hold.controller_id === id);
     // latch: native latch evidence (true / explicit false / unknown); entryHold adds the owner's native hold list.
     const latch = paperNativeLatch(controller.native ?? {});
     return { id, ...controller, current: paperCompleteRead(read, now), holds, latch, entryHold: paperNativeEntryHold(controller.native ?? {}, holds) };

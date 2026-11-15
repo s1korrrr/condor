@@ -654,7 +654,7 @@ test('risk map renders native holds even when the owner section is partial', () 
   const risk = {...fresh,section:'risk',completeness:'partial',data:fixture.risk.data};
   risk.data.controllers.xrp = {operator:{paused:false,emergency:false},native:{complete:true}};
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:[risk],now,reportAt:now,heartbeat:'Fresh',bot:'meridian_v5_paper'}));
-  assert.match(html,/Controller entry controls/);
+  assert.match(html,/<details class="paper-hold-details"><summary>Details: holds, controllers and evidence/);
   assert.match(html,/New entries held/);
   assert.match(html,/Held by owner/);
   assert.match(html,/The owner reports an entry hold/);

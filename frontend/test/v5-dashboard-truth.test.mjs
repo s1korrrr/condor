@@ -185,3 +185,13 @@ test('the remembered wallet is never a future value and is shown only when older
   assert.equal(paperLastWalletToShow(kept, 'other', read('degraded', now - 2_000), now), null);
   assert.equal(paperLastWalletToShow(kept, 'v5', read('degraded', now - 40_000), now), null);
 });
+
+test('the entry hold opens with one sentence from what the owner published (Fable UI item 5)', () => {
+  const {load} = frontendModules(Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])));
+  const {paperHoldSentence} = load('pages/tabs/ActiveBotsTab.tsx');
+  assert.equal(paperHoldSentence([{operator:{paused:true, emergency:false}}], []), 'Buying is paused by an operator.');
+  // An emergency halt's effect on exits is not published: no claim about selling.
+  assert.equal(paperHoldSentence([{operator:{paused:false, emergency:true}}], []), 'The owner reports an emergency halt: buying is stopped.');
+  assert.equal(paperHoldSentence([{operator:{paused:null, emergency:null}}], [{label:'Daily loss rail'}, {label:'Daily loss rail'}]), 'Buying is held: Daily loss rail.');
+  assert.equal(paperHoldSentence([], []), null);
+});

@@ -81,16 +81,29 @@ const group = int => int.replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 const render = (parts, plus = false) =>
   `${parts.neg ? MINUS : plus && !parts.zero ? '+' : ''}${group(parts.int)}${parts.frac ? `.${parts.frac}` : ''}`;
 
+function visible(parts, digits, plus = false) {
+  const rounded = round(parts, digits);
+  if (!rounded.zero || !/[1-9]/.test(parts.int + parts.frac)) return { text: render(rounded, plus), zero: rounded.zero };
+  const lead = parts.frac.search(/[1-9]/);
+  const extended = round(parts, Math.min(30, lead + 3));
+  if (extended.zero) {
+    const text = coin(`${parts.neg ? '-' : ''}${parts.int}.${parts.frac}`);
+    return { text: `${plus && !parts.neg ? '+' : ''}${text}`, zero: false };
+  }
+  extended.frac = extended.frac.replace(/0+$/, '');
+  return { text: render(extended, plus), zero: false };
+}
+
 /** "1,234.50" with a true minus and no plus sign: `digits` decimals (default 2). */
 export function fixed(value, digits = 2) {
   const parts = parse(value);
-  return parts ? render(round(parts, digits)) : DASH;
+  return parts ? visible(parts, digits).text : DASH;
 }
 
 /** "+1,234.5" / "−1,234.5" / "0.0": sign for non-zero values only, no arrow. */
 export function signed(value, digits = 2) {
   const parts = parse(value);
-  return parts ? render(round(parts, digits), true) : DASH;
+  return parts ? visible(parts, digits, true).text : DASH;
 }
 
 /** "199,330.70 USDC". An empty unit leaves the unit off (an owner that did not publish one). */
@@ -103,9 +116,9 @@ export function usdc(value, unit = 'USDC') {
 export function pnl(value, digits = 2) {
   const parts = parse(value);
   if (!parts) return { text: DASH, tone: 'none' };
-  const rounded = round(parts, digits);
-  if (rounded.zero) return { text: render(rounded), tone: 'zero' };
-  return rounded.neg ? { text: `▼ ${render(rounded)}`, tone: 'down' } : { text: `▲ ${render(rounded, true)}`, tone: 'up' };
+  const shown = visible(parts, digits, !parts.neg);
+  if (shown.zero) return { text: shown.text, tone: 'zero' };
+  return parts.neg ? { text: `▼ ${shown.text}`, tone: 'down' } : { text: `▲ ${shown.text}`, tone: 'up' };
 }
 
 /** Price: 0 decimals from 1,000, 2 decimals from 10, 4 decimals below 10. */
@@ -114,7 +127,7 @@ export function price(value) {
   if (!parts) return DASH;
   // The bucket comes from the integer digits, exactly (999.99… stays below 1,000).
   const intDigits = parts.int === '0' ? 0 : parts.int.length;
-  return render(round(parts, intDigits >= 4 ? 0 : intDigits >= 2 ? 2 : 4));
+  return visible(parts, intDigits >= 4 ? 0 : intDigits >= 2 ? 2 : 4).text;
 }
 
 /**

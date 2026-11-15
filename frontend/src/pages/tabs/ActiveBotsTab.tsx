@@ -664,6 +664,7 @@ export function paperHoldSentence(controllers: { id?: string; current?: boolean;
 }
 
 const paperMoneyDecimal = (value: unknown): value is string => typeof value === "string" && value.length <= 128 && /^-?\d+(\.\d{1,30})?$/.test(value);
+const SHOW_TODAY_WITH_MISSING_SAMPLES = true;
 type PaperMoney = Pick<MoneyRead, "range" | "now_ms" | "daily">;
 
 export function paperMoneyTiles({ walletRead, accountingRead, snapshot, complete, now, valuesAt = now, money }: { walletRead?: PaperRead; accountingRead?: PaperRead; snapshot?: PaperRead; complete: boolean; now: number; valuesAt?: number; money?: PaperMoney }) {
@@ -684,15 +685,16 @@ export function paperMoneyTiles({ walletRead, accountingRead, snapshot, complete
   const day = Math.floor(now / 86_400_000) * 86_400_000;
   const today = Array.isArray(money?.daily) ? money.daily.find(row => row?.day === day) : undefined;
   const moneyCurrent = current(walletRead) && current(accountingRead) && money?.range === "7d" && typeof money.now_ms === "number" && money.now_ms <= now && !paperSnapshotPresentation(money.now_ms, valuesAt, false).stale;
-  const firstSlot = typeof today?.first_at_ms === "number" && today.first_at_ms >= day && today.first_at_ms - day < SAMPLE_MS;
-  const elapsedSlots = typeof today?.last_at_ms === "number" && Number.isFinite(today.last_at_ms) ? Math.floor((today.last_at_ms - day) / SAMPLE_MS) + 1 : 0;
-  const todayComplete = moneyCurrent && today?.day === day && Number.isInteger(today.samples) && today.samples >= 2 && Number.isInteger(today.gaps) && today.gaps >= 0 && today.gaps <= today.samples && Number.isInteger(today.valid) && today.valid >= 2 && today.valid <= elapsedSlots && firstSlot && typeof today.first_at_ms === "number" && typeof today.last_at_ms === "number" && today.first_at_ms < today.last_at_ms && today.last_at_ms <= now && now - today.last_at_ms <= 360_000 && paperMoneyDecimal(today.equity_start) && paperMoneyDecimal(today.equity_end);
+  const firstSlot = typeof today?.equity_first_at_ms === "number" && today.equity_first_at_ms >= day && today.equity_first_at_ms - day < SAMPLE_MS;
+  const elapsedSlots = typeof today?.equity_last_at_ms === "number" && Number.isFinite(today.equity_last_at_ms) ? Math.floor((today.equity_last_at_ms - day) / SAMPLE_MS) + 1 : 0;
+  const todayComplete = moneyCurrent && today?.day === day && Number.isInteger(today.samples) && today.samples >= 2 && Number.isInteger(today.gaps) && today.gaps >= 0 && today.gaps <= today.samples && Number.isInteger(today.valid) && Number.isInteger(today.equity_valid) && today.equity_valid >= 2 && today.equity_valid <= today.valid && today.equity_valid <= elapsedSlots && firstSlot && typeof today.equity_first_at_ms === "number" && typeof today.equity_last_at_ms === "number" && today.equity_first_at_ms < today.equity_last_at_ms && today.equity_last_at_ms <= now && now - today.equity_last_at_ms <= 360_000 && paperMoneyDecimal(today.equity_start) && paperMoneyDecimal(today.equity_end);
+  const showToday = todayComplete && (SHOW_TODAY_WITH_MISSING_SAMPLES || elapsedSlots === today.equity_valid);
   const walletWhy = `Complete current owner wallet required${walletRead?.reason ? `: ${paperWords(walletRead.reason)}` : ""}`;
   const accountingWhy = "Complete current owner lifetime accounting required";
   return [
     tile("Wallet equity", wallet.equity_quote, walletRead?.generated_at_ms, walletWhy),
     tile("Since start", net, walletRead?.generated_at_ms, !current(walletRead) ? walletWhy : !zeroFlows ? "Owner external cash flows are not exactly zero" : "Owner equity or initial funding not published"),
-    tile("Today", todayComplete ? today.equity_change : null, today?.last_at_ms, typeof today?.first_at_ms === "number" && today.first_at_ms >= day + SAMPLE_MS ? "Today's 00:00 UTC sample is missing, so the change cannot cover the whole day" : "No complete current UTC-day Money row recorded", todayComplete && elapsedSlots > today.valid ? ` · ${elapsedSlots - today.valid} of ${elapsedSlots} samples missing` : ""),
+    tile("Today", showToday ? today.equity_change : null, today?.equity_last_at_ms, typeof today?.equity_first_at_ms === "number" && today.equity_first_at_ms >= day + SAMPLE_MS ? "Today's 00:00 UTC sample is missing, so the change cannot cover the whole day" : "No complete current UTC-day Money row recorded", showToday && elapsedSlots > today.equity_valid ? ` · ${elapsedSlots - today.equity_valid} of ${elapsedSlots} samples missing` : ""),
     tile("Profit from closed trades", accounting?.realized_pnl_quote, accountingRead?.generated_at_ms, accountingWhy),
     tile("Coins still held", accounting?.unrealized_pnl_quote, accountingRead?.generated_at_ms, accountingWhy),
     tile("Fees paid", accounting?.fees_paid_quote, accountingRead?.generated_at_ms, accountingWhy),

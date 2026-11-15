@@ -25,17 +25,40 @@ test('strings are rounded by string arithmetic and stay exact beyond float preci
   assert.equal(fixed('.5', 1), '0.5');
 });
 
-test('zero and negative zero render as plain 0.00, never -0.00 or a minus', () => {
+test('true zero stays zero while tiny nonzero values keep their signs', () => {
   assert.equal(fixed(0), '0.00');
   assert.equal(fixed(-0), '0.00');
-  assert.equal(fixed(-0.001), '0.00');
-  assert.equal(fixed('-0.004'), '0.00');
-  assert.equal(usdc(-0.001), '0.00 USDC');
-  assert.equal(signed(-0.001), '0.00');
-  assert.equal(pct(-0.001), '0.00%');
+  assert.equal(fixed(-0.001), '−0.001');
+  assert.equal(fixed('-0.004'), '−0.004');
+  assert.equal(fixed('0.000000000000000000000000000001'), '0.000000000000000000000000000001');
+  assert.equal(usdc(-0.001), '−0.001 USDC');
+  assert.equal(signed(-0.001), '−0.001');
+  assert.equal(signed('0.00001'), '+0.00001');
+  assert.equal(price('0.00001'), '0.00001');
+  assert.equal(pct(-0.001), '−0.001%');
   assert.deepEqual(pnl(-0), { text: '0.00', tone: 'zero' });
-  assert.deepEqual(pnl(-0.004), { text: '0.00', tone: 'zero' });
+  assert.deepEqual(pnl(-0.004), { text: '▼ −0.004', tone: 'down' });
+  assert.deepEqual(pnl('0.00001'), { text: '▲ +0.00001', tone: 'up' });
   assert.deepEqual(pnl('0.000'), { text: '0.00', tone: 'zero' });
+});
+
+test('each rounding helper preserves small positive and negative values exactly', () => {
+  assert.equal(fixed('0.004321'), '0.00432');
+  assert.equal(fixed('-0.004321'), '−0.00432');
+  assert.equal(signed('0.004321'), '+0.00432');
+  assert.equal(signed('-0.004321'), '−0.00432');
+  assert.equal(usdc('0.004'), '0.004 USDC');
+  assert.equal(usdc('-0.004'), '−0.004 USDC');
+  assert.deepEqual(pnl('0.004'), {text:'▲ +0.004',tone:'up'});
+  assert.deepEqual(pnl('-0.004'), {text:'▼ −0.004',tone:'down'});
+  assert.equal(price('0.00001'), '0.00001');
+  assert.equal(price('-0.00001'), '−0.00001');
+  assert.equal(fixed('1e-31'), '1e−31');
+  assert.equal(fixed('-1e-31'), '−1e−31');
+  assert.equal(signed('1e-30'), '+0.000000000000000000000000000001');
+  assert.equal(usdc('-1e-30'), '−0.000000000000000000000000000001 USDC');
+  assert.deepEqual(pnl('-1e-30'), {text:'▼ −0.000000000000000000000000000001',tone:'down'});
+  assert.equal(price('1e-30'), '0.000000000000000000000000000001');
 });
 
 test('unknown is a dash, never 0', () => {
@@ -57,7 +80,7 @@ test('pnl: sign, arrow and a true minus; tone follows the displayed value', () =
   assert.deepEqual(pnl('-669.30'), { text: `▼ ${M}669.30`, tone: 'down' });
   assert.deepEqual(pnl(1234.5), { text: '▲ +1,234.50', tone: 'up' });
   assert.deepEqual(pnl(0), { text: '0.00', tone: 'zero' });
-  assert.equal(pnl(-0.4, 0).tone, 'zero');
+  assert.equal(pnl(-0.4, 0).tone, 'down');
   assert.equal(pnl(0.006).text, '▲ +0.01');
 });
 

@@ -39,9 +39,9 @@ test('sentence names every missing coin and averages only published changes exac
   assert.match(marketSentence(changes([]), '24h'), /No current changes published over 24 hours/);
 });
 
-test('sentence uses the shared percent format for grouped exact decimals and rounded zero', () => {
+test('sentence uses the shared percent format for grouped exact decimals and tiny values', () => {
   assert.match(marketSentence(changes(['1234.565']), '24h'), /on average \+1,234\.57%\. BTC is strongest at \+1,234\.57%\./);
-  assert.match(marketSentence(changes(['-0.004']), '24h'), /on average 0\.00%\. BTC is weakest at 0\.00%\./);
+  assert.match(marketSentence(changes(['-0.004']), '24h'), /on average 0\.00%\. BTC is weakest at −0\.004%\./);
 });
 
 test('window return rounds exact candle decimals, not binary floating point; no substituted boundary', () => {

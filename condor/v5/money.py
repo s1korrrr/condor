@@ -144,7 +144,7 @@ def daily(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
     days: dict[int, dict[str, Any]] = {}
     for row in sorted((row for row in rows if row.get("bot") == "v5"), key=lambda row: row["at_ms"]):
         day = row["at_ms"] // DAY_MS * DAY_MS
-        entry = days.setdefault(day, {"day": day, "samples": 0, "gaps": 0, "slots": set(), "first": None, "last": None})
+        entry = days.setdefault(day, {"day": day, "samples": 0, "gaps": 0, "slots": set(), "equity_slots": set(), "first": None, "last": None, "equity_first": None, "equity_last": None})
         entry["samples"] += 1
         if row.get("gap"):
             entry["gaps"] += 1
@@ -152,19 +152,26 @@ def daily(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
             entry["slots"].add(row["at_ms"] // SLOT_MS)  # a restart can sample one slot twice
             entry["first"] = entry["first"] or row
             entry["last"] = row
+            if _value(row, "equity") is not None:
+                entry["equity_slots"].add(row["at_ms"] // SLOT_MS)
+                entry["equity_first"] = entry["equity_first"] or row
+                entry["equity_last"] = row
     out = []
     for entry in sorted(days.values(), key=lambda entry: entry["day"], reverse=True):
         first, last = entry.pop("first"), entry.pop("last")
+        equity_first, equity_last = entry.pop("equity_first"), entry.pop("equity_last")
         entry["valid"] = len(entry.pop("slots"))
+        entry["equity_valid"] = len(entry.pop("equity_slots"))
 
-        def pair(field: str) -> tuple[str | None, str | None, str | None]:
-            start = _value(first, field) if first else None
-            end = _value(last, field) if last else None
+        def pair(field: str, first_row: dict | None, last_row: dict | None) -> tuple[str | None, str | None, str | None]:
+            start = _value(first_row, field) if first_row else None
+            end = _value(last_row, field) if last_row else None
             change = None if start is None or end is None else format(end - start, "f")
             return (None if start is None else format(start, "f"), None if end is None else format(end, "f"), change)
 
-        equity_start, equity_end, equity_change = pair("equity")
-        _, _, realized_change = pair("realized")
+        equity_start, equity_end, equity_change = pair("equity", equity_first, equity_last)
+        _, _, realized_change = pair("realized", first, last)
         out.append({**entry, "equity_start": equity_start, "equity_end": equity_end, "equity_change": equity_change, "realized_change": realized_change,
-                    "first_at_ms": first["at_ms"] if first else None, "last_at_ms": last["at_ms"] if last else None})
+                    "first_at_ms": first["at_ms"] if first else None, "last_at_ms": last["at_ms"] if last else None,
+                    "equity_first_at_ms": equity_first["at_ms"] if equity_first else None, "equity_last_at_ms": equity_last["at_ms"] if equity_last else None})
     return out

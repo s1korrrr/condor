@@ -16,6 +16,8 @@ import {
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { PaperPriceChart } from "@/v5/PaperPriceChart";
 import { PaperPositions } from "@/v5/PaperPositions";
+import { PAIRS, hasPaperCandlePair, paperCandleQuery, usePaperCandleSymbols, type Candles } from "@/v5/paper-candles";
+import { readMoney, type MoneyRead } from "@/v5/money-api";
 import type { PaperRead } from "@/v5/contracts";
 import { usePaperSnapshot } from "@/v5/usePaperSnapshot";
 import { usePaperClock } from "@/v5/usePaperClock";
@@ -23,7 +25,6 @@ import { parsePaperReadText } from "@/v5/paper-json";
 import { paperDimmedSnapshot, paperSnapshotPresentation } from "@/v5/snapshot-presentation";
 import { paperReadFailureMessage } from "@/v5/policy";
 import { paperCompleteRead, paperNativeHolds, paperSnapshotsAgree } from "@/v5/policy";
-import { readMoney, type MoneyRead } from "@/v5/V5Money";
 import { utcExact } from "@/v5/shown.mjs";
 import { paperAge } from "@/v5/snapshot-presentation";
 import { paperAmount, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
@@ -742,7 +743,9 @@ function PaperIsolatedSection({ name, resetKey, render }: { name: string; resetK
   return <PaperSectionBoundary name={name} resetKey={resetKey}><PaperSectionContent render={render} /></PaperSectionBoundary>;
 }
 
-export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accountingError = false, money, complete = true, readFailed = false, now, valuesAt = now, reportAt, heartbeat, bot, asOf = null, snapshotStamp }: { reads: PaperRead[]; safetyReads?: PaperRead[]; accountingRead?: PaperRead; accountingError?: boolean; money?: PaperMoney; complete?: boolean; readFailed?: boolean; now: number; valuesAt?: number; reportAt: number | null; heartbeat: string; bot: string; asOf?: number | null; snapshotStamp?: ReactNode }) {
+type PaperMarket = { prices: Record<string, Candles | undefined>; money?: MoneyRead; pair: string; range: string; setPair: (pair: string) => void; setRange: (range: string) => void; view?: Candles; reason: string };
+
+export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accountingError = false, money, complete = true, readFailed = false, now, valuesAt = now, reportAt, heartbeat, bot, asOf = null, snapshotStamp, market }: { reads: PaperRead[]; safetyReads?: PaperRead[]; accountingRead?: PaperRead; accountingError?: boolean; money?: PaperMoney; complete?: boolean; readFailed?: boolean; now: number; valuesAt?: number; reportAt: number | null; heartbeat: string; bot: string; asOf?: number | null; snapshotStamp?: ReactNode; market?: PaperMarket }) {
   // asOf labels retained values, not current state. The separate valuesAt admits only display values;
   // states, safety evidence and timestamps still use now.
   const notCurrent = asOf === null ? null : `Not current · values from ${paperTime(asOf, now)}`;
@@ -789,8 +792,8 @@ export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accoun
       <PaperMetric label="Traded volume" value={paperAmount(accounting?.volume_traded_quote, "USDC")} note={accounting ? `Lifetime · native receipts · As of ${paperTime(accountingRead?.generated_at_ms, now)}` : "Lifetime · complete current owner accounting required"} />
       <PaperMetric label="Last report" value={paperTime(reportAt, now)} note="Native process heartbeat" />
     </dl><p className="paper-caption">{accounting ? <>Filled orders: {paperOrderCount(accounting.entry_count, "entry")} · {paperOrderCount(accounting.exit_count, "exit")}. Accounting since: {paperTime(accounting.accounting_since_ms, now)}. Counts are distinct filled orders, not actions.</> : <>Lifetime accounting: {accountingError ? "Owner read unavailable; no totals are inferred from recent fills." : paperWords(accountingRead?.reason ?? "Collecting the snapshot-bound owner aggregate; no totals are inferred from recent fills.")}</>}</p></section>} />
-    <PaperIsolatedSection name="Position cards" resetKey={resetKey} render={() => <PaperPositions positions={bySection.positions} decisions={bySection.decisions} wallet={bySection.wallet} now={now} valuesAt={valuesAt} />} />
-    {complete && <PaperIsolatedSection name="Price and trades" resetKey={resetKey} render={() => <PaperPriceChart fills={bySection.fills} positions={bySection.positions} decisions={bySection.decisions} now={now} valuesAt={valuesAt} />} />}
+    <PaperIsolatedSection name="Position cards" resetKey={resetKey} render={() => <PaperPositions positions={bySection.positions} decisions={bySection.decisions} wallet={bySection.wallet} now={now} valuesAt={valuesAt} prices={market?.prices} money={market?.money} />} />
+    {complete && <PaperIsolatedSection name="Price and trades" resetKey={resetKey} render={() => <PaperPriceChart fills={bySection.fills} positions={bySection.positions} decisions={bySection.decisions} now={now} valuesAt={valuesAt} {...market} />} />}
     <PaperIsolatedSection name="Positions" resetKey={resetKey} render={() => <PaperRecords read={bySection.positions} positions={bySection.positions} executors={bySection.executors} kind="positions" now={now} valuesAt={valuesAt} />} />
     <PaperIsolatedSection name="Fills" resetKey={resetKey} render={() => <PaperRecords read={bySection.fills} kind="fills" now={now} valuesAt={valuesAt} />} />
     <PaperIsolatedSection name="Executors" resetKey={resetKey} render={() => <PaperRecords read={bySection.executors} kind="executors" now={now} valuesAt={valuesAt} />} />
@@ -823,6 +826,7 @@ class PaperSectionSchemaError extends Error {
 }
 
 export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; generatedAt: number | null; ownerState: string }) {
+  const [pair, setPair] = useState(PAIRS[0]);
   const now = usePaperClock();
   const query = usePaperSnapshot<PaperRead[]>(["v5-paper-bots", bot], true, 9, (progress, signal) => {
       const prefix = `/api/v1/servers/rsibot-v5/`;
@@ -843,6 +847,19 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
         }
       }, undefined, progress);
   });
+  const [range, setRange] = useState("24h");
+  const symbols = usePaperCandleSymbols();
+  const listed = (item: string) => !symbols.isError && hasPaperCandlePair(symbols.data, item);
+  const bnb = useQuery(paperCandleQuery(PAIRS[0], "24h", listed(PAIRS[0])));
+  const btc = useQuery(paperCandleQuery(PAIRS[1], "24h", listed(PAIRS[1])));
+  const eth = useQuery(paperCandleQuery(PAIRS[2], "24h", listed(PAIRS[2])));
+  const sol = useQuery(paperCandleQuery(PAIRS[3], "24h", listed(PAIRS[3])));
+  const xrp = useQuery(paperCandleQuery(PAIRS[4], "24h", listed(PAIRS[4])));
+  const extended = useQuery(paperCandleQuery(pair, "7d", range === "7d" && listed(pair)));
+  const money = useQuery({ queryKey: ["v5-money", "7d"], queryFn: () => readMoney("7d"), retry: false, refetchInterval: 60_000 });
+  const prices = Object.fromEntries([bnb, btc, eth, sol, xrp].map((result, index) => [PAIRS[index], !result.isError && listed(PAIRS[index]) ? result.data : undefined]));
+  const selected = range === "7d" ? (!extended.isError ? extended.data : undefined) : prices[pair];
+  const market: PaperMarket = { prices, money: !money.isError ? money.data : undefined, pair, range, setPair, setRange, view: listed(pair) ? selected : undefined, reason: symbols.isPending ? "Reading candles" : symbols.isError ? "Candle store unavailable" : !listed(pair) ? "Pair not listed in the candle store" : "Candle read unavailable" };
   const complete = query.complete;
   const reads = query.data ?? query.reads;
   // Dimmed values (Falco 14 Nov, option B): between the 30 s freshness line and the hard cap, the last complete
@@ -850,7 +867,6 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
   // the normal stale rules withhold it, as before.
   const { dimmed, snapshotAt, valuesAt } = paperDimmedSnapshot(complete ? reads[0]?.generated_at_ms : null, now);
   const accounting = complete ? reads.find(read => read.section === "accounting") : undefined;
-  const money = useQuery({ queryKey: ["v5-money", "7d"], queryFn: () => readMoney("7d"), retry: false, refetchInterval: 60_000 });
   const clock = paperHeartbeat(generatedAt === null ? null : Math.floor(generatedAt * 1000), ownerState, now);
   const heartbeat = clock.current ? "Fresh" : ownerState === "UNAVAILABLE" ? "Unavailable" : "Stale";
   return <div className="v5-paper-bots">
@@ -858,7 +874,7 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
 
     {query.progress && <p role="status">{query.progress}</p>}
     {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
-    <PaperWorkspace snapshotStamp={complete && <p role={dimmed ? "status" : undefined} className={dimmed ? "paper-dimmed-stamp" : undefined}>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}{dimmed ? " · values below are from that time, dimmed until a new report" : ""}</p>} asOf={dimmed ? snapshotAt : null} reads={reads} safetyReads={query.safetyReads} complete={complete} readFailed={query.isError} money={money.isError ? undefined : money.data} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} valuesAt={valuesAt} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} />
+    <PaperWorkspace snapshotStamp={complete && <p role={dimmed ? "status" : undefined} className={dimmed ? "paper-dimmed-stamp" : undefined}>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}{dimmed ? " · values below are from that time, dimmed until a new report" : ""}</p>} asOf={dimmed ? snapshotAt : null} reads={reads} safetyReads={query.safetyReads} complete={complete} readFailed={query.isError} money={money.isError ? undefined : money.data} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} valuesAt={valuesAt} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} market={market} />
   </div>;
 }
 

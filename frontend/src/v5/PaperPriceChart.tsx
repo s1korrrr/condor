@@ -1,21 +1,15 @@
-import { lazy, Suspense, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { lazy, Suspense } from "react";
 import { paperPairBag, paperRetainedRecords, paperTime } from "./policy";
 import type { PaperRead } from "./contracts";
 import { tradeMarkers } from "./bots-chart-model.mjs";
-import { PAIRS, paperCandleQuery, usePaperCandleSymbols } from "./paper-candles";
+import { PAIRS, type Candles } from "./paper-candles";
 
 const RecordedCandleChart = lazy(() => import("@/components/charts/RecordedCandleChart").then(module => ({ default: module.RecordedCandleChart })));
 
-export function PaperPriceChart({ fills, positions, decisions, now, valuesAt = now }: { fills?: PaperRead; positions?: PaperRead; decisions?: PaperRead; now: number; valuesAt?: number }) {
-  const [pair, setPair] = useState(PAIRS[0]);
-  const [range, setRange] = useState("24h");
-  const symbols = usePaperCandleSymbols();
-  const listed = !symbols.isError && symbols.data?.rows.some(row => row.lane === "okx__spot" && row.pair === pair);
-  const candles = useQuery(paperCandleQuery(pair, range, !!listed));
-  const view = !candles.isError && listed ? candles.data : undefined;
+export function PaperPriceChart({ fills, positions, decisions, now, valuesAt = now, pair = PAIRS[0], range = "24h", setPair = () => {}, setRange = () => {}, view, reason = "Candle read unavailable" }: { fills?: PaperRead; positions?: PaperRead; decisions?: PaperRead; now: number; valuesAt?: number; pair?: string; range?: string; setPair?: (pair: string) => void; setRange?: (range: string) => void; view?: Candles; reason?: string }) {
+  view = view && Array.isArray(view.buckets) ? view : undefined;
   const records = paperRetainedRecords(fills, valuesAt);
-  const mapped = useMemo(() => view && records ? tradeMarkers(records, pair, view.start, view.end, view.buckets) : null, [view, records, pair]);
+  const mapped = view && records ? tradeMarkers(records, pair, view.start, view.end, view.buckets) : null;
   const bag = paperPairBag(pair, decisions, positions, valuesAt);
   return <section className="paper-section"><div className="paper-section-heading"><h2>Price and trades</h2></div>
     <div className="v5-button-row">{PAIRS.map(item => <button className="v5-button" key={item} aria-pressed={pair === item} onClick={() => setPair(item)}>{item.split("-")[0]}</button>)}</div>
@@ -23,6 +17,6 @@ export function PaperPriceChart({ fills, positions, decisions, now, valuesAt = n
     <p className="paper-caption">30 days is not offered: the candle store keeps 7 days of 1-minute candles.</p>
     {view && <p className="paper-caption">Recorded candles through {paperTime((view.end + 60) * 1000, now)} · OKX spot</p>}
     <p className="paper-caption">{mapped ? `▲ ${mapped.entries} entries ▼ ${mapped.exits} exits · retained fills${fills?.completeness === "partial" ? " (partial)" : ""}. Trades in missing candle minutes are counted but cannot be plotted.` : "— · fills or candles unavailable"}</p>
-    {view ? <Suspense fallback={<p role="status">Loading chart…</p>}><RecordedCandleChart buckets={view.buckets} label={`${view.venue} spot · ${view.pair}`} volumeUnit={view.volume_unit} markers={mapped?.markers} breakeven={bag?.breakevenPrice} /></Suspense> : <p role="status">— · {symbols.isPending || (listed && candles.isPending) ? "Reading candles" : symbols.isError ? "Candle store unavailable" : !listed ? "Pair not listed in the candle store" : "Candle read unavailable"}</p>}
+    {view ? <Suspense fallback={<p role="status">Loading chart…</p>}><RecordedCandleChart buckets={view.buckets} label={`${view.venue} spot · ${view.pair}`} volumeUnit={view.volume_unit} markers={mapped?.markers} breakeven={bag?.breakevenPrice} /></Suspense> : <p role="status">— · {reason}</p>}
   </section>;
 }

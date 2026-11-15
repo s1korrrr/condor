@@ -37,7 +37,7 @@ export async function readHelm(context?: { client: QueryClient }): Promise<HelmR
   if (!response.ok) throw new Error(`Helm read failed (HTTP ${response.status})`);
   const read = await response.json() as HelmRead;
   const previous = context?.client.getQueryData<HelmRead>(["v5-helm"]);
-  const usable = (read.state === "FRESH" || read.state === "STALE") && read.status != null;
+  const usable = read.state === "FRESH" && read.status != null;
   return { ...read, _requestedAtMs: sentMs, _lastUsableAtMs: usable ? Date.now() : previous?._lastUsableAtMs ?? null };
 }
 

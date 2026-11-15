@@ -16,7 +16,7 @@ const status = fixture('status');
 const controller = Object.keys(risk.data.controllers)[0];
 function pair(sequence, emergency, bot = risk.bot_id) {
   const next = structuredClone(risk);
-  Object.assign(next, {bot_id:bot, snapshot_id:`snapshot-${sequence}`, source:{...next.source, sequence}});
+  Object.assign(next, {bot_id:bot, snapshot_id:`snapshot-${sequence}`, source:{...next.source, boot_epoch:1, sequence}});
   Object.assign(next.data, {holds:[], control_hold:null, native_entry_holds:[]});
   for (const row of Object.values(next.data.controllers)) {
     Object.assign(row.operator, {paused:false, emergency:false});
@@ -83,7 +83,7 @@ test('different boot hold versus clear leaves strip restart order unknown', asyn
   for (const clearKey of ['strip', 'bots']) {
     const client = new QueryClient({defaultOptions:{queries:{retry:false, gcTime:Infinity}}});
     const bot = risk.bot_id, states = {};
-    const withBoot = (reads, boot) => reads.map(read => ({...read, source:{...read.source, boot_id:boot}}));
+    const withBoot = (reads, boot) => reads.map(read => ({...read, source:{...read.source, boot_id:boot, boot_epoch:undefined}}));
     const inputs = {strip:withBoot(pair(2, true), 'boot-b'), bots:withBoot(pair(2, true), 'boot-b')};
     function Observer({name, queryKey}) {
       states[name] = usePaperSnapshot(queryKey, true, 2, async progress => { progress(inputs[name]); return inputs[name]; });
@@ -99,6 +99,36 @@ test('different boot hold versus clear leaves strip restart order unknown', asyn
     await act(async () => root.unmount());
     client.clear();
   }
+});
+
+test('epoch-ordered late old-boot clear retains the Bots emergency and newer clear supersedes it', async () => {
+  const client = new QueryClient({defaultOptions:{queries:{retry:false, gcTime:Infinity}}});
+  const bot = risk.bot_id, states = {};
+  const withBoot = (reads, boot, epoch) => reads.map(read => ({...read, source:{...read.source, boot_id:boot, boot_epoch:epoch}}));
+  const inputs = {strip:withBoot(pair(2, true), 'boot-b', 2), bots:withBoot(pair(2, true), 'boot-b', 2)};
+  function Observer({name, queryKey}) {
+    states[name] = usePaperSnapshot(queryKey, true, 2, async progress => { progress(inputs[name]); return inputs[name]; });
+    return null;
+  }
+  let root;
+  try {
+    await act(async () => { root = create(React.createElement(QueryClientProvider, {client},
+      React.createElement(Observer, {name:'strip', queryKey:['v5-paper-observation-health', bot]}),
+      React.createElement(Observer, {name:'bots', queryKey:['v5-paper-bots', bot]}))); });
+    inputs.strip = withBoot(pair(99, false), 'boot-a', 1);
+    await act(async () => { await states.strip.refetch(); });
+    assert.equal(states.strip.restartOrderUnknown, false, 'epochs make the restart order known');
+    assert.ok(states.bots.safetyEvidence.some(read => read.data.controllers?.[controller]?.operator.emergency === true));
+    const overrides = Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}]));
+    const {PaperWorkspace} = frontendModules(overrides).load('pages/tabs/ActiveBotsTab');
+    const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:inputs.bots,safetyReads:states.bots.safetyReads,reconcileSafety:states.bots.reconcileSafety,complete:true,now:risk.generated_at_ms,reportAt:null,heartbeat:'Fresh',bot}));
+    assert.match(html, /New acquisitions held/);
+    assert.match(html, /Reported emergency halt: Yes/);
+    inputs.bots = withBoot(pair(1, false), 'boot-c', 3);
+    await act(async () => { await states.bots.refetch(); });
+    assert.equal(states.strip.safetyEvidence.some(read => read.data.controllers?.[controller]?.operator.emergency === true), false);
+    assert.equal(states.strip.restartOrderUnknown, false);
+  } finally { if (root) await act(async () => root.unmount()); client.clear(); }
 });
 
 test('same-boot clear before restart does not create a restart conflict', () => {

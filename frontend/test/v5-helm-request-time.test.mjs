@@ -3,6 +3,26 @@ import assert from 'node:assert/strict';
 import * as reactQuery from '@tanstack/react-query';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
+test('stale Helm responses do not advance the last fresh report time', async () => {
+  const {readHelm} = frontendModules({'@tanstack/react-query':reactQuery}).load('v5/V5Helm');
+  const client = new reactQuery.QueryClient();
+  const originalFetch = globalThis.fetch, originalNow = Date.now;
+  let now = 1000, state = 'FRESH';
+  Date.now = () => now;
+  globalThis.fetch = async () => ({ok:true, json:async () => ({state,reason:'',status:{generated_at:1,age_s:0}})});
+  try {
+    const options = {queryKey:['v5-helm'],queryFn:readHelm};
+    await client.fetchQuery(options);
+    const lastFresh = client.getQueryData(options.queryKey)._lastUsableAtMs;
+    state = 'STALE'; now = 2000;
+    await client.fetchQuery(options);
+    assert.equal(client.getQueryData(options.queryKey)._lastUsableAtMs, lastFresh);
+    now = 3000;
+    await client.fetchQuery(options);
+    assert.equal(client.getQueryData(options.queryKey)._lastUsableAtMs, lastFresh);
+  } finally { globalThis.fetch = originalFetch; Date.now = originalNow; client.clear(); }
+});
+
 test('Helm cached send time survives structural sharing and unavailable keeps the last usable time', async () => {
   const {readHelm, helmRequestedAt} = frontendModules({'@tanstack/react-query':reactQuery}).load('v5/V5Helm');
   const {statusStrip} = await import('../src/v5/status-strip-model.mjs');

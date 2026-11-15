@@ -24,7 +24,7 @@ function render(rows, failed = [], summaryFields = {}, now = checkedAt) {
 
 test("heartbeat is not current for old, future or delivery-expired evaluations", () => {
   assert.match(render([]).html, /Collector heartbeat current/);
-  for (const fields of [{now:checkedAt / 1000 - 600}, {now:checkedAt / 1000 + 600}, {status_age_s:59, _requestedAtMs:checkedAt - 10_000}]) {
+  for (const fields of [{now:checkedAt / 1000 - 600}, {now:checkedAt / 1000 + 600}, {now:checkedAt / 1000 - 50,status_age_s:20}, {status_age_s:59, _requestedAtMs:checkedAt - 10_000}]) {
     assert.doesNotMatch(render([], [], fields).html, /Collector heartbeat current/);
     assert.doesNotMatch(render([], [], fields, checkedAt + 1000).html, /Collector heartbeat current/);
   }

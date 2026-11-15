@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { Window } from 'happy-dom';
 
-test('shared strip poller retries a warming owner in five seconds', async () => {
+test('shared strip poller retries warming at five seconds then resumes thirty seconds', async context => {
   globalThis.window = new Window({url:'https://fixture.invalid/'});
   const { QueryClient, QueryObserver } = await import('@tanstack/react-query');
   const { frontendModules } = await import('./helpers/frontend-module.mjs');
@@ -14,15 +14,23 @@ test('shared strip poller retries a warming owner in five seconds', async () => 
     return {ok:true, json:async () => calls.length === 1 ? {state:'UNAVAILABLE',reason:'owner_warming'} : {state:'AVAILABLE',data:{tiles:[]}}};
   };
   const client = new QueryClient();
-  const observer = new QueryObserver(client, {...candleSummaryQuery(), retry:false, refetchInterval:candleSummaryInterval, refetchIntervalInBackground:true});
+  const observer = new QueryObserver(client, {...candleSummaryQuery(), retry:false, refetchInterval:candleSummaryInterval});
   try {
-    await new Promise((resolve, reject) => {
-      const timeout = setTimeout(() => reject(new Error('warming retry did not run')), 8000);
-      observer.subscribe(result => { if (result.isSuccess) { clearTimeout(timeout); resolve(); } });
-    });
+    context.mock.timers.enable({apis:['setInterval']});
+    observer.subscribe(() => {});
+    const settle = () => new Promise(resolve => setTimeout(resolve, 0));
+    await settle();
+    assert.equal(calls.length, 1);
+    context.mock.timers.tick(4999); await settle();
+    assert.equal(calls.length, 1);
+    context.mock.timers.tick(1); await settle();
     assert.equal(calls.length, 2);
-    assert.ok(calls[1] - calls[0] >= 4900 && calls[1] - calls[0] < 8000);
+    assert.equal(observer.getCurrentResult().isSuccess, true);
+    context.mock.timers.tick(29_999); await settle();
+    assert.equal(calls.length, 2);
+    context.mock.timers.tick(1); await settle();
+    assert.equal(calls.length, 3);
   } finally {
-    observer.destroy(); client.clear(); globalThis.fetch = originalFetch; delete globalThis.window;
+    observer.destroy(); client.clear(); context.mock.timers.reset(); globalThis.fetch = originalFetch; delete globalThis.window;
   }
 });

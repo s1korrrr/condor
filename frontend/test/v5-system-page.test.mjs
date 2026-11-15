@@ -36,6 +36,7 @@ test('System integer totals are exact and incomplete counts stay unavailable', (
   assert.match(systemTime(61000, 60000), /owner clock ahead/);
   const summary = {now:1000,status_age_s:10,tiles:[]};
   assert.equal(systemStoreCurrent(summary, 1_000_000, 1_000_000), true);
+  assert.equal(systemStoreCurrent({...summary,now:950,status_age_s:20}, 1_000_000, 1_000_000), false);
   assert.equal(systemStoreCurrent(summary, 1_000_000, 1_051_000), false);
   assert.equal(systemStoreCurrent({...summary,status_age_s:null}, 1_000_000, 1_000_000), false);
   assert.equal(systemStoreCurrent({...summary,now:1001}, 1_000_000, 1_000_000), false);
@@ -56,6 +57,11 @@ test('market system tabs show only current owner inputs and the selected view', 
     };
     const {V5SystemMarket} = frontendModules(overrides).load('v5/V5Market.tsx');
     const feeds = renderToStaticMarkup(React.createElement(V5SystemMarket,{tab:'data-feeds',paused:false}));
+    summary.status_age_s = 1; summary.now = 993; summary._requestedAtMs = 993_000; summary.tiles[0].last_minute_age_s = 20;
+    const delayed = renderToStaticMarkup(React.createElement(V5SystemMarket,{tab:'data-feeds',paused:false}));
+    assert.match(delayed, /class="v5m-muted">27 s/);
+    assert.match(delayed, /Slowest lane<\/span><strong>27 s/);
+    summary.tiles[0].last_minute_age_s = 30;
     summary.status_age_s = 55; summary.now = 993; summary._requestedAtMs = 993_000;
     assert.match(renderToStaticMarkup(React.createElement(V5SystemMarket,{tab:'data-feeds',paused:false})), /Candle store data is not current/);
     summary.status_age_s = 10; summary.now = 1000; summary._requestedAtMs = 1_000_000;

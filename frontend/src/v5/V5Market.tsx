@@ -14,7 +14,7 @@ import { v5Api } from "./api";
 import { candleCurrent, hourlyReturns, marketHolding, marketSentence, windowChange } from "./market-header";
 import { readMarketPaper } from "./market-paper";
 import { usePaperClock } from "./usePaperClock";
-import { ageSeconds, breadth, coinTile, indexedReturns, laneHealthClass, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, systemStoreCurrent, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
+import { ageSeconds, breadth, coinTile, indexedReturns, laneHealthClass, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, systemStoreTiming, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
 export { systemStoreCurrent } from "./market-model.mjs";
 import { age as ageShort, fixed, pct, price, signed, utcMin } from "./format.mjs";
 import { tri, utcMinute } from "./shown.mjs";
@@ -102,10 +102,11 @@ export function V5Market() {
   const health = storeHealth(lanes);
   const sentAt = summary.data ? candleRequestedAt(summary.data) : undefined;
   const requestedAt = Number.isFinite(sentAt) ? sentAt : summary.dataUpdatedAt;
-  const elapsed = summary.data && requestedAt != null ? Math.max(now - summary.data.now * 1000, now - requestedAt) / 1000 : null;
+  const timing = systemStoreTiming(summary.data, requestedAt, now);
+  const elapsed = timing.elapsedSeconds;
   const slowestAge = health.oldestMinuteAge == null || elapsed == null ? null : health.oldestMinuteAge + elapsed;
   const statusAge = summary.isSuccess ? summary.data.status_age_s : null;
-  const storeCurrent = summary.isSuccess && systemStoreCurrent(summary.data, requestedAt ?? 0, now) && slowestAge != null && slowestAge <= STALE_AFTER_S;
+  const storeCurrent = summary.isSuccess && timing.current && slowestAge != null && slowestAge <= STALE_AFTER_S;
   const refresh = workspace.data?.source_refresh;
   const feedCurrent = workspace.isSuccess && refresh?.feed_freshness === "FRESH" && refresh.feed_fresh_until_ms != null && now <= refresh.feed_fresh_until_ms;
   const failed = MARKET_COINS.filter(coin => reads[coin]?.error);
@@ -232,12 +233,13 @@ export function V5SystemMarket({ tab, paused }: { tab: 'data-feeds' | 'engine-in
   const invalidLanes = summary.isSuccess && (!summary.data || !Array.isArray(summary.data.tiles) || !summary.data.tiles.every(lane => lane && typeof lane === 'object' && typeof lane.lane === 'string' && typeof lane.venue === 'string' && typeof lane.segment === 'string'));
   const sentAt = summary.data ? candleRequestedAt(summary.data) : undefined;
   const requestedAt = Number.isFinite(sentAt) ? sentAt : summary.dataUpdatedAt;
-  const storeCurrent = !invalidLanes && summary.isSuccess && systemStoreCurrent(summary.data, requestedAt ?? 0, now);
+  const timing = systemStoreTiming(summary.data, requestedAt, now);
+  const storeCurrent = !invalidLanes && summary.isSuccess && timing.current;
   const lanes = storeCurrent && summary.data ? summary.data.tiles : [];
   const lanesUnknown = lanes.filter(lane => typeof lane.available !== 'boolean').length;
   const allLanesAvailable = lanes.length > 0 && lanes.every(lane => lane.available === true);
   const oldestAge = allLanesAvailable && lanes.every(lane => typeof lane.last_minute_age_s === 'number' && Number.isFinite(lane.last_minute_age_s)) ? Math.max(...lanes.map(lane => lane.last_minute_age_s!)) : null;
-  const slowestAge = oldestAge == null || !summary.data || requestedAt == null ? null : oldestAge + Math.max(now - summary.data.now * 1000, now - requestedAt) / 1000;
+  const slowestAge = oldestAge == null || timing.elapsedSeconds == null ? null : oldestAge + timing.elapsedSeconds;
   const gaps = allLanesAvailable ? exactSystemCount(lanes.map(lane => lane.gaps_7d)) : null;
   const coverage = systemCoverage(lanes);
   const refresh = workspace.data?.source_refresh;
@@ -247,7 +249,7 @@ export function V5SystemMarket({ tab, paused }: { tab: 'data-feeds' | 'engine-in
   const cohort = evidence ? selectedCohortCoverage(evidence) : null;
   if (tab === 'engine-inputs') return <div className="v5m">{invalidLanes && <p role="alert">— · Candle store lane data is invalid: expected an array of lane records.</p>}<Section title="V5 market features" note={`Packet cut: ${systemTime(evidence?.cutoff_ms, now)}`}><div className="v5m-card">{workspace.isPending ? 'Reading the V5 feed…' : workspace.isError ? `Workspace read failed: ${workspace.error.message}` : !evidence ? '— · V5 feed data is not current or was not reported.' : <V5MarketFeatures features={evidence.features} />}</div></Section></div>;
   return <div className="v5m"><Section title="Venues and data health" note="Candle store and the V5 market-context feed"><div className="v5m-row">
-    <Card title="Venue coverage" hint="Pairs held of listed · 24-hour candle coverage · age of newest minute">{!configured ? <p>— · Candle store is not configured.</p> : !storeCurrent ? <p>— · {invalidLanes ? 'Candle store lane data is invalid: expected an array of lane records.' : summary.isError ? `Candle store read failed: ${summary.error.message}` : 'Candle store data is not current or has not arrived.'}</p> : <div className="v5m-venues"><span>Venue</span><span>Spot</span><span>Perpetual</span>{venueGrid(lanes).map(row => <Venue key={row.venue} row={row} elapsedSeconds={Math.max(0, now - summary.dataUpdatedAt) / 1000} />)}</div>}</Card>
+    <Card title="Venue coverage" hint="Pairs held of listed · 24-hour candle coverage · age of newest minute">{!configured ? <p>— · Candle store is not configured.</p> : !storeCurrent ? <p>— · {invalidLanes ? 'Candle store lane data is invalid: expected an array of lane records.' : summary.isError ? `Candle store read failed: ${summary.error.message}` : 'Candle store data is not current or has not arrived.'}</p> : <div className="v5m-venues"><span>Venue</span><span>Spot</span><span>Perpetual</span>{venueGrid(lanes).map(row => <Venue key={row.venue} row={row} elapsedSeconds={timing.elapsedSeconds ?? 0} />)}</div>}</Card>
     <Card title="Candle store health" hint="One store feeds V5, Helm and research"><div className="v5m-stats">
       <Stat label="Lanes available" value={!storeCurrent || !lanes.length || lanesUnknown ? '—' : `${lanes.filter(lane => lane.available === true).length}/${lanes.length}`} note={!storeCurrent ? 'Store data not current' : !lanes.length ? 'No lanes reported' : lanesUnknown ? `${lanesUnknown} lanes unreported` : 'reported lanes'} />
       <Stat label="7-day coverage" value={coverage ?? '—'} note={coverage === null ? 'A lane is unavailable or 7-day coverage is missing or invalid' : 'mean of all reported lanes'} />

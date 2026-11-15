@@ -192,7 +192,7 @@ function renderMarket({ expired = false, failed = false, range = '24h', summaryD
 test('Market rejects old, future, and delivery-expired owner summaries', () => {
   const now = dense(180).now * 1000;
   const lane = {lane:'okx__spot',venue:'okx',segment:'spot',available:true,health:'green',last_minute_age_s:20};
-  for (const summary of [{now:now / 1000 - 600}, {now:now / 1000 + 1}, {now:now / 1000, status_age_s:59, _requestedAtMs:now - 10_000}]) {
+  for (const summary of [{now:now / 1000 - 600}, {now:now / 1000 + 1}, {now:now / 1000 - 50, status_age_s:20}, {now:now / 1000, status_age_s:59, _requestedAtMs:now - 10_000}]) {
     const html = renderMarket({summaryData:{tiles:[lane],status_age_s:1,...summary}}).html.split('</header>')[0];
     assert.match(html, /— not current/);
     assert.doesNotMatch(html, /1\/1 lanes available/);

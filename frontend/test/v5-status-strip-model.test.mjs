@@ -23,7 +23,8 @@ test('successive old owner summaries never make market data live', () => {
     assert.notEqual(chip(statusStrip(input({nowMs:sentAt,data})), 'data').tone, 'green');
   }
   const data = {...input().data,summary:{now:(NOW - 80_000) / 1000,status_age_s:1},lanes:{total:14,live:14,healthy:14,lagS:20}};
-  assert.equal(chip(statusStrip(input({data})), 'data').text, 'Live · slowest lane 100 s');
+  assert.equal(chip(statusStrip(input({data})), 'data').text, 'Owner summary not current');
+  assert.equal(chip(statusStrip(input({data:{...data,summary:{...data.summary,now:(NOW - 40_000) / 1000}}})), 'data').text, 'Live · slowest lane 60 s');
   assert.equal(chip(statusStrip(input({data:{...data,summary:{...data.summary,now:(NOW - 91_000) / 1000}}})), 'data').tone, 'grey');
   assert.equal(chip(statusStrip(input({data:{...data,summary:{...data.summary,status_age_s:null}}})), 'data').tone, 'grey');
 });

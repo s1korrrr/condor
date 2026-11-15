@@ -5,6 +5,7 @@ export const MARKET_COINS: MarketCoin[];
 export const REFERENCE: { venue: string; quote: string; spot: string; perpetual: string };
 export const STALE_AFTER_S: number;
 export function systemStoreCurrent(summary: {now?: number | null; status_age_s?: number | null} | null | undefined, receivedAt: number | null | undefined, now: number): boolean;
+export function systemStoreTiming(summary: {now?: number | null; status_age_s?: number | null} | null | undefined, receivedAt: number | null | undefined, now: number): {current: boolean; elapsedSeconds: number | null};
 
 /** Owner candle window as the server forwards it: dense minutes, `end` = last closed minute, owner `now` and totals. */
 export type CandleRead = { buckets: (number | null)[][]; start: number; end: number; now: number; totals?: Record<string, number> };

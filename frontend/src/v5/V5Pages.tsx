@@ -15,7 +15,7 @@ function useWorkspace() {
 
 export function PaperReadinessPage({ paused = false }: { paused?: boolean } = {}) {
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, refetchInterval: paused ? false : 15_000 });
-  const observation = usePaperObservation(profile.data?.readiness.paper_owner?.bot_name, paused ? false : 15_000, 'system');
+  const observation = usePaperObservation(profile.data?.readiness.paper_owner?.bot_name, false);
   if (!profile.data?.readiness.paper_owner) return <section><h2>Paper readiness</h2><p>Paper readiness is unavailable: the paper owner is not bound.</p></section>;
   const owner = profile.data.readiness.paper_owner;
   const gates = paperReadiness(owner);
@@ -28,7 +28,7 @@ export function PaperReadinessPage({ paused = false }: { paused?: boolean } = {}
 function PaperIdentity({ paused = false }: { paused?: boolean }) {
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, refetchInterval: paused ? false : 15_000 });
   const bot = profile.data?.readiness.paper_owner?.bot_name;
-  const identity = usePaperObservation(bot, paused ? false : 15_000, 'system');
+  const identity = usePaperObservation(bot, false);
   if (!profile.data?.readiness.paper_owner) return null;
   const owner = profile.data.readiness.paper_owner;
   const source = identity.status?.source;
@@ -432,7 +432,7 @@ export function SettingsPage({ paused = false }: { paused?: boolean } = {}) {
   const query = useQuery({ queryKey: ["v5-settings"], queryFn: v5Api.settings });
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile });
   const paper = Boolean(paperWorkspaceLabel(profile.data));
-  const observation = usePaperObservation(paper ? profile.data?.readiness.paper_owner?.bot_name : null, paused ? false : 15_000, 'system');
+  const observation = usePaperObservation(paper ? profile.data?.readiness.paper_owner?.bot_name : null, false);
   if (query.isPending) return <Loading label="Loading workspace settings" />;
   if (query.isError) return <QueryError query={query} retry={() => void query.refetch()} />;
   const settings = query.data;

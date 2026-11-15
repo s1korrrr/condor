@@ -114,6 +114,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         if (pathname === '/settings') {
           const health = client.getQueryData(['v5-paper-observation-health',bot]);
           assert.deepEqual(health,['status','wallet','positions','executors','risk'].map(section => sections[section]));
+          assert.ok(container.textContent.includes(sections.status.snapshot_id),'the retained identity snapshot must commit before freshness is checked');
           now = sections.status.generated_at_ms + 30000;
           Date.now = () => now;
           globalThis.__reviewAdvance = () => {now = sections.status.generated_at_ms + 30001;};

@@ -40,9 +40,9 @@ export function usePaperWorkspace(page: "capital" | "operations", bot?: string |
   return {data:query.data ?? (query.isError ? null : partial), complete:query.complete, progress:page === "capital" ? query.progress : undefined, error:query.isError ? query.error.message : null, pending:query.isPending || query.isFetching, refresh:() => {void query.refetch();}};
 }
 
-export function usePaperObservation(bot: string | null | undefined, refetchInterval: number | false = 15_000, scope?: string) {
+export function usePaperObservation(bot: string | null | undefined, refetchInterval: number | false = 15_000) {
   const now = usePaperClock();
-  const query = usePaperSnapshot<PaperRead[]>(scope ? ["v5-paper-observation-health", bot, scope] : ["v5-paper-observation-health", bot], Boolean(bot), 5, async (progress, signal) => {
+  const query = usePaperSnapshot<PaperRead[]>(["v5-paper-observation-health", bot], Boolean(bot), 5, async (progress, signal) => {
     const prefix = "/api/v1/servers/rsibot-v5/";
     return paperCoherentRead(`${prefix}bots/${encodeURIComponent(bot!)}/native/status`, [
       {section:"wallet",path:`${prefix}account-balances`},

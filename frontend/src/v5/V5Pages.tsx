@@ -8,7 +8,7 @@ import { usePaperObservation } from "./usePaperObservation";
 import type { MarketEvidence, V5Agent, V5Session, V5SessionDetail, V5TaskReport, V5Workspace } from "./contracts";
 import { formatUsdAmount, marketFeatures, qualifiedFeatureValue, selectedCohortCoverage, strategyAssessmentLabel, timestampAgeMs } from "./evidence";
 import { boundedLoopParameters, canRequestReport, paperReadiness, paperWorkspaceLabel, paperWords } from "./policy";
-import { ADVISOR_CONFIG_SCHEDULE, advisorAvailability, scheduledAgentLines, type WorkspaceRead } from "./agent-status";
+import { advisorAvailability, scheduledAgentLines, type WorkspaceRead } from "./agent-status";
 
 function useWorkspace() {
   return useQuery({ queryKey: ["v5-workspace"], queryFn: v5Api.workspace, refetchInterval: 30_000 });
@@ -269,9 +269,8 @@ export function AgentsPage() {
 function ScheduledAgents({ read, agentId }: { read: WorkspaceRead; agentId?: string }) {
   const lines = scheduledAgentLines(read).filter(line => !agentId || line.id === agentId);
   return <section className="v5-panel" aria-label="Scheduled agents"><h2>Scheduled agents</h2>
-    <p>{ADVISOR_CONFIG_SCHEDULE}</p>
-    {lines.map(line => <p key={line.id}><Link to={`/agents/${line.id}`}>{line.name}</Link> · <strong>{line.state}</strong> · {line.reason} · Last report: {line.reportTime ? <time dateTime={line.reportTime}>{line.reportTime.replace("T", " ").replace("Z", " UTC")}</time> : "not published"} ({line.reportAge}) · Owner report: {line.reportState} / {line.reportStatus} · {line.expiry}{line.scheduleExpiry && ` · ${line.scheduleExpiry}`} · {line.overdue} · Rule: {line.schedule}</p>)}
-    <p className="v5-muted">The schedule above is attributed to the advisor configuration; report times, task state and shared scheduler state come from owner reads. A loop recipe alone is not scheduling evidence.</p>
+    {lines.map(line => <p key={line.id}><Link to={`/agents/${line.id}`}>{line.name}</Link> · <strong>{line.state}</strong> · {line.reason} · Last report: {line.reportTime ? <time dateTime={line.reportTime}>{line.reportTime.replace("T", " ").replace("Z", " UTC")}</time> : "not published"} ({line.reportAge}) · Owner report: {line.reportState} / {line.reportStatus} · {line.expiry} · {line.overdue} · {line.schedule}</p>)}
+    <p className="v5-muted">Report times, task state and shared scheduler state come from owner reads. Cadence, role rotation and overdue rules are not published. A loop recipe alone is not scheduling evidence.</p>
   </section>;
 }
 

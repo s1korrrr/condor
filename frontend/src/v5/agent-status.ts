@@ -21,11 +21,6 @@ export function advisorAvailability(read: WorkspaceRead) {
   return { state: "unavailable", message: "Advisor state not read: advisor.enabled is not published · Source: /v1/advice/status" } as const;
 }
 
-export const ADVISOR_CONFIG_SCHEDULE = "Schedule (advisor config): one shared 15-minute slot rotates market analyst, source auditor and decision reviewer, about every 45 min each";
-const ROLE_INTERVAL_MS = 45 * 60_000;
-const OVERDUE_AFTER_MS = 60 * 60_000;
-const OVERDUE_RULE = "overdue when newest report > 60 min old (45 min rotation + one 15 min slot)";
-
 const scheduledRoles = [
   { id: "market_analyst", taskId: "market_context", name: "Market analyst" },
   { id: "source_auditor", taskId: "source_quality", name: "Source auditor" },
@@ -60,8 +55,6 @@ export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now()) {
     const report = latest?.task_id === role.taskId && latest.record?.result.task_id === role.taskId ? latest.record.result : undefined;
     const received = publishedTimestamp(report?.received_at_ms) ? report.received_at_ms : null;
     const expiry = publishedTimestamp(report?.expires_at_ms) ? report.expires_at_ms : null;
-    const ageMs = received !== null && Number.isFinite(nowMs) && nowMs >= received ? nowMs - received : null;
-    const overdue = ageMs === null ? null : ageMs > OVERDUE_AFTER_MS;
     const failure = sourceFailure(read, `latest_${role.taskId}`) || sourceFailure(read, "task_profiles");
     let state = "State not published";
     let reason = "Owner scheduling state is not published.";
@@ -81,9 +74,9 @@ export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now()) {
       state = "Last run failed";
       reason = [report.status, report.reason, report.rejection].filter(Boolean).join(" · ");
     } else if (scheduler?.enabled === true) {
-      reason = "Advisor config schedules this role; owner shared scheduler enabled: true.";
-      if (profile?.enabled === true && report?.status === "ACCEPTED" && latest?.status === "CURRENT_REPORT" && ageMs !== null) {
-        state = overdue ? "Overdue" : ageMs > ROLE_INTERVAL_MS ? "Awaiting next report" : "Running on schedule";
+      reason = "Owner shared scheduler enabled: true.";
+      if (profile?.enabled === true && report?.status === "ACCEPTED" && latest?.status === "CURRENT_REPORT" && received !== null && Number.isFinite(nowMs) && nowMs >= received) {
+        state = "Last report accepted";
       }
       if (scheduler.task_id === role.taskId && scheduler.last_status) reason += ` Last scheduler status: ${scheduler.last_status}.`;
     }
@@ -94,9 +87,8 @@ export function scheduledAgentLines(read: WorkspaceRead, nowMs = Date.now()) {
       reportStatus: report?.status ?? latest?.status ?? "not published",
       reportState: latest?.status ?? "not published",
       expiry: expiry === null ? "expiry not published" : !Number.isFinite(nowMs) ? "expiry unavailable (clock mismatch)" : nowMs >= expiry ? "expired" : "not expired",
-      scheduleExpiry: ageMs !== null && ageMs > ROLE_INTERVAL_MS ? "expired (configured 45 min interval)" : null,
-      overdue: overdue === null ? "overdue not determined (report time not published or clock mismatch)" : overdue ? "overdue" : "within 60 min overdue threshold",
-      schedule: OVERDUE_RULE,
+      overdue: "overdue rule not published",
+      schedule: "schedule not published",
     };
   });
 }

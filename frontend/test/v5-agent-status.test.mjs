@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { frontendModules } from "./helpers/frontend-module.mjs";
-import { ADVISOR_CONFIG_SCHEDULE, advisorAvailability, scheduledAgentLines } from "../src/v5/agent-status.ts";
+import { advisorAvailability, scheduledAgentLines } from "../src/v5/agent-status.ts";
 
 const agent = {
   id: "market_analyst", name: "Market Analyst", description: "Market reports",
@@ -85,13 +85,14 @@ test("line model includes exactly the three scheduled roles, even when a catalog
   assert.equal(lines[2].name, "Decision reviewer");
 });
 
-test("configured role schedule plus enabled owner reads and recent reports show running on schedule", () => {
+test("enabled scheduler and recent accepted reports do not publish a role schedule", () => {
   const data = scheduledWorkspace();
   const lines = scheduledAgentLines({ data }, now);
   for (const line of lines) {
-    assert.equal(line.state, "Running on schedule");
-    assert.match(line.reason, /Advisor config schedules this role; owner shared scheduler enabled: true/);
-    assert.equal(line.schedule, "overdue when newest report > 60 min old (45 min rotation + one 15 min slot)");
+    assert.equal(line.state, "Last report accepted");
+    assert.match(line.reason, /Owner shared scheduler enabled: true/);
+    assert.equal(line.schedule, "schedule not published");
+    assert.doesNotMatch(JSON.stringify(line), /Running on schedule|Advisor config schedules|15-minute|45 min/);
   }
   assert.match(lines[0].reason, /NOT_DUE/);
   assert.doesNotMatch(lines[1].reason, /NOT_DUE/);
@@ -157,7 +158,8 @@ test("missing task, scheduler, report and expiry stay not published, not disable
     assert.equal(line.reportAge, "age not published");
     assert.equal(line.reportStatus, "not published");
     assert.equal(line.expiry, "expiry not published");
-    assert.equal(line.overdue, "overdue not determined (report time not published or clock mismatch)");
+    assert.equal(line.overdue, "overdue rule not published");
+    assert.equal(line.schedule, "schedule not published");
   }
 });
 
@@ -238,7 +240,7 @@ test("embedded advisor errors override stale explicit true or false without a fa
   }
 });
 
-test("the actual catalog renders three lines at the top with configured cadence, UTC, age and expiry", context => {
+test("the actual catalog renders owner times and expiry with unpublished schedule and overdue policy", context => {
   context.mock.method(Date, "now", () => now);
   const data = scheduledWorkspace();
   data.advisor.latest_by_task.source_quality.record.result.expires_at_ms = 1;
@@ -249,43 +251,52 @@ test("the actual catalog renders three lines at the top with configured cadence,
   assert.match(section, /2026-11-15 11:58:00.000 UTC/);
   assert.match(section, /ago/);
   assert.match(section, / · expired · /);
-  assert.ok(section.includes(ADVISOR_CONFIG_SCHEDULE));
-  assert.equal((section.match(/Rule: overdue when newest report &gt; 60 min old/g) || []).length, 3);
+  assert.equal((section.match(/schedule not published/g) || []).length, 3);
+  assert.equal((section.match(/overdue rule not published/g) || []).length, 3);
+  assert.doesNotMatch(section, /Schedule \(advisor config\)|Running on schedule|15-minute|45 min|60 min/);
   assert.ok(html.indexOf(section) < html.indexOf('class="v5-agent-catalog"'));
 });
 
-test("45-minute cadence has one shared-slot grace, then actual report age marks overdue", () => {
+test("a 61-minute-old report with future owner expiry has no inferred overdue or second expiry", context => {
+  context.mock.method(Date, "now", () => now);
   const data = scheduledWorkspace();
   const report = data.advisor.latest_by_task.market_context.record.result;
-  for (const [age, state, overdue] of [
-    [45 * 60_000, "Running on schedule", false],
-    [45 * 60_000 + 1, "Awaiting next report", false],
-    [60 * 60_000, "Awaiting next report", false],
-    [60 * 60_000 + 1, "Overdue", true],
-  ]) {
-    report.received_at_ms = now - age;
-    const line = scheduledAgentLines({ data }, now)[0];
-    assert.equal(line.state, state);
-    assert.equal(line.overdue, overdue ? "overdue" : "within 60 min overdue threshold");
-    assert.equal(line.scheduleExpiry, age > 45 * 60_000 ? "expired (configured 45 min interval)" : null);
-  }
+  report.received_at_ms = now - 61 * 60_000;
+  report.expires_at_ms = now + 30 * 60_000;
+  const line = scheduledAgentLines({ data }, now)[0];
+  assert.equal(line.expiry, "not expired");
+  assert.equal(line.reportAge, "1h 1m ago");
+  assert.equal(line.overdue, "overdue rule not published");
+  assert.notEqual(line.state, "Overdue");
+  assert.equal(Object.hasOwn(line, "scheduleExpiry"), false);
+  assert.doesNotMatch(JSON.stringify(line), /configured 45 min|60 min|Awaiting next report/);
+  const html = renderPage("AgentDetailPage", { data });
+  const section = html.match(/<section[^>]*aria-label="Scheduled agents"[\s\S]*?<\/section>/)?.[0];
+  assert.ok(section);
+  assert.match(section, /1h 1m ago/);
+  assert.match(section, /overdue rule not published/);
+  assert.equal((section.match(/expired/g) || []).length, 1);
+  assert.doesNotMatch(section, /Overdue| · expired · |configured 45 min|60 min/);
 });
 
-test("the overdue rule uses each role's newest report, even for failed or disabled roles", () => {
+test("old reports retain observed ages without an overdue verdict for failed or disabled roles", () => {
   const data = scheduledWorkspace();
   const report = data.advisor.latest_by_task.source_quality.record.result;
   Object.assign(report, { received_at_ms: now - 61 * 60_000, status: "REJECTED" });
   let lines = scheduledAgentLines({ data }, now);
   assert.equal(lines[1].state, "Last run failed");
-  assert.equal(lines[1].overdue, "overdue");
-  assert.notEqual(lines[0].overdue, "overdue");
+  assert.equal(lines[1].reportAge, "1h 1m ago");
+  assert.equal(lines[1].overdue, "overdue rule not published");
+  assert.equal(lines[0].reportAge, "2m 0s ago");
+  assert.equal(lines[0].overdue, "overdue rule not published");
   data.advisor.task_profiles[1].enabled = false;
   lines = scheduledAgentLines({ data }, now);
   assert.equal(lines[1].state, "Disabled");
-  assert.equal(lines[1].overdue, "overdue");
+  assert.equal(lines[1].reportAge, "1h 1m ago");
+  assert.equal(lines[1].overdue, "overdue rule not published");
 });
 
-test("configured schedule alone does not turn missing scheduler or report state into running", () => {
+test("missing scheduler or report state is not promoted to running", () => {
   const data = scheduledWorkspace();
   delete data.advisor.scheduler;
   assert.equal(scheduledAgentLines({ data }, now)[0].state, "State not published");

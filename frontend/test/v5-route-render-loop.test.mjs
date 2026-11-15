@@ -106,11 +106,13 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       client.setQueryData(['v5-profile'],profile);
       client.setQueryData(['v5-settings'],settings);
       client.setQueryData(['v5-paper-observation-health',bot],['status','wallet','positions','executors','risk'].map(section => section === 'status' ? statusForRoute() : sections[section]));
+      if (pathname === '/bots') client.setQueryData(['v5-paper-bots',bot],['status','wallet','positions','fills','executors','risk','decisions','history','accounting'].map(section => section === 'status' ? statusForRoute() : sections[section]));
       try {
         await React.act(async () => {mount.render(React.createElement(Boundary,null,React.createElement(V5App)));});
+        assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, pathname === '/bots' ? 1 : 0, 'only Bots reads symbols once on initial mount with a complete snapshot');
         await React.act(async () => {await client.refetchQueries({type:'active'});});
         await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
-        assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, pathname === '/bots' ? 1 : 0, 'only Bots reads symbols once after its owner snapshot completes');
+        if (pathname !== '/bots') assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 0, 'other routes never read Bots symbols');
         assert.deepEqual(failures,[],'real route must not enter a render loop');
         assert.deepEqual(warnings,[],'React must not warn about unstable snapshots or cross-component updates');
         assert.ok(container.querySelector('main'),`${pathname} must keep the app mounted`);

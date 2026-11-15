@@ -6,10 +6,10 @@ import { paperSnapshotPresentation } from './snapshot-presentation';
 type Row = Record<string, unknown>;
 const object = (value: unknown): Row => value !== null && typeof value === 'object' && !Array.isArray(value) ? value as Row : {};
 
-export function PaperTerminalHistory({read, now}: {read?: PaperRead; now: number}) {
+export function PaperTerminalHistory({read, now, valuesAt = now}: {read?: PaperRead; now: number; valuesAt?: number}) {
   const descriptor = object(object(read?.data).terminal_executors), data = object(descriptor.data);
   if (data.delivery !== 'publication_pages') return null;
-  const snapshot = paperSnapshotPresentation(read?.generated_at_ms, now, false);
+  const snapshot = paperSnapshotPresentation(read?.generated_at_ms, valuesAt, false);
   const valid = read && !paperSectionError(read) && !snapshot.stale && !snapshot.clockAhead && ['complete', 'partial'].includes(read.completeness ?? '') && read.capabilities?.includes('read') && ['available', 'degraded'].includes(read.state) && Array.isArray(data.records) && data.records.every(row => typeof object(row).executor_id === 'string');
   const columns: TableColumn<Row>[] = [
     {id:'id',header:'Executor ID',value:row => String(row.executor_id),size:180},

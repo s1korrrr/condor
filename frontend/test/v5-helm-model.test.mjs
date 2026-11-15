@@ -5,6 +5,13 @@ import { helmHeadline } from '../src/v5/helm-model.mjs';
 const READY = [{ gate: 'ready', note: '' }];
 const status = (extra = {}) => ({ generated_at: 1793929882.6, reasons: [], ready: true, ...extra });
 
+test('malformed reason collections are never interpreted as a stop', () => {
+  for (const reasons of [{}, 'runtime_stopped', 42, null]) {
+    const headline = helmHeadline({state:'FRESH',status:status({reasons})});
+    assert.doesNotMatch(headline.text, /Stopped/);
+  }
+});
+
 test('a missing status file says only that, other unreadable files stay unreadable', () => {
   assert.deepEqual(helmHeadline({ state: 'UNAVAILABLE', reason: 'HELM_STATUS_MISSING', status: null }), { text: 'No status file published; current state unknown', good: false });
   assert.equal(helmHeadline({ state: 'UNAVAILABLE', reason: 'HELM_STATUS_SCHEMA', status: null }).text, 'Status file unreadable (HELM STATUS SCHEMA)');

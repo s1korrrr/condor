@@ -13,6 +13,11 @@ export const MARKET_COINS = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP'];
 export const REFERENCE = { venue: 'binance', quote: 'USDT', spot: 'binance__spot', perpetual: 'binance__perpetual' };
 /** A price older than this (owner time plus time since the read arrived) is marked as old on its tile. */
 export const STALE_AFTER_S = 180;
+
+export function systemStoreCurrent(summary, receivedAt, now) {
+  if (!summary || !Number.isFinite(summary.now) || summary.now * 1000 > now || now - summary.now * 1000 > 90_000 || !Number.isFinite(summary.status_age_s) || summary.status_age_s < 0 || receivedAt > now || receivedAt <= 0 || !Number.isFinite(receivedAt)) return false;
+  return summary.status_age_s * 1000 + now - receivedAt <= 60_000;
+}
 const SAMPLE = 5;
 
 /** One entry per owner minute; a minute that is not final has null prices and volume. Null without a window. */

@@ -17,7 +17,7 @@ export function StatusStrip({ bot, candleConfigured }: { bot: string | null; can
   const now = usePaperClock();
   const paper = usePaperObservation(bot);
   const helm = useQuery({ queryKey: ["v5-helm"], queryFn: readHelm, retry: false, refetchInterval: 15_000 });
-  const candles = useQuery({ ...candleSummaryQuery<{ tiles: unknown }>(), retry: false, refetchInterval: 30_000, enabled: candleConfigured });
+  const candles = useQuery({ ...candleSummaryQuery<{ tiles: unknown; now?: number | null; status_age_s?: number | null }>(), retry: false, refetchInterval: 30_000, enabled: candleConfigured });
   // Current only when the last read succeeded and the whole set passes the paper read contracts at this moment.
   const reads = paper.isError ? null : paper.data ?? null;
   const current = !!bot && !!reads && paperObservationSummary(reads, bot, now).label === "Available";
@@ -35,7 +35,6 @@ export function StatusStrip({ bot, candleConfigured }: { bot: string | null; can
   const currentRisk = current ? displayedRisk.flatMap(read => paperRiskControllers(read, now) ?? []) : [];
   const runKnown = current && currentRisk.length > 0 && displayedRisk.every(read => paperRiskHolds(read).length === 0)
     && currentRisk.every(controller => controller.operator.paused === false && controller.operator.emergency === false && controller.entryHold === false);
-  // Ages are counted from when each request was SENT (owner age at read time + delivery + time since), never from arrival.
   const helmSentMs = helm.data ? helmRequestedAt(helm.data) ?? null : null;
   const helmLastUsableMs = helm.data?._lastUsableAtMs ?? null;
   const candleSentMs = candles.data ? candleRequestedAt(candles.data) ?? null : null;
@@ -45,7 +44,7 @@ export function StatusStrip({ bot, candleConfigured }: { bot: string | null; can
     nowMs: now,
     v5: { bound: !!bot, pending: !!bot && !paper.data && !paper.isError, current, runKnown, entryHold: held ? true : null, emergency, restartOrderUnknown:paper.restartOrderUnknown, lastOkMs: paper.lastUsableAtMs },
     helm: { read: helm.isError ? null : helm.data ?? null, failed: helm.isError, lastOkMs: helmLastUsableMs, receivedAtMs: helm.dataUpdatedAt || null, requestedAtMs: helmSentMs },
-    data: { configured: candleConfigured, pending: candleConfigured && !candles.data && !candles.isError, failed: candles.isError, lanes: candles.isError ? null : laneHealth((candles.data as { tiles?: unknown } | undefined)?.tiles), lastOkMs: candles.dataUpdatedAt || null, receivedAtMs: candles.dataUpdatedAt || null, requestedAtMs: candleSentMs },
+    data: { configured: candleConfigured, pending: candleConfigured && !candles.data && !candles.isError, failed: candles.isError, summary: candles.data, lanes: candles.isError ? null : laneHealth(candles.data?.tiles), lastOkMs: candles.dataUpdatedAt || null, receivedAtMs: candles.dataUpdatedAt || null, requestedAtMs: candleSentMs },
     wallet: { current, equity: wallet?.equity_quote, funding: wallet?.initial_funding_quote, flows: wallet?.external_cash_flows_quote, unit: wallet?.quote_asset },
     updatedMs: stamps.length ? Math.max(...stamps) : null,
   });

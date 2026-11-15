@@ -81,7 +81,7 @@ export function helmHeadline(read) {
   if (read.state === 'UNAVAILABLE') return { text: `Status file unreadable (${words(read.reason ?? 'unknown')})`, good: false };
   const status = read.status;
   const lastAt = utcMin(status ? status.generated_at * 1000 : null) ?? 'unknown time';
-  const stopped = !!status?.reasons?.includes('runtime_stopped');
+  const stopped = Array.isArray(status?.reasons) && status.reasons.includes('runtime_stopped');
   if (stopped) return { text: `Stopped (last status ${lastAt})`, good: false };
   if (read.state !== 'FRESH') return { text: `No status update since ${lastAt}; current state unknown`, good: false };
   if (status?.ready === true) {

@@ -13,6 +13,9 @@ test('strip, Market, System and candle details share one summary query and refre
   }
   const marketSource = fs.readFileSync(new URL('../src/v5/V5Market.tsx', import.meta.url), 'utf8');
   assert.equal((marketSource.match(/\.\.\.candleSummaryQuery</g) ?? []).length, 2, 'Market and System use the canonical query');
+  assert.equal((marketSource.match(/\.\.\.candleSummaryQuery<Summary>\(\)[^\n]*refetchInterval: false/g) ?? []).length, 2, 'Market and System do not poll the summary');
+  const detailSource = fs.readFileSync(new URL('../src/v5/V5CandleStore.tsx', import.meta.url), 'utf8');
+  assert.match(detailSource, /\.\.\.candleSummaryQuery<Summary>\(\)[^\n]*refetchInterval: false/, 'candle details do not poll the summary');
   const { candleSummaryQuery, candleRequestedAt } = frontendModules().load('v5/candle-store-api');
   const strip = candleSummaryQuery();
   const market = candleSummaryQuery();

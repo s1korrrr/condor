@@ -7,6 +7,27 @@ import {frontendModules} from './helpers/frontend-module.mjs';
 
 const fixture = section => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
 
+test('strip rejects repeated successful summaries with an old owner evaluation time', () => {
+  let now = 1_793_929_900_000;
+  const paper = {data:undefined,isError:false,safetyEvidence:[],reconcileSafety:reads => reads};
+  const summary = {now:(now - 600_000) / 1000,status_age_s:1,tiles:[{available:true,last_minute_age_s:20,health:'green',partition_errors:[]}]};
+  const candles = {data:summary,dataUpdatedAt:now,isError:false};
+  const {load} = frontendModules({
+    './usePaperObservation':{usePaperObservation:() => paper},
+    './usePaperClock':{usePaperClock:() => now},
+    '@tanstack/react-query':{useQuery:options => options.queryKey[0] === 'candle-summary' ? candles : {data:undefined,dataUpdatedAt:0,isError:false}},
+    'react-router-dom':{NavLink:({children,...props}) => React.createElement('a',props,children)},
+  });
+  const Strip = load('v5/StatusStrip').StatusStrip;
+  for (let refresh = 0; refresh < 2; refresh++) {
+    candles.dataUpdatedAt = now;
+    const html = renderToStaticMarkup(React.createElement(Strip,{bot:null,candleConfigured:true}));
+    assert.match(html,/Owner summary not current/);
+    assert.doesNotMatch(html,/Live · slowest lane/);
+    now += 30_000;
+  }
+});
+
 test('strip reports a native hold even when its controller is omitted', () => {
   const risk = fixture('risk');
   const id = Object.keys(risk.data.controllers)[0];

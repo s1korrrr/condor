@@ -5,6 +5,7 @@
  * current is "—". Colour: green = working, amber = should be working and is not, red = stopped, grey = no data.
  */
 import { helmHeadline } from './helm-model.mjs';
+import { systemStoreCurrent } from './market-model.mjs';
 
 const MAX_DATE_MS = 8.64e15;
 /** Slowest candle lane older than this is amber. */
@@ -75,7 +76,7 @@ function helmChip(helm, nowMs) {
     : Number.isFinite(status?.generated_at) ? Math.max(0, nowMs / 1000 - status.generated_at) : Infinity;
   const read = helm.read.state === 'FRESH' && ageS > HELM_STALE_S ? { ...helm.read, state: 'STALE' } : helm.read;
   const { text, good } = helmHeadline(read);
-  const stopped = !!read.status?.reasons?.includes('runtime_stopped');
+  const stopped = Array.isArray(read.status?.reasons) && read.status.reasons.includes('runtime_stopped');
   const fresh = read.state === 'FRESH';
   if (!fresh && stopped) return { ...base, tone: 'grey', text: `No current report · last report (${utcClock(status?.generated_at * 1000) ?? 'unknown time'}) said: stopped`, short: 'Helm no report' };
   // Helm's headline is tri-state: green only when it says so, amber when it says not buying, neutral (grey) otherwise.
@@ -90,11 +91,11 @@ function dataChip(data, nowMs) {
   if (data.pending) return { ...base, tone: 'grey', text: 'Reading the candle store', short: 'Data …' };
   const lanes = data.lanes;
   if (data.failed || !lanes || !lanes.total) return { ...base, tone: 'grey', text: noReport(data.lastOkMs), short: 'Data no report' };
+  const sinceMs = Number.isFinite(data.requestedAtMs) ? data.requestedAtMs : data.receivedAtMs;
+  if (!systemStoreCurrent(data.summary, sinceMs, nowMs)) return { ...base, tone: 'grey', text: 'Owner summary not current', short: 'Data no report' };
   // A successful summary in which no lane is live is an explicit outage, not "no report" (Sol R2 W4 S2).
   if (!Number.isFinite(lanes.lagS)) return { ...base, tone: 'amber', text: `${lanes.total - lanes.live} of ${lanes.total} lanes not live`, short: 'Data partial' };
-  // The owner's age at read time plus local time since the read arrived, so the chip ages between polls.
-  const sinceMs = Number.isFinite(data.requestedAtMs) ? data.requestedAtMs : data.receivedAtMs;
-  const elapsedS = Number.isFinite(sinceMs) ? Math.max(0, (nowMs - sinceMs) / 1000) : 0;
+  const elapsedS = Math.max((nowMs - data.summary.now * 1000) / 1000, (nowMs - sinceMs) / 1000);
   const lagS = lanes.lagS + elapsedS, lag = Math.max(0, Math.round(lagS));
   // A lane that is unavailable or does not report its age is never read as live.
   if (lanes.live < lanes.total) return { ...base, tone: 'amber', text: `${lanes.total - lanes.live} of ${lanes.total} lanes not live · slowest live lane ${lag} s`, short: 'Data partial' };

@@ -26,7 +26,7 @@ const profile = {...baseline.profile.body,readiness:{...baseline.profile.body.re
 const workspace = {schema_version:'v5-workspace.v1',identity,context:null,advisor:settings.budget,agents:Object.values(baseline.workspace_agents),sessions:[],source_error:null};
 const routes = [
   ['/settings','Workspace settings'], ['/bots','Paper bots'], ['/helm','Helm paper bot'], ['/money','Money'], ['/capital','Capital'],
-  ['/operations','Operations'], ['/v5/readiness','Paper readiness'], ['/system','Operations'], ['/system/checks','Operations'],
+  ['/operations','Operations'], ['/v5/readiness','Paper readiness'], ['/system','Operations'], ['/system/checks','Operations'], ['/system/data-feeds','Venues and data health'],
   ['/backtests','Tradepad'], ['/','Overview'], ['/market','Market'], ['/market/BTC','Market'], ['/market/evidence','Market'], ['/market/candles','Market'],
   ['/market/stocks','OKX stocks'], ['/agents','Agents'],
   ['/agents/decision_reviewer','Decision Reviewer'], ['/research','Research'],
@@ -38,6 +38,7 @@ const routes = [
 test('real V5 routes settle with shared providers and an advancing paper clock', async context => {
   const routeSource = fs.readFileSync(new URL('../src/v5/V5App.tsx',import.meta.url),'utf8');
   const registered = [...routeSource.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1]).filter(pathname => pathname !== '*').map(pathname => pathname.replace('/system/:tab','/system/checks').replace('/market/:coin','/market/BTC').replace('/agents/:id','/agents/decision_reviewer').replace('/sessions/:id','/sessions/fixture-session'));
+  registered.push('/system/data-feeds');
   assert.deepEqual(routes.map(([pathname]) => pathname).sort(),registered.sort(),'every registered V5 route needs a real render case');
   let route = '/settings';
   const journalRoutes = new Set(['/bots', '/operations', '/v5/readiness']);
@@ -73,7 +74,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       assert.ok(sections[section],`unmapped owner read: ${native}`);
       body = section === 'status' ? statusForRoute() : sections[section];
     } else if (url.pathname === '/api/v5/auth') body = {authenticated:true};
-    else if (url.pathname === '/api/v5/dashboard/profile') body = profile;
+    else if (url.pathname === '/api/v5/dashboard/profile') body = route === '/system/data-feeds' ? {...profile,candle_store:{...profile.candle_store,configured:true}} : profile;
     else if (url.pathname === '/api/v5/settings') body = settings;
     else if (url.pathname === '/api/v5/workspace') body = workspace;
     else if (url.pathname === '/api/v5/sessions') body = {sessions:[]};
@@ -81,6 +82,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
     else if (url.pathname === '/api/v5/agents/decision_reviewer') body = baseline['agent:decision_reviewer'].body;
     else if (url.pathname === '/api/v5/candle-store/symbols') body = {state:'AVAILABLE',reason:null,data:{rows:[{lane:'okx__spot',pair:'BNB-USDC'}]}};
     else if (url.pathname === '/api/v5/candle-store/candles') body = {state:'AVAILABLE',reason:null,data:{pair:'BNB-USDC',venue:'OKX',volume_unit:'base',start:1793929800,end:1793929860,buckets:[]}};
+    else if (url.pathname === '/api/v5/candle-store/summary') body = {state:'AVAILABLE',reason:null,data:{now:now / 1000,status_age_s:1,tiles:[]}};
     else if (url.pathname === '/api/v5/money') body = {sampler:true,daily:[{day:1793923200000,samples:2,gaps:1,valid:1,equity_start:'199318.98',equity_end:'199318.98',equity_change:'0',realized_change:'0',first_at_ms:1793929000000,last_at_ms:1793929000000}],recorder_errors:{count:0,last:null,at_ms:null},started_at_ms:1793929000000,now_ms:1793929900000,range:'7d',rows:[{bot:'v5',at_ms:1793929000000,unit:'USDC',equity:'199318.98',initial_funding:'200000',realized:'114.13',unrealized:'-795.15',fees:'23.11',coins:{BNB:{realized:'14.8',unrealized:null}}},{bot:'v5',at_ms:1793929600000,gap:'wallet: stale'},{bot:'helm',at_ms:1793929600000,gap:'HELM_STATUS_MISSING'}]};
     else if (url.pathname === '/api/v5/helm') body = {state:'STALE',reason:'HELM_STATUS_STALE',bot:'helm_v5_paper',status:{generated_at:1793929882.6,age_s:600000,ready:false,failure:null,failure_reported:true,reasons:null,steps:5086,actions:0,phase:'P1',profile_id:null,entries_held:'operator_entry_pause',operator_entry_paused:true,kill_switch:null,adaptive_actions:'off',funding:'finite_wallet',image_tag:null,shutdown:{checkpoint:true,clean:null},mandate:{mandate_id:'helm-v5-paper-20261105',state:'active',valid_until_ms:1e18},risk:null,control_rejections:null,symbols:[{pair:'BNB-USDC',status:null,candidate_hold:'low_volatility',bag:null,last_decision:{at:-1e21,reason:null}}],withheld:2}};
     else if (url.pathname.startsWith('/api/v5/learning/')) body = {effect:'NONE',status:'DISABLED',roles:[],reason:'Stage1 disabled'};
@@ -103,9 +105,9 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       const container = document.createElement('div');
       document.body.append(container);
       const mount = createRoot(container);
-      if (pathname === '/bots') context.mock.timers.enable({apis:['setInterval']});
+      if (pathname === '/bots' || pathname === '/system/data-feeds') context.mock.timers.enable({apis:['setInterval']});
       client.setQueryData(['v5-auth'],{authenticated:true});
-      client.setQueryData(['v5-profile'],profile);
+      client.setQueryData(['v5-profile'],pathname === '/system/data-feeds' ? {...profile,candle_store:{...profile.candle_store,configured:true}} : profile);
       client.setQueryData(['v5-settings'],settings);
       client.setQueryData(['v5-paper-observation-health',bot],['status','wallet','positions','executors','risk'].map(section => section === 'status' ? statusForRoute() : sections[section]));
       if (pathname === '/bots') client.setQueryData(['v5-paper-bots',bot],['status','wallet','positions','fills','executors','risk','decisions','history','accounting'].map(section => section === 'status' ? statusForRoute() : sections[section]));
@@ -114,6 +116,22 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, pathname === '/bots' ? 1 : 0, 'only Bots reads symbols once on initial mount with a complete snapshot');
         await React.act(async () => {await client.refetchQueries({type:'active'});});
         await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
+        if (pathname === '/system/data-feeds') {
+          const count = () => requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/summary').length;
+          const start = count();
+          assert.ok(start > 0, 'summary was requested');
+          for (let step = 0; step < 4; step++) {
+            now += 15_000;
+            await React.act(async () => {context.mock.timers.tick(15_000); await new Promise(resolve => setTimeout(resolve,0));});
+            assert.equal(count() - start, Math.floor((step + 1) / 2), 'only the strip schedules summary polls');
+            if (step === 0) {
+              const pause = [...container.querySelectorAll('button')].find(button => button.textContent === 'Pause');
+              assert.ok(pause);
+              await React.act(async () => {pause.dispatchEvent(new browser.MouseEvent('click',{bubbles:true}));});
+            }
+          }
+          now -= 60_000;
+        }
         if (pathname === '/bots') {
           assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 1, 'explicit refresh must not reload the symbols list');
           const candlesBefore = requests.slice(requestStart).filter(request => request.startsWith('/api/v5/candle-store/candles?')).length;
@@ -192,7 +210,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         assert.deepEqual(unexpectedReads,[],'every requested owner response must have a fixture');
       } finally {
         await React.act(async () => mount.unmount());
-        if (pathname === '/bots') context.mock.timers.reset();
+        if (pathname === '/bots' || pathname === '/system/data-feeds') context.mock.timers.reset();
         container.remove();
         client.clear();
       }

@@ -14,7 +14,8 @@ import { v5Api } from "./api";
 import { candleCurrent, hourlyReturns, marketHolding, marketSentence, windowChange } from "./market-header";
 import { readMarketPaper } from "./market-paper";
 import { usePaperClock } from "./usePaperClock";
-import { ageSeconds, breadth, coinTile, indexedReturns, laneHealthClass, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
+import { ageSeconds, breadth, coinTile, indexedReturns, laneHealthClass, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, systemStoreCurrent, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
+export { systemStoreCurrent } from "./market-model.mjs";
 import { age as ageShort, fixed, pct, price, signed, utcMin } from "./format.mjs";
 import { tri, utcMinute } from "./shown.mjs";
 import "./market.css";
@@ -67,7 +68,7 @@ function Card({ title, hint, children, className }: { title: string; hint?: stri
 
 export function V5Market() {
   const [range, setRange] = useState<(typeof RANGES)[number]>("24h");
-  const summary = useQuery({ ...candleSummaryQuery<Summary>(), retry: false, refetchInterval: REFRESH_MS });
+  const summary = useQuery({ ...candleSummaryQuery<Summary>(), retry: false, refetchInterval: false });
   const coins = useQuery({ queryKey: ["v5-market", "coins", range], queryFn: () => readCoins(range), retry: false, refetchInterval: REFRESH_MS });
   const cross = useQuery({ queryKey: ["v5-market", "cross"], queryFn: readCross, retry: false, refetchInterval: REFRESH_MS, enabled: coins.isSuccess });
   const workspace = useQuery({ queryKey: ["v5-workspace"], queryFn: v5Api.workspace, refetchInterval: 30_000 });
@@ -203,11 +204,6 @@ export function systemTime(value: number | null | undefined, now: number) {
   return stamp == null ? '— · time not reported' : value! > now ? `${stamp} · owner clock ahead` : `${stamp} · ${ageText((now - value!) / 1000)}`;
 }
 
-export function systemStoreCurrent(summary: Summary | undefined, receivedAt: number, now: number) {
-  if (!summary || !Number.isFinite(summary.now) || summary.now * 1000 > now || now - summary.now * 1000 > 90_000 || !Number.isFinite(summary.status_age_s) || summary.status_age_s! < 0 || receivedAt > now || receivedAt <= 0) return false;
-  return summary.status_age_s! * 1000 + now - receivedAt <= 60_000;
-}
-
 function systemCoverage(lanes: LaneTile[]) {
   if (!lanes.length) return null;
   const scale = 10n ** 30n;
@@ -228,7 +224,7 @@ function systemCoverage(lanes: LaneTile[]) {
 export function V5SystemMarket({ tab, paused }: { tab: 'data-feeds' | 'engine-inputs'; paused: boolean }) {
   const profile = useQuery({ queryKey: ['v5-profile'], queryFn: v5Api.profile, retry: false });
   const configured = profile.data?.candle_store?.configured === true;
-  const summary = useQuery({ ...candleSummaryQuery<Summary>(), enabled: configured && tab === 'data-feeds', retry: false, refetchInterval: paused ? false : 15_000 });
+  const summary = useQuery({ ...candleSummaryQuery<Summary>(), enabled: configured && tab === 'data-feeds', retry: false, refetchInterval: false });
   const workspace = useQuery({ queryKey: ['v5-system', 'market-workspace'], queryFn: v5Api.workspace, retry: false, refetchInterval: paused ? false : 15_000 });
   const now = usePaperClock();
   const invalidLanes = summary.isSuccess && (!summary.data || !Array.isArray(summary.data.tiles) || !summary.data.tiles.every(lane => lane && typeof lane === 'object' && typeof lane.lane === 'string' && typeof lane.venue === 'string' && typeof lane.segment === 'string'));

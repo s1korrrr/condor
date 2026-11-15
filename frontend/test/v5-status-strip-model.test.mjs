@@ -9,12 +9,32 @@ const input = (over = {}) => ({
   nowMs: NOW,
   v5: { bound: true, pending: false, current: true, runKnown: true, entryHold: null, lastOkMs: NOW - 4000 },
   helm: { read: { state: 'FRESH', status: status() }, failed: false, lastOkMs: NOW - 4000, receivedAtMs: NOW },
-  data: { configured: true, pending: false, failed: false, lanes: { total: 14, live: 14, healthy: 14, lagS: 62 }, lastOkMs: NOW - 4000, receivedAtMs: NOW },
+  data: { configured: true, pending: false, failed: false, summary:{now:NOW / 1000,status_age_s:1}, lanes: { total: 14, live: 14, healthy: 14, lagS: 62 }, lastOkMs: NOW - 4000, receivedAtMs: NOW },
   wallet: { current: true, equity: '1012.35', funding: '1000', flows: '0', unit: 'USDC' },
   updatedMs: NOW - 4000,
   ...over,
 });
 const chip = (strip, id) => strip.chips.find(item => item.id === id);
+
+test('successive old owner summaries never make market data live', () => {
+  for (const sentAt of [NOW, NOW + 30_000]) {
+    const summary = {now:(NOW - 600_000) / 1000,status_age_s:1};
+    const data = {...input().data, summary, lanes:{total:14,live:14,healthy:14,lagS:20},receivedAtMs:sentAt,requestedAtMs:sentAt};
+    assert.notEqual(chip(statusStrip(input({nowMs:sentAt,data})), 'data').tone, 'green');
+  }
+  const data = {...input().data,summary:{now:(NOW - 80_000) / 1000,status_age_s:1},lanes:{total:14,live:14,healthy:14,lagS:20}};
+  assert.equal(chip(statusStrip(input({data})), 'data').text, 'Live · slowest lane 100 s');
+  assert.equal(chip(statusStrip(input({data:{...data,summary:{...data.summary,now:(NOW - 91_000) / 1000}}})), 'data').tone, 'grey');
+  assert.equal(chip(statusStrip(input({data:{...data,summary:{...data.summary,status_age_s:null}}})), 'data').tone, 'grey');
+});
+
+test('malformed Helm reasons never break the status strip', () => {
+  for (const reasons of [{}, 'runtime_stopped', 42, null]) {
+    const helm = {...input().helm,read:{state:'FRESH',status:status({reasons})}};
+    assert.doesNotThrow(() => statusStrip(input({helm})));
+    assert.notEqual(chip(statusStrip(input({helm})), 'helm').tone, 'red');
+  }
+});
 
 test('market data and equity chips point to their release navigation pages', () => {
   const strip = statusStrip(input());

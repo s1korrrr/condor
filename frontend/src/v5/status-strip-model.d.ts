@@ -5,7 +5,7 @@ export type StripInput = {
   nowMs: number;
   v5: { bound: boolean; pending: boolean; current: boolean; runKnown?: boolean; entryHold: boolean | null; emergency?: boolean; restartOrderUnknown?: boolean; lastOkMs: number | null };
   helm: { read: (Parameters<typeof helmHeadline>[0] & { status?: { age_s?: number; generated_at?: number } | null }) | null; failed: boolean; lastOkMs: number | null; receivedAtMs?: number | null; requestedAtMs?: number | null };
-  data: { configured: boolean; pending: boolean; failed: boolean; lanes: { total: number; live: number; healthy: number; lagS: number | null } | null; lastOkMs: number | null; receivedAtMs?: number | null; requestedAtMs?: number | null };
+  data: { configured: boolean; pending: boolean; failed: boolean; summary?: { now?: number | null; status_age_s?: number | null } | null; lanes: { total: number; live: number; healthy: number; lagS: number | null } | null; lastOkMs: number | null; receivedAtMs?: number | null; requestedAtMs?: number | null };
   wallet: { current: boolean; equity: unknown; funding: unknown; flows: unknown; unit: unknown };
   updatedMs: number | null;
 };

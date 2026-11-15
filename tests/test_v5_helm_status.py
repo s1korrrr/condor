@@ -84,6 +84,13 @@ def test_stopped_runtime_is_stale_not_hidden(tmp_path):
     assert result["state"] == "STALE" and result["status"]["age_s"] == pytest.approx(7 * 86400)
 
 
+@pytest.mark.parametrize("reasons", [{}, "runtime_stopped", 42, None])
+def test_non_list_reasons_are_withheld_from_page_status(tmp_path, reasons):
+    result = read_helm_status(write(tmp_path, helm_status(reasons=reasons)), now=NOW)
+    assert result["state"] == "FRESH"
+    assert result["status"]["reasons"] is None or isinstance(result["status"]["reasons"], list)
+
+
 @pytest.mark.parametrize("change", [
     {"paper_runtime_schema": "native_component_paper_runtime_v1"},
     {"execution_mode": "live"},

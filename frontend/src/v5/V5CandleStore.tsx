@@ -45,7 +45,6 @@ const OWNER_STATES: Record<string, string> = {
   owner_busy: "the owner is already serving its maximum of concurrent reads",
   owner_compute_timeout: "the owner read exceeded its 8 s limit",
 };
-const isWarming = (error: unknown) => error instanceof Error && (error.message === "owner_warming" || error.message === "owner_warm_unavailable");
 const describeFailure = (error: Error | null) => !error ? "No owner response" : OWNER_STATES[error.message] ? `${OWNER_STATES[error.message]} (${error.message})` : error.message;
 
 function Unavailable({ failures }: { failures: { view: string; error: Error | null; checkedAt: number }[] }) {
@@ -60,7 +59,7 @@ export function V5CandleStore() {
   // One `summary` read returns lane tiles and instrument rows from one owner pass; other tabs leave both owner
   // read slots free for their own, narrower reads.
   const coverageTab = tab === "coverage";
-  const summary = useQuery({ ...candleSummaryQuery<Summary>(), retry: false, refetchInterval: query => isWarming(query.state.error) ? 5000 : 30000, enabled: coverageTab });
+  const summary = useQuery({ ...candleSummaryQuery<Summary>(), retry: false, refetchInterval: false, enabled: coverageTab });
   const rows = summary.isError ? [] : summary.data?.rows ?? [];
   const heldOkx = rows.filter(row => row.lane === "okx__spot" && row.last_minute !== null);
   const v5Pairs = ["BNB-USDC", "BTC-USDC", "ETH-USDC", "SOL-USDC", "XRP-USDC"];

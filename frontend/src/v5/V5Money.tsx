@@ -8,7 +8,7 @@ import { readCandleStore } from "./candle-store-api";
 import { v5Api } from "./api";
 import { dayCoverage, equityChange, holdReturn, latest, series, type DailyRow } from "./money-model.mjs";
 import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
-import { count, fixed, pct, pnl, signed, usdc, utcMin } from "./format.mjs";
+import { axis, count, fixed, pct, pnl, signed, usdc, utcMin } from "./format.mjs";
 import { utcExact } from "./shown.mjs";
 import { readMoney } from "./money-api";
 export { readMoney } from "./money-api";
@@ -94,9 +94,9 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
 
       <div className="v5m-row">
         <article className="v5m-card"><h3>Wallet equity over time</h3><p className="v5m-hint">One point per 5-minute sample · lines break at gaps · hover for values</p>
-          <TimeSeriesChart series={equitySeries} height={240} ariaLabel="V5 wallet equity over time" leftFormat={value => fixed(value)} emptyText="No samples in this range yet." /></article>
+          <TimeSeriesChart series={equitySeries} height={240} ariaLabel="V5 wallet equity over time" leftFormat={value => fixed(value)} leftTickFormat={value => axis(value)} emptyText="No samples in this range yet." /></article>
         <article className="v5m-card"><h3>Closed-trade profit and held-coin gain or loss</h3><p className="v5m-hint">Lifetime totals at each sample · hover for values</p>
-          <TimeSeriesChart series={pnlSeries} height={240} zeroLine includeZero signed ariaLabel="V5 realized and unrealized P&L over time" leftFormat={value => signed(value)} emptyText="No samples in this range yet." /></article>
+          <TimeSeriesChart series={pnlSeries} height={240} zeroLine includeZero signed ariaLabel="V5 realized and unrealized P&L over time" leftFormat={value => signed(value)} leftTickFormat={value => axis(value, 2, true)} emptyText="No samples in this range yet." /></article>
       </div>
 
       <div className="v5m-row">

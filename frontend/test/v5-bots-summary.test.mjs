@@ -213,7 +213,7 @@ test('six tiles use exact owner strings and only zero-flow equity minus funding'
   assert.equal(result[0].value, '200,000.00 USDC');
   assert.equal(result[0].exact, '199999.999999999999999999999999999999');
   assert.equal(result[1].exact, '-0.000000000000000000000000000001');
-  assert.equal(result[1].value, '−0.000000000000000000000000000001 USDC');
+  assert.equal(result[1].value, '−1e−30 USDC');
   assert.equal(result[2].value, '−12.00 USDC');
   assert.deepEqual(result.slice(3).map(tile => tile.value), ['realized_pnl_quote', 'unrealized_pnl_quote', 'fees_paid_quote'].map(key => usdc(fixture.accounting.data.program[key])));
   assert.deepEqual(result.slice(3).map(tile => tile.exact), ['realized_pnl_quote', 'unrealized_pnl_quote', 'fees_paid_quote'].map(key => fixture.accounting.data.program[key]));
@@ -224,7 +224,7 @@ test('six tiles use exact owner strings and only zero-flow equity minus funding'
   walletRead.data.external_cash_flows_quote = '0';
   walletRead.data.equity_quote = '200000.000000000000000000000000000001';
   assert.equal(tiles({ walletRead })[1].exact, '0.000000000000000000000000000001');
-  assert.equal(tiles({ walletRead })[1].value, '0.000000000000000000000000000001 USDC');
+  assert.equal(tiles({ walletRead })[1].value, '1e−30 USDC');
 });
 
 test('closed-trade losses below one cent remain visibly negative', () => {

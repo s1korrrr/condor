@@ -85,11 +85,11 @@ function visible(parts, digits, plus = false) {
   const rounded = round(parts, digits);
   if (!rounded.zero || !/[1-9]/.test(parts.int + parts.frac)) return { text: render(rounded, plus), zero: rounded.zero };
   const lead = parts.frac.search(/[1-9]/);
-  const extended = round(parts, Math.min(30, lead + 3));
-  if (extended.zero) {
+  if (lead + 3 > 30) {
     const text = coin(`${parts.neg ? '-' : ''}${parts.int}.${parts.frac}`);
     return { text: `${plus && !parts.neg ? '+' : ''}${text}`, zero: false };
   }
+  const extended = round(parts, lead + 3);
   extended.frac = extended.frac.replace(/0+$/, '');
   return { text: render(extended, plus), zero: false };
 }
@@ -104,6 +104,16 @@ export function fixed(value, digits = 2) {
 export function signed(value, digits = 2) {
   const parts = parse(value);
   return parts ? visible(parts, digits, true).text : DASH;
+}
+
+export function axis(value, digits = 2, plus = false) {
+  if (typeof value !== 'number' || !Number.isFinite(value)) return DASH;
+  if (value === 0) return '0';
+  const rounded = round(parse(String(value)), digits);
+  const text = render(rounded, plus);
+  if (!rounded.zero && text.length <= 9) return text;
+  const scientific = value.toExponential(1).replace(/\.0e/, 'e').replace(/-/g, MINUS);
+  return `${plus && value > 0 ? '+' : ''}${scientific}`;
 }
 
 /** "199,330.70 USDC". An empty unit leaves the unit off (an owner that did not publish one). */

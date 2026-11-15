@@ -51,7 +51,7 @@ export function marketSentence(changes: Record<string, string | null>, range: st
   const subject = measured.length === 1 ? measured[0].coin : missing.length ? `All ${measured.length} published coins` : 'All five coins';
   const verb = measured.length === 1 ? 'is' : 'are';
   const direction = up === measured.length ? `${subject} ${verb} up` : down === measured.length ? `${subject} ${verb} down` : !up && !down ? `${subject} ${verb} unchanged` : `${up} up, ${down} down, ${measured.length - up - down} unchanged`;
-  const mean = rounded(measured.reduce((sum, row) => sum + row.value, 0n), BigInt(measured.length) * SCALE, 2);
+  const mean = rounded(measured.reduce((sum, row) => sum + row.value, 0n), BigInt(measured.length) * SCALE, 35);
   const weakest = [...measured].sort((left, right) => left.value < right.value ? -1 : left.value > right.value ? 1 : 0)[0];
   const strongest = [...measured].sort((left, right) => left.value > right.value ? -1 : left.value < right.value ? 1 : 0)[0];
   const extreme = down ? `${weakest.coin} is weakest at ${pct(weakest.text)}.` : up ? `${strongest.coin} is strongest at ${pct(strongest.text)}.` : '';

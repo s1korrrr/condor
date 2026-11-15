@@ -1,9 +1,30 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import { readFileSync } from 'node:fs';
+import * as format from '../src/v5/format.mjs';
 import { age, coin, count, fixed, pct, pnl, price, signed, usdc, utc, utcMin, when } from '../src/v5/format.mjs';
 
 const M = '−';
 const base = Date.UTC(2026, 10, 14, 11, 34, 22);
+
+test('axis ticks bound tiny and ordinary values without changing full text', () => {
+  assert.equal(format.axis(1e-30), '1e−30');
+  assert.equal(format.axis(-0.004), '−4e−3');
+  assert.equal(format.axis(1234.5), '1,234.50');
+  assert.equal(format.axis(1234.5, 2, true), '+1,234.50');
+  assert.equal(format.axis(1e30), '1e+30');
+  assert.equal(format.axis(0), '0');
+  assert.equal(fixed('1e-30'), '1e−30');
+});
+
+test('Money and Market use bounded ticks but retain full tooltip formatters', () => {
+  const money = readFileSync(new URL('../src/v5/V5Money.tsx', import.meta.url), 'utf8');
+  const market = readFileSync(new URL('../src/v5/V5Market.tsx', import.meta.url), 'utf8');
+  assert.match(money, /leftFormat=\{value => fixed\(value\)\} leftTickFormat=\{value => axis\(value\)\}/);
+  assert.match(money, /leftFormat=\{value => signed\(value\)\} leftTickFormat=\{value => axis\(value, 2, true\)\}/);
+  assert.match(market, /leftFormat=\{value => pct\(value\)\} leftTickFormat=\{value => `\$\{axis\(value, 2, true\)\}%`\}/);
+  assert.match(market, /leftFormat=\{value => `\$\{signed\(value, 1\)\} bp`\} leftTickFormat=\{value => `\$\{axis\(value, 1, true\)\} bp`\}/);
+});
 
 test('usdc: 2 decimals, separators, unit once, true minus; numbers and decimal strings alike', () => {
   assert.equal(usdc(199330.7), '199,330.70 USDC');
@@ -30,7 +51,7 @@ test('true zero stays zero while tiny nonzero values keep their signs', () => {
   assert.equal(fixed(-0), '0.00');
   assert.equal(fixed(-0.001), '−0.001');
   assert.equal(fixed('-0.004'), '−0.004');
-  assert.equal(fixed('0.000000000000000000000000000001'), '0.000000000000000000000000000001');
+  assert.equal(fixed('0.000000000000000000000000000001'), '1e−30');
   assert.equal(usdc(-0.001), '−0.001 USDC');
   assert.equal(signed(-0.001), '−0.001');
   assert.equal(signed('0.00001'), '+0.00001');
@@ -55,10 +76,28 @@ test('each rounding helper preserves small positive and negative values exactly'
   assert.equal(price('-0.00001'), '−0.00001');
   assert.equal(fixed('1e-31'), '1e−31');
   assert.equal(fixed('-1e-31'), '−1e−31');
-  assert.equal(signed('1e-30'), '+0.000000000000000000000000000001');
-  assert.equal(usdc('-1e-30'), '−0.000000000000000000000000000001 USDC');
-  assert.deepEqual(pnl('-1e-30'), {text:'▼ −0.000000000000000000000000000001',tone:'down'});
-  assert.equal(price('1e-30'), '0.000000000000000000000000000001');
+  assert.equal(signed('1e-30'), '+1e−30');
+  assert.equal(usdc('-1e-30'), '−1e−30 USDC');
+  assert.deepEqual(pnl('-1e-30'), {text:'▼ −1e−30',tone:'down'});
+  assert.equal(price('1e-30'), '1e−30');
+});
+
+test('sub-30-place values retain their magnitude for every rounding helper', () => {
+  for (const [value, plain, withSign, pnlText, tone] of [
+    ['4.99e-31', '4.99e−31', '+4.99e−31', '▲ +4.99e−31', 'up'],
+    ['-4.99e-31', '−4.99e−31', '−4.99e−31', '▼ −4.99e−31', 'down'],
+    ['5e-31', '5e−31', '+5e−31', '▲ +5e−31', 'up'],
+    ['-5e-31', '−5e−31', '−5e−31', '▼ −5e−31', 'down'],
+    ['9.99e-31', '9.99e−31', '+9.99e−31', '▲ +9.99e−31', 'up'],
+    ['-9.99e-31', '−9.99e−31', '−9.99e−31', '▼ −9.99e−31', 'down'],
+  ]) {
+    assert.equal(fixed(value), plain);
+    assert.equal(signed(value), withSign);
+    assert.equal(usdc(value), `${plain} USDC`);
+    assert.deepEqual(pnl(value), { text: pnlText, tone });
+    assert.equal(price(value), plain);
+    assert.equal(pct(value), `${withSign}%`);
+  }
 });
 
 test('unknown is a dash, never 0', () => {

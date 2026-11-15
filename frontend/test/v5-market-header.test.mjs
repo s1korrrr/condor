@@ -41,7 +41,9 @@ test('sentence names every missing coin and averages only published changes exac
 
 test('sentence uses the shared percent format for grouped exact decimals and tiny values', () => {
   assert.match(marketSentence(changes(['1234.565']), '24h'), /on average \+1,234\.57%\. BTC is strongest at \+1,234\.57%\./);
-  assert.match(marketSentence(changes(['-0.004']), '24h'), /on average 0\.00%\. BTC is weakest at −0\.004%\./);
+  assert.match(marketSentence(changes(['-0.004']), '24h'), /on average −0\.004%\. BTC is weakest at −0\.004%\./);
+  assert.match(marketSentence(changes(['-0.004', '-0.002']), '24h'), /on average −0\.003%/);
+  assert.match(marketSentence(changes(['0.000000000000000000000000000001']), '24h'), /on average \+1e−30%/);
 });
 
 test('window return rounds exact candle decimals, not binary floating point; no substituted boundary', () => {

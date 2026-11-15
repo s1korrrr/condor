@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, type QueryClient } from "@tanstack/react-query";
 import { RotateCw } from "lucide-react";
 import { age, count, fixed, usdc, utcMin } from "./format.mjs";
 import { tri } from "./shown.mjs";
@@ -26,19 +26,19 @@ export type HelmStatus = {
   symbols: { pair: string; status: string | null; candidate_hold: string | null; bag: { held_amount: Amount; breakeven_price: Amount } | null; last_decision: { at: number | null; reason: string | null } | null; signal: HelmSignal | null }[];
   withheld: number;
 };
-export type HelmRead = { state: "FRESH" | "STALE" | "UNAVAILABLE" | "UNBOUND"; reason: string; bot: string | null; status: HelmStatus | null };
+export type HelmRead = { state: "FRESH" | "STALE" | "UNAVAILABLE" | "UNBOUND"; reason: string; bot: string | null; status: HelmStatus | null; _requestedAtMs?: number; _lastUsableAtMs?: number | null };
 
-const helmSent = new WeakMap<object, number>();
 /** When the request that returned this Helm read was sent (epoch ms), so ages include delivery time. */
-export const helmRequestedAt = (read: object) => helmSent.get(read);
+export const helmRequestedAt = (read: HelmRead) => read._requestedAtMs;
 
-export async function readHelm(): Promise<HelmRead> {
+export async function readHelm(context?: { client: QueryClient }): Promise<HelmRead> {
   const sentMs = Date.now();
   const response = await fetch("/api/v5/helm", { credentials: "include", cache: "no-store", signal: AbortSignal.timeout(14_000) });
   if (!response.ok) throw new Error(`Helm read failed (HTTP ${response.status})`);
   const read = await response.json() as HelmRead;
-  if (read && typeof read === "object") helmSent.set(read, sentMs);
-  return read;
+  const previous = context?.client.getQueryData<HelmRead>(["v5-helm"]);
+  const usable = (read.state === "FRESH" || read.state === "STALE") && read.status != null;
+  return { ...read, _requestedAtMs: sentMs, _lastUsableAtMs: usable ? Date.now() : previous?._lastUsableAtMs ?? null };
 }
 
 /** Owner codes as words; anything that is not text is shown as missing, never coerced. */

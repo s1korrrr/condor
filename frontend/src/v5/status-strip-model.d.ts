@@ -12,5 +12,5 @@ export type StripInput = {
 export const DATA_LAG_AMBER_S: number;
 export const HELM_STALE_S: number;
 export function utcClock(ms: unknown): string | null;
-export function statusStrip(input: StripInput): { chips: StripChip[]; toCheck: number; checkText: string; shortCheckText: string; updated: string };
+export function statusStrip(input: StripInput): { chips: StripChip[]; toCheck: number; checkText: string; shortCheckText: string; updated: string; updatedShort: string };
 export function laneHealth(tiles: unknown): { total: number; live: number; healthy: number; lagS: number | null } | null;

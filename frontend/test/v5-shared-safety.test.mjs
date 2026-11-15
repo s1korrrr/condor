@@ -70,3 +70,39 @@ test('different query keys share ordered bot safety, including failed strip refr
   await act(async () => root.unmount());
   client.clear();
 });
+
+test('either query retains a new-boot emergency against a delayed old-boot clear', async () => {
+  for (const clearKey of ['strip', 'bots']) {
+    const client = new QueryClient({defaultOptions:{queries:{retry:false, gcTime:Infinity}}});
+    const bot = risk.bot_id, states = {};
+    const withBoot = (reads, boot) => reads.map(read => ({...read, source:{...read.source, boot_id:boot}}));
+    const inputs = {strip:withBoot(pair(2, true), 'boot-b'), bots:withBoot(pair(2, true), 'boot-b')};
+    function Observer({name, queryKey}) {
+      states[name] = usePaperSnapshot(queryKey, true, 2, async progress => { progress(inputs[name]); return inputs[name]; });
+      return null;
+    }
+    let root;
+    await act(async () => { root = create(React.createElement(QueryClientProvider, {client},
+      React.createElement(Observer, {name:'strip', queryKey:['v5-paper-observation-health', bot]}),
+      React.createElement(Observer, {name:'bots', queryKey:['v5-paper-bots', bot]}))); });
+    inputs[clearKey] = withBoot(pair(99, false), 'boot-a');
+    await act(async () => { await states[clearKey].refetch(); });
+    for (const name of ['strip', 'bots']) assert.ok(states[name].safetyEvidence.some(read => read.source.boot_id === 'boot-b' && read.data.controllers[controller].operator.emergency === true));
+    inputs[clearKey] = withBoot(pair(3, false), 'boot-b');
+    await act(async () => { await states[clearKey].refetch(); });
+    assert.equal(states.strip.safetyEvidence.length, 0, 'a newer clear from the same boot can clear');
+    await act(async () => root.unmount());
+    client.clear();
+  }
+});
+
+test('independent boot holds survive a clear of only one boot', () => {
+  const { PaperSafetyStore } = frontendModules().load('v5/paper-safety-store');
+  const store = new PaperSafetyStore();
+  const withBoot = (reads, boot) => reads.map(read => ({...read, source:{...read.source, boot_id:boot}}));
+  const first = withBoot(pair(2, true), 'a'), second = withBoot(pair(2, true), 'b');
+  store.receive(first, first[1]); store.receive(second, second[1]);
+  const clear = withBoot(pair(3, false), 'a');
+  store.receive(clear, clear[1]);
+  assert.ok(store.snapshot().some(read => read.source.boot_id === 'b'));
+});

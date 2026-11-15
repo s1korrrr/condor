@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { test } from 'node:test';
+import fs from 'node:fs';
 import { laneHealth, statusStrip, utcClock } from '../src/v5/status-strip-model.mjs';
 
 const NOW = Date.parse('2026-11-14T12:00:30Z');
@@ -21,6 +22,13 @@ test('market data and equity chips point to their release navigation pages', () 
   assert.equal(chip(strip, 'equity').to, '/');
 });
 
+test('compact layout keeps equity and updated time visible', () => {
+  const css = fs.readFileSync(new URL('../src/v5/status-strip.css', import.meta.url), 'utf8');
+  const mobile = css.slice(css.indexOf('@media (max-width: 640px)'));
+  assert.doesNotMatch(mobile, /\.v5-strip-chip\.is-equity|\.v5-strip-updated\s*\{[^}]*display:\s*none/);
+  assert.match(mobile, /flex-wrap:\s*wrap/);
+});
+
 test('everything current is green, counts nothing to check and stamps the update with a ticking age', () => {
   const strip = statusStrip(input());
   assert.deepEqual(strip.chips.map(item => [item.id, item.tone]), [['v5', 'green'], ['helm', 'green'], ['data', 'green'], ['equity', 'green']]);
@@ -28,7 +36,17 @@ test('everything current is green, counts nothing to check and stamps the update
   assert.equal(chip(strip, 'data').text, 'Live · slowest lane 62 s');
   assert.equal(strip.checkText, 'Nothing to check');
   assert.equal(strip.updated, 'Updated 12:00:26 UTC · 4 s ago');
+  assert.equal(strip.updatedShort, '4 s');
+  assert.equal(chip(strip, 'equity').short, 'Eq 1,012.35');
   assert.equal(statusStrip(input({ nowMs: NOW + 1000 })).updated, 'Updated 12:00:26 UTC · 5 s ago');
+});
+
+test('unavailable Helm retains the last usable time and shows the owner reason', () => {
+  const read = {state:'UNAVAILABLE', reason:'owner_unreachable', status:null};
+  const item = chip(statusStrip(input({helm:{read, failed:false, lastOkMs:NOW - 60_000}})), 'helm');
+  assert.equal(item.tone, 'grey');
+  assert.match(item.text, /No report since 11:59:30 UTC · owner_unreachable/);
+  assert.match(chip(statusStrip(input({helm:{read, failed:false, lastOkMs:null}})), 'helm').text, /No report yet · owner_unreachable/);
 });
 
 test('an owner entry hold is amber "buying paused"; a failed or stale V5 read is grey and names the last good report', () => {

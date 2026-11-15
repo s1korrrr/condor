@@ -21,8 +21,9 @@ export class PaperSafetyStore {
 
   receive(received: PaperRead[], complete?: PaperRead) {
     if (complete) for (const key of paperSafetyCoverage(complete)) {
-      const previous = this.coverage.get(key);
-      if (!previous || newerSnapshot(complete, previous)) this.coverage.set(key, complete);
+      const scopedKey = JSON.stringify([key, complete.source?.boot_id ?? null]);
+      const previous = this.coverage.get(scopedKey);
+      if (!previous || newerSnapshot(complete, previous)) this.coverage.set(scopedKey, complete);
     }
     this.reads = this.reconcile(paperSafetyReads(this.reads, received, complete));
     for (const listener of this.listeners) listener();

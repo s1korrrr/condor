@@ -64,6 +64,7 @@ function helmChip(helm, nowMs) {
   if (!helm.read) return { ...base, tone: 'grey', text: helm.failed ? noReport(helm.lastOkMs) : 'Reading Helm', short: helm.failed ? 'Helm no report' : 'Helm …' };
   // A failed refresh keeps no value as current: only the last-report time is shown.
   if (helm.failed) return { ...base, tone: 'grey', text: noReport(helm.lastOkMs), short: 'Helm no report' };
+  if (helm.read.state === 'UNAVAILABLE') return { ...base, tone: 'grey', text: `${noReport(helm.lastOkMs)}${helm.read.reason ? ` · ${helm.read.reason}` : ''}`, short: 'Helm no report' };
   // Age Helm's status with the clock since the read arrived, so a cached FRESH read expires at Helm's own 30 s line.
   // Counted from when the request was sent when known (delivery time is age too), else from arrival (Terra R3 B3).
   const sinceMs = Number.isFinite(helm.requestedAtMs) ? helm.requestedAtMs : helm.receivedAtMs;
@@ -104,7 +105,7 @@ function dataChip(data, nowMs) {
 function equityChip(wallet) {
   const base = { id: 'equity', label: 'V5 equity', to: '/' };
   const equity = wallet.current ? decimal(wallet.equity) : null;
-  if (equity === null) return { ...base, tone: 'grey', text: '—', short: '—' };
+  if (equity === null) return { ...base, tone: 'grey', text: '—', short: 'Eq —' };
   const unit = typeof wallet.unit === 'string' && wallet.unit ? ` ${wallet.unit}` : '';
   const funding = decimal(wallet.funding), flows = decimal(wallet.flows);
   const equityText = money(centsOf(scaled(equity, equity.scale), equity.scale));
@@ -114,7 +115,7 @@ function equityChip(wallet) {
     const scale = Math.max(equity.scale, funding.scale), cents = centsOf(scaled(equity, scale) - scaled(funding, scale), scale);
     delta = `${cents > 0n ? '+' : ''}${money(cents)} since start`;
   }
-  return { ...base, tone: 'green', text: `${equityText}${unit} · ${delta}`, short: equityText };
+  return { ...base, tone: 'green', text: `${equityText}${unit} · ${delta}`, short: `Eq ${equityText}` };
 }
 
 /**
@@ -137,6 +138,7 @@ export function statusStrip(input) {
     checkText: toCheck === 0 ? 'Nothing to check' : `${toCheck} ${toCheck === 1 ? 'thing' : 'things'} to check`,
     shortCheckText: String(toCheck),
     updated: at ? `Updated ${at} · ${ago} s ago` : 'Not updated yet',
+    updatedShort: at ? `${ago} s` : 'Not updated',
   };
 }
 

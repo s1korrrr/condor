@@ -111,7 +111,9 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       body = {state:'AVAILABLE',reason:null,data:{pair:url.searchParams.get('pair') ?? 'BNB-USDC',venue:'binance',volume_unit:'base',start:end-60,end,now:end+65,buckets:[[end-60,100,101,99,100,2,1],[end,101,102,100,101.123456789,2,1]],totals:{}}};
     }
     else if (url.pathname === '/api/v5/candle-store/summary') body = {state:'AVAILABLE',reason:null,data:{now:Math.floor(sections.status.read_at_ms/1000),status_age_s:1,tiles:[],rows:[]}};
-    else if (url.pathname === '/api/v5/candle-store/cross') body = {state:'AVAILABLE',reason:null,data:{table:[],series:[]}};
+    else if (url.pathname === '/api/v5/candle-store/cross') body = {state:'AVAILABLE',reason:null,data:{now:1793403300,asset:'BTC',segment:'spot',range:'24h',res:'1h',res_s:3600,start:1793401200,end:1793401200,minutes:1,minutes_with_median:1,venues_per_minute_max:2,note:'fixture',table:[],series:[]}};
+    else if (url.pathname === '/api/v5/candle-store/heatmap') body = {state:'AVAILABLE',reason:null,data:{now:1793403300,segment:'spot',hours:[],fields:['final','no_trade','unrecoverable','missing','pending'],last_closed:1793403200,rows:[]}};
+    else if (url.pathname === '/api/v5/candle-store/store') body = {state:'AVAILABLE',reason:null,data:{now:1793403300,status:{present:true,error:null,age_s:1,started_at:1793403200,uptime_s:100,fatal_error:null,process:{rss_mib:10,max_rss_mib:10,cpu_user_s:1,cpu_sys_s:1,loop_lag_s:{p50:0,p99:0,max:0,max_recent:0}},fault_injections:0},retention:{window_s:604800,margin_s:0,window_days:7,keep_days:7},versions:{found:{},expected:{},mismatches:[]},config:{source:'fixture',error:null,assets:['BTC']},bytes_total:0,lanes:[],read_method:'fixture'}};
     else if (url.pathname === '/api/v5/money') body = {sampler:true,daily:[{day:1793923200000,samples:2,gaps:1,valid:1,equity_start:'199318.98',equity_end:'199318.98',equity_change:'0',realized_change:'0',first_at_ms:1793929000000,last_at_ms:1793929000000}],recorder_errors:{count:0,last:null,at_ms:null},started_at_ms:1793929000000,now_ms:1793929900000,range:'7d',rows:[{bot:'v5',at_ms:1793929000000,unit:'USDC',equity:'199318.98',initial_funding:'200000',realized:'114.13',unrealized:'-795.15',fees:'23.11',coins:{BNB:{realized:'14.8',unrealized:null}}},{bot:'v5',at_ms:1793929600000,gap:'wallet: stale'},{bot:'helm',at_ms:1793929600000,gap:'HELM_STATUS_MISSING'}]};
     else if (url.pathname === '/api/v5/helm') body = {state:'STALE',reason:'HELM_STATUS_STALE',bot:'helm_v5_paper',status:{generated_at:1793929882.6,age_s:600000,ready:false,failure:null,failure_reported:true,reasons:null,steps:5086,actions:0,phase:'P1',profile_id:null,entries_held:'operator_entry_pause',operator_entry_paused:true,kill_switch:null,adaptive_actions:'off',funding:'finite_wallet',image_tag:null,shutdown:{checkpoint:true,clean:null},mandate:{mandate_id:'helm-v5-paper-20261105',state:'active',valid_until_ms:1e18},risk:null,control_rejections:null,symbols:[{pair:'BNB-USDC',status:null,candidate_hold:'low_volatility',bag:null,last_decision:{at:-1e21,reason:null}}],withheld:2}};
     else if (url.pathname.startsWith('/api/v5/learning/')) body = {effect:'NONE',status:'DISABLED',roles:[],reason:'Stage1 disabled'};
@@ -168,6 +170,13 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         if (pathname === '/market') {
           assert.match(container.textContent,/101\.12/,'configured Market must show a fixture candle close');
           assert.match(container.textContent,/Instrument coverage/,'open candle-store details must render the fixture view');
+          for (const [tab, heading] of [['Cross-venue','Cross-venue price deviation'],['Coverage heatmap','Hourly coverage'],['Store facts','Store facts']]) {
+            const button = [...container.querySelectorAll('[role="tab"]')].find(node => node.textContent === tab);
+            assert.ok(button, `market tab ${tab} must exist`);
+            await React.act(async () => { button.click(); await client.refetchQueries({type:'active'}); await new Promise(resolve => setTimeout(resolve,0)); });
+            assert.match(container.textContent,new RegExp(heading));
+            decimalFindings.push(...longVisibleDecimals(container).map(finding => `${pathname} / ${tab}: ${finding}`));
+          }
         }
         decimalFindings.push(...longVisibleDecimals(container).map(finding => `${pathname}: ${finding}`));
         if (pathname === '/market/stocks') {

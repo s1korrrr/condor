@@ -437,7 +437,7 @@ export function SettingsPage() {
   const settings = query.data;
   const tasks = settings.task_profiles ?? settings.budget.task_profiles ?? [];
   const errors = typeof settings.source_error === "string" ? settings.source_error.split(";") : [];
-  const advisorMissing = errors.some(error => error.startsWith("advisor:")) ? "advisor source unavailable" : "advisor enabled not published";
+  const advisorMissing = errors.some(error => error.startsWith("advisor:")) ? "advisor source unavailable" : settings.advisor_enabled_error === "not a boolean" ? "v5_advisory /v1/advice/status enabled is invalid: not a boolean" : "advisor enabled not published";
   const tasksMissing = errors.some(error => error.startsWith("task_profiles:")) ? "task profiles source unavailable" : "polling state not published";
   return <><PageHeading title="Workspace settings" description={paper ? `Read-only configuration · paper owner reads: ${observation.summary.label.toLowerCase()}. ${observation.summary.reason}` : "Read-only configuration. Owner readiness is reported separately."} actions={<button className="v5-button" onClick={() => void query.refetch()}><RotateCw size={15} />Refresh settings</button>} />
     <PaperIdentity />

@@ -96,6 +96,12 @@ test('Settings names independent advisor sources, exact policy and unpublished i
   const missing = renderToStaticMarkup(React.createElement(page));
   assert.match(missing, /— · advisor enabled not published/);
   assert.doesNotMatch(missing, /No · source: v5_advisory/);
+  settings.advisor_enabled_error = 'not a boolean';
+  const invalid = renderToStaticMarkup(React.createElement(page));
+  assert.match(invalid, /— · v5_advisory \/v1\/advice\/status enabled is invalid: not a boolean/);
+  assert.match(invalid, /Enabled · source: v5_advisory \/v1\/tasks scheduler.enabled/);
+  assert.doesNotMatch(invalid, /advisor enabled not published/);
+  delete settings.advisor_enabled_error;
   delete settings.scheduler.enabled;
   delete settings.budget_policy.authorized_ceiling_usd;
   settings.source_error = 'advisor:unavailable;task_profiles:unavailable';

@@ -1251,6 +1251,11 @@ def create_app(
                 if key in advisor
                 and (key != "enabled" or isinstance(advisor[key], bool))
             },
+            "advisor_enabled_error": (
+                "not a boolean"
+                if "enabled" in advisor and not isinstance(advisor["enabled"], bool)
+                else None
+            ),
             "task_profiles": rows,
             "budget_policy": source.get("budget_policy", {}),
             "scheduler": source.get("scheduler", {}),

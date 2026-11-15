@@ -300,6 +300,9 @@ def test_settings_keeps_advisor_and_scheduler_sources_separate(tmp_path):
         login(client)
         result = client.get("/api/v5/settings").json()
         assert "enabled" not in result["budget"]
+        assert result["advisor_enabled_error"] == "not a boolean"
+        assert result["budget"]["model"] == "claude-sonnet"
+        assert result["source_readiness"] == "AVAILABLE"
         assert result["scheduler"]["enabled"] is True
 
 

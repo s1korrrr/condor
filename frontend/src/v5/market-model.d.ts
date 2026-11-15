@@ -18,7 +18,8 @@ export type LaneTile = {
   unavailable_reason?: string | null;
 };
 export type StoreHealth = {
-  lanes: number; lanesLive: number; lanesUnknown: number; pairsHeld: number | null; pairsListed: number | null;
+  ownerHealth: "green" | "amber" | "red" | "unknown";
+  lanes: number; lanesAvailable: number; lanesUnknown: number; pairsHeld: number | null; pairsListed: number | null;
   coverage7d: number | null; gaps7d: number | null; oldestMinuteAge: number | null;
   unreported: { pairs: number; coverage: number; gaps: number; age: number };
 };

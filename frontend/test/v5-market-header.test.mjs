@@ -221,8 +221,19 @@ test('Market header withholds lane counts when owner status is old or availabili
   assert.match(header({ tiles: [lane], status_age_s: 0 }), /1\/1 lanes available/);
   assert.match(header({ tiles: [lane], status_age_s: 181 }), /— not current/);
   assert.doesNotMatch(header({ tiles: [lane], status_age_s: 181 }), /1\/1 lanes available/);
-  assert.match(header({ tiles: [{ ...lane, available: null }], status_age_s: 0 }), /— data incomplete/);
+  assert.match(header({ tiles: [{ ...lane, available: null }], status_age_s: 0 }), /— · lane availability incomplete/);
   assert.match(header({ tiles: [lane], status_age_s: null }), /— data incomplete/);
+});
+
+test('Market candle-store chip uses current owner health, independently of availability', () => {
+  const lane = { lane: 'binance__spot', venue: 'binance', segment: 'spot', available: true, last_minute_age_s: 10 };
+  const header = (tiles, status_age_s = 0) => renderMarket({ summaryData: { tiles, status_age_s } }).html.split('</header>')[0];
+  for (const [health, color] of [['red', 'is-bad'], ['amber', 'is-warn'], [null, 'is-unknown'], ['green', '']]) {
+    assert.match(header([{ ...lane, health }]), new RegExp(`class="v5m-chip ${color}"[^]*Candle store <b>1/1 lanes available · owner health ${health ?? 'unknown'}`));
+  }
+  assert.match(header([{ ...lane, available: null, health: 'red' }]), /v5m-chip is-bad[^]*lane availability incomplete · owner health red/);
+  assert.match(header([{ ...lane, health: 'red' }], 181), /v5m-chip is-warn[^]*Candle store <b>— not current/);
+  assert.doesNotMatch(header([{ ...lane, health: 'red' }], 181), /owner health red/);
 });
 
 test('Market candle requests use the selected range for both lanes of every coin', async () => {

@@ -18,14 +18,7 @@ import type { PaperRead } from "@/v5/contracts";
 import { usePaperSnapshot } from "@/v5/usePaperSnapshot";
 import { usePaperClock } from "@/v5/usePaperClock";
 import { parsePaperReadText } from "@/v5/paper-json";
-import { paperAge, paperSnapshotPresentation, PAPER_SNAPSHOT_FRESH_MS } from "@/v5/snapshot-presentation";
-
-/**
- * Hard cap for dimmed values (Falco 14 Nov option B). Today a full Bots read takes ~9 s (up to ~50 s under load) and
- * refreshes every 15 s, so a healthy owner always produces a complete snapshot well within 120 s (= 4x the 30 s line,
- * about 2x the worst observed gap). Older than that means the owner or the read path is failing: values are withheld.
- */
-const PAPER_DIMMED_MAX_MS = 120_000;
+import { paperDimmedSnapshot, paperSnapshotPresentation } from "@/v5/snapshot-presentation";
 import { paperPairBag, paperPairHoldings, paperReadFailureMessage } from "@/v5/policy";
 import { paperAmount, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperPairObservation, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
 import { PaperTerminalHistory } from "@/v5/PaperTerminalHistory";
@@ -51,6 +44,7 @@ import { formatCurrencyPnl, formatCurrencyVolume, pnlColor } from "@/lib/formatt
 import { botPollingPolicy, botCountLabel, expireNativeBotPage, nativeBotQuote, observedFleetCounts, observedPnlColor } from "@/lib/bot-monitoring";
 import { nativeCommandOutcome, nativeControlEligibility, awaitingNativeOwnerTransition, type NativeAction } from "@/lib/native-bot-controls";
 import { sessionRevision } from '@/lib/auth-session';
+
 
 function formatUptime(deployedAt: string | null): string {
   if (!deployedAt) return "—";
@@ -813,17 +807,14 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
   // Dimmed values (Falco 14 Nov, option B): between the 30 s freshness line and the hard cap, the last complete
   // snapshot stays on screen, judged as of its own time, dimmed, with ONE stamp saying it is not current. Past the cap
   // the normal stale rules withhold it, as before.
-  const snapshotAt = complete && typeof reads[0]?.generated_at_ms === "number" ? reads[0].generated_at_ms : null;
-  const ageMs = snapshotAt === null ? null : now - snapshotAt;
-  const dimmed = ageMs !== null && ageMs > PAPER_SNAPSHOT_FRESH_MS && ageMs <= PAPER_DIMMED_MAX_MS;
-  const judgedAt = dimmed ? snapshotAt! + 1_000 : now;
+  const { dimmed, snapshotAt, judgedAt } = paperDimmedSnapshot(complete ? reads[0]?.generated_at_ms : null, now);
   const accounting = complete ? reads.find(read => read.section === "accounting") : undefined;
   const clock = paperHeartbeat(generatedAt === null ? null : Math.floor(generatedAt * 1000), ownerState, now);
   const heartbeat = clock.current ? "Fresh" : ownerState === "UNAVAILABLE" ? "Unavailable" : "Stale";
   return <div className="v5-paper-bots" data-layout={layout}>
     <header className="v5-page-heading"><div><h1>Paper bots</h1><p>{bot} · simulated wallet · live disabled</p></div><div className="v5-button-row"><button className="v5-button" aria-pressed={layout === "grid"} onClick={() => setLayout("grid")}>Grid</button><button className="v5-button" aria-pressed={layout === "compact"} onClick={() => setLayout("compact")}>Compact</button><button className="v5-button" onClick={() => void query.refetch()}>Refresh paper data</button></div></header>
-    {complete && <p>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}</p>}
-    {dimmed && <p role="status" className="paper-dimmed-stamp">Values from {paperTime(snapshotAt, now)} · {paperAge(ageMs!)} ago · not current. Waiting for a new report.</p>}
+    {/* ONE stamp: while dimmed it also says the values below are from that time and wait for a new report. */}
+    {complete && <p role={dimmed ? "status" : undefined} className={dimmed ? "paper-dimmed-stamp" : undefined}>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}{dimmed ? " · values below are from that time, dimmed until a new report" : ""}</p>}
     {query.progress && <p role="status">{query.progress}</p>}
     {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
     <div className={dimmed ? "paper-dimmed" : undefined} style={dimmed ? { opacity: 0.6 } : undefined} aria-label={dimmed ? "Last complete owner snapshot, not current" : undefined}><PaperWorkspace asOf={dimmed ? snapshotAt : null} reads={reads} safetyReads={query.safetyReads} complete={complete} readFailed={query.isError} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={judgedAt} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} /></div>

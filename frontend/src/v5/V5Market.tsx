@@ -228,7 +228,7 @@ function systemCoverage(lanes: LaneTile[]) {
 export function V5SystemMarket({ tab, paused }: { tab: 'data-feeds' | 'engine-inputs'; paused: boolean }) {
   const profile = useQuery({ queryKey: ['v5-profile'], queryFn: v5Api.profile, retry: false });
   const configured = profile.data?.candle_store?.configured === true;
-  const summary = useQuery({ queryKey: ['v5-system', 'market-summary'], queryFn: () => readCandleStore<Summary>('summary'), enabled: configured && tab === 'data-feeds', retry: false, refetchInterval: paused ? false : 15_000 });
+  const summary = useQuery({ ...candleSummaryQuery<Summary>(), enabled: configured && tab === 'data-feeds', retry: false, refetchInterval: paused ? false : 15_000 });
   const workspace = useQuery({ queryKey: ['v5-system', 'market-workspace'], queryFn: v5Api.workspace, retry: false, refetchInterval: paused ? false : 15_000 });
   const now = usePaperClock();
   const invalidLanes = summary.isSuccess && (!summary.data || !Array.isArray(summary.data.tiles) || !summary.data.tiles.every(lane => lane && typeof lane === 'object' && typeof lane.lane === 'string' && typeof lane.venue === 'string' && typeof lane.segment === 'string'));

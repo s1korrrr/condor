@@ -49,7 +49,7 @@ test('market system tabs show only current owner inputs and the selected view', 
     const summary = {now:1000,status_age_s:10,tiles:[{lane:'okx__spot',venue:'okx',segment:'spot',available:true,health:'red',pairs_held:1,pairs_listed:1,coverage_24h:1,coverage_7d:1,gaps_7d:5,last_minute_age_s:30}]};
     const workspace = {source_refresh:{feed_freshness:'FRESH',feed_fresh_until_ms:1_030_000,last_success_at_ms:999_000},context:{cutoff_ms:999_000,features:{}}};
     const overrides = {
-      '@tanstack/react-query': {useQuery: ({queryKey}) => queryKey[0] === 'v5-profile' ? {data:{candle_store:{configured:true}}} : queryKey[1] === 'market-summary' ? {isSuccess:true,data:summary,dataUpdatedAt:1_000_000} : {isSuccess:true,data:workspace}},
+      '@tanstack/react-query': {useQuery: ({queryKey}) => queryKey[0] === 'v5-profile' ? {data:{candle_store:{configured:true}}} : queryKey[0] === 'candle-summary' ? {isSuccess:true,data:summary,dataUpdatedAt:1_000_000} : {isSuccess:true,data:workspace}},
       '@/features/quant-ops/kit/charts': {}, '@/features/quant-ops/kit/grid': {},
       './usePaperClock': {usePaperClock: () => now},
       './V5CandleStore': {}, './V5MarketDetail': {}, './V5MarketFeatures': {V5MarketFeatures:() => React.createElement('p',null,'FEATURE PACKET')},
@@ -83,7 +83,7 @@ test('System market rejects missing or malformed lane collections without crashi
   for (const tiles of [undefined, null, {}, [null]]) {
     const summary = {now:1000,status_age_s:10,tiles};
     const {V5SystemMarket} = frontendModules({
-      '@tanstack/react-query': {useQuery: ({queryKey}) => queryKey[0] === 'v5-profile' ? {data:{candle_store:{configured:true}}} : queryKey[1] === 'market-summary' ? {isSuccess:true,data:summary,dataUpdatedAt:1_000_000} : {isSuccess:true,data:{}}},
+      '@tanstack/react-query': {useQuery: ({queryKey}) => queryKey[0] === 'v5-profile' ? {data:{candle_store:{configured:true}}} : queryKey[0] === 'candle-summary' ? {isSuccess:true,data:summary,dataUpdatedAt:1_000_000} : {isSuccess:true,data:{}}},
       './usePaperClock': {usePaperClock: () => 1_000_000},
       '@/features/quant-ops/kit/charts': {}, '@/features/quant-ops/kit/grid': {}, './V5CandleStore': {}, './V5MarketDetail': {}, './V5MarketFeatures': {},
     }).load('v5/V5Market.tsx');

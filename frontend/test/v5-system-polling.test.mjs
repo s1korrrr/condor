@@ -8,7 +8,7 @@ test('paper snapshot polling defaults to 15 seconds and can be paused per observ
   const options = [];
   const cache = { getQueryCache: () => ({ find: () => undefined }) };
   const { load } = frontendModules({
-    react: { useRef: value => ({ current: value }), useState: value => [value, () => {}] },
+    react: { useRef: value => ({ current: value }), useState: value => [value, () => {}], useSyncExternalStore: (subscribe, snapshot) => snapshot() },
     '@tanstack/react-query': {
       useQueryClient: () => cache,
       useQuery: value => { options.push(value); return { data: undefined, isFetching: false }; },
@@ -25,6 +25,7 @@ test('paper snapshot polling defaults to 15 seconds and can be paused per observ
 test('System observation shares the owner cache and does not poll independently', () => {
   const calls = [];
   const {load} = frontendModules({
+    react: {useRef: value => ({current:value})},
     './usePaperClock': {usePaperClock: () => 1_000_000},
     './usePaperSnapshot': {usePaperSnapshot: (key, enabled, total, load, interval) => {calls.push({key,enabled,total,interval}); return {reads:[],journalReads:[],complete:false,isPending:true,isFetching:false,isError:false};}},
   });
@@ -41,6 +42,7 @@ test('global notice and System share one five-read sequence per polling cycle, i
   const sections = Object.fromEntries(['status','wallet','positions','executors','risk'].map(section => [section, JSON.parse(readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)))]));
   const bot = sections.status.bot_id, observers = [], requests = [];
   const {load} = frontendModules({
+    react: {useRef: value => ({current:value})},
     './usePaperClock': {usePaperClock: () => sections.status.generated_at_ms},
     './usePaperSnapshot': {usePaperSnapshot: (key, enabled, total, read, interval) => {observers.push({key,enabled,total,read,interval}); return {reads:[],journalReads:[],complete:false,isPending:true,isFetching:false,isError:false};}},
   });

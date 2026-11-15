@@ -57,6 +57,15 @@ test('market system tabs show only current owner inputs and the selected view', 
     const {V5SystemMarket} = frontendModules(overrides).load('v5/V5Market.tsx');
     const feeds = renderToStaticMarkup(React.createElement(V5SystemMarket,{tab:'data-feeds',paused:false}));
     assert.match(feeds, /Venue coverage/); assert.match(feeds, /okx/); assert.match(feeds, /class="is-down" title="Owner health: red · available"/); assert.doesNotMatch(feeds, /FEATURE PACKET/);
+    assert.match(feeds, /7-day coverage<\/span><strong>100\.0%/);
+    assert.match(feeds, /7-day coverage 100\.0% · missing minutes 5/);
+    summary.tiles[0].coverage_7d = 0.1;
+    summary.tiles.push({...summary.tiles[0],lane:'other__spot',venue:'other',coverage_7d:0.2});
+    const mean = renderToStaticMarkup(React.createElement(V5SystemMarket,{tab:'data-feeds',paused:false}));
+    assert.match(mean, /7-day coverage<\/span><strong>15\.0%/);
+    summary.tiles[1].coverage_7d = null;
+    assert.match(renderToStaticMarkup(React.createElement(V5SystemMarket,{tab:'data-feeds',paused:false})), /7-day coverage is missing or invalid/);
+    summary.tiles.pop(); summary.tiles[0].coverage_7d = 1;
     const inputs = renderToStaticMarkup(React.createElement(V5SystemMarket,{tab:'engine-inputs',paused:false}));
     assert.match(inputs, /FEATURE PACKET/); assert.doesNotMatch(inputs, /Venue coverage/);
     summary.tiles.push({lane:'bad__spot',venue:'bad',segment:'spot',available:false,pairs_held:999,pairs_listed:999,coverage_24h:1,coverage_7d:1,gaps_7d:999,last_minute_age_s:1});
@@ -68,6 +77,21 @@ test('market system tabs show only current owner inputs and the selected view', 
     assert.match(renderToStaticMarkup(React.createElement(V5SystemMarket,{tab:'data-feeds',paused:true})), /Candle store data is not current/);
     assert.doesNotMatch(renderToStaticMarkup(React.createElement(V5SystemMarket,{tab:'engine-inputs',paused:true})), /FEATURE PACKET/);
   } finally { Date.now = originalNow; }
+});
+
+test('System market rejects missing or malformed lane collections without crashing either tab', () => {
+  for (const tiles of [undefined, null, {}, [null]]) {
+    const summary = {now:1000,status_age_s:10,tiles};
+    const {V5SystemMarket} = frontendModules({
+      '@tanstack/react-query': {useQuery: ({queryKey}) => queryKey[0] === 'v5-profile' ? {data:{candle_store:{configured:true}}} : queryKey[1] === 'market-summary' ? {isSuccess:true,data:summary,dataUpdatedAt:1_000_000} : {isSuccess:true,data:{}}},
+      './usePaperClock': {usePaperClock: () => 1_000_000},
+      '@/features/quant-ops/kit/charts': {}, '@/features/quant-ops/kit/grid': {}, './V5CandleStore': {}, './V5MarketDetail': {}, './V5MarketFeatures': {},
+    }).load('v5/V5Market.tsx');
+    for (const tab of ['data-feeds','engine-inputs']) {
+      const html = renderToStaticMarkup(React.createElement(V5SystemMarket,{tab,paused:false}));
+      assert.match(html, /— · Candle store lane data is invalid/);
+    }
+  }
 });
 
 test('engine inputs retain owner decimal strings and explain unqualified values', () => {

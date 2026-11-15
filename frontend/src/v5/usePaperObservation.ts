@@ -18,7 +18,7 @@ async function readPaperSection(path: string, section: string, bot: string | nul
   return value;
 }
 
-export function usePaperWorkspace(page: "capital" | "operations", bot?: string | null) {
+export function usePaperWorkspace(page: "capital" | "operations", bot?: string | null, refetchInterval: number | false = 15_000) {
   const query = usePaperSnapshot<PaperRead & {history_read?: PaperRead; accounting_read?: PaperRead}>(["v5-paper-workspace", page, bot], Boolean(bot), page === "capital" ? 4 : 1, async (progress, signal) => {
     if (page === "operations") return paperBoundedRead(async () => {
       signal.throwIfAborted();
@@ -33,7 +33,7 @@ export function usePaperWorkspace(page: "capital" | "operations", bot?: string |
       {section:"accounting",path:`${prefix}fleet/accounting`},
     ], (path,section) => readPaperSection(path,section,bot,signal), undefined, progress);
     return {...reads[1], history_read:reads[2], accounting_read:reads[3]};
-  });
+  }, refetchInterval);
   const reads = query.reads;
   const wallet = reads.find(read => read.section === "wallet");
   const partial = wallet ? {...wallet, history_read:reads.find(read => read.section === "history"), accounting_read:reads.find(read => read.section === "accounting")} : null;

@@ -85,9 +85,25 @@ test('rendered position card shows exact holdings, excludes dust and retains nat
   assert.match(html, /<dt>Sell orders placed<\/dt><dd>0 of 6 · owner-reported protected exits/);
   assert.doesNotMatch(html, /bag-managed|sold by the bag policy|no resting order/);
   assert.match(html, /Breakeven:.*748\.17 USDC/);
+  assert.match(html, /Bag reason<\/dt><dd>Below target/);
+  assert.match(html, /Trailing armed<\/dt><dd>No/);
+  assert.match(html, /Trailing peak<\/dt><dd>— · not published/);
+  assert.match(html, /Release<\/dt><dd>— · not published/);
   assert.match(html, /Reported native entry hold: No|Native evidence complete/);
   assert.match(html, /Pair cap 40000 USDC/);
   assert.doesNotMatch(html, /Numeric rail limits are not published/);
+});
+
+test('position details retain the owner trailing and release facts', () => {
+  const decisions = structuredClone(final3.decisions);
+  const bag = decisions.data.controllers.find(row => row.pair === 'BNB-USDC').custom_info.bag;
+  Object.assign(bag, { reason:'below_target', trail_armed:true, trail_peak:'800.123456789123456789', release:'trailing_exit' });
+  const {PaperWorkspace} = paperWorkspaceModules().load('pages/tabs/ActiveBotsTab.tsx');
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values({...final3, decisions}), now, reportAt:final3.status.generated_at_ms, heartbeat:'Fresh', bot:'meridian_v5_paper'}));
+  assert.match(html, /Bag reason<\/dt><dd>Below target/);
+  assert.match(html, /Trailing armed<\/dt><dd>Yes/);
+  assert.match(html, /Trailing peak<\/dt><dd>800\.123456789123456789 USDC/);
+  assert.match(html, /Release<\/dt><dd>Trailing exit/);
 });
 
 // Live 2026-11-05 15:45Z: every position showed "Protection status unknown · executor data incomplete". The executors

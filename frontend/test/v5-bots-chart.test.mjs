@@ -15,9 +15,9 @@ test('trades are filtered by pair and range, counted by side, and gaps have no m
   assert.deepEqual(result.markers, [{time:60,side:'BUY',price:'10',quantity:'2'}]);
 });
 
-test('only the most recent 500 retained trades contribute', () => {
+test('all retained trades contribute without another global cutoff', () => {
   const fills = Array.from({length: 501}, (_, index) => ({trading_pair:'BNB-USDC', side:'BUY', event_at_ms:60000 + index}));
-  assert.equal(tradeMarkers(fills, 'BNB-USDC', 60, 60, [[60,null,null,null,null,null,1]]).entries, 500);
+  assert.equal(tradeMarkers(fills, 'BNB-USDC', 60, 60, [[60,null,null,null,null,null,1]]).entries, 501);
 });
 
 test('sell markers retain the owner amount and price at the final minute boundary', () => {

@@ -1,7 +1,6 @@
 export function tradeMarkers(fills, pair, start, end, buckets) {
   const available = new Set(buckets.filter(row => row[6] === 1).map(row => row[0]));
-  const recent = fills.filter(row => typeof row.event_at_ms === 'number' && Number.isFinite(row.event_at_ms)).slice().sort((left, right) => right.event_at_ms - left.event_at_ms).slice(0, 500);
-  const trades = recent.filter(row => row.trading_pair === pair && (row.side === 'BUY' || row.side === 'SELL') && row.event_at_ms >= start * 1000 && row.event_at_ms < (end + 60) * 1000);
+  const trades = fills.filter(row => row.trading_pair === pair && (row.side === 'BUY' || row.side === 'SELL') && typeof row.event_at_ms === 'number' && Number.isFinite(row.event_at_ms) && row.event_at_ms >= start * 1000 && row.event_at_ms < (end + 60) * 1000);
   return {
     entries: trades.filter(row => row.side === 'BUY').length,
     exits: trades.filter(row => row.side === 'SELL').length,

@@ -43,7 +43,7 @@ export function frontendModules(overrides = {}, privateExports = {}, transform =
 export function paperWorkspaceModules() {
   const overrides = Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}]));
   return frontendModules({ ...overrides,
-    '@tanstack/react-query': { ...ReactQuery, useQuery: () => ({ data: undefined, isError: false, isPending: true }) },
+    '@tanstack/react-query': { ...ReactQuery, useQuery: () => ({ data: undefined, isError: false, isPending: true }), useQueries: ({queries}) => queries.map(() => ({data:undefined,isError:false,isPending:true})) },
     '@/components/charts/RecordedCandleChart': { RecordedCandleChart: () => null },
     './V5Money': { readMoney: () => { throw new Error('Unexpected Money read in static rendering'); } },
   });

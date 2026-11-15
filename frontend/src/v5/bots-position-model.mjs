@@ -3,8 +3,13 @@ export function breakEvenDistance(breakeven, close) {
   // Candles are owner JSON numbers: this display percentage uses Number and rounds to 0.1%; money totals remain exact decimals.
   const price = Number(breakeven);
   if (!Number.isFinite(price) || price <= 0) return '—';
-  const distance = (price / close - 1) * 100;
-  return distance > 0 ? `Needs +${distance.toFixed(1)}% to break even` : `Above breakeven by ${Math.abs(distance).toFixed(1)}%`;
+  return close < price ? `Needs +${((price / close - 1) * 100).toFixed(1)}% to break even` : `Above breakeven by ${((close / price - 1) * 100).toFixed(1)}%`;
+}
+
+export function moneySampleState(row, now) {
+  if (!row || row.gap || row.unit !== 'USDC' || !Number.isSafeInteger(now) || !Number.isSafeInteger(row.at_ms) || !Number.isSafeInteger(row.snapshot_at_ms) || row.at_ms > now || row.snapshot_at_ms > now || Math.abs(row.at_ms - row.snapshot_at_ms) > 30000) return null;
+  const next = (Math.floor(row.at_ms / 300000) + 1) * 300000;
+  return { state: now < next ? 'sample' : 'late', next };
 }
 
 export function activeLots(rows) {

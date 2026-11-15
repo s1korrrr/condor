@@ -6,22 +6,17 @@ import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable"
 import { CHART, type ChartSeries } from "@/features/quant-ops/kit/series";
 import { readCandleStore } from "./candle-store-api";
 import { v5Api } from "./api";
-import { dayCoverage, equityChange, holdReturn, latest, series, type DailyRow, type MoneyRow } from "./money-model.mjs";
+import { dayCoverage, equityChange, holdReturn, latest, series, type DailyRow } from "./money-model.mjs";
 import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
 import { count, fixed, pct, pnl, signed, usdc, utcMin } from "./format.mjs";
 import { utcExact } from "./shown.mjs";
+import { readMoney } from "./money-api";
 import "./market.css";
 
-export type MoneyRead = { sampler: boolean; started_at_ms: number | null; now_ms: number; range: string; rows: MoneyRow[]; daily: DailyRow[]; recorder_errors: { count: number; last: string | null; at_ms: number | null } };
 type CrossLine = { venue: string; lane: string; close: [number, number][] };
 type Hold = { closes: Record<string, [number, number][] | undefined> };
 const RANGES = ["24h", "7d"] as const;
 
-export async function readMoney(range: string): Promise<MoneyRead> {
-  const response = await fetch(`/api/v5/money?range=${range}`, { credentials: "include", cache: "no-store", signal: AbortSignal.timeout(14_000) });
-  if (!response.ok) throw new Error(`Money read failed (HTTP ${response.status})`);
-  return response.json() as Promise<MoneyRead>;
-}
 
 /** The reference spot lane's closes for each coin over the candle store's 7 days, read one after another. */
 async function readHold(): Promise<Hold> {

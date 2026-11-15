@@ -39,8 +39,8 @@ function harness({cached = true} = {}) {
   const {load} = frontendModules({...stubs,
     react: {...React, useState: state, useRef: initial => state(() => ({current: initial}))[0], useEffect() {}},
     '@/v5/usePaperClock': {usePaperClock: () => now},
-    '@tanstack/react-query': {...ReactQuery, useQueryClient: () => client, useQuery: incoming => {
-      if (incoming.queryKey[0] !== 'v5-money') options = incoming;
+    '@tanstack/react-query': {...ReactQuery, useQueryClient: () => client, useQueries: ({queries}) => queries.map(() => ({data: undefined, isPending: true, isError: false})), useQuery: incoming => {
+      if (incoming.queryKey[0] === 'v5-paper-bots') options = incoming;
       return {data: client.getQueryData(incoming.queryKey), isPending: !cached, isFetching: false, isError: failed, error: failed ? new Error('Refresh failed') : null, refetch() {}};
     }},
   });
@@ -110,7 +110,7 @@ test('dimmed Bots keeps real ages advancing and accepts a newer heartbeat', () =
   } finally {current.close();}
 });
 
-test('a flat dimmed pair describes the last report, not a current wait for entry', () => {
+test('flat position cards retain zero under the dimmed snapshot stamp without inferring entry state', () => {
   const current = harness();
   try {
     for (const read of current.reads.filter(read => ['positions', 'executors'].includes(read.section))) {
@@ -119,11 +119,12 @@ test('a flat dimmed pair describes the last report, not a current wait for entry
       read.next_cursor = null;
     }
     current.setNow(current.at + 1_000);
-    assert.match(current.render(), /No position · waiting for entry signal/);
+    assert.match(current.render(), /<dt>Holding<\/dt><dd>0 BNB<\/dd>/);
     current.setNow(current.at + 60_000);
     const html = current.render();
-    assert.match(html, /No position in last report/);
-    assert.doesNotMatch(html, /No position · waiting for entry signal/);
+    assert.match(html, /values below are from that time, dimmed until a new report/);
+    assert.match(html, /<dt>Holding<\/dt><dd>0 BNB<\/dd>/);
+    assert.doesNotMatch(html, /waiting for entry signal/);
   } finally {current.close();}
 });
 

@@ -11,6 +11,7 @@ import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
 import { count, fixed, pct, pnl, signed, usdc, utcMin } from "./format.mjs";
 import { utcExact } from "./shown.mjs";
 import { readMoney } from "./money-api";
+export { readMoney } from "./money-api";
 import "./market.css";
 
 type CrossLine = { venue: string; lane: string; close: [number, number][] };

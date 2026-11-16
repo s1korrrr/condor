@@ -63,7 +63,7 @@ test('phone chart keeps partial-fill caveats and the not-current label outside d
   window.document.body.innerHTML = renderToStaticMarkup(React.createElement(PaperPriceChart, { now, view, fills, asOf: now }));
   const legend = window.document.querySelector('.paper-chart-legend');
   assert.match(legend.textContent, /▲ 1 entries ▼ 1 exits · retained fills \(partial\)/);
-  assert.match(legend.textContent, /missing candle minutes are counted but cannot be plotted/);
+  assert.match(legend.textContent, /missing candle minutes or without a valid published price are counted but cannot be plotted/);
   assert.equal(legend.children.length, 3);
   assert.match(window.document.querySelector('.paper-price-chart').textContent, /Trade markers and breakeven are dimmed snapshot values, not current/);
   assert.doesNotMatch(legend.textContent, /not current/);

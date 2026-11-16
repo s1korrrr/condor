@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import fs from "node:fs";
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { tradeMarkers } from "../src/v5/bots-chart-model.mjs";
@@ -13,6 +14,20 @@ const buckets = [
   [end, 105, 115, 95, 110, 1, 1, 0, 0, 0, 0, 0],
 ];
 const fill = (overrides = {}) => ({ trading_pair: "BNB-USDC", side: "BUY", event_at_ms: start * 1000 + 12345, price: "101.123456789012345678900", quantity: "0.100000000000000000001", ...overrides });
+
+for (const [reason, overrides] of [["invalid published price", { price: "0" }], ["missing candle minute", { event_at_ms: (start + 60) * 1000 + 12345 }]]) {
+  test(`legend explains a counted but unplotted fill with ${reason}`, () => {
+    const published = JSON.parse(fs.readFileSync(new URL("../../tests/fixtures/paper-api-final3/native-replay/fills.json", import.meta.url)));
+    const owner = { ...published.data[0], ...fill(overrides) };
+    const fills = { ...published, data: [owner], next_cursor: null };
+    const { PaperPriceChart } = frontendModules().load("v5/PaperPriceChart");
+    const html = renderToStaticMarkup(React.createElement(PaperPriceChart, { fills, now: published.generated_at_ms, pair: "BNB-USDC", view: { buckets, start, end, venue: "okx", pair: "BNB-USDC", volume_unit: "base" } }));
+    assert.equal(tradeMarkers([owner], "BNB-USDC", start, end, buckets).markers.length, 0);
+    assert.match(html, /▲ 1 entries/);
+    assert.match(html, /▼ 0 exits/);
+    assert.match(html, /Trades in missing candle minutes or without a valid published price are counted but cannot be plotted\./);
+  });
+}
 
 function renderFills(fills, snapshotDimmed = false) {
   let markers;

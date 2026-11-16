@@ -241,6 +241,9 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
             const owner = sections.fills.data.find(fill => marker.text === `${fill.side} ${fill.quantity} @ ${fill.price} · ${new Date(fill.event_at_ms).toISOString()}`);
             assert.ok(owner, 'each exact fill label must match one owner record, not an arbitrary raw decimal');
             assert.equal(marker.price, Number(owner.price));
+            assert.equal(marker.time, Math.floor(owner.event_at_ms / 60000) * 60);
+            assert.equal(marker.position, owner.side === 'BUY' ? 'atPriceBottom' : 'atPriceTop');
+            assert.equal(marker.shape, owner.side === 'BUY' ? 'arrowUp' : 'arrowDown');
           }
           assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 1, 'explicit refresh must not reload the symbols list');
           const candlesBefore = requests.slice(requestStart).filter(request => request.startsWith('/api/v5/candle-store/candles?')).length;

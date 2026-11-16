@@ -45,11 +45,21 @@ for (const [side, position, shape, color] of [["BUY", "atPriceBottom", "arrowUp"
   });
 }
 
-for (const invalid of ["NaN", "Infinity", "-Infinity", NaN, Infinity, "0", 0, "-1", "", null, undefined]) {
+for (const invalid of ["NaN", "Infinity", "-Infinity", NaN, Infinity, true, false, ["123.45"], {}, 1, "1e3", " 1", "0x10", "0", 0, "-1", "", null, undefined]) {
   test(`invalid fill price ${String(invalid)} (${typeof invalid}) draws no marker`, () => {
-    assert.deepEqual(renderFills([fill({ price: invalid })]).markers, []);
+    const { mapped, markers } = renderFills([fill({ price: invalid })]);
+    assert.deepEqual(mapped.markers, []);
+    assert.deepEqual(markers, []);
+    assert.equal(mapped.entries, 1);
   });
 }
+
+test("a fill exactly on a minute boundary stays on that candle", () => {
+  const owner = fill({ side: "SELL", event_at_ms: end * 1000 });
+  const { mapped, markers } = renderFills([owner]);
+  assert.equal(mapped.markers[0].event_at_ms, owner.event_at_ms);
+  assert.deepEqual({ time: markers[0].time, position: markers[0].position, shape: markers[0].shape }, { time: end, position: "atPriceTop", shape: "arrowDown" });
+});
 
 for (const [side, eventAt, exactTime] of [["BUY", start * 1000 + 12345, "2026-11-16T10:20:12.345Z"], ["SELL", end * 1000 + 59000, "2026-11-16T10:22:59.000Z"]]) {
   test(`${side} label and hover title preserve exact UTC fill time, quantity and price`, () => {

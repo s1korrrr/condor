@@ -235,10 +235,13 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
         if (pathname === '/bots') {
           assert.match(container.textContent,/terminal-fixture/,'terminal history must render a published record');
-          assert.ok(charts.slice(chartStart).some(chart => chart.markers.some(marker => marker.text === 'BUY 0.00617 @ 748.17')), 'the chart must receive the formatted buy marker');
-          const markerText = document.createElement('div');
-          markerText.textContent = charts.slice(chartStart).flatMap(chart => chart.markers.map(marker => marker.text)).join(' · ');
-          assert.deepEqual(longVisibleDecimals(markerText), [], 'chart markers must not expose raw decimal tails');
+          const chartMarkers = charts.slice(chartStart).flatMap(chart => chart.markers);
+          assert.ok(chartMarkers.some(marker => marker.text === `BUY ${fixtureFill.quantity} @ ${fixtureFill.price} · ${new Date(fixtureFill.event_at_ms).toISOString()}`), 'the chart must receive the exact buy fill');
+          for (const marker of chartMarkers) {
+            const owner = sections.fills.data.find(fill => marker.text === `${fill.side} ${fill.quantity} @ ${fill.price} · ${new Date(fill.event_at_ms).toISOString()}`);
+            assert.ok(owner, 'each exact fill label must match one owner record, not an arbitrary raw decimal');
+            assert.equal(marker.price, Number(owner.price));
+          }
           assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 1, 'explicit refresh must not reload the symbols list');
           const candlesBefore = requests.slice(requestStart).filter(request => request.startsWith('/api/v5/candle-store/candles?')).length;
           assert.ok(candlesBefore > 0, 'listed BNB must load candles before the interval');

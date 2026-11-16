@@ -4,6 +4,6 @@ export function tradeMarkers(fills, pair, start, end, buckets) {
   return {
     entries: trades.filter(row => row.side === 'BUY').length,
     exits: trades.filter(row => row.side === 'SELL').length,
-    markers: trades.map(row => ({ time: Math.floor(row.event_at_ms / 60000) * 60, side: row.side, price: row.price, quantity: row.quantity })).filter(row => available.has(row.time)).sort((left, right) => left.time - right.time),
+    markers: trades.map(row => ({ time: Math.floor(row.event_at_ms / 60000) * 60, event_at_ms: row.event_at_ms, side: row.side, price: row.price, quantity: row.quantity })).filter(row => available.has(row.time)).sort((left, right) => left.time - right.time),
   };
 }

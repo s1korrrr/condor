@@ -131,16 +131,16 @@ class V5Upstream:
         }
         parts = urlsplit(path)
         history_route = False
-        if parts.path == "/v1/advice/history" and parts.query:
+        if parts.path in {"/v1/advice/history", "/v1/advice/history/projected"} and parts.query:
             params = parse_qsl(parts.query, keep_blank_values=True)
             history_route = (
                 not parts.scheme and not parts.netloc and not parts.fragment
-                and path == f"/v1/advice/history?{parts.query}"
+                and path == f"{parts.path}?{parts.query}"
                 and len(params) == 2 and len(dict(params)) == 2
                 and set(dict(params)) == {"task_id", "limit"}
                 and dict(params)["task_id"] in {"market_context", "source_quality", "decision_review"}
                 and re.fullmatch(r"[1-9][0-9]{0,2}", dict(params)["limit"]) is not None
-                and int(dict(params)["limit"]) <= 100
+                and int(dict(params)["limit"]) <= (5 if parts.path.endswith("/projected") else 100)
                 and parts.query in {
                     f"task_id={dict(params)['task_id']}&limit={dict(params)['limit']}",
                     f"limit={dict(params)['limit']}&task_id={dict(params)['task_id']}",

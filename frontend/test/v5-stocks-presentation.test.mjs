@@ -102,7 +102,7 @@ test('configured Stocks formats exponent, signed and integer numeric fields with
   const publicRecord = records.find(record => record.title.includes('1.234567890123e-20'));
   const metadataRecord = records.find(record => record.title.includes('1700000000000'));
   assert.ok(publicRecord && metadataRecord);
-  const exactRecords = [...document.querySelectorAll('details')].filter(details => details.querySelector(':scope > summary')?.textContent === 'Exact record');
+  const exactRecords = [...document.querySelectorAll('details')].filter(details => details.querySelector(':scope > summary')?.textContent === 'Exact record · as sent');
   assert.equal(exactRecords.length, 2, 'both market and metadata records have a keyboard and touch disclosure');
   assert.ok(exactRecords.some(details => details.querySelector('pre')?.textContent.includes('1.234567890123e-20')));
   assert.ok(exactRecords.some(details => details.querySelector('pre')?.textContent.includes('"instrumentCode": "001234"')));
@@ -111,7 +111,7 @@ test('configured Stocks formats exponent, signed and integer numeric fields with
   assert.match(publicRecord.textContent, /198,961/);
   assert.match(publicRecord.textContent, /12,345/);
   assert.match(publicRecord.textContent, /1234567890123/);
-  assert.match(publicRecord.textContent, /"count": "3"/);
+  assert.doesNotMatch(publicRecord.textContent, /"count"/);
   assert.match(publicRecord.textContent, new RegExp(`"event_time_ms": ${ticker.event_time_ms}`));
   assert.match(publicRecord.textContent, /"3"/);
   assert.match(publicRecord.title, /\+99\.78007932/);
@@ -119,11 +119,24 @@ test('configured Stocks formats exponent, signed and integer numeric fields with
   assert.match(metadataRecord.textContent, /"maxLmtSz": "198,961"/);
   assert.match(metadataRecord.textContent, /"maxMktSz": "198,961"/);
   assert.match(metadataRecord.textContent, /"ctVal": null/);
-  assert.match(metadataRecord.textContent, /"instIdCode": "123456789"/);
-  assert.match(metadataRecord.textContent, /"instrumentCode": "001234"/);
-  assert.match(metadataRecord.textContent, /"version": "001"/);
+  assert.doesNotMatch(metadataRecord.textContent, /"instIdCode"|"instrumentCode"|"version"/);
   assert.match(metadataRecord.textContent, /1700000000000/);
   assert.match(metadataRecord.textContent, /EXAMPLE-USDT/);
+  window.close();
+});
+
+test('unknown Stocks fields appear only in the exact as-sent record', () => {
+  const ticker = { ...event('123.45'), data: { last: '123.45', newPrice: '99.7800793' } };
+  const { html } = render({ marketData: { ...market, latest: { ...market.latest, ticker } } });
+  const window = new Window();
+  window.document.body.innerHTML = html;
+  const exact = [...window.document.querySelectorAll('details')].find(details => details.querySelector(':scope > summary')?.textContent === 'Exact record · as sent' && details.textContent.includes('newPrice'));
+  const ordinary = [...window.document.querySelectorAll('pre[title]')].find(pre => pre.title.includes('newPrice'));
+  assert.ok(ordinary);
+  assert.doesNotMatch(ordinary.textContent, /newPrice|99\.7800793/);
+  assert.match(ordinary.textContent, /"last": "123\.45"/);
+  assert.ok(exact, 'unknown field remains available as sent');
+  assert.match(exact.textContent, /99\.7800793/);
   window.close();
 });
 

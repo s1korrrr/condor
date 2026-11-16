@@ -16,8 +16,10 @@ const formatted = (item: unknown) => {
   return result === '—' ? value(item) : result;
 };
 const numericFields = new Set(['last', 'lastSz', 'bidPx', 'askPx', 'bidSz', 'askSz', 'open24h', 'high24h', 'low24h', 'vol24h', 'volCcy24h', 'sodUtc0', 'sodUtc8', 'markPx', 'idxPx', 'fundingRate', 'nextFundingRate', 'oi', 'oiCcy', 'oiUsd', 'px', 'sz', 'ctVal', 'ctMult', 'tickSz', 'lotSz', 'minSz', 'maxLmtSz', 'maxMktSz']);
+const recordFields = new Set([...numericFields, 'latest', 'ticker', 'mark_price', 'index_price', 'funding', 'open_interest', 'books', 'recent_trades', 'book_depth', 'region', 'instId', 'instType', 'instCategory', 'state', 'ruleType', 'baseCcy', 'quoteCcy', 'settleCcy', 'uly', 'ctValCcy', 'listTime', 'expTime', 'dataset', 'event_time_ms', 'received_at_ms', 'source', 'data', 'action', 'projection', 'bids', 'asks', 'tradeId', 'side']);
 const formattedRecord = (item: unknown) => JSON.stringify(item, function (key, entry) {
   if (Array.isArray(this)) return entry;
+  if (key && !recordFields.has(key)) return undefined;
   if ((key === 'bids' || key === 'asks') && Array.isArray(entry)) return entry.map(level => Array.isArray(level) ? level.map((part, index) => index < 2 ? formatted(part) : part) : level);
   return numericFields.has(key) && entry != null && (typeof entry === 'string' || typeof entry === 'number') && price(entry) !== '—' ? formatted(entry) : entry;
 }, 2);
@@ -25,7 +27,7 @@ const readable = (state: string) => state === 'live' || state === 'stale';
 
 function StockRecord({ record }: { record: unknown }) {
   const exact = JSON.stringify(record, null, 2);
-  return <><pre className="v5-stock-json" title={exact}>{formattedRecord(record)}</pre><details><summary>Exact record</summary><pre className="v5-stock-json" data-exact-record>{exact}</pre></details></>;
+  return <><pre className="v5-stock-json" title={exact}>{formattedRecord(record)}</pre><details><summary>Exact record · as sent</summary><pre className="v5-stock-json" data-exact-record>{exact}</pre></details></>;
 }
 
 function metadataTime(stamp: unknown) {

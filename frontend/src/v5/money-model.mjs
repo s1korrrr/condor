@@ -4,6 +4,8 @@
  * and a comparison is shown only when both sides cover the same window.
  */
 
+import { decimalPercentRatio, rationalPercent } from './format.mjs';
+
 export const SAMPLE_MS = 300_000;
 
 const number = value => (typeof value === 'string' && value.trim() !== '' && Number.isFinite(Number(value)) ? Number(value) : null);
@@ -54,8 +56,21 @@ export function holdReturn(closesByCoin) {
   const shared = [...byCoin[0].keys()].filter(time => byCoin.every(closes => closes.has(time))).sort((a, b) => a - b);
   if (shared.length < 2) return { pct: null, startS: null, endS: null, missing: [] };
   const startS = shared[0], endS = shared[shared.length - 1];
-  const pct = (byCoin.reduce((sum, closes) => sum + (closes.get(endS) / closes.get(startS) - 1), 0) / byCoin.length) * 100;
-  return { pct, startS, endS, missing: [] };
+  const ratios = byCoin.map(closes => decimalPercentRatio(closes.get(endS), closes.get(startS)));
+  if (ratios.some(ratio => !ratio)) return { pct: null, startS, endS, missing: [] };
+  let numerator = 0n, denominator = 1n;
+  for (const ratio of ratios) {
+    numerator = numerator * ratio.denominator + ratio.numerator * denominator;
+    denominator *= ratio.denominator;
+  }
+  denominator *= BigInt(ratios.length);
+  let left = numerator < 0n ? -numerator : numerator, right = denominator;
+  while (right !== 0n) [left, right] = [right, left % right];
+  numerator /= left;
+  denominator /= left;
+  const result = rationalPercent(numerator, denominator);
+  const inputs = coins.map((coin, index) => `${coin} ${byCoin[index].get(startS)} → ${byCoin[index].get(endS)}`).join(', ');
+  return { pct: result.value, exact: `${inputs} · exact average ${result.exact} (fraction)`, startS, endS, missing: [] };
 }
 
 /** V5 equity change between its own first and last sample with a value in the given rows, with those exact times. */
@@ -63,5 +78,7 @@ export function equityChange(rows, bot) {
   const ordered = botRows(rows, bot).filter(row => !row.gap && number(row.equity) !== null);
   const first = ordered[0], last = ordered[ordered.length - 1];
   if (!first || first === last) return { pct: null, startMs: null, endMs: null };
-  return { pct: (number(last.equity) / number(first.equity) - 1) * 100, startMs: first.at_ms, endMs: last.at_ms };
+  const ratio = decimalPercentRatio(last.equity, first.equity);
+  const result = ratio && rationalPercent(ratio.numerator, ratio.denominator);
+  return { pct: result?.value ?? null, exact: result ? `(${last.equity} − ${first.equity}) × 100 / ${first.equity} = ${result.exact} (exact fraction)` : undefined, startMs: first.at_ms, endMs: last.at_ms };
 }

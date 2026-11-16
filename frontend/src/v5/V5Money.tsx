@@ -111,8 +111,8 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
           <BarsChart rows={coinRows} bars={[{ id: "realized", label: "Closed-trade profit", color: CHART.positive }, { id: "unrealized", label: "Held-coin gain or loss", color: CHART.negative }]} height={200} ariaLabel="V5 P&L by coin" emptyText="No per-coin values in the latest sample." /></article>
         <article className="v5m-card"><h3>Against holding the five coins</h3><p className="v5m-hint">Equal weights in {MARKET_COINS.join(", ")} over the candle store's 7 days ({REFERENCE.venue} spot {REFERENCE.quote})</p>
           {!candleConfigured ? <p className="v5m-hint">{profile.isPending ? "Checking for the candle store…" : "No candle store in this deployment, so holding the coins cannot be priced."}</p> : hold.isPending ? <p role="status" className="v5m-hint">Reading 7 days of prices…</p> : !holdView || holdView.pct == null ? <p className="v5m-hint">Holding comparison unavailable{holdView?.missing.length ? `: no 7-day closes for ${holdView.missing.join(", ")}` : ": the five coins share no first and last minute"}. The basket is never reduced to fewer coins.</p> : <div className="v5m-stats">
-            <Stat label="Holding the five coins" value={pct(holdView.pct)} note={`from ${at(holdView.startS! * 1000)} to ${at(holdView.endS! * 1000)}`} />
-            <Stat label="V5 wallet equity" value={pct(v5View?.pct)} note={money.data.range !== "7d" ? "pick 7d to compare" : v5View?.pct == null ? "fewer than two samples with values in 7 days" : `from ${utcExact(v5View.startMs) ?? "unknown time"} to ${utcExact(v5View.endMs) ?? "unknown time"}${sameWindow ? " · same window" : " · its own record, not the same window"}`} />
+            <Stat label="Holding the five coins" value={pct(holdView.pct)} title={holdView.exact} note={`from ${at(holdView.startS! * 1000)} to ${at(holdView.endS! * 1000)}`} />
+            <Stat label="V5 wallet equity" value={pct(v5View?.pct)} title={v5View?.exact} note={money.data.range !== "7d" ? "pick 7d to compare" : v5View?.pct == null ? "fewer than two samples with values in 7 days" : `from ${utcExact(v5View.startMs) ?? "unknown time"} to ${utcExact(v5View.endMs) ?? "unknown time"}${sameWindow ? " · same window" : " · its own record, not the same window"}`} />
           </div>}
           <p className="v5m-hint">Only the candle store's 7 days can be priced, so the comparison never reaches the trial start (2026-10-29).</p></article>
       </div>
@@ -132,6 +132,6 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
   </div>;
 }
 
-function Stat({ label, value, unit, note, warn, owner }: { label: string; value: string; unit?: string; note?: ReactNode; warn?: boolean; owner?: { value: unknown; kind: OwnerValueKind; unit?: string } }) {
-  return <div className={`v5m-stat${warn ? " is-warn" : ""}`}><span>{label}{unit && <em className="v5-phone-unit hidden not-italic"> ({unit})</em>}</span><strong>{owner ? <OwnerValue {...owner} /> : value}{unit && value !== "—" && <em className="v5-desktop-unit not-italic"> {unit}</em>}</strong>{note && <small>{note}</small>}</div>;
+function Stat({ label, value, unit, note, warn, owner, title }: { label: string; value: string; unit?: string; note?: ReactNode; warn?: boolean; owner?: { value: unknown; kind: OwnerValueKind; unit?: string }; title?: string }) {
+  return <div className={`v5m-stat${warn ? " is-warn" : ""}`}><span>{label}{unit && <em className="v5-phone-unit hidden not-italic"> ({unit})</em>}</span><strong title={title}>{owner ? <OwnerValue {...owner} /> : value}{unit && value !== "—" && <em className="v5-desktop-unit not-italic"> {unit}</em>}</strong>{note && <small>{note}</small>}</div>;
 }

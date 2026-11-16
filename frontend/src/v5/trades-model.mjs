@@ -1,11 +1,18 @@
 import { rationalPercent } from './format.mjs';
 
-const DECIMAL = /^\d+(?:\.\d+)?$/;
+const DECIMAL = /^(\d+)(?:\.(\d+))?(?:[Ee]([+-]?\d+))?$/;
+export const receiptAmountFields = ['entry_gross_base', 'entry_gross_quote', 'exit_gross_base', 'exit_gross_quote', 'fees_quote', 'remaining_owned_base', 'residual_dust_base'];
 
-function parts(value) {
-  if (typeof value !== 'string' || value.length > 128 || value.trim() !== value || !DECIMAL.test(value)) return null;
-  const [whole, fraction = ''] = value.split('.');
-  return { digits: BigInt(whole + fraction), scale: fraction.length };
+export function receiptDecimalParts(value) {
+  if (typeof value !== 'string' || value.length > 128 || value.trim() !== value) return null;
+  const match = DECIMAL.exec(value);
+  if (!match) return null;
+  const [, whole, fraction = '', exponent = '0'] = match;
+  const shift = BigInt(exponent);
+  if (shift < -64n || shift > 64n) return null;
+  const scale = BigInt(fraction.length) - shift;
+  const digits = BigInt(whole + fraction);
+  return scale < 0n ? { digits: digits * 10n ** -scale, scale: 0n } : { digits, scale };
 }
 
 function quotient(numerator, denominator, places) {
@@ -21,13 +28,13 @@ function quotient(numerator, denominator, places) {
 }
 
 export function lotBreakeven(basis, quantity) {
-  const left = parts(basis), right = parts(quantity);
+  const left = receiptDecimalParts(basis), right = receiptDecimalParts(quantity);
   if (!left || !right || right.digits === 0n) return null;
   return quotient(left.digits * 10n ** BigInt(right.scale), right.digits * 10n ** BigInt(left.scale), 12);
 }
 
 export function targetFromBreakeven(basis, quantity, target) {
-  const cost = parts(basis), amount = parts(quantity), goal = parts(target);
+  const cost = receiptDecimalParts(basis), amount = receiptDecimalParts(quantity), goal = receiptDecimalParts(target);
   if (!cost || !amount || !goal || cost.digits === 0n || amount.digits === 0n) return null;
   const targetValue = goal.digits * amount.digits * 10n ** BigInt(cost.scale);
   const costValue = cost.digits * 10n ** BigInt(goal.scale + amount.scale);
@@ -37,12 +44,12 @@ export function targetFromBreakeven(basis, quantity, target) {
 function signedParts(value) {
   if (typeof value !== 'string' || value.length > 128) return null;
   const negative = value.startsWith('-');
-  const parsed = parts(negative ? value.slice(1) : value);
+  const parsed = receiptDecimalParts(negative ? value.slice(1) : value);
   return parsed ? { ...parsed, digits: negative ? -parsed.digits : parsed.digits } : null;
 }
 
 function receiptRatio(numerator, denominator, percent = false) {
-  const left = signedParts(numerator), right = parts(denominator);
+  const left = signedParts(numerator), right = receiptDecimalParts(denominator);
   if (!left || !right || right.digits === 0n) return null;
   const top = left.digits * 10n ** BigInt(right.scale) * (percent ? 100n : 1n);
   const bottom = right.digits * 10n ** BigInt(left.scale);
@@ -66,9 +73,8 @@ export function tradeCosts(row) {
   };
   const receipt = row?.custom_info?.execution_receipt;
   if (!receipt || typeof receipt !== 'object' || Array.isArray(receipt) || typeof receipt.accounting_owner !== 'string') return unavailable;
-  const fields = ['entry_gross_base', 'entry_gross_quote', 'exit_gross_base', 'exit_gross_quote', 'fees_quote', 'remaining_owned_base', 'residual_dust_base'];
-  const amounts = Object.fromEntries(fields.map(key => [key, parts(receipt[key])]));
-  if (fields.some(key => !amounts[key]) || amounts.entry_gross_base.digits === 0n || amounts.entry_gross_quote.digits === 0n) return unavailable;
+  const amounts = Object.fromEntries(receiptAmountFields.map(key => [key, receiptDecimalParts(receipt[key])]));
+  if (receiptAmountFields.some(key => !amounts[key]) || amounts.entry_gross_base.digits === 0n || amounts.entry_gross_quote.digits === 0n) return unavailable;
   const entry = {
     ...unavailable,
     grossEntryCost: receipt.entry_gross_quote,
@@ -83,7 +89,7 @@ export function tradeCosts(row) {
     grossSaleProceeds: receipt.exit_gross_quote,
     averageExitPrice: receiptRatio(receipt.exit_gross_quote, receipt.exit_gross_base),
     notSold: amounts.exit_gross_base.digits === 0n,
-    realizedReturn: row.terminal === true && amounts.remaining_owned_base.digits === 0n
+    realizedReturn: amounts.remaining_owned_base.digits === 0n
       ? receiptRatio(row.realized_pnl_quote, receipt.entry_gross_quote, true) : null,
     reason: 'Realized return is shown only for a fully closed direct executor with known owner realized profit or loss.',
   };

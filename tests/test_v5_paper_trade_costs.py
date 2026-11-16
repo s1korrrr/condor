@@ -12,6 +12,7 @@ FIELDS = (
     "entry_gross_base", "entry_gross_quote", "exit_gross_base", "exit_gross_quote",
     "fees_quote", "remaining_owned_base", "residual_dust_base",
 )
+LIVE_SHAPE = json.loads((Path(__file__).parent / 'fixtures/v5-trade-costs-live-shape.json').read_text())
 
 
 def receipt():
@@ -54,7 +55,7 @@ def test_receipt_is_preserved_exactly_and_missing_receipt_is_backward_compatible
 
 @pytest.mark.parametrize("section", ["executors", "history"])
 @pytest.mark.parametrize("field", FIELDS)
-@pytest.mark.parametrize("invalid", [1, None, {}, [], True, "", "1" * 129])
+@pytest.mark.parametrize("invalid", [1, 0.1, None, {}, [], True, "", "1" * 129])
 def test_receipt_consumed_amounts_fail_closed(section, field, invalid):
     value = receipt()
     value[field] = invalid
@@ -84,8 +85,43 @@ def test_receipt_zero_denominators_remain_owner_evidence_not_available_costs(sec
 
 
 @pytest.mark.parametrize("section", ["executors", "history"])
-@pytest.mark.parametrize("field", [name for name in FIELDS if name != "fees_quote"])
-@pytest.mark.parametrize("invalid", ["0E-9", "1e2", "-1", " 1", "1.", ".1", "1\n"])
-def test_bounded_receipt_text_stays_raw_for_strict_display_qualification(section, field, invalid):
-    payload, _ = packet(section, {**receipt(), field: invalid})
+@pytest.mark.parametrize("field", ["entry_gross_base", "entry_gross_quote"])
+def test_missing_entry_denominator_fails_closed(section, field):
+    value = {name: amount for name, amount in receipt().items() if name != field}
+    payload, _ = packet(section, value)
+    with pytest.raises(HTTPException):
+        validate(payload)
+
+
+@pytest.mark.parametrize("section", ["executors", "history"])
+@pytest.mark.parametrize("field", FIELDS)
+@pytest.mark.parametrize("valid", ["0E-9", "1E-7", "6E-7", "1e2", "00.1", "1E+64", "1e-64", "1e-0008", "0" * 124 + "1E0"])
+def test_all_receipt_amounts_accept_exact_bounded_decimal_text(section, field, valid):
+    payload, _ = packet(section, {**receipt(), field: valid})
     assert validate(payload)["data"] == payload["data"]
+
+
+@pytest.mark.parametrize("section", ["executors", "history"])
+@pytest.mark.parametrize("field", FIELDS)
+@pytest.mark.parametrize("invalid", ["-1", "-0E-8", "NaN", "Infinity", "1E65", "1e-65", "0E999999999", " 1", "1.", ".1", "1\n", "1e", "1E+-2"])
+def test_invalid_receipt_text_keeps_existing_rejection_or_display_withholding(section, field, invalid):
+    payload, _ = packet(section, {**receipt(), field: invalid})
+    if (field == "fees_quote" and invalid != "-1") or invalid in {"NaN", "Infinity"}:
+        with pytest.raises(HTTPException):
+            validate(payload)
+    else:
+        assert validate(payload)["data"] == payload["data"]
+
+
+@pytest.mark.parametrize("section", ["executors", "history"])
+@pytest.mark.parametrize("sample", ["held_position", "closed_executor"])
+def test_boss_live_sample_shape_is_preserved_in_both_read_routes(section, sample):
+    payload, _ = packet(section, LIVE_SHAPE[sample])
+    assert validate(payload)["data"] == payload["data"]
+
+
+@pytest.mark.parametrize("section", ["executors", "history"])
+def test_receipt_unknown_children_still_use_generic_financial_validation(section):
+    payload, _ = packet(section, {**receipt(), "unexpected_fee_quote": "NaN"})
+    with pytest.raises(HTTPException):
+        validate(payload)

@@ -90,13 +90,13 @@ def test_history_rejects_malformed_result_envelope(tmp_path, result):
     assert 'PRIVATE' not in response.text
 
 
-def test_history_withholds_whole_envelope_when_later_record_is_invalid(tmp_path):
+def test_history_withholds_envelope_when_record_is_invalid(tmp_path):
     invalid = record()
     invalid['result'].pop('effect')
-    api = HistoryUpstream({'effect': 'NONE', 'records': [record(), invalid]})
+    api = HistoryUpstream({'effect': 'NONE', 'records': [invalid]})
     with TestClient(create_app(settings=settings(tmp_path), upstream=api, static_dir=tmp_path / 'dist')) as client:
         login(client)
-        response = client.get('/api/v5/advisor/history?task_id=market_context&limit=2')
+        response = client.get('/api/v5/advisor/history?task_id=market_context&limit=1')
     assert response.status_code == 502
     assert 'PRIVATE' not in response.text
 
@@ -156,10 +156,12 @@ def test_history_requires_dashboard_authentication(tmp_path):
 
 
 def test_history_projects_bounded_records_and_unfinished_requests(tmp_path):
-    api = HistoryUpstream({'effect': 'NONE', 'records': [record(), {'input': {'task_id': 'market_context'}, 'result': None}]})
+    api = HistoryUpstream({'effect': 'NONE', 'records': [record()]})
     with TestClient(create_app(settings=settings(tmp_path), upstream=api, static_dir=tmp_path / 'dist')) as client:
         login(client)
-        response = client.get('/api/v5/advisor/history?task_id=market_context&limit=2')
+        response = client.get('/api/v5/advisor/history?task_id=market_context&limit=1')
+        api.payload = {'effect': 'NONE', 'records': [{'input': {'task_id': 'market_context'}, 'result': None}]}
+        pending = client.get('/api/v5/advisor/history?task_id=market_context&limit=1')
     assert response.status_code == 200
     body = response.json()
     advice = body['records'][0]['record']['result']['advice']
@@ -167,8 +169,9 @@ def test_history_projects_bounded_records_and_unfinished_requests(tmp_path):
     assert len(advice['reason_codes']) == 8 and len(advice['reason_codes'][0]) == 64
     assert len(advice['evidence_refs']) == 32 and len(advice['evidence_refs'][0]) == 128
     assert 'PRIVATE' not in response.text
-    assert body['records'][1]['status'] == 'RESULT_NOT_PUBLISHED'
-    assert api.observation_calls[-1] == '/v1/advice/history?task_id=market_context&limit=2'
+    assert pending.status_code == 200
+    assert pending.json()['records'][0]['status'] == 'RESULT_NOT_PUBLISHED'
+    assert api.observation_calls[-1] == '/v1/advice/history?task_id=market_context&limit=1'
 
 
 def test_history_drops_non_string_nested_values(tmp_path):

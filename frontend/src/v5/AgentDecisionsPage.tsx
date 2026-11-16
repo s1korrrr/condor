@@ -67,7 +67,7 @@ export function AgentDecisionsPage() {
       </div> : <p>The advisor budget and scheduler are unavailable; a workspace owner response would fill this panel.</p>}
     </section>
     <section className="v5-panel"><h2>Report timeline</h2>
-      <p>Only the latest history record per agent is shown; older reports are not included.</p>
+      <p>Only the latest report from each agent is shown for now. Older reports are not shown yet: the advisor sends each report together with its full input, so only one report fits in a read. When the advisor publishes a slimmer history, the full timeline will appear here.</p>
       <div className="v5-decisions-filters"><label>Agent<select value={task} onChange={event => setTask(event.target.value)}><option value="all">All agents</option>{Object.entries(TASKS as Record<string, string>).map(([key, name]) => <option value={key} key={key}>{name}</option>)}</select></label>
         <label>Outcome or status<select value={status} onChange={event => setStatus(event.target.value)}><option value="all">All statuses</option>{statuses.map(item => <option key={item} value={item}>{item}</option>)}</select></label></div>
       <p>Coin filter not published by the advisor; reports with coin data would be needed to filter by coin.</p>

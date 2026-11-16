@@ -24,7 +24,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .agents import AgentCatalog, AgentDefinition
-from .candles import CandleOwner, OwnerUnavailable, validate_query
+from .candles import MAX_TIMESTAMP, CandleOwner, OwnerUnavailable, validate_query
 from .config import Settings, read_secret_file
 from .dashboard import dashboard_profile, read_compatibility_path
 from .helm import read_helm_status
@@ -87,6 +87,11 @@ def _safe_policy_metadata(
 
 
 _WATERMARK_REASON = re.compile(r"[A-Z_]{1,32}(?::[a-z_,]{1,96})?")
+_ADVISOR_TIME_KEYS = ("requested_at_ms", "received_at_ms", "expires_at_ms", "input_cutoff_ms", "input_available_at_ms")
+
+
+def _valid_advisor_time(value: Any) -> bool:
+    return type(value) is int and 0 < value <= MAX_TIMESTAMP * 1000
 
 
 def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
@@ -136,9 +141,9 @@ def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
         "COMPLETE_OBSERVED_COHORT", "PARTIAL_OR_UNKNOWN"
     }:
         safe_report["coverage_status"] = coverage_status
-    for key in ("requested_at_ms", "received_at_ms", "expires_at_ms"):
+    for key in _ADVISOR_TIME_KEYS:
         value = report.get(key)
-        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        if _valid_advisor_time(value):
             safe_report[key] = value
     actual_usd = report.get("actual_usd")
     if actual_usd is None or (
@@ -640,8 +645,7 @@ def create_app(
         task_id, limit = values["task_id"], values["limit"]
         if (
             task_id not in KNOWN_TASK_IDS
-            or not re.fullmatch(r"[1-9][0-9]{0,2}", limit)
-            or int(limit) > 100
+            or limit != "1"
             or request.scope["query_string"] not in {
                 f"task_id={task_id}&limit={limit}".encode(),
                 f"limit={limit}&task_id={task_id}".encode(),
@@ -677,12 +681,11 @@ def create_app(
                 })
                 continue
             report = record["result"]
-            time_keys = ("requested_at_ms", "received_at_ms", "expires_at_ms", "input_cutoff_ms", "input_available_at_ms")
             if (
                 not isinstance(report, dict)
                 or report.get("effect") != "NONE"
-                or not any(key in report for key in time_keys[:2])
-                or any(key in report and (type(report[key]) is not int or report[key] <= 0) for key in time_keys)
+                or not any(key in report for key in _ADVISOR_TIME_KEYS[:2])
+                or any(key in report and not _valid_advisor_time(report[key]) for key in _ADVISOR_TIME_KEYS)
             ):
                 raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})
             item = _safe_task_latest(task_id, {"status": "HISTORY", "record": record})

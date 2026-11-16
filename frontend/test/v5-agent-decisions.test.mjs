@@ -27,6 +27,15 @@ test('future advisor input times withhold the entire report and its filter value
   }
 });
 
+test('out-of-range advisor input times withhold report values', () => {
+  for (const field of ['input_cutoff_ms', 'input_available_at_ms']) {
+    const invalid = report('market_context', 5000, 12000);
+    invalid.record.result[field] = 4102444800001;
+    assert.equal(reportPresentation(invalid, now), 'withheld');
+    assert.equal(selectReports([invalid], 'all', 'ACCEPTED', now).length, 0);
+  }
+});
+
 test('timeline discloses the temporary owner history limit', () => {
   const page = fs.readFileSync(new URL('../src/v5/AgentDecisionsPage.tsx', import.meta.url), 'utf8');
   assert.match(page, /Older reports are not shown yet/);
@@ -69,7 +78,7 @@ test('page renders honest limits, withheld rows, and responsive filter rules', (
   assert.match(html, /reports-only; they do not place or block orders/);
   assert.match(html, /link from a report to a bot action is not published yet/);
   assert.match(html, /Coin filter not published/);
-  assert.match(html, /Only the latest history record per agent/);
+  assert.match(html, /Only the latest report from each agent is shown for now/);
   assert.match(html, /report time is missing or invalid/);
   assert.match(html, /Expired report · values withheld/);
   assert.match(html, /Future report withheld/);

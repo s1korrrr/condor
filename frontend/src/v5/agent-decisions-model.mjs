@@ -8,10 +8,12 @@ export function reportPresentation(report, now) {
   const result = report.record?.result;
   const requested = result?.requested_at_ms;
   const received = result?.received_at_ms;
-  const validTime = value => Number.isSafeInteger(value) && value > 0;
+  const observationTimes = ['requested_at_ms', 'received_at_ms', 'input_cutoff_ms', 'input_available_at_ms'];
+  const timeKeys = [...observationTimes, 'expires_at_ms'];
+  const validTime = value => Number.isSafeInteger(value) && value > 0 && value <= 4102444800000;
   if (!result || (![requested, received].some(validTime)) ||
-      ['requested_at_ms', 'received_at_ms', 'expires_at_ms'].some(key => key in result && !validTime(result[key]))) return 'withheld';
-  if ((requested && requested > now) || (received && received > now)) return 'future';
+      timeKeys.some(key => key in result && !validTime(result[key]))) return 'withheld';
+  if (observationTimes.some(key => result[key] > now)) return 'future';
   if (result?.expires_at_ms && result.expires_at_ms <= now) return 'expired';
   return 'historical';
 }

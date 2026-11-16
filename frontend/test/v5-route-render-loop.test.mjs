@@ -98,7 +98,7 @@ function longVisibleDecimals(container) {
   while (walker.nextNode()) {
     const node = walker.currentNode, parent = node.parentElement;
     const exact = parent?.closest('details > pre[data-exact-record]');
-    if (!parent || parent.closest('script, style') || exact?.parentElement.querySelector(':scope > summary')?.textContent === 'Exact record') continue;
+    if (!parent || parent.closest('script, style') || exact?.parentElement.querySelector(':scope > summary')?.textContent === 'Exact record · as sent') continue;
     scan(node.textContent, parent.tagName.toLowerCase(), parent);
   }
   for (const block of container.querySelectorAll('p, dd, dt, td, th, li, summary')) {
@@ -136,7 +136,7 @@ function unprovenNumbers(container, outputs = formatterOutputs) {
       return;
     }
     if (node.nodeType !== browser.Node.ELEMENT_NODE || node.matches('script, style, [hidden], [aria-hidden="true"]')) return;
-    if (node.matches('details > pre[data-exact-record]') && node.parentElement.querySelector(':scope > summary')?.textContent === 'Exact record') { flush(); segments.push({text:node.textContent ?? '',kind:'exact-record'}); return; }
+    if (node.matches('details > pre[data-exact-record]') && node.parentElement.querySelector(':scope > summary')?.textContent === 'Exact record · as sent') { flush(); segments.push({text:node.textContent ?? '',kind:'exact-record'}); return; }
     if (node.matches('[data-display-id], button.paper-copy, .capital-paper-source > code') || node.matches('.paper-detail > dd') && ['Executor','Controller'].includes(node.previousElementSibling?.textContent)) { flush(); segments.push({text:node.textContent ?? '',kind:'id'}); return; }
     if (node.matches('[data-display-count]')) { flush(); segments.push({text:node.textContent ?? '',kind:'count'}); return; }
     const block = node.matches('div, p, section, article, header, footer, main, aside, li, tr, td, th, dd, dt, summary, h1, h2, h3, h4, pre');
@@ -170,7 +170,7 @@ test('three-state text does not certify an unformatted owner number', () => {
 
 test('numeric provenance exceptions are bound to marked ids, counters and progress attributes', () => {
   const fixture = document.createElement('div');
-  fixture.innerHTML = '<div data-display-id>instrument:123456</div><p class="capital-paper-source"><code>snapshot:123456</code></p><dl class="paper-detail"><dt>Executor</dt><dd>123456</dd><dt>Price</dt><dd>123456</dd></dl><div data-display-count>3 lots</div><progress value="13.516106872503714"></progress><span role="separator" class="q-dt__resize" aria-valuenow="180"></span><div>2026-10-30 23:35:00 UTC</div><pre class="v5-stock-json">"event_time_ms": 1793403300404</pre><details open><summary>Exact record</summary><pre data-exact-record>99.7800793</pre></details><div>Updates every 15 s</div><div>15s ago</div><div>99.7800793</div><div>123456</div><code>123456</code><div>3</div><div>13.516106872503714</div><div>1793403300404</div><div>15</div><div>2026</div><div>180</div>';
+  fixture.innerHTML = '<div data-display-id>instrument:123456</div><p class="capital-paper-source"><code>snapshot:123456</code></p><dl class="paper-detail"><dt>Executor</dt><dd>123456</dd><dt>Price</dt><dd>123456</dd></dl><div data-display-count>3 lots</div><progress value="13.516106872503714"></progress><span role="separator" class="q-dt__resize" aria-valuenow="180"></span><div>2026-10-30 23:35:00 UTC</div><pre class="v5-stock-json">"event_time_ms": 1793403300404</pre><details open><summary>Exact record · as sent</summary><pre data-exact-record>99.7800793</pre></details><div>Updates every 15 s</div><div>15s ago</div><div>99.7800793</div><div>123456</div><code>123456</code><div>3</div><div>13.516106872503714</div><div>1793403300404</div><div>15</div><div>2026</div><div>180</div>';
   assert.deepEqual(unprovenNumbers(fixture, new Set()), ['123456', '99.7800793', '3', '13.516106872503714', '1793403300404', '15', '2026', '180']);
 });
 

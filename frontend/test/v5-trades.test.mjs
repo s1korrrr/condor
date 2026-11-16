@@ -104,6 +104,16 @@ test('future-dated orders are withheld and controller totals are not labeled lif
   assert.match(html,/do not establish lifetime coin attribution/);
 });
 
+test('trade owner values retain exact titles and rounded-zero tone', () => {
+  const sections = reads();
+  sections.executors.data[0].realized_pnl_quote = '-0.001';
+  sections.executors.data[0].cum_fees_quote = '12.34567';
+  const { TradesContent } = frontendModules().load('v5/V5Trades.tsx');
+  const html = renderToStaticMarkup(React.createElement(TradesContent,{reads:Object.values(sections),now:sections.status.generated_at_ms}));
+  assert.match(html,/title="-0\.001" data-tone="zero">0<\/span>/);
+  assert.match(html,/title="12\.34567"[^>]*>12\.35 USDC/);
+});
+
 test('phone layout keeps a text floor and scrolls wide tables', () => {
   const css = fs.readFileSync(new URL('../src/v5/v5-trades.css',import.meta.url),'utf8');
   assert.match(css,/font-size:\s*14px/);

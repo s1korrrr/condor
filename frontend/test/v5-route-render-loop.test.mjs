@@ -15,7 +15,10 @@ const phoneTitleSelectors = rules => [...rules].flatMap(rule => [
   ...(rule.style?.content === 'attr(title)' && rule.selectorText.endsWith('::after') ? [rule.selectorText.replace(/::after$/,'')] : []),
   ...phoneTitleSelectors(rule.cssRules ?? []),
 ]);
-const phoneTitleSelector = phoneTitleSelectors(phoneSheet.cssRules).join(', ');
+const phoneTitleSelector = phoneTitleSelectors(phoneSheet.cssRules).flatMap(selector => {
+  const group = selector.match(/:is\(([^()]*)\)/);
+  return group ? group[1].split(',').map(option => selector.replace(group[0],option.trim())) : [selector];
+}).join(', ');
 for (const name of ['window','document','navigator','HTMLElement','Element','Node','MutationObserver','localStorage']) {
   Object.defineProperty(globalThis,name,{value:name === 'window' ? browser : browser[name],configurable:true});
 }
@@ -23,11 +26,11 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 globalThis.getComputedStyle = browser.getComputedStyle.bind(browser);
 const {frontendModules} = await import('./helpers/frontend-module.mjs');
 const {createRoot} = await import('react-dom/client');
-const baselineFiles = new Set(['components/charts/RecordedCandleChart.tsx','features/quant-ops/kit/Rows.tsx','pages/tabs/ActiveBotsTab.tsx','v5/format.mjs','v5/policy.ts','v5/V5Stocks.tsx','v5/bots-position-model.mjs','v5/V5CandleStore.tsx','v5/CandleStorePanels.tsx','v5/candle-store-model.ts','v5/V5Helm.tsx','v5/V5MarketDetail.tsx','v5/V5Pages.tsx','v5/OwnerJournalCondition.tsx']);
+const baselineFiles = new Set(['components/charts/RecordedCandleChart.tsx','features/quant-ops/kit/Rows.tsx','pages/tabs/ActiveBotsTab.tsx','v5/format.mjs','v5/policy.ts','v5/V5Stocks.tsx','v5/bots-position-model.mjs','v5/V5CandleStore.tsx','v5/CandleStorePanels.tsx','v5/candle-store-model.ts','v5/V5Helm.tsx','v5/V5Market.tsx','v5/V5MarketDetail.tsx','v5/V5Pages.tsx','v5/OwnerJournalCondition.tsx']);
 const baselineSource = (filename, source) => {
   if (!process.env.DISPLAY_SCAN_BASELINE) return source;
   const relative = path.relative(path.resolve(import.meta.dirname,'../src'), filename);
-  const revision = process.env.DISPLAY_SCAN_BASELINE === 'e16cf5b9' ? 'e16cf5b9' : '87c660c8';
+  const revision = ['e16cf5b9','d277c7ca'].includes(process.env.DISPLAY_SCAN_BASELINE) ? process.env.DISPLAY_SCAN_BASELINE : '87c660c8';
   return baselineFiles.has(relative) ? execFileSync('git',['show',`${revision}:frontend/src/${relative}`],{cwd:path.resolve(import.meta.dirname,'../..'),encoding:'utf8'}) : source;
 };
 const fixture = relative => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/${relative}`,import.meta.url)));
@@ -60,6 +63,12 @@ const settings = {...baseline.settings,identity,budget:{enabled:false}};
 const profile = {...baseline.profile.body,readiness:{...baseline.profile.body.readiness,paper_owner:{bot_name:bot,state:'FRESH',generated_at:sections.status.generated_at_ms / 1000,reason:'fixture',mode:'PAPER'}}};
 sections.history.data.terminal_executors.data = {delivery:'publication_pages',records:[{executor_id:'terminal-fixture',trading_pair:'BNB-USDC',controller_id:'v5-bnb',close_type:'completed',close_at_ms:sections.status.generated_at_ms - 1000}],publication_record_count:1};
 const workspace = {schema_version:'v5-workspace.v1',identity,context:null,advisor:settings.budget,agents:Object.values(baseline.workspace_agents),sessions:[],source_error:null};
+const cohortFixture = {cutoff_ms:sections.status.read_at_ms - 1000,features:Object.fromEntries([
+  ['spot.assets_valid',1], ['spot.assets_expected',1048576], ['spot.asset_coverage_fraction','0.876543217317'],
+  ['spot.venues_valid',1], ['spot.venues_expected',1048576], ['spot.venue_coverage_fraction','0.876543217317'],
+  ['derivatives.venues_valid',1], ['derivatives.venues_expected',1048576], ['derivatives.venue_coverage_fraction','0.876543217317'],
+  ['derivatives.matched_assets',1],
+].map(([key,value]) => [key,{status:'QUALIFIED',value}]))};
 const agentFixture = {...baseline['agent:decision_reviewer'].body,tools:['fixture_reader'],policy:{...baseline['agent:decision_reviewer'].body.policy,allowed_tools:['fixture_reader']},notes:'Fixture operator notes'};
 const sessionFixture = {...baseline['inspect:decision_reviewer'],id:'fixture-session',agent_id:'decision_reviewer',loop_id:null,started_at_ms:sections.status.read_at_ms,finished_at_ms:sections.status.read_at_ms,effect:'NONE',journal:'Fixture journal text',ticks:baseline['inspect:decision_reviewer'].ticks.map((tick,index) => ({...tick,id:`tick-${index}`,at_ms:sections.status.read_at_ms,evidence_refs:[],report:'Fixture report output'}))};
 const routes = [
@@ -106,8 +115,8 @@ function longVisibleDecimals(container) {
 test('decimal scan checks phone CSS title helpers but not exact leaf tooltips', () => {
   const fixture = document.createElement('div');
   fixture.className = 'condor-native';
-  fixture.innerHTML = '<div class="v5m-stat" title="13.71580913935440000000000000"><strong>13.72</strong></div><div class="v5m-stat"><strong><span title="13.71580913935440000000000000">13.72</span></strong></div>';
-  assert.deepEqual(longVisibleDecimals(fixture), ['div[phone ::after]: 13.71580913935440000000000000']);
+  fixture.innerHTML = '<div class="v5m-stat" title="13.71580913935440000000000000"><strong>13.72</strong></div><div class="v5m-stat"><strong><span title="13.71580913935440000000000000">13.72</span></strong></div><div class="v5-system"><span class="v5m-lane" title="0.876543217317"><span title="0.876543217317">88%</span><span><span title="0.876543217317">88%</span></span></span><div class="op-hrow__pct" title="87.6543217317%">87.7%</div></div>';
+  assert.deepEqual(longVisibleDecimals(fixture), ['div[phone ::after]: 13.71580913935440000000000000', 'span[phone ::after]: 0.876543217317', 'span[phone ::after]: 0.876543217317', 'div[phone ::after]: 87.6543217317']);
 });
 
 test('decimal scan excludes exact titles and only allows three-significant-digit position dust', () => {
@@ -131,7 +140,8 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const registered = [...routeSource.matchAll(/<Route path="([^"]+)"/g)].map(match => match[1]).filter(pathname => pathname !== '*').map(pathname => pathname.replace('/system/:tab','/system/checks').replace('/market/:coin','/market/BTC').replace('/agents/:id','/agents/decision_reviewer').replace('/sessions/:id','/sessions/fixture-session'));
   assert.deepEqual([...new Set(routes.map(([pathname]) => pathname.replace(/^\/system\/(data-feeds|engine-inputs|readiness|settings)$/, '/system/checks')))].sort(),registered.sort(),'every registered V5 route needs a real render case');
   let route = '/settings';
-  const profileForRoute = () => route.startsWith('/market') && route !== '/market/stocks' ? {...profile,candle_store:{configured:true}} : profile;
+  const profileForRoute = () => route === '/system/data-feeds' || (route.startsWith('/market') && route !== '/market/stocks') ? {...profile,candle_store:{configured:true}} : profile;
+  const workspaceForRoute = () => route === '/system/data-feeds' ? {...workspace,context:{...cohortFixture,cutoff_ms:now - 1000},source_refresh:{feed_freshness:'FRESH',feed_fresh_until_ms:now + 60_000,last_success_at_ms:now}} : workspace;
   const journalRoutes = new Set(['/bots', '/operations', '/v5/readiness']);
   const statusForRoute = () => journalRoutes.has(route) ? {...sections.status, state:'degraded', reason:'OWNER_JOURNAL_EXCEEDED', data:{...sections.status.data, journal_budget:{state:'exceeded',journal_evidence_held:true,native_execution_continues:true}}} : sections.status;
   const originalFetch = globalThis.fetch;
@@ -188,7 +198,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
     } else if (url.pathname === '/api/v5/auth') body = {authenticated:true};
     else if (url.pathname === '/api/v5/dashboard/profile') body = profileForRoute();
     else if (url.pathname === '/api/v5/settings') body = settings;
-    else if (url.pathname === '/api/v5/workspace') body = workspace;
+    else if (url.pathname === '/api/v5/workspace') body = workspaceForRoute();
     else if (url.pathname === '/api/v5/advisor/history') body = {effect:'NONE',records:[]};
     else if (url.pathname === '/api/v5/sessions') body = {sessions:[sessionFixture]};
     else if (url.pathname === '/api/v5/sessions/fixture-session') body = sessionFixture;
@@ -198,7 +208,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       const end = Math.floor(sections.status.read_at_ms / 60_000) * 60 - 60;
       body = {state:'AVAILABLE',reason:null,data:{pair:url.searchParams.get('pair') ?? 'BNB-USDC',venue:'binance',volume_unit:'base',start:end-60,end,now:end+65,buckets:[[end-60,100,101,99,100,2,1],[end,101,102,100,fixtureClose,2,1]],totals:{}}};
     }
-    else if (url.pathname === '/api/v5/candle-store/summary') body = {state:'AVAILABLE',reason:null,data:{now:Math.floor(sections.status.read_at_ms/1000),status_age_s:1,tiles:[laneFixture],rows:[laneFixture]}};
+    else if (url.pathname === '/api/v5/candle-store/summary') body = {state:'AVAILABLE',reason:null,data:{now:Math.floor(now/1000),status_age_s:1,tiles:[laneFixture],rows:[laneFixture]}};
     else if (url.pathname === '/api/v5/candle-store/cross') body = {state:'AVAILABLE',reason:null,data:{now:1793403300,asset:'BTC',segment:'spot',range:'24h',res:'1h',res_s:3600,start:1793401200,end:1793401200,minutes:1,minutes_with_median:1,venues_per_minute_max:2,note:'fixture',table:[{lane:'binance__spot',venue:'binance',pair:'BTC-USDT',quote:'USDT',n:1,minutes_with_close:1,mean_bps:0.123456787317,mean_abs_bps:0.123456787317,p95_abs_bps:0.123456787317,max_abs_bps:0.123456787317,max_at:1793401200}],series:[{lane:'binance__spot',venue:'binance',pair:'BTC-USDT',close:[[1793401200,101.123456787317]],deviation_bps:[[1793401200,0.123456787317]]}]}};
     else if (['/api/v5/candle-store/stocks','/api/v5/candle-store/stock-market','/api/v5/candle-store/stock-candles'].includes(url.pathname)) {
       const seconds = Math.floor(now/1000), identity = {region:'eea',instId:'EXAMPLE-USDT-SWAP',instType:'SWAP'};
@@ -239,6 +249,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         }
       };
       if (pathname === '/bots') now = sections.status.generated_at_ms + 1000;
+      if (pathname === '/system/data-feeds') now = sections.status.generated_at_ms + 90_000;
       const requestStart = requests.length;
       const failures = [];
       const warnings = [];
@@ -313,6 +324,33 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         assert.ok(container.textContent.includes(heading),`${pathname} must render ${heading}: ${container.textContent}`);
         await openDisclosures(container);
         assertChartMarkers('open disclosures');
+        if (pathname === '/system/data-feeds') {
+          assert.ok(requests.slice(requestStart).includes('/api/v5/candle-store/summary'), 'configured System must read the lane fixture');
+          const lane = container.querySelector('.v5-system .v5m-lane:not(.is-none)');
+          assert.ok(lane, 'configured System must render a reported venue lane');
+          assert.match(container.textContent,/87\.7%/, 'configured System must render the lane mean');
+          assert.match(container.textContent,/88% this minute/, 'configured System must render qualified owner cohort fractions');
+          assert.match(container.textContent,/0% this minute/, 'configured System must render the derived 1/1048576 cohort percentage');
+          scan(container, `${pathname} / configured coverage`);
+          const stats = new Map([...container.querySelectorAll('.v5m-stat')].map(tile => [tile.querySelector(':scope > span')?.textContent,tile]));
+          const mean = stats.get('7-day coverage');
+          assert.equal(mean.title,'7-day coverage 87.7%', 'mean phone helper must use one decimal place');
+          assert.match(mean.querySelector('strong').title,/exact mean of 0\.876543217317 = 87\.6543217317/, 'mean leaf must retain exact inputs and result');
+          for (const label of ['Spot assets','Spot venue pairs qualified','Perpetual venue pairs qualified']) {
+            assert.equal(stats.get(label).title,'88% this minute', `${label} phone helper must use zero decimal places`);
+            assert.equal(stats.get(label).querySelector('strong').title,'0.876543217317', `${label} leaf must retain its owner fraction`);
+          }
+          const matched = stats.get('Matched spot / perpetual assets');
+          assert.equal(matched.title,'0% this minute', 'derived cohort phone helper must use zero decimal places');
+          assert.match(matched.querySelector('strong').title,/1 \/ 1048576; exact percentage 0\.000095367431640625/, 'derived cohort leaf must retain its ratio and exact percentage');
+          assert.equal(lane.title,'binance__spot · 7-day coverage 87.7% · missing minutes 1', 'venue phone helper must not append the exact fraction');
+          assert.equal(lane.querySelector(':scope > span:first-child').title,'Owner health: green · available', 'non-numeric lane health helper must remain');
+          assert.equal(lane.querySelector(':scope > span:first-child > span').title,'exact 7-day fraction 0.876543217317', 'venue leaf must retain the exact 7-day fraction');
+          const day = lane.querySelector(':scope > span:nth-child(2) > span');
+          assert.equal(day?.title,'0.876543217317', '24-hour leaf must retain its exact source fraction');
+          assert.equal(day.textContent,'88%', '24-hour coverage must keep zero decimal places');
+          for (const leaf of container.querySelectorAll('.v5m-stat strong[title], .v5m-lane > span > span[title]')) assert.equal(leaf.matches(phoneTitleSelector),false, 'exact coverage tooltips must not match phone helper selectors');
+        }
         if (pathname === '/market') await React.act(async () => { await client.refetchQueries({type:'active'}); await new Promise(resolve => setTimeout(resolve,0)); });
         if (pathname === '/market') {
           const chart = charts.slice(chartStart).findLast(item => item.data.some(row => row.close === 101.123456789));

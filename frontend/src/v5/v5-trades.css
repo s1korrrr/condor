@@ -1,0 +1,7 @@
+.v5-trades { min-width: 0; font-size: 14px; }
+.v5-trades-scroll { max-width: 100%; overflow-x: auto; }
+.v5-trades table { border-collapse: collapse; width: 100%; font-size: 14px; }
+.v5-trades th, .v5-trades td { padding: 8px; text-align: left; vertical-align: top; white-space: nowrap; }
+.v5-trades-filters { display: flex; flex-wrap: wrap; gap: 12px; margin-bottom: 12px; }
+.v5-trades-filters select { min-height: 40px; font-size: 14px; }
+.v5-trades .paper-chart-coins { display: none; }

@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { Component, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { PaperPriceChart } from "@/v5/PaperPriceChart";
+import { V5Trades } from "@/v5/V5Trades";
 import { PaperPositions } from "@/v5/PaperPositions";
 import { PAIRS, hasPaperCandlePair, paperCandleQuery, usePaperCandleSymbols, type Candles } from "@/v5/paper-candles";
 import { readMoney, type MoneyRead } from "@/v5/money-api";
@@ -886,12 +887,14 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
   const accounting = complete ? reads.find(read => read.section === "accounting") : undefined;
   const clock = paperHeartbeat(generatedAt === null ? null : Math.floor(generatedAt * 1000), ownerState, now);
   const heartbeat = clock.current ? "Fresh" : ownerState === "UNAVAILABLE" ? "Unavailable" : "Stale";
+  const [showTrades, setShowTrades] = useState(false);
   return <div className="v5-paper-bots">
-    <header className="v5-page-heading"><div><h1>Paper bots</h1><p>{bot} · simulated wallet · live disabled</p></div><div className="v5-button-row"><button className="v5-button" onClick={() => void query.refetch()}>Refresh paper data</button></div></header>
+    <header className="v5-page-heading"><div><h1>Paper bots</h1><p>{bot} · simulated wallet · live disabled</p></div><div className="v5-button-row"><button className="v5-button" aria-expanded={showTrades} onClick={() => setShowTrades(value => !value)}>{showTrades ? 'Hide trades' : 'Show trades'}</button><button className="v5-button" onClick={() => void query.refetch()}>Refresh paper data</button></div></header>
 
     {query.progress && <p role="status">{query.progress}</p>}
     {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
     <PaperWorkspace snapshotStamp={complete && <p role={dimmed ? "status" : undefined} className={dimmed ? "paper-dimmed-stamp" : undefined}>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}{dimmed ? " · snapshot values are from that time, dimmed until a new report" : ""}</p>} asOf={dimmed ? snapshotAt : null} reads={reads} safetyReads={query.safetyReads} complete={complete} readFailed={query.isError} money={money.isError ? undefined : money.data} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} valuesAt={valuesAt} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} market={market} />
+    {showTrades && <V5Trades bot={bot} now={now} read={readPaper} />}
   </div>;
 }
 

@@ -1,0 +1,24 @@
+{
+  "provenance": "Boss-supplied held_position receipt, 2026-11-16. Closed receipt is a synthetic variation using the reported live Decimal encodings; no live services were contacted.",
+  "held_position": {
+    "accounting_owner": "held_position",
+    "entry_gross_base": "0.1553500",
+    "entry_gross_quote": "99.700523000",
+    "exit_gross_base": "0.086547",
+    "exit_gross_quote": "56.10991059",
+    "fees_quote": "0.1358703289900",
+    "remaining_owned_base": "0.0688030",
+    "residual_dust_base": "0"
+  },
+  "closed_executor": {
+    "accounting_owner": "executor",
+    "entry_gross_base": "0.1553500",
+    "entry_gross_quote": "99.700523000",
+    "exit_gross_base": "0.1553499",
+    "exit_gross_quote": "109.670575300",
+    "fees_quote": "0E-9",
+    "remaining_owned_base": "0E-8",
+    "residual_dust_base": "1E-7"
+  },
+  "realized_pnl_quote": "9.970052300"
+}

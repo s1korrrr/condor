@@ -9,7 +9,7 @@ import { exactSignedSum } from './bots-position-model.mjs';
 import { hasPaperCandlePair, paperCandleQuery, usePaperCandleSymbols } from './paper-candles';
 import { count, ownerDisplay, type OwnerValueKind } from './format.mjs';
 import { OwnerValue } from './OwnerValue';
-import { groupTrades, lotBreakeven, reconcileFills, targetFromBreakeven, tradeWindow } from './trades-model.mjs';
+import { groupTrades, lotBreakeven, reconcileFills, targetFromBreakeven, tradeCosts, tradeWindow } from './trades-model.mjs';
 import './v5-trades.css';
 
 type Row = Record<string, any>;
@@ -24,6 +24,9 @@ const profit = (value: string) => <>{ownerValue(value, 'pnl')} USDC</>;
 const unitPrice = (value: string) => ownerValue(value, 'price');
 const coinValue = (value: string, unit?: string) => <OwnerValue value={value} kind="coin" unit={unit} />;
 const countValue = (value: string | number) => <OwnerValue value={value} kind="coin" />;
+const costRatio = (ratio: { value: string; exact: string; rounded: boolean } | null, kind: 'price' | 'pct') => ratio
+  ? <>{ratio.rounded ? '≈ ' : ''}<OwnerValue value={ratio.value} kind={kind} exact={ratio.exact} />{ratio.rounded ? ' (rounded)' : ''}</>
+  : '—';
 const at = (value: unknown, now: number) => typeof value === 'number' && Number.isSafeInteger(value) && value <= now ? <span title={String(value)}>{paperTime(value, now)}</span> : '—';
 const age = at;
 const asset = (row: Row) => typeof row.trading_pair === 'string' ? row.trading_pair.split('-')[0] : 'Not published';
@@ -91,6 +94,7 @@ export function TradesContent({ reads, now, readFailed = false, heartbeat = 'Una
   const [filterState, setFilterState] = useState('all');
   const visible = trades.filter((row: Row) => (filterCoin === 'all' || asset(row) === filterCoin) && (filterState === 'all' || (filterState === 'closed' ? row.terminal === true : row.terminal === false)));
   const selectedTrade = trades.find((row: Row) => row.executor_id === selected);
+  const selectedCosts = selectedTrade ? tradeCosts(selectedTrade) : null;
   const tradeIds = new Set(trades.map((row: Row) => row.executor_id));
   const unlinkedFills = fills?.filter(row => !tradeIds.has(row.executor_id)) ?? [];
   const coins = [...new Set(trades.map((row: Row) => asset(row)))].sort() as string[];
@@ -130,7 +134,16 @@ export function TradesContent({ reads, now, readFailed = false, heartbeat = 'Una
       {accounting && totals.size ? <Table headers={['Coin or controller', 'Profit', 'Fees', 'Volume', 'Entries', 'Exits']}>{[...totals].map(([name, rows]) => <tr key={name}><td>{name}</td><td>{exact(sum(rows, 'realized_pnl_quote'), profit)}</td><td>{exact(sum(rows, 'fees_paid_quote'), money)}</td><td>{exact(sum(rows, 'volume_traded_quote'), money)}</td><td>{exact(counts(rows, 'entry_count'), countValue)}</td><td>{exact(counts(rows, 'exit_count'), countValue)}</td></tr>)}</Table> : <p>Accounting totals are not published or unavailable; an owner accounting snapshot will fill this table.</p>}
     </section>
     <section className="paper-section"><h2>Open orders</h2>{orders?.length ? <Table headers={['Side', 'Price', 'Quantity', 'Executor', 'Placed']}>{orders.map(row => <tr key={row.order_id}><td>{paperWords(row.side)}</td><td>{exact(row.price, unitPrice)}</td><td>{exact(row.quantity, value => coinValue(value, asset(row)))}</td><td>{row.executor_id ?? 'Not published'}</td><td>{age(row.created_at_ms, now)}</td></tr>)}</Table> : <p>{orders ? 'No open orders in the owner snapshot; newly published open orders will appear here.' : 'Open orders are unavailable; a complete owner orders snapshot will fill this table.'}</p>}</section>
-    {selectedTrade && <section className="paper-section"><h2>Trade details · {asset(selectedTrade)}</h2><p>Executor: {selectedTrade.executor_id}</p><p>Average entry price: — · Average exit price: — · Margin at sale: —</p><p>The owner does not publish these sale metrics. A complete owner publication is needed; partial fills cannot establish exact averages or margin.</p>
+    {selectedTrade && selectedCosts && <section className="paper-section"><h2>Trade details · {asset(selectedTrade)}</h2><p>Executor: {selectedTrade.executor_id}</p>
+      <dl>
+        <dt>Gross entry cost</dt><dd data-trade-cost="entry"><OwnerValue value={selectedCosts.grossEntryCost} kind="usdc" /></dd>
+        <dt>Gross sale proceeds</dt><dd data-trade-cost="proceeds"><OwnerValue value={selectedCosts.grossSaleProceeds} kind="usdc" /></dd>
+        <dt>Average entry price</dt><dd data-trade-cost="entryPrice">{costRatio(selectedCosts.averageEntryPrice, 'price')}</dd>
+        <dt>Average exit price</dt><dd data-trade-cost="exitPrice">{selectedCosts.notSold ? 'Not sold' : costRatio(selectedCosts.averageExitPrice, 'price')}</dd>
+        <dt>Owner cumulative fees</dt><dd data-trade-cost="fees"><OwnerValue value={selectedCosts.feesQuote} kind="usdc" /></dd>
+        <dt>Realized return on gross entry</dt><dd data-trade-cost="return">{costRatio(selectedCosts.realizedReturn, 'pct')}</dd>
+      </dl>
+      <p>{selectedCosts.reason}</p><p>Gross amounts do not deduct fees. Owner cumulative fees are shown separately and are never subtracted again.</p>
       <h3>Fills</h3>{selectedFills?.length ? <Table headers={['Time', 'Side', 'Quantity', 'Price', 'Fee']}>{selectedFills.map(row => <tr key={`${row.order_id}:${row.trade_id}`}><td>{at(row.event_at_ms, now)}</td><td>{paperWords(row.side)}</td><td>{exact(row.quantity, value => coinValue(value, asset(row)))}</td><td>{exact(row.price, unitPrice)}</td><td>{typeof row.fee_amount === 'string' ? exact(row.fee_amount, value => coinValue(value, typeof row.fee_currency === 'string' ? row.fee_currency : undefined)) : exact(row.fee_quote, money)}</td></tr>)}</Table> : <p>No fills for this trade in the retained window; a published matching fill will appear here.</p>}
       <TradeChart trade={selectedTrade} fills={fills && sections.fills ? {...sections.fills, data: fills} : undefined} now={now} valuesAt={valuesAt} asOf={dimmed && typeof snapshot === 'number' ? snapshot : snapshotAt} />
       <h3>Lots and targets</h3><p>Owner bag breakeven: {selectedBag?.breakevenPrice ? unitPrice(selectedBag.breakevenPrice) : '— · a coherent owner bag publication will fill this value'}. This is for the whole bag, not an individual lot.</p><p>Lot breakeven uses the owner value when published; otherwise it is basis divided by quantity, rounded to 12 decimal places before display. Target distance uses the owner mark, rounded to two percentage places; a fresh mark is needed when it shows —.</p>

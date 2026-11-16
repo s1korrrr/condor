@@ -1,6 +1,7 @@
 import { PAPER_SNAPSHOT_FRESH_MS, paperAge, paperTimestampIssue } from './snapshot-presentation.ts';
 import { paperOpaqueClockNumber } from './paper-json.ts';
 import { decimalPercentRatio, fixed, usdc } from './format.mjs';
+import { receiptAmountFields, receiptDecimalParts } from './trades-model.mjs';
 
 export interface ReportPermissionInput {
   agentReady: boolean;
@@ -117,6 +118,7 @@ function paperNativeRecordValid(value: unknown, key = "", depth = 0, nativeFee =
   const currency = (part: unknown) => typeof part === "string" && /^[A-Za-z0-9_.-]{1,32}$/.test(part);
   const fields = (part: unknown, required: string[], allowed = required): part is Record<string, unknown> => object(part) && required.every(name => name in part) && Object.keys(part).every(name => allowed.includes(name));
   if (typeof value === "string" && (value.length > 4096 || /^(?:nan|-?inf|-?infinity)$/i.test(value))) return false;
+  if (key === "execution_receipt" && object(value)) return Object.entries(value).every(([name, part]) => depth < 16 && receiptAmountFields.includes(name) && receiptDecimalParts(part) !== null || paperNativeRecordValid(part, name, depth + 1, nativeFee, [...path, name]));
   if (key.endsWith("_ms") || key.endsWith("_count")) return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
   if (["count_basis", "fee_quote_valuation_basis", "target_basis", "pnl_scope"].includes(key) || nativeFee && key === "fee_type") return typeof value === "string" && !!value && (!["target_basis", "pnl_scope"].includes(key) || /^[A-Za-z0-9_.-]{1,128}$/.test(value));
   if (key === "fee") {

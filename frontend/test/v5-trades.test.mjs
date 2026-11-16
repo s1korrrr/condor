@@ -111,7 +111,7 @@ test('fixed-pair trade detail omits coin selector from the DOM', async () => {
   }
 });
 
-test('trade detail renders fills, lots, orders and honest unpublished metrics', async () => {
+test('trade detail renders fills, lots, orders and owner receipt metrics', async () => {
   const sections = reads();
   let chartFills;
   const { TradesContent } = frontendModules({'./PaperPriceChart':{PaperPriceChart:props => {chartFills = props.fills; return null;}}, './paper-candles':{usePaperCandleSymbols:() => ({}), hasPaperCandlePair:() => false, paperCandleQuery:() => ({})}, '@tanstack/react-query':{useQuery:() => ({})}}).load('v5/V5Trades.tsx');
@@ -121,8 +121,11 @@ test('trade detail renders fills, lots, orders and honest unpublished metrics', 
     await act(async () => { renderer = create(React.createElement(TradesContent,{reads:Object.values(sections),now:sections.status.generated_at_ms})); });
     await act(async () => { renderer.root.findAllByType('button').find(button => button.children[0] === 'View trade').props.onClick(); });
     const text = JSON.stringify(renderer.toJSON());
-    assert.match(text,/Average entry price: —/);
-    assert.match(text,/partial fills cannot establish exact averages or margin/);
+    const receipt = sections.executors.data[0].custom_info.execution_receipt;
+    const entryPrice = renderer.root.findByProps({'data-trade-cost':'entryPrice'}).findByType('span');
+    assert.ok(entryPrice.props.title.startsWith(`${receipt.entry_gross_quote} / ${receipt.entry_gross_base} = `));
+    assert.match(text,/Realized return on gross entry/);
+    assert.doesNotMatch(text,/partial fills cannot establish exact averages or margin/);
     assert.match(text,/fixture-order/);
     assert.match(text,/Breakeven/);
     assert.match(text,/100\.000000000001 \/ 3/);

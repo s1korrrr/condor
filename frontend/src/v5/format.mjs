@@ -54,6 +54,16 @@ function split(neg, text) {
   return { neg, int: int.replace(/^0+(?=\d)/, '') || '0', frac };
 }
 
+export function decimalShift(value, places) {
+  const parts = parse(value);
+  if (!parts || !Number.isInteger(places) || Math.abs(places) > MAX_EXPONENT) return null;
+  const digits = parts.int + parts.frac;
+  const point = parts.int.length + places;
+  const int = point <= 0 ? '0' : digits.slice(0, point).padEnd(point, '0');
+  const frac = point <= 0 ? '0'.repeat(-point) + digits : digits.slice(point);
+  return `${parts.neg ? '-' : ''}${int}${frac ? `.${frac}` : ''}`;
+}
+
 /** Add one unit in the last place to a string of digits. */
 function increment(digits) {
   const out = digits.split('');

@@ -9,7 +9,7 @@ import {
   type CrossStats, type CrossView, type HeatRow, type HeatmapView, type StoreLane, type StoreView,
 } from "./candle-store-model";
 import { readCandleStore } from "./candle-store-api";
-import { fixed } from "./format.mjs";
+import { fixed, ownerDisplay } from "./format.mjs";
 
 
 const control = "rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-[var(--color-text)]";
@@ -58,7 +58,7 @@ export function CrossVenuePanel({ pairs }: { pairs: string[] }) {
     {view && <>
       <p className="text-sm">Evaluated {utcText(view.now)} · {utcText(view.start)} to {utcText(view.end)} · {view.res} buckets (mean of minute deviations) · median available in {view.minutes_with_median.toLocaleString()} of {view.minutes.toLocaleString()} minutes · at most {view.venues_per_minute_max} venues in one minute.</p>
       {crossQuotes(view).length > 1 && <p className="text-sm" role="note">Quotes differ ({crossQuotes(view).join(", ")}). Part of a deviation can be the quote-currency basis, not a venue price difference. No conversion is applied.</p>}
-      <TimeSeriesChart series={series} height={260} ariaLabel={`${view.asset} ${view.segment} deviation from the cross-venue median, basis points`} zeroLine signed leftFormat={value => `${value >= 0 ? "+" : ""}${value.toFixed(2)} bps`} emptyText="No minute had final closes from two or more venues in this range." zoom={zoom} onZoom={setZoom} />
+      <TimeSeriesChart series={series} height={260} ariaLabel={`${view.asset} ${view.segment} deviation from the cross-venue median, basis points`} zeroLine signed leftFormat={value => ownerDisplay(value, "bps").text} emptyText="No minute had final closes from two or more venues in this range." zoom={zoom} onZoom={setZoom} />
       <ul className="flex flex-wrap gap-x-4 gap-y-1 text-xs" aria-label="Venues in the chart">{series.map(line => <li key={line.id} className="flex items-center gap-1.5"><i aria-hidden="true" className="inline-block h-0.5 w-4 rounded" style={{ background: line.color }} />{line.label} ({view.table.find(row => row.lane === line.id)?.quote ?? "quote unknown"})</li>)}</ul>
       <p className={muted}>Drag across the chart to zoom; double-click or Reset zoom to return. Gaps are minutes without a median or without this venue's final close.</p>
       <DataTable rows={view.table} columns={crossColumns} rowId={row => `${row.lane}/${row.pair}`} label={`${view.asset} ${view.segment} cross-venue deviation statistics`} pageSize={16} exportName={`candle-cross-${view.asset}-${view.segment}-${view.range}`} emptyText="No venue lists this asset in this market type." />

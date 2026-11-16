@@ -8,6 +8,8 @@
  * silently using a neighbour. Spot and perpetual are separate grids and are only compared minute by minute.
  */
 
+import { decimalShift, fixed, ownerDisplay } from './format.mjs';
+
 export const MARKET_COINS = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP'];
 /** Reference lanes for prices and the spot/perpetual premium: one venue so both legs share quote and clock. */
 export const REFERENCE = { venue: 'binance', quote: 'USDT', spot: 'binance__spot', perpetual: 'binance__perpetual' };
@@ -208,14 +210,18 @@ export const FEATURE_GROUPS = ['Breadth', 'Returns', 'Dispersion', 'Coverage', '
 
 /** Display text for one feature value in its owner unit; a non-numeric or unqualified value is said, not guessed. */
 export function featureText(value, unit) {
-  if (typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value)) return `${value}${unit === 'percent' ? '%' : unit === 'percentage_points' ? ' pp' : unit === 'fraction_0_1' ? ' (fraction)' : ''}`;
-  const number = typeof value === 'number' ? value : typeof value === 'string' && value.trim() !== '' ? Number(value) : NaN;
-  if (!Number.isFinite(number)) return value == null ? '—' : String(value);
-  if (unit === 'fraction_0_1') return `${(number * 100).toFixed(0)}%`;
-  if (unit === 'percent' || unit === 'percentage_points') return `${number > 0 ? '+' : ''}${number.toFixed(3)}${unit === 'percent' ? '%' : ' pp'}`;
-  if (/count$/.test(unit ?? '')) return Number.isInteger(number) ? String(number) : number.toFixed(1);
-  if (/pressure/.test(unit ?? '')) return `${number > 0 ? '+' : ''}${number.toFixed(2)}`;
-  return Math.abs(number) >= 100 ? number.toFixed(0) : number.toPrecision(4);
+  if (unit === 'fraction_0_1') {
+    const shifted = decimalShift(value, 2);
+    return shifted === null ? '—' : `${fixed(shifted, 0)}%`;
+  }
+  if (unit === 'percent') return ownerDisplay(value, 'pct').text;
+  if (unit === 'percentage_points') {
+    const text = ownerDisplay(value, 'signed').text;
+    return text === '—' ? text : `${text} pp`;
+  }
+  if (/count$/.test(unit ?? '')) return fixed(value, 0);
+  if (/pressure/.test(unit ?? '')) return ownerDisplay(value, 'signed').text;
+  return ownerDisplay(value, 'price').text;
 }
 
 export function featureRows(features) {

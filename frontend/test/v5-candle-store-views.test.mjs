@@ -42,6 +42,7 @@ test("cross deviation keeps gaps as null on a shared time axis and colours venue
   ] });
   assert.deepEqual(series[1].points, [{ time: 60000, value: null }, { time: 120000, value: 0.5 }]);
   assert.equal(series[0].label, "a BTC-USDT");
+  assert.equal(series[0].format(-0.004), "0.00 bps");
   assert.notEqual(series[0].color, series[1].color);
 });
 

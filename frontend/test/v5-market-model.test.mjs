@@ -165,9 +165,15 @@ test('features keep owner units and say when a value is not qualified', () => {
   assert.equal(rows.find(row => row.id === 'spot.venue_coverage_fraction').text, '90%');
   assert.equal(rows.find(row => row.id === 'spot.pressure_original_1m').numeric, -1.2);
   assert.equal(rows.find(row => row.id === 'baseline.composite_score').numeric, null);
-  assert.equal(featureText(0.0216, 'percent'), '+0.022%');
+  assert.equal(featureText(0.0216, 'percent'), '+0.02%');
   assert.equal(featureText(null, 'percent'), '—');
-  assert.equal(featureText('0.123456789012345678901234567890', 'fraction_0_1'), '0.123456789012345678901234567890 (fraction)');
+  assert.equal(featureText('0.123456789012345678901234567890', 'fraction_0_1'), '12%');
+});
+
+test('feature values follow rounded-zero and non-scientific presentation', () => {
+  assert.equal(featureText(-0.0001, 'percent'), '0.00%');
+  assert.equal(featureText(1e-8, 'generic'), '0.0000');
+  assert.equal(featureText('-0.004', 'percent'), '0.00%');
 });
 
 test('shared display helpers never throw and keep three states', () => {

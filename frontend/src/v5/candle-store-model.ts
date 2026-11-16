@@ -6,7 +6,7 @@
  */
 import { assetColor } from '@/features/quant-ops/format';
 import { CHART, type ChartSeries } from '@/features/quant-ops/kit/series';
-import { fixed } from './format.mjs';
+import { fixed, ownerDisplay } from './format.mjs';
 
 export type CrossPoint = [number, number];
 export type CrossLine = { lane: string; venue: string; pair: string; close: CrossPoint[]; deviation_bps: CrossPoint[] };
@@ -126,7 +126,7 @@ export function crossDeviationSeries(view: CrossView): ChartSeries[] {
     const values = new Map(line.deviation_bps.map(([t, v]) => [t, v]));
     return {
       id: line.lane, label: `${line.venue} ${line.pair}`, color: assetColor(line.venue), unit: 'bps',
-      format: (value: number) => `${value >= 0 ? '+' : ''}${value.toFixed(2)} bps`,
+      format: (value: number) => ownerDisplay(value, 'bps').text,
       points: axis.map(t => ({ time: t * 1000, value: values.get(t) ?? null })),
     };
   });

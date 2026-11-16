@@ -189,7 +189,7 @@ function HourStrip({ reads }: { reads: Record<string, CoinRead> }) {
     <tbody>{rows.map(({ coin, hours }) => <tr key={coin}><th scope="row">{coin}</th>{times.map(time => {
       const hour = hours.get(time), value = hour?.change ?? null;
       const label = value == null ? "— incomplete hour or missing minute" : pct(value);
-      return <td key={time} className={`v5m-hour${value == null ? " is-gap" : ""}`} title={`${coin} · ${utcMin(time * 1000)} – ${utcMin((time + 3600) * 1000)} · ${label}`} style={value == null ? undefined : { background: `color-mix(in srgb, ${COIN_COLOR.BTC} ${Math.min(85, 12 + Math.abs(Number(value)) * 15)}%, var(--color-surface))` }}>{value == null ? <span aria-label={label}>—</span> : label}</td>;
+      return <td key={time} className={`v5m-hour${value == null ? " is-gap" : ""}`} title={`${coin} · ${utcMin(time * 1000)} – ${utcMin((time + 3600) * 1000)} · ${label}${value == null ? "" : ` · result ${value}%; ${hour?.inputs}`}`} style={value == null ? undefined : { background: `color-mix(in srgb, ${COIN_COLOR.BTC} ${Math.min(85, 12 + Math.abs(Number(value)) * 15)}%, var(--color-surface))` }}>{value == null ? <span aria-label={label}>—</span> : label}</td>;
     })}</tr>)}</tbody>
   </table></div>;
 }

@@ -1,5 +1,5 @@
 import type { PaperRead } from './contracts';
-import { coin as formatCoin, pct } from './format.mjs';
+import { coin as formatCoin, decimalPercentChange, pct } from './format.mjs';
 import { ageSeconds, MARKET_COINS, STALE_AFTER_S, type CandleRead } from './market-model.mjs';
 import { paperCompleteRead, paperPairBag, paperPairHoldings, paperSectionError, paperSnapshotsAgree } from './policy.ts';
 
@@ -91,15 +91,15 @@ export function marketSentence(changes: Record<string, string | null>, range: st
   return `${direction} over ${period}, on average ${pct(mean)}.${extreme ? ` ${extreme}` : ''}${missing.length ? ` ${missing.join(', ')}: — change not published; excluded from the average.` : ''}`;
 }
 
-export function hourlyReturns(read: CandleRead | null | undefined): { from: number; to: number; change: string | null }[] {
+export function hourlyReturns(read: CandleRead | null | undefined): { from: number; to: number; change: string | null; inputs?: string }[] {
   if (!read?.buckets.length) return [];
   const byTime = new Map(read.buckets.map(row => [row[0], row]));
-  const result: { from: number; to: number; change: string | null }[] = [];
+  const result: { from: number; to: number; change: string | null; inputs?: string }[] = [];
   for (let from = Math.floor(read.start / 3600) * 3600; from <= read.end; from += 3600) {
     const to = from + 3600;
     const rows = Array.from({ length: 61 }, (_, index) => byTime.get(from - 60 + index * 60));
     const complete = rows.every(row => row?.[6] === 1 && row[4] != null);
-    result.push({ from, to, change: complete ? change(rows[60]![4]!, rows[0]![4]!) : null });
+    result.push({ from, to, change: complete ? change(rows[60]![4]!, rows[0]![4]!) : null, ...(complete ? { inputs: `first close ${rows[0]![4]}; last close ${rows[60]![4]}` } : {}) });
   }
   return result;
 }
@@ -122,5 +122,7 @@ export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot:
   else if (decimal(bag.breakevenPrice) == null || decimal(bag.breakevenPrice)! <= 0n) reason = 'Owner breakeven is not published.';
   else gap = change(last, bag.breakevenPrice!, 1);
   if (!gap && !reason) reason = 'A complete price comparison is unavailable.';
-  return { text: `V5 holds ${formatCoin(holdings.total)} · ${gap ? pct(gap, 1) : '—'} to breakeven`, exact: holdings.total, reason, asOf: positions.generated_at_ms };
+  const comparison = gap && last != null ? decimalPercentChange(last, bag?.breakevenPrice, 1) : null;
+  const exact = comparison ? `holding ${holdings.total} · (${last} − ${bag!.breakevenPrice}) × 100 / ${bag!.breakevenPrice} = ${comparison.exact} (exact fraction)` : holdings.total;
+  return { text: `V5 holds ${formatCoin(holdings.total)} · ${gap ? pct(gap, 1) : '—'} to breakeven`, exact, reason, asOf: positions.generated_at_ms };
 }

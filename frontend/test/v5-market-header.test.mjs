@@ -79,7 +79,7 @@ test('holds uses complete same-bot snapshots and exact 30-place totals; gap uses
   const reads = paper(), now = reads[0].generated_at_ms;
   const holding = marketHolding('BTC', reads, reads[0].bot_id, 90.8, 'USDT', now);
   assert.equal(holding.text, 'V5 holds 0.0162 · −9.2% to breakeven');
-  assert.equal(holding.exact, '0.016200000000000000000000000010');
+  assert.equal(holding.exact, 'holding 0.016200000000000000000000000010 · (90.8 − 100) × 100 / 100 = -9200/1000% (exact fraction)');
   assert.equal(holding.reason, null);
   assert.equal(holding.asOf, now);
   assert.match(marketHolding('BTC', reads, reads[0].bot_id, 109.2, 'USDT', now).text, /\+9.2% to breakeven/);
@@ -117,6 +117,7 @@ test('hourly strip uses UTC hour boundaries with the preceding close, not a neig
   assert.deepEqual(hours.map(hour => hour.from), [start, start + 3600, start + 7200]);
   assert.equal(hours[0].change, null);
   assert.equal(hours[1].change, '37.74');
+  assert.equal(hours[1].inputs, 'first close 159; last close 219');
   assert.equal(hours[2].change, '27.40');
   for (const missing of [59, 60, 90, 119]) assert.equal(hourlyReturns(dense(180, missing))[1].change, null);
   assert.equal(hourlyReturns(dense(150)).at(-1).change, null);
@@ -206,7 +207,7 @@ test('Market renders a small header, selected range, two chips, holds and hourly
   assert.doesNotMatch(header, /Refresh|Five coins across|Slowest lane/);
   assert.match(header, /aria-label="Market range"/);
   assert.match(html, /All five coins are up over 6 hours/);
-  assert.match(html, /title="0\.016200000000000000000000000010"/);
+  assert.match(html, /title="holding 0\.016200000000000000000000000010 · \(279 − 100\) × 100 \/ 100 = 17900\/100% \(exact fraction\)"/);
   assert.match(html, /V5 holds 0\.0162/);
   assert.match(html, /Hour-by-hour returns/);
   assert.doesNotMatch(html, /<dt>Minutes held<\/dt>|v5m-range/);

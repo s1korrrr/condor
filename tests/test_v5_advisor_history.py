@@ -23,6 +23,43 @@ class HistoryUpstream(FakeUpstream):
         return await super().observation(path)
 
 
+def test_history_projects_owner_input_times(tmp_path):
+    item = record()
+    item['result'].update(received_at_ms=5000, input_cutoff_ms=11000, input_available_at_ms=11000)
+    api = HistoryUpstream({'effect': 'NONE', 'records': [item]})
+    with TestClient(create_app(settings=settings(tmp_path), upstream=api, static_dir=tmp_path / 'dist')) as client:
+        login(client)
+        response = client.get('/api/v5/advisor/history?task_id=market_context&limit=1')
+    assert response.status_code == 200
+    projected = response.json()['records'][0]['record']['result']
+    assert projected['input_cutoff_ms'] == 11000
+    assert projected['input_available_at_ms'] == 11000
+
+
+@pytest.mark.parametrize('key', ['requested_at_ms', 'received_at_ms', 'expires_at_ms', 'input_cutoff_ms', 'input_available_at_ms'])
+@pytest.mark.parametrize('value', [4102444800001, 9007199254740992])
+def test_history_rejects_out_of_range_owner_times(tmp_path, key, value):
+    item = record()
+    item['result'][key] = value
+    api = HistoryUpstream({'effect': 'NONE', 'records': [item]})
+    with TestClient(create_app(settings=settings(tmp_path), upstream=api, static_dir=tmp_path / 'dist')) as client:
+        login(client)
+        response = client.get('/api/v5/advisor/history?task_id=market_context&limit=1')
+    assert response.status_code == 502
+    assert 'PRIVATE' not in response.text
+
+
+@pytest.mark.parametrize('limit', ['2', '100'])
+def test_history_rejects_multi_record_limits_before_owner_read(tmp_path, limit):
+    api = HistoryUpstream({'effect': 'NONE', 'records': []})
+    with TestClient(create_app(settings=settings(tmp_path), upstream=api, static_dir=tmp_path / 'dist')) as client:
+        login(client)
+        response = client.get(f'/api/v5/advisor/history?task_id=market_context&limit={limit}')
+    assert response.status_code == 400
+    assert response.json()['detail']['code'] == 'INVALID_HISTORY_QUERY'
+    assert not api.observation_calls
+
+
 def record(task='market_context'):
     return {'request_id': 'req', 'input': {'task_id': task, 'snapshot_id': 'snap', 'secret': 'PRIVATE_INPUT'},
             'result': {'task_id': task, 'effect': 'NONE', 'received_at_ms': 1, 'status': 'ACCEPTED', 'raw': 'PRIVATE_RAW', 'advice': {

@@ -10,6 +10,30 @@ const now = 10000;
 const report = (task, time, expiry, status = 'ACCEPTED') => ({ task_id: task, status: 'HISTORY', effect: 'NONE', record: { request_id: task, result: { task_id: task, effect: 'NONE', received_at_ms: time, expires_at_ms: expiry, status, advice: { assessment: 'CAUTION', summary: 'Published summary' } } } });
 const records = [report('market_context', 5000, 12000), report('source_quality', 8000, 9000), report('decision_review', 11000, 12000)];
 
+test('future advisor input times withhold the entire report and its filter values', () => {
+  for (const field of ['input_cutoff_ms', 'input_available_at_ms']) {
+    const futureInput = report('market_context', 5000, 12000);
+    futureInput.record.result[field] = 11000;
+    assert.equal(reportPresentation(futureInput, now), 'future');
+    assert.equal(selectReports([futureInput], 'all', 'ACCEPTED', now).length, 0);
+    const { load } = frontendModules({
+      '@tanstack/react-query': { useQuery: () => ({ data: { advisor: {}, source_error: null } }), useQueries: () => [{data: { effect: 'NONE', records: [futureInput] }}] },
+      'react-router-dom': { Link: ({ children, ...props }) => React.createElement('a', props, children) },
+      './usePaperClock': { usePaperClock: () => now },
+    });
+    const html = renderToStaticMarkup(React.createElement(load('v5/AgentDecisionsPage.tsx').AgentDecisionsPage));
+    assert.match(html, /Future report withheld/);
+    assert.doesNotMatch(html, /Published summary|ACCEPTED|CAUTION/);
+  }
+});
+
+test('timeline discloses the temporary owner history limit', () => {
+  const page = fs.readFileSync(new URL('../src/v5/AgentDecisionsPage.tsx', import.meta.url), 'utf8');
+  assert.match(page, /Older reports are not shown yet/);
+  assert.match(page, /full input, so only one report fits in a read/);
+  assert.match(page, /slimmer history, the full timeline will appear here/);
+});
+
 test('untimed reports are withheld instead of treated as historical', () => {
   const untimed = report('market_context', undefined, undefined);
   assert.equal(reportPresentation(untimed, now), 'withheld');

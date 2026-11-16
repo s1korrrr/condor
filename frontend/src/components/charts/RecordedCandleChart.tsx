@@ -31,7 +31,7 @@ export function RecordedCandleChart({ buckets, label, volumeUnit, markers = NO_M
     series.setData(buckets.map(row => row[6] === 1 && row.slice(1, 5).every(value => value !== null)
       ? { time: row[0] as UTCTimestamp, open: row[1]!, high: row[2]!, low: row[3]!, close: row[4]! }
       : { time: row[0] as UTCTimestamp }));
-    createSeriesMarkers(series, markers.map(marker => ({ time: marker.time as UTCTimestamp, position: marker.side === "BUY" ? "atPriceBottom" : "atPriceTop", price: Number(marker.price), shape: marker.side === "BUY" ? "arrowUp" : "arrowDown", color: snapshotDimmed ? "rgba(128, 128, 128, 0.55)" : marker.side === "BUY" ? colors.up : colors.down })));
+    createSeriesMarkers(series, markers.map(marker => ({ id: markerText(marker), time: marker.time as UTCTimestamp, position: marker.side === "BUY" ? "atPriceBottom" : "atPriceTop", price: Number(marker.price), shape: marker.side === "BUY" ? "arrowUp" : "arrowDown", color: snapshotDimmed ? "rgba(128, 128, 128, 0.55)" : marker.side === "BUY" ? colors.up : colors.down })));
     if (breakeven && Number.isFinite(Number(breakeven)) && Number(breakeven) > 0) series.createPriceLine({ price: Number(breakeven), color: snapshotDimmed ? "rgba(128, 128, 128, 0.55)" : colors.text, lineWidth: 1, lineStyle: LineStyle.Dashed, axisLabelVisible: true, title: "Breakeven" });
     const byTime = new Map(buckets.map(row => [row[0], row]));
     chart.subscribeCrosshairMove(event => setHover(event.time ? byTime.get(Number(event.time)) ?? null : null));

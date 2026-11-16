@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import React from 'react';
 import { act, create } from 'react-test-renderer';
 import { frontendModules } from './helpers/frontend-module.mjs';
+import { tradeMarkers } from '../src/v5/bots-chart-model.mjs';
+import { reconcileFills } from '../src/v5/trades-model.mjs';
 
 const buckets = [
   [60, 101.123456789, 102.123456789, 100.123456789, 101.123456789, 0.123456789, 1, 0, 0, 0, 0, 0],
@@ -18,7 +20,7 @@ const lines = [
 ];
 const text = node => typeof node === 'string' || typeof node === 'number' ? String(node) : (node?.children ?? []).map(text).join('');
 
-async function withChart(check) {
+async function withChart(check, markerFills = fills) {
   let markers, crosshair, renderer;
   const { RecordedCandleChart } = frontendModules({
     'lightweight-charts': { CandlestickSeries: {}, ColorType: { Solid: 'solid' }, LineStyle: { Dashed: 2 },
@@ -29,7 +31,7 @@ async function withChart(check) {
   }).load('components/charts/RecordedCandleChart.tsx');
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   try {
-    await act(async () => { renderer = create(React.createElement(RecordedCandleChart, { buckets, label: 'BNB', volumeUnit: 'BNB', markers: fills }), { createNodeMock: node => node.type === 'div' ? {} : null }); });
+    await act(async () => { renderer = create(React.createElement(RecordedCandleChart, { buckets, label: 'BNB', volumeUnit: 'BNB', markers: markerFills }), { createNodeMock: node => node.type === 'div' ? {} : null }); });
     await check({ markers, renderer, hover: async time => { await act(async () => crosshair({ time })); }, readout: () => renderer.root.findByProps({ 'aria-live': 'polite' }) });
   } finally {
     await act(async () => renderer?.unmount());
@@ -69,4 +71,32 @@ test('the title retains every exact fill while the chart arrows carry no labels'
     assert.equal(renderer.root.findByProps({ role: 'img' }).props.title, lines.join(' · '));
     assert.ok(markers.every(marker => !marker.text), 'the title carries exact details without always-on arrow labels');
   });
+});
+
+test('same-minute same-price same-side fills retain distinct ids and exact hover lines after duplicate reconciliation', async () => {
+  const first = { executor_id: 'collision-executor', order_id: 'collision-order', trade_id: 'trade-a', trading_pair: 'BNB-USDC', side: 'BUY', event_at_ms: 61023, quantity: '0.1', price: '100.00' };
+  const second = { ...first, trade_id: 'trade-b', event_at_ms: 62987, quantity: '0.2' };
+  const reconciled = reconcileFills([first, first, second]);
+  assert.equal(reconciled.conflicts, 0);
+  assert.equal(reconciled.withheldExecutors.size, 0);
+  const mapped = tradeMarkers(reconciled.fills, 'BNB-USDC', 60, 120, buckets);
+  const exactLines = [
+    'BUY 0.1 @ 100.00 · 1970-01-01T00:01:01.023Z',
+    'BUY 0.2 @ 100.00 · 1970-01-01T00:01:02.987Z',
+  ];
+  await withChart(async ({ markers, hover, readout, renderer }) => {
+    assert.equal(markers.length, 2, 'the repeated A fill must not hide the distinct B fill');
+    assert.deepEqual(markers.map(marker => marker.id), exactLines);
+    assert.equal(new Set(markers.map(marker => marker.id)).size, 2);
+    for (const marker of markers) {
+      assert.equal(marker.time, 60);
+      assert.equal(marker.price, 100);
+      assert.equal(marker.position, 'atPriceBottom');
+      assert.equal(marker.shape, 'arrowUp');
+      assert.ok(!marker.text, 'colliding arrows must have no always-on text');
+    }
+    await hover(60);
+    assert.deepEqual(readout().findAll(node => node.type === 'span' && node.props.className === 'block').map(text), exactLines);
+    assert.equal(renderer.root.findByProps({ role: 'img' }).props.title, exactLines.join(' · '));
+  }, mapped.markers);
 });

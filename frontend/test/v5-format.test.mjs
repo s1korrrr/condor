@@ -1,8 +1,48 @@
 import assert from 'node:assert/strict';
 
-test('exact percentages are readable decimals or reduced fractions', () => {
+test('percentage titles keep exact terminating decimals and round non-terminating results', () => {
   assert.equal(format.decimalPercentChange('199057.11379198655820', '200000').exact, '−0.4714431040067209%');
-  assert.equal(format.rationalPercent(12100n, 288n).exact, '3025/72%');
+  assert.equal(format.rationalPercent(1000n, 100n).exact, '10%');
+  assert.equal(format.rationalPercent(12100n, 288n).exact, '≈ 42.0139 % (rounded)');
+});
+
+test('live wallet equity percentage title rounds without a result fraction', () => {
+  const result = format.decimalPercentChange('199087.83518689085820', '199197.63587918115820');
+  assert.equal(result.exact, '≈ −0.0551 % (rounded)');
+  assert.doesNotMatch(result.exact, /\//);
+  assert.equal(result.value, '-0.06');
+});
+
+test('100 over 288 percent rounds to 0.3472 independently of tile precision', () => {
+  for (const digits of [0, 2, 12]) {
+    assert.equal(format.rationalPercent(100n, 288n, digits).exact, '≈ 0.3472 % (rounded)');
+  }
+});
+
+test('tiny non-terminating negative percentage titles have no minus after rounding to zero', () => {
+  const result = format.rationalPercent(-1n, 300000n);
+  assert.equal(result.exact, '≈ 0 % (rounded)');
+  assert.doesNotMatch(result.exact, /[−-]/);
+  assert.equal(result.direction, -1);
+});
+
+test('huge non-terminating percentages round without floating-point conversion', () => {
+  const scale = 10n ** 400n;
+  assert.equal(format.rationalPercent(50n * scale + 1n, 3n * scale + 1n).exact, '≈ 16.6667 % (rounded)');
+  assert.equal(format.rationalPercent(-(50n * scale + 1n), 3n * scale + 1n).exact, '≈ −16.6667 % (rounded)');
+});
+
+test('four-place rounding distinguishes huge fractions immediately below and above a half', () => {
+  const denominator = 30000000000000000000000000000000000000003n;
+  const below = denominator * 12345n / 100000n;
+  assert.equal(format.rationalPercent(below, denominator).exact, '≈ 0.1234 % (rounded)');
+  assert.equal(format.rationalPercent(below + 1n, denominator).exact, '≈ 0.1235 % (rounded)');
+  assert.equal(format.rationalPercent(-below, denominator).exact, '≈ −0.1234 % (rounded)');
+  assert.equal(format.rationalPercent(-(below + 1n), denominator).exact, '≈ −0.1235 % (rounded)');
+});
+
+test('non-terminating percentage rounding carries into the whole number', () => {
+  assert.equal(format.rationalPercent(299999n, 300000n).exact, '≈ 1.0000 % (rounded)');
 });
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';

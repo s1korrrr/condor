@@ -1,5 +1,5 @@
 import type { PaperRead } from './contracts';
-import { coin as formatCoin, decimalPercentChange, pct } from './format.mjs';
+import { coin as formatCoin, decimalPercentChange, pct, rationalPercent } from './format.mjs';
 import { ageSeconds, MARKET_COINS, STALE_AFTER_S, type CandleRead } from './market-model.mjs';
 import { paperCompleteRead, paperPairBag, paperPairHoldings, paperSectionError, paperSnapshotsAgree } from './policy.ts';
 
@@ -46,29 +46,7 @@ export function marketAverageTitle(changes: Record<string, string | null>): stri
   });
   if (!measured.length) return undefined;
   const sum = measured.reduce((total, row) => total + row.value, 0n);
-  let numerator = sum < 0n ? -sum : sum;
-  let denominator = BigInt(measured.length) * SCALE;
-  let left = numerator, right = denominator;
-  while (right !== 0n) [left, right] = [right, left % right];
-  numerator /= left;
-  denominator /= left;
-  let factors = denominator;
-  while (factors % 2n === 0n) factors /= 2n;
-  while (factors % 5n === 0n) factors /= 5n;
-  const sign = sum < 0n ? '−' : '';
-  let exact: string;
-  if (factors !== 1n) exact = `${sign}${numerator}/${denominator}% (non-terminating decimal)`;
-  else {
-    const whole = numerator / denominator;
-    let remainder = numerator % denominator;
-    let fraction = '';
-    while (remainder) {
-      remainder *= 10n;
-      fraction += String(remainder / denominator);
-      remainder %= denominator;
-    }
-    exact = `${sign}${whole}${fraction ? `.${fraction}` : ''}%`;
-  }
+  const exact = rationalPercent(sum, BigInt(measured.length) * SCALE)!.exact;
   return `${measured.map(row => `${row.coin} ${row.text}%`).join(', ')} · exact average ${exact}`;
 }
 

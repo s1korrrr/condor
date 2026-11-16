@@ -64,6 +64,23 @@ export function decimalShift(value, places) {
   return `${parts.neg ? '-' : ''}${int}${frac ? `.${frac}` : ''}`;
 }
 
+export function decimalPercentChange(value, base) {
+  const end = parse(value), start = parse(base);
+  if (!end || !start) return null;
+  const places = Math.max(end.frac.length, start.frac.length);
+  const integer = parts => {
+    const magnitude = BigInt(parts.int + parts.frac.padEnd(places, '0'));
+    return parts.neg ? -magnitude : magnitude;
+  };
+  const denominator = integer(start);
+  if (denominator <= 0n) return null;
+  const numerator = (integer(end) - denominator) * 100n;
+  const magnitude = numerator < 0n ? -numerator : numerator;
+  const cents = (magnitude * 200n + denominator) / (2n * denominator);
+  const digits = cents.toString().padStart(3, '0');
+  return { value: `${numerator < 0n && cents !== 0n ? '-' : ''}${digits.slice(0, -2)}.${digits.slice(-2)}`, exact: `${numerator}/${denominator}%` };
+}
+
 /** Add one unit in the last place to a string of digits. */
 function increment(digits) {
   const out = digits.split('');

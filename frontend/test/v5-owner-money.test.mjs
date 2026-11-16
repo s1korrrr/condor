@@ -21,5 +21,9 @@ test('Money retains exact owner values behind rounded zero tiles', () => {
     assert.equal(value.title, exact);
     assert.equal(value.dataset.tone, 'zero');
   }
+  const note = tiles.find(tile => tile.textContent.includes('Wallet equity')).querySelector('small');
+  assert.match(note.textContent, /−19\.92 vs the 200,000\.00 USDC start/);
+  assert.equal(note.querySelector('[data-tone]').title, '199980.07714623162240 − 200000 = −19.92285376837760');
+  assert.equal(note.querySelectorAll('span[title]')[2].title, '(199980.07714623162240 − 200000) × 100 / 200000 = -199228537683776000/20000000000000000000% (exact fraction)');
   window.close();
 });

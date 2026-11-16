@@ -1,5 +1,6 @@
 export const MINUS: string;
 export function decimalShift(value: unknown, places: number): string | null;
+export function decimalPercentChange(value: unknown, base: unknown): { value: string; exact: string } | null;
 export function fixed(value: unknown, digits?: number): string;
 export function signed(value: unknown, digits?: number): string;
 export function axis(value: number, digits?: number, plus?: boolean): string;

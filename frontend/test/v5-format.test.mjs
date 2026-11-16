@@ -67,6 +67,29 @@ test('owner display preserves the original value and uses the rounded sign for e
   assert.deepEqual(format.ownerDisplay(null, 'usdc'), {text:'—', exact:null, tone:'none'});
 });
 
+test('owner hover titles keep exact owner text up to 12 decimal places and round longer Decimal quotients', () => {
+  // Live Helm daily_loss_use, a 28-digit Decimal quotient (install-9 phone check, 2026-11-16).
+  assert.equal(format.ownerTitle('34.41737209677040000000000001'), '≈ 34.41737209677 (rounded)');
+  assert.equal(format.ownerDisplay('34.41737209677040000000000001', 'usdc', {unit:''}).exact, '≈ 34.41737209677 (rounded)');
+  assert.equal(format.ownerTitle('-31.82088632877040000000000001'), '≈ −31.82088632877 (rounded)');
+  assert.equal(format.ownerTitle('0.0000000000004'), '≈ 0 (rounded)');
+  // Rounding is half away from zero with carry, never truncation (Sol R1).
+  assert.equal(format.ownerTitle('1.0000000000005'), '≈ 1.000000000001 (rounded)');
+  assert.equal(format.ownerTitle('-1.0000000000005'), '≈ −1.000000000001 (rounded)');
+  assert.equal(format.ownerTitle('1.00000000000049'), '≈ 1 (rounded)');
+  assert.equal(format.ownerTitle('9.9999999999995'), '≈ 10 (rounded)');
+  assert.equal(format.ownerTitle('-0.0000000000004'), '≈ 0 (rounded)');
+  assert.equal(format.ownerTitle('4.9e-19'), '≈ 0 (rounded)');
+  assert.equal(format.ownerTitle(4.9e-19), '≈ 0 (rounded)');
+  assert.equal(format.ownerTitle('0'), '0');
+  assert.equal(format.ownerTitle(0), '0');
+  // Exact owner text stays exact: trailing zeros do not count, exponent text expands to its digits.
+  for (const value of ['0.1358703289900', '641.78', '0.123456789012', '1e-8', '200000', '-0.004'])
+    assert.equal(format.ownerTitle(value), value);
+  assert.equal(format.ownerTitle(null), null);
+  assert.equal(format.ownerTitle('not a number'), null);
+});
+
 test('tiny values round to normal places without negative zero', () => {
   assert.equal(coin('-0.00000001', 'BNB'), '0 BNB');
   assert.equal(usdc('-0.00000001'), '0.00 USDC');

@@ -206,6 +206,22 @@ export function pct(value, digits = 2) {
   return text === DASH ? text : `${text}%`;
 }
 
+const TITLE_PLACES = 12;
+
+/**
+ * Hover title for an owner value: the owner's exact text, unless it carries more than 12 decimal places after
+ * trailing zeros (a 28-digit Decimal quotient such as 34.41737209677040000000000001). Then it is the same
+ * "≈ x (rounded)" form the dashboard uses for its own long quotients: "≈ 34.41737209677 (rounded)".
+ */
+export function ownerTitle(value) {
+  const parts = parse(value);
+  if (!parts) return null;
+  if (parts.frac.replace(/0+$/, '').length <= TITLE_PLACES) return String(value);
+  const rounded = round(parts, TITLE_PLACES);
+  const frac = rounded.frac.replace(/0+$/, '');
+  return `≈ ${rounded.neg ? MINUS : ''}${rounded.int}${frac ? `.${frac}` : ''} (rounded)`;
+}
+
 export function ownerDisplay(value, kind, { unit, digits = 2 } = {}) {
   if (!parse(value)) return { text: DASH, exact: null, tone: 'none' };
   const text = kind === 'usdc' ? usdc(value, unit)
@@ -217,7 +233,7 @@ export function ownerDisplay(value, kind, { unit, digits = 2 } = {}) {
     : signed(value, digits);
   const number = text.match(/[−+]?\d[\d,]*(?:\.\d+)?/)?.[0];
   const tone = !number ? 'none' : !/[1-9]/.test(number) ? 'zero' : number.startsWith(MINUS) ? 'down' : 'up';
-  return { text, exact: String(value), tone };
+  return { text, exact: ownerTitle(value), tone };
 }
 
 /** Whole number with separators ("200,000"); a fraction is rounded. */

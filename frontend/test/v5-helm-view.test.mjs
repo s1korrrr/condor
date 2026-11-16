@@ -17,7 +17,7 @@ function render({ state = 'FRESH', age_s = 0, signal = null, rejections = { coun
   return renderToStaticMarkup(React.createElement(load('v5/V5Helm').V5Helm));
 }
 
-test('Helm daily loss keeps its exact title off the phone helper and formats every width', () => {
+test('Helm daily loss keeps its owner title off the phone helper and formats every width', () => {
   const exact = '13.71580913935440000000000000';
   const html = render({ extra: {
     risk: { daily_loss_use: exact, risk_reference_quote: '200000.123456789', unit: 'USDC' },
@@ -31,7 +31,8 @@ test('Helm daily loss keeps its exact title off the phone helper and formats eve
       const tile = tiles.find(item => item.firstElementChild.textContent === 'Daily loss used');
       assert.equal(tile.querySelector('strong').textContent, '13.72');
       assert.equal(tile.hasAttribute('title'), false, `${width}px: phone CSS must not publish an exact amount as helper text`);
-      assert.equal(tile.querySelector('strong .owner-value').title, exact);
+      // 13 decimal places after trailing zeros: the title uses the shared owner-title rule (format.mjs ownerTitle).
+      assert.equal(tile.querySelector('strong .owner-value').title, '≈ 13.715809139354 (rounded)');
       assert.equal(tile.querySelector('small').textContent, 'of the 200,000.12 USDC risk reference');
       assert.equal(tile.querySelector('small span').title, '200000.123456789');
       assert.equal(tiles.find(item => item.firstElementChild.textContent === 'Mandate').title, 'Revocation id shared-revocation (shared by the mandate and its authorization)');

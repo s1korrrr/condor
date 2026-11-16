@@ -93,6 +93,27 @@ test('phone frame and Overview have legible type and units in labels without alt
   assert.equal(window.document.querySelector('strong').textContent, '—');
 });
 
+test('Overview rounds tiny realized loss to zero and keeps exact since-start arithmetic', () => {
+  const row = {bot:'v5', at_ms:now, equity:'199980.07714623162240', initial_funding:'200000', realized:'-0.004', unrealized:'0'};
+  const { load } = frontendModules({
+    '@tanstack/react-query': {useQuery: ({queryKey}) => ({data:queryKey[0] === 'v5-money' ? {rows:[row]} : undefined})},
+    './V5Money': {V5Money:() => null, readMoney() {}},
+    './V5Helm': {readHelm() {}},
+  });
+  const window = new Window();
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(MemoryRouter, null, React.createElement(load('v5/V5Overview.tsx').V5Overview)));
+  const stats = [...window.document.querySelectorAll('.v5m-stat')];
+  const realized = stats.find(item => item.textContent.includes('Profit from closed trades'));
+  assert.equal(realized.querySelector('strong').textContent, '0.00');
+  assert.equal(realized.querySelector('[data-tone]').getAttribute('data-tone'), 'zero');
+  assert.equal(realized.querySelector('[data-tone]').getAttribute('title'), '-0.004');
+  assert.ok(!realized.classList.contains('is-down'));
+  const since = stats.find(item => item.textContent.includes('Since start')).querySelector('[data-tone]');
+  assert.equal(since.textContent, '−19.92');
+  assert.equal(since.title, '199980.07714623162240 − 200000 = −19.92285376837760');
+  window.close();
+});
+
 test('phone CSS confines layout changes, keeps chips independently scrollable and reserves bottom safe area', () => {
   assert.match(css, /^@media \(width < 640px\) \{/);
   assert.match(css, /\.v5-shell-header\s*\{[^}]*height:\s*48px/s);

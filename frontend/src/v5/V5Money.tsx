@@ -8,7 +8,8 @@ import { readCandleStore } from "./candle-store-api";
 import { v5Api } from "./api";
 import { dayCoverage, equityChange, holdReturn, latest, series, type DailyRow } from "./money-model.mjs";
 import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
-import { axis, count, fixed, pct, pnl, signed, usdc, utcMin } from "./format.mjs";
+import { axis, count, fixed, ownerDisplay, pct, pnl, signed, usdc, utcMin, type OwnerValueKind } from "./format.mjs";
+import { OwnerValue } from "./OwnerValue";
 import { utcExact } from "./shown.mjs";
 import { readMoney } from "./money-api";
 export { readMoney } from "./money-api";
@@ -86,10 +87,10 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
 
       <section className="v5m-section"><header><h2>V5 paper bot</h2><span>{now ? `as of ${at(now.at_ms)} · ${now.unit ?? "USDC"}` : "no sample with values yet"}</span></header>
         <div className="v5m-stats v5m-stats--wide">
-          <Stat label="Wallet equity" value={fixed(now?.equity)} unit={unit} note={funding != null && equity != null ? `${pnl(equity - funding).text} vs the ${usdc(now?.initial_funding, unit)} start (${pct((equity / funding - 1) * 100)})` : "start funding not published"} warn={equity != null && funding != null && equity < funding} />
-          <Stat label="Profit from closed trades" value={pnl(now?.realized).text} note="lifetime, owner accounting" />
-          <Stat label="Gain or loss on coins still held" value={pnl(now?.unrealized).text} note="marked at the owner's fresh book midpoint" warn={(num(now?.unrealized) ?? 0) < 0} />
-          <Stat label="Fees paid" value={fixed(now?.fees)} unit={unit} note="lifetime" />
+          <Stat label="Wallet equity" value={fixed(now?.equity)} owner={{value:now?.equity, kind:"usdc", unit:""}} unit={unit} note={funding != null && equity != null ? `${pnl(equity - funding).text} vs the ${usdc(now?.initial_funding, unit)} start (${pct((equity / funding - 1) * 100)})` : "start funding not published"} warn={equity != null && funding != null && equity < funding} />
+          <Stat label="Profit from closed trades" value={pnl(now?.realized).text} owner={{value:now?.realized, kind:"pnl"}} note="lifetime, owner accounting" />
+          <Stat label="Gain or loss on coins still held" value={pnl(now?.unrealized).text} owner={{value:now?.unrealized, kind:"pnl"}} note="marked at the owner's fresh book midpoint" warn={ownerDisplay(now?.unrealized, "pnl").tone === "down"} />
+          <Stat label="Fees paid" value={fixed(now?.fees)} owner={{value:now?.fees, kind:"usdc", unit:""}} unit={unit} note="lifetime" />
         </div>
       </section>
 
@@ -117,8 +118,8 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
 
       <section className="v5m-section"><header><h2>Helm paper bot</h2><span>{helm.newest ? `latest sample ${at(helm.newest.at_ms)}` : "no sample yet"}</span></header>
         <div className="v5m-card">{!helm.withValues ? <p className="v5m-hint">No Helm money yet{helm.newest?.gap ? `: ${helm.newest.gap.replaceAll("_", " ").toLowerCase()}` : ""}. Helm publishes profit and loss once it runs and has reports.</p> : <div className="v5m-stats">
-          <Stat label="Profit from closed trades" value={pnl(helm.withValues.realized).text} note={`as of ${at(helm.withValues.at_ms)}`} />
-          <Stat label="Gain or loss on coins still held" value={pnl(helm.withValues.unrealized).text} />
+          <Stat label="Profit from closed trades" value={pnl(helm.withValues.realized).text} owner={{value:helm.withValues.realized, kind:"pnl"}} note={`as of ${at(helm.withValues.at_ms)}`} />
+          <Stat label="Gain or loss on coins still held" value={pnl(helm.withValues.unrealized).text} owner={{value:helm.withValues.unrealized, kind:"pnl"}} />
         </div>}</div>
       </section>
       <p className="v5m-hint">Limits: values come from the owners' own reads; the record starts when this dashboard's recorder started (no backfill); a missing sample stays a gap; nothing here is a trading signal.</p>
@@ -126,6 +127,6 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
   </div>;
 }
 
-function Stat({ label, value, unit, note, warn }: { label: string; value: string; unit?: string; note?: string; warn?: boolean }) {
-  return <div className={`v5m-stat${warn ? " is-warn" : ""}`}><span>{label}{unit && <em className="v5-phone-unit hidden not-italic"> ({unit})</em>}</span><strong>{value}{unit && value !== "—" && <em className="v5-desktop-unit not-italic"> {unit}</em>}</strong>{note && <small>{note}</small>}</div>;
+function Stat({ label, value, unit, note, warn, owner }: { label: string; value: string; unit?: string; note?: string; warn?: boolean; owner?: { value: unknown; kind: OwnerValueKind; unit?: string } }) {
+  return <div className={`v5m-stat${warn ? " is-warn" : ""}`}><span>{label}{unit && <em className="v5-phone-unit hidden not-italic"> ({unit})</em>}</span><strong>{owner ? <OwnerValue {...owner} /> : value}{unit && value !== "—" && <em className="v5-desktop-unit not-italic"> {unit}</em>}</strong>{note && <small>{note}</small>}</div>;
 }

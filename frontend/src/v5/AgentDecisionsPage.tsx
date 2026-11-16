@@ -22,7 +22,7 @@ function Money({ value }: { value: string | number | null | undefined }) {
 
 function Identifiers({ values, total, missing }: { values?: string[]; total?: number; missing: string }) {
   const shown = values?.length ?? 0;
-  return <>{shown ? values?.join(', ') : total ? 'No in-cap identifiers shown.' : missing}{total != null && total > shown && ` (first ${count(shown)} of ${count(total)})`}</>;
+  return <>{shown ? values?.join(', ') : total ? 'No in-cap identifiers shown.' : missing}{total != null && total > shown && ` (${count(shown)} of ${count(total)} shown)`}</>;
 }
 
 function Report({ report, now }: { report: V5TaskReport; now: number }) {
@@ -60,7 +60,12 @@ export function AgentDecisionsPage() {
   const projectedHistoryMissing = histories.some(query => query.isError && query.error && 'code' in query.error && query.error.code === 'ADVISOR_PROJECTED_HISTORY_UNAVAILABLE');
   const reports = histories.flatMap(query => !query.isError && query.data?.effect === 'NONE' && Array.isArray(query.data.records) ? query.data.records : []);
   const statuses = Array.from(new Set(reports.filter(report => reportPresentation(report, now) === 'historical').flatMap(report => [report.record?.result?.status, report.record?.result?.advice?.assessment].filter((value): value is string => Boolean(value))))).sort();
-  const truncatedAssessments = new Set(reports.filter(report => reportPresentation(report, now) === 'historical' && report.record?.result?.advice?.truncated_fields?.includes('assessment')).map(report => report.record?.result?.advice?.assessment));
+  // A filter value can match whole and cut assessments, or a status: mark it as an excerpt only for the reports it really cut.
+  const filterExcerpt = (item: string) => {
+    const matching = reports.filter(report => reportPresentation(report, now) === 'historical' && (report.record?.result?.status === item || report.record?.result?.advice?.assessment === item));
+    const cut = matching.filter(report => report.record?.result?.advice?.assessment === item && report.record?.result?.advice?.truncated_fields?.includes('assessment')).length;
+    return !cut ? '' : cut === matching.length ? EXCERPT_MARKER : ' (excerpt in some matching reports)';
+  };
   const selected = selectReports(reports, task, status, now);
   const advisor = !workspace.isError && !workspace.data?.source_error?.includes('advisor:') ? workspace.data?.advisor : undefined;
   const scheduler = advisor?.scheduler;
@@ -79,7 +84,7 @@ export function AgentDecisionsPage() {
     <section className="v5-panel"><h2>Report timeline</h2>
       <p>Up to 5 reports per agent, newest first. Older reports beyond this bounded read are not included. History does not publish current report validity.</p>
       <div className="v5-decisions-filters"><label>Agent<select value={task} onChange={event => setTask(event.target.value)}><option value="all">All agents</option>{Object.entries(TASKS as Record<string, string>).map(([key, name]) => <option value={key} key={key}>{name}</option>)}</select></label>
-        <label>Outcome or status<select value={status} onChange={event => setStatus(event.target.value)}><option value="all">All statuses</option>{statuses.map(item => <option key={item} value={item}>{item}{truncatedAssessments.has(item) && EXCERPT_MARKER}</option>)}</select></label></div>
+        <label>Outcome or status<select value={status} onChange={event => setStatus(event.target.value)}><option value="all">All statuses</option>{statuses.map(item => <option key={item} value={item}>{item}{filterExcerpt(item)}</option>)}</select></label></div>
       <p>Coin filter not published by the advisor; reports with coin data would be needed to filter by coin.</p>
       {histories.some(query => query.isPending) && <p role="status">Loading advisor history…</p>}
       {projectedHistoryMissing && <p role="alert">The advisor owner does not publish projected history. Install the owner update before this dashboard. No full-record fallback is used.</p>}

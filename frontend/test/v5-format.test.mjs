@@ -7,6 +7,21 @@ import { age, coin, count, fixed, pct, pnl, price, signed, usdc, utc, utcMin, wh
 const M = '−';
 const base = Date.UTC(2026, 10, 14, 11, 34, 22);
 
+test('owner display preserves the original value and uses the rounded sign for every kind', () => {
+  for (const [kind, value, options, text, tone] of [
+    ['usdc', '-0.004', {}, '0.00 USDC', 'zero'],
+    ['signed', '-0.004', {}, '0.00', 'zero'],
+    ['pnl', '-0.004', {}, '0.00', 'zero'],
+    ['pct', '-0.0001', {}, '0.00%', 'zero'],
+    ['bps', '-0.004', {}, '0.00 bps', 'zero'],
+    ['price', '1e-8', {}, '0.0000', 'zero'],
+    ['coin', '-0.00000001', {unit:'BNB'}, '0 BNB', 'zero'],
+    ['signed', '-1.234', {}, '−1.23', 'down'],
+    ['signed', '1.234', {}, '+1.23', 'up'],
+  ]) assert.deepEqual(format.ownerDisplay(value, kind, options), {text, exact:value, tone});
+  assert.deepEqual(format.ownerDisplay(null, 'usdc'), {text:'—', exact:null, tone:'none'});
+});
+
 test('tiny values round to normal places without negative zero', () => {
   assert.equal(coin('-0.00000001', 'BNB'), '0 BNB');
   assert.equal(usdc('-0.00000001'), '0.00 USDC');

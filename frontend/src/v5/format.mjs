@@ -151,6 +151,20 @@ export function pct(value, digits = 2) {
   return text === DASH ? text : `${text}%`;
 }
 
+export function ownerDisplay(value, kind, { unit, digits = 2 } = {}) {
+  if (!parse(value)) return { text: DASH, exact: null, tone: 'none' };
+  const text = kind === 'usdc' ? usdc(value, unit)
+    : kind === 'coin' ? coin(value, unit)
+    : kind === 'price' ? price(value)
+    : kind === 'pct' ? pct(value, digits)
+    : kind === 'bps' ? `${signed(value, digits)} ${unit ?? 'bps'}`
+    : kind === 'pnl' ? pnl(value, digits).text
+    : signed(value, digits);
+  const number = text.match(/[−+]?\d[\d,]*(?:\.\d+)?/)?.[0];
+  const tone = !number ? 'none' : !/[1-9]/.test(number) ? 'zero' : number.startsWith(MINUS) ? 'down' : 'up';
+  return { text, exact: String(value), tone };
+}
+
 /** Whole number with separators ("200,000"); a fraction is rounded. */
 export function count(value) {
   return fixed(value, 0);

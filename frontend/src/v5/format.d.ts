@@ -7,6 +7,9 @@ export function pnl(value: unknown, digits?: number): { text: string; tone: 'up'
 export function price(value: unknown): string;
 export function coin(value: unknown, asset?: string): string;
 export function pct(value: unknown, digits?: number): string;
+export type OwnerValueKind = 'usdc' | 'coin' | 'price' | 'pct' | 'bps' | 'signed' | 'pnl';
+export type OwnerDisplay = { text: string; exact: string | null; tone: 'up' | 'down' | 'zero' | 'none' };
+export function ownerDisplay(value: unknown, kind: OwnerValueKind, options?: { unit?: string; digits?: number }): OwnerDisplay;
 export function count(value: unknown): string;
 export function utc(ms: unknown, nowMs?: number): string | null;
 export function utcMin(ms: unknown, nowMs?: number): string | null;

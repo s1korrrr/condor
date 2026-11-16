@@ -9,6 +9,13 @@ import {Window} from 'happy-dom';
 import {clockMutation} from './helpers/paper-clock-mutants.mjs';
 
 const browser = new Window({url:'https://fixture.invalid/'});
+const phoneSheet = new browser.CSSStyleSheet();
+phoneSheet.replaceSync(fs.readFileSync(new URL('../src/v5/phone.css',import.meta.url),'utf8'));
+const phoneTitleSelectors = rules => [...rules].flatMap(rule => [
+  ...(rule.style?.content === 'attr(title)' && rule.selectorText.endsWith('::after') ? [rule.selectorText.replace(/::after$/,'')] : []),
+  ...phoneTitleSelectors(rule.cssRules ?? []),
+]);
+const phoneTitleSelector = phoneTitleSelectors(phoneSheet.cssRules).join(', ');
 for (const name of ['window','document','navigator','HTMLElement','Element','Node','MutationObserver','localStorage']) {
   Object.defineProperty(globalThis,name,{value:name === 'window' ? browser : browser[name],configurable:true});
 }
@@ -90,8 +97,16 @@ function longVisibleDecimals(container) {
     scan(combined, `${block.tagName.toLowerCase()}[split]`, block, boundaries);
   }
   for (const element of container.querySelectorAll('[aria-label]')) scan(element.getAttribute('aria-label'), `${element.tagName.toLowerCase()}[aria-label]`, element);
+  if (phoneTitleSelector) for (const element of container.querySelectorAll(phoneTitleSelector)) scan(element.title, `${element.tagName.toLowerCase()}[phone ::after]`, element);
   return findings;
 }
+
+test('decimal scan checks phone CSS title helpers but not exact leaf tooltips', () => {
+  const fixture = document.createElement('div');
+  fixture.className = 'condor-native';
+  fixture.innerHTML = '<div class="v5m-stat" title="13.71580913935440000000000000"><strong>13.72</strong></div><div class="v5m-stat"><strong><span title="13.71580913935440000000000000">13.72</span></strong></div>';
+  assert.deepEqual(longVisibleDecimals(fixture), ['div[phone ::after]: 13.71580913935440000000000000']);
+});
 
 test('decimal scan excludes exact titles and only allows three-significant-digit position dust', () => {
   const fixture = document.createElement('div');

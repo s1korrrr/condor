@@ -127,7 +127,15 @@ export interface V5TaskReport {
       input_cutoff_ms?: number;
       input_available_at_ms?: number;
       actual_usd?: string | null;
-      advice?: { assessment?: string; summary?: string; reason_codes?: string[]; evidence_refs?: string[] };
+      advice?: {
+        assessment?: string;
+        summary?: string;
+        reason_codes?: string[];
+        reason_codes_total?: number;
+        evidence_refs?: string[];
+        evidence_refs_total?: number;
+        truncated_fields?: ('assessment' | 'summary')[];
+      };
     };
   };
 }

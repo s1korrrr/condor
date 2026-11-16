@@ -10,6 +10,43 @@ const now = 10000;
 const report = (task, time, expiry, status = 'ACCEPTED') => ({ task_id: task, status: 'HISTORY', effect: 'NONE', record: { request_id: task, result: { task_id: task, effect: 'NONE', received_at_ms: time, expires_at_ms: expiry, status, advice: { assessment: 'CAUTION', summary: 'Published summary' } } } });
 const records = [report('market_context', 5000, 12000), report('source_quality', 8000, 9000), report('decision_review', 11000, 12000)];
 
+test('timeline discloses text excerpts and shown identifier counts', () => {
+  const clipped = report('market_context', 5000, 12000);
+  clipped.record.result.advice = {
+    assessment: 'a'.repeat(1000), summary: 's'.repeat(1000), truncated_fields: ['assessment', 'summary'],
+    reason_codes: Array.from({ length: 8 }, (_, index) => `REASON_${index}`), reason_codes_total: 9,
+    evidence_refs: ['whole-ref'], evidence_refs_total: 2,
+  };
+  const { load } = frontendModules({
+    '@tanstack/react-query': { useQuery: () => ({}), useQueries: () => [{ data: { effect: 'NONE', records: [clipped] } }] },
+    'react-router-dom': { Link: ({ children, ...props }) => React.createElement('a', props, children) },
+    './usePaperClock': { usePaperClock: () => now },
+  });
+  const Page = load('v5/AgentDecisionsPage.tsx').AgentDecisionsPage;
+  const html = renderToStaticMarkup(React.createElement(Page));
+  assert.equal((html.match(/… \(excerpt; full text is longer\)/g) || []).length, 3);
+  assert.match(html, /a{1000}… \(excerpt; full text is longer\)<\/option>/);
+  assert.match(html, /first 8 of 9/);
+  assert.match(html, /first 1 of 2/);
+  clipped.record.result.advice.evidence_refs = [];
+  assert.match(renderToStaticMarkup(React.createElement(Page)), /first 0 of 2/);
+});
+
+test('timeline does not label whole text or complete lists as excerpts', () => {
+  const complete = report('market_context', 5000, 12000);
+  Object.assign(complete.record.result.advice, {
+    reason_codes: ['WHOLE_REASON'], reason_codes_total: 1, evidence_refs: ['whole-ref'], evidence_refs_total: 1,
+  });
+  const { load } = frontendModules({
+    '@tanstack/react-query': { useQuery: () => ({}), useQueries: () => [{ data: { effect: 'NONE', records: [complete] } }] },
+    'react-router-dom': { Link: ({ children, ...props }) => React.createElement('a', props, children) },
+    './usePaperClock': { usePaperClock: () => now },
+  });
+  const html = renderToStaticMarkup(React.createElement(load('v5/AgentDecisionsPage.tsx').AgentDecisionsPage));
+  assert.match(html, /Published summary/);
+  assert.doesNotMatch(html, /excerpt; full text is longer|first \d+ of \d+/);
+});
+
 test('future advisor input times withhold the entire report and its filter values', () => {
   for (const field of ['input_cutoff_ms', 'input_available_at_ms']) {
     const futureInput = report('market_context', 5000, 12000);

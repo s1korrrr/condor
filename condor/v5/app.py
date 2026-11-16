@@ -94,6 +94,40 @@ def _valid_advisor_time(value: Any) -> bool:
     return type(value) is int and 0 < value <= MAX_TIMESTAMP * 1000
 
 
+def _safe_history_advice(advice: Any) -> dict[str, Any]:
+    if not isinstance(advice, dict):
+        raise ValueError("invalid projected history advice")
+    projected: dict[str, Any] = {}
+    for key in ("assessment", "summary"):
+        if key in advice:
+            value = advice[key]
+            if not isinstance(value, str) or len(value) > 1_000:
+                raise ValueError("invalid projected history text")
+            projected[key] = value
+    for key, limit, length in (("reason_codes", 8, 64), ("evidence_refs", 32, 128)):
+        total_key = f"{key}_total"
+        if key in advice or total_key in advice:
+            values, total = advice.get(key), advice.get(total_key)
+            if (
+                not isinstance(values, list) or len(values) > limit
+                or any(not isinstance(value, str) or len(value) > length for value in values)
+                or type(total) is not int or not len(values) <= total <= 1_000_000
+            ):
+                raise ValueError("invalid projected history identifiers")
+            projected[key], projected[total_key] = values, total
+    if "truncated_fields" in advice:
+        fields = advice["truncated_fields"]
+        if (
+            not isinstance(fields, list) or not 1 <= len(fields) <= 2
+            or any(not isinstance(field, str) or field not in ("assessment", "summary") for field in fields)
+            or fields != sorted(set(fields))
+            or any(field not in projected or len(projected[field]) != 1_000 for field in fields)
+        ):
+            raise ValueError("invalid projected history excerpts")
+        projected["truncated_fields"] = fields
+    return projected
+
+
 def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
     """Project only a report whose request and result both name this task."""
     status = payload.get("status") if isinstance(payload, dict) else None
@@ -679,6 +713,10 @@ def create_app(
                 or any(key in record and not _valid_advisor_time(record[key]) for key in _ADVISOR_TIME_KEYS)
             ):
                 raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})
+            try:
+                advice = _safe_history_advice(record.get("advice", {}))
+            except ValueError:
+                raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"}) from None
             if record["status"] == "RESULT_NOT_PUBLISHED":
                 projected.append({
                     "task_id": task_id, "status": "RESULT_NOT_PUBLISHED",
@@ -690,6 +728,8 @@ def create_app(
             }})
             if item["record"] is None:
                 raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})
+            if "advice" in record:
+                item["record"]["result"]["advice"] = advice
             projected.append(item)
         return {"effect": "NONE", "records": projected}
 

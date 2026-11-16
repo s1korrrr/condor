@@ -15,7 +15,7 @@ import { candleCurrent, hourlyReturns, marketAverageTitle, marketHolding, market
 import { readMarketPaper } from "./market-paper";
 import { usePaperClock } from "./usePaperClock";
 import { ageSeconds, breadth, coinTile, indexedReturns, laneHealthClass, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
-import { age as ageShort, axis, fixed, pct, price, signed, utcMin } from "./format.mjs";
+import { age as ageShort, axis, decimalShift, fixed, pct, price, rationalPercent, signed, utcMin } from "./format.mjs";
 import { tri, utcMinute } from "./shown.mjs";
 import "./market.css";
 
@@ -221,8 +221,8 @@ function systemCoverage(lanes: LaneTile[]) {
   if (values.some(value => value === null)) return null;
   const total = values.reduce<bigint>((sum, value) => sum + value!, 0n);
   const divisor = scale * BigInt(values.length);
-  const tenths = (total * 2000n + divisor) / (2n * divisor);
-  return `${tenths / 10n}.${tenths % 10n}%`;
+  const result = rationalPercent(total * 100n, divisor, 1);
+  return result ? { text: `${fixed(result.value, 1)}%`, exact: `exact mean of ${lanes.map(lane => lane.coverage_7d).join(', ')} = ${result.exact}` } : null;
 }
 
 export function V5SystemMarket({ tab, paused }: { tab: 'data-feeds' | 'engine-inputs'; paused: boolean }) {
@@ -250,10 +250,10 @@ export function V5SystemMarket({ tab, paused }: { tab: 'data-feeds' | 'engine-in
     <Card title="Venue coverage" hint="Pairs held of listed · 24-hour candle coverage · age of newest minute">{!configured ? <p>— · Candle store is not configured.</p> : !storeCurrent ? <p>— · {invalidLanes ? 'Candle store lane data is invalid: expected an array of lane records.' : summary.isError ? `Candle store read failed: ${summary.error.message}` : 'Candle store data is not current or has not arrived.'}</p> : <div className="v5m-venues"><span>Venue</span><span>Spot</span><span>Perpetual</span>{venueGrid(lanes).map(row => <Venue key={row.venue} row={row} elapsedSeconds={Math.max(0, now - summary.dataUpdatedAt) / 1000} />)}</div>}</Card>
     <Card title="Candle store health" hint="One store feeds V5, Helm and research"><div className="v5m-stats">
       <Stat label="Lanes available" value={!storeCurrent || !lanes.length || lanesUnknown ? '—' : `${lanes.filter(lane => lane.available === true).length}/${lanes.length}`} note={!storeCurrent ? 'Store data not current' : !lanes.length ? 'No lanes reported' : lanesUnknown ? `${lanesUnknown} lanes unreported` : 'reported lanes'} />
-      <Stat label="7-day coverage" value={coverage ?? '—'} note={coverage === null ? 'A lane is unavailable or 7-day coverage is missing or invalid' : 'mean of all reported lanes'} />
+      <Stat label="7-day coverage" value={coverage?.text ?? '—'} title={coverage?.exact} note={coverage === null ? 'A lane is unavailable or 7-day coverage is missing or invalid' : 'mean of all reported lanes'} />
       <Stat label="Missing minutes, 7 days" value={gaps ?? '—'} note={gaps == null ? 'A lane is unavailable or gaps were not reported' : 'all reported lanes'} />
       <Stat label="Slowest lane" value={slowestAge == null ? '—' : `${Math.round(slowestAge)} s`} note={slowestAge == null ? 'Age not reported or not current' : 'since its newest final minute closed'} />
-    </div><h3 className="v5m-subhead">V5 market-context feed</h3><p className="v5m-hint">Last success: {systemTime(refresh?.last_success_at_ms, now)}</p>{!cohort ? <p>— · Feed data is not current or was not reported.</p> : <div className="v5m-stats">{cohort.dimensions.map(item => <Stat key={item.key} label={item.label} value={item.valid == null || item.expected == null ? '—' : `${item.valid}/${item.expected}`} note={item.fraction == null ? 'not qualified' : `${(item.fraction * 100).toFixed(0)}% this minute`} />)}</div>}</Card>
+    </div><h3 className="v5m-subhead">V5 market-context feed</h3><p className="v5m-hint">Last success: {systemTime(refresh?.last_success_at_ms, now)}</p>{!cohort ? <p>— · Feed data is not current or was not reported.</p> : <div className="v5m-stats">{cohort.dimensions.map(item => <Stat key={item.key} label={item.label} value={item.valid == null || item.expected == null ? '—' : `${item.valid}/${item.expected}`} title={item.fraction == null ? undefined : String(item.fraction)} note={item.fraction == null ? 'not qualified' : `${fixed(decimalShift(item.fraction, 2), 0)}% this minute`} />)}</div>}</Card>
   </div></Section></div>;
 }
 
@@ -268,9 +268,9 @@ function ReturnBars({ tiles, range, selected, onSelect }: { tiles: { coin: strin
 }
 
 function Venue({ row, elapsedSeconds }: { row: ReturnType<typeof venueGrid<LaneTile>>[number]; elapsedSeconds: number }) {
-  const cell = (lane: LaneTile | null) => lane ? <span className="v5m-lane" title={`${lane.lane} · 7-day coverage ${lane.available === true && typeof lane.coverage_7d === 'number' && Number.isFinite(lane.coverage_7d) && lane.coverage_7d >= 0 && lane.coverage_7d <= 1 ? `${(lane.coverage_7d * 100).toFixed(1)}%` : 'not reported or unavailable'} · missing minutes ${lane.available === true && Number.isSafeInteger(lane.gaps_7d) && lane.gaps_7d! >= 0 ? lane.gaps_7d : 'not reported or unavailable'}${lane.unavailable_reason ? ` · ${lane.unavailable_reason}` : ""}`}>
+  const cell = (lane: LaneTile | null) => lane ? <span className="v5m-lane" title={`${lane.lane} · 7-day coverage ${lane.available === true && typeof lane.coverage_7d === 'number' && Number.isFinite(lane.coverage_7d) && lane.coverage_7d >= 0 && lane.coverage_7d <= 1 ? `${fixed(decimalShift(lane.coverage_7d, 2), 1)}%` : 'not reported or unavailable'} · missing minutes ${lane.available === true && Number.isSafeInteger(lane.gaps_7d) && lane.gaps_7d! >= 0 ? lane.gaps_7d : 'not reported or unavailable'}${lane.available === true && lane.coverage_7d != null ? ` · exact 7-day fraction ${lane.coverage_7d}` : ''}${lane.unavailable_reason ? ` · ${lane.unavailable_reason}` : ""}`}>
     <span className={laneHealthClass(lane.health)} title={`Owner health: ${lane.health ?? "not reported"} · ${tri(lane.available, "available", "unavailable", "availability not reported")}`}>{lane.available === true && Number.isSafeInteger(lane.pairs_held) && Number.isSafeInteger(lane.pairs_listed) && lane.pairs_held! >= 0 && lane.pairs_listed! >= 0 ? `${lane.pairs_held}/${lane.pairs_listed}` : `— · ${lane.available === false ? 'lane unavailable' : lane.available === true ? 'pair counts not reported' : 'availability not reported'}`}</span>
-    <span>{lane.available !== true || lane.coverage_24h == null || !Number.isFinite(lane.coverage_24h) ? '— · coverage not current' : `${(lane.coverage_24h * 100).toFixed(0)}%`}</span>
+    <span title={lane.available === true && lane.coverage_24h != null && Number.isFinite(lane.coverage_24h) ? String(lane.coverage_24h) : undefined}>{lane.available !== true || lane.coverage_24h == null || !Number.isFinite(lane.coverage_24h) ? '— · coverage not current' : `${fixed(decimalShift(lane.coverage_24h, 2), 0)}%`}</span>
     <span className="v5m-muted">{lane.available !== true || lane.last_minute_age_s == null || !Number.isFinite(lane.last_minute_age_s) || lane.last_minute_age_s < 0 ? '— · age not current' : `${Math.round(lane.last_minute_age_s + elapsedSeconds)} s`}</span>
   </span> : <span className="v5m-lane is-none">— · lane not reported</span>;
   return <><span className="v5m-venue">{venueName(row.venue)}</span>{cell(row.spot)}{cell(row.perpetual)}</>;

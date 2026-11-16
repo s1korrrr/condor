@@ -59,10 +59,12 @@ test('market system tabs show only current owner inputs and the selected view', 
     assert.match(feeds, /Venue coverage/); assert.match(feeds, /okx/); assert.match(feeds, /class="is-down" title="Owner health: red · available"/); assert.doesNotMatch(feeds, /FEATURE PACKET/);
     assert.match(feeds, /7-day coverage<\/span><strong>100\.0%/);
     assert.match(feeds, /7-day coverage 100\.0% · missing minutes 5/);
+    assert.match(feeds, /title="1">100%<\/span>/);
     summary.tiles[0].coverage_7d = 0.1;
     summary.tiles.push({...summary.tiles[0],lane:'other__spot',venue:'other',coverage_7d:0.2});
     const mean = renderToStaticMarkup(React.createElement(V5SystemMarket,{tab:'data-feeds',paused:false}));
     assert.match(mean, /7-day coverage<\/span><strong>15\.0%/);
+    assert.match(mean, /exact mean.*0\.1.*0\.2/);
     summary.tiles[1].coverage_7d = null;
     assert.match(renderToStaticMarkup(React.createElement(V5SystemMarket,{tab:'data-feeds',paused:false})), /7-day coverage is missing or invalid/);
     summary.tiles.pop(); summary.tiles[0].coverage_7d = 1;

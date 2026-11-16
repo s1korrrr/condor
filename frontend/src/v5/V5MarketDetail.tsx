@@ -16,15 +16,16 @@ type VenueRow = CrossStats & { segment: "spot" | "perpetual" };
 
 const compact = (value: number) => value >= 1e9 ? `${fixed(value / 1e9, 2)} B` : value >= 1e6 ? `${fixed(value / 1e6, 1)} M` : value >= 1e3 ? `${fixed(value / 1e3, 1)} k` : fixed(value, 0);
 const venueName = (venue: string) => venue.replace("_io", ".io");
+const exactCell = (value: number | null, text: string) => <span title={value == null ? undefined : String(value)}>{text}</span>;
 
 const columns: TableColumn<VenueRow>[] = [
   { id: "venue", header: "Venue", value: row => venueName(row.venue), rowHeader: true, size: 95 },
   { id: "segment", header: "Market", value: row => row.segment, size: 85 },
   { id: "pair", header: "Pair", value: row => row.pair, size: 95 },
-  { id: "mean", header: "Mean gap (bp)", value: row => row.mean_bps == null ? null : Number(row.mean_bps.toFixed(2)), kind: "number", cell: row => signed(row.mean_bps, 2), size: 85, title: () => "Average signed distance from the median of venues; positive means this venue trades above the others" },
-  { id: "abs", header: "Mean |gap| (bp)", value: row => row.mean_abs_bps == null ? null : Number(row.mean_abs_bps.toFixed(2)), kind: "number", cell: row => fixed(row.mean_abs_bps, 2), size: 90 },
-  { id: "p95", header: "p95 |gap| (bp)", value: row => row.p95_abs_bps == null ? null : Number(row.p95_abs_bps.toFixed(2)), kind: "number", cell: row => fixed(row.p95_abs_bps, 2), size: 85 },
-  { id: "max", header: "Max |gap| (bp)", value: row => row.max_abs_bps == null ? null : Number(row.max_abs_bps.toFixed(2)), kind: "number", cell: row => fixed(row.max_abs_bps, 2), size: 85, title: row => row.max_at == null ? undefined : `At ${utcMin(row.max_at * 1000) ?? "an unknown time"}` },
+  { id: "mean", header: "Mean gap (bp)", value: row => row.mean_bps, kind: "number", cell: row => exactCell(row.mean_bps, signed(row.mean_bps, 2)), size: 85, title: () => "Average signed distance from the median of venues; positive means this venue trades above the others" },
+  { id: "abs", header: "Mean |gap| (bp)", value: row => row.mean_abs_bps, kind: "number", cell: row => exactCell(row.mean_abs_bps, fixed(row.mean_abs_bps, 2)), size: 90 },
+  { id: "p95", header: "p95 |gap| (bp)", value: row => row.p95_abs_bps, kind: "number", cell: row => exactCell(row.p95_abs_bps, fixed(row.p95_abs_bps, 2)), size: 85 },
+  { id: "max", header: "Max |gap| (bp)", value: row => row.max_abs_bps, kind: "number", cell: row => exactCell(row.max_abs_bps, fixed(row.max_abs_bps, 2)), size: 85, title: row => row.max_at == null ? undefined : `At ${utcMin(row.max_at * 1000) ?? "an unknown time"}` },
   { id: "minutes", header: "Minutes compared", value: row => row.n, kind: "number", size: 90 },
   { id: "quote", header: "Quote", value: row => row.quote, size: 65 },
 ];

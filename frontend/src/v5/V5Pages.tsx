@@ -10,6 +10,7 @@ import { formatUsdAmount, marketFeatures, qualifiedFeatureValue, selectedCohortC
 import { boundedLoopParameters, canRequestReport, paperReadiness, paperWorkspaceLabel, paperWords } from "./policy";
 import { advisorAvailability, advisorTaskProfile, scheduledAgentLines, type WorkspaceRead } from "./agent-status";
 import { usePaperClock } from "./usePaperClock";
+import { decimalShift, fixed } from "./format.mjs";
 
 function useWorkspace() {
   return useQuery({ queryKey: ["v5-workspace"], queryFn: v5Api.workspace, refetchInterval: 30_000 });
@@ -211,7 +212,7 @@ function CohortCoverageNotice({ evidence }: { evidence: MarketEvidence }) {
   const coverage = selectedCohortCoverage(evidence);
   return <section className={`v5-cohort-coverage${coverage.complete ? " is-complete" : " is-partial"}`} aria-label="Selected market cohort coverage">
     <div className="v5-cohort-coverage-heading"><div><strong>{coverage.complete ? "Complete observed cohort" : "PARTIAL SOURCE"}</strong><p>{coverage.complete ? "All selected spot assets and spot/perpetual venue pairs have qualified coverage." : "Selected asset or venue coverage is incomplete or unknown. Qualified feature values may describe only the observed subset."}</p></div><Status state={coverage.complete ? "ready" : "blocked"} label={coverage.complete ? "COMPLETE" : "PARTIAL / UNKNOWN"} /></div>
-    <div className="v5-cohort-coverage-grid">{coverage.dimensions.map((row) => <div className="v5-cohort-coverage-row" key={row.key}><span>{row.label}</span><strong>{row.valid == null || row.expected == null ? "Unavailable" : `${row.valid} / ${row.expected}`}</strong><small>{row.fraction == null ? "Coverage unknown" : `${(row.fraction * 100).toFixed(1)}%`}</small></div>)}</div>
+    <div className="v5-cohort-coverage-grid">{coverage.dimensions.map((row) => <div className="v5-cohort-coverage-row" key={row.key}><span>{row.label}</span><strong>{row.valid == null || row.expected == null ? "Unavailable" : `${row.valid} / ${row.expected}`}</strong><small title={row.fraction == null ? undefined : String(row.fraction)}>{row.fraction == null ? "Coverage unknown" : `${fixed(decimalShift(row.fraction, 2), 1)}%`}</small></div>)}</div>
   </section>;
 }
 

@@ -100,3 +100,7 @@
   .condor-native .v5-system .op-hrow__pct { grid-column: 1 / -1; grid-row: 3; text-align: left; }
   body:has(.condor-native .v5-system) .q-heat-tip :is(p, span, small, dt, dd) { overflow-wrap: anywhere; font-size: 12px !important; }
 }
+
+@media (max-width: 430px) {
+  .condor-native .v5-catalog-meta { font-size: 12px; }
+}

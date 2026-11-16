@@ -85,7 +85,7 @@ function visible(parts, digits, plus = false) {
   const rounded = round(parts, digits);
   if (!rounded.zero || !/[1-9]/.test(parts.int + parts.frac)) return { text: render(rounded, plus), zero: rounded.zero };
   const lead = parts.frac.search(/[1-9]/);
-  if (lead + 3 > 30) {
+  if (lead + 3 > 8) {
     const text = coin(`${parts.neg ? '-' : ''}${parts.int}.${parts.frac}`);
     return { text: `${plus && !parts.neg ? '+' : ''}${text}`, zero: false };
   }
@@ -141,7 +141,7 @@ export function price(value) {
 
 /**
  * Coin amount, trailing zeros removed, never 18 decimals: from 1 up, 6 significant digits but every integer digit
- * (1,390.56; 1,234,567); below 1, 6 decimals (0.016246); dust below 0.0001 keeps 3 significant digits (up to 18 decimals) so it never shows as 0.
+ * (1,390.56; 1,234,567); below 1, 6 decimals (0.016246); dust keeps 3 significant digits so it never shows as 0.
  * `asset` is appended when given ("0.016246 BTC").
  */
 export function coin(value, asset) {
@@ -151,8 +151,8 @@ export function coin(value, asset) {
   if (parts.int !== '0') digits = Math.max(0, 6 - parts.int.length);
   else {
     const lead = parts.frac.search(/[1-9]/);
-    // Dust that cannot keep 3 significant digits within 18 decimals is shown in bounded scientific form, never as 0.
-    if (lead >= 16) {
+    // Dust that cannot keep 3 significant digits within 8 decimals is shown in bounded scientific form, never as 0.
+    if (lead >= 6) {
       const sig = round({ neg: false, int: parts.frac[lead], frac: parts.frac.slice(lead + 1) }, 2);
       const mantissa = sig.int.length > 1 ? `1.${sig.int.slice(1, 2)}${sig.frac[0]}` : `${sig.int}.${sig.frac}`;
       const power = sig.int.length > 1 ? lead : lead + 1;

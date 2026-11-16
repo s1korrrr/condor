@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { RecordedCandleChart } from '@/components/charts/RecordedCandleChart';
 import { DataTable, type TableColumn } from '@/features/quant-ops/kit/DataTable';
 import { readStockOwner } from './stocks-api';
+import { price } from './format.mjs';
 import { captureEntry, effectiveState, filterStockRows, fundingApplicable, publicObservation, selectedStock, stockCaptured, stockKey, stockProductLabel, unlistedCapture } from './stocks-model.mjs';
 import type { PublicEvent, StockCatalog, StockCandles, StockChannel, StockFilter, StockInstrument, StockMarket, StockRange, StockRegion, StockRow } from './stocks-types';
 import './stocks.css';
@@ -10,6 +11,16 @@ import './stocks.css';
 const utc = (seconds: number | null | undefined) => seconds == null ? 'Unavailable' : new Date(seconds * 1000).toISOString().replace('T', ' ').replace(/\.\d+Z$/, ' UTC');
 const value = (item: unknown) => typeof item === 'string' && item !== '' ? item : typeof item === 'number' && Number.isFinite(item) ? String(item) : 'Unavailable';
 const field = (event: PublicEvent | null, name: string) => value(event?.data[name]);
+const formatted = (item: unknown) => {
+  const result = price(item);
+  return result === '—' ? value(item) : result;
+};
+const numericFields = new Set(['last', 'lastSz', 'bidPx', 'askPx', 'bidSz', 'askSz', 'open24h', 'high24h', 'low24h', 'vol24h', 'volCcy24h', 'sodUtc0', 'sodUtc8', 'markPx', 'idxPx', 'fundingRate', 'nextFundingRate', 'oi', 'oiCcy', 'oiUsd', 'px', 'sz', 'ctVal', 'ctMult', 'tickSz', 'lotSz', 'minSz', 'maxLmtSz', 'maxMktSz']);
+const formattedRecord = (item: unknown) => JSON.stringify(item, function (key, entry) {
+  if (Array.isArray(this)) return entry;
+  if ((key === 'bids' || key === 'asks') && Array.isArray(entry)) return entry.map(level => Array.isArray(level) ? level.map((part, index) => index < 2 ? formatted(part) : part) : level);
+  return numericFields.has(key) && entry != null && (typeof entry === 'string' || typeof entry === 'number') && price(entry) !== '—' ? formatted(entry) : entry;
+}, 2);
 const readable = (state: string) => state === 'live' || state === 'stale';
 
 function metadataTime(stamp: unknown) {
@@ -19,7 +30,7 @@ function metadataTime(stamp: unknown) {
 }
 
 function Observation({ label, event, name, unit, notApplicable = false }: { label: string; event: PublicEvent | null; name: string; unit: string; notApplicable?: boolean }) {
-  return <div className="v5-stock-observation"><dt>{label}</dt><dd className="v5-stock-value">{notApplicable ? 'Not applicable' : field(event, name)}{!notApplicable && event && <small>{unit}</small>}</dd>{event && !notApplicable && <dd className="v5-stock-caption">Source time: {utc(event.event_time_ms == null ? null : event.event_time_ms / 1000)}<br />Received: {utc(event.received_at_ms / 1000)} · {event.source.toUpperCase()}</dd>}</div>;
+  return <div className="v5-stock-observation"><dt>{label}</dt><dd className="v5-stock-value">{notApplicable ? 'Not applicable' : <span title={field(event, name)}>{formatted(event?.data[name])}</span>}{!notApplicable && event && <small>{unit}</small>}</dd>{event && !notApplicable && <dd className="v5-stock-caption">Source time: {utc(event.event_time_ms == null ? null : event.event_time_ms / 1000)}<br />Received: {utc(event.received_at_ms / 1000)} · {event.source.toUpperCase()}</dd>}</div>;
 }
 
 type DepthRow = { side: string; index: number; price: string; size: string; orders: string };
@@ -32,16 +43,16 @@ function depthRows(book: PublicEvent | null): DepthRow[] {
 
 const depthColumns: TableColumn<DepthRow>[] = [
   { id: 'side', header: 'Side', value: row => row.side, rowHeader: true, size: 70 },
-  { id: 'price', header: 'Price', value: row => row.price, size: 180 },
-  { id: 'size', header: 'Size (venue units)', value: row => row.size, size: 180 },
+  { id: 'price', header: 'Price', value: row => row.price, cell: row => formatted(row.price), size: 180 },
+  { id: 'size', header: 'Size (venue units)', value: row => row.size, cell: row => formatted(row.size), size: 180 },
   { id: 'orders', header: 'Order count', value: row => row.orders, size: 110 },
 ];
 const tradeColumns: TableColumn<PublicEvent>[] = [
   { id: 'time', header: 'Source time (UTC)', value: event => utc(event.event_time_ms == null ? null : event.event_time_ms / 1000), rowHeader: true, size: 180 },
   { id: 'id', header: 'Trade ID', value: event => field(event, 'tradeId'), size: 130 },
   { id: 'side', header: 'Side', value: event => field(event, 'side'), size: 70 },
-  { id: 'price', header: 'Price', value: event => field(event, 'px'), size: 150 },
-  { id: 'size', header: 'Size (venue units)', value: event => field(event, 'sz'), size: 150 },
+  { id: 'price', header: 'Price', value: event => field(event, 'px'), cell: event => formatted(event.data.px), size: 150 },
+  { id: 'size', header: 'Size (venue units)', value: event => field(event, 'sz'), cell: event => formatted(event.data.sz), size: 150 },
 ];
 const channelColumns: TableColumn<StockChannel & { name: string }>[] = [
   { id: 'name', header: 'Public channel', value: row => row.name, rowHeader: true, size: 150 },
@@ -57,11 +68,11 @@ function InstrumentMetadata({ instrument }: { instrument: StockInstrument }) {
   return <details className="v5-stock-details"><summary>Instrument metadata</summary><dl className="v5-stock-metadata">
     <div><dt>Underlying</dt><dd>{value(instrument.uly)}</dd></div>
     <div><dt>Quote / settlement</dt><dd>{value(instrument.quoteCcy)} / {spot ? 'Not applicable' : value(instrument.settleCcy)}</dd></div>
-    <div><dt>Contract value / multiplier</dt><dd>{spot ? 'Not applicable' : `${value(instrument.ctVal)} ${value(instrument.ctValCcy)} / ${value(instrument.ctMult)}`}</dd></div>
-    <div><dt>Tick / lot / minimum size</dt><dd>{value(instrument.tickSz)} / {value(instrument.lotSz)} / {value(instrument.minSz)}</dd></div>
+    <div><dt>Contract value / multiplier</dt><dd title={spot ? undefined : `${value(instrument.ctVal)} ${value(instrument.ctValCcy)} / ${value(instrument.ctMult)}`}>{spot ? 'Not applicable' : `${formatted(instrument.ctVal)} ${value(instrument.ctValCcy)} / ${formatted(instrument.ctMult)}`}</dd></div>
+    <div><dt>Tick / lot / minimum size</dt><dd title={`${value(instrument.tickSz)} / ${value(instrument.lotSz)} / ${value(instrument.minSz)}`}>{formatted(instrument.tickSz)} / {formatted(instrument.lotSz)} / {formatted(instrument.minSz)}</dd></div>
     <div><dt>Listed (UTC)</dt><dd>{metadataTime(instrument.listTime)}</dd></div>
     <div><dt>Expiry (UTC)</dt><dd>{spot || instrument.instType === 'SWAP' ? 'Not applicable' : metadataTime(instrument.expTime)}</dd></div>
-  </dl><details><summary>All public instrument fields</summary><pre className="v5-stock-json">{JSON.stringify(instrument, null, 2)}</pre></details></details>;
+  </dl><details><summary>All public instrument fields</summary><pre className="v5-stock-json" title={JSON.stringify(instrument, null, 2)}>{formattedRecord(instrument)}</pre></details></details>;
 }
 
 function NotCaptured({ region, instrument }: { region: StockRegion; instrument: StockInstrument }) {
@@ -113,7 +124,7 @@ export function V5Stocks({ configured, profilePending = false, profileError = nu
     { id: 'rule', header: 'Rule type', value: row => row.instrument.ruleType, size: 95 },
     { id: 'state', header: 'Instrument state', value: row => row.instrument.state, size: 100 },
     { id: 'quote', header: 'Quote / settlement', value: row => `${value(row.instrument.quoteCcy)} / ${row.instrument.instType === 'SPOT' ? 'N/A' : value(row.instrument.settleCcy)}`, size: 140 },
-    { id: 'last', header: 'Last recorded trade price', value: row => field(publicObservation(snapshot ? { ...row, now: snapshot.now, state: snapshot.state } : null, 'ticker', catalog.isError, nowMs), 'last'), size: 150 },
+    { id: 'last', header: 'Last recorded trade price', value: row => field(publicObservation(snapshot ? { ...row, now: snapshot.now, state: snapshot.state } : null, 'ticker', catalog.isError, nowMs), 'last'), cell: row => formatted(publicObservation(snapshot ? { ...row, now: snapshot.now, state: snapshot.state } : null, 'ticker', catalog.isError, nowMs)?.data.last), size: 150 },
     { id: 'channel', header: 'Ticker state', value: row => !ownerReady ? 'Unavailable' : !stockCaptured(row) ? 'Not captured' : row.channels.ticker?.state ?? 'Unavailable', size: 100 },
     { id: 'age', header: 'Ticker receipt age at evaluation (s)', value: row => ownerReady ? row.channels.ticker?.age_s : null, kind: 'number', size: 120 },
     { id: 'from', header: 'Candles from (UTC)', value: row => utc(row.coverage.candle_start), size: 180 },
@@ -164,7 +175,7 @@ export function V5Stocks({ configured, profilePending = false, profileError = nu
             <details className="v5-stock-details"><summary>Public order book{book && detail.book_depth ? ` · ${detail.book_depth.bids} bids / ${detail.book_depth.asks} asks` : ' · unavailable'}</summary><p className="v5-stock-caption">Up to 50 levels per side from the recorded standard public book. Size is {instrument.instType === 'SPOT' ? 'in the base asset' : 'in derivative contracts'}. A stream gap removes the current book until a new snapshot arrives.</p><DataTable rows={depthRows(book)} columns={depthColumns} rowId={row => `${row.side}/${row.index}`} label="Selected stock public order book" emptyText="No continuous public order book is available." /></details>
             <details className="v5-stock-details"><summary>Recent captured trades · {trades.length}</summary><p className="v5-stock-caption">Up to 50 captured observations; this is not a complete historical trade record. Size is {instrument.instType === 'SPOT' ? 'in the base asset' : 'in derivative contracts'}.</p><DataTable rows={trades} columns={tradeColumns} rowId={(event, index) => `${event.received_at_ms}/${index}`} label="Selected stock recent trades" emptyText="Recent trade observations are unavailable." /></details>
             <details className="v5-stock-details"><summary>Channel freshness and coverage</summary><DataTable rows={Object.entries(detail.channels).map(([name, channel]) => ({ name, ...channel }))} columns={channelColumns} rowId={row => row.name} label="Selected stock channel freshness" emptyText="No channel status is available." /><p className="v5-stock-caption">Recorded candles: {utc(detail.coverage.candle_start)} through {utc(detail.coverage.candle_end)}. Funding settlement times in source records describe settlement, not observation freshness.</p></details>
-            <details className="v5-stock-details"><summary>All recorded market fields</summary><p className="v5-stock-caption">Exact public source fields and decimal strings for the selected instrument. Unavailable channels are null. Books are the bounded display projection, and trades are the recent captured observations shown above.</p><pre className="v5-stock-json">{JSON.stringify({ latest: Object.fromEntries((['ticker', 'mark_price', 'index_price', 'funding', 'open_interest', 'books'] as const).map(dataset => [dataset, publicObservation(detail, dataset, market.isError, nowMs)])), recent_trades: trades, book_depth: book ? detail.book_depth : null }, null, 2)}</pre></details>
+            <details className="v5-stock-details"><summary>All recorded market fields</summary><p className="v5-stock-caption">Public source fields for the selected instrument; exact decimal strings are in the title. Unavailable channels are null. Books are the bounded display projection, and trades are the recent captured observations shown above.</p><pre className="v5-stock-json" title={JSON.stringify({ latest: Object.fromEntries((['ticker', 'mark_price', 'index_price', 'funding', 'open_interest', 'books'] as const).map(dataset => [dataset, publicObservation(detail, dataset, market.isError, nowMs)])), recent_trades: trades, book_depth: book ? detail.book_depth : null }, null, 2)}>{formattedRecord({ latest: Object.fromEntries((['ticker', 'mark_price', 'index_price', 'funding', 'open_interest', 'books'] as const).map(dataset => [dataset, publicObservation(detail, dataset, market.isError, nowMs)])), recent_trades: trades, book_depth: book ? detail.book_depth : null })}</pre></details>
           </section>}
         </>}
         <InstrumentMetadata instrument={instrument} />

@@ -725,8 +725,6 @@ def create_app(
             "source_refresh": "/v1/source/status",
             "identity": "/v1/identity",
             "advisor": "/v1/advice/status",
-            "history": "/v1/advice/history",
-            "latest": "/v1/advice/latest",
         }
         names = list(paths)
         results = await asyncio.gather(
@@ -802,7 +800,6 @@ def create_app(
         status.update(budget)
         source_error = ";".join(errors) if errors else None
         paper = await current_paper()
-        history = source.get("history", {}).get("records", [])
         sessions = store.sessions()
         return {
             "schema_version": "v5-workspace.v1",
@@ -825,11 +822,9 @@ def create_app(
             "advisor": {
                 **status,
                 "task_profiles": rows,
-                "latest": source.get("latest"),
                 "latest_by_task": source.get("latest_by_task", {}),
                 "budget_policy": source.get("budget_policy", {}),
                 "scheduler": source.get("scheduler", {}),
-                "history_count": len(history) if isinstance(history, list) else 0,
             },
             "agents": [
                 apply_task_status(agent, rows, paper)

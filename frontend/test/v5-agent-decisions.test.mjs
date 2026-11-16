@@ -36,11 +36,18 @@ test('out-of-range advisor input times withhold report values', () => {
   }
 });
 
-test('timeline discloses the temporary owner history limit', () => {
+test('timeline discloses its bounded projected history and older-owner failure', () => {
   const page = fs.readFileSync(new URL('../src/v5/AgentDecisionsPage.tsx', import.meta.url), 'utf8');
-  assert.match(page, /Older reports are not shown yet/);
-  assert.match(page, /full input, so only one report fits in a read/);
-  assert.match(page, /slimmer history, the full timeline will appear here/);
+  assert.match(page, /Up to 5 reports per agent/);
+  assert.doesNotMatch(page, /Only the latest report|Older reports are not shown yet|slimmer history/);
+  const { load } = frontendModules({
+    '@tanstack/react-query': { useQuery: () => ({}), useQueries: () => [{isError:true,error:{code:'ADVISOR_PROJECTED_HISTORY_UNAVAILABLE'}}] },
+    'react-router-dom': { Link: ({ children, ...props }) => React.createElement('a', props, children) },
+    './usePaperClock': { usePaperClock: () => now },
+  });
+  const html = renderToStaticMarkup(React.createElement(load('v5/AgentDecisionsPage.tsx').AgentDecisionsPage));
+  assert.match(html, /owner does not publish projected history/);
+  assert.match(html, /No full-record fallback/);
 });
 
 test('untimed reports are withheld instead of treated as historical', () => {
@@ -49,14 +56,34 @@ test('untimed reports are withheld instead of treated as historical', () => {
   assert.equal(selectReports([untimed], 'all', 'ACCEPTED', now).length, 0);
 });
 
-test('history requests one bounded owner record per agent', async () => {
+test('history requests five bounded owner projections per agent', async () => {
   const original = globalThis.fetch;
   let requested;
   globalThis.fetch = async url => { requested = url; return { ok: true, json: async () => ({ effect: 'NONE', records: [] }) }; };
   try {
     await frontendModules().load('v5/api.ts').v5Api.advisorHistory('market_context');
-    assert.equal(requested, '/api/v5/advisor/history?task_id=market_context&limit=1');
+    assert.equal(requested, '/api/v5/advisor/history?task_id=market_context&limit=5');
   } finally { globalThis.fetch = original; }
+});
+
+test('timeline renders multiple reports for the same agent newest first and preserves withheld values', () => {
+  const older = report('market_context', 4000, 12000);
+  older.record.result.advice.summary = 'Older timeline report';
+  const newer = report('market_context', 7000, 12000);
+  newer.record.result.advice.summary = 'Newer timeline report';
+  const future = report('market_context', 11000, 12000);
+  future.record.result.advice.summary = 'PRIVATE_FUTURE_SUMMARY';
+  const { load } = frontendModules({
+    '@tanstack/react-query': { useQuery: () => ({}), useQueries: () => [{data:{effect:'NONE',records:[older,future,newer]}}] },
+    'react-router-dom': { Link: ({ children, ...props }) => React.createElement('a', props, children) },
+    './usePaperClock': { usePaperClock: () => now },
+  });
+  const html = renderToStaticMarkup(React.createElement(load('v5/AgentDecisionsPage.tsx').AgentDecisionsPage));
+  assert.match(html, /Up to 5 reports per agent/);
+  assert.ok(html.indexOf('Newer timeline report') < html.indexOf('Older timeline report'));
+  assert.match(html, /data-freshness="historical"/);
+  assert.match(html, /Future report withheld/);
+  assert.doesNotMatch(html, /PRIVATE_FUTURE_SUMMARY/);
 });
 
 test('history is sorted and filters agent, status and assessment without future values', () => {
@@ -78,7 +105,7 @@ test('page renders honest limits, withheld rows, and responsive filter rules', (
   assert.match(html, /reports-only; they do not place or block orders/);
   assert.match(html, /link from a report to a bot action is not published yet/);
   assert.match(html, /Coin filter not published/);
-  assert.match(html, /Only the latest report from each agent is shown for now/);
+  assert.match(html, /Up to 5 reports per agent, newest first/);
   assert.match(html, /report time is missing or invalid/);
   assert.match(html, /Expired report · values withheld/);
   assert.match(html, /Future report withheld/);

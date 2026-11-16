@@ -49,6 +49,7 @@ export function AgentDecisionsPage() {
   const [status, setStatus] = useState('all');
   const workspace = useQuery({ queryKey: ['v5-workspace'], queryFn: v5Api.workspace, refetchInterval: 30_000 });
   const histories = useQueries({ queries: Object.keys(TASKS).map(taskId => ({ queryKey: ['v5-advisor-history', taskId], queryFn: () => v5Api.advisorHistory(taskId), refetchInterval: 30_000 })) });
+  const projectedHistoryMissing = histories.some(query => query.isError && query.error && 'code' in query.error && query.error.code === 'ADVISOR_PROJECTED_HISTORY_UNAVAILABLE');
   const reports = histories.flatMap(query => !query.isError && query.data?.effect === 'NONE' && Array.isArray(query.data.records) ? query.data.records : []);
   const statuses = Array.from(new Set(reports.filter(report => reportPresentation(report, now) === 'historical').flatMap(report => [report.record?.result?.status, report.record?.result?.advice?.assessment].filter((value): value is string => Boolean(value))))).sort();
   const selected = selectReports(reports, task, status, now);
@@ -67,11 +68,12 @@ export function AgentDecisionsPage() {
       </div> : <p>The advisor budget and scheduler are unavailable; a workspace owner response would fill this panel.</p>}
     </section>
     <section className="v5-panel"><h2>Report timeline</h2>
-      <p>Only the latest report from each agent is shown for now. Older reports are not shown yet: the advisor sends each report together with its full input, so only one report fits in a read. When the advisor publishes a slimmer history, the full timeline will appear here.</p>
+      <p>Up to 5 reports per agent, newest first. Older reports beyond this bounded read are not included. History does not publish current report validity.</p>
       <div className="v5-decisions-filters"><label>Agent<select value={task} onChange={event => setTask(event.target.value)}><option value="all">All agents</option>{Object.entries(TASKS as Record<string, string>).map(([key, name]) => <option value={key} key={key}>{name}</option>)}</select></label>
         <label>Outcome or status<select value={status} onChange={event => setStatus(event.target.value)}><option value="all">All statuses</option>{statuses.map(item => <option key={item} value={item}>{item}</option>)}</select></label></div>
       <p>Coin filter not published by the advisor; reports with coin data would be needed to filter by coin.</p>
       {histories.some(query => query.isPending) && <p role="status">Loading advisor history…</p>}
+      {projectedHistoryMissing && <p role="alert">The advisor owner does not publish projected history. Install the owner update before this dashboard. No full-record fallback is used.</p>}
       {histories.some(query => query.isError) && <p role="alert">Some advisor history is unavailable; a successful owner history read would fill the missing reports.</p>}
       {selected.map((report, index) => <Report key={`${report.task_id}-${report.record?.request_id ?? index}`} report={report} now={now} />)}
       {!selected.length && !histories.some(query => query.isPending) && <p>No reports match the available history and filters; advisor reports or different filters would fill this timeline.</p>}

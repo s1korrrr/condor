@@ -68,7 +68,7 @@ export const v5Api = {
   logout: () => request<void>("/auth/logout", { method: "POST" }),
   workspace: () => request<V5Workspace>("/workspace"),
   advisorHistory: async (task: string) => {
-    const result = await request<{ effect: "NONE"; records: V5TaskReport[] }>(`/advisor/history?task_id=${encodeURIComponent(task)}&limit=1`);
+    const result = await request<{ effect: "NONE"; records: V5TaskReport[] }>(`/advisor/history?task_id=${encodeURIComponent(task)}&limit=5`);
     if (!result || result.effect !== "NONE" || !Array.isArray(result.records)) throw new V5ApiError("The advisor returned invalid history.", 502, "INVALID_HISTORY");
     return result;
   },

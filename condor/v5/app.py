@@ -645,7 +645,7 @@ def create_app(
         task_id, limit = values["task_id"], values["limit"]
         if (
             task_id not in KNOWN_TASK_IDS
-            or limit != "1"
+            or re.fullmatch(r"[1-5]", limit) is None
             or request.scope["query_string"] not in {
                 f"task_id={task_id}&limit={limit}".encode(),
                 f"limit={limit}&task_id={task_id}".encode(),
@@ -654,10 +654,11 @@ def create_app(
             raise HTTPException(400, detail={"code": "INVALID_HISTORY_QUERY"})
         try:
             payload = await api.observation(
-                f"/v1/advice/history?task_id={task_id}&limit={limit}"
+                f"/v1/advice/history/projected?task_id={task_id}&limit={limit}"
             )
-        except UpstreamError:
-            raise HTTPException(503, detail={"code": "ADVISOR_HISTORY_UNAVAILABLE"}) from None
+        except UpstreamError as exc:
+            code = "ADVISOR_PROJECTED_HISTORY_UNAVAILABLE" if exc.http_status in {404, 405} else "ADVISOR_HISTORY_UNAVAILABLE"
+            raise HTTPException(503, detail={"code": code}) from None
         records = payload.get("records") if isinstance(payload, dict) else None
         if (
             not isinstance(records, list)
@@ -669,26 +670,24 @@ def create_app(
         for record in records:
             if (
                 not isinstance(record, dict)
-                or not isinstance(record.get("input"), dict)
-                or record["input"].get("task_id") != task_id
-                or "result" not in record
+                or record.get("task_id") != task_id
+                or not isinstance(record.get("request_id"), str)
+                or not 0 < len(record["request_id"]) <= 128
+                or not isinstance(record.get("status"), str)
+                or record.get("effect") != "NONE"
+                or not any(key in record for key in _ADVISOR_TIME_KEYS[:2])
+                or any(key in record and not _valid_advisor_time(record[key]) for key in _ADVISOR_TIME_KEYS)
             ):
                 raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})
-            if record.get("result") is None:
+            if record["status"] == "RESULT_NOT_PUBLISHED":
                 projected.append({
                     "task_id": task_id, "status": "RESULT_NOT_PUBLISHED",
                     "effect": "NONE", "record": None,
                 })
                 continue
-            report = record["result"]
-            if (
-                not isinstance(report, dict)
-                or report.get("effect") != "NONE"
-                or not any(key in report for key in _ADVISOR_TIME_KEYS[:2])
-                or any(key in report and not _valid_advisor_time(report[key]) for key in _ADVISOR_TIME_KEYS)
-            ):
-                raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})
-            item = _safe_task_latest(task_id, {"status": "HISTORY", "record": record})
+            item = _safe_task_latest(task_id, {"status": "HISTORY", "record": {
+                "request_id": record["request_id"], "input": {"task_id": record["task_id"]}, "result": record,
+            }})
             if item["record"] is None:
                 raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})
             projected.append(item)

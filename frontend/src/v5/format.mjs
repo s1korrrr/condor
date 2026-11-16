@@ -64,9 +64,9 @@ export function decimalShift(value, places) {
   return `${parts.neg ? '-' : ''}${int}${frac ? `.${frac}` : ''}`;
 }
 
-export function decimalPercentChange(value, base) {
+export function decimalPercentChange(value, base, digits = 2) {
   const end = parse(value), start = parse(base);
-  if (!end || !start) return null;
+  if (!end || !start || !Number.isInteger(digits) || digits < 0 || digits > 30) return null;
   const places = Math.max(end.frac.length, start.frac.length);
   const integer = parts => {
     const magnitude = BigInt(parts.int + parts.frac.padEnd(places, '0'));
@@ -76,9 +76,9 @@ export function decimalPercentChange(value, base) {
   if (denominator <= 0n) return null;
   const numerator = (integer(end) - denominator) * 100n;
   const magnitude = numerator < 0n ? -numerator : numerator;
-  const cents = (magnitude * 200n + denominator) / (2n * denominator);
-  const digits = cents.toString().padStart(3, '0');
-  return { value: `${numerator < 0n && cents !== 0n ? '-' : ''}${digits.slice(0, -2)}.${digits.slice(-2)}`, exact: `${numerator}/${denominator}%` };
+  const units = (magnitude * 2n * 10n ** BigInt(digits) + denominator) / (2n * denominator);
+  const text = units.toString().padStart(digits + 1, '0');
+  return { value: `${numerator < 0n && units !== 0n ? '-' : ''}${digits ? `${text.slice(0, -digits)}.${text.slice(-digits)}` : text}`, exact: `${numerator}/${denominator}%`, direction: numerator < 0n ? -1 : numerator > 0n ? 1 : 0 };
 }
 
 /** Add one unit in the last place to a string of digits. */

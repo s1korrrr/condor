@@ -1,8 +1,8 @@
 import type { PaperRead } from "./contracts";
 import { latest } from "./money-model.mjs";
 import { paperCompleteRead, paperCompleteRecords, paperDecimalSum, paperExitProjection, paperPairBag, paperPairHoldings, paperPairObservation, paperTime, paperWords } from "./policy";
-import { coin as formatCoin, price as formatPrice, usdc } from "./format.mjs";
-import { activeLots, breakEvenDistance, exactSignedSum, moneySampleState } from "./bots-position-model.mjs";
+import { coin as formatCoin, decimalPercentChange, price as formatPrice, usdc } from "./format.mjs";
+import { activeLots, breakEvenDistanceDetail, exactSignedSum, moneySampleState } from "./bots-position-model.mjs";
 import { PAIRS, latestFinalCandle, type Candles } from "./paper-candles";
 import type { MoneyRead } from "./money-api";
 import { utcMinute } from "./shown.mjs";
@@ -23,7 +23,9 @@ export function PaperPositions({ positions, executors, decisions, wallet, now, v
     const decision = paperPairObservation(pair, positions, executors, decisions, valuesAt).decision;
     const observed = latestFinalCandle(prices[pair]?.buckets);
     const price = observed && observed.at <= now && now - observed.at <= 180_000 ? observed : null;
-    const distance = breakEvenDistance(bag?.breakevenPrice, price?.close);
+    const distance = breakEvenDistanceDetail(bag?.breakevenPrice, price?.close);
+    const progressChange = decimalPercentChange(price?.close, bag?.breakevenPrice, 8);
+    const progress = progressChange && exactSignedSum('100', progressChange.value);
     const coinMoney = sample ? newest?.coins?.[coin] : null;
     const profit = exactSignedSum(coinMoney?.realized, coinMoney?.unrealized);
     const asset = assets.find(item => item && item.asset === coin);
@@ -38,8 +40,8 @@ export function PaperPositions({ positions, executors, decisions, wallet, now, v
       <p className="paper-caption">Price: {price ? <><span title={String(price.close)}>{formatPrice(price.close)} USDC</span> · {paperTime(price.at, now)}</> : "— · latest closed candle unavailable or old"}</p>
       {asOf !== null && <p className="paper-caption">Position and breakeven below are not current · {paperTime(asOf, now)}</p>}
       <div className={asOf !== null ? "paper-dimmed-position" : undefined} style={asOf !== null ? {opacity: 0.6} : undefined}>
-      <p>{distance === "—" ? "— · current price or breakeven unavailable" : distance}</p><p className="paper-caption">Breakeven: {bag?.breakevenPrice ? <span title={bag.breakevenPrice}>{formatPrice(bag.breakevenPrice)} USDC</span> : "— · not published"}</p>
-      {price && bag?.breakevenPrice && distance !== "—" && <progress max={100} value={Math.min(100, price.close / Number(bag.breakevenPrice) * 100)} aria-label={`${coin} price relative to breakeven`} />}
+      <p>{distance ? <span title={distance.exact}>{distance.text}</span> : "— · current price or breakeven unavailable"}</p><p className="paper-caption">Breakeven: {bag?.breakevenPrice ? <span title={bag.breakevenPrice}>{formatPrice(bag.breakevenPrice)} USDC</span> : "— · not published"}</p>
+      {distance && progress && <progress max={100} value={Math.min(100, Math.max(0, Number(progress)))} aria-label={`${coin} price relative to breakeven`} />}
       {decision && <p>Buy decision: {paperWords(decision.status)} · {paperWords(decision.reason)} · {paperTime(decision.event_at_ms, now)}</p>}
       <dl className="paper-detail"><dt>Holding</dt><dd>{holding !== null ? <span title={holding}>{formatCoin(holding, coin)}</span> : "— · position read unavailable"}{dust && <div>+ <span title={dust.quantity}>{formatCoin(dust.quantity, coin)}</span> dust</div>}</dd><dt>Worth now</dt><dd>{typeof worth === "string" ? <span title={worth}>{usdc(worth)}</span> : "— · current owner mark unavailable"}</dd><dt>Lots</dt><dd>{lots ? lots.length : "— · position read unavailable"}</dd><dt>Sell orders placed</dt><dd>{sellOrders}</dd></dl>
       <details><summary>Details</summary><dl className="paper-detail"><dt>Bag reason</dt><dd>{bag?.reason ? paperWords(bag.reason) : "— · not published"}</dd><dt>Trailing armed</dt><dd>{bag?.trailArmed == null ? "— · not published" : bag.trailArmed ? "Yes" : "No"}</dd><dt>Trailing peak</dt><dd>{bag?.trailPeak ? <span title={bag.trailPeak}>{formatPrice(bag.trailPeak)} USDC</span> : "— · not published"}</dd><dt>Release</dt><dd>{bag?.release ? paperWords(bag.release) : "— · not published"}</dd></dl></details>

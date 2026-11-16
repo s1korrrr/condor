@@ -33,7 +33,7 @@ test("heat cells label every state and never treat an outside hour as covered", 
 test("row coverage excludes pending minutes and is unavailable, not 100%, without settled minutes", () => {
   const { heatRowCoverage } = model();
   assert.equal(heatRowCoverage({ cells: [null, [0, 0, 0, 0, 30]] }), null);
-  assert.equal(heatRowCoverage({ cells: [[30, 10, 0, 0, 20], [20, 0, 0, 20, 0], null] }), 60 / 80);
+  assert.deepEqual(heatRowCoverage({ cells: [[30, 10, 0, 0, 20], [20, 0, 0, 20, 0], null] }), { text: "75.00%", exact: "60 / 80 settled minutes; exact percentage 6000/80%" });
 });
 
 test("heat strips put the newest owner hour on the left", () => {

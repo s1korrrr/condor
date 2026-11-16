@@ -57,6 +57,23 @@ test('page renders honest limits, withheld rows, and responsive filter rules', (
   assert.match(css, /min-width:\s*0/);
 });
 
+test('owner values use shared rounding and retain exact amounts and times', () => {
+  const priced = report('market_context', 5000, 12000);
+  priced.record.result.actual_usd = '1.235';
+  const zero = report('source_quality', 6000, 12000);
+  zero.record.result.actual_usd = '-0.004';
+  const { load } = frontendModules({
+    '@tanstack/react-query': { useQuery: () => ({ data: { advisor: { calls_today: 1000 }, source_error: null } }), useQueries: () => [{data: { effect: 'NONE', records: [priced, zero] }}] },
+    'react-router-dom': { Link: ({ children, ...props }) => React.createElement('a', props, children) },
+    './usePaperClock': { usePaperClock: () => now },
+  });
+  const html = renderToStaticMarkup(React.createElement(load('v5/AgentDecisionsPage.tsx').AgentDecisionsPage));
+  assert.match(html, /class="owner-value" title="1\.235" data-tone="up">1\.24 USD/);
+  assert.match(html, /class="owner-value" title="-0\.004" data-tone="zero">0<\/span> USD/);
+  assert.match(html, /class="owner-value" title="1000">1,000/);
+  assert.match(html, /<time class="owner-value" title="5000">/);
+});
+
 test('agent decisions route and entry are included', () => {
   const app = fs.readFileSync(new URL('../src/v5/V5App.tsx', import.meta.url), 'utf8');
   const pages = fs.readFileSync(new URL('../src/v5/V5Pages.tsx', import.meta.url), 'utf8');

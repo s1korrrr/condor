@@ -3,18 +3,19 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { v5Api } from './api';
 import type { V5TaskReport } from './contracts';
-import { age, count, usdc, utc } from './format.mjs';
+import { age, count, ownerDisplay, utc } from './format.mjs';
+import { OwnerValue } from './OwnerValue';
 import { TASKS, reportPresentation, selectReports } from './agent-decisions-model.mjs';
 import { usePaperClock } from './usePaperClock';
 import './agent-decisions.css';
 
 function Time({ value, now, allowFuture = false }: { value?: number | null; now: number; allowFuture?: boolean }) {
   if (!value || (!allowFuture && value > now)) return <>Not published or future time withheld</>;
-  return <time title={String(value)}>{utc(value, now) ?? 'Invalid owner time'}{value <= now ? ` · ${age((now - value) / 1000)} ago` : ''}</time>;
+  return <time className="owner-value" title={String(value)}>{utc(value, now) ?? 'Invalid owner time'}{value <= now ? ` · ${age((now - value) / 1000)} ago` : ''}</time>;
 }
 
 function Money({ value }: { value: string | number | null | undefined }) {
-  return value == null ? <>Not published</> : <span title={String(value)}>{/^[+-]?0*(?:\.0*)?$/.test(String(value)) ? `${count(value)} USD` : usdc(value, 'USD')}</span>;
+  return value == null ? <>Not published</> : ownerDisplay(value, 'usdc').tone === 'zero' ? <><OwnerValue value={value} kind="signed" digits={0} /> USD</> : <OwnerValue value={value} kind="usdc" unit="USD" />;
 }
 
 function Report({ report, now }: { report: V5TaskReport; now: number }) {
@@ -59,7 +60,7 @@ export function AgentDecisionsPage() {
     <p>Advisor reports are reports-only; they do not place or block orders. The link from a report to a bot action is not published yet.</p>
     <section className="v5-panel"><h2>Budget and scheduler</h2>
       {advisor ? <div className="v5-decisions-budget"><p>Owner usage snapshot · observation time not published</p>
-        <p>Calls today: {advisor.calls_today == null ? 'Not published' : <span title={String(advisor.calls_today)}>{count(advisor.calls_today)}</span>} · Spent: <Money value={advisor.spent_usd} /> · Reserved: <Money value={advisor.reserved_usd} /></p>
+        <p>Calls today: {advisor.calls_today == null ? 'Not published' : <span className="owner-value" title={String(advisor.calls_today)}>{count(advisor.calls_today)}</span>} · Spent: <Money value={advisor.spent_usd} /> · Reserved: <Money value={advisor.reserved_usd} /></p>
         <p>Daily budget: <Money value={advisor.budget_policy?.daily_usd} /> · Pilot budget: <Money value={advisor.budget_policy?.pilot_usd} /> · Ceiling: <Money value={advisor.budget_policy?.authorized_ceiling_usd} /> · Remaining: <Money value={advisor.budget_policy?.remaining_pilot_usd} /></p>
         <p>Scheduler status: {scheduler?.last_attempt_ms && scheduler.last_attempt_ms > now ? 'Future value withheld' : scheduler?.last_status ?? 'Not published'} · Task: {scheduler?.last_attempt_ms && scheduler.last_attempt_ms > now ? 'Future value withheld' : scheduler?.task_id ?? 'Not published'} · Last attempt: <Time value={scheduler?.last_attempt_ms} now={now} /></p>
         <p>Missing budget or scheduler values appear when the advisor publishes them.</p>

@@ -1,4 +1,9 @@
 import assert from 'node:assert/strict';
+
+test('exact percentages are readable decimals or reduced fractions', () => {
+  assert.equal(format.decimalPercentChange('199057.11379198655820', '200000').exact, '−0.4714431040067209%');
+  assert.equal(format.rationalPercent(12100n, 288n).exact, '3025/72%');
+});
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import * as format from '../src/v5/format.mjs';
@@ -7,19 +12,44 @@ import { age, coin, count, fixed, pct, pnl, price, signed, usdc, utc, utcMin, wh
 const M = '−';
 const base = Date.UTC(2026, 10, 14, 11, 34, 22);
 
+test('owner display preserves the original value and uses the rounded sign for every kind', () => {
+  for (const [kind, value, options, text, tone] of [
+    ['usdc', '-0.004', {}, '0.00 USDC', 'zero'],
+    ['signed', '-0.004', {}, '0.00', 'zero'],
+    ['pnl', '-0.004', {}, '0.00', 'zero'],
+    ['pct', '-0.0001', {}, '0.00%', 'zero'],
+    ['bps', '-0.004', {}, '0.00 bps', 'zero'],
+    ['price', '1e-8', {}, '0.0000', 'zero'],
+    ['coin', '-0.00000001', {unit:'BNB'}, '0 BNB', 'zero'],
+    ['signed', '-1.234', {}, '−1.23', 'down'],
+    ['signed', '1.234', {}, '+1.23', 'up'],
+  ]) assert.deepEqual(format.ownerDisplay(value, kind, options), {text, exact:value, tone});
+  assert.deepEqual(format.ownerDisplay(null, 'usdc'), {text:'—', exact:null, tone:'none'});
+});
+
+test('tiny values round to normal places without negative zero', () => {
+  assert.equal(coin('-0.00000001', 'BNB'), '0 BNB');
+  assert.equal(usdc('-0.00000001'), '0.00 USDC');
+  assert.equal(fixed('-0.00000001'), '0.00');
+  assert.deepEqual(pnl('-0.00000001'), {text:'0.00',tone:'zero'});
+  assert.equal(usdc('-0.004'), '0.00 USDC');
+  assert.equal(coin('0.0000039', 'BNB'), '0.000004 BNB');
+  assert.equal(price('1.234567890123e-20'), '0.0000');
+});
+
 test('axis ticks preserve ordinary values and bound tiny values', () => {
   assert.equal(format.axis(199330.7), '199,330.70');
   assert.equal(format.axis(199330.7, 2, true), '+199,330.70');
   assert.equal(format.axis(12345.6, 2, true), '+12,345.60');
   assert.equal(format.axis(99999.99, 2, true), '+99,999.99');
   assert.equal(format.axis(-35.52, 2, true), '−35.52');
-  assert.equal(format.axis(1e-30), '1e−30');
-  assert.equal(format.axis(-0.004), '−4e−3');
+  assert.equal(format.axis(1e-30), '0.00');
+  assert.equal(format.axis(-0.004), '0.00');
   assert.equal(format.axis(1234.5), '1,234.50');
   assert.equal(format.axis(1234.5, 2, true), '+1,234.50');
   assert.equal(format.axis(1e30), '—');
   assert.equal(format.axis(0), '0');
-  assert.equal(fixed('1e-30'), '1e−30');
+  assert.equal(fixed('1e-30'), '0.00');
 });
 
 test('ordinary axis ticks match the existing text formatter', () => {
@@ -60,57 +90,50 @@ test('strings are rounded by string arithmetic and stay exact beyond float preci
   assert.equal(fixed('.5', 1), '0.5');
 });
 
-test('true zero stays zero while tiny nonzero values keep their signs', () => {
+test('true zero and tiny values that round to zero have no sign', () => {
   assert.equal(fixed(0), '0.00');
   assert.equal(fixed(-0), '0.00');
-  assert.equal(fixed(-0.001), '−0.001');
-  assert.equal(fixed('-0.004'), '−0.004');
-  assert.equal(fixed('0.000000000000000000000000000001'), '1e−30');
-  assert.equal(usdc(-0.001), '−0.001 USDC');
-  assert.equal(signed(-0.001), '−0.001');
-  assert.equal(signed('0.00001'), '+0.00001');
-  assert.equal(price('0.00001'), '0.00001');
-  assert.equal(pct(-0.001), '−0.001%');
+  assert.equal(fixed(-0.001), '0.00');
+  assert.equal(fixed('-0.004'), '0.00');
+  assert.equal(fixed('0.000000000000000000000000000001'), '0.00');
+  assert.equal(usdc(-0.001), '0.00 USDC');
+  assert.equal(signed(-0.001), '0.00');
+  assert.equal(signed('0.00001'), '0.00');
+  assert.equal(price('0.00001'), '0.0000');
+  assert.equal(pct(-0.001), '0.00%');
   assert.deepEqual(pnl(-0), { text: '0.00', tone: 'zero' });
-  assert.deepEqual(pnl(-0.004), { text: '▼ −0.004', tone: 'down' });
-  assert.deepEqual(pnl('0.00001'), { text: '▲ +0.00001', tone: 'up' });
+  assert.deepEqual(pnl(-0.004), { text: '0.00', tone: 'zero' });
+  assert.deepEqual(pnl('0.00001'), { text: '0.00', tone: 'zero' });
   assert.deepEqual(pnl('0.000'), { text: '0.00', tone: 'zero' });
 });
 
-test('each rounding helper preserves small positive and negative values exactly', () => {
-  assert.equal(fixed('0.004321'), '0.00432');
-  assert.equal(fixed('-0.004321'), '−0.00432');
-  assert.equal(signed('0.004321'), '+0.00432');
-  assert.equal(signed('-0.004321'), '−0.00432');
-  assert.equal(usdc('0.004'), '0.004 USDC');
-  assert.equal(usdc('-0.004'), '−0.004 USDC');
-  assert.deepEqual(pnl('0.004'), {text:'▲ +0.004',tone:'up'});
-  assert.deepEqual(pnl('-0.004'), {text:'▼ −0.004',tone:'down'});
-  assert.equal(price('0.00001'), '0.00001');
-  assert.equal(price('-0.00001'), '−0.00001');
-  assert.equal(fixed('1e-31'), '1e−31');
-  assert.equal(fixed('-1e-31'), '−1e−31');
-  assert.equal(signed('1e-30'), '+1e−30');
-  assert.equal(usdc('-1e-30'), '−1e−30 USDC');
-  assert.deepEqual(pnl('-1e-30'), {text:'▼ −1e−30',tone:'down'});
-  assert.equal(price('1e-30'), '1e−30');
+test('each rounding helper rounds small positive and negative values', () => {
+  assert.equal(fixed('0.004321'), '0.00');
+  assert.equal(fixed('-0.004321'), '0.00');
+  assert.equal(signed('0.004321'), '0.00');
+  assert.equal(signed('-0.004321'), '0.00');
+  assert.equal(usdc('0.004'), '0.00 USDC');
+  assert.equal(usdc('-0.004'), '0.00 USDC');
+  assert.deepEqual(pnl('0.004'), {text:'0.00',tone:'zero'});
+  assert.deepEqual(pnl('-0.004'), {text:'0.00',tone:'zero'});
+  assert.equal(price('0.00001'), '0.0000');
+  assert.equal(price('-0.00001'), '0.0000');
+  assert.equal(fixed('1e-31'), '0.00');
+  assert.equal(fixed('-1e-31'), '0.00');
+  assert.equal(signed('1e-30'), '0.00');
+  assert.equal(usdc('-1e-30'), '0.00 USDC');
+  assert.deepEqual(pnl('-1e-30'), {text:'0.00',tone:'zero'});
+  assert.equal(price('1e-30'), '0.0000');
 });
 
-test('sub-30-place values retain their magnitude for every rounding helper', () => {
-  for (const [value, plain, withSign, pnlText, tone] of [
-    ['4.99e-31', '4.99e−31', '+4.99e−31', '▲ +4.99e−31', 'up'],
-    ['-4.99e-31', '−4.99e−31', '−4.99e−31', '▼ −4.99e−31', 'down'],
-    ['5e-31', '5e−31', '+5e−31', '▲ +5e−31', 'up'],
-    ['-5e-31', '−5e−31', '−5e−31', '▼ −5e−31', 'down'],
-    ['9.99e-31', '9.99e−31', '+9.99e−31', '▲ +9.99e−31', 'up'],
-    ['-9.99e-31', '−9.99e−31', '−9.99e−31', '▼ −9.99e−31', 'down'],
-  ]) {
-    assert.equal(fixed(value), plain);
-    assert.equal(signed(value), withSign);
-    assert.equal(usdc(value), `${plain} USDC`);
-    assert.deepEqual(pnl(value), { text: pnlText, tone });
-    assert.equal(price(value), plain);
-    assert.equal(pct(value), `${withSign}%`);
+test('sub-30-place values round to zero for every rounding helper', () => {
+  for (const value of ['4.99e-31', '-4.99e-31', '5e-31', '-5e-31', '9.99e-31', '-9.99e-31']) {
+    assert.equal(fixed(value), '0.00');
+    assert.equal(signed(value), '0.00');
+    assert.equal(usdc(value), '0.00 USDC');
+    assert.deepEqual(pnl(value), { text: '0.00', tone: 'zero' });
+    assert.equal(price(value), '0.0000');
+    assert.equal(pct(value), '0.00%');
   }
 });
 
@@ -133,7 +156,7 @@ test('pnl: sign, arrow and a true minus; tone follows the displayed value', () =
   assert.deepEqual(pnl('-669.30'), { text: `▼ ${M}669.30`, tone: 'down' });
   assert.deepEqual(pnl(1234.5), { text: '▲ +1,234.50', tone: 'up' });
   assert.deepEqual(pnl(0), { text: '0.00', tone: 'zero' });
-  assert.equal(pnl(-0.4, 0).tone, 'down');
+  assert.equal(pnl(-0.4, 0).tone, 'zero');
   assert.equal(pnl(0.006).text, '▲ +0.01');
 });
 
@@ -154,7 +177,7 @@ test('coin: 6 significant digits at most, trailing zeros removed, no 18 decimals
   assert.equal(coin('2.50000', 'ETH'), '2.5 ETH');
   assert.equal(coin('100.000000', 'SOL'), '100 SOL');
   assert.equal(coin(1234567.891, 'XRP'), '1,234,568 XRP');
-  assert.equal(coin('0.00000049'), '4.9e−7');
+  assert.equal(coin('0.00000049'), '0');
   assert.equal(coin('-0.5', 'BTC'), `${M}0.5 BTC`);
   assert.equal(coin(0), '0');
   assert.equal(coin(1.5), '1.5');
@@ -220,9 +243,8 @@ test('exact decimals through exponent text, dust and price buckets (Sol R1)', ()
   assert.equal(fixed('1.005e0'), '1.01');
   assert.equal(fixed('1.5e3'), '1,500.00');
   assert.equal(fixed('1e999'), '—');
-  // Dust that cannot keep 3 significant digits within 18 decimals is scientific, never 0.
-  assert.equal(coin('0.00000000000000000049', 'BTC'), '4.9e−19 BTC');
-  assert.equal(coin('0.000000000000000999', 'BTC'), '9.99e−16 BTC');
+  assert.equal(coin('0.00000000000000000049', 'BTC'), '0 BTC');
+  assert.equal(coin('0.000000000000000999', 'BTC'), '0 BTC');
   assert.equal(coin('0.016245819000000000', 'BTC'), '0.016246 BTC');
   // The price bucket comes from the integer digits exactly.
   assert.equal(price('999.999999999999999999999999999999'), '1,000.00');
@@ -237,7 +259,7 @@ test('numbers and the same decimal strings format identically, including exponen
   for (const [number, text] of [[4.9e-21, '4.9e-21'], [1.234e-19, '1.234e-19'], [-3.5e-7, '-3.5e-7'], [0.016245819, '0.016245819'], [1390.5632, '1390.5632']]) {
     assert.equal(coin(number, 'BTC'), coin(text, 'BTC'), String(number));
   }
-  assert.equal(coin(4.9e-21, 'BTC'), '4.9e−21 BTC');
-  assert.equal(coin(1.234e-19, 'BTC'), '1.23e−19 BTC');
+  assert.equal(coin(4.9e-21, 'BTC'), '0 BTC');
+  assert.equal(coin(1.234e-19, 'BTC'), '0 BTC');
   assert.equal(fixed(-3.5e-7, 8), '−0.00000035');
 });

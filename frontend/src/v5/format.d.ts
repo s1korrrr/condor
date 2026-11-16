@@ -1,4 +1,8 @@
 export const MINUS: string;
+export function decimalShift(value: unknown, places: number): string | null;
+export function decimalPercentChange(value: unknown, base: unknown, digits?: number): { value: string; exact: string; direction: -1 | 0 | 1 } | null;
+export function decimalPercentRatio(value: unknown, base: unknown): { numerator: bigint; denominator: bigint } | null;
+export function rationalPercent(numerator: bigint, denominator: bigint, digits?: number): { value: string; exact: string; direction: -1 | 0 | 1 } | null;
 export function fixed(value: unknown, digits?: number): string;
 export function signed(value: unknown, digits?: number): string;
 export function axis(value: number, digits?: number, plus?: boolean): string;
@@ -7,6 +11,9 @@ export function pnl(value: unknown, digits?: number): { text: string; tone: 'up'
 export function price(value: unknown): string;
 export function coin(value: unknown, asset?: string): string;
 export function pct(value: unknown, digits?: number): string;
+export type OwnerValueKind = 'usdc' | 'coin' | 'price' | 'pct' | 'bps' | 'signed' | 'pnl';
+export type OwnerDisplay = { text: string; exact: string | null; tone: 'up' | 'down' | 'zero' | 'none' };
+export function ownerDisplay(value: unknown, kind: OwnerValueKind, options?: { unit?: string; digits?: number }): OwnerDisplay;
 export function count(value: unknown): string;
 export function utc(ms: unknown, nowMs?: number): string | null;
 export function utcMin(ms: unknown, nowMs?: number): string | null;

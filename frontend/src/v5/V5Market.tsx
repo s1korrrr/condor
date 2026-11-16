@@ -7,15 +7,15 @@ import type { ChartSeries } from "@/features/quant-ops/kit/series";
 import { V5CandleStore } from "./V5CandleStore";
 import { readCandleStore } from "./candle-store-api";
 import type { CrossStats } from "./candle-store-model";
-import { selectedCohortCoverage } from "./evidence";
+import { cohortCoverageDisplay, selectedCohortCoverage } from "./evidence";
 import { V5MarketDetail, type DetailRead } from "./V5MarketDetail";
 import { V5MarketFeatures } from "./V5MarketFeatures";
 import { v5Api } from "./api";
-import { candleCurrent, hourlyReturns, marketHolding, marketSentence, windowChange } from "./market-header";
+import { candleCurrent, hourlyReturns, marketAverageTitle, marketHolding, marketSentence, windowChange } from "./market-header";
 import { readMarketPaper } from "./market-paper";
 import { usePaperClock } from "./usePaperClock";
 import { ageSeconds, breadth, coinTile, indexedReturns, laneHealthClass, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
-import { age as ageShort, axis, fixed, pct, price, signed, utcMin } from "./format.mjs";
+import { age as ageShort, axis, decimalShift, fixed, pct, price, rationalPercent, signed, utcMin } from "./format.mjs";
 import { tri, utcMinute } from "./shown.mjs";
 import "./market.css";
 
@@ -117,19 +117,19 @@ export function V5Market() {
         <span className={`v5m-chip ${feedCurrent ? "" : workspace.isError || refresh ? "is-warn" : "is-unknown"}`}><i />V5 feed <b>{feedCurrent ? "current" : workspace.isError ? "unavailable" : refresh ? "not current" : "no data"}</b></span>
       </div>
     </header>
-    <p className="v5m-summary">{marketSentence(changes, range)}</p>
+    <p className="v5m-summary" title={marketAverageTitle(changes)}>{marketSentence(changes, range)}</p>
 
     {coins.isPending && <p role="status" className="v5m-status">Reading {range} of candles for {MARKET_COINS.join(", ")}…</p>}
     {coins.isError && <p role="alert" className="v5m-status">Candle refresh failed: {coins.error.message}. Earlier prices are not shown.</p>}
     {failed.length > 0 && <p role="alert" className="v5m-status">No candles for {failed.map(coin => `${coin} (${reads[coin].error})`).join(", ")}. Those tiles are left out.</p>}
 
     <TileGrid label="Coins" min={200}>{tiles.map((tile, index) => tile ? <article key={tile.coin} className={`v5m-card v5m-coin is-clickable${selected === tile.coin ? " is-selected" : ""}`} role="button" tabIndex={0} aria-pressed={selected === tile.coin} aria-label={`${tile.coin}: open statistics, candles and venue detail`} onClick={() => select(tile.coin)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(tile.coin); } }}>
-      <div className="v5m-coin-top"><span className="v5m-sym"><i style={{ background: COIN_COLOR[tile.coin] }} />{tile.coin}</span><span className="v5m-change">{range} {changes[tile.coin] == null ? "—" : pct(changes[tile.coin])}</span></div>
-      <strong className="v5m-price">{current[tile.coin] ? `${price(tile.last)} ${REFERENCE.quote}` : "—"}</strong><small className={`v5m-asof${current[tile.coin] ? "" : " is-old"}`}>{current[tile.coin] ? "Close" : "— close not current"} · {minuteText(tile.lastTime + 60)} · {ageText(age(tile.coin, tile.lastTime))}</small>
+      <div className="v5m-coin-top"><span className="v5m-sym"><i style={{ background: COIN_COLOR[tile.coin] }} />{tile.coin}</span><span className="v5m-change" title={changes[tile.coin] == null ? undefined : `result ${changes[tile.coin]}%; first close ${reads[tile.coin]?.spot?.buckets[0]?.[4]}; last close ${reads[tile.coin]?.spot?.buckets.at(-1)?.[4]}`}>{range} {changes[tile.coin] == null ? "—" : pct(changes[tile.coin])}</span></div>
+      <strong className="v5m-price" title={current[tile.coin] ? String(tile.last) : undefined}>{current[tile.coin] ? `${price(tile.last)} ${REFERENCE.quote}` : "—"}</strong><small className={`v5m-asof${current[tile.coin] ? "" : " is-old"}`}>{current[tile.coin] ? "Close" : "— close not current"} · {minuteText(tile.lastTime + 60)} · {ageText(age(tile.coin, tile.lastTime))}</small>
       {changes[tile.coin] == null && <small className="v5m-asof">— {range} change: current boundary closes required.</small>}
       <SparkChart points={tile.spark} color={COIN_COLOR[tile.coin]} height={44} format={price} unit={REFERENCE.quote} ariaLabel={`${tile.coin} recorded prices, ${range}, breaks where minutes are missing`} />
       <HoldingLine holding={holdings[tile.coin]} error={paper.isError ? paper.error.message : null} now={now} />
-      <dl className="v5m-kv"><dt>Perpetual premium</dt><dd>{reads[tile.coin]?.perpetualError ? "— perpetual read failed" : tile.premiumBps == null || tile.premiumTime == null ? "— no paired closes" : (() => { const seconds = age(tile.coin, tile.premiumTime); return seconds == null || seconds > STALE_AFTER_S ? "— paired close not current" : `${signed(tile.premiumBps, 1)} bp · ${minuteText(tile.premiumTime + 60)} · ${ageText(seconds)}`; })()}</dd></dl>
+      <dl className="v5m-kv"><dt>Perpetual premium</dt><dd title={!reads[tile.coin]?.perpetualError && tile.premiumBps != null && tile.premiumTime != null && age(tile.coin, tile.premiumTime) != null && age(tile.coin, tile.premiumTime)! <= STALE_AFTER_S ? `result ${tile.premiumBps} bp; ${tile.premiumInputs}` : undefined}>{reads[tile.coin]?.perpetualError ? "— perpetual read failed" : tile.premiumBps == null || tile.premiumTime == null ? "— no paired closes" : (() => { const seconds = age(tile.coin, tile.premiumTime); return seconds == null || seconds > STALE_AFTER_S ? "— paired close not current" : `${signed(tile.premiumBps, 1)} bp · ${minuteText(tile.premiumTime + 60)} · ${ageText(seconds)}`; })()}</dd></dl>
     </article> : <article key={MARKET_COINS[index]} className="v5m-card v5m-coin is-empty"><span className="v5m-sym">{MARKET_COINS[index]}</span><strong className="v5m-price">—</strong><p>{coins.isPending ? "Loading…" : reads[MARKET_COINS[index]]?.error ? `Candle read failed: ${reads[MARKET_COINS[index]].error}` : `No closed minute in ${range}.`}</p><HoldingLine holding={holdings[MARKET_COINS[index]]} error={paper.isError ? paper.error.message : null} now={now} /></article>)}</TileGrid>
     {selected ? <V5MarketDetail key={selected} coin={selected} color={COIN_COLOR[selected]} onClose={() => setSelected(null)} tileRead={range === "24h" && coins.isSuccess && reads[selected]?.spot ? reads[selected] as unknown as DetailRead : null} /> : <p className="v5m-hint v5m-tip">Click a coin for its candles, minutes held and venue-by-venue price gaps.</p>}
 
@@ -163,7 +163,7 @@ export function V5Market() {
               const row = read.table?.find(item => item.venue === venue);
               if (!row || row.mean_bps == null || !row.n) return <td key={read.coin} className="is-none" title={read.error ? "read failed" : row ? "no minute compared" : "no row from the owner for this venue"}>—</td>;
               const bps = row.mean_bps, strength = Math.min(Math.abs(bps) / 12, 1) * 0.45;
-              return <td key={read.coin} className={`is-clickable${selected === read.coin ? " is-selected" : ""}`} onClick={() => select(read.coin)} title={`${venueName(venue)} ${row.pair}: mean ${signed(bps, 2)} bp over ${row.n} minutes · p95 |gap| ${row.p95_abs_bps == null ? "—" : fixed(row.p95_abs_bps, 1)} bp · click for ${read.coin} detail`} style={{ background: Math.abs(bps) < 0.5 ? undefined : `color-mix(in srgb, ${bps < 0 ? "var(--color-red)" : "var(--color-green)"} ${Math.round(strength * 100)}%, transparent)` }}>{signed(bps, 1)}</td>;
+              return <td key={read.coin} className={`is-clickable${selected === read.coin ? " is-selected" : ""}`} onClick={() => select(read.coin)} title={`${venueName(venue)} ${row.pair}: mean ${bps} bp over ${row.n} minutes · p95 |gap| ${row.p95_abs_bps == null ? "—" : row.p95_abs_bps} bp · click for ${read.coin} detail`} style={{ background: Math.abs(bps) < 0.5 ? undefined : `color-mix(in srgb, ${bps < 0 ? "var(--color-red)" : "var(--color-green)"} ${Math.round(strength * 100)}%, transparent)` }}>{signed(bps, 1)}</td>;
             })}</tr>)}</tbody></table>}
           <p className="v5m-hint">Green: above the median of venues, red: below. Quotes can differ (USDT, USD, USDC), so part of a gap can be the quote currency, not the venue.</p>
         </Card>
@@ -189,7 +189,7 @@ function HourStrip({ reads }: { reads: Record<string, CoinRead> }) {
     <tbody>{rows.map(({ coin, hours }) => <tr key={coin}><th scope="row">{coin}</th>{times.map(time => {
       const hour = hours.get(time), value = hour?.change ?? null;
       const label = value == null ? "— incomplete hour or missing minute" : pct(value);
-      return <td key={time} className={`v5m-hour${value == null ? " is-gap" : ""}`} title={`${coin} · ${utcMin(time * 1000)} – ${utcMin((time + 3600) * 1000)} · ${label}`} style={value == null ? undefined : { background: `color-mix(in srgb, ${COIN_COLOR.BTC} ${Math.min(85, 12 + Math.abs(Number(value)) * 15)}%, var(--color-surface))` }}>{value == null ? <span aria-label={label}>—</span> : label}</td>;
+      return <td key={time} className={`v5m-hour${value == null ? " is-gap" : ""}`} title={`${coin} · ${utcMin(time * 1000)} – ${utcMin((time + 3600) * 1000)} · ${label}${value == null ? "" : ` · result ${value}%; ${hour?.inputs}`}`} style={value == null ? undefined : { background: `color-mix(in srgb, ${COIN_COLOR.BTC} ${Math.min(85, 12 + Math.abs(Number(value)) * 15)}%, var(--color-surface))` }}>{value == null ? <span aria-label={label}>—</span> : label}</td>;
     })}</tr>)}</tbody>
   </table></div>;
 }
@@ -221,8 +221,8 @@ function systemCoverage(lanes: LaneTile[]) {
   if (values.some(value => value === null)) return null;
   const total = values.reduce<bigint>((sum, value) => sum + value!, 0n);
   const divisor = scale * BigInt(values.length);
-  const tenths = (total * 2000n + divisor) / (2n * divisor);
-  return `${tenths / 10n}.${tenths % 10n}%`;
+  const result = rationalPercent(total * 100n, divisor, 1);
+  return result ? { text: `${fixed(result.value, 1)}%`, exact: `exact mean of ${lanes.map(lane => lane.coverage_7d).join(', ')} = ${result.exact}` } : null;
 }
 
 export function V5SystemMarket({ tab, paused }: { tab: 'data-feeds' | 'engine-inputs'; paused: boolean }) {
@@ -250,10 +250,10 @@ export function V5SystemMarket({ tab, paused }: { tab: 'data-feeds' | 'engine-in
     <Card title="Venue coverage" hint="Pairs held of listed · 24-hour candle coverage · age of newest minute">{!configured ? <p>— · Candle store is not configured.</p> : !storeCurrent ? <p>— · {invalidLanes ? 'Candle store lane data is invalid: expected an array of lane records.' : summary.isError ? `Candle store read failed: ${summary.error.message}` : 'Candle store data is not current or has not arrived.'}</p> : <div className="v5m-venues"><span>Venue</span><span>Spot</span><span>Perpetual</span>{venueGrid(lanes).map(row => <Venue key={row.venue} row={row} elapsedSeconds={Math.max(0, now - summary.dataUpdatedAt) / 1000} />)}</div>}</Card>
     <Card title="Candle store health" hint="One store feeds V5, Helm and research"><div className="v5m-stats">
       <Stat label="Lanes available" value={!storeCurrent || !lanes.length || lanesUnknown ? '—' : `${lanes.filter(lane => lane.available === true).length}/${lanes.length}`} note={!storeCurrent ? 'Store data not current' : !lanes.length ? 'No lanes reported' : lanesUnknown ? `${lanesUnknown} lanes unreported` : 'reported lanes'} />
-      <Stat label="7-day coverage" value={coverage ?? '—'} note={coverage === null ? 'A lane is unavailable or 7-day coverage is missing or invalid' : 'mean of all reported lanes'} />
+      <Stat label="7-day coverage" value={coverage?.text ?? '—'} title={coverage?.exact} note={coverage === null ? 'A lane is unavailable or 7-day coverage is missing or invalid' : 'mean of all reported lanes'} />
       <Stat label="Missing minutes, 7 days" value={gaps ?? '—'} note={gaps == null ? 'A lane is unavailable or gaps were not reported' : 'all reported lanes'} />
       <Stat label="Slowest lane" value={slowestAge == null ? '—' : `${Math.round(slowestAge)} s`} note={slowestAge == null ? 'Age not reported or not current' : 'since its newest final minute closed'} />
-    </div><h3 className="v5m-subhead">V5 market-context feed</h3><p className="v5m-hint">Last success: {systemTime(refresh?.last_success_at_ms, now)}</p>{!cohort ? <p>— · Feed data is not current or was not reported.</p> : <div className="v5m-stats">{cohort.dimensions.map(item => <Stat key={item.key} label={item.label} value={item.valid == null || item.expected == null ? '—' : `${item.valid}/${item.expected}`} note={item.fraction == null ? 'not qualified' : `${(item.fraction * 100).toFixed(0)}% this minute`} />)}</div>}</Card>
+    </div><h3 className="v5m-subhead">V5 market-context feed</h3><p className="v5m-hint">Last success: {systemTime(refresh?.last_success_at_ms, now)}</p>{!cohort ? <p>— · Feed data is not current or was not reported.</p> : <div className="v5m-stats">{cohort.dimensions.map(item => { const shown = cohortCoverageDisplay(item, 0); return <Stat key={item.key} label={item.label} value={item.valid == null || item.expected == null ? '—' : `${item.valid}/${item.expected}`} title={shown?.exact} note={shown ? `${shown.text} this minute` : 'not qualified'} />; })}</div>}</Card>
   </div></Section></div>;
 }
 
@@ -268,9 +268,9 @@ function ReturnBars({ tiles, range, selected, onSelect }: { tiles: { coin: strin
 }
 
 function Venue({ row, elapsedSeconds }: { row: ReturnType<typeof venueGrid<LaneTile>>[number]; elapsedSeconds: number }) {
-  const cell = (lane: LaneTile | null) => lane ? <span className="v5m-lane" title={`${lane.lane} · 7-day coverage ${lane.available === true && typeof lane.coverage_7d === 'number' && Number.isFinite(lane.coverage_7d) && lane.coverage_7d >= 0 && lane.coverage_7d <= 1 ? `${(lane.coverage_7d * 100).toFixed(1)}%` : 'not reported or unavailable'} · missing minutes ${lane.available === true && Number.isSafeInteger(lane.gaps_7d) && lane.gaps_7d! >= 0 ? lane.gaps_7d : 'not reported or unavailable'}${lane.unavailable_reason ? ` · ${lane.unavailable_reason}` : ""}`}>
+  const cell = (lane: LaneTile | null) => lane ? <span className="v5m-lane" title={`${lane.lane} · 7-day coverage ${lane.available === true && typeof lane.coverage_7d === 'number' && Number.isFinite(lane.coverage_7d) && lane.coverage_7d >= 0 && lane.coverage_7d <= 1 ? `${fixed(decimalShift(lane.coverage_7d, 2), 1)}%` : 'not reported or unavailable'} · missing minutes ${lane.available === true && Number.isSafeInteger(lane.gaps_7d) && lane.gaps_7d! >= 0 ? lane.gaps_7d : 'not reported or unavailable'}${lane.available === true && lane.coverage_7d != null ? ` · exact 7-day fraction ${lane.coverage_7d}` : ''}${lane.unavailable_reason ? ` · ${lane.unavailable_reason}` : ""}`}>
     <span className={laneHealthClass(lane.health)} title={`Owner health: ${lane.health ?? "not reported"} · ${tri(lane.available, "available", "unavailable", "availability not reported")}`}>{lane.available === true && Number.isSafeInteger(lane.pairs_held) && Number.isSafeInteger(lane.pairs_listed) && lane.pairs_held! >= 0 && lane.pairs_listed! >= 0 ? `${lane.pairs_held}/${lane.pairs_listed}` : `— · ${lane.available === false ? 'lane unavailable' : lane.available === true ? 'pair counts not reported' : 'availability not reported'}`}</span>
-    <span>{lane.available !== true || lane.coverage_24h == null || !Number.isFinite(lane.coverage_24h) ? '— · coverage not current' : `${(lane.coverage_24h * 100).toFixed(0)}%`}</span>
+    <span title={lane.available === true && lane.coverage_24h != null && Number.isFinite(lane.coverage_24h) ? String(lane.coverage_24h) : undefined}>{lane.available !== true || lane.coverage_24h == null || !Number.isFinite(lane.coverage_24h) ? '— · coverage not current' : `${fixed(decimalShift(lane.coverage_24h, 2), 0)}%`}</span>
     <span className="v5m-muted">{lane.available !== true || lane.last_minute_age_s == null || !Number.isFinite(lane.last_minute_age_s) || lane.last_minute_age_s < 0 ? '— · age not current' : `${Math.round(lane.last_minute_age_s + elapsedSeconds)} s`}</span>
   </span> : <span className="v5m-lane is-none">— · lane not reported</span>;
   return <><span className="v5m-venue">{venueName(row.venue)}</span>{cell(row.spot)}{cell(row.perpetual)}</>;

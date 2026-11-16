@@ -16,12 +16,19 @@ const formatted = (item: unknown) => {
   return result === '—' ? value(item) : result;
 };
 const numericFields = new Set(['last', 'lastSz', 'bidPx', 'askPx', 'bidSz', 'askSz', 'open24h', 'high24h', 'low24h', 'vol24h', 'volCcy24h', 'sodUtc0', 'sodUtc8', 'markPx', 'idxPx', 'fundingRate', 'nextFundingRate', 'oi', 'oiCcy', 'oiUsd', 'px', 'sz', 'ctVal', 'ctMult', 'tickSz', 'lotSz', 'minSz', 'maxLmtSz', 'maxMktSz']);
+const recordFields = new Set([...numericFields, 'latest', 'ticker', 'mark_price', 'index_price', 'funding', 'open_interest', 'books', 'recent_trades', 'book_depth', 'region', 'instId', 'instType', 'instCategory', 'state', 'ruleType', 'baseCcy', 'quoteCcy', 'settleCcy', 'uly', 'ctValCcy', 'listTime', 'expTime', 'dataset', 'event_time_ms', 'received_at_ms', 'source', 'data', 'action', 'projection', 'bids', 'asks', 'tradeId', 'side']);
 const formattedRecord = (item: unknown) => JSON.stringify(item, function (key, entry) {
   if (Array.isArray(this)) return entry;
+  if (key && !recordFields.has(key)) return undefined;
   if ((key === 'bids' || key === 'asks') && Array.isArray(entry)) return entry.map(level => Array.isArray(level) ? level.map((part, index) => index < 2 ? formatted(part) : part) : level);
   return numericFields.has(key) && entry != null && (typeof entry === 'string' || typeof entry === 'number') && price(entry) !== '—' ? formatted(entry) : entry;
 }, 2);
 const readable = (state: string) => state === 'live' || state === 'stale';
+
+function StockRecord({ record }: { record: unknown }) {
+  const exact = JSON.stringify(record, null, 2);
+  return <><pre className="v5-stock-json" title={exact}>{formattedRecord(record)}</pre><details><summary>Exact record · as sent</summary><pre className="v5-stock-json">{exact}</pre></details></>;
+}
 
 function metadataTime(stamp: unknown) {
   if (typeof stamp !== 'string' || !/^\d+$/.test(stamp)) return 'Unavailable';
@@ -72,7 +79,7 @@ function InstrumentMetadata({ instrument }: { instrument: StockInstrument }) {
     <div><dt>Tick / lot / minimum size</dt><dd title={`${value(instrument.tickSz)} / ${value(instrument.lotSz)} / ${value(instrument.minSz)}`}>{formatted(instrument.tickSz)} / {formatted(instrument.lotSz)} / {formatted(instrument.minSz)}</dd></div>
     <div><dt>Listed (UTC)</dt><dd>{metadataTime(instrument.listTime)}</dd></div>
     <div><dt>Expiry (UTC)</dt><dd>{spot || instrument.instType === 'SWAP' ? 'Not applicable' : metadataTime(instrument.expTime)}</dd></div>
-  </dl><details><summary>All public instrument fields</summary><pre className="v5-stock-json" title={JSON.stringify(instrument, null, 2)}>{formattedRecord(instrument)}</pre></details></details>;
+  </dl><details><summary>All public instrument fields</summary><StockRecord record={instrument} /></details></details>;
 }
 
 function NotCaptured({ region, instrument }: { region: StockRegion; instrument: StockInstrument }) {
@@ -175,7 +182,7 @@ export function V5Stocks({ configured, profilePending = false, profileError = nu
             <details className="v5-stock-details"><summary>Public order book{book && detail.book_depth ? ` · ${detail.book_depth.bids} bids / ${detail.book_depth.asks} asks` : ' · unavailable'}</summary><p className="v5-stock-caption">Up to 50 levels per side from the recorded standard public book. Size is {instrument.instType === 'SPOT' ? 'in the base asset' : 'in derivative contracts'}. A stream gap removes the current book until a new snapshot arrives.</p><DataTable rows={depthRows(book)} columns={depthColumns} rowId={row => `${row.side}/${row.index}`} label="Selected stock public order book" emptyText="No continuous public order book is available." /></details>
             <details className="v5-stock-details"><summary>Recent captured trades · {trades.length}</summary><p className="v5-stock-caption">Up to 50 captured observations; this is not a complete historical trade record. Size is {instrument.instType === 'SPOT' ? 'in the base asset' : 'in derivative contracts'}.</p><DataTable rows={trades} columns={tradeColumns} rowId={(event, index) => `${event.received_at_ms}/${index}`} label="Selected stock recent trades" emptyText="Recent trade observations are unavailable." /></details>
             <details className="v5-stock-details"><summary>Channel freshness and coverage</summary><DataTable rows={Object.entries(detail.channels).map(([name, channel]) => ({ name, ...channel }))} columns={channelColumns} rowId={row => row.name} label="Selected stock channel freshness" emptyText="No channel status is available." /><p className="v5-stock-caption">Recorded candles: {utc(detail.coverage.candle_start)} through {utc(detail.coverage.candle_end)}. Funding settlement times in source records describe settlement, not observation freshness.</p></details>
-            <details className="v5-stock-details"><summary>All recorded market fields</summary><p className="v5-stock-caption">Public source fields for the selected instrument; exact decimal strings are in the title. Unavailable channels are null. Books are the bounded display projection, and trades are the recent captured observations shown above.</p><pre className="v5-stock-json" title={JSON.stringify({ latest: Object.fromEntries((['ticker', 'mark_price', 'index_price', 'funding', 'open_interest', 'books'] as const).map(dataset => [dataset, publicObservation(detail, dataset, market.isError, nowMs)])), recent_trades: trades, book_depth: book ? detail.book_depth : null }, null, 2)}>{formattedRecord({ latest: Object.fromEntries((['ticker', 'mark_price', 'index_price', 'funding', 'open_interest', 'books'] as const).map(dataset => [dataset, publicObservation(detail, dataset, market.isError, nowMs)])), recent_trades: trades, book_depth: book ? detail.book_depth : null })}</pre></details>
+            <details className="v5-stock-details"><summary>All recorded market fields</summary><p className="v5-stock-caption">Public source fields for the selected instrument; exact decimal strings are in the title. Unavailable channels are null. Books are the bounded display projection, and trades are the recent captured observations shown above.</p><StockRecord record={{ latest: Object.fromEntries((['ticker', 'mark_price', 'index_price', 'funding', 'open_interest', 'books'] as const).map(dataset => [dataset, publicObservation(detail, dataset, market.isError, nowMs)])), recent_trades: trades, book_depth: book ? detail.book_depth : null }} /></details>
           </section>}
         </>}
         <InstrumentMetadata instrument={instrument} />

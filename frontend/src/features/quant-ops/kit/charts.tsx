@@ -1,6 +1,6 @@
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ReferenceArea, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { formatDecimal, formatSigned } from '../format';
+import { axis, ownerDisplay, signed as formatSigned } from '@/v5/format.mjs';
 import { CHART, dayTicks, markerLayout, projectTimeSeries, roundedAxis, seriesInRange, timeTick, valueAt, valueExtent, zoomSelection, type ChartMarker, type ChartSeries, type SeriesPoint } from './series';
 import './kit.css';
 
@@ -10,21 +10,30 @@ import './kit.css';
  * each series held at the hovered time, and says when that sample is older than the cursor.
  */
 
-const plain = (value: number) => formatDecimal(value);
+export const chartAxis = (value: number, withSign = false) => axis(value, 2, withSign);
+const plain = (value: number) => chartAxis(value);
 const utc = (time: number, withDate = true) => new Date(time).toLocaleString('en-GB', { timeZone: 'UTC', ...(withDate ? { month: 'short', day: 'numeric' } : {}), hour: '2-digit', minute: '2-digit' });
 
-export function TooltipCard({ title, rows }: { title: string; rows: { key: string; label: string; color: string; value: string; note?: string; tone?: string }[] }) {
+export function TooltipCard({ title, rows }: { title: string; rows: { key: string; label: string; color: string; value: string; exact?: string; note?: string; tone?: string }[] }) {
   return <div className="q-tooltip">
     <p className="q-tooltip__title">{title}</p>
     {rows.map(row => <p key={row.key} className="q-tooltip__row">
-      <i style={{ background: row.color }} /><span>{row.label}</span><strong className={row.tone}>{row.value}</strong>
+      <i style={{ background: row.color }} /><span>{row.label}</span><strong className={row.tone} title={row.exact}>{row.value}</strong>
       {row.note && <small>{row.note}</small>}
     </p>)}
   </div>;
 }
 
 
-const toneClass = (value: number | null, signed: boolean) => !signed || value == null || value === 0 ? undefined : value > 0 ? 'q-positive' : 'q-negative';
+export const chartTone = (text: string, signed: boolean) => {
+  if (!signed) return undefined;
+  const token = text.match(/[−+-]?\d[\d,]*(?:\.\d+)?/)?.[0];
+  if (!token) return undefined;
+  const normalized = token.replaceAll(',', '').replace('−', '-');
+  const digits = normalized.split('.')[1]?.length ?? 0;
+  const tone = ownerDisplay(normalized, 'signed', { digits }).tone;
+  return tone === 'up' ? 'q-positive' : tone === 'down' ? 'q-negative' : undefined;
+};
 
 /** Hoverable multi-series time chart with left/right axes, gap-preserving lines and optional markers. */
 export function TimeSeriesChart({ series, height = 220, markers = [], highlight, domains, timeDomain, leftFormat = plain, rightFormat = plain, leftTickFormat, zeroLine = false, includeZero = false, signed = false, ariaLabel, emptyText = 'No observations in this window.', zoom = null, onZoom }: {
@@ -97,7 +106,8 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
               if (!sample) return [];
               const format = item.format ?? (item.axis === 'secondary' ? rightFormat : leftFormat);
               const lag = label - sample.time;
-              return [{ key: item.id, label: item.label, color: item.color, value: sample.value === null ? 'Gap' : `${format(sample.value)}${item.unit ? ` ${item.unit}` : ''}`, tone: toneClass(sample.value, signed || item.axis === 'secondary'), note: sample.value !== null && lag > 0 ? `as of ${utc(sample.time, span > 86_400_000)}` : undefined }];
+              const text = sample.value === null ? 'Gap' : item.format ? item.format(sample.value, sample.exact) : format(sample.value);
+              return [{ key: item.id, label: item.label, color: item.color, value: sample.value === null ? text : `${text}${item.unit ? ` ${item.unit}` : ''}`, exact: sample.exact ?? (sample.value == null ? undefined : String(sample.value)), tone: chartTone(text, signed || item.axis === 'secondary'), note: sample.value !== null && lag > 0 ? `as of ${utc(sample.time, span > 86_400_000)}` : undefined }];
             });
             const marker = markers.find(item => Math.abs(item.time - label) <= span / 200);
             return <TooltipCard title={`${utc(label)} UTC${marker ? ` · ${marker.label}` : ''}`} rows={rows} />;
@@ -120,9 +130,9 @@ export type BarSpec = {
 };
 
 /** Hoverable category bars (days, bins) with an optional line on its own axis. Missing values stay empty. */
-export function BarsChart({ rows, bars, line, height = 160, format = formatSigned, tickFormat, signed = true, integer = false, unit, ariaLabel, emptyText = 'No values to plot.' }: {
+export function BarsChart({ rows, bars, line, height = 160, format = (value, exact) => formatSigned(exact ?? value), tickFormat, signed = true, integer = false, unit, ariaLabel, emptyText = 'No values to plot.' }: {
   rows: ({ label: string } & Record<string, number | string | null>)[]; bars: BarSpec[]; line?: { id: string; label: string; color: string } | null;
-  height?: number; format?: (value: number) => string; unit?: string; ariaLabel: string; emptyText?: ReactNode;
+  height?: number; format?: (value: number, exact?: string) => string; unit?: string; ariaLabel: string; emptyText?: ReactNode;
   /** Axis labels from the rounded tick step; tooltips keep `format`. */
   tickFormat?: (value: number, step: number, ticks: number[]) => string;
   /** Counts: whole-number axis ticks only. */
@@ -153,7 +163,9 @@ export function BarsChart({ rows, bars, line, height = 160, format = formatSigne
             return <TooltipCard title={String(label)} rows={specs.flatMap(spec => {
               const value = row[spec.id];
               if (typeof value !== 'number') return [];
-              return [{ key: spec.id, label: spec.label, color: 'colorFor' in spec && spec.colorFor?.(row) || (spec.signColors ? (value >= 0 ? CHART.positive : CHART.negative) : spec.color), value: `${format(value)}${unit ? ` ${unit}` : ''}`, tone: toneClass(value, signed) }];
+              const exact = typeof row[`${spec.id}Exact`] === 'string' ? row[`${spec.id}Exact`] as string : undefined;
+              const text = format(value, exact);
+              return [{ key: spec.id, label: spec.label, color: 'colorFor' in spec && spec.colorFor?.(row) || (spec.signColors ? (value >= 0 ? CHART.positive : CHART.negative) : spec.color), value: `${text}${unit ? ` ${unit}` : ''}`, exact, tone: chartTone(text, signed) }];
             })} />;
           }} />
         {bars.map(bar => <Bar key={bar.id} yAxisId="left" dataKey={bar.id} name={bar.label} fill={bar.color} radius={[2, 2, 2, 2]} maxBarSize={28} isAnimationActive={false}>

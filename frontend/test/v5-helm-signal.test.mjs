@@ -96,8 +96,8 @@ test('RSI below or on the line needs a rise, never a back-solved price or inferr
 });
 
 test('RSI distances and ATR comparisons retain all thirty decimal places without floating point', () => {
-  assert.equal(row(signal({ rsi: '29.000000000000000000000000000001' })).rsi, 'RSI 29, 1e−30 points above the line');
-  assert.equal(row(signal({ rsi: '28.999999999999999999999999999999' })).rsi, 'RSI 29, 1e−30 points below the line: a buy needs RSI to rise above 29');
+  assert.equal(row(signal({ rsi: '29.000000000000000000000000000001' })).rsi, 'RSI 29, 0 points above the line');
+  assert.equal(row(signal({ rsi: '28.999999999999999999999999999999' })).rsi, 'RSI 29, 0 points below the line: a buy needs RSI to rise above 29');
   assert.match(row(signal({ atr_fraction: '0.010000000000000000000000000001' })).atr, /above the/);
   assert.match(row(signal({ atr_fraction: '0.000199999999999999999999999999' })).atr, /below the/);
 });
@@ -105,7 +105,7 @@ test('RSI distances and ATR comparisons retain all thirty decimal places without
 test('signal ages use shared whole units and holdings carry the base asset', () => {
   assert.equal(row(signal({ at: nowS - 180 })).sample, '6 Nov 01:48 UTC · 3 min ago · stale');
   const shown = row(signal(), {}, { pair: 'BTC-USDC', bag: { held_amount: '0.000000000000000000000000000001', breakeven_price: '123456.78' } });
-  assert.equal(shown.held, '1e−30 BTC');
+  assert.equal(shown.held, '0 BTC');
   assert.equal(shown.breakeven, '123,457');
 });
 

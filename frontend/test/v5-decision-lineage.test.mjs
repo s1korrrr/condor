@@ -32,3 +32,9 @@ test('revised lifecycle and structured unknown usage stay explicit, including no
   assert.match(markup, /Unknown \/ Unknown \/ Unknown/);
   assert.doesNotMatch(markup, /\[object Object\]/);
 });
+
+test('workflow cost is rounded while its owner value remains reachable', () => {
+  const jobs = [{ job_id: 'job-1', attempt_id: 'attempt-1', owner_state: 'OUTPUT_PENDING', state_history: [], usage: { state: 'KNOWN', calls: 1, input_tokens: 1, output_tokens: 1, duration_ms: 1000, money: { value: '198961.17077127617', quote_currency: 'USDC' } }, reservation: { max_calls: 2, duration_ms: 1000 }, replay_allowed: false }];
+  const markup = render(DecisionLineagePanel, { data: { status: 'FIXTURE_ONLY', effect: 'NONE', jobs } });
+  assert.match(markup, /title="198961\.17077127617"[^>]*>198,961\.17 USDC<\/span> \/ 1000 ms/);
+});

@@ -1,6 +1,6 @@
 import { PAPER_SNAPSHOT_FRESH_MS, paperAge, paperTimestampIssue } from './snapshot-presentation.ts';
 import { paperOpaqueClockNumber } from './paper-json.ts';
-import { usdc } from './format.mjs';
+import { decimalPercentRatio, fixed, usdc } from './format.mjs';
 
 export interface ReportPermissionInput {
   agentReady: boolean;
@@ -274,13 +274,8 @@ export function paperWords(value: unknown): string {
 
 export function paperAmount(value: unknown, unit: string, places = 4): string {
   if (typeof value !== "string" || !/^-?\d+(\.\d+)?$/.test(value) || value.length > 128) return "Not published";
-  const negative = value.startsWith("-");
-  const [whole, fraction = ""] = value.replace(/^-/, "").split(".");
-  const digits = fraction.padEnd(places + 1, "0");
-  const scaled = BigInt(whole + digits.slice(0, places)) + (digits[places] >= "5" ? 1n : 0n);
-  const rounded = scaled.toString().padStart(places + 1, "0");
-  const integer = places ? rounded.slice(0, -places) : rounded;
-  return `${negative && scaled !== 0n ? "−" : ""}${integer.replace(/\B(?=(\d{3})+(?!\d))/g, ",")}${places ? "." + rounded.slice(-places) : ""} ${unit}`;
+  const shown = fixed(value, places);
+  return `${/^0(?:\.0+)?$/.test(shown) ? "0" : shown} ${unit}`;
 }
 
 export function paperExactAmount(value: unknown, unit: string): string {
@@ -370,13 +365,15 @@ function paperNativeRails(risk: import("./contracts").PaperRiskData | null): Rec
     const limits = native.configured_limits && typeof native.configured_limits === "object" ? native.configured_limits as Record<string, unknown> : {};
     const complete = native.complete === true;
     const used = complete && paperDecimal(native.marked_exposure) ? native.marked_exposure : null;
-    const limit = complete && paperDecimal(limits.pair_quote) && Number(limits.pair_quote) > 0 ? limits.pair_quote : null;
+    const limit = complete && paperDecimal(limits.pair_quote) && decimalPercentRatio(limits.pair_quote, limits.pair_quote) ? limits.pair_quote : null;
+    const ratio = used !== null && limit !== null ? decimalPercentRatio(used, limit) : null;
+    const usedPercent = ratio && ratio.numerator >= -100n * ratio.denominator && ratio.numerator <= 0n ? 100 + Number(ratio.numerator) / Number(ratio.denominator) : null;
     const latch = native.latched === true ? "Yes" : native.latched === false ? "No" : "Not published";
     return {
       label: `${id} marked exposure`,
       used_quote: used,
       limit_quote: limit,
-      used_percent: used !== null && limit !== null ? Number(used) / Number(limit) * 100 : null,
+      used_percent: usedPercent,
       note: complete
         ? `Pair cap ${paperDecimal(limits.pair_quote) ? usdc(limits.pair_quote) : "Not published"} · program cap ${paperDecimal(limits.program_quote) ? usdc(limits.program_quote) : "Not published"} · reserved admission ${paperAmount(native.reserved_admission, "USDC")} · daily loss use ${paperAmount(native.daily_loss_use, "USDC")} · drawdown use ${paperAmount(native.drawdown_use, "USDC")} · native entry latch: ${latch} (${paperWords(native.reason)})`
         : `Native risk evidence incomplete: ${paperWords(native.stale_reason ?? native.reason ?? "not published")}. No use is inferred.`,

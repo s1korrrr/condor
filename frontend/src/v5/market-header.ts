@@ -1,5 +1,5 @@
 import type { PaperRead } from './contracts';
-import { coin as formatCoin, pct } from './format.mjs';
+import { coin as formatCoin, decimalPercentChange, pct } from './format.mjs';
 import { ageSeconds, MARKET_COINS, STALE_AFTER_S, type CandleRead } from './market-model.mjs';
 import { paperCompleteRead, paperPairBag, paperPairHoldings, paperSectionError, paperSnapshotsAgree } from './policy.ts';
 
@@ -39,6 +39,39 @@ export function windowChange(read: CandleRead | null | undefined): string | null
   return first?.[6] === 1 && last?.[6] === 1 && first[4] != null && last[4] != null ? change(last[4], first[4]) : null;
 }
 
+export function marketAverageTitle(changes: Record<string, string | null>): string | undefined {
+  const measured = MARKET_COINS.flatMap(coin => {
+    const value = decimal(changes[coin]);
+    return value === null ? [] : [{ coin, value, text: changes[coin]! }];
+  });
+  if (!measured.length) return undefined;
+  const sum = measured.reduce((total, row) => total + row.value, 0n);
+  let numerator = sum < 0n ? -sum : sum;
+  let denominator = BigInt(measured.length) * SCALE;
+  let left = numerator, right = denominator;
+  while (right !== 0n) [left, right] = [right, left % right];
+  numerator /= left;
+  denominator /= left;
+  let factors = denominator;
+  while (factors % 2n === 0n) factors /= 2n;
+  while (factors % 5n === 0n) factors /= 5n;
+  const sign = sum < 0n ? '−' : '';
+  let exact: string;
+  if (factors !== 1n) exact = `${sign}${numerator}/${denominator}% (non-terminating decimal)`;
+  else {
+    const whole = numerator / denominator;
+    let remainder = numerator % denominator;
+    let fraction = '';
+    while (remainder) {
+      remainder *= 10n;
+      fraction += String(remainder / denominator);
+      remainder %= denominator;
+    }
+    exact = `${sign}${whole}${fraction ? `.${fraction}` : ''}%`;
+  }
+  return `${measured.map(row => `${row.coin} ${row.text}%`).join(', ')} · exact average ${exact}`;
+}
+
 export function marketSentence(changes: Record<string, string | null>, range: string): string {
   const measured = MARKET_COINS.flatMap(coin => {
     const value = decimal(changes[coin]);
@@ -58,15 +91,15 @@ export function marketSentence(changes: Record<string, string | null>, range: st
   return `${direction} over ${period}, on average ${pct(mean)}.${extreme ? ` ${extreme}` : ''}${missing.length ? ` ${missing.join(', ')}: — change not published; excluded from the average.` : ''}`;
 }
 
-export function hourlyReturns(read: CandleRead | null | undefined): { from: number; to: number; change: string | null }[] {
+export function hourlyReturns(read: CandleRead | null | undefined): { from: number; to: number; change: string | null; inputs?: string }[] {
   if (!read?.buckets.length) return [];
   const byTime = new Map(read.buckets.map(row => [row[0], row]));
-  const result: { from: number; to: number; change: string | null }[] = [];
+  const result: { from: number; to: number; change: string | null; inputs?: string }[] = [];
   for (let from = Math.floor(read.start / 3600) * 3600; from <= read.end; from += 3600) {
     const to = from + 3600;
     const rows = Array.from({ length: 61 }, (_, index) => byTime.get(from - 60 + index * 60));
     const complete = rows.every(row => row?.[6] === 1 && row[4] != null);
-    result.push({ from, to, change: complete ? change(rows[60]![4]!, rows[0]![4]!) : null });
+    result.push({ from, to, change: complete ? change(rows[60]![4]!, rows[0]![4]!) : null, ...(complete ? { inputs: `first close ${rows[0]![4]}; last close ${rows[60]![4]}` } : {}) });
   }
   return result;
 }
@@ -89,5 +122,7 @@ export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot:
   else if (decimal(bag.breakevenPrice) == null || decimal(bag.breakevenPrice)! <= 0n) reason = 'Owner breakeven is not published.';
   else gap = change(last, bag.breakevenPrice!, 1);
   if (!gap && !reason) reason = 'A complete price comparison is unavailable.';
-  return { text: `V5 holds ${formatCoin(holdings.total)} · ${gap ? pct(gap, 1) : '—'} to breakeven`, exact: holdings.total, reason, asOf: positions.generated_at_ms };
+  const comparison = gap && last != null ? decimalPercentChange(last, bag?.breakevenPrice, 1) : null;
+  const exact = comparison ? `holding ${holdings.total} · (${last} − ${bag!.breakevenPrice}) × 100 / ${bag!.breakevenPrice} = ${comparison.exact}` : holdings.total;
+  return { text: `V5 holds ${formatCoin(holdings.total)} · ${gap ? pct(gap, 1) : '—'} to breakeven`, exact, reason, asOf: positions.generated_at_ms };
 }

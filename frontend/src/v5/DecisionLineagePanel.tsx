@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { DataTable } from '../features/quant-ops/kit/DataTable';
 import { EvidenceList, ProjectionClock, ProjectionNotice, UtcTime } from './LearningPanel';
 import { learningRead } from './api';
+import { OwnerValue } from './OwnerValue';
 import type { ResearchProjection } from './ResearchFactoryPanel';
 
 export function DecisionLineagePanel({ data, error }: { data?: ResearchProjection; error?: string }) {
@@ -14,7 +15,7 @@ export function DecisionLineagePanel({ data, error }: { data?: ResearchProjectio
       { id: 'history', header: 'State history', value: row => row.state_history.join(' → '), wrap: true },
       { id: 'usage', header: 'Usage state', value: row => row.usage.state },
       { id: 'calls', header: 'Calls / input / output tokens', value: row => [row.usage.calls, row.usage.input_tokens, row.usage.output_tokens].map(value => value ?? 'Unknown').join(' / ') },
-      { id: 'cost', header: 'Cost / duration', value: row => `${row.usage.money ? `${row.usage.money.value} ${row.usage.money.quote_currency}` : 'Unknown'} / ${row.usage.duration_ms == null ? 'Unknown' : `${row.usage.duration_ms} ms`}` },
+      { id: 'cost', header: 'Cost / duration', value: row => `${row.usage.money ? `${row.usage.money.value} ${row.usage.money.quote_currency}` : 'Unknown'} / ${row.usage.duration_ms == null ? 'Unknown' : `${row.usage.duration_ms} ms`}`, cell: row => <>{row.usage.money ? <OwnerValue value={row.usage.money.value} kind="usdc" unit={row.usage.money.quote_currency} /> : 'Unknown'} / {row.usage.duration_ms == null ? 'Unknown' : `${row.usage.duration_ms} ms`}</> },
       { id: 'reserved', header: 'Reserved calls / duration', value: row => `${row.reservation.max_calls} / ${row.reservation.duration_ms == null ? 'Unknown' : `${row.reservation.duration_ms} ms`}` },
       { id: 'reservation-state', header: 'Reservation state', value: row => row.reservation_state ?? 'Unknown' },
       { id: 'resolution', header: 'No-dispatch owner proof', value: row => row.dispatch_resolution_ref?.record_id ?? 'Not reported', cell: row => <EvidenceList refs={row.dispatch_resolution_ref ? [row.dispatch_resolution_ref] : []} empty="Not reported" />, wrap: true },

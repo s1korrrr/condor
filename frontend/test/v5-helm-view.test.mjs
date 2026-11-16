@@ -61,3 +61,13 @@ test('page statistics, counts, holdings and UTC times retain shared formatter ou
   assert.equal(held.match(/640\.00/g)?.length, 2);
   assert.doesNotMatch(held, /0\.12345678901234567890|640\.000001/);
 });
+
+test('rounded Helm figures retain exact owner inputs and RSI distance', context => {
+  context.mock.method(Date, 'now', () => 1793929900000);
+  const html = render({ signal: { at: 1793929890, rsi: '28.9999999', oversold: '29', rsi_length: 17 }, extra: {
+    risk: { daily_loss_use: '-0.004', risk_reference_quote: '200.00001', unit: 'USDC' },
+  } });
+  assert.match(html, /title="-0\.004"[^>]*><span>Daily loss used<\/span><strong>0\.00<\/strong>/);
+  assert.match(html, /title="RSI 28\.9999999 − line 29 = −0\.0000001"[^>]*>RSI 29, 0 points below the line/);
+  assert.match(html, /title="200\.00001"/);
+});

@@ -20,7 +20,7 @@ export function V5MarketFeatures({ features }: { features: Features }) {
 
 function FeatureTile({ row, open, onToggle }: { row: FeatureRow; open: boolean; onToggle: () => void }) {
   const qualified = row.status === "QUALIFIED";
-  return <button type="button" className={`v5m-feature${qualified ? "" : " is-unqualified"}${open ? " is-open" : ""}`} aria-expanded={open} onClick={onToggle} title={`${row.id} · ${row.unit} · ${row.status}`}>
+  return <button type="button" className={`v5m-feature${qualified ? "" : " is-unqualified"}${open ? " is-open" : ""}`} aria-expanded={open} onClick={onToggle} title={`${row.id} · ${row.unit} · ${row.status}${qualified && row.value != null ? ` · exact ${row.value}` : ""}`}>
     <span className="v5m-feature-label">{row.label}</span>
     <strong>{qualified ? row.text : `— · ${row.status.toLowerCase().replaceAll("_", " ")}`}</strong>
     {open && <span className="v5m-feature-meta">{row.id} · unit {row.unit || "none"} · {row.status.toLowerCase()}</span>}

@@ -65,6 +65,14 @@ test('native per-controller rails are shown when the owner publishes no flat rai
   assert.deepEqual([paperRiskUsage(incomplete, now)[0].used_quote, paperRiskUsage(incomplete, now)[0].used_percent], [null, null], 'incomplete native risk infers no use');
 });
 
+test('native exposure just over the cap is not rendered as a full bar', () => {
+  const risk = structuredClone(final3.risk);
+  const native = risk.data.controllers.modular_spot_meridian_v5_paper_bnb.native;
+  native.marked_exposure = '100.00000000000000001';
+  native.configured_limits.pair_quote = '100';
+  assert.equal(paperRiskUsage(risk, now).find(rail => rail.label.startsWith('modular_spot_meridian_v5_paper_bnb')).used_percent, null);
+});
+
 test('paper read failures are typed: timeouts are transient, invalid publications are not', () => {
   assert.match(paperReadFailureMessage(503, {detail:{code:'upstream_timeout'}}), /^Transient: .*HTTP 503 · upstream_timeout/);
   assert.match(paperReadFailureMessage(503, {detail:{code:'upstream_unavailable', upstream_code:'PAPER_READ_CAPACITY', upstream_reason:'wait_timeout'}}), /^Transient: .*PAPER_READ_CAPACITY · wait_timeout/);
@@ -81,7 +89,7 @@ test('rendered position card shows exact holdings, excludes dust and retains nat
   const reads = Object.values({...final3, positions: livePositions});
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads, now, reportAt:final3.status.generated_at_ms, heartbeat:'Fresh', bot:'meridian_v5_paper'}));
   assert.match(html, /<dt>Holding<\/dt><dd><span title="0\.3615174">0\.361517 BNB/);
-  assert.match(html, /\+ <span title="0\.0000016">0\.0000016 BNB<\/span> dust/);
+  assert.match(html, /\+ <span title="0\.0000016">0\.000002 BNB<\/span> dust/);
   assert.match(html, /<dt>Lots<\/dt><dd>6<\/dd>/);
   assert.match(html, /<dt>Sell orders placed<\/dt><dd>— · protection unknown for 6 lot\(s\)/);
   assert.doesNotMatch(html, /bag-managed|sold by the bag policy|no resting order/);
@@ -106,8 +114,9 @@ test('position card formats money and quantities without losing exact values', (
   const money = {rows:[{bot:'v5',at_ms:now,snapshot_at_ms:now,unit:'USDC',coins:{BNB:{realized:'114.1396691483993272381433853',unrealized:'0'}}}]};
   const prices = {'BNB-USDC':{buckets:[[Math.floor(now/60000)*60-60,1,2,1,680.896303,0,1]]}};
   const html = renderToStaticMarkup(React.createElement(PaperPositions,{positions:livePositions,decisions,wallet,money,prices,now}));
-  for (const exact of ['114.1396691483993272381433853','680.8963033983613722931914460','800.123456789123456789','1234.567890000000','0.3615174','0.0000016']) assert.ok(html.includes(`title="${exact}"`),exact);
-  for (const formatted of ['114.14 USDC','680.90 USDC','800.12 USDC','1,234.57 USDC','0.361517 BNB','0.0000016 BNB']) assert.ok(html.includes(formatted),formatted);
+  assert.ok(html.includes('title="114.1396691483993272381433853 + 0 = 114.1396691483993272381433853"'));
+  for (const exact of ['680.8963033983613722931914460','800.123456789123456789','1234.567890000000','0.3615174','0.0000016']) assert.ok(html.includes(`title="${exact}"`),exact);
+  for (const formatted of ['114.14 USDC','680.90 USDC','800.12 USDC','1,234.57 USDC','0.361517 BNB','0.000002 BNB']) assert.ok(html.includes(formatted),formatted);
 });
 
 test('position cards cross-check protections and retain the snapshot buy decision', () => {

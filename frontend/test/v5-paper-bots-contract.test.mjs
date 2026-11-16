@@ -518,10 +518,11 @@ test('paper presentation uses readable reasons and boolean words', () => {
   assert.equal(paperWords(null), 'Not published');
 });
 
-test('amount display rounds decimal text without binary arithmetic or fake zero', () => {
+test('amount display rounds decimal text without binary arithmetic or negative zero', () => {
   assert.equal(paperAmount('1001.2592', 'USDC'), '1,001.2592 USDC');
   assert.equal(paperAmount('999.99999', 'USDC'), '1,000.0000 USDC');
   assert.equal(paperAmount('-0.000001', 'BNB', 6), '−0.000001 BNB');
+  assert.equal(paperAmount('-0.00000001', 'BNB', 4), '0 BNB');
   assert.equal(paperAmount('9007199254740993.00001', 'USDC'), '9,007,199,254,740,993.0000 USDC');
   assert.equal(paperAmount(null, 'USDC'), 'Not published');
   assert.equal(paperAmount('NaN', 'USDC'), 'Not published');

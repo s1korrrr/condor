@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { frontendModules } from './helpers/frontend-module.mjs';
-import { candleCurrent, hourlyReturns, marketHolding, marketSentence, windowChange } from '../src/v5/market-header.ts';
+import { candleCurrent, hourlyReturns, marketAverageTitle, marketHolding, marketSentence, windowChange } from '../src/v5/market-header.ts';
 
 const coins = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP'];
 const changes = values => Object.fromEntries(coins.map((coin, index) => [coin, values[index] ?? null]));
@@ -24,6 +24,12 @@ const paper = (quote = 'USDT') => {
   return reads;
 };
 
+test('market average identifies the exact inputs and a non-terminating result', () => {
+  assert.equal(marketAverageTitle(changes(['1', '2'])), 'BTC 1%, ETH 2% · exact average 1.5%');
+  assert.equal(marketAverageTitle(changes(['1', '0', '0'])), 'BTC 1%, ETH 0%, BNB 0% · exact average 1/3% (non-terminating decimal)');
+  assert.equal(marketAverageTitle(changes([])), undefined);
+});
+
 test('sentence uses the selected range, all down, all up, mixed and unchanged', () => {
   assert.equal(marketSentence(changes(['-3.55', '-3.55', '-3.55', '-5.90', '-1.20']), '24h'), 'All five coins are down over 24 hours, on average −3.55%. SOL is weakest at −5.90%.');
   assert.match(marketSentence(changes(['1', '2', '3', '4', '5']), '6h'), /^All five coins are up over 6 hours, on average \+3.00%\. XRP is strongest at \+5.00%\.$/);
@@ -41,9 +47,9 @@ test('sentence names every missing coin and averages only published changes exac
 
 test('sentence uses the shared percent format for grouped exact decimals and tiny values', () => {
   assert.match(marketSentence(changes(['1234.565']), '24h'), /on average \+1,234\.57%\. BTC is strongest at \+1,234\.57%\./);
-  assert.match(marketSentence(changes(['-0.004']), '24h'), /on average −0\.004%\. BTC is weakest at −0\.004%\./);
-  assert.match(marketSentence(changes(['-0.004', '-0.002']), '24h'), /on average −0\.003%/);
-  assert.match(marketSentence(changes(['0.000000000000000000000000000001']), '24h'), /on average \+1e−30%/);
+  assert.match(marketSentence(changes(['-0.004']), '24h'), /on average 0\.00%\. BTC is weakest at 0\.00%\./);
+  assert.match(marketSentence(changes(['-0.004', '-0.002']), '24h'), /on average 0\.00%/);
+  assert.match(marketSentence(changes(['0.000000000000000000000000000001']), '24h'), /on average 0\.00%/);
 });
 
 test('window return rounds exact candle decimals, not binary floating point; no substituted boundary', () => {
@@ -73,7 +79,7 @@ test('holds uses complete same-bot snapshots and exact 30-place totals; gap uses
   const reads = paper(), now = reads[0].generated_at_ms;
   const holding = marketHolding('BTC', reads, reads[0].bot_id, 90.8, 'USDT', now);
   assert.equal(holding.text, 'V5 holds 0.0162 · −9.2% to breakeven');
-  assert.equal(holding.exact, '0.016200000000000000000000000010');
+  assert.equal(holding.exact, 'holding 0.016200000000000000000000000010 · (90.8 − 100) × 100 / 100 = −9.2%');
   assert.equal(holding.reason, null);
   assert.equal(holding.asOf, now);
   assert.match(marketHolding('BTC', reads, reads[0].bot_id, 109.2, 'USDT', now).text, /\+9.2% to breakeven/);
@@ -111,6 +117,7 @@ test('hourly strip uses UTC hour boundaries with the preceding close, not a neig
   assert.deepEqual(hours.map(hour => hour.from), [start, start + 3600, start + 7200]);
   assert.equal(hours[0].change, null);
   assert.equal(hours[1].change, '37.74');
+  assert.equal(hours[1].inputs, 'first close 159; last close 219');
   assert.equal(hours[2].change, '27.40');
   for (const missing of [59, 60, 90, 119]) assert.equal(hourlyReturns(dense(180, missing))[1].change, null);
   assert.equal(hourlyReturns(dense(150)).at(-1).change, null);
@@ -200,7 +207,7 @@ test('Market renders a small header, selected range, two chips, holds and hourly
   assert.doesNotMatch(header, /Refresh|Five coins across|Slowest lane/);
   assert.match(header, /aria-label="Market range"/);
   assert.match(html, /All five coins are up over 6 hours/);
-  assert.match(html, /title="0\.016200000000000000000000000010"/);
+  assert.match(html, /title="holding 0\.016200000000000000000000000010 · \(279 − 100\) × 100 \/ 100 = 179%"/);
   assert.match(html, /V5 holds 0\.0162/);
   assert.match(html, /Hour-by-hour returns/);
   assert.doesNotMatch(html, /<dt>Minutes held<\/dt>|v5m-range/);

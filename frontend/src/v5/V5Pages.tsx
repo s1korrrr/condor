@@ -1,12 +1,12 @@
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { AlertTriangle, Bot, Check, ChevronRight, CircleDot, Database, FileSearch, FileText, GitBranch, LockKeyhole, Play, RotateCw, Save, ShieldAlert, Sparkles, Square, XCircle } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { isValidElement, useEffect, useMemo, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { v5Api } from "./api";
 import { usePaperObservation } from "./usePaperObservation";
 import type { MarketEvidence, V5Agent, V5Session, V5SessionDetail, V5TaskReport, V5Workspace } from "./contracts";
-import { formatUsdAmount, marketFeatures, qualifiedFeatureValue, selectedCohortCoverage, strategyAssessmentLabel, timestampAgeMs } from "./evidence";
+import { cohortCoverageDisplay, formatUsdAmount, marketFeatures, qualifiedFeatureValue, selectedCohortCoverage, strategyAssessmentLabel, timestampAgeMs } from "./evidence";
 import { boundedLoopParameters, canRequestReport, paperReadiness, paperWorkspaceLabel, paperWords } from "./policy";
 import { advisorAvailability, advisorTaskProfile, scheduledAgentLines, type WorkspaceRead } from "./agent-status";
 import { usePaperClock } from "./usePaperClock";
@@ -169,7 +169,8 @@ function TaskLatestReports({ reports, agents, taskId }: { reports?: Record<strin
 }
 
 function money(value: number | string | null | undefined) {
-  return formatUsdAmount(value);
+  const text = formatUsdAmount(value);
+  return <span title={text === "Unavailable" ? undefined : String(value)}>{text}</span>;
 }
 
 function EvidenceSummary({ evidence }: { evidence: MarketEvidence | null }) {
@@ -210,7 +211,7 @@ function CohortCoverageNotice({ evidence }: { evidence: MarketEvidence }) {
   const coverage = selectedCohortCoverage(evidence);
   return <section className={`v5-cohort-coverage${coverage.complete ? " is-complete" : " is-partial"}`} aria-label="Selected market cohort coverage">
     <div className="v5-cohort-coverage-heading"><div><strong>{coverage.complete ? "Complete observed cohort" : "PARTIAL SOURCE"}</strong><p>{coverage.complete ? "All selected spot assets and spot/perpetual venue pairs have qualified coverage." : "Selected asset or venue coverage is incomplete or unknown. Qualified feature values may describe only the observed subset."}</p></div><Status state={coverage.complete ? "ready" : "blocked"} label={coverage.complete ? "COMPLETE" : "PARTIAL / UNKNOWN"} /></div>
-    <div className="v5-cohort-coverage-grid">{coverage.dimensions.map((row) => <div className="v5-cohort-coverage-row" key={row.key}><span>{row.label}</span><strong>{row.valid == null || row.expected == null ? "Unavailable" : `${row.valid} / ${row.expected}`}</strong><small>{row.fraction == null ? "Coverage unknown" : `${(row.fraction * 100).toFixed(1)}%`}</small></div>)}</div>
+    <div className="v5-cohort-coverage-grid">{coverage.dimensions.map((row) => { const shown = cohortCoverageDisplay(row, 1); return <div className="v5-cohort-coverage-row" key={row.key}><span>{row.label}</span><strong>{row.valid == null || row.expected == null ? "Unavailable" : `${row.valid} / ${row.expected}`}</strong><small title={shown?.exact}>{shown?.text ?? "Coverage unknown"}</small></div>; })}</div>
   </section>;
 }
 
@@ -223,7 +224,7 @@ function formatAge(ms: number) {
 function FeatureGroup({ label, prefix, features, evidence }: { label: string; prefix: "spot." | "derivatives."; features?: ReturnType<typeof marketFeatures>; evidence: MarketEvidence | null }) {
   const rows = features ?? (evidence ? marketFeatures(evidence, prefix) : []);
   return <section className="v5-domain-block"><span className="v5-domain-label">{label}</span>{rows.length ? <div className="v5-feature-list">{rows.map((feature) => <div className="v5-feature-row" key={feature.id}>
-    <span className="v5-feature-name" title={feature.id}>{feature.label}</span><strong className={feature.status === "QUALIFIED" ? "is-qualified" : "is-unavailable"}>{qualifiedFeatureValue(feature)}</strong><span className="v5-feature-unit">{feature.unit}</span><span className={`v5-feature-state${feature.status === "QUALIFIED" ? " is-qualified" : ""}`}>{feature.status}</span>
+    <span className="v5-feature-name" title={feature.id}>{feature.label}</span><strong title={feature.status === "QUALIFIED" && feature.value != null ? String(feature.value) : undefined} className={feature.status === "QUALIFIED" ? "is-qualified" : "is-unavailable"}>{qualifiedFeatureValue(feature)}</strong><span className="v5-feature-unit">{feature.unit}</span><span className={`v5-feature-state${feature.status === "QUALIFIED" ? " is-qualified" : ""}`}>{feature.status}</span>
   </div>)}</div> : <span className="v5-muted">Unavailable · no {label.toLowerCase()} feature rows</span>}</section>;
 }
 
@@ -257,7 +258,7 @@ function displayEvidenceValue(value: unknown): string {
 }
 
 function DataValue({ label, value }: { label: string; value: unknown }) {
-  const display = value == null || value === "" ? "Unavailable" : displayEvidenceValue(value);
+  const display = isValidElement(value) ? value : value == null || value === "" ? "Unavailable" : displayEvidenceValue(value);
   return <div className="v5-data-value"><span>{label}</span><strong>{display}</strong></div>;
 }
 

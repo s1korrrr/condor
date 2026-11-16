@@ -59,6 +59,7 @@ test('money and candle price stay outside the dimmed snapshot values', () => {
   browser.document.body.innerHTML = renderToStaticMarkup(React.createElement(PaperPositions,{now:600000,asOf:540000,prices,money}));
   const card = browser.document.querySelector('.paper-pair');
   assert.match(card.textContent, /3.00 USDC.*profit or loss/);
+  assert.equal(card.querySelector('strong').getAttribute('title'), '2 + 1 = 3');
   assert.match(card.textContent, /Price: 1.5000 USDC/);
   assert.doesNotMatch(card.querySelector('.paper-dimmed-position').textContent, /profit or loss|Price: 1.5/);
   assert.match(card.querySelector('.paper-dimmed-position').textContent, /Holding/);

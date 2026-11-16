@@ -6,8 +6,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { Window } from 'happy-dom';
 import { frontendModules } from './helpers/frontend-module.mjs';
+import { liveMoneyRows } from './helpers/v5-live-money.mjs';
 
 const css = fs.readFileSync(new URL('../src/v5/phone.css', import.meta.url), 'utf8');
+const marketCss = fs.readFileSync(new URL('../src/v5/market.css', import.meta.url), 'utf8');
 const now = Date.UTC(2026, 10, 15, 12, 34, 56);
 
 test('collapsed phone summary shows the formatted owner cell with exact title', () => {
@@ -91,6 +93,46 @@ test('phone frame and Overview have legible type and units in labels without alt
   assert.equal(window.document.querySelector('span').textContent, 'Wallet equity (USDC)');
   window.document.body.innerHTML = renderToStaticMarkup(React.createElement(Stat, { label: 'Wallet equity', value: '—', unit: 'USDC' }));
   assert.equal(window.document.querySelector('strong').textContent, '—');
+});
+
+test('Overview rounds tiny realized loss to zero and keeps exact since-start arithmetic', () => {
+  const row = {bot:'v5', at_ms:now, equity:'199980.07714623162240', initial_funding:'200000', realized:'-0.004', unrealized:'0'};
+  const { load } = frontendModules({
+    '@tanstack/react-query': {useQuery: ({queryKey}) => ({data:queryKey[0] === 'v5-money' ? {rows:[row]} : undefined})},
+    './V5Money': {V5Money:() => null, readMoney() {}},
+    './V5Helm': {readHelm() {}},
+  });
+  const window = new Window();
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(MemoryRouter, null, React.createElement(load('v5/V5Overview.tsx').V5Overview)));
+  const stats = [...window.document.querySelectorAll('.v5m-stat')];
+  const realized = stats.find(item => item.textContent.includes('Profit from closed trades'));
+  assert.equal(realized.querySelector('strong').textContent, '0.00');
+  assert.equal(realized.querySelector('[data-tone]').getAttribute('data-tone'), 'zero');
+  assert.equal(realized.querySelector('[data-tone]').getAttribute('title'), '-0.004');
+  assert.ok(!realized.classList.contains('is-down'));
+  const since = stats.find(item => item.textContent.includes('Since start')).querySelector('[data-tone]');
+  assert.equal(since.textContent, '−19.92');
+  assert.equal(since.title, '199980.07714623162240 − 200000 = −19.92285376837760');
+  window.close();
+});
+
+test('Overview values use the tile value element and inherit their rounded tone', () => {
+  assert.match(marketCss, /\.v5m-stat strong \.owner-value\s*\{[^}]*font-size:\s*inherit;[^}]*\}/);
+  assert.match(marketCss, /\.v5m-stat strong \.v5-desktop-unit\s*\{[^}]*font-size:\s*\.7em/);
+  const {load} = frontendModules({
+    '@tanstack/react-query': {useQuery: ({queryKey}) => ({data:queryKey[0] === 'v5-money' ? {rows:liveMoneyRows} : undefined})},
+    './V5Money': {V5Money:() => null, readMoney() {}}, './V5Helm': {readHelm() {}},
+  });
+  const window = new Window();
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(MemoryRouter, null, React.createElement(load('v5/V5Overview.tsx').V5Overview)));
+  const tiles = [...window.document.querySelectorAll('.v5m-stat')];
+  for (const [label,tone] of [['Since start','down'], ['Profit from closed trades','up'], ['Coins still held','down']]) {
+    const tile = tiles.find(item => item.firstElementChild.textContent === label);
+    assert.ok(tile.classList.contains(`is-${tone}`));
+    assert.ok(tile.querySelector('strong > .owner-value'));
+  }
+  assert.ok(tiles[0].querySelector('strong > em.v5-desktop-unit'));
+  window.close();
 });
 
 test('phone CSS confines layout changes, keeps chips independently scrollable and reserves bottom safe area', () => {
@@ -404,10 +446,10 @@ test('executor details format owner amounts and preserve exact titles', () => {
   const read = { ...fixture, data: [row], generated_at_ms: now };
   const window = new Window();
   window.document.body.innerHTML = renderToStaticMarkup(React.createElement(PaperRecords, { read, kind: 'executors', now }));
-  for (const [exact, displayed] of [['44.19171445147200000000000000', '44.19 USDC'], ['-0.00001351276800000000000000000000', '−0.0000135 USDC'], ['0.001277020', '0.001277 BTC']]) {
+  for (const [exact, displayed] of [['44.19171445147200000000000000', ['44.19 USDC', '44.1917 USDC']], ['-0.00001351276800000000000000000000', ['0.00 USDC', '−0.000014 USDC']], ['0.001277020', ['0.001277 BTC']]]) {
     const values = [...window.document.querySelectorAll('span[title]')].filter(span => span.title === exact);
     assert.ok(values.length, exact);
-    assert.ok(values.every(span => span.textContent === displayed));
+    for (const value of displayed) assert.ok(values.some(span => span.textContent === value), `${exact}: ${value}`);
   }
   window.close();
 });

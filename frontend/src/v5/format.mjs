@@ -54,6 +54,56 @@ function split(neg, text) {
   return { neg, int: int.replace(/^0+(?=\d)/, '') || '0', frac };
 }
 
+export function decimalShift(value, places) {
+  const parts = parse(value);
+  if (!parts || !Number.isInteger(places) || Math.abs(places) > MAX_EXPONENT) return null;
+  const digits = parts.int + parts.frac;
+  const point = parts.int.length + places;
+  const int = point <= 0 ? '0' : digits.slice(0, point).padEnd(point, '0');
+  const frac = point <= 0 ? '0'.repeat(-point) + digits : digits.slice(point);
+  return `${parts.neg ? '-' : ''}${int}${frac ? `.${frac}` : ''}`;
+}
+
+export function decimalPercentRatio(value, base) {
+  const end = parse(value), start = parse(base);
+  if (!end || !start) return null;
+  const places = Math.max(end.frac.length, start.frac.length);
+  const integer = parts => {
+    const magnitude = BigInt(parts.int + parts.frac.padEnd(places, '0'));
+    return parts.neg ? -magnitude : magnitude;
+  };
+  const denominator = integer(start);
+  if (denominator <= 0n) return null;
+  const numerator = (integer(end) - denominator) * 100n;
+  return { numerator, denominator };
+}
+
+export function rationalPercent(numerator, denominator, digits = 2) {
+  if (typeof numerator !== 'bigint' || typeof denominator !== 'bigint' || denominator <= 0n || !Number.isInteger(digits) || digits < 0 || digits > 30) return null;
+  const magnitude = numerator < 0n ? -numerator : numerator;
+  const units = (magnitude * 2n * 10n ** BigInt(digits) + denominator) / (2n * denominator);
+  const text = units.toString().padStart(digits + 1, '0');
+  let left = magnitude, right = denominator;
+  while (right) [left, right] = [right, left % right];
+  const reducedNumerator = magnitude / left, reducedDenominator = denominator / left;
+  let remainder = reducedDenominator, twos = 0, fives = 0;
+  while (remainder % 2n === 0n) { remainder /= 2n; twos += 1; }
+  while (remainder % 5n === 0n) { remainder /= 5n; fives += 1; }
+  const sign = numerator < 0n ? MINUS : '';
+  let exact;
+  if (remainder === 1n) {
+    const places = Math.max(twos, fives);
+    const decimal = (reducedNumerator * 2n ** BigInt(places - twos) * 5n ** BigInt(places - fives)).toString().padStart(places + 1, '0');
+    exact = `${sign}${places ? `${decimal.slice(0, -places)}.${decimal.slice(-places)}` : decimal}%`;
+  } else exact = `${sign}${reducedNumerator}/${reducedDenominator}%`;
+  return { value: `${numerator < 0n && units !== 0n ? '-' : ''}${digits ? `${text.slice(0, -digits)}.${text.slice(-digits)}` : text}`, exact, direction: numerator < 0n ? -1 : numerator > 0n ? 1 : 0 };
+}
+
+export function decimalPercentChange(value, base, digits = 2) {
+  const ratio = decimalPercentRatio(value, base);
+  return ratio ? rationalPercent(ratio.numerator, ratio.denominator, digits) : null;
+}
+
 /** Add one unit in the last place to a string of digits. */
 function increment(digits) {
   const out = digits.split('');
@@ -83,15 +133,7 @@ const render = (parts, plus = false) =>
 
 function visible(parts, digits, plus = false) {
   const rounded = round(parts, digits);
-  if (!rounded.zero || !/[1-9]/.test(parts.int + parts.frac)) return { text: render(rounded, plus), zero: rounded.zero };
-  const lead = parts.frac.search(/[1-9]/);
-  if (lead + 3 > 8) {
-    const text = coin(`${parts.neg ? '-' : ''}${parts.int}.${parts.frac}`);
-    return { text: `${plus && !parts.neg ? '+' : ''}${text}`, zero: false };
-  }
-  const extended = round(parts, lead + 3);
-  extended.frac = extended.frac.replace(/0+$/, '');
-  return { text: render(extended, plus), zero: false };
+  return { text: render(rounded, plus), zero: rounded.zero };
 }
 
 /** "1,234.50" with a true minus and no plus sign: `digits` decimals (default 2). */
@@ -109,10 +151,7 @@ export function signed(value, digits = 2) {
 export function axis(value, digits = 2, plus = false) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return DASH;
   if (value === 0) return '0';
-  const rounded = round(parse(String(value)), digits);
-  if (!rounded.zero) return plus ? signed(value, digits) : fixed(value, digits);
-  const scientific = value.toExponential(1).replace(/\.0e/, 'e').replace(/-/g, MINUS);
-  return `${plus && value > 0 ? '+' : ''}${scientific}`;
+  return plus ? signed(value, digits) : fixed(value, digits);
 }
 
 /** "199,330.70 USDC". An empty unit leaves the unit off (an owner that did not publish one). */
@@ -141,7 +180,7 @@ export function price(value) {
 
 /**
  * Coin amount, trailing zeros removed, never 18 decimals: from 1 up, 6 significant digits but every integer digit
- * (1,390.56; 1,234,567); below 1, 6 decimals (0.016246); dust keeps 3 significant digits so it never shows as 0.
+ * (1,390.56; 1,234,567); below 1, 6 decimals (0.016246).
  * `asset` is appended when given ("0.016246 BTC").
  */
 export function coin(value, asset) {
@@ -149,18 +188,7 @@ export function coin(value, asset) {
   if (!parts) return DASH;
   let digits;
   if (parts.int !== '0') digits = Math.max(0, 6 - parts.int.length);
-  else {
-    const lead = parts.frac.search(/[1-9]/);
-    // Dust that cannot keep 3 significant digits within 8 decimals is shown in bounded scientific form, never as 0.
-    if (lead >= 6) {
-      const sig = round({ neg: false, int: parts.frac[lead], frac: parts.frac.slice(lead + 1) }, 2);
-      const mantissa = sig.int.length > 1 ? `1.${sig.int.slice(1, 2)}${sig.frac[0]}` : `${sig.int}.${sig.frac}`;
-      const power = sig.int.length > 1 ? lead : lead + 1;
-      const text = `${parts.neg ? MINUS : ''}${mantissa.replace(/\.?0+$/, '')}e${MINUS}${power}`;
-      return asset ? `${text} ${asset}` : text;
-    }
-    digits = lead < 0 ? 0 : Math.max(6, lead + 3);
-  }
+  else digits = 6;
   const rounded = round(parts, digits);
   const frac = rounded.frac.replace(/0+$/, '');
   const text = `${rounded.neg ? MINUS : ''}${group(rounded.int)}${frac ? `.${frac}` : ''}`;
@@ -171,6 +199,20 @@ export function coin(value, asset) {
 export function pct(value, digits = 2) {
   const text = signed(value, digits);
   return text === DASH ? text : `${text}%`;
+}
+
+export function ownerDisplay(value, kind, { unit, digits = 2 } = {}) {
+  if (!parse(value)) return { text: DASH, exact: null, tone: 'none' };
+  const text = kind === 'usdc' ? usdc(value, unit)
+    : kind === 'coin' ? coin(value, unit)
+    : kind === 'price' ? price(value)
+    : kind === 'pct' ? pct(value, digits)
+    : kind === 'bps' ? `${signed(value, digits)} ${unit ?? 'bps'}`
+    : kind === 'pnl' ? pnl(value, digits).text
+    : signed(value, digits);
+  const number = text.match(/[−+]?\d[\d,]*(?:\.\d+)?/)?.[0];
+  const tone = !number ? 'none' : !/[1-9]/.test(number) ? 'zero' : number.startsWith(MINUS) ? 'down' : 'up';
+  return { text, exact: String(value), tone };
 }
 
 /** Whole number with separators ("200,000"); a fraction is rounded. */

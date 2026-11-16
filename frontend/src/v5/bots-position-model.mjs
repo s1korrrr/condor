@@ -1,9 +1,18 @@
+import { decimalPercentChange, fixed, signed } from './format.mjs';
+
 export function breakEvenDistance(breakeven, close) {
-  if (typeof breakeven !== 'string' || !/^\d+(\.\d+)?$/.test(breakeven) || typeof close !== 'number' || !Number.isFinite(close) || close <= 0) return '—';
-  // Candles are owner JSON numbers: this display percentage uses Number and rounds to 0.1%; money totals remain exact decimals.
-  const price = Number(breakeven);
-  if (!Number.isFinite(price) || price <= 0) return '—';
-  return close < price ? `Needs +${((price / close - 1) * 100).toFixed(1)}% to break even` : `Above breakeven by ${((close / price - 1) * 100).toFixed(1)}%`;
+  return breakEvenDistanceDetail(breakeven, close)?.text ?? '—';
+}
+
+export function breakEvenDistanceDetail(breakeven, close) {
+  if (typeof breakeven !== 'string' || !/^\d+(\.\d+)?$/.test(breakeven) || typeof close !== 'number' || !Number.isFinite(close)) return null;
+  const need = decimalPercentChange(breakeven, close, 1);
+  const above = decimalPercentChange(close, breakeven, 1);
+  if (!need || !above) return null;
+  const needsRise = need.direction > 0;
+  const result = needsRise ? need : above;
+  const end = needsRise ? breakeven : String(close), base = needsRise ? String(close) : breakeven;
+  return { text: needsRise ? `Needs ${signed(result.value, 1)}% to break even` : `Above breakeven by ${fixed(result.value, 1)}%`, exact: `(${end} − ${base}) × 100 / ${base} = ${result.exact}` };
 }
 
 export function moneySampleState(row, now) {

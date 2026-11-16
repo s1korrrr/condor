@@ -11,6 +11,8 @@ test('series break at gap rows, rows without the field, and one missed five-minu
   const points = series(rows, 'v5', 'equity');
   // 10 → 20 misses the 15-minute slot: a null at 15 breaks the line.
   assert.deepEqual(points.map(point => point.value), [100, null, 100, null, 100]);
+  assert.equal(points[0].exact, '100');
+  assert.equal(points[1].exact, undefined);
   assert.equal(points[3].time, T0 + 15 * 60_000);
   // Fable's case: a missing :10–:20 and a row with no equity both stay gaps.
   assert.deepEqual(series([row(0), row(5), row(25, { equity: null }), row(30)], 'v5', 'equity').map(point => point.value), [100, 100, null, null, 100]);
@@ -46,6 +48,15 @@ test('V5 equity change uses its own first and last sample with values', () => {
   assert.deepEqual([result.startMs, result.endMs], [T0, T0 + 55 * 60_000]);
   assert.ok(Math.abs(result.pct - 5) < 1e-9);
   assert.equal(equityChange([row(0)], 'v5').pct, null);
+});
+
+test('Money comparisons retain exact inputs and rational results', () => {
+  const result = equityChange([row(0, { equity: '100' }), row(5, { equity: '100.000000000000000000000000001' })], 'v5');
+  assert.equal(result.pct, '0.00');
+  assert.equal(result.exact, '(100.000000000000000000000000001 − 100) × 100 / 100 = 0.000000000000000000000000001%');
+  const holding = holdReturn({ BTC: [[1, 3], [2, 4]], ETH: [[1, 3], [2, 3]] });
+  assert.equal(holding.pct, '16.67');
+  assert.equal(holding.exact, 'BTC 3 → 4, ETH 3 → 3 · exact average 50/3%');
 });
 
 test('V5 endpoints keep their exact sample times, not rounded to the minute', () => {

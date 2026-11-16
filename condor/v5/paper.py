@@ -1187,6 +1187,19 @@ def _matches_c1_schema(value: Any, schema: dict) -> bool:
 
 
 NATIVE_DECIMAL = {"type": "string", "maxLength": 128, "pattern": r"\A-?[0-9]+(?:\.[0-9]+)?\Z"}
+RECEIPT_AMOUNTS = (
+    "entry_gross_base", "entry_gross_quote", "exit_gross_base", "exit_gross_quote",
+    "fees_quote", "remaining_owned_base", "residual_dust_base",
+)
+RECEIPT_DECIMAL = re.compile(r"[0-9]+(?:\.[0-9]+)?(?:[Ee]([+-]?[0-9]+))?")
+NATIVE_EXECUTION_RECEIPT = {
+    "type": "object",
+    "required": ["accounting_owner", *RECEIPT_AMOUNTS],
+    "properties": {
+        "accounting_owner": {"type": "string"},
+        **{name: {"type": "string", "minLength": 1, "maxLength": 128} for name in RECEIPT_AMOUNTS},
+    },
+}
 NATIVE_CURRENCY = {"type": "string", "pattern": r"\A[A-Za-z0-9_.-]{1,32}\Z"}
 NATIVE_STRUCTURED_FINANCIAL = {
     "fee": {
@@ -1218,9 +1231,24 @@ NATIVE_STRUCTURED_FINANCIAL = {
 }
 
 
+def _receipt_decimal_valid(value: Any) -> bool:
+    if not isinstance(value, str) or len(value) > 128:
+        return False
+    match = RECEIPT_DECIMAL.fullmatch(value)
+    return match is not None and abs(int(match.group(1) or "0")) <= 64
+
+
 def _validate_read_tree(value: Any, key: str = "", depth: int = 0, *, native_fee: bool = False) -> None:
     if depth > 16 or isinstance(value, float):
         raise ValueError("invalid paper observation value")
+    if key == "execution_receipt":
+        if not _matches_c1_schema(value, NATIVE_EXECUTION_RECEIPT):
+            raise ValueError("invalid execution receipt")
+        for name, child in value.items():
+            if depth < 16 and name in RECEIPT_AMOUNTS and _receipt_decimal_valid(child):
+                continue
+            _validate_read_tree(child, name, depth + 1, native_fee=native_fee)
+        return
     if value is None:
         return
     if key.endswith("_ms"):

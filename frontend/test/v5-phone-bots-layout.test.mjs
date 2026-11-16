@@ -92,14 +92,15 @@ test('recorded chart keeps a 360px canvas, 12px axis labels and dimmed breakeven
     assert.equal(line.title, 'Breakeven');
     assert.match(line.color, /0\.55/);
     assert.match(markers[0].color, /0\.55/);
-    assert.equal(markers[0].text, `BUY 0.1234567890123456789 @ 700 · ${new Date(minute * 1000 + 1).toISOString()}`);
+    assert.ok(!markers[0].text);
+    assert.equal(renderer.root.findByProps({ role: 'img' }).props.title, `BUY 0.1234567890123456789 @ 700 · ${new Date(minute * 1000 + 1).toISOString()}`);
   } finally {
     await act(async () => renderer?.unmount());
     delete globalThis.IS_REACT_ACT_ENVIRONMENT;
   }
 });
 
-test('recorded chart preserves exact fill labels and formats hovered candle values', async () => {
+test('recorded chart preserves exact fills in the hover readout and formats hovered candle values', async () => {
   let markers, crosshair;
   const { RecordedCandleChart } = frontendModules({
     'lightweight-charts': { CandlestickSeries:{}, ColorType:{Solid:'solid'}, LineStyle:{Dashed:2},
@@ -113,9 +114,10 @@ test('recorded chart preserves exact fill labels and formats hovered candle valu
   try {
     const candle = [60,101.123456789,102.123456789,100.123456789,101.123456789,0.123456789,1,0,0,0,0,0];
     await act(async () => { renderer=create(React.createElement(RecordedCandleChart,{buckets:[candle],label:'BNB',volumeUnit:'BNB',markers:[{time:60,event_at_ms:61023,side:'BUY',quantity:'0.00000000',price:'101.123456789'}]}),{createNodeMock: node => node.type === 'div' ? {} : null}); });
-    assert.equal(markers[0].text, 'BUY 0.00000000 @ 101.123456789 · 1970-01-01T00:01:01.023Z');
+    assert.ok(!markers[0].text);
     await act(async () => crosshair({time:60}));
     const readout=renderer.root.findByProps({'aria-live':'polite'});
+    assert.equal(readout.findByProps({ className: 'block' }).children.join(''), 'BUY 0.00000000 @ 101.123456789 · 1970-01-01T00:01:01.023Z');
     const close = readout.findAllByType('span').find(span => span.props.title === '101.123456789');
     assert.ok(close);
     assert.match(close.children.join(''), /101\.12/);

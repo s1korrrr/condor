@@ -894,7 +894,7 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
     {query.progress && <p role="status">{query.progress}</p>}
     {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
     <PaperWorkspace snapshotStamp={complete && <p role={dimmed ? "status" : undefined} className={dimmed ? "paper-dimmed-stamp" : undefined}>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}{dimmed ? " · snapshot values are from that time, dimmed until a new report" : ""}</p>} asOf={dimmed ? snapshotAt : null} reads={reads} safetyReads={query.safetyReads} complete={complete} readFailed={query.isError} money={money.isError ? undefined : money.data} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} valuesAt={valuesAt} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} market={market} />
-    {showTrades && <V5Trades bot={bot} now={now} read={readPaper} />}
+    {showTrades && <V5Trades bot={bot} now={now} read={readPaper} readFailed={query.isError} heartbeat={heartbeat} />}
   </div>;
 }
 

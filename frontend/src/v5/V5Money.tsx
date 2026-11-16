@@ -70,7 +70,7 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
     { id: "unrealized", label: "Gain or loss on coins still held", color: CHART.negative, points: series(rows, "v5", "unrealized"), format: (value, exact) => signed(exact ?? value) },
   ];
   const coins = (now?.coins ?? {}) as Record<string, { realized: string | null; unrealized: string | null }>;
-  const coinRows = Object.entries(coins).map(([coin, values]) => ({ label: coin, realized: num(values.realized), unrealized: num(values.unrealized) }));
+  const coinRows = Object.entries(coins).map(([coin, values]) => ({ label: coin, realized: num(values.realized), realizedExact: values.realized, unrealized: num(values.unrealized), unrealizedExact: values.unrealized }));
   const days = money.data?.daily ?? [];
   const holdView = hold.data ? holdReturn(hold.data.closes) : null;
   // V5 over its own first and last sample in the 7-day rows; it is "the same window" only if both ends match exactly.

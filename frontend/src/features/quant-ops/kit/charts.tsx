@@ -130,9 +130,9 @@ export type BarSpec = {
 };
 
 /** Hoverable category bars (days, bins) with an optional line on its own axis. Missing values stay empty. */
-export function BarsChart({ rows, bars, line, height = 160, format = formatSigned, tickFormat, signed = true, integer = false, unit, ariaLabel, emptyText = 'No values to plot.' }: {
+export function BarsChart({ rows, bars, line, height = 160, format = (value, exact) => formatSigned(exact ?? value), tickFormat, signed = true, integer = false, unit, ariaLabel, emptyText = 'No values to plot.' }: {
   rows: ({ label: string } & Record<string, number | string | null>)[]; bars: BarSpec[]; line?: { id: string; label: string; color: string } | null;
-  height?: number; format?: (value: number) => string; unit?: string; ariaLabel: string; emptyText?: ReactNode;
+  height?: number; format?: (value: number, exact?: string) => string; unit?: string; ariaLabel: string; emptyText?: ReactNode;
   /** Axis labels from the rounded tick step; tooltips keep `format`. */
   tickFormat?: (value: number, step: number, ticks: number[]) => string;
   /** Counts: whole-number axis ticks only. */
@@ -163,8 +163,9 @@ export function BarsChart({ rows, bars, line, height = 160, format = formatSigne
             return <TooltipCard title={String(label)} rows={specs.flatMap(spec => {
               const value = row[spec.id];
               if (typeof value !== 'number') return [];
-              const text = format(value);
-              return [{ key: spec.id, label: spec.label, color: 'colorFor' in spec && spec.colorFor?.(row) || (spec.signColors ? (value >= 0 ? CHART.positive : CHART.negative) : spec.color), value: `${text}${unit ? ` ${unit}` : ''}`, tone: chartTone(text, signed) }];
+              const exact = typeof row[`${spec.id}Exact`] === 'string' ? row[`${spec.id}Exact`] as string : undefined;
+              const text = format(value, exact);
+              return [{ key: spec.id, label: spec.label, color: 'colorFor' in spec && spec.colorFor?.(row) || (spec.signColors ? (value >= 0 ? CHART.positive : CHART.negative) : spec.color), value: `${text}${unit ? ` ${unit}` : ''}`, exact, tone: chartTone(text, signed) }];
             })} />;
           }} />
         {bars.map(bar => <Bar key={bar.id} yAxisId="left" dataKey={bar.id} name={bar.label} fill={bar.color} radius={[2, 2, 2, 2]} maxBarSize={28} isAnimationActive={false}>

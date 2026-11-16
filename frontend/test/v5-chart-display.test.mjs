@@ -32,3 +32,15 @@ test('time-series tooltip formats the original decimal and uses its rounded tone
   assert.match(html, /<strong title="-0\.004">0\.00<\/strong>/);
   assert.doesNotMatch(html, /q-negative/);
 });
+
+test('bar tooltip keeps the exact owner decimal and rounds its display', () => {
+  const wrap = ({ children }) => React.createElement('div', null, children);
+  const names = ['Area', 'Bar', 'CartesianGrid', 'Cell', 'ComposedChart', 'Line', 'Pie', 'PieChart', 'ReferenceArea', 'ReferenceDot', 'ReferenceLine', 'ResponsiveContainer', 'XAxis', 'YAxis'];
+  const recharts = Object.fromEntries(names.map(name => [name, wrap]));
+  const row = { label: 'BNB', realized: -0.004, realizedExact: '-0.0040000000000000001' };
+  recharts.Tooltip = ({ content }) => content({ active: true, label: 'BNB', payload: [{ payload: row }] });
+  const { BarsChart } = frontendModules({ recharts }).load('features/quant-ops/kit/charts.tsx');
+  const html = renderToStaticMarkup(React.createElement(BarsChart, { rows: [row], bars: [{ id: 'realized', label: 'Closed', color: 'blue' }], ariaLabel: 'P&L' }));
+  assert.match(html, /<strong title="-0\.0040000000000000001">0\.00<\/strong>/);
+  assert.doesNotMatch(html, /q-negative/);
+});

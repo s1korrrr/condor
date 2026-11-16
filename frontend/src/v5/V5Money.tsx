@@ -64,10 +64,10 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
   const sincePercent = decimalPercentChange(equity, funding);
   const sinceExact = sinceStart == null ? undefined : `${equity} − ${funding} = ${sinceStart.replace(/^-/, "−")}`;
   const unit = now?.unit ?? "USDC";
-  const equitySeries: ChartSeries[] = [{ id: "equity", label: "V5 wallet equity", color: CHART.blue, points: series(rows, "v5", "equity"), unit, format: value => fixed(value) }];
+  const equitySeries: ChartSeries[] = [{ id: "equity", label: "V5 wallet equity", color: CHART.blue, points: series(rows, "v5", "equity"), unit, format: (value, exact) => fixed(exact ?? value) }];
   const pnlSeries: ChartSeries[] = [
-    { id: "realized", label: "Profit from closed trades", color: CHART.positive, points: series(rows, "v5", "realized"), format: value => signed(value) },
-    { id: "unrealized", label: "Gain or loss on coins still held", color: CHART.negative, points: series(rows, "v5", "unrealized"), format: value => signed(value) },
+    { id: "realized", label: "Profit from closed trades", color: CHART.positive, points: series(rows, "v5", "realized"), format: (value, exact) => signed(exact ?? value) },
+    { id: "unrealized", label: "Gain or loss on coins still held", color: CHART.negative, points: series(rows, "v5", "unrealized"), format: (value, exact) => signed(exact ?? value) },
   ];
   const coins = (now?.coins ?? {}) as Record<string, { realized: string | null; unrealized: string | null }>;
   const coinRows = Object.entries(coins).map(([coin, values]) => ({ label: coin, realized: num(values.realized), unrealized: num(values.unrealized) }));

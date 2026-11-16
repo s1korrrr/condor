@@ -10,11 +10,11 @@ export const CHART = {
 /** Largest JavaScript Date offset; later or earlier timestamps cannot be shown as a time. */
 const MAX_TIME_MS = 8.64e15;
 
-export type SeriesPoint = { time: number; value: number | null };
+export type SeriesPoint = { time: number; value: number | null; exact?: string };
 export type ChartSeries = {
   id: string; label: string; color: string; points: SeriesPoint[];
   /** Secondary series keep their own scale on the left edge (for example cumulative bot PnL over wallet value). */
-  axis?: 'primary' | 'secondary'; area?: boolean; unit?: string; format?: (value: number) => string;
+  axis?: 'primary' | 'secondary'; area?: boolean; unit?: string; format?: (value: number, exact?: string) => string;
   /** One signed series drawn green above zero and red below it (breadth pressure, net flow). Tooltip still shows one row. */
   signSplit?: { positive: string; negative: string };
   /** Set on the drawn halves of a `signSplit` series: the area fills from zero, not from the axis floor. */

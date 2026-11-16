@@ -11,6 +11,8 @@ test('series break at gap rows, rows without the field, and one missed five-minu
   const points = series(rows, 'v5', 'equity');
   // 10 → 20 misses the 15-minute slot: a null at 15 breaks the line.
   assert.deepEqual(points.map(point => point.value), [100, null, 100, null, 100]);
+  assert.equal(points[0].exact, '100');
+  assert.equal(points[1].exact, undefined);
   assert.equal(points[3].time, T0 + 15 * 60_000);
   // Fable's case: a missing :10–:20 and a row with no equity both stay gaps.
   assert.deepEqual(series([row(0), row(5), row(25, { equity: null }), row(30)], 'v5', 'equity').map(point => point.value), [100, 100, null, null, 100]);

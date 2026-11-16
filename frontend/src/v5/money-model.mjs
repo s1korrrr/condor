@@ -24,7 +24,8 @@ export function series(rows, bot, field) {
   let previous = null;
   for (const row of botRows(rows, bot)) {
     if (previous !== null && row.at_ms - previous > 1.5 * SAMPLE_MS) out.push({ time: previous + SAMPLE_MS, value: null });
-    out.push({ time: row.at_ms, value: row.gap ? null : number(row[field]) });
+    const value = row.gap ? null : number(row[field]);
+    out.push({ time: row.at_ms, value, ...(value !== null && typeof row[field] === 'string' ? { exact: row[field] } : {}) });
     previous = row.at_ms;
   }
   return out;

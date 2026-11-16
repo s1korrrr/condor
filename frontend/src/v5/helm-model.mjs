@@ -30,7 +30,7 @@ export function helmCoinRow(row, { fresh, nowS }) {
     rule: !signal ? 'Rule not published by Helm' : problem ? `Rule unavailable · ${problem}`
       : !Number.isSafeInteger(signal.rsi_length) || signal.rsi_length <= 0 || !lineKnown ? 'Rule not published by Helm'
       : `Buys when RSI(${count(signal.rsi_length)}) crosses up through ${coin(signal.oversold)}`,
-    rsi: `— · ${problem ?? 'RSI or line not published by Helm'}`,
+    rsi: `— · ${problem ?? 'RSI or line not published by Helm'}`, rsiTitle: undefined,
     atr: `— · ${problem ?? 'ATR not published by Helm'}`,
     decision: `— · ${problem ?? 'Entry decision not published'}`,
     sample: !time ? 'Signal time not published' : `${time} · ${ageS < 0 ? 'ahead of this read' : `${age(ageS)} ago`}${!fresh || ageS > 30 ? ' · stale' : ''}`,
@@ -40,6 +40,7 @@ export function helmCoinRow(row, { fresh, nowS }) {
   if (!problem) {
     if (rsi != null && rsi <= 100n * SCALE && lineKnown) {
       const distance = rsi - line;
+      result.rsiTitle = `RSI ${signal.rsi} − line ${signal.oversold} = ${distance < 0n ? '−' : ''}${points(distance < 0n ? -distance : distance)}`;
       result.rsi = `RSI ${coin(signal.rsi)}, ${distance === 0n ? 'on the line' : `${coin(points(distance < 0n ? -distance : distance))} points ${distance < 0n ? 'below' : 'above'} the line`}`;
       if (distance <= 0n) result.rsi += `: a buy needs RSI to rise above ${coin(signal.oversold)}`;
     }

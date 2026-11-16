@@ -123,6 +123,6 @@ export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot:
   else gap = change(last, bag.breakevenPrice!, 1);
   if (!gap && !reason) reason = 'A complete price comparison is unavailable.';
   const comparison = gap && last != null ? decimalPercentChange(last, bag?.breakevenPrice, 1) : null;
-  const exact = comparison ? `holding ${holdings.total} · (${last} − ${bag!.breakevenPrice}) × 100 / ${bag!.breakevenPrice} = ${comparison.exact} (exact fraction)` : holdings.total;
+  const exact = comparison ? `holding ${holdings.total} · (${last} − ${bag!.breakevenPrice}) × 100 / ${bag!.breakevenPrice} = ${comparison.exact}` : holdings.total;
   return { text: `V5 holds ${formatCoin(holdings.total)} · ${gap ? pct(gap, 1) : '—'} to breakeven`, exact, reason, asOf: positions.generated_at_ms };
 }

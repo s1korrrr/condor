@@ -71,7 +71,7 @@ export function holdReturn(closesByCoin) {
   denominator /= left;
   const result = rationalPercent(numerator, denominator);
   const inputs = coins.map((coin, index) => `${coin} ${byCoin[index].get(startS)} → ${byCoin[index].get(endS)}`).join(', ');
-  return { pct: result.value, exact: `${inputs} · exact average ${result.exact} (fraction)`, startS, endS, missing: [] };
+  return { pct: result.value, exact: `${inputs} · exact average ${result.exact}`, startS, endS, missing: [] };
 }
 
 /** V5 equity change between its own first and last sample with a value in the given rows, with those exact times. */
@@ -81,5 +81,5 @@ export function equityChange(rows, bot) {
   if (!first || first === last) return { pct: null, startMs: null, endMs: null };
   const ratio = decimalPercentRatio(last.equity, first.equity);
   const result = ratio && rationalPercent(ratio.numerator, ratio.denominator);
-  return { pct: result?.value ?? null, exact: result ? `(${last.equity} − ${first.equity}) × 100 / ${first.equity} = ${result.exact} (exact fraction)` : undefined, startMs: first.at_ms, endMs: last.at_ms };
+  return { pct: result?.value ?? null, exact: result ? `(${last.equity} − ${first.equity}) × 100 / ${first.equity} = ${result.exact}` : undefined, startMs: first.at_ms, endMs: last.at_ms };
 }

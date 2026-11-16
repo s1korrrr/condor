@@ -1,4 +1,9 @@
 import assert from 'node:assert/strict';
+
+test('exact percentages are readable decimals or reduced fractions', () => {
+  assert.equal(format.decimalPercentChange('199057.11379198655820', '200000').exact, '−0.4714431040067209%');
+  assert.equal(format.rationalPercent(12100n, 288n).exact, '3025/72%');
+});
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import * as format from '../src/v5/format.mjs';

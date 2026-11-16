@@ -83,7 +83,20 @@ export function rationalPercent(numerator, denominator, digits = 2) {
   const magnitude = numerator < 0n ? -numerator : numerator;
   const units = (magnitude * 2n * 10n ** BigInt(digits) + denominator) / (2n * denominator);
   const text = units.toString().padStart(digits + 1, '0');
-  return { value: `${numerator < 0n && units !== 0n ? '-' : ''}${digits ? `${text.slice(0, -digits)}.${text.slice(-digits)}` : text}`, exact: `${numerator}/${denominator}%`, direction: numerator < 0n ? -1 : numerator > 0n ? 1 : 0 };
+  let left = magnitude, right = denominator;
+  while (right) [left, right] = [right, left % right];
+  const reducedNumerator = magnitude / left, reducedDenominator = denominator / left;
+  let remainder = reducedDenominator, twos = 0, fives = 0;
+  while (remainder % 2n === 0n) { remainder /= 2n; twos += 1; }
+  while (remainder % 5n === 0n) { remainder /= 5n; fives += 1; }
+  const sign = numerator < 0n ? MINUS : '';
+  let exact;
+  if (remainder === 1n) {
+    const places = Math.max(twos, fives);
+    const decimal = (reducedNumerator * 2n ** BigInt(places - twos) * 5n ** BigInt(places - fives)).toString().padStart(places + 1, '0');
+    exact = `${sign}${places ? `${decimal.slice(0, -places)}.${decimal.slice(-places)}` : decimal}%`;
+  } else exact = `${sign}${reducedNumerator}/${reducedDenominator}%`;
+  return { value: `${numerator < 0n && units !== 0n ? '-' : ''}${digits ? `${text.slice(0, -digits)}.${text.slice(-digits)}` : text}`, exact, direction: numerator < 0n ? -1 : numerator > 0n ? 1 : 0 };
 }
 
 export function decimalPercentChange(value, base, digits = 2) {

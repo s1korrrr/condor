@@ -6,8 +6,10 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import { MemoryRouter } from 'react-router-dom';
 import { Window } from 'happy-dom';
 import { frontendModules } from './helpers/frontend-module.mjs';
+import { liveMoneyRows } from './helpers/v5-live-money.mjs';
 
 const css = fs.readFileSync(new URL('../src/v5/phone.css', import.meta.url), 'utf8');
+const marketCss = fs.readFileSync(new URL('../src/v5/market.css', import.meta.url), 'utf8');
 const now = Date.UTC(2026, 10, 15, 12, 34, 56);
 
 test('collapsed phone summary shows the formatted owner cell with exact title', () => {
@@ -111,6 +113,25 @@ test('Overview rounds tiny realized loss to zero and keeps exact since-start ari
   const since = stats.find(item => item.textContent.includes('Since start')).querySelector('[data-tone]');
   assert.equal(since.textContent, '−19.92');
   assert.equal(since.title, '199980.07714623162240 − 200000 = −19.92285376837760');
+  window.close();
+});
+
+test('Overview values use the tile value element and inherit their rounded tone', () => {
+  assert.match(marketCss, /\.v5m-stat strong \.owner-value\s*\{[^}]*font-size:\s*inherit;[^}]*\}/);
+  assert.match(marketCss, /\.v5m-stat strong \.v5-desktop-unit\s*\{[^}]*font-size:\s*\.7em/);
+  const {load} = frontendModules({
+    '@tanstack/react-query': {useQuery: ({queryKey}) => ({data:queryKey[0] === 'v5-money' ? {rows:liveMoneyRows} : undefined})},
+    './V5Money': {V5Money:() => null, readMoney() {}}, './V5Helm': {readHelm() {}},
+  });
+  const window = new Window();
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(MemoryRouter, null, React.createElement(load('v5/V5Overview.tsx').V5Overview)));
+  const tiles = [...window.document.querySelectorAll('.v5m-stat')];
+  for (const [label,tone] of [['Since start','down'], ['Profit from closed trades','up'], ['Coins still held','down']]) {
+    const tile = tiles.find(item => item.firstElementChild.textContent === label);
+    assert.ok(tile.classList.contains(`is-${tone}`));
+    assert.ok(tile.querySelector('strong > .owner-value'));
+  }
+  assert.ok(tiles[0].querySelector('strong > em.v5-desktop-unit'));
   window.close();
 });
 

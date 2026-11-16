@@ -12,7 +12,7 @@ export function breakEvenDistanceDetail(breakeven, close) {
   const needsRise = need.direction > 0;
   const result = needsRise ? need : above;
   const end = needsRise ? breakeven : String(close), base = needsRise ? String(close) : breakeven;
-  return { text: needsRise ? `Needs ${signed(result.value, 1)}% to break even` : `Above breakeven by ${fixed(result.value, 1)}%`, exact: `(${end} − ${base}) × 100 / ${base} = ${result.exact} (exact fraction)` };
+  return { text: needsRise ? `Needs ${signed(result.value, 1)}% to break even` : `Above breakeven by ${fixed(result.value, 1)}%`, exact: `(${end} − ${base}) × 100 / ${base} = ${result.exact}` };
 }
 
 export function moneySampleState(row, now) {

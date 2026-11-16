@@ -65,6 +65,14 @@ test('native per-controller rails are shown when the owner publishes no flat rai
   assert.deepEqual([paperRiskUsage(incomplete, now)[0].used_quote, paperRiskUsage(incomplete, now)[0].used_percent], [null, null], 'incomplete native risk infers no use');
 });
 
+test('native exposure just over the cap is not rendered as a full bar', () => {
+  const risk = structuredClone(final3.risk);
+  const native = risk.data.controllers.modular_spot_meridian_v5_paper_bnb.native;
+  native.marked_exposure = '100.00000000000000001';
+  native.configured_limits.pair_quote = '100';
+  assert.equal(paperRiskUsage(risk, now).find(rail => rail.label.startsWith('modular_spot_meridian_v5_paper_bnb')).used_percent, null);
+});
+
 test('paper read failures are typed: timeouts are transient, invalid publications are not', () => {
   assert.match(paperReadFailureMessage(503, {detail:{code:'upstream_timeout'}}), /^Transient: .*HTTP 503 · upstream_timeout/);
   assert.match(paperReadFailureMessage(503, {detail:{code:'upstream_unavailable', upstream_code:'PAPER_READ_CAPACITY', upstream_reason:'wait_timeout'}}), /^Transient: .*PAPER_READ_CAPACITY · wait_timeout/);

@@ -53,10 +53,10 @@ test('V5 equity change uses its own first and last sample with values', () => {
 test('Money comparisons retain exact inputs and rational results', () => {
   const result = equityChange([row(0, { equity: '100' }), row(5, { equity: '100.000000000000000000000000001' })], 'v5');
   assert.equal(result.pct, '0.00');
-  assert.equal(result.exact, '(100.000000000000000000000000001 − 100) × 100 / 100 = 100/100000000000000000000000000000% (exact fraction)');
+  assert.equal(result.exact, '(100.000000000000000000000000001 − 100) × 100 / 100 = 0.000000000000000000000000001%');
   const holding = holdReturn({ BTC: [[1, 3], [2, 4]], ETH: [[1, 3], [2, 3]] });
   assert.equal(holding.pct, '16.67');
-  assert.equal(holding.exact, 'BTC 3 → 4, ETH 3 → 3 · exact average 50/3% (fraction)');
+  assert.equal(holding.exact, 'BTC 3 → 4, ETH 3 → 3 · exact average 50/3%');
 });
 
 test('V5 endpoints keep their exact sample times, not rounded to the minute', () => {

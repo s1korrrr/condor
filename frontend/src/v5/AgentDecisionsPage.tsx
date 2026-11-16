@@ -22,8 +22,9 @@ function Report({ report, now }: { report: V5TaskReport; now: number }) {
   const result = report.record?.result;
   const visible = presentation === 'historical';
   return <article className="v5-decision-row" data-freshness={presentation}>
-    <div className="v5-decision-header"><strong>{TASKS[report.task_id] ?? 'Unknown agent'}</strong><span>{presentation === 'future' ? 'Future report withheld' : presentation === 'expired' ? 'Expired report · values withheld' : 'Stale or historical report · current validity not published'}</span></div>
-    {presentation !== 'future' && <p><Time value={result?.received_at_ms ?? result?.requested_at_ms} now={now} /></p>}
+    <div className="v5-decision-header"><strong>{TASKS[report.task_id] ?? 'Unknown agent'}</strong><span>{presentation === 'future' ? 'Future report withheld' : presentation === 'expired' ? 'Expired report · values withheld' : presentation === 'withheld' ? 'Report values withheld' : 'Stale or historical report · current validity not published'}</span></div>
+    {presentation !== 'future' && presentation !== 'withheld' && <p><Time value={result?.received_at_ms ?? result?.requested_at_ms} now={now} /></p>}
+    {presentation === 'withheld' && <p>{result ? 'The report time is missing or invalid; a usable advisor time is needed to show its values.' : 'The advisor has not published a result for this request; a completed result would appear here.'}</p>}
     {presentation === 'expired' && <p>Expired: <Time value={result?.expires_at_ms} now={now} /></p>}
     {visible && result ? <>
       <p><strong>{result.status ?? 'Status not published'}</strong> · {result.advice?.assessment ?? 'Assessment not published'}</p>
@@ -65,6 +66,7 @@ export function AgentDecisionsPage() {
       </div> : <p>The advisor budget and scheduler are unavailable; a workspace owner response would fill this panel.</p>}
     </section>
     <section className="v5-panel"><h2>Report timeline</h2>
+      <p>Only the latest history record per agent is shown; older reports are not included.</p>
       <div className="v5-decisions-filters"><label>Agent<select value={task} onChange={event => setTask(event.target.value)}><option value="all">All agents</option>{Object.entries(TASKS as Record<string, string>).map(([key, name]) => <option value={key} key={key}>{name}</option>)}</select></label>
         <label>Outcome or status<select value={status} onChange={event => setStatus(event.target.value)}><option value="all">All statuses</option>{statuses.map(item => <option key={item} value={item}>{item}</option>)}</select></label></div>
       <p>Coin filter not published by the advisor; reports with coin data would be needed to filter by coin.</p>

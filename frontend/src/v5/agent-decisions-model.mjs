@@ -8,6 +8,9 @@ export function reportPresentation(report, now) {
   const result = report.record?.result;
   const requested = result?.requested_at_ms;
   const received = result?.received_at_ms;
+  const validTime = value => Number.isSafeInteger(value) && value > 0;
+  if (!result || (![requested, received].some(validTime)) ||
+      ['requested_at_ms', 'received_at_ms', 'expires_at_ms'].some(key => key in result && !validTime(result[key]))) return 'withheld';
   if ((requested && requested > now) || (received && received > now)) return 'future';
   if (result?.expires_at_ms && result.expires_at_ms <= now) return 'expired';
   return 'historical';
@@ -21,7 +24,7 @@ export function selectReports(reports, task, status, now) {
     return report.record?.result?.status === status || report.record?.result?.advice?.assessment === status;
   }).sort((left, right) => {
     const time = report => {
-      if (reportPresentation(report, now) === 'future') return 0;
+      if (['future', 'withheld'].includes(reportPresentation(report, now))) return 0;
       return report.record?.result?.received_at_ms ?? report.record?.result?.requested_at_ms ?? 0;
     };
     return time(right) - time(left);

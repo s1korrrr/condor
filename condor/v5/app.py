@@ -676,6 +676,15 @@ def create_app(
                     "effect": "NONE", "record": None,
                 })
                 continue
+            report = record["result"]
+            time_keys = ("requested_at_ms", "received_at_ms", "expires_at_ms")
+            if (
+                not isinstance(report, dict)
+                or report.get("effect") != "NONE"
+                or not any(key in report for key in time_keys[:2])
+                or any(key in report and (type(report[key]) is not int or report[key] <= 0) for key in time_keys)
+            ):
+                raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})
             item = _safe_task_latest(task_id, {"status": "HISTORY", "record": record})
             if item["record"] is None:
                 raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})

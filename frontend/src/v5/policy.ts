@@ -342,7 +342,7 @@ export function paperWalletTotals(read: import("./contracts").PaperRead | undefi
 }
 
 const PAPER_DECIMAL = /^\d+(\.\d+)?$/;
-const paperDecimal = (value: unknown): value is string => typeof value === "string" && value.length <= 128 && PAPER_DECIMAL.test(value);
+export const paperDecimal = (value: unknown): value is string => typeof value === "string" && value.length <= 128 && PAPER_DECIMAL.test(value);
 
 /** Exact sum of non-negative decimal strings; the result keeps the longest fraction. */
 export function paperDecimalSum(values: readonly string[]): string {

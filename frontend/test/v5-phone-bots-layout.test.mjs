@@ -63,7 +63,7 @@ test('phone chart keeps partial-fill caveats and the not-current label outside d
   window.document.body.innerHTML = renderToStaticMarkup(React.createElement(PaperPriceChart, { now, view, fills, asOf: now }));
   const legend = window.document.querySelector('.paper-chart-legend');
   assert.match(legend.textContent, /▲ 1 entries ▼ 1 exits · retained fills \(partial\)/);
-  assert.match(legend.textContent, /missing candle minutes are counted but cannot be plotted/);
+  assert.match(legend.textContent, /missing candle minutes or without a valid published price are counted but cannot be plotted/);
   assert.equal(legend.children.length, 3);
   assert.match(window.document.querySelector('.paper-price-chart').textContent, /Trade markers and breakeven are dimmed snapshot values, not current/);
   assert.doesNotMatch(legend.textContent, /not current/);
@@ -84,7 +84,7 @@ test('recorded chart keeps a 360px canvas, 12px axis labels and dimmed breakeven
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   try {
     await act(async () => { renderer = create(React.createElement(RecordedCandleChart, { buckets: view.buckets, label: 'BNB', volumeUnit: 'BNB', breakeven: '748.17', snapshotDimmed: true,
-      markers: [{ time: minute, side: 'BUY', price: '700', quantity: '0.1234567890123456789' }] }), { createNodeMock: node => node.type === 'div' ? {} : null }); });
+      markers: [{ time: minute, event_at_ms: minute * 1000 + 1, side: 'BUY', price: '700', quantity: '0.1234567890123456789' }] }), { createNodeMock: node => node.type === 'div' ? {} : null }); });
     assert.equal(options.height, 360);
     assert.equal(options.autoSize, true);
     assert.equal(options.layout.fontSize, 12);
@@ -92,14 +92,14 @@ test('recorded chart keeps a 360px canvas, 12px axis labels and dimmed breakeven
     assert.equal(line.title, 'Breakeven');
     assert.match(line.color, /0\.55/);
     assert.match(markers[0].color, /0\.55/);
-    assert.equal(markers[0].text, 'BUY 0.123457 @ 700.00');
+    assert.equal(markers[0].text, `BUY 0.1234567890123456789 @ 700 · ${new Date(minute * 1000 + 1).toISOString()}`);
   } finally {
     await act(async () => renderer?.unmount());
     delete globalThis.IS_REACT_ACT_ENVIRONMENT;
   }
 });
 
-test('recorded chart formats marker labels and hovered candle values', async () => {
+test('recorded chart preserves exact fill labels and formats hovered candle values', async () => {
   let markers, crosshair;
   const { RecordedCandleChart } = frontendModules({
     'lightweight-charts': { CandlestickSeries:{}, ColorType:{Solid:'solid'}, LineStyle:{Dashed:2},
@@ -112,8 +112,8 @@ test('recorded chart formats marker labels and hovered candle values', async () 
   globalThis.IS_REACT_ACT_ENVIRONMENT = true;
   try {
     const candle = [60,101.123456789,102.123456789,100.123456789,101.123456789,0.123456789,1,0,0,0,0,0];
-    await act(async () => { renderer=create(React.createElement(RecordedCandleChart,{buckets:[candle],label:'BNB',volumeUnit:'BNB',markers:[{time:60,side:'BUY',quantity:'0.00000000',price:'101.123456789'}]}),{createNodeMock: node => node.type === 'div' ? {} : null}); });
-    assert.equal(markers[0].text, 'BUY 0 @ 101.12');
+    await act(async () => { renderer=create(React.createElement(RecordedCandleChart,{buckets:[candle],label:'BNB',volumeUnit:'BNB',markers:[{time:60,event_at_ms:61023,side:'BUY',quantity:'0.00000000',price:'101.123456789'}]}),{createNodeMock: node => node.type === 'div' ? {} : null}); });
+    assert.equal(markers[0].text, 'BUY 0.00000000 @ 101.123456789 · 1970-01-01T00:01:01.023Z');
     await act(async () => crosshair({time:60}));
     const readout=renderer.root.findByProps({'aria-live':'polite'});
     const close = readout.findAllByType('span').find(span => span.props.title === '101.123456789');

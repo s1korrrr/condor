@@ -18,7 +18,7 @@ export function PaperPriceChart({ fills, positions, decisions, now, valuesAt = n
     <p className="paper-caption">30 days is not offered: the candle store keeps 7 days of 1-minute candles.</p>
     {view && <p className="paper-caption">Requested window: {paperTime(view.start * 1000, now)} to {paperTime((view.end + 60) * 1000, now)} · Latest final candle: {latest ? paperTime(latest.at, now) : "— · no final candle"} · OKX spot</p>}
     {asOf !== null && <p className="paper-caption">Trade markers and breakeven are dimmed snapshot values, not current · {paperTime(asOf, now)}</p>}
-    <p className="paper-caption paper-chart-legend" style={asOf !== null ? {opacity: 0.6} : undefined}>{mapped ? <><span>▲ {mapped.entries} entries</span>{" "}<span>▼ {mapped.exits} exits</span>{" "}<span>· retained fills{fills?.completeness === "partial" ? " (partial)" : ""}. Trades in missing candle minutes are counted but cannot be plotted.</span></> : "— · fills or candles unavailable"}</p>
+    <p className="paper-caption paper-chart-legend" style={asOf !== null ? {opacity: 0.6} : undefined}>{mapped ? <><span>▲ {mapped.entries} entries</span>{" "}<span>▼ {mapped.exits} exits</span>{" "}<span>· retained fills{fills?.completeness === "partial" ? " (partial)" : ""}. Trades in missing candle minutes or without a valid published price are counted but cannot be plotted.</span></> : "— · fills or candles unavailable"}</p>
     {view ? <Suspense fallback={<p role="status">Loading chart…</p>}><RecordedCandleChart buckets={view.buckets} label={`${view.venue} spot · ${view.pair}`} volumeUnit={view.volume_unit} markers={mapped?.markers} breakeven={bag?.breakevenPrice} snapshotDimmed={asOf !== null} /></Suspense> : <p role="status">— · {reason}</p>}
   </section>;
 }

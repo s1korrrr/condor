@@ -126,7 +126,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const overrides = {'lightweight-charts':{CandlestickSeries:{},ColorType:{Solid:'solid'},LineStyle:{Dashed:2},createChart:() => {
     const capture = {data:[],markers:[],move:null}; charts.push(capture);
     return {addSeries:() => ({capture,setData(data){capture.data = data;},createPriceLine(){}}),subscribeCrosshairMove(callback){capture.move = callback;},timeScale:() => ({fitContent(){}}),remove(){}};
-  },createSeriesMarkers(series,markers){series.capture.markers = markers;}},'react-router-dom':{...Router,BrowserRouter:({children}) => React.createElement(Router.MemoryRouter,{initialEntries:[route]},children)}};
+  },createSeriesMarkers(series,markers){series.capture.markers.push(...markers);}},'react-router-dom':{...Router,BrowserRouter:({children}) => React.createElement(Router.MemoryRouter,{initialEntries:[route]},children)}};
   const {load} = frontendModules(overrides,{'v5/V5App.tsx':['client']},(filename,source) => {
     source = clockMutation(filename,baselineSource(filename,source));
     if (!filename.endsWith('/v5/V5Pages.tsx')) return source;
@@ -208,6 +208,17 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
     for (const [pathname,heading] of routes) await context.test(pathname,async () => {
       route = pathname;
       const chartStart = charts.length;
+      const assertChartMarkers = stage => {
+        if (pathname !== '/bots') return;
+        for (const marker of charts.slice(chartStart).flatMap(chart => chart.markers)) {
+          const owner = sections.fills.data.find(fill => marker.text === `${fill.side} ${fill.quantity} @ ${fill.price} · ${new Date(fill.event_at_ms).toISOString()}`);
+          assert.ok(owner, `${stage}: each exact fill label must match one owner record, not an arbitrary raw decimal`);
+          assert.equal(marker.price, Number(owner.price));
+          assert.equal(marker.time, Math.floor(owner.event_at_ms / 60000) * 60);
+          assert.equal(marker.position, owner.side === 'BUY' ? 'atPriceBottom' : 'atPriceTop');
+          assert.equal(marker.shape, owner.side === 'BUY' ? 'arrowUp' : 'arrowDown');
+        }
+      };
       if (pathname === '/bots') now = sections.status.generated_at_ms + 1000;
       const requestStart = requests.length;
       const failures = [];
@@ -230,20 +241,22 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       if (pathname === '/bots') client.setQueryData(['v5-paper-bots',bot],['status','wallet','positions','fills','executors','risk','decisions','history','accounting'].map(section => section === 'status' ? statusForRoute() : sections[section]));
       try {
         await React.act(async () => {mount.render(React.createElement(Boundary,null,React.createElement(V5App)));});
+        assertChartMarkers('mount');
         assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, pathname === '/bots' ? 1 : 0, 'only Bots reads symbols once on initial mount with a complete snapshot');
         await React.act(async () => {await client.refetchQueries({type:'active'});});
+        assertChartMarkers('explicit refresh');
         await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
+        assertChartMarkers('settled refresh');
         if (pathname === '/bots') {
           assert.match(container.textContent,/terminal-fixture/,'terminal history must render a published record');
-          assert.ok(charts.slice(chartStart).some(chart => chart.markers.some(marker => marker.text === 'BUY 0.00617 @ 748.17')), 'the chart must receive the formatted buy marker');
-          const markerText = document.createElement('div');
-          markerText.textContent = charts.slice(chartStart).flatMap(chart => chart.markers.map(marker => marker.text)).join(' · ');
-          assert.deepEqual(longVisibleDecimals(markerText), [], 'chart markers must not expose raw decimal tails');
+          const chartMarkers = charts.slice(chartStart).flatMap(chart => chart.markers);
+          assert.ok(chartMarkers.some(marker => marker.text === `BUY ${fixtureFill.quantity} @ ${fixtureFill.price} · ${new Date(fixtureFill.event_at_ms).toISOString()}`), 'the chart must receive the exact buy fill');
           assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 1, 'explicit refresh must not reload the symbols list');
           const candlesBefore = requests.slice(requestStart).filter(request => request.startsWith('/api/v5/candle-store/candles?')).length;
           assert.ok(candlesBefore > 0, 'listed BNB must load candles before the interval');
           now += 60_001;
           await React.act(async () => {context.mock.timers.tick(60_001); await new Promise(resolve => setTimeout(resolve,0));});
+          assertChartMarkers('candle poll');
           assert.ok(requests.slice(requestStart).filter(request => request.startsWith('/api/v5/candle-store/candles?')).length > candlesBefore, 'candles must poll after an elapsed interval');
           assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 1, 'symbols stay loaded after an elapsed interval');
           const symbols = client.getQueryCache().find({queryKey:['v5-bots-candle-symbols']});
@@ -256,6 +269,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         assert.ok(container.querySelector('main'),`${pathname} must keep the app mounted`);
         assert.ok(container.textContent.includes(heading),`${pathname} must render ${heading}: ${container.textContent}`);
         await openDisclosures(container);
+        assertChartMarkers('open disclosures');
         if (pathname === '/market') await React.act(async () => { await client.refetchQueries({type:'active'}); await new Promise(resolve => setTimeout(resolve,0)); });
         if (pathname === '/market') {
           const chart = charts.slice(chartStart).findLast(item => item.data.some(row => row.close === 101.123456789));
@@ -374,6 +388,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           assert.doesNotMatch(container.textContent,/paper owner reads: available/);
         }
         await React.act(async () => {window.dispatchEvent(new browser.Event('focus'));});
+        assertChartMarkers('focus');
         if (pathname === '/settings') {
           assert.match(container.textContent,/stale; not current/,'focus must publish the stale flip at 30,001 ms');
           assert.doesNotMatch(container.textContent,/snapshot only/);

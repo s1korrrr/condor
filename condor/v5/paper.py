@@ -1187,6 +1187,18 @@ def _matches_c1_schema(value: Any, schema: dict) -> bool:
 
 
 NATIVE_DECIMAL = {"type": "string", "maxLength": 128, "pattern": r"\A-?[0-9]+(?:\.[0-9]+)?\Z"}
+RECEIPT_AMOUNTS = (
+    "entry_gross_base", "entry_gross_quote", "exit_gross_base", "exit_gross_quote",
+    "fees_quote", "remaining_owned_base", "residual_dust_base",
+)
+NATIVE_EXECUTION_RECEIPT = {
+    "type": "object",
+    "required": ["accounting_owner", *RECEIPT_AMOUNTS],
+    "properties": {
+        "accounting_owner": {"type": "string"},
+        **{name: {"type": "string", "minLength": 1, "maxLength": 128} for name in RECEIPT_AMOUNTS},
+    },
+}
 NATIVE_CURRENCY = {"type": "string", "pattern": r"\A[A-Za-z0-9_.-]{1,32}\Z"}
 NATIVE_STRUCTURED_FINANCIAL = {
     "fee": {
@@ -1221,6 +1233,9 @@ NATIVE_STRUCTURED_FINANCIAL = {
 def _validate_read_tree(value: Any, key: str = "", depth: int = 0, *, native_fee: bool = False) -> None:
     if depth > 16 or isinstance(value, float):
         raise ValueError("invalid paper observation value")
+    if key == "execution_receipt":
+        if not _matches_c1_schema(value, NATIVE_EXECUTION_RECEIPT):
+            raise ValueError("invalid execution receipt")
     if value is None:
         return
     if key.endswith("_ms"):

@@ -45,6 +45,8 @@ const bot = sections.status.bot_id;
 const fixtureMinute = Math.floor(sections.status.read_at_ms / 60_000) * 60 - 60;
 const fixtureClose = 101.123456789;
 const fixtureFill = sections.fills.data.find(row => row.trading_pair === 'BNB-USDC' && row.side === 'BUY');
+const ownerLine = fill => `${fill.side} ${fill.quantity} @ ${fill.price} · ${new Date(fill.event_at_ms).toISOString()}`;
+const matchesFill = (marker, fill) => marker.id === ownerLine(fill);
 fixtureFill.event_at_ms = fixtureMinute * 1000;
 fixtureFill.executor_id = sections.executors.data.find(row => row.trading_pair === 'BNB-USDC').executor_id;
 const laneFixture = {lane:'binance__spot',venue:'binance',segment:'spot',pair:'BTC-USDT',health:'green',health_rules:[{level:'info',rule:'fixture',detail:'owner evidence'}],volume_unit:'base',last_minute:1793403200,last_minute_age_s:1,coverage_1h:0.876543217317,coverage_24h:0.876543217317,coverage_7d:0.876543217317,gaps_7d:1,pending:0,unrecoverable_7d:0,no_trade_7d:0,ws_state:'connected',grace_s:30,pairs_listed:1,pairs_held:1,available:true,unavailable_reason:null,partition_errors:[]};
@@ -215,8 +217,9 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       const assertChartMarkers = stage => {
         if (pathname !== '/bots') return;
         for (const marker of charts.slice(chartStart).flatMap(chart => chart.markers)) {
-          const owner = sections.fills.data.find(fill => marker.text === `${fill.side} ${fill.quantity} @ ${fill.price} · ${new Date(fill.event_at_ms).toISOString()}`);
-          assert.ok(owner, `${stage}: each exact fill label must match one owner record, not an arbitrary raw decimal`);
+          const owner = sections.fills.data.find(fill => matchesFill(marker, fill));
+          assert.ok(owner, `${stage}: each marker id must match an exact owner fill line`);
+          assert.ok(!marker.text, `${stage}: fill markers must have no always-on text`);
           assert.equal(marker.price, Number(owner.price));
           assert.equal(marker.time, Math.floor(owner.event_at_ms / 60000) * 60);
           assert.equal(marker.position, owner.side === 'BUY' ? 'atPriceBottom' : 'atPriceTop');
@@ -254,7 +257,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         if (pathname === '/bots') {
           assert.match(container.textContent,/terminal-fixture/,'terminal history must render a published record');
           const chartMarkers = charts.slice(chartStart).flatMap(chart => chart.markers);
-          assert.ok(chartMarkers.some(marker => marker.text === `BUY ${fixtureFill.quantity} @ ${fixtureFill.price} · ${new Date(fixtureFill.event_at_ms).toISOString()}`), 'the chart must receive the exact buy fill');
+          assert.ok(chartMarkers.some(marker => matchesFill(marker, fixtureFill)), 'the chart must receive the exact buy fill');
           const tradesButton = [...container.querySelectorAll('button')].find(button => button.textContent === 'Show trades');
           assert.ok(tradesButton, 'Bots must expose the Trades subview');
           const tradesRequestStart = requests.length;
@@ -276,8 +279,16 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           const tradeChart = charts.slice(tradeChartStart).at(-1);
           assert.ok(tradeChart, 'the selected trade chart must render');
           assertChartMarkers('Trades detail');
-          const tradeMarkers = tradeChart.markers.filter(marker => marker.text === `BUY ${fixtureFill.quantity} @ ${fixtureFill.price} · ${new Date(fixtureFill.event_at_ms).toISOString()}`);
-          assert.equal(tradeMarkers.length,1,'duplicate fills must produce one trade chart marker');
+          const tradeMarkers = tradeChart.markers.filter(marker => matchesFill(marker, fixtureFill));
+          assert.equal(tradeMarkers.length,1,'duplicate fills must produce exactly one marker with the fixture fill id');
+          const plottedMinutes = new Set(tradeChart.data.filter(row => Number.isFinite(row.close)).map(row => row.time));
+          const admittedOwnerFills = sections.fills.data.filter(fill => fill.executor_id === fixtureFill.executor_id
+            && fill.trading_pair === fixtureFill.trading_pair && ['BUY','SELL'].includes(fill.side)
+            && typeof fill.event_at_ms === 'number' && Number.isFinite(fill.event_at_ms) && fill.event_at_ms <= now
+            && plottedMinutes.has(Math.floor(fill.event_at_ms / 60000) * 60)
+            && typeof fill.price === 'string' && /^-?[0-9]+(?:\.[0-9]+)?$/.test(fill.price) && Number(fill.price) > 0);
+          const distinctOwnerFills = new Set(admittedOwnerFills.map(fill => JSON.stringify([fill.order_id,fill.trade_id])));
+          assert.equal(tradeChart.markers.length,distinctOwnerFills.size,'every distinct admitted owner fill must produce one trade chart marker');
           await React.act(async () => { [...container.querySelectorAll('button')].find(button => button.textContent === 'Hide trades').click(); });
           assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 1, 'explicit refresh must not reload the symbols list');
           const candlesBefore = requests.slice(requestStart).filter(request => request.startsWith('/api/v5/candle-store/candles?')).length;

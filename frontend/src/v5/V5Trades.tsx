@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import type { PaperRead } from './contracts';
 import { PaperPriceChart } from './PaperPriceChart';
 import { usePaperSnapshot } from './usePaperSnapshot';
-import { paperCoherentRead, paperCompleteRead, paperCompleteRecords, paperDecimalSum, paperPairBag, paperRetainedRecords, paperSectionError, paperTime, paperWords } from './policy';
+import { paperCoherentRead, paperCompleteRead, paperCompleteRecords, paperPairBag, paperRetainedRecords, paperSectionError, paperTime, paperWords } from './policy';
 import { paperDimmedSnapshot, paperSnapshotPresentation } from './snapshot-presentation';
 import { exactSignedSum } from './bots-position-model.mjs';
 import { hasPaperCandlePair, paperCandleQuery, usePaperCandleSymbols } from './paper-candles';
@@ -27,6 +27,7 @@ const countValue = (value: string | number) => <OwnerValue value={value} kind="c
 const at = (value: unknown, now: number) => typeof value === 'number' && Number.isSafeInteger(value) && value <= now ? <span title={String(value)}>{paperTime(value, now)}</span> : '—';
 const age = at;
 const asset = (row: Row) => typeof row.trading_pair === 'string' ? row.trading_pair.split('-')[0] : 'Not published';
+const sum = (rows: Row[], key: string) => rows.every(row => typeof row[key] === 'string') ? rows.reduce((total: string | null, row) => total === null ? null : exactSignedSum(total, row[key]), '0') : null;
 
 function historyRows(read: PaperRead | undefined, now: number): Row[] | null {
   if (!read || read.section !== 'history' || paperSectionError(read) || !read.capabilities?.includes('read') || !['available', 'degraded'].includes(read.state) || !['complete', 'partial'].includes(read.completeness ?? '') || typeof read.generated_at_ms !== 'number' || read.generated_at_ms > now || now - read.generated_at_ms > 30_000) return null;
@@ -106,7 +107,6 @@ export function TradesContent({ reads, now, readFailed = false, heartbeat = 'Una
     const name = pairs?.size === 1 ? `Observed pair ${[...pairs][0]} · ${controller}` : `Pair not established · ${controller}`;
     totals.set(name, [object(value)]);
   }
-  const sum = (rows: Row[], key: string) => rows.every(row => typeof row[key] === 'string') ? key === 'realized_pnl_quote' ? rows.reduce((total: string | null, row) => total === null ? null : exactSignedSum(total, row[key]), '0') : paperDecimalSum(rows.map(row => row[key])) : null;
   const counts = (rows: Row[], key: string) => rows.every(row => Number.isSafeInteger(row[key]) && row[key] >= 0) ? rows.reduce((total, row) => total + BigInt(row[key]), 0n).toString() : null;
   const selectedFills = selectedTrade && fills ? fills.filter(row => row.executor_id === selected) : null;
   const selectedLots = selectedTrade && lots ? lots.filter(row => row.executor_id === selected) : null;

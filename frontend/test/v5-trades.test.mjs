@@ -54,6 +54,63 @@ function reads() {
   return sections;
 }
 
+for (const key of ['fees_paid_quote', 'volume_traded_quote']) {
+  test(`accounting totals render signed ${key}`, () => {
+    const sections = reads();
+    sections.accounting.data.controllers = { signed: { realized_pnl_quote: '0', fees_paid_quote: '0', volume_traded_quote: '0', entry_count: 0, exit_count: 0, [key]: '-0.01' } };
+    const { TradesContent } = frontendModules().load('v5/V5Trades.tsx');
+    const window = new Window();
+    try {
+      window.document.body.innerHTML = renderToStaticMarkup(React.createElement(TradesContent,{reads:Object.values(sections),now:sections.status.generated_at_ms}));
+      const accounting = [...window.document.querySelectorAll('section')].find(section => section.querySelector('h2')?.textContent === 'Totals by coin');
+      const cell = accounting.querySelectorAll('tbody td')[key === 'fees_paid_quote' ? 2 : 3];
+      assert.equal(cell.textContent, '−0.01 USDC');
+      assert.equal(cell.querySelector('[title]').title, '-0.01');
+    } finally {
+      window.close();
+    }
+  });
+}
+
+test('every accounting column sums mixed signs exactly', () => {
+  const { sum } = frontendModules({}, {'v5/V5Trades.tsx':['sum']}).load('v5/V5Trades.tsx');
+  for (const key of ['realized_pnl_quote', 'fees_paid_quote', 'volume_traded_quote']) {
+    assert.equal(sum([{[key]:'0.02'}, {[key]:'-0.03'}], key), '-0.01');
+    assert.equal(sum([{[key]:'-0.01'}, {[key]:'0.03'}], key), '0.02');
+    assert.equal(sum([{[key]:'100000000000000000000.01'}, {[key]:'-100000000000000000000.02'}], key), '-0.01');
+    assert.equal(sum([{[key]:'0.01'}, {[key]:'-0.01'}], key), '0.00');
+    assert.equal(sum([{[key]:'0.01'}, {[key]:'invalid'}], key), null);
+    assert.equal(sum([{[key]:'0.01'}, {}], key), null);
+  }
+});
+
+test('fixed-pair trade detail omits coin selector from the DOM', async () => {
+  const sections = reads();
+  const { TradesContent } = frontendModules({ './paper-candles':{PAIRS:['BNB-USDC','BTC-USDC','ETH-USDC','SOL-USDC','XRP-USDC'], latestFinalCandle:() => null, usePaperCandleSymbols:() => ({}), hasPaperCandlePair:() => false, paperCandleQuery:() => ({})}, '@tanstack/react-query':{useQuery:() => ({})} }).load('v5/V5Trades.tsx');
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  let renderer;
+  try {
+    await act(async () => { renderer = create(React.createElement(TradesContent,{reads:Object.values(sections),now:sections.status.generated_at_ms})); });
+    await act(async () => { renderer.root.findAllByType('button').find(button => button.children[0] === 'View trade').props.onClick(); });
+    const chart = renderer.root.findAllByType('section').find(section => section.props.className === 'paper-section paper-price-chart');
+    assert.ok(chart);
+    for (const width of [390,430]) {
+      const window = new Window({width,height:844});
+      try {
+        window.document.body.innerHTML = renderToStaticMarkup(chart.props.children);
+        assert.equal(window.document.querySelectorAll('[aria-label="Chart coin"]').length, 0);
+        assert.equal(window.document.querySelectorAll('.paper-chart-coins').length, 0);
+        assert.deepEqual([...window.document.querySelectorAll('[aria-label="Chart range"] button')].map(button => button.textContent), ['1D','7D']);
+      } finally {
+        window.close();
+      }
+    }
+  } finally {
+    await act(async () => renderer?.unmount());
+    delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+  }
+});
+
 test('trade detail renders fills, lots, orders and honest unpublished metrics', async () => {
   const sections = reads();
   let chartFills;

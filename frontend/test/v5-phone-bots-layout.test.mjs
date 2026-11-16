@@ -27,7 +27,7 @@ function chartModules() {
 test('phone chart exposes every coin and range with selected state and a real fixed-height chart', () => {
   const { PaperPriceChart } = chartModules().load('v5/PaperPriceChart.tsx');
   const window = new Window();
-  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(PaperPriceChart, { now, view, pair: 'BNB-USDC' }));
+  window.document.body.innerHTML = renderToStaticMarkup(React.createElement(PaperPriceChart, { now, view, pair: 'BNB-USDC', setPair: () => {} }));
   const coins = [...window.document.querySelectorAll('[aria-label="Chart coin"] button')];
   assert.deepEqual(coins.map(button => button.textContent), ['BNB', 'BTC', 'ETH', 'SOL', 'XRP']);
   assert.deepEqual(coins.filter(button => button.getAttribute('aria-pressed') === 'true').map(button => button.textContent), ['BNB']);

@@ -24,7 +24,7 @@ from starlette.concurrency import run_in_threadpool
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from .agents import AgentCatalog, AgentDefinition
-from .candles import CandleOwner, OwnerUnavailable, validate_query
+from .candles import MAX_TIMESTAMP, CandleOwner, OwnerUnavailable, validate_query
 from .config import Settings, read_secret_file
 from .dashboard import dashboard_profile, read_compatibility_path
 from .helm import read_helm_status
@@ -87,6 +87,11 @@ def _safe_policy_metadata(
 
 
 _WATERMARK_REASON = re.compile(r"[A-Z_]{1,32}(?::[a-z_,]{1,96})?")
+_ADVISOR_TIME_KEYS = ("requested_at_ms", "received_at_ms", "expires_at_ms", "input_cutoff_ms", "input_available_at_ms")
+
+
+def _valid_advisor_time(value: Any) -> bool:
+    return type(value) is int and 0 < value <= MAX_TIMESTAMP * 1000
 
 
 def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
@@ -132,11 +137,13 @@ def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
         # Application-written by the advisor; never model text.
         safe_report["rejection"] = rejection[:300]
     coverage_status = report.get("coverage_status")
-    if coverage_status in {"COMPLETE_OBSERVED_COHORT", "PARTIAL_OR_UNKNOWN"}:
+    if isinstance(coverage_status, str) and coverage_status in {
+        "COMPLETE_OBSERVED_COHORT", "PARTIAL_OR_UNKNOWN"
+    }:
         safe_report["coverage_status"] = coverage_status
-    for key in ("requested_at_ms", "received_at_ms", "expires_at_ms"):
+    for key in _ADVISOR_TIME_KEYS:
         value = report.get(key)
-        if isinstance(value, int) and not isinstance(value, bool) and value > 0:
+        if _valid_advisor_time(value):
             safe_report[key] = value
     actual_usd = report.get("actual_usd")
     if actual_usd is None or (
@@ -155,7 +162,9 @@ def _safe_task_latest(task_id: str, payload: Any) -> dict[str, Any]:
         for key, limit, length in (("reason_codes", 8, 64), ("evidence_refs", 32, 128)):
             values = advice.get(key)
             if isinstance(values, list):
-                safe_advice[key] = [str(item)[:length] for item in values[:limit]]
+                safe_advice[key] = [
+                    item[:length] for item in values[:limit] if isinstance(item, str)
+                ]
         safe_report["advice"] = safe_advice
     request_id = record.get("request_id")
     safe_record: dict[str, Any] = {"result": safe_report}
@@ -626,6 +635,64 @@ def create_app(
 
     async def get_json(path: str) -> dict[str, Any]:
         return await api.observation(path)
+
+    @app.get("/api/v5/advisor/history", dependencies=[Depends(require_auth)])
+    async def advisor_history(request: Request):
+        params = request.query_params.multi_items()
+        if len(params) != 2 or set(key for key, _ in params) != {"task_id", "limit"}:
+            raise HTTPException(400, detail={"code": "INVALID_HISTORY_QUERY"})
+        values = dict(params)
+        task_id, limit = values["task_id"], values["limit"]
+        if (
+            task_id not in KNOWN_TASK_IDS
+            or limit != "1"
+            or request.scope["query_string"] not in {
+                f"task_id={task_id}&limit={limit}".encode(),
+                f"limit={limit}&task_id={task_id}".encode(),
+            }
+        ):
+            raise HTTPException(400, detail={"code": "INVALID_HISTORY_QUERY"})
+        try:
+            payload = await api.observation(
+                f"/v1/advice/history?task_id={task_id}&limit={limit}"
+            )
+        except UpstreamError:
+            raise HTTPException(503, detail={"code": "ADVISOR_HISTORY_UNAVAILABLE"}) from None
+        records = payload.get("records") if isinstance(payload, dict) else None
+        if (
+            not isinstance(records, list)
+            or len(records) > int(limit)
+            or payload.get("effect") != "NONE"
+        ):
+            raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})
+        projected = []
+        for record in records:
+            if (
+                not isinstance(record, dict)
+                or not isinstance(record.get("input"), dict)
+                or record["input"].get("task_id") != task_id
+                or "result" not in record
+            ):
+                raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})
+            if record.get("result") is None:
+                projected.append({
+                    "task_id": task_id, "status": "RESULT_NOT_PUBLISHED",
+                    "effect": "NONE", "record": None,
+                })
+                continue
+            report = record["result"]
+            if (
+                not isinstance(report, dict)
+                or report.get("effect") != "NONE"
+                or not any(key in report for key in _ADVISOR_TIME_KEYS[:2])
+                or any(key in report and not _valid_advisor_time(report[key]) for key in _ADVISOR_TIME_KEYS)
+            ):
+                raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})
+            item = _safe_task_latest(task_id, {"status": "HISTORY", "record": record})
+            if item["record"] is None:
+                raise HTTPException(502, detail={"code": "INVALID_HISTORY_RESPONSE"})
+            projected.append(item)
+        return {"effect": "NONE", "records": projected}
 
     def task_rows(payload: dict[str, Any]) -> list[dict[str, Any]]:
         rows = payload.get("tasks", [])

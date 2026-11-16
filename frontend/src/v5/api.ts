@@ -3,6 +3,7 @@ import type {
   V5SessionDetail,
   V5Settings,
   V5Workspace,
+  V5TaskReport,
 } from "./contracts";
 
 export class V5ApiError extends Error {
@@ -66,6 +67,11 @@ export const v5Api = {
     }),
   logout: () => request<void>("/auth/logout", { method: "POST" }),
   workspace: () => request<V5Workspace>("/workspace"),
+  advisorHistory: async (task: string) => {
+    const result = await request<{ effect: "NONE"; records: V5TaskReport[] }>(`/advisor/history?task_id=${encodeURIComponent(task)}&limit=1`);
+    if (!result || result.effect !== "NONE" || !Array.isArray(result.records)) throw new V5ApiError("The advisor returned invalid history.", 502, "INVALID_HISTORY");
+    return result;
+  },
   agent: (id: string) => request<V5AgentDetail>(`/agents/${encodeURIComponent(id)}`),
   inspect: (id: string) =>
     request<V5SessionDetail>(`/agents/${encodeURIComponent(id)}/inspect`, { method: "POST" }),

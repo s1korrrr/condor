@@ -124,6 +124,8 @@ export interface V5TaskReport {
       requested_at_ms?: number;
       received_at_ms?: number;
       expires_at_ms?: number;
+      input_cutoff_ms?: number;
+      input_available_at_ms?: number;
       actual_usd?: string | null;
       advice?: { assessment?: string; summary?: string; reason_codes?: string[]; evidence_refs?: string[] };
     };

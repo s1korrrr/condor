@@ -27,7 +27,7 @@ const routes = [
   ['/settings','Workspace settings'], ['/bots','Paper bots'], ['/helm','Helm paper bot'], ['/money','Money'], ['/capital','Capital'],
   ['/operations','Operations'], ['/v5/readiness','Paper readiness'], ['/system','Operations'], ['/system/checks','Operations'],
   ['/backtests','Tradepad'], ['/','Overview'], ['/market','Market'], ['/market/BTC','Market'], ['/market/evidence','Market'], ['/market/candles','Market'],
-  ['/market/stocks','OKX stocks'], ['/agents','Agents'],
+  ['/market/stocks','OKX stocks'], ['/agents','Agents'], ['/agents/decisions','Agent decisions'],
   ['/agents/decision_reviewer','Decision Reviewer'], ['/research','Research'],
   ['/learning','Learning'], ['/research-factory','Research factory'],
   ['/decision-lineage','Decision lineage'], ['/sessions','Sessions'],

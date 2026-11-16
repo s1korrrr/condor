@@ -32,7 +32,7 @@ const columns: TableColumn<Row>[] = [
   { id: "last", header: "Last open (UTC)", value: row => utc(row.last_minute), size: 170 },
   { id: "age", header: "Age since close (s)", value: row => row.last_minute_age_s, kind: "number", size: 85 },
   { id: "grace", header: "Settle grace (s)", value: row => row.grace_s, kind: "number", size: 75 },
-  ...(["1h", "24h", "7d"] as const).map(span => ({ id: `coverage_${span}`, header: `Settled coverage ${span} (%)`, value: (row: Row) => row[`coverage_${span}`], cell: (row: Row) => row[`coverage_${span}`] == null ? "—" : <span title={String(row[`coverage_${span}`])}>{fixed(decimalShift(row[`coverage_${span}`], 2), 2)}</span>, kind: "number" as const, size: 85 })),
+  ...(["1h", "24h", "7d"] as const).map(span => ({ id: `coverage_${span}`, header: `Settled coverage ${span} (%)`, value: (row: Row) => row[`coverage_${span}`] == null ? null : Number(fixed(decimalShift(row[`coverage_${span}`], 2), 2).replaceAll(",", "")), cell: (row: Row) => row[`coverage_${span}`] == null ? "—" : <span title={String(row[`coverage_${span}`])}>{fixed(decimalShift(row[`coverage_${span}`], 2), 2)}</span>, kind: "number" as const, size: 85 })),
   { id: "gaps", header: "Missing 7d (min)", value: row => row.gaps_7d, kind: "number", size: 75 },
   { id: "pending", header: "Pending (min)", value: row => row.pending, kind: "number", size: 75 },
   { id: "unrecoverable", header: "Unrecoverable 7d (min)", value: row => row.unrecoverable_7d, kind: "number", size: 115 },

@@ -12,4 +12,5 @@ test('cohort and candle-store coverage retain source fractions', () => {
   const { columns } = frontendModules({ '@/components/charts/RecordedCandleChart': {} }, { 'v5/V5CandleStore.tsx': ['columns'] }).load('v5/V5CandleStore.tsx');
   const cell = columns.find(column => column.id === 'coverage_1h').cell({ coverage_1h: 0.123456789 });
   assert.equal(renderToStaticMarkup(cell), '<span title="0.123456789">12.35</span>');
+  assert.equal(columns.find(column => column.id === 'coverage_1h').value({ coverage_1h: 0.123456789 }), 12.35);
 });

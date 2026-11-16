@@ -37,6 +37,8 @@ def record(task='market_context'):
     {'effect': 'NONE', 'requested_at_ms': True},
     {'effect': 'NONE', 'received_at_ms': 0},
     {'effect': 'NONE', 'received_at_ms': 1, 'expires_at_ms': None},
+    {'effect': 'NONE', 'received_at_ms': 1, 'input_cutoff_ms': '1'},
+    {'effect': 'NONE', 'received_at_ms': 1, 'input_available_at_ms': False},
     {'effect': 'NONE'},
 ])
 def test_history_rejects_malformed_result_envelope(tmp_path, result):

@@ -677,7 +677,7 @@ def create_app(
                 })
                 continue
             report = record["result"]
-            time_keys = ("requested_at_ms", "received_at_ms", "expires_at_ms")
+            time_keys = ("requested_at_ms", "received_at_ms", "expires_at_ms", "input_cutoff_ms", "input_available_at_ms")
             if (
                 not isinstance(report, dict)
                 or report.get("effect") != "NONE"

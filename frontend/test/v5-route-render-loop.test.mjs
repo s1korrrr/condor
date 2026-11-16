@@ -206,7 +206,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
     else if (url.pathname === '/api/v5/dashboard/profile') body = profileForRoute();
     else if (url.pathname === '/api/v5/settings') body = settings;
     else if (url.pathname === '/api/v5/workspace') body = workspaceForRoute();
-    else if (url.pathname === '/api/v5/advisor/history') body = {effect:'NONE',records:[]};
+    else if (url.pathname === '/api/v5/advisor/history') body = {effect:'NONE',records:[1,2].map(index => ({task_id:url.searchParams.get('task_id'),status:'HISTORY',effect:'NONE',record:{request_id:`timeline-${index}`,result:{task_id:url.searchParams.get('task_id'),effect:'NONE',status:'ACCEPTED',received_at_ms:index * 1000,advice:{assessment:'CAUTION',summary:`Timeline report ${index}`}}}}))};
     else if (url.pathname === '/api/v5/sessions') body = {sessions:[sessionFixture]};
     else if (url.pathname === '/api/v5/sessions/fixture-session') body = sessionFixture;
     else if (url.pathname === '/api/v5/agents/decision_reviewer') body = agentFixture;
@@ -285,6 +285,13 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         assertChartMarkers('explicit refresh');
         await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
         assertChartMarkers('settled refresh');
+        if (pathname === '/agents/decisions') {
+          assert.match(container.textContent,/Up to 5 reports per agent/,'timeline must disclose its bounded projected read');
+          assert.match(container.textContent,/Timeline report 1/,'timeline must render older reports');
+          assert.ok(container.textContent.indexOf('Timeline report 2') < container.textContent.indexOf('Timeline report 1'),'timeline must render newer reports first');
+          const historyRequests = requests.slice(requestStart).filter(request => request.startsWith('/api/v5/advisor/history?'));
+          assert.ok(historyRequests.length >= 3 && historyRequests.every(request => request.endsWith('&limit=5')),'each agent must read the bounded projected timeline');
+        }
         if (pathname === '/bots') {
           assert.match(container.textContent,/terminal-fixture/,'terminal history must render a published record');
           const chartMarkers = charts.slice(chartStart).flatMap(chart => chart.markers);

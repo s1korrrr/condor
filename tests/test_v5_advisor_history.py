@@ -76,19 +76,32 @@ async def test_history_size_guard_accepts_one_owner_capped_record(tmp_path):
                     'coverage_status': 'PARTIAL_OR_UNKNOWN'}
     feature = input_record['features'].pop('x')
     input_record['features']['x' * (owner_cap - len(encode(input_record)) - len(encode(feature)) - 3)] = feature
+    provider_cap = 32 * 1024
+    provider_raw = {'model': 'model', 'usage': {'input_tokens': 1, 'output_tokens': 1}, 'stop_reason': 'end_turn',
+                    'content': [{'type': 'text', 'text': ''}]}
+    realistic_result = {'request_id': '0' * 36, 'task_id': 'market_context', 'effect': 'NONE',
+                        'received_at_ms': 1, 'status': 'REJECTED', 'raw': provider_raw}
+    canonical = lambda value: json.dumps(value, separators=(',', ':'), allow_nan=False).encode()
+    provider_raw['content'][0]['text'] = '\u0800' * ((owner_cap - len(canonical(realistic_result))) // 6)
+    assert len(encode(provider_raw)) == 32759 < provider_cap
+    assert len(canonical(realistic_result)) == 65535 < owner_cap
     result_record = {'request_id': '0' * 36, 'task_id': 'market_context', 'effect': 'NONE', 'received_at_ms': 1, 'raw': ''}
     result_record['raw'] = 'x' * (owner_cap - len(encode(result_record)))
     assert len(encode(input_record)) == owner_cap
     assert len(encode(result_record)) == owner_cap
     item = {'request_id': '0' * 36, 'input': input_record, 'result': result_record}
     body = encode({'effect': 'NONE', 'records': [item]})
-    assert len(body) <= 2 * owner_cap + wrapper_allowance < MAX_RESPONSE_BYTES
+    assert len(body) == 131174 <= 2 * owner_cap + wrapper_allowance < MAX_RESPONSE_BYTES
 
     class HistorySession(Session):
         def request(self, method, url, **kwargs):
             return Response(200, body)
 
     upstream = V5Upstream(make_settings(tmp_path), session_factory=HistorySession)
+    assert len((await upstream.observation('/v1/advice/history?task_id=market_context&limit=1'))['records']) == 1
+    realistic_item = {'request_id': '0' * 36, 'input': input_record, 'result': realistic_result}
+    body = encode({'effect': 'NONE', 'records': [realistic_item]})
+    assert len(body) == 98539 < MAX_RESPONSE_BYTES
     assert len((await upstream.observation('/v1/advice/history?task_id=market_context&limit=1'))['records']) == 1
     body = encode({'effect': 'NONE', 'records': [item, item]})
     assert len(body) > MAX_RESPONSE_BYTES

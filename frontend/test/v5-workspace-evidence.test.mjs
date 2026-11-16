@@ -22,6 +22,7 @@ test("only QUALIFIED feature values are presented as values, including explicit 
   const qualified = marketFeatures(evidence, "spot.").find((row) => row.id === "spot.decliners");
   const unavailable = marketFeatures(evidence, "baseline.").find((row) => row.id === "baseline.composite_score");
   assert.equal(qualifiedFeatureValue(qualified), "0");
+  assert.equal(qualifiedFeatureValue({ status: 'QUALIFIED', unit: 'percent', value: '-0.004' }), '0.00%');
   assert.equal(unavailableFeatureValue(unavailable), "Unavailable");
   assert.equal(evidence.baseline_binding_hash, null);
   assert.equal(evidence.strategy_assessment_eligible, false);
@@ -93,7 +94,7 @@ test("unknown or unqualified selected coverage fails closed and stays unavailabl
 
 test("dollar strings are parsed strictly and invalid or negative values remain unavailable", () => {
   assert.equal(parseNonNegativeDecimal("0.001000"), 0.001);
-  assert.equal(formatUsdAmount("0.001000"), "$0.001000");
+  assert.equal(formatUsdAmount("0.001000"), "$0.00");
   assert.equal(formatUsdAmount("0"), "$0.00");
   assert.equal(formatUsdAmount("-0.01"), "Unavailable");
   assert.equal(formatUsdAmount(null), "Unavailable");

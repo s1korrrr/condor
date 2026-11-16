@@ -1,4 +1,6 @@
 import type { MarketEvidence } from "./contracts.ts";
+import { fixed, ownerDisplay } from "./format.mjs";
+import { featureText } from "./market-model.mjs";
 
 export interface MarketFeature {
   id: string;
@@ -76,7 +78,7 @@ export function marketFeatures(evidence: MarketEvidence, prefix: string): Market
 
 export function qualifiedFeatureValue(feature: MarketFeature): string {
   if (feature.status !== "QUALIFIED" || feature.value == null) return "Unavailable";
-  return String(feature.value);
+  return ownerDisplay(feature.value, "price").tone === "none" ? String(feature.value) : featureText(feature.value, feature.unit);
 }
 
 export function parseNonNegativeDecimal(value: unknown): number | null {
@@ -89,18 +91,9 @@ export function parseNonNegativeDecimal(value: unknown): number | null {
 }
 
 export function formatUsdAmount(value: unknown): string {
-  const parsed = parseNonNegativeDecimal(value);
-  if (parsed == null) return "Unavailable";
-  if (typeof value === "string") {
-    const [whole = "0", fraction = ""] = value.trim().split(".");
-    return `$${BigInt(whole).toLocaleString()}${fraction.length ? `.${fraction.padEnd(2, "0")}` : ".00"}`;
-  }
-  return new Intl.NumberFormat(undefined, {
-    style: "currency",
-    currency: "USD",
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 12,
-  }).format(parsed);
+  if (parseNonNegativeDecimal(value) == null) return "Unavailable";
+  const shown = fixed(value);
+  return shown === "—" ? "Unavailable" : `$${shown}`;
 }
 
 export function timestampAgeMs(timestamp: unknown, nowMs: number): number | null {

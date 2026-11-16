@@ -274,11 +274,9 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           scan(container, `${pathname} / trade details`);
           const tradeChart = charts.slice(tradeChartStart).at(-1);
           assert.ok(tradeChart, 'the selected trade chart must render');
-          const tradeMarkers = tradeChart.markers.filter(marker => marker.text === 'BUY 0.00617 @ 748.17');
+          assertChartMarkers('Trades detail');
+          const tradeMarkers = tradeChart.markers.filter(marker => marker.text === `BUY ${fixtureFill.quantity} @ ${fixtureFill.price} · ${new Date(fixtureFill.event_at_ms).toISOString()}`);
           assert.equal(tradeMarkers.length,1,'duplicate fills must produce one trade chart marker');
-          const tradeMarkerText = document.createElement('div');
-          tradeMarkerText.textContent = tradeChart.markers.map(marker => marker.text).join(' · ');
-          assert.deepEqual(longVisibleDecimals(tradeMarkerText), [], 'trade chart markers must not expose raw decimal tails');
           await React.act(async () => { [...container.querySelectorAll('button')].find(button => button.textContent === 'Hide trades').click(); });
           assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 1, 'explicit refresh must not reload the symbols list');
           const candlesBefore = requests.slice(requestStart).filter(request => request.startsWith('/api/v5/candle-store/candles?')).length;

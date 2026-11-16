@@ -18,7 +18,7 @@ test('cohort and candle-store coverage retain source fractions', () => {
 test('daily coverage uses an exact slot fraction and names its inputs', () => {
   const { dailyColumns } = frontendModules({}, { 'v5/V5Money.tsx': ['dailyColumns'] }).load('v5/V5Money.tsx');
   const column = dailyColumns.find(entry => entry.id === 'coverage');
-  assert.equal(renderToStaticMarkup(column.cell({ valid: 1 })), '<span title="1 / 288 slots; exact percentage 25/72%">0%</span>');
+  assert.equal(renderToStaticMarkup(column.cell({ valid: 1 })), '<span title="1 / 288 slots; exact percentage ≈ 0.3472 % (rounded)">0%</span>');
 });
 
 test('daily equity change tone follows rounded text', () => {
@@ -36,5 +36,5 @@ test('derived cohort coverage names the exact count ratio', () => {
     'derivatives.matched_assets': { status: 'QUALIFIED', value: 1 },
   };
   const html = renderToStaticMarkup(React.createElement(CohortCoverageNotice, { evidence: { features } }));
-  assert.match(html, /title="1 \/ 3; exact percentage 100\/3%">33\.3%<\/small>/);
+  assert.match(html, /title="1 \/ 3; exact percentage ≈ 33\.3333 % \(rounded\)">33\.3%<\/small>/);
 });

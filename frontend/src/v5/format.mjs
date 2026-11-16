@@ -95,7 +95,12 @@ export function rationalPercent(numerator, denominator, digits = 2) {
     const places = Math.max(twos, fives);
     const decimal = (reducedNumerator * 2n ** BigInt(places - twos) * 5n ** BigInt(places - fives)).toString().padStart(places + 1, '0');
     exact = `${sign}${places ? `${decimal.slice(0, -places)}.${decimal.slice(-places)}` : decimal}%`;
-  } else exact = `${sign}${reducedNumerator}/${reducedDenominator}%`;
+  } else {
+    const roundedUnits = (magnitude * 20000n + denominator) / (2n * denominator);
+    const roundedText = roundedUnits.toString().padStart(5, '0');
+    const roundedSign = numerator < 0n && roundedUnits !== 0n ? MINUS : '';
+    exact = `≈ ${roundedSign}${roundedUnits === 0n ? '0' : `${roundedText.slice(0, -4)}.${roundedText.slice(-4)}`} % (rounded)`;
+  }
   return { value: `${numerator < 0n && units !== 0n ? '-' : ''}${digits ? `${text.slice(0, -digits)}.${text.slice(-digits)}` : text}`, exact, direction: numerator < 0n ? -1 : numerator > 0n ? 1 : 0 };
 }
 

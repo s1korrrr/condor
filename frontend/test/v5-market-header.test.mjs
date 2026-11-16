@@ -26,7 +26,7 @@ const paper = (quote = 'USDT') => {
 
 test('market average identifies the exact inputs and a non-terminating result', () => {
   assert.equal(marketAverageTitle(changes(['1', '2'])), 'BTC 1%, ETH 2% · exact average 1.5%');
-  assert.equal(marketAverageTitle(changes(['1', '0', '0'])), 'BTC 1%, ETH 0%, BNB 0% · exact average 1/3% (non-terminating decimal)');
+  assert.equal(marketAverageTitle(changes(['1', '0', '0'])), 'BTC 1%, ETH 0%, BNB 0% · exact average ≈ 0.3333 % (rounded)');
   assert.equal(marketAverageTitle(changes([])), undefined);
 });
 

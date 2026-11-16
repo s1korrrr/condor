@@ -56,7 +56,15 @@ test('Money comparisons retain exact inputs and rational results', () => {
   assert.equal(result.exact, '(100.000000000000000000000000001 − 100) × 100 / 100 = 0.000000000000000000000000001%');
   const holding = holdReturn({ BTC: [[1, 3], [2, 4]], ETH: [[1, 3], [2, 3]] });
   assert.equal(holding.pct, '16.67');
-  assert.equal(holding.exact, 'BTC 3 → 4, ETH 3 → 3 · exact average 50/3%');
+  assert.equal(holding.exact, 'BTC 3 → 4, ETH 3 → 3 · exact average ≈ 16.6667 % (rounded)');
+});
+
+test('live wallet comparison title retains owner inputs and rounds only the result', () => {
+  const first = '199197.63587918115820';
+  const last = '199087.83518689085820';
+  const result = equityChange([row(0, { equity: first }), row(5, { equity: last })], 'v5');
+  assert.equal(result.exact, `(${last} − ${first}) × 100 / ${first} = ≈ −0.0551 % (rounded)`);
+  assert.doesNotMatch(result.exact.split(' = ')[1], /\//);
 });
 
 test('V5 endpoints keep their exact sample times, not rounded to the minute', () => {

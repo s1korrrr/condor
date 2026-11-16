@@ -20,3 +20,13 @@ test('daily coverage uses an exact slot fraction and names its inputs', () => {
   const column = dailyColumns.find(entry => entry.id === 'coverage');
   assert.equal(renderToStaticMarkup(column.cell({ valid: 1 })), '<span title="1 / 288 slots; exact percentage 100/288%">0%</span>');
 });
+
+test('derived cohort coverage names the exact count ratio', () => {
+  const { CohortCoverageNotice } = frontendModules({}, { 'v5/V5Pages.tsx': ['CohortCoverageNotice'] }).load('v5/V5Pages.tsx');
+  const features = {
+    'spot.assets_expected': { status: 'QUALIFIED', value: 3 },
+    'derivatives.matched_assets': { status: 'QUALIFIED', value: 1 },
+  };
+  const html = renderToStaticMarkup(React.createElement(CohortCoverageNotice, { evidence: { features } }));
+  assert.match(html, /title="1 \/ 3; exact percentage 100\/3%">33\.3%<\/small>/);
+});

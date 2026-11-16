@@ -1,5 +1,5 @@
 import type { MarketEvidence } from "./contracts.ts";
-import { fixed, ownerDisplay } from "./format.mjs";
+import { decimalShift, fixed, ownerDisplay, rationalPercent } from "./format.mjs";
 import { featureText } from "./market-model.mjs";
 
 export interface MarketFeature {
@@ -16,6 +16,8 @@ export interface CohortCoverageDimension {
   valid: number | null;
   expected: number | null;
   fraction: number | null;
+  fractionSource: string | null;
+  fractionDerived: boolean;
 }
 
 const COHORT_DIMENSIONS = [
@@ -37,9 +39,7 @@ export function selectedCohortCoverage(evidence: MarketEvidence): { complete: bo
     const validValue = qualifiedNumber(evidence, valid);
     const expectedValue = qualifiedNumber(evidence, expected);
     const reportedFraction = fraction == null ? null : qualifiedNumber(evidence, fraction);
-    const fractionValue = fraction == null
-      ? (validValue != null && expectedValue != null && expectedValue > 0 ? validValue / expectedValue : null)
-      : reportedFraction;
+    const fractionValue = reportedFraction;
     const countsValid = validValue != null && expectedValue != null && expectedValue > 0 && Number.isInteger(validValue) && Number.isInteger(expectedValue) && validValue <= expectedValue;
     return {
       key,
@@ -47,12 +47,21 @@ export function selectedCohortCoverage(evidence: MarketEvidence): { complete: bo
       valid: countsValid ? validValue : null,
       expected: countsValid ? expectedValue : null,
       fraction: fractionValue != null && fractionValue <= 1 ? fractionValue : null,
+      fractionSource: fraction != null && reportedFraction != null ? String(evidence.features?.[fraction]?.value) : null,
+      fractionDerived: fraction == null,
     };
   });
   return {
-    complete: dimensions.every((row) => row.valid != null && row.expected != null && row.valid === row.expected && row.fraction === 1),
+    complete: dimensions.every((row) => row.valid != null && row.expected != null && row.valid === row.expected && (row.fractionDerived || row.fraction === 1)),
     dimensions,
   };
+}
+
+export function cohortCoverageDisplay(row: CohortCoverageDimension, digits: number): { text: string; exact: string } | null {
+  if (!row.fractionDerived) return row.fraction == null || row.fractionSource == null ? null : { text: `${fixed(decimalShift(row.fractionSource, 2), digits)}%`, exact: row.fractionSource };
+  if (!Number.isSafeInteger(row.valid) || !Number.isSafeInteger(row.expected) || row.expected! <= 0) return null;
+  const result = rationalPercent(BigInt(row.valid!) * 100n, BigInt(row.expected!), digits);
+  return result ? { text: `${fixed(result.value, digits)}%`, exact: `${row.valid} / ${row.expected}; exact percentage ${result.exact}` } : null;
 }
 
 export function strategyAssessmentLabel(evidence: MarketEvidence): string {

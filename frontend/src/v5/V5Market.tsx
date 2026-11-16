@@ -7,7 +7,7 @@ import type { ChartSeries } from "@/features/quant-ops/kit/series";
 import { V5CandleStore } from "./V5CandleStore";
 import { readCandleStore } from "./candle-store-api";
 import type { CrossStats } from "./candle-store-model";
-import { selectedCohortCoverage } from "./evidence";
+import { cohortCoverageDisplay, selectedCohortCoverage } from "./evidence";
 import { V5MarketDetail, type DetailRead } from "./V5MarketDetail";
 import { V5MarketFeatures } from "./V5MarketFeatures";
 import { v5Api } from "./api";
@@ -253,7 +253,7 @@ export function V5SystemMarket({ tab, paused }: { tab: 'data-feeds' | 'engine-in
       <Stat label="7-day coverage" value={coverage?.text ?? '—'} title={coverage?.exact} note={coverage === null ? 'A lane is unavailable or 7-day coverage is missing or invalid' : 'mean of all reported lanes'} />
       <Stat label="Missing minutes, 7 days" value={gaps ?? '—'} note={gaps == null ? 'A lane is unavailable or gaps were not reported' : 'all reported lanes'} />
       <Stat label="Slowest lane" value={slowestAge == null ? '—' : `${Math.round(slowestAge)} s`} note={slowestAge == null ? 'Age not reported or not current' : 'since its newest final minute closed'} />
-    </div><h3 className="v5m-subhead">V5 market-context feed</h3><p className="v5m-hint">Last success: {systemTime(refresh?.last_success_at_ms, now)}</p>{!cohort ? <p>— · Feed data is not current or was not reported.</p> : <div className="v5m-stats">{cohort.dimensions.map(item => <Stat key={item.key} label={item.label} value={item.valid == null || item.expected == null ? '—' : `${item.valid}/${item.expected}`} title={item.fraction == null ? undefined : String(item.fraction)} note={item.fraction == null ? 'not qualified' : `${fixed(decimalShift(item.fraction, 2), 0)}% this minute`} />)}</div>}</Card>
+    </div><h3 className="v5m-subhead">V5 market-context feed</h3><p className="v5m-hint">Last success: {systemTime(refresh?.last_success_at_ms, now)}</p>{!cohort ? <p>— · Feed data is not current or was not reported.</p> : <div className="v5m-stats">{cohort.dimensions.map(item => { const shown = cohortCoverageDisplay(item, 0); return <Stat key={item.key} label={item.label} value={item.valid == null || item.expected == null ? '—' : `${item.valid}/${item.expected}`} title={shown?.exact} note={shown ? `${shown.text} this minute` : 'not qualified'} />; })}</div>}</Card>
   </div></Section></div>;
 }
 

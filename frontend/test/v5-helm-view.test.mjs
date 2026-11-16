@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { test } from 'node:test';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { Window } from 'happy-dom';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
 function render({ state = 'FRESH', age_s = 0, signal = null, rejections = { count: 0, recent: [] }, extra = {} } = {}) {
@@ -15,6 +16,28 @@ function render({ state = 'FRESH', age_s = 0, signal = null, rejections = { coun
   });
   return renderToStaticMarkup(React.createElement(load('v5/V5Helm').V5Helm));
 }
+
+test('Helm daily loss keeps its exact title off the phone helper and formats every width', () => {
+  const exact = '13.71580913935440000000000000';
+  const html = render({ extra: {
+    risk: { daily_loss_use: exact, risk_reference_quote: '200000.123456789', unit: 'USDC' },
+    mandate: { state: 'active', mandate_id: 'helm-test', revocation_id: 'shared-revocation' },
+  } });
+  for (const width of [1280,430,390]) {
+    const window = new Window({width});
+    try {
+      window.document.body.innerHTML = html;
+      const tiles = [...window.document.querySelectorAll('.v5m-stat')];
+      const tile = tiles.find(item => item.firstElementChild.textContent === 'Daily loss used');
+      assert.equal(tile.querySelector('strong').textContent, '13.72');
+      assert.equal(tile.hasAttribute('title'), false, `${width}px: phone CSS must not publish an exact amount as helper text`);
+      assert.equal(tile.querySelector('strong .owner-value').title, exact);
+      assert.equal(tile.querySelector('small').textContent, 'of the 200,000.12 USDC risk reference');
+      assert.equal(tile.querySelector('small span').title, '200000.123456789');
+      assert.equal(tiles.find(item => item.firstElementChild.textContent === 'Mandate').title, 'Revocation id shared-revocation (shared by the mandate and its authorization)');
+    } finally { window.close(); }
+  }
+});
 
 test('unpublished signals have no default recipe numbers and render table and narrow-screen cards', () => {
   const html = render();
@@ -67,7 +90,7 @@ test('rounded Helm figures retain exact owner inputs and RSI distance', context 
   const html = render({ signal: { at: 1793929890, rsi: '28.9999999', oversold: '29', rsi_length: 17 }, extra: {
     risk: { daily_loss_use: '-0.004', risk_reference_quote: '200.00001', unit: 'USDC' },
   } });
-  assert.match(html, /title="-0\.004"[^>]*><span>Daily loss used<\/span><strong>0\.00<\/strong>/);
+  assert.match(html, /<span>Daily loss used<\/span><strong><span class="owner-value" title="-0\.004" data-tone="zero">0\.00<\/span><\/strong>/);
   assert.match(html, /title="RSI 28\.9999999 − line 29 = −0\.0000001"[^>]*>RSI 29, 0 points below the line/);
   assert.match(html, /title="200\.00001"/);
 });

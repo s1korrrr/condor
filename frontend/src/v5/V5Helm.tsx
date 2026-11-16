@@ -1,7 +1,8 @@
 import { useEffect, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { RotateCw } from "lucide-react";
-import { age, count, fixed, usdc, utcMin } from "./format.mjs";
+import { age, count, usdc, utcMin } from "./format.mjs";
+import { OwnerValue } from "./OwnerValue";
 import { tri } from "./shown.mjs";
 import { helmCoinRow, helmHeadline } from "./helm-model.mjs";
 import "./market.css";
@@ -74,7 +75,7 @@ export function V5Helm() {
           <Stat label="New entries" value={status.operator_entry_paused === true ? "Paused" : status.entries_held ? "Held" : status.operator_entry_paused === false ? "Not paused" : "Not published"} note={status.entries_held ? words(status.entries_held) : status.operator_entry_paused === false ? "no entry hold published" : "pause state not published"} warn={!!status.entries_held || status.operator_entry_paused !== false} />
           <Stat label="Mandate" value={words(status.mandate?.state)} note={status.mandate ? <><span>{status.mandate.mandate_id ?? "id not published"}</span> · revision {status.mandate.revision == null ? "not published" : count(status.mandate.revision)} · until {at(status.mandate.valid_until_ms)}</> : "not published"} title={status.mandate?.revocation_id ? `Revocation id ${status.mandate.revocation_id} (shared by the mandate and its authorization)` : undefined} />
           <Stat label="Risk latch" value={tri(status.risk?.latched, "Latched", "Clear")} note={words(status.risk?.reason)} warn={status.risk?.latched !== false} />
-          <Stat label="Daily loss used" value={fixed(status.risk?.daily_loss_use)} title={status.risk?.daily_loss_use == null ? undefined : String(status.risk.daily_loss_use)} note={<>of the <span title={status.risk?.risk_reference_quote == null ? undefined : String(status.risk.risk_reference_quote)}>{usdc(status.risk?.risk_reference_quote, status.risk?.unit ?? "")}</span> risk reference</>} />
+          <Stat label="Daily loss used" value={<OwnerValue value={status.risk?.daily_loss_use} kind="usdc" unit="" />} note={<>of the <span title={status.risk?.risk_reference_quote == null ? undefined : String(status.risk.risk_reference_quote)}>{usdc(status.risk?.risk_reference_quote, status.risk?.unit ?? "")}</span> risk reference</>} />
           <Stat label="Kill switch" value={tri(status.kill_switch, "On", "Off")} warn={status.kill_switch !== false} />
           <Stat label="Phase · profile" value={status.phase ?? "—"} note={status.profile_id ?? undefined} />
           <Stat label="Runtime actions" value={count(status.actions)} note={`${count(status.steps)} engine steps`} />
@@ -106,6 +107,6 @@ function CoinSignal({ row }: { row: ReturnType<typeof helmCoinRow> }) {
   return <div className="v5m-helm-signal"><span className={row.rsi.startsWith("—") ? "v5m-muted" : undefined} title={row.rsiTitle}>{row.rsi}</span><span className={row.atr.startsWith("—") ? "v5m-muted" : undefined}>{row.atr}</span><small>{row.decision}</small><small>{row.owner}</small><small>{row.sample}</small></div>;
 }
 
-function Stat({ label, value, note, warn, title }: { label: string; value: string; note?: ReactNode; warn?: boolean; title?: string }) {
+function Stat({ label, value, note, warn, title }: { label: string; value: ReactNode; note?: ReactNode; warn?: boolean; title?: string }) {
   return <div className={`v5m-stat${warn ? " is-warn" : ""}`} title={title}><span>{label}</span><strong>{value}</strong>{note && <> <small>{note}</small></>}</div>;
 }

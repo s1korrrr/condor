@@ -10,7 +10,7 @@ export type CandleRead = { buckets: (number | null)[][]; start: number; end: num
 export type Minute = { t: number; high: number | null; low: number | null; close: number | null; volume: number | null };
 export type CoinTile = {
   coin: string; last: number; lastTime: number; changePct: number | null; change1hPct: number | null;
-  high: number; low: number; heldMinutes: number; windowMinutes: number; premiumBps: number | null; premiumTime: number | null; spark: SeriesPoint[];
+  high: number; low: number; heldMinutes: number; windowMinutes: number; premiumBps: number | null; premiumInputs?: string; premiumTime: number | null; spark: SeriesPoint[];
 };
 export type LaneTile = {
   lane: string; venue: string; segment: string; health: string; available: boolean | null; pairs_listed: number | null; pairs_held: number | null;
@@ -28,6 +28,8 @@ export type CoinStats = {
   rangePct: number; maxDrawdownPct: number | null; volumeQuote: number | null; volumeMissingMinutes: number;
   premium: { mean: number; min: number; max: number; minutes: number } | null;
 };
+
+export function marketDetailTitles(spotRead: CandleRead | null | undefined, perpetualRead: CandleRead | null | undefined, stats: CoinStats | null): Partial<Record<"returnWindowPct" | "return1hPct" | "rangePct" | "maxDrawdownPct" | "volumeQuote" | "premium", string>>;
 
 export function grid(read: CandleRead | null | undefined): Minute[] | null;
 export function pct(value: number | null | undefined, base: number | null | undefined): number | null;

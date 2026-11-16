@@ -70,6 +70,7 @@ test('premium from the newest minute both legs closed, named with that minute; c
   const tile = coinTile('BNB', spot, perpetual);
   assert.equal(tile.lastTime, T0 + 109 * 60);
   near(tile.premiumBps, 100);
+  assert.equal(tile.premiumInputs, 'spot close 100; perpetual close 101');
   assert.equal(tile.premiumTime, T0 + 109 * 60);
   // The perpetual has not finalized the newest spot minute yet: the premium is from the minute before, and says so.
   const lagging = coinTile('BNB', spot, dense(120, i => (i === 108 ? 102 : i === 109 ? null : 101)));
@@ -80,9 +81,11 @@ test('premium from the newest minute both legs closed, named with that minute; c
   assert.equal(none.premiumBps, null);
   assert.equal(none.premiumTime, null);
   const series = premiumSeries(spot, perpetual);
+  assert.match(series.find(point => point.value != null).exact, /spot close 100; perpetual close 101/);
   assert.equal(series.at(-1).value, null);
   assert.ok(series.some(point => point.value != null));
   const returns = indexedReturns(dense(30, i => (i >= 10 && i < 20 ? null : 50 + i)));
+  assert.match(returns[0].exact, /close 54; first close 50/);
   assert.deepEqual(returns.map(point => point.value === null), [false, false, true, true, false, false]);
   // A gap strictly between two sample positions (minute 6, samples at 4 and 9) still breaks the line.
   const between = indexedReturns(dense(10, i => (i === 6 ? null : 100 + i)));

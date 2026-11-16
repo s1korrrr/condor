@@ -38,7 +38,7 @@ export function ageSeconds(minuteT, read, receivedAtMs, nowMs) {
  * the window's last minute is still pending) and the last minute. A minute with no value anywhere since the
  * previous sample adds an explicit null at that minute, so a chart breaks across missing time even between samples.
  */
-function samples(minutes, value) {
+function samples(minutes, value, describe) {
   const out = [];
   let missingSince = null;
   const newest = minutes.findLastIndex(minute => minute.close != null && value(minute) != null);
@@ -47,7 +47,7 @@ function samples(minutes, value) {
     if (current == null && missingSince == null) missingSince = minute.t;
     if (index % SAMPLE !== SAMPLE - 1 && index !== minutes.length - 1 && index !== newest) return;
     if (missingSince != null && current != null) out.push({ time: missingSince * 1000, value: null });
-    out.push({ time: minute.t * 1000, value: current });
+    out.push({ time: minute.t * 1000, value: current, ...(current != null && describe ? { exact: describe(minute, current) } : {}) });
     missingSince = null;
   });
   return out;
@@ -77,6 +77,7 @@ export function coinTile(coin, spotRead, perpetualRead) {
     heldMinutes: held.length,
     windowMinutes: minutes.length,
     premiumBps: both < 0 ? null : (perpetual.get(minutes[both].t) / minutes[both].close - 1) * 10_000,
+    premiumInputs: both < 0 ? undefined : `spot close ${minutes[both].close}; perpetual close ${perpetual.get(minutes[both].t)}`,
     premiumTime: both < 0 ? null : minutes[both].t,
     spark: samples(minutes, minute => minute.close),
   };
@@ -86,7 +87,7 @@ export function coinTile(coin, spotRead, perpetualRead) {
 export function indexedReturns(spotRead) {
   const minutes = grid(spotRead);
   const base = minutes?.[0]?.close;
-  return base == null ? [] : samples(minutes, minute => pct(minute.close, base));
+  return base == null ? [] : samples(minutes, minute => pct(minute.close, base), (minute, result) => `result ${result}%; close ${minute.close}; first close ${base}`);
 }
 
 /** Perpetual over spot (bps) on every fifth minute; null where either leg has no close that minute. */
@@ -94,7 +95,7 @@ export function premiumSeries(spotRead, perpetualRead) {
   const minutes = grid(spotRead);
   if (!minutes) return [];
   const perpetual = new Map((grid(perpetualRead) ?? []).map(minute => [minute.t, minute.close]));
-  return samples(minutes, minute => minute.close != null && perpetual.get(minute.t) != null ? (perpetual.get(minute.t) / minute.close - 1) * 10_000 : null);
+  return samples(minutes, minute => minute.close != null && perpetual.get(minute.t) != null ? (perpetual.get(minute.t) / minute.close - 1) * 10_000 : null, (minute, result) => `result ${result} bp; spot close ${minute.close}; perpetual close ${perpetual.get(minute.t)}`);
 }
 
 /** How many measured coins rose over the window and over the last hour; a coin without a measurement is not counted. */
@@ -179,6 +180,25 @@ export function coinStats(spotRead, perpetualRead) {
     volumeQuote: volumeMissing === 0 ? minutes.reduce((sum, minute) => sum + minute.volume * minute.close, 0) : null,
     volumeMissingMinutes: volumeMissing,
     premium: premium.length ? { mean: premium.reduce((sum, value) => sum + value, 0) / premium.length, min: Math.min(...premium), max: Math.max(...premium), minutes: premium.length } : null,
+  };
+}
+
+export function marketDetailTitles(spotRead, perpetualRead, stats) {
+  const minutes = grid(spotRead);
+  if (!minutes || !stats) return {};
+  const index = lastIndex(minutes), held = minutes.filter(minute => minute.close != null);
+  const last = minutes[index]?.close;
+  const previous = minutes[index - 60]?.close;
+  const perpetual = new Map((grid(perpetualRead) ?? []).map(minute => [minute.t, minute.close]));
+  const pairs = minutes.filter(minute => minute.close != null && perpetual.get(minute.t) != null).map(minute => [minute.close, perpetual.get(minute.t)]);
+  const title = (result, inputs) => result == null ? undefined : `result ${result}; ${inputs}`;
+  return {
+    returnWindowPct: title(stats.returnWindowPct, `close ${last} / first close ${minutes[0].close}`),
+    return1hPct: title(stats.return1hPct, `close ${last} / hour-ago close ${previous}`),
+    rangePct: title(stats.rangePct, `high ${Math.max(...held.map(minute => minute.high))} / low ${Math.min(...held.map(minute => minute.low))}`),
+    maxDrawdownPct: title(stats.maxDrawdownPct, `closes ${JSON.stringify(held.map(minute => minute.close))}`),
+    volumeQuote: title(stats.volumeQuote, `[close, volume] ${JSON.stringify(minutes.map(minute => [minute.close, minute.volume]))}`),
+    premium: stats.premium ? `mean ${stats.premium.mean}; min ${stats.premium.min}; max ${stats.premium.max}; [spot close, perpetual close] ${JSON.stringify(pairs)}` : undefined,
   };
 }
 

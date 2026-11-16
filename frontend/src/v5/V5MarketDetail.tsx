@@ -5,7 +5,7 @@ import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable"
 import { RecordedCandleChart, type RecordedMinute } from "@/components/charts/RecordedCandleChart";
 import type { CrossStats, CrossView } from "./candle-store-model";
 import { readCandleStore } from "./candle-store-api";
-import { coinStats, REFERENCE, type CandleRead } from "./market-model.mjs";
+import { coinStats, marketDetailTitles, REFERENCE, type CandleRead } from "./market-model.mjs";
 import { fixed, pct, signed, utcMin } from "./format.mjs";
 
 const RANGES = ["1h", "6h", "24h", "7d"] as const;
@@ -57,14 +57,15 @@ export function V5MarketDetail({ coin, color, onClose, tileRead }: { coin: strin
     return reads;
   } });
   const stats = candles.data ? coinStats(candles.data.spot as unknown as CandleRead, candles.data.perpetual as unknown as CandleRead) : null;
+  const titles = candles.data ? marketDetailTitles(candles.data.spot as unknown as CandleRead, candles.data.perpetual as unknown as CandleRead, stats) : {};
   const partial = stats ? stats.heldMinutes < stats.windowMinutes : false;
-  const tiles: [string, string, string?][] = stats ? [
-    [`Return, ${range}`, pct(stats.returnWindowPct), stats.returnWindowPct == null ? "no close at the window's first minute" : undefined],
-    ["Return, last hour", pct(stats.return1hPct), stats.return1hPct == null ? (range === "1h" ? "needs a range longer than 1h" : "no close exactly one hour earlier") : undefined],
-    ["High–low range", `${fixed(stats.rangePct)}%`, partial ? `over ${stats.heldMinutes} held minutes only` : undefined],
-    ["Largest drop from a peak", pct(stats.maxDrawdownPct), partial ? `over ${stats.heldMinutes} held minutes only` : undefined],
-    ["Traded value", stats.volumeQuote == null ? "—" : `${compact(stats.volumeQuote)} ${REFERENCE.quote}`, stats.volumeQuote == null ? `volume missing for ${stats.volumeMissingMinutes} minute(s)` : `${venueName(REFERENCE.venue)} spot only`],
-    ["Perpetual premium, mean", stats.premium ? `${signed(stats.premium.mean, 1)} bp` : "—", candles.data!.perpetualError ? "perpetual read failed" : stats.premium ? `${stats.premium.minutes} minutes with both legs · min ${signed(stats.premium.min, 1)} · max ${signed(stats.premium.max, 1)} bp` : "no minute with both legs"],
+  const tiles: [string, string, string?, string?][] = stats ? [
+    [`Return, ${range}`, pct(stats.returnWindowPct), stats.returnWindowPct == null ? "no close at the window's first minute" : undefined, titles.returnWindowPct],
+    ["Return, last hour", pct(stats.return1hPct), stats.return1hPct == null ? (range === "1h" ? "needs a range longer than 1h" : "no close exactly one hour earlier") : undefined, titles.return1hPct],
+    ["High–low range", `${fixed(stats.rangePct)}%`, partial ? `over ${stats.heldMinutes} held minutes only` : undefined, titles.rangePct],
+    ["Largest drop from a peak", pct(stats.maxDrawdownPct), partial ? `over ${stats.heldMinutes} held minutes only` : undefined, titles.maxDrawdownPct],
+    ["Traded value", stats.volumeQuote == null ? "—" : `${compact(stats.volumeQuote)} ${REFERENCE.quote}`, stats.volumeQuote == null ? `volume missing for ${stats.volumeMissingMinutes} minute(s)` : `${venueName(REFERENCE.venue)} spot only`, titles.volumeQuote],
+    ["Perpetual premium, mean", stats.premium ? `${signed(stats.premium.mean, 1)} bp` : "—", candles.data!.perpetualError ? "perpetual read failed" : stats.premium ? `${stats.premium.minutes} minutes with both legs · min ${signed(stats.premium.min, 1)} · max ${signed(stats.premium.max, 1)} bp` : "no minute with both legs", titles.premium],
     ["Minutes held", `${stats.heldMinutes} / ${stats.windowMinutes}`, "final 1-minute candles in the window"],
   ] : [];
   return <section className="v5m-card v5m-detail" aria-label={`${coin} detail`}>
@@ -74,7 +75,7 @@ export function V5MarketDetail({ coin, color, onClose, tileRead }: { coin: strin
       <button type="button" className="v5m-icon" aria-label={`Close ${coin} detail`} onClick={onClose}><X size={16} /></button>
     </header>
     {candles.isPending ? <p role="status" className="v5m-hint">Reading {range} of {coin} candles…</p> : candles.isError ? <p role="alert" className="v5m-hint">Candles unavailable: {candles.error.message}. Nothing older is shown.</p> : <>
-      <div className="v5m-stats v5m-stats--wide">{tiles.map(([label, value, note]) => <div key={label} className="v5m-stat"><span>{label}</span><strong>{value}</strong>{note && <small>{note}</small>}</div>)}</div>
+      <div className="v5m-stats v5m-stats--wide">{tiles.map(([label, value, note, title]) => <div key={label} className="v5m-stat"><span>{label}</span><strong title={title}>{value}</strong>{note && <small>{note}</small>}</div>)}</div>
       <RecordedCandleChart buckets={candles.data.spot.buckets} label={`${venueName(REFERENCE.venue)} spot · ${pair} (price in ${REFERENCE.quote})`} volumeUnit={candles.data.spot.volume_unit} />
     </>}
     <h3 className="v5m-subhead">How far each venue's price sits from the others, {range}</h3>

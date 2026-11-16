@@ -21,6 +21,14 @@ test('daily coverage uses an exact slot fraction and names its inputs', () => {
   assert.equal(renderToStaticMarkup(column.cell({ valid: 1 })), '<span title="1 / 288 slots; exact percentage 100/288%">0%</span>');
 });
 
+test('daily equity change tone follows rounded text', () => {
+  const { dailyColumns } = frontendModules({}, { 'v5/V5Money.tsx': ['dailyColumns'] }).load('v5/V5Money.tsx');
+  const column = dailyColumns.find(entry => entry.id === 'change');
+  assert.equal(column.className({ equity_change: '-0.004' }), undefined);
+  assert.equal(column.className({ equity_change: '-0.01' }), 'is-down');
+  assert.equal(column.className({ equity_change: '0.01' }), 'is-up');
+});
+
 test('derived cohort coverage names the exact count ratio', () => {
   const { CohortCoverageNotice } = frontendModules({}, { 'v5/V5Pages.tsx': ['CohortCoverageNotice'] }).load('v5/V5Pages.tsx');
   const features = {

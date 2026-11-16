@@ -107,7 +107,7 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
               const format = item.format ?? (item.axis === 'secondary' ? rightFormat : leftFormat);
               const lag = label - sample.time;
               const text = sample.value === null ? 'Gap' : item.format ? item.format(sample.value, sample.exact) : format(sample.value);
-              return [{ key: item.id, label: item.label, color: item.color, value: sample.value === null ? text : `${text}${item.unit ? ` ${item.unit}` : ''}`, exact: sample.exact, tone: chartTone(text, signed || item.axis === 'secondary'), note: sample.value !== null && lag > 0 ? `as of ${utc(sample.time, span > 86_400_000)}` : undefined }];
+              return [{ key: item.id, label: item.label, color: item.color, value: sample.value === null ? text : `${text}${item.unit ? ` ${item.unit}` : ''}`, exact: sample.exact ?? (sample.value == null ? undefined : String(sample.value)), tone: chartTone(text, signed || item.axis === 'secondary'), note: sample.value !== null && lag > 0 ? `as of ${utc(sample.time, span > 86_400_000)}` : undefined }];
             });
             const marker = markers.find(item => Math.abs(item.time - label) <= span / 200);
             return <TooltipCard title={`${utc(label)} UTC${marker ? ` · ${marker.label}` : ''}`} rows={rows} />;

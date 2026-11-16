@@ -27,7 +27,7 @@ const readable = (state: string) => state === 'live' || state === 'stale';
 
 function StockRecord({ record }: { record: unknown }) {
   const exact = JSON.stringify(record, null, 2);
-  return <><pre className="v5-stock-json" title={exact}>{formattedRecord(record)}</pre><details><summary>Exact record · as sent</summary><pre className="v5-stock-json" data-exact-record>{exact}</pre></details></>;
+  return <><pre className="v5-stock-json" title={exact}>{formattedRecord(record)}</pre><details><summary>Exact record · as sent</summary><pre className="v5-stock-json">{exact}</pre></details></>;
 }
 
 function metadataTime(stamp: unknown) {

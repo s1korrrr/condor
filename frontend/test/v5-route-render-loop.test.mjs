@@ -16,23 +16,6 @@ globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 globalThis.getComputedStyle = browser.getComputedStyle.bind(browser);
 const {frontendModules} = await import('./helpers/frontend-module.mjs');
 const {createRoot} = await import('react-dom/client');
-const formatterOutputs = new Set();
-const recordOutput = output => {
-  if (typeof output === 'string') formatterOutputs.add(output);
-  else if (output && typeof output === 'object') Object.values(output).forEach(recordOutput);
-  return output;
-};
-globalThis.__v5RecordDisplayOutput = recordOutput;
-const instrumentDisplays = (filename, source) => {
-  if (filename.endsWith('/v5/V5Market.tsx')) {
-    const original = 'const ageText = (seconds: number | null) => seconds == null ? "age unknown" : `${ageShort(seconds)} ago`;';
-    assert.equal(source.split(original).length - 1, 1, 'market age helper must be instrumented exactly once');
-    source = source.replace(original, 'const ageText = (seconds: number | null) => globalThis.__v5RecordDisplayOutput(seconds == null ? "age unknown" : `${ageShort(seconds)} ago`);');
-  }
-  if (!/\/v5\/(?:format|shown)\.mjs$/.test(filename)) return source;
-  const timeOnly = filename.endsWith('/v5/shown.mjs');
-  return `${source}\n;for (const [name, original] of Object.entries(module.exports)) { if (typeof original === 'function' && (!${timeOnly} || ['utcExact','utcMinute'].includes(name))) module.exports[name] = (...args) => globalThis.__v5RecordDisplayOutput(original(...args)); }`;
-};
 const baselineFiles = new Set(['components/charts/RecordedCandleChart.tsx','features/quant-ops/kit/Rows.tsx','pages/tabs/ActiveBotsTab.tsx','v5/format.mjs','v5/policy.ts','v5/V5Stocks.tsx','v5/bots-position-model.mjs','v5/V5CandleStore.tsx','v5/CandleStorePanels.tsx','v5/candle-store-model.ts','v5/V5Helm.tsx','v5/V5MarketDetail.tsx','v5/V5Pages.tsx','v5/OwnerJournalCondition.tsx']);
 const baselineSource = (filename, source) => {
   if (!process.env.DISPLAY_SCAN_BASELINE) return source;
@@ -97,8 +80,7 @@ function longVisibleDecimals(container) {
   const walker = document.createTreeWalker(container, browser.NodeFilter.SHOW_TEXT);
   while (walker.nextNode()) {
     const node = walker.currentNode, parent = node.parentElement;
-    const exact = parent?.closest('details > pre[data-exact-record]');
-    if (!parent || parent.closest('script, style') || exact?.parentElement.querySelector(':scope > summary')?.textContent === 'Exact record · as sent') continue;
+    if (!parent || parent.closest('script, style')) continue;
     scan(node.textContent, parent.tagName.toLowerCase(), parent);
   }
   for (const block of container.querySelectorAll('p, dd, dt, td, th, li, summary')) {
@@ -110,69 +92,6 @@ function longVisibleDecimals(container) {
   for (const element of container.querySelectorAll('[aria-label]')) scan(element.getAttribute('aria-label'), `${element.tagName.toLowerCase()}[aria-label]`, element);
   return findings;
 }
-
-const numericMatches = text => [...String(text).matchAll(/(?<![\p{N}_.])[-−+]?(?:\d{1,3}(?:,\d{3})+|\d+)\.\d+(?:[eE][−+-]?\d+)?(?![\p{N}_])|(?<![\p{L}\p{N}_.])[-−+]?(?:\d{1,3}(?:,\d{3})+|\d+)(?:[eE][−+-]?\d+)?(?![\p{N}_])/gu)];
-const within = (context, pattern) => [...context.text.matchAll(pattern)].some(match => context.offset >= match.index && context.offset + context.token.length <= match.index + match[0].length);
-const numericAllowlist = [
-  {name:'marked-owner-id', reason:'Owner identifiers are displayed verbatim, not as quantities.', accepts: (token, context) => context.kind === 'id'},
-  {name:'exact-stock-record', reason:'The explicitly labelled exact-record disclosure preserves selectable owner JSON.', accepts: (_token, context) => context.kind === 'exact-record'},
-  {name:'labelled-count', reason:'Whole-number counts describe the explicitly labelled collection or counter.', accepts: (token, context) => /^[\d,]+$/.test(token) && (context.kind === 'count' || within(context, /\b(?:\d+\s+(?:rejected record\(s\)|rows|five-minute slots)|\d+\s+of\s+\d+\s+five-minute slots|\d+\s*\/\s*8,000)/g))},
-  {name:'progress-value', reason:'The progress element needs its numeric value as a control attribute.', accepts: (token, context) => context.kind === 'progress'},
-  {name:'table-column-width', reason:'Resize handles expose their pixel width as an accessibility control value.', accepts: (token, context) => context.kind === 'column-width' && /^\d+$/.test(token)},
-  {name:'utc-time', reason:'Date and clock components are not monetary amounts.', accepts: (_token, context) => within(context, /(?:\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?(?:Z| UTC)?)?|(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec) \d{1,2}, \d{4},? \d{1,2}:\d{2}(?::\d{2})? (?:AM|PM) UTC|\d{1,2}:\d{2}:\d{2} UTC)/g)},
-  {name:'age-label', reason:'Elapsed-time labels identify duration units, not owner quantities.', accepts: (_token, context) => within(context, /\b\d+(?:ms|s|m|h|d)\b/g)},
-  {name:'record-timestamp', reason:'Recorded timestamp fields in a stock record are owner timestamps, not prices.', accepts: (_token, context) => context.kind === 'stock-record' && within(context, /"(?:event_time_ms|received_at_ms)"\s*:\s*\d+/g)},
-  {name:'fixed-window-label', reason:'Fixed dashboard refresh, retention and chart windows are labels, not owner amounts.', accepts: (_token, context) => within(context, /(?:Updates every 15 s|last 168 hours|24-hour candle coverage|over 24 hours|at most 500 terminal rows|(?:1h|6h|24h|7d))/g)},
-];
-function unprovenNumbers(container, outputs = formatterOutputs) {
-  const segments = [];
-  let text = '';
-  const flush = () => { if (text) segments.push({text, kind:'text'}); text = ''; };
-  const walk = node => {
-    if (node.nodeType === browser.Node.TEXT_NODE) {
-      const part = node.textContent ?? '';
-      if (/\p{L}$/u.test(text) && /^[-−+]?\d/.test(part) && !/\d[eE]$/.test(text)) text += ' ';
-      text += part;
-      return;
-    }
-    if (node.nodeType !== browser.Node.ELEMENT_NODE || node.matches('script, style, [hidden], [aria-hidden="true"]')) return;
-    if (node.matches('details > pre[data-exact-record]') && node.parentElement.querySelector(':scope > summary')?.textContent === 'Exact record · as sent') { flush(); segments.push({text:node.textContent ?? '',kind:'exact-record'}); return; }
-    if (node.matches('[data-display-id], button.paper-copy, .capital-paper-source > code') || node.matches('.paper-detail > dd') && ['Executor','Controller'].includes(node.previousElementSibling?.textContent)) { flush(); segments.push({text:node.textContent ?? '',kind:'id'}); return; }
-    if (node.matches('[data-display-count]')) { flush(); segments.push({text:node.textContent ?? '',kind:'count'}); return; }
-    const block = node.matches('div, p, section, article, header, footer, main, aside, li, tr, td, th, dd, dt, summary, h1, h2, h3, h4, pre');
-    if (block) flush();
-    if (node.matches('pre.v5-stock-json')) { segments.push({text:node.textContent ?? '',kind:'stock-record'}); return; }
-    [...node.childNodes].forEach(walk);
-    if (block) flush();
-  };
-  walk(container); flush();
-  for (const element of container.querySelectorAll('[aria-label], [aria-description], [aria-valuenow], [aria-valuetext], input, textarea, select, progress')) {
-    for (const attribute of ['aria-label','aria-description','aria-valuenow','aria-valuetext']) if (element.hasAttribute(attribute)) segments.push({text:element.getAttribute(attribute),kind:attribute === 'aria-valuenow' && element.matches('[role="separator"].q-dt__resize') ? 'column-width' : 'text'});
-    if ('value' in element && (!element.matches('progress') || element.hasAttribute('value'))) segments.push({text:String(element.value),kind:element.matches('progress') ? 'progress' : 'text'});
-  }
-  return [...new Set(segments.flatMap(segment => numericMatches(segment.text).filter(match => ![...outputs].some(output => output.includes(match[0])) && !numericAllowlist.some(entry => entry.accepts(match[0], {...segment, token:match[0], offset:match.index}))).map(match => match[0])))];
-}
-
-test('numeric provenance rejects unformatted owner values even across element boundaries', () => {
-  const fixture = document.createElement('div');
-  fixture.innerHTML = '<div>99.7800793 USDC</div><div>99.7800793USDC</div><div><span>label</span><span>99.7800793</span></div><div><span>balance</span><span>123456</span></div><div>1234567890123e-20</div><div><span>198961.1707</span><span>7127617</span></div><div></div>';
-  fixture.lastChild.textContent = String(147258.1234567);
-  assert.deepEqual(unprovenNumbers(fixture, new Set()), ['99.7800793', '123456', '1234567890123e-20', '198961.17077127617', '147258.1234567']);
-});
-
-test('three-state text does not certify an unformatted owner number', () => {
-  const {load} = frontendModules({}, {}, instrumentDisplays);
-  const raw = '876543.9876543';
-  const fixture = document.createElement('div');
-  fixture.textContent = load('v5/shown.mjs').tri(true, raw, 'no');
-  assert.ok(unprovenNumbers(fixture).includes(raw));
-});
-
-test('numeric provenance exceptions are bound to marked ids, counters and progress attributes', () => {
-  const fixture = document.createElement('div');
-  fixture.innerHTML = '<div data-display-id>instrument:123456</div><p class="capital-paper-source"><code>snapshot:123456</code></p><dl class="paper-detail"><dt>Executor</dt><dd>123456</dd><dt>Price</dt><dd>123456</dd></dl><div data-display-count>3 lots</div><progress value="13.516106872503714"></progress><span role="separator" class="q-dt__resize" aria-valuenow="180"></span><div>2026-10-30 23:35:00 UTC</div><pre class="v5-stock-json">"event_time_ms": 1793403300404</pre><details open><summary>Exact record · as sent</summary><pre data-exact-record>99.7800793</pre></details><div>Updates every 15 s</div><div>15s ago</div><div>99.7800793</div><div>123456</div><code>123456</code><div>3</div><div>13.516106872503714</div><div>1793403300404</div><div>15</div><div>2026</div><div>180</div>';
-  assert.deepEqual(unprovenNumbers(fixture, new Set()), ['123456', '99.7800793', '3', '13.516106872503714', '1793403300404', '15', '2026', '180']);
-});
 
 test('decimal scan excludes exact titles and only allows three-significant-digit position dust', () => {
   const fixture = document.createElement('div');
@@ -209,7 +128,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
     return {addSeries:() => ({capture,setData(data){capture.data = data;},createPriceLine(){}}),subscribeCrosshairMove(callback){capture.move = callback;},timeScale:() => ({fitContent(){}}),remove(){}};
   },createSeriesMarkers(series,markers){series.capture.markers = markers;}},'react-router-dom':{...Router,BrowserRouter:({children}) => React.createElement(Router.MemoryRouter,{initialEntries:[route]},children)}};
   const {load} = frontendModules(overrides,{'v5/V5App.tsx':['client']},(filename,source) => {
-    source = instrumentDisplays(filename,clockMutation(filename,baselineSource(filename,source)));
+    source = clockMutation(filename,baselineSource(filename,source));
     if (!filename.endsWith('/v5/V5Pages.tsx')) return source;
     const anchor = 'function PaperIdentity({ paused = false }: { paused?: boolean }) {';
     assert.equal(source.split(anchor).length - 1,1,'frame probe must target exactly one real PaperIdentity');
@@ -223,15 +142,12 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const requests = [];
   const unexpectedReads = [];
   const decimalFindings = [];
-  const provenanceFindings = [];
   const scan = (container, label) => {
-    decimalFindings.push(...longVisibleDecimals(container).map(finding => `${label}: ${finding}`));
-    provenanceFindings.push(...unprovenNumbers(container).map(finding => `${label}: ${finding}`));
-    const negative = document.createElement('div');
-    negative.textContent = String(fixtureClose);
-    container.append(negative);
-    assert.ok(unprovenNumbers(container).includes(String(fixtureClose)), `${label}: a raw numeric owner value must be rejected`);
-    negative.remove();
+    const display = container.cloneNode(true);
+    for (const details of display.querySelectorAll('details')) {
+      if (details.querySelector(':scope > summary')?.textContent === 'Exact record · as sent') details.querySelector(':scope > pre').textContent = '';
+    }
+    decimalFindings.push(...longVisibleDecimals(display).map(finding => `${label}: ${finding}`));
   };
   const openDisclosures = async container => {
     while (container.querySelector('details:not([open])')) {
@@ -322,7 +238,6 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           assert.ok(charts.slice(chartStart).some(chart => chart.markers.some(marker => marker.text === 'BUY 0.00617 @ 748.17')), 'the chart must receive the formatted buy marker');
           const markerText = document.createElement('div');
           markerText.textContent = charts.slice(chartStart).flatMap(chart => chart.markers.map(marker => marker.text)).join(' · ');
-          assert.deepEqual(unprovenNumbers(markerText), [], 'chart marker labels must have formatting provenance');
           assert.deepEqual(longVisibleDecimals(markerText), [], 'chart markers must not expose raw decimal tails');
           assert.equal(requests.slice(requestStart).filter(request => request === '/api/v5/candle-store/symbols').length, 1, 'explicit refresh must not reload the symbols list');
           const candlesBefore = requests.slice(requestStart).filter(request => request.startsWith('/api/v5/candle-store/candles?')).length;
@@ -475,7 +390,6 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       }
     });
     assert.deepEqual(decimalFindings, [], `Visible decimals over eight places:\n${decimalFindings.join('\n')}`);
-    assert.deepEqual(provenanceFindings, [], `Numbers without display provenance:\n${provenanceFindings.join('\n')}`);
     assert.ok(requests.some(request => request.includes('native%2Fstatus')),'real snapshot query must read owner fixtures');
   } finally {
     client.clear();

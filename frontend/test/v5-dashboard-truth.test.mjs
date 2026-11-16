@@ -81,7 +81,7 @@ test('rendered position card shows exact holdings, excludes dust and retains nat
   const reads = Object.values({...final3, positions: livePositions});
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads, now, reportAt:final3.status.generated_at_ms, heartbeat:'Fresh', bot:'meridian_v5_paper'}));
   assert.match(html, /<dt>Holding<\/dt><dd><span title="0\.3615174">0\.361517 BNB/);
-  assert.match(html, /\+ <span title="0\.0000016">0\.0000016 BNB<\/span> dust/);
+  assert.match(html, /\+ <span title="0\.0000016">0\.000002 BNB<\/span> dust/);
   assert.match(html, /<dt>Lots<\/dt><dd>6<\/dd>/);
   assert.match(html, /<dt>Sell orders placed<\/dt><dd>— · protection unknown for 6 lot\(s\)/);
   assert.doesNotMatch(html, /bag-managed|sold by the bag policy|no resting order/);
@@ -107,7 +107,7 @@ test('position card formats money and quantities without losing exact values', (
   const prices = {'BNB-USDC':{buckets:[[Math.floor(now/60000)*60-60,1,2,1,680.896303,0,1]]}};
   const html = renderToStaticMarkup(React.createElement(PaperPositions,{positions:livePositions,decisions,wallet,money,prices,now}));
   for (const exact of ['114.1396691483993272381433853','680.8963033983613722931914460','800.123456789123456789','1234.567890000000','0.3615174','0.0000016']) assert.ok(html.includes(`title="${exact}"`),exact);
-  for (const formatted of ['114.14 USDC','680.90 USDC','800.12 USDC','1,234.57 USDC','0.361517 BNB','0.0000016 BNB']) assert.ok(html.includes(formatted),formatted);
+  for (const formatted of ['114.14 USDC','680.90 USDC','800.12 USDC','1,234.57 USDC','0.361517 BNB','0.000002 BNB']) assert.ok(html.includes(formatted),formatted);
 });
 
 test('position cards cross-check protections and retain the snapshot buy decision', () => {

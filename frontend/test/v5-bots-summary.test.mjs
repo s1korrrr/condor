@@ -24,11 +24,14 @@ test('native risk rail limits are formatted with their exact owner strings in ti
   const risk = structuredClone(fixture.risk);
   const native = Object.values(risk.data.controllers)[0].native;
   native.configured_limits.pair_quote = '99.780079327317';
+  native.marked_exposure = '0.00000001';
   native.configured_limits.program_quote = '200000.000000007317';
   const reads = Object.values(fixture).map(read => read.section === 'risk' ? risk : read);
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace, {reads, accountingRead:fixture.accounting, money, now, reportAt:now, heartbeat:'Fresh', bot:fixture.status.bot_id}));
   assert.match(html, /Pair cap 99\.78 USDC/);
   assert.match(html, /title="[^"]*99\.780079327317/);
+  assert.match(html, /title="0\.00000001">0 USDC<\/span>/);
+  assert.match(html, /title="99\.780079327317">99\.7801 USDC<\/span>/);
   assert.doesNotMatch(html, />[^<]*99\.780079327317/);
 });
 
@@ -41,6 +44,15 @@ test('money tiles format values while retaining exact source and arithmetic resu
     assert.match(html, new RegExp(`title="${tile.exact}"`));
     assert.ok(html.includes(tile.value));
   }
+});
+
+test('rounded-zero record amounts keep the exact owner value in the title', () => {
+  const fills = structuredClone(fixture.fills);
+  fills.data[0].quantity = '0.00000001';
+  fills.next_cursor = null;
+  const reads = Object.values(fixture).map(read => read.section === 'fills' ? fills : read);
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads,accountingRead:fixture.accounting,money,now,reportAt:now,heartbeat:'Fresh',bot:fixture.status.bot_id}));
+  assert.match(html, /title="0\.00000001">0 [^<]+<\/span>/);
 });
 
 test('money tiles follow snapshot dimming at 25, 45 and 125 seconds', () => {
@@ -225,7 +237,7 @@ test('six tiles use exact owner strings and only zero-flow equity minus funding'
   assert.equal(result[0].value, '200,000.00 USDC');
   assert.equal(result[0].exact, '199999.999999999999999999999999999999');
   assert.equal(result[1].exact, '-0.000000000000000000000000000001');
-  assert.equal(result[1].value, '−1e−30 USDC');
+  assert.equal(result[1].value, '0.00 USDC');
   assert.equal(result[2].value, '−12.00 USDC');
   assert.deepEqual(result.slice(3).map(tile => tile.value), ['realized_pnl_quote', 'unrealized_pnl_quote', 'fees_paid_quote'].map(key => usdc(fixture.accounting.data.program[key])));
   assert.deepEqual(result.slice(3).map(tile => tile.exact), ['realized_pnl_quote', 'unrealized_pnl_quote', 'fees_paid_quote'].map(key => fixture.accounting.data.program[key]));
@@ -236,14 +248,14 @@ test('six tiles use exact owner strings and only zero-flow equity minus funding'
   walletRead.data.external_cash_flows_quote = '0';
   walletRead.data.equity_quote = '200000.000000000000000000000000000001';
   assert.equal(tiles({ walletRead })[1].exact, '0.000000000000000000000000000001');
-  assert.equal(tiles({ walletRead })[1].value, '1e−30 USDC');
+  assert.equal(tiles({ walletRead })[1].value, '0.00 USDC');
 });
 
-test('closed-trade losses below one cent remain visibly negative', () => {
+test('closed-trade losses below half a cent round to zero while retaining the exact value', () => {
   const accountingRead = structuredClone(fixture.accounting);
   accountingRead.data.program.realized_pnl_quote = '-0.004';
   const tile = tiles({accountingRead})[3];
-  assert.equal(tile.value, '−0.004 USDC');
+  assert.equal(tile.value, '0.00 USDC');
   assert.equal(tile.exact, '-0.004');
 });
 

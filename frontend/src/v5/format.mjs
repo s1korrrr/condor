@@ -83,15 +83,7 @@ const render = (parts, plus = false) =>
 
 function visible(parts, digits, plus = false) {
   const rounded = round(parts, digits);
-  if (!rounded.zero || !/[1-9]/.test(parts.int + parts.frac)) return { text: render(rounded, plus), zero: rounded.zero };
-  const lead = parts.frac.search(/[1-9]/);
-  if (lead + 3 > 8) {
-    const text = coin(`${parts.neg ? '-' : ''}${parts.int}.${parts.frac}`);
-    return { text: `${plus && !parts.neg ? '+' : ''}${text}`, zero: false };
-  }
-  const extended = round(parts, lead + 3);
-  extended.frac = extended.frac.replace(/0+$/, '');
-  return { text: render(extended, plus), zero: false };
+  return { text: render(rounded, plus), zero: rounded.zero };
 }
 
 /** "1,234.50" with a true minus and no plus sign: `digits` decimals (default 2). */
@@ -109,10 +101,7 @@ export function signed(value, digits = 2) {
 export function axis(value, digits = 2, plus = false) {
   if (typeof value !== 'number' || !Number.isFinite(value)) return DASH;
   if (value === 0) return '0';
-  const rounded = round(parse(String(value)), digits);
-  if (!rounded.zero) return plus ? signed(value, digits) : fixed(value, digits);
-  const scientific = value.toExponential(1).replace(/\.0e/, 'e').replace(/-/g, MINUS);
-  return `${plus && value > 0 ? '+' : ''}${scientific}`;
+  return plus ? signed(value, digits) : fixed(value, digits);
 }
 
 /** "199,330.70 USDC". An empty unit leaves the unit off (an owner that did not publish one). */
@@ -141,7 +130,7 @@ export function price(value) {
 
 /**
  * Coin amount, trailing zeros removed, never 18 decimals: from 1 up, 6 significant digits but every integer digit
- * (1,390.56; 1,234,567); below 1, 6 decimals (0.016246); dust keeps 3 significant digits so it never shows as 0.
+ * (1,390.56; 1,234,567); below 1, 6 decimals (0.016246).
  * `asset` is appended when given ("0.016246 BTC").
  */
 export function coin(value, asset) {
@@ -149,18 +138,7 @@ export function coin(value, asset) {
   if (!parts) return DASH;
   let digits;
   if (parts.int !== '0') digits = Math.max(0, 6 - parts.int.length);
-  else {
-    const lead = parts.frac.search(/[1-9]/);
-    // Dust that cannot keep 3 significant digits within 8 decimals is shown in bounded scientific form, never as 0.
-    if (lead >= 6) {
-      const sig = round({ neg: false, int: parts.frac[lead], frac: parts.frac.slice(lead + 1) }, 2);
-      const mantissa = sig.int.length > 1 ? `1.${sig.int.slice(1, 2)}${sig.frac[0]}` : `${sig.int}.${sig.frac}`;
-      const power = sig.int.length > 1 ? lead : lead + 1;
-      const text = `${parts.neg ? MINUS : ''}${mantissa.replace(/\.?0+$/, '')}e${MINUS}${power}`;
-      return asset ? `${text} ${asset}` : text;
-    }
-    digits = lead < 0 ? 0 : Math.max(6, lead + 3);
-  }
+  else digits = 6;
   const rounded = round(parts, digits);
   const frac = rounded.frac.replace(/0+$/, '');
   const text = `${rounded.neg ? MINUS : ''}${group(rounded.int)}${frac ? `.${frac}` : ''}`;

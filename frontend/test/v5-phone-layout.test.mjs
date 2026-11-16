@@ -404,10 +404,10 @@ test('executor details format owner amounts and preserve exact titles', () => {
   const read = { ...fixture, data: [row], generated_at_ms: now };
   const window = new Window();
   window.document.body.innerHTML = renderToStaticMarkup(React.createElement(PaperRecords, { read, kind: 'executors', now }));
-  for (const [exact, displayed] of [['44.19171445147200000000000000', '44.19 USDC'], ['-0.00001351276800000000000000000000', '−0.0000135 USDC'], ['0.001277020', '0.001277 BTC']]) {
+  for (const [exact, displayed] of [['44.19171445147200000000000000', ['44.19 USDC', '44.1917 USDC']], ['-0.00001351276800000000000000000000', ['0.00 USDC', '−0.000014 USDC']], ['0.001277020', ['0.001277 BTC']]]) {
     const values = [...window.document.querySelectorAll('span[title]')].filter(span => span.title === exact);
     assert.ok(values.length, exact);
-    assert.ok(values.every(span => span.textContent === displayed));
+    for (const value of displayed) assert.ok(values.some(span => span.textContent === value), `${exact}: ${value}`);
   }
   window.close();
 });

@@ -259,7 +259,7 @@ function displayEvidenceValue(value: unknown): string {
 
 function DataValue({ label, value }: { label: string; value: unknown }) {
   const display = value == null || value === "" ? "Unavailable" : displayEvidenceValue(value);
-  return <div className="v5-data-value"><span>{label}</span><strong data-display-id={label === 'Observation snapshot' || label === 'Snapshot' ? true : undefined}>{display}</strong></div>;
+  return <div className="v5-data-value"><span>{label}</span><strong>{display}</strong></div>;
 }
 
 export function AgentsPage() {

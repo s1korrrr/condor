@@ -274,7 +274,8 @@ export function paperWords(value: unknown): string {
 
 export function paperAmount(value: unknown, unit: string, places = 4): string {
   if (typeof value !== "string" || !/^-?\d+(\.\d+)?$/.test(value) || value.length > 128) return "Not published";
-  return `${fixed(value, places)} ${unit}`;
+  const shown = fixed(value, places);
+  return `${/^0(?:\.0+)?$/.test(shown) ? "0" : shown} ${unit}`;
 }
 
 export function paperExactAmount(value: unknown, unit: string): string {

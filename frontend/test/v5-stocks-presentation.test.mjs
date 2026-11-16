@@ -95,7 +95,7 @@ test('configured Stocks formats exponent, signed and integer numeric fields with
   const window = new Window();
   window.document.body.innerHTML = html;
   const document = window.document;
-  for (const [exact, display] of [['1.234567890123e-20', '1.23e−20'], ['+99.78007932', '99.78'], ['198961', '198,961'], ['12345', '12,345']]) {
+  for (const [exact, display] of [['1.234567890123e-20', '0.0000'], ['+99.78007932', '99.78'], ['198961', '198,961'], ['12345', '12,345']]) {
     assert.ok([...document.querySelectorAll('[title]')].some(element => element.title === exact && element.textContent === display), `${exact} is formatted and retains its exact title`);
   }
   const records = [...document.querySelectorAll('pre')];
@@ -106,7 +106,7 @@ test('configured Stocks formats exponent, signed and integer numeric fields with
   assert.equal(exactRecords.length, 2, 'both market and metadata records have a keyboard and touch disclosure');
   assert.ok(exactRecords.some(details => details.querySelector('pre')?.textContent.includes('1.234567890123e-20')));
   assert.ok(exactRecords.some(details => details.querySelector('pre')?.textContent.includes('"instrumentCode": "001234"')));
-  assert.match(publicRecord.textContent, /1\.23e−20/);
+  assert.match(publicRecord.textContent, /0\.0000/);
   assert.match(publicRecord.textContent, /99\.78/);
   assert.match(publicRecord.textContent, /198,961/);
   assert.match(publicRecord.textContent, /12,345/);

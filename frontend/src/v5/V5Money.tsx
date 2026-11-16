@@ -8,7 +8,7 @@ import { readCandleStore } from "./candle-store-api";
 import { v5Api } from "./api";
 import { dayCoverage, equityChange, holdReturn, latest, series, type DailyRow } from "./money-model.mjs";
 import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
-import { axis, count, decimalPercentChange, fixed, ownerDisplay, pct, pnl, signed, usdc, utcMin, type OwnerValueKind } from "./format.mjs";
+import { axis, count, decimalPercentChange, fixed, ownerDisplay, pct, pnl, rationalPercent, signed, usdc, utcMin, type OwnerValueKind } from "./format.mjs";
 import { exactSignedSum } from "./bots-position-model.mjs";
 import { OwnerValue } from "./OwnerValue";
 import { utcExact } from "./shown.mjs";
@@ -34,7 +34,12 @@ async function readHold(): Promise<Hold> {
 }
 
 const num = (value: string | null | undefined) => value != null && value !== "" && Number.isFinite(Number(value)) ? Number(value) : null;
-const share = (value: number | null) => value == null ? "—" : `${Math.round(value * 100)}%`;
+const dayShare = (row: DailyRow) => {
+  if (!Number.isInteger(row.valid)) return "—";
+  const slots = Math.min(288, row.valid);
+  const percentage = rationalPercent(BigInt(slots) * 100n, 288n, 0);
+  return percentage ? <span title={`${row.valid} / 288 slots${row.valid > 288 ? " (capped at 288)" : ""}; exact percentage ${percentage.exact}`}>{fixed(percentage.value, 0)}%</span> : "—";
+};
 const at = (ms: number | null | undefined) => utcMin(ms) ?? "unknown time";
 const exactCell = (value: string | null | undefined, text: string) => <span title={value ?? undefined}>{text}</span>;
 
@@ -44,7 +49,7 @@ const dailyColumns: TableColumn<DailyRow>[] = [
   { id: "end", header: "Equity, last sample", value: row => num(row.equity_end), kind: "number", size: 120, cell: row => exactCell(row.equity_end, fixed(row.equity_end)), title: row => row.equity_last_at_ms != null ? `at ${at(row.equity_last_at_ms)}` : undefined },
   { id: "change", header: "Equity change", value: row => num(row.equity_change), kind: "number", size: 110, cell: row => exactCell(row.equity_change, pnl(row.equity_change).text), className: row => num(row.equity_change) == null ? undefined : num(row.equity_change)! < 0 ? "is-down" : "is-up" },
   { id: "realized", header: "Closed-trade profit", value: row => num(row.realized_change), kind: "number", size: 120, cell: row => exactCell(row.realized_change, pnl(row.realized_change).text), title: () => "Change in lifetime realized P&L between the day's first and last sample with values" },
-  { id: "coverage", header: "Day with values", value: row => dayCoverage(row), kind: "number", size: 100, cell: row => share(dayCoverage(row)), title: row => `${row.valid} of 288 five-minute slots hold values · ${row.samples} samples recorded, ${row.gaps} of them gaps` },
+  { id: "coverage", header: "Day with values", value: row => dayCoverage(row), kind: "number", size: 100, cell: dayShare, title: row => `${row.valid} of 288 five-minute slots hold values · ${row.samples} samples recorded, ${row.gaps} of them gaps` },
 ];
 
 /** The Money view; on Overview it is embedded under the bot cards (`embedded` turns its title into a section heading). */

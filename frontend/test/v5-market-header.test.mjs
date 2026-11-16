@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { frontendModules } from './helpers/frontend-module.mjs';
-import { candleCurrent, hourlyReturns, marketHolding, marketSentence, windowChange } from '../src/v5/market-header.ts';
+import { candleCurrent, hourlyReturns, marketAverageTitle, marketHolding, marketSentence, windowChange } from '../src/v5/market-header.ts';
 
 const coins = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP'];
 const changes = values => Object.fromEntries(coins.map((coin, index) => [coin, values[index] ?? null]));
@@ -23,6 +23,12 @@ const paper = (quote = 'USDT') => {
   reads[2].data = { controllers: [{ pair: `BTC-${quote}`, custom_info: { bag: { held_amount: '0.016200000000000000000000000010', breakeven_price: '100' } } }] };
   return reads;
 };
+
+test('market average identifies the exact inputs and a non-terminating result', () => {
+  assert.equal(marketAverageTitle(changes(['1', '2'])), 'BTC 1%, ETH 2% · exact average 1.5%');
+  assert.equal(marketAverageTitle(changes(['1', '0', '0'])), 'BTC 1%, ETH 0%, BNB 0% · exact average 1/3% (non-terminating decimal)');
+  assert.equal(marketAverageTitle(changes([])), undefined);
+});
 
 test('sentence uses the selected range, all down, all up, mixed and unchanged', () => {
   assert.equal(marketSentence(changes(['-3.55', '-3.55', '-3.55', '-5.90', '-1.20']), '24h'), 'All five coins are down over 24 hours, on average −3.55%. SOL is weakest at −5.90%.');

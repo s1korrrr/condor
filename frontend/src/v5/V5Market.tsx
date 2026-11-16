@@ -11,7 +11,7 @@ import { selectedCohortCoverage } from "./evidence";
 import { V5MarketDetail, type DetailRead } from "./V5MarketDetail";
 import { V5MarketFeatures } from "./V5MarketFeatures";
 import { v5Api } from "./api";
-import { candleCurrent, hourlyReturns, marketHolding, marketSentence, windowChange } from "./market-header";
+import { candleCurrent, hourlyReturns, marketAverageTitle, marketHolding, marketSentence, windowChange } from "./market-header";
 import { readMarketPaper } from "./market-paper";
 import { usePaperClock } from "./usePaperClock";
 import { ageSeconds, breadth, coinTile, indexedReturns, laneHealthClass, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
@@ -117,7 +117,7 @@ export function V5Market() {
         <span className={`v5m-chip ${feedCurrent ? "" : workspace.isError || refresh ? "is-warn" : "is-unknown"}`}><i />V5 feed <b>{feedCurrent ? "current" : workspace.isError ? "unavailable" : refresh ? "not current" : "no data"}</b></span>
       </div>
     </header>
-    <p className="v5m-summary">{marketSentence(changes, range)}</p>
+    <p className="v5m-summary" title={marketAverageTitle(changes)}>{marketSentence(changes, range)}</p>
 
     {coins.isPending && <p role="status" className="v5m-status">Reading {range} of candles for {MARKET_COINS.join(", ")}…</p>}
     {coins.isError && <p role="alert" className="v5m-status">Candle refresh failed: {coins.error.message}. Earlier prices are not shown.</p>}

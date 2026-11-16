@@ -39,6 +39,39 @@ export function windowChange(read: CandleRead | null | undefined): string | null
   return first?.[6] === 1 && last?.[6] === 1 && first[4] != null && last[4] != null ? change(last[4], first[4]) : null;
 }
 
+export function marketAverageTitle(changes: Record<string, string | null>): string | undefined {
+  const measured = MARKET_COINS.flatMap(coin => {
+    const value = decimal(changes[coin]);
+    return value === null ? [] : [{ coin, value, text: changes[coin]! }];
+  });
+  if (!measured.length) return undefined;
+  const sum = measured.reduce((total, row) => total + row.value, 0n);
+  let numerator = sum < 0n ? -sum : sum;
+  let denominator = BigInt(measured.length) * SCALE;
+  let left = numerator, right = denominator;
+  while (right !== 0n) [left, right] = [right, left % right];
+  numerator /= left;
+  denominator /= left;
+  let factors = denominator;
+  while (factors % 2n === 0n) factors /= 2n;
+  while (factors % 5n === 0n) factors /= 5n;
+  const sign = sum < 0n ? '−' : '';
+  let exact: string;
+  if (factors !== 1n) exact = `${sign}${numerator}/${denominator}% (non-terminating decimal)`;
+  else {
+    const whole = numerator / denominator;
+    let remainder = numerator % denominator;
+    let fraction = '';
+    while (remainder) {
+      remainder *= 10n;
+      fraction += String(remainder / denominator);
+      remainder %= denominator;
+    }
+    exact = `${sign}${whole}${fraction ? `.${fraction}` : ''}%`;
+  }
+  return `${measured.map(row => `${row.coin} ${row.text}%`).join(', ')} · exact average ${exact}`;
+}
+
 export function marketSentence(changes: Record<string, string | null>, range: string): string {
   const measured = MARKET_COINS.flatMap(coin => {
     const value = decimal(changes[coin]);

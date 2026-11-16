@@ -6,6 +6,7 @@ import { act, create } from 'react-test-renderer';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { Window } from 'happy-dom';
 import { groupTrades, lotBreakeven, targetFromBreakeven, tradeWindow } from '../src/v5/trades-model.mjs';
+import { ownerTitle } from '../src/v5/format.mjs';
 import { frontendModules } from './helpers/frontend-module.mjs';
 import { paperObservationPages } from '../src/v5/policy.ts';
 
@@ -229,7 +230,7 @@ test('owner bag breakeven is shown separately from a derived lot breakeven', asy
     await act(async () => { renderer.root.findAllByType('button').find(button => button.children[0] === 'View trade').props.onClick(); });
     const text = JSON.stringify(renderer.toJSON());
     assert.match(text,/Owner bag breakeven/);
-    assert.ok(renderer.root.findAllByProps({title:bag.breakeven_price}).length > 0);
+    assert.ok(renderer.root.findAllByProps({title:ownerTitle(bag.breakeven_price)}).length > 0);
     assert.match(text,/100\.000000000001 \/ 3/);
     sections.positions.data[0].breakeven_price = '24.1234567';
     await act(async () => { renderer.update(React.createElement(TradesContent,{reads:Object.values(sections),now:sections.status.generated_at_ms})); });

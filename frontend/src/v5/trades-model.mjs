@@ -32,13 +32,46 @@ export function targetFromBreakeven(basis, quantity, target) {
   return quotient((targetValue - costValue) * 100n, costValue, 2);
 }
 
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === 'object') return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
+  return value;
+}
+
+export function reconcileFills(fills) {
+  const identities = new Map();
+  const withheldExecutors = new Set();
+  let conflicts = 0;
+  for (const fill of fills) {
+    if (typeof fill.order_id !== 'string' || !fill.order_id || typeof fill.trade_id !== 'string' || !fill.trade_id) {
+      if (typeof fill.executor_id === 'string') withheldExecutors.add(fill.executor_id);
+      conflicts += 1;
+      continue;
+    }
+    const key = JSON.stringify([fill.order_id, fill.trade_id]);
+    const records = identities.get(key) ?? [];
+    records.push(fill);
+    identities.set(key, records);
+  }
+  const unique = [];
+  for (const records of identities.values()) {
+    const versions = new Set(records.map(record => JSON.stringify(canonical(record))));
+    if (versions.size > 1) {
+      conflicts += 1;
+      for (const record of records) if (typeof record.executor_id === 'string') withheldExecutors.add(record.executor_id);
+    } else unique.push(records[0]);
+  }
+  return { fills: unique.filter(fill => !withheldExecutors.has(fill.executor_id)), withheldExecutors, conflicts };
+}
+
 export function groupTrades(executors, history, fills) {
   const rows = new Map();
   for (const row of history) if (typeof row.executor_id === 'string') rows.set(row.executor_id, { ...row, terminal: true });
   for (const row of executors) if (typeof row.executor_id === 'string') rows.set(row.executor_id, row);
-  return [...rows.values()].map(row => ({
+  const reconciled = reconcileFills(fills);
+  return [...rows.values()].filter(row => !reconciled.withheldExecutors.has(row.executor_id)).map(row => ({
     ...row,
-    fills: fills.filter(fill => fill.executor_id === row.executor_id),
+    fills: reconciled.fills.filter(fill => fill.executor_id === row.executor_id),
   }));
 }
 

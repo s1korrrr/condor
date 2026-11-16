@@ -10,6 +10,13 @@ import { frontendModules } from "./helpers/frontend-module.mjs";
 const golden = name => JSON.parse(fs.readFileSync(new URL(`../../tests/fixtures/candle_store_views/${name}.json`, import.meta.url), "utf8"));
 const model = () => frontendModules().load("v5/candle-store-model");
 
+test("cross-venue statistics keep their exact values in titles", () => {
+  const { crossColumns } = frontendModules({}, { 'v5/CandleStorePanels.tsx': ['crossColumns'] }).load('v5/CandleStorePanels.tsx');
+  const row = { mean_bps: -0.004, mean_abs_bps: 0.004 };
+  assert.equal(renderToStaticMarkup(crossColumns.find(column => column.id === 'mean').cell(row)), '<span title="-0.004">0.00</span>');
+  assert.equal(renderToStaticMarkup(crossColumns.find(column => column.id === 'mean_abs').cell(row)), '<span title="0.004">0.00</span>');
+});
+
 test("heat cells label every state and never treat an outside hour as covered", () => {
   const { heatCell } = model();
   const hour = Date.parse("2026-11-03T07:00:00Z") / 1000;

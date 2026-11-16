@@ -14,7 +14,7 @@ import { fixed, ownerDisplay } from "./format.mjs";
 
 const control = "rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-[var(--color-text)]";
 const muted = "text-xs text-[var(--color-text-muted)]";
-const bps = (value: number | null) => value == null ? null : Number(value.toFixed(2));
+const exactCell = (value: number | null) => <span title={value == null ? undefined : String(value)}>{fixed(value)}</span>;
 
 function ReadFailure({ view, error, checkedAt }: { view: string; error: Error | null; checkedAt: number }) {
   return <p role="alert" className="rounded-lg border border-[var(--color-border)] p-4 text-sm">{view} unavailable: {error?.message ?? "No owner response"}. Checked {utcText(checkedAt / 1000 || null)} (dashboard time). No earlier values are shown in its place. Retry with Refresh.</p>;
@@ -30,10 +30,10 @@ const crossColumns: TableColumn<CrossStats>[] = [
   { id: "quote", header: "Quote", value: row => row.quote, size: 70 },
   { id: "with_close", header: "Minutes with final close", value: row => row.minutes_with_close, kind: "number", size: 110 },
   { id: "n", header: "Minutes compared", value: row => row.n, kind: "number", size: 100 },
-  { id: "mean", header: "Mean (bps)", value: row => bps(row.mean_bps), kind: "number", size: 90 },
-  { id: "mean_abs", header: "Mean |dev| (bps)", value: row => bps(row.mean_abs_bps), kind: "number", size: 100 },
-  { id: "p95", header: "p95 |dev| (bps)", value: row => bps(row.p95_abs_bps), kind: "number", size: 95 },
-  { id: "max", header: "Largest dev (bps)", value: row => bps(row.max_abs_bps), kind: "number", size: 100 },
+  { id: "mean", header: "Mean (bps)", value: row => row.mean_bps, cell: row => exactCell(row.mean_bps), kind: "number", size: 90 },
+  { id: "mean_abs", header: "Mean |dev| (bps)", value: row => row.mean_abs_bps, cell: row => exactCell(row.mean_abs_bps), kind: "number", size: 100 },
+  { id: "p95", header: "p95 |dev| (bps)", value: row => row.p95_abs_bps, cell: row => exactCell(row.p95_abs_bps), kind: "number", size: 95 },
+  { id: "max", header: "Largest dev (bps)", value: row => row.max_abs_bps, cell: row => exactCell(row.max_abs_bps), kind: "number", size: 100 },
   { id: "max_at", header: "Largest at (UTC)", value: row => row.max_at == null ? null : utcText(row.max_at), size: 150 },
 ];
 

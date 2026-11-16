@@ -58,7 +58,7 @@ const routes = [
   ['/operations','Operations'], ['/v5/readiness','Paper readiness'], ['/system','Operations'], ['/system/checks','Operations'],
   ['/system/data-feeds','Venues and data health'], ['/system/engine-inputs','V5 market features'], ['/system/readiness','Paper readiness'], ['/system/settings','Workspace settings'],
   ['/backtests','Tradepad'], ['/','Overview'], ['/market','Market'], ['/market/BTC','Market'], ['/market/evidence','Market'], ['/market/candles','Market'],
-  ['/market/stocks','OKX stocks'], ['/agents','Agents'],
+  ['/market/stocks','OKX stocks'], ['/agents','Agents'], ['/agents/decisions','Agent decisions'],
   ['/agents/decision_reviewer','Decision Reviewer'], ['/research','Research'],
   ['/learning','Learning'], ['/research-factory','Research factory'],
   ['/decision-lineage','Decision lineage'], ['/sessions','Sessions'],
@@ -171,6 +171,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
     else if (url.pathname === '/api/v5/dashboard/profile') body = profileForRoute();
     else if (url.pathname === '/api/v5/settings') body = settings;
     else if (url.pathname === '/api/v5/workspace') body = workspace;
+    else if (url.pathname === '/api/v5/advisor/history') body = {effect:'NONE',records:[]};
     else if (url.pathname === '/api/v5/sessions') body = {sessions:[sessionFixture]};
     else if (url.pathname === '/api/v5/sessions/fixture-session') body = sessionFixture;
     else if (url.pathname === '/api/v5/agents/decision_reviewer') body = agentFixture;

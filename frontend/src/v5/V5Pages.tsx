@@ -267,6 +267,7 @@ export function AgentsPage() {
   if (query.isPending) return <Loading label="Loading agent catalog" />;
   if (query.isError) return <QueryError query={query} retry={() => void query.refetch()} />;
   return <><PageHeading title="Agent catalog" description="The workspace roles and their owner-reported readiness." />
+    <p><Link className="v5-text-link" to="/agents/decisions">Agent decisions <ChevronRight size={14} /></Link></p>
     <ScheduledAgents read={query} />
     {query.data.agents.length ? <div className="v5-agent-catalog">{query.data.agents.map((agent) => <AgentCatalogRow agent={agent} key={agent.id} />)}</div> : <EmptyState title="No agents are registered" body="The service returned an empty catalog. No demo or placeholder agents are shown." />}
     {query.data.source_error && <div className="v5-source-warning"><AlertTriangle size={16} />Some catalog sources are unavailable: {query.data.source_error}</div>}

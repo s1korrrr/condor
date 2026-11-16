@@ -15,10 +15,14 @@ const phoneTitleSelectors = rules => [...rules].flatMap(rule => [
   ...(rule.style?.content === 'attr(title)' && rule.selectorText.endsWith('::after') ? [rule.selectorText.replace(/::after$/,'')] : []),
   ...phoneTitleSelectors(rule.cssRules ?? []),
 ]);
-const phoneTitleSelector = phoneTitleSelectors(phoneSheet.cssRules).flatMap(selector => {
+const phoneTitleMatchers = phoneTitleSelectors(phoneSheet.cssRules).flatMap(selector => {
   const group = selector.match(/:is\(([^()]*)\)/);
-  return group ? group[1].split(',').map(option => selector.replace(group[0],option.trim())) : [selector];
-}).join(', ');
+  if (!group) return [element => element.matches(selector)];
+  const ancestry = selector.slice(0,group.index).trim();
+  const suffix = selector.slice(group.index + group[0].length);
+  return group[1].split(',').map(option => element => element.matches(`${option.trim()}${suffix}`) && element.parentElement?.closest(ancestry));
+});
+const matchesPhoneTitle = element => phoneTitleMatchers.some(matches => matches(element));
 for (const name of ['window','document','navigator','HTMLElement','Element','Node','MutationObserver','localStorage']) {
   Object.defineProperty(globalThis,name,{value:name === 'window' ? browser : browser[name],configurable:true});
 }
@@ -108,7 +112,7 @@ function longVisibleDecimals(container) {
     scan(combined, `${block.tagName.toLowerCase()}[split]`, block, boundaries);
   }
   for (const element of container.querySelectorAll('[aria-label]')) scan(element.getAttribute('aria-label'), `${element.tagName.toLowerCase()}[aria-label]`, element);
-  if (phoneTitleSelector) for (const element of container.querySelectorAll(phoneTitleSelector)) scan(element.title, `${element.tagName.toLowerCase()}[phone ::after]`, element);
+  for (const element of container.querySelectorAll('[title]')) if (matchesPhoneTitle(element)) scan(element.title, `${element.tagName.toLowerCase()}[phone ::after]`, element);
   return findings;
 }
 
@@ -116,7 +120,8 @@ test('decimal scan checks phone CSS title helpers but not exact leaf tooltips', 
   const fixture = document.createElement('div');
   fixture.className = 'condor-native';
   fixture.innerHTML = '<div class="v5m-stat" title="13.71580913935440000000000000"><strong>13.72</strong></div><div class="v5m-stat"><strong><span title="13.71580913935440000000000000">13.72</span></strong></div><div class="v5-system"><span class="v5m-lane" title="0.876543217317"><span title="0.876543217317">88%</span><span><span title="0.876543217317">88%</span></span></span><div class="op-hrow__pct" title="87.6543217317%">87.7%</div></div>';
-  assert.deepEqual(longVisibleDecimals(fixture), ['div[phone ::after]: 13.71580913935440000000000000', 'span[phone ::after]: 0.876543217317', 'span[phone ::after]: 0.876543217317', 'div[phone ::after]: 87.6543217317']);
+  fixture.innerHTML += '<div class="v5-system v5m-lane"><span title="0.876543217317">88%</span></div>';
+  assert.deepEqual(longVisibleDecimals(fixture), ['div[phone ::after]: 13.71580913935440000000000000', 'span[phone ::after]: 0.876543217317', 'span[phone ::after]: 0.876543217317', 'div[phone ::after]: 87.6543217317', 'span[phone ::after]: 0.876543217317']);
 });
 
 test('decimal scan excludes exact titles and only allows three-significant-digit position dust', () => {
@@ -349,7 +354,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           const day = lane.querySelector(':scope > span:nth-child(2) > span');
           assert.equal(day?.title,'0.876543217317', '24-hour leaf must retain its exact source fraction');
           assert.equal(day.textContent,'88%', '24-hour coverage must keep zero decimal places');
-          for (const leaf of container.querySelectorAll('.v5m-stat strong[title], .v5m-lane > span > span[title]')) assert.equal(leaf.matches(phoneTitleSelector),false, 'exact coverage tooltips must not match phone helper selectors');
+          for (const leaf of container.querySelectorAll('.v5m-stat strong[title], .v5m-lane > span > span[title]')) assert.equal(matchesPhoneTitle(leaf),false, 'exact coverage tooltips must not match phone helper selectors');
         }
         if (pathname === '/market') await React.act(async () => { await client.refetchQueries({type:'active'}); await new Promise(resolve => setTimeout(resolve,0)); });
         if (pathname === '/market') {

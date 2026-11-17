@@ -143,6 +143,14 @@ test('whole-envelope rejection: one bad field fails everything', async () => {
   await assert.rejects(async () => check('records', await rehash(stale), 'node'));
 });
 
+test('the row hash is checked even when only the envelope is resealed', async () => {
+  const document = json('examples/records-nodes.json');
+  document.items[0].title = 'edited; envelope resealed, row hash stale';
+  const { envelope_sha256: _omitted, ...body } = document;
+  document.envelope_sha256 = await validate.sha256Hex(validate.canonicalJson(body));
+  await assert.rejects(async () => check('records', document, 'node'), /row hash/);
+});
+
 test('records pages never mix nodes and edges; out-of-scope refs are opaque; sources are safe', async () => {
   await assert.rejects(async () => check('records', json('examples/records-edges.json'), 'node'), /edge in a node page/);
   await assert.rejects(async () => check('records', json('examples/records-nodes.json'), 'edge'), /node in an edge page/);
@@ -418,6 +426,24 @@ test('scope or revision change clears every store and re-reads from the first pa
   assert.equal(calls.length, 2);
   assert.equal(calls[1].params.cursor, undefined);
   assert.equal(store.getSnapshot().state, 'ready');
+});
+
+test('configure drops everything shown and the cursor stack, then reads the new filter from page one', async () => {
+  const token = HASHES.cursor.token;
+  const page1 = json('examples/records-nodes.json');
+  page1.page = { limit: 25, next_cursor: token, has_more: true };
+  await rehash(page1);
+  const { store, calls } = makeStore({ pollMs: 0, answers: [ok(page1), ok(page1), ok(await aged(5))] });
+  store.start(); await settle();
+  store.next(); await settle();
+  assert.equal(store.getSnapshot().pageIndex, 1);
+  store.configure({ dataset: 'records', params: { record_type: 'edge' }, pollMs: 0 });
+  assert.equal(store.getSnapshot().state, 'loading');
+  assert.equal(store.getSnapshot().envelope, null);
+  store.start(); await settle();
+  assert.equal(calls.at(-1).params.record_type, 'edge');
+  assert.equal(calls.at(-1).params.cursor, undefined);
+  assert.equal(store.getSnapshot().pageIndex, 0);
 });
 
 test('clampPollMs never polls faster than the owner verifies', () => {

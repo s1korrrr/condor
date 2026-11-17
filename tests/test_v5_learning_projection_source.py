@@ -374,6 +374,7 @@ def bad_owner_cases():
     return {
         "oversize": http(200, b" " * (lp.MAX_PROJECTION_RESPONSE_BYTES + 1)),
         "gzip": http(200, gzip.compress(good), headers={"Content-Encoding": "gzip"}),
+        "claims gzip, plain body": http(200, good, headers={"Content-Encoding": "gzip"}),
         "not json type": http(200, good, ctype="text/html"),
         "redirect": http(302, b"", headers={"Location": "http://example.test/"}),
         "declared length beyond cap": http(200, good, length=str(lp.MAX_PROJECTION_RESPONSE_BYTES + 1)),

@@ -273,6 +273,15 @@ def test_hash_mismatches_are_rejected_without_resealing():
         validate(document)
 
 
+def test_row_hash_is_checked_even_when_only_the_envelope_is_resealed():
+    document = load("examples/records-nodes.json")
+    document["items"][0]["title"] = "Edited and the envelope re-sealed, the row hash left stale"
+    body = {key: value for key, value in document.items() if key != "envelope_sha256"}
+    document["envelope_sha256"] = lp.sha256_hex(lp.canonical(body))
+    with pytest.raises(lp.ContractViolation, match="row hash"):
+        validate(document)
+
+
 def test_items_must_be_strictly_ascending_by_record_id_bytes():
     document = load("examples/records-nodes.json")
     second = copy.deepcopy(document["items"][0])

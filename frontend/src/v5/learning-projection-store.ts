@@ -60,12 +60,21 @@ export class ProjectionStore {
   private pollTimer: unknown = null;
   private disposed = false;
 
-  private readonly options: StoreOptions;
+  private options: StoreOptions;
 
   constructor(options: StoreOptions) { this.options = options; }
 
   readonly subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   readonly getSnapshot = () => this.snapshot;
+
+  /** Point the store at another dataset / filter / poll interval: everything shown or paged is dropped. */
+  configure(next: Pick<StoreOptions, 'dataset' | 'params' | 'pollMs'>) {
+    this.abort();
+    this.clearTimers();
+    this.options = { ...this.options, ...next };
+    this.stack = [null];
+    this.set({ ...INITIAL });
+  }
 
   /** Start (or restart from the current page). Idempotent for the caller; a new call supersedes the previous request. */
   start = () => {

@@ -15,7 +15,7 @@
  * - polls never extend freshness: expiry is anchored to the owner's
  *   `verified_at_ms`, not to the time a poll arrived.
  */
-import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
 import {
   ContractViolation, parseStrictJson, utf8Length, validateEnvelope, validateErrorBody,
 } from './learning-projection-validate';
@@ -488,19 +488,17 @@ export function clampPollMs(pollMs: number | undefined): number {
 function useStore(dataset: ProjectionDataset, params: ProjectionParams, options: ProjectionPagesOptions | undefined) {
   const enabled = options?.enabled ?? true;
   const pollMs = clampPollMs(options?.pollMs);
-  // The cursor is owned by the store; only the filter identifies it.
-  const key = JSON.stringify([dataset, params.record_type ?? null, params.root_id ?? null, params.limit ?? null, pollMs]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const store = useMemo(() => new ProjectionStore({
-    dataset, params: { record_type: params.record_type, root_id: params.root_id, limit: params.limit },
-    read: storeRead, clock: realClock, maxAgeMs: MAX_VERIFICATION_AGE_MS, pollMs,
-  }), [key]);
+  const { record_type: recordType, root_id: rootId, limit } = params; // the cursor is owned by the store
+  const [store] = useState(() => new ProjectionStore({
+    dataset, params: { record_type: recordType, root_id: rootId, limit }, read: storeRead, clock: realClock, maxAgeMs: MAX_VERIFICATION_AGE_MS, pollMs,
+  }));
   useEffect(() => {
     if (!enabled) return undefined;
+    store.configure({ dataset, params: { record_type: recordType, root_id: rootId, limit }, pollMs });
     const unregister = registerProjectionStore(store);
     store.start();
     return () => { unregister(); store.dispose(); };
-  }, [store, enabled]);
+  }, [store, enabled, dataset, recordType, rootId, limit, pollMs]);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   return { store, snapshot };
 }

@@ -52,7 +52,8 @@ export function ScopedRefs({ refs }: { refs: Ref[] }) {
 
 export function RecordedWindow({ row }: { row: LessonRow | UnavailableRowStub }) {
   const scope = row.row_scope.recorded_scope;
-  return <p>Recorded scope: {scope?.venue ?? 'Unknown'} · {scope?.capital_model ?? 'Unknown'} · window {scope?.window ? <><OwnerUtcTime value={scope.window.start} /> to <OwnerUtcTime value={scope.window.end_exclusive} /> (exclusive)</> : 'Unknown'}</p>;
+  const window = scope?.window;
+  return <p>Recorded scope: {scope?.venue ?? 'Unknown'} · {scope?.capital_model ?? 'Unknown'} · window {typeof window === 'string' ? window : window ? <><OwnerUtcTime value={window.start} /> to <OwnerUtcTime value={window.end_exclusive} /> (exclusive)</> : 'Unknown'}</p>;
 }
 
 export function LearningPanel({ view, data }: { view?: ProjectionPagesView<'lessons'>; data?: ProjectionEnvelope<LessonRow | UnavailableRowStub> }) {

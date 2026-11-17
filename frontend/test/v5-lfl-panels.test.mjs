@@ -82,6 +82,13 @@ test('partial lesson reports the owner issue and keeps long identifiers exact', 
   assert.match(html, /on this page/i);
 });
 
+test('recorded textual windows remain visible', () => {
+  const { LearningPanel } = load('v5/LearningPanel.tsx');
+  const data = structuredClone(fixtures.lessons);
+  data.items[0].row_scope.recorded_scope.window = 'May–August 2026';
+  assert.match(render(LearningPanel, { data }), /May–August 2026/);
+});
+
 test('unknown proposed count is not presented as an owner-measured zero', () => {
   const { DecisionLineagePanel } = load('v5/DecisionLineagePanel.tsx');
   const edges = structuredClone(fixtures['records-edges']);

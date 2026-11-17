@@ -32,29 +32,18 @@ export const render = (component, props) => renderToStaticMarkup(React.createEle
 
 const { LearningPanel, UtcTime, EvidenceList, ProjectionClock } = loadPanel('v5/LearningPanel.tsx');
 const { learningRead } = loadPanel('v5/api.ts');
-test('learning states show unknown, empty, error and stale without false success', () => {
-  const empty = render(LearningPanel, { data: { status: 'FIXTURE_ONLY', effect: 'NONE', lessons: [], releases: [], adoptions: [], retractions: [] } });
-  assert.match(empty, /No lessons reported/);
-  assert.match(empty, /Publication does not mean applied/);
-  assert.match(empty, /No retraction reported/);
-  assert.match(render(LearningPanel, { error: 'Owner unavailable' }), /role="alert"/);
-  assert.match(render(LearningPanel, { data: { status: 'STALE', effect: 'NONE' } }), /Stale owner snapshot/);
+test('learning shows an unavailable state without inventing a count', () => {
+  const markup = render(LearningPanel, {});
+  assert.match(markup, /UNAVAILABLE/);
+  assert.match(markup, /Recall: not evaluated/);
+  assert.doesNotMatch(markup, /Roles blocked|Knowledge releases|zero applied/i);
   assert.match(render(UtcTime, { value: 1793275200000 }), /UTC<\/time>/);
   assert.equal(render(UtcTime, {}), '<span>Unknown</span>');
 });
-test('roles expose blockers and never offer a paid or execution control', () => {
-  const markup = render(LearningPanel, { roles: [{ role_id: 'portfolio_manager', name: 'Portfolio Manager', status: 'BLOCKED', blockers: ['Owner task binding missing'], task_id: null, usage: 'NOT_DISPATCHED', provider_metered_usage: null }] });
-  assert.match(markup, /Owner task binding missing/);
-  assert.match(markup, /Binding missing/);
-  assert.doesNotMatch(markup, />Run model<|>Activate<|>Delegate</);
-  assert.match(markup, /aria-label="Role bindings"/);
-  assert.match(markup, /role="separator"/);
-  assert.match(markup, /Filter/);
-});
-test('missing role data never presents a measured zero blocked roles', () => {
+test('learning never offers a paid or execution control', () => {
   const markup = render(LearningPanel, {});
-  assert.match(markup, /Roles blocked<\/span><p[^>]*>Unknown<\/p>/);
-  assert.match(markup, /View provider calls/);
+  assert.doesNotMatch(markup, />Run model<|>Activate<|>Delegate</);
+  assert.doesNotMatch(markup, /Role bindings|View provider calls/);
 });
 test('learning transport never accepts an authorizing result', async () => {
   const previous = globalThis.fetch;

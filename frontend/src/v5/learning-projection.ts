@@ -15,6 +15,11 @@
  * - polls never extend freshness: expiry is anchored to the owner's
  *   `verified_at_ms`, not to the time a poll arrived.
  */
+import { useEffect, useMemo, useSyncExternalStore } from 'react';
+import {
+  ContractViolation, parseStrictJson, utf8Length, validateEnvelope, validateErrorBody,
+} from './learning-projection-validate';
+import { ProjectionStore, type StoreClock, type StoreRead } from './learning-projection-store';
 
 /** Stage-A datasets that Condor serves with a success schema. */
 export const STAGE_A_DATASETS = ['manifest', 'lessons', 'records', 'jobs'] as const;
@@ -297,8 +302,7 @@ export interface ProjectionError {
 }
 
 // ---------------------------------------------------------------------------
-// Read API. INTERFACE COMMIT: names and signatures are final; the bodies land in
-// the following commits on this branch (see LEARNING_PROJECTION_INTERFACE.md).
+// Read API
 // ---------------------------------------------------------------------------
 
 /** What a hook shows. `ready` is the only state that carries rows. */
@@ -306,8 +310,9 @@ export type ProjectionViewState = 'loading' | 'ready' | 'unavailable' | 'expired
 
 export interface ProjectionPagesView<D extends PagedDataset> {
   state: ProjectionViewState;
-  /** The validated envelope currently shown, or null in every other state. */
+  /** The validated envelope currently shown. Present when `ready`, and for an owner-reported UNAVAILABLE envelope (no rows). */
   envelope: ProjectionEnvelope<DatasetRows[D]> | null;
+  /** Empty unless `state === 'ready'`. */
   rows: DatasetRows[D][];
   error: ProjectionError | null;
   /** Zero-based index in the cursor stack (0 = first page). */
@@ -316,7 +321,7 @@ export interface ProjectionPagesView<D extends PagedDataset> {
   hasPrevious: boolean;
   /** True after a 409 SNAPSHOT_CHANGED: old pages were cleared; offer `first()`. */
   snapshotChanged: boolean;
-  /** Milliseconds until the shown data expires (monotonic, from `verified_at_ms`), or null. */
+  /** Milliseconds until the shown data expires (monotonic, from `verified_at_ms`), or null. Read at render time. */
   expiresInMs: number | null;
   next: () => void;
   previous: () => void;
@@ -325,8 +330,9 @@ export interface ProjectionPagesView<D extends PagedDataset> {
 }
 
 export interface ProjectionPagesOptions {
+  /** False: no read is made and the view stays `loading`. Default true. */
   enabled?: boolean;
-  /** Automatic refresh interval; clamped to at least MIN_POLL_MS. 0 disables polling. */
+  /** Automatic refresh interval; clamped to at least MIN_POLL_MS. 0 disables polling. Default MIN_POLL_MS. */
   pollMs?: number;
 }
 
@@ -336,28 +342,17 @@ export interface ManifestView {
   scope: Scope | null;
   /** `scope.scope_id`. */
   scopeId: Id | null;
+  /** The six descriptors in frozen order (also when the owner reports UNAVAILABLE). Capability metadata, not rows. */
   descriptors: DatasetDescriptor[];
   descriptor: (dataset: DescriptorDataset) => DatasetDescriptor | null;
-  /** True only when the manifest is shown and the dataset descriptor has `capabilities.read`. */
+  /** True only when the manifest is shown (`ready`) and the dataset descriptor has `capabilities.read`. */
   canRead: (dataset: DescriptorDataset) => boolean;
   error: ProjectionError | null;
   expiresInMs: number | null;
   refresh: () => void;
 }
 
-const NOT_IMPLEMENTED = 'learning-projection interface commit: implementation follows';
-
-/**
- * One authenticated GET of `/api/v5/learning/<dataset>`. Resolves to a fully
- * validated envelope; rejects with a `ProjectionReadError` (typed, `.error`).
- */
-export async function readProjection<D extends ProjectionDataset>(
-  _dataset: D, _params?: ProjectionParams, _options?: { signal?: AbortSignal },
-): Promise<ProjectionEnvelope<D extends PagedDataset | 'manifest' ? DatasetRows[D] : never>> {
-  throw new Error(NOT_IMPLEMENTED);
-}
-
-/** The rejection value of `readProjection`. */
+/** The rejection value of `readProjection`; `.error` is the typed failure. */
 export class ProjectionReadError extends Error {
   readonly error: ProjectionError;
   constructor(error: ProjectionError) {
@@ -371,19 +366,183 @@ export function isProjectionReadError(value: unknown): value is ProjectionReadEr
   return value instanceof ProjectionReadError;
 }
 
-/** Paged, cancellable, expiry-aware read of one dataset. Cursor stack is internal and opaque. */
-export function useProjectionPages<D extends PagedDataset>(
-  _dataset: D, _params?: ProjectionParams, _options?: ProjectionPagesOptions,
-): ProjectionPagesView<D> {
-  throw new Error(NOT_IMPLEMENTED);
+const typedError = (status: number, code: ProjectionError['code'], snapshot_id: Hash | null = null): ProjectionError => ({
+  status, code, retryable: status === 503 || status === 0, snapshot_id, unauthenticated: false,
+});
+const invalidProjection = () => typedError(502, 'INVALID_OWNER_PROJECTION');
+
+/** UTC epoch milliseconds as `YYYY-MM-DD HH:MM:SS UTC`; null or invalid is null (never 1970). */
+export function formatUtc(value: number | null | undefined): string | null {
+  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > 8_640_000_000_000_000) return null;
+  return new Date(value).toISOString().replace('T', ' ').replace(/\.000Z$/, ' UTC').replace(/Z$/, ' UTC');
 }
 
-/** The scope and per-dataset descriptors (`capabilities.read`). */
-export function useManifest(_options?: ProjectionPagesOptions): ManifestView {
-  throw new Error(NOT_IMPLEMENTED);
+// --- scope binding and the store registry -----------------------------------------------------------------
+
+interface ClearableStore { clearForAuth: () => void; clearForScopeChange: () => void }
+const stores = new Set<ClearableStore>();
+let boundScope: string | null = null;
+
+/** Registers a store for 401 and scope-change clearing. Returns the unregister function. (Used by the hooks.) */
+export function registerProjectionStore(store: ClearableStore): () => void {
+  stores.add(store);
+  return () => { stores.delete(store); };
 }
 
-/** Drop every cached projection page (also done automatically on any HTTP 401). */
+/** Drop every cached projection page and stop all reads. Done automatically on any HTTP 401. */
 export function clearProjectionCaches(): void {
-  throw new Error(NOT_IMPLEMENTED);
+  boundScope = null;
+  for (const store of [...stores]) store.clearForAuth();
+}
+
+function bindScope(envelope: { scope: Scope | null; projection_revision: Hash }): void {
+  if (envelope.scope === null) return;
+  const key = `${envelope.scope.scope_id}|${envelope.scope.scope_sha256}|${envelope.projection_revision}`;
+  const changed = boundScope !== null && boundScope !== key;
+  boundScope = key;
+  if (changed) for (const store of [...stores]) store.clearForScopeChange(); // a different scope/revision: nothing carries over
+}
+
+// --- one validated read -----------------------------------------------------------------------------------
+
+function buildQuery(params: ProjectionParams): string {
+  const query = new URLSearchParams();
+  if (params.record_type) query.set('record_type', params.record_type);
+  if (params.root_id) query.set('root_id', params.root_id);
+  if (params.limit !== undefined) query.set('limit', String(params.limit));
+  if (params.cursor) query.set('cursor', params.cursor); // opaque: passed through, never decoded
+  const text = query.toString();
+  return text ? `?${text}` : '';
+}
+
+export type ReadResult<D extends ProjectionDataset> =
+  | { ok: true; envelope: ProjectionEnvelope<D extends keyof DatasetRows ? DatasetRows[D] : never> }
+  | { ok: false; error: ProjectionError };
+
+/** Non-throwing form used by the hooks. Aborted reads resolve `{ok:false}` with status 0; callers drop them. */
+export async function readProjectionResult<D extends ProjectionDataset>(
+  dataset: D, params: ProjectionParams = {}, signal?: AbortSignal, fetcher: typeof fetch = fetch,
+): Promise<ReadResult<D>> {
+  let response: Response;
+  try {
+    response = await fetcher(`/api/v5/learning/${dataset}${buildQuery(params)}`, {
+      credentials: 'include', headers: { Accept: 'application/json' }, signal, cache: 'no-store',
+    });
+  } catch {
+    return { ok: false, error: typedError(0, 'UPSTREAM_UNAVAILABLE') };
+  }
+  let text: string;
+  try { text = await response.text(); } catch { return { ok: false, error: typedError(0, 'UPSTREAM_UNAVAILABLE') }; }
+  if (response.status === 401) {
+    clearProjectionCaches();
+    return { ok: false, error: { status: 401, code: AUTHENTICATION_REQUIRED, retryable: false, snapshot_id: null, unauthenticated: true } };
+  }
+  if (utf8Length(text) > MAX_PROJECTION_RESPONSE_BYTES) return { ok: false, error: invalidProjection() };
+  try {
+    const document = parseStrictJson(text);
+    if (response.status === 200) {
+      const recordType = dataset === 'records' ? params.record_type : undefined;
+      const envelope = await validateEnvelope(dataset, document, { recordType, maxAgeMs: MAX_VERIFICATION_AGE_MS });
+      bindScope(envelope as unknown as { scope: Scope | null; projection_revision: Hash });
+      return { ok: true, envelope: envelope as never };
+    }
+    const body = validateErrorBody(response.status, document);
+    return { ok: false, error: { status: response.status, code: body.code as ProjectionErrorCode, retryable: body.retryable, snapshot_id: body.snapshot_id, unauthenticated: false } };
+  } catch (error) {
+    if (!(error instanceof ContractViolation)) throw error;
+    return { ok: false, error: invalidProjection() };
+  }
+}
+
+/**
+ * One authenticated GET of `/api/v5/learning/<dataset>`. Resolves to a fully validated envelope or rejects
+ * with a `ProjectionReadError`. A cancelled read rejects with an `AbortError`.
+ */
+export async function readProjection<D extends ProjectionDataset>(
+  dataset: D, params: ProjectionParams = {}, options: { signal?: AbortSignal } = {},
+): Promise<ProjectionEnvelope<D extends keyof DatasetRows ? DatasetRows[D] : never>> {
+  const result = await readProjectionResult(dataset, params, options.signal);
+  if (options.signal?.aborted) throw new DOMException('Aborted', 'AbortError');
+  if (!result.ok) throw new ProjectionReadError(result.error);
+  return result.envelope;
+}
+
+// --- hooks ------------------------------------------------------------------------------------------------
+
+const realClock: StoreClock = {
+  now: () => performance.now(),
+  setTimeout: (callback, ms) => globalThis.setTimeout(callback, ms),
+  clearTimeout: handle => globalThis.clearTimeout(handle as ReturnType<typeof setTimeout>),
+};
+
+const storeRead: StoreRead = async (dataset, params, signal) => {
+  const result = await readProjectionResult(dataset, params, signal);
+  return result.ok ? { ok: true, envelope: result.envelope as ProjectionEnvelope<unknown> } : result;
+};
+
+export function clampPollMs(pollMs: number | undefined): number {
+  if (pollMs === undefined) return MIN_POLL_MS;
+  return pollMs <= 0 ? 0 : Math.max(MIN_POLL_MS, pollMs);
+}
+
+function useStore(dataset: ProjectionDataset, params: ProjectionParams, options: ProjectionPagesOptions | undefined) {
+  const enabled = options?.enabled ?? true;
+  const pollMs = clampPollMs(options?.pollMs);
+  // The cursor is owned by the store; only the filter identifies it.
+  const key = JSON.stringify([dataset, params.record_type ?? null, params.root_id ?? null, params.limit ?? null, pollMs]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const store = useMemo(() => new ProjectionStore({
+    dataset, params: { record_type: params.record_type, root_id: params.root_id, limit: params.limit },
+    read: storeRead, clock: realClock, maxAgeMs: MAX_VERIFICATION_AGE_MS, pollMs,
+  }), [key]);
+  useEffect(() => {
+    if (!enabled) return undefined;
+    const unregister = registerProjectionStore(store);
+    store.start();
+    return () => { unregister(); store.dispose(); };
+  }, [store, enabled]);
+  const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
+  return { store, snapshot };
+}
+
+const expiresIn = (expiresAt: number | null) => expiresAt === null ? null : Math.max(0, Math.round(expiresAt - realClock.now()));
+
+/** Paged, cancellable, expiry-aware read of one dataset. The cursor stack is internal and opaque. */
+export function useProjectionPages<D extends PagedDataset>(
+  dataset: D, params: ProjectionParams = {}, options?: ProjectionPagesOptions,
+): ProjectionPagesView<D> {
+  const { store, snapshot } = useStore(dataset, params, options);
+  const envelope = snapshot.envelope as ProjectionEnvelope<DatasetRows[D]> | null;
+  return {
+    state: snapshot.state,
+    envelope,
+    rows: snapshot.state === 'ready' && envelope ? envelope.items : [],
+    error: snapshot.error,
+    pageIndex: snapshot.pageIndex,
+    hasNext: snapshot.hasNext,
+    hasPrevious: snapshot.hasPrevious,
+    snapshotChanged: snapshot.snapshotChanged,
+    expiresInMs: expiresIn(snapshot.expiresAt),
+    next: store.next, previous: store.previous, first: store.first, refresh: store.refresh,
+  };
+}
+
+/** The configured scope and the per-dataset descriptors (`capabilities.read`). */
+export function useManifest(options?: ProjectionPagesOptions): ManifestView {
+  const { store, snapshot } = useStore('manifest', {}, options);
+  const envelope = snapshot.envelope as ManifestEnvelope | null;
+  const descriptors = envelope?.items ?? [];
+  const descriptor = (dataset: DescriptorDataset) => descriptors.find(item => item.dataset === dataset) ?? null;
+  return {
+    state: snapshot.state,
+    envelope,
+    scope: envelope?.scope ?? null,
+    scopeId: envelope?.scope?.scope_id ?? null,
+    descriptors,
+    descriptor,
+    canRead: dataset => snapshot.state === 'ready' && descriptor(dataset)?.capabilities.read === true,
+    error: snapshot.error,
+    expiresInMs: expiresIn(snapshot.expiresAt),
+    refresh: store.refresh,
+  };
 }

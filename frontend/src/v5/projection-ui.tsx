@@ -1,14 +1,7 @@
 import { type ReactNode } from 'react';
-import type { Coverage, EnvelopeStatus, Issue, ProjectionError, ProjectionViewState, Ref, SourceRef } from './learning-projection';
+import { formatUtc, type Coverage, type EnvelopeStatus, type Issue, type ProjectionError, type ProjectionViewState, type Ref, type SourceRef } from './learning-projection';
 
 /** Shared, presentational pieces for the projection panels. No data fetching here. */
-
-const MAX_TIME_MS = 8_640_000_000_000_000;
-
-export function formatUtc(value: number | null | undefined): string | null {
-  if (typeof value !== 'number' || !Number.isSafeInteger(value) || value < 0 || value > MAX_TIME_MS) return null;
-  return new Date(value).toISOString().replace('T', ' ').replace('.000Z', ' UTC').replace(/Z$/, ' UTC');
-}
 
 /** UTC epoch milliseconds as a `<time>`; null/invalid is "Unknown", never 1970. */
 export function UtcTime({ value }: { value?: number | null }) {
@@ -38,22 +31,29 @@ export function SourceRefList({ sources, empty = 'No source receipt' }: { source
   </ul>;
 }
 
-const RESOLUTION_TEXT: Record<Ref['resolution'], string> = {
+const RESOLUTION_TEXT: Record<Exclude<Ref['resolution'], 'OUT_OF_SCOPE'>, string> = {
   RESOLVED: 'Resolved',
   NOT_PUBLISHED: 'Not published',
   UNAVAILABLE: 'Unavailable',
-  OUT_OF_SCOPE: 'Outside this scope (opaque ID only)',
 };
 
-/** References are bounded previews; `total` (when known) counts all of them. */
+/**
+ * References are bounded previews; `total` (when known) counts all of them. An out-of-scope neighbour is an
+ * opaque unresolved reference: only its token is shown, with an "unresolved / out of scope" label. Its owner,
+ * kind and any identity inside the token are never displayed, decoded or linked.
+ */
 export function RefList({ refs, total, empty = 'None recorded' }: { refs: Ref[]; total?: number | null; empty?: string }) {
   if (!refs.length) return <span>{empty}</span>;
   const omitted = typeof total === 'number' && total > refs.length ? total - refs.length : 0;
   return <div>
     <ul className="space-y-1" aria-label="References">
-      {refs.map((ref, index) => <li key={`${ref.owner}:${ref.kind}:${ref.record_id}:${index}`} className="break-all">
+      {refs.map((ref, index) => <li key={`${ref.resolution}:${ref.record_id}:${index}`} className="break-all">
         <span className="select-text">{ref.record_id}</span>
-        <span className="text-xs text-[var(--color-text-muted)]"> · {ref.owner} · {ref.kind} · {RESOLUTION_TEXT[ref.resolution]}</span>
+        <span className="text-xs text-[var(--color-text-muted)]">
+          {ref.resolution === 'OUT_OF_SCOPE'
+            ? ' · Unresolved · out of scope'
+            : ` · ${ref.owner} · ${ref.kind} · ${RESOLUTION_TEXT[ref.resolution]}`}
+        </span>
       </li>)}
     </ul>
     {omitted > 0 && <p className="text-xs text-[var(--color-text-muted)]">{omitted} more not shown (preview of {refs.length} of {total}).</p>}
@@ -118,6 +118,7 @@ export function ProjectionStatusBanner({ state, envelope, error, onFirst, childr
     return <div className="v5-panel mb-4" role="alert">
       <strong>UNAVAILABLE{error ? ` · ${code}` : ''}</strong>
       <p>{ERROR_TEXT[code] ?? 'The owner projection is unavailable.'}</p>
+      {envelope && envelope.reason_codes.length > 0 && <p className="text-xs">{envelope.reason_codes.join(', ')}</p>}
       {error?.code === 'SNAPSHOT_CHANGED' && onFirst && <button type="button" onClick={onFirst}>First page</button>}
       {children}
     </div>;

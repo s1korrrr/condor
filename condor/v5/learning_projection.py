@@ -416,6 +416,15 @@ def _check_row(row: dict[str, Any], *, context: str, variant: str | None = None)
         raise ContractViolation(f"{context}: scalar region exceeds the contract")
 
 
+NATIVE_COMPARISON_PLACEHOLDERS = frozenset({"UNAVAILABLE", "UNKNOWN", "NONE", "NULL", "N/A", "NOT_RECORDED", "UNVERIFIED"})
+
+
+def _check_comparison_identity(value: str, *, context: str) -> None:
+    normalized = value.strip().upper()
+    if not normalized or normalized in NATIVE_COMPARISON_PLACEHOLDERS:
+        raise ContractViolation(f"{context}: comparison requires an explicit non-placeholder identity")
+
+
 def _check_dataset_row(row: dict[str, Any], dataset: str, request: RequestShape, *, context: str) -> None:
     stub = row["row_status"] == "UNAVAILABLE"
     if dataset == "records":
@@ -464,6 +473,9 @@ def _check_dataset_row(row: dict[str, Any], dataset: str, request: RequestShape,
             conditions = comparison["conditions"]
             if any(comparison[key] != conditions[key] for key in ("baseline_id", "metric", "unit")):
                 raise ContractViolation(f"{context}: inconsistent comparison conditions")
+            _check_comparison_identity(comparison["comparable_group"], context=f"{context}.comparable_group")
+            for field in ("baseline_id", "metric", "unit", "venue", "instrument", "capital_model", "costs_identity", "execution_identity", "validation"):
+                _check_comparison_identity(conditions[field], context=f"{context}.{field}")
             window = conditions["window"]
             if isinstance(window, dict):
                 try:
@@ -472,6 +484,8 @@ def _check_dataset_row(row: dict[str, Any], dataset: str, request: RequestShape,
                     ordered = False
                 if not ordered:
                     raise ContractViolation(f"{context}: comparison window is not ordered ISO time")
+            else:
+                _check_comparison_identity(window, context=f"{context}.window")
 
 
 def _stage_b_variant(dataset: str, row: dict[str, Any]) -> str:

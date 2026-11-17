@@ -8,7 +8,8 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 from condor.v5 import learning_projection as lp
-from condor.v5.config import ConfigurationError, _learning_projection_config
+from condor.v5.app import create_app
+from condor.v5.config import ConfigurationError, Settings, _learning_projection_config
 from condor.v5.learning import FixtureLearningAPI, learning_router
 
 
@@ -142,6 +143,44 @@ def test_startup_rejects_scope_and_revision_mismatches(revision, digest):
         })
 
 
+@pytest.mark.parametrize("configured", [True, False], ids=["stage-b", "unconfigured"])
+def test_authenticated_stage_b_route_exposes_only_the_pinned_config(configured, tmp_path, monkeypatch):
+    projection = _learning_projection_config({
+        "V5_LEARNING_SOURCE": "research_os_v1", "V5_LEARNING_OWNER_URL": "http://owner.invalid",
+        "V5_LEARNING_SCOPE_ID": "v5-lfl-okx-spot-dca", "V5_LEARNING_SCOPE_SHA256": STAGE_B_SCOPE_SHA,
+        "V5_LEARNING_PROJECTION_REVISION": REVISION,
+    }) if configured else None
+    config = Settings(
+        runtime_root=tmp_path / "state", dashboard_token_file=tmp_path / "unused",
+        dashboard_origin="https://v5.example.test", observation_base_url="http://observation.invalid",
+        observation_read_token_file=tmp_path / "unused-observation", advisor_control_base_url="http://advisor.invalid",
+        advisor_request_token_file=tmp_path / "unused-advisor", cookie_secure=False, learning_projection=projection,
+    )
+    reader = Reader()
+    binding = lp.ResearchOwnerLearningSource(projection, client=reader) if projection else None
+    fixture_value = "in-process-test-only" * 2
+    monkeypatch.setattr("condor.v5.app.read_secret_file", lambda _path: fixture_value)
+    app = create_app(settings=config, projection_source=binding, static_dir=tmp_path / "dist")
+    with TestClient(app) as client:
+        before = client.get("/api/v5/auth")
+        assert (before.status_code, before.json()) == (200, {"authenticated": False})
+        login = client.post("/api/v5/auth/login", json={"token": fixture_value}, headers={"Origin": config.dashboard_origin})
+        assert (login.status_code, login.json()) == (200, {"authenticated": True})
+        after = client.get("/api/v5/auth")
+
+    expected = {"authenticated": True}
+    if configured:
+        scope = json.loads((lp.SCOPE_DIR / "scope-okx-spot-dca-stage-b.json").read_bytes())
+        expected.update({
+            "learning_projection_revision": REVISION, "learning_scope_sha256": STAGE_B_SCOPE_SHA,
+            "learning_scope_id": "v5-lfl-okx-spot-dca",
+            "learning_scope_membership": {key: scope[key] for key in ("program_id", "family_lane_pairs")},
+        })
+    assert (after.status_code, after.json()) == (200, expected)
+    assert after.headers["Cache-Control"] == "no-store"
+    assert not reader.calls
+
+
 @pytest.mark.parametrize("entry", ERRORS, ids=lambda entry: entry["path"])
 def test_stage_b_passes_each_typed_reader_error(entry):
     raw = read(entry["path"])
@@ -218,6 +257,33 @@ def test_assessment_comparison_rejects_disordered_native_iso_windows(start, end)
     entry = next(entry for entry in INDEX if entry["path"] == ASSESSMENTS)
     result = asyncio.run(source(reader).read("assessments", query(entry)))
     assert (result.status, json.loads(result.body)["code"]) == (502, "INVALID_OWNER_PROJECTION")
+
+
+@pytest.mark.parametrize("field,value", [
+    *((field, " UNKNOWN ") for field in (
+        "baseline_id", "comparable_group", "metric", "unit", "venue", "instrument", "capital_model",
+        "costs_identity", "execution_identity", "validation", "window",
+    )),
+    *(("costs_identity", f"\u0085{code.lower()}\u2007") for code in (
+        "UNAVAILABLE", "NONE", "NULL", "N/A", "NOT_RECORDED", "UNVERIFIED",
+    )),
+], ids=lambda value: str(value).strip())
+def test_assessment_comparison_rejects_native_placeholders(field, value):
+    document = json.loads(read(ASSESSMENTS))
+    row = document["items"][0]
+    comparison = row["comparison"]
+    if field != "comparable_group":
+        comparison["conditions"][field] = value
+    if field in {"baseline_id", "comparable_group", "metric", "unit"}:
+        comparison[field] = value
+    row.pop("row_sha256")
+    row["row_sha256"] = sha256(lp.canonical(row)).hexdigest()
+    raw = seal(document)
+    assert lp.schema_errors("assessments", document) is None
+    reader = Reader(lp.OwnerResponse(200, raw, None))
+    entry = next(entry for entry in INDEX if entry["path"] == ASSESSMENTS)
+    result = asyncio.run(source(reader).read("assessments", query(entry)))
+    assert (result.status, json.loads(result.body).get("code")) == (502, "INVALID_OWNER_PROJECTION")
 
 
 def test_status_only_clears_old_page_receipt_without_extending_its_original_deadline():

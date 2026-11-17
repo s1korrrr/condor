@@ -406,6 +406,17 @@ function nativeIsoBoundary(value: string): { aware: boolean; micros: bigint } | 
   return { aware: Boolean(zone), micros: midnight + BigInt(seconds(parts)) * 1000000n + BigInt(parts[3]) - offset };
 }
 
+const NATIVE_COMPARISON_PLACEHOLDERS = new Set(['UNAVAILABLE', 'UNKNOWN', 'NONE', 'NULL', 'N/A', 'NOT_RECORDED', 'UNVERIFIED']);
+const PYTHON_STRIP_SPACE = '\\u0009-\\u000d\\u001c-\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000';
+const PYTHON_EDGE_WHITESPACE = new RegExp(`^[${PYTHON_STRIP_SPACE}]+|[${PYTHON_STRIP_SPACE}]+$`, 'g');
+
+function checkComparisonIdentity(value: string, context: string): void {
+  const normalized = value.replace(PYTHON_EDGE_WHITESPACE, '').toUpperCase();
+  if (!normalized || NATIVE_COMPARISON_PLACEHOLDERS.has(normalized)) {
+    throw new ContractViolation(`${context}: comparison requires an explicit non-placeholder identity`);
+  }
+}
+
 function checkDatasetRow(row: Json, dataset: string, { recordType, ideaRevisionId }: EnvelopeContext, context: string): void {
   const stub = row.row_status === 'UNAVAILABLE';
   if (dataset === 'records') {
@@ -462,6 +473,10 @@ function checkDatasetRow(row: Json, dataset: string, { recordType, ideaRevisionI
       if (['baseline_id', 'metric', 'unit'].some(key => comparison[key] !== conditions[key])) {
         throw new ContractViolation(`${context}: inconsistent comparison conditions`);
       }
+      checkComparisonIdentity(comparison.comparable_group as string, `${context}.comparable_group`);
+      for (const field of ['baseline_id', 'metric', 'unit', 'venue', 'instrument', 'capital_model', 'costs_identity', 'execution_identity', 'validation']) {
+        checkComparisonIdentity(conditions[field] as string, `${context}.${field}`);
+      }
       if (typeof conditions.window === 'object') {
         const { start, end_exclusive: end } = conditions.window as { start: string; end_exclusive: string };
         const from = nativeIsoBoundary(start);
@@ -469,6 +484,8 @@ function checkDatasetRow(row: Json, dataset: string, { recordType, ideaRevisionI
         if (!from || !to || from.aware !== to.aware || from.micros >= to.micros) {
           throw new ContractViolation(`${context}: comparison window is not ordered ISO time`);
         }
+      } else {
+        checkComparisonIdentity(conditions.window as string, `${context}.window`);
       }
     }
   }

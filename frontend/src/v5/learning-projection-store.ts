@@ -111,7 +111,7 @@ export class ProjectionStore {
   private listeners = new Set<() => void>();
   /** `stack[i]` is the opaque cursor that fetches page i (null = first page). Never decoded. */
   private stack: (string | null)[] = [null];
-  private stageBContinuation = false;
+  private admittedRevision: string | null = null;
   private controller: AbortController | null = null;
   private expiryTimer: unknown = null;
   private pollTimer: unknown = null;
@@ -135,6 +135,7 @@ export class ProjectionStore {
     this.clearTimers();
     this.options = { ...this.options, ...next };
     this.stack = [null];
+    this.admittedRevision = null;
     this.assessmentTraversal.clear();
     this.set({ ...INITIAL });
   }
@@ -147,11 +148,9 @@ export class ProjectionStore {
   refresh = () => { void this.load(this.snapshot.pageIndex); };
   first = () => { this.stack = [null]; this.assessmentTraversal.clear(); void this.load(0, true); };
   next = () => {
-    const envelope = this.snapshot.envelope;
-    const cursor = envelope?.page.next_cursor;
-    if (!cursor) return;
+    const cursor = this.snapshot.envelope?.page.next_cursor;
+    if (!this.snapshot.hasNext || !cursor) return;
     const index = this.snapshot.pageIndex + 1;
-    this.stageBContinuation = envelope.projection_revision === STAGE_B_REVISION;
     this.stack = [...this.stack.slice(0, index), cursor];
     void this.load(index);
   };
@@ -165,6 +164,7 @@ export class ProjectionStore {
     this.abort();
     this.clearTimers();
     this.stack = [null];
+    this.admittedRevision = null;
     this.assessmentTraversal.clear();
     this.set({ ...INITIAL, state: 'unauthenticated', error: { status: 401, code: 'authentication_required', retryable: false, snapshot_id: null, unauthenticated: true } });
   }
@@ -174,6 +174,7 @@ export class ProjectionStore {
     if (this.disposed || this.snapshot.state === 'unauthenticated') return;
     this.clearTimers();
     this.stack = [null];
+    this.admittedRevision = null;
     this.assessmentTraversal.clear();
     this.set({ ...INITIAL });
     void this.load(0, true);
@@ -219,6 +220,7 @@ export class ProjectionStore {
   }
 
   private async load(pageIndex: number, announce = false) {
+    if (pageIndex >= this.stack.length) pageIndex = 0;
     this.abort();
     this.clearPoll();
     const controller = new AbortController();
@@ -250,6 +252,8 @@ export class ProjectionStore {
       if (admission.miss) return this.freshnessMiss(freshnessError(admission.miss, envelope.snapshot_id), pageIndex);
       expiresAt = admission.expiresAt;
     }
+    if (expiresAt !== null && expiresAt <= now) return this.freshnessMiss(freshnessError('expired', envelope.snapshot_id), pageIndex);
+    this.admittedRevision = envelope.projection_revision;
     if (expiresAt === null) {
       this.clearExpiry();
       this.assessmentTraversal.clear();
@@ -260,7 +264,6 @@ export class ProjectionStore {
       this.set({ ...this.cleared(null, { pageIndex, hasPrevious: pageIndex > 0 }), envelope });
       return this.schedulePoll();
     }
-    if (expiresAt <= now) return this.freshnessMiss(freshnessError('expired', envelope.snapshot_id), pageIndex);
     this.clearExpiry();
     const assessmentRelationships = dataset === 'assessments'
       ? this.assessmentTraversal.observe(envelope as ProjectionEnvelope<AssessmentRow | UnavailableRowStub>, pageIndex, cursor, this.options.params.idea_revision_id)
@@ -274,17 +277,24 @@ export class ProjectionStore {
   }
 
   private freshnessMiss(error: ProjectionError, pageIndex: number) {
+    const resumeIndex = this.resetFailedContinuation(pageIndex);
     if (this.snapshot.expiresAt === null || this.snapshot.expiresAt <= this.options.clock.now()) {
       this.clearExpiry();
       this.assessmentTraversal.clear();
-      if (error.freshness === 'retired') return this.fail(error, pageIndex);
-      if (error.freshness === 'expired' || this.snapshot.state === 'expired') {
-        this.set(this.cleared(error, { state: 'expired', pageIndex }));
-      } else {
-        this.set(this.cleared(error, { pageIndex }));
-      }
+      if (error.freshness === 'retired' && this.admittedRevision === STAGE_B_REVISION) return this.fail(error, resumeIndex);
+      const state = error.freshness === 'expired' || this.snapshot.state === 'expired' ? 'expired' : 'unavailable';
+      this.set(this.cleared(error, { state, pageIndex: resumeIndex, hasPrevious: resumeIndex > 0 }));
+    } else if (resumeIndex !== pageIndex) {
+      this.assessmentTraversal.clear();
+      this.set({ ...this.snapshot, hasNext: false, assessmentRelationships: null });
     }
     this.schedulePoll();
+  }
+
+  private resetFailedContinuation(pageIndex: number) {
+    if (pageIndex === 0 || this.admittedRevision !== STAGE_B_REVISION) return pageIndex;
+    this.stack = [null];
+    return 0;
   }
 
   /** The shown data is older than the contract allows: clear it. Polling continues so the page can recover. */
@@ -302,10 +312,7 @@ export class ProjectionStore {
       this.set({ ...INITIAL, state: 'unavailable', error, snapshotChanged: error.code === 'SNAPSHOT_CHANGED', pageIndex: 0 });
       return;
     }
-    if (error.status === 502 && error.code === 'INVALID_OWNER_PROJECTION' && pageIndex > 0 && this.stageBContinuation) {
-      this.stack = [null];
-      pageIndex = 0;
-    }
+    pageIndex = this.resetFailedContinuation(pageIndex);
     this.set(this.cleared(error, { pageIndex, hasPrevious: pageIndex > 0 }));
     this.schedulePoll();
   }

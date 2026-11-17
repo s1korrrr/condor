@@ -17,6 +17,7 @@ const projection = modules.load('v5/learning-projection.ts');
 const { ProjectionStore } = modules.load('v5/learning-projection-store.ts');
 const { AssessmentTraversal } = modules.load('v5/factory-assessment-relationships.ts');
 const { FactoryDataset, FactoryStatus } = modules.load('v5/ResearchFactoryPanel.tsx');
+const { ProjectionStatusBanner } = modules.load('v5/projection-ui.tsx');
 const scope = golden('manifest').scope;
 const membership = { program_id: scope.program_id, family_lane_pairs: scope.family_lane_pairs };
 const session = projectionRevision => ({
@@ -235,6 +236,35 @@ test('the browser orders native window boundaries without rounding or inventing 
   }
 });
 
+for (const [field, value] of [
+  ...['costs_identity', 'baseline_id', 'comparable_group', 'metric', 'unit', 'venue', 'instrument',
+    'capital_model', 'execution_identity', 'validation', 'window'].map(field => [field, ' UNKNOWN ']),
+  ...['UNAVAILABLE', 'NONE', 'NULL', 'N/A', 'NOT_RECORDED', 'UNVERIFIED'].map(code => ['costs_identity', `\u0085${code.toLowerCase()}\u2007`]),
+]) {
+  test(`the browser rejects native placeholders: ${field} ${JSON.stringify(value)}`, async () => {
+    const document = golden('assessments-supported');
+    const [row] = document.items;
+    const { comparison } = row;
+    if (field !== 'comparable_group') comparison.conditions[field] = value;
+    if (['baseline_id', 'comparable_group', 'metric', 'unit'].includes(field)) comparison[field] = value;
+    await resealBody(row, 'row_sha256');
+    await resealBody(document, 'envelope_sha256');
+    assert.equal(validator.schemaError('assessments', document), null);
+    await assert.rejects(validateStageB(document, row.idea_revision_id), /non-placeholder|identify a frozen window/i, field);
+  });
+}
+
+test('native identity validation leaves genuine conditions bytes untouched', async () => {
+  const document = golden('assessments-supported');
+  const [row] = document.items;
+  const value = '\ufeffUNKNOWN ';
+  row.comparison.conditions.costs_identity = value;
+  await resealBody(row, 'row_sha256');
+  await resealBody(document, 'envelope_sha256');
+  const validated = await validateStageB(document, row.idea_revision_id);
+  assert.equal(validated.items[0].comparison.conditions.costs_identity, value);
+});
+
 test('Stage B one-shot reads share generation retirement and never return stale rows', async () => {
   const { readProjectionResult } = frontendModules().load('v5/learning-projection.ts');
   const candidate = golden('candidates-real-scope');
@@ -363,19 +393,45 @@ test('Stage B clears the cursor stack on owner UNAVAILABLE, 409, 401 and expiry'
   assert.equal(store.getSnapshot().envelope, null);
 });
 
-function pagedStore(dataset, first, second, finalResult) {
+function pagedStore(dataset, first, second, finalResult, pollMs = 0) {
   const requests = [];
+  const timers = new Map();
   let now = 0;
+  let timerId = 0;
+  const fire = delay => {
+    const timer = [...timers.entries()].find(([, alarm]) => alarm.delay === delay);
+    assert.ok(timer, `No pending ${delay} ms timer`);
+    timers.delete(timer[0]);
+    timer[1].callback();
+  };
   const store = new ProjectionStore({
-    dataset, params: {}, maxAgeMs: 90_000, pollMs: 0,
-    clock: { now: () => now, setTimeout: () => 1, clearTimeout() {} },
+    dataset, params: {}, maxAgeMs: 90_000, pollMs,
+    clock: { now: () => now, setTimeout: (callback, delay) => { timers.set(++timerId, { callback, delay }); return timerId; }, clearTimeout: id => timers.delete(id) },
     read: async (_dataset, params) => {
       requests.push(params.cursor);
-      if (requests.length <= 2) return { ok: true, envelope: requests.length === 1 ? first : second };
+      if (requests.length === 1) return { ok: true, envelope: first };
+      if (requests.length === 2 && second) return { ok: true, envelope: second };
       return finalResult;
     },
   });
-  return { store, requests, advanceToExpiry: () => { now = store.getSnapshot().expiresAt; } };
+  return { store, requests, advanceToExpiry: () => {
+    const deadline = store.getSnapshot().expiresAt;
+    const delay = deadline - now;
+    now = deadline;
+    fire(delay);
+  }, runPoll: () => fire(pollMs) };
+}
+
+for (const [status, code] of [[503, 'VERIFICATION_UNAVAILABLE'], [404, 'DATASET_NOT_ENABLED'], [400, 'INVALID_QUERY']]) {
+  test(`a Stage B ${status} on Next drops the rejected candidate cursor`, async () => {
+    const first = golden('candidates-real-scope');
+    const { store, requests } = pagedStore('candidates', first, null, { ok: false, error: { status, code } });
+    store.start(); await tick();
+    store.next(); await tick();
+    assert.equal(store.getSnapshot().error.code, code);
+    store.refresh(); await tick();
+    assert.deepEqual(requests, [undefined, first.page.next_cursor, undefined]);
+  });
 }
 
 test('a Stage B validation failure on page two drops the failed continuation', async () => {
@@ -405,11 +461,53 @@ test('a retired candidate page only offers First after no live page remains', as
   assert.doesNotMatch(render(second, store.getSnapshot()), /First page/);
   advanceToExpiry();
   store.refresh(); await tick();
+  assert.deepEqual(requests, [undefined, first.page.next_cursor, first.page.next_cursor, undefined]);
   assert.equal(store.getSnapshot().envelope, null);
   assert.equal(store.getSnapshot().pageIndex, 0);
+  assert.equal(store.getSnapshot().snapshotChanged, true);
   assert.match(render(null, store.getSnapshot()), /First page/);
   store.first(); await tick();
   assert.equal(requests.at(-1), undefined);
+});
+
+test('an expired Stage B candidate continuation resets to First on a retired reply', async () => {
+  const first = golden('candidates-real-scope');
+  const second = golden('candidates-real-scope-page-two');
+  const error = { status: 409, code: 'SNAPSHOT_CHANGED', freshness: 'retired' };
+  const { store, requests, advanceToExpiry } = pagedStore('candidates', first, second, { ok: false, error });
+  store.start(); await tick();
+  store.next(); await tick();
+  advanceToExpiry();
+  assert.equal(store.getSnapshot().state, 'expired');
+  store.refresh(); await tick();
+  const { pageIndex, hasPrevious, snapshotChanged } = store.getSnapshot();
+  assert.deepEqual({ pageIndex, hasPrevious, snapshotChanged }, { pageIndex: 0, hasPrevious: false, snapshotChanged: true });
+  assert.match(render(null, store.getSnapshot()), /First page/);
+  store.first(); await tick();
+  assert.deepEqual(requests, [undefined, first.page.next_cursor, first.page.next_cursor, undefined]);
+});
+
+test('an expired Stage A records page ignores a retired reply without resetting or stopping its poll', async () => {
+  const record = load('examples/records-nodes.json');
+  const first = { ...record, page: { ...record.page, has_more: true, next_cursor: 'opaque' } };
+  const error = { status: 409, code: 'SNAPSHOT_CHANGED', freshness: 'retired' };
+  const { store, requests, advanceToExpiry, runPoll } = pagedStore('records', first, record, { ok: false, error }, 30_000);
+  store.start(); await tick();
+  store.next(); await tick();
+  advanceToExpiry();
+  assert.equal(store.getSnapshot().state, 'expired');
+  store.refresh(); await tick();
+  const { pageIndex, hasPrevious, snapshotChanged, state } = store.getSnapshot();
+  assert.deepEqual({ pageIndex, hasPrevious, snapshotChanged, state }, { pageIndex: 1, hasPrevious: true, snapshotChanged: false, state: 'unavailable' });
+  runPoll(); await tick();
+  assert.deepEqual(requests, [undefined, 'opaque', 'opaque', 'opaque']);
+});
+
+test('the shared Stage A banner does not offer First for a locally retired reply', () => {
+  const error = { status: 409, code: 'SNAPSHOT_CHANGED', freshness: 'retired' };
+  const html = renderToStaticMarkup(React.createElement(ProjectionStatusBanner, { state: 'unavailable', error, onFirst() {} }));
+  assert.doesNotMatch(html, /First page/);
+  assert.match(html, /retired snapshot/);
 });
 
 test('a status-only Stage A response leaves the records continuation on page two', async () => {

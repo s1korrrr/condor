@@ -103,14 +103,14 @@ function Assessment({ row, relationship }: { row: AssessmentRow; relationship?: 
   </>;
 }
 
-export function FactoryStatus({ state, envelope, error, first }: Pick<ProjectionPagesView<FactoryDatasetName>, 'state' | 'error'> & { envelope: BannerEnvelope | null; first?: () => void }) {
+export function FactoryStatus({ state, envelope, error, first, snapshotChanged }: Pick<ProjectionPagesView<FactoryDatasetName>, 'state' | 'error'> & { envelope: BannerEnvelope | null; first?: () => void; snapshotChanged?: boolean }) {
   if (envelope?.status === 'UNAVAILABLE') return <div role="alert" className="v5-panel min-w-0">
     <strong>UNAVAILABLE</strong><p>{envelope.reason_codes.join(', ')}</p><FactoryIssues issues={envelope.issues} />
   </div>;
   if (error?.code === 'WARMING') return <div role="status" className="v5-panel"><strong>WARMING</strong><p>The owner is verifying a publication.</p></div>;
   if (error?.code === 'UPSTREAM_UNAVAILABLE') return <div role="alert" className="v5-panel"><strong>UNAVAILABLE · UPSTREAM_UNAVAILABLE</strong><p>No owner projection response is available.</p></div>;
   if (state === 'unavailable' && !error) return <div role="alert" className="v5-panel"><strong>UNAVAILABLE</strong><p>No fresh owner receipt is available.</p></div>;
-  return <ProjectionStatusBanner state={state} envelope={envelope} error={error} onFirst={first}>
+  return <ProjectionStatusBanner state={state} envelope={envelope} error={error} onFirst={first} allowRetiredFirst={snapshotChanged}>
     {envelope?.reason_codes.includes('OMITTED_CONTENT') && <p>Some owner content was omitted from this projection.</p>}
   </ProjectionStatusBanner>;
 }
@@ -123,7 +123,7 @@ export function FactoryDataset({ dataset, view, onAssess }: {
   const { state, envelope, rows, error } = view;
   return <section className="v5-panel min-w-0 max-w-full space-y-3 [overflow-wrap:anywhere]">
     <h2>{TITLES[dataset]}</h2>
-    <FactoryStatus state={state} envelope={envelope} error={error} first={view.first} />
+    <FactoryStatus state={state} envelope={envelope} error={error} first={view.first} snapshotChanged={view.snapshotChanged} />
     {state === 'ready' && envelope && <>
       {!rows.length && <p>{dataset === 'assessments' && envelope.status === 'BOUND' && envelope.coverage.total_items === 0
         ? 'no recorded assessments for this revision' : 'No rows on this owner page.'}</p>}

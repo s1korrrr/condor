@@ -452,6 +452,8 @@ def create_app(
         expected = dashboard_token()
         supplied = request.cookies.get(COOKIE_NAME, "")
         if not supplied or not hmac.compare_digest(supplied, expected):
+            if projection is not None and request.url.path in PROJECTION_PATHS:
+                projection.invalidate()
             raise HTTPException(401, detail={"code": "authentication_required"})
 
     # Production projection source only when fully configured (V5_LEARNING_*); otherwise the routes answer a
@@ -488,14 +490,18 @@ def create_app(
         supplied = request.cookies.get(COOKIE_NAME, "")
         authenticated = bool(supplied and hmac.compare_digest(supplied, token))
         if authenticated and projection is not None:
+            scope = {
+                "authenticated": True,
+                "learning_scope_id": projection.config.scope_id,
+                "learning_scope_membership": projection.config.membership.summary(),
+            }
             if projection.config.stage_b:
                 return {
-                    "authenticated": True,
-                    "learning_scope_id": projection.config.scope_id,
+                    **scope,
                     "learning_scope_sha256": projection.config.scope_sha256,
                     "learning_projection_revision": projection.config.projection_revision,
                 }
-            return {"authenticated": True, "learning_scope_id": projection.config.scope_id}
+            return scope
         return {"authenticated": authenticated}
 
     def paper_observation() -> PaperObservation | None:

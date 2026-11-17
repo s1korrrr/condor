@@ -1,10 +1,12 @@
 import asyncio
 import json
+import time
 from hashlib import sha256
 
 import pytest
 
 from condor.v5 import learning_projection as lp
+from condor.v5.config import ConfigurationError, _learning_projection_config
 
 
 def read(path):
@@ -17,6 +19,9 @@ MANIFEST = json.loads(read("examples/stage-b/manifest.json"))
 BASE_TIME = MANIFEST["served_at_ms"]
 REVISION = MANIFEST["projection_revision"]
 SCOPE = MANIFEST["scope"]
+MEMBERSHIP = lp.ScopeMembership(
+    SCOPE["program_id"], tuple((pair["family_id"], pair["lane"]) for pair in SCOPE["family_lane_pairs"])
+)
 ERRORS = [entry for entry in json.loads(read("golden-index.json"))["examples"] if entry["status"] not in (200, 401)]
 ASSESSMENTS = "examples/stage-b/assessments-supported.json"
 CHANGED_SEAL = "examples/stage-b/campaigns-seal-integrity-failure.json"
@@ -32,9 +37,9 @@ class Reader:
         return next(self.responses)
 
 
-def source(reader, revision=REVISION):
-    config = lp.LearningProjectionConfig("http://owner.invalid", SCOPE["scope_id"], SCOPE["scope_sha256"], revision)
-    return lp.ResearchOwnerLearningSource(config, client=reader, clock=lambda: BASE_TIME)
+def source(reader, revision=REVISION, *, monotonic=time.monotonic):
+    config = lp.LearningProjectionConfig("http://owner.invalid", SCOPE["scope_id"], SCOPE["scope_sha256"], revision, MEMBERSHIP)
+    return lp.ResearchOwnerLearningSource(config, client=reader, clock=lambda: BASE_TIME, monotonic=monotonic)
 
 
 def query(entry):
@@ -77,6 +82,25 @@ def test_stage_a_keeps_the_factory_disabled_without_an_owner_call():
     assert reader.calls == []
 
 
+def test_stage_b_config_requires_the_vendored_stage_b_membership_pin():
+    stage_b_sha = "1f65d67fc990262e049e808961b1a23068f26692b9171112eb441be0157e7c16"
+    env = {
+        "V5_LEARNING_SOURCE": "research_os_v1",
+        "V5_LEARNING_OWNER_URL": "http://owner.invalid",
+        "V5_LEARNING_SCOPE_ID": "v5-lfl-okx-spot-dca",
+        "V5_LEARNING_SCOPE_SHA256": stage_b_sha,
+        "V5_LEARNING_PROJECTION_REVISION": REVISION,
+    }
+    config = _learning_projection_config(env)
+    assert config.stage_b and config.expected.scope_sha256 == stage_b_sha
+    pinned = json.loads((lp.SCOPE_DIR / "scope-okx-spot-dca-stage-b.json").read_bytes())
+    assert config.expected.membership.summary() == {key: pinned[key] for key in ("program_id", "family_lane_pairs")}
+    with pytest.raises(ConfigurationError, match="Stage B"):
+        _learning_projection_config({
+            **env, "V5_LEARNING_SCOPE_SHA256": "a3a34ee765c75616da6f606a66156cdbf0e8736c91052966607fa6b59936bd18"
+        })
+
+
 @pytest.mark.parametrize("entry", ERRORS, ids=lambda entry: entry["path"])
 def test_stage_b_passes_each_typed_reader_error(entry):
     raw = read(entry["path"])
@@ -104,6 +128,7 @@ def test_unavailable_manifest_does_not_gate_stage_b():
     (ASSESSMENTS, "projection_revision", "1" * 64),
     (ASSESSMENTS, "scope", None),
     (ASSESSMENTS, "scope", {**SCOPE, "scope_id": "wrong-scope"}),
+    (ASSESSMENTS, "scope", {**SCOPE, "program_id": "wrong-program"}),
     (ASSESSMENTS, "snapshot_id", None),
     (ASSESSMENTS, "verified_at_ms", None),
     (CHANGED_SEAL, "projection_revision", "1" * 64),
@@ -122,15 +147,22 @@ def test_invalid_stage_b_success_fails_closed(path, field, value):
     assert binding.receipt_expiry(document["dataset"]) is None
 
 
-def test_status_only_clears_old_page_receipt_without_allowing_replay():
+def test_status_only_clears_old_page_receipt_without_extending_its_original_deadline():
     published = read("examples/stage-b/campaigns-real-scope.json")
     unavailable = read(CHANGED_SEAL)
-    reader = Reader(*(lp.OwnerResponse(200, body, None) for body in (published, unavailable, published)))
-    binding = source(reader)
+    reader = Reader(*(lp.OwnerResponse(200, body, None) for body in (published, unavailable, published, published)))
+    clock = [0]
+    binding = source(reader, monotonic=lambda: clock[0])
     params = "scope_id=v5-okx-spot-dca"
     assert asyncio.run(binding.read("campaigns", params)).body == published
-    assert binding.receipt_expiry("campaigns") is not None
+    deadline = binding.receipt_expiry("campaigns")
+    assert deadline == 89
     assert asyncio.run(binding.read("campaigns", params)).body == unavailable
     assert binding.receipt_expiry("campaigns") is None
+    clock[0] = deadline - 1
+    assert asyncio.run(binding.read("campaigns", params)).body == published
+    assert binding.receipt_expiry("campaigns") == deadline
+    clock[0] = deadline
     replay = asyncio.run(binding.read("campaigns", params))
     assert (replay.status, json.loads(replay.body)["code"]) == (503, "VERIFICATION_UNAVAILABLE")
+    assert replay.freshness == "expired"

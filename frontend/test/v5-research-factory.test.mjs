@@ -14,7 +14,12 @@ const projection = modules.load('v5/learning-projection.ts');
 const { ProjectionStore } = modules.load('v5/learning-projection-store.ts');
 const { AssessmentTraversal } = modules.load('v5/factory-assessment-relationships.ts');
 const { FactoryDataset, FactoryStatus } = modules.load('v5/ResearchFactoryPanel.tsx');
-const { ownerTitle } = modules.load('v5/format.mjs');
+const scope = golden('manifest').scope;
+const membership = { program_id: scope.program_id, family_lane_pairs: scope.family_lane_pairs };
+const session = projectionRevision => ({
+  authenticated: true, learning_scope_id: scope.scope_id, learning_scope_membership: membership,
+  learning_scope_sha256: scope.scope_sha256, learning_projection_revision: projectionRevision,
+});
 const render = (envelope, overrides = {}) => {
   const view = { state: envelope?.status === 'UNAVAILABLE' ? 'unavailable' : 'ready', envelope, rows: envelope?.items ?? [], first() {}, ...overrides };
   return renderToStaticMarkup(['manifest', 'records'].includes(envelope?.dataset)
@@ -28,7 +33,8 @@ for (const entry of load('golden-index-stage-b.json').examples) {
     const document = validator.parseStrictJson(raw);
     assert.equal(validator.schemaError('browser-response-stage-b', document), null);
     await validator.validateEnvelope(document.dataset, document, {
-      stageB: true, maxAgeMs: 90_000, nowMs: document.served_at_ms, recordType: entry.query.record_type,
+      stageB: true, maxAgeMs: 90_000, recordType: entry.query.record_type,
+      scopeId: scope.scope_id, scopeSha256: scope.scope_sha256, membership,
       ideaRevisionId: entry.query.idea_revision_id,
     });
     const html = render(document);
@@ -68,12 +74,15 @@ test('empty, qualified, and whole-omission assessment presentation', () => {
   const assessmentSchema = load('stage-b-common.schema.json');
   const hurdle = assessmentSchema.$defs.Assessment.properties.hurdle_status.enum[0];
   document.items[0].hurdle_status = hurdle;
-  document.items[0].comparison.delta = '-1.239876543210987654321';
+  document.items[0].comparison.delta = '-1655.377097372744015183632563';
   const html = render(document);
-  for (const value of ['SUPPORTED', 'VALID', 'ISOLATED', hurdle, ownerTitle(document.items[0].comparison.delta, { exact: true })]) {
+  for (const value of ['SUPPORTED', 'VALID', 'ISOLATED', hurdle]) {
     assert.ok(html.includes(value), value);
   }
-  assert.match(html, /title="-1\.239876543210987654321">−1\.24</);
+  assert.match(html, /title="≈ −1655\.377097372744 \(rounded\)">/);
+  assert.doesNotMatch(html, /1655\.377097372744015183632563/);
+  document.items[0].comparison.delta = '-1.23987654321';
+  assert.match(render(document), /title="-1\.23987654321">−1\.24</);
   const omitted = render(golden('assessments-omitted-comparison'));
   assert.match(omitted, /content was omitted/i);
   assert.doesNotMatch(omitted, /SUPPORTED/);
@@ -94,10 +103,7 @@ test('Factory page cannot read fixtures or import fixture UI', () => {
 test('Stage B browser reads use the non-projection config and send the exact assessment filter', async () => {
   const document = golden('assessments-supported');
   const revision = document.items[0].idea_revision_id;
-  const config = {
-    authenticated: true, learning_scope_id: document.scope.scope_id,
-    learning_scope_sha256: document.scope.scope_sha256, learning_projection_revision: document.projection_revision,
-  };
+  const config = session(document.projection_revision);
   const urls = [];
   const fetcher = async url => {
     urls.push(url);
@@ -105,6 +111,15 @@ test('Stage B browser reads use the non-projection config and send the exact ass
   };
   assert.equal((await projection.readProjectionResult('assessments', { idea_revision_id: revision }, undefined, fetcher)).ok, true);
   assert.deepEqual(urls, ['/api/v5/auth', `/api/v5/learning/assessments?scope_id=v5-okx-spot-dca&idea_revision_id=${encodeURIComponent(revision)}`]);
+  config.learning_scope_membership = { ...membership, program_id: 'foreign-program' };
+  const wrongMembership = await projection.readProjectionResult('assessments', { idea_revision_id: revision }, undefined, fetcher);
+  assert.equal(wrongMembership.error.code, 'INVALID_OWNER_PROJECTION');
+  config.learning_scope_membership = undefined;
+  urls.length = 0;
+  const missingMembership = await projection.readProjectionResult('assessments', { idea_revision_id: revision }, undefined, fetcher);
+  assert.equal(missingMembership.error.code, 'INVALID_OWNER_PROJECTION');
+  assert.deepEqual(urls, ['/api/v5/auth']);
+  config.learning_scope_membership = membership;
   config.learning_scope_sha256 = 'f'.repeat(64);
   const wrongScope = await projection.readProjectionResult('assessments', { idea_revision_id: revision }, undefined, fetcher);
   assert.equal(wrongScope.error.code, 'INVALID_OWNER_PROJECTION');
@@ -115,11 +130,7 @@ test('Stage B browser reads use the non-projection config and send the exact ass
 
 test('Stage B browser status-only manifests and typed errors keep owner facts', async () => {
   const document = golden('manifest-unavailable');
-  const available = golden('manifest');
-  const config = {
-    authenticated: true, learning_scope_id: available.scope.scope_id,
-    learning_scope_sha256: available.scope.scope_sha256, learning_projection_revision: document.projection_revision,
-  };
+  const config = session(document.projection_revision);
   const responses = [Response.json(document), Response.json(load('examples/errors/PUBLICATION_UNAVAILABLE.json'), { status: 503 })];
   const fetcher = async url => url === '/api/v5/auth' ? Response.json(config) : responses.shift();
   const manifest = await projection.readProjectionResult('manifest', {}, undefined, fetcher);
@@ -127,6 +138,43 @@ test('Stage B browser status-only manifests and typed errors keep owner facts', 
   assert.match(render(manifest.envelope), /UNAVAILABLE.*NOT_PUBLISHED/);
   const result = await projection.readProjectionResult('campaigns', {}, undefined, fetcher);
   assert.equal(result.error.code, 'PUBLICATION_UNAVAILABLE');
+});
+
+test('Stage B one-shot reads share generation retirement and never return stale rows', async () => {
+  const { readProjectionResult } = frontendModules().load('v5/learning-projection.ts');
+  const candidate = golden('candidates-real-scope');
+  const campaign = golden('campaigns-real-scope');
+  const reseal = async (document, overrides) => {
+    const result = { ...document, ...overrides };
+    delete result.envelope_sha256;
+    const { schema, projection_revision, publication_sha256, database_sha256, source_revision, source_snapshot, event_signature } = result;
+    result.snapshot_id = await validator.sha256Hex(validator.canonicalJson({
+      schema, projection_revision, scope_sha256: result.scope.scope_sha256,
+      publication_sha256, database_sha256, source_revision, source_snapshot, event_signature,
+    }));
+    result.envelope_sha256 = await validator.sha256Hex(validator.canonicalJson(result));
+    return result;
+  };
+  const read = (document, response = Response.json(document)) => readProjectionResult(document.dataset, {}, undefined,
+    async url => url === '/api/v5/auth' ? Response.json(session(document.projection_revision)) : response);
+  assert.equal((await read(candidate)).ok, true);
+  const verified = candidate.verified_at_ms;
+  const nextPublication = { database_sha256: 'e'.repeat(64) };
+  const tied = await reseal(campaign, { ...nextPublication, verified_at_ms: verified });
+  const ignored = await read(tied);
+  assert.deepEqual([ignored.ok, ignored.error?.status, ignored.error?.code, ignored.error?.freshness], [false, 503, 'STALE_OR_EXPIRED', 'ignored']);
+  assert.equal('envelope' in ignored, false);
+  const newer = await reseal(campaign, { ...nextPublication, verified_at_ms: verified + 1 });
+  assert.equal((await read(newer)).ok, true);
+  const retired = await read(candidate);
+  assert.deepEqual([retired.ok, retired.error?.status, retired.error?.code, retired.error?.freshness], [false, 409, 'SNAPSHOT_CHANGED', 'retired']);
+  assert.equal('envelope' in retired, false);
+  const ownerConflict = await read(candidate, Response.json(load('examples/errors/SNAPSHOT_CHANGED.json'), { status: 409 }));
+  assert.equal(ownerConflict.error.code, 'SNAPSHOT_CHANGED');
+  assert.equal(ownerConflict.error.freshness, undefined);
+  const expired = await read(await reseal(campaign, { ...nextPublication, verified_at_ms: verified + 2, served_at_ms: verified + 90_002 }));
+  assert.deepEqual([expired.ok, expired.error?.status, expired.error?.code, expired.error?.freshness], [false, 503, 'STALE_OR_EXPIRED', 'expired']);
+  assert.equal('envelope' in expired, false);
 });
 
 test('assessment labels require the complete unchanged cursor chain', () => {
@@ -147,6 +195,29 @@ test('assessment labels require the complete unchanged cursor chain', () => {
   const supersession = new AssessmentTraversal().observe(golden('assessments-supersession'), 0, null, revision);
   assert.equal(supersession.get('assessment:fixture-old'), 'Superseded by an explicit owner link');
   assert.equal(new AssessmentTraversal().observe(golden('assessments-omitted-comparison'), 0, null, revision), null);
+});
+
+test('assessment relationship caps include 128 pages and 2,000 rows, but not either overflow', () => {
+  const envelope = golden('assessments-supported');
+  const [row] = envelope.items;
+  const revision = row.idea_revision_id;
+  for (const [pageCount, total, expected] of [[128, 2000, 2000], [129, 2000, null], [128, 2001, null]]) {
+    const traversal = new AssessmentTraversal();
+    for (let index = 0; index < pageCount; index += 1) {
+      const start = Math.floor(index * total / pageCount);
+      const end = Math.floor((index + 1) * total / pageCount);
+      const last = index === pageCount - 1;
+      const items = Array.from({ length: end - start }, (_unused, offset) => {
+        const id = start + offset;
+        return { ...row, record_id: `assessment:${id}`, evaluation_id: `evaluation:${id}`, row_sha256: id.toString(16).padStart(64, '0') };
+      });
+      const labels = traversal.observe({
+        ...envelope, items, page: { ...envelope.page, next_cursor: last ? null : `cursor-${index + 1}`, has_more: !last },
+        coverage: { ...envelope.coverage, total_items: total, returned_items: items.length },
+      }, index, index === 0 ? null : `cursor-${index}`, revision);
+      assert.equal(labels?.size ?? null, last ? expected : null, `${pageCount}/${total}, page ${index + 1}`);
+    }
+  }
 });
 
 test('Stage B clears the cursor stack on owner UNAVAILABLE, 409, 401 and expiry', async () => {

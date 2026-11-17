@@ -89,7 +89,7 @@ function Assessment({ row, relationship }: { row: AssessmentRow; relationship?: 
     ]} />
     {relationship && <p>{relationship}</p>}
     {comparison && <FactList facts={[
-      ['Delta', <><span title={ownerTitle(comparison.delta, { exact: true }) ?? undefined}>{signed(comparison.delta)}</span> {comparison.unit}</>],
+      ['Delta', <><span title={ownerTitle(comparison.delta) ?? undefined}>{signed(comparison.delta)}</span> {comparison.unit}</>],
       ['Baseline', comparison.baseline_id], ['Metric', comparison.metric], ['Comparable group', comparison.comparable_group],
       ['Owner comparison group', comparison.comparison_group],
       ['Window', typeof comparison.conditions.window === 'string' ? comparison.conditions.window : `${comparison.conditions.window.start} to ${comparison.conditions.window.end_exclusive} (exclusive)`],

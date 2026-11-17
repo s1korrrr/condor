@@ -37,9 +37,4 @@ profile = "black"
 [tool.setuptools.package-data]
 "condor.reports" = ["report_runtime.js"]
 "condor.web" = ["market_picture.schema.json", "market_picture_responses.schema.json"]
-"condor.v5" = [
-    "schemas/learning/*.schema.json",
-    "schemas/learning_projection/*.schema.json",
-    "schemas/learning_projection/row-regions-stage-b.json",
-    "schemas/learning_projection/wire-contract-stage-b.json",
-]
+"condor.v5" = ["schemas/learning/*.schema.json", "schemas/learning_projection/**/*", "schemas/learning_scopes/*"]

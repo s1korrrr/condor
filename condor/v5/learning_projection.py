@@ -25,7 +25,7 @@ import time
 from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
-from typing import Any, Callable
+from typing import Any, Awaitable, Callable, Literal
 from urllib.parse import unquote_to_bytes
 
 import aiohttp
@@ -38,6 +38,12 @@ from yarl import URL
 logger = logging.getLogger(__name__)
 
 SCHEMA_DIR = Path(__file__).resolve().parent / "schemas" / "learning_projection"
+SCOPE_DIR = SCHEMA_DIR.with_name("learning_scopes")
+STAGE_B_SCOPE_SHA256 = "1f65d67fc990262e049e808961b1a23068f26692b9171112eb441be0157e7c16"
+SCOPE_ARTIFACTS = {
+    "a3a34ee765c75616da6f606a66156cdbf0e8736c91052966607fa6b59936bd18": "scope-okx-spot-dca.json",
+    STAGE_B_SCOPE_SHA256: "scope-okx-spot-dca-stage-b.json",
+}
 SCHEMA_URN = "urn:rsibot:v5-lfl:stage-a:r2:"
 
 # Appendix wire-contract limits (frozen).
@@ -54,6 +60,8 @@ MAX_VERIFICATION_AGE_MS = 90_000
 MAX_FUTURE_SKEW_MS = 5_000
 TOTAL_TIMEOUT_SECONDS = 4.0
 SAFE_INT_MAX = 9_007_199_254_740_991
+MAX_RETIRED_SNAPSHOTS = 4_096
+FreshnessMiss = Literal["retired", "ignored", "expired"]
 
 STAGE_A_DATASETS = ("manifest", "lessons", "records", "jobs")
 STAGE_B_DATASETS = ("candidates", "campaigns", "assessments")
@@ -242,12 +250,42 @@ def schema_errors(name: str, document: Any) -> str | None:
 
 
 @dataclass(frozen=True)
+class ScopeMembership:
+    program_id: str
+    family_lane_pairs: tuple[tuple[str, str], ...]
+
+    def summary(self) -> dict[str, Any]:
+        return {
+            "program_id": self.program_id,
+            "family_lane_pairs": [{"family_id": family, "lane": lane} for family, lane in self.family_lane_pairs],
+        }
+
+
+def load_scope_membership(scope_id: str, scope_sha256: str) -> ScopeMembership:
+    name = SCOPE_ARTIFACTS.get(scope_sha256)
+    if name is None:
+        raise ContractViolation("V5_LEARNING_SCOPE_SHA256 must name a pinned scope artifact")
+    try:
+        artifact = parse_strict((SCOPE_DIR / name).read_bytes())
+    except OSError as error:
+        raise ContractViolation("pinned learning scope artifact is unavailable") from error
+    if sha256_hex(canonical(artifact)) != scope_sha256:
+        raise ContractViolation("pinned learning scope artifact digest mismatch")
+    if artifact["scope_id"] != scope_id:
+        raise ContractViolation("V5_LEARNING_SCOPE_ID does not match the pinned scope artifact")
+    return ScopeMembership(artifact["program_id"], tuple(
+        (pair["family_id"], pair["lane"]) for pair in artifact["family_lane_pairs"]
+    ))
+
+
+@dataclass(frozen=True)
 class ExpectedBinding:
     """What Condor was configured to accept; an envelope for anything else is rejected."""
 
     scope_id: str
     scope_sha256: str
     projection_revision: str
+    membership: ScopeMembership
 
 
 @dataclass(frozen=True)
@@ -492,9 +530,12 @@ def validate_envelope(
     scope = document["scope"]
     if scope is not None and (scope["scope_id"] != expected.scope_id or scope["scope_sha256"] != expected.scope_sha256):
         raise ContractViolation("scope mismatch")
-    pairs = [(pair["family_id"], pair["lane"]) for pair in scope["family_lane_pairs"]] if scope is not None else []
-    if pairs != sorted(pairs):
-        raise ContractViolation("scope family/lane pairs are not sorted")
+    membership = expected.membership
+    if scope is not None and (
+        scope["program_id"] != membership.program_id
+        or tuple((pair["family_id"], pair["lane"]) for pair in scope["family_lane_pairs"]) != membership.family_lane_pairs
+    ):
+        raise ContractViolation("scope membership differs from the pinned scope artifact")
     if any(len(canonical(issue)) > MAX_ISSUE_BYTES for issue in document["issues"]):
         raise ContractViolation("envelope issue too large")
 
@@ -562,13 +603,13 @@ def validate_envelope(
                 raise ContractViolation(f"{context}: unavailable manifest advertises data")
             continue
         row_scope = item["row_scope"]
-        if scope is None or (row_scope["family_id"], row_scope["lane"]) not in pairs:
-            raise ContractViolation(f"{context}: row family/lane is outside the envelope scope")
-        program = scope["program_id"]
+        if scope is None or (row_scope["family_id"], row_scope["lane"]) not in membership.family_lane_pairs:
+            raise ContractViolation(f"{context}: row family/lane is outside the pinned scope")
+        program = membership.program_id
         if row_scope["program_id"] not in (None, program) or (
             row_scope["membership_basis"] == "LESSON_PROGRAM" and row_scope["program_id"] != program
         ) or ("program_id" in item and item["program_id"] != program and not (stage_b and item["program_id"] is None)):
-            raise ContractViolation(f"{context}: row program is outside the envelope scope")
+            raise ContractViolation(f"{context}: row program is outside the pinned scope")
         recorded_scope = row_scope["recorded_scope"]
         window = recorded_scope["window"] if recorded_scope is not None else None
         if isinstance(window, dict) and window["start"] >= window["end_exclusive"]:
@@ -757,6 +798,7 @@ class LearningProjectionConfig:
     scope_id: str
     scope_sha256: str
     projection_revision: str
+    membership: ScopeMembership
 
     @property
     def stage_b(self) -> bool:
@@ -764,7 +806,7 @@ class LearningProjectionConfig:
 
     @property
     def expected(self) -> ExpectedBinding:
-        return ExpectedBinding(self.scope_id, self.scope_sha256, self.projection_revision)
+        return ExpectedBinding(self.scope_id, self.scope_sha256, self.projection_revision, self.membership)
 
 
 @dataclass(frozen=True)
@@ -774,11 +816,11 @@ class ProjectionResult:
     status: int
     body: bytes
     retry_after: int | None = None
+    freshness: FreshnessMiss | None = None
 
 
 @dataclass
 class Receipt:
-    snapshot_id: str
     status: str
     expires_at: float  # monotonic seconds
 
@@ -790,10 +832,10 @@ def normalize_retry_after(value: str | None) -> int:
     return 1
 
 
-def local_result(code: str, snapshot_id: str | None = None) -> ProjectionResult:
+def local_result(code: str, snapshot_id: str | None = None, *, freshness: FreshnessMiss | None = None) -> ProjectionResult:
     """A Condor-originated typed error: the five-key owner shape, Retry-After: 1 on 503."""
     status = CODE_STATUS[code]
-    return ProjectionResult(status, error_body(code, snapshot_id), 1 if status == 503 else None)
+    return ProjectionResult(status, error_body(code, snapshot_id), 1 if status == 503 else None, freshness)
 
 
 class ResearchOwnerLearningSource:
@@ -812,7 +854,10 @@ class ResearchOwnerLearningSource:
         self.clock = clock
         self.monotonic = monotonic
         self._receipts: dict[str, Receipt] = {}
-        self._verification_high_water: dict[tuple[str, str], int] = {}
+        self._global_max_verified_at_ms = -1
+        self._current_snapshot_id: str | None = None
+        self._retired_snapshots: set[str] = set()
+        self._deadlines: dict[str, float] = {}
 
     # --- receipt state -------------------------------------------------------------------------------------
 
@@ -839,30 +884,44 @@ class ResearchOwnerLearningSource:
         receipt = self._receipts.get(dataset)
         return receipt.expires_at if receipt else None
 
-    def _accept(self, dataset: str, envelope: dict[str, Any]) -> bool:
+    def _accept(self, dataset: str, envelope: dict[str, Any]) -> FreshnessMiss | None:
         status = envelope["status"]
-        if status == "UNAVAILABLE":
-            self.invalidate(dataset)
-            return True
         snapshot = envelope["snapshot_id"]
         verified = envelope["verified_at_ms"]
-        key = dataset, snapshot
+        current = self._current_snapshot_id
+        maximum = self._global_max_verified_at_ms
+        if snapshot in self._retired_snapshots:
+            return "retired"
+        if verified is not None and (verified < maximum or (verified == maximum and snapshot != current)):
+            return "ignored"
         now = self.monotonic()
-        previous = self._receipts.get(dataset)
-        if verified <= self._verification_high_water.get(key, -1):
-            return previous is not None and previous.snapshot_id == snapshot and now < previous.expires_at
-        self._verification_high_water[key] = verified
+        if status == "UNAVAILABLE":
+            deadline = self._deadlines.get(dataset) if verified == maximum else None
+            if deadline is not None and now >= deadline:
+                return "expired"
+            self.invalidate(dataset)
+            return None
+        if verified > maximum:
+            if current is not None and snapshot != current:
+                if len(self._retired_snapshots) >= MAX_RETIRED_SNAPSHOTS:
+                    return "ignored"
+                self._retired_snapshots.add(current)
+                self.invalidate()
+            self._current_snapshot_id = snapshot
+            self._global_max_verified_at_ms = verified
+            self._deadlines.clear()
         remaining_ms = MAX_VERIFICATION_AGE_MS - (envelope["served_at_ms"] - verified)
-        expires_at = now + remaining_ms / 1000
-        for other, receipt in list(self._receipts.items()):
-            if other != dataset and receipt.snapshot_id != snapshot:
-                del self._receipts[other]  # the generation changed: drop what belonged to the old one
-        self._receipts[dataset] = Receipt(snapshot, status, expires_at)
-        return True
+        expires_at = self._deadlines.setdefault(dataset, now + remaining_ms / 1000)
+        if now >= expires_at:
+            return "expired"
+        self._receipts[dataset] = Receipt(status, expires_at)
+        return None
 
     # --- reads ---------------------------------------------------------------------------------------------
 
-    async def read(self, dataset: str, raw_query: str) -> ProjectionResult:
+    async def read(
+        self, dataset: str, raw_query: str, *, disconnected: Callable[[], Awaitable[bool]] | None = None,
+    ) -> ProjectionResult:
         """One browser request -> at most one owner request. No retry, no cache hit, no fallback."""
         if dataset in STAGE_B_DATASETS and not self.config.stage_b:
             return local_result("DATASET_NOT_ENABLED")  # checked before query validation, like the owner
@@ -877,9 +936,13 @@ class ResearchOwnerLearningSource:
         try:
             response = await self.client.get(dataset, raw_query)
         except ProjectionTransportError as error:
+            if disconnected is not None and await disconnected():
+                return local_result("UPSTREAM_UNAVAILABLE")
             logger.warning("learning projection %s transport failure: %s", dataset, error)
             self.invalidate()
             return local_result("UPSTREAM_UNAVAILABLE" if error.kind == "unavailable" else "INVALID_OWNER_PROJECTION")
+        if disconnected is not None and await disconnected():
+            return local_result("UPSTREAM_UNAVAILABLE")
         try:
             return self._interpret(dataset, parsed, response)
         except ContractViolation as violation:
@@ -892,14 +955,16 @@ class ResearchOwnerLearningSource:
             document = parse_strict(response.body)
             request = RequestShape(dataset, parsed.get("record_type"), parsed.get("idea_revision_id"))
             envelope = validate_envelope(document, request=request, expected=self.config.expected, now_ms=self.clock())
-            if not self._accept(dataset, envelope):
-                return local_result("VERIFICATION_UNAVAILABLE", envelope["snapshot_id"])
+            miss = self._accept(dataset, envelope)
+            if miss is not None:
+                code = "SNAPSHOT_CHANGED" if miss == "retired" else "VERIFICATION_UNAVAILABLE"
+                return local_result(code, envelope["snapshot_id"], freshness=miss)
             return ProjectionResult(200, response.body)
         if response.status not in ERROR_STATUS_CODES:
             raise ContractViolation("unknown upstream status")
         if len(response.body) > MAX_ERROR_BYTES:
             raise ContractViolation("error body too large")
-        document = validate_error(response.status, parse_strict(response.body))
+        validate_error(response.status, parse_strict(response.body))
         self.invalidate(dataset)
         retry = normalize_retry_after(response.retry_after) if response.status == 503 else None
         return ProjectionResult(response.status, response.body, retry)
@@ -913,6 +978,8 @@ def _response(result: ProjectionResult, *, extra: dict[str, str] | None = None) 
     headers = {"Cache-Control": "no-store"}
     if result.retry_after is not None:
         headers["Retry-After"] = str(result.retry_after)
+    if result.freshness is not None:
+        headers["X-V5-Projection-Freshness"] = result.freshness
     if extra:
         headers.update(extra)
     return Response(content=result.body, status_code=result.status, media_type="application/json", headers=headers)
@@ -934,7 +1001,7 @@ def add_projection_routes(router: APIRouter, projection: ResearchOwnerLearningSo
                 return _response(local_result("TARGET_TOO_LONG"))
             if request.method != "GET":
                 return _response(local_result("METHOD_NOT_ALLOWED"), extra={"Allow": "GET"})
-            if "transfer-encoding" in request.headers or request.headers.get("content-length", "0") != "0":
+            if "transfer-encoding" in request.headers or request.headers.getlist("content-length") not in ([], ["0"]):
                 return _response(local_result("REQUEST_BODY_NOT_ALLOWED"))
             if dataset in STAGE_B_DATASETS:
                 return _response(local_result("DATASET_NOT_ENABLED"))
@@ -944,7 +1011,7 @@ def add_projection_routes(router: APIRouter, projection: ResearchOwnerLearningSo
                 query = raw_query.decode("ascii")
             except UnicodeDecodeError:
                 return _response(local_result("INVALID_QUERY"))
-            return _response(await projection.read(dataset, query))
+            return _response(await projection.read(dataset, query, disconnected=request.is_disconnected))
 
         handle.__name__ = f"learning_projection_{dataset}"
         return handle

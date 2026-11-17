@@ -1,4 +1,4 @@
-import { createContext, useContext, type ReactNode } from 'react';
+import { createContext, useContext, type ComponentProps, type ReactNode } from 'react';
 import { TileGrid } from '../features/quant-ops/kit/grid';
 
 export interface EvidenceRef {
@@ -49,8 +49,8 @@ export function ReferencePreview({ shown, total }: { shown: number; total: numbe
   return <p>Reference preview: {shown} of {total === null ? 'unknown total shown; more may exist' : <><span title={ownerTitle(total) ?? undefined}>{total}</span> shown{shown < total ? '; more may exist' : ''}</>}</p>;
 }
 
-export function emptyPreview(shown: number, total: number | null) {
-  return total !== null && shown === total ? 'None recorded' : 'No references in this preview; more may exist.';
+export function ReferencePreviewList({ refs, complete, empty }: Pick<ComponentProps<typeof RefList>, 'refs' | 'empty'> & { complete: boolean }) {
+  return <RefList refs={refs} empty={empty ?? (complete ? 'None recorded' : 'No references in this preview; more may exist.')} />;
 }
 
 function PartialReasons({ codes }: { codes: string[] }) {
@@ -69,6 +69,18 @@ export function RecordedWindow({ row }: { row: LessonRow | UnavailableRowStub })
   return <p>Historical recorded scope: {scope?.venue ?? 'Unknown'} · {scope?.capital_model ?? 'Unknown'} · window {typeof window === 'string' ? window : window ? <><OwnerUtcTime value={window.start} /> to <OwnerUtcTime value={window.end_exclusive} /> (exclusive)</> : 'Unknown'} · recorded regimes: {scope?.regimes.length ? scope.regimes.join(', ') : 'Not recorded'}</p>;
 }
 
+function LessonReferences({ row }: { row: LessonRow }) {
+  const { outcome_refs, contradictory_refs, supersedes, reference_total } = row;
+  const shown = outcome_refs.length + contradictory_refs.length + (supersedes ? 1 : 0);
+  const complete = shown === reference_total;
+  return <>
+    <ReferencePreview shown={shown} total={reference_total} />
+    <h3>Outcomes</h3><ReferencePreviewList refs={outcome_refs} complete={complete} />
+    <h3>Contradicting records</h3><ReferencePreviewList refs={contradictory_refs} complete={complete} empty={row.contradiction_state === 'RECORDED' ? undefined : 'No references in this preview; contradictions are not established as absent.'} />
+    <h3>Supersession</h3>{supersedes ? <RefList refs={[supersedes]} /> : <p>{complete ? 'Not recorded' : 'Not shown; more references may exist.'}</p>}
+  </>;
+}
+
 export function LearningPanel({ view, data }: { view?: ProjectionPagesView<'lessons'>; data?: ProjectionEnvelope<LessonRow | UnavailableRowStub> }) {
   const envelope = view ? view.envelope : data ?? null;
   const rows = (!view || view.state === 'ready') && envelope && envelope.status !== 'UNAVAILABLE' ? envelope.items : [];
@@ -83,10 +95,7 @@ export function LearningPanel({ view, data }: { view?: ProjectionPagesView<'less
       <RecordedWindow row={row} /><IssueList issues={row.issues} /><PartialReasons codes={row.issues.map(issue => issue.code)} />
       {!isUnavailableStub(row) && <><p>{row.statement}</p><p>Domain: {row.domain} · Confidence: {row.confidence} · Evidence: {row.evidence_state}</p>
         <p>Reopening condition: {row.reopening_condition}</p><p>{contradictionText[row.contradiction_state]}</p>
-        <ReferencePreview shown={row.outcome_refs.length + row.contradictory_refs.length} total={row.reference_total} />
-        <h3>Outcomes</h3><RefList refs={row.outcome_refs} empty={emptyPreview(row.outcome_refs.length + row.contradictory_refs.length, row.reference_total)} />
-        <h3>Contradicting records</h3><RefList refs={row.contradictory_refs} empty={row.contradiction_state === 'RECORDED' ? emptyPreview(row.outcome_refs.length + row.contradictory_refs.length, row.reference_total) : 'No references in this preview; contradictions are not established as absent.'} />
-        <h3>Supersession</h3>{row.supersedes ? <RefList refs={[row.supersedes]} /> : <p>Not recorded</p>}</>}
+        <LessonReferences row={row} /></>}
       <h3>Source receipts</h3><SourceRefList sources={row.sources} /><p>Row hash: <CopyableHash value={row.row_sha256} label="row hash" /></p>
     </article>)}
     {view && <nav aria-label="Lesson pages" className="flex flex-wrap gap-3"><button type="button" onClick={view.first} disabled={!view.hasPrevious && !view.snapshotChanged}>First</button><button type="button" onClick={view.previous} disabled={!view.hasPrevious}>Previous</button><button type="button" onClick={view.next} disabled={!view.hasNext}>Next</button></nav>}

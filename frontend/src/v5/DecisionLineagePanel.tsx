@@ -2,7 +2,7 @@ import { isUnavailableStub, useProjectionPages } from './learning-projection';
 import type { JobRow, ProjectionEnvelope, ProjectionPagesView, RecordEdgeRow, RecordNodeRow, UnavailableRowStub } from './learning-projection';
 import { CopyableHash, IssueList, ProjectionStatusBanner, RefList, SourceRefList, UtcTime } from './projection-ui';
 import { ownerTitle } from './format.mjs';
-import { emptyPreview, ReferencePreview } from './LearningPanel';
+import { ReferencePreview, ReferencePreviewList } from './LearningPanel';
 
 type Records = ProjectionEnvelope<RecordNodeRow | RecordEdgeRow | UnavailableRowStub>;
 type Attempts = ProjectionEnvelope<JobRow | UnavailableRowStub>;
@@ -33,7 +33,7 @@ export function DecisionLineagePanel({ nodeView, edgeView, attemptView, nodes, e
     <section className="min-w-0"><h2>Nodes</h2><ProjectionStatusBanner state={bannerState(nodeView, nodeEnvelope)} envelope={nodeEnvelope} error={nodeView?.error} onFirst={nodeView?.first} />
       {nodePage?.status !== 'UNAVAILABLE' && nodePage?.items.map(row => <article key={row.record_id} className="v5-panel min-w-0 break-words">
         <p className="break-all"><code className="select-text">{row.record_id}</code></p>
-        {!isUnavailableStub(row) && row.record_type === 'node' ? <><h3>{row.title}</h3><p>{row.kind} · {row.native_state ?? 'Unknown'}</p>{row.kind === 'idea_revision' && <p>PROPOSED means registration, not readiness.</p>}{row.summary && <p>{row.summary}</p>}{row.identities.map(identity => <p key={`${identity.name}:${identity.value}`} className="break-all">{identity.name}: <code className="select-text">{identity.value}</code></p>)}</> : <p>Record unavailable</p>}
+        {!isUnavailableStub(row) && row.record_type === 'node' ? <><h3>{row.title}</h3><p>{row.kind} · {row.native_state ?? 'Unknown'}</p>{row.native_state === 'PROPOSED' && (row.kind === 'idea' || row.kind === 'idea_revision') && <p>PROPOSED means registration, not readiness.</p>}{row.summary && <p>{row.summary}</p>}{row.identities.map(identity => <p key={`${identity.name}:${identity.value}`} className="break-all">{identity.name}: <code className="select-text">{identity.value}</code></p>)}</> : <p>Record unavailable</p>}
         <Receipts row={row} />
       </article>)}<Pages view={nodeView} label="Node" /></section>
     <section className="min-w-0"><h2>Explicit edges</h2><ProjectionStatusBanner state={bannerState(edgeView, edgeEnvelope)} envelope={edgeEnvelope} error={edgeView?.error} onFirst={edgeView?.first} />
@@ -46,7 +46,7 @@ export function DecisionLineagePanel({ nodeView, edgeView, attemptView, nodes, e
     <section className="min-w-0"><h2>Research attempts</h2><ProjectionStatusBanner state={bannerState(attemptView, attemptEnvelope)} envelope={attemptEnvelope} error={attemptView?.error} onFirst={attemptView?.first} />
       {attemptPage?.status !== 'UNAVAILABLE' && attemptPage?.items.map(row => <article key={row.record_id} className="v5-panel min-w-0 break-words">
         <p className="break-all"><code className="select-text">{row.record_id}</code></p>
-        {!isUnavailableStub(row) ? <><h3>Attempt <code className="select-text break-all">{row.attempt_id}</code></h3><p>{row.native_state} · Completion: {row.completion}{row.native_state === 'RUNNING' ? ' (not a process-liveness claim)' : ''}</p><p>Started: <UtcTime value={row.started_at_ms} /> · Finished: <UtcTime value={row.finished_at_ms} /></p><ReferencePreview shown={1 + row.artifact_refs.length} total={row.reference_total} /><h4>Experiment</h4><RefList refs={[row.experiment_ref]} /><h4>Artifacts</h4><RefList refs={row.artifact_refs} empty={emptyPreview(1 + row.artifact_refs.length, row.reference_total)} /></> : <p>Attempt unavailable</p>}
+        {!isUnavailableStub(row) ? <><h3>Attempt <code className="select-text break-all">{row.attempt_id}</code></h3><p>{row.native_state} · Completion: {row.completion}{row.native_state === 'RUNNING' ? ' (not a process-liveness claim)' : ''}</p><p>Started: <UtcTime value={row.started_at_ms} /> · Finished: <UtcTime value={row.finished_at_ms} /></p><ReferencePreview shown={1 + row.artifact_refs.length} total={row.reference_total} /><h4>Experiment</h4><RefList refs={[row.experiment_ref]} /><h4>Artifacts</h4><ReferencePreviewList refs={row.artifact_refs} complete={1 + row.artifact_refs.length === row.reference_total} /></> : <p>Attempt unavailable</p>}
         <Receipts row={row} />
       </article>)}<Pages view={attemptView} label="Attempt" /></section>
   </div>;

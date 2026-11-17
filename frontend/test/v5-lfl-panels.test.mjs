@@ -38,6 +38,16 @@ function load(file) {
 const render = (component, props) => renderToStaticMarkup(React.createElement(component, props));
 const viewFor = (envelope, state = 'ready', error = null) => ({ state, envelope, rows: envelope?.items ?? [], error, pageIndex: 0, hasNext: false, hasPrevious: false, snapshotChanged: error?.code === 'SNAPSHOT_CHANGED', expiresInMs: 1000, first() {}, previous() {}, next() {}, refresh() {} });
 
+async function validateDerivedFixture(data, recordType) {
+  const { canonicalJson, sha256Hex, validateEnvelope } = load('v5/learning-projection-validate.ts');
+  const row = data.items[0];
+  const { row_sha256: _rowHash, ...rowBody } = row;
+  row.row_sha256 = await sha256Hex(canonicalJson(rowBody));
+  const { envelope_sha256: _envelopeHash, ...envelopeBody } = data;
+  data.envelope_sha256 = await sha256Hex(canonicalJson(envelopeBody));
+  return validateEnvelope(data.dataset, data, { recordType, maxAgeMs: 90_000 });
+}
+
 test('owner unavailable envelopes retain reasons and issues in every panel section', () => {
   const unavailable = fixture => ({ ...structuredClone(fixture), status: 'UNAVAILABLE', reason_codes: ['SOURCE_CHANGED'], items: [], issues: [{ code: 'SOURCE_CHANGED', record_id: null, detail: 'Owner source changed' }] });
   const { LearningPanel } = load('v5/LearningPanel.tsx');
@@ -83,6 +93,36 @@ test('lesson reference previews preserve groups and shared completeness', () => 
   assert.match(html, /contradictions are not established as absent/i);
 });
 
+for (const { label, total, hasSupersession, shown, complete } of [
+  { label: 'a truncated preview', total: 3, hasSupersession: false, shown: 2, complete: false },
+  { label: 'an unknown total', total: null, hasSupersession: false, shown: 2, complete: false },
+  { label: 'a complete preview without supersession', total: 2, hasSupersession: false, shown: 2, complete: true },
+  { label: 'a complete preview with supersession', total: 3, hasSupersession: true, shown: 3, complete: true },
+]) {
+  test(`lesson supersession reflects reference coverage for ${label}`, async () => {
+    const { LearningPanel } = load('v5/LearningPanel.tsx');
+    const data = structuredClone(fixtures.lessons);
+    const row = data.items[0];
+    const reference = row.outcome_refs[0];
+    row.contradiction_state = 'RECORDED';
+    row.contradictory_refs = [{ ...reference, record_id: 'decision:outcome:contradiction' }];
+    row.supersedes = hasSupersession ? { ...reference, kind: 'lesson', record_id: 'decision:lesson:previous' } : null;
+    row.reference_total = total;
+    data.reason_codes = ['OMITTED_CONTENT'];
+    row.issues = [{ code: 'OMITTED_CONTENT', record_id: row.record_id, detail: 'Lesson preview shortened.' }];
+    const html = render(LearningPanel, { data: await validateDerivedFixture(data) });
+    const preview = html.match(/<p>Reference preview: ([^]*?)<\/p>/)?.[1].replace(/<[^>]+>/g, '');
+    assert.equal(preview, `${shown} of ${total ?? 'unknown total'} shown${complete ? '' : '; more may exist'}`);
+    const supersession = html.match(/<h3>Supersession<\/h3>([^]*?)<h3>Source receipts<\/h3>/)?.[1] ?? '';
+    if (hasSupersession) assert.match(supersession, /decision:lesson:previous/);
+    else if (complete) assert.match(supersession, /<p>Not recorded<\/p>/);
+    else {
+      assert.doesNotMatch(supersession, /not recorded/i);
+      assert.match(supersession, /not shown; more references may exist/i);
+    }
+  });
+}
+
 test('partial attempt reference preview never claims omitted artifacts are absent', () => {
   const { DecisionLineagePanel } = load('v5/DecisionLineagePanel.tsx');
   const attempts = structuredClone(fixtures.jobs);
@@ -116,12 +156,27 @@ test('proposed count uses an owner title and idea revision registration is not r
   const { DecisionLineagePanel } = load('v5/DecisionLineagePanel.tsx');
   const nodes = structuredClone(fixtures['records-nodes']);
   nodes.items[0].kind = 'idea_revision';
+  nodes.items[0].native_state = 'PROPOSED';
   const edges = structuredClone(fixtures['records-edges']);
   edges.coverage.excluded_proposed_edges = 12345;
   const html = render(DecisionLineagePanel, { nodes, edges });
   assert.match(html, /title="12345"[^>]*>12345<\/span> proposed links not shown/);
   assert.match(html, /PROPOSED means registration, not readiness/);
 });
+
+for (const { kind, nativeState, noteShown } of [
+  { kind: 'idea', nativeState: 'PROPOSED', noteShown: true },
+  { kind: 'idea_revision', nativeState: 'REGISTERED', noteShown: false },
+]) {
+  test(`lineage shows the registration note only for PROPOSED state: ${kind} ${nativeState}`, async () => {
+    const { DecisionLineagePanel } = load('v5/DecisionLineagePanel.tsx');
+    const nodes = structuredClone(fixtures['records-nodes']);
+    Object.assign(nodes.items[0], { kind, native_kind: kind, record_id: `${kind}:fixture-1`, native_state: nativeState });
+    const html = render(DecisionLineagePanel, { nodes: await validateDerivedFixture(nodes, 'node') });
+    assert.ok(html.includes(`${kind} · ${nativeState}`));
+    assert.equal(html.includes('PROPOSED means registration, not readiness'), noteShown);
+  });
+}
 
 test('golden lessons show historical owner evidence, not recall or a verdict', () => {
   const { LearningPanel } = load('v5/LearningPanel.tsx');

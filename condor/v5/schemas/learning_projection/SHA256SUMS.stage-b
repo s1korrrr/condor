@@ -43,4 +43,4 @@ a13517c648f8c8de70ba903d48fbfb7440764f03635fa34e88642d7d86877598  golden-hashes-
 f03d28d279d4133ad01424065e39ebd3c10ce737167d94fd0d1ce94f7d8293d8  records-stage-b.schema.json
 02f0d734aadf60b46aa6cd1b3ba28accaf01dd3af21e683800262cb0fd27038e  row-regions-stage-b.json
 b9c0d2ea4f492580f6575214d779898c8c42ea5d7404dcf144132f592aa566a9  stage-b-common.schema.json
-b8eae775ac92fd66b428ad8e51c8bf638a720f8e31f84b7872ad2aa174c388c9  wire-contract-stage-b.json
+670d15af0eae63f9b2f7584cb978e26fcfe6543d7cc1220445bacdcd379174f0  wire-contract-stage-b.json

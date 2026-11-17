@@ -2,7 +2,7 @@
 
 Read-only, authority `NONE`. Contract: rsibot `1d8c0ab6` (`docs/plans/active/2026-11-18-v5-learning-factory-lineage-projection.md` §5 plus the frozen appendix `2026-11-18-v5-lfl-contract/`). This is the Condor side. The panels (`LearningPanel`, `DecisionLineagePanel`, `ResearchFactoryPanel`) build on the names below; they must not call `fetch`, `learningRead` or the legacy `/learning/research` route for projection data.
 
-Stage A is implemented on `feat/andrzej_v5_lfl_condor_binding`; Stage B extends it on `feat/andrzej_v5_lfl_factory_panel` using rsibot `dd49b28`.
+Stage A is implemented on `feat/andrzej_v5_lfl_condor_binding`; Stage B extends it on `feat/andrzej_v5_lfl_factory_panel` using rsibot `bf9f3c14de413c56b7c3ddacf16b10e2d4c4027c`.
 
 ## Modules
 

@@ -1,6 +1,6 @@
 """Condor binding for the frozen V5 Learning / Factory / Lineage projection.
 
-Read-only, authority NONE. Contracts: rsibot ``1d8c0ab6`` (A) and ``dd49b28`` (B), vendored verbatim in
+Read-only, authority NONE. Contracts: rsibot ``1d8c0ab6`` (A) and ``bf9f3c14`` (B), vendored verbatim in
 ``schemas/learning_projection``. Four parts:
 
 * strict parsing and canonical hashing (``parse_strict``, ``canonical``);

@@ -1,6 +1,6 @@
 /**
  * Browser side of the frozen V5 Learning / Factory / Lineage projections
- * (rsibot `1d8c0ab6` Stage A and `dd49b28` Stage B).
+ * (rsibot `1d8c0ab6` Stage A and `bf9f3c14` Stage B).
  *
  * Read-only, authority NONE. This module is the single shared base for the
  * Learning (W7), Lineage (W7) and Research Factory (W8) panels. The published

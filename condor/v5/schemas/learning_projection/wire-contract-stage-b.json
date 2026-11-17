@@ -396,7 +396,7 @@
       "wire_type": "string",
       "grammar": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?(?![\\s\\S])",
       "max_utf8_bytes": 128,
-      "normalization": "Exact decimal value of the original admitted native JSON number token; expand exponent, strip trailing fractional zeroes and redundant sign, zero is 0. No binary64 round trip or arithmetic. Producer canonical output normalizes zero and fractional padding; grammar also accepts -0 and 1.0. Display rounding is UI-title-only.",
+      "normalization": "After unchanged native admission, prefer the recorded delta_exact, then delta_decimal, when present; if both are present they must agree after canonicalization. Only when neither is present use the recorded native JSON number token, never a browser binary64 value. Do not fall back after an invalid, conflicting or over-limit exact value. Parse the selected decimal token exactly; expand exponent, strip trailing fractional zeroes and redundant sign, zero is 0. No binary64 round trip or arithmetic. Producer canonical output normalizes zero and fractional padding; grammar also accepts -0 and 1.0. Display rounding is UI-title-only.",
       "failure": "Whole comparison null with OMITTED_CONTENT; preserve owner admission and suppress verdict presentation.",
       "match_semantics": "Whole string, no trimming, no multiline flags; final negative lookahead forbids every following scalar including LF in both Python and ECMAScript."
     },

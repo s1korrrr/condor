@@ -27,7 +27,12 @@ function load(file) {
     if (!candidate) throw new Error(`Unresolved panel dependency ${name}`);
     return load(candidate);
   };
-  new Function('require', 'module', 'exports', code)(localRequire, module, module.exports);
+  try {
+    new Function('require', 'module', 'exports', code)(localRequire, module, module.exports);
+  } catch (error) {
+    cache.delete(path);
+    throw error;
+  }
   return module.exports;
 }
 const render = (component, props) => renderToStaticMarkup(React.createElement(component, props));

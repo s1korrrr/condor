@@ -42,28 +42,50 @@ export function MetricTiles({ items }: { items: { label: string; value: string |
 
 import { isUnavailableStub, useProjectionPages } from './learning-projection';
 import type { LessonRow, ProjectionEnvelope, ProjectionPagesView, UnavailableRowStub } from './learning-projection';
+import { ownerTitle } from './format.mjs';
 import { CopyableHash, IssueList, ProjectionStatusBanner, RefList, SourceRefList, UtcTime as OwnerUtcTime } from './projection-ui';
+
+export function ReferencePreview({ shown, total }: { shown: number; total: number | null }) {
+  return <p>Reference preview: {shown} of {total === null ? 'unknown total shown; more may exist' : <><span title={ownerTitle(total) ?? undefined}>{total}</span> shown{shown < total ? '; more may exist' : ''}</>}</p>;
+}
+
+export function emptyPreview(shown: number, total: number | null) {
+  return total !== null && shown === total ? 'None recorded' : 'No references in this preview; more may exist.';
+}
+
+function PartialReasons({ codes }: { codes: string[] }) {
+  return <>{codes.includes('CONTRADICTIONS_NOT_INDEXED') && <p>Counter-evidence not indexed; recall not evaluated.</p>}{codes.includes('OMITTED_CONTENT') && <p>Preview shortened or scope details omitted; full recorded content remains in the source.</p>}</>;
+}
+
+const contradictionText = {
+  NOT_INDEXED: 'Contradictions not indexed: unknown, not none',
+  RECORDED: 'Contradictions recorded',
+  UNAVAILABLE: 'Contradictions unavailable: unknown, not none',
+} as const;
 
 export function RecordedWindow({ row }: { row: LessonRow | UnavailableRowStub }) {
   const scope = row.row_scope.recorded_scope;
   const window = scope?.window;
-  return <p>Recorded scope: {scope?.venue ?? 'Unknown'} · {scope?.capital_model ?? 'Unknown'} · window {typeof window === 'string' ? window : window ? <><OwnerUtcTime value={window.start} /> to <OwnerUtcTime value={window.end_exclusive} /> (exclusive)</> : 'Unknown'}</p>;
+  return <p>Historical recorded scope: {scope?.venue ?? 'Unknown'} · {scope?.capital_model ?? 'Unknown'} · window {typeof window === 'string' ? window : window ? <><OwnerUtcTime value={window.start} /> to <OwnerUtcTime value={window.end_exclusive} /> (exclusive)</> : 'Unknown'} · recorded regimes: {scope?.regimes.length ? scope.regimes.join(', ') : 'Not recorded'}</p>;
 }
 
 export function LearningPanel({ view, data }: { view?: ProjectionPagesView<'lessons'>; data?: ProjectionEnvelope<LessonRow | UnavailableRowStub> }) {
-  const envelope = view ? (view.state === 'ready' ? view.envelope : null) : data ?? null;
-  const rows = envelope && envelope.status !== 'UNAVAILABLE' ? envelope.items : [];
+  const envelope = view ? view.envelope : data ?? null;
+  const rows = (!view || view.state === 'ready') && envelope && envelope.status !== 'UNAVAILABLE' ? envelope.items : [];
+  const bannerState = view?.state === 'unavailable' && envelope?.status === 'UNAVAILABLE' && !view.error ? 'ready' : view?.state ?? (envelope ? 'ready' : 'unavailable');
   return <div className="space-y-4 min-w-0">
     <div className="v5-page-heading"><div><h1>Learning</h1><p>Historical recorded lessons; not a research verdict.</p><p>Recall: not evaluated</p></div></div>
-    <ProjectionStatusBanner state={view?.state ?? (envelope ? 'ready' : 'unavailable')} envelope={envelope} error={view?.error} onFirst={view?.first} />
+    <ProjectionStatusBanner state={bannerState} envelope={envelope} error={view?.error} onFirst={view?.first}><PartialReasons codes={envelope?.reason_codes ?? []} /></ProjectionStatusBanner>
     {rows.map(row => <article key={row.record_id} className="v5-panel min-w-0 break-words">
       <h2>{isUnavailableStub(row) ? 'Recorded lesson unavailable' : row.title}</h2>
       <p className="break-all">Record: <code className="select-text">{row.record_id}</code></p>
       <p>Recorded: <OwnerUtcTime value={row.recorded_at_ms} /> · Available: <OwnerUtcTime value={row.available_at_ms} /></p>
-      <RecordedWindow row={row} /><IssueList issues={row.issues} />
+      <RecordedWindow row={row} /><IssueList issues={row.issues} /><PartialReasons codes={row.issues.map(issue => issue.code)} />
       {!isUnavailableStub(row) && <><p>{row.statement}</p><p>Domain: {row.domain} · Confidence: {row.confidence} · Evidence: {row.evidence_state}</p>
-        <p>Reopening condition: {row.reopening_condition}</p><p>Contradiction state: {row.contradiction_state}</p>
-        <h3>Evidence references</h3><RefList refs={[...row.outcome_refs, ...row.contradictory_refs]} />
+        <p>Reopening condition: {row.reopening_condition}</p><p>{contradictionText[row.contradiction_state]}</p>
+        <ReferencePreview shown={row.outcome_refs.length + row.contradictory_refs.length} total={row.reference_total} />
+        <h3>Outcomes</h3><RefList refs={row.outcome_refs} empty={emptyPreview(row.outcome_refs.length + row.contradictory_refs.length, row.reference_total)} />
+        <h3>Contradicting records</h3><RefList refs={row.contradictory_refs} empty={row.contradiction_state === 'RECORDED' ? emptyPreview(row.outcome_refs.length + row.contradictory_refs.length, row.reference_total) : 'No references in this preview; contradictions are not established as absent.'} />
         <h3>Supersession</h3>{row.supersedes ? <RefList refs={[row.supersedes]} /> : <p>Not recorded</p>}</>}
       <h3>Source receipts</h3><SourceRefList sources={row.sources} /><p>Row hash: <CopyableHash value={row.row_sha256} label="row hash" /></p>
     </article>)}

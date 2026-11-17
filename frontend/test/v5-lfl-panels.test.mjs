@@ -78,6 +78,9 @@ test('lesson reference previews preserve groups and shared completeness', () => 
   html = render(LearningPanel, { data });
   assert.match(html, /more may exist/i);
   assert.doesNotMatch(html, /Contradicting records<\/h3><span>None recorded/);
+  row.reference_total = 1;
+  html = render(LearningPanel, { data });
+  assert.match(html, /contradictions are not established as absent/i);
 });
 
 test('partial attempt reference preview never claims omitted artifacts are absent', () => {
@@ -89,6 +92,10 @@ test('partial attempt reference preview never claims omitted artifacts are absen
   assert.match(html, /1 of <span[^>]*title="2"[^>]*>2<\/span> shown/);
   assert.doesNotMatch(html, /Artifacts<\/h4><span>None recorded/);
   assert.match(html, /more may exist/i);
+  attempts.items[0].reference_total = null;
+  assert.match(render(DecisionLineagePanel, { attempts }), /more may exist/i);
+  attempts.items[0].reference_total = 1;
+  assert.match(render(DecisionLineagePanel, { attempts }), /Artifacts<\/h4><span>None recorded/);
 });
 
 test('historical scope, contradiction labels and partial reasons use plain words', () => {

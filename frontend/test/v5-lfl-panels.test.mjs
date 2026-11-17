@@ -55,7 +55,7 @@ test('out-of-scope references remain opaque and unknown proposed counts are not 
   const { DecisionLineagePanel } = load('v5/DecisionLineagePanel.tsx');
   const edges = structuredClone(fixtures['records-edges']);
   edges.coverage.excluded_proposed_edges = null;
-  edges.items[0].to_ref = { owner: 'research_os', kind: 'secret-kind', record_id: 'opaque:12345678901234567890', revision: null, source_index: 0, resolution: 'OUT_OF_SCOPE' };
+  edges.items[0].to_ref = { owner: 'research_os', kind: 'secret-kind', record_id: 'opaque:12345678901234567890', revision: null, source_index: null, resolution: 'OUT_OF_SCOPE' };
   const html = render(DecisionLineagePanel, { edges });
   assert.match(html, /opaque:12345678901234567890/);
   assert.doesNotMatch(html, /secret-kind/);

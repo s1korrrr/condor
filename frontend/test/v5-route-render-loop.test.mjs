@@ -85,7 +85,7 @@ const routes = [
   ['/market/stocks','OKX stocks'], ['/agents','Agents'], ['/agents/decisions','Agent decisions'],
   ['/agents/decision_reviewer','Decision Reviewer'], ['/research','Research'],
   ['/learning','Learning'], ['/research-factory','Research factory'],
-  ['/decision-lineage','Decision lineage'], ['/sessions','Sessions'],
+  ['/decision-lineage','Research lineage'], ['/sessions','Sessions'],
   ['/sessions/fixture-session','Session'],
 ];
 

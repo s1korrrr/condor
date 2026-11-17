@@ -1,7 +1,6 @@
 import { isUnavailableStub, useProjectionPages } from './learning-projection';
 import type { JobRow, ProjectionEnvelope, ProjectionPagesView, RecordEdgeRow, RecordNodeRow, UnavailableRowStub } from './learning-projection';
-import { CopyableHash, IssueList, ProjectionStatusBanner, SourceRefList, UtcTime } from './projection-ui';
-import { ScopedRefs } from './LearningPanel';
+import { CopyableHash, IssueList, ProjectionStatusBanner, RefList, SourceRefList, UtcTime } from './projection-ui';
 
 type Records = ProjectionEnvelope<RecordNodeRow | RecordEdgeRow | UnavailableRowStub>;
 type Attempts = ProjectionEnvelope<JobRow | UnavailableRowStub>;
@@ -35,13 +34,13 @@ export function DecisionLineagePanel({ nodeView, edgeView, attemptView, nodes, e
       <p>{excluded == null ? 'unknown' : excluded} proposed links not shown: not explicit assertions</p>
       {edgePage?.status !== 'UNAVAILABLE' && edgePage?.items.map(row => <article key={row.record_id} className="v5-panel min-w-0 break-words">
         <p className="break-all"><code className="select-text">{row.record_id}</code></p>
-        {!isUnavailableStub(row) && row.record_type === 'edge' ? <><h3>{row.relation} · {row.basis}</h3><h4>From</h4><ScopedRefs refs={[row.from_ref]} /><h4>To</h4><ScopedRefs refs={[row.to_ref]} /></> : <p>Record unavailable</p>}
+        {!isUnavailableStub(row) && row.record_type === 'edge' ? <><h3>{row.relation} · {row.basis}</h3><h4>From</h4><RefList refs={[row.from_ref]} /><h4>To</h4><RefList refs={[row.to_ref]} /></> : <p>Record unavailable</p>}
         <Receipts row={row} />
       </article>)}<Pages view={edgeView} label="Edge" /></section>
     <section className="min-w-0"><h2>Research attempts</h2><ProjectionStatusBanner state={attemptView?.state ?? (attemptPage ? 'ready' : 'unavailable')} envelope={attemptPage} error={attemptView?.error} onFirst={attemptView?.first} />
       {attemptPage?.status !== 'UNAVAILABLE' && attemptPage?.items.map(row => <article key={row.record_id} className="v5-panel min-w-0 break-words">
         <p className="break-all"><code className="select-text">{row.record_id}</code></p>
-        {!isUnavailableStub(row) ? <><h3>Attempt <code className="select-text break-all">{row.attempt_id}</code></h3><p>{row.native_state} · Completion: {row.completion}{row.native_state === 'RUNNING' ? ' (not a process-liveness claim)' : ''}</p><p>Started: <UtcTime value={row.started_at_ms} /> · Finished: <UtcTime value={row.finished_at_ms} /></p><h4>Experiment</h4><ScopedRefs refs={[row.experiment_ref]} /><h4>Artifacts</h4><ScopedRefs refs={row.artifact_refs} /></> : <p>Attempt unavailable</p>}
+        {!isUnavailableStub(row) ? <><h3>Attempt <code className="select-text break-all">{row.attempt_id}</code></h3><p>{row.native_state} · Completion: {row.completion}{row.native_state === 'RUNNING' ? ' (not a process-liveness claim)' : ''}</p><p>Started: <UtcTime value={row.started_at_ms} /> · Finished: <UtcTime value={row.finished_at_ms} /></p><h4>Experiment</h4><RefList refs={[row.experiment_ref]} /><h4>Artifacts</h4><RefList refs={row.artifact_refs} /></> : <p>Attempt unavailable</p>}
         <Receipts row={row} />
       </article>)}<Pages view={attemptView} label="Attempt" /></section>
   </div>;

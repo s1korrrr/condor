@@ -41,14 +41,8 @@ export function MetricTiles({ items }: { items: { label: string; value: string |
 }
 
 import { isUnavailableStub, useProjectionPages } from './learning-projection';
-import type { LessonRow, ProjectionEnvelope, ProjectionPagesView, Ref, UnavailableRowStub } from './learning-projection';
+import type { LessonRow, ProjectionEnvelope, ProjectionPagesView, UnavailableRowStub } from './learning-projection';
 import { CopyableHash, IssueList, ProjectionStatusBanner, RefList, SourceRefList, UtcTime as OwnerUtcTime } from './projection-ui';
-
-export function ScopedRefs({ refs }: { refs: Ref[] }) {
-  const scoped = refs.filter(ref => ref.resolution !== 'OUT_OF_SCOPE');
-  const opaque = refs.filter(ref => ref.resolution === 'OUT_OF_SCOPE');
-  return <div className="min-w-0"><RefList refs={scoped} empty="No in-scope references reported" />{opaque.map((ref, index) => <p key={`${ref.record_id}:${index}`} className="break-all">Unresolved reference: <code className="select-text">{ref.record_id}</code></p>)}</div>;
-}
 
 export function RecordedWindow({ row }: { row: LessonRow | UnavailableRowStub }) {
   const scope = row.row_scope.recorded_scope;
@@ -69,8 +63,8 @@ export function LearningPanel({ view, data }: { view?: ProjectionPagesView<'less
       <RecordedWindow row={row} /><IssueList issues={row.issues} />
       {!isUnavailableStub(row) && <><p>{row.statement}</p><p>Domain: {row.domain} · Confidence: {row.confidence} · Evidence: {row.evidence_state}</p>
         <p>Reopening condition: {row.reopening_condition}</p><p>Contradiction state: {row.contradiction_state}</p>
-        <h3>Evidence references</h3><ScopedRefs refs={[...row.outcome_refs, ...row.contradictory_refs]} />
-        <h3>Supersession</h3>{row.supersedes ? <ScopedRefs refs={[row.supersedes]} /> : <p>Not recorded</p>}</>}
+        <h3>Evidence references</h3><RefList refs={[...row.outcome_refs, ...row.contradictory_refs]} />
+        <h3>Supersession</h3>{row.supersedes ? <RefList refs={[row.supersedes]} /> : <p>Not recorded</p>}</>}
       <h3>Source receipts</h3><SourceRefList sources={row.sources} /><p>Row hash: <CopyableHash value={row.row_sha256} label="row hash" /></p>
     </article>)}
     {view && <nav aria-label="Lesson pages" className="flex flex-wrap gap-3"><button type="button" onClick={view.first} disabled={!view.hasPrevious && !view.snapshotChanged}>First</button><button type="button" onClick={view.previous} disabled={!view.hasPrevious}>Previous</button><button type="button" onClick={view.next} disabled={!view.hasNext}>Next</button></nav>}

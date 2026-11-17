@@ -9,6 +9,7 @@ from pathlib import Path
 
 import aiohttp
 import pytest
+from fastapi import APIRouter, FastAPI
 from fastapi.testclient import TestClient
 
 from condor.v5 import learning_projection as lp
@@ -570,6 +571,69 @@ def test_retired_generation_cannot_rebind_through_an_unseen_dataset():
     assert source.state()["records"] == "BOUND" and source.state()["jobs"] == "UNAVAILABLE"
 
 
+def test_newer_identity_bearing_unavailable_retires_the_previous_snapshot():
+    first = generation(load("examples/lessons.json"), "1")
+    unavailable = generation(load("examples/jobs.json"), "2", 10_000)
+    unavailable.update(status="UNAVAILABLE", items=[], reason_codes=["VERIFICATION_EXPIRED"])
+    unavailable["coverage"].update(state="UNAVAILABLE", returned_items=0)
+    rehash(unavailable)
+    late = generation(load("examples/lessons.json"), "1", 20_000)
+    source = scripted_source(Clock(), first, unavailable, late)
+    assert read(source, "lessons", "").status == 200
+    result = read(source, "jobs", "")
+    assert result.status == 200 and json.loads(result.body) == unavailable
+    state = source.state()
+    replay = read(source, "lessons", "")
+    assert replay.status == 409 and json.loads(replay.body)["code"] == "SNAPSHOT_CHANGED"
+    assert source.state() == state == dict.fromkeys(lp.STAGE_A_DATASETS, "UNAVAILABLE")
+    assert source.receipt_expiry("lessons") is None and source.receipt_expiry("jobs") is None
+
+
+def test_projection_route_headers_stay_within_the_frozen_wire_allowlist():
+    headers = load("wire-contract.json")["permitted_headers"]
+
+    def field(entry):
+        return entry.partition(":")[0].lower()
+
+    base = {field(entry) for entry in headers["regenerated"]}
+    per_status = {}
+    for entry in [*headers["forwarded"], headers["method_error"]]:
+        name, suffix = entry.split(" only on ", 1)
+        status = int(suffix[:3])
+        per_status.setdefault(status, set()).add(field(name))
+
+    first = generation(load("examples/lessons.json"), "1")
+    current = generation(load("examples/jobs.json"), "2", 10_000)
+    owner_error = lp.OwnerResponse(502, json.dumps(typed("UPSTREAM_INVALID")).encode(), None)
+    clock = Clock()
+    source = scripted_source(clock, first, current, first, current, owner_error)
+    app = FastAPI()
+    router = APIRouter(prefix="/api/v5/learning")
+    lp.add_projection_routes(router, source)
+    app.include_router(router)
+    query = f"?scope_id={SCOPE_ID}"
+    lessons = "/api/v5/learning/lessons"
+    jobs = "/api/v5/learning/jobs"
+    with TestClient(app) as client:
+        responses = [
+            (client.get(lessons + query), 200),
+            (client.get(jobs + query), 200),
+            (client.get(lessons + query), 409),
+            (client.post(lessons + query), 405),
+            (client.get(lessons + query, headers={"Content-Length": "1"}), 413),
+            (client.get(lessons + "?" + "x" * 4096), 414),
+            (client.get(lessons), 400),
+            (client.get("/api/v5/learning/candidates" + query), 404),
+        ]
+        clock.now = 91
+        responses.extend([(client.get(jobs + query), 503), (client.get(jobs + query), 502)])
+        assert responses[-2][0].json()["code"] == "VERIFICATION_UNAVAILABLE"
+        assert responses[-2][0].headers["Retry-After"] == "1"
+        for response, status in responses:
+            assert response.status_code == status
+            assert not (set(response.headers) - (base | per_status.get(status, set()))), (status, response.headers)
+
+
 def test_older_generation_cannot_replace_newer_or_clear_other_datasets():
     first = generation(load("examples/records-nodes.json"), "1", 1_000)
     lessons = generation(load("examples/lessons.json"), "1", 1_000)
@@ -632,7 +696,7 @@ def test_route_relogin_cannot_extend_a_verification_deadline(tmp_path):
         result = client.get(url)
         assert result.status_code == 503
         assert result.json()["code"] == "VERIFICATION_UNAVAILABLE"
-        assert result.headers["X-V5-Projection-Freshness"] == "expired"
+        assert result.headers["Retry-After"] == "1"
 
 
 def test_resealed_foreign_program_cannot_define_its_own_membership():

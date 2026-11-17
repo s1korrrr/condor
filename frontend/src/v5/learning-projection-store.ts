@@ -80,22 +80,23 @@ export class ProjectionFreshness {
     if (verifiedAt !== null && (verifiedAt < maximum || (verifiedAt === maximum && snapshot !== current))) {
       return { miss: 'ignored' };
     }
-    if (envelope.status === 'UNAVAILABLE') {
-      const deadline = verifiedAt === maximum ? this.deadlines.get(dataset) : undefined;
-      return deadline !== undefined && now >= deadline ? { expiresAt: deadline, changed: false, miss: 'expired' }
-        : { expiresAt: null, changed: false };
-    }
-    if (snapshot === null || verifiedAt === null) return { miss: 'ignored' };
-    const changed = current !== null && current !== snapshot;
-    if (verifiedAt > maximum) {
-      if (changed) {
+    let changed = false;
+    if (snapshot !== null && verifiedAt !== null && verifiedAt > maximum) {
+      if (current !== null && current !== snapshot) {
         if (this.retired.size >= MAX_RETIRED_SNAPSHOTS) return { miss: 'ignored' };
         this.retired.add(current);
+        changed = true;
       }
       this.globalMaxVerifiedAt = verifiedAt;
       this.currentSnapshot = snapshot;
       this.deadlines.clear();
     }
+    if (envelope.status === 'UNAVAILABLE') {
+      const deadline = verifiedAt === maximum ? this.deadlines.get(dataset) : undefined;
+      return deadline !== undefined && now >= deadline ? { expiresAt: deadline, changed, miss: 'expired' }
+        : { expiresAt: null, changed };
+    }
+    if (snapshot === null || verifiedAt === null) return { miss: 'ignored' };
     let expiresAt = this.deadlines.get(dataset);
     if (expiresAt === undefined) {
       expiresAt = now + (maxAgeMs - (envelope.served_at_ms - verifiedAt));

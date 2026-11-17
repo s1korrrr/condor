@@ -237,5 +237,7 @@ def test_status_only_clears_old_page_receipt_without_extending_its_original_dead
     assert binding.receipt_expiry("campaigns") == deadline
     clock[0] = deadline
     replay = asyncio.run(binding.read("campaigns", params))
-    assert (replay.status, json.loads(replay.body)["code"]) == (503, "VERIFICATION_UNAVAILABLE")
-    assert replay.freshness == "expired"
+    error = json.loads(replay.body)
+    assert (replay.status, error["code"], error["snapshot_id"], replay.retry_after) == (
+        503, "VERIFICATION_UNAVAILABLE", json.loads(published)["snapshot_id"], 1,
+    )

@@ -722,7 +722,6 @@ class ProjectionResult:
     status: int
     body: bytes
     retry_after: int | None = None
-    freshness: FreshnessMiss | None = None
 
 
 @dataclass
@@ -738,10 +737,10 @@ def normalize_retry_after(value: str | None) -> int:
     return 1
 
 
-def local_result(code: str, snapshot_id: str | None = None, *, freshness: FreshnessMiss | None = None) -> ProjectionResult:
+def local_result(code: str, snapshot_id: str | None = None) -> ProjectionResult:
     """A Condor-originated typed error: the five-key owner shape, Retry-After: 1 on 503."""
     status = CODE_STATUS[code]
-    return ProjectionResult(status, error_body(code, snapshot_id), 1 if status == 503 else None, freshness)
+    return ProjectionResult(status, error_body(code, snapshot_id), 1 if status == 503 else None)
 
 
 class ResearchOwnerLearningSource:
@@ -800,14 +799,7 @@ class ResearchOwnerLearningSource:
             return "retired"
         if verified is not None and (verified < maximum or (verified == maximum and snapshot != current)):
             return "ignored"
-        now = self.monotonic()
-        if status == "UNAVAILABLE":
-            deadline = self._deadlines.get(dataset) if verified == maximum else None
-            if deadline is not None and now >= deadline:
-                return "expired"
-            self.invalidate(dataset)
-            return None
-        if verified > maximum:
+        if snapshot is not None and verified is not None and verified > maximum:
             if current is not None and snapshot != current:
                 if len(self._retired_snapshots) >= MAX_RETIRED_SNAPSHOTS:
                     return "ignored"
@@ -816,6 +808,13 @@ class ResearchOwnerLearningSource:
             self._current_snapshot_id = snapshot
             self._global_max_verified_at_ms = verified
             self._deadlines.clear()
+        now = self.monotonic()
+        if status == "UNAVAILABLE":
+            deadline = self._deadlines.get(dataset) if verified == maximum else None
+            if deadline is not None and now >= deadline:
+                return "expired"
+            self.invalidate(dataset)
+            return None
         remaining_ms = MAX_VERIFICATION_AGE_MS - (envelope["served_at_ms"] - verified)
         expires_at = self._deadlines.setdefault(dataset, now + remaining_ms / 1000)
         if now >= expires_at:
@@ -864,7 +863,7 @@ class ResearchOwnerLearningSource:
             miss = self._accept(dataset, envelope)
             if miss is not None:
                 code = "SNAPSHOT_CHANGED" if miss == "retired" else "VERIFICATION_UNAVAILABLE"
-                return local_result(code, envelope["snapshot_id"], freshness=miss)
+                return local_result(code, envelope["snapshot_id"])
             return ProjectionResult(200, response.body)
         if response.status not in ERROR_STATUS_CODES:
             raise ContractViolation("unknown upstream status")
@@ -884,8 +883,6 @@ def _response(result: ProjectionResult, *, extra: dict[str, str] | None = None) 
     headers = {"Cache-Control": "no-store"}
     if result.retry_after is not None:
         headers["Retry-After"] = str(result.retry_after)
-    if result.freshness is not None:
-        headers["X-V5-Projection-Freshness"] = result.freshness
     if extra:
         headers.update(extra)
     return Response(content=result.body, status_code=result.status, media_type="application/json", headers=headers)

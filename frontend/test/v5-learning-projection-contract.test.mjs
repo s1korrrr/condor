@@ -275,6 +275,31 @@ test('retired generation cannot rebind through a dataset that never saw it', asy
   } finally { unregister(); }
 });
 
+test('a newer identity-bearing UNAVAILABLE retires the previous snapshot', async () => {
+  const session = frontendModules().load('v5/learning-projection.ts');
+  const first = await newGeneration(json('examples/lessons.json'), '1');
+  const unavailable = await newGeneration(json('examples/jobs.json'), '2', 10_000);
+  Object.assign(unavailable, { status: 'UNAVAILABLE', items: [], reason_codes: ['VERIFICATION_EXPIRED'],
+    coverage: { ...unavailable.coverage, state: 'UNAVAILABLE', returned_items: 0 } });
+  await rehash(unavailable);
+  const late = await newGeneration(json('examples/lessons.json'), '1', 20_000);
+  const request = (dataset, body) => session.readProjectionResult(dataset, {}, undefined, fetcher(() => response(200, body)));
+  assert.equal((await request('lessons', first)).ok, true);
+  const cleared = [];
+  const unregister = ['lessons', 'records'].map(dataset => session.registerProjectionStore({ clearForAuth() {}, clearForScopeChange: () => cleared.push(dataset) }));
+  try {
+    const result = await request('jobs', unavailable);
+    assert.equal(result.ok, true);
+    assert.equal(result.expiresAt, null);
+    assert.deepEqual(result.envelope.items, []);
+    const replay = await request('lessons', late);
+    assert.equal(replay.ok, false);
+    assert.equal(replay.error.code, 'SNAPSHOT_CHANGED');
+    assert.equal(replay.error.freshness, 'retired');
+    assert.deepEqual(cleared, ['lessons', 'records']);
+  } finally { unregister.forEach(remove => remove()); }
+});
+
 test('older verification of another snapshot cannot replace the current generation', async () => {
   const session = frontendModules().load('v5/learning-projection.ts');
   const fetchProjection = async (dataset, file, publication, offset) => {
@@ -550,23 +575,26 @@ test('an older filter response keeps both filters’ independently expiring live
   main.store.dispose(); other.store.dispose();
 });
 
-test('Condor ledger misses do not act like owner errors or clear a live filter', async () => {
+test('wire 409 and 503 clear live pages; only 409 offers First', async () => {
   const page = await aged(10);
   const cases = [
-    ['retired', 409, 'SNAPSHOT_CHANGED', 'SNAPSHOT_CHANGED'],
-    ['ignored', 503, 'VERIFICATION_UNAVAILABLE', 'STALE_OR_EXPIRED'],
-    ['expired', 503, 'VERIFICATION_UNAVAILABLE', 'STALE_OR_EXPIRED'],
+    [409, 'SNAPSHOT_CHANGED'],
+    [503, 'VERIFICATION_UNAVAILABLE'],
   ];
-  for (const [freshness, status, wireCode, code] of cases) {
+  for (const [status, code] of cases) {
     const result = await projection.readProjectionResult('records', { record_type: 'node' }, undefined, fetcher(() => response(status,
-      { ...typed(wireCode), snapshot_id: page.snapshot_id }, { headers: { 'X-V5-Projection-Freshness': freshness } })));
+      { ...typed(code), snapshot_id: page.snapshot_id }, status === 503 ? { headers: { 'Retry-After': '1' } } : {})));
+    assert.equal(result.ok, false);
     assert.equal(result.error.code, code);
-    assert.equal(result.error.freshness, freshness);
+    assert.equal(result.error.freshness, undefined);
+    assert.equal(result.error.retryable, status === 503);
     const { store } = makeStore({ pollMs: 0, answers: [ok(page), result] });
     store.start(); await settle();
-    const live = store.getSnapshot();
+    assert.equal(store.getSnapshot().state, 'ready');
     store.refresh(); await settle();
-    assert.equal(store.getSnapshot(), live);
+    assert.equal(store.getSnapshot().state, 'unavailable');
+    assert.equal(store.getSnapshot().envelope, null);
+    assert.equal(store.getSnapshot().snapshotChanged, status === 409);
     store.dispose();
   }
 });

@@ -3,6 +3,7 @@ import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, so
 import { numericFilterMatch, searchMatch } from './table-filter';
 import { cleanFloat } from '../decimal-display';
 import { Rows } from './Rows';
+import { ownerTitleText } from '@/v5/format.mjs';
 import './kit.css';
 
 /**
@@ -21,11 +22,13 @@ export type TableColumn<T> = {
   cell?: (row: T) => ReactNode;
   /** `number` right-aligns, sorts numerically and accepts comparison filters. */
   kind?: 'text' | 'number';
+  ownerValue?: boolean;
   size?: number;
   minSize?: number;
   /** Row header cell (`<th scope="row">`). */
   rowHeader?: boolean;
   title?: (row: T) => string | undefined;
+  note?: (row: T) => string | undefined;
   className?: (row: T) => string | undefined;
   /** Long prose cells wrap; every other cell stays on one line and shows its full value on hover. */
   wrap?: boolean;
@@ -248,7 +251,9 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, phoneNe
               const meta = cell.column.columnDef.meta as TableColumn<T>;
               const content = meta.cell ? meta.cell(row.original) : String(cell.getValue() ?? '—');
               const raw = cell.getValue();
-              const props = { 'data-kind': meta.kind ?? 'text', 'data-wrap': meta.wrap || undefined, title: meta.title?.(row.original) ?? (raw == null || raw === '' ? undefined : String(raw)), className: meta.className?.(row.original) };
+              const rawTitle = meta.title?.(row.original) ?? (raw == null || raw === '' ? undefined : String(raw));
+              const title = meta.kind === 'number' || meta.ownerValue ? ownerTitleText(rawTitle) : rawTitle;
+              const props = { 'data-kind': meta.kind ?? 'text', 'data-wrap': meta.wrap || undefined, title, className: meta.className?.(row.original) };
               return meta.rowHeader ? <th key={cell.id} scope="row" {...props}>{content}</th> : <td key={cell.id} {...props}>{content}</td>;
             })}
           </tr>)}

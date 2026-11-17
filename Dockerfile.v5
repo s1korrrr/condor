@@ -20,6 +20,7 @@ COPY condor/__init__.py ./condor/__init__.py
 COPY condor/v5 ./condor/v5
 COPY agents_v5 ./agents_v5
 COPY --from=frontend /build/condor/frontend/dist-v5 ./frontend/dist-v5
+COPY --from=frontend /build/condor/frontend/v5-reviewed-build.json ./frontend/v5-reviewed-build.json
 ARG CONDOR_SOURCE_COMMIT
 ARG WORKSPACE_SOURCE_COMMIT
 ARG UPSTREAM_AGENTS_REVISION=6008bcfd803eba254d7cca44cc8e69618fd5e810

@@ -7,6 +7,7 @@ import React from 'react';
 import * as Router from 'react-router-dom';
 import {Window} from 'happy-dom';
 import {clockMutation} from './helpers/paper-clock-mutants.mjs';
+import stageAScope from '../../condor/v5/schemas/learning_scopes/scope-okx-spot-dca.json' with { type: 'json' };
 
 const browser = new Window({url:'https://fixture.invalid/'});
 const phoneSheet = new browser.CSSStyleSheet();
@@ -32,6 +33,10 @@ const {frontendModules} = await import('./helpers/frontend-module.mjs');
 const {createRoot} = await import('react-dom/client');
 const baselineFiles = new Set(['components/charts/RecordedCandleChart.tsx','features/quant-ops/kit/Rows.tsx','pages/tabs/ActiveBotsTab.tsx','v5/format.mjs','v5/policy.ts','v5/V5Stocks.tsx','v5/bots-position-model.mjs','v5/V5CandleStore.tsx','v5/CandleStorePanels.tsx','v5/candle-store-model.ts','v5/V5Helm.tsx','v5/V5Market.tsx','v5/V5MarketDetail.tsx','v5/V5Pages.tsx','v5/OwnerJournalCondition.tsx']);
 const baselineSource = (filename, source) => {
+  if (process.env.V5_TITLE_BASELINE && filename.startsWith(path.resolve(import.meta.dirname, '../src') + path.sep)) {
+    const relative = path.relative(path.resolve(import.meta.dirname, '../src'), filename);
+    return execFileSync('git', ['show', `${process.env.V5_TITLE_BASELINE}:frontend/src/${relative}`], { cwd: path.resolve(import.meta.dirname, '../..'), encoding: 'utf8' });
+  }
   if (!process.env.DISPLAY_SCAN_BASELINE) return source;
   const relative = path.relative(path.resolve(import.meta.dirname,'../src'), filename);
   const revision = ['e16cf5b9','d277c7ca'].includes(process.env.DISPLAY_SCAN_BASELINE) ? process.env.DISPLAY_SCAN_BASELINE : '87c660c8';
@@ -41,11 +46,22 @@ const fixture = relative => JSON.parse(fs.readFileSync(new URL(`../../tests/fixt
 const poisonDecimals = value => {
   if (Array.isArray(value)) return value.map(poisonDecimals);
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, poisonDecimals(item)]));
+  if (typeof value === 'number' && Number.isFinite(value) && !Number.isInteger(value)) return Number(`${value.toFixed(6)}73179863`);
   if (typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value)) {
     const [whole, fraction = ''] = value.split('.');
-    return `${whole}.${fraction.slice(0, 26).padEnd(8, '0')}7317`;
+    return `${whole}.${fraction.slice(0, 8).padEnd(8, '0')}73170000000000000001`;
   }
   return value;
+};
+const stockAmountFields = new Set(['last','bidPx','askPx','vol24h','volCcy24h','ctVal','ctMult','tickSz','lotSz','minSz','markPx','idxPx','fundingRate','oi','px','sz']);
+const poisonStockAmounts = value => {
+  if (Array.isArray(value)) return value.map(poisonStockAmounts);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key,
+    stockAmountFields.has(key) ? poisonDecimals(item)
+      : ['bids','asks'].includes(key) && Array.isArray(item) ? item.map(level => level.map((part, index) => index < 2 ? poisonDecimals(part) : part))
+        : poisonStockAmounts(item),
+  ]));
 };
 const baseline = fixture('v5_unbound_base_8284ffe7.json');
 const sections = Object.fromEntries(['status','wallet','positions','executors','risk','fills','decisions','history','accounting','operations'].map(section => [section,fixture(`paper-api-final3/native-replay/${section}.json`)]));
@@ -85,7 +101,7 @@ const routes = [
   ['/market/stocks','OKX stocks'], ['/agents','Agents'], ['/agents/decisions','Agent decisions'],
   ['/agents/decision_reviewer','Decision Reviewer'], ['/research','Research'],
   ['/learning','Learning'], ['/research-factory','Research factory'],
-  ['/decision-lineage','Decision lineage'], ['/sessions','Sessions'],
+  ['/decision-lineage','Research lineage'], ['/sessions','Sessions'],
   ['/sessions/fixture-session','Session'],
 ];
 
@@ -117,6 +133,36 @@ function longVisibleDecimals(container) {
   for (const element of container.querySelectorAll('[title]')) if (matchesPhoneTitle(element)) scan(element.title, `${element.tagName.toLowerCase()}[phone ::after]`, element);
   return findings;
 }
+
+function longOwnerTitles(container) {
+  const findings = [];
+  for (const element of container.querySelectorAll('[title]')) {
+    const text = element.title;
+    const longFraction = [...text.matchAll(/\d*\.(\d{13,})/g)].some(match => match[1].replace(/0+$/, '').length > 12);
+    const tinyExponent = [...text.matchAll(/\d+(?:\.\d+)?[eE]([+-]?\d+)/g)].some(match => {
+      const [mantissa] = match[0].split(/[eE]/);
+      const fraction = mantissa.split('.')[1] ?? '';
+      const trailing = mantissa.replace('.', '').match(/0+$/)?.[0].length ?? 0;
+      return fraction.length - Number(match[1]) - trailing > 12;
+    });
+    if (longFraction || tinyExponent) {
+      findings.push(`${element.tagName} title=${text}`);
+    }
+  }
+  return findings;
+}
+
+test('independent owner-title scan catches fractions regardless of punctuation, signs, units or grouping', () => {
+  assert.equal(poisonDecimals('1').split('.')[1].length, 28);
+  const container = document.createElement('div');
+  container.innerHTML = '<span title="114.1396691483993272381433853"></span><span title="1e-13"></span><span title="(680.8963033983613722931914460 − 594.17)"></span><span title="199123.96997705845820"></span><span title="1.2345678901230000000000000000"></span><span title="owner abc123.12345678901234567890"></span>';
+  assert.equal(longOwnerTitles(container).length, 5);
+  assert.ok(String(poisonDecimals(114.1)).split('.')[1].length > 12);
+  for (const title of ['result 0.1234567890123456.', 'x−0.1234567890123456', '0.1234567890123456bp', '1,234.1234567890123456', '(1.1234567890123456+2.1234567890123456)']) {
+    container.replaceChildren(Object.assign(document.createElement('span'), { title }));
+    assert.equal(longOwnerTitles(container).length, 1, title);
+  }
+});
 
 test('decimal scan checks phone CSS title helpers but not exact leaf tooltips', () => {
   const fixture = document.createElement('div');
@@ -152,6 +198,8 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const journalRoutes = new Set(['/bots', '/operations', '/v5/readiness']);
   const statusForRoute = () => journalRoutes.has(route) ? {...sections.status, state:'degraded', reason:'OWNER_JOURNAL_EXCEEDED', data:{...sections.status.data, journal_budget:{state:'exceeded',journal_evidence_held:true,native_execution_continues:true}}} : sections.status;
   const originalFetch = globalThis.fetch;
+  const {scope_id,program_id,family_lane_pairs} = stageAScope;
+  const auth = {authenticated:true,learning_scope_id:scope_id,learning_scope_membership:{program_id,family_lane_pairs}};
   const originalNow = Date.now;
   const originalError = console.error;
   let now = sections.status.read_at_ms;
@@ -177,8 +225,11 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   let duplicateTradeFills = false;
   const unexpectedReads = [];
   const decimalFindings = [];
+  const titleFindings = [];
   const scan = (container, label) => {
+    titleFindings.push(...longOwnerTitles(container).map(finding => `${label}: ${finding}`));
     const display = container.cloneNode(true);
+    for (const marker of display.querySelectorAll('.recorded-candle-readout .block')) marker.textContent = '';
     for (const details of display.querySelectorAll('details')) {
       if (details.querySelector(':scope > summary')?.textContent === 'Exact record · as sent') details.querySelector(':scope > pre').textContent = '';
     }
@@ -202,7 +253,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       const section = native.includes('native/status') ? 'status' : native.includes('account-balances') || native.includes('fleet/summary') ? 'wallet' : native.includes('holdings') ? 'positions' : native.includes('performance/history') ? 'history' : native.includes('operations/workspace') ? 'operations' : native.split('?')[0].split('/').at(-1);
       assert.ok(sections[section],`unmapped owner read: ${native}`);
       body = section === 'status' ? statusForRoute() : section === 'fills' && duplicateTradeFills ? {...sections.fills,data:[...sections.fills.data,{...fixtureFill}]} : sections[section];
-    } else if (url.pathname === '/api/v5/auth') body = {authenticated:true};
+    } else if (url.pathname === '/api/v5/auth') body = auth;
     else if (url.pathname === '/api/v5/dashboard/profile') body = profileForRoute();
     else if (url.pathname === '/api/v5/settings') body = settings;
     else if (url.pathname === '/api/v5/workspace') body = workspaceForRoute();
@@ -238,6 +289,8 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
     else if (url.pathname.startsWith('/api/v5/learning/')) body = {effect:'NONE',status:'DISABLED',roles:[],reason:'Stage1 disabled'};
     else {unexpectedReads.push(url.pathname + url.search); throw new Error(`unmapped read: ${url}`);}
     if (url.pathname === '/api/v5/money') body = poisonDecimals(body);
+    if (['/api/v5/candle-store/cross','/api/v5/candle-store/candles'].includes(url.pathname)) body = poisonDecimals(body);
+    if (['/api/v5/candle-store/stocks','/api/v5/candle-store/stock-market','/api/v5/candle-store/stock-candles'].includes(url.pathname)) body = poisonStockAmounts(body);
     return new Response(JSON.stringify(body),{status:200,headers:{'Content-Type':'application/json'}});
   };
   try {
@@ -272,7 +325,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       document.body.append(container);
       const mount = createRoot(container);
       if (pathname === '/bots') context.mock.timers.enable({apis:['setInterval']});
-      client.setQueryData(['v5-auth'],{authenticated:true});
+      client.setQueryData(['v5-auth'],auth);
       client.setQueryData(['v5-profile'],profileForRoute());
       client.setQueryData(['v5-settings'],settings);
       client.setQueryData(['v5-paper-observation-health',bot],['status','wallet','positions','executors','risk'].map(section => section === 'status' ? statusForRoute() : sections[section]));
@@ -285,6 +338,11 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         assertChartMarkers('explicit refresh');
         await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
         assertChartMarkers('settled refresh');
+        if (pathname === '/learning' || pathname === '/decision-lineage') {
+          const expected = pathname === '/learning' ? ['lessons'] : ['records', 'jobs'];
+          const reads = requests.slice(requestStart).map(request => new URL(request,'https://fixture.invalid'));
+          for (const dataset of expected) assert.ok(reads.some(url => url.pathname === `/api/v5/learning/${dataset}` && url.searchParams.get('scope_id') === scope_id), `missing scoped ${dataset} read`);
+        }
         if (pathname === '/agents/decisions') {
           assert.match(container.textContent,/Up to 5 reports per agent/,'timeline must disclose its bounded projected read');
           assert.match(container.textContent,/Timeline report 1/,'timeline must render older reports');
@@ -365,7 +423,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           }
           const matched = stats.get('Matched spot / perpetual assets');
           assert.equal(matched.title,'0% this minute', 'derived cohort phone helper must use zero decimal places');
-          assert.match(matched.querySelector('strong').title,/1 \/ 1048576; exact percentage 0\.000095367431640625/, 'derived cohort leaf must retain its ratio and exact percentage');
+          assert.equal(matched.querySelector('strong').title,'1 / 1048576; exact percentage ≈ 0.000095367432 (rounded)%', 'derived cohort leaf must retain its ratio and bound its long percentage');
           assert.equal(lane.title,'binance__spot · 7-day coverage 87.7% · missing minutes 1', 'venue phone helper must not append the exact fraction');
           assert.equal(lane.querySelector(':scope > span:first-child').title,'Owner health: green · available', 'non-numeric lane health helper must remain');
           assert.equal(lane.querySelector(':scope > span:first-child > span').title,'exact 7-day fraction 0.876543217317', 'venue leaf must retain the exact 7-day fraction');
@@ -376,7 +434,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         }
         if (pathname === '/market') await React.act(async () => { await client.refetchQueries({type:'active'}); await new Promise(resolve => setTimeout(resolve,0)); });
         if (pathname === '/market') {
-          const chart = charts.slice(chartStart).findLast(item => item.data.some(row => row.close === 101.123456789));
+          const chart = charts.slice(chartStart).findLast(item => item.data.some(row => row.close === poisonDecimals(fixtureClose)));
           assert.ok(chart?.move, 'the real candle chart must subscribe to crosshair movement');
           await React.act(async () => {chart.move({time:fixtureMinute});});
           assert.match(container.textContent,/C 101\.12/, 'the crosshair must show the formatted close');
@@ -508,6 +566,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         client.clear();
       }
     });
+    assert.deepEqual(titleFindings, [], `Owner titles over twelve decimal places:\n${titleFindings.join('\n')}`);
     assert.deepEqual(decimalFindings, [], `Visible decimals over eight places:\n${decimalFindings.join('\n')}`);
     assert.ok(requests.some(request => request.includes('native%2Fstatus')),'real snapshot query must read owner fixtures');
   } finally {

@@ -222,6 +222,15 @@ export function ownerTitle(value) {
   return `≈ ${rounded.neg ? MINUS : ''}${rounded.int}${frac ? `.${frac}` : ''} (rounded)`;
 }
 
+export function ownerTitleText(value) {
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined;
+  const text = String(value);
+  const percent = text.endsWith('%');
+  const title = ownerTitle((percent ? text.slice(0, -1) : text).replace(/^−/, '-'));
+  if (title != null) return title.startsWith('≈') ? `${title}${percent ? '%' : ''}` : text;
+  return text;
+}
+
 export function ownerDisplay(value, kind, { unit, digits = 2 } = {}) {
   if (!parse(value)) return { text: DASH, exact: null, tone: 'none' };
   const text = kind === 'usdc' ? usdc(value, unit)

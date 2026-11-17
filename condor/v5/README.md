@@ -107,5 +107,11 @@ WorkspaceState.backup_database(
 ```
 
 The application serves the V5 frontend from `$V5_FRONTEND_DIST/v5.html` and its
-`assets/` directory. The ordinary Condor app, routes, auth, runtime root, and
+`assets/` directory. Put the matching reviewed build manifest at
+`$V5_FRONTEND_DIST/../v5-reviewed-build.json` (for example,
+`frontend/dist-v5/` alongside `frontend/v5-reviewed-build.json`). New root-level
+statics and the favicon alias require manifest membership and a matching SHA256;
+an absent or invalid manifest withholds them with a warning. The legacy
+`/condor_old.jpeg` GET route remains independent of the manifest and serves the
+logo file as before. The ordinary Condor app, routes, auth, runtime root, and
 ports are not changed by this package.

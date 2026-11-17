@@ -77,10 +77,10 @@ test("a fill exactly on a minute boundary stays on that candle", () => {
 });
 
 for (const [side, eventAt, exactTime] of [["BUY", start * 1000 + 12345, "2026-11-16T10:20:12.345Z"], ["SELL", end * 1000 + 59000, "2026-11-16T10:22:59.000Z"]]) {
-  test(`${side} title preserves exact UTC fill time, quantity and price without an arrow label`, () => {
+  test(`${side} title preserves exact UTC fill time and bounds owner quantity and price`, () => {
     const owner = fill({ side, event_at_ms: eventAt });
     const { markers, title, mapped } = renderFills([owner]);
-    const expected = `${side} ${owner.quantity} @ ${owner.price} · ${exactTime}`;
+    const expected = `${side} ≈ 0.1 (rounded) @ ≈ 101.123456789012 (rounded) · ${exactTime}`;
     assert.ok(!markers[0].text);
     assert.equal(title, expected);
     assert.equal(mapped.markers[0].event_at_ms, eventAt);
@@ -101,7 +101,7 @@ test("gap minutes never snap to a neighboring candle and window bounds exclude o
   assert.equal(mapped.exits, 1);
   assert.deepEqual(markers.map(marker => marker.time), [end]);
   assert.ok(!markers[0].text);
-  assert.equal(title, `SELL ${retained.quantity} @ ${retained.price} · 2026-11-16T10:22:59.999Z`);
+  assert.equal(title, 'SELL ≈ 0.1 (rounded) @ ≈ 101.123456789012 (rounded) · 2026-11-16T10:22:59.999Z');
 });
 
 test("dimmed BUY and SELL markers retain grey at their fill price", () => {

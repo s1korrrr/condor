@@ -18,6 +18,10 @@ const lines = [
   'BUY 0.000000000000000001 @ 101.1234567890123456789 · 1970-01-01T00:01:01.023Z',
   'SELL 1.234567890123456789 @ 102.9876543210987654321 · 1970-01-01T00:01:02.987Z',
 ];
+const titles = [
+  'BUY ≈ 0 (rounded) @ ≈ 101.123456789012 (rounded) · 1970-01-01T00:01:01.023Z',
+  'SELL ≈ 1.234567890123 (rounded) @ ≈ 102.987654321099 (rounded) · 1970-01-01T00:01:02.987Z',
+];
 const text = node => typeof node === 'string' || typeof node === 'number' ? String(node) : (node?.children ?? []).map(text).join('');
 
 async function withChart(check, markerFills = fills) {
@@ -49,10 +53,11 @@ test('fill arrows have no always-on text and preserve minute, price, side and co
   });
 });
 
-test('hovering one minute shows both exact owner fill lines in separate readout rows', async () => {
+test('hovering one minute shows formatted fill lines with bounded owner titles', async () => {
   await withChart(async ({ hover, readout }) => {
     await hover(60);
     assert.deepEqual(readout().findAll(node => node.type === 'span' && node.props.className === 'block').map(text), lines);
+    assert.deepEqual(readout().findAll(node => node.type === 'span' && node.props.className === 'block').map(node => node.props.title), titles);
     assert.match(text(readout()), /O 101\.12.*H 102\.12.*L 100\.12.*C 101\.12.*Volume 0\.123457 BNB/);
   });
 });
@@ -66,9 +71,9 @@ test('moving from a fill minute to an empty minute leaves only its OHLC readout'
   });
 });
 
-test('the title retains every exact fill while the chart arrows carry no labels', async () => {
+test('the title retains every fill under the shared owner rule while arrows carry no labels', async () => {
   await withChart(({ renderer, markers }) => {
-    assert.equal(renderer.root.findByProps({ role: 'img' }).props.title, lines.join(' · '));
+    assert.equal(renderer.root.findByProps({ role: 'img' }).props.title, titles.join(' · '));
     assert.ok(markers.every(marker => !marker.text), 'the title carries exact details without always-on arrow labels');
   });
 });

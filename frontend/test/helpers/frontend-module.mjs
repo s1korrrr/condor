@@ -7,6 +7,7 @@ import * as ReactQuery from '@tanstack/react-query';
 
 const require = createRequire(import.meta.url);
 const sourceRoot = fileURLToPath(new URL('../../src/', import.meta.url));
+const workspaceRoot = process.env.V5_WORKSPACE_ROOT ?? path.resolve(sourceRoot, '../../..');
 export const paperVisualStubs = { '@/v5/PaperPriceChart': { PaperPriceChart: () => null }, '@/v5/PaperPositions': { PaperPositions: () => null } };
 
 // Fresh module graph per scenario. Actual TS/TSX and dependencies run unchanged;
@@ -30,7 +31,7 @@ export function frontendModules(overrides = {}, privateExports = {}, transform =
     new Function('require', 'module', 'exports', `${code}\n${expose}`)(id => {
       if (Object.hasOwn(overrides, id)) return overrides[id];
       if (id.endsWith('.css')) return {};
-      if (id.startsWith('@reporting/')) return load(path.resolve(sourceRoot, '../../../dashboard/hummingbot-reporting-next/app', id.slice('@reporting/'.length)));
+      if (id.startsWith('@reporting/')) return load(path.resolve(workspaceRoot, 'dashboard/hummingbot-reporting-next/app', id.slice('@reporting/'.length)));
       if (id.startsWith('@/')) return load(id.slice(2));
       if (id.startsWith('.')) return load(path.resolve(path.dirname(filename), id));
       return require(id);

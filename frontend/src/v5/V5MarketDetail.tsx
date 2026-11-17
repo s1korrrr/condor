@@ -6,7 +6,7 @@ import { RecordedCandleChart, type RecordedMinute } from "@/components/charts/Re
 import type { CrossStats, CrossView } from "./candle-store-model";
 import { readCandleStore } from "./candle-store-api";
 import { coinStats, marketDetailTitles, REFERENCE, type CandleRead } from "./market-model.mjs";
-import { fixed, pct, signed, utcMin } from "./format.mjs";
+import { ownerTitleText, fixed, pct, signed, utcMin } from './format.mjs';
 
 const RANGES = ["1h", "6h", "24h", "7d"] as const;
 type Range = (typeof RANGES)[number];
@@ -16,7 +16,7 @@ type VenueRow = CrossStats & { segment: "spot" | "perpetual" };
 
 const compact = (value: number) => value >= 1e9 ? `${fixed(value / 1e9, 2)} B` : value >= 1e6 ? `${fixed(value / 1e6, 1)} M` : value >= 1e3 ? `${fixed(value / 1e3, 1)} k` : fixed(value, 0);
 const venueName = (venue: string) => venue.replace("_io", ".io");
-const exactCell = (value: number | null, text: string) => <span title={value == null ? undefined : String(value)}>{text}</span>;
+const exactCell = (value: number | null, text: string) => <span title={ownerTitleText(value == null ? undefined : String(value))}>{text}</span>;
 
 const columns: TableColumn<VenueRow>[] = [
   { id: "venue", header: "Venue", value: row => venueName(row.venue), rowHeader: true, size: 95 },
@@ -75,7 +75,7 @@ export function V5MarketDetail({ coin, color, onClose, tileRead }: { coin: strin
       <button type="button" className="v5m-icon" aria-label={`Close ${coin} detail`} onClick={onClose}><X size={16} /></button>
     </header>
     {candles.isPending ? <p role="status" className="v5m-hint">Reading {range} of {coin} candles…</p> : candles.isError ? <p role="alert" className="v5m-hint">Candles unavailable: {candles.error.message}. Nothing older is shown.</p> : <>
-      <div className="v5m-stats v5m-stats--wide">{tiles.map(([label, value, note, title]) => <div key={label} className="v5m-stat"><span>{label}</span><strong title={title}>{value}</strong>{note && <small>{note}</small>}</div>)}</div>
+      <div className="v5m-stats v5m-stats--wide">{tiles.map(([label, value, note, title]) => <div key={label} className="v5m-stat"><span>{label}</span><strong title={ownerTitleText(title)}>{value}</strong>{note && <small>{note}</small>}</div>)}</div>
       <RecordedCandleChart buckets={candles.data.spot.buckets} label={`${venueName(REFERENCE.venue)} spot · ${pair} (price in ${REFERENCE.quote})`} volumeUnit={candles.data.spot.volume_unit} />
     </>}
     <h3 className="v5m-subhead">How far each venue's price sits from the others, {range}</h3>

@@ -102,7 +102,7 @@ test('engine inputs retain owner decimal strings and explain unqualified values'
     'spot.advancers':{status:'QUALIFIED',unit:'asset_count',value:'0.123456789012345678901234567890'},
     'baseline.composite_score':{status:'UNAVAILABLE',unit:'score',value:'123'},
   }}));
-  assert.match(html, /0\.123456789012345678901234567890/);
+  assert.match(html, /exact ≈ 0\.123456789012 \(rounded\)/);
   assert.match(html, /— · unavailable/);
   assert.doesNotMatch(html, />123<\/strong>/);
 });

@@ -1,4 +1,5 @@
 import type { RecordedMinute } from '@/components/charts/RecordedCandleChart';
+import type { OkxSourcePayload } from './stocks-source-schema';
 
 export type StockRegion = 'eea' | 'global';
 export type StockProduct = 'SPOT' | 'SWAP' | 'FUTURES';
@@ -9,7 +10,7 @@ export type SummaryDataset = 'ticker' | 'mark_price' | 'index_price' | 'funding'
 export type PublicDataset = SummaryDataset | 'books' | 'trades';
 export type ChannelState = 'waiting' | 'live' | 'stale' | 'gap' | 'error' | 'unavailable';
 
-export interface StockInstrument {
+export interface StockInstrument extends OkxSourcePayload<'instrument'> {
   instId: string;
   instType: StockProduct;
   instCategory: '3';
@@ -30,15 +31,15 @@ export interface StockInstrument {
   [field: string]: unknown;
 }
 
-export interface PublicEvent {
+export interface PublicEvent<Dataset extends PublicDataset = PublicDataset> {
   region: StockRegion;
   instId: string;
   instType: StockProduct;
-  dataset: PublicDataset;
+  dataset: Dataset;
   event_time_ms: number | null;
   received_at_ms: number;
   source: 'rest' | 'ws';
-  data: Record<string, unknown>;
+  data: OkxSourcePayload<Dataset> & Record<string, unknown>;
   action?: 'snapshot' | 'update';
   projection?: 'top50_from_standard_books';
 }

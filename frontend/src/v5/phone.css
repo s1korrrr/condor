@@ -22,7 +22,8 @@
   .condor-native .v5-overview :is(small, button, input, select, summary, .q-tooltip, .q-tooltip__title, .q-legend, .q-chart-legend, .q-dt__bar, .q-dt, .v5-phone-rows dt, svg text) { font-size: 12px !important; }
   .condor-native .v5-phone-tools { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
   .condor-native .v5-phone-tools > * { padding: 8px; border: 1px solid var(--color-border); border-radius: 6px; }
-  .condor-native.condor-shell :is(a, button, input:not([type="hidden"]), select, textarea, summary, [role="button"], [role="checkbox"], [role="tab"]) { min-width: 44px; min-height: 44px; max-width: 100%; }
+  .condor-native.condor-shell :is(a, button, input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"]), select, textarea, summary, [role="button"], [role="checkbox"], [role="tab"]) { min-width: 44px; min-height: 44px; max-width: 100%; }
+  .condor-native.condor-shell label:has(> :is(input[type="checkbox"], input[type="radio"])) { display: inline-flex; align-items: center; gap: 8px; min-width: 44px; min-height: 44px; }
   .condor-native :is(a, button, summary) { overflow-wrap: anywhere; }
   .condor-native a { display: inline-flex; align-items: center; }
   .condor-native summary { align-content: center; cursor: pointer; }

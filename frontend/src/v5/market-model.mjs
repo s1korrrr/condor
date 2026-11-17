@@ -8,7 +8,7 @@
  * silently using a neighbour. Spot and perpetual are separate grids and are only compared minute by minute.
  */
 
-import { decimalShift, fixed, ownerDisplay } from './format.mjs';
+import { decimalShift, fixed, ownerDisplay, ownerTitleText } from './format.mjs';
 
 export const MARKET_COINS = ['BTC', 'ETH', 'BNB', 'SOL', 'XRP'];
 /** Reference lanes for prices and the spot/perpetual premium: one venue so both legs share quote and clock. */
@@ -47,7 +47,7 @@ function samples(minutes, value, describe) {
     if (current == null && missingSince == null) missingSince = minute.t;
     if (index % SAMPLE !== SAMPLE - 1 && index !== minutes.length - 1 && index !== newest) return;
     if (missingSince != null && current != null) out.push({ time: missingSince * 1000, value: null });
-    out.push({ time: minute.t * 1000, value: current, ...(current != null && describe ? { exact: describe(minute, current) } : {}) });
+    out.push({ time: minute.t * 1000, value: current, ...(current != null && describe ? { exact: describe(minute, current, String), title: describe(minute, current, ownerTitleText) } : {}) });
     missingSince = null;
   });
   return out;
@@ -77,7 +77,7 @@ export function coinTile(coin, spotRead, perpetualRead) {
     heldMinutes: held.length,
     windowMinutes: minutes.length,
     premiumBps: both < 0 ? null : (perpetual.get(minutes[both].t) / minutes[both].close - 1) * 10_000,
-    premiumInputs: both < 0 ? undefined : `spot close ${minutes[both].close}; perpetual close ${perpetual.get(minutes[both].t)}`,
+    premiumInputs: both < 0 ? undefined : `spot close ${ownerTitleText(minutes[both].close)}; perpetual close ${ownerTitleText(perpetual.get(minutes[both].t))}`,
     premiumTime: both < 0 ? null : minutes[both].t,
     spark: samples(minutes, minute => minute.close),
   };
@@ -87,7 +87,7 @@ export function coinTile(coin, spotRead, perpetualRead) {
 export function indexedReturns(spotRead) {
   const minutes = grid(spotRead);
   const base = minutes?.[0]?.close;
-  return base == null ? [] : samples(minutes, minute => pct(minute.close, base), (minute, result) => `result ${result}%; close ${minute.close}; first close ${base}`);
+  return base == null ? [] : samples(minutes, minute => pct(minute.close, base), (minute, result, title) => `result ${title(result)}%; close ${title(minute.close)}; first close ${title(base)}`);
 }
 
 /** Perpetual over spot (bps) on every fifth minute; null where either leg has no close that minute. */
@@ -95,7 +95,7 @@ export function premiumSeries(spotRead, perpetualRead) {
   const minutes = grid(spotRead);
   if (!minutes) return [];
   const perpetual = new Map((grid(perpetualRead) ?? []).map(minute => [minute.t, minute.close]));
-  return samples(minutes, minute => minute.close != null && perpetual.get(minute.t) != null ? (perpetual.get(minute.t) / minute.close - 1) * 10_000 : null, (minute, result) => `result ${result} bp; spot close ${minute.close}; perpetual close ${perpetual.get(minute.t)}`);
+  return samples(minutes, minute => minute.close != null && perpetual.get(minute.t) != null ? (perpetual.get(minute.t) / minute.close - 1) * 10_000 : null, (minute, result, title) => `result ${title(result)} bp; spot close ${title(minute.close)}; perpetual close ${title(perpetual.get(minute.t))}`);
 }
 
 /** How many measured coins rose over the window and over the last hour; a coin without a measurement is not counted. */
@@ -191,14 +191,15 @@ export function marketDetailTitles(spotRead, perpetualRead, stats) {
   const previous = minutes[index - 60]?.close;
   const perpetual = new Map((grid(perpetualRead) ?? []).map(minute => [minute.t, minute.close]));
   const pairs = minutes.filter(minute => minute.close != null && perpetual.get(minute.t) != null).map(minute => [minute.close, perpetual.get(minute.t)]);
-  const title = (result, inputs) => result == null ? undefined : `result ${result}; ${inputs}`;
+  const title = (result, inputs) => result == null ? undefined : `result ${ownerTitleText(result)}; ${inputs}`;
+  const titleArray = values => JSON.stringify(values, (_key, value) => typeof value === 'number' && ownerTitleText(value)?.startsWith('≈') ? ownerTitleText(value) : value);
   return {
-    returnWindowPct: title(stats.returnWindowPct, `close ${last} / first close ${minutes[0].close}`),
-    return1hPct: title(stats.return1hPct, `close ${last} / hour-ago close ${previous}`),
-    rangePct: title(stats.rangePct, `high ${Math.max(...held.map(minute => minute.high))} / low ${Math.min(...held.map(minute => minute.low))}`),
-    maxDrawdownPct: title(stats.maxDrawdownPct, `closes ${JSON.stringify(held.map(minute => minute.close))}`),
-    volumeQuote: title(stats.volumeQuote, `[close, volume] ${JSON.stringify(minutes.map(minute => [minute.close, minute.volume]))}`),
-    premium: stats.premium ? `mean ${stats.premium.mean}; min ${stats.premium.min}; max ${stats.premium.max}; [spot close, perpetual close] ${JSON.stringify(pairs)}` : undefined,
+    returnWindowPct: title(stats.returnWindowPct, `close ${ownerTitleText(last)} / first close ${ownerTitleText(minutes[0].close)}`),
+    return1hPct: title(stats.return1hPct, `close ${ownerTitleText(last)} / hour-ago close ${ownerTitleText(previous)}`),
+    rangePct: title(stats.rangePct, `high ${ownerTitleText(Math.max(...held.map(minute => minute.high)))} / low ${ownerTitleText(Math.min(...held.map(minute => minute.low)))}`),
+    maxDrawdownPct: title(stats.maxDrawdownPct, `closes ${titleArray(held.map(minute => minute.close))}`),
+    volumeQuote: title(stats.volumeQuote, `[close, volume] ${titleArray(minutes.map(minute => [minute.close, minute.volume]))}`),
+    premium: stats.premium ? `mean ${ownerTitleText(stats.premium.mean)}; min ${ownerTitleText(stats.premium.min)}; max ${ownerTitleText(stats.premium.max)}; [spot close, perpetual close] ${titleArray(pairs)}` : undefined,
   };
 }
 

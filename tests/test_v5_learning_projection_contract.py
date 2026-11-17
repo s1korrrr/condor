@@ -47,6 +47,30 @@ def validate(document, path="examples/records-nodes.json", now=BASE_NOW):
     return lp.validate_envelope(document, request=request_for(path), expected=EXPECTED, now_ms=now)
 
 
+@pytest.mark.parametrize("mutant", ["family", "program", "lesson-program", "pairs", "window", "issue"])
+def test_resealed_scope_and_size_counterexamples(mutant):
+    path = "examples/lessons.json" if mutant == "lesson-program" else "examples/records-nodes.json"
+    document = load(path)
+    row = document["items"][0]
+    if mutant == "family":
+        row["row_scope"]["family_id"] = "outside-family"
+    elif mutant == "program":
+        row["row_scope"]["program_id"] = "outside-program"
+    elif mutant == "lesson-program":
+        row["program_id"] = "outside-program"
+    elif mutant == "pairs":
+        document["scope"]["family_lane_pairs"].append({"family_id": "aaa", "lane": "SPOT"})
+    elif mutant == "window":
+        row["row_scope"]["recorded_scope"]["window"] = {"start": 20, "end_exclusive": 10}
+    else:
+        document["status"] = "PARTIAL"
+        document["issues"] = [{"code": "OMITTED_CONTENT", "record_id": "r" * 160, "detail": "d" * 128}]
+    rehash(document)
+    assert lp.schema_errors(request_for(path).dataset, document) is None
+    with pytest.raises(lp.ContractViolation):
+        validate(document, path)
+
+
 # --- vendored appendix is the frozen one -------------------------------------------------------------------
 
 
@@ -383,11 +407,12 @@ def test_query_parser_is_strict_and_forwards_raw_bytes():
     for bad in ("a", "a=", "=b", "a=1&a=2", "a=%zz", "a=%ff", "a=1&&b=2"):
         with pytest.raises(lp.QueryViolation):
             lp.parse_query(bad)
-    assert lp.prepare_query("lessons", "limit=10", SCOPE_ID) == "limit=10&scope_id=fixture-v5-lfl"
-    assert lp.prepare_query("lessons", "", SCOPE_ID) == "scope_id=fixture-v5-lfl"
-    assert lp.prepare_query("lessons", f"scope_id={SCOPE_ID}&limit=10", SCOPE_ID) == f"scope_id={SCOPE_ID}&limit=10"
+    with pytest.raises(lp.QueryViolation):
+        lp.validate_query("lessons", "limit=10", SCOPE_ID)
+    with pytest.raises(lp.QueryViolation):
+        lp.validate_query("lessons", "", SCOPE_ID)
+    assert lp.validate_query("lessons", f"scop%65_id={SCOPE_ID}&limit=10", SCOPE_ID) == {"scope_id": SCOPE_ID, "limit": "10"}
     for dataset, query in (
-        ("lessons", "scope_id=other"),
         ("lessons", "limit=51"),
         ("lessons", "limit=05"),
         ("lessons", "limit=0"),
@@ -398,9 +423,10 @@ def test_query_parser_is_strict_and_forwards_raw_bytes():
         ("lessons", "cursor=bad+cursor"),
         ("lessons", "cursor=" + "A" * 513),
     ):
+        query = f"scope_id={SCOPE_ID}" + (f"&{query}" if query else "")
         with pytest.raises(lp.QueryViolation):
-            lp.prepare_query(dataset, query, SCOPE_ID)
-    assert lp.prepare_query("records", "record_type=edge&root_id=a%2Fb", SCOPE_ID).startswith("record_type=edge&root_id=a%2Fb")
+            lp.validate_query(dataset, query, SCOPE_ID)
+    assert lp.validate_query("records", f"scope_id={SCOPE_ID}&record_type=edge&root_id=a%2Fb", SCOPE_ID)["root_id"] == "a/b"
 
 
 def test_retry_after_is_one_to_thirty_or_one():

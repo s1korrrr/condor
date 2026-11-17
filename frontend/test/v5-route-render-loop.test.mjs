@@ -152,6 +152,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const journalRoutes = new Set(['/bots', '/operations', '/v5/readiness']);
   const statusForRoute = () => journalRoutes.has(route) ? {...sections.status, state:'degraded', reason:'OWNER_JOURNAL_EXCEEDED', data:{...sections.status.data, journal_budget:{state:'exceeded',journal_evidence_held:true,native_execution_continues:true}}} : sections.status;
   const originalFetch = globalThis.fetch;
+  const auth = {authenticated:true,learning_scope_id:'fixture-v5-lfl'};
   const originalNow = Date.now;
   const originalError = console.error;
   let now = sections.status.read_at_ms;
@@ -202,7 +203,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       const section = native.includes('native/status') ? 'status' : native.includes('account-balances') || native.includes('fleet/summary') ? 'wallet' : native.includes('holdings') ? 'positions' : native.includes('performance/history') ? 'history' : native.includes('operations/workspace') ? 'operations' : native.split('?')[0].split('/').at(-1);
       assert.ok(sections[section],`unmapped owner read: ${native}`);
       body = section === 'status' ? statusForRoute() : section === 'fills' && duplicateTradeFills ? {...sections.fills,data:[...sections.fills.data,{...fixtureFill}]} : sections[section];
-    } else if (url.pathname === '/api/v5/auth') body = {authenticated:true};
+    } else if (url.pathname === '/api/v5/auth') body = auth;
     else if (url.pathname === '/api/v5/dashboard/profile') body = profileForRoute();
     else if (url.pathname === '/api/v5/settings') body = settings;
     else if (url.pathname === '/api/v5/workspace') body = workspaceForRoute();
@@ -272,7 +273,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       document.body.append(container);
       const mount = createRoot(container);
       if (pathname === '/bots') context.mock.timers.enable({apis:['setInterval']});
-      client.setQueryData(['v5-auth'],{authenticated:true});
+      client.setQueryData(['v5-auth'],auth);
       client.setQueryData(['v5-profile'],profileForRoute());
       client.setQueryData(['v5-settings'],settings);
       client.setQueryData(['v5-paper-observation-health',bot],['status','wallet','positions','executors','risk'].map(section => section === 'status' ? statusForRoute() : sections[section]));
@@ -285,6 +286,11 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         assertChartMarkers('explicit refresh');
         await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
         assertChartMarkers('settled refresh');
+        if (pathname === '/learning' || pathname === '/decision-lineage') {
+          const expected = pathname === '/learning' ? ['lessons'] : ['records', 'jobs'];
+          const reads = requests.slice(requestStart).map(request => new URL(request,'https://fixture.invalid'));
+          for (const dataset of expected) assert.ok(reads.some(url => url.pathname === `/api/v5/learning/${dataset}` && url.searchParams.get('scope_id') === 'fixture-v5-lfl'), `missing scoped ${dataset} read`);
+        }
         if (pathname === '/agents/decisions') {
           assert.match(container.textContent,/Up to 5 reports per agent/,'timeline must disclose its bounded projected read');
           assert.match(container.textContent,/Timeline report 1/,'timeline must render older reports');

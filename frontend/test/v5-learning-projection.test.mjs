@@ -1,6 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync, existsSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { createRequire } from 'node:module';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -46,9 +47,21 @@ test('learning never offers a paid or execution control', () => {
   assert.doesNotMatch(markup, /Role bindings|View provider calls/);
 });
 test('learning transport never accepts an authorizing result', async () => {
+  const { canonicalJson } = loadPanel('v5/learning-projection-validate.ts');
+  const manifest = JSON.parse(readFileSync(resolve(root, '../../condor/v5/schemas/learning_projection/examples/manifest.json'), 'utf8'));
+  manifest.effect = 'ORDER';
+  const { envelope_sha256: _omitted, ...body } = manifest;
+  manifest.envelope_sha256 = createHash('sha256').update(canonicalJson(body)).digest('hex');
+  const calls = [];
   const previous = globalThis.fetch;
-  globalThis.fetch = async () => ({ ok: true, json: async () => ({ effect: 'ORDER' }) });
-  try { await assert.rejects(learningRead('manifest'), /Learning projection/); }
+  globalThis.fetch = async url => {
+    calls.push(url);
+    return Response.json(url === '/api/v5/auth' ? { authenticated: true, learning_scope_id: manifest.scope.scope_id } : manifest);
+  };
+  try {
+    await assert.rejects(learningRead('manifest'), error => error.status === 502 && error.code === 'INVALID_OWNER_PROJECTION');
+    assert.deepEqual(calls, ['/api/v5/auth', `/api/v5/learning/manifest?scope_id=${manifest.scope.scope_id}`]);
+  }
   finally { globalThis.fetch = previous; }
 });
 

@@ -26,13 +26,14 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import quote, unquote_to_bytes
+from urllib.parse import unquote_to_bytes
 
 import aiohttp
 from fastapi import APIRouter, Request, Response
 from jsonschema import Draft202012Validator, ValidationError
 from jsonschema import validators as _jsonschema_validators
 from referencing import Registry, Resource
+from yarl import URL
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ SAFE_INT_MAX = 9_007_199_254_740_991
 STAGE_A_DATASETS = ("manifest", "lessons", "records", "jobs")
 STAGE_B_DATASETS = ("candidates", "campaigns", "assessments")
 ALL_DATASETS = STAGE_A_DATASETS + STAGE_B_DATASETS
+PROJECTION_PATHS = frozenset(f"/api/v5/learning/{dataset}" for dataset in ALL_DATASETS)
 MANIFEST_ORDER = ("lessons", "records", "jobs", "candidates", "campaigns", "assessments")
 OWNER_PATH_PREFIX = "/api/knowledge/v5-projection/v1/"
 ERROR_SCHEMA = "research_knowledge.v5_projection_error.v1"
@@ -99,6 +101,10 @@ class QueryViolation(ValueError):
     """The browser query is invalid for its route."""
 
 
+class CursorViolation(QueryViolation):
+    """A recognized cursor does not meet its query schema."""
+
+
 class ProjectionTransportError(RuntimeError):
     """``kind`` is ``unavailable`` (timeout / connect) or ``invalid`` (framing, size, encoding, redirect)."""
 
@@ -132,6 +138,8 @@ def _reject_constant(token: str) -> Any:
 def _parse_int(token: str) -> int:
     if token.startswith("-") or (len(token) > 1 and token.startswith("0")):
         raise ContractViolation("negative or padded integer")
+    if len(token) > len(str(SAFE_INT_MAX)):
+        raise ContractViolation("integer beyond the safe range")
     value = int(token)
     if value > SAFE_INT_MAX:
         raise ContractViolation("integer beyond the safe range")
@@ -314,7 +322,7 @@ def _check_row(row: dict[str, Any], *, context: str) -> None:
             raise ContractViolation(f"{context}: issue too large")
     body = {key: value for key, value in row.items() if key != "row_sha256"}
     encoded = canonical(body)
-    if len(encoded) + 76 > MAX_ROW_BYTES:  # 76 = ,"row_sha256":"<64>"
+    if len(encoded) + 80 > MAX_ROW_BYTES:
         raise ContractViolation(f"{context}: row exceeds {MAX_ROW_BYTES} bytes")
     if sha256_hex(encoded) != row["row_sha256"]:
         raise ContractViolation(f"{context}: row hash mismatch")
@@ -398,6 +406,11 @@ def validate_envelope(
     scope = document["scope"]
     if scope is not None and (scope["scope_id"] != expected.scope_id or scope["scope_sha256"] != expected.scope_sha256):
         raise ContractViolation("scope mismatch")
+    pairs = [(pair["family_id"], pair["lane"]) for pair in scope["family_lane_pairs"]] if scope is not None else []
+    if pairs != sorted(pairs):
+        raise ContractViolation("scope family/lane pairs are not sorted")
+    if any(len(canonical(issue)) > MAX_ISSUE_BYTES for issue in document["issues"]):
+        raise ContractViolation("envelope issue too large")
 
     status = document["status"]
     items = document["items"]
@@ -462,6 +475,18 @@ def validate_envelope(
             if status == "UNAVAILABLE" and (item["availability"] != "UNAVAILABLE" or item["total_items"] is not None):
                 raise ContractViolation(f"{context}: unavailable manifest advertises data")
             continue
+        row_scope = item["row_scope"]
+        if scope is None or (row_scope["family_id"], row_scope["lane"]) not in pairs:
+            raise ContractViolation(f"{context}: row family/lane is outside the envelope scope")
+        program = scope["program_id"]
+        if row_scope["program_id"] not in (None, program) or (
+            row_scope["membership_basis"] == "LESSON_PROGRAM" and row_scope["program_id"] != program
+        ) or ("program_id" in item and item["program_id"] != program):
+            raise ContractViolation(f"{context}: row program is outside the envelope scope")
+        recorded_scope = row_scope["recorded_scope"]
+        window = recorded_scope["window"] if recorded_scope is not None else None
+        if isinstance(window, dict) and window["start"] >= window["end_exclusive"]:
+            raise ContractViolation(f"{context}: recorded window is not ordered")
         _check_row(item, context=context)
         _check_dataset_row(item, dataset, request, context=context)
         ids.append(item["record_id"].encode("utf-8"))
@@ -509,6 +534,7 @@ def error_body(code: str, snapshot_id: str | None = None) -> bytes:
 # ---------------------------------------------------------------------------
 
 _BAD_PERCENT = re.compile(r"%(?![0-9A-Fa-f]{2})")
+_RAW_QUERY = re.compile(r"[A-Za-z0-9._~!$&'()*+,;=:@/?%\-]*\Z")
 
 
 def parse_query(raw: str) -> dict[str, str]:
@@ -535,25 +561,19 @@ def parse_query(raw: str) -> dict[str, str]:
     return result
 
 
-def prepare_query(dataset: str, raw: str, scope_id: str) -> str:
-    """Validate a browser query and return the raw query to forward.
-
-    The browser does not know the scope ID before it reads the manifest, so Condor appends its configured
-    ``scope_id`` when absent. A supplied ``scope_id`` must equal the configured one. Everything else is forwarded
-    byte-for-byte; the owner remains authoritative.
-    """
+def validate_query(dataset: str, raw: str, scope_id: str) -> dict[str, str]:
+    """Validate the decoded query; callers forward the original, not this map."""
+    if not _RAW_QUERY.fullmatch(raw):
+        raise QueryViolation("invalid raw query characters")
     parsed = parse_query(raw)
-    forwarded = raw
-    if "scope_id" not in parsed:
-        forwarded = f"{raw}&" if raw else ""
-        forwarded += "scope_id=" + quote(scope_id, safe="")
-        parsed["scope_id"] = scope_id
-    elif parsed["scope_id"] != scope_id:
-        raise QueryViolation("scope_id is not the configured scope")
-    problem = schema_errors(f"query-{dataset}", parsed)
-    if problem:
-        raise QueryViolation(problem)
-    return forwarded
+    if parsed.get("scope_id") != scope_id:
+        raise QueryViolation("missing or mismatched scope_id")
+    errors = list(_validator(f"query-{dataset}").iter_errors(parsed))
+    if errors:
+        if all(list(error.absolute_path) == ["cursor"] for error in errors):
+            raise CursorViolation("invalid cursor")
+        raise QueryViolation("query does not match the route schema")
+    return parsed
 
 
 # ---------------------------------------------------------------------------
@@ -595,7 +615,8 @@ class OwnerProjectionClient:
                 async with self.session_factory(
                     timeout=timeout, auto_decompress=False, cookie_jar=aiohttp.DummyCookieJar()
                 ) as session:
-                    async with session.get(self.base_url + target, headers=headers, allow_redirects=False) as response:
+                    session._retry_connection = False
+                    async with session.get(URL(self.base_url + target, encoded=True), headers=headers, allow_redirects=False) as response:
                         return await self._read(response)
         except (asyncio.TimeoutError, TimeoutError) as error:
             raise ProjectionTransportError("unavailable", "timeout") from error
@@ -607,15 +628,21 @@ class OwnerProjectionClient:
             raise ProjectionTransportError("unavailable", "connect") from error
 
     async def _read(self, response) -> OwnerResponse:
-        encoding = response.headers.get("Content-Encoding", "identity").strip().lower()
-        if encoding not in {"", "identity"}:
-            raise ProjectionTransportError("invalid", "compressed response")
+        encodings = response.headers.getall("Content-Encoding", [])
+        if len(encodings) > 1 or (encodings and encodings[0].strip().lower() not in {"", "identity"}):
+            raise ProjectionTransportError("invalid", "duplicate or compressed response encoding")
         media = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
         if media != "application/json":
             raise ProjectionTransportError("invalid", "not JSON")
-        declared = response.headers.get("Content-Length")
-        if declared is not None and (not declared.isdigit() or int(declared) > self.max_bytes):
-            raise ProjectionTransportError("invalid", "declared length beyond the cap")
+        length = response.headers.get("Content-Length")
+        declared = None
+        if length is not None:
+            digits = length.lstrip("0") or "0"
+            if not length.isascii() or not length.isdigit() or len(digits) > len(str(self.max_bytes)):
+                raise ProjectionTransportError("invalid", "invalid declared length")
+            declared = int(digits)
+            if declared > self.max_bytes:
+                raise ProjectionTransportError("invalid", "declared length beyond the cap")
         body = bytearray()
         while True:  # count the actual dechunked bytes; never trust Content-Length
             chunk = await response.content.read(self.max_bytes + 1 - len(body))
@@ -624,9 +651,10 @@ class OwnerProjectionClient:
             body.extend(chunk)
             if len(body) > self.max_bytes:
                 raise ProjectionTransportError("invalid", "response beyond the cap")
-        if declared is not None and int(declared) != len(body):
+        if declared is not None and declared != len(body):
             raise ProjectionTransportError("invalid", "length mismatch")
-        return OwnerResponse(response.status, bytes(body), response.headers.get("Retry-After"))
+        retry = response.headers.getall("Retry-After", [])
+        return OwnerResponse(response.status, bytes(body), retry[0] if len(retry) == 1 else None)
 
 
 # ---------------------------------------------------------------------------
@@ -658,7 +686,6 @@ class ProjectionResult:
 @dataclass
 class Receipt:
     snapshot_id: str
-    verified_at_ms: int
     status: str
     expires_at: float  # monotonic seconds
 
@@ -692,6 +719,7 @@ class ResearchOwnerLearningSource:
         self.clock = clock
         self.monotonic = monotonic
         self._receipts: dict[str, Receipt] = {}
+        self._verification_high_water: dict[tuple[str, str], int] = {}
 
     # --- receipt state -------------------------------------------------------------------------------------
 
@@ -718,24 +746,26 @@ class ResearchOwnerLearningSource:
         receipt = self._receipts.get(dataset)
         return receipt.expires_at if receipt else None
 
-    def _accept(self, dataset: str, envelope: dict[str, Any]) -> None:
+    def _accept(self, dataset: str, envelope: dict[str, Any]) -> bool:
         status = envelope["status"]
         if status == "UNAVAILABLE":
             self.invalidate(dataset)
-            return
+            return True
         snapshot = envelope["snapshot_id"]
         verified = envelope["verified_at_ms"]
+        key = dataset, snapshot
+        now = self.monotonic()
         previous = self._receipts.get(dataset)
-        if previous and previous.snapshot_id == snapshot and verified < previous.verified_at_ms:
-            raise ContractViolation("verification time went backwards for one snapshot")
+        if verified <= self._verification_high_water.get(key, -1):
+            return previous is not None and previous.snapshot_id == snapshot and now < previous.expires_at
+        self._verification_high_water[key] = verified
         remaining_ms = MAX_VERIFICATION_AGE_MS - (envelope["served_at_ms"] - verified)
-        expires_at = self.monotonic() + remaining_ms / 1000
-        if previous and previous.snapshot_id == snapshot and previous.verified_at_ms == verified:
-            expires_at = min(expires_at, previous.expires_at)  # same verification: a poll cannot extend it
+        expires_at = now + remaining_ms / 1000
         for other, receipt in list(self._receipts.items()):
             if other != dataset and receipt.snapshot_id != snapshot:
                 del self._receipts[other]  # the generation changed: drop what belonged to the old one
-        self._receipts[dataset] = Receipt(snapshot, verified, status, expires_at)
+        self._receipts[dataset] = Receipt(snapshot, status, expires_at)
+        return True
 
     # --- reads ---------------------------------------------------------------------------------------------
 
@@ -746,12 +776,13 @@ class ResearchOwnerLearningSource:
         if dataset not in STAGE_A_DATASETS:
             return local_result("ROUTE_NOT_FOUND")
         try:
-            forwarded = prepare_query(dataset, raw_query, self.config.scope_id)
-            parsed = parse_query(forwarded)
+            parsed = validate_query(dataset, raw_query, self.config.scope_id)
+        except CursorViolation:
+            return local_result("INVALID_CURSOR")
         except QueryViolation:
             return local_result("INVALID_QUERY")
         try:
-            response = await self.client.get(dataset, forwarded)
+            response = await self.client.get(dataset, raw_query)
         except ProjectionTransportError as error:
             logger.warning("learning projection %s transport failure: %s", dataset, error)
             self.invalidate()
@@ -768,7 +799,8 @@ class ResearchOwnerLearningSource:
             document = parse_strict(response.body)
             request = RequestShape(dataset, parsed.get("record_type"))
             envelope = validate_envelope(document, request=request, expected=self.config.expected, now_ms=self.clock())
-            self._accept(dataset, envelope)
+            if not self._accept(dataset, envelope):
+                return local_result("VERIFICATION_UNAVAILABLE", envelope["snapshot_id"])
             return ProjectionResult(200, response.body)
         if response.status not in ERROR_STATUS_CODES:
             raise ContractViolation("unknown upstream status")
@@ -783,9 +815,6 @@ class ResearchOwnerLearningSource:
 # ---------------------------------------------------------------------------
 # Browser routes: /api/v5/learning/{manifest,lessons,records,jobs,candidates,campaigns,assessments}
 # ---------------------------------------------------------------------------
-
-ROUTE_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-
 
 def _response(result: ProjectionResult, *, extra: dict[str, str] | None = None) -> Response:
     headers = {"Cache-Control": "no-store"}
@@ -814,13 +843,14 @@ def add_projection_routes(router: APIRouter, projection: ResearchOwnerLearningSo
                 return _response(local_result("METHOD_NOT_ALLOWED"), extra={"Allow": "GET"})
             if "transfer-encoding" in request.headers or request.headers.get("content-length", "0") != "0":
                 return _response(local_result("REQUEST_BODY_NOT_ALLOWED"))
+            if dataset in STAGE_B_DATASETS:
+                return _response(local_result("DATASET_NOT_ENABLED"))
+            if projection is None:
+                return _response(local_result("PUBLICATION_UNAVAILABLE"))
             try:
                 query = raw_query.decode("ascii")
             except UnicodeDecodeError:
                 return _response(local_result("INVALID_QUERY"))
-            if projection is None:
-                code = "DATASET_NOT_ENABLED" if dataset in STAGE_B_DATASETS else "PUBLICATION_UNAVAILABLE"
-                return _response(local_result(code))
             return _response(await projection.read(dataset, query))
 
         handle.__name__ = f"learning_projection_{dataset}"
@@ -828,4 +858,7 @@ def add_projection_routes(router: APIRouter, projection: ResearchOwnerLearningSo
 
     for dataset in ALL_DATASETS:
         if dataset not in skip:
-            router.add_api_route(f"/{dataset}", make(dataset), methods=ROUTE_METHODS, include_in_schema=False)
+            router.add_api_route(
+                f"/{dataset}", make(dataset), methods=[], include_in_schema=False,
+                generate_unique_id_function=lambda route: route.name,
+            )

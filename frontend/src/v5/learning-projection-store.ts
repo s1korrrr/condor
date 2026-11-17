@@ -44,11 +44,45 @@ export interface StoreOptions {
   maxAgeMs: number;
   /** 0 disables polling. */
   pollMs: number;
+  freshness?: ProjectionFreshness;
 }
 
 const INITIAL: StoreSnapshot = {
   state: 'loading', envelope: null, error: null, pageIndex: 0, hasNext: false, hasPrevious: false, snapshotChanged: false, expiresAt: null,
 };
+
+interface Verification {
+  verifiedAt: number;
+  expiresAt: number;
+}
+
+export class ProjectionFreshness {
+  private highWater = new Map<string, Verification>();
+  private active = new Map<ProjectionDataset, Verification>();
+
+  isStale(dataset: ProjectionDataset, snapshot: string, verifiedAt: number, now: number) {
+    const receipt = this.highWater.get(`${dataset}:${snapshot}`);
+    return receipt !== undefined && (verifiedAt < receipt.verifiedAt || (
+      verifiedAt === receipt.verifiedAt && (this.active.get(dataset) !== receipt || now >= receipt.expiresAt)
+    ));
+  }
+
+  observe(dataset: ProjectionDataset, snapshot: string, verifiedAt: number, expiresAt: number) {
+    const key = `${dataset}:${snapshot}`;
+    let receipt = this.highWater.get(key);
+    if (!receipt || verifiedAt > receipt.verifiedAt) {
+      receipt = { verifiedAt, expiresAt };
+      this.highWater.set(key, receipt);
+      this.active.set(dataset, receipt);
+    }
+    return { receipt, active: this.active.get(dataset) === receipt };
+  }
+
+  invalidate(dataset?: ProjectionDataset) {
+    if (dataset === undefined) this.active.clear();
+    else this.active.delete(dataset);
+  }
+}
 
 export class ProjectionStore {
   private snapshot: StoreSnapshot = INITIAL;
@@ -61,8 +95,12 @@ export class ProjectionStore {
   private disposed = false;
 
   private options: StoreOptions;
+  private freshness: ProjectionFreshness;
 
-  constructor(options: StoreOptions) { this.options = options; }
+  constructor(options: StoreOptions) {
+    this.options = options;
+    this.freshness = options.freshness ?? new ProjectionFreshness();
+  }
 
   readonly subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   readonly getSnapshot = () => this.snapshot;
@@ -81,7 +119,7 @@ export class ProjectionStore {
     this.disposed = false;
     if (this.snapshot.state !== 'unauthenticated') void this.load(this.snapshot.pageIndex);
   };
-  refresh = () => { void this.load(this.snapshot.pageIndex, true); };
+  refresh = () => { void this.load(this.snapshot.pageIndex); };
   first = () => { this.stack = [null]; void this.load(0, true); };
   next = () => {
     const cursor = this.snapshot.envelope?.page.next_cursor;
@@ -97,6 +135,7 @@ export class ProjectionStore {
 
   /** 401 anywhere: drop data and stop, until the caller explicitly refreshes after signing in. */
   clearForAuth() {
+    this.freshness.invalidate();
     this.abort();
     this.clearTimers();
     this.stack = [null];
@@ -165,22 +204,41 @@ export class ProjectionStore {
     const result = await this.options.read(this.options.dataset, { ...this.options.params, cursor: this.stack[pageIndex] ?? undefined }, controller.signal);
     if (controller.signal.aborted || this.disposed || this.controller !== controller) return; // superseded: ignore
     this.controller = null;
-    this.clearExpiry();
-    if (!result.ok) return this.fail(result.error, pageIndex);
+    const dataset = this.options.dataset;
+    if (!result.ok) {
+      this.clearExpiry();
+      this.freshness.invalidate(dataset);
+      return this.fail(result.error, pageIndex);
+    }
     const envelope = result.envelope;
     if (envelope.status === 'UNAVAILABLE') {
+      this.clearExpiry();
+      this.freshness.invalidate(dataset);
       this.set({ ...this.cleared(null, { pageIndex }), envelope });
       return this.schedulePoll();
     }
     const clock = this.options.clock;
-    const age = envelope.served_at_ms - (envelope.verified_at_ms as number);
-    let expiresAt = clock.now() + (this.options.maxAgeMs - age);
-    if (previous && previous.pageIndex === pageIndex && previous.expiresAt !== null && previous.envelope
-      && previous.envelope.snapshot_id === envelope.snapshot_id && previous.envelope.verified_at_ms === envelope.verified_at_ms) {
-      expiresAt = Math.min(expiresAt, previous.expiresAt); // same verification: a poll cannot renew it
+    const verifiedAt = envelope.verified_at_ms as number;
+    const age = envelope.served_at_ms - verifiedAt;
+    const now = clock.now();
+    const snapshotId = envelope.snapshot_id as string;
+    const displayed = this.snapshot.envelope;
+    if (displayed?.snapshot_id !== snapshotId && this.snapshot.state === 'ready' && this.snapshot.expiresAt !== null
+      && this.snapshot.expiresAt > now && this.freshness.isStale(dataset, snapshotId, verifiedAt, now)) {
+      return this.schedulePoll();
     }
+    const { receipt, active } = this.freshness.observe(dataset, snapshotId, verifiedAt, now + this.options.maxAgeMs - age);
+    const { expiresAt } = receipt;
+    if (this.snapshot.state === 'ready' && this.snapshot.expiresAt !== null && this.snapshot.expiresAt > clock.now()
+      && this.snapshot.envelope?.snapshot_id === envelope.snapshot_id && verifiedAt <= (this.snapshot.envelope.verified_at_ms as number)
+      && active) return this.schedulePoll();
+    this.clearExpiry();
     if (expiresAt <= clock.now()) {
       this.set({ ...INITIAL, state: 'expired', pageIndex, hasPrevious: pageIndex > 0 });
+      return this.schedulePoll();
+    }
+    if (!active || verifiedAt < receipt.verifiedAt) {
+      this.set(this.cleared(null, { pageIndex }));
       return this.schedulePoll();
     }
     this.set({

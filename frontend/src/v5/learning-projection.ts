@@ -17,9 +17,9 @@
  */
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import {
-  ContractViolation, parseStrictJson, utf8Length, validateEnvelope, validateErrorBody,
+  ContractViolation, parseStrictJson, validateEnvelope, validateErrorBody,
 } from './learning-projection-validate';
-import { ProjectionStore, type StoreClock, type StoreRead } from './learning-projection-store';
+import { ProjectionFreshness, ProjectionStore, type StoreClock, type StoreRead } from './learning-projection-store';
 
 /** Stage-A datasets that Condor serves with a success schema. */
 export const STAGE_A_DATASETS = ['manifest', 'lessons', 'records', 'jobs'] as const;
@@ -276,7 +276,7 @@ export function isUnavailableStub<R extends { row_status: RowStatus }>(row: R): 
   return row.row_status === 'UNAVAILABLE';
 }
 
-/** Query parameters a panel may set. `scope_id` is supplied by Condor from its configuration. */
+/** Query parameters a panel may set. The reader gets `scope_id` from Condor's session read. */
 export interface ProjectionParams {
   /** 1..50, default 25. */
   limit?: number;
@@ -381,7 +381,8 @@ export function formatUtc(value: number | null | undefined): string | null {
 
 interface ClearableStore { clearForAuth: () => void; clearForScopeChange: () => void }
 const stores = new Set<ClearableStore>();
-let boundScope: string | null = null;
+const freshness = new ProjectionFreshness();
+let binding: { scope: string; snapshot: Hash | null } | null = null;
 
 /** Registers a store for 401 and scope-change clearing. Returns the unregister function. (Used by the hooks.) */
 export function registerProjectionStore(store: ClearableStore): () => void {
@@ -391,28 +392,58 @@ export function registerProjectionStore(store: ClearableStore): () => void {
 
 /** Drop every cached projection page and stop all reads. Done automatically on any HTTP 401. */
 export function clearProjectionCaches(): void {
-  boundScope = null;
+  binding = null;
+  freshness.invalidate();
   for (const store of [...stores]) store.clearForAuth();
 }
 
-function bindScope(envelope: { scope: Scope | null; projection_revision: Hash }): void {
+function bindScope(envelope: { scope: Scope | null; projection_revision: Hash; snapshot_id: Hash | null }): void {
   if (envelope.scope === null) return;
-  const key = `${envelope.scope.scope_id}|${envelope.scope.scope_sha256}|${envelope.projection_revision}`;
-  const changed = boundScope !== null && boundScope !== key;
-  boundScope = key;
-  if (changed) for (const store of [...stores]) store.clearForScopeChange(); // a different scope/revision: nothing carries over
+  const scope = JSON.stringify([envelope.scope.scope_id, envelope.scope.scope_sha256, envelope.projection_revision]);
+  const previousSnapshot = binding?.scope === scope ? binding.snapshot : null;
+  const snapshot = envelope.snapshot_id ?? previousSnapshot;
+  const changed = binding !== null && (binding.scope !== scope || (previousSnapshot !== null && snapshot !== previousSnapshot));
+  binding = { scope, snapshot };
+  if (changed) {
+    freshness.invalidate();
+    for (const store of [...stores]) store.clearForScopeChange();
+  }
 }
 
 // --- one validated read -----------------------------------------------------------------------------------
 
-function buildQuery(params: ProjectionParams): string {
-  const query = new URLSearchParams();
+function buildQuery(scopeId: string, params: ProjectionParams): string {
+  const query = new URLSearchParams({ scope_id: scopeId });
   if (params.record_type) query.set('record_type', params.record_type);
   if (params.root_id) query.set('root_id', params.root_id);
   if (params.limit !== undefined) query.set('limit', String(params.limit));
   if (params.cursor) query.set('cursor', params.cursor); // opaque: passed through, never decoded
-  const text = query.toString();
-  return text ? `?${text}` : '';
+  return `?${query.toString()}`;
+}
+
+async function readJson(response: Response, limit: number): Promise<unknown> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new ContractViolation('missing response body');
+  const decoder = new TextDecoder('utf-8', { fatal: true, ignoreBOM: true });
+  let bytes = 0;
+  let text = '';
+  const decode = (chunk?: Uint8Array) => {
+    try { return decoder.decode(chunk, { stream: chunk !== undefined }); }
+    catch { throw new ContractViolation('invalid UTF-8'); }
+  };
+  try {
+    while (true) {
+      const { done, value } = await reader.read().catch(() => { throw new TypeError('response stream failed'); });
+      if (done) break;
+      bytes += value.byteLength;
+      if (bytes > limit) throw new ContractViolation('response beyond the cap');
+      text += decode(value);
+    }
+    return parseStrictJson(text + decode());
+  } catch (error) {
+    void reader.cancel().catch(() => {});
+    throw error;
+  } finally { reader.releaseLock(); }
 }
 
 export type ReadResult<D extends ProjectionDataset> =
@@ -423,39 +454,59 @@ export type ReadResult<D extends ProjectionDataset> =
 export async function readProjectionResult<D extends ProjectionDataset>(
   dataset: D, params: ProjectionParams = {}, signal?: AbortSignal, fetcher: typeof fetch = fetch,
 ): Promise<ReadResult<D>> {
-  let response: Response;
-  try {
-    response = await fetcher(`/api/v5/learning/${dataset}${buildQuery(params)}`, {
-      credentials: 'include', headers: { Accept: 'application/json' }, signal, cache: 'no-store',
-    });
-  } catch {
-    return { ok: false, error: typedError(0, 'UPSTREAM_UNAVAILABLE') };
-  }
-  let text: string;
-  try { text = await response.text(); } catch { return { ok: false, error: typedError(0, 'UPSTREAM_UNAVAILABLE') }; }
-  if (response.status === 401) {
+  const unavailable = (): ReadResult<D> => ({ ok: false, error: typedError(0, 'UPSTREAM_UNAVAILABLE') });
+  const unauthenticated = (): ReadResult<D> => {
     clearProjectionCaches();
     return { ok: false, error: { status: 401, code: AUTHENTICATION_REQUIRED, retryable: false, snapshot_id: null, unauthenticated: true } };
-  }
-  if (utf8Length(text) > MAX_PROJECTION_RESPONSE_BYTES) return { ok: false, error: invalidProjection() };
+  };
+  const init = { credentials: 'include', headers: { Accept: 'application/json' }, signal, cache: 'no-store' } as const;
+  const get = async (url: string) => {
+    try { return await fetcher(url, init); }
+    catch { return null; }
+  };
   try {
-    const document = parseStrictJson(text);
+    if (signal?.aborted) return unavailable();
+    const session = await get('/api/v5/auth');
+    if (signal?.aborted || !session) return unavailable();
+    if (session.status === 401) return unauthenticated();
+    if (session.status !== 200) return unavailable();
+    const info = await readJson(session, 2048) as { authenticated?: unknown; learning_scope_id?: unknown } | null;
+    if (signal?.aborted) return unavailable();
+    if (info?.authenticated === false) return unauthenticated();
+    if (info?.authenticated !== true) return { ok: false, error: invalidProjection() };
+    const scopeId = info.learning_scope_id;
+    if (scopeId === undefined) {
+      return (STAGE_B_DATASETS as readonly string[]).includes(dataset)
+        ? { ok: false, error: typedError(404, 'DATASET_NOT_ENABLED') }
+        : { ok: false, error: typedError(503, 'PUBLICATION_UNAVAILABLE') };
+    }
+    if (typeof scopeId !== 'string' || !scopeId) return { ok: false, error: invalidProjection() };
+    const response = await get(`/api/v5/learning/${dataset}${buildQuery(scopeId, params)}`);
+    if (signal?.aborted || !response) return unavailable();
+    if (response.status === 401) return unauthenticated();
+    const document = await readJson(response, response.status === 200 ? MAX_PROJECTION_RESPONSE_BYTES : 2048);
+    if (signal?.aborted) return unavailable();
     if (response.status === 200) {
       const recordType = dataset === 'records' ? params.record_type : undefined;
       const envelope = await validateEnvelope(dataset, document, { recordType, maxAgeMs: MAX_VERIFICATION_AGE_MS });
-      bindScope(envelope as unknown as { scope: Scope | null; projection_revision: Hash });
+      if (signal?.aborted) return unavailable();
+      const received = envelope as unknown as ProjectionEnvelope<unknown>;
+      if (received.scope !== null && received.scope.scope_id !== scopeId) return { ok: false, error: invalidProjection() };
+      if (received.status === 'UNAVAILABLE') bindScope({ ...received, snapshot_id: null });
+      else if (!freshness.isStale(dataset, received.snapshot_id as string, received.verified_at_ms as number, realClock.now())) bindScope(received);
       return { ok: true, envelope: envelope as never };
     }
     const body = validateErrorBody(response.status, document);
     return { ok: false, error: { status: response.status, code: body.code as ProjectionErrorCode, retryable: body.retryable, snapshot_id: body.snapshot_id, unauthenticated: false } };
   } catch (error) {
+    if (signal?.aborted || error instanceof TypeError || error instanceof DOMException) return unavailable();
     if (!(error instanceof ContractViolation)) throw error;
     return { ok: false, error: invalidProjection() };
   }
 }
 
 /**
- * One authenticated GET of `/api/v5/learning/<dataset>`. Resolves to a fully validated envelope or rejects
+ * Reads the configured scope, then one authenticated GET of `/api/v5/learning/<dataset>`. Resolves to a fully validated envelope or rejects
  * with a `ProjectionReadError`. A cancelled read rejects with an `AbortError`.
  */
 export async function readProjection<D extends ProjectionDataset>(
@@ -490,7 +541,7 @@ function useStore(dataset: ProjectionDataset, params: ProjectionParams, options:
   const pollMs = clampPollMs(options?.pollMs);
   const { record_type: recordType, root_id: rootId, limit } = params; // the cursor is owned by the store
   const [store] = useState(() => new ProjectionStore({
-    dataset, params: { record_type: recordType, root_id: rootId, limit }, read: storeRead, clock: realClock, maxAgeMs: MAX_VERIFICATION_AGE_MS, pollMs,
+    dataset, params: { record_type: recordType, root_id: rootId, limit }, read: storeRead, clock: realClock, maxAgeMs: MAX_VERIFICATION_AGE_MS, pollMs, freshness,
   }));
   useEffect(() => {
     if (!enabled) return undefined;

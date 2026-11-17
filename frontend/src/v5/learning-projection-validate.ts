@@ -207,9 +207,9 @@ function check(schema: Schema, value: unknown, path: string): string | null {
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     const object = value as Record<string, unknown>;
     const properties = (s.properties ?? {}) as Record<string, Schema>;
-    for (const key of (s.required ?? []) as string[]) if (!(key in object)) return `${path}: missing ${key}`;
+    for (const key of (s.required ?? []) as string[]) if (!Object.hasOwn(object, key)) return `${path}: missing ${key}`;
     for (const key of Object.keys(object)) {
-      if (key in properties) { const problem = check(properties[key], object[key], `${path}/${key}`); if (problem) return problem; }
+      if (Object.hasOwn(properties, key)) { const problem = check(properties[key], object[key], `${path}/${key}`); if (problem) return problem; }
       else if (s.additionalProperties === false) return `${path}: unknown key ${key}`;
     }
   }
@@ -345,6 +345,13 @@ function hasGap(envelope: Json): boolean {
   return false;
 }
 
+function compareUtf8(left: Uint8Array, right: Uint8Array): number {
+  for (let at = 0; at < Math.min(left.length, right.length); at += 1) {
+    if (left[at] !== right[at]) return left[at] - right[at];
+  }
+  return left.length - right.length;
+}
+
 /** Validates one 200 body (already strictly parsed). Resolves to the typed document or throws ContractViolation. */
 export async function validateEnvelope(dataset: string, document: unknown, context: EnvelopeContext): Promise<Json> {
   if (!['manifest', 'lessons', 'records', 'jobs'].includes(dataset)) throw new ContractViolation('dataset has no Stage-A success schema');
@@ -358,6 +365,16 @@ export async function validateEnvelope(dataset: string, document: unknown, conte
     if (envelope.projection_revision !== expected.projectionRevision) throw new ContractViolation('projection revision mismatch');
     if (scope !== null && (scope.scope_id !== expected.scopeId || scope.scope_sha256 !== expected.scopeSha256)) throw new ContractViolation('scope mismatch');
   }
+  const pairs = (scope?.family_lane_pairs ?? []) as { family_id: string; lane: string }[];
+  for (let index = 1; index < pairs.length; index += 1) {
+    const left = pairs[index - 1];
+    const right = pairs[index];
+    const familyOrder = compareUtf8(encoder.encode(left.family_id), encoder.encode(right.family_id));
+    if ((familyOrder || compareUtf8(encoder.encode(left.lane), encoder.encode(right.lane))) >= 0) {
+      throw new ContractViolation('scope family/lane pairs are not sorted');
+    }
+  }
+  if ((envelope.issues as Json[]).some(issue => cLen(issue) > 256)) throw new ContractViolation('envelope issue too large');
   const status = envelope.status as string;
   const items = envelope.items as Json[];
   const coverage = envelope.coverage as Json;
@@ -396,18 +413,28 @@ export async function validateEnvelope(dataset: string, document: unknown, conte
       if (status === 'UNAVAILABLE' && (item.availability !== 'UNAVAILABLE' || item.total_items !== null)) throw new ContractViolation(`${label}: unavailable manifest advertises data`);
       continue;
     }
+    const rowScope = item.row_scope as Json;
+    if (scope === null || !pairs.some(pair => pair.family_id === rowScope.family_id && pair.lane === rowScope.lane)) {
+      throw new ContractViolation(`${label}: row family/lane is outside the envelope scope`);
+    }
+    const program = scope.program_id;
+    if ((rowScope.program_id !== null && rowScope.program_id !== program)
+      || (rowScope.membership_basis === 'LESSON_PROGRAM' && rowScope.program_id !== program)
+      || (Object.hasOwn(item, 'program_id') && item.program_id !== program)) {
+      throw new ContractViolation(`${label}: row program is outside the envelope scope`);
+    }
+    const window = (rowScope.recorded_scope as Json | null)?.window;
+    if (window && typeof window === 'object') {
+      const { start, end_exclusive: end } = window as { start: number; end_exclusive: number };
+      if (start >= end) throw new ContractViolation(`${label}: recorded window is not ordered`);
+    }
     await checkRow(item, label);
     checkDatasetRow(item, dataset, context.recordType, label);
     ids.push(item.record_id as string);
   }
   const bytes = ids.map(id => encoder.encode(id));
   for (let index = 1; index < bytes.length; index += 1) {
-    const left = bytes[index - 1];
-    const right = bytes[index];
-    let order = 0;
-    for (let at = 0; at < Math.min(left.length, right.length) && order === 0; at += 1) order = left[at] - right[at];
-    if (order === 0) order = left.length - right.length;
-    if (order >= 0) throw new ContractViolation('items are not strictly ascending by record_id');
+    if (compareUtf8(bytes[index - 1], bytes[index]) >= 0) throw new ContractViolation('items are not strictly ascending by record_id');
   }
   if (status === 'UNAVAILABLE' && items.length && dataset !== 'manifest') throw new ContractViolation('unavailable envelope carries rows');
   if (status === 'BOUND' && (coverage.unresolved_membership_items !== 0 || coverage.omitted_items !== 0 || hasGap(envelope))) throw new ContractViolation('BOUND envelope hides a gap');

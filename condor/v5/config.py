@@ -8,7 +8,7 @@ import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit
 
 from .paper import status_file_name_valid
 from .learning_projection import LearningProjectionConfig
@@ -257,8 +257,11 @@ def _learning_projection_config(values) -> LearningProjectionConfig | None:
     for name in ("V5_LEARNING_SCOPE_SHA256", "V5_LEARNING_PROJECTION_REVISION"):
         if not re.fullmatch(r"[0-9a-f]{64}", given[name]):
             raise ConfigurationError(f"{name} must be 64 lowercase hex characters")
+    owner_url = given["V5_LEARNING_OWNER_URL"]
+    if urlsplit(owner_url).path not in {"", "/"} or "?" in owner_url or "#" in owner_url:
+        raise ConfigurationError("V5_LEARNING_OWNER_URL must not include a path, query or fragment")
     return LearningProjectionConfig(
-        owner_url=_validate_base_url(given["V5_LEARNING_OWNER_URL"], "V5_LEARNING_OWNER_URL"),
+        owner_url=_validate_base_url(owner_url, "V5_LEARNING_OWNER_URL"),
         scope_id=scope_id,
         scope_sha256=given["V5_LEARNING_SCOPE_SHA256"],
         projection_revision=given["V5_LEARNING_PROJECTION_REVISION"],

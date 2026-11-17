@@ -18,6 +18,7 @@ from condor.v5.learning import FixtureLearningAPI
 from tests.test_v5_learning_projection_contract import (
     CONTRACT,
     EXPECTED,
+    FIXTURE_MEMBERSHIP,
     HASHES,
     SCOPE_ID,
     SCOPE_SHA,
@@ -29,12 +30,14 @@ from tests.test_v5_learning_projection_contract import (
 from tests.test_v5_workspace_auth import FakeUpstream, login, settings
 
 NOW = 1794916801000
-CONFIG = lp.LearningProjectionConfig("http://127.0.0.1:1", SCOPE_ID, SCOPE_SHA, REVISION)
+CONFIG = lp.LearningProjectionConfig("http://127.0.0.1:1", SCOPE_ID, SCOPE_SHA, REVISION, FIXTURE_MEMBERSHIP)
+PINNED_SCOPE_ID = "v5-lfl-okx-spot-dca"
+PINNED_SCOPE_SHA = "a3a34ee765c75616da6f606a66156cdbf0e8736c91052966607fa6b59936bd18"
 ENV = {
     "V5_LEARNING_SOURCE": "research_os_v1",
     "V5_LEARNING_OWNER_URL": "http://172.18.0.1:8875/",
-    "V5_LEARNING_SCOPE_ID": SCOPE_ID,
-    "V5_LEARNING_SCOPE_SHA256": SCOPE_SHA,
+    "V5_LEARNING_SCOPE_ID": PINNED_SCOPE_ID,
+    "V5_LEARNING_SCOPE_SHA256": PINNED_SCOPE_SHA,
     "V5_LEARNING_PROJECTION_REVISION": REVISION,
 }
 GOLDEN_BYTES = {name: (CONTRACT / f"examples/{name}.json").read_bytes() for name in (
@@ -146,7 +149,29 @@ def test_unset_configuration_is_disabled_and_full_configuration_is_exact():
 
     assert parse({}) is None
     config = parse(ENV)
-    assert config == lp.LearningProjectionConfig("http://172.18.0.1:8875", SCOPE_ID, SCOPE_SHA, REVISION)
+    assert (config.owner_url, config.scope_id, config.scope_sha256, config.projection_revision) == (
+        "http://172.18.0.1:8875", PINNED_SCOPE_ID, PINNED_SCOPE_SHA, REVISION,
+    )
+    assert config.membership.program_id == "okx_spot_dca"
+    assert config.membership.family_lane_pairs == (
+        ("ok_rsi_challenger_20260903", "SPOT"), ("ok_rsi_owner_replay_baseline", "SPOT"),
+        ("ok_rsi_trend_aware_dca", "SPOT"), ("okx_spot_dca", "SPOT"),
+    )
+
+
+@pytest.mark.parametrize("digest", [
+    "a3a34ee765c75616da6f606a66156cdbf0e8736c91052966607fa6b59936bd18",
+    "1f65d67fc990262e049e808961b1a23068f26692b9171112eb441be0157e7c16",
+])
+def test_startup_accepts_only_the_canonical_pins_with_matching_scope_id(digest):
+    from condor.v5.config import _learning_projection_config as parse
+
+    env = {**ENV, "V5_LEARNING_SCOPE_ID": "v5-lfl-okx-spot-dca", "V5_LEARNING_SCOPE_SHA256": digest}
+    assert parse(env).scope_sha256 == digest
+    with pytest.raises(ConfigurationError):
+        parse({**env, "V5_LEARNING_SCOPE_SHA256": "0" * 64})
+    with pytest.raises(ConfigurationError):
+        parse({**env, "V5_LEARNING_SCOPE_ID": "wrong-scope"})
 
 
 @pytest.mark.parametrize("missing", sorted(ENV))
@@ -192,7 +217,7 @@ def test_settings_from_env_carries_the_projection_block(tmp_path, monkeypatch):
         "V5_ADVISORY_REQUEST_TOKEN_FILE": str(base.advisor_request_token_file),
     }
     assert Settings.from_env(env).learning_projection is None
-    assert Settings.from_env({**env, **ENV}).learning_projection.scope_id == SCOPE_ID
+    assert Settings.from_env({**env, **ENV}).learning_projection.scope_id == PINNED_SCOPE_ID
     with pytest.raises(ConfigurationError):
         Settings.from_env({**env, "V5_LEARNING_SCOPE_ID": SCOPE_ID})
 
@@ -508,6 +533,144 @@ def read(source, dataset="records", query="record_type=node"):
     return asyncio.run(source.read(dataset, f"{query + '&' if query else ''}scope_id={SCOPE_ID}"))
 
 
+def generation(document, publication, offset=0):
+    document["publication_sha256"] = publication * 64
+    document["verified_at_ms"] += offset
+    document["served_at_ms"] += offset
+    document["snapshot_id"] = lp.sha256_hex(lp.canonical({
+        key: document["scope"][key] if key == "scope_sha256" else document[key]
+        for key in ("schema", "projection_revision", "scope_sha256", "publication_sha256",
+                    "database_sha256", "source_revision", "source_snapshot", "event_signature")
+    }))
+    return rehash(document)
+
+
+def scripted_source(clock, *answers):
+    pending = iter(answers)
+
+    class Owner:
+        async def get(self, dataset, query):
+            answer = next(pending)
+            if isinstance(answer, lp.OwnerResponse):
+                return answer
+            return lp.OwnerResponse(200, json.dumps(answer).encode(), None)
+
+    wall_time = max(answer["served_at_ms"] for answer in answers if isinstance(answer, dict))
+    return lp.ResearchOwnerLearningSource(CONFIG, client=Owner(), clock=lambda: wall_time, monotonic=clock)
+
+
+def test_retired_generation_cannot_rebind_through_an_unseen_dataset():
+    first = generation(load("examples/records-nodes.json"), "1")
+    next_generation = generation(load("examples/records-nodes.json"), "2", 39_000)
+    retired = generation(load("examples/jobs.json"), "1", 40_000)
+    source = scripted_source(Clock(), first, next_generation, retired)
+    assert read(source).status == read(source).status == 200
+    replay = read(source, "jobs", "")
+    assert replay.status == 409 and json.loads(replay.body)["code"] == "SNAPSHOT_CHANGED"
+    assert source.state()["records"] == "BOUND" and source.state()["jobs"] == "UNAVAILABLE"
+
+
+def test_older_generation_cannot_replace_newer_or_clear_other_datasets():
+    first = generation(load("examples/records-nodes.json"), "1", 1_000)
+    lessons = generation(load("examples/lessons.json"), "1", 1_000)
+    current = generation(load("examples/records-nodes.json"), "2", 40_000)
+    current_lessons = generation(load("examples/lessons.json"), "2", 40_000)
+    late = generation(load("examples/records-nodes.json"), "1", 20_000)
+    source = scripted_source(Clock(), first, lessons, current, current_lessons, late)
+    for dataset, query in (("records", "record_type=node"), ("lessons", "")) * 2:
+        assert read(source, dataset, query).status == 200
+    expiry = {dataset: source.receipt_expiry(dataset) for dataset in ("records", "lessons")}
+    live = source.state()
+    assert live["records"] == current["status"] and live["lessons"] == current_lessons["status"]
+    assert read(source).status == 409
+    assert {dataset: source.receipt_expiry(dataset) for dataset in expiry} == expiry
+    assert source.state() == live
+
+
+@pytest.mark.parametrize("status", [401, 409])
+def test_cache_clear_preserves_original_replay_deadline(status):
+    first, _ = aged(89)
+    denied = lp.OwnerResponse(status, json.dumps(typed("SNAPSHOT_CHANGED")).encode(), None)
+    clock = Clock()
+    source = scripted_source(clock, first, *([denied] if status == 409 else []), first, first)
+    assert read(source).status == 200
+    if status == 401:
+        source.invalidate()  # Auth boundary clears display receipts, not the ledger.
+    else:
+        assert read(source).status == 409
+    clock.now = 0.5
+    assert read(source).status == 200
+    assert source.receipt_expiry("records") == 1.0
+    clock.now = 1.001
+    if status == 401:
+        source.invalidate()
+    else:
+        assert source.state()["records"] == "UNAVAILABLE"
+    assert read(source).status == 503
+
+
+def test_route_relogin_cannot_extend_a_verification_deadline(tmp_path):
+    first, _ = aged(89)
+    clock = Clock()
+    source = scripted_source(clock, first, first, first)
+    app = create_app(settings=settings(tmp_path), upstream=FakeUpstream(), projection_source=source)
+    url = f"/api/v5/learning/records?scope_id={SCOPE_ID}&record_type=node"
+    with TestClient(app) as client:
+        login(client)
+        assert client.get(url).status_code == 200
+        client.cookies.clear()
+        assert client.get(url).status_code == 401
+        assert source.state()["records"] == "UNAVAILABLE"
+        clock.now = 0.5
+        login(client)
+        assert client.get(url).status_code == 200
+        assert source.receipt_expiry("records") == 1
+        client.cookies.clear()
+        assert client.get(url).status_code == 401
+        clock.now = 1.001
+        login(client)
+        result = client.get(url)
+        assert result.status_code == 503
+        assert result.json()["code"] == "VERIFICATION_UNAVAILABLE"
+        assert result.headers["X-V5-Projection-Freshness"] == "expired"
+
+
+def test_resealed_foreign_program_cannot_define_its_own_membership():
+    foreign = load("examples/lessons.json")
+    foreign["scope"]["program_id"] = "foreign-program"
+    for row in foreign["items"]:
+        row["program_id"] = row["row_scope"]["program_id"] = "foreign-program"
+    rehash(foreign)
+    assert lp.schema_errors("lessons", foreign) is None
+    result = read(scripted_source(Clock(), foreign), "lessons", "")
+    assert result.status == 502 and json.loads(result.body)["code"] == "INVALID_OWNER_PROJECTION"
+
+
+def test_retired_unavailable_response_cannot_remove_a_live_receipt():
+    first = generation(load("examples/records-nodes.json"), "1")
+    current = generation(load("examples/records-nodes.json"), "2", 1)
+    late = {**first, "status": "UNAVAILABLE", "items": [], "reason_codes": ["VERIFICATION_EXPIRED"]}
+    late["coverage"] = {**first["coverage"], "state": "UNAVAILABLE", "returned_items": 0}
+    rehash(late)
+    assert lp.schema_errors("records", late) is None
+    source = scripted_source(Clock(), first, current, late)
+    assert read(source).status == read(source).status == 200
+    assert read(source).status == 409
+    assert source.state()["records"] == "BOUND"
+
+
+def test_duplicate_content_length_is_typed_413_without_owner_call(tmp_path):
+    with RawOwner(lambda request: http(200, GOLDEN_BYTES["manifest"])) as owner:
+        client = client_for(tmp_path, owner)
+        try:
+            result = client.get(f"/api/v5/learning/manifest?scope_id={SCOPE_ID}",
+                                headers=[("Content-Length", "0"), ("Content-Length", "0")])
+            assert result.status_code == 413 and result.json() == typed("REQUEST_BODY_NOT_ALLOWED")
+            assert owner.requests == []
+        finally:
+            client.__exit__(None, None, None)
+
+
 def test_receipt_expires_90_seconds_after_the_owner_verification_not_after_the_poll():
     document, served = aged(89)  # verified 89 s before it was served
     body = json.dumps(document).encode()
@@ -572,7 +735,7 @@ def test_late_older_verification_is_ignored_without_clearing_any_receipts():
         expiry = source.receipt_expiry("records")
         clock.now = 5
         release.set()
-        assert (await late).status == 200
+        assert (await late).status == 503
         assert source.state()["records"] == source.state()["jobs"] == "BOUND"
         assert source.receipt_expiry("records") == expiry
 
@@ -606,22 +769,13 @@ def test_transport_failure_clears_every_receipt_and_a_typed_error_clears_its_dat
 
 def test_a_new_snapshot_drops_receipts_that_belonged_to_the_old_generation():
     clock = Clock()
-    jobs = json.loads(GOLDEN_BYTES["jobs"])
-    other = json.loads(GOLDEN_BYTES["records-nodes"])
-    other["publication_sha256"] = "9" * 64
-    other["snapshot_id"] = lp.sha256_hex(lp.canonical({
-        "schema": other["schema"], "projection_revision": other["projection_revision"], "scope_sha256": SCOPE_SHA,
-        "publication_sha256": other["publication_sha256"], "database_sha256": other["database_sha256"],
-        "source_revision": other["source_revision"], "source_snapshot": other["source_snapshot"],
-        "event_signature": other["event_signature"],
-    }))
-    rehash(other)
-    with RawOwner(lambda request: http(200, json.dumps(other).encode()) if "records" in request["target"] else http(200, json.dumps(jobs).encode())) as owner:
-        source = make_source(owner, clock)
-        read(source, "jobs", "")
-        assert source.state()["jobs"] == "BOUND"
-        read(source)
-        assert source.state() == {"manifest": "UNAVAILABLE", "lessons": "UNAVAILABLE", "records": "BOUND", "jobs": "UNAVAILABLE"}
+    jobs = load("examples/jobs.json")
+    other = generation(load("examples/records-nodes.json"), "9", 1)
+    source = scripted_source(clock, jobs, other)
+    assert read(source, "jobs", "").status == 200
+    assert source.state()["jobs"] == "BOUND"
+    assert read(source).status == 200
+    assert source.state() == {"manifest": "UNAVAILABLE", "lessons": "UNAVAILABLE", "records": "BOUND", "jobs": "UNAVAILABLE"}
 
 
 def test_replaying_the_89s_golden_at_91s_cannot_revive_an_expired_receipt():
@@ -640,21 +794,18 @@ def test_replaying_the_89s_golden_at_91s_cannot_revive_an_expired_receipt():
         assert json.loads(after_removal.body)["code"] == "VERIFICATION_UNAVAILABLE"
 
 
-def test_equal_verification_cannot_recreate_an_invalidated_receipt_but_a_newer_one_can():
-    first = load("examples/records-nodes.json")
-    newer = load("examples/records-nodes.json")
+def test_newer_verification_renews_an_expired_deadline():
+    first, _ = aged(89)
+    newer, _ = aged(89)
     newer["verified_at_ms"] += 1
     rehash(newer)
-    answers = iter([first, first, newer])
-    with RawOwner(lambda request: http(200, json.dumps(next(answers)).encode())) as owner:
-        source = make_source(owner, Clock())
-        assert read(source).status == 200
-        source.invalidate("records")
-        replay = read(source)
-        assert source.state()["records"] == "UNAVAILABLE"
-        assert replay.status == 503
-        assert read(source).status == 200
-        assert source.state()["records"] == "BOUND"
+    clock = Clock()
+    source = scripted_source(clock, first, newer)
+    assert read(source).status == 200
+    clock.now = 2
+    assert source.state()["records"] == "UNAVAILABLE"
+    assert read(source).status == 200
+    assert source.state()["records"] == "BOUND"
 
 
 def test_huge_owner_integer_is_typed_and_clears_every_receipt():
@@ -685,7 +836,12 @@ def test_authenticated_session_read_exposes_only_the_configured_scope(tmp_path):
             assert client.get("/api/v5/auth").json() == {"authenticated": False}
             login(client)
             response = client.get("/api/v5/auth")
-        assert response.json() == {"authenticated": True, "learning_scope_id": SCOPE_ID}
+        assert response.json() == {
+            "authenticated": True, "learning_scope_id": SCOPE_ID,
+            "learning_scope_membership": {
+                "program_id": "fixture-program", "family_lane_pairs": [{"family_id": "fixture-family", "lane": "SPOT"}],
+            },
+        }
         assert response.headers["Cache-Control"] == "no-store"
         assert not owner.requests
 

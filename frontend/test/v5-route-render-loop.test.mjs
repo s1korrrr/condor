@@ -7,6 +7,7 @@ import React from 'react';
 import * as Router from 'react-router-dom';
 import {Window} from 'happy-dom';
 import {clockMutation} from './helpers/paper-clock-mutants.mjs';
+import stageAScope from '../../condor/v5/schemas/learning_scopes/scope-okx-spot-dca.json' with { type: 'json' };
 
 const browser = new Window({url:'https://fixture.invalid/'});
 const phoneSheet = new browser.CSSStyleSheet();
@@ -152,7 +153,8 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const journalRoutes = new Set(['/bots', '/operations', '/v5/readiness']);
   const statusForRoute = () => journalRoutes.has(route) ? {...sections.status, state:'degraded', reason:'OWNER_JOURNAL_EXCEEDED', data:{...sections.status.data, journal_budget:{state:'exceeded',journal_evidence_held:true,native_execution_continues:true}}} : sections.status;
   const originalFetch = globalThis.fetch;
-  const auth = {authenticated:true,learning_scope_id:'fixture-v5-lfl'};
+  const {scope_id,program_id,family_lane_pairs} = stageAScope;
+  const auth = {authenticated:true,learning_scope_id:scope_id,learning_scope_membership:{program_id,family_lane_pairs}};
   const originalNow = Date.now;
   const originalError = console.error;
   let now = sections.status.read_at_ms;
@@ -289,7 +291,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         if (pathname === '/learning' || pathname === '/decision-lineage') {
           const expected = pathname === '/learning' ? ['lessons'] : ['records', 'jobs'];
           const reads = requests.slice(requestStart).map(request => new URL(request,'https://fixture.invalid'));
-          for (const dataset of expected) assert.ok(reads.some(url => url.pathname === `/api/v5/learning/${dataset}` && url.searchParams.get('scope_id') === 'fixture-v5-lfl'), `missing scoped ${dataset} read`);
+          for (const dataset of expected) assert.ok(reads.some(url => url.pathname === `/api/v5/learning/${dataset}` && url.searchParams.get('scope_id') === scope_id), `missing scoped ${dataset} read`);
         }
         if (pathname === '/agents/decisions') {
           assert.match(container.textContent,/Up to 5 reports per agent/,'timeline must disclose its bounded projected read');

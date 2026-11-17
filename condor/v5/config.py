@@ -11,7 +11,7 @@ from pathlib import Path
 from urllib.parse import urlparse, urlsplit
 
 from .paper import status_file_name_valid
-from .learning_projection import LearningProjectionConfig
+from .learning_projection import ContractViolation, LearningProjectionConfig, load_scope_membership
 
 MAX_STRATEGIES = 10000
 MAX_SOURCES = 10000
@@ -260,11 +260,17 @@ def _learning_projection_config(values) -> LearningProjectionConfig | None:
     owner_url = given["V5_LEARNING_OWNER_URL"]
     if urlsplit(owner_url).path not in {"", "/"} or "?" in owner_url or "#" in owner_url:
         raise ConfigurationError("V5_LEARNING_OWNER_URL must not include a path, query or fragment")
+    scope_sha256 = given["V5_LEARNING_SCOPE_SHA256"]
+    try:
+        membership = load_scope_membership(scope_id, scope_sha256)
+    except ContractViolation as error:
+        raise ConfigurationError(str(error)) from error
     return LearningProjectionConfig(
         owner_url=_validate_base_url(owner_url, "V5_LEARNING_OWNER_URL"),
         scope_id=scope_id,
-        scope_sha256=given["V5_LEARNING_SCOPE_SHA256"],
+        scope_sha256=scope_sha256,
         projection_revision=given["V5_LEARNING_PROJECTION_REVISION"],
+        membership=membership,
     )
 
 

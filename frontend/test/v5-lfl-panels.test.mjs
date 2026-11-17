@@ -7,6 +7,7 @@ import { fileURLToPath } from 'node:url';
 import ts from 'typescript';
 import React from 'react';
 import { renderToStaticMarkup } from 'react-dom/server';
+import stageAScope from '../../condor/v5/schemas/learning_scopes/scope-okx-spot-dca.json' with { type: 'json' };
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = resolve(here, '../src');
@@ -40,12 +41,21 @@ const viewFor = (envelope, state = 'ready', error = null) => ({ state, envelope,
 
 async function validateDerivedFixture(data, recordType) {
   const { canonicalJson, sha256Hex, validateEnvelope } = load('v5/learning-projection-validate.ts');
+  const { scope_id, program_id, family_lane_pairs } = stageAScope;
+  const scope_sha256 = await sha256Hex(canonicalJson(stageAScope));
+  assert.equal(scope_sha256, 'a3a34ee765c75616da6f606a66156cdbf0e8736c91052966607fa6b59936bd18');
+  data.scope = { scope_id, program_id, family_lane_pairs, scope_sha256 };
+  const { schema, projection_revision, publication_sha256, database_sha256, source_revision, source_snapshot, event_signature } = data;
+  data.snapshot_id = await sha256Hex(canonicalJson({ schema, projection_revision, scope_sha256, publication_sha256, database_sha256, source_revision, source_snapshot, event_signature }));
   const row = data.items[0];
+  Object.assign(row.row_scope, family_lane_pairs[0]);
+  if (row.row_scope.program_id !== null) row.row_scope.program_id = program_id;
+  if (Object.hasOwn(row, 'program_id')) row.program_id = program_id;
   const { row_sha256: _rowHash, ...rowBody } = row;
   row.row_sha256 = await sha256Hex(canonicalJson(rowBody));
   const { envelope_sha256: _envelopeHash, ...envelopeBody } = data;
   data.envelope_sha256 = await sha256Hex(canonicalJson(envelopeBody));
-  return validateEnvelope(data.dataset, data, { recordType, maxAgeMs: 90_000 });
+  return validateEnvelope(data.dataset, data, { recordType, maxAgeMs: 90_000, scopeId: scope_id, membership: { program_id, family_lane_pairs } });
 }
 
 test('owner unavailable envelopes retain reasons and issues in every panel section', () => {

@@ -18,7 +18,8 @@ WIRE = json.loads((CONTRACT / "wire-contract.json").read_text())
 SCOPE_ID = "fixture-v5-lfl"
 SCOPE_SHA = HASHES["scope_sha256"]["sha256"]
 REVISION = HASHES["vectors"][0]["sha256"]
-EXPECTED = lp.ExpectedBinding(SCOPE_ID, SCOPE_SHA, REVISION)
+FIXTURE_MEMBERSHIP = lp.ScopeMembership("fixture-program", (("fixture-family", "SPOT"),))
+EXPECTED = lp.ExpectedBinding(SCOPE_ID, SCOPE_SHA, REVISION, FIXTURE_MEMBERSHIP)
 BASE_NOW = 1794916889000
 
 
@@ -45,6 +46,21 @@ def request_for(path: str) -> lp.RequestShape:
 
 def validate(document, path="examples/records-nodes.json", now=BASE_NOW):
     return lp.validate_envelope(document, request=request_for(path), expected=EXPECTED, now_ms=now)
+
+
+def test_whole_row_byte_limit_accepts_8192_and_rejects_8193():
+    document = load("examples/records-nodes.json")
+    row = document["items"][0]
+    row["record_id"] += "x" * (8192 - len(lp.canonical(row)))
+    rehash(document)
+    assert len(lp.canonical(row)) == 8192
+    with pytest.raises(lp.ContractViolation, match="scalar region"):
+        lp._check_row(row, context="row")
+    row["record_id"] += "x"
+    rehash(document)
+    assert len(lp.canonical(row)) == 8193
+    with pytest.raises(lp.ContractViolation, match="row exceeds 8192 bytes"):
+        lp._check_row(row, context="row")
 
 
 @pytest.mark.parametrize("mutant", ["family", "program", "lesson-program", "pairs", "window", "issue"])

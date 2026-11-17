@@ -3,7 +3,7 @@
  *
  * One store = one dataset + one filter. It owns the opaque cursor stack, request cancellation, the monotonic
  * expiry anchored to the owner's `verified_at_ms`, polling, and the "clear, never retain" rules:
- *   - any failure, rejection or expiry clears the rows (no last-good view);
+ *   - a failure or expiry clears the rows; a ledger rejection never replaces a live page;
  *   - 409 SNAPSHOT_CHANGED clears the pages and waits for an explicit `first()`;
  *   - 401 clears everything and the store stays `unauthenticated`;
  *   - a poll that returns the same `verified_at_ms` cannot extend expiry.
@@ -14,7 +14,7 @@ import type {
 
 export type StoreRead = (
   dataset: ProjectionDataset, params: ProjectionParams, signal: AbortSignal,
-) => Promise<{ ok: true; envelope: ProjectionEnvelope<unknown> } | { ok: false; error: ProjectionError }>;
+) => Promise<{ ok: true; envelope: ProjectionEnvelope<unknown>; expiresAt?: number | null } | { ok: false; error: ProjectionError }>;
 
 export interface StoreClock {
   /** Monotonic milliseconds (performance.now). Never the wall clock, never a poll timestamp. */
@@ -51,36 +51,54 @@ const INITIAL: StoreSnapshot = {
   state: 'loading', envelope: null, error: null, pageIndex: 0, hasNext: false, hasPrevious: false, snapshotChanged: false, expiresAt: null,
 };
 
-interface Verification {
-  verifiedAt: number;
-  expiresAt: number;
+export type FreshnessMiss = 'retired' | 'ignored' | 'expired';
+type Admission = { expiresAt: number | null; changed: boolean; miss?: 'expired' } | { miss: 'ignored' | 'retired' };
+const MAX_RETIRED_SNAPSHOTS = 4096;
+
+export function freshnessError(miss: FreshnessMiss, snapshotId: string | null): ProjectionError {
+  return {
+    status: miss === 'retired' ? 409 : 503,
+    code: miss === 'retired' ? 'SNAPSHOT_CHANGED' : 'STALE_OR_EXPIRED',
+    retryable: miss !== 'retired', snapshot_id: snapshotId, unauthenticated: false, freshness: miss,
+  };
 }
 
 export class ProjectionFreshness {
-  private highWater = new Map<string, Verification>();
-  private active = new Map<ProjectionDataset, Verification>();
+  private globalMaxVerifiedAt = -1;
+  private currentSnapshot: string | null = null;
+  private retired = new Set<string>();
+  private deadlines = new Map<ProjectionDataset, number>();
 
-  isStale(dataset: ProjectionDataset, snapshot: string, verifiedAt: number, now: number) {
-    const receipt = this.highWater.get(`${dataset}:${snapshot}`);
-    return receipt !== undefined && (verifiedAt < receipt.verifiedAt || (
-      verifiedAt === receipt.verifiedAt && (this.active.get(dataset) !== receipt || now >= receipt.expiresAt)
-    ));
-  }
-
-  observe(dataset: ProjectionDataset, snapshot: string, verifiedAt: number, expiresAt: number) {
-    const key = `${dataset}:${snapshot}`;
-    let receipt = this.highWater.get(key);
-    if (!receipt || verifiedAt > receipt.verifiedAt) {
-      receipt = { verifiedAt, expiresAt };
-      this.highWater.set(key, receipt);
-      this.active.set(dataset, receipt);
+  observe(dataset: ProjectionDataset, envelope: ProjectionEnvelope<unknown>, now: number, maxAgeMs: number): Admission {
+    const { snapshot_id: snapshot, verified_at_ms: verifiedAt } = envelope;
+    if (snapshot !== null && this.retired.has(snapshot)) return { miss: 'retired' };
+    const current = this.currentSnapshot;
+    const maximum = this.globalMaxVerifiedAt;
+    if (verifiedAt !== null && (verifiedAt < maximum || (verifiedAt === maximum && snapshot !== current))) {
+      return { miss: 'ignored' };
     }
-    return { receipt, active: this.active.get(dataset) === receipt };
-  }
-
-  invalidate(dataset?: ProjectionDataset) {
-    if (dataset === undefined) this.active.clear();
-    else this.active.delete(dataset);
+    if (envelope.status === 'UNAVAILABLE') {
+      const deadline = verifiedAt === maximum ? this.deadlines.get(dataset) : undefined;
+      return deadline !== undefined && now >= deadline ? { expiresAt: deadline, changed: false, miss: 'expired' }
+        : { expiresAt: null, changed: false };
+    }
+    if (snapshot === null || verifiedAt === null) return { miss: 'ignored' };
+    const changed = current !== null && current !== snapshot;
+    if (verifiedAt > maximum) {
+      if (changed) {
+        if (this.retired.size >= MAX_RETIRED_SNAPSHOTS) return { miss: 'ignored' };
+        this.retired.add(current);
+      }
+      this.globalMaxVerifiedAt = verifiedAt;
+      this.currentSnapshot = snapshot;
+      this.deadlines.clear();
+    }
+    let expiresAt = this.deadlines.get(dataset);
+    if (expiresAt === undefined) {
+      expiresAt = now + (maxAgeMs - (envelope.served_at_ms - verifiedAt));
+      this.deadlines.set(dataset, expiresAt);
+    }
+    return now >= expiresAt ? { expiresAt, changed, miss: 'expired' } : { expiresAt, changed };
   }
 }
 
@@ -135,7 +153,6 @@ export class ProjectionStore {
 
   /** 401 anywhere: drop data and stop, until the caller explicitly refreshes after signing in. */
   clearForAuth() {
-    this.freshness.invalidate();
     this.abort();
     this.clearTimers();
     this.stack = [null];
@@ -206,45 +223,42 @@ export class ProjectionStore {
     this.controller = null;
     const dataset = this.options.dataset;
     if (!result.ok) {
+      if (result.error.freshness) return this.freshnessMiss(result.error, pageIndex);
       this.clearExpiry();
-      this.freshness.invalidate(dataset);
       return this.fail(result.error, pageIndex);
     }
     const envelope = result.envelope;
-    if (envelope.status === 'UNAVAILABLE') {
+    const clock = this.options.clock;
+    const now = clock.now();
+    let expiresAt = result.expiresAt;
+    if (expiresAt === undefined) {
+      const admission = this.freshness.observe(dataset, envelope, now, this.options.maxAgeMs);
+      if (admission.miss) return this.freshnessMiss(freshnessError(admission.miss, envelope.snapshot_id), pageIndex);
+      expiresAt = admission.expiresAt;
+    }
+    if (expiresAt === null) {
       this.clearExpiry();
-      this.freshness.invalidate(dataset);
       this.set({ ...this.cleared(null, { pageIndex }), envelope });
       return this.schedulePoll();
     }
-    const clock = this.options.clock;
-    const verifiedAt = envelope.verified_at_ms as number;
-    const age = envelope.served_at_ms - verifiedAt;
-    const now = clock.now();
-    const snapshotId = envelope.snapshot_id as string;
-    const displayed = this.snapshot.envelope;
-    if (displayed?.snapshot_id !== snapshotId && this.snapshot.state === 'ready' && this.snapshot.expiresAt !== null
-      && this.snapshot.expiresAt > now && this.freshness.isStale(dataset, snapshotId, verifiedAt, now)) {
-      return this.schedulePoll();
-    }
-    const { receipt, active } = this.freshness.observe(dataset, snapshotId, verifiedAt, now + this.options.maxAgeMs - age);
-    const { expiresAt } = receipt;
-    if (this.snapshot.state === 'ready' && this.snapshot.expiresAt !== null && this.snapshot.expiresAt > clock.now()
-      && this.snapshot.envelope?.snapshot_id === envelope.snapshot_id && verifiedAt <= (this.snapshot.envelope.verified_at_ms as number)
-      && active) return this.schedulePoll();
+    if (expiresAt <= now) return this.freshnessMiss(freshnessError('expired', envelope.snapshot_id), pageIndex);
     this.clearExpiry();
-    if (expiresAt <= clock.now()) {
-      this.set({ ...INITIAL, state: 'expired', pageIndex, hasPrevious: pageIndex > 0 });
-      return this.schedulePoll();
-    }
-    if (!active || verifiedAt < receipt.verifiedAt) {
-      this.set(this.cleared(null, { pageIndex }));
-      return this.schedulePoll();
-    }
     this.set({
       state: 'ready', envelope, error: null, pageIndex, hasNext: envelope.page.next_cursor !== null, hasPrevious: pageIndex > 0, snapshotChanged: false, expiresAt,
     });
     this.expiryTimer = clock.setTimeout(() => this.expire(), Math.max(0, expiresAt - clock.now()));
+    this.schedulePoll();
+  }
+
+  private freshnessMiss(error: ProjectionError, pageIndex: number) {
+    if (this.snapshot.expiresAt === null || this.snapshot.expiresAt <= this.options.clock.now()) {
+      this.clearExpiry();
+      if (error.freshness === 'expired' || this.snapshot.state === 'expired') {
+        this.set(this.cleared(error, { state: 'expired', pageIndex }));
+      } else {
+        this.set(this.cleared(error, { pageIndex }));
+      }
+    }
     this.schedulePoll();
   }
 

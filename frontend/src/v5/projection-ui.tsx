@@ -83,6 +83,7 @@ const ERROR_TEXT: Record<string, string> = {
   SNAPSHOT_CHANGED: 'The owner published a newer snapshot. Earlier pages were cleared; start from the first page.',
   WARMING: 'The owner is verifying a new publication. Retrying shortly.',
   VERIFICATION_UNAVAILABLE: 'The owner could not complete its freshness check.',
+  STALE_OR_EXPIRED: 'The response did not carry a current verification.',
   PUBLICATION_UNAVAILABLE: 'No current owner publication is available (or the learning source is not configured).',
   PROJECTION_BUSY: 'The owner read lane is busy. Retrying shortly.',
   PROJECTION_DEADLINE: 'The owner read took too long.',
@@ -111,15 +112,15 @@ export function ProjectionStatusBanner({ state, envelope, error, onFirst, childr
   if (state === 'unauthenticated') return <div className="v5-panel mb-4" role="alert"><strong>Signed out</strong><p>{ERROR_TEXT.authentication_required}</p></div>;
   if (state === 'expired') return <div className="v5-panel mb-4" role="alert">
     <strong>Expired — UNAVAILABLE</strong>
-    <p>The owner's last verification is older than 90 seconds. Nothing is shown until a newer verified response arrives.</p>
+    <p>The owner's last verification reached its 90-second limit. Nothing is shown until a newer verified response arrives.</p>
   </div>;
   if (state === 'unavailable' || !envelope) {
     const code = error?.code ?? 'UPSTREAM_UNAVAILABLE';
     return <div className="v5-panel mb-4" role="alert">
       <strong>UNAVAILABLE{error ? ` · ${code}` : ''}</strong>
-      <p>{ERROR_TEXT[code] ?? 'The owner projection is unavailable.'}</p>
+      <p>{error?.freshness === 'retired' ? 'The response belongs to a retired snapshot.' : (ERROR_TEXT[code] ?? 'The owner projection is unavailable.')}</p>
       {envelope && envelope.reason_codes.length > 0 && <p className="text-xs">{envelope.reason_codes.join(', ')}</p>}
-      {error?.code === 'SNAPSHOT_CHANGED' && onFirst && <button type="button" onClick={onFirst}>First page</button>}
+      {error?.code === 'SNAPSHOT_CHANGED' && !error.freshness && onFirst && <button type="button" onClick={onFirst}>First page</button>}
       {children}
     </div>;
   }

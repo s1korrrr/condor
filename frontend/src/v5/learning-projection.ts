@@ -9,17 +9,17 @@
  * Rules the implementation enforces for every consumer:
  * - a response is either one fully validated envelope or one typed error;
  *   a single bad field rejects the whole envelope (no partial rendering);
- * - there is no fixture fallback and no retained last-good view: an expired,
- *   rejected or failed read clears what was displayed;
+ * - there is no fixture fallback: failures and expiry clear affected pages,
+ *   but a ledger rejection never replaces a still-live page;
  * - cursors are opaque tokens: they are echoed unchanged, never decoded;
  * - polls never extend freshness: expiry is anchored to the owner's
  *   `verified_at_ms`, not to the time a poll arrived.
  */
 import { useEffect, useState, useSyncExternalStore } from 'react';
 import {
-  ContractViolation, parseStrictJson, validateEnvelope, validateErrorBody,
+  ContractViolation, parseStrictJson, readScopeMembership, validateEnvelope, validateErrorBody,
 } from './learning-projection-validate';
-import { ProjectionFreshness, ProjectionStore, type StoreClock, type StoreRead } from './learning-projection-store';
+import { freshnessError, ProjectionFreshness, ProjectionStore, type FreshnessMiss, type StoreClock, type StoreRead } from './learning-projection-store';
 
 /** Stage-A datasets that Condor serves with a success schema. */
 export const STAGE_A_DATASETS = ['manifest', 'lessons', 'records', 'jobs'] as const;
@@ -289,16 +289,17 @@ export interface ProjectionParams {
 }
 
 /**
- * A typed projection failure. `status` is the HTTP status (0 when Condor could not
+ * A typed projection failure. `status` is the HTTP status or its local equivalent (0 when Condor could not
  * be reached). 401 is the existing Condor auth wrapper: `code === 'authentication_required'`
  * and `unauthenticated === true`; it clears every projection cache.
  */
 export interface ProjectionError {
   status: number;
-  code: ProjectionErrorCode | typeof AUTHENTICATION_REQUIRED;
+  code: ProjectionErrorCode | typeof AUTHENTICATION_REQUIRED | 'STALE_OR_EXPIRED';
   retryable: boolean;
   snapshot_id: Hash | null;
   unauthenticated: boolean;
+  freshness?: FreshnessMiss;
 }
 
 // ---------------------------------------------------------------------------
@@ -382,7 +383,6 @@ export function formatUtc(value: number | null | undefined): string | null {
 interface ClearableStore { clearForAuth: () => void; clearForScopeChange: () => void }
 const stores = new Set<ClearableStore>();
 const freshness = new ProjectionFreshness();
-let binding: { scope: string; snapshot: Hash | null } | null = null;
 
 /** Registers a store for 401 and scope-change clearing. Returns the unregister function. (Used by the hooks.) */
 export function registerProjectionStore(store: ClearableStore): () => void {
@@ -392,22 +392,7 @@ export function registerProjectionStore(store: ClearableStore): () => void {
 
 /** Drop every cached projection page and stop all reads. Done automatically on any HTTP 401. */
 export function clearProjectionCaches(): void {
-  binding = null;
-  freshness.invalidate();
   for (const store of [...stores]) store.clearForAuth();
-}
-
-function bindScope(envelope: { scope: Scope | null; projection_revision: Hash; snapshot_id: Hash | null }): void {
-  if (envelope.scope === null) return;
-  const scope = JSON.stringify([envelope.scope.scope_id, envelope.scope.scope_sha256, envelope.projection_revision]);
-  const previousSnapshot = binding?.scope === scope ? binding.snapshot : null;
-  const snapshot = envelope.snapshot_id ?? previousSnapshot;
-  const changed = binding !== null && (binding.scope !== scope || (previousSnapshot !== null && snapshot !== previousSnapshot));
-  binding = { scope, snapshot };
-  if (changed) {
-    freshness.invalidate();
-    for (const store of [...stores]) store.clearForScopeChange();
-  }
 }
 
 // --- one validated read -----------------------------------------------------------------------------------
@@ -447,7 +432,7 @@ async function readJson(response: Response, limit: number): Promise<unknown> {
 }
 
 export type ReadResult<D extends ProjectionDataset> =
-  | { ok: true; envelope: ProjectionEnvelope<D extends keyof DatasetRows ? DatasetRows[D] : never> }
+  | { ok: true; envelope: ProjectionEnvelope<D extends keyof DatasetRows ? DatasetRows[D] : never>; expiresAt: number | null }
   | { ok: false; error: ProjectionError };
 
 /** Non-throwing form used by the hooks. Aborted reads resolve `{ok:false}` with status 0; callers drop them. */
@@ -470,7 +455,7 @@ export async function readProjectionResult<D extends ProjectionDataset>(
     if (signal?.aborted || !session) return unavailable();
     if (session.status === 401) return unauthenticated();
     if (session.status !== 200) return unavailable();
-    const info = await readJson(session, 2048) as { authenticated?: unknown; learning_scope_id?: unknown } | null;
+    const info = await readJson(session, 2048) as { authenticated?: unknown; learning_scope_id?: unknown; learning_scope_membership?: unknown } | null;
     if (signal?.aborted) return unavailable();
     if (info?.authenticated === false) return unauthenticated();
     if (info?.authenticated !== true) return { ok: false, error: invalidProjection() };
@@ -481,6 +466,7 @@ export async function readProjectionResult<D extends ProjectionDataset>(
         : { ok: false, error: typedError(503, 'PUBLICATION_UNAVAILABLE') };
     }
     if (typeof scopeId !== 'string' || !scopeId) return { ok: false, error: invalidProjection() };
+    const membership = readScopeMembership(info.learning_scope_membership);
     const response = await get(`/api/v5/learning/${dataset}${buildQuery(scopeId, params)}`);
     if (signal?.aborted || !response) return unavailable();
     if (response.status === 401) return unauthenticated();
@@ -488,15 +474,22 @@ export async function readProjectionResult<D extends ProjectionDataset>(
     if (signal?.aborted) return unavailable();
     if (response.status === 200) {
       const recordType = dataset === 'records' ? params.record_type : undefined;
-      const envelope = await validateEnvelope(dataset, document, { recordType, maxAgeMs: MAX_VERIFICATION_AGE_MS });
+      const envelope = await validateEnvelope(dataset, document, { recordType, maxAgeMs: MAX_VERIFICATION_AGE_MS, scopeId, membership });
       if (signal?.aborted) return unavailable();
       const received = envelope as unknown as ProjectionEnvelope<unknown>;
-      if (received.scope !== null && received.scope.scope_id !== scopeId) return { ok: false, error: invalidProjection() };
-      if (received.status === 'UNAVAILABLE') bindScope({ ...received, snapshot_id: null });
-      else if (!freshness.isStale(dataset, received.snapshot_id as string, received.verified_at_ms as number, realClock.now())) bindScope(received);
-      return { ok: true, envelope: envelope as never };
+      const admission = freshness.observe(dataset, received, realClock.now(), MAX_VERIFICATION_AGE_MS);
+      if ('changed' in admission && admission.changed) {
+        for (const store of [...stores]) store.clearForScopeChange();
+      }
+      if (admission.miss) return { ok: false, error: freshnessError(admission.miss, received.snapshot_id) };
+      return { ok: true, envelope: envelope as never, expiresAt: admission.expiresAt };
     }
     const body = validateErrorBody(response.status, document);
+    const miss = response.headers.get('X-V5-Projection-Freshness');
+    if ((miss === 'retired' && body.code === 'SNAPSHOT_CHANGED' && body.snapshot_id !== null)
+      || ((miss === 'ignored' || miss === 'expired') && body.code === 'VERIFICATION_UNAVAILABLE')) {
+      return { ok: false, error: freshnessError(miss, body.snapshot_id) };
+    }
     return { ok: false, error: { status: response.status, code: body.code as ProjectionErrorCode, retryable: body.retryable, snapshot_id: body.snapshot_id, unauthenticated: false } };
   } catch (error) {
     if (signal?.aborted || error instanceof TypeError || error instanceof DOMException) return unavailable();
@@ -526,10 +519,7 @@ const realClock: StoreClock = {
   clearTimeout: handle => globalThis.clearTimeout(handle as ReturnType<typeof setTimeout>),
 };
 
-const storeRead: StoreRead = async (dataset, params, signal) => {
-  const result = await readProjectionResult(dataset, params, signal);
-  return result.ok ? { ok: true, envelope: result.envelope as ProjectionEnvelope<unknown> } : result;
-};
+const storeRead: StoreRead = readProjectionResult;
 
 export function clampPollMs(pollMs: number | undefined): number {
   if (pollMs === undefined) return MIN_POLL_MS;

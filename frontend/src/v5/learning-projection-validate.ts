@@ -5,7 +5,7 @@
  * (a small Draft 2020-12 subset interpreter, run on the generated copy of the frozen files), and the
  * appendix's relational invariants. One violation rejects the whole envelope.
  */
-import { PROJECTION_SCHEMAS } from './learning-projection-schemas';
+import { PROJECTION_SCHEMAS, STAGE_B_REVISION, STAGE_B_ROW_REGIONS } from './learning-projection-schemas';
 
 export class ContractViolation extends Error {
   constructor(message: string) { super(message); this.name = 'ContractViolation'; }
@@ -13,6 +13,7 @@ export class ContractViolation extends Error {
 
 const SAFE_INT_MAX = 9_007_199_254_740_991;
 const SCHEMA_PREFIX = 'urn:rsibot:v5-lfl:stage-a:r2:';
+const B_SCHEMA_PREFIX = 'urn:rsibot:v5-lfl:stage-b:v2:';
 const encoder = new TextEncoder();
 export const utf8Length = (text: string) => encoder.encode(text).length;
 
@@ -196,6 +197,7 @@ function check(schema: Schema, value: unknown, path: string): string | null {
     if (typeof s.minItems === 'number' && value.length < s.minItems) return `${path}: too few items`;
     if (typeof s.maxItems === 'number' && value.length > s.maxItems) return `${path}: too many items`;
     if (s.uniqueItems === true && new Set(value.map(canonicalJson)).size !== value.length) return `${path}: duplicate items`;
+    if (s.contains !== undefined && !value.some(item => check(s.contains as Schema, item, path) === null)) return `${path}: missing matching member`;
     const prefix = Array.isArray(s.prefixItems) ? s.prefixItems as Schema[] : [];
     for (let index = 0; index < value.length; index += 1) {
       const item = index < prefix.length ? prefix[index] : s.items;
@@ -216,6 +218,7 @@ function check(schema: Schema, value: unknown, path: string): string | null {
   if (Array.isArray(s.allOf)) for (const part of s.allOf as Schema[]) { const problem = check(part, value, path); if (problem) return problem; }
   if (Array.isArray(s.anyOf) && !(s.anyOf as Schema[]).some(part => check(part, value, path) === null)) return `${path}: matches no alternative`;
   if (Array.isArray(s.oneOf) && (s.oneOf as Schema[]).filter(part => check(part, value, path) === null).length !== 1) return `${path}: does not match exactly one alternative`;
+  if (s.not !== undefined && check(s.not as Schema, value, path) === null) return `${path}: prohibited alternative`;
   if ('if' in s) {
     const branch = check(s.if as Schema, value, path) === null ? s.then : s.else;
     if (branch !== undefined) { const problem = check(branch as Schema, value, path); if (problem) return problem; }
@@ -225,7 +228,8 @@ function check(schema: Schema, value: unknown, path: string): string | null {
 
 /** Short schema name (e.g. `lessons`, `error`, `query-records`) -> first violation or null. */
 export function schemaError(name: string, value: unknown): string | null {
-  return check({ $ref: `${SCHEMA_PREFIX}${name}` }, value, name);
+  const stageB = name.endsWith('-stage-b') || ['assessments', 'campaigns', 'candidates'].includes(name);
+  return check({ $ref: `${stageB ? B_SCHEMA_PREFIX : SCHEMA_PREFIX}${name.replace(/-stage-b$/, '')}` }, value, name);
 }
 
 // ---------------------------------------------------------------------------
@@ -248,6 +252,8 @@ export const ERROR_STATUS_CODES: Record<number, readonly string[]> = {
 export interface EnvelopeContext {
   /** `records` only: the requested `record_type`, so nodes and edges are never mixed. */
   recordType?: 'node' | 'edge';
+  ideaRevisionId?: string;
+  stageB?: boolean;
   maxAgeMs: number;
   /** When given, scope/revision must equal these (the browser binds them from the first accepted envelope). */
   expected?: { scopeId: string; scopeSha256: string; projectionRevision: string };
@@ -269,17 +275,40 @@ function depthOf(value: unknown): number {
 
 function refsOf(row: Json): Json[] {
   const refs: Json[] = [];
-  for (const field of ['supersedes', 'experiment_ref', 'from_ref', 'to_ref']) {
+  for (const field of ['supersedes', 'experiment_ref', 'from_ref', 'to_ref', 'run_ref']) {
     const value = row[field];
     if (typeof value === 'object' && value !== null) refs.push(value as Json);
   }
-  for (const field of ['outcome_refs', 'contradictory_refs', 'artifact_refs']) refs.push(...((row[field] as Json[] | undefined) ?? []));
+  for (const field of ['outcome_refs', 'contradictory_refs', 'artifact_refs', 'experiment_refs', 'assessment_refs', 'attempt_refs', 'candidate_refs']) refs.push(...((row[field] as Json[] | undefined) ?? []));
   return refs;
 }
 
 const safeRelativePath = (path: string) => !(path.startsWith('/') || path.includes('\\') || path.includes('\u0000')) && !path.split('/').some(part => part === '' || part === '.' || part === '..');
 
-async function checkRow(row: Json, context: string): Promise<void> {
+type RegionVariant = keyof typeof STAGE_B_ROW_REGIONS;
+
+function regionVariant(dataset: string, row: Json): RegionVariant {
+  if (row.row_status === 'UNAVAILABLE') return 'UnavailableRowStub';
+  if (dataset === 'records') return row.record_type === 'edge' ? 'RecordEdge' : 'RecordNode';
+  if (dataset === 'campaigns') return row.native_kind === 'paper_campaign' ? 'PaperCampaign' : 'AutonomousCampaign';
+  return dataset === 'assessments' ? 'Assessment' : 'Candidate';
+}
+
+function checkRegions(row: Json, variant: RegionVariant, context: string) {
+  const { fixed_keys, reference_keys, region_caps_bytes: caps } = STAGE_B_ROW_REGIONS[variant];
+  const fields = { fixed: fixed_keys, references: reference_keys, row_scope: ['row_scope'], sources: ['sources'], issues: ['issues'] };
+  const budgeted = new Set(Object.values(fields).flat());
+  if (Object.keys(row).some(key => !budgeted.has(key))) throw new ContractViolation(`${context}: unbudgeted Stage-B row member`);
+  let punctuation = cLen(row);
+  for (const region of Object.keys(fields) as (keyof typeof fields)[]) {
+    const size = cLen(Object.fromEntries(fields[region].filter(key => Object.hasOwn(row, key)).map(key => [key, row[key]]))) - 2;
+    if (size > caps[region]) throw new ContractViolation(`${context}: Stage-B ${region} region too large`);
+    punctuation -= size;
+  }
+  if (punctuation > caps.outer_punctuation) throw new ContractViolation(`${context}: Stage-B punctuation too large`);
+}
+
+async function checkRow(row: Json, context: string, variant?: RegionVariant): Promise<void> {
   const sources = row.sources as Json[];
   const issues = row.issues as Json[];
   for (const source of sources) {
@@ -304,16 +333,17 @@ async function checkRow(row: Json, context: string): Promise<void> {
   const encoded = canonicalJson(body);
   if (utf8Length(encoded) + 76 > 8192) throw new ContractViolation(`${context}: row exceeds 8192 bytes`);
   if (await sha256Hex(encoded) !== row.row_sha256) throw new ContractViolation(`${context}: row hash mismatch`);
+  if (objectsBelow(row) > 16 || depthOf(row) - 1 > 8) throw new ContractViolation(`${context}: row nesting exceeds the contract`);
+  if (variant) { checkRegions(row, variant, context); return; }
   if (cLen(row.row_scope) > 768) throw new ContractViolation(`${context}: row_scope too large`);
   if (sumLen(sources) > 1024) throw new ContractViolation(`${context}: source region too large`);
   if (sumLen(refs) > 2048) throw new ContractViolation(`${context}: reference region too large`);
   if (sumLen(issues) > 512) throw new ContractViolation(`${context}: issue region too large`);
-  if (objectsBelow(row) > 16 || depthOf(row) - 1 > 8) throw new ContractViolation(`${context}: row nesting exceeds the contract`);
   const scalar = cLen(row) - cLen(row.row_scope) - sumLen(sources) - sumLen(refs) - sumLen(issues);
   if (scalar > 3072 + 512) throw new ContractViolation(`${context}: scalar region exceeds the contract`);
 }
 
-function checkDatasetRow(row: Json, dataset: string, recordType: string | undefined, context: string): void {
+function checkDatasetRow(row: Json, dataset: string, { recordType, ideaRevisionId }: EnvelopeContext, context: string): void {
   const stub = row.row_status === 'UNAVAILABLE';
   if (dataset === 'records') {
     const kind = row.native_kind;
@@ -328,6 +358,19 @@ function checkDatasetRow(row: Json, dataset: string, recordType: string | undefi
     if (row.completion === 'RECORDED' && finished === null) {
       const codes = (row.issues as Json[]).map(issue => issue.code);
       if (row.row_status !== 'PARTIAL' || !codes.includes('COMPLETION_NOT_RECORDED')) throw new ContractViolation(`${context}: recorded completion without a time must be PARTIAL`);
+    }
+  }
+  if (stub) return;
+  if (dataset === 'candidates' && row.record_id !== row.idea_revision_id) throw new ContractViolation(`${context}: candidate does not identify its exact revision`);
+  if (dataset === 'campaigns') {
+    const prefix = row.native_kind === 'paper_campaign' ? '' : 'decision:campaign:';
+    if (row.record_id !== prefix + String(row.campaign_id)) throw new ContractViolation(`${context}: campaign identity mismatch`);
+  }
+  if (dataset === 'assessments') {
+    if (row.record_id !== `assessment:${row.assessment_id}` || row.idea_revision_id !== ideaRevisionId) throw new ContractViolation(`${context}: assessment identity or filter mismatch`);
+    const comparison = row.comparison as Json | null;
+    if (comparison && ['baseline_id', 'metric', 'unit'].some(key => comparison[key] !== (comparison.conditions as Json)[key])) {
+      throw new ContractViolation(`${context}: inconsistent comparison conditions`);
     }
   }
 }
@@ -347,11 +390,15 @@ function hasGap(envelope: Json): boolean {
 
 /** Validates one 200 body (already strictly parsed). Resolves to the typed document or throws ContractViolation. */
 export async function validateEnvelope(dataset: string, document: unknown, context: EnvelopeContext): Promise<Json> {
-  if (!['manifest', 'lessons', 'records', 'jobs'].includes(dataset)) throw new ContractViolation('dataset has no Stage-A success schema');
-  const problem = schemaError(dataset, document);
+  const stageB = context.stageB ?? ((context.expected?.projectionRevision ?? (document as Json | null)?.projection_revision) === STAGE_B_REVISION);
+  const factory = ['assessments', 'campaigns', 'candidates'].includes(dataset);
+  if (!(factory && stageB) && !['manifest', 'lessons', 'records', 'jobs'].includes(dataset)) throw new ContractViolation('dataset is not enabled in this stage');
+  const name = stageB && ['manifest', 'records'].includes(dataset) ? `${dataset}-stage-b` : dataset;
+  const problem = schemaError(name, document);
   if (problem) throw new ContractViolation(problem);
   const envelope = document as Json;
   if (envelope.dataset !== dataset) throw new ContractViolation('envelope answers a different dataset');
+  if (stageB && envelope.projection_revision !== STAGE_B_REVISION) throw new ContractViolation('Stage-B projection revision mismatch');
   const scope = envelope.scope as Json | null;
   const expected = context.expected;
   if (expected) {
@@ -396,8 +443,8 @@ export async function validateEnvelope(dataset: string, document: unknown, conte
       if (status === 'UNAVAILABLE' && (item.availability !== 'UNAVAILABLE' || item.total_items !== null)) throw new ContractViolation(`${label}: unavailable manifest advertises data`);
       continue;
     }
-    await checkRow(item, label);
-    checkDatasetRow(item, dataset, context.recordType, label);
+    await checkRow(item, label, stageB && (factory || dataset === 'records') ? regionVariant(dataset, item) : undefined);
+    checkDatasetRow(item, dataset, context, label);
     ids.push(item.record_id as string);
   }
   const bytes = ids.map(id => encoder.encode(id));
@@ -409,7 +456,7 @@ export async function validateEnvelope(dataset: string, document: unknown, conte
     if (order === 0) order = left.length - right.length;
     if (order >= 0) throw new ContractViolation('items are not strictly ascending by record_id');
   }
-  if (status === 'UNAVAILABLE' && items.length && dataset !== 'manifest') throw new ContractViolation('unavailable envelope carries rows');
+  if (status === 'UNAVAILABLE' && ((items.length && dataset !== 'manifest') || page.next_cursor !== null)) throw new ContractViolation('unavailable envelope carries rows or continuation');
   if (status === 'BOUND' && (coverage.unresolved_membership_items !== 0 || coverage.omitted_items !== 0 || hasGap(envelope))) throw new ContractViolation('BOUND envelope hides a gap');
   if (status === 'PARTIAL' && !hasGap(envelope)) throw new ContractViolation('PARTIAL envelope names no gap');
   return envelope;

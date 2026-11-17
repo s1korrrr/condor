@@ -1,0 +1,104 @@
+{
+  "schema": "research_knowledge.v5_read_projection.v1",
+  "owner": "research_os",
+  "authority": "READ_ONLY",
+  "effect": "NONE",
+  "dataset": "records",
+  "scope": {
+    "scope_id": "v5-okx-spot-dca",
+    "program_id": "okx_spot_dca",
+    "family_lane_pairs": [
+      {
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT"
+      }
+    ],
+    "scope_sha256": "ac251f1a1cb75eb8890c1b8598046ef40ac79d7775a6284835851318b25abd66"
+  },
+  "projection_revision": "a24cf24b124c983d89b57779d5c1f9cbab7d2176c5c7dc3ef91896a1d5e08601",
+  "snapshot_id": "30815f5eec2d39e41f84da1e0c7957c8ed20ede8783118f14509518cb788df0c",
+  "publication_sha256": "dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e",
+  "database_sha256": "a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482",
+  "source_revision": "fixture-source-r1",
+  "source_snapshot": "fixture-source-s1",
+  "event_signature": "fixture-events-e1",
+  "status": "BOUND",
+  "reason_codes": [],
+  "generated_at_ms": 1794916620000,
+  "verified_at_ms": 1794916800000,
+  "served_at_ms": 1794916801000,
+  "coverage": {
+    "state": "COMPLETE",
+    "total_items": 1,
+    "returned_items": 1,
+    "omitted_items": 0,
+    "unresolved_membership_items": 0,
+    "excluded_proposed_edges": 0,
+    "pending_events": 0
+  },
+  "page": {
+    "limit": 25,
+    "next_cursor": null,
+    "has_more": false
+  },
+  "items": [
+    {
+      "record_id": "okx-ok-rsi-full-window-20260909-r3-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1788999598274,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260909-r3-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "c873d3bddbea79d53d69685d0872824ad8b5c731f06cf801d724348b905d8b3e",
+          "bytes": 600
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260909-r3-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "be7796d9be508db6f0b00d1ccf3b65f83e93f8ed10a70522a4da35050717f979",
+          "bytes": 635493
+        }
+      ],
+      "row_status": "COMPLETE",
+      "issues": [],
+      "record_type": "node",
+      "kind": "campaign",
+      "title": "Recorded paper campaign",
+      "native_state": null,
+      "summary": null,
+      "identities": [
+        {
+          "name": "campaign_id",
+          "value": "okx-ok-rsi-full-window-20260909-r3-trial-1"
+        }
+      ],
+      "row_sha256": "4daf6e6661fa376da1e2a995f2abaa4b3376bb9f1874cd43b2d50fa287db283d"
+    }
+  ],
+  "issues": [],
+  "envelope_sha256": "89b774cf80e7a05aae170082933428c94b006b166a1c922834fe5c67ffb37a38"
+}

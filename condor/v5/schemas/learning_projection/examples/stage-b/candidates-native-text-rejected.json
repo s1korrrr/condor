@@ -1,0 +1,94 @@
+{
+  "schema": "research_knowledge.v5_read_projection.v1",
+  "owner": "research_os",
+  "authority": "READ_ONLY",
+  "effect": "NONE",
+  "dataset": "candidates",
+  "scope": {
+    "scope_id": "v5-okx-spot-dca",
+    "program_id": "okx_spot_dca",
+    "family_lane_pairs": [
+      {
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT"
+      }
+    ],
+    "scope_sha256": "ac251f1a1cb75eb8890c1b8598046ef40ac79d7775a6284835851318b25abd66"
+  },
+  "projection_revision": "a24cf24b124c983d89b57779d5c1f9cbab7d2176c5c7dc3ef91896a1d5e08601",
+  "snapshot_id": "30815f5eec2d39e41f84da1e0c7957c8ed20ede8783118f14509518cb788df0c",
+  "publication_sha256": "dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e",
+  "database_sha256": "a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482",
+  "source_revision": "fixture-source-r1",
+  "source_snapshot": "fixture-source-s1",
+  "event_signature": "fixture-events-e1",
+  "status": "PARTIAL",
+  "reason_codes": [
+    "OMITTED_CONTENT"
+  ],
+  "generated_at_ms": 1794916620000,
+  "verified_at_ms": 1794916800000,
+  "served_at_ms": 1794916801000,
+  "coverage": {
+    "state": "PARTIAL",
+    "total_items": 1,
+    "returned_items": 1,
+    "omitted_items": 0,
+    "unresolved_membership_items": 0,
+    "excluded_proposed_edges": 0,
+    "pending_events": 0
+  },
+  "page": {
+    "limit": 25,
+    "next_cursor": null,
+    "has_more": false
+  },
+  "items": [
+    {
+      "record_id": "idea:ok-rsi-cd01-accumulate-distribute-20260903:revision:cd2887da2b4e98e7d786512627bcc975",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "fixtures/stage-b-native-text.json",
+          "pointer": "",
+          "sha256": "44f5c4599209dfb0555ed449de4b4d74620a64337d4eabba325720b72a7f5198",
+          "bytes": 128
+        }
+      ],
+      "row_status": "UNAVAILABLE",
+      "issues": [
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:ok-rsi-cd01-accumulate-distribute-20260903:revision:cd2887da2b4e98e7d786512627bcc975",
+          "detail": "Native title contains a forbidden control; title and identity were not rewritten."
+        }
+      ],
+      "row_sha256": "47433c2a1d0fb69b741d7ecdcb32b56621ceb8e78e4f7062c71c870718bf4089"
+    }
+  ],
+  "issues": [],
+  "envelope_sha256": "893d98ff12975222eefc30c5023e1692319870ff2fe7120f7348ef2c437ea88f"
+}

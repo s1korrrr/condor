@@ -1,0 +1,432 @@
+{
+  "contract_id": "v5-lfl-stage-b-2026-11-18-v2",
+  "stage": "B",
+  "projection_revision_preimage": {
+    "schema": "research_knowledge.v5_projection_contract.v1",
+    "version": 1,
+    "stage": "B",
+    "mapping": "RECORDED_V2_R2_OWNER_REPAIR",
+    "ordering": "UTF8_RECORD_ID_ASC_V1",
+    "hashing": "CANONICAL_JSON_INTEGER_V1",
+    "wire_contract_id": "v5-lfl-stage-b-2026-11-18-v2"
+  },
+  "projection_revision": "a24cf24b124c983d89b57779d5c1f9cbab7d2176c5c7dc3ef91896a1d5e08601",
+  "canonical_json": {
+    "encoding": "UTF-8",
+    "bom": false,
+    "trailing_newline": false,
+    "object_key_order": "ascending Unicode scalar value; fixed ASCII schema keys",
+    "whitespace": "none",
+    "string_encoding": "raw Unicode scalar values except quote/backslash and U+0000..001F; quote/backslash use backslash escapes; backspace/tab/LF/formfeed/CR use \\b/\\t/\\n/\\f/\\r; remaining controls use lowercase \\u00xx; no slash/HTML escaping",
+    "normalization": "none; reject unpaired surrogates, invalid UTF-8, duplicate keys",
+    "numbers": "only unsigned integer tokens 0..9007199254740991; no bool-as-int, floats, exponent, negative zero, NaN or infinity",
+    "arrays": "retain wire order; set arrays canonicalized only at publication as specified in README"
+  },
+  "hash_preimages": {
+    "row_sha256": "C(entire row excluding only its own top-level row_sha256)",
+    "envelope_sha256": "C(entire envelope excluding only its own top-level envelope_sha256); retain row hashes and all timestamps",
+    "snapshot_id": "C(object with exactly schema,projection_revision,scope_sha256,publication_sha256,database_sha256,source_revision,source_snapshot,event_signature)",
+    "projection_revision": "C(projection_revision_preimage in this file); no timestamps, host paths or self-hash"
+  },
+  "ordering": {
+    "page_key": "record_id",
+    "edge_key": "native edge_id == record_id",
+    "comparison": "ascending unsigned UTF-8 bytes; no normalization, locale or case fold",
+    "ties": "publication error",
+    "manifest_items": [
+      "lessons",
+      "records",
+      "jobs",
+      "candidates",
+      "campaigns",
+      "assessments"
+    ]
+  },
+  "cursor": {
+    "consumer": "OPAQUE; echo unchanged, never decode or synthesize",
+    "owner_encoding": "unpadded canonical base64url",
+    "max_encoded_bytes": 512,
+    "max_decoded_bytes": 358,
+    "layout": [
+      {
+        "offset": 0,
+        "bytes": 1,
+        "name": "version",
+        "value": 1
+      },
+      {
+        "offset": 1,
+        "bytes": 1,
+        "name": "dataset",
+        "enum": {
+          "lessons": 1,
+          "records": 2,
+          "jobs": 3,
+          "candidates": 4,
+          "campaigns": 5,
+          "assessments": 6
+        }
+      },
+      {
+        "offset": 2,
+        "bytes": 1,
+        "name": "record_type",
+        "enum": {
+          "not_records": 0,
+          "node": 1,
+          "edge": 2
+        }
+      },
+      {
+        "offset": 3,
+        "bytes": 1,
+        "name": "flags",
+        "value": 0
+      },
+      {
+        "offset": 4,
+        "bytes": 2,
+        "name": "last_id_utf8_length",
+        "encoding": "unsigned big-endian; 1..160"
+      },
+      {
+        "offset": 6,
+        "bytes": 32,
+        "name": "scope_sha256",
+        "encoding": "raw digest"
+      },
+      {
+        "offset": 38,
+        "bytes": 32,
+        "name": "projection_revision",
+        "encoding": "raw digest"
+      },
+      {
+        "offset": 70,
+        "bytes": 32,
+        "name": "snapshot_id",
+        "encoding": "raw digest"
+      },
+      {
+        "offset": 102,
+        "bytes": 32,
+        "name": "filter_sha256",
+        "encoding": "raw digest"
+      },
+      {
+        "offset": 134,
+        "bytes": "last_id_utf8_length",
+        "name": "last_id",
+        "encoding": "exact native ID UTF-8"
+      },
+      {
+        "offset": "134 + last_id_utf8_length",
+        "bytes": 64,
+        "name": "reserved",
+        "value": "all zero"
+      }
+    ],
+    "filter_preimage": {
+      "lessons": {},
+      "jobs": {},
+      "records": {
+        "record_type": "requested node|edge",
+        "root_id": "exact requested ID or null"
+      },
+      "candidates": {},
+      "campaigns": {},
+      "assessments": {
+        "idea_revision_id": "exact requested ID"
+      }
+    },
+    "filter_hash": "SHA-256(C(dataset filter_preimage)); scope/dataset/revision bind separately; limit excluded so page size may change",
+    "errors": {
+      "malformed_or_wrong_binding": "400 INVALID_CURSOR",
+      "otherwise_valid_old_snapshot": "409 SNAPSHOT_CHANGED"
+    },
+    "validation_order": "canonical encoding/size/version/zero fields/UTF-8 and lengths; dataset/type/scope/revision/filter binding; then snapshot",
+    "authority": "unsigned bounded data; parameterized indexed SQL only, no SQL/path authority"
+  },
+  "routes": [
+    {
+      "dataset": "manifest",
+      "browser_path": "/api/v5/learning/manifest",
+      "proxy_path": "/api/knowledge/v5-projection/v1/manifest",
+      "reader_path": "/api/knowledge/v5-projection/v1/manifest",
+      "query_schema": "query-manifest.schema.json",
+      "enabled_in_stage_a": true,
+      "stage_a_status": 200,
+      "success_schema": "manifest-stage-b.schema.json",
+      "disabled_golden": null,
+      "enabled_in_stage_b": true,
+      "stage_b_status": 200
+    },
+    {
+      "dataset": "lessons",
+      "browser_path": "/api/v5/learning/lessons",
+      "proxy_path": "/api/knowledge/v5-projection/v1/lessons",
+      "reader_path": "/api/knowledge/v5-projection/v1/lessons",
+      "query_schema": "query-lessons.schema.json",
+      "enabled_in_stage_a": true,
+      "stage_a_status": 200,
+      "success_schema": "lessons.schema.json",
+      "disabled_golden": null,
+      "enabled_in_stage_b": true,
+      "stage_b_status": 200
+    },
+    {
+      "dataset": "records",
+      "browser_path": "/api/v5/learning/records",
+      "proxy_path": "/api/knowledge/v5-projection/v1/records",
+      "reader_path": "/api/knowledge/v5-projection/v1/records",
+      "query_schema": "query-records.schema.json",
+      "enabled_in_stage_a": true,
+      "stage_a_status": 200,
+      "success_schema": "records-stage-b.schema.json",
+      "disabled_golden": null,
+      "enabled_in_stage_b": true,
+      "stage_b_status": 200
+    },
+    {
+      "dataset": "jobs",
+      "browser_path": "/api/v5/learning/jobs",
+      "proxy_path": "/api/knowledge/v5-projection/v1/jobs",
+      "reader_path": "/api/knowledge/v5-projection/v1/jobs",
+      "query_schema": "query-jobs.schema.json",
+      "enabled_in_stage_a": true,
+      "stage_a_status": 200,
+      "success_schema": "jobs.schema.json",
+      "disabled_golden": null,
+      "enabled_in_stage_b": true,
+      "stage_b_status": 200
+    },
+    {
+      "dataset": "candidates",
+      "browser_path": "/api/v5/learning/candidates",
+      "proxy_path": "/api/knowledge/v5-projection/v1/candidates",
+      "reader_path": "/api/knowledge/v5-projection/v1/candidates",
+      "query_schema": "query-candidates.schema.json",
+      "enabled_in_stage_a": false,
+      "stage_a_status": 404,
+      "success_schema": "candidates.schema.json",
+      "disabled_golden": "examples/candidates-disabled.json",
+      "enabled_in_stage_b": true,
+      "stage_b_status": 200
+    },
+    {
+      "dataset": "campaigns",
+      "browser_path": "/api/v5/learning/campaigns",
+      "proxy_path": "/api/knowledge/v5-projection/v1/campaigns",
+      "reader_path": "/api/knowledge/v5-projection/v1/campaigns",
+      "query_schema": "query-campaigns.schema.json",
+      "enabled_in_stage_a": false,
+      "stage_a_status": 404,
+      "success_schema": "campaigns.schema.json",
+      "disabled_golden": "examples/campaigns-disabled.json",
+      "enabled_in_stage_b": true,
+      "stage_b_status": 200
+    },
+    {
+      "dataset": "assessments",
+      "browser_path": "/api/v5/learning/assessments",
+      "proxy_path": "/api/knowledge/v5-projection/v1/assessments",
+      "reader_path": "/api/knowledge/v5-projection/v1/assessments",
+      "query_schema": "query-assessments.schema.json",
+      "enabled_in_stage_a": false,
+      "stage_a_status": 404,
+      "success_schema": "assessments.schema.json",
+      "disabled_golden": "examples/assessments-disabled.json",
+      "enabled_in_stage_b": true,
+      "stage_b_status": 200
+    }
+  ],
+  "query_validation": {
+    "authoritative": "reader",
+    "proxy": "exact path allowlist + target length cap and HTTP framing only",
+    "decode": "strict UTF-8 percent decoding exactly once; plus is space; reject malformed encodings, duplicate/repeated/unknown names and blank values",
+    "scope": "required exact configured scope_id; unknown/mismatched scope gives 400 INVALID_QUERY",
+    "limit": "optional canonical decimal 1..50, default 25; no plus/leading zeros/whitespace",
+    "cursor": "optional opaque base64url; owner validates binding; malformed gives INVALID_CURSOR",
+    "disabled_dataset_precedence": "A-only publication retains the A disabled precedence; B-enabled publication validates each B route normally before warm admission."
+  },
+  "limits": {
+    "target_bytes": 4096,
+    "header_bytes": 8192,
+    "error_decoded_bytes": 2048,
+    "row_encoded_bytes": 8192,
+    "owner_response_decoded_bytes": 224000,
+    "condor_response_decoded_bytes": 256000,
+    "page_max": 50,
+    "row_refs_combined": 4,
+    "row_sources": 2,
+    "row_issues": 2,
+    "envelope_issues": 4
+  },
+  "errors": [
+    {
+      "status": 400,
+      "codes": [
+        "INVALID_QUERY",
+        "INVALID_CURSOR"
+      ],
+      "retryable": false,
+      "retry_after": null
+    },
+    {
+      "status": 404,
+      "codes": [
+        "ROOT_NOT_IN_SCOPE",
+        "DATASET_NOT_ENABLED",
+        "ROUTE_NOT_FOUND"
+      ],
+      "retryable": false,
+      "retry_after": null
+    },
+    {
+      "status": 405,
+      "codes": [
+        "METHOD_NOT_ALLOWED"
+      ],
+      "retryable": false,
+      "retry_after": null
+    },
+    {
+      "status": 413,
+      "codes": [
+        "REQUEST_BODY_NOT_ALLOWED"
+      ],
+      "retryable": false,
+      "retry_after": null
+    },
+    {
+      "status": 414,
+      "codes": [
+        "TARGET_TOO_LONG"
+      ],
+      "retryable": false,
+      "retry_after": null
+    },
+    {
+      "status": 409,
+      "codes": [
+        "SNAPSHOT_CHANGED"
+      ],
+      "retryable": false,
+      "retry_after": null
+    },
+    {
+      "status": 503,
+      "codes": [
+        "PROJECTION_BUSY",
+        "PROJECTION_DEADLINE",
+        "WARMING",
+        "VERIFICATION_UNAVAILABLE",
+        "PUBLICATION_UNAVAILABLE",
+        "UPSTREAM_UNAVAILABLE"
+      ],
+      "retryable": true,
+      "retry_after": "1..30 decimal; absent/invalid upstream replaced by 1"
+    },
+    {
+      "status": 502,
+      "codes": [
+        "UPSTREAM_INVALID",
+        "INVALID_OWNER_PROJECTION"
+      ],
+      "retryable": false,
+      "retry_after": null
+    }
+  ],
+  "permitted_headers": {
+    "regenerated": [
+      "Content-Type: application/json",
+      "Content-Length",
+      "Cache-Control: no-store",
+      "Connection: close"
+    ],
+    "forwarded": [
+      "Retry-After only on 503, validated as above"
+    ],
+    "method_error": "Allow: GET only on 405",
+    "all_other_upstream_headers": "discard"
+  },
+  "upstream_content_encoding": "identity only; reject compressed upstream before committing headers",
+  "legacy": {
+    "source": "8cf37d8c",
+    "port": 8874,
+    "server": "ForkingMixIn",
+    "max_children": 2,
+    "request_queue_size": 2,
+    "header_deadline_seconds": 5,
+    "request_deadline_seconds": 16,
+    "get_paths": [
+      "/api/knowledge/overview",
+      "/api/knowledge/network"
+    ],
+    "changed": false
+  },
+  "projection_transport": {
+    "port": 8875,
+    "separate_process": true,
+    "upstream_workers": 2,
+    "parser_lanes": 1,
+    "application_queue": 0,
+    "socket_backlog": 2,
+    "header_deadline_ms": 250,
+    "busy_reply_after_parse_ms": 100,
+    "total_deadline_ms": 3000,
+    "upstream_deadline_ms": 2500,
+    "reader_total_deadline_ms": 2000,
+    "condor_total_deadline_ms": 4000,
+    "saturation": "parsed request: 503 PROJECTION_BUSY / Retry-After: 1; pre-accept OS overflow may refuse/reset/timeout"
+  },
+  "fixtures_are_production_evidence": false,
+  "extends": "wire-contract.json",
+  "stage_b_delta": {
+    "schemas": [
+      "stage-b-common.schema.json",
+      "candidates.schema.json",
+      "campaigns.schema.json",
+      "assessments.schema.json",
+      "records-stage-b.schema.json",
+      "manifest-stage-b.schema.json",
+      "browser-response-stage-b.schema.json"
+    ],
+    "delta": {
+      "wire_type": "string",
+      "grammar": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?(?![\\s\\S])",
+      "max_utf8_bytes": 128,
+      "normalization": "Exact decimal value of the original admitted native JSON number token; expand exponent, strip trailing fractional zeroes and redundant sign, zero is 0. No binary64 round trip or arithmetic. Producer canonical output normalizes zero and fractional padding; grammar also accepts -0 and 1.0. Display rounding is UI-title-only.",
+      "failure": "Whole comparison null with OMITTED_CONTENT; preserve owner admission and suppress verdict presentation.",
+      "match_semantics": "Whole string, no trimming, no multiline flags; final negative lookahead forbids every following scalar including LF in both Python and ECMAScript."
+    },
+    "comparison_window": "Native frozen-window string or native ordered ISO-boundary strings, byte-preserved. Not the epoch-ms RowScope.Window. Never rebuild owner comparison_group from wire-transformed conditions.",
+    "ordering": "Inherited UTF8_RECORD_ID_ASC_V1; immutable idea_revision ID / assessment node ID / native paper campaign_id.",
+    "capability": "All six descriptors read=true; all mutating capabilities remain false; recall NOT_EVALUATED; D07/D12 off.",
+    "activation": "New scope_sha256 (enabled_datasets includes all seven routes), projection_revision and snapshot_id. Rebuild publication/index receipts as one owner generation; this document authorizes no publication.",
+    "campaign_predicate_override": "Supersedes design section 3.1 autonomous-campaign predicate and section 3.3 campaign row for Stage B only. Support research_knowledge.paper_campaign.v1, with frozen preregistration experiment-parent membership. Do not require or fabricate autonomous state chains. Autonomous campaigns remain a supported disjoint chain type, with zero rows in scope. Missing paper seals produce PARTIAL / PREREGISTRATION_SEAL_MISSING, never a fabricated seal. Existing seal integrity failures make the campaigns envelope UNAVAILABLE with the owner reason.",
+    "candidate_excerpt": {
+      "field": "hypothesis",
+      "max_utf8_bytes": 512,
+      "marker": "truncated_fields=[hypothesis] and issues contains OMITTED_CONTENT",
+      "identity_and_conditions_truncated": false,
+      "native_object_embedded": false
+    },
+    "empty_assessments_ui": "no recorded assessments for this revision",
+    "row_region_contract": "row-regions-stage-b.json; README-stage-b.md item 6; assessment-only redistribution preserves row8192 and response224000.",
+    "lineage_relations_v2": [
+      "revision_of",
+      "uses_idea",
+      "attempt_of",
+      "decides",
+      "derived_from",
+      "supersedes",
+      "assesses",
+      "evaluates",
+      "records_outcome_for",
+      "produced"
+    ],
+    "stage_a_produced": "UNSUPPORTED_NATIVE_SCHEMA; frozen v1 Stage A is unchanged.",
+    "artifact_produced_targets": "Native evidence:<digest> IDs are exact opaque Stage-A OUT_OF_SCOPE refs; do not project a new node type."
+  }
+}

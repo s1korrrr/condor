@@ -57,6 +57,7 @@ SAFE_INT_MAX = 9_007_199_254_740_991
 STAGE_A_DATASETS = ("manifest", "lessons", "records", "jobs")
 STAGE_B_DATASETS = ("candidates", "campaigns", "assessments")
 ALL_DATASETS = STAGE_A_DATASETS + STAGE_B_DATASETS
+STAGE_B_REVISION = json.loads((SCHEMA_DIR / "wire-contract-stage-b.json").read_bytes())["projection_revision"]
 MANIFEST_ORDER = ("lessons", "records", "jobs", "candidates", "campaigns", "assessments")
 OWNER_PATH_PREFIX = "/api/knowledge/v5-projection/v1/"
 ERROR_SCHEMA = "research_knowledge.v5_projection_error.v1"
@@ -244,6 +245,7 @@ class ExpectedBinding:
 class RequestShape:
     dataset: str
     record_type: str | None = None
+    idea_revision_id: str | None = None
 
 
 def _objects_below(value: Any) -> int:
@@ -273,10 +275,10 @@ def _depth(value: Any) -> int:
 
 def _refs_of(row: dict[str, Any]) -> list[dict[str, Any]]:
     refs: list[dict[str, Any]] = []
-    for field_name in ("supersedes", "experiment_ref", "from_ref", "to_ref"):
+    for field_name in ("supersedes", "experiment_ref", "from_ref", "to_ref", "run_ref"):
         if isinstance(row.get(field_name), dict):
             refs.append(row[field_name])
-    for field_name in ("outcome_refs", "contradictory_refs", "artifact_refs"):
+    for field_name in ("outcome_refs", "contradictory_refs", "artifact_refs", "experiment_refs", "assessment_refs", "attempt_refs", "candidate_refs"):
         refs.extend(row.get(field_name) or [])
     return refs
 
@@ -287,7 +289,29 @@ def _safe_relative_path(path: str) -> bool:
     return not any(part in _RELATIVE_SEGMENT_BAD for part in path.split("/"))
 
 
-def _check_row(row: dict[str, Any], *, context: str) -> None:
+@lru_cache(maxsize=1)
+def _stage_b_regions() -> dict[str, Any]:
+    return json.loads((SCHEMA_DIR / "row-regions-stage-b.json").read_bytes())["variants"]
+
+
+def _check_stage_b_regions(row: dict[str, Any], variant: str, context: str) -> None:
+    regions = _stage_b_regions()[variant]
+    fields = {
+        "fixed": regions["fixed_keys"],
+        "references": regions["reference_keys"],
+        "row_scope": ["row_scope"],
+        "sources": ["sources"],
+        "issues": ["issues"],
+    }
+    if set(row) - {key for keys in fields.values() for key in keys}:
+        raise ContractViolation(f"{context}: unbudgeted Stage-B row member")
+    sizes = {region: len(canonical({key: row[key] for key in keys if key in row})) - 2 for region, keys in fields.items()}
+    sizes["outer_punctuation"] = len(canonical(row)) - sum(sizes.values())
+    if any(size > regions["region_caps_bytes"][region] for region, size in sizes.items()):
+        raise ContractViolation(f"{context}: Stage-B row region too large")
+
+
+def _check_row(row: dict[str, Any], *, context: str, variant: str | None = None) -> None:
     sources = row["sources"]
     for source in sources:
         if not _safe_relative_path(source["relative_path"]):
@@ -318,6 +342,11 @@ def _check_row(row: dict[str, Any], *, context: str) -> None:
         raise ContractViolation(f"{context}: row exceeds {MAX_ROW_BYTES} bytes")
     if sha256_hex(encoded) != row["row_sha256"]:
         raise ContractViolation(f"{context}: row hash mismatch")
+    if _objects_below(row) > MAX_ROW_NESTED_OBJECTS or _depth(row) - 1 > MAX_ROW_DEPTH:
+        raise ContractViolation(f"{context}: row nesting exceeds the contract")
+    if variant is not None:
+        _check_stage_b_regions(row, variant, context)
+        return
     if len(canonical(row["row_scope"])) > 768:
         raise ContractViolation(f"{context}: row_scope too large")
     if sum(len(canonical(source)) for source in sources) > 1_024:
@@ -326,8 +355,6 @@ def _check_row(row: dict[str, Any], *, context: str) -> None:
         raise ContractViolation(f"{context}: reference region too large")
     if sum(len(canonical(issue)) for issue in row["issues"]) > 512:
         raise ContractViolation(f"{context}: issue region too large")
-    if _objects_below(row) > MAX_ROW_NESTED_OBJECTS or _depth(row) - 1 > MAX_ROW_DEPTH:
-        raise ContractViolation(f"{context}: row nesting exceeds the contract")
     scalar_region = (
         len(canonical(row))
         - len(canonical(row["row_scope"]))
@@ -357,6 +384,30 @@ def _check_dataset_row(row: dict[str, Any], dataset: str, request: RequestShape,
             codes = {issue["code"] for issue in row["issues"]}
             if row["row_status"] != "PARTIAL" or "COMPLETION_NOT_RECORDED" not in codes:
                 raise ContractViolation(f"{context}: recorded completion without a time must be PARTIAL")
+    if stub:
+        return
+    if dataset == "candidates" and row["record_id"] != row["idea_revision_id"]:
+        raise ContractViolation(f"{context}: candidate does not identify its exact revision")
+    if dataset == "campaigns":
+        prefix = "" if row["native_kind"] == "paper_campaign" else "decision:campaign:"
+        if row["record_id"] != prefix + row["campaign_id"]:
+            raise ContractViolation(f"{context}: campaign identity mismatch")
+    if dataset == "assessments":
+        if row["record_id"] != "assessment:" + row["assessment_id"] or row["idea_revision_id"] != request.idea_revision_id:
+            raise ContractViolation(f"{context}: assessment identity or filter mismatch")
+        comparison = row["comparison"]
+        if comparison and any(comparison[key] != comparison["conditions"][key] for key in ("baseline_id", "metric", "unit")):
+            raise ContractViolation(f"{context}: inconsistent comparison conditions")
+
+
+def _stage_b_variant(dataset: str, row: dict[str, Any]) -> str:
+    if row["row_status"] == "UNAVAILABLE":
+        return "UnavailableRowStub"
+    if dataset == "records":
+        return "RecordEdge" if row["record_type"] == "edge" else "RecordNode"
+    if dataset == "campaigns":
+        return "PaperCampaign" if row["native_kind"] == "paper_campaign" else "AutonomousCampaign"
+    return "Assessment" if dataset == "assessments" else "Candidate"
 
 
 def _has_gap(envelope: dict[str, Any]) -> bool:
@@ -386,9 +437,11 @@ def validate_envelope(
 ) -> dict[str, Any]:
     """Validate one 200 body. Returns the document; raises ``ContractViolation`` on any violation."""
     dataset = request.dataset
-    if dataset not in STAGE_A_DATASETS:
-        raise ContractViolation("dataset has no Stage-A success schema")
-    problem = schema_errors(dataset, document)
+    stage_b = expected.projection_revision == STAGE_B_REVISION
+    if dataset not in (ALL_DATASETS if stage_b else STAGE_A_DATASETS):
+        raise ContractViolation("dataset is not enabled in the configured stage")
+    name = f"{dataset}-stage-b" if stage_b and dataset in ("manifest", "records") else dataset
+    problem = schema_errors(name, document)
     if problem:
         raise ContractViolation(problem)
     if document["dataset"] != dataset:
@@ -462,15 +515,16 @@ def validate_envelope(
             if status == "UNAVAILABLE" and (item["availability"] != "UNAVAILABLE" or item["total_items"] is not None):
                 raise ContractViolation(f"{context}: unavailable manifest advertises data")
             continue
-        _check_row(item, context=context)
+        variant = _stage_b_variant(dataset, item) if stage_b and dataset in (*STAGE_B_DATASETS, "records") else None
+        _check_row(item, context=context, variant=variant)
         _check_dataset_row(item, dataset, request, context=context)
         ids.append(item["record_id"].encode("utf-8"))
     if any(left >= right for left, right in zip(ids, ids[1:])):
         raise ContractViolation("items are not strictly ascending by record_id")
 
     # Status semantics.
-    if status == "UNAVAILABLE" and (items and dataset != "manifest"):
-        raise ContractViolation("unavailable envelope carries rows")
+    if status == "UNAVAILABLE" and ((items and dataset != "manifest") or page["next_cursor"] is not None):
+        raise ContractViolation("unavailable envelope carries rows or continuation")
     if status == "BOUND":
         if coverage["unresolved_membership_items"] != 0 or coverage["omitted_items"] != 0 or _has_gap(document):
             raise ContractViolation("BOUND envelope hides a gap")
@@ -741,9 +795,9 @@ class ResearchOwnerLearningSource:
 
     async def read(self, dataset: str, raw_query: str) -> ProjectionResult:
         """One browser request -> at most one owner request. No retry, no cache hit, no fallback."""
-        if dataset in STAGE_B_DATASETS:
+        if dataset in STAGE_B_DATASETS and self.config.projection_revision != STAGE_B_REVISION:
             return local_result("DATASET_NOT_ENABLED")  # checked before query validation, like the owner
-        if dataset not in STAGE_A_DATASETS:
+        if dataset not in ALL_DATASETS:
             return local_result("ROUTE_NOT_FOUND")
         try:
             forwarded = prepare_query(dataset, raw_query, self.config.scope_id)
@@ -766,7 +820,7 @@ class ResearchOwnerLearningSource:
     def _interpret(self, dataset: str, parsed: dict[str, str], response: OwnerResponse) -> ProjectionResult:
         if response.status == 200:
             document = parse_strict(response.body)
-            request = RequestShape(dataset, parsed.get("record_type"))
+            request = RequestShape(dataset, parsed.get("record_type"), parsed.get("idea_revision_id"))
             envelope = validate_envelope(document, request=request, expected=self.config.expected, now_ms=self.clock())
             self._accept(dataset, envelope)
             return ProjectionResult(200, response.body)

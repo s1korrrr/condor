@@ -10,9 +10,9 @@ The V5 backend mounted `/assets` and one fixed logo route, but not the other pub
 
 ## Repair
 
-- Every owner-number title path uses `ownerTitleText()`, a text adapter that delegates numeric rounding to existing `ownerTitle()`. Each expression operand and result is handled separately. Word/ID boundaries, Unicode minus, leading-dot decimals and exponent text are covered. Known ID/hash title paths remain unchanged.
-- Owner inputs, numeric calculations, receipt ratios, marker identities, exact as-sent disclosures, read queries, admission and owner-state checks are unchanged. Visible chart fill readouts use existing coin/price formatters; their titles retain bounded owner detail and exact UTC times.
-- Root images come from the sibling `frontend/v5-reviewed-build.json` files allowlist. Only top-level image names are admitted. Responses reject symlinks and changed bytes and return the same bytes that passed SHA256 verification. The existing fixed `condor_old.jpeg` compatibility route stays unchanged.
+- Owner-number title paths delegate to existing `ownerTitle()` through the scalar `ownerTitleText()` adapter. Typed expression builders format operands before interpolation; the adapter no longer searches arbitrary prose. Text columns, IDs, hashes, paths and record identifiers stay exact.
+- Owner inputs, numeric calculations, receipt ratios, marker identities, exact as-sent disclosures, read queries, admission and owner-state checks are unchanged. Visible chart fill readouts use the exact original `markerText()` as on `45ec2f82`; only their titles are bounded. OHLC and volume readouts retain their existing visible formatters.
+- Root images come from the sibling `frontend/v5-reviewed-build.json` files allowlist. Only safe top-level image names are admitted. Responses use `O_NOFOLLOW | O_CLOEXEC`, inspect a regular file and its 8-MiB cap on that same descriptor, then read, hash-verify and return its bytes. `O_NONBLOCK` prevents a FIFO replacement from hanging the read. The legacy logo now uses this same guarded route rather than a separate hash-bypassing `FileResponse` route. HEAD verifies the same bytes and returns identical status/headers without a body. Missing manifests log a warning and remain fail-closed.
 - The runtime image copies that same reviewed manifest beside its built dist. Without this packaging change, a built image would correctly fail closed but still return 404 for the new assets. The image-copy regression failed before the Dockerfile repair; no image build or deployment is claimed.
 - `v5.html` links the shipped `/favicon.svg`; a browser request for `/favicon.ico` aliases that reviewed SVG with `image/svg+xml`.
 - Phone checkbox/radio labels retain a 44px touch target without enlarging the native glyph. Cash, traded volume and retained wallet-equity tiles use two decimal places.
@@ -24,6 +24,9 @@ The V5 backend mounted `/assets` and one fixed logo route, but not the other pub
 No new numeric rounding implementation, dependency, service, configuration flag, owner ledger, API authority or arbitrary static-directory mount. The title adapter reuses the existing string-arithmetic rule. Hash-verified root images are read once, not verified and then reopened for delivery.
 
 ## Changed assertions: old → new
+
+This is the original C4 receipt. The round-1 correction receipt below supersedes
+its prose-adapter and visible chart-hover expectations and its previous build identity.
 
 All changes are display expectations; owner fixtures, raw accounting assertions, identity/reconciliation checks, protection checks, clock checks and fail-closed read tests stay in place.
 
@@ -134,3 +137,200 @@ Recovery fetch/registration log: `/var/tmp/dash-c4/git-metadata-repair.log`. Pre
 ## Remaining
 
 No merge, install, deploy, service restart, browser connection to live services, trading operation or real credential/token access occurred. No checkout work, branches, worktrees or retained evidence were deleted or discarded. Independent review was not run: this writer was explicitly forbidden to delegate. Boss review and live acceptance after an authorized install remain required. Keep the task worktrees/branch and retained evidence.
+
+## Round-1 correction receipt — 2026-11-17
+
+This section supersedes the earlier implementation, assertion and build descriptions
+where they conflict. Starting clean heads: Condor
+`aa9d761580148e21a57c7572ce79fe02cdf5b7fb`, rsibot
+`4b670f0770f24fba08039c2f8f2a7157888fa959`; both branches are
+`feat/andrzej_v5_dashboard_backlog_c4`. Only the locked C4 worktree was used.
+
+### Root cause
+
+- B1: desktop cells bypassed the title boundary, including JS numbers and Stock
+  depth fields whose existing sort kind is text. The route fixture poisoned strings only.
+- B2/S1: the prose-wide substitution adapter had no field semantics: it changed
+  decimal-looking identifiers while missing adjacent arithmetic operands.
+- B3: chart hover text was changed along with its title, outside the display contract.
+- B4/S2/S5: the legacy logo bypassed the manifest, pathname checks raced reads,
+  HEAD was not registered, and absent manifests had no warning.
+- S3/S4: scanner recognition shared adapter assumptions and money-tile expectations
+  called the formatter under test instead of using independent literals.
+
+### Repair
+
+- Numeric table columns and title-only `ownerValue` metadata call the same scalar
+  `ownerTitle()` rule through `ownerTitleText()`. Text IDs remain exact on both
+  layouts. Stock sort/filter kinds and visible values stay unchanged.
+- Expressions format typed operands and results at their builders, retaining raw
+  `.exact` provenance where consumed elsewhere. Stock record titles format known
+  amount keys and only the first two bid/ask fields; paths, IDs and other fields
+  remain exact. Exact-as-sent JSON remains unchanged.
+- Restored visible `markerText()` as on `45ec2f82`; a separate typed marker title
+  bounds only hover attributes. Phone visible notes are retained separately from titles.
+- Root assets, including the legacy logo, use manifest membership, a safe basename,
+  `O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK`, same-descriptor `fstat`, an 8 MiB regular-file
+  cap, bounded reads and SHA256 validation. HEAD verifies the same bytes and returns
+  GET's status/headers/content length without a body. Missing manifests warn.
+- Independent fraction/exponent probes, numeric poisoning and deterministic
+  pre-open symlink/post-open inode-swap tests cover the missed boundaries. Tile
+  expectations are six explicit literals. No dependency/build-config/checkbox change.
+
+### Simplification
+
+Removed prose-wide number replacement and the separate unverified logo route.
+No new dependency, state authority, service or formatter rule. Explicit title-only
+metadata avoids changing Stock sort semantics to fix an unrelated display issue.
+
+### Changed assertions: round-1 old → new
+
+| File / assertion | Old | New |
+| --- | --- | --- |
+| `v5-marker-labels.test.mjs`, visible BUY/SELL | `BUY 0 @ 101.12`; `SELL 1.23457 @ 102.99` | `BUY 0.000000000000000001 @ 101.1234567890123456789`; `SELL 1.234567890123456789 @ 102.9876543210987654321`; exact UTC suffixes unchanged |
+| `v5-phone-bots-layout.test.mjs`, visible BUY | `BUY 0 @ 101.12` | `BUY 0.00000000 @ 101.123456789`; exact UTC suffix unchanged |
+| `v5-bots-summary.test.mjs`, title oracle | `ownerTitleText(tile.exact)` | explicit `≈ 199980.077146231622 (rounded)`, `≈ −19.922853768378 (rounded)`, `≈ −12 (rounded)`, `≈ 13.093702869214 (rounded)`, `≈ −33.016556637591 (rounded)`, `≈ 4.314779042378 (rounded)` |
+| `v5-owner-title-contract.test.mjs`, expression source | raw `distance.exact` sent to prose adapter | typed builder's `distance.title`; same expected bounded expression |
+| Same file, scalar probes | prose containing leading dot / Unicode minus / exponent | explicit `.1234567890125` → `≈ 0.123456789013 (rounded)`, `−1.1234567890125` → `≈ −1.123456789013 (rounded)`, `1e-13` → `≈ 0 (rounded)`; `order/1.12345678901234567890` unchanged |
+| Same file, phone owner column | implicit text column | explicitly numeric owner column; four bounded title assertions unchanged |
+| `v5-bots-position.test.mjs` / `v5-candle-store-views.test.mjs` | `{text, exact}` | original fields unchanged, plus explicit `title` equal to the original short expression |
+| `v5-trade-costs.test.mjs` | exponent-source object has `exact` only | same `exact`, plus title `1e1 / 70 × 100 = ≈ 14.2857 % (rounded)` |
+| `v5-market-detail-values.test.mjs` | raw floating results `-0.004000000000004`, `49.998799999999996`; interpolated range | explicit `≈ −0.004 (rounded)`, `≈ 49.9988 (rounded)` and literal range `50`; inputs retained |
+| `v5-route-render-loop.test.mjs`, scanner count | 4 matches | 5 independently detected matches, including an ID-looking digit run; separate identifier-preservation tests prevent semantic overreach |
+| Same file, chart close lookup | hardcoded original close | poisoned fixture's actual close, preserving the original lookup's meaning |
+| Same file, visible scan | scans restored exact marker readout as formatted value | excludes only marker readout text, not its title; explicit marker tests assert raw visible text |
+| `v5-stocks-presentation.test.mjs`, retained catalog after detail failure | raw `123.456789012345678901` title | bounded title `≈ 123.456789012346 (rounded)` and unchanged visible `123.46`; failed detail's prior price still forbidden |
+| `test_v5_static_assets.py`, verified-byte race | monkeypatch pathname `read_bytes` | swap pathname after `os.open`; response must contain the already-open reviewed inode's bytes |
+| `test_v5_dashboard_bridge.py`, logo fixture | logo without manifest | fixture includes exact HTML/logo hashes; existing status/content/deep-link assertions unchanged |
+
+The raw-source assertions were not loosened: native amounts, IDs, accounting,
+state/clock/error handling, exact record disclosure and fail-closed checks remain.
+
+### Verification: fail before repair
+
+Every heavy command used this exact gate prefix (no alternate pool or bypass):
+
+```sh
+python3 /Users/s1kor/.codex/.tmp/mac-gate/mac-heavy-gate.py --thread dash-c4 --wait 5400 -- nice -n 10
+```
+
+The commands below ran after that prefix, with `TMPDIR=/var/tmp`,
+`NODE_OPTIONS=--max-old-space-size=1536`, `PYTHONDONTWRITEBYTECODE=1` and
+`PYTEST_DISABLE_PLUGIN_AUTOLOAD=1` where applicable.
+
+From Condor/frontend:
+
+```sh
+env V5_TITLE_BASELINE=aa9d761580148e21a57c7572ce79fe02cdf5b7fb node --test --test-concurrency=1 test/v5-owner-title-boundaries.test.mjs test/v5-route-render-loop.test.mjs
+```
+
+**33 passed / 9 failed / 42 total**, exit 1: all eight new boundary tests fail
+on pinned production source, plus the real-route render loop. Failed identities:
+desktop td/th; numeric title override with visible note; text IDs; candle health
+detail; Stock record IDs/amounts; Stock depth/trade title metadata; breakeven
+operands; Helm/System derived results; settled real V5 routes. The baseline route
+failure includes raw numeric `mean_abs_bps`/`p95_abs_bps` and Stock price titles.
+The hook obtains each frontend production module using `git show <SHA>:<path>`;
+it does not edit or switch the checkout.
+
+From the task-owned baseline archive directory:
+
+```sh
+env PYTHONPATH=.:tests /Users/s1kor/anaconda3/bin/python3 -m pytest -q -p no:cacheprovider -p pytest_asyncio.plugin --basetemp=/var/tmp/dash-c4-r1-fix.t93QyW/pytest-baseline-final tests/test_v5_static_assets.py
+```
+
+**20 passed / 13 failed / 33 total**, exit 1, using exact archived `aa9d7615`
+production with only the new static test file overlaid. `condor/v5/app.py` SHA256
+matches `git show` exactly:
+`e21cace6cf8e3372fbf83c9ae2192e14b4cb732f00526bf612fadb7d7074be54`.
+Failing node suffixes under `tests/test_v5_static_assets.py::`:
+
+- `test_root_static_requires_a_bounded_regular_descriptor[directory|fifo|oversized]`
+  (each GET is rejected; baseline HEAD is 405 rather than the required 404).
+- `test_root_static_size_limit_uses_the_open_descriptor`.
+- `test_legacy_logo_also_requires_its_reviewed_hash`.
+- `test_root_static_head_matches_get_headers_without_body[condor.png|favicon.svg|hyperliquid.png|icons.svg|condor_old.jpeg|favicon.ico]` (six distinct nodes).
+- `test_root_static_symlink_swap_at_open_is_rejected` (baseline returns 200).
+- `test_missing_static_manifest_logs_warning`.
+
+### Verification: rebuild identity
+
+From Condor/frontend, gated as above:
+
+```sh
+env V5_WORKSPACE_ROOT=/Users/s1kor/dev/trading/rsibot/.worktrees/mac.noindex/v5-c4 node node_modules/vite/bin/vite.js build --config vite.v5.config.ts --outDir /var/tmp/dash-c4-r1-fix.t93QyW/seed-dist --emptyOutDir false
+node tooling/check-v5-reproducibility.mjs rebuild /var/tmp/dash-c4-r1-fix.t93QyW/repro-final /Users/s1kor/dev/trading/rsibot/.worktrees/mac.noindex/v5-c4
+```
+
+Seed build PASS. Regenerated `frontend/v5-reviewed-build.json` from built HTML's
+module entry and the canonical exported `distHashes()`, verified with `verifyDist()`.
+Rebuild PASS: **two fresh builds, 26/26 files verified each**, exit 0.
+Entry `assets/v5-DnpER67o.js`; SHA256
+`b170da8e1eed2f9324775b12a6e1281c435f3941fec11d52ae0e58a1635d3d37`.
+Both builds use the same workspace; no cross-machine/Docker proof is claimed.
+Vite reports existing mixed static/dynamic imports and the large entry chunk.
+
+### Verification: final local gates
+
+All commands use the exact gate/environment above. From Condor:
+
+```sh
+node ../dashboard/v5-workspace/typecheck.mjs frontend ..
+```
+
+**PASS**, exit 0. From Condor/frontend:
+
+```sh
+node --test --test-concurrency=1 test/v5-*.test.mjs
+```
+
+**858 passed / 0 failed / 0 skipped**, exit 0. The focused boundary/route run
+also passed **42/42**. From Condor:
+
+```sh
+env PYTHONPATH=.:tests /Users/s1kor/anaconda3/bin/python3 -m pytest -q -p no:cacheprovider -p pytest_asyncio.plugin --basetemp=/var/tmp/dash-c4-r1-fix.t93QyW/pytest-final-confirmed tests/test_v5_dashboard_bridge.py tests/test_v5_helm_status.py tests/test_v5_money.py tests/test_v5_workspace_auth.py tests/test_v5_paper_trade_costs.py tests/test_v5_advisor_history.py tests/test_v5_static_assets.py
+```
+
+**669 passed / 0 failed**, exit 0, including **33 static-asset cases**.
+From the C4 worktree's `dashboard/condor-workspace`:
+
+```sh
+node --test --test-concurrency=1 test/*.test.mjs
+```
+
+**681 passed / 0 failed / 0 skipped**, exit 0. These are local test results,
+not hosted CI, browser or deployed-service evidence.
+
+Intermediate failures were repaired, not classified as baseline parity: the
+first full frontend run was **851 pass / 5 fail**, then **857 pass / 1 fail**;
+the last failure expected a now-bounded Stock catalog title. The first canonical
+Python run was **668 pass / 1 fail** because its synthetic legacy-logo fixture
+lacked the now-required manifest; adding exact fixture hashes preserves all
+existing success/deep-link assertions without weakening the production guard.
+A redundant queued validation command was stopped before admission; it is not
+counted as a check. The completed final stream above supplies every required result.
+
+Before any production edits, this gated command also demonstrated the marker
+regression on unchanged `aa9d7615` source, from Condor/frontend:
+
+```sh
+node --test --test-concurrency=1 test/v5-owner-title-boundaries.test.mjs test/v5-marker-labels.test.mjs test/v5-phone-bots-layout.test.mjs
+```
+
+That initial mixed run was **11 pass / 7 fail**. Three failures were the explicit
+original visible marker expectations (`v5-marker-labels.test.mjs` hover and
+move-off tests, and `v5-phone-bots-layout.test.mjs` chart-hover test): actual
+`BUY 0 @ 101.12` differed from required raw text. One Stock boundary test in this
+early run had a test-import setup error; it was corrected, and the later pinned
+42-test baseline run above is the authoritative boundary fail-first evidence.
+
+`git diff --check` passed in both repositories. The existing checkbox stylesheet,
+package files and Vite configuration have no changes relative to `aa9d7615`.
+
+### Remaining
+
+No subagents, independent review, services, credentials, merge, deployment or
+live verification. The boss owns round 2, the last broad review, and acceptance.
+The locked worktree and task-owned Condor Git backing store must remain.
+Only this writer's `/var/tmp/dash-c4-r1-fix.t93QyW` scratch is eligible for removal
+after its evidence has been recorded. Earlier `/var/tmp/dash-c4` is not ours.

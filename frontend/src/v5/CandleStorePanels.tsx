@@ -93,7 +93,7 @@ export function CoverageHeatmapPanel() {
         const coverage = heatRowCoverage(row);
         const name = `${row.venue} · ${row.pair}`;
         return <div key={`${row.lane}/${row.pair}`} className="grid grid-cols-1 items-center gap-x-3 gap-y-0.5 sm:grid-cols-[minmax(150px,220px)_minmax(0,1fr)]">
-          <div className="min-w-0 text-xs"><span className="font-medium">{name}</span> <span className="text-[var(--color-text-muted)]" title={ownerTitleText(coverage?.exact)}>· {coverage == null ? "no settled minutes" : `${coverage.text} settled`}</span></div>
+          <div className="min-w-0 text-xs"><span className="font-medium">{name}</span> <span className="text-[var(--color-text-muted)]" title={coverage?.title}>· {coverage == null ? "no settled minutes" : `${coverage.text} settled`}</span></div>
           <HeatStrip ariaLabel={`${name} hourly coverage`} maxCellWidth={12} height={16} cells={order.map(ownerIndex => { const cell = heatCell(row.cells[ownerIndex], view.hours[ownerIndex]); return { key: String(view.hours[ownerIndex]), color: cell.color, empty: cell.state === "outside", label: `${name} · ${cell.label}` }; })} renderTooltip={index => heatTooltip(row, view, order[index])} />
         </div>;
       })}</div>

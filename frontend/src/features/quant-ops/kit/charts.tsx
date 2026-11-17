@@ -14,11 +14,11 @@ export const chartAxis = (value: number, withSign = false) => axis(value, 2, wit
 const plain = (value: number) => chartAxis(value);
 const utc = (time: number, withDate = true) => new Date(time).toLocaleString('en-GB', { timeZone: 'UTC', ...(withDate ? { month: 'short', day: 'numeric' } : {}), hour: '2-digit', minute: '2-digit' });
 
-export function TooltipCard({ title, rows }: { title: string; rows: { key: string; label: string; color: string; value: string; exact?: string; note?: string; tone?: string }[] }) {
+export function TooltipCard({ title, rows }: { title: string; rows: { key: string; label: string; color: string; value: string; exact?: string; title?: string; note?: string; tone?: string }[] }) {
   return <div className="q-tooltip">
     <p className="q-tooltip__title">{title}</p>
     {rows.map(row => <p key={row.key} className="q-tooltip__row">
-      <i style={{ background: row.color }} /><span>{row.label}</span><strong className={row.tone} title={ownerTitleText(row.exact)}>{row.value}</strong>
+      <i style={{ background: row.color }} /><span>{row.label}</span><strong className={row.tone} title={row.title ?? ownerTitleText(row.exact)}>{row.value}</strong>
       {row.note && <small>{row.note}</small>}
     </p>)}
   </div>;
@@ -107,7 +107,7 @@ export function TimeSeriesChart({ series, height = 220, markers = [], highlight,
               const format = item.format ?? (item.axis === 'secondary' ? rightFormat : leftFormat);
               const lag = label - sample.time;
               const text = sample.value === null ? 'Gap' : item.format ? item.format(sample.value, sample.exact) : format(sample.value);
-              return [{ key: item.id, label: item.label, color: item.color, value: sample.value === null ? text : `${text}${item.unit ? ` ${item.unit}` : ''}`, exact: sample.exact ?? (sample.value == null ? undefined : String(sample.value)), tone: chartTone(text, signed || item.axis === 'secondary'), note: sample.value !== null && lag > 0 ? `as of ${utc(sample.time, span > 86_400_000)}` : undefined }];
+              return [{ key: item.id, label: item.label, color: item.color, value: sample.value === null ? text : `${text}${item.unit ? ` ${item.unit}` : ''}`, title: sample.title, exact: sample.exact ?? (sample.value == null ? undefined : String(sample.value)), tone: chartTone(text, signed || item.axis === 'secondary'), note: sample.value !== null && lag > 0 ? `as of ${utc(sample.time, span > 86_400_000)}` : undefined }];
             });
             const marker = markers.find(item => Math.abs(item.time - label) <= span / 200);
             return <TooltipCard title={`${utc(label)} UTC${marker ? ` · ${marker.label}` : ''}`} rows={rows} />;

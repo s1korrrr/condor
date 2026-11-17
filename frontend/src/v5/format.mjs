@@ -225,12 +225,10 @@ export function ownerTitle(value) {
 export function ownerTitleText(value) {
   if (typeof value !== 'string' && typeof value !== 'number') return undefined;
   const text = String(value);
-  const title = ownerTitle(text.replace(/^−/, '-'));
-  if (title != null) return title.startsWith('≈') ? title : text;
-  return text.replace(/(?<![\w.+−-])[-−+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?![\w.])/g, token => {
-    const shown = ownerTitle(token.replace(/^−/, '-'));
-    return shown?.startsWith('≈') ? shown : token;
-  });
+  const percent = text.endsWith('%');
+  const title = ownerTitle((percent ? text.slice(0, -1) : text).replace(/^−/, '-'));
+  if (title != null) return title.startsWith('≈') ? `${title}${percent ? '%' : ''}` : text;
+  return text;
 }
 
 export function ownerDisplay(value, kind, { unit, digits = 2 } = {}) {

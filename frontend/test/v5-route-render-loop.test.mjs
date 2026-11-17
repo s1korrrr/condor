@@ -45,11 +45,22 @@ const fixture = relative => JSON.parse(fs.readFileSync(new URL(`../../tests/fixt
 const poisonDecimals = value => {
   if (Array.isArray(value)) return value.map(poisonDecimals);
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, poisonDecimals(item)]));
+  if (typeof value === 'number' && Number.isFinite(value) && !Number.isInteger(value)) return Number(`${value.toFixed(6)}73179863`);
   if (typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value)) {
     const [whole, fraction = ''] = value.split('.');
     return `${whole}.${fraction.slice(0, 8).padEnd(8, '0')}73170000000000000001`;
   }
   return value;
+};
+const stockAmountFields = new Set(['last','bidPx','askPx','vol24h','volCcy24h','ctVal','ctMult','tickSz','lotSz','minSz','markPx','idxPx','fundingRate','oi','px','sz']);
+const poisonStockAmounts = value => {
+  if (Array.isArray(value)) return value.map(poisonStockAmounts);
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(Object.entries(value).map(([key, item]) => [key,
+    stockAmountFields.has(key) ? poisonDecimals(item)
+      : ['bids','asks'].includes(key) && Array.isArray(item) ? item.map(level => level.map((part, index) => index < 2 ? poisonDecimals(part) : part))
+        : poisonStockAmounts(item),
+  ]));
 };
 const baseline = fixture('v5_unbound_base_8284ffe7.json');
 const sections = Object.fromEntries(['status','wallet','positions','executors','risk','fills','decisions','history','accounting','operations'].map(section => [section,fixture(`paper-api-final3/native-replay/${section}.json`)]));
@@ -125,21 +136,31 @@ function longVisibleDecimals(container) {
 function longOwnerTitles(container) {
   const findings = [];
   for (const element of container.querySelectorAll('[title]')) {
-    for (const match of element.title.matchAll(/(?<![\w.+−-])[-−+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?![\w.])/g)) {
-      const [mantissa, exponent = '0'] = match[0].split(/[eE]/);
+    const text = element.title;
+    const longFraction = [...text.matchAll(/\d*\.(\d{13,})/g)].some(match => match[1].replace(/0+$/, '').length > 12);
+    const tinyExponent = [...text.matchAll(/\d+(?:\.\d+)?[eE]([+-]?\d+)/g)].some(match => {
+      const [mantissa] = match[0].split(/[eE]/);
       const fraction = mantissa.split('.')[1] ?? '';
       const trailing = mantissa.replace('.', '').match(/0+$/)?.[0].length ?? 0;
-      if (fraction.length - Number(exponent) - trailing > 12) findings.push(`${element.tagName} title=${element.title}`);
+      return fraction.length - Number(match[1]) - trailing > 12;
+    });
+    if (longFraction || tinyExponent) {
+      findings.push(`${element.tagName} title=${text}`);
     }
   }
   return findings;
 }
 
-test('owner-title scan catches 28-place inputs and scientific notation, not padded exact values or IDs', () => {
+test('independent owner-title scan catches fractions regardless of punctuation, signs, units or grouping', () => {
   assert.equal(poisonDecimals('1').split('.')[1].length, 28);
   const container = document.createElement('div');
   container.innerHTML = '<span title="114.1396691483993272381433853"></span><span title="1e-13"></span><span title="(680.8963033983613722931914460 − 594.17)"></span><span title="199123.96997705845820"></span><span title="1.2345678901230000000000000000"></span><span title="owner abc123.12345678901234567890"></span>';
-  assert.equal(longOwnerTitles(container).length, 4);
+  assert.equal(longOwnerTitles(container).length, 5);
+  assert.ok(String(poisonDecimals(114.1)).split('.')[1].length > 12);
+  for (const title of ['result 0.1234567890123456.', 'x−0.1234567890123456', '0.1234567890123456bp', '1,234.1234567890123456', '(1.1234567890123456+2.1234567890123456)']) {
+    container.replaceChildren(Object.assign(document.createElement('span'), { title }));
+    assert.equal(longOwnerTitles(container).length, 1, title);
+  }
 });
 
 test('decimal scan checks phone CSS title helpers but not exact leaf tooltips', () => {
@@ -205,6 +226,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const scan = (container, label) => {
     titleFindings.push(...longOwnerTitles(container).map(finding => `${label}: ${finding}`));
     const display = container.cloneNode(true);
+    for (const marker of display.querySelectorAll('.recorded-candle-readout .block')) marker.textContent = '';
     for (const details of display.querySelectorAll('details')) {
       if (details.querySelector(':scope > summary')?.textContent === 'Exact record · as sent') details.querySelector(':scope > pre').textContent = '';
     }
@@ -264,6 +286,8 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
     else if (url.pathname.startsWith('/api/v5/learning/')) body = {effect:'NONE',status:'DISABLED',roles:[],reason:'Stage1 disabled'};
     else {unexpectedReads.push(url.pathname + url.search); throw new Error(`unmapped read: ${url}`);}
     if (url.pathname === '/api/v5/money') body = poisonDecimals(body);
+    if (['/api/v5/candle-store/cross','/api/v5/candle-store/candles'].includes(url.pathname)) body = poisonDecimals(body);
+    if (['/api/v5/candle-store/stocks','/api/v5/candle-store/stock-market','/api/v5/candle-store/stock-candles'].includes(url.pathname)) body = poisonStockAmounts(body);
     return new Response(JSON.stringify(body),{status:200,headers:{'Content-Type':'application/json'}});
   };
   try {
@@ -402,7 +426,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         }
         if (pathname === '/market') await React.act(async () => { await client.refetchQueries({type:'active'}); await new Promise(resolve => setTimeout(resolve,0)); });
         if (pathname === '/market') {
-          const chart = charts.slice(chartStart).findLast(item => item.data.some(row => row.close === 101.123456789));
+          const chart = charts.slice(chartStart).findLast(item => item.data.some(row => row.close === poisonDecimals(fixtureClose)));
           assert.ok(chart?.move, 'the real candle chart must subscribe to crosshair movement');
           await React.act(async () => {chart.move({time:fixtureMinute});});
           assert.match(container.textContent,/C 101\.12/, 'the crosshair must show the formatted close');

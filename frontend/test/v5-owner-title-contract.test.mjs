@@ -32,7 +32,7 @@ for (const [label, value, expected] of [
 test('live breakeven expression rounds each input, not just its result', () => {
   const { breakEvenDistanceDetail } = modules.load('v5/bots-position-model.mjs');
   const distance = breakEvenDistanceDetail('680.8963033983613722931914460', 594.17);
-  const html = renderToStaticMarkup(React.createElement(modules.load('v5/OwnerValue.tsx').OwnerValue, { value: '14.5962', kind: 'pct', exact: distance.exact }));
+  const html = renderToStaticMarkup(React.createElement(modules.load('v5/OwnerValue.tsx').OwnerValue, { value: '14.5962', kind: 'pct', exact: distance.title }));
   assert.match(html, /title="\(≈ 680\.896303398361 \(rounded\) − 594\.17\) × 100 \/ 594\.17 = ≈ 14\.5962 % \(rounded\)"/);
 });
 
@@ -52,16 +52,19 @@ test('owner title expressions leave IDs and words unchanged', () => {
   assert.ok(renderToStaticMarkup(React.createElement(OwnerValue, { value: '1', kind: 'coin', exact })).includes(`title="${exact}"`));
 });
 
-test('owner expressions handle leading-dot decimals, Unicode minus, and exponents', () => {
-  const html = renderToStaticMarkup(React.createElement(modules.load('v5/OwnerValue.tsx').OwnerValue, { value: '1', kind: 'coin', exact: '(.1234567890125 − −1.1234567890125) / 1e-13' }));
-  assert.ok(html.includes('title="(≈ 0.123456789013 (rounded) − ≈ −1.123456789013 (rounded)) / ≈ 0 (rounded)"'), html);
+test('typed owner operands handle leading-dot decimals, Unicode minus, and exponents', () => {
+  const { ownerTitleText } = modules.load('v5/format.mjs');
+  assert.equal(ownerTitleText('.1234567890125'), '≈ 0.123456789013 (rounded)');
+  assert.equal(ownerTitleText('−1.1234567890125'), '≈ −1.123456789013 (rounded)');
+  assert.equal(ownerTitleText('1e-13'), '≈ 0 (rounded)');
+  assert.equal(ownerTitleText('order/1.12345678901234567890'), 'order/1.12345678901234567890');
 });
 
 test('phone row summaries and expanded fields do not reintroduce raw owner titles', () => {
   const { Rows } = modules.load('features/quant-ops/kit/Rows.tsx');
   const value = '114.1396691483993272381433853';
   const html = renderToStaticMarkup(React.createElement(Rows, { rows: [{ value }], rowId: () => 'owner', label: 'Owner values', columns: [
-    { id: 'value', header: 'Profit', value: row => row.value, cell: row => React.createElement(modules.load('v5/OwnerValue.tsx').OwnerValue, { value: row.value, kind: 'usdc' }) },
+    { id: 'value', header: 'Profit', kind: 'number', value: row => row.value, cell: row => React.createElement(modules.load('v5/OwnerValue.tsx').OwnerValue, { value: row.value, kind: 'usdc' }) },
   ] }));
   assert.ok(!html.includes(`title="${value}"`), html);
   assert.equal(html.match(/title="≈ 114\.139669148399 \(rounded\)"/g)?.length, 4);

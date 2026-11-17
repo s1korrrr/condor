@@ -27,7 +27,11 @@ const readable = (state: string) => state === 'live' || state === 'stale';
 
 function StockRecord({ record }: { record: unknown }) {
   const exact = JSON.stringify(record, null, 2);
-  return <><pre className="v5-stock-json" title={ownerTitleText(exact)}>{formattedRecord(record)}</pre><details><summary>Exact record · as sent</summary><pre className="v5-stock-json">{exact}</pre></details></>;
+  const title = JSON.stringify(record, function (key, entry) {
+    if ((key === 'bids' || key === 'asks') && Array.isArray(entry)) return entry.map(level => Array.isArray(level) ? level.map((part, index) => index < 2 ? ownerTitleText(part) ?? part : part) : level);
+    return numericFields.has(key) ? ownerTitleText(entry) ?? entry : entry;
+  }, 2);
+  return <><pre className="v5-stock-json" title={title}>{formattedRecord(record)}</pre><details><summary>Exact record · as sent</summary><pre className="v5-stock-json">{exact}</pre></details></>;
 }
 
 function metadataTime(stamp: unknown) {
@@ -50,16 +54,16 @@ function depthRows(book: PublicEvent | null): DepthRow[] {
 
 const depthColumns: TableColumn<DepthRow>[] = [
   { id: 'side', header: 'Side', value: row => row.side, rowHeader: true, size: 70 },
-  { id: 'price', header: 'Price', value: row => row.price, cell: row => formatted(row.price), size: 180 },
-  { id: 'size', header: 'Size (venue units)', value: row => row.size, cell: row => formatted(row.size), size: 180 },
-  { id: 'orders', header: 'Order count', value: row => row.orders, size: 110 },
+  { id: 'price', header: 'Price', ownerValue: true, value: row => row.price, cell: row => formatted(row.price), size: 180 },
+  { id: 'size', header: 'Size (venue units)', ownerValue: true, value: row => row.size, cell: row => formatted(row.size), size: 180 },
+  { id: 'orders', header: 'Order count', ownerValue: true, value: row => row.orders, size: 110 },
 ];
 const tradeColumns: TableColumn<PublicEvent>[] = [
   { id: 'time', header: 'Source time (UTC)', value: event => utc(event.event_time_ms == null ? null : event.event_time_ms / 1000), rowHeader: true, size: 180 },
   { id: 'id', header: 'Trade ID', value: event => field(event, 'tradeId'), size: 130 },
   { id: 'side', header: 'Side', value: event => field(event, 'side'), size: 70 },
-  { id: 'price', header: 'Price', value: event => field(event, 'px'), cell: event => formatted(event.data.px), size: 150 },
-  { id: 'size', header: 'Size (venue units)', value: event => field(event, 'sz'), cell: event => formatted(event.data.sz), size: 150 },
+  { id: 'price', header: 'Price', ownerValue: true, value: event => field(event, 'px'), cell: event => formatted(event.data.px), size: 150 },
+  { id: 'size', header: 'Size (venue units)', ownerValue: true, value: event => field(event, 'sz'), cell: event => formatted(event.data.sz), size: 150 },
 ];
 const channelColumns: TableColumn<StockChannel & { name: string }>[] = [
   { id: 'name', header: 'Public channel', value: row => row.name, rowHeader: true, size: 150 },
@@ -75,8 +79,8 @@ function InstrumentMetadata({ instrument }: { instrument: StockInstrument }) {
   return <details className="v5-stock-details"><summary>Instrument metadata</summary><dl className="v5-stock-metadata">
     <div><dt>Underlying</dt><dd>{value(instrument.uly)}</dd></div>
     <div><dt>Quote / settlement</dt><dd>{value(instrument.quoteCcy)} / {spot ? 'Not applicable' : value(instrument.settleCcy)}</dd></div>
-    <div><dt>Contract value / multiplier</dt><dd title={ownerTitleText(spot ? undefined : `${value(instrument.ctVal)} ${value(instrument.ctValCcy)} / ${value(instrument.ctMult)}`)}>{spot ? 'Not applicable' : `${formatted(instrument.ctVal)} ${value(instrument.ctValCcy)} / ${formatted(instrument.ctMult)}`}</dd></div>
-    <div><dt>Tick / lot / minimum size</dt><dd title={ownerTitleText(`${value(instrument.tickSz)} / ${value(instrument.lotSz)} / ${value(instrument.minSz)}`)}>{formatted(instrument.tickSz)} / {formatted(instrument.lotSz)} / {formatted(instrument.minSz)}</dd></div>
+    <div><dt>Contract value / multiplier</dt><dd title={spot ? undefined : `${ownerTitleText(instrument.ctVal) ?? 'Unavailable'} ${value(instrument.ctValCcy)} / ${ownerTitleText(instrument.ctMult) ?? 'Unavailable'}`}>{spot ? 'Not applicable' : `${formatted(instrument.ctVal)} ${value(instrument.ctValCcy)} / ${formatted(instrument.ctMult)}`}</dd></div>
+    <div><dt>Tick / lot / minimum size</dt><dd title={`${ownerTitleText(instrument.tickSz) ?? 'Unavailable'} / ${ownerTitleText(instrument.lotSz) ?? 'Unavailable'} / ${ownerTitleText(instrument.minSz) ?? 'Unavailable'}`}>{formatted(instrument.tickSz)} / {formatted(instrument.lotSz)} / {formatted(instrument.minSz)}</dd></div>
     <div><dt>Listed (UTC)</dt><dd>{metadataTime(instrument.listTime)}</dd></div>
     <div><dt>Expiry (UTC)</dt><dd>{spot || instrument.instType === 'SWAP' ? 'Not applicable' : metadataTime(instrument.expTime)}</dd></div>
   </dl><details><summary>All public instrument fields</summary><StockRecord record={instrument} /></details></details>;
@@ -131,7 +135,7 @@ export function V5Stocks({ configured, profilePending = false, profileError = nu
     { id: 'rule', header: 'Rule type', value: row => row.instrument.ruleType, size: 95 },
     { id: 'state', header: 'Instrument state', value: row => row.instrument.state, size: 100 },
     { id: 'quote', header: 'Quote / settlement', value: row => `${value(row.instrument.quoteCcy)} / ${row.instrument.instType === 'SPOT' ? 'N/A' : value(row.instrument.settleCcy)}`, size: 140 },
-    { id: 'last', header: 'Last recorded trade price', value: row => field(publicObservation(snapshot ? { ...row, now: snapshot.now, state: snapshot.state } : null, 'ticker', catalog.isError, nowMs), 'last'), cell: row => formatted(publicObservation(snapshot ? { ...row, now: snapshot.now, state: snapshot.state } : null, 'ticker', catalog.isError, nowMs)?.data.last), size: 150 },
+    { id: 'last', header: 'Last recorded trade price', ownerValue: true, value: row => field(publicObservation(snapshot ? { ...row, now: snapshot.now, state: snapshot.state } : null, 'ticker', catalog.isError, nowMs), 'last'), cell: row => formatted(publicObservation(snapshot ? { ...row, now: snapshot.now, state: snapshot.state } : null, 'ticker', catalog.isError, nowMs)?.data.last), size: 150 },
     { id: 'channel', header: 'Ticker state', value: row => !ownerReady ? 'Unavailable' : !stockCaptured(row) ? 'Not captured' : row.channels.ticker?.state ?? 'Unavailable', size: 100 },
     { id: 'age', header: 'Ticker receipt age at evaluation (s)', value: row => ownerReady ? row.channels.ticker?.age_s : null, kind: 'number', size: 120 },
     { id: 'from', header: 'Candles from (UTC)', value: row => utc(row.coverage.candle_start), size: 180 },

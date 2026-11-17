@@ -1,5 +1,6 @@
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 
@@ -106,17 +107,105 @@ def test_changed_reviewed_static_is_not_served(static_site):
 def test_static_response_uses_the_bytes_that_were_verified(static_site, monkeypatch):
     client, dist = static_site
     image = dist / 'condor.png'
-    original_read = Path.read_bytes
-    reviewed = original_read(image)
+    original_open = os.open
+    reviewed = image.read_bytes()
 
-    def read_then_replace(path):
-        content = original_read(path)
-        if path == image:
-            path.rename(dist / 'retained-condor.png')
-            path.write_bytes(b'unreviewed replacement')
-        return content
+    def open_then_replace(path, flags, *args, **kwargs):
+        descriptor = original_open(path, flags, *args, **kwargs)
+        if Path(path) == image:
+            image.rename(dist / 'retained-condor.png')
+            image.write_bytes(b'unreviewed replacement')
+        return descriptor
 
-    monkeypatch.setattr(Path, 'read_bytes', read_then_replace)
+    monkeypatch.setattr(os, 'open', open_then_replace)
     response = client.get('/condor.png')
     assert response.status_code == 200
     assert response.content == reviewed
+
+
+@pytest.mark.parametrize('kind', ['directory', 'fifo', 'oversized'])
+def test_root_static_requires_a_bounded_regular_descriptor(static_site, kind):
+    client, dist = static_site
+    image = dist / 'condor.png'
+    image.rename(dist / 'retained-condor.png')
+    if kind == 'directory':
+        image.mkdir()
+    elif kind == 'fifo':
+        os.mkfifo(image)
+    else:
+        with image.open('wb') as source:
+            source.truncate(8 * 1024 * 1024 + 1)
+    assert client.get('/condor.png').status_code == 404
+    assert client.head('/condor.png').status_code == 404
+
+
+def test_root_static_size_limit_uses_the_open_descriptor(static_site, monkeypatch):
+    client, _ = static_site
+    original_fstat = os.fstat
+    checked = []
+
+    def oversized_descriptor(descriptor):
+        metadata = original_fstat(descriptor)
+        checked.append(descriptor)
+        values = list(metadata)
+        values[6] = 8 * 1024 * 1024 + 1
+        return os.stat_result(values)
+
+    monkeypatch.setattr(os, 'fstat', oversized_descriptor)
+    assert client.get('/condor.png').status_code == 404
+    assert checked
+
+
+def test_legacy_logo_also_requires_its_reviewed_hash(static_site):
+    client, dist = static_site
+    (dist / 'condor_old.jpeg').write_bytes(b'not reviewed')
+    assert client.get('/condor_old.jpeg').status_code == 404
+    assert client.head('/condor_old.jpeg').status_code == 404
+
+
+@pytest.mark.parametrize('name', [*ROOT_ASSETS, 'favicon.ico'])
+def test_root_static_head_matches_get_headers_without_body(static_site, name):
+    client, _ = static_site
+    response = client.get('/' + name)
+    head = client.head('/' + name)
+    assert head.status_code == response.status_code == 200
+    assert head.headers == response.headers
+    assert head.content == b''
+
+
+def test_root_static_symlink_swap_at_open_is_rejected(static_site, monkeypatch):
+    client, dist = static_site
+    image = dist / 'condor.png'
+    retained = dist / 'retained-condor.png'
+    original_open = os.open
+    original_read = Path.read_bytes
+    swapped = False
+
+    def swap():
+        nonlocal swapped
+        if not swapped:
+            image.rename(retained)
+            image.symlink_to(retained)
+            swapped = True
+
+    def swap_before_open(path, flags, *args, **kwargs):
+        if Path(path) == image:
+            swap()
+        return original_open(path, flags, *args, **kwargs)
+
+    def swap_before_read(path):
+        if path == image:
+            swap()
+        return original_read(path)
+
+    monkeypatch.setattr(os, 'open', swap_before_open)
+    monkeypatch.setattr(Path, 'read_bytes', swap_before_read)
+    assert client.get('/condor.png').status_code == 404
+    assert swapped
+
+
+def test_missing_static_manifest_logs_warning(tmp_path, caplog):
+    dist = tmp_path / 'dist-v5'
+    dist.mkdir()
+    create_app(settings=settings(tmp_path), upstream=FakeUpstream(), static_dir=dist)
+    assert 'V5 root statics withheld: missing reviewed manifest' in caplog.text

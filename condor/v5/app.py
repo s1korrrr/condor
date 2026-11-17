@@ -12,7 +12,9 @@ import hmac
 import ipaddress
 import json
 import logging
+import os
 import re
+import stat
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -1439,13 +1441,15 @@ def create_app(
             root_static_hashes = {
                 name: digest
                 for name, digest in files.items()
-                if Path(name).name == name
+                if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name)
                 and Path(name).suffix in root_media_types
                 and isinstance(digest, str)
                 and re.fullmatch(r"[0-9a-f]{64}", digest)
             }
         except (OSError, ValueError, KeyError, TypeError):
             logging.getLogger(__name__).warning("V5 root statics withheld: invalid reviewed manifest")
+    else:
+        logging.getLogger(__name__).warning("V5 root statics withheld: missing reviewed manifest")
 
     @app.get("/", response_class=HTMLResponse)
     async def root_page():
@@ -1454,13 +1458,6 @@ def create_app(
         return HTMLResponse(
             "V5 workspace frontend has not been built.", status_code=503
         )
-
-    @app.get("/condor_old.jpeg")
-    async def dashboard_logo():
-        image = static_root / "condor_old.jpeg"
-        if not image.is_file() or image.is_symlink():
-            raise HTTPException(404)
-        return FileResponse(image, media_type="image/jpeg")
 
     for ui_path in (
         "/market",
@@ -1509,20 +1506,30 @@ def create_app(
             raise HTTPException(404)
         return await root_page()
 
-    @app.get("/{asset_name}")
-    def root_static(asset_name: str):
+    @app.api_route("/{asset_name}", methods=["GET", "HEAD"])
+    def root_static(asset_name: str, request: Request):
         name = "favicon.svg" if asset_name == "favicon.ico" and asset_name not in root_static_hashes else asset_name
         digest = root_static_hashes.get(name)
         image = static_root / name
-        if digest is None or image.is_symlink() or not image.is_file():
+        if digest is None:
             raise HTTPException(404)
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+        limit = 8 * 1024 * 1024
         try:
-            content = image.read_bytes()
+            with os.fdopen(os.open(image, flags), "rb") as source:
+                metadata = os.fstat(source.fileno())
+                if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > limit:
+                    raise HTTPException(404)
+                content = source.read(limit + 1)
         except OSError:
             raise HTTPException(404) from None
-        if not hmac.compare_digest(hashlib.sha256(content).hexdigest(), digest):
+        if len(content) > limit or not hmac.compare_digest(hashlib.sha256(content).hexdigest(), digest):
             raise HTTPException(404)
-        return Response(content, media_type=root_media_types[image.suffix])
+        return Response(
+            b"" if request.method == "HEAD" else content,
+            media_type=root_media_types[image.suffix],
+            headers={"content-length": str(len(content))},
+        )
 
     @app.exception_handler(StarletteHTTPException)
     async def not_found_page(request: Request, exc: StarletteHTTPException):

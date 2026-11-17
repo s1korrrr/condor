@@ -54,7 +54,7 @@ test('selected detail failure cannot render its earlier success', () => {
   const { html } = render({ failed: ['stock-market'] });
   assert.match(html, /Public observations: owner_unreachable/);
   assert.doesNotMatch(html, /9876\.543210/);
-  assert.match(html, /123\.456789012345678901/);
+  assert.match(html, /title="≈ 123\.456789012346 \(rounded\)">123\.46/);
 });
 
 test('default region is EEA and spot derivative metrics are explicitly not applicable', () => {

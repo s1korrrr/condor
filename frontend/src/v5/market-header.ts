@@ -1,5 +1,5 @@
 import type { PaperRead } from './contracts';
-import { coin as formatCoin, decimalPercentChange, pct, rationalPercent } from './format.mjs';
+import { coin as formatCoin, decimalPercentChange, pct, ownerTitleText, rationalPercent } from './format.mjs';
 import { ageSeconds, MARKET_COINS, STALE_AFTER_S, type CandleRead } from './market-model.mjs';
 import { paperCompleteRead, paperPairBag, paperPairHoldings, paperSectionError, paperSnapshotsAgree } from './policy.ts';
 
@@ -47,7 +47,7 @@ export function marketAverageTitle(changes: Record<string, string | null>): stri
   if (!measured.length) return undefined;
   const sum = measured.reduce((total, row) => total + row.value, 0n);
   const exact = rationalPercent(sum, BigInt(measured.length) * SCALE)!.exact;
-  return `${measured.map(row => `${row.coin} ${row.text}%`).join(', ')} · exact average ${exact}`;
+  return `${measured.map(row => `${row.coin} ${ownerTitleText(row.text)}%`).join(', ')} · exact average ${ownerTitleText(exact)}`;
 }
 
 export function marketSentence(changes: Record<string, string | null>, range: string): string {
@@ -77,12 +77,12 @@ export function hourlyReturns(read: CandleRead | null | undefined): { from: numb
     const to = from + 3600;
     const rows = Array.from({ length: 61 }, (_, index) => byTime.get(from - 60 + index * 60));
     const complete = rows.every(row => row?.[6] === 1 && row[4] != null);
-    result.push({ from, to, change: complete ? change(rows[60]![4]!, rows[0]![4]!) : null, ...(complete ? { inputs: `first close ${rows[0]![4]}; last close ${rows[60]![4]}` } : {}) });
+    result.push({ from, to, change: complete ? change(rows[60]![4]!, rows[0]![4]!) : null, ...(complete ? { inputs: `first close ${ownerTitleText(rows[0]![4])}; last close ${ownerTitleText(rows[60]![4])}` } : {}) });
   }
   return result;
 }
 
-export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot: string | null | undefined, last: number | null, quote: string, now: number): { text: string; exact?: string; reason: string | null; asOf: number | null } {
+export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot: string | null | undefined, last: number | null, quote: string, now: number): { text: string; exact?: string; title?: string; reason: string | null; asOf: number | null } {
   const unavailable = (reason: string) => ({ text: 'V5 holds —', reason, asOf: null });
   if (!bot || !reads || reads.length !== 3 || !['status', 'positions', 'decisions'].every(section => reads.some(read => read.section === section)) ||
       reads.some(read => read.bot_id !== bot || paperSectionError(read) || read.section !== 'status' && !paperCompleteRead(read, now)) || !paperSnapshotsAgree(reads)) return unavailable('Complete current V5 paper snapshot required.');
@@ -102,5 +102,6 @@ export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot:
   if (!gap && !reason) reason = 'A complete price comparison is unavailable.';
   const comparison = gap && last != null ? decimalPercentChange(last, bag?.breakevenPrice, 1) : null;
   const exact = comparison ? `holding ${holdings.total} · (${last} − ${bag!.breakevenPrice}) × 100 / ${bag!.breakevenPrice} = ${comparison.exact}` : holdings.total;
-  return { text: `V5 holds ${formatCoin(holdings.total)} · ${gap ? pct(gap, 1) : '—'} to breakeven`, exact, reason, asOf: positions.generated_at_ms };
+  const title = comparison ? `holding ${ownerTitleText(holdings.total)} · (${ownerTitleText(last)} − ${ownerTitleText(bag!.breakevenPrice)}) × 100 / ${ownerTitleText(bag!.breakevenPrice)} = ${ownerTitleText(comparison.exact)}` : ownerTitleText(holdings.total);
+  return { text: `V5 holds ${formatCoin(holdings.total)} · ${gap ? pct(gap, 1) : '—'} to breakeven`, exact, title, reason, asOf: positions.generated_at_ms };
 }

@@ -29,7 +29,7 @@ export function V5Overview() {
   const equity = v5Values?.equity, funding = v5Values?.initial_funding;
   const oppositeFunding = typeof funding === "string" ? funding.startsWith("-") ? funding.slice(1) : `-${funding}` : null;
   const sinceStart = exactSignedSum(equity, oppositeFunding);
-  const sinceExact = sinceStart == null ? undefined : `${equity} − ${funding} = ${sinceStart.replace(/^-/, "−")}`;
+  const sinceExact = sinceStart == null ? undefined : `${ownerTitleText(equity)} − ${ownerTitleText(funding)} = ${ownerTitleText(sinceStart.replace(/^-/, "−"))}`;
   const realized = v5Values?.realized, unrealized = v5Values?.unrealized;
   const headline = helmHeadline(helm.data);
   const helmMoney = helmRow.withValues;

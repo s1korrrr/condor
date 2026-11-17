@@ -1,5 +1,5 @@
 /** Helm page headline from the read state alone: what the runtime itself published, never inferred. */
-import { age, coin, count, price, utcMin } from './format.mjs';
+import { age, coin, ownerTitleText, count, price, utcMin } from './format.mjs';
 import { tri } from './shown.mjs';
 
 const SCALE = 10n ** 30n;
@@ -40,7 +40,7 @@ export function helmCoinRow(row, { fresh, nowS }) {
   if (!problem) {
     if (rsi != null && rsi <= 100n * SCALE && lineKnown) {
       const distance = rsi - line;
-      result.rsiTitle = `RSI ${signal.rsi} − line ${signal.oversold} = ${distance < 0n ? '−' : ''}${points(distance < 0n ? -distance : distance)}`;
+      result.rsiTitle = `RSI ${ownerTitleText(signal.rsi)} − line ${ownerTitleText(signal.oversold)} = ${ownerTitleText(`${distance < 0n ? '−' : ''}${points(distance < 0n ? -distance : distance)}`)}`;
       result.rsi = `RSI ${coin(signal.rsi)}, ${distance === 0n ? 'on the line' : `${coin(points(distance < 0n ? -distance : distance))} points ${distance < 0n ? 'below' : 'above'} the line`}`;
       if (distance <= 0n) result.rsi += `: a buy needs RSI to rise above ${coin(signal.oversold)}`;
     }

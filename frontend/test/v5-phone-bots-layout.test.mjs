@@ -117,7 +117,7 @@ test('recorded chart preserves exact fills in the hover readout and formats hove
     assert.ok(!markers[0].text);
     await act(async () => crosshair({time:60}));
     const readout=renderer.root.findByProps({'aria-live':'polite'});
-    assert.equal(readout.findByProps({ className: 'block' }).children.join(''), 'BUY 0 @ 101.12 · 1970-01-01T00:01:01.023Z');
+    assert.equal(readout.findByProps({ className: 'block' }).children.join(''), 'BUY 0.00000000 @ 101.123456789 · 1970-01-01T00:01:01.023Z');
     const close = readout.findAllByType('span').find(span => span.props.title === '101.123456789');
     assert.ok(close);
     assert.match(close.children.join(''), /101\.12/);

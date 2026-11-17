@@ -28,7 +28,7 @@ const columns: TableColumn<Row>[] = [
   { id: "venue", header: "Venue", value: row => row.venue, size: 95 },
   { id: "segment", header: "Market type", value: row => row.segment, size: 75 },
   { id: "pair", header: "Instrument", value: row => row.pair, rowHeader: true, size: 100 },
-  { id: "health", header: "Data health", value: row => row.health, size: 75, title: row => row.health_rules.map(rule => `${rule.rule}: ${rule.detail}`).join("; ") },
+  { id: "health", header: "Data health", value: row => row.health, size: 75, title: row => row.health_rules.map(rule => `${rule.rule}: ${ownerTitleText(rule.detail)}`).join("; "), note: row => row.health_rules.map(rule => `${rule.rule}: ${rule.detail}`).join("; ") },
   { id: "last", header: "Last open (UTC)", value: row => utc(row.last_minute), size: 170 },
   { id: "age", header: "Age since close (s)", value: row => row.last_minute_age_s, kind: "number", size: 85 },
   { id: "grace", header: "Settle grace (s)", value: row => row.grace_s, kind: "number", size: 75 },

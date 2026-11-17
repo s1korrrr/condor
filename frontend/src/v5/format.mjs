@@ -213,10 +213,10 @@ const TITLE_PLACES = 12;
  * trailing zeros (a 28-digit Decimal quotient such as 34.41737209677040000000000001). Then it is the same
  * "≈ x (rounded)" form the dashboard uses for its own long quotients: "≈ 34.41737209677 (rounded)".
  */
-export function ownerTitle(value) {
+export function ownerTitle(value, { exact = false } = {}) {
   const parts = parse(value);
   if (!parts) return null;
-  if (parts.frac.replace(/0+$/, '').length <= TITLE_PLACES) return String(value);
+  if (exact || parts.frac.replace(/0+$/, '').length <= TITLE_PLACES) return String(value);
   const rounded = round(parts, TITLE_PLACES);
   const frac = rounded.frac.replace(/0+$/, '');
   return `≈ ${rounded.neg ? MINUS : ''}${rounded.int}${frac ? `.${frac}` : ''} (rounded)`;

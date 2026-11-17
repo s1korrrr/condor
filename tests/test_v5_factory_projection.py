@@ -103,11 +103,13 @@ def test_unavailable_manifest_does_not_gate_stage_b():
 @pytest.mark.parametrize("path, field, value", [
     (ASSESSMENTS, "projection_revision", "1" * 64),
     (ASSESSMENTS, "scope", None),
+    (ASSESSMENTS, "scope", {**SCOPE, "scope_id": "wrong-scope"}),
     (ASSESSMENTS, "snapshot_id", None),
     (ASSESSMENTS, "verified_at_ms", None),
     (CHANGED_SEAL, "projection_revision", "1" * 64),
     (CHANGED_SEAL, "items", json.loads(read("examples/stage-b/campaigns-real-scope.json"))["items"][:1]),
     (CHANGED_SEAL, "page", {"has_more": True, "limit": 25, "next_cursor": "A" * 112}),
+    ("examples/stage-b/manifest.json", "reason_codes", ["PREREGISTRATION_SEAL_MISSING", "OMITTED_CONTENT", "INDEX_INCOMPLETE"]),
 ])
 def test_invalid_stage_b_success_fails_closed(path, field, value):
     document = json.loads(read(path))
@@ -118,3 +120,17 @@ def test_invalid_stage_b_success_fails_closed(path, field, value):
     result = asyncio.run(binding.read(document["dataset"], query(entry)))
     assert (result.status, json.loads(result.body)["code"]) == (502, "INVALID_OWNER_PROJECTION")
     assert binding.receipt_expiry(document["dataset"]) is None
+
+
+def test_status_only_clears_old_page_receipt_without_allowing_replay():
+    published = read("examples/stage-b/campaigns-real-scope.json")
+    unavailable = read(CHANGED_SEAL)
+    reader = Reader(*(lp.OwnerResponse(200, body, None) for body in (published, unavailable, published)))
+    binding = source(reader)
+    params = "scope_id=v5-okx-spot-dca"
+    assert asyncio.run(binding.read("campaigns", params)).body == published
+    assert binding.receipt_expiry("campaigns") is not None
+    assert asyncio.run(binding.read("campaigns", params)).body == unavailable
+    assert binding.receipt_expiry("campaigns") is None
+    replay = asyncio.run(binding.read("campaigns", params))
+    assert (replay.status, json.loads(replay.body)["code"]) == (503, "VERIFICATION_UNAVAILABLE")

@@ -1,5 +1,5 @@
 /**
- * Strict client-side validation of the frozen Stage-A projection (rsibot 1d8c0ab6).
+ * Strict client-side validation of the frozen Stage-A and Stage-B projections.
  *
  * Mirrors condor/v5/learning_projection.py: strict JSON, canonical hashing, the vendored JSON Schemas
  * (a small Draft 2020-12 subset interpreter, run on the generated copy of the frozen files), and the
@@ -14,6 +14,7 @@ export class ContractViolation extends Error {
 const SAFE_INT_MAX = 9_007_199_254_740_991;
 const SCHEMA_PREFIX = 'urn:rsibot:v5-lfl:stage-a:r2:';
 const B_SCHEMA_PREFIX = 'urn:rsibot:v5-lfl:stage-b:v2:';
+const REASON_OVERFLOW = 'Reason summary truncated; inspect row issues and dataset pages.';
 const encoder = new TextEncoder();
 export const utf8Length = (text: string) => encoder.encode(text).length;
 
@@ -209,9 +210,9 @@ function check(schema: Schema, value: unknown, path: string): string | null {
   if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
     const object = value as Record<string, unknown>;
     const properties = (s.properties ?? {}) as Record<string, Schema>;
-    for (const key of (s.required ?? []) as string[]) if (!(key in object)) return `${path}: missing ${key}`;
+    for (const key of (s.required ?? []) as string[]) if (!Object.hasOwn(object, key)) return `${path}: missing ${key}`;
     for (const key of Object.keys(object)) {
-      if (key in properties) { const problem = check(properties[key], object[key], `${path}/${key}`); if (problem) return problem; }
+      if (Object.hasOwn(properties, key)) { const problem = check(properties[key], object[key], `${path}/${key}`); if (problem) return problem; }
       else if (s.additionalProperties === false) return `${path}: unknown key ${key}`;
     }
   }
@@ -361,7 +362,32 @@ function checkDatasetRow(row: Json, dataset: string, { recordType, ideaRevisionI
     }
   }
   if (stub) return;
-  if (dataset === 'candidates' && row.record_id !== row.idea_revision_id) throw new ContractViolation(`${context}: candidate does not identify its exact revision`);
+  if (['candidates', 'campaigns'].includes(dataset) && typeof row.reference_total === 'number' && row.reference_total < refsOf(row).length) {
+    throw new ContractViolation(`${context}: reference preview exceeds the known total`);
+  }
+  if (dataset === 'candidates') {
+    if (row.record_id !== row.idea_revision_id) throw new ContractViolation(`${context}: candidate does not identify its exact revision`);
+    const identities = new Set<string>();
+    for (const field of ['experiment_refs', 'assessment_refs']) {
+      let previous: string[] | null = null;
+      for (const ref of row[field] as Json[]) {
+        const identity = [ref.owner, ref.kind, ref.record_id, ref.revision ?? ''] as string[];
+        const key = JSON.stringify(identity);
+        if (identities.has(key)) throw new ContractViolation(`${context}: duplicate candidate references`);
+        if (previous) {
+          const firstDifference = previous.findIndex((value, index) => value !== identity[index]);
+          if (firstDifference >= 0 && compareUtf8(encoder.encode(previous[firstDifference]), encoder.encode(identity[firstDifference])) > 0) {
+            throw new ContractViolation(`${context}: candidate preview is not owner ordered`);
+          }
+        }
+        identities.add(key);
+        previous = identity;
+      }
+    }
+    if (row.reference_total === null && !(row.issues as Json[]).some(issue => issue.code === 'INDEX_INCOMPLETE')) {
+      throw new ContractViolation(`${context}: unknown reference census has no issue`);
+    }
+  }
   if (dataset === 'campaigns') {
     const prefix = row.native_kind === 'paper_campaign' ? '' : 'decision:campaign:';
     if (row.record_id !== prefix + String(row.campaign_id)) throw new ContractViolation(`${context}: campaign identity mismatch`);
@@ -388,6 +414,32 @@ function hasGap(envelope: Json): boolean {
   return false;
 }
 
+function compareUtf8(left: Uint8Array, right: Uint8Array): number {
+  for (let at = 0; at < Math.min(left.length, right.length); at += 1) {
+    if (left[at] !== right[at]) return left[at] - right[at];
+  }
+  return left.length - right.length;
+}
+
+function checkStageBReasons(envelope: Json) {
+  const reasons = envelope.reason_codes as string[];
+  const issues = envelope.issues as Json[];
+  const visible = new Set(issues.map(issue => issue.code as string));
+  const sorted = (codes: string[]) => codes.every((code, index) => index === 0 || codes[index - 1] < code);
+  for (const item of envelope.items as Json[]) {
+    if (envelope.dataset === 'manifest') {
+      const descriptor = item.reason_codes as string[];
+      if (!sorted(descriptor)) throw new ContractViolation('manifest descriptor reasons are not sorted');
+      for (const code of descriptor) visible.add(code);
+    } else {
+      for (const issue of item.issues as Json[]) visible.add(issue.code as string);
+    }
+  }
+  const overflow = issues.some(issue => issue.code === 'INDEX_INCOMPLETE' && issue.detail === REASON_OVERFLOW);
+  if (!sorted(reasons) || (!overflow && [...visible].some(code => !reasons.includes(code)))) throw new ContractViolation('invalid Stage-B reason summary');
+  if (overflow && (reasons.length !== 4 || !reasons.includes('INDEX_INCOMPLETE') || envelope.status === 'BOUND')) throw new ContractViolation('invalid Stage-B reason overflow marker');
+}
+
 /** Validates one 200 body (already strictly parsed). Resolves to the typed document or throws ContractViolation. */
 export async function validateEnvelope(dataset: string, document: unknown, context: EnvelopeContext): Promise<Json> {
   const stageB = context.stageB ?? ((context.expected?.projectionRevision ?? (document as Json | null)?.projection_revision) === STAGE_B_REVISION);
@@ -398,13 +450,23 @@ export async function validateEnvelope(dataset: string, document: unknown, conte
   if (problem) throw new ContractViolation(problem);
   const envelope = document as Json;
   if (envelope.dataset !== dataset) throw new ContractViolation('envelope answers a different dataset');
-  if (stageB && envelope.projection_revision !== STAGE_B_REVISION) throw new ContractViolation('Stage-B projection revision mismatch');
+  if (stageB !== (envelope.projection_revision === STAGE_B_REVISION)) throw new ContractViolation('projection stage mismatch');
   const scope = envelope.scope as Json | null;
   const expected = context.expected;
   if (expected) {
     if (envelope.projection_revision !== expected.projectionRevision) throw new ContractViolation('projection revision mismatch');
     if (scope !== null && (scope.scope_id !== expected.scopeId || scope.scope_sha256 !== expected.scopeSha256)) throw new ContractViolation('scope mismatch');
   }
+  const pairs = (scope?.family_lane_pairs ?? []) as { family_id: string; lane: string }[];
+  for (let index = 1; index < pairs.length; index += 1) {
+    const left = pairs[index - 1];
+    const right = pairs[index];
+    const familyOrder = compareUtf8(encoder.encode(left.family_id), encoder.encode(right.family_id));
+    if ((familyOrder || compareUtf8(encoder.encode(left.lane), encoder.encode(right.lane))) >= 0) {
+      throw new ContractViolation('scope family/lane pairs are not sorted');
+    }
+  }
+  if ((envelope.issues as Json[]).some(issue => cLen(issue) > 256)) throw new ContractViolation('envelope issue too large');
   const status = envelope.status as string;
   const items = envelope.items as Json[];
   const coverage = envelope.coverage as Json;
@@ -443,22 +505,33 @@ export async function validateEnvelope(dataset: string, document: unknown, conte
       if (status === 'UNAVAILABLE' && (item.availability !== 'UNAVAILABLE' || item.total_items !== null)) throw new ContractViolation(`${label}: unavailable manifest advertises data`);
       continue;
     }
+    const rowScope = item.row_scope as Json;
+    if (scope === null || !pairs.some(pair => pair.family_id === rowScope.family_id && pair.lane === rowScope.lane)) {
+      throw new ContractViolation(`${label}: row family/lane is outside the envelope scope`);
+    }
+    const program = scope.program_id;
+    if ((rowScope.program_id !== null && rowScope.program_id !== program)
+      || (rowScope.membership_basis === 'LESSON_PROGRAM' && rowScope.program_id !== program)
+      || (Object.hasOwn(item, 'program_id') && item.program_id !== program && !(stageB && item.program_id === null))) {
+      throw new ContractViolation(`${label}: row program is outside the envelope scope`);
+    }
+    const window = (rowScope.recorded_scope as Json | null)?.window;
+    if (window && typeof window === 'object') {
+      const { start, end_exclusive: end } = window as { start: number; end_exclusive: number };
+      if (start >= end) throw new ContractViolation(`${label}: recorded window is not ordered`);
+    }
     await checkRow(item, label, stageB && (factory || dataset === 'records') ? regionVariant(dataset, item) : undefined);
     checkDatasetRow(item, dataset, context, label);
     ids.push(item.record_id as string);
   }
   const bytes = ids.map(id => encoder.encode(id));
   for (let index = 1; index < bytes.length; index += 1) {
-    const left = bytes[index - 1];
-    const right = bytes[index];
-    let order = 0;
-    for (let at = 0; at < Math.min(left.length, right.length) && order === 0; at += 1) order = left[at] - right[at];
-    if (order === 0) order = left.length - right.length;
-    if (order >= 0) throw new ContractViolation('items are not strictly ascending by record_id');
+    if (compareUtf8(bytes[index - 1], bytes[index]) >= 0) throw new ContractViolation('items are not strictly ascending by record_id');
   }
   if (status === 'UNAVAILABLE' && ((items.length && dataset !== 'manifest') || page.next_cursor !== null)) throw new ContractViolation('unavailable envelope carries rows or continuation');
   if (status === 'BOUND' && (coverage.unresolved_membership_items !== 0 || coverage.omitted_items !== 0 || hasGap(envelope))) throw new ContractViolation('BOUND envelope hides a gap');
   if (status === 'PARTIAL' && !hasGap(envelope)) throw new ContractViolation('PARTIAL envelope names no gap');
+  if (stageB && (factory || dataset === 'manifest' || dataset === 'records')) checkStageBReasons(envelope);
   return envelope;
 }
 

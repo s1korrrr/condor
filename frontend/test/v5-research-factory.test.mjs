@@ -10,6 +10,9 @@ const load = relative => JSON.parse(readFileSync(new URL(relative, base), 'utf8'
 const golden = name => load(`examples/stage-b/${name}.json`);
 const modules = frontendModules();
 const validator = modules.load('v5/learning-projection-validate.ts');
+const projection = modules.load('v5/learning-projection.ts');
+const { ProjectionStore } = modules.load('v5/learning-projection-store.ts');
+const { AssessmentTraversal } = modules.load('v5/factory-assessment-relationships.ts');
 const { FactoryDataset, FactoryStatus } = modules.load('v5/ResearchFactoryPanel.tsx');
 const { ownerTitle } = modules.load('v5/format.mjs');
 const render = (envelope, overrides = {}) => {
@@ -65,10 +68,12 @@ test('empty, qualified, and whole-omission assessment presentation', () => {
   const assessmentSchema = load('stage-b-common.schema.json');
   const hurdle = assessmentSchema.$defs.Assessment.properties.hurdle_status.enum[0];
   document.items[0].hurdle_status = hurdle;
+  document.items[0].comparison.delta = '-1.239876543210987654321';
   const html = render(document);
-  for (const value of ['SUPPORTED', 'VALID', 'ISOLATED', hurdle, ownerTitle(document.items[0].comparison.delta)]) {
+  for (const value of ['SUPPORTED', 'VALID', 'ISOLATED', hurdle, ownerTitle(document.items[0].comparison.delta, { exact: true })]) {
     assert.ok(html.includes(value), value);
   }
+  assert.match(html, /title="-1\.239876543210987654321">−1\.24</);
   const omitted = render(golden('assessments-omitted-comparison'));
   assert.match(omitted, /content was omitted/i);
   assert.doesNotMatch(omitted, /SUPPORTED/);
@@ -84,4 +89,101 @@ test('typed failures have no rows; 409 offers first, warming and expiry are expl
 test('Factory page cannot read fixtures or import fixture UI', () => {
   const text = readFileSync(new URL('../src/v5/ResearchFactoryPanel.tsx', import.meta.url), 'utf8');
   assert.doesNotMatch(text, /learningRead|\/learning\/research|from ['"].\/LearningPanel['"]|\bfetch\(/);
+});
+
+test('Stage B browser reads use the non-projection config and send the exact assessment filter', async () => {
+  const document = golden('assessments-supported');
+  const revision = document.items[0].idea_revision_id;
+  const config = {
+    authenticated: true, learning_scope_id: document.scope.scope_id,
+    learning_scope_sha256: document.scope.scope_sha256, learning_projection_revision: document.projection_revision,
+  };
+  const urls = [];
+  const fetcher = async url => {
+    urls.push(url);
+    return Response.json(url === '/api/v5/auth' ? config : document);
+  };
+  assert.equal((await projection.readProjectionResult('assessments', { idea_revision_id: revision }, undefined, fetcher)).ok, true);
+  assert.deepEqual(urls, ['/api/v5/auth', `/api/v5/learning/assessments?scope_id=v5-okx-spot-dca&idea_revision_id=${encodeURIComponent(revision)}`]);
+  config.learning_scope_sha256 = 'f'.repeat(64);
+  const wrongScope = await projection.readProjectionResult('assessments', { idea_revision_id: revision }, undefined, fetcher);
+  assert.equal(wrongScope.error.code, 'INVALID_OWNER_PROJECTION');
+  config.learning_projection_revision = undefined;
+  const mixedStage = await projection.readProjectionResult('assessments', { idea_revision_id: revision }, undefined, fetcher);
+  assert.equal(mixedStage.error.code, 'INVALID_OWNER_PROJECTION');
+});
+
+test('Stage B browser status-only manifests and typed errors keep owner facts', async () => {
+  const document = golden('manifest-unavailable');
+  const available = golden('manifest');
+  const config = {
+    authenticated: true, learning_scope_id: available.scope.scope_id,
+    learning_scope_sha256: available.scope.scope_sha256, learning_projection_revision: document.projection_revision,
+  };
+  const responses = [Response.json(document), Response.json(load('examples/errors/PUBLICATION_UNAVAILABLE.json'), { status: 503 })];
+  const fetcher = async url => url === '/api/v5/auth' ? Response.json(config) : responses.shift();
+  const manifest = await projection.readProjectionResult('manifest', {}, undefined, fetcher);
+  assert.equal(manifest.ok, true);
+  assert.match(render(manifest.envelope), /UNAVAILABLE.*NOT_PUBLISHED/);
+  const result = await projection.readProjectionResult('campaigns', {}, undefined, fetcher);
+  assert.equal(result.error.code, 'PUBLICATION_UNAVAILABLE');
+});
+
+test('assessment labels require the complete unchanged cursor chain', () => {
+  const full = golden('assessments-conflict');
+  const revision = full.items[0].idea_revision_id;
+  const first = { ...full, items: full.items.slice(0, 1), page: { ...full.page, has_more: true, next_cursor: 'opaque' } };
+  const second = { ...full, items: full.items.slice(1) };
+  const traversal = new AssessmentTraversal();
+  assert.equal(traversal.observe(second, 1, 'opaque', revision), null);
+  assert.equal(traversal.observe(first, 0, null, revision), null);
+  assert.equal(traversal.observe(second, 1, 'unexpected', revision), null);
+  assert.equal(traversal.observe(first, 0, null, revision), null);
+  const labels = traversal.observe(second, 1, 'opaque', revision);
+  assert.match(render(second, { assessmentRelationships: labels }), /Conflicting recorded assessments/);
+  assert.doesNotMatch(render(first), /Conflicting recorded assessments/);
+  const recordOnly = new AssessmentTraversal().observe(golden('assessments-evaluation-collision'), 0, null, revision);
+  assert.deepEqual([...recordOnly.values()], ['Recorded evaluation identity collision', 'Recorded evaluation identity collision']);
+  const supersession = new AssessmentTraversal().observe(golden('assessments-supersession'), 0, null, revision);
+  assert.equal(supersession.get('assessment:fixture-old'), 'Superseded by an explicit owner link');
+  assert.equal(new AssessmentTraversal().observe(golden('assessments-omitted-comparison'), 0, null, revision), null);
+});
+
+test('Stage B clears the cursor stack on owner UNAVAILABLE, 409, 401 and expiry', async () => {
+  const fixture = golden('candidates-real-scope');
+  const unavailable = golden('candidates-unavailable');
+  const cases = [
+    { output: { ok: true, envelope: unavailable }, expected: 'unavailable' },
+    { output: { ok: false, error: { status: 409, code: 'SNAPSHOT_CHANGED' } }, expected: 'unavailable' },
+    { output: { ok: false, error: { status: 401, code: 'authentication_required', unauthenticated: true } }, expected: 'unauthenticated' },
+  ];
+  const tick = () => new Promise(resolve => setImmediate(resolve));
+  for (const { output, expected } of cases) {
+    const cursors = [];
+    const store = new ProjectionStore({
+      dataset: 'candidates', params: {}, maxAgeMs: 90_000, pollMs: 0,
+      clock: { now: () => 0, setTimeout: () => 1, clearTimeout() {} },
+      read: async (_dataset, params) => {
+        cursors.push(params.cursor);
+        return cursors.length === 1 ? { ok: true, envelope: fixture } : output;
+      },
+    });
+    store.start(); await tick();
+    store.next(); await tick();
+    assert.deepEqual(cursors, [undefined, fixture.page.next_cursor]);
+    assert.equal(store.getSnapshot().state, expected);
+    assert.equal(store.getSnapshot().pageIndex, 0);
+    assert.equal(store.getSnapshot().hasPrevious, false);
+    assert.equal(store.getSnapshot().expiresAt, null);
+  }
+  let expire;
+  const store = new ProjectionStore({
+    dataset: 'candidates', params: {}, maxAgeMs: 90_000, pollMs: 0,
+    clock: { now: () => 0, setTimeout: callback => { expire = callback; return 1; }, clearTimeout() {} },
+    read: async () => ({ ok: true, envelope: fixture }),
+  });
+  store.start(); await tick();
+  expire();
+  assert.equal(store.getSnapshot().state, 'expired');
+  assert.equal(store.getSnapshot().envelope, null);
 });

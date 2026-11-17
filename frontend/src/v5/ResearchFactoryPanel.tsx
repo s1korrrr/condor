@@ -89,7 +89,7 @@ function Assessment({ row, relationship }: { row: AssessmentRow; relationship?: 
     ]} />
     {relationship && <p>{relationship}</p>}
     {comparison && <FactList facts={[
-      ['Delta', <><span title={ownerTitle(comparison.delta) ?? undefined}>{signed(comparison.delta)}</span> {comparison.unit}</>],
+      ['Delta', <><span title={ownerTitle(comparison.delta, { exact: true }) ?? undefined}>{signed(comparison.delta)}</span> {comparison.unit}</>],
       ['Baseline', comparison.baseline_id], ['Metric', comparison.metric], ['Comparable group', comparison.comparable_group],
       ['Owner comparison group', comparison.comparison_group],
       ['Window', typeof comparison.conditions.window === 'string' ? comparison.conditions.window : `${comparison.conditions.window.start} to ${comparison.conditions.window.end_exclusive} (exclusive)`],
@@ -105,6 +105,8 @@ export function FactoryStatus({ state, envelope, error, first }: Pick<Projection
     <strong>UNAVAILABLE</strong><p>{envelope.reason_codes.join(', ')}</p><FactoryIssues issues={envelope.issues} />
   </div>;
   if (error?.code === 'WARMING') return <div role="status" className="v5-panel"><strong>WARMING</strong><p>The owner is verifying a publication.</p></div>;
+  if (error?.code === 'UPSTREAM_UNAVAILABLE') return <div role="alert" className="v5-panel"><strong>UNAVAILABLE · UPSTREAM_UNAVAILABLE</strong><p>No owner projection response is available.</p></div>;
+  if (state === 'unavailable' && !error) return <div role="alert" className="v5-panel"><strong>UNAVAILABLE</strong><p>No fresh owner receipt is available.</p></div>;
   return <ProjectionStatusBanner state={state} envelope={envelope} error={error} onFirst={first}>
     {envelope?.reason_codes.includes('OMITTED_CONTENT') && <p>Some owner content was omitted from this projection.</p>}
   </ProjectionStatusBanner>;
@@ -122,12 +124,12 @@ export function FactoryDataset({ dataset, view, onAssess }: {
     {state === 'ready' && envelope && <>
       {!rows.length && <p>{dataset === 'assessments' && envelope.status === 'BOUND' && envelope.coverage.total_items === 0
         ? 'no recorded assessments for this revision' : 'No rows on this owner page.'}</p>}
-      {dataset === 'assessments' && rows.length > 0 && <p>assessment relationship status not yet established</p>}
+      {dataset === 'assessments' && rows.length > 0 && !view.assessmentRelationships && <p>assessment relationship status not yet established</p>}
       {rows.map(row => <article key={row.record_id} className="min-w-0 space-y-2 border-t border-[var(--color-border)] pt-3">
         {isUnavailableStub(row) ? <p>UNAVAILABLE row · <CopyableHash value={row.record_id} label="record ID" /></p>
           : 'registration_state' in row ? <Candidate row={row} onAssess={onAssess} />
           : 'campaign_id' in row ? <Campaign row={row} />
-          : 'assessment_id' in row ? <Assessment row={row} />
+          : 'assessment_id' in row ? <Assessment row={row} relationship={view.assessmentRelationships?.get(row.record_id)} />
           : null}
         <FactoryIssues issues={row.issues} /><SourceRefList sources={row.sources} />
       </article>)}

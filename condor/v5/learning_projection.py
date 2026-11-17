@@ -1,7 +1,7 @@
-"""Condor binding for the frozen V5 Learning / Factory / Lineage Stage-A projection.
+"""Condor binding for the frozen V5 Learning / Factory / Lineage projection.
 
-Read-only, authority NONE. Contract: rsibot ``1d8c0ab6`` (design §5 and the appendix vendored verbatim in
-``schemas/learning_projection``). Four parts:
+Read-only, authority NONE. Contracts: rsibot ``1d8c0ab6`` (A) and ``dd49b28`` (B), vendored verbatim in
+``schemas/learning_projection``. Four parts:
 
 * strict parsing and canonical hashing (``parse_strict``, ``canonical``);
 * envelope and error validation against the vendored JSON Schemas plus the appendix's relational/byte
@@ -26,13 +26,14 @@ from dataclasses import dataclass
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Callable
-from urllib.parse import quote, unquote_to_bytes
+from urllib.parse import unquote_to_bytes
 
 import aiohttp
 from fastapi import APIRouter, Request, Response
 from jsonschema import Draft202012Validator, ValidationError
 from jsonschema import validators as _jsonschema_validators
 from referencing import Registry, Resource
+from yarl import URL
 
 logger = logging.getLogger(__name__)
 
@@ -58,6 +59,8 @@ STAGE_A_DATASETS = ("manifest", "lessons", "records", "jobs")
 STAGE_B_DATASETS = ("candidates", "campaigns", "assessments")
 ALL_DATASETS = STAGE_A_DATASETS + STAGE_B_DATASETS
 STAGE_B_REVISION = json.loads((SCHEMA_DIR / "wire-contract-stage-b.json").read_bytes())["projection_revision"]
+REASON_OVERFLOW = "Reason summary truncated; inspect row issues and dataset pages."
+PROJECTION_PATHS = frozenset(f"/api/v5/learning/{dataset}" for dataset in ALL_DATASETS)
 MANIFEST_ORDER = ("lessons", "records", "jobs", "candidates", "campaigns", "assessments")
 OWNER_PATH_PREFIX = "/api/knowledge/v5-projection/v1/"
 ERROR_SCHEMA = "research_knowledge.v5_projection_error.v1"
@@ -100,6 +103,10 @@ class QueryViolation(ValueError):
     """The browser query is invalid for its route."""
 
 
+class CursorViolation(QueryViolation):
+    """A recognized cursor does not meet its query schema."""
+
+
 class ProjectionTransportError(RuntimeError):
     """``kind`` is ``unavailable`` (timeout / connect) or ``invalid`` (framing, size, encoding, redirect)."""
 
@@ -133,6 +140,8 @@ def _reject_constant(token: str) -> Any:
 def _parse_int(token: str) -> int:
     if token.startswith("-") or (len(token) > 1 and token.startswith("0")):
         raise ContractViolation("negative or padded integer")
+    if len(token) > len(str(SAFE_INT_MAX)):
+        raise ContractViolation("integer beyond the safe range")
     value = int(token)
     if value > SAFE_INT_MAX:
         raise ContractViolation("integer beyond the safe range")
@@ -338,7 +347,7 @@ def _check_row(row: dict[str, Any], *, context: str, variant: str | None = None)
             raise ContractViolation(f"{context}: issue too large")
     body = {key: value for key, value in row.items() if key != "row_sha256"}
     encoded = canonical(body)
-    if len(encoded) + 76 > MAX_ROW_BYTES:  # 76 = ,"row_sha256":"<64>"
+    if len(encoded) + 80 > MAX_ROW_BYTES:
         raise ContractViolation(f"{context}: row exceeds {MAX_ROW_BYTES} bytes")
     if sha256_hex(encoded) != row["row_sha256"]:
         raise ContractViolation(f"{context}: row hash mismatch")
@@ -386,8 +395,22 @@ def _check_dataset_row(row: dict[str, Any], dataset: str, request: RequestShape,
                 raise ContractViolation(f"{context}: recorded completion without a time must be PARTIAL")
     if stub:
         return
-    if dataset == "candidates" and row["record_id"] != row["idea_revision_id"]:
-        raise ContractViolation(f"{context}: candidate does not identify its exact revision")
+    if dataset in ("candidates", "campaigns") and row["reference_total"] is not None and row["reference_total"] < len(_refs_of(row)):
+        raise ContractViolation(f"{context}: reference preview exceeds the known total")
+    if dataset == "candidates":
+        if row["record_id"] != row["idea_revision_id"]:
+            raise ContractViolation(f"{context}: candidate does not identify its exact revision")
+        tuples = []
+        for field in ("experiment_refs", "assessment_refs"):
+            identities = [(ref["owner"], ref["kind"], ref["record_id"], ref["revision"] or "") for ref in row[field]]
+            if identities != sorted(identities):
+                raise ContractViolation(f"{context}: candidate preview is not owner ordered")
+            tuples.extend(identities)
+        if len(tuples) != len(set(tuples)):
+            raise ContractViolation(f"{context}: duplicate candidate references")
+        codes = {issue["code"] for issue in row["issues"]}
+        if row["reference_total"] is None and "INDEX_INCOMPLETE" not in codes:
+            raise ContractViolation(f"{context}: unknown reference census has no issue")
     if dataset == "campaigns":
         prefix = "" if row["native_kind"] == "paper_campaign" else "decision:campaign:"
         if row["record_id"] != prefix + row["campaign_id"]:
@@ -428,6 +451,24 @@ def _has_gap(envelope: dict[str, Any]) -> bool:
     return False
 
 
+def _check_stage_b_reasons(envelope: dict[str, Any]) -> None:
+    actual = envelope["reason_codes"]
+    visible = {issue["code"] for issue in envelope["issues"]}
+    if envelope["dataset"] == "manifest":
+        for descriptor in envelope["items"]:
+            reasons = descriptor["reason_codes"]
+            if reasons != sorted(reasons):
+                raise ContractViolation("manifest descriptor reasons are not sorted")
+            visible.update(reasons)
+    else:
+        visible.update(issue["code"] for row in envelope["items"] for issue in row["issues"])
+    overflow = any(issue["code"] == "INDEX_INCOMPLETE" and issue["detail"] == REASON_OVERFLOW for issue in envelope["issues"])
+    if actual != sorted(actual) or (not overflow and not visible.issubset(actual)):
+        raise ContractViolation("invalid Stage-B reason summary")
+    if overflow and (len(actual) != 4 or "INDEX_INCOMPLETE" not in actual or envelope["status"] == "BOUND"):
+        raise ContractViolation("invalid Stage-B reason overflow marker")
+
+
 def validate_envelope(
     document: Any,
     *,
@@ -451,6 +492,11 @@ def validate_envelope(
     scope = document["scope"]
     if scope is not None and (scope["scope_id"] != expected.scope_id or scope["scope_sha256"] != expected.scope_sha256):
         raise ContractViolation("scope mismatch")
+    pairs = [(pair["family_id"], pair["lane"]) for pair in scope["family_lane_pairs"]] if scope is not None else []
+    if pairs != sorted(pairs):
+        raise ContractViolation("scope family/lane pairs are not sorted")
+    if any(len(canonical(issue)) > MAX_ISSUE_BYTES for issue in document["issues"]):
+        raise ContractViolation("envelope issue too large")
 
     status = document["status"]
     items = document["items"]
@@ -515,6 +561,18 @@ def validate_envelope(
             if status == "UNAVAILABLE" and (item["availability"] != "UNAVAILABLE" or item["total_items"] is not None):
                 raise ContractViolation(f"{context}: unavailable manifest advertises data")
             continue
+        row_scope = item["row_scope"]
+        if scope is None or (row_scope["family_id"], row_scope["lane"]) not in pairs:
+            raise ContractViolation(f"{context}: row family/lane is outside the envelope scope")
+        program = scope["program_id"]
+        if row_scope["program_id"] not in (None, program) or (
+            row_scope["membership_basis"] == "LESSON_PROGRAM" and row_scope["program_id"] != program
+        ) or ("program_id" in item and item["program_id"] != program and not (stage_b and item["program_id"] is None)):
+            raise ContractViolation(f"{context}: row program is outside the envelope scope")
+        recorded_scope = row_scope["recorded_scope"]
+        window = recorded_scope["window"] if recorded_scope is not None else None
+        if isinstance(window, dict) and window["start"] >= window["end_exclusive"]:
+            raise ContractViolation(f"{context}: recorded window is not ordered")
         variant = _stage_b_variant(dataset, item) if stage_b and dataset in (*STAGE_B_DATASETS, "records") else None
         _check_row(item, context=context, variant=variant)
         _check_dataset_row(item, dataset, request, context=context)
@@ -530,6 +588,8 @@ def validate_envelope(
             raise ContractViolation("BOUND envelope hides a gap")
     if status == "PARTIAL" and not _has_gap(document):
         raise ContractViolation("PARTIAL envelope names no gap")
+    if stage_b and dataset not in ("lessons", "jobs"):
+        _check_stage_b_reasons(document)
     return document
 
 
@@ -563,6 +623,7 @@ def error_body(code: str, snapshot_id: str | None = None) -> bytes:
 # ---------------------------------------------------------------------------
 
 _BAD_PERCENT = re.compile(r"%(?![0-9A-Fa-f]{2})")
+_RAW_QUERY = re.compile(r"[A-Za-z0-9._~!$&'()*+,;=:@/?%\-]*\Z")
 
 
 def parse_query(raw: str) -> dict[str, str]:
@@ -589,25 +650,19 @@ def parse_query(raw: str) -> dict[str, str]:
     return result
 
 
-def prepare_query(dataset: str, raw: str, scope_id: str) -> str:
-    """Validate a browser query and return the raw query to forward.
-
-    The browser does not know the scope ID before it reads the manifest, so Condor appends its configured
-    ``scope_id`` when absent. A supplied ``scope_id`` must equal the configured one. Everything else is forwarded
-    byte-for-byte; the owner remains authoritative.
-    """
+def validate_query(dataset: str, raw: str, scope_id: str) -> dict[str, str]:
+    """Validate the decoded query; callers forward the original, not this map."""
+    if not _RAW_QUERY.fullmatch(raw):
+        raise QueryViolation("invalid raw query characters")
     parsed = parse_query(raw)
-    forwarded = raw
-    if "scope_id" not in parsed:
-        forwarded = f"{raw}&" if raw else ""
-        forwarded += "scope_id=" + quote(scope_id, safe="")
-        parsed["scope_id"] = scope_id
-    elif parsed["scope_id"] != scope_id:
-        raise QueryViolation("scope_id is not the configured scope")
-    problem = schema_errors(f"query-{dataset}", parsed)
-    if problem:
-        raise QueryViolation(problem)
-    return forwarded
+    if parsed.get("scope_id") != scope_id:
+        raise QueryViolation("missing or mismatched scope_id")
+    errors = list(_validator(f"query-{dataset}").iter_errors(parsed))
+    if errors:
+        if all(list(error.absolute_path) == ["cursor"] for error in errors):
+            raise CursorViolation("invalid cursor")
+        raise QueryViolation("query does not match the route schema")
+    return parsed
 
 
 # ---------------------------------------------------------------------------
@@ -649,7 +704,8 @@ class OwnerProjectionClient:
                 async with self.session_factory(
                     timeout=timeout, auto_decompress=False, cookie_jar=aiohttp.DummyCookieJar()
                 ) as session:
-                    async with session.get(self.base_url + target, headers=headers, allow_redirects=False) as response:
+                    session._retry_connection = False
+                    async with session.get(URL(self.base_url + target, encoded=True), headers=headers, allow_redirects=False) as response:
                         return await self._read(response)
         except (asyncio.TimeoutError, TimeoutError) as error:
             raise ProjectionTransportError("unavailable", "timeout") from error
@@ -661,15 +717,21 @@ class OwnerProjectionClient:
             raise ProjectionTransportError("unavailable", "connect") from error
 
     async def _read(self, response) -> OwnerResponse:
-        encoding = response.headers.get("Content-Encoding", "identity").strip().lower()
-        if encoding not in {"", "identity"}:
-            raise ProjectionTransportError("invalid", "compressed response")
+        encodings = response.headers.getall("Content-Encoding", [])
+        if len(encodings) > 1 or (encodings and encodings[0].strip().lower() not in {"", "identity"}):
+            raise ProjectionTransportError("invalid", "duplicate or compressed response encoding")
         media = response.headers.get("Content-Type", "").split(";")[0].strip().lower()
         if media != "application/json":
             raise ProjectionTransportError("invalid", "not JSON")
-        declared = response.headers.get("Content-Length")
-        if declared is not None and (not declared.isdigit() or int(declared) > self.max_bytes):
-            raise ProjectionTransportError("invalid", "declared length beyond the cap")
+        length = response.headers.get("Content-Length")
+        declared = None
+        if length is not None:
+            digits = length.lstrip("0") or "0"
+            if not length.isascii() or not length.isdigit() or len(digits) > len(str(self.max_bytes)):
+                raise ProjectionTransportError("invalid", "invalid declared length")
+            declared = int(digits)
+            if declared > self.max_bytes:
+                raise ProjectionTransportError("invalid", "declared length beyond the cap")
         body = bytearray()
         while True:  # count the actual dechunked bytes; never trust Content-Length
             chunk = await response.content.read(self.max_bytes + 1 - len(body))
@@ -678,9 +740,10 @@ class OwnerProjectionClient:
             body.extend(chunk)
             if len(body) > self.max_bytes:
                 raise ProjectionTransportError("invalid", "response beyond the cap")
-        if declared is not None and int(declared) != len(body):
+        if declared is not None and declared != len(body):
             raise ProjectionTransportError("invalid", "length mismatch")
-        return OwnerResponse(response.status, bytes(body), response.headers.get("Retry-After"))
+        retry = response.headers.getall("Retry-After", [])
+        return OwnerResponse(response.status, bytes(body), retry[0] if len(retry) == 1 else None)
 
 
 # ---------------------------------------------------------------------------
@@ -694,6 +757,10 @@ class LearningProjectionConfig:
     scope_id: str
     scope_sha256: str
     projection_revision: str
+
+    @property
+    def stage_b(self) -> bool:
+        return self.projection_revision == STAGE_B_REVISION
 
     @property
     def expected(self) -> ExpectedBinding:
@@ -712,7 +779,6 @@ class ProjectionResult:
 @dataclass
 class Receipt:
     snapshot_id: str
-    verified_at_ms: int
     status: str
     expires_at: float  # monotonic seconds
 
@@ -746,6 +812,7 @@ class ResearchOwnerLearningSource:
         self.clock = clock
         self.monotonic = monotonic
         self._receipts: dict[str, Receipt] = {}
+        self._verification_high_water: dict[tuple[str, str], int] = {}
 
     # --- receipt state -------------------------------------------------------------------------------------
 
@@ -765,47 +832,50 @@ class ResearchOwnerLearningSource:
                 del self._receipts[dataset]
                 continue
             result[dataset] = receipt.status
-        return {dataset: result.get(dataset, "UNAVAILABLE") for dataset in STAGE_A_DATASETS}
+        return {dataset: result.get(dataset, "UNAVAILABLE") for dataset in (ALL_DATASETS if self.config.stage_b else STAGE_A_DATASETS)}
 
     def receipt_expiry(self, dataset: str) -> float | None:
         """Monotonic instant at which this dataset's receipt expires, or None when there is none."""
         receipt = self._receipts.get(dataset)
         return receipt.expires_at if receipt else None
 
-    def _accept(self, dataset: str, envelope: dict[str, Any]) -> None:
+    def _accept(self, dataset: str, envelope: dict[str, Any]) -> bool:
         status = envelope["status"]
         if status == "UNAVAILABLE":
             self.invalidate(dataset)
-            return
+            return True
         snapshot = envelope["snapshot_id"]
         verified = envelope["verified_at_ms"]
+        key = dataset, snapshot
+        now = self.monotonic()
         previous = self._receipts.get(dataset)
-        if previous and previous.snapshot_id == snapshot and verified < previous.verified_at_ms:
-            raise ContractViolation("verification time went backwards for one snapshot")
+        if verified <= self._verification_high_water.get(key, -1):
+            return previous is not None and previous.snapshot_id == snapshot and now < previous.expires_at
+        self._verification_high_water[key] = verified
         remaining_ms = MAX_VERIFICATION_AGE_MS - (envelope["served_at_ms"] - verified)
-        expires_at = self.monotonic() + remaining_ms / 1000
-        if previous and previous.snapshot_id == snapshot and previous.verified_at_ms == verified:
-            expires_at = min(expires_at, previous.expires_at)  # same verification: a poll cannot extend it
+        expires_at = now + remaining_ms / 1000
         for other, receipt in list(self._receipts.items()):
             if other != dataset and receipt.snapshot_id != snapshot:
                 del self._receipts[other]  # the generation changed: drop what belonged to the old one
-        self._receipts[dataset] = Receipt(snapshot, verified, status, expires_at)
+        self._receipts[dataset] = Receipt(snapshot, status, expires_at)
+        return True
 
     # --- reads ---------------------------------------------------------------------------------------------
 
     async def read(self, dataset: str, raw_query: str) -> ProjectionResult:
         """One browser request -> at most one owner request. No retry, no cache hit, no fallback."""
-        if dataset in STAGE_B_DATASETS and self.config.projection_revision != STAGE_B_REVISION:
+        if dataset in STAGE_B_DATASETS and not self.config.stage_b:
             return local_result("DATASET_NOT_ENABLED")  # checked before query validation, like the owner
         if dataset not in ALL_DATASETS:
             return local_result("ROUTE_NOT_FOUND")
         try:
-            forwarded = prepare_query(dataset, raw_query, self.config.scope_id)
-            parsed = parse_query(forwarded)
+            parsed = validate_query(dataset, raw_query, self.config.scope_id)
+        except CursorViolation:
+            return local_result("INVALID_CURSOR")
         except QueryViolation:
             return local_result("INVALID_QUERY")
         try:
-            response = await self.client.get(dataset, forwarded)
+            response = await self.client.get(dataset, raw_query)
         except ProjectionTransportError as error:
             logger.warning("learning projection %s transport failure: %s", dataset, error)
             self.invalidate()
@@ -822,7 +892,8 @@ class ResearchOwnerLearningSource:
             document = parse_strict(response.body)
             request = RequestShape(dataset, parsed.get("record_type"), parsed.get("idea_revision_id"))
             envelope = validate_envelope(document, request=request, expected=self.config.expected, now_ms=self.clock())
-            self._accept(dataset, envelope)
+            if not self._accept(dataset, envelope):
+                return local_result("VERIFICATION_UNAVAILABLE", envelope["snapshot_id"])
             return ProjectionResult(200, response.body)
         if response.status not in ERROR_STATUS_CODES:
             raise ContractViolation("unknown upstream status")
@@ -837,9 +908,6 @@ class ResearchOwnerLearningSource:
 # ---------------------------------------------------------------------------
 # Browser routes: /api/v5/learning/{manifest,lessons,records,jobs,candidates,campaigns,assessments}
 # ---------------------------------------------------------------------------
-
-ROUTE_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
-
 
 def _response(result: ProjectionResult, *, extra: dict[str, str] | None = None) -> Response:
     headers = {"Cache-Control": "no-store"}
@@ -868,13 +936,14 @@ def add_projection_routes(router: APIRouter, projection: ResearchOwnerLearningSo
                 return _response(local_result("METHOD_NOT_ALLOWED"), extra={"Allow": "GET"})
             if "transfer-encoding" in request.headers or request.headers.get("content-length", "0") != "0":
                 return _response(local_result("REQUEST_BODY_NOT_ALLOWED"))
+            if dataset in STAGE_B_DATASETS:
+                return _response(local_result("DATASET_NOT_ENABLED"))
+            if projection is None:
+                return _response(local_result("PUBLICATION_UNAVAILABLE"))
             try:
                 query = raw_query.decode("ascii")
             except UnicodeDecodeError:
                 return _response(local_result("INVALID_QUERY"))
-            if projection is None:
-                code = "DATASET_NOT_ENABLED" if dataset in STAGE_B_DATASETS else "PUBLICATION_UNAVAILABLE"
-                return _response(local_result(code))
             return _response(await projection.read(dataset, query))
 
         handle.__name__ = f"learning_projection_{dataset}"
@@ -882,4 +951,7 @@ def add_projection_routes(router: APIRouter, projection: ResearchOwnerLearningSo
 
     for dataset in ALL_DATASETS:
         if dataset not in skip:
-            router.add_api_route(f"/{dataset}", make(dataset), methods=ROUTE_METHODS, include_in_schema=False)
+            router.add_api_route(
+                f"/{dataset}", make(dataset), methods=[], include_in_schema=False,
+                generate_unique_id_function=lambda route: route.name,
+            )

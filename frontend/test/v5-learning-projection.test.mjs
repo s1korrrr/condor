@@ -59,7 +59,7 @@ test('missing role data never presents a measured zero blocked roles', () => {
 test('learning transport never accepts an authorizing result', async () => {
   const previous = globalThis.fetch;
   globalThis.fetch = async () => ({ ok: true, json: async () => ({ effect: 'ORDER' }) });
-  try { await assert.rejects(learningRead('manifest'), /Invalid non-authorizing/); }
+  try { await assert.rejects(learningRead('manifest'), /Learning projection/); }
   finally { globalThis.fetch = previous; }
 });
 

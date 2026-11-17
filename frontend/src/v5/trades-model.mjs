@@ -1,4 +1,4 @@
-import { rationalPercent } from './format.mjs';
+import { ownerTitleText, rationalPercent } from './format.mjs';
 
 const DECIMAL = /^(\d+)(?:\.(\d+))?(?:[Ee]([+-]?\d+))?$/;
 export const receiptAmountFields = ['entry_gross_base', 'entry_gross_quote', 'exit_gross_base', 'exit_gross_quote', 'fees_quote', 'remaining_owned_base', 'residual_dust_base'];
@@ -61,7 +61,7 @@ function receiptRatio(numerator, denominator, percent = false) {
   const value = rounded
     ? `${top < 0n ? '-' : ''}${truncated.slice(0, -5)}.${truncated.slice(-5)}`
     : result.exact.replace(/%$/, '').replace('−', '-');
-  return { value, rounded, exact: `${numerator} / ${denominator}${percent ? ' × 100' : ''} = ${detail}` };
+  return { value, rounded, exact: `${numerator} / ${denominator}${percent ? ' × 100' : ''} = ${detail}`, title: `${ownerTitleText(numerator)} / ${ownerTitleText(denominator)}${percent ? ' × 100' : ''} = ${ownerTitleText(detail)}` };
 }
 
 export function tradeCosts(row) {

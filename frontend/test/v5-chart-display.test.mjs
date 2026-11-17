@@ -41,6 +41,6 @@ test('bar tooltip keeps the exact owner decimal and rounds its display', () => {
   recharts.Tooltip = ({ content }) => content({ active: true, label: 'BNB', payload: [{ payload: row }] });
   const { BarsChart } = frontendModules({ recharts }).load('features/quant-ops/kit/charts.tsx');
   const html = renderToStaticMarkup(React.createElement(BarsChart, { rows: [row], bars: [{ id: 'realized', label: 'Closed', color: 'blue' }], ariaLabel: 'P&L' }));
-  assert.match(html, /<strong title="-0\.0040000000000000001">0\.00<\/strong>/);
+  assert.match(html, /<strong title="≈ −0\.004 \(rounded\)">0\.00<\/strong>/);
   assert.doesNotMatch(html, /q-negative/);
 });

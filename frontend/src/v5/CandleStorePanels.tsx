@@ -9,12 +9,12 @@ import {
   type CrossStats, type CrossView, type HeatRow, type HeatmapView, type StoreLane, type StoreView,
 } from "./candle-store-model";
 import { readCandleStore } from "./candle-store-api";
-import { fixed, ownerDisplay } from "./format.mjs";
+import { ownerTitleText, fixed, ownerDisplay } from './format.mjs';
 
 
 const control = "rounded border border-[var(--color-border)] bg-[var(--color-surface)] p-2 text-[var(--color-text)]";
 const muted = "text-xs text-[var(--color-text-muted)]";
-const exactCell = (value: number | null) => <span title={value == null ? undefined : String(value)}>{fixed(value)}</span>;
+const exactCell = (value: number | null) => <span title={ownerTitleText(value == null ? undefined : String(value))}>{fixed(value)}</span>;
 
 function ReadFailure({ view, error, checkedAt }: { view: string; error: Error | null; checkedAt: number }) {
   return <p role="alert" className="rounded-lg border border-[var(--color-border)] p-4 text-sm">{view} unavailable: {error?.message ?? "No owner response"}. Checked {utcText(checkedAt / 1000 || null)} (dashboard time). No earlier values are shown in its place. Retry with Refresh.</p>;
@@ -93,7 +93,7 @@ export function CoverageHeatmapPanel() {
         const coverage = heatRowCoverage(row);
         const name = `${row.venue} · ${row.pair}`;
         return <div key={`${row.lane}/${row.pair}`} className="grid grid-cols-1 items-center gap-x-3 gap-y-0.5 sm:grid-cols-[minmax(150px,220px)_minmax(0,1fr)]">
-          <div className="min-w-0 text-xs"><span className="font-medium">{name}</span> <span className="text-[var(--color-text-muted)]" title={coverage?.exact}>· {coverage == null ? "no settled minutes" : `${coverage.text} settled`}</span></div>
+          <div className="min-w-0 text-xs"><span className="font-medium">{name}</span> <span className="text-[var(--color-text-muted)]" title={coverage?.title}>· {coverage == null ? "no settled minutes" : `${coverage.text} settled`}</span></div>
           <HeatStrip ariaLabel={`${name} hourly coverage`} maxCellWidth={12} height={16} cells={order.map(ownerIndex => { const cell = heatCell(row.cells[ownerIndex], view.hours[ownerIndex]); return { key: String(view.hours[ownerIndex]), color: cell.color, empty: cell.state === "outside", label: `${name} · ${cell.label}` }; })} renderTooltip={index => heatTooltip(row, view, order[index])} />
         </div>;
       })}</div>
@@ -125,7 +125,7 @@ export function StoreFactsPanel() {
     {view && <>
       <p className="text-sm">Evaluated {utcText(view.now)} · {view.read_method}.</p>
       {[view.status.error && `Collector status: ${view.status.error}`, view.status.fatal_error && `Collector fatal error: ${view.status.fatal_error}`, view.config.error && `Lanes config: ${view.config.error}`, ...view.versions.mismatches.map(item => `Format: ${item}`)].filter(Boolean).map(text => <p key={text as string} role="alert" className="break-words text-sm">{text}</p>)}
-      <TileGrid label="Candle store facts" min={180}>{storeTiles(view).map(tile => <article key={tile.id} className="h-full min-w-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3" data-tone={tile.tone}><span className={muted}>{tile.label}</span><p className={`break-words text-lg font-semibold${tile.tone ? " text-[var(--color-yellow,#f59e0b)]" : ""}`}>{tile.value}</p><p className={`${muted} break-words`} title={tile.note}>{tile.note}</p></article>)}</TileGrid>
+      <TileGrid label="Candle store facts" min={180}>{storeTiles(view).map(tile => <article key={tile.id} className="h-full min-w-0 rounded-lg border border-[var(--color-border)] bg-[var(--color-surface)] p-3" data-tone={tile.tone}><span className={muted}>{tile.label}</span><p className={`break-words text-lg font-semibold${tile.tone ? " text-[var(--color-yellow,#f59e0b)]" : ""}`}>{tile.value}</p><p className={`${muted} break-words`} title={ownerTitleText(tile.note)}>{tile.note}</p></article>)}</TileGrid>
       <DataTable rows={view.lanes} columns={laneColumns} rowId={row => row.lane} label="Candle store lanes on disk" pageSize={16} exportName="candle-store-lanes" emptyText="The owner lists no lanes." />
       <p className={muted}>Config source: {view.config.source} · assets: {view.config.assets.join(", ") || "none listed"}.</p>
     </>}

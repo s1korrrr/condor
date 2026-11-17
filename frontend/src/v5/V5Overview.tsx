@@ -3,7 +3,7 @@ import { NavLink } from "react-router-dom";
 import { helmHeadline } from "./helm-model.mjs";
 import { latest } from "./money-model.mjs";
 import { exactSignedSum } from "./bots-position-model.mjs";
-import { ownerDisplay, usdc } from "./format.mjs";
+import { ownerTitleText, ownerDisplay, usdc } from './format.mjs';
 import { OwnerValue } from "./OwnerValue";
 import { utcExact } from "./shown.mjs";
 import { readHelm } from "./V5Helm";
@@ -29,7 +29,7 @@ export function V5Overview() {
   const equity = v5Values?.equity, funding = v5Values?.initial_funding;
   const oppositeFunding = typeof funding === "string" ? funding.startsWith("-") ? funding.slice(1) : `-${funding}` : null;
   const sinceStart = exactSignedSum(equity, oppositeFunding);
-  const sinceExact = sinceStart == null ? undefined : `${equity} − ${funding} = ${sinceStart.replace(/^-/, "−")}`;
+  const sinceExact = sinceStart == null ? undefined : `${ownerTitleText(equity)} − ${ownerTitleText(funding)} = ${ownerTitleText(sinceStart.replace(/^-/, "−"))}`;
   const realized = v5Values?.realized, unrealized = v5Values?.unrealized;
   const headline = helmHeadline(helm.data);
   const helmMoney = helmRow.withValues;
@@ -44,7 +44,7 @@ export function V5Overview() {
           : <>
             <div className="v5m-stats">
               <div className="v5m-stat"><span>Wallet equity<em className="v5-phone-unit hidden not-italic"> (USDC)</em></span><strong><OwnerValue value={equity} kind="usdc" unit="" />{ownerDisplay(equity, "usdc").tone !== "none" && <em className="v5-desktop-unit not-italic"> USDC</em>}</strong><small>{`as of ${utcExact(v5Values.at_ms)}`}</small></div>
-              <div className={`v5m-stat${tone(sinceStart)}`}><span>Since start</span><strong><OwnerValue value={sinceStart} kind="signed" exact={sinceExact} /></strong><small title={funding ?? undefined}>{funding == null ? "start funding not published" : `against ${usdc(funding)} start funding`}</small></div>
+              <div className={`v5m-stat${tone(sinceStart)}`}><span>Since start</span><strong><OwnerValue value={sinceStart} kind="signed" exact={sinceExact} /></strong><small title={ownerTitleText(funding ?? undefined)}>{funding == null ? "start funding not published" : `against ${usdc(funding)} start funding`}</small></div>
               <div className={`v5m-stat${tone(realized)}`}><span>Profit from closed trades</span><strong><OwnerValue value={realized} kind="signed" /></strong><small>lifetime, owner accounting</small></div>
               <div className={`v5m-stat${tone(unrealized)}`}><span>Coins still held</span><strong><OwnerValue value={unrealized} kind="signed" /></strong><small>gain or loss at current marks</small></div>
             </div>

@@ -15,7 +15,7 @@ import { candleCurrent, hourlyReturns, marketAverageTitle, marketHolding, market
 import { readMarketPaper } from "./market-paper";
 import { usePaperClock } from "./usePaperClock";
 import { ageSeconds, breadth, coinTile, indexedReturns, laneHealthClass, MARKET_COINS, premiumSeries, REFERENCE, STALE_AFTER_S, storeHealth, venueGrid, type CandleRead, type LaneTile } from "./market-model.mjs";
-import { age as ageShort, axis, decimalShift, fixed, pct, price, rationalPercent, signed, utcMin } from "./format.mjs";
+import { ownerTitleText, age as ageShort, axis, decimalShift, fixed, pct, price, rationalPercent, signed, utcMin } from './format.mjs';
 import { tri, utcMinute } from "./shown.mjs";
 import "./market.css";
 
@@ -117,19 +117,19 @@ export function V5Market() {
         <span className={`v5m-chip ${feedCurrent ? "" : workspace.isError || refresh ? "is-warn" : "is-unknown"}`}><i />V5 feed <b>{feedCurrent ? "current" : workspace.isError ? "unavailable" : refresh ? "not current" : "no data"}</b></span>
       </div>
     </header>
-    <p className="v5m-summary" title={marketAverageTitle(changes)}>{marketSentence(changes, range)}</p>
+    <p className="v5m-summary" title={ownerTitleText(marketAverageTitle(changes))}>{marketSentence(changes, range)}</p>
 
     {coins.isPending && <p role="status" className="v5m-status">Reading {range} of candles for {MARKET_COINS.join(", ")}…</p>}
     {coins.isError && <p role="alert" className="v5m-status">Candle refresh failed: {coins.error.message}. Earlier prices are not shown.</p>}
     {failed.length > 0 && <p role="alert" className="v5m-status">No candles for {failed.map(coin => `${coin} (${reads[coin].error})`).join(", ")}. Those tiles are left out.</p>}
 
     <TileGrid label="Coins" min={200}>{tiles.map((tile, index) => tile ? <article key={tile.coin} className={`v5m-card v5m-coin is-clickable${selected === tile.coin ? " is-selected" : ""}`} role="button" tabIndex={0} aria-pressed={selected === tile.coin} aria-label={`${tile.coin}: open statistics, candles and venue detail`} onClick={() => select(tile.coin)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(tile.coin); } }}>
-      <div className="v5m-coin-top"><span className="v5m-sym"><i style={{ background: COIN_COLOR[tile.coin] }} />{tile.coin}</span><span className="v5m-change" title={changes[tile.coin] == null ? undefined : `result ${changes[tile.coin]}%; first close ${reads[tile.coin]?.spot?.buckets[0]?.[4]}; last close ${reads[tile.coin]?.spot?.buckets.at(-1)?.[4]}`}>{range} {changes[tile.coin] == null ? "—" : pct(changes[tile.coin])}</span></div>
-      <strong className="v5m-price" title={current[tile.coin] ? String(tile.last) : undefined}>{current[tile.coin] ? `${price(tile.last)} ${REFERENCE.quote}` : "—"}</strong><small className={`v5m-asof${current[tile.coin] ? "" : " is-old"}`}>{current[tile.coin] ? "Close" : "— close not current"} · {minuteText(tile.lastTime + 60)} · {ageText(age(tile.coin, tile.lastTime))}</small>
+      <div className="v5m-coin-top"><span className="v5m-sym"><i style={{ background: COIN_COLOR[tile.coin] }} />{tile.coin}</span><span className="v5m-change" title={changes[tile.coin] == null ? undefined : `result ${ownerTitleText(changes[tile.coin])}%; first close ${ownerTitleText(reads[tile.coin]?.spot?.buckets[0]?.[4])}; last close ${ownerTitleText(reads[tile.coin]?.spot?.buckets.at(-1)?.[4])}`}>{range} {changes[tile.coin] == null ? "—" : pct(changes[tile.coin])}</span></div>
+      <strong className="v5m-price" title={ownerTitleText(current[tile.coin] ? String(tile.last) : undefined)}>{current[tile.coin] ? `${price(tile.last)} ${REFERENCE.quote}` : "—"}</strong><small className={`v5m-asof${current[tile.coin] ? "" : " is-old"}`}>{current[tile.coin] ? "Close" : "— close not current"} · {minuteText(tile.lastTime + 60)} · {ageText(age(tile.coin, tile.lastTime))}</small>
       {changes[tile.coin] == null && <small className="v5m-asof">— {range} change: current boundary closes required.</small>}
       <SparkChart points={tile.spark} color={COIN_COLOR[tile.coin]} height={44} format={price} unit={REFERENCE.quote} ariaLabel={`${tile.coin} recorded prices, ${range}, breaks where minutes are missing`} />
       <HoldingLine holding={holdings[tile.coin]} error={paper.isError ? paper.error.message : null} now={now} />
-      <dl className="v5m-kv"><dt>Perpetual premium</dt><dd title={!reads[tile.coin]?.perpetualError && tile.premiumBps != null && tile.premiumTime != null && age(tile.coin, tile.premiumTime) != null && age(tile.coin, tile.premiumTime)! <= STALE_AFTER_S ? `result ${tile.premiumBps} bp; ${tile.premiumInputs}` : undefined}>{reads[tile.coin]?.perpetualError ? "— perpetual read failed" : tile.premiumBps == null || tile.premiumTime == null ? "— no paired closes" : (() => { const seconds = age(tile.coin, tile.premiumTime); return seconds == null || seconds > STALE_AFTER_S ? "— paired close not current" : `${signed(tile.premiumBps, 1)} bp · ${minuteText(tile.premiumTime + 60)} · ${ageText(seconds)}`; })()}</dd></dl>
+      <dl className="v5m-kv"><dt>Perpetual premium</dt><dd title={ownerTitleText(!reads[tile.coin]?.perpetualError && tile.premiumBps != null && tile.premiumTime != null && age(tile.coin, tile.premiumTime) != null && age(tile.coin, tile.premiumTime)! <= STALE_AFTER_S ? `result ${ownerTitleText(tile.premiumBps)} bp; ${tile.premiumInputs}` : undefined)}>{reads[tile.coin]?.perpetualError ? "— perpetual read failed" : tile.premiumBps == null || tile.premiumTime == null ? "— no paired closes" : (() => { const seconds = age(tile.coin, tile.premiumTime); return seconds == null || seconds > STALE_AFTER_S ? "— paired close not current" : `${signed(tile.premiumBps, 1)} bp · ${minuteText(tile.premiumTime + 60)} · ${ageText(seconds)}`; })()}</dd></dl>
     </article> : <article key={MARKET_COINS[index]} className="v5m-card v5m-coin is-empty"><span className="v5m-sym">{MARKET_COINS[index]}</span><strong className="v5m-price">—</strong><p>{coins.isPending ? "Loading…" : reads[MARKET_COINS[index]]?.error ? `Candle read failed: ${reads[MARKET_COINS[index]].error}` : `No closed minute in ${range}.`}</p><HoldingLine holding={holdings[MARKET_COINS[index]]} error={paper.isError ? paper.error.message : null} now={now} /></article>)}</TileGrid>
     {selected ? <V5MarketDetail key={selected} coin={selected} color={COIN_COLOR[selected]} onClose={() => setSelected(null)} tileRead={range === "24h" && coins.isSuccess && reads[selected]?.spot ? reads[selected] as unknown as DetailRead : null} /> : <p className="v5m-hint v5m-tip">Click a coin for its candles, minutes held and venue-by-venue price gaps.</p>}
 
@@ -159,11 +159,11 @@ export function V5Market() {
         </Card>
         <Card title="Same coin, different venue" hint="Average gap of each venue's spot close from the median of venues over the last hour, basis points (owner-computed; hover for minutes compared)">
           {cross.isPending ? <p role="status" className="v5m-hint">Reading cross-venue prices…</p> : !cross.data || crossVenues.length === 0 ? <p className="v5m-hint">Cross-venue statistics unavailable{cross.data?.some(read => read.error) ? `: ${cross.data.find(read => read.error)!.error}` : ""}.</p> :
-            <table className="v5m-heat"><thead><tr><th>Venue</th>{cross.data.map(read => <th key={read.coin} title={read.error ?? undefined}>{read.coin}{read.error ? " (read failed)" : ""}</th>)}</tr></thead><tbody>{crossVenues.map(venue => <tr key={venue}><td>{venueName(venue)}</td>{cross.data!.map(read => {
+            <table className="v5m-heat"><thead><tr><th>Venue</th>{cross.data.map(read => <th key={read.coin} title={ownerTitleText(read.error ?? undefined)}>{read.coin}{read.error ? " (read failed)" : ""}</th>)}</tr></thead><tbody>{crossVenues.map(venue => <tr key={venue}><td>{venueName(venue)}</td>{cross.data!.map(read => {
               const row = read.table?.find(item => item.venue === venue);
-              if (!row || row.mean_bps == null || !row.n) return <td key={read.coin} className="is-none" title={read.error ? "read failed" : row ? "no minute compared" : "no row from the owner for this venue"}>—</td>;
+              if (!row || row.mean_bps == null || !row.n) return <td key={read.coin} className="is-none" title={ownerTitleText(read.error ? "read failed" : row ? "no minute compared" : "no row from the owner for this venue")}>—</td>;
               const bps = row.mean_bps, strength = Math.min(Math.abs(bps) / 12, 1) * 0.45;
-              return <td key={read.coin} className={`is-clickable${selected === read.coin ? " is-selected" : ""}`} onClick={() => select(read.coin)} title={`${venueName(venue)} ${row.pair}: mean ${bps} bp over ${row.n} minutes · p95 |gap| ${row.p95_abs_bps == null ? "—" : row.p95_abs_bps} bp · click for ${read.coin} detail`} style={{ background: Math.abs(bps) < 0.5 ? undefined : `color-mix(in srgb, ${bps < 0 ? "var(--color-red)" : "var(--color-green)"} ${Math.round(strength * 100)}%, transparent)` }}>{signed(bps, 1)}</td>;
+              return <td key={read.coin} className={`is-clickable${selected === read.coin ? " is-selected" : ""}`} onClick={() => select(read.coin)} title={ownerTitleText(`${venueName(venue)} ${row.pair}: mean ${ownerTitleText(bps)} bp over ${row.n} minutes · p95 |gap| ${row.p95_abs_bps == null ? "—" : ownerTitleText(row.p95_abs_bps)} bp · click for ${read.coin} detail`)} style={{ background: Math.abs(bps) < 0.5 ? undefined : `color-mix(in srgb, ${bps < 0 ? "var(--color-red)" : "var(--color-green)"} ${Math.round(strength * 100)}%, transparent)` }}>{signed(bps, 1)}</td>;
             })}</tr>)}</tbody></table>}
           <p className="v5m-hint">Green: above the median of venues, red: below. Quotes can differ (USDT, USD, USDC), so part of a gap can be the quote currency, not the venue.</p>
         </Card>
@@ -177,7 +177,7 @@ export function V5Market() {
 }
 
 function HoldingLine({ holding, error, now }: { holding: ReturnType<typeof marketHolding>; error: string | null; now: number }) {
-  return <><p className="v5m-holding" title={holding.exact}>{holding.text}</p><small className="v5m-asof">{error ?? holding.reason}{holding.asOf != null && <> · Paper {utcMin(holding.asOf)} · {ageText((now - holding.asOf) / 1000)}</>}</small></>;
+  return <><p className="v5m-holding" title={holding.title}>{holding.text}</p><small className="v5m-asof">{error ?? holding.reason}{holding.asOf != null && <> · Paper {utcMin(holding.asOf)} · {ageText((now - holding.asOf) / 1000)}</>}</small></>;
 }
 
 function HourStrip({ reads }: { reads: Record<string, CoinRead> }) {
@@ -189,7 +189,7 @@ function HourStrip({ reads }: { reads: Record<string, CoinRead> }) {
     <tbody>{rows.map(({ coin, hours }) => <tr key={coin}><th scope="row">{coin}</th>{times.map(time => {
       const hour = hours.get(time), value = hour?.change ?? null;
       const label = value == null ? "— incomplete hour or missing minute" : pct(value);
-      return <td key={time} className={`v5m-hour${value == null ? " is-gap" : ""}`} title={`${coin} · ${utcMin(time * 1000)} – ${utcMin((time + 3600) * 1000)} · ${label}${value == null ? "" : ` · result ${value}%; ${hour?.inputs}`}`} style={value == null ? undefined : { background: `color-mix(in srgb, ${COIN_COLOR.BTC} ${Math.min(85, 12 + Math.abs(Number(value)) * 15)}%, var(--color-surface))` }}>{value == null ? <span aria-label={label}>—</span> : label}</td>;
+      return <td key={time} className={`v5m-hour${value == null ? " is-gap" : ""}`} title={ownerTitleText(`${coin} · ${utcMin(time * 1000)} – ${utcMin((time + 3600) * 1000)} · ${label}${value == null ? "" : ` · result ${ownerTitleText(value)}%; ${hour?.inputs}`}`)} style={value == null ? undefined : { background: `color-mix(in srgb, ${COIN_COLOR.BTC} ${Math.min(85, 12 + Math.abs(Number(value)) * 15)}%, var(--color-surface))` }}>{value == null ? <span aria-label={label}>—</span> : label}</td>;
     })}</tr>)}</tbody>
   </table></div>;
 }
@@ -222,7 +222,7 @@ function systemCoverage(lanes: LaneTile[]) {
   const total = values.reduce<bigint>((sum, value) => sum + value!, 0n);
   const divisor = scale * BigInt(values.length);
   const result = rationalPercent(total * 100n, divisor, 1);
-  return result ? { text: `${fixed(result.value, 1)}%`, exact: `exact mean of ${lanes.map(lane => lane.coverage_7d).join(', ')} = ${result.exact}` } : null;
+  return result ? { text: `${fixed(result.value, 1)}%`, exact: `exact mean of ${lanes.map(lane => ownerTitleText(lane.coverage_7d)).join(', ')} = ${ownerTitleText(result.exact)}` } : null;
 }
 
 export function V5SystemMarket({ tab, paused }: { tab: 'data-feeds' | 'engine-inputs'; paused: boolean }) {
@@ -253,29 +253,29 @@ export function V5SystemMarket({ tab, paused }: { tab: 'data-feeds' | 'engine-in
       <Stat label="7-day coverage" value={coverage?.text ?? '—'} title={coverage ? `7-day coverage ${coverage.text}` : undefined} exact={coverage?.exact} note={coverage === null ? 'A lane is unavailable or 7-day coverage is missing or invalid' : 'mean of all reported lanes'} />
       <Stat label="Missing minutes, 7 days" value={gaps ?? '—'} note={gaps == null ? 'A lane is unavailable or gaps were not reported' : 'all reported lanes'} />
       <Stat label="Slowest lane" value={slowestAge == null ? '—' : `${Math.round(slowestAge)} s`} note={slowestAge == null ? 'Age not reported or not current' : 'since its newest final minute closed'} />
-    </div><h3 className="v5m-subhead">V5 market-context feed</h3><p className="v5m-hint">Last success: {systemTime(refresh?.last_success_at_ms, now)}</p>{!cohort ? <p>— · Feed data is not current or was not reported.</p> : <div className="v5m-stats">{cohort.dimensions.map(item => { const shown = cohortCoverageDisplay(item, 0); return <Stat key={item.key} label={item.label} value={item.valid == null || item.expected == null ? '—' : `${item.valid}/${item.expected}`} title={shown ? `${shown.text} this minute` : undefined} exact={shown?.exact} note={shown ? `${shown.text} this minute` : 'not qualified'} />; })}</div>}</Card>
+    </div><h3 className="v5m-subhead">V5 market-context feed</h3><p className="v5m-hint">Last success: {systemTime(refresh?.last_success_at_ms, now)}</p>{!cohort ? <p>— · Feed data is not current or was not reported.</p> : <div className="v5m-stats">{cohort.dimensions.map(item => { const shown = cohortCoverageDisplay(item, 0); return <Stat key={item.key} label={item.label} value={item.valid == null || item.expected == null ? '—' : `${item.valid}/${item.expected}`} title={shown ? `${shown.text} this minute` : undefined} exact={shown?.title} note={shown ? `${shown.text} this minute` : 'not qualified'} />; })}</div>}</Card>
   </div></Section></div>;
 }
 
 function Legend({ series, hidden, onToggle }: { series: ChartSeries[]; hidden: ReadonlySet<string>; onToggle: (id: string) => void }) {
-  return <div className="v5m-legend" role="group" aria-label="Show or hide coins">{series.map(item => { const last = [...item.points].reverse().find(point => point.value != null); const off = hidden.has(item.id); return <button type="button" key={item.id} aria-pressed={!off} className={off ? "is-off" : ""} onClick={() => onToggle(item.id)} title={off ? `Show ${item.label}` : `Hide ${item.label}`}><i style={{ background: item.color }} />{item.label} <b>{last?.value == null ? "—" : item.format!(last.value)}</b></button>; })}</div>;
+  return <div className="v5m-legend" role="group" aria-label="Show or hide coins">{series.map(item => { const last = [...item.points].reverse().find(point => point.value != null); const off = hidden.has(item.id); return <button type="button" key={item.id} aria-pressed={!off} className={off ? "is-off" : ""} onClick={() => onToggle(item.id)} title={ownerTitleText(off ? `Show ${item.label}` : `Hide ${item.label}`)}><i style={{ background: item.color }} />{item.label} <b>{last?.value == null ? "—" : item.format!(last.value)}</b></button>; })}</div>;
 }
 
 function ReturnBars({ tiles, range, selected, onSelect }: { tiles: { coin: string; changePct: string }[]; range: string; selected: string | null; onSelect: (coin: string) => void }) {
   const sorted = [...tiles].sort((left, right) => Number(right.changePct) - Number(left.changePct));
   const max = Math.max(...sorted.map(tile => Math.abs(Number(tile.changePct))), 0.01);
-  return <div className="v5m-bars">{sorted.map(tile => <button type="button" key={tile.coin} className={`v5m-bar${selected === tile.coin ? " is-selected" : ""}`} aria-pressed={selected === tile.coin} onClick={() => onSelect(tile.coin)} title={`${tile.coin}: ${pct(tile.changePct)} over ${range} · click for detail`}><span>{tile.coin}</span><div><i style={{ width: `${(Math.abs(Number(tile.changePct)) / max) * 50}%`, background: "var(--color-primary)", [Number(tile.changePct) < 0 ? "right" : "left"]: "50%" }} /></div><b>{pct(tile.changePct)}</b></button>)}</div>;
+  return <div className="v5m-bars">{sorted.map(tile => <button type="button" key={tile.coin} className={`v5m-bar${selected === tile.coin ? " is-selected" : ""}`} aria-pressed={selected === tile.coin} onClick={() => onSelect(tile.coin)} title={ownerTitleText(`${tile.coin}: ${pct(tile.changePct)} over ${range} · click for detail`)}><span>{tile.coin}</span><div><i style={{ width: `${(Math.abs(Number(tile.changePct)) / max) * 50}%`, background: "var(--color-primary)", [Number(tile.changePct) < 0 ? "right" : "left"]: "50%" }} /></div><b>{pct(tile.changePct)}</b></button>)}</div>;
 }
 
 function Venue({ row, elapsedSeconds }: { row: ReturnType<typeof venueGrid<LaneTile>>[number]; elapsedSeconds: number }) {
-  const cell = (lane: LaneTile | null) => lane ? <span className="v5m-lane" title={`${lane.lane} · 7-day coverage ${lane.available === true && typeof lane.coverage_7d === 'number' && Number.isFinite(lane.coverage_7d) && lane.coverage_7d >= 0 && lane.coverage_7d <= 1 ? `${fixed(decimalShift(lane.coverage_7d, 2), 1)}%` : 'not reported or unavailable'} · missing minutes ${lane.available === true && Number.isSafeInteger(lane.gaps_7d) && lane.gaps_7d! >= 0 ? lane.gaps_7d : 'not reported or unavailable'}${lane.unavailable_reason ? ` · ${lane.unavailable_reason}` : ""}`}>
-    <span className={laneHealthClass(lane.health)} title={`Owner health: ${lane.health ?? "not reported"} · ${tri(lane.available, "available", "unavailable", "availability not reported")}`}><span title={lane.available === true && lane.coverage_7d != null ? `exact 7-day fraction ${lane.coverage_7d}` : undefined}>{lane.available === true && Number.isSafeInteger(lane.pairs_held) && Number.isSafeInteger(lane.pairs_listed) && lane.pairs_held! >= 0 && lane.pairs_listed! >= 0 ? `${lane.pairs_held}/${lane.pairs_listed}` : `— · ${lane.available === false ? 'lane unavailable' : lane.available === true ? 'pair counts not reported' : 'availability not reported'}`}</span></span>
-    <span><span title={lane.available === true && lane.coverage_24h != null && Number.isFinite(lane.coverage_24h) ? String(lane.coverage_24h) : undefined}>{lane.available !== true || lane.coverage_24h == null || !Number.isFinite(lane.coverage_24h) ? '— · coverage not current' : `${fixed(decimalShift(lane.coverage_24h, 2), 0)}%`}</span></span>
+  const cell = (lane: LaneTile | null) => lane ? <span className="v5m-lane" title={ownerTitleText(`${lane.lane} · 7-day coverage ${lane.available === true && typeof lane.coverage_7d === 'number' && Number.isFinite(lane.coverage_7d) && lane.coverage_7d >= 0 && lane.coverage_7d <= 1 ? `${fixed(decimalShift(lane.coverage_7d, 2), 1)}%` : 'not reported or unavailable'} · missing minutes ${lane.available === true && Number.isSafeInteger(lane.gaps_7d) && lane.gaps_7d! >= 0 ? lane.gaps_7d : 'not reported or unavailable'}${lane.unavailable_reason ? ` · ${lane.unavailable_reason}` : ""}`)}>
+    <span className={laneHealthClass(lane.health)} title={ownerTitleText(`Owner health: ${lane.health ?? "not reported"} · ${tri(lane.available, "available", "unavailable", "availability not reported")}`)}><span title={ownerTitleText(lane.available === true && lane.coverage_7d != null ? `exact 7-day fraction ${ownerTitleText(lane.coverage_7d)}` : undefined)}>{lane.available === true && Number.isSafeInteger(lane.pairs_held) && Number.isSafeInteger(lane.pairs_listed) && lane.pairs_held! >= 0 && lane.pairs_listed! >= 0 ? `${lane.pairs_held}/${lane.pairs_listed}` : `— · ${lane.available === false ? 'lane unavailable' : lane.available === true ? 'pair counts not reported' : 'availability not reported'}`}</span></span>
+    <span><span title={ownerTitleText(lane.available === true && lane.coverage_24h != null && Number.isFinite(lane.coverage_24h) ? String(lane.coverage_24h) : undefined)}>{lane.available !== true || lane.coverage_24h == null || !Number.isFinite(lane.coverage_24h) ? '— · coverage not current' : `${fixed(decimalShift(lane.coverage_24h, 2), 0)}%`}</span></span>
     <span className="v5m-muted">{lane.available !== true || lane.last_minute_age_s == null || !Number.isFinite(lane.last_minute_age_s) || lane.last_minute_age_s < 0 ? '— · age not current' : `${Math.round(lane.last_minute_age_s + elapsedSeconds)} s`}</span>
   </span> : <span className="v5m-lane is-none">— · lane not reported</span>;
   return <><span className="v5m-venue">{venueName(row.venue)}</span>{cell(row.spot)}{cell(row.perpetual)}</>;
 }
 
 function Stat({ label, value, note, warn, title, exact }: { label: string; value: string; note?: string; warn?: boolean; title?: string; exact?: string }) {
-  return <div className={`v5m-stat${warn ? " is-warn" : ""}`} title={title}><span>{label}</span><strong title={exact}>{value}</strong>{note && <small>{note}</small>}</div>;
+  return <div className={`v5m-stat${warn ? " is-warn" : ""}`} title={ownerTitleText(title)}><span>{label}</span><strong title={ownerTitleText(exact)}>{value}</strong>{note && <small>{note}</small>}</div>;
 }

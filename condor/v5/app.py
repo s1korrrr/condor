@@ -7,10 +7,14 @@ TickEngine, MCP tools, Hummingbot controls, or any general Condor router.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import ipaddress
+import json
 import logging
+import os
 import re
+import stat
 import time
 from contextlib import asynccontextmanager
 from pathlib import Path
@@ -1420,6 +1424,32 @@ def create_app(
     assets_path = static_root / "assets"
     if assets_path.is_dir():
         app.mount("/assets", StaticFiles(directory=assets_path), name="v5-assets")
+    root_media_types = {
+        ".png": "image/png",
+        ".svg": "image/svg+xml",
+        ".jpeg": "image/jpeg",
+        ".ico": "image/vnd.microsoft.icon",
+    }
+    root_static_hashes = {}
+    manifest_path = static_root.parent / "v5-reviewed-build.json"
+    if manifest_path.is_file() and not manifest_path.is_symlink():
+        try:
+            manifest = json.loads(manifest_path.read_text())
+            files = manifest["files"]
+            if not isinstance(files, dict):
+                raise ValueError("manifest files must be an object")
+            root_static_hashes = {
+                name: digest
+                for name, digest in files.items()
+                if re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9_.-]*", name)
+                and Path(name).suffix in root_media_types
+                and isinstance(digest, str)
+                and re.fullmatch(r"[0-9a-f]{64}", digest)
+            }
+        except (OSError, ValueError, KeyError, TypeError):
+            logging.getLogger(__name__).warning("V5 root statics withheld: invalid reviewed manifest")
+    else:
+        logging.getLogger(__name__).warning("V5 root statics withheld: missing reviewed manifest")
 
     @app.get("/", response_class=HTMLResponse)
     async def root_page():
@@ -1482,6 +1512,43 @@ def create_app(
         if coin not in MARKET_PAGE_COINS:
             raise HTTPException(404)
         return await root_page()
+
+    def root_static(request: Request):
+        asset_name = request.url.path.removeprefix("/")
+        name = "favicon.svg" if asset_name == "favicon.ico" and asset_name not in root_static_hashes else asset_name
+        digest = root_static_hashes.get(name)
+        image = static_root / name
+        if digest is None:
+            raise HTTPException(404)
+        flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
+        limit = 8 * 1024 * 1024
+        try:
+            descriptor = os.open(image, flags)
+            try:
+                metadata = os.fstat(descriptor)
+                if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > limit:
+                    raise HTTPException(404)
+                with os.fdopen(descriptor, "rb", closefd=False) as source:
+                    content = source.read(limit + 1)
+            finally:
+                os.close(descriptor)
+        except OSError:
+            raise HTTPException(404) from None
+        if len(content) > limit or not hmac.compare_digest(hashlib.sha256(content).hexdigest(), digest):
+            raise HTTPException(404)
+        return Response(
+            b"" if request.method == "HEAD" else content,
+            media_type=root_media_types[image.suffix],
+            headers={"content-length": str(len(content))},
+        )
+
+    root_static_names = set(root_static_hashes) - {"condor_old.jpeg"}
+    if "favicon.svg" in root_static_hashes:
+        root_static_names.add("favicon.ico")
+    for asset_name in sorted(root_static_names):
+        app.add_api_route(
+            f"/{asset_name}", root_static, methods=["GET", "HEAD"], include_in_schema=False
+        )
 
     @app.exception_handler(StarletteHTTPException)
     async def not_found_page(request: Request, exc: StarletteHTTPException):

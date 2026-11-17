@@ -6,7 +6,7 @@
  */
 import { assetColor } from '@/features/quant-ops/format';
 import { CHART, type ChartSeries } from '@/features/quant-ops/kit/series';
-import { fixed, ownerDisplay, rationalPercent } from './format.mjs';
+import { fixed, ownerDisplay, ownerTitleText, rationalPercent } from './format.mjs';
 
 export type CrossPoint = [number, number];
 export type CrossLine = { lane: string; venue: string; pair: string; close: CrossPoint[]; deviation_bps: CrossPoint[] };
@@ -98,7 +98,7 @@ export function heatCell(counts: HeatCellCounts, hour: number): { state: HeatSta
 }
 
 /** Settled coverage over the row's in-window hours; null when no settled minute exists (never 100% by default). */
-export function heatRowCoverage(row: HeatRow): { text: string; exact: string } | null {
+export function heatRowCoverage(row: HeatRow): { text: string; exact: string; title: string } | null {
   let settled = 0n, covered = 0n;
   for (const cell of row.cells) {
     if (!cell) continue;
@@ -108,7 +108,7 @@ export function heatRowCoverage(row: HeatRow): { text: string; exact: string } |
     settled += final + noTrade + unrecoverable + missing;
   }
   const result = rationalPercent(covered * 100n, settled);
-  return result ? { text: `${fixed(result.value)}%`, exact: `${covered} / ${settled} settled minutes; exact percentage ${result.exact}` } : null;
+  return result ? { text: `${fixed(result.value)}%`, exact: `${covered} / ${settled} settled minutes; exact percentage ${result.exact}`, title: `${covered} / ${settled} settled minutes; exact percentage ${ownerTitleText(result.exact)}` } : null;
 }
 
 /** Newest hour first, the kit HeatStrip convention. Indexes map back to owner order for tooltips. */

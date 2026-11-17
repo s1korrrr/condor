@@ -8,7 +8,7 @@ test('distance uses the close, sign and missing inputs', () => {
   assert.equal(breakEvenDistance('9007199254740993', 9007199254740992), 'Needs 0.0% to break even');
   assert.equal(breakEvenDistance('90', null), '—');
   assert.equal(breakEvenDistance('0', 100), '—');
-  assert.deepEqual(breakEvenDistanceDetail('110', 100), { text: 'Needs +10.0% to break even', exact: '(110 − 100) × 100 / 100 = 10%' });
+  assert.deepEqual(breakEvenDistanceDetail('110', 100), { text: 'Needs +10.0% to break even', exact: '(110 − 100) × 100 / 100 = 10%', title: '(110 − 100) × 100 / 100 = 10%' });
 });
 test('money samples follow the five-minute cadence and late is never current', () => {
   const row = { at_ms: 300001, snapshot_at_ms: 300000, unit: 'USDC' };

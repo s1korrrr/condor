@@ -1,5 +1,5 @@
 import type { MarketEvidence } from "./contracts.ts";
-import { decimalShift, fixed, ownerDisplay, rationalPercent } from "./format.mjs";
+import { decimalShift, fixed, ownerDisplay, ownerTitleText, rationalPercent } from "./format.mjs";
 import { featureText } from "./market-model.mjs";
 
 export interface MarketFeature {
@@ -57,11 +57,11 @@ export function selectedCohortCoverage(evidence: MarketEvidence): { complete: bo
   };
 }
 
-export function cohortCoverageDisplay(row: CohortCoverageDimension, digits: number): { text: string; exact: string } | null {
-  if (!row.fractionDerived) return row.fraction == null || row.fractionSource == null ? null : { text: `${fixed(decimalShift(row.fractionSource, 2), digits)}%`, exact: row.fractionSource };
+export function cohortCoverageDisplay(row: CohortCoverageDimension, digits: number): { text: string; exact: string; title: string | undefined } | null {
+  if (!row.fractionDerived) return row.fraction == null || row.fractionSource == null ? null : { text: `${fixed(decimalShift(row.fractionSource, 2), digits)}%`, exact: row.fractionSource, title: ownerTitleText(row.fractionSource) };
   if (!Number.isSafeInteger(row.valid) || !Number.isSafeInteger(row.expected) || row.expected! <= 0) return null;
   const result = rationalPercent(BigInt(row.valid!) * 100n, BigInt(row.expected!), digits);
-  return result ? { text: `${fixed(result.value, digits)}%`, exact: `${row.valid} / ${row.expected}; exact percentage ${result.exact}` } : null;
+  return result ? { text: `${fixed(result.value, digits)}%`, exact: `${row.valid} / ${row.expected}; exact percentage ${result.exact}`, title: `${row.valid} / ${row.expected}; exact percentage ${ownerTitleText(result.exact)}` } : null;
 }
 
 export function strategyAssessmentLabel(evidence: MarketEvidence): string {

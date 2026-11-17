@@ -10,7 +10,7 @@ export const CHART = {
 /** Largest JavaScript Date offset; later or earlier timestamps cannot be shown as a time. */
 const MAX_TIME_MS = 8.64e15;
 
-export type SeriesPoint = { time: number; value: number | null; exact?: string };
+export type SeriesPoint = { time: number; value: number | null; exact?: string; title?: string };
 export type ChartSeries = {
   id: string; label: string; color: string; points: SeriesPoint[];
   /** Secondary series keep their own scale on the left edge (for example cumulative bot PnL over wallet value). */

@@ -77,7 +77,7 @@ test('Money retains exact owner values behind rounded zero tiles', () => {
   }
   const note = tiles.find(tile => tile.textContent.includes('Wallet equity')).querySelector('small');
   assert.match(note.textContent, /−19\.92 vs the 200,000\.00 USDC start/);
-  assert.equal(note.querySelector('[data-tone]').title, '199980.07714623162240 − 200000 = −19.92285376837760');
-  assert.equal(note.querySelectorAll('span[title]')[2].title, '(199980.07714623162240 − 200000) × 100 / 200000 = −0.0099614268841888%');
+  assert.equal(note.querySelector('[data-tone]').title, '≈ 199980.077146231622 (rounded) − 200000 = ≈ −19.922853768378 (rounded)');
+  assert.equal(note.querySelectorAll('span[title]')[2].title, '(≈ 199980.077146231622 (rounded) − 200000) × 100 / 200000 = ≈ −0.009961426884 (rounded)%');
   window.close();
 });

@@ -5,7 +5,7 @@ import { TileGrid } from "@/features/quant-ops/kit/grid";
 import { RecordedCandleChart, type RecordedMinute } from "@/components/charts/RecordedCandleChart";
 import { CoverageHeatmapPanel, CrossVenuePanel, StoreFactsPanel } from "./CandleStorePanels";
 import { readCandleStore } from "./candle-store-api";
-import { decimalShift, fixed } from "./format.mjs";
+import { ownerTitleText, decimalShift, fixed } from './format.mjs';
 import "./candle-store.css";
 
 type Row = { health_rules: { level: string; rule: string; detail: string }[]; lane: string; venue: string; segment: string; pair: string; health: string; volume_unit: string; last_minute: number | null; last_minute_age_s: number | null; coverage_1h: number | null; coverage_24h: number | null; coverage_7d: number | null; gaps_7d: number | null; pending: number | null; unrecoverable_7d: number | null; no_trade_7d: number | null; ws_state: string | null; grace_s: number | null };
@@ -28,11 +28,11 @@ const columns: TableColumn<Row>[] = [
   { id: "venue", header: "Venue", value: row => row.venue, size: 95 },
   { id: "segment", header: "Market type", value: row => row.segment, size: 75 },
   { id: "pair", header: "Instrument", value: row => row.pair, rowHeader: true, size: 100 },
-  { id: "health", header: "Data health", value: row => row.health, size: 75, title: row => row.health_rules.map(rule => `${rule.rule}: ${rule.detail}`).join("; ") },
+  { id: "health", header: "Data health", value: row => row.health, size: 75, title: row => row.health_rules.map(rule => `${rule.rule}: ${ownerTitleText(rule.detail)}`).join("; "), note: row => row.health_rules.map(rule => `${rule.rule}: ${rule.detail}`).join("; ") },
   { id: "last", header: "Last open (UTC)", value: row => utc(row.last_minute), size: 170 },
   { id: "age", header: "Age since close (s)", value: row => row.last_minute_age_s, kind: "number", size: 85 },
   { id: "grace", header: "Settle grace (s)", value: row => row.grace_s, kind: "number", size: 75 },
-  ...(["1h", "24h", "7d"] as const).map(span => ({ id: `coverage_${span}`, header: `Settled coverage ${span} (%)`, value: (row: Row) => row[`coverage_${span}`] == null ? null : Number(fixed(decimalShift(row[`coverage_${span}`], 2), 2).replaceAll(",", "")), cell: (row: Row) => row[`coverage_${span}`] == null ? "—" : <span title={String(row[`coverage_${span}`])}>{fixed(decimalShift(row[`coverage_${span}`], 2), 2)}</span>, kind: "number" as const, size: 85 })),
+  ...(["1h", "24h", "7d"] as const).map(span => ({ id: `coverage_${span}`, header: `Settled coverage ${span} (%)`, value: (row: Row) => row[`coverage_${span}`] == null ? null : Number(fixed(decimalShift(row[`coverage_${span}`], 2), 2).replaceAll(",", "")), cell: (row: Row) => row[`coverage_${span}`] == null ? "—" : <span title={ownerTitleText(String(row[`coverage_${span}`]))}>{fixed(decimalShift(row[`coverage_${span}`], 2), 2)}</span>, kind: "number" as const, size: 85 })),
   { id: "gaps", header: "Missing 7d (min)", value: row => row.gaps_7d, kind: "number", size: 75 },
   { id: "pending", header: "Pending (min)", value: row => row.pending, kind: "number", size: 75 },
   { id: "unrecoverable", header: "Unrecoverable 7d (min)", value: row => row.unrecoverable_7d, kind: "number", size: 115 },

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import hashlib
+import json
 from pathlib import Path
 
 from fastapi.testclient import TestClient
@@ -254,6 +256,15 @@ def test_full_dashboard_deep_links_serve_only_known_ui_paths(tmp_path):
     dist.mkdir()
     (dist / "v5.html").write_text("<html>full V5 dashboard</html>")
     (dist / "condor_old.jpeg").write_bytes(b"test-logo")
+    files = {
+        name: hashlib.sha256((dist / name).read_bytes()).hexdigest()
+        for name in ("v5.html", "condor_old.jpeg")
+    }
+    (tmp_path / "v5-reviewed-build.json").write_text(
+        json.dumps(
+            {"entry": "v5.html", "entrySha256": files["v5.html"], "files": files}
+        )
+    )
     app = create_app(
         settings=make_settings(tmp_path), upstream=NoNetworkUpstream(), static_dir=dist
     )

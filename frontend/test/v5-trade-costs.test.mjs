@@ -135,7 +135,7 @@ test('only a fully closed direct executor with known owner PnL shows realized re
   assert.equal(value.grossEntryCost, '70');
   assert.equal(value.grossSaleProceeds, '80');
   assert.deepEqual(costs(closed, { terminal: false }).realizedReturn, value.realizedReturn);
-  assert.deepEqual(costs(closed, { realized_pnl_quote: '1e1' }).realizedReturn, { ...value.realizedReturn, exact: '1e1 / 70 × 100 = ≈ 14.2857 % (rounded)' });
+  assert.deepEqual(costs(closed, { realized_pnl_quote: '1e1' }).realizedReturn, { ...value.realizedReturn, exact: '1e1 / 70 × 100 = ≈ 14.2857 % (rounded)', title: '1e1 / 70 × 100 = ≈ 14.2857 % (rounded)' });
   for (const row of [{ realized_pnl_quote: null }, { realized_pnl_quote: 10 }, { realized_pnl_quote: 'NaN' }, { realized_pnl_quote: '1e65' }]) assert.equal(costs(closed, row).realizedReturn, null);
   assert.equal(costs({}, { terminal: true }).realizedReturn, null);
   assert.equal(costs(closed, { terminal: true, realized_pnl_quote: '-7' }).realizedReturn.value, '-10');

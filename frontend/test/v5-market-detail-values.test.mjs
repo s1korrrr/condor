@@ -14,14 +14,14 @@ test('venue gap statistics use rounded text and retain the exact owner number', 
   }
 });
 
-test('market detail derivations name received inputs and unrounded results', () => {
+test('market detail titles name received inputs and explicitly mark rounded results', () => {
   const spot = { buckets: [[0, 10, 11, 9, 10, 2, 1], [60, 10, 12, 8, 9.9996, 3, 1]] };
   const perpetual = { buckets: [[0, 10, 11, 9, 10.1, 1, 1], [60, 10, 12, 8, 10, 1, 1]] };
   const stats = coinStats(spot, perpetual);
   const titles = marketDetailTitles(spot, perpetual, stats);
-  assert.equal(titles.returnWindowPct, `result ${stats.returnWindowPct}; close 9.9996 / first close 10`);
-  assert.equal(titles.rangePct, `result ${stats.rangePct}; high 12 / low 8`);
-  assert.equal(titles.volumeQuote, `result ${stats.volumeQuote}; [close, volume] [[10,2],[9.9996,3]]`);
+  assert.equal(titles.returnWindowPct, 'result ≈ −0.004 (rounded); close 9.9996 / first close 10');
+  assert.equal(titles.rangePct, 'result 50; high 12 / low 8');
+  assert.equal(titles.volumeQuote, 'result ≈ 49.9988 (rounded); [close, volume] [[10,2],[9.9996,3]]');
   assert.match(titles.premium, /\[spot close, perpetual close\] \[\[10,10\.1\],\[9\.9996,10\]\]/);
 });
 

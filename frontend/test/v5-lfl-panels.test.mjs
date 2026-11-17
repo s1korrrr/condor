@@ -78,7 +78,7 @@ test('lineage sections clear independently and edge 409 offers First', () => {
   assert.ok(html.includes(fixtures['records-nodes'].items[0].record_id));
   assert.ok(html.includes(fixtures.jobs.items[0].record_id));
   assert.doesNotMatch(html, /edge:fixture-1/);
-  const changed = render(DecisionLineagePanel, { edgeView: viewFor(null, 'unavailable', { status: 409, code: 'SNAPSHOT_CHANGED', retryable: true }) });
+  const changed = render(DecisionLineagePanel, { edgeView: viewFor(null, 'unavailable', { status: 409, code: 'SNAPSHOT_CHANGED', retryable: false }) });
   assert.match(changed, /SNAPSHOT_CHANGED/);
   assert.match(changed, /First page/);
 });
@@ -253,11 +253,12 @@ test('view renders fresh rows but clears them for expiry, warming and snapshot c
   const { LearningPanel } = load('v5/LearningPanel.tsx');
   const view = { state: 'ready', envelope: fixtures.lessons, rows: fixtures.lessons.items, error: null, pageIndex: 0, hasNext: false, hasPrevious: false, snapshotChanged: false, expiresInMs: 1000, first() {}, previous() {}, next() {}, refresh() {} };
   assert.match(render(LearningPanel, { view }), /Recorded fixture lesson/);
-  for (const [state, code] of [['expired', null], ['unavailable', 'WARMING'], ['unavailable', 'SNAPSHOT_CHANGED']]) {
-    const unavailable = { ...view, state, error: code ? { status: code === 'SNAPSHOT_CHANGED' ? 409 : 503, code, retryable: true, snapshot_id: null, unauthenticated: false } : null, snapshotChanged: code === 'SNAPSHOT_CHANGED' };
+  for (const [state, code, status] of [['expired', null, null], ['unavailable', 'WARMING', 503], ['unavailable', 'VERIFICATION_UNAVAILABLE', 503], ['unavailable', 'SNAPSHOT_CHANGED', 409]]) {
+    const unavailable = { ...view, state, error: code ? { status, code, retryable: status === 503, snapshot_id: null, unauthenticated: false } : null, snapshotChanged: status === 409 };
     const html = render(LearningPanel, { view: unavailable });
     assert.match(html, /UNAVAILABLE/);
     if (code) assert.match(html, new RegExp(code));
+    assert.equal(html.includes('First page</button>'), status === 409);
     assert.doesNotMatch(html, /Recorded fixture lesson/);
   }
 });

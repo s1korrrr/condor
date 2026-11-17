@@ -485,11 +485,6 @@ export async function readProjectionResult<D extends ProjectionDataset>(
       return { ok: true, envelope: envelope as never, expiresAt: admission.expiresAt };
     }
     const body = validateErrorBody(response.status, document);
-    const miss = response.headers.get('X-V5-Projection-Freshness');
-    if ((miss === 'retired' && body.code === 'SNAPSHOT_CHANGED' && body.snapshot_id !== null)
-      || ((miss === 'ignored' || miss === 'expired') && body.code === 'VERIFICATION_UNAVAILABLE')) {
-      return { ok: false, error: freshnessError(miss, body.snapshot_id) };
-    }
     return { ok: false, error: { status: response.status, code: body.code as ProjectionErrorCode, retryable: body.retryable, snapshot_id: body.snapshot_id, unauthenticated: false } };
   } catch (error) {
     if (signal?.aborted || error instanceof TypeError || error instanceof DOMException) return unavailable();

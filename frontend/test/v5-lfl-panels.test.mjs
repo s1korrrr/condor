@@ -36,6 +36,85 @@ function load(file) {
   return module.exports;
 }
 const render = (component, props) => renderToStaticMarkup(React.createElement(component, props));
+const viewFor = (envelope, state = 'ready', error = null) => ({ state, envelope, rows: envelope?.items ?? [], error, pageIndex: 0, hasNext: false, hasPrevious: false, snapshotChanged: error?.code === 'SNAPSHOT_CHANGED', expiresInMs: 1000, first() {}, previous() {}, next() {}, refresh() {} });
+
+test('owner unavailable envelopes retain reasons and issues in every panel section', () => {
+  const unavailable = fixture => ({ ...structuredClone(fixture), status: 'UNAVAILABLE', reason_codes: ['SOURCE_CHANGED'], items: [], issues: [{ code: 'SOURCE_CHANGED', record_id: null, detail: 'Owner source changed' }] });
+  const { LearningPanel } = load('v5/LearningPanel.tsx');
+  const { DecisionLineagePanel } = load('v5/DecisionLineagePanel.tsx');
+  const lesson = render(LearningPanel, { view: viewFor(unavailable(fixtures.lessons), 'unavailable') });
+  const lineage = render(DecisionLineagePanel, { nodeView: viewFor(unavailable(fixtures['records-nodes']), 'unavailable'), edgeView: viewFor(unavailable(fixtures['records-edges']), 'unavailable'), attemptView: viewFor(unavailable(fixtures.jobs), 'unavailable') });
+  for (const html of [lesson, lineage]) {
+    assert.match(html, /SOURCE_CHANGED/);
+    assert.match(html, /Owner source changed/);
+    assert.doesNotMatch(html, /could not be reached/);
+  }
+  assert.equal((lineage.match(/Owner source changed/g) ?? []).length, 3);
+});
+
+test('lineage sections clear independently and edge 409 offers First', () => {
+  const { DecisionLineagePanel } = load('v5/DecisionLineagePanel.tsx');
+  const html = render(DecisionLineagePanel, { nodeView: viewFor(fixtures['records-nodes']), edgeView: viewFor(fixtures['records-edges'], 'expired'), attemptView: viewFor(fixtures.jobs) });
+  assert.ok(html.includes(fixtures['records-nodes'].items[0].record_id));
+  assert.ok(html.includes(fixtures.jobs.items[0].record_id));
+  assert.doesNotMatch(html, /edge:fixture-1/);
+  const changed = render(DecisionLineagePanel, { edgeView: viewFor(null, 'unavailable', { status: 409, code: 'SNAPSHOT_CHANGED', retryable: true }) });
+  assert.match(changed, /SNAPSHOT_CHANGED/);
+  assert.match(changed, /First page/);
+});
+
+test('lesson reference previews preserve groups and shared completeness', () => {
+  const { LearningPanel } = load('v5/LearningPanel.tsx');
+  const data = structuredClone(fixtures.lessons);
+  const row = data.items[0];
+  row.contradictory_refs = [{ ...row.outcome_refs[0], record_id: 'contradiction:exact-123', kind: 'outcome' }];
+  row.reference_total = 3;
+  let html = render(LearningPanel, { data });
+  assert.match(html, /2 of <span[^>]*title="3"[^>]*>3<\/span> shown/);
+  assert.match(html, /Outcomes[\s\S]*decision:outcome:fixture-1[\s\S]*Contradicting records[\s\S]*contradiction:exact-123/);
+  assert.doesNotMatch(html, /Evidence references/);
+  row.reference_total = null;
+  row.contradictory_refs = [];
+  html = render(LearningPanel, { data });
+  assert.match(html, /more may exist/i);
+  assert.doesNotMatch(html, /Contradicting records<\/h3><span>None recorded/);
+});
+
+test('partial attempt reference preview never claims omitted artifacts are absent', () => {
+  const { DecisionLineagePanel } = load('v5/DecisionLineagePanel.tsx');
+  const attempts = structuredClone(fixtures.jobs);
+  attempts.items[0].row_status = 'PARTIAL';
+  attempts.items[0].reference_total = 2;
+  const html = render(DecisionLineagePanel, { attempts });
+  assert.match(html, /1 of <span[^>]*title="2"[^>]*>2<\/span> shown/);
+  assert.doesNotMatch(html, /Artifacts<\/h4><span>None recorded/);
+  assert.match(html, /more may exist/i);
+});
+
+test('historical scope, contradiction labels and partial reasons use plain words', () => {
+  const { LearningPanel } = load('v5/LearningPanel.tsx');
+  const data = structuredClone(fixtures.lessons);
+  data.items[0].row_scope.recorded_scope.regimes = ['BEAR_ONLY'];
+  data.reason_codes = ['CONTRADICTIONS_NOT_INDEXED', 'OMITTED_CONTENT'];
+  let html = render(LearningPanel, { data });
+  for (const expected of ['BEAR_ONLY', 'Contradictions not indexed: unknown, not none', 'Counter-evidence not indexed; recall not evaluated.', 'Preview shortened or scope details omitted; full recorded content remains in the source.']) assert.ok(html.includes(expected), expected);
+  for (const [state, expected] of [['RECORDED', 'Contradictions recorded'], ['UNAVAILABLE', 'Contradictions unavailable: unknown, not none']]) {
+    data.items[0].contradiction_state = state;
+    html = render(LearningPanel, { data });
+    assert.ok(html.includes(expected), expected);
+  }
+});
+
+test('proposed count uses an owner title and idea revision registration is not readiness', () => {
+  const { DecisionLineagePanel } = load('v5/DecisionLineagePanel.tsx');
+  const nodes = structuredClone(fixtures['records-nodes']);
+  nodes.items[0].kind = 'idea_revision';
+  const edges = structuredClone(fixtures['records-edges']);
+  edges.coverage.excluded_proposed_edges = 12345;
+  const html = render(DecisionLineagePanel, { nodes, edges });
+  assert.match(html, /title="12345"[^>]*>12345<\/span> proposed links not shown/);
+  assert.match(html, /PROPOSED means registration, not readiness/);
+});
 
 test('golden lessons show historical owner evidence, not recall or a verdict', () => {
   const { LearningPanel } = load('v5/LearningPanel.tsx');

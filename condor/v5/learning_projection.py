@@ -19,6 +19,7 @@ from __future__ import annotations
 import asyncio
 import hashlib
 import json
+import logging
 import re
 import time
 from dataclasses import dataclass
@@ -28,9 +29,12 @@ from typing import Any, Callable
 from urllib.parse import quote, unquote_to_bytes
 
 import aiohttp
+from fastapi import APIRouter, Request, Response
 from jsonschema import Draft202012Validator, ValidationError
 from jsonschema import validators as _jsonschema_validators
 from referencing import Registry, Resource
+
+logger = logging.getLogger(__name__)
 
 SCHEMA_DIR = Path(__file__).resolve().parent / "schemas" / "learning_projection"
 SCHEMA_URN = "urn:rsibot:v5-lfl:stage-a:r2:"
@@ -666,6 +670,12 @@ def normalize_retry_after(value: str | None) -> int:
     return 1
 
 
+def local_result(code: str, snapshot_id: str | None = None) -> ProjectionResult:
+    """A Condor-originated typed error: the five-key owner shape, Retry-After: 1 on 503."""
+    status = CODE_STATUS[code]
+    return ProjectionResult(status, error_body(code, snapshot_id), 1 if status == 503 else None)
+
+
 class ResearchOwnerLearningSource:
     """Read-only Research OS projection source. Owns receipt expiry; holds no rows and no fixtures."""
 
@@ -703,6 +713,11 @@ class ResearchOwnerLearningSource:
             result[dataset] = receipt.status
         return {dataset: result.get(dataset, "UNAVAILABLE") for dataset in STAGE_A_DATASETS}
 
+    def receipt_expiry(self, dataset: str) -> float | None:
+        """Monotonic instant at which this dataset's receipt expires, or None when there is none."""
+        receipt = self._receipts.get(dataset)
+        return receipt.expires_at if receipt else None
+
     def _accept(self, dataset: str, envelope: dict[str, Any]) -> None:
         status = envelope["status"]
         if status == "UNAVAILABLE":
@@ -724,31 +739,29 @@ class ResearchOwnerLearningSource:
 
     # --- reads ---------------------------------------------------------------------------------------------
 
-    @staticmethod
-    def _local(code: str, snapshot_id: str | None = None) -> ProjectionResult:
-        return ProjectionResult(CODE_STATUS[code], error_body(code, snapshot_id), 1 if CODE_STATUS[code] == 503 else None)
-
     async def read(self, dataset: str, raw_query: str) -> ProjectionResult:
         """One browser request -> at most one owner request. No retry, no cache hit, no fallback."""
         if dataset in STAGE_B_DATASETS:
-            return self._local("DATASET_NOT_ENABLED")  # checked before query validation, like the owner
+            return local_result("DATASET_NOT_ENABLED")  # checked before query validation, like the owner
         if dataset not in STAGE_A_DATASETS:
-            return self._local("ROUTE_NOT_FOUND")
+            return local_result("ROUTE_NOT_FOUND")
         try:
             forwarded = prepare_query(dataset, raw_query, self.config.scope_id)
             parsed = parse_query(forwarded)
         except QueryViolation:
-            return self._local("INVALID_QUERY")
+            return local_result("INVALID_QUERY")
         try:
             response = await self.client.get(dataset, forwarded)
         except ProjectionTransportError as error:
+            logger.warning("learning projection %s transport failure: %s", dataset, error)
             self.invalidate()
-            return self._local("UPSTREAM_UNAVAILABLE" if error.kind == "unavailable" else "INVALID_OWNER_PROJECTION")
+            return local_result("UPSTREAM_UNAVAILABLE" if error.kind == "unavailable" else "INVALID_OWNER_PROJECTION")
         try:
             return self._interpret(dataset, parsed, response)
-        except ContractViolation:
+        except ContractViolation as violation:
+            logger.warning("learning projection %s rejected: %s", dataset, violation)
             self.invalidate()
-            return self._local("INVALID_OWNER_PROJECTION")
+            return local_result("INVALID_OWNER_PROJECTION")
 
     def _interpret(self, dataset: str, parsed: dict[str, str], response: OwnerResponse) -> ProjectionResult:
         if response.status == 200:
@@ -765,3 +778,54 @@ class ResearchOwnerLearningSource:
         self.invalidate(dataset)
         retry = normalize_retry_after(response.retry_after) if response.status == 503 else None
         return ProjectionResult(response.status, response.body, retry)
+
+
+# ---------------------------------------------------------------------------
+# Browser routes: /api/v5/learning/{manifest,lessons,records,jobs,candidates,campaigns,assessments}
+# ---------------------------------------------------------------------------
+
+ROUTE_METHODS = ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]
+
+
+def _response(result: ProjectionResult, *, extra: dict[str, str] | None = None) -> Response:
+    headers = {"Cache-Control": "no-store"}
+    if result.retry_after is not None:
+        headers["Retry-After"] = str(result.retry_after)
+    if extra:
+        headers.update(extra)
+    return Response(content=result.body, status_code=result.status, media_type="application/json", headers=headers)
+
+
+def add_projection_routes(router: APIRouter, projection: ResearchOwnerLearningSource | None, *, skip: tuple[str, ...] = ()) -> None:
+    """Register the projection routes on an authenticated router.
+
+    Precedence matches the appendix: target length 414, method 405, body framing 413, then the read. With no
+    configured source, Stage-A routes answer a typed 503 PUBLICATION_UNAVAILABLE (never a fixture) and Stage-B
+    routes the same typed 404 DATASET_NOT_ENABLED they answer when configured.
+    """
+
+    def make(dataset: str):
+        async def handle(request: Request) -> Response:
+            raw_query = request.scope.get("query_string", b"")
+            target = request.scope.get("raw_path") or request.url.path.encode("utf-8")
+            if len(target) + (len(raw_query) + 1 if raw_query else 0) > MAX_TARGET_BYTES:
+                return _response(local_result("TARGET_TOO_LONG"))
+            if request.method != "GET":
+                return _response(local_result("METHOD_NOT_ALLOWED"), extra={"Allow": "GET"})
+            if "transfer-encoding" in request.headers or request.headers.get("content-length", "0") != "0":
+                return _response(local_result("REQUEST_BODY_NOT_ALLOWED"))
+            try:
+                query = raw_query.decode("ascii")
+            except UnicodeDecodeError:
+                return _response(local_result("INVALID_QUERY"))
+            if projection is None:
+                code = "DATASET_NOT_ENABLED" if dataset in STAGE_B_DATASETS else "PUBLICATION_UNAVAILABLE"
+                return _response(local_result(code))
+            return _response(await projection.read(dataset, query))
+
+        handle.__name__ = f"learning_projection_{dataset}"
+        return handle
+
+    for dataset in ALL_DATASETS:
+        if dataset not in skip:
+            router.add_api_route(f"/{dataset}", make(dataset), methods=ROUTE_METHODS, include_in_schema=False)

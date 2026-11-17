@@ -1,5 +1,10 @@
 # V5 dashboard C4 writer handoff
 
+Current state: the final owner-repair receipt at the end supersedes round-1
+source-schema, descriptor-cleanup, catch-all routing and legacy-logo decisions.
+Round 2 on `e1224dbc` closed every round-1 finding; the boss owns the bounded
+final verification of C1–C4 and the two nits. No further broad review is planned.
+
 ## Root cause
 
 Install 10 applied `ownerTitle()` through `ownerDisplay().exact`, but native Bots metrics, expression titles, Trades exact overrides, chart markers/tooltips, phone row wrappers, market features and record previews bypassed it. The existing route scan deliberately excluded most hover titles and used mostly twelve-place fixtures.
@@ -12,7 +17,7 @@ The V5 backend mounted `/assets` and one fixed logo route, but not the other pub
 
 - Owner-number title paths delegate to existing `ownerTitle()` through the scalar `ownerTitleText()` adapter. Typed expression builders format operands before interpolation; the adapter no longer searches arbitrary prose. Text columns, IDs, hashes, paths and record identifiers stay exact.
 - Owner inputs, numeric calculations, receipt ratios, marker identities, exact as-sent disclosures, read queries, admission and owner-state checks are unchanged. Visible chart fill readouts use the exact original `markerText()` as on `45ec2f82`; only their titles are bounded. OHLC and volume readouts retain their existing visible formatters.
-- Root images come from the sibling `frontend/v5-reviewed-build.json` files allowlist. Only safe top-level image names are admitted. Responses use `O_NOFOLLOW | O_CLOEXEC`, inspect a regular file and its 8-MiB cap on that same descriptor, then read, hash-verify and return its bytes. `O_NONBLOCK` prevents a FIFO replacement from hanging the read. The legacy logo now uses this same guarded route rather than a separate hash-bypassing `FileResponse` route. HEAD verifies the same bytes and returns identical status/headers without a body. Missing manifests log a warning and remain fail-closed.
+- New root images use exact routes from the sibling `frontend/v5-reviewed-build.json` allowlist. Only safe top-level image names are admitted. Responses use `O_NOFOLLOW | O_CLOEXEC`, inspect a regular file and its 8-MiB cap on that same descriptor before constructing a stream, then read, hash-verify and return its bytes. Descriptor ownership starts immediately after open and ends in `finally`. `O_NONBLOCK` prevents a FIFO replacement from hanging. New static HEAD requests verify the same bytes and return identical status/headers without a body. Missing manifests warn and withhold new assets. The legacy logo keeps its exact `45ec2f82` manifest-independent GET route, including symlink rejection and HEAD 405.
 - The runtime image copies that same reviewed manifest beside its built dist. Without this packaging change, a built image would correctly fail closed but still return 404 for the new assets. The image-copy regression failed before the Dockerfile repair; no image build or deployment is claimed.
 - `v5.html` links the shipped `/favicon.svg`; a browser request for `/favicon.ico` aliases that reviewed SVG with `image/svg+xml`.
 - Phone checkbox/radio labels retain a 44px touch target without enlarging the native glyph. Cash, traded volume and retained wallet-equity tiles use two decimal places.
@@ -334,3 +339,100 @@ live verification. The boss owns round 2, the last broad review, and acceptance.
 The locked worktree and task-owned Condor Git backing store must remain.
 Only this writer's `/var/tmp/dash-c4-r1-fix.t93QyW` scratch is eligible for removal
 after its evidence has been recorded. Earlier `/var/tmp/dash-c4` is not ours.
+
+## Final owner-repair receipt — C1–C4, 2026-11-17
+
+### Root cause
+
+Round-2 baseline: Condor `e1224dbc19bbc96e0f501aea1972957fc655c3cb`, rsibot
+`20629af1a28d9f1926ff7573b3dcf6f1fbd4f237`, both on
+`feat/andrzej_v5_dashboard_backlog_c4` in the existing locked C4 worktree.
+The title replacer reused the visible preview's partial numeric-key set;
+`fdopen(open(...))` left rejected directory descriptors ownerless; a root
+catch-all changed unrelated method matching; the new manifest requirement also
+captured a pre-existing logo route. Phone summary null titles had disappeared.
+
+### Repair: correction → change → test
+
+| Correction | Change | Test / observed evidence |
+| --- | --- | --- |
+| C1 | Source schemas declare decimal, opaque and book-tuple roles for instruments and all seven carried OKX event kinds; source TypeScript payload types derive from those same schemas. Title projection selects the dataset's schema and calls the existing scalar formatter only on declared numeric fields. The visible preview is unchanged. | Independent real-shaped funding/ticker fixture checks all 21 amount fields, including `settFundingRate`; IDs, timestamps, paths, hashes, unknown nested metadata and exact-as-sent JSON stay exact. Source-schema probe fails on `e1224dbc`, passes after repair. |
+| C2 | Own the descriptor immediately after `os.open`, require a regular bounded file with `fstat` before `fdopen(closefd=False)`, close in `finally`. | 300 directory-replacement GETs: baseline fd count **18 → 318**; repaired test requires unchanged count. Existing symlink-swap, same-descriptor bytes and size-cap probes still pass. |
+| C3 | Register exact manifest-allowlisted asset names, plus the available favicon alias; remove the GET/HEAD root catch-all. | Three existing GET paths retain HEAD 405; four POST path cases retain base statuses. Direct loading of exact `45ec2f82` confirmed `/market`, `/helm`, `/health`: HEAD/POST 405; unknown single segment: HEAD/POST 404. |
+| C4 | Restore the original manifest-independent logo GET route, including its existing file/symlink checks. Document dist plus sibling-manifest layout beside `V5_FRONTEND_DIST`. New assets remain hash-verified and manifest-dependent. | No-manifest logo GET 200 with exact bytes, all five new static names/alias withheld with 404 and warning. Legacy HEAD remains 405; legacy symlinks are rejected. |
+| Nits | Restore the null phone-summary `title="—"`; update the C4 plan to the final reviewed entry/hash. | Explicit `<strong title="—">—</strong>` probe fails before and passes after. Manifest and plan identify `assets/v5-Bdp43O3A.js`. |
+
+### Simplification
+
+There is no prose-wide numeric recognition or second title-formatting rule.
+Declared source roles drive both types and record-title projection; opaque and
+unknown metadata are not recursively searched. The existing visible preview
+and exact disclosure remain unchanged. Exact framework routes replace a global
+catch-all; standard descriptor ownership replaces nested resource acquisition.
+No dependencies, state authority, services or checkbox styles changed.
+
+### Verification: fail before repair
+
+All test/build/Git batches used this exact admission prefix, without bypass:
+
+```sh
+python3 /Users/s1kor/.codex/.tmp/mac-gate/mac-heavy-gate.py --thread dash-c4 --wait 5400 -- nice -n 10
+```
+
+Batches exported `TMPDIR=/var/tmp`, `NODE_OPTIONS=--max-old-space-size=1536`,
+`PYTHONDONTWRITEBYTECODE=1`, `PYTEST_DISABLE_PLUGIN_AUTOLOAD=1`.
+Only tests changed before the following baseline checks; production was still
+the pinned `e1224dbc` head. No baseline checkout was reset or edited.
+
+- In `condor/frontend`: `V5_TITLE_BASELINE=e1224dbc node --test --test-concurrency=1 --test-name-pattern="stock source schemas|phone row summary" test/v5-owner-title-boundaries.test.mjs` — **0 passed, 2 failed**. Repeating the settlement probe with `--test-name-pattern="stock source schemas"` explicitly failed at `funding.settFundingRate`.
+- In `condor`: `PYTHONPATH=.:tests /Users/s1kor/anaconda3/bin/python3 -m pytest -q -p no:cacheprovider -p pytest_asyncio.plugin --basetemp=/var/tmp/dash-c4-owner-final.zhp9N3/pytest-red tests/test_v5_static_assets.py` — **33 passed, 7 failed**: legacy-logo GET; missing-manifest logo; repeated directory fd count; HEAD `/market`, `/helm`, `/health`; POST unknown single segment. The red-test cleanup closes only tracked directory descriptors, preserving other process resources.
+- Base method parity: `git -C condor show 45ec2f82:condor/v5/app.py` was loaded with `importlib.util.spec_from_file_location("condor.v5._base_app", ...)` and exercised through TestClient; all eight HEAD/POST status expectations above matched the exact base.
+
+### Verification: final commands and counts
+
+Each command below ran inside the gate prefix above. Paths are relative to the
+C4 worktree unless absolute. No unrequested full Python/workspace suites ran.
+
+| Working directory | Exact command | Result |
+| --- | --- | --- |
+| `condor` | `node ../dashboard/v5-workspace/typecheck.mjs frontend ..` | PASS |
+| `condor/frontend` | `node --test --test-concurrency=1 test/v5-*.test.mjs` | **860 passed, 0 failed** |
+| `condor` | `PYTHONPATH=.:tests /Users/s1kor/anaconda3/bin/python3 -m pytest -q -p no:cacheprovider -p pytest_asyncio.plugin --basetemp=/var/tmp/dash-c4-owner-final.zhp9N3/pytest-final tests/test_v5_static_assets.py tests/test_v5_dashboard_bridge.py` | **48 passed, 0 failed** |
+| `dashboard/condor-workspace` | Workspace title command below | **9 passed, 0 failed**, including an existing duplicate registration of the paper-Capital title case |
+| `condor/frontend` | `node tooling/check-v5-reproducibility.mjs rebuild /var/tmp/dash-c4-owner-final.zhp9N3/repro /Users/s1kor/dev/trading/rsibot/.worktrees/mac.noindex/v5-c4` | **2 fresh builds × 26 files**, both exactly match the reviewed manifest |
+
+Exact workspace title command:
+
+```sh
+node --test --test-concurrency=1 --test-name-pattern="Capital groups large exact|Capital normalizes|paper Capital rounds|Bots ages retained|decimal display|N1 first committed|Bots Money (endpoint|read failure)" test/v5-dashboard-polish.test.mjs test/v5-paper-capital.test.mjs test/v5-retained-query-observer.test.mjs test/v5-real-first-frame.test.mjs test/v5-real-boundaries.test.mjs
+```
+
+The seed build used `V5_WORKSPACE_ROOT=/Users/s1kor/dev/trading/rsibot/.worktrees/mac.noindex/v5-c4 node node_modules/vite/bin/vite.js build --config vite.v5.config.ts --outDir /var/tmp/dash-c4-owner-final.zhp9N3/seed-dist --emptyOutDir false`.
+Manifest regeneration imported `distHashes()` and `verifyDist()` from the
+canonical `tooling/check-v5-reproducibility.mjs`, derived the entry from built
+`v5.html`, and applied the resulting reviewed JSON through `apply_patch`.
+Both canonical rebuilds independently verified every manifest file and entry:
+
+- Entry: `assets/v5-Bdp43O3A.js`.
+- SHA256: `d4c87564e5364f2b1b2513e06f5f12e4a2844f44cb38bcce169c4b545a592d2c`.
+- Mixed-import and chunk-size advisory warnings remain; no performance claim.
+
+### Changed assertions: owner-repair old → new
+
+| Assertion | Old | New |
+| --- | --- | --- |
+| Legacy logo after replacing its bytes | GET 404, HEAD 404 | GET 200 with those exact file bytes, HEAD 405, matching base behavior |
+| Static GET/HEAD equivalence parameter set | All root images including legacy logo | New verified images and favicon alias only; legacy method contract is tested separately |
+| Missing manifest | Warning only | Same warning plus legacy logo 200 and every new static/alias 404 |
+| Legacy symlink coverage | New images only | Add the legacy logo while retaining its base symlink rejection |
+| Existing amount/ID record boundary fixture | Context-free mixture of trade and book fields | Real `recent_trades[].data` and `latest.books.data` containers; all original rounding and ID assertions unchanged |
+| New schema/phone/fd/method probes | No assertions at those boundaries | Explicit bounded settlement/21-field fixture; unchanged IDs and null-title literal; unchanged fd count after 300 rejects; exact base method statuses |
+
+### Remaining
+
+The boss owns bounded final verification of these named corrections; no third
+repair or broad review is authorized. Evidence is local source/TestClient/build
+evidence only, not browser, service, deployment or live-trading evidence.
+Commit/push only the task branches and matching rsibot gitlink. Keep both locks
+and `.workspace/condor-owner.git`. Only this turn's scratch
+`/var/tmp/dash-c4-owner-final.zhp9N3` is removable; earlier scratch is not ours.

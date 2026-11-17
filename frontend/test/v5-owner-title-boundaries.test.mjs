@@ -65,14 +65,54 @@ test('candle health bounds numeric rule detail only in titles and preserves its 
 test('stock record titles bound owner amounts without rounding trade IDs or paths', () => {
   const { StockRecord } = modules().load('v5/V5Stocks.tsx');
   const html = renderToStaticMarkup(React.createElement(StockRecord, { record: {
-    tradeId: '1e-13', source: 'order/1.12345678901234567890', px: raw,
-    bids: [[raw, '1e-13', '1e-13']],
+    recent_trades: [{ data: { tradeId: '1e-13', source: 'order/1.12345678901234567890', px: raw } }],
+    latest: { books: { data: { bids: [[raw, '1e-13', '1e-13']] } } },
   } }));
   const title = html.match(/title="([^"]*)"/)[1];
   assert.ok(title.includes('&quot;tradeId&quot;: &quot;1e-13&quot;'));
   assert.ok(title.includes('order/1.12345678901234567890'));
   assert.ok(title.includes(rounded));
   assert.ok(title.includes('≈ 0 (rounded)'));
+});
+
+test('stock source schemas bound every OKX funding and ticker amount while preserving opaque fields', () => {
+  const { StockRecord } = modules().load('v5/V5Stocks.tsx');
+  const amount = '0.0001418433662153';
+  const fundingAmounts = ['settFundingRate', 'fundingRate', 'nextFundingRate', 'minFundingRate', 'maxFundingRate', 'interestRate', 'impactValue', 'premium'];
+  const tickerAmounts = ['last', 'lastSz', 'askPx', 'askSz', 'bidPx', 'bidSz', 'open24h', 'high24h', 'low24h', 'volCcy24h', 'vol24h', 'sodUtc0', 'sodUtc8'];
+  const identity = '1.12345678901234567890';
+  const record = { latest: {
+    funding: { dataset: 'funding', source: 'rest', data: {
+      instType: 'SWAP', instId: identity, method: 'current_period', fundingTime: '1794931200000', nextFundingTime: '1794960000000', settState: 'settled', ts: '1794902400000',
+      ...Object.fromEntries(fundingAmounts.map(name => [name, amount])),
+      tradeId: '1e-13', path: `order/${identity}`, hash: identity, metadata: { fundingRate: identity },
+    } },
+    ticker: { dataset: 'ticker', source: 'ws', data: {
+      instType: 'SWAP', instId: identity, ts: '1794902400000',
+      ...Object.fromEntries(tickerAmounts.map(name => [name, amount])),
+    } },
+  } };
+  const html = renderToStaticMarkup(React.createElement(StockRecord, { record }));
+  const title = JSON.parse(html.match(/title="([^"]*)"/)[1].replaceAll('&quot;', '"'));
+  for (const [dataset, fields] of [['funding', fundingAmounts], ['ticker', tickerAmounts]]) {
+    for (const name of fields) assert.equal(title.latest[dataset].data[name], '≈ 0.000141843366 (rounded)', `${dataset}.${name}`);
+    assert.equal(title.latest[dataset].data.instId, identity);
+    assert.equal(title.latest[dataset].data.ts, '1794902400000');
+  }
+  assert.equal(title.latest.funding.data.tradeId, '1e-13');
+  assert.equal(title.latest.funding.data.path, `order/${identity}`);
+  assert.equal(title.latest.funding.data.hash, identity);
+  assert.deepEqual(title.latest.funding.data.metadata, { fundingRate: identity });
+  assert.ok(html.includes(`<pre class="v5-stock-json">${JSON.stringify(record, null, 2).replaceAll('"', '&quot;')}</pre>`));
+});
+
+test('phone row summary keeps the unavailable title for null owner values', () => {
+  const { Rows } = modules().load('features/quant-ops/kit/Rows.tsx');
+  const html = renderToStaticMarkup(React.createElement(Rows, {
+    rows: [null], rowId: () => 'null', label: 'Unavailable',
+    columns: [{ id: 'amount', header: 'Amount', kind: 'number', value: row => row }],
+  }));
+  assert.ok(html.includes('<strong title="—">—</strong>'));
 });
 
 test('stock depth and trade prices have title-only numeric metadata without changing sort kinds', () => {

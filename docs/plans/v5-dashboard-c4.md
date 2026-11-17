@@ -22,7 +22,7 @@ Owner: V5 dashboard boss; writer only, no children.
 - [x] Shared title and root static repair, including transitive private Capital.
 - [x] Width evidence, scoped fixes, backlog.
 - [x] Required local checks: typecheck PASS; frontend 850/0; Python 656/0; private workspace 681/0, no skipped cases.
-- [x] Reproducibility: two fresh 26-file builds match `assets/v5-MyocE3Dw.js`, SHA256 `62ebcdeaab7fa3eaae84f8587cb2fe1781b5ec9d121e9694a4c30ce3df77d21f`. Actual built-file smoke: 25 hashes, six root image types, six rejected paths.
+- [x] Reproducibility: final owner-repair 26-file manifest entry is `assets/v5-Bdp43O3A.js`, SHA256 `d4c87564e5364f2b1b2513e06f5f12e4a2844f44cb38bcce169c4b545a592d2c`; two fresh builds are recorded in the final owner-repair receipt. Original built-file smoke: 25 hashes, six root image types, six rejected paths.
 - [x] Writer self-review and handoff package prepared. Commit/push identities are recorded in the final handoff after remote verification; no PR, merge, deploy or cleanup is performed.
 - [ ] Deferred to boss: independent exact-head review and live install acceptance. Install both repository pins together; retain worktrees and all evidence.
 

@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { RecordedCandleChart } from '@/components/charts/RecordedCandleChart';
 import { DataTable, type TableColumn } from '@/features/quant-ops/kit/DataTable';
 import { readStockOwner } from './stocks-api';
+import { stockRecordTitle } from './stocks-source-schema';
 import { ownerTitleText, price } from './format.mjs';
 import { captureEntry, effectiveState, filterStockRows, fundingApplicable, publicObservation, selectedStock, stockCaptured, stockKey, stockProductLabel, unlistedCapture } from './stocks-model.mjs';
 import type { PublicEvent, StockCatalog, StockCandles, StockChannel, StockFilter, StockInstrument, StockMarket, StockRange, StockRegion, StockRow } from './stocks-types';
@@ -27,10 +28,7 @@ const readable = (state: string) => state === 'live' || state === 'stale';
 
 function StockRecord({ record }: { record: unknown }) {
   const exact = JSON.stringify(record, null, 2);
-  const title = JSON.stringify(record, function (key, entry) {
-    if ((key === 'bids' || key === 'asks') && Array.isArray(entry)) return entry.map(level => Array.isArray(level) ? level.map((part, index) => index < 2 ? ownerTitleText(part) ?? part : part) : level);
-    return numericFields.has(key) ? ownerTitleText(entry) ?? entry : entry;
-  }, 2);
+  const title = stockRecordTitle(record);
   return <><pre className="v5-stock-json" title={title}>{formattedRecord(record)}</pre><details><summary>Exact record · as sent</summary><pre className="v5-stock-json">{exact}</pre></details></>;
 }
 

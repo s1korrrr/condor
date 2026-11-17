@@ -1459,6 +1459,13 @@ def create_app(
             "V5 workspace frontend has not been built.", status_code=503
         )
 
+    @app.get("/condor_old.jpeg")
+    async def dashboard_logo():
+        image = static_root / "condor_old.jpeg"
+        if not image.is_file() or image.is_symlink():
+            raise HTTPException(404)
+        return FileResponse(image, media_type="image/jpeg")
+
     for ui_path in (
         "/market",
         "/capital",
@@ -1506,8 +1513,8 @@ def create_app(
             raise HTTPException(404)
         return await root_page()
 
-    @app.api_route("/{asset_name}", methods=["GET", "HEAD"])
-    def root_static(asset_name: str, request: Request):
+    def root_static(request: Request):
+        asset_name = request.url.path.removeprefix("/")
         name = "favicon.svg" if asset_name == "favicon.ico" and asset_name not in root_static_hashes else asset_name
         digest = root_static_hashes.get(name)
         image = static_root / name
@@ -1516,11 +1523,15 @@ def create_app(
         flags = os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC | os.O_NONBLOCK
         limit = 8 * 1024 * 1024
         try:
-            with os.fdopen(os.open(image, flags), "rb") as source:
-                metadata = os.fstat(source.fileno())
+            descriptor = os.open(image, flags)
+            try:
+                metadata = os.fstat(descriptor)
                 if not stat.S_ISREG(metadata.st_mode) or metadata.st_size > limit:
                     raise HTTPException(404)
-                content = source.read(limit + 1)
+                with os.fdopen(descriptor, "rb", closefd=False) as source:
+                    content = source.read(limit + 1)
+            finally:
+                os.close(descriptor)
         except OSError:
             raise HTTPException(404) from None
         if len(content) > limit or not hmac.compare_digest(hashlib.sha256(content).hexdigest(), digest):
@@ -1529,6 +1540,14 @@ def create_app(
             b"" if request.method == "HEAD" else content,
             media_type=root_media_types[image.suffix],
             headers={"content-length": str(len(content))},
+        )
+
+    root_static_names = set(root_static_hashes) - {"condor_old.jpeg"}
+    if "favicon.svg" in root_static_hashes:
+        root_static_names.add("favicon.ico")
+    for asset_name in sorted(root_static_names):
+        app.add_api_route(
+            f"/{asset_name}", root_static, methods=["GET", "HEAD"], include_in_schema=False
         )
 
     @app.exception_handler(StarletteHTTPException)

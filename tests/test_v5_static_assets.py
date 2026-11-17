@@ -89,7 +89,7 @@ def test_static_paths_do_not_escape_the_allowlist(static_site, path):
     assert client.get(path).status_code == 404
 
 
-@pytest.mark.parametrize('name', ['favicon.svg', 'condor.png'])
+@pytest.mark.parametrize('name', ['favicon.svg', 'condor.png', 'condor_old.jpeg'])
 def test_reviewed_static_symlink_is_not_served(static_site, name):
     client, dist = static_site
     image = dist / name
@@ -156,14 +156,16 @@ def test_root_static_size_limit_uses_the_open_descriptor(static_site, monkeypatc
     assert checked
 
 
-def test_legacy_logo_also_requires_its_reviewed_hash(static_site):
+def test_legacy_logo_keeps_its_original_unhashed_get_route(static_site):
     client, dist = static_site
     (dist / 'condor_old.jpeg').write_bytes(b'not reviewed')
-    assert client.get('/condor_old.jpeg').status_code == 404
-    assert client.head('/condor_old.jpeg').status_code == 404
+    response = client.get('/condor_old.jpeg')
+    assert response.status_code == 200
+    assert response.content == b'not reviewed'
+    assert client.head('/condor_old.jpeg').status_code == 405
 
 
-@pytest.mark.parametrize('name', [*ROOT_ASSETS, 'favicon.ico'])
+@pytest.mark.parametrize('name', [*[name for name in ROOT_ASSETS if name != 'condor_old.jpeg'], 'favicon.ico'])
 def test_root_static_head_matches_get_headers_without_body(static_site, name):
     client, _ = static_site
     response = client.get('/' + name)
@@ -207,5 +209,57 @@ def test_root_static_symlink_swap_at_open_is_rejected(static_site, monkeypatch):
 def test_missing_static_manifest_logs_warning(tmp_path, caplog):
     dist = tmp_path / 'dist-v5'
     dist.mkdir()
-    create_app(settings=settings(tmp_path), upstream=FakeUpstream(), static_dir=dist)
+    (dist / 'condor_old.jpeg').write_bytes(b'legacy logo')
+    for name in ROOT_ASSETS:
+        if name != 'condor_old.jpeg':
+            (dist / name).write_bytes(b'unreviewed image')
+    app = create_app(settings=settings(tmp_path), upstream=FakeUpstream(), static_dir=dist)
+    with TestClient(app) as client:
+        assert client.get('/condor_old.jpeg').status_code == 200
+        assert client.get('/condor_old.jpeg').content == b'legacy logo'
+        for name in [*ROOT_ASSETS, 'favicon.ico']:
+            if name != 'condor_old.jpeg':
+                assert client.get('/' + name).status_code == 404
     assert 'V5 root statics withheld: missing reviewed manifest' in caplog.text
+
+
+def test_rejected_directory_requests_do_not_leak_descriptors(static_site, monkeypatch):
+    client, dist = static_site
+    image = dist / 'condor.png'
+    image.rename(dist / 'retained-condor.png')
+    image.mkdir()
+    client.get('/health')
+    original_open = os.open
+    descriptors = []
+
+    def track_open(path, flags, *args, **kwargs):
+        descriptor = original_open(path, flags, *args, **kwargs)
+        if Path(path) == image:
+            descriptors.append(descriptor)
+        return descriptor
+
+    monkeypatch.setattr(os, 'open', track_open)
+    before = len(os.listdir('/dev/fd'))
+    try:
+        for _ in range(300):
+            assert client.get('/condor.png').status_code == 404
+        assert len(os.listdir('/dev/fd')) == before
+    finally:
+        for descriptor in set(descriptors):
+            try:
+                if os.fstat(descriptor).st_ino == image.stat().st_ino:
+                    os.close(descriptor)
+            except OSError:
+                pass
+
+
+@pytest.mark.parametrize('path', ['/market', '/helm', '/health'])
+def test_existing_get_routes_retain_base_head_status(static_site, path):
+    client, _ = static_site
+    assert client.head(path).status_code == 405
+
+
+@pytest.mark.parametrize('path', ['/market', '/helm', '/health', '/unknown-single-segment'])
+def test_non_static_post_routes_retain_base_status(static_site, path):
+    client, _ = static_site
+    assert client.post(path).status_code == (404 if path == '/unknown-single-segment' else 405)

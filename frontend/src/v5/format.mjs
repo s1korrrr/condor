@@ -222,6 +222,17 @@ export function ownerTitle(value) {
   return `≈ ${rounded.neg ? MINUS : ''}${rounded.int}${frac ? `.${frac}` : ''} (rounded)`;
 }
 
+export function ownerTitleText(value) {
+  if (typeof value !== 'string' && typeof value !== 'number') return undefined;
+  const text = String(value);
+  const title = ownerTitle(text.replace(/^−/, '-'));
+  if (title != null) return title.startsWith('≈') ? title : text;
+  return text.replace(/(?<![\w.+−-])[-−+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?![\w.])/g, token => {
+    const shown = ownerTitle(token.replace(/^−/, '-'));
+    return shown?.startsWith('≈') ? shown : token;
+  });
+}
+
 export function ownerDisplay(value, kind, { unit, digits = 2 } = {}) {
   if (!parse(value)) return { text: DASH, exact: null, tone: 'none' };
   const text = kind === 'usdc' ? usdc(value, unit)

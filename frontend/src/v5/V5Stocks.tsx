@@ -3,7 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { RecordedCandleChart } from '@/components/charts/RecordedCandleChart';
 import { DataTable, type TableColumn } from '@/features/quant-ops/kit/DataTable';
 import { readStockOwner } from './stocks-api';
-import { price } from './format.mjs';
+import { ownerTitleText, price } from './format.mjs';
 import { captureEntry, effectiveState, filterStockRows, fundingApplicable, publicObservation, selectedStock, stockCaptured, stockKey, stockProductLabel, unlistedCapture } from './stocks-model.mjs';
 import type { PublicEvent, StockCatalog, StockCandles, StockChannel, StockFilter, StockInstrument, StockMarket, StockRange, StockRegion, StockRow } from './stocks-types';
 import './stocks.css';
@@ -27,7 +27,7 @@ const readable = (state: string) => state === 'live' || state === 'stale';
 
 function StockRecord({ record }: { record: unknown }) {
   const exact = JSON.stringify(record, null, 2);
-  return <><pre className="v5-stock-json" title={exact}>{formattedRecord(record)}</pre><details><summary>Exact record · as sent</summary><pre className="v5-stock-json">{exact}</pre></details></>;
+  return <><pre className="v5-stock-json" title={ownerTitleText(exact)}>{formattedRecord(record)}</pre><details><summary>Exact record · as sent</summary><pre className="v5-stock-json">{exact}</pre></details></>;
 }
 
 function metadataTime(stamp: unknown) {
@@ -37,7 +37,7 @@ function metadataTime(stamp: unknown) {
 }
 
 function Observation({ label, event, name, unit, notApplicable = false }: { label: string; event: PublicEvent | null; name: string; unit: string; notApplicable?: boolean }) {
-  return <div className="v5-stock-observation"><dt>{label}</dt><dd className="v5-stock-value">{notApplicable ? 'Not applicable' : <span title={field(event, name)}>{formatted(event?.data[name])}</span>}{!notApplicable && event && <small>{unit}</small>}</dd>{event && !notApplicable && <dd className="v5-stock-caption">Source time: {utc(event.event_time_ms == null ? null : event.event_time_ms / 1000)}<br />Received: {utc(event.received_at_ms / 1000)} · {event.source.toUpperCase()}</dd>}</div>;
+  return <div className="v5-stock-observation"><dt>{label}</dt><dd className="v5-stock-value">{notApplicable ? 'Not applicable' : <span title={ownerTitleText(field(event, name))}>{formatted(event?.data[name])}</span>}{!notApplicable && event && <small>{unit}</small>}</dd>{event && !notApplicable && <dd className="v5-stock-caption">Source time: {utc(event.event_time_ms == null ? null : event.event_time_ms / 1000)}<br />Received: {utc(event.received_at_ms / 1000)} · {event.source.toUpperCase()}</dd>}</div>;
 }
 
 type DepthRow = { side: string; index: number; price: string; size: string; orders: string };
@@ -75,8 +75,8 @@ function InstrumentMetadata({ instrument }: { instrument: StockInstrument }) {
   return <details className="v5-stock-details"><summary>Instrument metadata</summary><dl className="v5-stock-metadata">
     <div><dt>Underlying</dt><dd>{value(instrument.uly)}</dd></div>
     <div><dt>Quote / settlement</dt><dd>{value(instrument.quoteCcy)} / {spot ? 'Not applicable' : value(instrument.settleCcy)}</dd></div>
-    <div><dt>Contract value / multiplier</dt><dd title={spot ? undefined : `${value(instrument.ctVal)} ${value(instrument.ctValCcy)} / ${value(instrument.ctMult)}`}>{spot ? 'Not applicable' : `${formatted(instrument.ctVal)} ${value(instrument.ctValCcy)} / ${formatted(instrument.ctMult)}`}</dd></div>
-    <div><dt>Tick / lot / minimum size</dt><dd title={`${value(instrument.tickSz)} / ${value(instrument.lotSz)} / ${value(instrument.minSz)}`}>{formatted(instrument.tickSz)} / {formatted(instrument.lotSz)} / {formatted(instrument.minSz)}</dd></div>
+    <div><dt>Contract value / multiplier</dt><dd title={ownerTitleText(spot ? undefined : `${value(instrument.ctVal)} ${value(instrument.ctValCcy)} / ${value(instrument.ctMult)}`)}>{spot ? 'Not applicable' : `${formatted(instrument.ctVal)} ${value(instrument.ctValCcy)} / ${formatted(instrument.ctMult)}`}</dd></div>
+    <div><dt>Tick / lot / minimum size</dt><dd title={ownerTitleText(`${value(instrument.tickSz)} / ${value(instrument.lotSz)} / ${value(instrument.minSz)}`)}>{formatted(instrument.tickSz)} / {formatted(instrument.lotSz)} / {formatted(instrument.minSz)}</dd></div>
     <div><dt>Listed (UTC)</dt><dd>{metadataTime(instrument.listTime)}</dd></div>
     <div><dt>Expiry (UTC)</dt><dd>{spot || instrument.instType === 'SWAP' ? 'Not applicable' : metadataTime(instrument.expTime)}</dd></div>
   </dl><details><summary>All public instrument fields</summary><StockRecord record={instrument} /></details></details>;

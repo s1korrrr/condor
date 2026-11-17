@@ -8,7 +8,7 @@ import { readCandleStore } from "./candle-store-api";
 import { v5Api } from "./api";
 import { dayCoverage, equityChange, holdReturn, latest, series, type DailyRow } from "./money-model.mjs";
 import { MARKET_COINS, REFERENCE } from "./market-model.mjs";
-import { axis, count, decimalPercentChange, fixed, ownerDisplay, pct, pnl, rationalPercent, signed, usdc, utcMin, type OwnerValueKind } from "./format.mjs";
+import { ownerTitleText, axis, count, decimalPercentChange, fixed, ownerDisplay, pct, pnl, rationalPercent, signed, usdc, utcMin, type OwnerValueKind } from './format.mjs';
 import { exactSignedSum } from "./bots-position-model.mjs";
 import { OwnerValue } from "./OwnerValue";
 import { utcExact } from "./shown.mjs";
@@ -38,10 +38,10 @@ const dayShare = (row: DailyRow) => {
   if (!Number.isInteger(row.valid)) return "—";
   const slots = Math.min(288, row.valid);
   const percentage = rationalPercent(BigInt(slots) * 100n, 288n, 0);
-  return percentage ? <span title={`${row.valid} / 288 slots${row.valid > 288 ? " (capped at 288)" : ""}; exact percentage ${percentage.exact}`}>{fixed(percentage.value, 0)}%</span> : "—";
+  return percentage ? <span title={ownerTitleText(`${row.valid} / 288 slots${row.valid > 288 ? " (capped at 288)" : ""}; exact percentage ${percentage.exact}`)}>{fixed(percentage.value, 0)}%</span> : "—";
 };
 const at = (ms: number | null | undefined) => utcMin(ms) ?? "unknown time";
-const exactCell = (value: string | null | undefined, text: string) => <span title={value ?? undefined}>{text}</span>;
+const exactCell = (value: string | null | undefined, text: string) => <span title={ownerTitleText(value ?? undefined)}>{text}</span>;
 
 const dailyColumns: TableColumn<DailyRow>[] = [
   { id: "day", header: "Day (UTC)", value: row => new Date(row.day).toISOString().slice(0, 10), rowHeader: true, size: 100 },
@@ -97,7 +97,7 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
 
       <section className="v5m-section"><header><h2>V5 paper bot</h2><span>{now ? `as of ${at(now.at_ms)} · ${now.unit ?? "USDC"}` : "no sample with values yet"}</span></header>
         <div className="v5m-stats v5m-stats--wide">
-          <Stat label="Wallet equity" value={fixed(now?.equity)} owner={{value:now?.equity, kind:"usdc", unit:""}} unit={unit} note={sinceStart == null ? "start funding not published" : <><OwnerValue value={sinceStart} kind="pnl" exact={sinceExact} /> vs the <span title={funding ?? undefined}>{usdc(funding, unit)}</span> start {sincePercent && <span title={`(${equity} − ${funding}) × 100 / ${funding} = ${sincePercent.exact}`}>({pct(sincePercent.value)})</span>}</>} warn={ownerDisplay(sinceStart, "pnl").tone === "down"} />
+          <Stat label="Wallet equity" value={fixed(now?.equity)} owner={{value:now?.equity, kind:"usdc", unit:""}} unit={unit} note={sinceStart == null ? "start funding not published" : <><OwnerValue value={sinceStart} kind="pnl" exact={sinceExact} /> vs the <span title={ownerTitleText(funding ?? undefined)}>{usdc(funding, unit)}</span> start {sincePercent && <span title={ownerTitleText(`(${equity} − ${funding}) × 100 / ${funding} = ${sincePercent.exact}`)}>({pct(sincePercent.value)})</span>}</>} warn={ownerDisplay(sinceStart, "pnl").tone === "down"} />
           <Stat label="Profit from closed trades" value={pnl(now?.realized).text} owner={{value:now?.realized, kind:"pnl"}} note="lifetime, owner accounting" />
           <Stat label="Gain or loss on coins still held" value={pnl(now?.unrealized).text} owner={{value:now?.unrealized, kind:"pnl"}} note="marked at the owner's fresh book midpoint" warn={ownerDisplay(now?.unrealized, "pnl").tone === "down"} />
           <Stat label="Fees paid" value={fixed(now?.fees)} owner={{value:now?.fees, kind:"usdc", unit:""}} unit={unit} note="lifetime" />
@@ -139,5 +139,5 @@ export function V5Money({ embedded = false }: { embedded?: boolean } = {}) {
 
 function Stat({ label, value, unit, note, warn, owner, title }: { label: string; value: string; unit?: string; note?: ReactNode; warn?: boolean; owner?: { value: unknown; kind: OwnerValueKind; unit?: string }; title?: string }) {
   const tone = owner?.kind === "pnl" ? ownerDisplay(owner.value, owner.kind, { unit: owner.unit }).tone : null;
-  return <div className={`v5m-stat${warn ? " is-warn" : ""}`}><span>{label}{unit && <em className="v5-phone-unit hidden not-italic"> ({unit})</em>}</span><strong title={title} className={tone === "up" || tone === "down" ? `is-${tone}` : undefined}>{owner ? <OwnerValue {...owner} /> : value}{unit && value !== "—" && <em className="v5-desktop-unit not-italic"> {unit}</em>}</strong>{note && <small>{note}</small>}</div>;
+  return <div className={`v5m-stat${warn ? " is-warn" : ""}`}><span>{label}{unit && <em className="v5-phone-unit hidden not-italic"> ({unit})</em>}</span><strong title={ownerTitleText(title)} className={tone === "up" || tone === "down" ? `is-${tone}` : undefined}>{owner ? <OwnerValue {...owner} /> : value}{unit && value !== "—" && <em className="v5-desktop-unit not-italic"> {unit}</em>}</strong>{note && <small>{note}</small>}</div>;
 }

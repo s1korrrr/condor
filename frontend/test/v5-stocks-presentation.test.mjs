@@ -68,9 +68,9 @@ test('default region is EEA and spot derivative metrics are explicitly not appli
 
 test('selected public fields format venue decimals while titles retain exact records', () => {
   const { html } = render();
-  assert.match(html, /title="9876\.000000000000001">9,876/);
-  assert.match(html, /title="9877\.000000000000001">9,877/);
-  assert.match(html, /title="456\.000000000000001">456\.00/);
+  assert.match(html, /title="≈ 9876 \(rounded\)">9,876/);
+  assert.match(html, /title="≈ 9877 \(rounded\)">9,877/);
+  assert.match(html, /title="≈ 456 \(rounded\)">456\.00/);
   assert.match(html, /All recorded market fields/);
   assert.match(html, /1234567\.890123456789/);
   const window = new Window();
@@ -95,11 +95,11 @@ test('configured Stocks formats exponent, signed and integer numeric fields with
   const window = new Window();
   window.document.body.innerHTML = html;
   const document = window.document;
-  for (const [exact, display] of [['1.234567890123e-20', '0.0000'], ['+99.78007932', '99.78'], ['198961', '198,961'], ['12345', '12,345']]) {
+  for (const [exact, display] of [['≈ 0 (rounded)', '0.0000'], ['+99.78007932', '99.78'], ['198961', '198,961'], ['12345', '12,345']]) {
     assert.ok([...document.querySelectorAll('[title]')].some(element => element.title === exact && element.textContent === display), `${exact} is formatted and retains its exact title`);
   }
   const records = [...document.querySelectorAll('pre')];
-  const publicRecord = records.find(record => record.title.includes('1.234567890123e-20'));
+  const publicRecord = records.find(record => record.title.includes('≈ 0 (rounded)'));
   const metadataRecord = records.find(record => record.title.includes('1700000000000'));
   assert.ok(publicRecord && metadataRecord);
   const exactRecords = [...document.querySelectorAll('details')].filter(details => details.querySelector(':scope > summary')?.textContent === 'Exact record · as sent');

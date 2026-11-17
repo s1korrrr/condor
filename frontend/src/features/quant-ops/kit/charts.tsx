@@ -1,6 +1,6 @@
 import { useId, useMemo, useState, type ReactNode } from 'react';
 import { Area, Bar, CartesianGrid, Cell, ComposedChart, Line, Pie, PieChart, ReferenceArea, ReferenceDot, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { axis, ownerDisplay, signed as formatSigned } from '@/v5/format.mjs';
+import { axis, ownerDisplay, ownerTitleText, signed as formatSigned } from '@/v5/format.mjs';
 import { CHART, dayTicks, markerLayout, projectTimeSeries, roundedAxis, seriesInRange, timeTick, valueAt, valueExtent, zoomSelection, type ChartMarker, type ChartSeries, type SeriesPoint } from './series';
 import './kit.css';
 
@@ -18,7 +18,7 @@ export function TooltipCard({ title, rows }: { title: string; rows: { key: strin
   return <div className="q-tooltip">
     <p className="q-tooltip__title">{title}</p>
     {rows.map(row => <p key={row.key} className="q-tooltip__row">
-      <i style={{ background: row.color }} /><span>{row.label}</span><strong className={row.tone} title={row.exact}>{row.value}</strong>
+      <i style={{ background: row.color }} /><span>{row.label}</span><strong className={row.tone} title={ownerTitleText(row.exact)}>{row.value}</strong>
       {row.note && <small>{row.note}</small>}
     </p>)}
   </div>;

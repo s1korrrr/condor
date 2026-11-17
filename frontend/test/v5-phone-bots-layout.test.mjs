@@ -93,7 +93,7 @@ test('recorded chart keeps a 360px canvas, 12px axis labels and dimmed breakeven
     assert.match(line.color, /0\.55/);
     assert.match(markers[0].color, /0\.55/);
     assert.ok(!markers[0].text);
-    assert.equal(renderer.root.findByProps({ role: 'img' }).props.title, `BUY 0.1234567890123456789 @ 700 · ${new Date(minute * 1000 + 1).toISOString()}`);
+    assert.equal(renderer.root.findByProps({ role: 'img' }).props.title, `BUY ≈ 0.123456789012 (rounded) @ 700 · ${new Date(minute * 1000 + 1).toISOString()}`);
   } finally {
     await act(async () => renderer?.unmount());
     delete globalThis.IS_REACT_ACT_ENVIRONMENT;
@@ -117,7 +117,7 @@ test('recorded chart preserves exact fills in the hover readout and formats hove
     assert.ok(!markers[0].text);
     await act(async () => crosshair({time:60}));
     const readout=renderer.root.findByProps({'aria-live':'polite'});
-    assert.equal(readout.findByProps({ className: 'block' }).children.join(''), 'BUY 0.00000000 @ 101.123456789 · 1970-01-01T00:01:01.023Z');
+    assert.equal(readout.findByProps({ className: 'block' }).children.join(''), 'BUY 0 @ 101.12 · 1970-01-01T00:01:01.023Z');
     const close = readout.findAllByType('span').find(span => span.props.title === '101.123456789');
     assert.ok(close);
     assert.match(close.children.join(''), /101\.12/);
@@ -142,8 +142,8 @@ for (const dimmed of [false, true]) test(`phone position cards retain all owner 
   assert.deepEqual(cards.map(card => card.querySelector('h3').textContent), ['BNB', 'BTC', 'ETH', 'SOL', 'XRP']);
   const card = cards[0];
   for (const text of [/199,132\.37 USDC/, /profit or loss/, /sample as of .*UTC/, /Price: 700\.00 USDC · .*UTC/, /Needs \+6\.9% to break even/, /Breakeven: 748\.17 USDC/, /1\.23457 BNB/, /\+ 0 BNB dust/, /protection unknown for 1 lot/, /Buy decision: Held · Candle gap/]) assert.match(card.textContent, text);
-  assert.ok(card.querySelector('[title="1.234567890123456789"]'));
-  assert.ok(card.querySelector('[title="0.000000000000000001"]'));
+  assert.ok(card.querySelector('[title="≈ 1.234567890123 (rounded)"]'));
+  assert.ok(card.querySelector('[title="≈ 0 (rounded)"]'));
   const fields = [...card.querySelectorAll(':scope > div > dl > dt')].map(field => field.textContent);
   assert.deepEqual(fields, ['Holding', 'Worth now', 'Lots', 'Sell orders placed']);
   const details = card.querySelector('details');

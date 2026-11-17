@@ -7,7 +7,7 @@ import { paperCoherentRead, paperCompleteRead, paperCompleteRecords, paperPairBa
 import { paperDimmedSnapshot, paperSnapshotPresentation } from './snapshot-presentation';
 import { exactSignedSum } from './bots-position-model.mjs';
 import { hasPaperCandlePair, paperCandleQuery, usePaperCandleSymbols } from './paper-candles';
-import { count, ownerDisplay, type OwnerValueKind } from './format.mjs';
+import { ownerTitleText, count, ownerDisplay, type OwnerValueKind } from './format.mjs';
 import { OwnerValue } from './OwnerValue';
 import { groupTrades, lotBreakeven, reconcileFills, targetFromBreakeven, tradeCosts, tradeWindow } from './trades-model.mjs';
 import './v5-trades.css';
@@ -27,7 +27,7 @@ const countValue = (value: string | number) => <OwnerValue value={value} kind="c
 const costRatio = (ratio: { value: string; exact: string; rounded: boolean } | null, kind: 'price' | 'pct') => ratio
   ? <>{ratio.rounded ? '≈ ' : ''}<OwnerValue value={ratio.value} kind={kind} exact={ratio.exact} />{ratio.rounded ? ' (rounded)' : ''}</>
   : '—';
-const at = (value: unknown, now: number) => typeof value === 'number' && Number.isSafeInteger(value) && value <= now ? <span title={String(value)}>{paperTime(value, now)}</span> : '—';
+const at = (value: unknown, now: number) => typeof value === 'number' && Number.isSafeInteger(value) && value <= now ? <span title={ownerTitleText(String(value))}>{paperTime(value, now)}</span> : '—';
 const age = at;
 const asset = (row: Row) => typeof row.trading_pair === 'string' ? row.trading_pair.split('-')[0] : 'Not published';
 const sum = (rows: Row[], key: string) => rows.every(row => typeof row[key] === 'string') ? rows.reduce((total: string | null, row) => total === null ? null : exactSignedSum(total, row[key]), '0') : null;
@@ -123,7 +123,7 @@ export function TradesContent({ reads, now, readFailed = false, heartbeat = 'Una
     {reconciled.conflicts > 0 && <p role="status">Conflicting or incomplete fill identities were withheld, along with affected trades. A consistent owner publication will restore them.</p>}
     <div style={dimmed ? { opacity: 0.6 } : undefined}>
     <section className="paper-section"><h2>Trades</h2>
-      <p title={executors && fills && history ? `Fills: ${fills.length}; closed trades: ${trades.filter((row: Row) => row.terminal === true).length}` : undefined}>{executors && fills && history ? tradeWindow(count(fills.length), count(trades.filter((row: Row) => row.terminal === true).length), !!sections.fills?.next_cursor || sections.fills?.completeness === 'partial', !!sections.history?.next_cursor) : 'The owner trade or fill window is unavailable. A fresh published snapshot will fill this list.'}</p>
+      <p title={ownerTitleText(executors && fills && history ? `Fills: ${fills.length}; closed trades: ${trades.filter((row: Row) => row.terminal === true).length}` : undefined)}>{executors && fills && history ? tradeWindow(count(fills.length), count(trades.filter((row: Row) => row.terminal === true).length), !!sections.fills?.next_cursor || sections.fills?.completeness === 'partial', !!sections.history?.next_cursor) : 'The owner trade or fill window is unavailable. A fresh published snapshot will fill this list.'}</p>
       <div className="v5-trades-filters"><label>Coin <select value={filterCoin} onChange={event => setFilterCoin(event.target.value)}><option value="all">All coins</option>{coins.map(coinName => <option key={coinName}>{coinName}</option>)}</select></label><label>State <select value={filterState} onChange={event => setFilterState(event.target.value)}><option value="all">All states</option><option value="open">Open</option><option value="closed">Closed</option></select></label></div>
       {executors && fills && history && visible.length ? <Table headers={['Coin', 'State', 'Opened', 'Buy fills', 'Holding time', 'Fees', 'Profit', 'Close type', 'Details']}>{visible.map((row: Row) => <tr key={row.executor_id}><td>{asset(row)}</td><td>{row.terminal === true ? 'Closed' : row.terminal === false ? 'Open' : 'Not published'}</td><td>{at(row.created_at_ms, now)}</td><td title="Buy fills in the retained window; not a lifetime count">{countValue(row.fills.filter((fill: Row) => fill.side === 'BUY' && typeof fill.event_at_ms === 'number' && fill.event_at_ms <= now).length)}</td><td>{typeof row.created_at_ms === 'number' && typeof row.close_at_ms === 'number' && row.close_at_ms <= now && row.close_at_ms >= row.created_at_ms ? <>{countValue(Math.floor((row.close_at_ms - row.created_at_ms) / 1000))} s</> : '—'}</td><td>{exact(row.cum_fees_quote, money)}</td><td>{exact(row.realized_pnl_quote, profit)}</td><td>{typeof row.close_type === 'string' ? paperWords(row.close_type) : '—'}</td><td><button className="v5-button" onClick={() => setSelected(row.executor_id)}>View trade</button></td></tr>)}</Table> : <p>No trade rows are available for these filters; published matching executors will appear here.</p>}
     </section>

@@ -12,6 +12,21 @@ const css = fs.readFileSync(new URL('../src/v5/phone.css', import.meta.url), 'ut
 const marketCss = fs.readFileSync(new URL('../src/v5/market.css', import.meta.url), 'utf8');
 const now = Date.UTC(2026, 10, 15, 12, 34, 56);
 
+test('phone checkboxes keep a compact glyph inside a full label touch target', () => {
+  for (const width of [390, 430]) {
+    const window = new Window({ width, height: 844 });
+    window.document.head.innerHTML = `<style>.op-hcheck input { width: 20px; height: 20px; }${css}</style>`;
+    window.document.body.innerHTML = '<div class="condor-native condor-shell"><div class="v5-system"><label class="op-hcheck"><input type="checkbox">Needs attention only</label><input type="search" aria-label="Search services"></div></div>';
+    const checkbox = window.getComputedStyle(window.document.querySelector('input[type="checkbox"]'));
+    assert.notEqual(checkbox.minWidth, '44px', `${width}: native checkbox must not be enlarged to a button`);
+    assert.notEqual(checkbox.minHeight, '44px');
+    assert.equal(checkbox.width, '20px');
+    assert.equal(window.getComputedStyle(window.document.querySelector('label')).minHeight, '44px');
+    assert.equal(window.getComputedStyle(window.document.querySelector('input[type="search"]')).minHeight, '44px');
+    window.close();
+  }
+});
+
 test('collapsed phone summary shows the formatted owner cell with exact title', () => {
   const { Rows } = frontendModules().load('features/quant-ops/kit/Rows.tsx');
   const window = new Window();
@@ -112,7 +127,7 @@ test('Overview rounds tiny realized loss to zero and keeps exact since-start ari
   assert.ok(!realized.classList.contains('is-down'));
   const since = stats.find(item => item.textContent.includes('Since start')).querySelector('[data-tone]');
   assert.equal(since.textContent, '−19.92');
-  assert.equal(since.title, '199980.07714623162240 − 200000 = −19.92285376837760');
+  assert.equal(since.title, '≈ 199980.077146231622 (rounded) − 200000 = ≈ −19.922853768378 (rounded)');
   window.close();
 });
 

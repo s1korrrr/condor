@@ -5,7 +5,7 @@ import React from 'react';
 import * as ReactQuery from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
 import { frontendModules } from './helpers/frontend-module.mjs';
-import { usdc } from '../src/v5/format.mjs';
+import { ownerTitleText, usdc } from '../src/v5/format.mjs';
 
 const overrides = Object.fromEntries(['@/components/bots/AggregatedPnlChart', '@/components/bots/ControllerBrowser', '@/components/bots/DeployBotDialog', '@/components/bots/PnlSparkline', '@/hooks/useWebSocket', '@/hooks/useRates'].map(name => [name, {}]));
 const { load } = frontendModules(overrides);
@@ -41,7 +41,7 @@ test('money tiles format values while retaining exact source and arithmetic resu
   assert.deepEqual(result.slice(0,3).map(tile => tile.exact), ['199087.84807014005820','-912.15192985994180','-12.000000000000000000000000000001']);
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values(fixture),accountingRead:fixture.accounting,money,now,reportAt:now,heartbeat:'Fresh',bot:fixture.status.bot_id}));
   for (const tile of tiles()) {
-    assert.match(html, new RegExp(`title="${tile.exact}"`));
+    assert.ok(html.includes(`title="${ownerTitleText(tile.exact)}"`));
     assert.ok(html.includes(tile.value));
   }
 });
@@ -314,7 +314,7 @@ test('Bots uses the Money view reader and shared 7d cache key and withholds fail
   });
   const { V5PaperBots } = load('pages/tabs/ActiveBotsTab.tsx');
   const render = () => renderToStaticMarkup(React.createElement(V5PaperBots, { bot: 'meridian_v5_paper', ownerState: 'AVAILABLE', generatedAt: now / 1000 }));
-  assert.match(render(), /title="-12\.000000000000000000000000000001">−12\.00 USDC/);
+  assert.match(render(), /title="≈ −12 \(rounded\)">−12\.00 USDC/);
   const moneyQueries = queries.filter(query => query.queryKey[0] === 'v5-money');
   assert.equal(moneyQueries.length, 1);
   assert.deepEqual(moneyQueries[0].queryKey, ['v5-money', '7d']);
@@ -327,7 +327,7 @@ test('Bots uses the Money view reader and shared 7d cache key and withholds fail
     assert.equal(reads[0].options.credentials, 'include');
   } finally { globalThis.fetch = original; }
   failed = true;
-  assert.doesNotMatch(render(), /title="-12\.000000000000000000000000000001">−12\.00 USDC/);
+  assert.doesNotMatch(render(), /title="≈ −12 \(rounded\)">−12\.00 USDC/);
 });
 
 test('hold evidence stays rendered in closed Details above the six money tiles', () => {

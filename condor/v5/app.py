@@ -7,8 +7,10 @@ TickEngine, MCP tools, Hummingbot controls, or any general Condor router.
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import hmac
 import ipaddress
+import json
 import logging
 import re
 import time
@@ -1420,6 +1422,30 @@ def create_app(
     assets_path = static_root / "assets"
     if assets_path.is_dir():
         app.mount("/assets", StaticFiles(directory=assets_path), name="v5-assets")
+    root_media_types = {
+        ".png": "image/png",
+        ".svg": "image/svg+xml",
+        ".jpeg": "image/jpeg",
+        ".ico": "image/vnd.microsoft.icon",
+    }
+    root_static_hashes = {}
+    manifest_path = static_root.parent / "v5-reviewed-build.json"
+    if manifest_path.is_file() and not manifest_path.is_symlink():
+        try:
+            manifest = json.loads(manifest_path.read_text())
+            files = manifest["files"]
+            if not isinstance(files, dict):
+                raise ValueError("manifest files must be an object")
+            root_static_hashes = {
+                name: digest
+                for name, digest in files.items()
+                if Path(name).name == name
+                and Path(name).suffix in root_media_types
+                and isinstance(digest, str)
+                and re.fullmatch(r"[0-9a-f]{64}", digest)
+            }
+        except (OSError, ValueError, KeyError, TypeError):
+            logging.getLogger(__name__).warning("V5 root statics withheld: invalid reviewed manifest")
 
     @app.get("/", response_class=HTMLResponse)
     async def root_page():
@@ -1482,6 +1508,21 @@ def create_app(
         if coin not in MARKET_PAGE_COINS:
             raise HTTPException(404)
         return await root_page()
+
+    @app.get("/{asset_name}")
+    def root_static(asset_name: str):
+        name = "favicon.svg" if asset_name == "favicon.ico" and asset_name not in root_static_hashes else asset_name
+        digest = root_static_hashes.get(name)
+        image = static_root / name
+        if digest is None or image.is_symlink() or not image.is_file():
+            raise HTTPException(404)
+        try:
+            content = image.read_bytes()
+        except OSError:
+            raise HTTPException(404) from None
+        if not hmac.compare_digest(hashlib.sha256(content).hexdigest(), digest):
+            raise HTTPException(404)
+        return Response(content, media_type=root_media_types[image.suffix])
 
     @app.exception_handler(StarletteHTTPException)
     async def not_found_page(request: Request, exc: StarletteHTTPException):

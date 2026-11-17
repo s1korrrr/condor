@@ -207,7 +207,7 @@ test('Market renders a small header, selected range, two chips, holds and hourly
   assert.doesNotMatch(header, /Refresh|Five coins across|Slowest lane/);
   assert.match(header, /aria-label="Market range"/);
   assert.match(html, /All five coins are up over 6 hours/);
-  assert.match(html, /title="holding 0\.016200000000000000000000000010 · \(279 − 100\) × 100 \/ 100 = 179%"/);
+  assert.match(html, /title="holding ≈ 0\.0162 \(rounded\) · \(279 − 100\) × 100 \/ 100 = 179%"/);
   assert.match(html, /V5 holds 0\.0162/);
   assert.match(html, /Hour-by-hour returns/);
   assert.doesNotMatch(html, /<dt>Minutes held<\/dt>|v5m-range/);

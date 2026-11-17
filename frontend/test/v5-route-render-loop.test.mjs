@@ -32,6 +32,10 @@ const {frontendModules} = await import('./helpers/frontend-module.mjs');
 const {createRoot} = await import('react-dom/client');
 const baselineFiles = new Set(['components/charts/RecordedCandleChart.tsx','features/quant-ops/kit/Rows.tsx','pages/tabs/ActiveBotsTab.tsx','v5/format.mjs','v5/policy.ts','v5/V5Stocks.tsx','v5/bots-position-model.mjs','v5/V5CandleStore.tsx','v5/CandleStorePanels.tsx','v5/candle-store-model.ts','v5/V5Helm.tsx','v5/V5Market.tsx','v5/V5MarketDetail.tsx','v5/V5Pages.tsx','v5/OwnerJournalCondition.tsx']);
 const baselineSource = (filename, source) => {
+  if (process.env.V5_TITLE_BASELINE && filename.startsWith(path.resolve(import.meta.dirname, '../src') + path.sep)) {
+    const relative = path.relative(path.resolve(import.meta.dirname, '../src'), filename);
+    return execFileSync('git', ['show', `${process.env.V5_TITLE_BASELINE}:frontend/src/${relative}`], { cwd: path.resolve(import.meta.dirname, '../..'), encoding: 'utf8' });
+  }
   if (!process.env.DISPLAY_SCAN_BASELINE) return source;
   const relative = path.relative(path.resolve(import.meta.dirname,'../src'), filename);
   const revision = ['e16cf5b9','d277c7ca'].includes(process.env.DISPLAY_SCAN_BASELINE) ? process.env.DISPLAY_SCAN_BASELINE : '87c660c8';
@@ -43,7 +47,7 @@ const poisonDecimals = value => {
   if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, poisonDecimals(item)]));
   if (typeof value === 'string' && /^-?\d+(?:\.\d+)?$/.test(value)) {
     const [whole, fraction = ''] = value.split('.');
-    return `${whole}.${fraction.slice(0, 26).padEnd(8, '0')}7317`;
+    return `${whole}.${fraction.slice(0, 8).padEnd(8, '0')}73170000000000000001`;
   }
   return value;
 };
@@ -118,6 +122,26 @@ function longVisibleDecimals(container) {
   return findings;
 }
 
+function longOwnerTitles(container) {
+  const findings = [];
+  for (const element of container.querySelectorAll('[title]')) {
+    for (const match of element.title.matchAll(/(?<![\w.+−-])[-−+]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?(?![\w.])/g)) {
+      const [mantissa, exponent = '0'] = match[0].split(/[eE]/);
+      const fraction = mantissa.split('.')[1] ?? '';
+      const trailing = mantissa.replace('.', '').match(/0+$/)?.[0].length ?? 0;
+      if (fraction.length - Number(exponent) - trailing > 12) findings.push(`${element.tagName} title=${element.title}`);
+    }
+  }
+  return findings;
+}
+
+test('owner-title scan catches 28-place inputs and scientific notation, not padded exact values or IDs', () => {
+  assert.equal(poisonDecimals('1').split('.')[1].length, 28);
+  const container = document.createElement('div');
+  container.innerHTML = '<span title="114.1396691483993272381433853"></span><span title="1e-13"></span><span title="(680.8963033983613722931914460 − 594.17)"></span><span title="199123.96997705845820"></span><span title="1.2345678901230000000000000000"></span><span title="owner abc123.12345678901234567890"></span>';
+  assert.equal(longOwnerTitles(container).length, 4);
+});
+
 test('decimal scan checks phone CSS title helpers but not exact leaf tooltips', () => {
   const fixture = document.createElement('div');
   fixture.className = 'condor-native';
@@ -177,7 +201,9 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   let duplicateTradeFills = false;
   const unexpectedReads = [];
   const decimalFindings = [];
+  const titleFindings = [];
   const scan = (container, label) => {
+    titleFindings.push(...longOwnerTitles(container).map(finding => `${label}: ${finding}`));
     const display = container.cloneNode(true);
     for (const details of display.querySelectorAll('details')) {
       if (details.querySelector(':scope > summary')?.textContent === 'Exact record · as sent') details.querySelector(':scope > pre').textContent = '';
@@ -365,7 +391,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           }
           const matched = stats.get('Matched spot / perpetual assets');
           assert.equal(matched.title,'0% this minute', 'derived cohort phone helper must use zero decimal places');
-          assert.match(matched.querySelector('strong').title,/1 \/ 1048576; exact percentage 0\.000095367431640625/, 'derived cohort leaf must retain its ratio and exact percentage');
+          assert.equal(matched.querySelector('strong').title,'1 / 1048576; exact percentage ≈ 0.000095367432 (rounded)%', 'derived cohort leaf must retain its ratio and bound its long percentage');
           assert.equal(lane.title,'binance__spot · 7-day coverage 87.7% · missing minutes 1', 'venue phone helper must not append the exact fraction');
           assert.equal(lane.querySelector(':scope > span:first-child').title,'Owner health: green · available', 'non-numeric lane health helper must remain');
           assert.equal(lane.querySelector(':scope > span:first-child > span').title,'exact 7-day fraction 0.876543217317', 'venue leaf must retain the exact 7-day fraction');
@@ -508,6 +534,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
         client.clear();
       }
     });
+    assert.deepEqual(titleFindings, [], `Owner titles over twelve decimal places:\n${titleFindings.join('\n')}`);
     assert.deepEqual(decimalFindings, [], `Visible decimals over eight places:\n${decimalFindings.join('\n')}`);
     assert.ok(requests.some(request => request.includes('native%2Fstatus')),'real snapshot query must read owner fixtures');
   } finally {

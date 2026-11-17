@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { CandlestickSeries, ColorType, createChart, createSeriesMarkers, LineStyle, type UTCTimestamp } from "lightweight-charts";
 import { getThemeColors } from "@/lib/theme-colors";
 import { useTheme } from "@/hooks/useTheme";
-import { coin, price } from "@/v5/format.mjs";
+import { coin, ownerTitleText, price } from "@/v5/format.mjs";
 
 export type RecordedMinute = [number, number | null, number | null, number | null, number | null, number | null, number, number, number, number, number, number];
 type RecordedFillMarker = { time: number; event_at_ms: number; side: unknown; price: string; quantity: unknown };
@@ -41,7 +41,7 @@ export function RecordedCandleChart({ buckets, label, volumeUnit, markers = NO_M
   const state = hover ? (hover[6] ? "Final" : hover[7] ? "No trade" : hover[8] ? "Unrecoverable" : hover[9] ? "Missing" : "Pending") : null;
   return <figure className="recorded-candle-chart min-w-0 rounded-lg border border-[var(--color-border)] p-3">
     <figcaption className="mb-2 text-sm font-medium">{label} · 1m · UTC</figcaption>
-    <div ref={container} role="img" aria-label={`${label} interactive 1m candlestick chart; missing minutes remain gaps`} title={markers.length ? markers.map(markerText).join(" · ") : undefined} className="recorded-candle-canvas h-[360px] min-w-0" />
-    <p className="recorded-candle-readout min-h-12 break-words pt-2 text-xs text-[var(--color-text-muted)]" aria-live="polite">{hover ? <>{new Date(hover[0] * 1000).toISOString()} · {state}{([["O",hover[1]],["H",hover[2]],["L",hover[3]],["C",hover[4]],["Volume",hover[5]]] as const).map(([name,value]) => <span key={name} title={value == null ? undefined : String(value)}> · {name} {value == null ? "Unavailable" : name === "Volume" ? coin(value) : price(value)}{name === "Volume" ? ` ${volumeUnit}` : ""}</span>)}{markers.filter(marker => marker.time === hover[0]).map((marker, index) => <span className="block" key={index}>{markerText(marker)}</span>)}</> : "Touch and hold or hover for recorded OHLC, volume and minute state. Drag to pan; scroll to zoom. Gaps are never filled."}</p>
+    <div ref={container} role="img" aria-label={`${label} interactive 1m candlestick chart; missing minutes remain gaps`} title={ownerTitleText(markers.length ? markers.map(markerText).join(" · ") : undefined)} className="recorded-candle-canvas h-[360px] min-w-0" />
+    <p className="recorded-candle-readout min-h-12 break-words pt-2 text-xs text-[var(--color-text-muted)]" aria-live="polite">{hover ? <>{new Date(hover[0] * 1000).toISOString()} · {state}{([["O",hover[1]],["H",hover[2]],["L",hover[3]],["C",hover[4]],["Volume",hover[5]]] as const).map(([name,value]) => <span key={name} title={ownerTitleText(value)}> · {name} {value == null ? "Unavailable" : name === "Volume" ? coin(value) : price(value)}{name === "Volume" ? ` ${volumeUnit}` : ""}</span>)}{markers.filter(marker => marker.time === hover[0]).map((marker, index) => <span className="block" key={index} title={ownerTitleText(markerText(marker))}>{`${marker.side} ${coin(marker.quantity)} @ ${price(marker.price)} · ${new Date(marker.event_at_ms).toISOString()}`}</span>)}</> : "Touch and hold or hover for recorded OHLC, volume and minute state. Drag to pan; scroll to zoom. Gaps are never filled."}</p>
   </figure>;
 }

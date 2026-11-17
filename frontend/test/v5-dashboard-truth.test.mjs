@@ -114,8 +114,8 @@ test('position card formats money and quantities without losing exact values', (
   const money = {rows:[{bot:'v5',at_ms:now,snapshot_at_ms:now,unit:'USDC',coins:{BNB:{realized:'114.1396691483993272381433853',unrealized:'0'}}}]};
   const prices = {'BNB-USDC':{buckets:[[Math.floor(now/60000)*60-60,1,2,1,680.896303,0,1]]}};
   const html = renderToStaticMarkup(React.createElement(PaperPositions,{positions:livePositions,decisions,wallet,money,prices,now}));
-  assert.ok(html.includes('title="114.1396691483993272381433853 + 0 = 114.1396691483993272381433853"'));
-  for (const exact of ['680.8963033983613722931914460','800.123456789123456789','1234.567890000000','0.3615174','0.0000016']) assert.ok(html.includes(`title="${exact}"`),exact);
+  assert.ok(html.includes('title="≈ 114.139669148399 (rounded) + 0 = ≈ 114.139669148399 (rounded)"'));
+  for (const title of ['≈ 680.896303398361 (rounded)','≈ 800.123456789123 (rounded)','1234.567890000000','0.3615174','0.0000016']) assert.ok(html.includes(`title="${title}"`),title);
   for (const formatted of ['114.14 USDC','680.90 USDC','800.12 USDC','1,234.57 USDC','0.361517 BNB','0.000002 BNB']) assert.ok(html.includes(formatted),formatted);
 });
 
@@ -147,7 +147,7 @@ test('position details retain the owner trailing and release facts', () => {
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values({...final3, decisions}), now, reportAt:final3.status.generated_at_ms, heartbeat:'Fresh', bot:'meridian_v5_paper'}));
   assert.match(html, /Bag reason<\/dt><dd>Below target/);
   assert.match(html, /Trailing armed<\/dt><dd>Yes/);
-  assert.match(html, /Trailing peak<\/dt><dd><span title="800\.123456789123456789">800\.12 USDC/);
+  assert.match(html, /Trailing peak<\/dt><dd><span title="≈ 800\.123456789123 \(rounded\)">800\.12 USDC/);
   assert.match(html, /Release<\/dt><dd>Trailing exit/);
 });
 

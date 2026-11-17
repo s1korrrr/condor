@@ -1,0 +1,250 @@
+{
+  "contract_id": "v5-lfl-stage-a-2026-11-18-r2",
+  "algorithm": "SHA-256",
+  "vectors": [
+    {
+      "name": "projection_revision",
+      "preimage": {
+        "schema": "research_knowledge.v5_projection_contract.v1",
+        "version": 1,
+        "stage": "A",
+        "mapping": "RECORDED_V1",
+        "ordering": "UTF8_RECORD_ID_ASC_V1",
+        "hashing": "CANONICAL_JSON_INTEGER_V1",
+        "wire_contract_id": "v5-lfl-stage-a-2026-11-18-r2"
+      },
+      "canonical_utf8": "{\"hashing\":\"CANONICAL_JSON_INTEGER_V1\",\"mapping\":\"RECORDED_V1\",\"ordering\":\"UTF8_RECORD_ID_ASC_V1\",\"schema\":\"research_knowledge.v5_projection_contract.v1\",\"stage\":\"A\",\"version\":1,\"wire_contract_id\":\"v5-lfl-stage-a-2026-11-18-r2\"}",
+      "canonical_utf8_hex": "7b2268617368696e67223a2243414e4f4e4943414c5f4a534f4e5f494e54454745525f5631222c226d617070696e67223a225245434f524445445f5631222c226f72646572696e67223a22555446385f5245434f52445f49445f4153435f5631222c22736368656d61223a2272657365617263685f6b6e6f776c656467652e76355f70726f6a656374696f6e5f636f6e74726163742e7631222c227374616765223a2241222c2276657273696f6e223a312c22776972655f636f6e74726163745f6964223a2276352d6c666c2d73746167652d612d323032362d31312d31382d7232227d",
+      "byte_length": 228,
+      "sha256": "bb6391c6d97e1043c087b88116706a0919a9a0985c5dac9d3751eba872bb759a"
+    },
+    {
+      "name": "snapshot_id",
+      "preimage": {
+        "schema": "research_knowledge.v5_read_projection.v1",
+        "projection_revision": "bb6391c6d97e1043c087b88116706a0919a9a0985c5dac9d3751eba872bb759a",
+        "scope_sha256": "d364ab0182f590617ea29f482a9279bf0cd4cfd06850a8f11b7bef821c159fd8",
+        "publication_sha256": "dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e",
+        "database_sha256": "a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482",
+        "source_revision": "fixture-source-r1",
+        "source_snapshot": "fixture-source-s1",
+        "event_signature": "fixture-events-e1"
+      },
+      "canonical_utf8": "{\"database_sha256\":\"a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482\",\"event_signature\":\"fixture-events-e1\",\"projection_revision\":\"bb6391c6d97e1043c087b88116706a0919a9a0985c5dac9d3751eba872bb759a\",\"publication_sha256\":\"dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e\",\"schema\":\"research_knowledge.v5_read_projection.v1\",\"scope_sha256\":\"d364ab0182f590617ea29f482a9279bf0cd4cfd06850a8f11b7bef821c159fd8\",\"source_revision\":\"fixture-source-r1\",\"source_snapshot\":\"fixture-source-s1\"}",
+      "canonical_utf8_hex": "7b2264617461626173655f736861323536223a2261303430306436323630643239343232333932656137663735346534336237363039386231326231626436623762666434313066376164666362313030343832222c226576656e745f7369676e6174757265223a22666978747572652d6576656e74732d6531222c2270726f6a656374696f6e5f7265766973696f6e223a2262623633393163366439376531303433633038376238383131363730366130393139613961303938356335646163396433373531656261383732626237353961222c227075626c69636174696f6e5f736861323536223a2264633632613334616238653962333365366337376366336463626634303133633835326438353961646135353265393630366233346235656137613864633365222c22736368656d61223a2272657365617263685f6b6e6f776c656467652e76355f726561645f70726f6a656374696f6e2e7631222c2273636f70655f736861323536223a2264333634616230313832663539303631376561323966343832613932373962663063643463666430363835306138663131623762656638323163313539666438222c22736f757263655f7265766973696f6e223a22666978747572652d736f757263652d7231222c22736f757263655f736e617073686f74223a22666978747572652d736f757263652d7331227d",
+      "byte_length": 511,
+      "sha256": "7853c8fe2e59de742216785718f21552523efdef59d742457f31e13325facea1"
+    },
+    {
+      "name": "row_sha256",
+      "preimage": {
+        "record_id": "experiment:fixture-1",
+        "native_kind": "experiment",
+        "native_revision": "b95766d0e2ea6965e7f245fd7cd2b3badf5652ef78502712dd98bbc2baf7708b",
+        "row_scope": {
+          "membership_basis": "OWN_FAMILY_LANE",
+          "family_id": "fixture-family",
+          "lane": "SPOT",
+          "program_id": null,
+          "recorded_scope": {
+            "venue": "fixture-venue",
+            "capital_model": "SPOT",
+            "window": {
+              "start": 1772323200000,
+              "end_exclusive": 1790812800000
+            },
+            "regimes": [],
+            "scope_state": "RECORDED"
+          }
+        },
+        "recorded_at_ms": 1794916740000,
+        "available_at_ms": null,
+        "sources": [
+          {
+            "root": "STORE",
+            "relative_path": "graph_events/fixture.json",
+            "pointer": "/nodes/0",
+            "sha256": "b95766d0e2ea6965e7f245fd7cd2b3badf5652ef78502712dd98bbc2baf7708b",
+            "bytes": 20
+          }
+        ],
+        "row_status": "COMPLETE",
+        "issues": [],
+        "record_type": "node",
+        "kind": "experiment",
+        "title": "Registered fixture experiment",
+        "native_state": "REGISTERED",
+        "summary": null,
+        "identities": [
+          {
+            "name": "native_id",
+            "value": "fixture-1"
+          }
+        ]
+      },
+      "canonical_utf8": "{\"available_at_ms\":null,\"identities\":[{\"name\":\"native_id\",\"value\":\"fixture-1\"}],\"issues\":[],\"kind\":\"experiment\",\"native_kind\":\"experiment\",\"native_revision\":\"b95766d0e2ea6965e7f245fd7cd2b3badf5652ef78502712dd98bbc2baf7708b\",\"native_state\":\"REGISTERED\",\"record_id\":\"experiment:fixture-1\",\"record_type\":\"node\",\"recorded_at_ms\":1794916740000,\"row_scope\":{\"family_id\":\"fixture-family\",\"lane\":\"SPOT\",\"membership_basis\":\"OWN_FAMILY_LANE\",\"program_id\":null,\"recorded_scope\":{\"capital_model\":\"SPOT\",\"regimes\":[],\"scope_state\":\"RECORDED\",\"venue\":\"fixture-venue\",\"window\":{\"end_exclusive\":1790812800000,\"start\":1772323200000}}},\"row_status\":\"COMPLETE\",\"sources\":[{\"bytes\":20,\"pointer\":\"/nodes/0\",\"relative_path\":\"graph_events/fixture.json\",\"root\":\"STORE\",\"sha256\":\"b95766d0e2ea6965e7f245fd7cd2b3badf5652ef78502712dd98bbc2baf7708b\"}],\"summary\":null,\"title\":\"Registered fixture experiment\"}",
+      "canonical_utf8_hex": "7b22617661696c61626c655f61745f6d73223a6e756c6c2c226964656e746974696573223a5b7b226e616d65223a226e61746976655f6964222c2276616c7565223a22666978747572652d31227d5d2c22697373756573223a5b5d2c226b696e64223a226578706572696d656e74222c226e61746976655f6b696e64223a226578706572696d656e74222c226e61746976655f7265766973696f6e223a2262393537363664306532656136393635653766323435666437636432623362616466353635326566373835303237313264643938626263326261663737303862222c226e61746976655f7374617465223a2252454749535445524544222c227265636f72645f6964223a226578706572696d656e743a666978747572652d31222c227265636f72645f74797065223a226e6f6465222c227265636f726465645f61745f6d73223a313739343931363734303030302c22726f775f73636f7065223a7b2266616d696c795f6964223a22666978747572652d66616d696c79222c226c616e65223a2253504f54222c226d656d626572736869705f6261736973223a224f574e5f46414d494c595f4c414e45222c2270726f6772616d5f6964223a6e756c6c2c227265636f726465645f73636f7065223a7b226361706974616c5f6d6f64656c223a2253504f54222c22726567696d6573223a5b5d2c2273636f70655f7374617465223a225245434f52444544222c2276656e7565223a22666978747572652d76656e7565222c2277696e646f77223a7b22656e645f6578636c7573697665223a313739303831323830303030302c227374617274223a313737323332333230303030307d7d7d2c22726f775f737461747573223a22434f4d504c455445222c22736f7572636573223a5b7b226279746573223a32302c22706f696e746572223a222f6e6f6465732f30222c2272656c61746976655f70617468223a2267726170685f6576656e74732f666978747572652e6a736f6e222c22726f6f74223a2253544f5245222c22736861323536223a2262393537363664306532656136393635653766323435666437636432623362616466353635326566373835303237313264643938626263326261663737303862227d5d2c2273756d6d617279223a6e756c6c2c227469746c65223a22526567697374657265642066697874757265206578706572696d656e74227d",
+      "byte_length": 878,
+      "sha256": "6cca38b138300ebbb91db27d4928f5ebf335638b977c3912198fac633e19f6d2"
+    },
+    {
+      "name": "envelope_sha256",
+      "preimage": {
+        "schema": "research_knowledge.v5_read_projection.v1",
+        "owner": "research_os",
+        "authority": "READ_ONLY",
+        "effect": "NONE",
+        "dataset": "records",
+        "scope": {
+          "scope_id": "fixture-v5-lfl",
+          "program_id": "fixture-program",
+          "family_lane_pairs": [
+            {
+              "family_id": "fixture-family",
+              "lane": "SPOT"
+            }
+          ],
+          "scope_sha256": "d364ab0182f590617ea29f482a9279bf0cd4cfd06850a8f11b7bef821c159fd8"
+        },
+        "projection_revision": "bb6391c6d97e1043c087b88116706a0919a9a0985c5dac9d3751eba872bb759a",
+        "snapshot_id": "7853c8fe2e59de742216785718f21552523efdef59d742457f31e13325facea1",
+        "publication_sha256": "dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e",
+        "database_sha256": "a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482",
+        "source_revision": "fixture-source-r1",
+        "source_snapshot": "fixture-source-s1",
+        "event_signature": "fixture-events-e1",
+        "status": "BOUND",
+        "reason_codes": [],
+        "generated_at_ms": 1794916620000,
+        "verified_at_ms": 1794916800000,
+        "served_at_ms": 1794916801000,
+        "coverage": {
+          "state": "COMPLETE",
+          "total_items": 1,
+          "returned_items": 1,
+          "omitted_items": 0,
+          "unresolved_membership_items": 0,
+          "excluded_proposed_edges": 0,
+          "pending_events": 0
+        },
+        "page": {
+          "limit": 25,
+          "next_cursor": null,
+          "has_more": false
+        },
+        "items": [
+          {
+            "record_id": "experiment:fixture-1",
+            "native_kind": "experiment",
+            "native_revision": "b95766d0e2ea6965e7f245fd7cd2b3badf5652ef78502712dd98bbc2baf7708b",
+            "row_scope": {
+              "membership_basis": "OWN_FAMILY_LANE",
+              "family_id": "fixture-family",
+              "lane": "SPOT",
+              "program_id": null,
+              "recorded_scope": {
+                "venue": "fixture-venue",
+                "capital_model": "SPOT",
+                "window": {
+                  "start": 1772323200000,
+                  "end_exclusive": 1790812800000
+                },
+                "regimes": [],
+                "scope_state": "RECORDED"
+              }
+            },
+            "recorded_at_ms": 1794916740000,
+            "available_at_ms": null,
+            "sources": [
+              {
+                "root": "STORE",
+                "relative_path": "graph_events/fixture.json",
+                "pointer": "/nodes/0",
+                "sha256": "b95766d0e2ea6965e7f245fd7cd2b3badf5652ef78502712dd98bbc2baf7708b",
+                "bytes": 20
+              }
+            ],
+            "row_status": "COMPLETE",
+            "issues": [],
+            "record_type": "node",
+            "kind": "experiment",
+            "title": "Registered fixture experiment",
+            "native_state": "REGISTERED",
+            "summary": null,
+            "identities": [
+              {
+                "name": "native_id",
+                "value": "fixture-1"
+              }
+            ],
+            "row_sha256": "6cca38b138300ebbb91db27d4928f5ebf335638b977c3912198fac633e19f6d2"
+          }
+        ],
+        "issues": []
+      },
+      "canonical_utf8": "{\"authority\":\"READ_ONLY\",\"coverage\":{\"excluded_proposed_edges\":0,\"omitted_items\":0,\"pending_events\":0,\"returned_items\":1,\"state\":\"COMPLETE\",\"total_items\":1,\"unresolved_membership_items\":0},\"database_sha256\":\"a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482\",\"dataset\":\"records\",\"effect\":\"NONE\",\"event_signature\":\"fixture-events-e1\",\"generated_at_ms\":1794916620000,\"issues\":[],\"items\":[{\"available_at_ms\":null,\"identities\":[{\"name\":\"native_id\",\"value\":\"fixture-1\"}],\"issues\":[],\"kind\":\"experiment\",\"native_kind\":\"experiment\",\"native_revision\":\"b95766d0e2ea6965e7f245fd7cd2b3badf5652ef78502712dd98bbc2baf7708b\",\"native_state\":\"REGISTERED\",\"record_id\":\"experiment:fixture-1\",\"record_type\":\"node\",\"recorded_at_ms\":1794916740000,\"row_scope\":{\"family_id\":\"fixture-family\",\"lane\":\"SPOT\",\"membership_basis\":\"OWN_FAMILY_LANE\",\"program_id\":null,\"recorded_scope\":{\"capital_model\":\"SPOT\",\"regimes\":[],\"scope_state\":\"RECORDED\",\"venue\":\"fixture-venue\",\"window\":{\"end_exclusive\":1790812800000,\"start\":1772323200000}}},\"row_sha256\":\"6cca38b138300ebbb91db27d4928f5ebf335638b977c3912198fac633e19f6d2\",\"row_status\":\"COMPLETE\",\"sources\":[{\"bytes\":20,\"pointer\":\"/nodes/0\",\"relative_path\":\"graph_events/fixture.json\",\"root\":\"STORE\",\"sha256\":\"b95766d0e2ea6965e7f245fd7cd2b3badf5652ef78502712dd98bbc2baf7708b\"}],\"summary\":null,\"title\":\"Registered fixture experiment\"}],\"owner\":\"research_os\",\"page\":{\"has_more\":false,\"limit\":25,\"next_cursor\":null},\"projection_revision\":\"bb6391c6d97e1043c087b88116706a0919a9a0985c5dac9d3751eba872bb759a\",\"publication_sha256\":\"dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e\",\"reason_codes\":[],\"schema\":\"research_knowledge.v5_read_projection.v1\",\"scope\":{\"family_lane_pairs\":[{\"family_id\":\"fixture-family\",\"lane\":\"SPOT\"}],\"program_id\":\"fixture-program\",\"scope_id\":\"fixture-v5-lfl\",\"scope_sha256\":\"d364ab0182f590617ea29f482a9279bf0cd4cfd06850a8f11b7bef821c159fd8\"},\"served_at_ms\":1794916801000,\"snapshot_id\":\"7853c8fe2e59de742216785718f21552523efdef59d742457f31e13325facea1\",\"source_revision\":\"fixture-source-r1\",\"source_snapshot\":\"fixture-source-s1\",\"status\":\"BOUND\",\"verified_at_ms\":1794916800000}",
+      "canonical_utf8_hex": "7b22617574686f72697479223a22524541445f4f4e4c59222c22636f766572616765223a7b226578636c756465645f70726f706f7365645f6564676573223a302c226f6d69747465645f6974656d73223a302c2270656e64696e675f6576656e7473223a302c2272657475726e65645f6974656d73223a312c227374617465223a22434f4d504c455445222c22746f74616c5f6974656d73223a312c22756e7265736f6c7665645f6d656d626572736869705f6974656d73223a307d2c2264617461626173655f736861323536223a2261303430306436323630643239343232333932656137663735346534336237363039386231326231626436623762666434313066376164666362313030343832222c2264617461736574223a227265636f726473222c22656666656374223a224e4f4e45222c226576656e745f7369676e6174757265223a22666978747572652d6576656e74732d6531222c2267656e6572617465645f61745f6d73223a313739343931363632303030302c22697373756573223a5b5d2c226974656d73223a5b7b22617661696c61626c655f61745f6d73223a6e756c6c2c226964656e746974696573223a5b7b226e616d65223a226e61746976655f6964222c2276616c7565223a22666978747572652d31227d5d2c22697373756573223a5b5d2c226b696e64223a226578706572696d656e74222c226e61746976655f6b696e64223a226578706572696d656e74222c226e61746976655f7265766973696f6e223a2262393537363664306532656136393635653766323435666437636432623362616466353635326566373835303237313264643938626263326261663737303862222c226e61746976655f7374617465223a2252454749535445524544222c227265636f72645f6964223a226578706572696d656e743a666978747572652d31222c227265636f72645f74797065223a226e6f6465222c227265636f726465645f61745f6d73223a313739343931363734303030302c22726f775f73636f7065223a7b2266616d696c795f6964223a22666978747572652d66616d696c79222c226c616e65223a2253504f54222c226d656d626572736869705f6261736973223a224f574e5f46414d494c595f4c414e45222c2270726f6772616d5f6964223a6e756c6c2c227265636f726465645f73636f7065223a7b226361706974616c5f6d6f64656c223a2253504f54222c22726567696d6573223a5b5d2c2273636f70655f7374617465223a225245434f52444544222c2276656e7565223a22666978747572652d76656e7565222c2277696e646f77223a7b22656e645f6578636c7573697665223a313739303831323830303030302c227374617274223a313737323332333230303030307d7d7d2c22726f775f736861323536223a2236636361333862313338333030656262623931646232376434393238663565626633333536333862393737633339313231393866616336333365313966366432222c22726f775f737461747573223a22434f4d504c455445222c22736f7572636573223a5b7b226279746573223a32302c22706f696e746572223a222f6e6f6465732f30222c2272656c61746976655f70617468223a2267726170685f6576656e74732f666978747572652e6a736f6e222c22726f6f74223a2253544f5245222c22736861323536223a2262393537363664306532656136393635653766323435666437636432623362616466353635326566373835303237313264643938626263326261663737303862227d5d2c2273756d6d617279223a6e756c6c2c227469746c65223a22526567697374657265642066697874757265206578706572696d656e74227d5d2c226f776e6572223a2272657365617263685f6f73222c2270616765223a7b226861735f6d6f7265223a66616c73652c226c696d6974223a32352c226e6578745f637572736f72223a6e756c6c7d2c2270726f6a656374696f6e5f7265766973696f6e223a2262623633393163366439376531303433633038376238383131363730366130393139613961303938356335646163396433373531656261383732626237353961222c227075626c69636174696f6e5f736861323536223a2264633632613334616238653962333365366337376366336463626634303133633835326438353961646135353265393630366233346235656137613864633365222c22726561736f6e5f636f646573223a5b5d2c22736368656d61223a2272657365617263685f6b6e6f776c656467652e76355f726561645f70726f6a656374696f6e2e7631222c2273636f7065223a7b2266616d696c795f6c616e655f7061697273223a5b7b2266616d696c795f6964223a22666978747572652d66616d696c79222c226c616e65223a2253504f54227d5d2c2270726f6772616d5f6964223a22666978747572652d70726f6772616d222c2273636f70655f6964223a22666978747572652d76352d6c666c222c2273636f70655f736861323536223a2264333634616230313832663539303631376561323966343832613932373962663063643463666430363835306138663131623762656638323163313539666438227d2c227365727665645f61745f6d73223a313739343931363830313030302c22736e617073686f745f6964223a2237383533633866653265353964653734323231363738353731386632313535323532336566646566353964373432343537663331653133333235666163656131222c22736f757263655f7265766973696f6e223a22666978747572652d736f757263652d7231222c22736f757263655f736e617073686f74223a22666978747572652d736f757263652d7331222c22737461747573223a22424f554e44222c2276657269666965645f61745f6d73223a313739343931363830303030307d",
+      "byte_length": 2138,
+      "sha256": "57683351db5072fc4142250c749416112546e3393629d119bc314d445d04ac43"
+    }
+  ],
+  "scope_sha256": {
+    "preimage": {
+      "schema": "research_knowledge.v5_projection_scope.v1",
+      "scope_id": "fixture-v5-lfl",
+      "program_id": "fixture-program",
+      "family_lane_pairs": [
+        {
+          "family_id": "fixture-family",
+          "lane": "SPOT"
+        }
+      ],
+      "membership_policy": "RECORDED_V1",
+      "enabled_datasets": [
+        "jobs",
+        "lessons",
+        "manifest",
+        "records"
+      ],
+      "source_receipts": [
+        {
+          "root": "SOURCE",
+          "relative_path": "fixtures/selection.json",
+          "pointer": "",
+          "sha256": "fbf0c6b015227ccb2cea93670523b6182cdc022405d7b0eaa327b5d01300e161",
+          "bytes": 17
+        }
+      ]
+    },
+    "sha256": "d364ab0182f590617ea29f482a9279bf0cd4cfd06850a8f11b7bef821c159fd8"
+  },
+  "cursor": {
+    "filter_preimage": {
+      "record_type": "node",
+      "root_id": null
+    },
+    "filter_sha256": "b80d834a629212768743ae6093e3c01899c73ec8f118f3519f6de735d2ea5c27",
+    "last_id": "experiment:fixture-1",
+    "decoded_hex": "010201000014d364ab0182f590617ea29f482a9279bf0cd4cfd06850a8f11b7bef821c159fd8bb6391c6d97e1043c087b88116706a0919a9a0985c5dac9d3751eba872bb759a7853c8fe2e59de742216785718f21552523efdef59d742457f31e13325facea1b80d834a629212768743ae6093e3c01899c73ec8f118f3519f6de735d2ea5c276578706572696d656e743a666978747572652d3100000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000",
+    "decoded_bytes": 218,
+    "token": "AQIBAAAU02SrAYL1kGF-op9IKpJ5vwzUz9BoUKjxG3vvghwVn9i7Y5HG2X4QQ8CHuIEWcGoJGamgmFxdrJ03Ueuocrt1mnhTyP4uWd50IhZ4VxjyFVJSPv3vWddCRX8x4TMl-s6huA2DSmKSEnaHQ65gk-PAGJnHPsjxGPNRn23nNdLqXCdleHBlcmltZW50OmZpeHR1cmUtMQAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+  },
+  "ordering": {
+    "input": [
+      "z",
+      "é",
+      "a",
+      "A",
+      "á",
+      "😀"
+    ],
+    "expected": [
+      "A",
+      "a",
+      "á",
+      "z",
+      "é",
+      "😀"
+    ]
+  }
+}

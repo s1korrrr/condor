@@ -1,0 +1,62 @@
+{
+  "clock": "UTC epoch milliseconds; age also checked against monotonic completion",
+  "schedule_interval_ms": 30000,
+  "verification_attempt_deadline_ms": 30000,
+  "max_age_ms": 90000,
+  "vectors": [
+    {
+      "name": "89s",
+      "verified_at_ms": 1794916800000,
+      "served_at_ms": 1794916889000,
+      "expected_http": 200,
+      "expected_availability": "BOUND",
+      "golden": "examples/records-age-89s.json",
+      "poll_advances_verified_at": false
+    },
+    {
+      "name": "90s-boundary",
+      "verified_at_ms": 1794916800000,
+      "served_at_ms": 1794916890000,
+      "expected_http": 200,
+      "expected_availability": "BOUND",
+      "poll_advances_verified_at": false
+    },
+    {
+      "name": "91s",
+      "verified_at_ms": 1794916800000,
+      "served_at_ms": 1794916891000,
+      "expected_http": 503,
+      "expected_code": "VERIFICATION_UNAVAILABLE",
+      "reason_code": "VERIFICATION_EXPIRED",
+      "expected_availability": "UNAVAILABLE",
+      "expected_retry_after": "1",
+      "golden": "examples/errors/VERIFICATION_UNAVAILABLE.json",
+      "poll_advances_verified_at": false
+    },
+    {
+      "name": "stable-scheduler",
+      "previous_verified_at_ms": 1794916800000,
+      "scheduled_start_ms": 1794916830000,
+      "successful_completion_ms": 1794916830040,
+      "next_get_ms": 1794916831000,
+      "expected_verified_at_ms": 1794916830040,
+      "publication_changed": false
+    },
+    {
+      "name": "restart-cold",
+      "warm_receipt": false,
+      "expected_http": 503,
+      "expected_code": "WARMING",
+      "expected_retry_after": "1",
+      "hash_allowed_in_get": false
+    },
+    {
+      "name": "new-publication",
+      "matching_warm_receipt": false,
+      "expected_http": 503,
+      "expected_code": "WARMING",
+      "expected_retry_after": "1",
+      "hash_allowed_in_get": false
+    }
+  ]
+}

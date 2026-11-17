@@ -8,9 +8,10 @@ import re
 import stat
 from dataclasses import dataclass
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import urlparse, urlsplit
 
 from .paper import status_file_name_valid
+from .learning_projection import ContractViolation, LearningProjectionConfig, load_scope_membership
 
 MAX_STRATEGIES = 10000
 MAX_SOURCES = 10000
@@ -47,6 +48,8 @@ class Settings:
     tradepad_url: str | None = None
     research_url: str | None = None
     tradepad_campaign_id: str | None = None
+    # Production Research OS learning projection (V5_LEARNING_*); None leaves the routes disabled/UNAVAILABLE.
+    learning_projection: LearningProjectionConfig | None = None
 
     @classmethod
     def from_env(cls, env: dict[str, str] | None = None) -> "Settings":
@@ -221,7 +224,54 @@ class Settings:
             tradepad_url=_validate_base_url(values["V5_TRADEPAD_URL"], "V5_TRADEPAD_URL") if values.get("V5_TRADEPAD_URL", "").strip() else None,
             research_url=_validate_base_url(values["V5_RESEARCH_URL"], "V5_RESEARCH_URL") if values.get("V5_RESEARCH_URL", "").strip() else None,
             tradepad_campaign_id=campaign_id or None,
+            learning_projection=_learning_projection_config(values),
         )
+
+
+LEARNING_SOURCE_NAMES = (
+    "V5_LEARNING_SOURCE",
+    "V5_LEARNING_OWNER_URL",
+    "V5_LEARNING_SCOPE_ID",
+    "V5_LEARNING_SCOPE_SHA256",
+    "V5_LEARNING_PROJECTION_REVISION",
+)
+LEARNING_SOURCE_VALUE = "research_os_v1"
+
+
+def _learning_projection_config(values) -> LearningProjectionConfig | None:
+    """All five V5_LEARNING_* names or none. Partial or invalid configuration fails startup."""
+    given = {name: values.get(name, "").strip() for name in LEARNING_SOURCE_NAMES}
+    if not any(given.values()):
+        return None
+    missing = [name for name, value in given.items() if not value]
+    if missing:
+        raise ConfigurationError("partial V5 learning projection configuration; missing " + ", ".join(missing))
+    if given["V5_LEARNING_SOURCE"] != LEARNING_SOURCE_VALUE:
+        raise ConfigurationError(f"V5_LEARNING_SOURCE must be exactly {LEARNING_SOURCE_VALUE}")
+    scope_id = given["V5_LEARNING_SCOPE_ID"]
+    if (
+        len(scope_id.encode("utf-8")) > 160
+        or re.search(r"[\x00-\x1f\x7f]", scope_id)
+    ):
+        raise ConfigurationError("V5_LEARNING_SCOPE_ID must be a nonblank identifier of at most 160 bytes")
+    for name in ("V5_LEARNING_SCOPE_SHA256", "V5_LEARNING_PROJECTION_REVISION"):
+        if not re.fullmatch(r"[0-9a-f]{64}", given[name]):
+            raise ConfigurationError(f"{name} must be 64 lowercase hex characters")
+    owner_url = given["V5_LEARNING_OWNER_URL"]
+    if urlsplit(owner_url).path not in {"", "/"} or "?" in owner_url or "#" in owner_url:
+        raise ConfigurationError("V5_LEARNING_OWNER_URL must not include a path, query or fragment")
+    scope_sha256 = given["V5_LEARNING_SCOPE_SHA256"]
+    try:
+        membership = load_scope_membership(scope_id, scope_sha256)
+    except ContractViolation as error:
+        raise ConfigurationError(str(error)) from error
+    return LearningProjectionConfig(
+        owner_url=_validate_base_url(owner_url, "V5_LEARNING_OWNER_URL"),
+        scope_id=scope_id,
+        scope_sha256=scope_sha256,
+        projection_revision=given["V5_LEARNING_PROJECTION_REVISION"],
+        membership=membership,
+    )
 
 
 def _validate_base_url(value: str, name: str) -> str:

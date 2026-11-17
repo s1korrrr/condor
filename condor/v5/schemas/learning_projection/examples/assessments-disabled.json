@@ -1,0 +1,11 @@
+{
+  "dataset": "assessments",
+  "http_status": 404,
+  "body": {
+    "schema": "research_knowledge.v5_projection_error.v1",
+    "owner": "research_os",
+    "code": "DATASET_NOT_ENABLED",
+    "retryable": false,
+    "snapshot_id": null
+  }
+}

@@ -34,6 +34,7 @@ from .dashboard import dashboard_profile, read_compatibility_path
 from .helm import read_helm_status
 from .money import MoneyLedger, daily as money_daily, helm_row, seconds_to_next_slot, v5_row
 from .learning import FixtureLearningAPI, learning_router
+from .learning_projection import PROJECTION_PATHS, ResearchOwnerLearningSource
 from .paper import PaperObservation, read_paper_status
 from .read_bridge import read_research, read_tradepad, research_route, tradepad_route
 from .state import StateCapacityError, WorkspaceState
@@ -256,7 +257,10 @@ class RequestBodyLimit:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope["method"] not in {"POST", "PUT", "PATCH"}:
+        if (
+            scope["type"] != "http" or scope["method"] not in {"POST", "PUT", "PATCH"}
+            or scope["path"] in PROJECTION_PATHS
+        ):
             return await self.app(scope, receive, send)
         data = bytearray()
         while True:
@@ -308,6 +312,7 @@ def create_app(
     static_dir: Path | None = None,
     clock=lambda: time.time_ns() // 1_000_000,
     learning_source: FixtureLearningAPI | None = None,
+    projection_source: ResearchOwnerLearningSource | None = None,
 ) -> FastAPI:
     config = settings or Settings.from_env()
     store = state or WorkspaceState(config.runtime_root, clock=clock)
@@ -451,14 +456,24 @@ def create_app(
         expected = dashboard_token()
         supplied = request.cookies.get(COOKIE_NAME, "")
         if not supplied or not hmac.compare_digest(supplied, expected):
+            if projection is not None and request.url.path in PROJECTION_PATHS:
+                projection.invalidate()
             raise HTTPException(401, detail={"code": "authentication_required"})
 
+    # Production projection source only when fully configured (V5_LEARNING_*); otherwise the routes answer a
+    # typed UNAVAILABLE. A fixture source is only ever injected explicitly (tests) and never replaces a failed read.
+    projection = projection_source or (
+        ResearchOwnerLearningSource(config.learning_projection, clock=clock)
+        if config.learning_projection is not None
+        else None
+    )
     app.include_router(
         learning_router(
             source=learning_source or FixtureLearningAPI(),
             require_auth=require_auth,
             check_origin=check_origin,
             now=clock,
+            projection=projection,
         )
     )
 
@@ -477,9 +492,14 @@ def create_app(
         if not 32 <= len(token) <= 256:
             return {"authenticated": False}
         supplied = request.cookies.get(COOKIE_NAME, "")
-        return {
-            "authenticated": bool(supplied and hmac.compare_digest(supplied, token))
-        }
+        authenticated = bool(supplied and hmac.compare_digest(supplied, token))
+        if authenticated and projection is not None:
+            return {
+                "authenticated": True,
+                "learning_scope_id": projection.config.scope_id,
+                "learning_scope_membership": projection.config.membership.summary(),
+            }
+        return {"authenticated": authenticated}
 
     def paper_observation() -> PaperObservation | None:
         """One bounded read of the configured paper status; None when not configured."""

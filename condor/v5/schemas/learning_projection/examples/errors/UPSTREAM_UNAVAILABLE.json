@@ -1,0 +1,7 @@
+{
+  "schema": "research_knowledge.v5_projection_error.v1",
+  "owner": "research_os",
+  "code": "UPSTREAM_UNAVAILABLE",
+  "retryable": true,
+  "snapshot_id": null
+}

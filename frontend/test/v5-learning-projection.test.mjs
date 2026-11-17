@@ -67,7 +67,10 @@ test('learning transport never accepts an authorizing result', async () => {
   const previous = globalThis.fetch;
   globalThis.fetch = async url => {
     calls.push(url);
-    return Response.json(url === '/api/v5/auth' ? { authenticated: true, learning_scope_id: manifest.scope.scope_id } : manifest);
+    const { scope_id, program_id, family_lane_pairs } = manifest.scope;
+    return Response.json(url === '/api/v5/auth'
+      ? { authenticated: true, learning_scope_id: scope_id, learning_scope_membership: { program_id, family_lane_pairs } }
+      : manifest);
   };
   try {
     await assert.rejects(learningRead('manifest'), error => error.status === 502 && error.code === 'INVALID_OWNER_PROJECTION');

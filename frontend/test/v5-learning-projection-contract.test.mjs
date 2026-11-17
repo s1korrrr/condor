@@ -15,7 +15,7 @@ const json = relative => JSON.parse(read(relative));
 const modules = frontendModules();
 const validate = modules.load('v5/learning-projection-validate.ts');
 const projection = modules.load('v5/learning-projection.ts');
-const { ProjectionStore } = modules.load('v5/learning-projection-store.ts');
+const { ProjectionStore, ProjectionFreshness } = modules.load('v5/learning-projection-store.ts');
 const ui = modules.load('v5/projection-ui.tsx');
 const render = (component, props) => renderToStaticMarkup(React.createElement(component, props));
 
@@ -36,7 +36,9 @@ async function rehash(document) {
   document.envelope_sha256 = await validate.sha256Hex(validate.canonicalJson(body));
   return document;
 }
-const check = (dataset, document, recordType) => validate.validateEnvelope(dataset, document, { recordType, maxAgeMs: MAX_AGE });
+const { scope_id, program_id, family_lane_pairs } = json('examples/manifest.json').scope;
+const membership = { program_id, family_lane_pairs };
+const check = (dataset, document, recordType) => validate.validateEnvelope(dataset, document, { recordType, maxAgeMs: MAX_AGE, scopeId: scope_id, membership });
 const recordType = path => path.includes('edges') ? 'edge' : path.includes('nodes') || path.includes('age') ? 'node' : undefined;
 const datasetOf = path => path.split('/').pop().split('-')[0].replace('.json', '');
 const aged = async seconds => {
@@ -56,6 +58,21 @@ test('published limits are the contract limits', () => {
   assert.equal(projection.MAX_PROJECTION_RESPONSE_BYTES, WIRE.limits.condor_response_decoded_bytes);
   assert.equal(projection.MIN_POLL_MS, FRESHNESS.schedule_interval_ms);
   assert.deepEqual([...projection.MANIFEST_DATASET_ORDER], WIRE.ordering.manifest_items);
+});
+
+test('whole-row byte limit accepts 8192 and rejects 8193 before the scalar budget', async () => {
+  const { checkRow } = frontendModules({}, { 'v5/learning-projection-validate.ts': ['checkRow'] }).load('v5/learning-projection-validate.ts');
+  const document = json('examples/records-nodes.json');
+  const row = document.items[0];
+  const size = () => Buffer.byteLength(validate.canonicalJson(row));
+  row.record_id += 'x'.repeat(8192 - size());
+  await rehash(document);
+  assert.equal(size(), 8192);
+  await assert.rejects(checkRow(row, 'row'), /scalar region/);
+  row.record_id += 'x';
+  await rehash(document);
+  assert.equal(size(), 8193);
+  await assert.rejects(checkRow(row, 'row'), /row exceeds 8192 bytes/);
 });
 
 // --- goldens -----------------------------------------------------------------------------------------------
@@ -176,9 +193,9 @@ test('ordering is strictly ascending record_id bytes', async () => {
 // --- readProjectionResult: transport + typed errors -------------------------------------------------------
 
 const response = (status, body, init = {}) => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, ...init });
-const fetcher = (handler, calls = [], scopeId = 'fixture-v5-lfl') => async (url, options) => {
+const fetcher = (handler, calls = [], scopeId = scope_id) => async (url, options) => {
   calls.push({ url, options });
-  if (url === '/api/v5/auth') return response(200, { authenticated: true, learning_scope_id: scopeId });
+  if (url === '/api/v5/auth') return response(200, { authenticated: true, learning_scope_id: scopeId, learning_scope_membership: membership });
   return handler(url, options);
 };
 const typed = code => json(`examples/errors/${code}.json`);
@@ -231,17 +248,108 @@ for (const key of ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__pr
   });
 }
 
-async function newGeneration(document) {
-  document.publication_sha256 = '9'.repeat(64);
+async function newGeneration(document, publication = '9', offset = 0) {
+  document.publication_sha256 = publication.repeat(64);
+  document.verified_at_ms += offset;
+  document.served_at_ms += offset;
   const { schema, projection_revision, scope: { scope_sha256 }, publication_sha256, database_sha256, source_revision, source_snapshot, event_signature } = document;
   document.snapshot_id = await validate.sha256Hex(validate.canonicalJson({ schema, projection_revision, scope_sha256, publication_sha256, database_sha256, source_revision, source_snapshot, event_signature }));
   return rehash(document);
 }
 
+test('retired generation cannot rebind through a dataset that never saw it', async () => {
+  const session = frontendModules().load('v5/learning-projection.ts');
+  const first = await newGeneration(json('examples/manifest.json'), '1');
+  const current = await newGeneration(json('examples/manifest.json'), '2', 39_000);
+  const retired = await newGeneration(json('examples/jobs.json'), '1', 40_000);
+  const fetchProjection = (dataset, body) => session.readProjectionResult(dataset, {}, undefined, fetcher(() => response(200, body)));
+  assert.equal((await fetchProjection('manifest', first)).ok, true);
+  assert.equal((await fetchProjection('manifest', current)).ok, true);
+  let clears = 0;
+  const unregister = session.registerProjectionStore({ clearForAuth() {}, clearForScopeChange() { clears += 1; } });
+  try {
+    const replay = await fetchProjection('jobs', retired);
+    assert.equal(replay.ok, false);
+    assert.equal(replay.error.code, 'SNAPSHOT_CHANGED');
+    assert.equal(clears, 0);
+  } finally { unregister(); }
+});
+
+test('older verification of another snapshot cannot replace the current generation', async () => {
+  const session = frontendModules().load('v5/learning-projection.ts');
+  const fetchProjection = async (dataset, file, publication, offset) => {
+    const body = await newGeneration(json(`examples/${file}.json`), publication, offset);
+    return session.readProjectionResult(dataset, dataset === 'records' ? { record_type: 'node' } : {}, undefined, fetcher(() => response(200, body)));
+  };
+  assert.equal((await fetchProjection('records', 'records-nodes', '1', 1000)).ok, true);
+  assert.equal((await fetchProjection('lessons', 'lessons', '1', 1000)).ok, true);
+  assert.equal((await fetchProjection('records', 'records-nodes', '2', 40_000)).ok, true);
+  assert.equal((await fetchProjection('lessons', 'lessons', '2', 40_000)).ok, true);
+  let clears = 0;
+  const unregister = session.registerProjectionStore({ clearForAuth() {}, clearForScopeChange() { clears += 1; } });
+  try {
+    const late = await fetchProjection('records', 'records-nodes', '1', 20_000);
+    assert.equal(late.ok, false);
+    assert.equal(late.error.code, 'SNAPSHOT_CHANGED');
+    assert.equal(clears, 0);
+  } finally { unregister(); }
+});
+
+test('retired UNAVAILABLE metadata does not authorize clearing a live page', async () => {
+  const session = frontendModules().load('v5/learning-projection.ts');
+  const first = await newGeneration(json('examples/records-nodes.json'), '1');
+  const current = await newGeneration(json('examples/records-nodes.json'), '2', 1);
+  const retired = await rehash({ ...first, status: 'UNAVAILABLE', items: [], reason_codes: ['VERIFICATION_EXPIRED'],
+    coverage: { ...first.coverage, state: 'UNAVAILABLE', returned_items: 0 } });
+  assert.equal(validate.schemaError('records', retired), null);
+  const request = body => session.readProjectionResult('records', { record_type: 'node' }, undefined, fetcher(() => response(200, body)));
+  assert.equal((await request(first)).ok, true);
+  assert.equal((await request(current)).ok, true);
+  const replay = await request(retired);
+  assert.equal(replay.ok, false);
+  assert.equal(replay.error.freshness, 'retired');
+});
+
+for (const status of [401, 409]) {
+  test(`direct reads after ${status} serve only until the original deadline`, async context => {
+    const session = frontendModules().load('v5/learning-projection.ts');
+    let now = 0;
+    context.mock.method(performance, 'now', () => now);
+    const body = json('examples/manifest.json');
+    body.served_at_ms = body.verified_at_ms + 89_000;
+    await rehash(body);
+    const request = (statusCode, payload) => session.readProjectionResult('manifest', {}, undefined, fetcher(() => response(statusCode, payload)));
+    assert.equal((await request(200, body)).ok, true);
+    assert.equal((await request(status, typed(status === 401 ? 'AUTHENTICATION_REQUIRED' : 'SNAPSHOT_CHANGED'))).error.status, status);
+    now = 500;
+    assert.equal((await request(200, body)).ok, true);
+    if (status === 401) assert.equal((await request(401, {})).error.status, 401);
+    now = 1001;
+    const replay = await request(200, body);
+    assert.equal(replay.ok, false);
+    assert.equal(replay.error.code, 'STALE_OR_EXPIRED');
+    const replayFetch = fetcher(() => response(200, body));
+    context.mock.method(globalThis, 'fetch', replayFetch);
+    await assert.rejects(session.readProjection('manifest'), error => error.error?.code === 'STALE_OR_EXPIRED');
+  });
+}
+
+test('trusted session membership rejects a resealed foreign program and its matching rows', async () => {
+  const session = frontendModules().load('v5/learning-projection.ts');
+  const body = json('examples/lessons.json');
+  body.scope.program_id = 'foreign-program';
+  for (const row of body.items) row.program_id = row.row_scope.program_id = 'foreign-program';
+  await rehash(body);
+  assert.equal(validate.schemaError('lessons', body), null);
+  const result = await session.readProjectionResult('lessons', {}, undefined, fetcher(() => response(200, body)));
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, 'INVALID_OWNER_PROJECTION');
+});
+
 test('an active generation change clears every registered dataset store', async () => {
-  projection.clearProjectionCaches();
+  const projection = frontendModules().load('v5/learning-projection.ts');
   const old = json('examples/manifest.json');
-  const next = await newGeneration(json('examples/jobs.json'));
+  const next = await newGeneration(json('examples/jobs.json'), '9', 1);
   const cleared = [];
   const unregister = ['manifest', 'jobs', 'records'].map(name => projection.registerProjectionStore({ clearForAuth() {}, clearForScopeChange: () => cleared.push(name) }));
   try {
@@ -252,9 +360,9 @@ test('an active generation change clears every registered dataset store', async 
 });
 
 test('a cancelled, valid response changes neither the scope nor the generation', async () => {
-  projection.clearProjectionCaches();
+  const projection = frontendModules().load('v5/learning-projection.ts');
   const current = json('examples/manifest.json');
-  const cancelled = await newGeneration(json('examples/manifest.json'));
+  const cancelled = await newGeneration(json('examples/manifest.json'), '9', 1);
   cancelled.scope.scope_id = 'alternate-scope';
   await rehash(cancelled);
   const cleared = [];
@@ -408,19 +516,60 @@ class FakeClock {
 }
 const settle = async () => { for (let i = 0; i < 8; i += 1) await Promise.resolve(); };
 
-function makeStore({ dataset = 'records', params = { record_type: 'node' }, pollMs = 30_000, answers = [] } = {}) {
-  const clock = new FakeClock();
+function makeStore({ dataset = 'records', params = { record_type: 'node' }, pollMs = 30_000, answers = [], clock = new FakeClock(), freshness } = {}) {
   const calls = [];
   const read = async (name, requested, signal) => {
     calls.push({ name, params: { ...requested }, signal });
     const answer = answers.shift();
     return typeof answer === 'function' ? answer(signal) : answer;
   };
-  const store = new ProjectionStore({ dataset, params, read, clock, maxAgeMs: MAX_AGE, pollMs });
+  const store = new ProjectionStore({ dataset, params, read, clock, maxAgeMs: MAX_AGE, pollMs, freshness });
   return { store, clock, calls, answers };
 }
 const ok = envelope => ({ ok: true, envelope });
 const fail = (status, code, extra = {}) => ({ ok: false, error: { status, code, retryable: status === 503, snapshot_id: null, unauthenticated: false, ...extra } });
+
+test('an older filter response keeps both filters’ independently expiring live pages', async () => {
+  const freshness = new ProjectionFreshness();
+  const clock = new FakeClock();
+  const old = await aged(10);
+  const newer = await newGeneration(structuredClone(old), '1', 10_000);
+  const first = await newGeneration(structuredClone(old), '1');
+  const older = await newGeneration(structuredClone(old), '3');
+  const other = makeStore({ clock, freshness, answers: [ok(newer)], params: { record_type: 'node', root_id: 'other' } });
+  const main = makeStore({ clock, freshness, answers: [ok(first), ok(first), ok(older)] });
+  main.store.start(); await settle();
+  await clock.advance(1000);
+  other.store.start(); await settle();
+  const displays = [main.store.getSnapshot(), other.store.getSnapshot()];
+  assert.deepEqual(displays.map(view => view.state), ['ready', 'ready']);
+  main.store.refresh(); await settle();
+  assert.deepEqual([main.store.getSnapshot(), other.store.getSnapshot()], displays);
+  main.store.refresh(); await settle();
+  assert.deepEqual([main.store.getSnapshot(), other.store.getSnapshot()], displays);
+  main.store.dispose(); other.store.dispose();
+});
+
+test('Condor ledger misses do not act like owner errors or clear a live filter', async () => {
+  const page = await aged(10);
+  const cases = [
+    ['retired', 409, 'SNAPSHOT_CHANGED', 'SNAPSHOT_CHANGED'],
+    ['ignored', 503, 'VERIFICATION_UNAVAILABLE', 'STALE_OR_EXPIRED'],
+    ['expired', 503, 'VERIFICATION_UNAVAILABLE', 'STALE_OR_EXPIRED'],
+  ];
+  for (const [freshness, status, wireCode, code] of cases) {
+    const result = await projection.readProjectionResult('records', { record_type: 'node' }, undefined, fetcher(() => response(status,
+      { ...typed(wireCode), snapshot_id: page.snapshot_id }, { headers: { 'X-V5-Projection-Freshness': freshness } })));
+    assert.equal(result.error.code, code);
+    assert.equal(result.error.freshness, freshness);
+    const { store } = makeStore({ pollMs: 0, answers: [ok(page), result] });
+    store.start(); await settle();
+    const live = store.getSnapshot();
+    store.refresh(); await settle();
+    assert.equal(store.getSnapshot(), live);
+    store.dispose();
+  }
+});
 
 test('rows are shown while fresh and cleared at verified_at + 90 s (not poll time)', async () => {
   const envelope = await aged(89);
@@ -479,7 +628,7 @@ test('a late older verification does not replace the displayed rows or their dea
 
 test('a tombstoned generation cannot replace the currently displayed generation', async () => {
   const old = await aged(10);
-  const current = await newGeneration(await aged(10));
+  const current = await newGeneration(await aged(10), '9', 1);
   const { store } = makeStore({ pollMs: 0, answers: [ok(old), ok(current), ok(old)] });
   store.start(); await settle();
   store.refresh(); await settle();
@@ -488,17 +637,18 @@ test('a tombstoned generation cannot replace the currently displayed generation'
   assert.equal(store.getSnapshot().envelope, current);
 });
 
-test('only a newer verification can recover after a receipt was invalidated', async () => {
+test('an invalidated page can recover before its original deadline', async () => {
   const first = await aged(10);
   const newer = { ...first, verified_at_ms: first.verified_at_ms + 1 };
   await rehash(newer);
-  const { store } = makeStore({ pollMs: 0, answers: [ok(first), fail(503, 'WARMING'), ok(first), ok(newer)] });
+  const { store, clock } = makeStore({ pollMs: 0, answers: [ok(first), fail(503, 'WARMING'), ok(first), ok(newer)] });
   store.start(); await settle();
   store.refresh(); await settle();
   assert.equal(store.getSnapshot().error.code, 'WARMING');
+  await clock.advance(1000);
   store.refresh(); await settle();
-  assert.equal(store.getSnapshot().state, 'unavailable');
-  assert.equal(store.getSnapshot().error, null);
+  assert.equal(store.getSnapshot().state, 'ready');
+  assert.equal(store.getSnapshot().expiresAt, 80_000);
   store.refresh(); await settle();
   assert.equal(store.getSnapshot().envelope, newer);
 });
@@ -541,7 +691,7 @@ test('409 clears the pages and waits for an explicit First', async () => {
   const page1 = json('examples/records-nodes.json');
   page1.page = { limit: 25, next_cursor: token, has_more: true };
   await rehash(page1);
-  const { store, calls, clock } = makeStore({ answers: [ok(page1), fail(409, 'SNAPSHOT_CHANGED'), ok(await newGeneration(await aged(5)))] });
+  const { store, calls, clock } = makeStore({ answers: [ok(page1), fail(409, 'SNAPSHOT_CHANGED'), ok(await newGeneration(await aged(5), '9', 1))] });
   store.start(); await settle();
   store.next(); await settle();
   const cleared = store.getSnapshot();
@@ -668,13 +818,17 @@ test('no fixture fallback exists in the projection modules', () => {
 
 // --- api.ts learningRead -----------------------------------------------------------------------------------
 
-test('learningRead(manifest) delegates to the validated projection and never falls back', async () => {
+test('learningRead(manifest) delegates to the validated projection and never falls back', async context => {
   const { learningRead } = frontendModules().load('v5/api.ts');
+  let now = 0;
+  context.mock.method(performance, 'now', () => now);
   const original = globalThis.fetch;
   try {
     globalThis.fetch = fetcher(() => response(200, read('examples/manifest.json')));
     const manifest = await learningRead('manifest');
     assert.equal(manifest.dataset, 'manifest');
+    now = 90_000;
+    await assert.rejects(learningRead('manifest'), error => error.status === 503 && error.code === 'STALE_OR_EXPIRED');
     globalThis.fetch = fetcher(() => response(503, typed('WARMING')));
     await assert.rejects(learningRead('manifest'), error => error.name === 'V5ApiError' && error.status === 503 && error.code === 'WARMING');
     globalThis.fetch = fetcher(() => response(200, '{"effect":"NONE","status":"FIXTURE_ONLY"}'));

@@ -250,7 +250,23 @@ export interface EnvelopeContext {
   recordType?: 'node' | 'edge';
   maxAgeMs: number;
   /** When given, scope/revision must equal these (the browser binds them from the first accepted envelope). */
-  expected?: { scopeId: string; scopeSha256: string; projectionRevision: string };
+  scopeId: string;
+  membership: ScopeMembership;
+}
+
+export interface ScopeMembership {
+  program_id: string;
+  family_lane_pairs: { family_id: string; lane: string }[];
+}
+
+export function readScopeMembership(value: unknown): ScopeMembership {
+  const scope = value as Partial<ScopeMembership> | null | undefined;
+  if (!scope || typeof scope.program_id !== 'string' || !scope.program_id || !Array.isArray(scope.family_lane_pairs)
+    || !scope.family_lane_pairs.length || !scope.family_lane_pairs.every(pair => pair && typeof pair.family_id === 'string'
+      && pair.family_id && ['SPOT', 'FUTURES', 'PROXY', 'MIXED'].includes(pair.lane))) {
+    throw new ContractViolation('missing or invalid trusted scope membership');
+  }
+  return scope as ScopeMembership;
 }
 
 const cLen = (value: unknown) => utf8Length(canonicalJson(value));
@@ -302,7 +318,7 @@ async function checkRow(row: Json, context: string): Promise<void> {
   for (const issue of issues) if (cLen(issue) > 256) throw new ContractViolation(`${context}: issue too large`);
   const { row_sha256: _hash, ...body } = row; // eslint-disable-line @typescript-eslint/no-unused-vars
   const encoded = canonicalJson(body);
-  if (utf8Length(encoded) + 76 > 8192) throw new ContractViolation(`${context}: row exceeds 8192 bytes`);
+  if (utf8Length(encoded) + 80 > 8192) throw new ContractViolation(`${context}: row exceeds 8192 bytes`);
   if (await sha256Hex(encoded) !== row.row_sha256) throw new ContractViolation(`${context}: row hash mismatch`);
   if (cLen(row.row_scope) > 768) throw new ContractViolation(`${context}: row_scope too large`);
   if (sumLen(sources) > 1024) throw new ContractViolation(`${context}: source region too large`);
@@ -360,12 +376,13 @@ export async function validateEnvelope(dataset: string, document: unknown, conte
   const envelope = document as Json;
   if (envelope.dataset !== dataset) throw new ContractViolation('envelope answers a different dataset');
   const scope = envelope.scope as Json | null;
-  const expected = context.expected;
-  if (expected) {
-    if (envelope.projection_revision !== expected.projectionRevision) throw new ContractViolation('projection revision mismatch');
-    if (scope !== null && (scope.scope_id !== expected.scopeId || scope.scope_sha256 !== expected.scopeSha256)) throw new ContractViolation('scope mismatch');
+  if (scope !== null && scope.scope_id !== context.scopeId) throw new ContractViolation('scope mismatch');
+  const pairs = (scope?.family_lane_pairs ?? []) as ScopeMembership['family_lane_pairs'];
+  const { family_lane_pairs: trustedPairs, program_id: program } = context.membership;
+  if (scope !== null && (scope.program_id !== program || pairs.length !== trustedPairs.length
+    || pairs.some((pair, index) => pair.family_id !== trustedPairs[index].family_id || pair.lane !== trustedPairs[index].lane))) {
+    throw new ContractViolation('scope membership differs from the trusted session scope');
   }
-  const pairs = (scope?.family_lane_pairs ?? []) as { family_id: string; lane: string }[];
   for (let index = 1; index < pairs.length; index += 1) {
     const left = pairs[index - 1];
     const right = pairs[index];
@@ -414,14 +431,13 @@ export async function validateEnvelope(dataset: string, document: unknown, conte
       continue;
     }
     const rowScope = item.row_scope as Json;
-    if (scope === null || !pairs.some(pair => pair.family_id === rowScope.family_id && pair.lane === rowScope.lane)) {
-      throw new ContractViolation(`${label}: row family/lane is outside the envelope scope`);
+    if (scope === null || !trustedPairs.some(pair => pair.family_id === rowScope.family_id && pair.lane === rowScope.lane)) {
+      throw new ContractViolation(`${label}: row family/lane is outside the pinned scope`);
     }
-    const program = scope.program_id;
     if ((rowScope.program_id !== null && rowScope.program_id !== program)
       || (rowScope.membership_basis === 'LESSON_PROGRAM' && rowScope.program_id !== program)
       || (Object.hasOwn(item, 'program_id') && item.program_id !== program)) {
-      throw new ContractViolation(`${label}: row program is outside the envelope scope`);
+      throw new ContractViolation(`${label}: row program is outside the pinned scope`);
     }
     const window = (rowScope.recorded_scope as Json | null)?.window;
     if (window && typeof window === 'object') {

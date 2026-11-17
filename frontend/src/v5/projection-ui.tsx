@@ -100,12 +100,13 @@ const ERROR_TEXT: Record<string, string> = {
  * One truthful status line for a dataset. Pass the shown envelope (if any), the hook
  * state and the typed error. UNAVAILABLE/expired/failed states never show rows.
  */
-export function ProjectionStatusBanner({ state, envelope, error, onFirst, children }: {
+export function ProjectionStatusBanner({ state, envelope, error, onFirst, allowRetiredFirst = false, children }: {
   state: ProjectionViewState;
   envelope?: BannerEnvelope | null;
   error?: ProjectionError | null;
   /** Offered after a 409 SNAPSHOT_CHANGED. */
   onFirst?: () => void;
+  allowRetiredFirst?: boolean;
   children?: ReactNode;
 }) {
   if (state === 'loading') return <div className="v5-panel mb-4" role="status"><strong>Loading owner projection</strong></div>;
@@ -120,7 +121,7 @@ export function ProjectionStatusBanner({ state, envelope, error, onFirst, childr
       <strong>UNAVAILABLE{error ? ` · ${code}` : ''}</strong>
       <p>{error?.freshness === 'retired' ? 'The response belongs to a retired snapshot.' : (ERROR_TEXT[code] ?? 'The owner projection is unavailable.')}</p>
       {envelope && envelope.reason_codes.length > 0 && <p className="text-xs">{envelope.reason_codes.join(', ')}</p>}
-      {error?.code === 'SNAPSHOT_CHANGED' && !error.freshness && onFirst && <button type="button" onClick={onFirst}>First page</button>}
+      {error?.code === 'SNAPSHOT_CHANGED' && (!error.freshness || (error.freshness === 'retired' && allowRetiredFirst)) && onFirst && <button type="button" onClick={onFirst}>First page</button>}
       {children}
     </div>;
   }

@@ -494,11 +494,18 @@ def create_app(
         supplied = request.cookies.get(COOKIE_NAME, "")
         authenticated = bool(supplied and hmac.compare_digest(supplied, token))
         if authenticated and projection is not None:
-            return {
+            scope = {
                 "authenticated": True,
                 "learning_scope_id": projection.config.scope_id,
                 "learning_scope_membership": projection.config.membership.summary(),
             }
+            if projection.config.stage_b:
+                return {
+                    **scope,
+                    "learning_scope_sha256": projection.config.scope_sha256,
+                    "learning_projection_revision": projection.config.projection_revision,
+                }
+            return scope
         return {"authenticated": authenticated}
 
     def paper_observation() -> PaperObservation | None:

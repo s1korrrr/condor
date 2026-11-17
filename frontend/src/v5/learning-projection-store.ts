@@ -9,8 +9,10 @@
  *   - a poll that returns the same `verified_at_ms` cannot extend expiry.
  */
 import type {
-  PagedDataset, ProjectionDataset, ProjectionEnvelope, ProjectionError, ProjectionParams, ProjectionViewState,
+  AssessmentRow, PagedDataset, ProjectionDataset, ProjectionEnvelope, ProjectionError, ProjectionParams, ProjectionViewState, UnavailableRowStub,
 } from './learning-projection';
+import { AssessmentTraversal } from './factory-assessment-relationships';
+import { STAGE_B_REVISION } from './learning-projection-schemas';
 
 export type StoreRead = (
   dataset: ProjectionDataset, params: ProjectionParams, signal: AbortSignal,
@@ -34,6 +36,7 @@ export interface StoreSnapshot {
   snapshotChanged: boolean;
   /** Monotonic instant at which the shown data expires, or null. */
   expiresAt: number | null;
+  assessmentRelationships?: ReadonlyMap<string, string> | null;
 }
 
 export interface StoreOptions {
@@ -108,6 +111,7 @@ export class ProjectionStore {
   private listeners = new Set<() => void>();
   /** `stack[i]` is the opaque cursor that fetches page i (null = first page). Never decoded. */
   private stack: (string | null)[] = [null];
+  private admittedRevision: string | null = null;
   private controller: AbortController | null = null;
   private expiryTimer: unknown = null;
   private pollTimer: unknown = null;
@@ -115,6 +119,7 @@ export class ProjectionStore {
 
   private options: StoreOptions;
   private freshness: ProjectionFreshness;
+  private assessmentTraversal = new AssessmentTraversal();
 
   constructor(options: StoreOptions) {
     this.options = options;
@@ -130,6 +135,8 @@ export class ProjectionStore {
     this.clearTimers();
     this.options = { ...this.options, ...next };
     this.stack = [null];
+    this.admittedRevision = null;
+    this.assessmentTraversal.clear();
     this.set({ ...INITIAL });
   }
 
@@ -139,10 +146,10 @@ export class ProjectionStore {
     if (this.snapshot.state !== 'unauthenticated') void this.load(this.snapshot.pageIndex);
   };
   refresh = () => { void this.load(this.snapshot.pageIndex); };
-  first = () => { this.stack = [null]; void this.load(0, true); };
+  first = () => { this.stack = [null]; this.assessmentTraversal.clear(); void this.load(0, true); };
   next = () => {
     const cursor = this.snapshot.envelope?.page.next_cursor;
-    if (!cursor) return;
+    if (!this.snapshot.hasNext || !cursor) return;
     const index = this.snapshot.pageIndex + 1;
     this.stack = [...this.stack.slice(0, index), cursor];
     void this.load(index);
@@ -157,6 +164,8 @@ export class ProjectionStore {
     this.abort();
     this.clearTimers();
     this.stack = [null];
+    this.admittedRevision = null;
+    this.assessmentTraversal.clear();
     this.set({ ...INITIAL, state: 'unauthenticated', error: { status: 401, code: 'authentication_required', retryable: false, snapshot_id: null, unauthenticated: true } });
   }
 
@@ -165,6 +174,8 @@ export class ProjectionStore {
     if (this.disposed || this.snapshot.state === 'unauthenticated') return;
     this.clearTimers();
     this.stack = [null];
+    this.admittedRevision = null;
+    this.assessmentTraversal.clear();
     this.set({ ...INITIAL });
     void this.load(0, true);
   }
@@ -174,6 +185,7 @@ export class ProjectionStore {
     this.disposed = true;
     this.abort();
     this.clearTimers();
+    this.assessmentTraversal.clear();
   }
 
   // --- internals -----------------------------------------------------------------------------------
@@ -208,6 +220,7 @@ export class ProjectionStore {
   }
 
   private async load(pageIndex: number, announce = false) {
+    if (pageIndex >= this.stack.length) pageIndex = 0;
     this.abort();
     this.clearPoll();
     const controller = new AbortController();
@@ -219,13 +232,15 @@ export class ProjectionStore {
       this.clearExpiry();
       this.set({ ...INITIAL, pageIndex, hasPrevious: pageIndex > 0, state: 'loading' });
     }
-    const result = await this.options.read(this.options.dataset, { ...this.options.params, cursor: this.stack[pageIndex] ?? undefined }, controller.signal);
+    const cursor = this.stack[pageIndex] ?? null;
+    const result = await this.options.read(this.options.dataset, { ...this.options.params, cursor: cursor ?? undefined }, controller.signal);
     if (controller.signal.aborted || this.disposed || this.controller !== controller) return; // superseded: ignore
     this.controller = null;
     const dataset = this.options.dataset;
     if (!result.ok) {
       if (result.error.freshness) return this.freshnessMiss(result.error, pageIndex);
       this.clearExpiry();
+      this.assessmentTraversal.clear();
       return this.fail(result.error, pageIndex);
     }
     const envelope = result.envelope;
@@ -237,35 +252,55 @@ export class ProjectionStore {
       if (admission.miss) return this.freshnessMiss(freshnessError(admission.miss, envelope.snapshot_id), pageIndex);
       expiresAt = admission.expiresAt;
     }
+    if (expiresAt !== null && expiresAt <= now) return this.freshnessMiss(freshnessError('expired', envelope.snapshot_id), pageIndex);
+    this.admittedRevision = envelope.projection_revision;
     if (expiresAt === null) {
       this.clearExpiry();
-      this.set({ ...this.cleared(null, { pageIndex }), envelope });
+      this.assessmentTraversal.clear();
+      if (envelope.projection_revision === STAGE_B_REVISION) {
+        this.stack = [null];
+        pageIndex = 0;
+      }
+      this.set({ ...this.cleared(null, { pageIndex, hasPrevious: pageIndex > 0 }), envelope });
       return this.schedulePoll();
     }
-    if (expiresAt <= now) return this.freshnessMiss(freshnessError('expired', envelope.snapshot_id), pageIndex);
     this.clearExpiry();
+    const assessmentRelationships = dataset === 'assessments'
+      ? this.assessmentTraversal.observe(envelope as ProjectionEnvelope<AssessmentRow | UnavailableRowStub>, pageIndex, cursor, this.options.params.idea_revision_id)
+      : null;
     this.set({
       state: 'ready', envelope, error: null, pageIndex, hasNext: envelope.page.next_cursor !== null, hasPrevious: pageIndex > 0, snapshotChanged: false, expiresAt,
+      assessmentRelationships,
     });
     this.expiryTimer = clock.setTimeout(() => this.expire(), Math.max(0, expiresAt - clock.now()));
     this.schedulePoll();
   }
 
   private freshnessMiss(error: ProjectionError, pageIndex: number) {
+    const resumeIndex = this.resetFailedContinuation(pageIndex);
     if (this.snapshot.expiresAt === null || this.snapshot.expiresAt <= this.options.clock.now()) {
       this.clearExpiry();
-      if (error.freshness === 'expired' || this.snapshot.state === 'expired') {
-        this.set(this.cleared(error, { state: 'expired', pageIndex }));
-      } else {
-        this.set(this.cleared(error, { pageIndex }));
-      }
+      this.assessmentTraversal.clear();
+      if (error.freshness === 'retired' && this.admittedRevision === STAGE_B_REVISION) return this.fail(error, resumeIndex);
+      const state = error.freshness === 'expired' || this.snapshot.state === 'expired' ? 'expired' : 'unavailable';
+      this.set(this.cleared(error, { state, pageIndex: resumeIndex, hasPrevious: resumeIndex > 0 }));
+    } else if (resumeIndex !== pageIndex) {
+      this.assessmentTraversal.clear();
+      this.set({ ...this.snapshot, hasNext: false, assessmentRelationships: null });
     }
     this.schedulePoll();
+  }
+
+  private resetFailedContinuation(pageIndex: number) {
+    if (pageIndex === 0 || this.admittedRevision !== STAGE_B_REVISION) return pageIndex;
+    this.stack = [null];
+    return 0;
   }
 
   /** The shown data is older than the contract allows: clear it. Polling continues so the page can recover. */
   private expire() {
     this.expiryTimer = null;
+    this.assessmentTraversal.clear();
     this.set({ ...INITIAL, state: 'expired', pageIndex: this.snapshot.pageIndex, hasPrevious: this.snapshot.pageIndex > 0 });
     if (this.controller === null && this.pollTimer === null) this.schedulePoll();
   }
@@ -277,7 +312,8 @@ export class ProjectionStore {
       this.set({ ...INITIAL, state: 'unavailable', error, snapshotChanged: error.code === 'SNAPSHOT_CHANGED', pageIndex: 0 });
       return;
     }
-    this.set({ ...this.cleared(error, { pageIndex }) });
+    pageIndex = this.resetFailedContinuation(pageIndex);
+    this.set(this.cleared(error, { pageIndex, hasPrevious: pageIndex > 0 }));
     this.schedulePoll();
   }
 

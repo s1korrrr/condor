@@ -1,0 +1,1265 @@
+{
+  "schema": "research_knowledge.v5_read_projection.v1",
+  "owner": "research_os",
+  "authority": "READ_ONLY",
+  "effect": "NONE",
+  "dataset": "candidates",
+  "scope": {
+    "scope_id": "v5-okx-spot-dca",
+    "program_id": "okx_spot_dca",
+    "family_lane_pairs": [
+      {
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT"
+      }
+    ],
+    "scope_sha256": "ac251f1a1cb75eb8890c1b8598046ef40ac79d7775a6284835851318b25abd66"
+  },
+  "projection_revision": "a24cf24b124c983d89b57779d5c1f9cbab7d2176c5c7dc3ef91896a1d5e08601",
+  "snapshot_id": "30815f5eec2d39e41f84da1e0c7957c8ed20ede8783118f14509518cb788df0c",
+  "publication_sha256": "dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e",
+  "database_sha256": "a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482",
+  "source_revision": "fixture-source-r1",
+  "source_snapshot": "fixture-source-s1",
+  "event_signature": "fixture-events-e1",
+  "status": "PARTIAL",
+  "reason_codes": [
+    "INDEX_INCOMPLETE",
+    "OMITTED_CONTENT"
+  ],
+  "generated_at_ms": 1794916620000,
+  "verified_at_ms": 1794916800000,
+  "served_at_ms": 1794916801000,
+  "coverage": {
+    "state": "PARTIAL",
+    "total_items": 52,
+    "returned_items": 25,
+    "omitted_items": 0,
+    "unresolved_membership_items": 0,
+    "excluded_proposed_edges": 0,
+    "pending_events": 0
+  },
+  "page": {
+    "limit": 25,
+    "next_cursor": "AQQAAABVrCUfGhy3XriJDBuFmARu9ArHnXd1pihINYUTGLJavWaiTPJLEkyYPYm1d3nVwfnLq30hdsXH3D75GJah1eCGATCBX17sLTnkH4TaHgx5V8jtIO3oeDEY8UUJUYy3iN8MRBNvo1WzZ4oRRq0W9-hknpT7T8If536DEMBg9hyq_4ppZGVhOm9reC1ydXVqc3MtMjA5ODQ2MTY2MTg0MTc0NDIyNy10c2ZyZXNoOnJldmlzaW9uOjAxYjEzNGEwNjk2MjM5Y2IyOGFmYzkxZWFiMDU2YzRhAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "has_more": true
+  },
+  "items": [
+    {
+      "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:0270bd4091a8fc16db8601934050cf5c",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-0270bd4091a8fc16db8601934050cf5c376bd4519ce1a1c46da202b78530846c.json",
+          "pointer": "/nodes/1",
+          "sha256": "0725c9b6b0b7955dd8d380216aedfde8865f6e90034cc482cf95e016916aeb4f",
+          "bytes": 9659
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:0270bd4091a8fc16db8601934050cf5c",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909",
+      "idea_revision_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:0270bd4091a8fc16db8601934050cf5c",
+      "title": "Frozen non-episode owner-replay baseline on the required cached corpus",
+      "hypothesis": "current ok_rsi with episode_enabled false, bound to a frozen owner snapshot and ok_rsi_bnb.yml, completes one exclusive local owner-action replay over scored UTC 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive, with hash-sealed cache, config, source, and result receipts. That artifact is the same-window owner comparison later candidates must use. Historical C0 proxy PnL (+96.5086290244 USDC, 12 BUY including 4 DCA, July 0) is not this baseline.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "c23eaf5fa3508110afa0682ae5058f09593a8ba7caae7a56d129b55c437dde20",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:06f8979a7fd0bc77f5f7d055bf926cc1",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-06f8979a7fd0bc77f5f7d055bf926cc16d53dd2dff042f176ef165b8c929b561.json",
+          "pointer": "/nodes/1",
+          "sha256": "cf848b7015058be64e0d7ccde4e4b490bf346c7e115001e257c5c706fcc73577",
+          "bytes": 8928
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:06f8979a7fd0bc77f5f7d055bf926cc1",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909",
+      "idea_revision_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:06f8979a7fd0bc77f5f7d055bf926cc1",
+      "title": "Frozen non-episode owner-replay baseline on the required cached corpus",
+      "hypothesis": "current ok_rsi with episode_enabled false, bound to a frozen owner snapshot and ok_rsi_bnb.yml, completes one exclusive local owner-action replay over scored UTC 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive, with hash-sealed cache, config, source, and result receipts. That artifact is the same-window owner comparison later candidates must use. Historical C0 proxy PnL (+96.5086290244 USDC, 12 BUY including 4 DCA, July 0) is not this baseline.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "9ff3286cc21d2e00ffe67480b55de40cf40950a031e5a4581d0500c13702fdf2",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:0d4b5fa41a85f01abd656eede67d15a0",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-0d4b5fa41a85f01abd656eede67d15a0b847f16f09954c42ff3997809e9c22ba.json",
+          "pointer": "/nodes/1",
+          "sha256": "b0f5c406bda0f7274ffaa6033aa79cc77a4cab753378ec346c1b90078555ad0a",
+          "bytes": 9596
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:0d4b5fa41a85f01abd656eede67d15a0",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909",
+      "idea_revision_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:0d4b5fa41a85f01abd656eede67d15a0",
+      "title": "Frozen non-episode owner-replay baseline on the required cached corpus",
+      "hypothesis": "current ok_rsi with episode_enabled false, bound to a frozen owner snapshot and ok_rsi_bnb.yml, completes one exclusive local owner-action replay over scored UTC 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive, with hash-sealed cache, config, source, and result receipts. That artifact is the same-window owner comparison later candidates must use. Historical C0 proxy PnL (+96.5086290244 USDC, 12 BUY including 4 DCA, July 0) is not this baseline.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "7fa6ded4517da37200b227b1105ae9217200d85f25fccf371f23ca07cb522162",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:170b5b4cc00c991d378fd2669c2a08ad",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-170b5b4cc00c991d378fd2669c2a08ad1e5d94f48c282ff230e747d209f7d334.json",
+          "pointer": "/nodes/1",
+          "sha256": "d84d206ae4f97ba86665e843e4bef161bfe02b439d6da75e1de9c7d551b919e2",
+          "bytes": 7433
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:170b5b4cc00c991d378fd2669c2a08ad",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909",
+      "idea_revision_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:170b5b4cc00c991d378fd2669c2a08ad",
+      "title": "Frozen non-episode owner-replay baseline on the required cached corpus",
+      "hypothesis": "current ok_rsi with episode_enabled false, bound to a frozen owner snapshot and ok_rsi_bnb.yml, completes one exclusive local owner-action replay over scored UTC 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive, with hash-sealed cache, config, source, and result receipts. That artifact is the same-window owner comparison later candidates must use. Historical C0 proxy PnL (+96.5086290244 USDC, 12 BUY including 4 DCA, July 0) is not this baseline.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "8dd2d52935a5326613d54c6500b078164675ca9cb253316c4a43f4341b5f8ba4",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:1e652215819b9be83be068ca2a2bc2b7",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-1e652215819b9be83be068ca2a2bc2b7e9ca40ce535034a243af7e49c45fd77e.json",
+          "pointer": "/nodes/1",
+          "sha256": "b59d60f3bfe8dc57d8b56a06a64f568c634b27ac4ac2216c5e9ed6ed7d85d574",
+          "bytes": 8178
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:1e652215819b9be83be068ca2a2bc2b7",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909",
+      "idea_revision_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:1e652215819b9be83be068ca2a2bc2b7",
+      "title": "Frozen non-episode owner-replay baseline on the required cached corpus",
+      "hypothesis": "current ok_rsi with episode_enabled false, bound to a frozen owner snapshot and ok_rsi_bnb.yml, completes one exclusive local owner-action replay over scored UTC 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive, with hash-sealed cache, config, source, and result receipts. That artifact is the same-window owner comparison later candidates must use. Historical C0 proxy PnL (+96.5086290244 USDC, 12 BUY including 4 DCA, July 0) is not this baseline.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "cd4dd1724805b6a339ff9acbc5ac7b706119fb342463808277277cc0f7ec50ca",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:40416439cec795adaea0262b0b98ff2b",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-40416439cec795adaea0262b0b98ff2b8f30ee7aa3e5476899002763c1e4936f.json",
+          "pointer": "/nodes/1",
+          "sha256": "f1e5afb04aa3393127737cb5ab4e1cfaa01f85c55481033d39fef6d9b2fc5376",
+          "bytes": 11305
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:40416439cec795adaea0262b0b98ff2b",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909",
+      "idea_revision_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:40416439cec795adaea0262b0b98ff2b",
+      "title": "Frozen non-episode owner-replay baseline on the required cached corpus",
+      "hypothesis": "current ok_rsi with episode_enabled false, bound to a frozen owner snapshot and ok_rsi_bnb.yml, completes one exclusive local owner-action replay over scored UTC 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive, with hash-sealed cache, config, source, and result receipts. That artifact is the same-window owner comparison later candidates must use. Historical C0 proxy PnL (+96.5086290244 USDC, 12 BUY including 4 DCA, July 0) is not this baseline.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "3a29d341a8f94299f44e987086ad52405cdbf5971ada5467ae274a86201f9c9b",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:457d6fa7169c35d4e2730b0f5d792f82",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-457d6fa7169c35d4e2730b0f5d792f82d14854dda5da5100e26e01a105e5f64c.json",
+          "pointer": "/nodes/1",
+          "sha256": "f77afc37d110ceb8f5378a0b355da199b3b43e507f22aa997327eaaf6204a694",
+          "bytes": 10634
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:457d6fa7169c35d4e2730b0f5d792f82",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909",
+      "idea_revision_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:457d6fa7169c35d4e2730b0f5d792f82",
+      "title": "Frozen non-episode owner-replay baseline on the required cached corpus",
+      "hypothesis": "current ok_rsi with episode_enabled false, bound to a frozen owner snapshot and ok_rsi_bnb.yml, completes one exclusive local owner-action replay over scored UTC 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive, with hash-sealed cache, config, source, and result receipts. That artifact is the same-window owner comparison later candidates must use. Historical C0 proxy PnL (+96.5086290244 USDC, 12 BUY including 4 DCA, July 0) is not this baseline.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "7efe313d9a54467d94a9529cbdb54f0297fd59e48a15e2c5d2c4ee0c86ce141a",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:627a40b723f5886a6c6e011fe357058a",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-627a40b723f5886a6c6e011fe357058aa3e6c8887bc99aa49f6b547e987c7bb4.json",
+          "pointer": "/nodes/1",
+          "sha256": "58d0c43a532f5feb73ee2c12faca456b392201628979838fcf38804bd6a3822d",
+          "bytes": 9009
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:627a40b723f5886a6c6e011fe357058a",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909",
+      "idea_revision_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:627a40b723f5886a6c6e011fe357058a",
+      "title": "Frozen non-episode owner-replay baseline on the required cached corpus",
+      "hypothesis": "current ok_rsi with episode_enabled false, bound to a frozen owner snapshot and ok_rsi_bnb.yml, completes one exclusive local owner-action replay over scored UTC 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive, with hash-sealed cache, config, source, and result receipts. That artifact is the same-window owner comparison later candidates must use. Historical C0 proxy PnL (+96.5086290244 USDC, 12 BUY including 4 DCA, July 0) is not this baseline.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "5ffeeb8f1036f3877c368c18f8f70cf9406a7d6d3d379c3af0de6b916d5941f4",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:8923252af7ed23ab04c678f6b445bfe4",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-8923252af7ed23ab04c678f6b445bfe48114eb085026f0add85f3826930d2cd7.json",
+          "pointer": "/nodes/1",
+          "sha256": "a2a4409e7f5b6163a1e86758470345598649dbb1f40bb30069757ff4858d3331",
+          "bytes": 10520
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:8923252af7ed23ab04c678f6b445bfe4",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909",
+      "idea_revision_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:8923252af7ed23ab04c678f6b445bfe4",
+      "title": "Frozen non-episode owner-replay baseline on the required cached corpus",
+      "hypothesis": "current ok_rsi with episode_enabled false, bound to a frozen owner snapshot and ok_rsi_bnb.yml, completes one exclusive local owner-action replay over scored UTC 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive, with hash-sealed cache, config, source, and result receipts. That artifact is the same-window owner comparison later candidates must use. Historical C0 proxy PnL (+96.5086290244 USDC, 12 BUY including 4 DCA, July 0) is not this baseline.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "577b2089ed5c6d8b3cd9bbdfaef3bd2531a8816af8c16258a186a71f97e9ec41",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:ec3b734f4c291386ef4ece834a014832",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-ec3b734f4c291386ef4ece834a0148324b7bab6d8c2f177173774d850eb56d3e.json",
+          "pointer": "/nodes/1",
+          "sha256": "9c97765584a7a8a9de2e2ff7cb0392f8d49da90a3675356af0388708968f7e0f",
+          "bytes": 12153
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:ec3b734f4c291386ef4ece834a014832",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909",
+      "idea_revision_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:ec3b734f4c291386ef4ece834a014832",
+      "title": "Frozen non-episode owner-replay baseline on the required cached corpus",
+      "hypothesis": "current ok_rsi with episode_enabled false, bound to a frozen owner snapshot and ok_rsi_bnb.yml, completes one exclusive local owner-action replay over scored UTC 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive, with hash-sealed cache, config, source, and result receipts. That artifact is the same-window owner comparison later candidates must use. Historical C0 proxy PnL (+96.5086290244 USDC, 12 BUY including 4 DCA, July 0) is not this baseline.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "aed0ef3343997a4e4b0c6a0942b9d71b09db1b86f3fa0751357256ee8d016f28",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:f70c8ad092771d9a318e9a695cec56a1",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-f70c8ad092771d9a318e9a695cec56a127365740e4176af987202ee469e70121.json",
+          "pointer": "/nodes/1",
+          "sha256": "b545049f8798f62c98d2f9760fded56babb78e91a98478d40bed0eabd4dfe8ae",
+          "bytes": 8970
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:f70c8ad092771d9a318e9a695cec56a1",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909",
+      "idea_revision_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:f70c8ad092771d9a318e9a695cec56a1",
+      "title": "Frozen non-episode owner-replay baseline on the required cached corpus",
+      "hypothesis": "current ok_rsi with episode_enabled false, bound to a frozen owner snapshot and ok_rsi_bnb.yml, completes one exclusive local owner-action replay over scored UTC 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive, with hash-sealed cache, config, source, and result receipts. That artifact is the same-window owner comparison later candidates must use. Historical C0 proxy PnL (+96.5086290244 USDC, 12 BUY including 4 DCA, July 0) is not this baseline.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "7c5d69be4b2e4c97c391833be5446507b9d9940169c8a8c97a859eddbb5890c9",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:27dac04a136a06417e6bd653709a301f",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-27dac04a136a06417e6bd653709a301f9e3107517616cd0461acf6891f2b628a.json",
+          "pointer": "/nodes/1",
+          "sha256": "eb32b33380ee00427b6d48fe2f156621d712bd2b872c71c84d41400a06b46ea0",
+          "bytes": 13519
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:27dac04a136a06417e6bd653709a301f",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:27dac04a136a06417e6bd653709a301f",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910",
+      "idea_revision_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:27dac04a136a06417e6bd653709a301f",
+      "title": "Restrict-only g with 1h EWMAC when 1d forecast is not ready",
+      "hypothesis": "After live RSI/DCA has produced a new BUY plan, multiply new BUY planned USD only by restrict-only g in [0,1]. Clip formula stays g=clip((f+20)/40,0,1) with Fmax=20. Forecast f is the equal-weight average of EWMAC 16/64 on completed 1h and EWMAC 16/64 on completed 1d when both forecasts are ready. If the 1h forecast is ready and the 1d forecast is not ready (EWMAC warmup), use the 1h forecast only; do not zero g_trend and do not treat a missing 1d forecast as t7 skip-missing-pair. If the 1h forecast is also",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "18f338926b5243d6742c36d302e9beffc22c765f173e81f357848c3468f0e2e0",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:3a3abc9a0d28501b4dcb0a1e0436fed4",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-3a3abc9a0d28501b4dcb0a1e0436fed437b9ef2a9c9aaae19fcd7d4f434fccbe.json",
+          "pointer": "/nodes/1",
+          "sha256": "aea7b26aa433f281071a4ab95250c57216f624c7af865de5c0318cf905447c2f",
+          "bytes": 12255
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:3a3abc9a0d28501b4dcb0a1e0436fed4",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:3a3abc9a0d28501b4dcb0a1e0436fed4",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910",
+      "idea_revision_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:3a3abc9a0d28501b4dcb0a1e0436fed4",
+      "title": "Restrict-only continuous g(f) on new ok_rsi BUY planned USD",
+      "hypothesis": "After live RSI/DCA has produced a new BUY plan, multiply new BUY planned USD only by restrict-only g in [0,1] from an equal-weight average of EWMAC 16/64 on completed 1h and EWMAC 16/64 on completed 1d (derived from 1m via derive_higher_timeframe_candles), mapped g=clip((f+20)/40,0,1), with B2 a completed 1h ATR% warmup-median control and B3 the product. Leave RSI timing, 5m/15m ADX confirmation, trailing, and exits unchanged. Skip sub-min instead of uplift. Candidate in a quants-lab replay wrapper, not liv",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "e61ac5ca54be655d8dd376c79667282327861f3ebec910d94bc79b447ab70427",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:5b658e75fd4d876c63e2613ab6d56d75",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-5b658e75fd4d876c63e2613ab6d56d7542251c7ff7d2bf116472405f56d5144c.json",
+          "pointer": "/nodes/1",
+          "sha256": "5eba123e6e0a8aba4682c74c9c27dade388b77c4c491c2d1bbab716d9df724c7",
+          "bytes": 10962
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:5b658e75fd4d876c63e2613ab6d56d75",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:5b658e75fd4d876c63e2613ab6d56d75",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910",
+      "idea_revision_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:5b658e75fd4d876c63e2613ab6d56d75",
+      "title": "Restrict-only continuous g(f) on new ok_rsi BUY planned USD",
+      "hypothesis": "After live RSI/DCA has produced a new BUY plan, multiply new BUY planned USD only by restrict-only g in [0,1] from an equal-weight average of EWMAC 16/64 on completed 1h and EWMAC 16/64 on completed 1d (derived from 1m via derive_higher_timeframe_candles), mapped g=clip((f+20)/40,0,1), with B2 a completed 1h ATR% warmup-median control and B3 the product. Leave RSI timing, 5m/15m ADX confirmation, trailing, and exits unchanged. Skip sub-min instead of uplift. Candidate in a quants-lab replay wrapper, not liv",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "b64ff4aaa28a7e35edf51a5f5f882bf122c38292c5d200afe0d6f7aa3a3ecdc5",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:6d35098f097c568bab00e3ca5eb54ddc",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-6d35098f097c568bab00e3ca5eb54ddcbe5bac8ee8ecb924bbe2926bc9512ac8.json",
+          "pointer": "/nodes/1",
+          "sha256": "84aff10dda0197ddad617fcb0c0291096d1aab9db1ea63a15bb5026beaa23c43",
+          "bytes": 13197
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:6d35098f097c568bab00e3ca5eb54ddc",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:6d35098f097c568bab00e3ca5eb54ddc",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910",
+      "idea_revision_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:6d35098f097c568bab00e3ca5eb54ddc",
+      "title": "Restrict-only continuous g(f) on new ok_rsi BUY planned USD",
+      "hypothesis": "After live RSI/DCA has produced a new BUY plan, multiply new BUY planned USD only by restrict-only g in [0,1] from an equal-weight average of EWMAC 16/64 on completed 1h and EWMAC 16/64 on completed 1d (derived from 1m via derive_higher_timeframe_candles), mapped g=clip((f+20)/40,0,1), with B2 a completed 1h ATR% warmup-median control and B3 the product. Leave RSI timing, 5m/15m ADX confirmation, trailing, and exits unchanged. Skip sub-min instead of uplift. Candidate in a quants-lab replay wrapper, not liv",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "1aa22eeb6e0ac8b3b862dcb68de08903a263f46ed2b2bc2c8d74a54bb2d89ce2",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:aebfbdc0ac812e95fe7f390dd6fdcdea",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-aebfbdc0ac812e95fe7f390dd6fdcdea54d8ef047d71c084ef91b52623c984cd.json",
+          "pointer": "/nodes/1",
+          "sha256": "be5ecb15f4253644d6569b925475ab36620e7529453a9c309970f5efcb83f2d6",
+          "bytes": 13161
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:aebfbdc0ac812e95fe7f390dd6fdcdea",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:aebfbdc0ac812e95fe7f390dd6fdcdea",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910",
+      "idea_revision_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:aebfbdc0ac812e95fe7f390dd6fdcdea",
+      "title": "Restrict-only continuous g(f) on new ok_rsi BUY planned USD",
+      "hypothesis": "After live RSI/DCA has produced a new BUY plan, multiply new BUY planned USD only by restrict-only g in [0,1] from an equal-weight average of EWMAC 16/64 on completed 1h and EWMAC 16/64 on completed 1d (derived from 1m via derive_higher_timeframe_candles), mapped g=clip((f+20)/40,0,1), with B2 a completed 1h ATR% warmup-median control and B3 the product. Leave RSI timing, 5m/15m ADX confirmation, trailing, and exits unchanged. Skip sub-min instead of uplift. Candidate in a quants-lab replay wrapper, not liv",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "cdb8a9613de4de1252ce511d624587483e93d1ee46b813fbda3c6a412e0d27e5",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:ba2cc851e789d58457dfb72b723c90c0",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-ba2cc851e789d58457dfb72b723c90c0cb798b8177582bc95c4d99f50c5e33a0.json",
+          "pointer": "/nodes/1",
+          "sha256": "8e3f6fba66b320504f7df2c18c802cd87be973c507fa0a18a3db5c791d8889db",
+          "bytes": 14013
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:ba2cc851e789d58457dfb72b723c90c0",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:ba2cc851e789d58457dfb72b723c90c0",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910",
+      "idea_revision_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:ba2cc851e789d58457dfb72b723c90c0",
+      "title": "Restrict-only continuous g(f) on new ok_rsi BUY planned USD",
+      "hypothesis": "After live RSI/DCA has produced a new BUY plan, multiply new BUY planned USD only by restrict-only g in [0,1] from an equal-weight average of EWMAC 16/64 on completed 1h and EWMAC 16/64 on completed 1d (derived from 1m via derive_higher_timeframe_candles), mapped g=clip((f+20)/40,0,1), with B2 a completed 1h ATR% warmup-median control and B3 the product. Leave RSI timing, 5m/15m ADX confirmation, trailing, and exits unchanged. Skip sub-min instead of uplift. Candidate in a quants-lab replay wrapper, not liv",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "47fd5216fc7fbc0036b2bffc8afe723d8e272125e18df1c5cd24f20c2fde8d13",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:d0a56ec8a280ac64348f7579a761da56",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-d0a56ec8a280ac64348f7579a761da5605b70451aa82c835262d1b5188e5f86e.json",
+          "pointer": "/nodes/1",
+          "sha256": "5e0da4b3f765cdd59d72bb054e0a37005fe0c3a6e6062f3ccf9c98a7999734e7",
+          "bytes": 11974
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:d0a56ec8a280ac64348f7579a761da56",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:d0a56ec8a280ac64348f7579a761da56",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910",
+      "idea_revision_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:d0a56ec8a280ac64348f7579a761da56",
+      "title": "Restrict-only continuous g(f) on new ok_rsi BUY planned USD",
+      "hypothesis": "After live RSI/DCA has produced a new BUY plan, multiply new BUY planned USD only by restrict-only g in [0,1] from an equal-weight average of EWMAC 16/64 on completed 1h and EWMAC 16/64 on completed 1d (derived from 1m via derive_higher_timeframe_candles), mapped g=clip((f+20)/40,0,1), with B2 a completed 1h ATR% warmup-median control and B3 the product. Leave RSI timing, 5m/15m ADX confirmation, trailing, and exits unchanged. Skip sub-min instead of uplift. Candidate in a quants-lab replay wrapper, not liv",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "fd09fa62b9a9bc817121db52685cb75ffa8633a8b76cce2a38073de17931382c",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:e58216c132991415b901ced8ceecdfdd",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-e58216c132991415b901ced8ceecdfdd576b5c73901417ac3f86c2c393b73bd9.json",
+          "pointer": "/nodes/1",
+          "sha256": "4e245397aed0a4a27964be4fd3fde64a58f08723bc2ddef548231bd8d37e6964",
+          "bytes": 9321
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:e58216c132991415b901ced8ceecdfdd",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:e58216c132991415b901ced8ceecdfdd",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910",
+      "idea_revision_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:e58216c132991415b901ced8ceecdfdd",
+      "title": "Restrict-only continuous g(f) on new ok_rsi BUY planned USD",
+      "hypothesis": "After live RSI/DCA has produced a new BUY plan, multiply new BUY planned USD only by restrict-only g in [0,1] from an equal-weight average of EWMAC 16/64 on completed 1h and EWMAC 16/64 on completed 1d (derived from 1m via derive_higher_timeframe_candles), mapped g=clip((f+20)/40,0,1), with B2 a completed 1h ATR% warmup-median control and B3 the product. Leave RSI timing, 5m/15m ADX confirmation, trailing, and exits unchanged. Skip sub-min instead of uplift. Candidate in a quants-lab replay wrapper, not liv",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "5d101fa4d7d41cb784591bba0c0ee58b0cb74f6f3f5676fc747417f9e991e499",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:okx-pomorski-ensemble-regime-20260913:revision:97900e7c876789b3dacd757f94162d45",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-97900e7c876789b3dacd757f94162d458b412e63df90b1c8fc8d3c2f5f927692.json",
+          "pointer": "/nodes/1",
+          "sha256": "35334c00e20941b7745ccc142d7def0c941e918e1c5c13cc2fc2c93543051eab",
+          "bytes": 12526
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-pomorski-ensemble-regime-20260913:revision:97900e7c876789b3dacd757f94162d45",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:okx-pomorski-ensemble-regime-20260913:revision:97900e7c876789b3dacd757f94162d45",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-pomorski-ensemble-regime-20260913",
+      "idea_revision_id": "idea:okx-pomorski-ensemble-regime-20260913:revision:97900e7c876789b3dacd757f94162d45",
+      "title": "Pomorski tweet vs Bai 2108.02283v6 vs KMRF+MPC: classification vs regression construction on ok_rsi 1x",
+      "hypothesis": "Record two distinct claims. (1) Bai/Pukthuanthong: classification loss / stacking class probabilities beat matched return-regression for US-equity long-short construction after costs. (2) Pomorski thesis: RF classifies KAMA+MSR regimes; construction is Kalman-boosted expected returns inside long-only MPO+MPC, not ranking on class probability. Tweet IMO that regressions do better at construction matches (2) and contradicts (1). Neither book (CRSP long-short, nor multi-asset MPO/MPC) is an `ok_rsi` 1x cash/in",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "ba25b347f6770bc5ec54b30eb42ff10c7ce87a0ef2d8e1d1a0ea58f2f3bdcfc3",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:okx-quantifiedstrat-bb-squeeze-20260915:revision:c56d772ad50dba7a5aa538557280bfa9",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-c56d772ad50dba7a5aa538557280bfa97b612a335897c59d10789afb7ecc75ff.json",
+          "pointer": "/nodes/1",
+          "sha256": "7302da8e6ab157bc061d53222b28b365c3d31bcca73857aee331157159b039bc",
+          "bytes": 7427
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-quantifiedstrat-bb-squeeze-20260915:revision:c56d772ad50dba7a5aa538557280bfa9",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-quantifiedstrat-bb-squeeze-20260915",
+      "idea_revision_id": "idea:okx-quantifiedstrat-bb-squeeze-20260915:revision:c56d772ad50dba7a5aa538557280bfa9",
+      "title": "Weekly Bollinger-bandwidth RSI squeeze breakout (QuantifiedStrat 2099845695238992000)",
+      "hypothesis": "As stated by the source: on weekly bars, when the 10-bar RSI of the 10-week Bollinger bandwidth is below 45 (a volatility squeeze) and the close sets a new 5-day high, a long entry held for 20 weeks earns a positive return. The source demonstrates this only on Pepsi (PEP) US equity via a screenshot. It is NOT established that any venue-bound, costed, OKX spot crypto form of this rule exists or has positive expectancy on the cached 2026-05-01 to 2026-09-01 window.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "cd835e4062b2397eb0d917d8548101cf2196a2b6efa5dbe410a4f2160b317c56",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-rsi-bullish-div-entry-20260913:revision:c1eced329caf86e83042121fcc4a207b",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-c1eced329caf86e83042121fcc4a207bbc9f3780e1c5afc9c53159b6ed8f6359.json",
+          "pointer": "/nodes/1",
+          "sha256": "4c1f5d3c83cbfb3bb05c232a47626a78a012de1e1418f518766827b2be8ab40c",
+          "bytes": 10748
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-rsi-bullish-div-entry-20260913:revision:c1eced329caf86e83042121fcc4a207b",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:okx-rsi-bullish-div-entry-20260913:revision:c1eced329caf86e83042121fcc4a207b",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-rsi-bullish-div-entry-20260913",
+      "idea_revision_id": "idea:okx-rsi-bullish-div-entry-20260913:revision:c1eced329caf86e83042121fcc4a207b",
+      "title": "ok_rsi initial-entry wait-for-retest: regular bullish close-trough RSI divergence vs stabilisation-only",
+      "hypothesis": "A stateful wait-for-retest gate on initial entry (arm on first eligible close-based oversold reversal; freeze A0; remember first close trough P1/R1; require bounce >= a*A0; then P2 <= P1 - eps_P*A0 and R2 >= R1 + eps_R; enter only after n completed candles with no new closing low and rebound >= b*A0) can improve after-cost portfolio performance, including idle cash and marked-to-market inventory, versus frozen ok_rsi and versus first-dip stabilisation alone. Second-leg and RSI-divergence extras are adopted ",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "8ce29085312b021e0e5028bc5a7caf3f8570f28f7bbc76e66f1cd30b0e0d4d59",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:okx-rsi-bullish-div-entry-20260915:revision:8e40bbe3fcbecac151309d6eb92806db",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-8e40bbe3fcbecac151309d6eb92806db364875e35d0ff7ae4c342625074e3727.json",
+          "pointer": "/nodes/1",
+          "sha256": "1ed41b61e097243871edb5de3e9f5ce0e4c8047bb51beeca2edd6b1ab3b16ae5",
+          "bytes": 11010
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-rsi-bullish-div-entry-20260915:revision:8e40bbe3fcbecac151309d6eb92806db",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        },
+        {
+          "code": "OMITTED_CONTENT",
+          "record_id": "idea:okx-rsi-bullish-div-entry-20260915:revision:8e40bbe3fcbecac151309d6eb92806db",
+          "detail": "Hypothesis excerpt: at most 512 UTF-8 bytes; full assertion is in the source."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-rsi-bullish-div-entry-20260915",
+      "idea_revision_id": "idea:okx-rsi-bullish-div-entry-20260915:revision:8e40bbe3fcbecac151309d6eb92806db",
+      "title": "ok_rsi initial-entry wait-for-retest four-way on cached May-August 2026",
+      "hypothesis": "A stateful wait-for-retest gate on initial entry (arm on first eligible close-based oversold reversal; freeze A0; remember first close trough P1/R1; require bounce >= a*A0; then either recover in place, or require P2 <= P1 - eps_P*A0 with optional R2 >= R1 + eps_R; enter after n completed candles with no new closing low and rebound >= b*A0) can change after-cost portfolio performance, including idle cash and marked-to-market inventory, versus frozen ok_rsi with buy_confirmation_mode none and versus first-di",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "8234abba0095da3c7cefc1cd0f08135605b015697e240c2bc4500ecddfa1ed55",
+      "truncated_fields": [
+        "hypothesis"
+      ]
+    },
+    {
+      "record_id": "idea:okx-rsi-path-dca-admission-20260912:revision:948bf6b200f9ffa44f08d9ec23422896",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-948bf6b200f9ffa44f08d9ec2342289671c2da9407b331f92bad8804363647d9.json",
+          "pointer": "/nodes/1",
+          "sha256": "602ff30fee420fe5b773588375e88fc4aa0a88da4e3ad0add1a7ab7efbe9dda0",
+          "bytes": 7044
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-rsi-path-dca-admission-20260912:revision:948bf6b200f9ffa44f08d9ec23422896",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-rsi-path-dca-admission-20260912",
+      "idea_revision_id": "idea:okx-rsi-path-dca-admission-20260912:revision:948bf6b200f9ffa44f08d9ec23422896",
+      "title": "RSI-path persistence as incremental ok_rsi DCA admission gate",
+      "hypothesis": "Conditioning incremental DCA admission on RSI trajectory (four closed RSI observations, three consecutive declines, current RSI below the existing pair oversold threshold, RSI four bars ago below 60) plus already-enabled HTF confirmation, without changing fresh entries or exits, can improve after-cost equity or reduce capital lock-up versus frozen ok_rsi, within a preregistered trade-off. This is untested. Publisher Triple RSI constants 30/50 and SMA_200 are not this hypothesis.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "3272bbb501d9b82a6c2088da54b1b37eeb02acdfe38354f2947921a99c1f4f3b",
+      "truncated_fields": []
+    },
+    {
+      "record_id": "idea:okx-ruujss-2098461661841744227-tsfresh:revision:01b134a0696239cb28afc91eab056c4a",
+      "native_kind": "idea_revision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "graph_events/idea-01b134a0696239cb28afc91eab056c4a42112ed86fbf8997e5408be502be8be0.json",
+          "pointer": "/nodes/1",
+          "sha256": "57151641c28e5b5839d325531a6db09b398ad881386736c8fc17f473a803792e",
+          "bytes": 4490
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "INDEX_INCOMPLETE",
+          "record_id": "idea:okx-ruujss-2098461661841744227-tsfresh:revision:01b134a0696239cb28afc91eab056c4a",
+          "detail": "Reference census is not supplied by this source-only golden; no zero is inferred."
+        }
+      ],
+      "candidate_basis": "REGISTERED_IDEA_REVISION",
+      "idea_id": "idea:okx-ruujss-2098461661841744227-tsfresh",
+      "idea_revision_id": "idea:okx-ruujss-2098461661841744227-tsfresh:revision:01b134a0696239cb28afc91eab056c4a",
+      "title": "RuujSs 2098461661841744227 tsfresh oEmbed is not an ok_rsi overlay",
+      "hypothesis": "Verified oEmbed spans say tsfresh takes any time series and automatically extracts 700+ features, then mathematically filters out the ones that do not matter. That is an open-source feature-extraction library announcement. It is not established that this status specifies a venue-bound OKX spot entry, exit, or size rule for ok_rsi, or that any such mapping has expectancy on the cached 2026-05-01T00:00:00Z to 2026-09-01T00:00:00Z window.",
+      "registration_state": "PROPOSED",
+      "experiment_refs": [],
+      "assessment_refs": [],
+      "reference_total": null,
+      "implementation_qualification": "NOT_PUBLISHED",
+      "readiness": "NOT_PUBLISHED",
+      "execution_permission": "NONE",
+      "row_sha256": "35be2d40fa19f2a011a3768487911b49080f7b5aebbf5efc194a28ce03cc75d5",
+      "truncated_fields": []
+    }
+  ],
+  "issues": [],
+  "envelope_sha256": "ea11103bdf488fa79e1c417edf423019a9f8ac4258e42d6950a320016d93393e"
+}

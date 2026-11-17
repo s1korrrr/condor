@@ -2,7 +2,7 @@
 
 Read-only, authority `NONE`. Contract: rsibot `1d8c0ab6` (`docs/plans/active/2026-11-18-v5-learning-factory-lineage-projection.md` §5 plus the frozen appendix `2026-11-18-v5-lfl-contract/`). This is the Condor side. The panels (`LearningPanel`, `DecisionLineagePanel`, `ResearchFactoryPanel`) build on the names below; they must not call `fetch`, `learningRead` or the legacy `/learning/research` route for projection data.
 
-Status: names and types are final. Everything below is implemented on `feat/andrzej_v5_lfl_condor_binding` (the hand-off's last line gives the HEAD).
+Stage A is implemented on `feat/andrzej_v5_lfl_condor_binding`; Stage B extends it on `feat/andrzej_v5_lfl_factory_panel` using rsibot `bf9f3c14de413c56b7c3ddacf16b10e2d4c4027c`.
 
 ## Modules
 
@@ -27,11 +27,14 @@ const envelope = await readProjection('lessons', { limit: 25, cursor });   // th
 - `scope_id` is not a panel parameter; the reader supplies it on the wire (see amendment below).
 - Params per dataset beyond `scope_id`: `lessons`/`jobs`: `limit`, `cursor`. `records`: also `record_type` (required, `node` or `edge`; they are never mixed) and optional `root_id`. `manifest`: none.
 - Cursors are opaque: pass `page.next_cursor` back unchanged as `cursor`. Never decode, build or edit one.
-- `candidates`, `campaigns`, `assessments` are Stage B. Their routes answer `404 DATASET_NOT_ENABLED`; `readProjection` accepts them only to surface that typed error. Read `useManifest().canRead(dataset)` before offering them.
+- `candidates`, `campaigns`, `assessments` are Stage B. They accept opaque `cursor`/`limit`; `assessments` also requires the exact `idea_revision_id`. Configured Stage A returns local `404 DATASET_NOT_ENABLED`, without an owner call. Configured Stage B forwards all three to the reader; descriptor availability never gates the server and `capabilities.read` is not health.
+- A BOUND or PARTIAL Stage-B 200 requires the configured revision/scope and a verification receipt. A schema-valid, revision-pinned UNAVAILABLE envelope can report owner reasons without a receipt or continuation (manifest descriptors are not rows); it clears that dataset's pages.
 
 ### Stage-A contract amendment: scope bootstrap
 
 The authenticated, non-projection `GET /api/v5/auth` returns `learning_scope_id` and `learning_scope_membership: { program_id, family_lane_pairs: [{ family_id, lane }, …] }` only when the projection is configured. The browser reader sends the ID as `scope_id` on every projection GET, including manifest, and validates scope summaries and rows against the trusted membership. Condor requires the configured ID, returns `400 INVALID_QUERY` for a missing or different ID, and forwards valid raw query bytes unchanged. Condor never inserts or rewrites `scope_id`. No projection schema or owner wire error code changed. W7/W8 fetch mocks must include the scope membership in the authenticated session reply, matching the envelope fixtures.
+
+Configuration pairs each frozen revision with its own vendored scope artifact. For Stage B that is `scope-okx-spot-dca-stage-b.json` (canonical `1f65d67fc990262e049e808961b1a23068f26692b9171112eb441be0157e7c16`). The authenticated response also supplies `learning_scope_sha256` and `learning_projection_revision`. The browser validates B against that binding and never selects B from a manifest. The Factory mounts its dataset reads from the authenticated config, not manifest health. Condor independently validates the B response and forwards the owner's exact bytes.
 
 ## Hooks
 
@@ -42,7 +45,7 @@ view.rows;       // empty unless state === 'ready'
 view.envelope;   // the shown validated envelope; null unless 'ready' or the owner itself reported UNAVAILABLE (no rows)
 view.error;      // ProjectionError | null
 view.next(); view.previous(); view.first(); view.refresh();
-view.snapshotChanged;  // wire 409: pages cleared, offer First (no automatic restart)
+view.snapshotChanged;  // pages cleared after snapshot change, offer First (no automatic restart)
 view.expiresInMs;      // monotonic countdown from the owner's verified_at_ms
 
 const manifest = useManifest();
@@ -51,7 +54,7 @@ manifest.scopeId; manifest.descriptors; manifest.canRead('lessons');
 
 Behaviour you can rely on:
 
-- Opaque cursor stack; `first()` clears it. A wire `409 SNAPSHOT_CHANGED` from either Condor or the owner clears the dataset's pages and sets `snapshotChanged`; the hook does not restart by itself. A replay rejected by the browser's local ledger cannot clear a live page or set `snapshotChanged`.
+- Opaque cursor stack; `first()` clears it. A wire `409 SNAPSHOT_CHANGED` from either Condor or the owner clears the dataset's pages and sets `snapshotChanged`; the hook does not restart by itself. Any failed Stage-B continuation drops the cursor stack. A local ledger rejection can leave a still-live page visible, but it cannot reuse that failed Stage-B cursor. Only Stage B offers First on a locally retired reply when no live page remains; Stage A keeps its original polling behavior.
 - Superseded requests are aborted; unmount aborts.
 - The process and browser session each retain their ledger across all cache clears. First admission fixes the deadline per `(dataset, snapshot_id, verified_at_ms)` at `90_000 - (served_at_ms - verified_at_ms)` monotonic ms from admission. Re-login or retry may show a replay only until that original deadline. Polls default to 30 s (minimum 30 s).
 - Retired snapshots, verifications below the global maximum, and ties from different snapshots are not admitted by either ledger, regardless of envelope status. A strictly newer `UNAVAILABLE` with a snapshot ID and verification time advances the ledger but gives no receipt, deadline or rows. Existing deadlines are never renewed by replays. Wire read failures and expiry still clear their affected pages.
@@ -67,7 +70,7 @@ Behaviour you can rely on:
 
 ## Server behaviour you can rely on (Condor)
 
-- Unconfigured source: Stage-A routes answer typed `503 PUBLICATION_UNAVAILABLE` (`Retry-After: 1`), never fixture data. Stage-B routes always answer typed `404 DATASET_NOT_ENABLED` without an owner call.
+- Unconfigured source: Stage-A routes answer typed `503 PUBLICATION_UNAVAILABLE` (`Retry-After: 1`), never fixture data. With no projection or when configured for Stage A, Stage-B routes answer typed `404 DATASET_NOT_ENABLED` without an owner call.
 - Success bodies are the owner's exact bytes. Typed owner errors pass through with the same status; `Retry-After` on 503 is normalised to 1..30 (default 1).
 - Condor uses existing wire errors: `409 SNAPSHOT_CHANGED` clears the dataset's pages and offers First for retired generations; retryable `503 VERIFICATION_UNAVAILABLE` with `Retry-After: 1` clears the affected dataset for other ignored or expired tuples. The `X-V5-Projection-Freshness` header was removed; browser consumers and mocks handle these like the same owner errors. Equal tuples can repopulate a cleared receipt only within its original deadline.
 - Any owner response that fails validation, framing, size (256 000 B), encoding or the 90 s age rule becomes `502 INVALID_OWNER_PROJECTION`; an unreachable or slow (4 s) owner becomes `503 UPSTREAM_UNAVAILABLE`. There are no retries.
@@ -89,6 +92,6 @@ Disabled unless `V5_LEARNING_SOURCE` is set. When set, **all five** names are re
 | `V5_LEARNING_OWNER_URL` | fixed HTTP(S) owner projection-proxy origin (W5 listener); path must be empty or `/`; no query, fragment or credentials |
 | `V5_LEARNING_SCOPE_ID` | must match the selected vendored artifact |
 | `V5_LEARNING_SCOPE_SHA256` | canonical SHA-256 of a vendored scope artifact (see `condor/v5/schemas/learning_scopes/PIN.md`); unknown or mismatched pins fail startup |
-| `V5_LEARNING_PROJECTION_REVISION` | lowercase hex, 64 characters (the frozen projection revision hash) |
+| `V5_LEARNING_PROJECTION_REVISION` | frozen projection revision hash for the stage selected by the scope SHA; mixed-stage pairs fail startup |
 
 Documentation/example scope: `program_id=okx_spot_dca`, pairs `ok_rsi_trend_aware_dca`/SPOT, `ok_rsi_owner_replay_baseline`/SPOT, `okx_spot_dca`/SPOT, `ok_rsi_challenger_20260903`/SPOT. Tests use `fixture-*` scopes.

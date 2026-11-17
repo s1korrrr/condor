@@ -1,6 +1,6 @@
 /**
- * Browser side of the frozen V5 Learning / Factory / Lineage Stage-A projection
- * contract (rsibot `1d8c0ab6`, appendix `2026-11-18-v5-lfl-contract`).
+ * Browser side of the frozen V5 Learning / Factory / Lineage projections
+ * (rsibot `1d8c0ab6` Stage A and `bf9f3c14` Stage B).
  *
  * Read-only, authority NONE. This module is the single shared base for the
  * Learning (W7), Lineage (W7) and Research Factory (W8) panels. The published
@@ -20,15 +20,16 @@ import {
   ContractViolation, parseStrictJson, readScopeMembership, validateEnvelope, validateErrorBody,
 } from './learning-projection-validate';
 import { freshnessError, ProjectionFreshness, ProjectionStore, type FreshnessMiss, type StoreClock, type StoreRead } from './learning-projection-store';
+import { STAGE_B_REVISION } from './learning-projection-schemas';
 
 /** Stage-A datasets that Condor serves with a success schema. */
 export const STAGE_A_DATASETS = ['manifest', 'lessons', 'records', 'jobs'] as const;
-/** Stage-B paths exist but answer a typed 404 DATASET_NOT_ENABLED until a later contract. */
+/** Stage-B paths are disabled under a Stage-A configuration. */
 export const STAGE_B_DATASETS = ['candidates', 'campaigns', 'assessments'] as const;
 export const ALL_DATASETS = [...STAGE_A_DATASETS, ...STAGE_B_DATASETS] as const;
 
 export type ProjectionDataset = (typeof ALL_DATASETS)[number];
-export type PagedDataset = Exclude<(typeof STAGE_A_DATASETS)[number], 'manifest'>;
+export type PagedDataset = Exclude<ProjectionDataset, 'manifest'>;
 /** Order of the six manifest descriptors (frozen). */
 export const MANIFEST_DATASET_ORDER = ['lessons', 'records', 'jobs', 'candidates', 'campaigns', 'assessments'] as const;
 export type DescriptorDataset = (typeof MANIFEST_DATASET_ORDER)[number];
@@ -51,7 +52,7 @@ export type RowStatus = 'COMPLETE' | 'PARTIAL' | 'UNAVAILABLE';
 export type IssueCode =
   | 'MISSING_SOURCE' | 'SOURCE_CHANGED' | 'SCOPE_UNKNOWN' | 'UNSUPPORTED_NATIVE_SCHEMA' | 'OMITTED_CONTENT'
   | 'UNRESOLVED_REFERENCE' | 'CONTRADICTIONS_NOT_INDEXED' | 'COMPLETION_NOT_RECORDED' | 'INDEX_INCOMPLETE'
-  | 'NOT_PUBLISHED' | 'CLOCK_SKEW';
+  | 'NOT_PUBLISHED' | 'CLOCK_SKEW' | 'PREREGISTRATION_SEAL_MISSING';
 
 /** Closed registry of projection error codes (owner, proxy and Condor). */
 export type ProjectionErrorCode =
@@ -183,7 +184,7 @@ export interface RecordNodeRow extends RowBase {
 
 export type RecordRelation =
   | 'revision_of' | 'uses_idea' | 'attempt_of' | 'decides' | 'derived_from'
-  | 'supersedes' | 'assesses' | 'evaluates' | 'records_outcome_for';
+  | 'supersedes' | 'assesses' | 'evaluates' | 'records_outcome_for' | 'produced';
 
 export interface RecordEdgeRow extends RowBase {
   native_kind: 'edge';
@@ -264,11 +265,89 @@ export type LessonsEnvelope = ProjectionEnvelope<LessonRow | UnavailableRowStub>
 export type RecordsEnvelope = ProjectionEnvelope<RecordNodeRow | RecordEdgeRow | UnavailableRowStub>;
 export type JobsEnvelope = ProjectionEnvelope<JobRow | UnavailableRowStub>;
 
+interface FactoryRow extends RowBase { row_status: 'COMPLETE' | 'PARTIAL' }
+
+export interface CandidateRow extends FactoryRow {
+  native_kind: 'idea_revision';
+  idea_id: Id;
+  idea_revision_id: Id;
+  title: string;
+  hypothesis: string;
+  truncated_fields: 'hypothesis'[];
+  registration_state: 'PROPOSED';
+  implementation_qualification: 'NOT_PUBLISHED';
+  readiness: 'NOT_PUBLISHED';
+  execution_permission: 'NONE';
+  reference_total: number | null;
+  experiment_refs: Ref[];
+  assessment_refs: Ref[];
+}
+
+interface CampaignBase extends FactoryRow {
+  campaign_id: Id;
+  dispatch_permission: 'NONE';
+  reference_total: number | null;
+  candidate_refs: Ref[];
+  attempt_refs: Ref[];
+}
+
+export type CampaignRow = CampaignBase & ({
+  native_kind: 'paper_campaign';
+  preregistration_seal: 'MISSING' | 'VERIFIED';
+  stage: string;
+  query: string;
+  experiment_ref: Ref;
+} | {
+  native_kind: 'decision';
+  title: string;
+  native_state: string;
+  reason: string | null;
+});
+
+export interface AssessmentComparison {
+  baseline_id: string;
+  metric: string;
+  unit: string;
+  delta: string;
+  comparable_group: string;
+  comparison_group: string;
+  conditions: {
+    baseline_id: string;
+    metric: string;
+    unit: string;
+    window: string | { start: string; end_exclusive: string };
+    venue: string;
+    instrument: string;
+    capital_model: string;
+    costs_identity: string;
+    execution_identity: string;
+    validation: string;
+  };
+}
+
+export interface AssessmentRow extends FactoryRow {
+  native_kind: 'assessment';
+  idea_revision_id: Id;
+  assessment_id: Id;
+  evaluation_id: Id;
+  verdict: 'SUPPORTED' | 'CONTRADICTED' | 'INCONCLUSIVE';
+  validity: 'VALID' | 'INVALID' | 'UNAVAILABLE';
+  attribution: 'ISOLATED' | 'COMBINED' | 'UNAVAILABLE';
+  admission: 'ADMITTED_COMPARISON' | 'RECORDED_ONLY';
+  hurdle_status?: string;
+  run_ref: Ref;
+  supersedes: Ref | null;
+  comparison: AssessmentComparison | null;
+}
+
 export interface DatasetRows {
   manifest: DatasetDescriptor;
   lessons: LessonRow | UnavailableRowStub;
   records: RecordNodeRow | RecordEdgeRow | UnavailableRowStub;
   jobs: JobRow | UnavailableRowStub;
+  candidates: CandidateRow | UnavailableRowStub;
+  campaigns: CampaignRow | UnavailableRowStub;
+  assessments: AssessmentRow | UnavailableRowStub;
 }
 
 /** Type guard for the per-dataset stub (verified base-only row). */
@@ -286,6 +365,7 @@ export interface ProjectionParams {
   record_type?: 'node' | 'edge';
   /** `records` only: an in-scope root; one-hop neighbourhood, independently paginated. */
   root_id?: string;
+  idea_revision_id?: string;
 }
 
 /**
@@ -324,6 +404,7 @@ export interface ProjectionPagesView<D extends PagedDataset> {
   snapshotChanged: boolean;
   /** Milliseconds until the shown data expires (monotonic, from `verified_at_ms`), or null. Read at render time. */
   expiresInMs: number | null;
+  assessmentRelationships?: ReadonlyMap<string, string> | null;
   next: () => void;
   previous: () => void;
   first: () => void;
@@ -401,6 +482,7 @@ function buildQuery(scopeId: string, params: ProjectionParams): string {
   const query = new URLSearchParams({ scope_id: scopeId });
   if (params.record_type) query.set('record_type', params.record_type);
   if (params.root_id) query.set('root_id', params.root_id);
+  if (params.idea_revision_id) query.set('idea_revision_id', params.idea_revision_id);
   if (params.limit !== undefined) query.set('limit', String(params.limit));
   if (params.cursor) query.set('cursor', params.cursor); // opaque: passed through, never decoded
   return `?${query.toString()}`;
@@ -455,7 +537,10 @@ export async function readProjectionResult<D extends ProjectionDataset>(
     if (signal?.aborted || !session) return unavailable();
     if (session.status === 401) return unauthenticated();
     if (session.status !== 200) return unavailable();
-    const info = await readJson(session, 2048) as { authenticated?: unknown; learning_scope_id?: unknown; learning_scope_membership?: unknown } | null;
+    const info = await readJson(session, 2048) as {
+      authenticated?: unknown; learning_scope_id?: unknown; learning_scope_membership?: unknown;
+      learning_scope_sha256?: unknown; learning_projection_revision?: unknown;
+    } | null;
     if (signal?.aborted) return unavailable();
     if (info?.authenticated === false) return unauthenticated();
     if (info?.authenticated !== true) return { ok: false, error: invalidProjection() };
@@ -466,6 +551,9 @@ export async function readProjectionResult<D extends ProjectionDataset>(
         : { ok: false, error: typedError(503, 'PUBLICATION_UNAVAILABLE') };
     }
     if (typeof scopeId !== 'string' || !scopeId) return { ok: false, error: invalidProjection() };
+    const stageB = info.learning_projection_revision === STAGE_B_REVISION;
+    const scopeSha256 = stageB && typeof info.learning_scope_sha256 === 'string' ? info.learning_scope_sha256 : undefined;
+    if (stageB && (!scopeSha256 || !/^[a-f0-9]{64}$/.test(scopeSha256))) return { ok: false, error: invalidProjection() };
     const membership = readScopeMembership(info.learning_scope_membership);
     const response = await get(`/api/v5/learning/${dataset}${buildQuery(scopeId, params)}`);
     if (signal?.aborted || !response) return unavailable();
@@ -474,7 +562,9 @@ export async function readProjectionResult<D extends ProjectionDataset>(
     if (signal?.aborted) return unavailable();
     if (response.status === 200) {
       const recordType = dataset === 'records' ? params.record_type : undefined;
-      const envelope = await validateEnvelope(dataset, document, { recordType, maxAgeMs: MAX_VERIFICATION_AGE_MS, scopeId, membership });
+      const envelope = await validateEnvelope(dataset, document, {
+        recordType, ideaRevisionId: params.idea_revision_id, maxAgeMs: MAX_VERIFICATION_AGE_MS, stageB, scopeId, scopeSha256, membership,
+      });
       if (signal?.aborted) return unavailable();
       const received = envelope as unknown as ProjectionEnvelope<unknown>;
       const admission = freshness.observe(dataset, received, realClock.now(), MAX_VERIFICATION_AGE_MS);
@@ -524,17 +614,17 @@ export function clampPollMs(pollMs: number | undefined): number {
 function useStore(dataset: ProjectionDataset, params: ProjectionParams, options: ProjectionPagesOptions | undefined) {
   const enabled = options?.enabled ?? true;
   const pollMs = clampPollMs(options?.pollMs);
-  const { record_type: recordType, root_id: rootId, limit } = params; // the cursor is owned by the store
+  const { record_type: recordType, root_id: rootId, idea_revision_id: ideaRevisionId, limit } = params; // the cursor is owned by the store
   const [store] = useState(() => new ProjectionStore({
-    dataset, params: { record_type: recordType, root_id: rootId, limit }, read: storeRead, clock: realClock, maxAgeMs: MAX_VERIFICATION_AGE_MS, pollMs, freshness,
+    dataset, params: { record_type: recordType, root_id: rootId, idea_revision_id: ideaRevisionId, limit }, read: storeRead, clock: realClock, maxAgeMs: MAX_VERIFICATION_AGE_MS, pollMs, freshness,
   }));
   useEffect(() => {
     if (!enabled) return undefined;
-    store.configure({ dataset, params: { record_type: recordType, root_id: rootId, limit }, pollMs });
+    store.configure({ dataset, params: { record_type: recordType, root_id: rootId, idea_revision_id: ideaRevisionId, limit }, pollMs });
     const unregister = registerProjectionStore(store);
     store.start();
     return () => { unregister(); store.dispose(); };
-  }, [store, enabled, dataset, recordType, rootId, limit, pollMs]);
+  }, [store, enabled, dataset, recordType, rootId, ideaRevisionId, limit, pollMs]);
   const snapshot = useSyncExternalStore(store.subscribe, store.getSnapshot, store.getSnapshot);
   return { store, snapshot };
 }
@@ -557,6 +647,7 @@ export function useProjectionPages<D extends PagedDataset>(
     hasPrevious: snapshot.hasPrevious,
     snapshotChanged: snapshot.snapshotChanged,
     expiresInMs: expiresIn(snapshot.expiresAt),
+    assessmentRelationships: snapshot.assessmentRelationships,
     next: store.next, previous: store.previous, first: store.first, refresh: store.refresh,
   };
 }

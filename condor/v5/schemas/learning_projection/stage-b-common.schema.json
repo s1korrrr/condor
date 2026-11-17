@@ -1,0 +1,1977 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rsibot:v5-lfl:stage-b:v2:common",
+  "$defs": {
+    "Candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_id",
+        "native_kind",
+        "native_revision",
+        "row_scope",
+        "recorded_at_ms",
+        "available_at_ms",
+        "sources",
+        "row_status",
+        "issues",
+        "row_sha256",
+        "candidate_basis",
+        "idea_id",
+        "idea_revision_id",
+        "title",
+        "hypothesis",
+        "registration_state",
+        "experiment_refs",
+        "assessment_refs",
+        "reference_total",
+        "implementation_qualification",
+        "readiness",
+        "execution_permission",
+        "truncated_fields"
+      ],
+      "properties": {
+        "record_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "native_kind": {
+          "const": "idea_revision"
+        },
+        "native_revision": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "row_scope": {
+          "allOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/RowScope"
+            },
+            {
+              "properties": {
+                "membership_basis": {
+                  "const": "OWN_FAMILY_LANE"
+                },
+                "family_id": {
+                  "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+                }
+              }
+            }
+          ]
+        },
+        "recorded_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "available_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/SourceRef"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "row_status": {
+          "enum": [
+            "COMPLETE",
+            "PARTIAL"
+          ]
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/Issue"
+          },
+          "minItems": 0,
+          "maxItems": 2
+        },
+        "row_sha256": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+        },
+        "candidate_basis": {
+          "const": "REGISTERED_IDEA_REVISION"
+        },
+        "idea_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "idea_revision_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "x-maxUtf8Bytes": 128,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "hypothesis": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 512,
+          "x-maxUtf8Bytes": 512,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "registration_state": {
+          "const": "PROPOSED"
+        },
+        "experiment_refs": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Ref"
+              },
+              {
+                "properties": {
+                  "owner": {
+                    "const": "research_os"
+                  },
+                  "kind": {
+                    "const": "experiment"
+                  }
+                }
+              }
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 4
+        },
+        "assessment_refs": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Ref"
+              },
+              {
+                "properties": {
+                  "owner": {
+                    "const": "research_os"
+                  },
+                  "kind": {
+                    "const": "assessment"
+                  }
+                }
+              }
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 4
+        },
+        "reference_total": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Counter"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "implementation_qualification": {
+          "const": "NOT_PUBLISHED"
+        },
+        "readiness": {
+          "const": "NOT_PUBLISHED"
+        },
+        "execution_permission": {
+          "const": "NONE"
+        },
+        "truncated_fields": {
+          "type": "array",
+          "items": {
+            "const": "hypothesis"
+          },
+          "maxItems": 1,
+          "uniqueItems": true
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "row_status": {
+                "const": "COMPLETE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "issues": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "row_status": {
+                "const": "PARTIAL"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "issues": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "truncated_fields": {
+                "contains": {
+                  "const": "hypothesis"
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "row_status": {
+                "const": "PARTIAL"
+              },
+              "issues": {
+                "contains": {
+                  "properties": {
+                    "code": {
+                      "const": "OMITTED_CONTENT"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "row_status": {
+                "const": "COMPLETE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "truncated_fields": {
+                "maxItems": 0
+              }
+            }
+          }
+        }
+      ],
+      "x-maxCanonicalBytes": 8192
+    },
+    "Assessment": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_id",
+        "native_kind",
+        "native_revision",
+        "row_scope",
+        "recorded_at_ms",
+        "available_at_ms",
+        "sources",
+        "row_status",
+        "issues",
+        "row_sha256",
+        "assessment_id",
+        "idea_revision_id",
+        "evaluation_id",
+        "run_ref",
+        "verdict",
+        "validity",
+        "attribution",
+        "supersedes",
+        "admission",
+        "comparison"
+      ],
+      "properties": {
+        "record_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "native_kind": {
+          "const": "assessment"
+        },
+        "native_revision": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "row_scope": {
+          "allOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/RowScope"
+            },
+            {
+              "properties": {
+                "membership_basis": {
+                  "const": "ASSERTED_PARENT"
+                },
+                "family_id": {
+                  "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+                }
+              }
+            }
+          ]
+        },
+        "recorded_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "available_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/SourceRef"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "row_status": {
+          "enum": [
+            "COMPLETE",
+            "PARTIAL"
+          ]
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/Issue"
+          },
+          "minItems": 0,
+          "maxItems": 2
+        },
+        "row_sha256": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+        },
+        "assessment_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "idea_revision_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "evaluation_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "run_ref": {
+          "allOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Ref"
+            },
+            {
+              "properties": {
+                "owner": {
+                  "const": "research_os"
+                },
+                "kind": {
+                  "const": "run"
+                }
+              }
+            }
+          ]
+        },
+        "verdict": {
+          "enum": [
+            "SUPPORTED",
+            "CONTRADICTED",
+            "INCONCLUSIVE"
+          ]
+        },
+        "validity": {
+          "enum": [
+            "VALID",
+            "INVALID",
+            "UNAVAILABLE"
+          ]
+        },
+        "attribution": {
+          "enum": [
+            "ISOLATED",
+            "COMBINED",
+            "UNAVAILABLE"
+          ]
+        },
+        "supersedes": {
+          "anyOf": [
+            {
+              "allOf": [
+                {
+                  "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Ref"
+                },
+                {
+                  "properties": {
+                    "owner": {
+                      "const": "research_os"
+                    },
+                    "kind": {
+                      "const": "assessment"
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "admission": {
+          "enum": [
+            "ADMITTED_COMPARISON",
+            "RECORDED_ONLY"
+          ]
+        },
+        "comparison": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/Comparison"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hurdle_status": {
+          "enum": [
+            "ADOPTED_BY_RULE_IN_SAMPLE",
+            "ATTRIBUTION_LOCK_MATERIAL",
+            "BEATS_P23_RETURN_DRAWDOWN_BOUND_FAILED_PLATEAU_SPIKE",
+            "BOTH_CANDIDATES_SUPPORTED_RELATIVE_TO_P23_ALL_VARIANTS_TRAIL_BUY_HOLD_ON_ETH_BTC",
+            "CLEARS",
+            "CLEARS_BUY_HOLD_DOES_NOT_BEAT_BASELINE_V3",
+            "CONTRADICTED_POINT_BELOW_ZERO_AND_DD_BREACH_ETH_MAY_AUG",
+            "DOES_NOT_BEAT_BASELINE_V3",
+            "DOES_NOT_BEAT_P23_PLATEAU_SPIKE",
+            "DOES_NOT_CLEAR",
+            "DOES_NOT_CLEAR_BOTH_GATES_FAIL",
+            "OVERRIDE_WITHDRAWN",
+            "PASSES_2_OF_3_DD_FAIL_ETH",
+            "PASSES_3_OF_3_BEST_MEAN_EXCESS_LOWEST_MEAN_DD",
+            "PREREGISTERED_RULE_FAILED",
+            "PRIMARY_SCREEN_FAIL_SAMPLE_FLOOR_FAIL",
+            "P_POSITIVE_0.94_NOT_SIGNIFICANT_AT_95",
+            "SELECTION_PASS_BTC_PASS_HOLDOUT_BELOW_P23",
+            "SIZING_CLAIM_CONTRADICTED_CANDIDATE_PASSES_3_OF_3",
+            "STAGE1_PASS_STAGE2_FAIL",
+            "WINNER_OBJECTIVE_BELOW_P23_CONTROL_NO_PROPOSAL_DOMINATES"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "row_status": {
+                "const": "COMPLETE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "issues": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "row_status": {
+                "const": "PARTIAL"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "issues": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "admission": {
+                "const": "ADMITTED_COMPARISON"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "validity": {
+                "const": "VALID"
+              },
+              "attribution": {
+                "const": "ISOLATED"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "admission": {
+                "const": "RECORDED_ONLY"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "comparison": {
+                "type": "null"
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "comparison": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "row_status": {
+                "const": "PARTIAL"
+              },
+              "issues": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "admission": {
+                "const": "ADMITTED_COMPARISON"
+              },
+              "comparison": {
+                "type": "null"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "issues": {
+                "contains": {
+                  "properties": {
+                    "code": {
+                      "const": "OMITTED_CONTENT"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "x-maxCanonicalBytes": 8192
+    },
+    "Comparison": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseline_id",
+        "metric",
+        "unit",
+        "delta",
+        "comparable_group",
+        "comparison_group",
+        "conditions"
+      ],
+      "properties": {
+        "baseline_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 192,
+          "x-maxUtf8Bytes": 192,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "metric": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "x-maxUtf8Bytes": 256,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "x-maxUtf8Bytes": 128,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "delta": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "x-maxUtf8Bytes": 128,
+          "pattern": "^-?(0|[1-9][0-9]*)(\\.[0-9]+)?(?![\\s\\S])"
+        },
+        "comparable_group": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 192,
+          "x-maxUtf8Bytes": 192,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "comparison_group": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 204,
+          "x-maxUtf8Bytes": 204,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "conditions": {
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/Conditions"
+        }
+      }
+    },
+    "Conditions": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baseline_id",
+        "metric",
+        "unit",
+        "window",
+        "venue",
+        "instrument",
+        "capital_model",
+        "costs_identity",
+        "execution_identity",
+        "validation"
+      ],
+      "properties": {
+        "baseline_id": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 192,
+          "x-maxUtf8Bytes": 192,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "metric": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "x-maxUtf8Bytes": 256,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "unit": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "x-maxUtf8Bytes": 128,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "window": {
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/ComparisonWindow"
+        },
+        "venue": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "x-maxUtf8Bytes": 128,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "instrument": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "x-maxUtf8Bytes": 128,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "capital_model": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "x-maxUtf8Bytes": 256,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "costs_identity": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1536,
+          "x-maxUtf8Bytes": 1536,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "execution_identity": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1536,
+          "x-maxUtf8Bytes": 1536,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "validation": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 384,
+          "x-maxUtf8Bytes": 384,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        }
+      }
+    },
+    "ComparisonWindow": {
+      "oneOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "x-maxUtf8Bytes": 256,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "start",
+            "end_exclusive"
+          ],
+          "properties": {
+            "start": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxUtf8Bytes": 256,
+              "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+            },
+            "end_exclusive": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 256,
+              "x-maxUtf8Bytes": 256,
+              "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+            }
+          }
+        }
+      ]
+    },
+    "Descriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "dataset",
+        "native_schema_ids",
+        "availability",
+        "reason_codes",
+        "total_items",
+        "max_limit",
+        "capabilities"
+      ],
+      "properties": {
+        "dataset": {
+          "enum": [
+            "lessons",
+            "records",
+            "jobs",
+            "candidates",
+            "campaigns",
+            "assessments"
+          ]
+        },
+        "native_schema_ids": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 96,
+            "x-maxUtf8Bytes": 96,
+            "enum": [
+              "research_knowledge.graph_event.v1",
+              "research_knowledge.outcome.v1",
+              "research_knowledge.scoped_lesson.v1",
+              "rsibot.research_knowledge.event.v1",
+              "research_knowledge.paper_campaign.v1",
+              "research_knowledge.autonomous_campaign.v1"
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 6,
+          "uniqueItems": true
+        },
+        "availability": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Status"
+        },
+        "reason_codes": {
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/ReasonCodes"
+        },
+        "total_items": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Counter"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_limit": {
+          "const": 50
+        },
+        "capabilities": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Capabilities"
+        }
+      }
+    },
+    "UnavailableRowStub": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_id",
+        "native_kind",
+        "native_revision",
+        "row_scope",
+        "recorded_at_ms",
+        "available_at_ms",
+        "sources",
+        "row_status",
+        "issues",
+        "row_sha256"
+      ],
+      "properties": {
+        "record_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "native_kind": {
+          "enum": [
+            "idea",
+            "idea_revision",
+            "experiment",
+            "run",
+            "assessment",
+            "outcome",
+            "decision",
+            "evidence",
+            "metrics",
+            "report",
+            "artifact_bundle",
+            "edge",
+            "paper_campaign"
+          ]
+        },
+        "native_revision": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "row_scope": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/RowScope"
+        },
+        "recorded_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "available_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/SourceRef"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "row_status": {
+          "const": "UNAVAILABLE"
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/Issue"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "row_sha256": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+        }
+      }
+    },
+    "RecordNode": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_id",
+        "native_kind",
+        "native_revision",
+        "row_scope",
+        "recorded_at_ms",
+        "available_at_ms",
+        "sources",
+        "row_status",
+        "issues",
+        "row_sha256",
+        "record_type",
+        "kind",
+        "title",
+        "native_state",
+        "summary",
+        "identities"
+      ],
+      "properties": {
+        "record_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "native_kind": {
+          "enum": [
+            "idea",
+            "idea_revision",
+            "experiment",
+            "run",
+            "assessment",
+            "outcome",
+            "decision",
+            "evidence",
+            "metrics",
+            "report",
+            "artifact_bundle",
+            "paper_campaign"
+          ]
+        },
+        "native_revision": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "row_scope": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/RowScope"
+        },
+        "recorded_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "available_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/SourceRef"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "row_status": {
+          "enum": [
+            "COMPLETE",
+            "PARTIAL"
+          ]
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/Issue"
+          },
+          "minItems": 0,
+          "maxItems": 2
+        },
+        "row_sha256": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+        },
+        "record_type": {
+          "const": "node"
+        },
+        "kind": {
+          "enum": [
+            "idea",
+            "idea_revision",
+            "experiment",
+            "run",
+            "assessment",
+            "outcome",
+            "lesson",
+            "campaign",
+            "decision",
+            "evidence",
+            "metrics",
+            "report",
+            "artifact_bundle"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "maxLength": 128,
+          "x-maxUtf8Bytes": 128
+        },
+        "native_state": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 128,
+              "x-maxUtf8Bytes": 128
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "summary": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 512,
+              "x-maxUtf8Bytes": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "identities": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "name",
+              "value"
+            ],
+            "properties": {
+              "name": {
+                "type": "string",
+                "maxLength": 128,
+                "x-maxUtf8Bytes": 128
+              },
+              "value": {
+                "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+              }
+            }
+          },
+          "minItems": 0,
+          "maxItems": 2
+        }
+      }
+    },
+    "Issue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "record_id",
+        "detail"
+      ],
+      "properties": {
+        "code": {
+          "enum": [
+            "MISSING_SOURCE",
+            "SOURCE_CHANGED",
+            "SCOPE_UNKNOWN",
+            "UNSUPPORTED_NATIVE_SCHEMA",
+            "OMITTED_CONTENT",
+            "UNRESOLVED_REFERENCE",
+            "CONTRADICTIONS_NOT_INDEXED",
+            "COMPLETION_NOT_RECORDED",
+            "INDEX_INCOMPLETE",
+            "NOT_PUBLISHED",
+            "CLOCK_SKEW",
+            "PREREGISTRATION_SEAL_MISSING"
+          ]
+        },
+        "record_id": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "detail": {
+          "type": "string",
+          "maxLength": 128,
+          "x-maxUtf8Bytes": 128
+        }
+      }
+    },
+    "ReasonCodes": {
+      "type": "array",
+      "items": {
+        "enum": [
+          "MISSING_SOURCE",
+          "SOURCE_CHANGED",
+          "SCOPE_UNKNOWN",
+          "UNSUPPORTED_NATIVE_SCHEMA",
+          "OMITTED_CONTENT",
+          "UNRESOLVED_REFERENCE",
+          "CONTRADICTIONS_NOT_INDEXED",
+          "COMPLETION_NOT_RECORDED",
+          "INDEX_INCOMPLETE",
+          "NOT_PUBLISHED",
+          "CLOCK_SKEW",
+          "INVALID_QUERY",
+          "INVALID_CURSOR",
+          "ROOT_NOT_IN_SCOPE",
+          "DATASET_NOT_ENABLED",
+          "ROUTE_NOT_FOUND",
+          "METHOD_NOT_ALLOWED",
+          "REQUEST_BODY_NOT_ALLOWED",
+          "TARGET_TOO_LONG",
+          "SNAPSHOT_CHANGED",
+          "PROJECTION_BUSY",
+          "PROJECTION_DEADLINE",
+          "WARMING",
+          "VERIFICATION_UNAVAILABLE",
+          "PUBLICATION_UNAVAILABLE",
+          "UPSTREAM_UNAVAILABLE",
+          "UPSTREAM_INVALID",
+          "INVALID_OWNER_PROJECTION",
+          "VERIFICATION_EXPIRED",
+          "PUBLICATION_NOT_CURRENT",
+          "PREREGISTRATION_SEAL_MISSING"
+        ]
+      },
+      "minItems": 0,
+      "maxItems": 4,
+      "uniqueItems": true
+    },
+    "PaperCampaign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_id",
+        "native_kind",
+        "native_revision",
+        "row_scope",
+        "recorded_at_ms",
+        "available_at_ms",
+        "sources",
+        "row_status",
+        "issues",
+        "row_sha256",
+        "campaign_id",
+        "native_schema_id",
+        "campaign_basis",
+        "query",
+        "promotion",
+        "model_calls",
+        "program_id",
+        "experiment_ref",
+        "candidate_refs",
+        "attempt_refs",
+        "reference_total",
+        "dispatch_permission",
+        "schema",
+        "authority",
+        "created_at_utc",
+        "workspace",
+        "stage",
+        "preregistration_seal"
+      ],
+      "properties": {
+        "record_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "native_kind": {
+          "const": "paper_campaign"
+        },
+        "native_revision": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "row_scope": {
+          "allOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/RowScope"
+            },
+            {
+              "properties": {
+                "membership_basis": {
+                  "const": "EXPERIMENT_PARENT"
+                },
+                "family_id": {
+                  "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+                }
+              }
+            }
+          ]
+        },
+        "recorded_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "available_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/SourceRef"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "row_status": {
+          "enum": [
+            "COMPLETE",
+            "PARTIAL"
+          ]
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/Issue"
+          },
+          "minItems": 0,
+          "maxItems": 2
+        },
+        "row_sha256": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+        },
+        "campaign_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "native_schema_id": {
+          "const": "research_knowledge.paper_campaign.v1"
+        },
+        "campaign_basis": {
+          "const": "PREREGISTERED_PAPER_CAMPAIGN"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1024,
+          "x-maxUtf8Bytes": 1024,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "promotion": {
+          "const": "HOLD_FOR_EVIDENCE"
+        },
+        "model_calls": {
+          "const": "EXTERNAL_AGENT_FILE_EXCHANGE"
+        },
+        "program_id": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "experiment_ref": {
+          "allOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Ref"
+            },
+            {
+              "properties": {
+                "owner": {
+                  "const": "research_os"
+                },
+                "kind": {
+                  "const": "experiment"
+                }
+              }
+            }
+          ]
+        },
+        "candidate_refs": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Ref"
+              },
+              {
+                "properties": {
+                  "owner": {
+                    "const": "research_os"
+                  },
+                  "kind": {
+                    "const": "idea_revision"
+                  }
+                }
+              }
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 4
+        },
+        "attempt_refs": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Ref"
+              },
+              {
+                "properties": {
+                  "owner": {
+                    "const": "research_os"
+                  },
+                  "kind": {
+                    "const": "run"
+                  }
+                }
+              }
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 4
+        },
+        "reference_total": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Counter"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dispatch_permission": {
+          "const": "NONE"
+        },
+        "authority": {
+          "const": "research-only"
+        },
+        "schema": {
+          "const": "research_knowledge.paper_campaign.v1"
+        },
+        "created_at_utc": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 40,
+          "x-maxUtf8Bytes": 40,
+          "pattern": "^\\d{4}-\\d\\d-\\d\\dT\\d\\d:\\d\\d:\\d\\d(?:\\.\\d+)?(?:Z|\\+00:00)(?![\\s\\S])"
+        },
+        "workspace": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 256,
+          "x-maxUtf8Bytes": 256
+        },
+        "stage": {
+          "enum": [
+            "RESEARCH_REQUIRED",
+            "PARTIAL_PREREGISTRATION",
+            "PREREGISTERED",
+            "ATTEMPT_CLAIMED",
+            "COLLECTED"
+          ]
+        },
+        "preregistration_seal": {
+          "enum": [
+            "VERIFIED",
+            "MISSING"
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "row_status": {
+                "const": "COMPLETE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "issues": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "row_status": {
+                "const": "PARTIAL"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "issues": {
+                "minItems": 1
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "preregistration_seal": {
+                "const": "MISSING"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "row_status": {
+                "const": "PARTIAL"
+              },
+              "issues": {
+                "contains": {
+                  "properties": {
+                    "code": {
+                      "const": "PREREGISTRATION_SEAL_MISSING"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      ],
+      "x-maxCanonicalBytes": 8192
+    },
+    "AutonomousCampaign": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_id",
+        "native_kind",
+        "native_revision",
+        "row_scope",
+        "recorded_at_ms",
+        "available_at_ms",
+        "sources",
+        "row_status",
+        "issues",
+        "row_sha256",
+        "campaign_id",
+        "native_schema_id",
+        "campaign_basis",
+        "program_id",
+        "candidate_refs",
+        "attempt_refs",
+        "reference_total",
+        "dispatch_permission",
+        "sequence",
+        "state_hash",
+        "previous_hash",
+        "title",
+        "native_state",
+        "reason"
+      ],
+      "properties": {
+        "record_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "native_kind": {
+          "const": "decision"
+        },
+        "native_revision": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "row_scope": {
+          "allOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/RowScope"
+            },
+            {
+              "properties": {
+                "membership_basis": {
+                  "const": "OWN_FAMILY_LANE"
+                },
+                "family_id": {
+                  "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+                }
+              }
+            }
+          ]
+        },
+        "recorded_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "available_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/SourceRef"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "row_status": {
+          "enum": [
+            "COMPLETE",
+            "PARTIAL"
+          ]
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/Issue"
+          },
+          "minItems": 0,
+          "maxItems": 2
+        },
+        "row_sha256": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+        },
+        "campaign_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "native_schema_id": {
+          "const": "research_knowledge.autonomous_campaign.v1"
+        },
+        "campaign_basis": {
+          "const": "AUTONOMOUS_STATE_CHAIN"
+        },
+        "program_id": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "candidate_refs": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Ref"
+              },
+              {
+                "properties": {
+                  "owner": {
+                    "const": "research_os"
+                  },
+                  "kind": {
+                    "const": "idea_revision"
+                  }
+                }
+              }
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 4
+        },
+        "attempt_refs": {
+          "type": "array",
+          "items": {
+            "allOf": [
+              {
+                "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Ref"
+              },
+              {
+                "properties": {
+                  "owner": {
+                    "const": "research_os"
+                  },
+                  "kind": {
+                    "const": "run"
+                  }
+                }
+              }
+            ]
+          },
+          "minItems": 0,
+          "maxItems": 4
+        },
+        "reference_total": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Counter"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dispatch_permission": {
+          "const": "NONE"
+        },
+        "sequence": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Counter"
+        },
+        "state_hash": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+        },
+        "previous_hash": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "x-maxUtf8Bytes": 128,
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/NonBlankText"
+        },
+        "native_state": {
+          "enum": [
+            "RUNNING",
+            "COMPLETE",
+            "STOPPED_BUDGET",
+            "STOPPED_INFORMATION",
+            "HELD",
+            "CANCELLED"
+          ]
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "type": "string",
+              "maxLength": 512,
+              "x-maxUtf8Bytes": 512
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "row_status": {
+                "const": "COMPLETE"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "issues": {
+                "maxItems": 0
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "row_status": {
+                "const": "PARTIAL"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "issues": {
+                "minItems": 1
+              }
+            }
+          }
+        }
+      ],
+      "x-maxCanonicalBytes": 8192
+    },
+    "Campaign": {
+      "oneOf": [
+        {
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/PaperCampaign"
+        },
+        {
+          "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/AutonomousCampaign"
+        }
+      ]
+    },
+    "RecordEdge": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "record_id",
+        "native_kind",
+        "native_revision",
+        "row_scope",
+        "recorded_at_ms",
+        "available_at_ms",
+        "sources",
+        "row_status",
+        "issues",
+        "row_sha256",
+        "record_type",
+        "edge_id",
+        "from_ref",
+        "to_ref",
+        "relation",
+        "basis"
+      ],
+      "properties": {
+        "record_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "native_kind": {
+          "const": "edge"
+        },
+        "native_revision": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "row_scope": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/RowScope"
+        },
+        "recorded_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "available_at_ms": {
+          "anyOf": [
+            {
+              "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sources": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/SourceRef"
+          },
+          "minItems": 1,
+          "maxItems": 2
+        },
+        "row_status": {
+          "enum": [
+            "COMPLETE",
+            "PARTIAL"
+          ]
+        },
+        "issues": {
+          "type": "array",
+          "items": {
+            "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/Issue"
+          },
+          "minItems": 0,
+          "maxItems": 2
+        },
+        "row_sha256": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+        },
+        "record_type": {
+          "const": "edge"
+        },
+        "edge_id": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+        },
+        "from_ref": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Ref"
+        },
+        "to_ref": {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Ref"
+        },
+        "relation": {
+          "enum": [
+            "revision_of",
+            "uses_idea",
+            "attempt_of",
+            "decides",
+            "derived_from",
+            "supersedes",
+            "assesses",
+            "evaluates",
+            "records_outcome_for",
+            "produced"
+          ]
+        },
+        "basis": {
+          "const": "EXPLICIT"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "relation": {
+                "const": "produced"
+              },
+              "to_ref": {
+                "properties": {
+                  "record_id": {
+                    "pattern": "^evidence:[0-9a-f]{64}(?![\\s\\S])"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "to_ref": {
+                "properties": {
+                  "owner": {
+                    "const": "research_os"
+                  },
+                  "kind": {
+                    "const": "OPAQUE"
+                  },
+                  "revision": {
+                    "const": null
+                  },
+                  "source_index": {
+                    "const": null
+                  },
+                  "resolution": {
+                    "const": "OUT_OF_SCOPE"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "NonBlankText": {
+      "pattern": "^(?=[^\\u0000-\\u001f\\u007f]*[^\\u0000-\\u001f\\u007f\\u0020\\u0085\\u00a0\\u1680\\u2000-\\u200a\\u2028\\u2029\\u202f\\u205f\\u3000\\ufeff])[^\\u0000-\\u001f\\u007f]+(?![\\s\\S])"
+    }
+  },
+  "x-constraints": [
+    "Inherit every Stage-A canonical, source, issue, region, object-count, depth and byte bound.",
+    "Combined Ref count across a row is at most four, not four per array.",
+    "Conditions window strings preserve native identity; object boundaries must pass native ordered ISO parsing.",
+    "No placeholder comparison identities; duplicate native fields equal their conditions counterparts.",
+    "record_id equals native graph ID for candidates and assessments. Candidate idea_revision_id equals record_id; assessment_id preserves native data.assessment_id, not its prefixed graph node ID.",
+    "Campaign record_id equals native campaign_id; paper_campaign is an explicit projection kind, not a fabricated graph node.",
+    "Admission and comparison_group come only from owner admission; never derive them from verdict alone."
+  ]
+}

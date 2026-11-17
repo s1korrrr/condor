@@ -1,0 +1,317 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rsibot:v5-lfl:stage-b:v2:candidates",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "owner",
+    "authority",
+    "effect",
+    "dataset",
+    "scope",
+    "projection_revision",
+    "snapshot_id",
+    "publication_sha256",
+    "database_sha256",
+    "source_revision",
+    "source_snapshot",
+    "event_signature",
+    "status",
+    "reason_codes",
+    "generated_at_ms",
+    "verified_at_ms",
+    "served_at_ms",
+    "coverage",
+    "page",
+    "issues",
+    "envelope_sha256",
+    "items"
+  ],
+  "properties": {
+    "schema": {
+      "const": "research_knowledge.v5_read_projection.v1"
+    },
+    "owner": {
+      "const": "research_os"
+    },
+    "authority": {
+      "const": "READ_ONLY"
+    },
+    "effect": {
+      "const": "NONE"
+    },
+    "dataset": {
+      "const": "candidates"
+    },
+    "scope": {
+      "anyOf": [
+        {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Scope"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "projection_revision": {
+      "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+    },
+    "snapshot_id": {
+      "anyOf": [
+        {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "publication_sha256": {
+      "anyOf": [
+        {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "database_sha256": {
+      "anyOf": [
+        {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source_revision": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "x-maxUtf8Bytes": 160
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "source_snapshot": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "x-maxUtf8Bytes": 160
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "event_signature": {
+      "anyOf": [
+        {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 160,
+          "x-maxUtf8Bytes": 160
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "status": {
+      "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Status"
+    },
+    "reason_codes": {
+      "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/ReasonCodes"
+    },
+    "generated_at_ms": {
+      "anyOf": [
+        {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "verified_at_ms": {
+      "anyOf": [
+        {
+          "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "served_at_ms": {
+      "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+    },
+    "coverage": {
+      "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Coverage"
+    },
+    "page": {
+      "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Page"
+    },
+    "issues": {
+      "type": "array",
+      "items": {
+        "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/Issue"
+      },
+      "minItems": 0,
+      "maxItems": 4
+    },
+    "envelope_sha256": {
+      "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+    },
+    "items": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/Candidate"
+          },
+          {
+            "$ref": "urn:rsibot:v5-lfl:stage-b:v2:common#/$defs/UnavailableRowStub"
+          }
+        ]
+      },
+      "minItems": 0,
+      "maxItems": 50
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "enum": [
+              "BOUND",
+              "PARTIAL"
+            ]
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "scope": {
+            "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Scope"
+          },
+          "snapshot_id": {
+            "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+          },
+          "publication_sha256": {
+            "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+          },
+          "database_sha256": {
+            "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Hash"
+          },
+          "source_revision": {
+            "type": "string"
+          },
+          "source_snapshot": {
+            "type": "string"
+          },
+          "event_signature": {
+            "type": "string"
+          },
+          "generated_at_ms": {
+            "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+          },
+          "verified_at_ms": {
+            "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/TimeMs"
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "UNAVAILABLE"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "page": {
+            "properties": {
+              "next_cursor": {
+                "type": "null"
+              },
+              "has_more": {
+                "const": false
+              }
+            }
+          },
+          "coverage": {
+            "properties": {
+              "state": {
+                "const": "UNAVAILABLE"
+              }
+            }
+          },
+          "items": {
+            "maxItems": 0
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "BOUND"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "reason_codes": {
+            "maxItems": 0
+          },
+          "issues": {
+            "maxItems": 0
+          },
+          "coverage": {
+            "properties": {
+              "state": {
+                "const": "COMPLETE"
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "status": {
+            "const": "BOUND"
+          }
+        }
+      },
+      "then": {
+        "properties": {
+          "items": {
+            "items": {
+              "properties": {
+                "row_status": {
+                  "const": "COMPLETE"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}

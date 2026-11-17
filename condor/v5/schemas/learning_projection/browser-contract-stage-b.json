@@ -1,0 +1,214 @@
+{
+  "contract_id": "v5-lfl-stage-b-2026-11-18-v2",
+  "status": "FROZEN_STAGE_B_DELTA_NOT_INSTALLED",
+  "condor_pin": "45ec2f8240a3c42d0c9d4aad91d814b1ec94fc8b",
+  "routes": [
+    {
+      "dataset": "manifest",
+      "browser_path": "/api/v5/learning/manifest",
+      "proxy_path": "/api/knowledge/v5-projection/v1/manifest",
+      "reader_path": "/api/knowledge/v5-projection/v1/manifest",
+      "query_schema": "query-manifest.schema.json",
+      "enabled_in_stage_a": true,
+      "stage_a_status": 200,
+      "success_schema": "manifest-stage-b.schema.json",
+      "disabled_golden": null,
+      "enabled_in_stage_b": true,
+      "stage_b_status": 200
+    },
+    {
+      "dataset": "lessons",
+      "browser_path": "/api/v5/learning/lessons",
+      "proxy_path": "/api/knowledge/v5-projection/v1/lessons",
+      "reader_path": "/api/knowledge/v5-projection/v1/lessons",
+      "query_schema": "query-lessons.schema.json",
+      "enabled_in_stage_a": true,
+      "stage_a_status": 200,
+      "success_schema": "lessons.schema.json",
+      "disabled_golden": null,
+      "enabled_in_stage_b": true,
+      "stage_b_status": 200
+    },
+    {
+      "dataset": "records",
+      "browser_path": "/api/v5/learning/records",
+      "proxy_path": "/api/knowledge/v5-projection/v1/records",
+      "reader_path": "/api/knowledge/v5-projection/v1/records",
+      "query_schema": "query-records.schema.json",
+      "enabled_in_stage_a": true,
+      "stage_a_status": 200,
+      "success_schema": "records-stage-b.schema.json",
+      "disabled_golden": null,
+      "enabled_in_stage_b": true,
+      "stage_b_status": 200
+    },
+    {
+      "dataset": "jobs",
+      "browser_path": "/api/v5/learning/jobs",
+      "proxy_path": "/api/knowledge/v5-projection/v1/jobs",
+      "reader_path": "/api/knowledge/v5-projection/v1/jobs",
+      "query_schema": "query-jobs.schema.json",
+      "enabled_in_stage_a": true,
+      "stage_a_status": 200,
+      "success_schema": "jobs.schema.json",
+      "disabled_golden": null,
+      "enabled_in_stage_b": true,
+      "stage_b_status": 200
+    },
+    {
+      "dataset": "candidates",
+      "browser_path": "/api/v5/learning/candidates",
+      "proxy_path": "/api/knowledge/v5-projection/v1/candidates",
+      "reader_path": "/api/knowledge/v5-projection/v1/candidates",
+      "query_schema": "query-candidates.schema.json",
+      "enabled_in_stage_a": false,
+      "stage_a_status": 404,
+      "success_schema": "candidates.schema.json",
+      "disabled_golden": "examples/candidates-disabled.json",
+      "enabled_in_stage_b": true,
+      "stage_b_status": 200
+    },
+    {
+      "dataset": "campaigns",
+      "browser_path": "/api/v5/learning/campaigns",
+      "proxy_path": "/api/knowledge/v5-projection/v1/campaigns",
+      "reader_path": "/api/knowledge/v5-projection/v1/campaigns",
+      "query_schema": "query-campaigns.schema.json",
+      "enabled_in_stage_a": false,
+      "stage_a_status": 404,
+      "success_schema": "campaigns.schema.json",
+      "disabled_golden": "examples/campaigns-disabled.json",
+      "enabled_in_stage_b": true,
+      "stage_b_status": 200
+    },
+    {
+      "dataset": "assessments",
+      "browser_path": "/api/v5/learning/assessments",
+      "proxy_path": "/api/knowledge/v5-projection/v1/assessments",
+      "reader_path": "/api/knowledge/v5-projection/v1/assessments",
+      "query_schema": "query-assessments.schema.json",
+      "enabled_in_stage_a": false,
+      "stage_a_status": 404,
+      "success_schema": "assessments.schema.json",
+      "disabled_golden": "examples/assessments-disabled.json",
+      "enabled_in_stage_b": true,
+      "stage_b_status": 200
+    }
+  ],
+  "auth": {
+    "reuse_existing_require_auth": true,
+    "failure_status": 401,
+    "failure_schema": "auth-error.schema.json",
+    "golden": "examples/errors/AUTHENTICATION_REQUIRED.json",
+    "citation": "condor/v5/app.py:450"
+  },
+  "query_handling": "validate exact per-route query schema after rejecting duplicate/unknown params; raw query forwarded unchanged; no upstream URL/path selection; reader remains authoritative",
+  "success_mapping": "identity: preserve envelope schema, dataset, items, hashes, all timestamps and raw response bytes; no Stage-1 facade translation or new fields",
+  "error_mapping": [
+    {
+      "owner_proxy_status": 400,
+      "browser_status": 400,
+      "codes": [
+        "INVALID_QUERY",
+        "INVALID_CURSOR"
+      ],
+      "body": "same validated five-key projection error, no detail wrapper",
+      "action": "clear affected dataset; show UNAVAILABLE"
+    },
+    {
+      "owner_proxy_status": 404,
+      "browser_status": 404,
+      "codes": [
+        "ROOT_NOT_IN_SCOPE",
+        "DATASET_NOT_ENABLED",
+        "ROUTE_NOT_FOUND"
+      ],
+      "body": "same validated five-key projection error, no detail wrapper",
+      "action": "clear affected dataset; show UNAVAILABLE"
+    },
+    {
+      "owner_proxy_status": 405,
+      "browser_status": 405,
+      "codes": [
+        "METHOD_NOT_ALLOWED"
+      ],
+      "body": "same validated five-key projection error, no detail wrapper",
+      "action": "clear affected dataset; show UNAVAILABLE"
+    },
+    {
+      "owner_proxy_status": 413,
+      "browser_status": 413,
+      "codes": [
+        "REQUEST_BODY_NOT_ALLOWED"
+      ],
+      "body": "same validated five-key projection error, no detail wrapper",
+      "action": "clear affected dataset; show UNAVAILABLE"
+    },
+    {
+      "owner_proxy_status": 414,
+      "browser_status": 414,
+      "codes": [
+        "TARGET_TOO_LONG"
+      ],
+      "body": "same validated five-key projection error, no detail wrapper",
+      "action": "clear affected dataset; show UNAVAILABLE"
+    },
+    {
+      "owner_proxy_status": 409,
+      "browser_status": 409,
+      "codes": [
+        "SNAPSHOT_CHANGED"
+      ],
+      "body": "same validated five-key projection error, no detail wrapper",
+      "action": "clear selected pages; offer First"
+    },
+    {
+      "owner_proxy_status": 503,
+      "browser_status": 503,
+      "codes": [
+        "PROJECTION_BUSY",
+        "PROJECTION_DEADLINE",
+        "WARMING",
+        "VERIFICATION_UNAVAILABLE",
+        "PUBLICATION_UNAVAILABLE",
+        "UPSTREAM_UNAVAILABLE"
+      ],
+      "body": "same validated five-key projection error, no detail wrapper",
+      "action": "clear affected dataset; show UNAVAILABLE"
+    },
+    {
+      "owner_proxy_status": 502,
+      "browser_status": 502,
+      "codes": [
+        "UPSTREAM_INVALID",
+        "INVALID_OWNER_PROJECTION"
+      ],
+      "body": "same validated five-key projection error, no detail wrapper",
+      "action": "clear affected dataset; show UNAVAILABLE"
+    }
+  ],
+  "auth_mapping": "401 existing detail/code wrapper passes unchanged; clear ALL projection caches; never turn into projection 200",
+  "adapter_originated_errors": {
+    "malformed_or_hash_scope_schema_time_invalid": "502 INVALID_OWNER_PROJECTION",
+    "timeout_or_unreachable": "503 UPSTREAM_UNAVAILABLE",
+    "invalid_query": "400 INVALID_QUERY",
+    "method": "405 METHOD_NOT_ALLOWED",
+    "body": "413 REQUEST_BODY_NOT_ALLOWED",
+    "target": "414 TARGET_TOO_LONG"
+  },
+  "cursor": "opaque, unchanged token; consumers never decode; owner enforces cursor bindings",
+  "time": "do not regenerate verified_at, generated_at or served_at; monotonic expiry uses remaining age≤90s from owner verified_at, never poll time",
+  "headers": "wire-contract.json permitted_headers; no browser credentials forwarded upstream",
+  "existing_nonprojection_routes": [
+    "/api/v5/learning/roles",
+    "/api/v5/learning/research",
+    "/api/v5/learning/workflows"
+  ],
+  "existing_nonprojection_behavior": "unchanged separate fixtures/disabled actions; never aliases or fallbacks; D07/D12 stay off",
+  "manifest_route": "production binding replaces only its projection read handler; do not run Stage-1 release manifest validator on the new envelope",
+  "frontend_schema": "browser-response-stage-b.schema.json",
+  "response_byte_cap": 256000,
+  "no_retry": true,
+  "extends": "browser-contract.json",
+  "stage_b_activation": "Only a B-enabled, receipt-bound publication selects B schemas. A-only publication retains A schemas and typed disabled 404s. Do not mix revisions or fallback."
+}

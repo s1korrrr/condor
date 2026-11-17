@@ -1,0 +1,45 @@
+{
+  "schema": "research_knowledge.v5_read_projection.v1",
+  "owner": "research_os",
+  "authority": "READ_ONLY",
+  "effect": "NONE",
+  "dataset": "campaigns",
+  "scope": null,
+  "projection_revision": "a24cf24b124c983d89b57779d5c1f9cbab7d2176c5c7dc3ef91896a1d5e08601",
+  "snapshot_id": null,
+  "publication_sha256": null,
+  "database_sha256": null,
+  "source_revision": null,
+  "source_snapshot": null,
+  "event_signature": null,
+  "status": "UNAVAILABLE",
+  "reason_codes": [
+    "SOURCE_CHANGED"
+  ],
+  "generated_at_ms": null,
+  "verified_at_ms": null,
+  "served_at_ms": 1794916801000,
+  "coverage": {
+    "state": "UNAVAILABLE",
+    "total_items": null,
+    "returned_items": 0,
+    "omitted_items": null,
+    "unresolved_membership_items": null,
+    "excluded_proposed_edges": null,
+    "pending_events": null
+  },
+  "page": {
+    "limit": 25,
+    "next_cursor": null,
+    "has_more": false
+  },
+  "items": [],
+  "issues": [
+    {
+      "code": "SOURCE_CHANGED",
+      "record_id": null,
+      "detail": "Synthetic existing preregistration seal failed source integrity."
+    }
+  ],
+  "envelope_sha256": "5cf37799102221a2bcef4d35ae487d3366e59a605cf4ccc091f92a7cb9e2250e"
+}

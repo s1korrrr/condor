@@ -1,0 +1,100 @@
+{
+  "schema": "research_knowledge.v5_read_projection.v1",
+  "owner": "research_os",
+  "authority": "READ_ONLY",
+  "effect": "NONE",
+  "dataset": "campaigns",
+  "scope": {
+    "scope_id": "v5-okx-spot-dca",
+    "program_id": "okx_spot_dca",
+    "family_lane_pairs": [
+      {
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT"
+      }
+    ],
+    "scope_sha256": "ac251f1a1cb75eb8890c1b8598046ef40ac79d7775a6284835851318b25abd66"
+  },
+  "projection_revision": "a24cf24b124c983d89b57779d5c1f9cbab7d2176c5c7dc3ef91896a1d5e08601",
+  "snapshot_id": "30815f5eec2d39e41f84da1e0c7957c8ed20ede8783118f14509518cb788df0c",
+  "publication_sha256": "dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e",
+  "database_sha256": "a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482",
+  "source_revision": "fixture-source-r1",
+  "source_snapshot": "fixture-source-s1",
+  "event_signature": "fixture-events-e1",
+  "status": "BOUND",
+  "reason_codes": [],
+  "generated_at_ms": 1794916620000,
+  "verified_at_ms": 1794916800000,
+  "served_at_ms": 1794916801000,
+  "coverage": {
+    "state": "COMPLETE",
+    "total_items": 1,
+    "returned_items": 1,
+    "omitted_items": 0,
+    "unresolved_membership_items": 0,
+    "excluded_proposed_edges": 0,
+    "pending_events": 0
+  },
+  "page": {
+    "limit": 25,
+    "next_cursor": null,
+    "has_more": false
+  },
+  "items": [
+    {
+      "record_id": "decision:campaign:fixture-autonomous-campaign",
+      "native_kind": "decision",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "OWN_FAMILY_LANE",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": "okx_spot_dca",
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "fixtures/autonomous-campaign-state.json",
+          "pointer": "",
+          "sha256": "e2a17a19e81e4da2e5d07a6ea21fc72b3e63fe0965bec45437f0a5abb55a2d82",
+          "bytes": 363
+        }
+      ],
+      "row_status": "COMPLETE",
+      "issues": [],
+      "campaign_id": "fixture-autonomous-campaign",
+      "native_schema_id": "research_knowledge.autonomous_campaign.v1",
+      "campaign_basis": "AUTONOMOUS_STATE_CHAIN",
+      "program_id": "okx_spot_dca",
+      "candidate_refs": [],
+      "attempt_refs": [],
+      "reference_total": 0,
+      "dispatch_permission": "NONE",
+      "row_sha256": "1d4849419e9a468e98d87cb68271bd274adcf3c7105ccc0d212b24868fed111c",
+      "sequence": 0,
+      "state_hash": "2fbd66af4e53c59ee23d71be2479b5f9c1db91ead5d4a89624c8ebb4b5e6fb40",
+      "previous_hash": null,
+      "title": "Synthetic chain contract boundary",
+      "native_state": "HELD",
+      "reason": null
+    }
+  ],
+  "issues": [],
+  "envelope_sha256": "adccc4f0d1982c13b10f591712faedc89cfeea984a91fd637b1c7bc9379f0c4a"
+}

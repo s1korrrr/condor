@@ -59,7 +59,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const v5Api = {
-  auth: () => request<{ authenticated: boolean }>("/auth"),
+  auth: () => request<{ authenticated: boolean; learning_projection_revision?: string }>("/auth"),
   profile: () => request<V5DashboardProfile>("/dashboard/profile"),
   login: (token: string) =>
     request<{ authenticated: boolean }>("/auth/login", {

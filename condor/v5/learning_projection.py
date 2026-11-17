@@ -1,7 +1,7 @@
-"""Condor binding for the frozen V5 Learning / Factory / Lineage Stage-A projection.
+"""Condor binding for the frozen V5 Learning / Factory / Lineage projection.
 
-Read-only, authority NONE. Contract: rsibot ``1d8c0ab6`` (design §5 and the appendix vendored verbatim in
-``schemas/learning_projection``). Four parts:
+Read-only, authority NONE. Contracts: rsibot ``1d8c0ab6`` (A) and ``bf9f3c14`` (B), vendored verbatim in
+``schemas/learning_projection``. Four parts:
 
 * strict parsing and canonical hashing (``parse_strict``, ``canonical``);
 * envelope and error validation against the vendored JSON Schemas plus the appendix's relational/byte
@@ -23,6 +23,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Literal
@@ -39,9 +40,11 @@ logger = logging.getLogger(__name__)
 
 SCHEMA_DIR = Path(__file__).resolve().parent / "schemas" / "learning_projection"
 SCOPE_DIR = SCHEMA_DIR.with_name("learning_scopes")
+STAGE_A_SCOPE_SHA256 = "a3a34ee765c75616da6f606a66156cdbf0e8736c91052966607fa6b59936bd18"
+STAGE_B_SCOPE_SHA256 = "1f65d67fc990262e049e808961b1a23068f26692b9171112eb441be0157e7c16"
 SCOPE_ARTIFACTS = {
-    "a3a34ee765c75616da6f606a66156cdbf0e8736c91052966607fa6b59936bd18": "scope-okx-spot-dca.json",
-    "1f65d67fc990262e049e808961b1a23068f26692b9171112eb441be0157e7c16": "scope-okx-spot-dca-stage-b.json",
+    STAGE_A_SCOPE_SHA256: "scope-okx-spot-dca.json",
+    STAGE_B_SCOPE_SHA256: "scope-okx-spot-dca-stage-b.json",
 }
 SCHEMA_URN = "urn:rsibot:v5-lfl:stage-a:r2:"
 
@@ -65,6 +68,9 @@ FreshnessMiss = Literal["retired", "ignored", "expired"]
 STAGE_A_DATASETS = ("manifest", "lessons", "records", "jobs")
 STAGE_B_DATASETS = ("candidates", "campaigns", "assessments")
 ALL_DATASETS = STAGE_A_DATASETS + STAGE_B_DATASETS
+STAGE_A_REVISION = json.loads((SCHEMA_DIR / "wire-contract.json").read_bytes())["projection_revision"]
+STAGE_B_REVISION = json.loads((SCHEMA_DIR / "wire-contract-stage-b.json").read_bytes())["projection_revision"]
+REASON_OVERFLOW = "Reason summary truncated; inspect row issues and dataset pages."
 PROJECTION_PATHS = frozenset(f"/api/v5/learning/{dataset}" for dataset in ALL_DATASETS)
 MANIFEST_ORDER = ("lessons", "records", "jobs", "candidates", "campaigns", "assessments")
 OWNER_PATH_PREFIX = "/api/knowledge/v5-projection/v1/"
@@ -289,6 +295,7 @@ class ExpectedBinding:
 class RequestShape:
     dataset: str
     record_type: str | None = None
+    idea_revision_id: str | None = None
 
 
 def _objects_below(value: Any) -> int:
@@ -318,10 +325,10 @@ def _depth(value: Any) -> int:
 
 def _refs_of(row: dict[str, Any]) -> list[dict[str, Any]]:
     refs: list[dict[str, Any]] = []
-    for field_name in ("supersedes", "experiment_ref", "from_ref", "to_ref"):
+    for field_name in ("supersedes", "experiment_ref", "from_ref", "to_ref", "run_ref"):
         if isinstance(row.get(field_name), dict):
             refs.append(row[field_name])
-    for field_name in ("outcome_refs", "contradictory_refs", "artifact_refs"):
+    for field_name in ("outcome_refs", "contradictory_refs", "artifact_refs", "experiment_refs", "assessment_refs", "attempt_refs", "candidate_refs"):
         refs.extend(row.get(field_name) or [])
     return refs
 
@@ -332,7 +339,29 @@ def _safe_relative_path(path: str) -> bool:
     return not any(part in _RELATIVE_SEGMENT_BAD for part in path.split("/"))
 
 
-def _check_row(row: dict[str, Any], *, context: str) -> None:
+@lru_cache(maxsize=1)
+def _stage_b_regions() -> dict[str, Any]:
+    return json.loads((SCHEMA_DIR / "row-regions-stage-b.json").read_bytes())["variants"]
+
+
+def _check_stage_b_regions(row: dict[str, Any], variant: str, context: str) -> None:
+    regions = _stage_b_regions()[variant]
+    fields = {
+        "fixed": regions["fixed_keys"],
+        "references": regions["reference_keys"],
+        "row_scope": ["row_scope"],
+        "sources": ["sources"],
+        "issues": ["issues"],
+    }
+    if set(row) - {key for keys in fields.values() for key in keys}:
+        raise ContractViolation(f"{context}: unbudgeted Stage-B row member")
+    sizes = {region: len(canonical({key: row[key] for key in keys if key in row})) - 2 for region, keys in fields.items()}
+    sizes["outer_punctuation"] = len(canonical(row)) - sum(sizes.values())
+    if any(size > regions["region_caps_bytes"][region] for region, size in sizes.items()):
+        raise ContractViolation(f"{context}: Stage-B row region too large")
+
+
+def _check_row(row: dict[str, Any], *, context: str, variant: str | None = None) -> None:
     sources = row["sources"]
     for source in sources:
         if not _safe_relative_path(source["relative_path"]):
@@ -363,6 +392,11 @@ def _check_row(row: dict[str, Any], *, context: str) -> None:
         raise ContractViolation(f"{context}: row exceeds {MAX_ROW_BYTES} bytes")
     if sha256_hex(encoded) != row["row_sha256"]:
         raise ContractViolation(f"{context}: row hash mismatch")
+    if _objects_below(row) > MAX_ROW_NESTED_OBJECTS or _depth(row) - 1 > MAX_ROW_DEPTH:
+        raise ContractViolation(f"{context}: row nesting exceeds the contract")
+    if variant is not None:
+        _check_stage_b_regions(row, variant, context)
+        return
     if len(canonical(row["row_scope"])) > 768:
         raise ContractViolation(f"{context}: row_scope too large")
     if sum(len(canonical(source)) for source in sources) > 1_024:
@@ -371,8 +405,6 @@ def _check_row(row: dict[str, Any], *, context: str) -> None:
         raise ContractViolation(f"{context}: reference region too large")
     if sum(len(canonical(issue)) for issue in row["issues"]) > 512:
         raise ContractViolation(f"{context}: issue region too large")
-    if _objects_below(row) > MAX_ROW_NESTED_OBJECTS or _depth(row) - 1 > MAX_ROW_DEPTH:
-        raise ContractViolation(f"{context}: row nesting exceeds the contract")
     scalar_region = (
         len(canonical(row))
         - len(canonical(row["row_scope"]))
@@ -382,6 +414,15 @@ def _check_row(row: dict[str, Any], *, context: str) -> None:
     )
     if scalar_region > 3_072 + 512:
         raise ContractViolation(f"{context}: scalar region exceeds the contract")
+
+
+NATIVE_COMPARISON_PLACEHOLDERS = frozenset({"UNAVAILABLE", "UNKNOWN", "NONE", "NULL", "N/A", "NOT_RECORDED", "UNVERIFIED"})
+
+
+def _check_comparison_identity(value: str, *, context: str) -> None:
+    normalized = value.strip().upper()
+    if not normalized or normalized in NATIVE_COMPARISON_PLACEHOLDERS:
+        raise ContractViolation(f"{context}: comparison requires an explicit non-placeholder identity")
 
 
 def _check_dataset_row(row: dict[str, Any], dataset: str, request: RequestShape, *, context: str) -> None:
@@ -402,6 +443,59 @@ def _check_dataset_row(row: dict[str, Any], dataset: str, request: RequestShape,
             codes = {issue["code"] for issue in row["issues"]}
             if row["row_status"] != "PARTIAL" or "COMPLETION_NOT_RECORDED" not in codes:
                 raise ContractViolation(f"{context}: recorded completion without a time must be PARTIAL")
+    if stub:
+        return
+    if dataset in ("candidates", "campaigns") and row["reference_total"] is not None and row["reference_total"] < len(_refs_of(row)):
+        raise ContractViolation(f"{context}: reference preview exceeds the known total")
+    if dataset == "candidates":
+        if row["record_id"] != row["idea_revision_id"]:
+            raise ContractViolation(f"{context}: candidate does not identify its exact revision")
+        tuples = []
+        for field in ("experiment_refs", "assessment_refs"):
+            identities = [(ref["owner"], ref["kind"], ref["record_id"], ref["revision"] or "") for ref in row[field]]
+            if identities != sorted(identities):
+                raise ContractViolation(f"{context}: candidate preview is not owner ordered")
+            tuples.extend(identities)
+        if len(tuples) != len(set(tuples)):
+            raise ContractViolation(f"{context}: duplicate candidate references")
+        codes = {issue["code"] for issue in row["issues"]}
+        if row["reference_total"] is None and "INDEX_INCOMPLETE" not in codes:
+            raise ContractViolation(f"{context}: unknown reference census has no issue")
+    if dataset == "campaigns":
+        prefix = "" if row["native_kind"] == "paper_campaign" else "decision:campaign:"
+        if row["record_id"] != prefix + row["campaign_id"]:
+            raise ContractViolation(f"{context}: campaign identity mismatch")
+    if dataset == "assessments":
+        if row["record_id"] != "assessment:" + row["assessment_id"] or row["idea_revision_id"] != request.idea_revision_id:
+            raise ContractViolation(f"{context}: assessment identity or filter mismatch")
+        comparison = row["comparison"]
+        if comparison:
+            conditions = comparison["conditions"]
+            if any(comparison[key] != conditions[key] for key in ("baseline_id", "metric", "unit")):
+                raise ContractViolation(f"{context}: inconsistent comparison conditions")
+            _check_comparison_identity(comparison["comparable_group"], context=f"{context}.comparable_group")
+            for field in ("baseline_id", "metric", "unit", "venue", "instrument", "capital_model", "costs_identity", "execution_identity", "validation"):
+                _check_comparison_identity(conditions[field], context=f"{context}.{field}")
+            window = conditions["window"]
+            if isinstance(window, dict):
+                try:
+                    ordered = datetime.fromisoformat(window["start"]) < datetime.fromisoformat(window["end_exclusive"])
+                except (ValueError, TypeError):
+                    ordered = False
+                if not ordered:
+                    raise ContractViolation(f"{context}: comparison window is not ordered ISO time")
+            else:
+                _check_comparison_identity(window, context=f"{context}.window")
+
+
+def _stage_b_variant(dataset: str, row: dict[str, Any]) -> str:
+    if row["row_status"] == "UNAVAILABLE":
+        return "UnavailableRowStub"
+    if dataset == "records":
+        return "RecordEdge" if row["record_type"] == "edge" else "RecordNode"
+    if dataset == "campaigns":
+        return "PaperCampaign" if row["native_kind"] == "paper_campaign" else "AutonomousCampaign"
+    return "Assessment" if dataset == "assessments" else "Candidate"
 
 
 def _has_gap(envelope: dict[str, Any]) -> bool:
@@ -422,6 +516,26 @@ def _has_gap(envelope: dict[str, Any]) -> bool:
     return False
 
 
+def _check_stage_b_reasons(envelope: dict[str, Any]) -> None:
+    actual = envelope["reason_codes"]
+    visible = {issue["code"] for issue in envelope["issues"]}
+    if envelope["dataset"] == "manifest":
+        for descriptor in envelope["items"]:
+            reasons = descriptor["reason_codes"]
+            if reasons != sorted(reasons):
+                raise ContractViolation("manifest descriptor reasons are not sorted")
+            visible.update(reasons)
+    else:
+        visible.update(issue["code"] for row in envelope["items"] for issue in row["issues"])
+    overflow = any(issue["code"] == "INDEX_INCOMPLETE" and issue["detail"] == REASON_OVERFLOW for issue in envelope["issues"])
+    if actual != sorted(actual) or (not overflow and not visible.issubset(actual)):
+        raise ContractViolation("invalid Stage-B reason summary")
+    if overflow and (len(actual) != 4 or "INDEX_INCOMPLETE" not in actual or envelope["status"] == "BOUND"):
+        raise ContractViolation("invalid Stage-B reason overflow marker")
+    if overflow and sorted((visible | set(actual)) - {"INDEX_INCOMPLETE"})[:3] != [code for code in actual if code != "INDEX_INCOMPLETE"]:
+        raise ContractViolation("invalid Stage-B reason overflow ranking")
+
+
 def validate_envelope(
     document: Any,
     *,
@@ -431,9 +545,11 @@ def validate_envelope(
 ) -> dict[str, Any]:
     """Validate one 200 body. Returns the document; raises ``ContractViolation`` on any violation."""
     dataset = request.dataset
-    if dataset not in STAGE_A_DATASETS:
-        raise ContractViolation("dataset has no Stage-A success schema")
-    problem = schema_errors(dataset, document)
+    stage_b = expected.projection_revision == STAGE_B_REVISION
+    if dataset not in (ALL_DATASETS if stage_b else STAGE_A_DATASETS):
+        raise ContractViolation("dataset is not enabled in the configured stage")
+    name = f"{dataset}-stage-b" if stage_b and dataset in ("manifest", "records") else dataset
+    problem = schema_errors(name, document)
     if problem:
         raise ContractViolation(problem)
     if document["dataset"] != dataset:
@@ -521,26 +637,29 @@ def validate_envelope(
         program = membership.program_id
         if row_scope["program_id"] not in (None, program) or (
             row_scope["membership_basis"] == "LESSON_PROGRAM" and row_scope["program_id"] != program
-        ) or ("program_id" in item and item["program_id"] != program):
+        ) or ("program_id" in item and item["program_id"] != program and not (stage_b and item["program_id"] is None)):
             raise ContractViolation(f"{context}: row program is outside the pinned scope")
         recorded_scope = row_scope["recorded_scope"]
         window = recorded_scope["window"] if recorded_scope is not None else None
         if isinstance(window, dict) and window["start"] >= window["end_exclusive"]:
             raise ContractViolation(f"{context}: recorded window is not ordered")
-        _check_row(item, context=context)
+        variant = _stage_b_variant(dataset, item) if stage_b and dataset in (*STAGE_B_DATASETS, "records") else None
+        _check_row(item, context=context, variant=variant)
         _check_dataset_row(item, dataset, request, context=context)
         ids.append(item["record_id"].encode("utf-8"))
     if any(left >= right for left, right in zip(ids, ids[1:])):
         raise ContractViolation("items are not strictly ascending by record_id")
 
     # Status semantics.
-    if status == "UNAVAILABLE" and (items and dataset != "manifest"):
-        raise ContractViolation("unavailable envelope carries rows")
+    if status == "UNAVAILABLE" and ((items and dataset != "manifest") or page["next_cursor"] is not None):
+        raise ContractViolation("unavailable envelope carries rows or continuation")
     if status == "BOUND":
         if coverage["unresolved_membership_items"] != 0 or coverage["omitted_items"] != 0 or _has_gap(document):
             raise ContractViolation("BOUND envelope hides a gap")
     if status == "PARTIAL" and not _has_gap(document):
         raise ContractViolation("PARTIAL envelope names no gap")
+    if stage_b and dataset not in ("lessons", "jobs"):
+        _check_stage_b_reasons(document)
     return document
 
 
@@ -711,6 +830,10 @@ class LearningProjectionConfig:
     membership: ScopeMembership
 
     @property
+    def stage_b(self) -> bool:
+        return self.projection_revision == STAGE_B_REVISION
+
+    @property
     def expected(self) -> ExpectedBinding:
         return ExpectedBinding(self.scope_id, self.scope_sha256, self.projection_revision, self.membership)
 
@@ -782,7 +905,7 @@ class ResearchOwnerLearningSource:
                 del self._receipts[dataset]
                 continue
             result[dataset] = receipt.status
-        return {dataset: result.get(dataset, "UNAVAILABLE") for dataset in STAGE_A_DATASETS}
+        return {dataset: result.get(dataset, "UNAVAILABLE") for dataset in (ALL_DATASETS if self.config.stage_b else STAGE_A_DATASETS)}
 
     def receipt_expiry(self, dataset: str) -> float | None:
         """Monotonic instant at which this dataset's receipt expires, or None when there is none."""
@@ -828,9 +951,9 @@ class ResearchOwnerLearningSource:
         self, dataset: str, raw_query: str, *, disconnected: Callable[[], Awaitable[bool]] | None = None,
     ) -> ProjectionResult:
         """One browser request -> at most one owner request. No retry, no cache hit, no fallback."""
-        if dataset in STAGE_B_DATASETS:
+        if dataset in STAGE_B_DATASETS and not self.config.stage_b:
             return local_result("DATASET_NOT_ENABLED")  # checked before query validation, like the owner
-        if dataset not in STAGE_A_DATASETS:
+        if dataset not in ALL_DATASETS:
             return local_result("ROUTE_NOT_FOUND")
         try:
             parsed = validate_query(dataset, raw_query, self.config.scope_id)
@@ -858,7 +981,7 @@ class ResearchOwnerLearningSource:
     def _interpret(self, dataset: str, parsed: dict[str, str], response: OwnerResponse) -> ProjectionResult:
         if response.status == 200:
             document = parse_strict(response.body)
-            request = RequestShape(dataset, parsed.get("record_type"))
+            request = RequestShape(dataset, parsed.get("record_type"), parsed.get("idea_revision_id"))
             envelope = validate_envelope(document, request=request, expected=self.config.expected, now_ms=self.clock())
             miss = self._accept(dataset, envelope)
             if miss is not None:
@@ -893,7 +1016,7 @@ def add_projection_routes(router: APIRouter, projection: ResearchOwnerLearningSo
 
     Precedence matches the appendix: target length 414, method 405, body framing 413, then the read. With no
     configured source, Stage-A routes answer a typed 503 PUBLICATION_UNAVAILABLE (never a fixture) and Stage-B
-    routes the same typed 404 DATASET_NOT_ENABLED they answer when configured.
+    routes the same typed 404 DATASET_NOT_ENABLED they answer when configured for Stage A.
     """
 
     def make(dataset: str):
@@ -906,7 +1029,7 @@ def add_projection_routes(router: APIRouter, projection: ResearchOwnerLearningSo
                 return _response(local_result("METHOD_NOT_ALLOWED"), extra={"Allow": "GET"})
             if "transfer-encoding" in request.headers or request.headers.getlist("content-length") not in ([], ["0"]):
                 return _response(local_result("REQUEST_BODY_NOT_ALLOWED"))
-            if dataset in STAGE_B_DATASETS:
+            if dataset in STAGE_B_DATASETS and (projection is None or not projection.config.stage_b):
                 return _response(local_result("DATASET_NOT_ENABLED"))
             if projection is None:
                 return _response(local_result("PUBLICATION_UNAVAILABLE"))

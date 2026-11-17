@@ -1,0 +1,172 @@
+{
+  "schema": "research_knowledge.v5_read_projection.v1",
+  "owner": "research_os",
+  "authority": "READ_ONLY",
+  "effect": "NONE",
+  "dataset": "manifest",
+  "scope": null,
+  "projection_revision": "a24cf24b124c983d89b57779d5c1f9cbab7d2176c5c7dc3ef91896a1d5e08601",
+  "snapshot_id": null,
+  "publication_sha256": null,
+  "database_sha256": null,
+  "source_revision": null,
+  "source_snapshot": null,
+  "event_signature": null,
+  "status": "UNAVAILABLE",
+  "reason_codes": [
+    "NOT_PUBLISHED"
+  ],
+  "generated_at_ms": null,
+  "verified_at_ms": null,
+  "served_at_ms": 1794916801000,
+  "coverage": {
+    "state": "UNAVAILABLE",
+    "total_items": null,
+    "returned_items": 6,
+    "omitted_items": null,
+    "unresolved_membership_items": null,
+    "excluded_proposed_edges": null,
+    "pending_events": null
+  },
+  "page": {
+    "limit": 6,
+    "next_cursor": null,
+    "has_more": false
+  },
+  "items": [
+    {
+      "dataset": "lessons",
+      "native_schema_ids": [
+        "research_knowledge.scoped_lesson.v1"
+      ],
+      "availability": "UNAVAILABLE",
+      "reason_codes": [
+        "NOT_PUBLISHED"
+      ],
+      "total_items": null,
+      "max_limit": 50,
+      "capabilities": {
+        "read": true,
+        "dispatch": false,
+        "activate": false,
+        "release": false,
+        "adopt": false,
+        "recall": "NOT_EVALUATED"
+      }
+    },
+    {
+      "dataset": "records",
+      "native_schema_ids": [
+        "research_knowledge.autonomous_campaign.v1",
+        "research_knowledge.graph_event.v1",
+        "research_knowledge.outcome.v1",
+        "research_knowledge.paper_campaign.v1",
+        "research_knowledge.scoped_lesson.v1",
+        "rsibot.research_knowledge.event.v1"
+      ],
+      "availability": "UNAVAILABLE",
+      "reason_codes": [
+        "NOT_PUBLISHED"
+      ],
+      "total_items": null,
+      "max_limit": 50,
+      "capabilities": {
+        "read": true,
+        "dispatch": false,
+        "activate": false,
+        "release": false,
+        "adopt": false,
+        "recall": "NOT_EVALUATED"
+      }
+    },
+    {
+      "dataset": "jobs",
+      "native_schema_ids": [
+        "rsibot.research_knowledge.event.v1"
+      ],
+      "availability": "UNAVAILABLE",
+      "reason_codes": [
+        "NOT_PUBLISHED"
+      ],
+      "total_items": null,
+      "max_limit": 50,
+      "capabilities": {
+        "read": true,
+        "dispatch": false,
+        "activate": false,
+        "release": false,
+        "adopt": false,
+        "recall": "NOT_EVALUATED"
+      }
+    },
+    {
+      "dataset": "candidates",
+      "native_schema_ids": [
+        "research_knowledge.graph_event.v1"
+      ],
+      "availability": "UNAVAILABLE",
+      "reason_codes": [
+        "NOT_PUBLISHED"
+      ],
+      "total_items": null,
+      "max_limit": 50,
+      "capabilities": {
+        "read": true,
+        "dispatch": false,
+        "activate": false,
+        "release": false,
+        "adopt": false,
+        "recall": "NOT_EVALUATED"
+      }
+    },
+    {
+      "dataset": "campaigns",
+      "native_schema_ids": [
+        "research_knowledge.autonomous_campaign.v1",
+        "research_knowledge.paper_campaign.v1"
+      ],
+      "availability": "UNAVAILABLE",
+      "reason_codes": [
+        "NOT_PUBLISHED"
+      ],
+      "total_items": null,
+      "max_limit": 50,
+      "capabilities": {
+        "read": true,
+        "dispatch": false,
+        "activate": false,
+        "release": false,
+        "adopt": false,
+        "recall": "NOT_EVALUATED"
+      }
+    },
+    {
+      "dataset": "assessments",
+      "native_schema_ids": [
+        "research_knowledge.graph_event.v1"
+      ],
+      "availability": "UNAVAILABLE",
+      "reason_codes": [
+        "NOT_PUBLISHED"
+      ],
+      "total_items": null,
+      "max_limit": 50,
+      "capabilities": {
+        "read": true,
+        "dispatch": false,
+        "activate": false,
+        "release": false,
+        "adopt": false,
+        "recall": "NOT_EVALUATED"
+      }
+    }
+  ],
+  "issues": [
+    {
+      "code": "NOT_PUBLISHED",
+      "record_id": null,
+      "detail": "New B generation is not admitted; capability is not health."
+    }
+  ],
+  "envelope_sha256": "48cb8979f607db9108d971445d3f7a9b57c01fff90c14c1e628120021ff55b67"
+}

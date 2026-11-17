@@ -10,6 +10,7 @@ import re
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 
+from .learning_projection import add_projection_routes
 from .projection_validation import (
     OwnerReceiptValidationError,
     ProjectionValidationError,
@@ -447,7 +448,7 @@ class FixtureLearningAPI:
         self.workflows = FixtureWorkflowRequests(workflows)
 
 
-def learning_router(*, source, require_auth, check_origin, now):
+def learning_router(*, source, require_auth, check_origin, now, projection=None):
     from .research import project_research
 
     router = APIRouter(prefix="/api/v5/learning", dependencies=[Depends(require_auth)])
@@ -460,22 +461,23 @@ def learning_router(*, source, require_auth, check_origin, now):
             "enabled": False,
         }
 
-    @router.get("/manifest")
-    async def manifest():
-        if source.manifest is None:
-            return {
-                "status": "UNAVAILABLE",
-                "reason": "Learning owner is not bound; Stage 1 disabled",
-                "effect": "NONE",
-            }
-        try:
-            return project_learning_manifest(
-                source.manifest, source.scope, now_ms=now()
-            )
-        except ProjectionValidationError as error:
-            raise HTTPException(
-                502, detail={"code": "INVALID_LEARNING_PROJECTION"}
-            ) from error
+    # The Stage-1 fixture manifest stays only for an explicitly injected isolated fixture. A production
+    # (or unconfigured) deployment serves the projection manifest instead; the Stage-1 validator never
+    # runs on the new envelope.
+    legacy_manifest = projection is None and source.manifest is not None
+    if legacy_manifest:
+        @router.get("/manifest")
+        async def manifest():
+            try:
+                return project_learning_manifest(
+                    source.manifest, source.scope, now_ms=now()
+                )
+            except ProjectionValidationError as error:
+                raise HTTPException(
+                    502, detail={"code": "INVALID_LEARNING_PROJECTION"}
+                ) from error
+
+    add_projection_routes(router, projection, skip=("manifest",) if legacy_manifest else ())
 
     @router.get("/research")
     async def research(cursor: int = 0, limit: int = 25):

@@ -1,0 +1,85 @@
+{
+  "base": "209b10912f6c75554e0f97e0bc35ad6e55a6e831",
+  "aliases": false,
+  "scope": {
+    "scope_id": "fixture-v5-lfl",
+    "program_id": "fixture-program",
+    "family_lane_pairs": [
+      {
+        "family_id": "fixture-family",
+        "lane": "SPOT"
+      }
+    ],
+    "scope_sha256": "d364ab0182f590617ea29f482a9279bf0cd4cfd06850a8f11b7bef821c159fd8"
+  },
+  "cases": [
+    {
+      "kind": "decision",
+      "data_schema": "research_knowledge.scoped_lesson.v1",
+      "expected": "LESSON"
+    },
+    {
+      "kind": "decision",
+      "data_schema": "scoped_lesson.v1",
+      "expected": "REJECT_UNSUPPORTED_NATIVE_SCHEMA"
+    },
+    {
+      "kind": "decision",
+      "data_schema": "research_knowledge.scoped_lesson.v2",
+      "expected": "REJECT_UNSUPPORTED_NATIVE_SCHEMA"
+    },
+    {
+      "kind": "lesson",
+      "data_schema": "research_knowledge.scoped_lesson.v1",
+      "expected": "REJECT_KIND"
+    },
+    {
+      "kind": "decision",
+      "data_schema": "research_knowledge.autonomous_campaign.v1",
+      "expected": "CAMPAIGN_STAGE_B_DISABLED"
+    },
+    {
+      "kind": "decision",
+      "data_schema": "autonomous_campaign.v1",
+      "expected": "REJECT_UNSUPPORTED_NATIVE_SCHEMA"
+    },
+    {
+      "kind": "decision",
+      "data_schema": "research_knowledge.outcome.v1",
+      "expected": "OUTCOME"
+    },
+    {
+      "kind": "run",
+      "event_schema": "rsibot.research_knowledge.event.v1",
+      "event_type": "attempt_started",
+      "status": "RUNNING",
+      "expected": "JOB_RUNNING_NOT_LIVE"
+    },
+    {
+      "kind": "run",
+      "event_schema": "research_knowledge.event.v1",
+      "event_type": "attempt_started",
+      "status": "RUNNING",
+      "expected": "REJECT_UNSUPPORTED_NATIVE_SCHEMA"
+    },
+    {
+      "kind": "idea_revision",
+      "event_schema": "research_knowledge.graph_event.v1",
+      "status": "PROPOSED",
+      "expected": "REGISTERED_IDEA_REVISION_STAGE_B_DISABLED"
+    }
+  ],
+  "job_timestamp_mapping": {
+    "started_at_ms": "started.json.recorded_at_utc parsed UTC to integer epoch milliseconds",
+    "finished_at_ms": "finished.json.recorded_at_utc parsed UTC to integer epoch milliseconds; null when absent",
+    "recorded_at_ms": "selected native event recorded_at_utc",
+    "available_at_ms": "null unless separately recorded causal-availability evidence exists"
+  },
+  "citations": {
+    "lesson": "research_os/src/research_os/research_knowledge/learning.py:26",
+    "outcome": "research_os/src/research_os/research_knowledge/learning.py:25",
+    "campaign": "research_os/src/research_os/research_knowledge/campaigns.py:36",
+    "workflow": "research_os/src/research_os/research_knowledge/workflow.py:19",
+    "graph_event": "research_os/src/research_os/research_knowledge/graph_events.py:21"
+  }
+}

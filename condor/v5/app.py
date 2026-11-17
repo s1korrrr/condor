@@ -30,6 +30,7 @@ from .dashboard import dashboard_profile, read_compatibility_path
 from .helm import read_helm_status
 from .money import MoneyLedger, daily as money_daily, helm_row, seconds_to_next_slot, v5_row
 from .learning import FixtureLearningAPI, learning_router
+from .learning_projection import ResearchOwnerLearningSource
 from .paper import PaperObservation, read_paper_status
 from .read_bridge import read_research, read_tradepad, research_route, tradepad_route
 from .state import StateCapacityError, WorkspaceState
@@ -304,6 +305,7 @@ def create_app(
     static_dir: Path | None = None,
     clock=lambda: time.time_ns() // 1_000_000,
     learning_source: FixtureLearningAPI | None = None,
+    projection_source: ResearchOwnerLearningSource | None = None,
 ) -> FastAPI:
     config = settings or Settings.from_env()
     store = state or WorkspaceState(config.runtime_root, clock=clock)
@@ -449,12 +451,20 @@ def create_app(
         if not supplied or not hmac.compare_digest(supplied, expected):
             raise HTTPException(401, detail={"code": "authentication_required"})
 
+    # Production projection source only when fully configured (V5_LEARNING_*); otherwise the routes answer a
+    # typed UNAVAILABLE. A fixture source is only ever injected explicitly (tests) and never replaces a failed read.
+    projection = projection_source or (
+        ResearchOwnerLearningSource(config.learning_projection, clock=clock)
+        if config.learning_projection is not None
+        else None
+    )
     app.include_router(
         learning_router(
             source=learning_source or FixtureLearningAPI(),
             require_auth=require_auth,
             check_origin=check_origin,
             now=clock,
+            projection=projection,
         )
     )
 

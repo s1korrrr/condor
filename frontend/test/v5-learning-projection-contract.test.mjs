@@ -176,7 +176,11 @@ test('ordering is strictly ascending record_id bytes', async () => {
 // --- readProjectionResult: transport + typed errors -------------------------------------------------------
 
 const response = (status, body, init = {}) => new Response(typeof body === 'string' ? body : JSON.stringify(body), { status, ...init });
-const fetcher = (handler, calls = []) => async (url, options) => { calls.push({ url, options }); return handler(url, options); };
+const fetcher = (handler, calls = [], scopeId = 'fixture-v5-lfl') => async (url, options) => {
+  calls.push({ url, options });
+  if (url === '/api/v5/auth') return response(200, { authenticated: true, learning_scope_id: scopeId });
+  return handler(url, options);
+};
 const typed = code => json(`examples/errors/${code}.json`);
 
 test('a success is the validated envelope; the request is a credentialed, query-only GET', async () => {
@@ -185,17 +189,149 @@ test('a success is the validated envelope; the request is a credentialed, query-
     fetcher(() => response(200, read('examples/lessons.json')), calls));
   assert.equal(result.ok, true);
   assert.equal(result.envelope.items[0].recall, 'NOT_EVALUATED');
-  assert.equal(calls[0].url, `/api/v5/learning/lessons?limit=10&cursor=${HASHES.cursor.token}`); // cursor unchanged, no scope_id
-  assert.equal(calls[0].options.credentials, 'include');
-  assert.equal(calls[0].options.method, undefined);
-  assert.equal(calls[0].options.body, undefined);
+  assert.equal(calls[0].url, '/api/v5/auth');
+  assert.equal(calls[1].url, `/api/v5/learning/lessons?scope_id=fixture-v5-lfl&limit=10&cursor=${HASHES.cursor.token}`);
+  assert.equal(calls[1].options.credentials, 'include');
+  assert.equal(calls[1].options.method, undefined);
+  assert.equal(calls[1].options.body, undefined);
 });
 
 test('records query carries record_type and root_id', async () => {
   const calls = [];
   await projection.readProjectionResult('records', { record_type: 'edge', root_id: 'a/b c', limit: 5 }, undefined,
     fetcher(() => response(200, read('examples/records-edges.json')), calls));
-  assert.equal(calls[0].url, '/api/v5/learning/records?record_type=edge&root_id=a%2Fb+c&limit=5');
+  assert.equal(calls.at(-1).url, '/api/v5/learning/records?scope_id=fixture-v5-lfl&record_type=edge&root_id=a%2Fb+c&limit=5');
+});
+
+for (const mutant of ['family', 'program', 'lesson-program', 'pairs', 'window', 'issue']) {
+  test(`resealed ${mutant} violates scope or size invariants`, async () => {
+    const dataset = mutant === 'lesson-program' ? 'lessons' : 'records';
+    const document = json(`examples/${dataset === 'records' ? 'records-nodes' : dataset}.json`);
+    const row = document.items[0];
+    if (mutant === 'family') row.row_scope.family_id = 'outside-family';
+    if (mutant === 'program') row.row_scope.program_id = 'outside-program';
+    if (mutant === 'lesson-program') row.program_id = 'outside-program';
+    if (mutant === 'pairs') document.scope.family_lane_pairs.push({ family_id: 'aaa', lane: 'SPOT' });
+    if (mutant === 'window') row.row_scope.recorded_scope.window = { start: 20, end_exclusive: 10 };
+    if (mutant === 'issue') {
+      document.status = 'PARTIAL';
+      document.issues = [{ code: 'OMITTED_CONTENT', record_id: 'r'.repeat(160), detail: 'd'.repeat(128) }];
+    }
+    await rehash(document);
+    assert.equal(validate.schemaError(dataset, document), null);
+    await assert.rejects(check(dataset, document, 'node'), validate.ContractViolation);
+  });
+}
+
+for (const key of ['constructor', 'toString', 'valueOf', 'hasOwnProperty', '__proto__']) {
+  test(`schema rejects inherited property name ${key} as an unknown key`, async () => {
+    const document = validate.parseStrictJson(read('examples/manifest.json').replace('{', `{${JSON.stringify(key)}:null,`));
+    await rehash(document);
+    assert.match(validate.schemaError('manifest', document), /unknown key/);
+  });
+}
+
+async function newGeneration(document) {
+  document.publication_sha256 = '9'.repeat(64);
+  const { schema, projection_revision, scope: { scope_sha256 }, publication_sha256, database_sha256, source_revision, source_snapshot, event_signature } = document;
+  document.snapshot_id = await validate.sha256Hex(validate.canonicalJson({ schema, projection_revision, scope_sha256, publication_sha256, database_sha256, source_revision, source_snapshot, event_signature }));
+  return rehash(document);
+}
+
+test('an active generation change clears every registered dataset store', async () => {
+  projection.clearProjectionCaches();
+  const old = json('examples/manifest.json');
+  const next = await newGeneration(json('examples/jobs.json'));
+  const cleared = [];
+  const unregister = ['manifest', 'jobs', 'records'].map(name => projection.registerProjectionStore({ clearForAuth() {}, clearForScopeChange: () => cleared.push(name) }));
+  try {
+    assert.equal((await projection.readProjectionResult('manifest', {}, undefined, fetcher(() => response(200, old)))).ok, true);
+    assert.equal((await projection.readProjectionResult('jobs', {}, undefined, fetcher(() => response(200, next)))).ok, true);
+    assert.deepEqual(cleared, ['manifest', 'jobs', 'records']);
+  } finally { unregister.forEach(remove => remove()); }
+});
+
+test('a cancelled, valid response changes neither the scope nor the generation', async () => {
+  projection.clearProjectionCaches();
+  const current = json('examples/manifest.json');
+  const cancelled = await newGeneration(json('examples/manifest.json'));
+  cancelled.scope.scope_id = 'alternate-scope';
+  await rehash(cancelled);
+  const cleared = [];
+  const unregister = projection.registerProjectionStore({ clearForAuth() {}, clearForScopeChange: () => cleared.push(true) });
+  const controller = new AbortController();
+  try {
+    const active = () => projection.readProjectionResult('manifest', {}, undefined, fetcher(() => response(200, current)));
+    assert.equal((await active()).ok, true);
+    const pending = projection.readProjectionResult('manifest', {}, controller.signal, fetcher(() => {
+      controller.abort();
+      return response(200, cancelled);
+    }, [], cancelled.scope.scope_id));
+    await pending;
+    assert.equal((await active()).ok, true);
+    assert.deepEqual(cleared, []);
+  } finally { unregister(); }
+});
+
+test('an unreadable 401 still clears all caches before reading the body', async () => {
+  let cleared = 0;
+  const unregister = projection.registerProjectionStore({ clearForAuth: () => { cleared += 1; }, clearForScopeChange() {} });
+  const denied = new Response(new ReadableStream({ start: stream => stream.error(new Error('unreadable')) }), { status: 401 });
+  try {
+    const result = await projection.readProjectionResult('manifest', {}, undefined, fetcher(() => denied));
+    assert.equal(result.error.status, 401);
+    assert.equal(cleared, 1);
+  } finally { unregister(); }
+});
+
+test('a cancelled 401 does not clear another request’s state', async () => {
+  let cleared = 0;
+  const unregister = projection.registerProjectionStore({ clearForAuth: () => { cleared += 1; }, clearForScopeChange() {} });
+  const controller = new AbortController();
+  try {
+    await projection.readProjectionResult('manifest', {}, controller.signal, fetcher(() => {
+      controller.abort();
+      return response(401, typed('AUTHENTICATION_REQUIRED'));
+    }));
+    assert.equal(cleared, 0);
+  } finally { unregister(); }
+});
+
+test('a streamed response stops at the running byte cap', async () => {
+  let pulls = 0;
+  let cancelled = false;
+  const stream = new ReadableStream({
+    pull(controller) {
+      pulls += 1;
+      if (pulls <= 3) controller.enqueue(new Uint8Array(130_000));
+      else controller.close();
+    },
+    cancel() { cancelled = true; },
+  }, { highWaterMark: 0 });
+  const result = await projection.readProjectionResult('manifest', {}, undefined, fetcher(() => new Response(stream)));
+  assert.equal(result.error.code, 'INVALID_OWNER_PROJECTION');
+  assert.equal(pulls, 2);
+  assert.equal(cancelled, true);
+});
+
+test('a leading UTF-8 BOM is not stripped before strict parsing', async () => {
+  const result = await projection.readProjectionResult('manifest', {}, undefined,
+    fetcher(() => response(200, `\uFEFF${read('examples/manifest.json')}`)));
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, 'INVALID_OWNER_PROJECTION');
+});
+
+test('malformed UTF-8 cannot become a valid replacement character', async () => {
+  const document = json('examples/lessons.json');
+  document.items[0].title = '\uFFFD';
+  await rehash(document);
+  const encoded = new TextEncoder().encode(JSON.stringify(document));
+  const index = encoded.indexOf(0xef);
+  assert.notEqual(index, -1);
+  const mutant = Uint8Array.from([...encoded.slice(0, index), 0xff, ...encoded.slice(index + 3)]);
+  const result = await projection.readProjectionResult('lessons', {}, undefined, fetcher(() => new Response(mutant)));
+  assert.equal(result.ok, false);
+  assert.equal(result.error.code, 'INVALID_OWNER_PROJECTION');
 });
 
 test('every projection error maps to {status, code, retryable, snapshot_id}', async () => {
@@ -314,6 +450,59 @@ test('a poll with the same verification time cannot extend expiry', async () => 
   assert.equal(store.getSnapshot().expiresAt, 60_000); // not 120_000
 });
 
+test('replaying the 89s golden after expiry never makes the store ready again', async () => {
+  const replay = json('examples/records-age-89s.json');
+  const { store, clock } = makeStore({ pollMs: 0, answers: [ok(replay), ok(replay), ok(replay)] });
+  store.start(); await settle();
+  assert.equal(store.getSnapshot().state, 'ready');
+  await clock.advance(2_000);
+  assert.equal(store.getSnapshot().state, 'expired');
+  store.refresh(); await settle();
+  assert.equal(store.getSnapshot().state, 'expired');
+  store.configure({ dataset: 'records', params: { record_type: 'node' }, pollMs: 0 });
+  store.start(); await settle();
+  assert.equal(store.getSnapshot().state, 'expired');
+  assert.equal(store.getSnapshot().envelope, null);
+});
+
+test('a late older verification does not replace the displayed rows or their deadline', async () => {
+  const newer = await aged(30);
+  const older = json('examples/records-nodes.json');
+  older.verified_at_ms -= 5_000;
+  await rehash(older);
+  const { store, clock } = makeStore({ answers: [ok(newer), ok(older)] });
+  store.start(); await settle();
+  const snapshot = store.getSnapshot();
+  await clock.advance(30_000);
+  assert.deepEqual(store.getSnapshot(), snapshot);
+});
+
+test('a tombstoned generation cannot replace the currently displayed generation', async () => {
+  const old = await aged(10);
+  const current = await newGeneration(await aged(10));
+  const { store } = makeStore({ pollMs: 0, answers: [ok(old), ok(current), ok(old)] });
+  store.start(); await settle();
+  store.refresh(); await settle();
+  assert.equal(store.getSnapshot().envelope, current);
+  store.refresh(); await settle();
+  assert.equal(store.getSnapshot().envelope, current);
+});
+
+test('only a newer verification can recover after a receipt was invalidated', async () => {
+  const first = await aged(10);
+  const newer = { ...first, verified_at_ms: first.verified_at_ms + 1 };
+  await rehash(newer);
+  const { store } = makeStore({ pollMs: 0, answers: [ok(first), fail(503, 'WARMING'), ok(first), ok(newer)] });
+  store.start(); await settle();
+  store.refresh(); await settle();
+  assert.equal(store.getSnapshot().error.code, 'WARMING');
+  store.refresh(); await settle();
+  assert.equal(store.getSnapshot().state, 'unavailable');
+  assert.equal(store.getSnapshot().error, null);
+  store.refresh(); await settle();
+  assert.equal(store.getSnapshot().envelope, newer);
+});
+
 test('a failed poll clears the rows: there is no last-good view', async () => {
   const { store, clock } = makeStore({ answers: [ok(await aged(10)), fail(503, 'WARMING')] });
   store.start(); await settle();
@@ -352,7 +541,7 @@ test('409 clears the pages and waits for an explicit First', async () => {
   const page1 = json('examples/records-nodes.json');
   page1.page = { limit: 25, next_cursor: token, has_more: true };
   await rehash(page1);
-  const { store, calls, clock } = makeStore({ answers: [ok(page1), fail(409, 'SNAPSHOT_CHANGED'), ok(await aged(5))] });
+  const { store, calls, clock } = makeStore({ answers: [ok(page1), fail(409, 'SNAPSHOT_CHANGED'), ok(await newGeneration(await aged(5)))] });
   store.start(); await settle();
   store.next(); await settle();
   const cleared = store.getSnapshot();

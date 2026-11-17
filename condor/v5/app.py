@@ -30,7 +30,7 @@ from .dashboard import dashboard_profile, read_compatibility_path
 from .helm import read_helm_status
 from .money import MoneyLedger, daily as money_daily, helm_row, seconds_to_next_slot, v5_row
 from .learning import FixtureLearningAPI, learning_router
-from .learning_projection import ResearchOwnerLearningSource
+from .learning_projection import PROJECTION_PATHS, ResearchOwnerLearningSource
 from .paper import PaperObservation, read_paper_status
 from .read_bridge import read_research, read_tradepad, research_route, tradepad_route
 from .state import StateCapacityError, WorkspaceState
@@ -253,7 +253,10 @@ class RequestBodyLimit:
         self.app = app
 
     async def __call__(self, scope, receive, send):
-        if scope["type"] != "http" or scope["method"] not in {"POST", "PUT", "PATCH"}:
+        if (
+            scope["type"] != "http" or scope["method"] not in {"POST", "PUT", "PATCH"}
+            or scope["path"] in PROJECTION_PATHS
+        ):
             return await self.app(scope, receive, send)
         data = bytearray()
         while True:
@@ -483,9 +486,10 @@ def create_app(
         if not 32 <= len(token) <= 256:
             return {"authenticated": False}
         supplied = request.cookies.get(COOKIE_NAME, "")
-        return {
-            "authenticated": bool(supplied and hmac.compare_digest(supplied, token))
-        }
+        authenticated = bool(supplied and hmac.compare_digest(supplied, token))
+        if authenticated and projection is not None:
+            return {"authenticated": True, "learning_scope_id": projection.config.scope_id}
+        return {"authenticated": authenticated}
 
     def paper_observation() -> PaperObservation | None:
         """One bounded read of the configured paper status; None when not configured."""

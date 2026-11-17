@@ -23,10 +23,14 @@ const envelope = await readProjection('lessons', { limit: 25, cursor });   // th
 - `status === 0`: Condor unreachable (`code: 'UPSTREAM_UNAVAILABLE'`).
 - `401`: the existing Condor auth wrapper. `code === 'authentication_required'`, `unauthenticated === true`. It clears **all** projection caches.
 - Any client-side validation failure (bad schema, hash, scope, time, size) is `502 INVALID_OWNER_PROJECTION`. One bad field rejects the whole envelope.
-- `scope_id` is never passed by the panel. Condor appends its configured scope; a browser-supplied different `scope_id` is `400 INVALID_QUERY`.
-- Params per dataset: `lessons`/`jobs`: `limit`, `cursor`. `records`: also `record_type` (required, `node` or `edge`; they are never mixed) and optional `root_id`. `manifest`: none.
+- `scope_id` is not a panel parameter; the reader supplies it on the wire (see amendment below).
+- Params per dataset beyond `scope_id`: `lessons`/`jobs`: `limit`, `cursor`. `records`: also `record_type` (required, `node` or `edge`; they are never mixed) and optional `root_id`. `manifest`: none.
 - Cursors are opaque: pass `page.next_cursor` back unchanged as `cursor`. Never decode, build or edit one.
 - `candidates`, `campaigns`, `assessments` are Stage B. Their routes answer `404 DATASET_NOT_ENABLED`; `readProjection` accepts them only to surface that typed error. Read `useManifest().canRead(dataset)` before offering them.
+
+### Stage-A contract amendment: scope bootstrap
+
+The authenticated, non-projection `GET /api/v5/auth` returns `learning_scope_id` when the projection is configured. The browser reader sends it as `scope_id` on every projection GET, including manifest. Condor requires the configured ID, returns `400 INVALID_QUERY` for a missing or different ID, and forwards valid raw query bytes unchanged. Condor never inserts or rewrites `scope_id`. No projection schema or owner wire contract changed.
 
 ## Hooks
 
@@ -48,11 +52,11 @@ Behaviour you can rely on:
 
 - Opaque cursor stack; `first()` clears it. A `409 SNAPSHOT_CHANGED` clears the dataset's pages and sets `snapshotChanged`; the hook does not restart by itself.
 - Superseded requests are aborted; unmount aborts.
-- Expiry is anchored to `verified_at_ms`, never to the poll time: at most `90_000 - (served_at_ms - verified_at_ms)` ms after receipt the rows are cleared and `state` is `'expired'`. A poll that returns the same `verified_at_ms` does not extend it. Polls default to 30 s (minimum 30 s).
+- The first admission fixes the monotonic deadline for each dataset/snapshot verification at `90_000 - (served_at_ms - verified_at_ms)` ms from receipt. Only a strictly newer verification can renew it. A replay cannot revive deleted or expired data. Polls default to 30 s (minimum 30 s).
 - No retained last-good view: any failure or expiry clears the rows.
 - Any HTTP 401 on any projection read clears every hook's data (`state: 'unauthenticated'`).
-- Hooks never prefetch and never call anything but the allowlisted GET routes; rendering a hook makes no request (reads start in an effect).
-- A different `scope_id` / `scope_sha256` / `projection_revision` in any accepted envelope clears every hook and re-reads from the first page.
+- Hooks never prefetch and only make the session GET and allowlisted projection GET; rendering a hook makes no request (reads start in an effect).
+- A different `scope_id` / `scope_sha256` / `projection_revision` or `snapshot_id` in any accepted envelope clears every hook and re-reads from the first page. Cancelled reads cannot change the binding or caches.
 
 ## Shared UI rules
 
@@ -64,6 +68,7 @@ Behaviour you can rely on:
 
 - Unconfigured source: Stage-A routes answer typed `503 PUBLICATION_UNAVAILABLE` (`Retry-After: 1`), never fixture data. Stage-B routes always answer typed `404 DATASET_NOT_ENABLED` without an owner call.
 - Success bodies are the owner's exact bytes. Typed owner errors pass through with the same status; `Retry-After` on 503 is normalised to 1..30 (default 1).
+- A valid replay with no live receipt returns `503 VERIFICATION_UNAVAILABLE` rather than making expired or invalidated rows available again. A valid late older verification while the receipt is live does not change the receipt or clear any other dataset.
 - Any owner response that fails validation, framing, size (256 000 B), encoding or the 90 s age rule becomes `502 INVALID_OWNER_PROJECTION`; an unreachable or slow (4 s) owner becomes `503 UPSTREAM_UNAVAILABLE`. There are no retries.
 - Method other than GET: `405 METHOD_NOT_ALLOWED` (`Allow: GET`); a body: `413`; a target over 4096 bytes: `414`; all typed.
 
@@ -73,12 +78,14 @@ The envelope carries facts only. The panel writers own the honest copy: `recall`
 
 ## Condor configuration (backend)
 
+Do not configure `V5_LEARNING_*` on any build without W7. Merge W6 and W7 together and build the install only after both are present: the legacy Learning page expects the old manifest shape.
+
 Disabled unless `V5_LEARNING_SOURCE` is set. When set, **all five** names are required; a partial or invalid set fails startup.
 
 | Variable | Value |
 | --- | --- |
 | `V5_LEARNING_SOURCE` | exactly `research_os_v1` enables the projection source; unset = disabled (routes answer typed `503 PUBLICATION_UNAVAILABLE`); any other value fails startup |
-| `V5_LEARNING_OWNER_URL` | fixed owner projection-proxy base URL, e.g. `http://172.18.0.1:<port>` (W5 listener); validated like `V5_RESEARCH_URL` (fixed http(s) base, no path/query/credentials) |
+| `V5_LEARNING_OWNER_URL` | fixed HTTP(S) owner projection-proxy origin (W5 listener); path must be empty or `/`; no query, fragment or credentials |
 | `V5_LEARNING_SCOPE_ID` | the configured scope ID |
 | `V5_LEARNING_SCOPE_SHA256` | lowercase hex, 64 characters |
 | `V5_LEARNING_PROJECTION_REVISION` | lowercase hex, 64 characters (the frozen projection revision hash) |

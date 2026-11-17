@@ -7,11 +7,12 @@ import json
 import threading
 from pathlib import Path
 
+import aiohttp
 import pytest
 from fastapi.testclient import TestClient
 
 from condor.v5 import learning_projection as lp
-from condor.v5.app import create_app
+from condor.v5.app import MAX_JSON_BODY_BYTES, create_app
 from condor.v5.config import ConfigurationError, Settings
 from condor.v5.learning import FixtureLearningAPI
 from tests.test_v5_learning_projection_contract import (
@@ -219,8 +220,8 @@ def test_each_stage_a_route_returns_the_owner_bytes_unchanged_and_forwards_nothi
     with RawOwner(serving(documents)) as owner:
         client = client_for(tmp_path, owner)
         client.cookies.set("other", "secret")
-        for dataset, query in (("manifest", ""), ("lessons", "?limit=10"), ("records", "?record_type=node"), ("jobs", "")):
-            response = client.get(f"/api/v5/learning/{dataset}{query}", headers={"Authorization": "Bearer abc", "Origin": "https://x"})
+        for dataset, query in (("manifest", ""), ("lessons", "limit=10&"), ("records", "record_type=node&"), ("jobs", "")):
+            response = client.get(f"/api/v5/learning/{dataset}?{query}scope_id={SCOPE_ID}", headers={"Authorization": "Bearer abc", "Origin": "https://x"})
             assert response.status_code == 200, (dataset, response.text)
             assert response.content == documents[dataset]  # byte-for-byte, no re-serialisation
             assert response.headers["cache-control"] == "no-store"
@@ -246,7 +247,7 @@ def test_cursor_is_forwarded_and_returned_unchanged(tmp_path):
     body = json.dumps(rehash(document)).encode()
     with RawOwner(serving({"records": body})) as owner:
         client = client_for(tmp_path, owner)
-        response = client.get(f"/api/v5/learning/records?record_type=node&cursor={token}")
+        response = client.get(f"/api/v5/learning/records?record_type=node&cursor={token}&scope_id={SCOPE_ID}")
         client.__exit__(None, None, None)
     assert response.status_code == 200 and response.json()["page"]["next_cursor"] == token
     assert owner.requests[0]["target"].endswith(f"record_type=node&cursor={token}&scope_id=fixture-v5-lfl")
@@ -281,7 +282,7 @@ def test_every_owner_error_golden_passes_through_with_its_status_and_exact_bytes
     status = lp.CODE_STATUS[code]
     with RawOwner(lambda request: http(status, body, headers={"Retry-After": "7"} if status == 503 else None)) as owner:
         client = client_for(tmp_path, owner)
-        response = client.get("/api/v5/learning/lessons")
+        response = client.get(f"/api/v5/learning/lessons?scope_id={SCOPE_ID}")
         client.__exit__(None, None, None)
     assert response.status_code == status
     assert response.content == body
@@ -294,7 +295,7 @@ def test_retry_after_is_normalised_on_503(tmp_path, given, expected):
     body = json.dumps(typed("WARMING")).encode()
     with RawOwner(lambda request: http(503, body, headers={"Retry-After": given} if given else None)) as owner:
         client = client_for(tmp_path, owner)
-        response = client.get("/api/v5/learning/lessons")
+        response = client.get(f"/api/v5/learning/lessons?scope_id={SCOPE_ID}")
         client.__exit__(None, None, None)
     assert response.status_code == 503 and response.headers["retry-after"] == expected
 
@@ -312,24 +313,25 @@ def test_stage_b_routes_are_typed_404_before_any_query_validation_or_owner_call(
 
 
 @pytest.mark.parametrize(
-    "query",
-    ["?limit=0", "?limit=51", "?limit=05", "?limit=a", "?limit=1&limit=2", "?cursor=", "?cursor=a%20b", "?x=1", "?limit=%ff", "?limit=%zz"],
+    "query,code",
+    [(query, "INVALID_QUERY") for query in ("limit=0", "limit=51", "limit=05", "limit=a", "limit=1&limit=2", "cursor=", "x=1", "limit=%ff", "limit=%zz")]
+    + [("cursor=a%20b", "INVALID_CURSOR")],
 )
-def test_invalid_query_is_a_typed_400_and_never_reaches_the_owner(tmp_path, query):
+def test_invalid_query_is_a_typed_400_and_never_reaches_the_owner(tmp_path, query, code):
     with RawOwner(lambda request: http(200, b"{}")) as owner:
         client = client_for(tmp_path, owner)
-        response = client.get(f"/api/v5/learning/lessons{query}")
+        response = client.get(f"/api/v5/learning/lessons?scope_id={SCOPE_ID}&{query}")
         client.__exit__(None, None, None)
-    assert response.status_code == 400 and response.json() == typed("INVALID_QUERY")
+    assert response.status_code == 400 and response.json() == typed(code)
     assert owner.requests == []
 
 
 def test_records_needs_a_record_type_and_manifest_takes_no_page_params(tmp_path):
     with RawOwner(lambda request: http(200, b"{}")) as owner:
         client = client_for(tmp_path, owner)
-        assert client.get("/api/v5/learning/records").status_code == 400
-        assert client.get("/api/v5/learning/records?record_type=graph").status_code == 400
-        assert client.get("/api/v5/learning/manifest?limit=5").status_code == 400
+        assert client.get(f"/api/v5/learning/records?scope_id={SCOPE_ID}").status_code == 400
+        assert client.get(f"/api/v5/learning/records?scope_id={SCOPE_ID}&record_type=graph").status_code == 400
+        assert client.get(f"/api/v5/learning/manifest?scope_id={SCOPE_ID}&limit=5").status_code == 400
         client.__exit__(None, None, None)
     assert owner.requests == []
 
@@ -401,7 +403,7 @@ def test_malformed_or_violating_owner_responses_become_one_typed_502(tmp_path, l
     answer = bad_owner_cases()[label]
     with RawOwner(lambda request: answer) as owner:
         client = client_for(tmp_path, owner)
-        response = client.get("/api/v5/learning/lessons")
+        response = client.get(f"/api/v5/learning/lessons?scope_id={SCOPE_ID}")
         client.__exit__(None, None, None)
     assert response.status_code == 502, label
     assert response.json() == typed("INVALID_OWNER_PROJECTION")
@@ -411,7 +413,7 @@ def test_malformed_or_violating_owner_responses_become_one_typed_502(tmp_path, l
 def test_chunked_owner_responses_are_counted_and_accepted(tmp_path):
     with RawOwner(lambda request: http(200, GOLDEN_BYTES["lessons"], chunked=True)) as owner:
         client = client_for(tmp_path, owner)
-        response = client.get("/api/v5/learning/lessons")
+        response = client.get(f"/api/v5/learning/lessons?scope_id={SCOPE_ID}")
         client.__exit__(None, None, None)
     assert response.status_code == 200 and response.content == GOLDEN_BYTES["lessons"]
 
@@ -422,7 +424,7 @@ def test_unreachable_owner_is_a_typed_503_with_retry_after(tmp_path):
     config = dataclasses.replace(settings(tmp_path), learning_projection=dataclasses.replace(CONFIG, owner_url=url))
     with TestClient(create_app(settings=config, upstream=FakeUpstream(), clock=lambda: NOW)) as client:
         login(client)
-        response = client.get("/api/v5/learning/lessons")
+        response = client.get(f"/api/v5/learning/lessons?scope_id={SCOPE_ID}")
     assert response.status_code == 503 and response.json() == typed("UPSTREAM_UNAVAILABLE")
     assert response.headers["retry-after"] == "1"
 
@@ -437,7 +439,7 @@ def test_slow_owner_is_cut_off_at_the_client_deadline_without_retry(tmp_path):
         config = dataclasses.replace(settings(tmp_path), learning_projection=dataclasses.replace(CONFIG, owner_url=owner.url))
         with TestClient(create_app(settings=config, upstream=FakeUpstream(), clock=lambda: NOW, projection_source=source)) as client:
             login(client)
-            response = client.get("/api/v5/learning/lessons")
+            response = client.get(f"/api/v5/learning/lessons?scope_id={SCOPE_ID}")
     assert response.status_code == 503 and response.json()["code"] == "UPSTREAM_UNAVAILABLE"
     assert len(owner.requests) == 1  # no retry
 
@@ -462,7 +464,7 @@ def test_an_injected_fixture_never_answers_for_a_configured_projection(tmp_path)
         config = dataclasses.replace(settings(tmp_path), learning_projection=dataclasses.replace(CONFIG, owner_url=owner.url))
         with TestClient(create_app(settings=config, upstream=FakeUpstream(), clock=lambda: NOW, learning_source=fixture)) as client:
             login(client)
-            response = client.get("/api/v5/learning/manifest")
+            response = client.get(f"/api/v5/learning/manifest?scope_id={SCOPE_ID}")
     assert response.status_code == 503 and response.json() == typed("UPSTREAM_UNAVAILABLE")
     assert "FIXTURE" not in response.text
 
@@ -503,7 +505,7 @@ def make_source(owner, clock, *, ms=lambda: NOW):
 
 
 def read(source, dataset="records", query="record_type=node"):
-    return asyncio.run(source.read(dataset, query))
+    return asyncio.run(source.read(dataset, f"{query + '&' if query else ''}scope_id={SCOPE_ID}"))
 
 
 def test_receipt_expires_90_seconds_after_the_owner_verification_not_after_the_poll():
@@ -537,19 +539,44 @@ def test_polling_the_same_verification_never_extends_expiry():
         assert source.receipt_expiry("records") == pytest.approx(60.0)  # not 100.0
 
 
-def test_verification_going_backwards_for_one_snapshot_is_rejected_and_clears():
+def test_late_older_verification_is_ignored_without_clearing_any_receipts():
     newer, served = aged(10)
     older = load("examples/records-nodes.json")
     older["verified_at_ms"] -= 5_000
     older["generated_at_ms"] -= 5_000
     rehash(older)
-    answers = [json.dumps(newer).encode(), json.dumps(older).encode()]
     clock = Clock()
-    with RawOwner(lambda request: http(200, answers.pop(0))) as owner:
-        source = make_source(owner, clock, ms=lambda: served)
-        assert read(source).status == 200
-        assert read(source).status == 502
-        assert source.state()["records"] == "UNAVAILABLE"
+
+    async def exercise():
+        started = asyncio.Event()
+        release = asyncio.Event()
+
+        class OutOfOrderOwner:
+            async def get(self, dataset, query):
+                if dataset == "jobs":
+                    body = GOLDEN_BYTES["jobs"]
+                elif "limit=1" in query:
+                    started.set()
+                    await release.wait()
+                    body = json.dumps(older).encode()
+                else:
+                    body = json.dumps(newer).encode()
+                return lp.OwnerResponse(200, body, None)
+
+        source = lp.ResearchOwnerLearningSource(CONFIG, client=OutOfOrderOwner(), clock=lambda: served, monotonic=clock)
+        query = f"scope_id={SCOPE_ID}&record_type=node"
+        late = asyncio.create_task(source.read("records", f"{query}&limit=1"))
+        await started.wait()
+        assert (await source.read("records", query)).status == 200
+        assert (await source.read("jobs", f"scope_id={SCOPE_ID}")).status == 200
+        expiry = source.receipt_expiry("records")
+        clock.now = 5
+        release.set()
+        assert (await late).status == 200
+        assert source.state()["records"] == source.state()["jobs"] == "BOUND"
+        assert source.receipt_expiry("records") == expiry
+
+    asyncio.run(exercise())
 
 
 def test_transport_failure_clears_every_receipt_and_a_typed_error_clears_its_dataset():
@@ -595,3 +622,152 @@ def test_a_new_snapshot_drops_receipts_that_belonged_to_the_old_generation():
         assert source.state()["jobs"] == "BOUND"
         read(source)
         assert source.state() == {"manifest": "UNAVAILABLE", "lessons": "UNAVAILABLE", "records": "BOUND", "jobs": "UNAVAILABLE"}
+
+
+def test_replaying_the_89s_golden_at_91s_cannot_revive_an_expired_receipt():
+    body = (CONTRACT / "examples/records-age-89s.json").read_bytes()
+    served = json.loads(body)["served_at_ms"]
+    clock = Clock()
+    with RawOwner(lambda request: http(200, body)) as owner:
+        source = make_source(owner, clock, ms=lambda: served)
+        assert read(source).status == 200
+        clock.now = 2
+        first_replay = read(source)
+        assert source.state()["records"] == "UNAVAILABLE"
+        after_removal = read(source)
+        assert source.state()["records"] == "UNAVAILABLE"
+        assert [result.status for result in (first_replay, after_removal)] == [503, 503]
+        assert json.loads(after_removal.body)["code"] == "VERIFICATION_UNAVAILABLE"
+
+
+def test_equal_verification_cannot_recreate_an_invalidated_receipt_but_a_newer_one_can():
+    first = load("examples/records-nodes.json")
+    newer = load("examples/records-nodes.json")
+    newer["verified_at_ms"] += 1
+    rehash(newer)
+    answers = iter([first, first, newer])
+    with RawOwner(lambda request: http(200, json.dumps(next(answers)).encode())) as owner:
+        source = make_source(owner, Clock())
+        assert read(source).status == 200
+        source.invalidate("records")
+        replay = read(source)
+        assert source.state()["records"] == "UNAVAILABLE"
+        assert replay.status == 503
+        assert read(source).status == 200
+        assert source.state()["records"] == "BOUND"
+
+
+def test_huge_owner_integer_is_typed_and_clears_every_receipt():
+    body = GOLDEN_BYTES["records-nodes"].replace(b'"returned_items": 1', b'"returned_items": ' + b"9" * 4301)
+    answers = iter([GOLDEN_BYTES["records-nodes"], body])
+    with RawOwner(lambda request: http(200, next(answers))) as owner:
+        source = make_source(owner, Clock())
+        assert read(source).status == 200
+        result = read(source)
+        assert result.status == 502 and json.loads(result.body)["code"] == "INVALID_OWNER_PROJECTION"
+        assert set(source.state().values()) == {"UNAVAILABLE"}
+
+
+def test_projection_query_requires_scope_and_forwards_the_exact_raw_bytes(tmp_path):
+    with RawOwner(serving({"manifest": GOLDEN_BYTES["manifest"]})) as owner:
+        with TestClient(configured(tmp_path, owner)) as client:
+            login(client)
+            explicit = client.get(f"/api/v5/learning/manifest?scop%65_id={SCOPE_ID}")
+            missing = client.get("/api/v5/learning/manifest")
+        assert explicit.status_code == 200
+        assert [request["target"] for request in owner.requests] == [f"{lp.OWNER_PATH_PREFIX}manifest?scop%65_id={SCOPE_ID}"]
+        assert missing.status_code == 400 and missing.json() == typed("INVALID_QUERY")
+
+
+def test_authenticated_session_read_exposes_only_the_configured_scope(tmp_path):
+    with RawOwner(lambda request: pytest.fail("session read reached the owner")) as owner:
+        with TestClient(configured(tmp_path, owner)) as client:
+            assert client.get("/api/v5/auth").json() == {"authenticated": False}
+            login(client)
+            response = client.get("/api/v5/auth")
+        assert response.json() == {"authenticated": True, "learning_scope_id": SCOPE_ID}
+        assert response.headers["Cache-Control"] == "no-store"
+        assert not owner.requests
+
+
+def test_malformed_cursor_has_the_frozen_error(tmp_path):
+    with RawOwner(lambda request: http(200, b"{}")) as owner:
+        with TestClient(configured(tmp_path, owner)) as client:
+            login(client)
+            response = client.get(f"/api/v5/learning/lessons?scope_id={SCOPE_ID}&cursor=!!!")
+        assert response.status_code == 400 and response.json() == typed("INVALID_CURSOR")
+        assert not owner.requests
+
+
+def test_stage_b_is_disabled_before_non_ascii_raw_query_decoding(tmp_path):
+    with RawOwner(lambda request: http(200, b"{}")) as owner:
+        app = configured(tmp_path, owner)
+
+        async def raw_query_app(scope, receive, send):
+            if scope.get("path") == "/api/v5/learning/candidates":
+                scope = {**scope, "query_string": b"scope_id=\xff"}
+            await app(scope, receive, send)
+
+        with TestClient(raw_query_app) as client:
+            login(client)
+            response = client.get("/api/v5/learning/candidates")
+        assert response.status_code == 404 and response.json() == typed("DATASET_NOT_ENABLED")
+        assert not owner.requests
+
+
+@pytest.mark.parametrize("method", ["TRACE", "CONNECT", "CUSTOM"])
+def test_unlisted_methods_still_receive_a_typed_405(tmp_path, method):
+    with RawOwner(lambda request: http(200, b"{}")) as owner:
+        with TestClient(configured(tmp_path, owner)) as client:
+            login(client)
+            response = client.request(method, "/api/v5/learning/manifest")
+        assert response.status_code == 405 and response.json() == typed("METHOD_NOT_ALLOWED")
+        assert response.headers["Allow"] == "GET"
+        assert not owner.requests
+
+
+def test_non_get_projection_rejects_method_without_buffering_a_large_body(tmp_path):
+    with RawOwner(lambda request: http(200, b"{}")) as owner:
+        with TestClient(configured(tmp_path, owner)) as client:
+            login(client)
+            response = client.post("/api/v5/learning/manifest", content=b"x" * (MAX_JSON_BODY_BYTES + 1))
+        assert response.status_code == 405 and response.json() == typed("METHOD_NOT_ALLOWED")
+        assert not owner.requests
+
+
+@pytest.mark.parametrize("path", ["/path", "//", "/;matrix", "?", "#"])
+def test_learning_owner_rejects_a_non_root_url_path(path):
+    from condor.v5.config import _learning_projection_config
+
+    with pytest.raises(ConfigurationError, match="V5_LEARNING_OWNER_URL"):
+        _learning_projection_config({**ENV, "V5_LEARNING_OWNER_URL": f"http://owner.test{path}"})
+
+
+@pytest.mark.parametrize("header,status,expected", [
+    (b"Content-Encoding: identity\r\nContent-Encoding: gzip\r\n", 200, 502),
+    (b"Retry-After: 7\r\nRetry-After: 9\r\n", 503, 503),
+])
+def test_duplicate_owner_headers_are_not_treated_as_singletons(header, status, expected):
+    body = GOLDEN_BYTES["records-nodes"] if status == 200 else json.dumps(typed("WARMING")).encode()
+    raw = http(status, body).replace(b"Connection: close\r\n", header + b"Connection: close\r\n")
+    with RawOwner(lambda request: raw) as owner:
+        result = read(make_source(owner, Clock()))
+    assert result.status == expected
+    if status == 503:
+        assert result.retry_after == 1
+    else:
+        assert json.loads(result.body)["code"] == "INVALID_OWNER_PROJECTION"
+
+
+def test_production_aiohttp_disconnect_makes_only_one_attempt(monkeypatch):
+    attempts = []
+
+    async def disconnect(*args, **kwargs):
+        attempts.append(True)
+        raise aiohttp.ServerDisconnectedError()
+
+    monkeypatch.setattr(aiohttp.TCPConnector, "connect", disconnect)
+    client = lp.OwnerProjectionClient(CONFIG.owner_url)
+    with pytest.raises(lp.ProjectionTransportError, match="unavailable"):
+        asyncio.run(client.get("manifest", f"scope_id={SCOPE_ID}"))
+    assert len(attempts) == 1

@@ -23,6 +23,7 @@ import logging
 import re
 import time
 from dataclasses import dataclass
+from datetime import datetime
 from functools import lru_cache
 from pathlib import Path
 from typing import Any, Awaitable, Callable, Literal
@@ -39,9 +40,10 @@ logger = logging.getLogger(__name__)
 
 SCHEMA_DIR = Path(__file__).resolve().parent / "schemas" / "learning_projection"
 SCOPE_DIR = SCHEMA_DIR.with_name("learning_scopes")
+STAGE_A_SCOPE_SHA256 = "a3a34ee765c75616da6f606a66156cdbf0e8736c91052966607fa6b59936bd18"
 STAGE_B_SCOPE_SHA256 = "1f65d67fc990262e049e808961b1a23068f26692b9171112eb441be0157e7c16"
 SCOPE_ARTIFACTS = {
-    "a3a34ee765c75616da6f606a66156cdbf0e8736c91052966607fa6b59936bd18": "scope-okx-spot-dca.json",
+    STAGE_A_SCOPE_SHA256: "scope-okx-spot-dca.json",
     STAGE_B_SCOPE_SHA256: "scope-okx-spot-dca-stage-b.json",
 }
 SCHEMA_URN = "urn:rsibot:v5-lfl:stage-a:r2:"
@@ -66,6 +68,7 @@ FreshnessMiss = Literal["retired", "ignored", "expired"]
 STAGE_A_DATASETS = ("manifest", "lessons", "records", "jobs")
 STAGE_B_DATASETS = ("candidates", "campaigns", "assessments")
 ALL_DATASETS = STAGE_A_DATASETS + STAGE_B_DATASETS
+STAGE_A_REVISION = json.loads((SCHEMA_DIR / "wire-contract.json").read_bytes())["projection_revision"]
 STAGE_B_REVISION = json.loads((SCHEMA_DIR / "wire-contract-stage-b.json").read_bytes())["projection_revision"]
 REASON_OVERFLOW = "Reason summary truncated; inspect row issues and dataset pages."
 PROJECTION_PATHS = frozenset(f"/api/v5/learning/{dataset}" for dataset in ALL_DATASETS)
@@ -457,8 +460,18 @@ def _check_dataset_row(row: dict[str, Any], dataset: str, request: RequestShape,
         if row["record_id"] != "assessment:" + row["assessment_id"] or row["idea_revision_id"] != request.idea_revision_id:
             raise ContractViolation(f"{context}: assessment identity or filter mismatch")
         comparison = row["comparison"]
-        if comparison and any(comparison[key] != comparison["conditions"][key] for key in ("baseline_id", "metric", "unit")):
-            raise ContractViolation(f"{context}: inconsistent comparison conditions")
+        if comparison:
+            conditions = comparison["conditions"]
+            if any(comparison[key] != conditions[key] for key in ("baseline_id", "metric", "unit")):
+                raise ContractViolation(f"{context}: inconsistent comparison conditions")
+            window = conditions["window"]
+            if isinstance(window, dict):
+                try:
+                    ordered = datetime.fromisoformat(window["start"]) < datetime.fromisoformat(window["end_exclusive"])
+                except (ValueError, TypeError):
+                    ordered = False
+                if not ordered:
+                    raise ContractViolation(f"{context}: comparison window is not ordered ISO time")
 
 
 def _stage_b_variant(dataset: str, row: dict[str, Any]) -> str:
@@ -505,6 +518,8 @@ def _check_stage_b_reasons(envelope: dict[str, Any]) -> None:
         raise ContractViolation("invalid Stage-B reason summary")
     if overflow and (len(actual) != 4 or "INDEX_INCOMPLETE" not in actual or envelope["status"] == "BOUND"):
         raise ContractViolation("invalid Stage-B reason overflow marker")
+    if overflow and sorted((visible | set(actual)) - {"INDEX_INCOMPLETE"})[:3] != [code for code in actual if code != "INDEX_INCOMPLETE"]:
+        raise ContractViolation("invalid Stage-B reason overflow ranking")
 
 
 def validate_envelope(
@@ -1003,7 +1018,7 @@ def add_projection_routes(router: APIRouter, projection: ResearchOwnerLearningSo
                 return _response(local_result("METHOD_NOT_ALLOWED"), extra={"Allow": "GET"})
             if "transfer-encoding" in request.headers or request.headers.getlist("content-length") not in ([], ["0"]):
                 return _response(local_result("REQUEST_BODY_NOT_ALLOWED"))
-            if dataset in STAGE_B_DATASETS:
+            if dataset in STAGE_B_DATASETS and (projection is None or not projection.config.stage_b):
                 return _response(local_result("DATASET_NOT_ENABLED"))
             if projection is None:
                 return _response(local_result("PUBLICATION_UNAVAILABLE"))

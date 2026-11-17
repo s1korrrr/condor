@@ -2,10 +2,13 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import React from 'react';
+import * as ReactQuery from '@tanstack/react-query';
 import { renderToStaticMarkup } from 'react-dom/server';
+import { act, create } from 'react-test-renderer';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
 const base = new URL('../../condor/v5/schemas/learning_projection/', import.meta.url);
+const { QueryClient, QueryClientProvider } = ReactQuery;
 const load = relative => JSON.parse(readFileSync(new URL(relative, base), 'utf8'));
 const golden = name => load(`examples/stage-b/${name}.json`);
 const modules = frontendModules();
@@ -20,6 +23,14 @@ const session = projectionRevision => ({
   authenticated: true, learning_scope_id: scope.scope_id, learning_scope_membership: membership,
   learning_scope_sha256: scope.scope_sha256, learning_projection_revision: projectionRevision,
 });
+const tick = () => new Promise(resolve => setImmediate(resolve));
+const validateStageB = (document, ideaRevisionId) => validator.validateEnvelope(document.dataset, document, {
+  stageB: true, maxAgeMs: 90_000, scopeId: scope.scope_id, scopeSha256: scope.scope_sha256, membership, ideaRevisionId,
+});
+const resealBody = async (document, field) => {
+  delete document[field];
+  document[field] = await validator.sha256Hex(validator.canonicalJson(document));
+};
 const render = (envelope, overrides = {}) => {
   const view = { state: envelope?.status === 'UNAVAILABLE' ? 'unavailable' : 'ready', envelope, rows: envelope?.items ?? [], first() {}, ...overrides };
   return renderToStaticMarkup(['manifest', 'records'].includes(envelope?.dataset)
@@ -140,6 +151,90 @@ test('Stage B browser status-only manifests and typed errors keep owner facts', 
   assert.equal(result.error.code, 'PUBLICATION_UNAVAILABLE');
 });
 
+test('a Stage B session mounts the whole Factory even when the manifest is unavailable', async t => {
+  const runtime = frontendModules({ '@tanstack/react-query': ReactQuery });
+  const { ResearchFactoryPanel } = runtime.load('v5/ResearchFactoryPanel.tsx');
+  const { v5Api } = runtime.load('v5/api.ts');
+  const candidate = golden('candidates-real-scope');
+  const campaign = golden('campaigns-real-scope');
+  const assessment = golden('assessments-real-scope-empty');
+  const manifest = golden('manifest-unavailable');
+  const requested = [];
+  t.mock.method(globalThis, 'fetch', async url => {
+    requested.push(url);
+    if (url === '/api/v5/auth') return Response.json(session(manifest.projection_revision));
+    const dataset = url.split('?')[0].split('/').at(-1);
+    const bodies = { manifest, candidates: candidate, campaigns: campaign, assessments: assessment };
+    assert.ok(bodies[dataset], url);
+    return Response.json(bodies[dataset]);
+  });
+  const client = new QueryClient();
+  await client.fetchQuery({ queryKey: ['v5-auth'], queryFn: v5Api.auth });
+  const previousAct = globalThis.IS_REACT_ACT_ENVIRONMENT;
+  globalThis.IS_REACT_ACT_ENVIRONMENT = true;
+  let renderer;
+  try {
+    await act(async () => { renderer = create(React.createElement(QueryClientProvider, { client }, React.createElement(ResearchFactoryPanel))); });
+    assert.ok(requested.includes(`/api/v5/learning/campaigns?scope_id=${scope.scope_id}`), requested.join(', '));
+    for (let attempt = 0; attempt < 30 && !renderer.root.findAllByProps({ 'aria-label': 'Candidate revisions owner pages' }).length; attempt += 1) {
+      await act(tick);
+    }
+    assert.match(JSON.stringify(renderer.toJSON()), /NOT_PUBLISHED/);
+    const select = renderer.root.findAllByType('button').find(button => button.props.children === 'View assessments for this revision');
+    assert.ok(select);
+    await act(async () => { select.props.onClick(); });
+    assert.ok(requested.some(url => url.startsWith('/api/v5/learning/assessments?')));
+    assert.match(JSON.stringify(renderer.toJSON()), /Selected revision/);
+  } finally {
+    if (renderer) await act(async () => { renderer.unmount(); });
+    client.clear();
+    if (previousAct === undefined) delete globalThis.IS_REACT_ACT_ENVIRONMENT;
+    else globalThis.IS_REACT_ACT_ENVIRONMENT = previousAct;
+  }
+});
+
+test('overflow cannot evict a higher-ranked visible descriptor reason', async () => {
+  const document = golden('manifest-reason-overflow');
+  document.reason_codes = ['INDEX_INCOMPLETE', 'OMITTED_CONTENT', 'PREREGISTRATION_SEAL_MISSING', 'UNRESOLVED_REFERENCE'];
+  await resealBody(document, 'envelope_sha256');
+  assert.equal(validator.schemaError('manifest-stage-b', document), null);
+  await assert.rejects(validateStageB(document), /reason overflow/i);
+});
+
+for (const [name, start, end] of [
+  ['reversed', '2026-10-01T00:00:00Z', '2026-03-01T00:00:00Z'],
+  ['offset-reversed', '2026-03-01T00:00:00-03:00', '2026-03-01T02:00:00Z'],
+  ['mixed awareness', '2026-03-01T00:00:00', '2026-10-01T00:00:00Z'],
+  ['equal instant', '2026-03-01T00:00:00-03:00', '2026-03-01T03:00:00Z'],
+  ['impossible date', '2026-02-29T00:00:00Z', '2026-03-02T00:00:00Z'],
+]) {
+  test(`the browser rejects a resealed ${name} comparison window`, async () => {
+    const document = golden('assessments-supported');
+    const [row] = document.items;
+    row.comparison.conditions.window = { start, end_exclusive: end };
+    await resealBody(row, 'row_sha256');
+    await resealBody(document, 'envelope_sha256');
+    assert.equal(validator.schemaError('assessments', document), null);
+    await assert.rejects(validateStageB(document, row.idea_revision_id), /ordered ISO/i);
+  });
+}
+
+test('the browser orders native window boundaries without rounding or inventing a zone', async () => {
+  for (const [start, end] of [
+    ['2026-03-01 00:00:00.000001', '2026-03-01T00:00:00.000002'],
+    ['2026-03-01T01:00:00+02:00', '2026-03-01T00:00:00Z'],
+    ['2026-W09-7', '20260302'],
+  ]) {
+    const document = golden('assessments-supported');
+    const [row] = document.items;
+    row.comparison.conditions.window = { start, end_exclusive: end };
+    await resealBody(row, 'row_sha256');
+    await resealBody(document, 'envelope_sha256');
+    const validated = await validateStageB(document, row.idea_revision_id);
+    assert.deepEqual(validated.items[0].comparison.conditions.window, { start, end_exclusive: end });
+  }
+});
+
 test('Stage B one-shot reads share generation retirement and never return stale rows', async () => {
   const { readProjectionResult } = frontendModules().load('v5/learning-projection.ts');
   const candidate = golden('candidates-real-scope');
@@ -197,6 +292,16 @@ test('assessment labels require the complete unchanged cursor chain', () => {
   assert.equal(new AssessmentTraversal().observe(golden('assessments-omitted-comparison'), 0, null, revision), null);
 });
 
+test('relationship labels reject a split conflict whose page boundaries descend', () => {
+  const full = golden('assessments-conflict');
+  const [earlier, later] = full.items;
+  const first = { ...full, items: [later], page: { ...full.page, has_more: true, next_cursor: 'opaque' } };
+  const second = { ...full, items: [earlier] };
+  const traversal = new AssessmentTraversal();
+  assert.equal(traversal.observe(first, 0, null, earlier.idea_revision_id), null);
+  assert.equal(traversal.observe(second, 1, 'opaque', earlier.idea_revision_id), null);
+});
+
 test('assessment relationship caps include 128 pages and 2,000 rows, but not either overflow', () => {
   const envelope = golden('assessments-supported');
   const [row] = envelope.items;
@@ -209,7 +314,7 @@ test('assessment relationship caps include 128 pages and 2,000 rows, but not eit
       const last = index === pageCount - 1;
       const items = Array.from({ length: end - start }, (_unused, offset) => {
         const id = start + offset;
-        return { ...row, record_id: `assessment:${id}`, evaluation_id: `evaluation:${id}`, row_sha256: id.toString(16).padStart(64, '0') };
+        return { ...row, record_id: `assessment:${String(id).padStart(4, '0')}`, evaluation_id: `evaluation:${id}`, row_sha256: id.toString(16).padStart(64, '0') };
       });
       const labels = traversal.observe({
         ...envelope, items, page: { ...envelope.page, next_cursor: last ? null : `cursor-${index + 1}`, has_more: !last },
@@ -228,7 +333,6 @@ test('Stage B clears the cursor stack on owner UNAVAILABLE, 409, 401 and expiry'
     { output: { ok: false, error: { status: 409, code: 'SNAPSHOT_CHANGED' } }, expected: 'unavailable' },
     { output: { ok: false, error: { status: 401, code: 'authentication_required', unauthenticated: true } }, expected: 'unauthenticated' },
   ];
-  const tick = () => new Promise(resolve => setImmediate(resolve));
   for (const { output, expected } of cases) {
     const cursors = [];
     const store = new ProjectionStore({
@@ -257,4 +361,68 @@ test('Stage B clears the cursor stack on owner UNAVAILABLE, 409, 401 and expiry'
   expire();
   assert.equal(store.getSnapshot().state, 'expired');
   assert.equal(store.getSnapshot().envelope, null);
+});
+
+function pagedStore(dataset, first, second, finalResult) {
+  const requests = [];
+  let now = 0;
+  const store = new ProjectionStore({
+    dataset, params: {}, maxAgeMs: 90_000, pollMs: 0,
+    clock: { now: () => now, setTimeout: () => 1, clearTimeout() {} },
+    read: async (_dataset, params) => {
+      requests.push(params.cursor);
+      if (requests.length <= 2) return { ok: true, envelope: requests.length === 1 ? first : second };
+      return finalResult;
+    },
+  });
+  return { store, requests, advanceToExpiry: () => { now = store.getSnapshot().expiresAt; } };
+}
+
+test('a Stage B validation failure on page two drops the failed continuation', async () => {
+  const first = golden('candidates-real-scope');
+  const second = golden('candidates-real-scope-page-two');
+  const { store, requests } = pagedStore('candidates', first, second, { ok: false, error: { status: 502, code: 'INVALID_OWNER_PROJECTION' } });
+  store.start(); await tick();
+  store.next(); await tick();
+  assert.equal(store.getSnapshot().pageIndex, 1);
+  store.refresh(); await tick();
+  assert.equal(store.getSnapshot().envelope, null);
+  assert.equal(store.getSnapshot().pageIndex, 0);
+  assert.equal(store.getSnapshot().hasPrevious, false);
+  store.refresh(); await tick();
+  assert.deepEqual(requests, [undefined, first.page.next_cursor, first.page.next_cursor, undefined]);
+});
+
+test('a retired candidate page only offers First after no live page remains', async () => {
+  const first = golden('candidates-real-scope');
+  const second = golden('candidates-real-scope-page-two');
+  const error = { status: 409, code: 'SNAPSHOT_CHANGED', freshness: 'retired' };
+  const { store, requests, advanceToExpiry } = pagedStore('candidates', first, second, { ok: false, error });
+  store.start(); await tick();
+  store.next(); await tick();
+  store.refresh(); await tick();
+  assert.equal(store.getSnapshot().envelope, second);
+  assert.doesNotMatch(render(second, store.getSnapshot()), /First page/);
+  advanceToExpiry();
+  store.refresh(); await tick();
+  assert.equal(store.getSnapshot().envelope, null);
+  assert.equal(store.getSnapshot().pageIndex, 0);
+  assert.match(render(null, store.getSnapshot()), /First page/);
+  store.first(); await tick();
+  assert.equal(requests.at(-1), undefined);
+});
+
+test('a status-only Stage A response leaves the records continuation on page two', async () => {
+  const record = load('examples/records-nodes.json');
+  const first = { ...record, page: { ...record.page, has_more: true, next_cursor: 'opaque' } };
+  const unavailable = { ...record, items: [], status: 'UNAVAILABLE', snapshot_id: null, verified_at_ms: null };
+  const { store, requests } = pagedStore('records', first, record, { ok: true, envelope: unavailable });
+  store.start(); await tick();
+  store.next(); await tick();
+  store.refresh(); await tick();
+  assert.equal(store.getSnapshot().state, 'unavailable');
+  assert.equal(store.getSnapshot().pageIndex, 1);
+  assert.equal(store.getSnapshot().hasPrevious, true);
+  store.refresh(); await tick();
+  assert.deepEqual(requests, [undefined, 'opaque', 'opaque', 'opaque']);
 });

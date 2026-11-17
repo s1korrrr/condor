@@ -1,5 +1,5 @@
 import type { AssessmentRow, ProjectionEnvelope, UnavailableRowStub } from './learning-projection';
-import { canonicalJson } from './learning-projection-validate';
+import { canonicalJson, compareProjectionIds } from './learning-projection-validate';
 
 type Envelope = ProjectionEnvelope<AssessmentRow | UnavailableRowStub>;
 type Fact = Pick<AssessmentRow, 'record_id' | 'row_sha256' | 'evaluation_id' | 'verdict' | 'admission'> & {
@@ -33,8 +33,10 @@ export class AssessmentTraversal {
       return null;
     }
     const facts: Fact[] = [];
+    let precedingId = this.segments.slice(0, index).findLast(segment => segment.facts.length > 0)?.facts.at(-1)?.record_id;
     for (const row of envelope.items) {
       if (row.row_status === 'UNAVAILABLE' || row.idea_revision_id !== revision || (row.supersedes && row.supersedes.resolution !== 'RESOLVED')
+        || (precedingId !== undefined && compareProjectionIds(precedingId, row.record_id) >= 0)
         || (row.admission === 'ADMITTED_COMPARISON' && (!row.comparison || row.run_ref.resolution !== 'RESOLVED' || row.issues.some(issue => issue.code === 'OMITTED_CONTENT')))) {
         this.clear();
         return null;
@@ -44,6 +46,7 @@ export class AssessmentTraversal {
         group: row.comparison ? canonicalJson([row.comparison.comparison_group, row.comparison.conditions]) : null,
         supersedes: row.supersedes?.record_id ?? null,
       });
+      precedingId = row.record_id;
     }
     const next = envelope.page.next_cursor;
     if (next !== null && (next === cursor || this.segments.slice(0, index).some(segment => segment.cursor === next))) {

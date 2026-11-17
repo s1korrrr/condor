@@ -12,6 +12,7 @@ import type {
   AssessmentRow, PagedDataset, ProjectionDataset, ProjectionEnvelope, ProjectionError, ProjectionParams, ProjectionViewState, UnavailableRowStub,
 } from './learning-projection';
 import { AssessmentTraversal } from './factory-assessment-relationships';
+import { STAGE_B_REVISION } from './learning-projection-schemas';
 
 export type StoreRead = (
   dataset: ProjectionDataset, params: ProjectionParams, signal: AbortSignal,
@@ -109,6 +110,7 @@ export class ProjectionStore {
   private listeners = new Set<() => void>();
   /** `stack[i]` is the opaque cursor that fetches page i (null = first page). Never decoded. */
   private stack: (string | null)[] = [null];
+  private stageBContinuation = false;
   private controller: AbortController | null = null;
   private expiryTimer: unknown = null;
   private pollTimer: unknown = null;
@@ -144,9 +146,11 @@ export class ProjectionStore {
   refresh = () => { void this.load(this.snapshot.pageIndex); };
   first = () => { this.stack = [null]; this.assessmentTraversal.clear(); void this.load(0, true); };
   next = () => {
-    const cursor = this.snapshot.envelope?.page.next_cursor;
+    const envelope = this.snapshot.envelope;
+    const cursor = envelope?.page.next_cursor;
     if (!cursor) return;
     const index = this.snapshot.pageIndex + 1;
+    this.stageBContinuation = envelope.projection_revision === STAGE_B_REVISION;
     this.stack = [...this.stack.slice(0, index), cursor];
     void this.load(index);
   };
@@ -247,9 +251,12 @@ export class ProjectionStore {
     }
     if (expiresAt === null) {
       this.clearExpiry();
-      this.stack = [null];
       this.assessmentTraversal.clear();
-      this.set({ ...this.cleared(null, { pageIndex: 0, hasPrevious: false }), envelope });
+      if (envelope.projection_revision === STAGE_B_REVISION) {
+        this.stack = [null];
+        pageIndex = 0;
+      }
+      this.set({ ...this.cleared(null, { pageIndex, hasPrevious: pageIndex > 0 }), envelope });
       return this.schedulePoll();
     }
     if (expiresAt <= now) return this.freshnessMiss(freshnessError('expired', envelope.snapshot_id), pageIndex);
@@ -269,6 +276,7 @@ export class ProjectionStore {
     if (this.snapshot.expiresAt === null || this.snapshot.expiresAt <= this.options.clock.now()) {
       this.clearExpiry();
       this.assessmentTraversal.clear();
+      if (error.freshness === 'retired') return this.fail(error, pageIndex);
       if (error.freshness === 'expired' || this.snapshot.state === 'expired') {
         this.set(this.cleared(error, { state: 'expired', pageIndex }));
       } else {
@@ -293,7 +301,11 @@ export class ProjectionStore {
       this.set({ ...INITIAL, state: 'unavailable', error, snapshotChanged: error.code === 'SNAPSHOT_CHANGED', pageIndex: 0 });
       return;
     }
-    this.set({ ...this.cleared(error, { pageIndex }) });
+    if (error.status === 502 && error.code === 'INVALID_OWNER_PROJECTION' && pageIndex > 0 && this.stageBContinuation) {
+      this.stack = [null];
+      pageIndex = 0;
+    }
+    this.set(this.cleared(error, { pageIndex, hasPrevious: pageIndex > 0 }));
     this.schedulePoll();
   }
 

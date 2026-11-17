@@ -120,7 +120,7 @@ export function ProjectionStatusBanner({ state, envelope, error, onFirst, childr
       <strong>UNAVAILABLE{error ? ` · ${code}` : ''}</strong>
       <p>{error?.freshness === 'retired' ? 'The response belongs to a retired snapshot.' : (ERROR_TEXT[code] ?? 'The owner projection is unavailable.')}</p>
       {envelope && envelope.reason_codes.length > 0 && <p className="text-xs">{envelope.reason_codes.join(', ')}</p>}
-      {error?.code === 'SNAPSHOT_CHANGED' && !error.freshness && onFirst && <button type="button" onClick={onFirst}>First page</button>}
+      {error?.code === 'SNAPSHOT_CHANGED' && onFirst && <button type="button" onClick={onFirst}>First page</button>}
       {children}
     </div>;
   }

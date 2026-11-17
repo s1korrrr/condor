@@ -360,6 +360,52 @@ async function checkRow(row: Json, context: string, variant?: RegionVariant): Pr
   if (scalar > 3072 + 512) throw new ContractViolation(`${context}: scalar region exceeds the contract`);
 }
 
+function isoTimeParts(value: string): [number, number, number, number] | null {
+  const match = /^(\d{2})(?:(:?)(\d{2})(?:\2(\d{2})(?:[.,](\d+))?)?)?$/.exec(value);
+  if (!match || match[0] !== value) return null;
+  const [, hour, , minute = '0', second = '0', fraction = ''] = match;
+  return [Number(hour), Number(minute), Number(second), Number(fraction.slice(0, 6).padEnd(6, '0'))];
+}
+
+function nativeIsoBoundary(value: string): { aware: boolean; micros: bigint } | null {
+  const calendar = /^(\d{4})(-?)(\d{2})\2(\d{2})/.exec(value);
+  const weekDate = /^(\d{4})(-?)W(\d{2})(?:\2([1-7]))?/.exec(value);
+  const date = calendar ?? weekDate;
+  if (!date || Number(date[1]) === 0) return null;
+  const year = Number(date[1]);
+  const day = new Date(0);
+  if (calendar) {
+    const month = Number(calendar[3]) - 1;
+    day.setUTCFullYear(year, month, Number(calendar[4]));
+    if (day.getUTCMonth() !== month || day.getUTCDate() !== Number(calendar[4])) return null;
+  } else {
+    const week = Number(date[3]);
+    if (week < 1 || week > 53) return null;
+    day.setUTCFullYear(year, 0, 4);
+    const monday = 4 - ((day.getUTCDay() + 6) % 7) + (week - 1) * 7;
+    day.setUTCDate(monday + 3);
+    if (day.getUTCFullYear() !== year) return null;
+    day.setUTCDate(day.getUTCDate() + Number(date[4] ?? '1') - 4);
+    if (day.getUTCFullYear() < 1 || day.getUTCFullYear() > 9999) return null;
+  }
+  const suffix = value.slice(date[0].length);
+  const midnight = BigInt(day.getTime()) * 1000n;
+  if (!suffix) return { aware: false, micros: midnight };
+  const clock = /^.(?<time>[0-9:.,]+)(?<zone>Z|[+-][0-9:.,]+)?$/su.exec(suffix);
+  if (!clock?.groups || clock[0] !== suffix) return null;
+  const { time, zone } = clock.groups;
+  const parts = isoTimeParts(time);
+  if (!parts || parts[0] > 23 || parts[1] > 59 || parts[2] > 59) return null;
+  const seconds = ([hour, minute, second]: number[]) => hour * 3600 + minute * 60 + second;
+  let offset = 0n;
+  if (zone && zone !== 'Z') {
+    const offsetParts = isoTimeParts(zone.slice(1));
+    if (!offsetParts || seconds(offsetParts) >= 86400) return null;
+    if (seconds(offsetParts) !== 0) offset = (BigInt(seconds(offsetParts)) * 1000000n + BigInt(offsetParts[3])) * (zone[0] === '-' ? -1n : 1n);
+  }
+  return { aware: Boolean(zone), micros: midnight + BigInt(seconds(parts)) * 1000000n + BigInt(parts[3]) - offset };
+}
+
 function checkDatasetRow(row: Json, dataset: string, { recordType, ideaRevisionId }: EnvelopeContext, context: string): void {
   const stub = row.row_status === 'UNAVAILABLE';
   if (dataset === 'records') {
@@ -411,8 +457,19 @@ function checkDatasetRow(row: Json, dataset: string, { recordType, ideaRevisionI
   if (dataset === 'assessments') {
     if (row.record_id !== `assessment:${row.assessment_id}` || row.idea_revision_id !== ideaRevisionId) throw new ContractViolation(`${context}: assessment identity or filter mismatch`);
     const comparison = row.comparison as Json | null;
-    if (comparison && ['baseline_id', 'metric', 'unit'].some(key => comparison[key] !== (comparison.conditions as Json)[key])) {
-      throw new ContractViolation(`${context}: inconsistent comparison conditions`);
+    if (comparison) {
+      const conditions = comparison.conditions as Json;
+      if (['baseline_id', 'metric', 'unit'].some(key => comparison[key] !== conditions[key])) {
+        throw new ContractViolation(`${context}: inconsistent comparison conditions`);
+      }
+      if (typeof conditions.window === 'object') {
+        const { start, end_exclusive: end } = conditions.window as { start: string; end_exclusive: string };
+        const from = nativeIsoBoundary(start);
+        const to = nativeIsoBoundary(end);
+        if (!from || !to || from.aware !== to.aware || from.micros >= to.micros) {
+          throw new ContractViolation(`${context}: comparison window is not ordered ISO time`);
+        }
+      }
     }
   }
 }
@@ -437,6 +494,8 @@ function compareUtf8(left: Uint8Array, right: Uint8Array): number {
   return left.length - right.length;
 }
 
+export const compareProjectionIds = (left: string, right: string) => compareUtf8(encoder.encode(left), encoder.encode(right));
+
 function checkStageBReasons(envelope: Json) {
   const reasons = envelope.reason_codes as string[];
   const issues = envelope.issues as Json[];
@@ -454,6 +513,10 @@ function checkStageBReasons(envelope: Json) {
   const overflow = issues.some(issue => issue.code === 'INDEX_INCOMPLETE' && issue.detail === REASON_OVERFLOW);
   if (!sorted(reasons) || (!overflow && [...visible].some(code => !reasons.includes(code)))) throw new ContractViolation('invalid Stage-B reason summary');
   if (overflow && (reasons.length !== 4 || !reasons.includes('INDEX_INCOMPLETE') || envelope.status === 'BOUND')) throw new ContractViolation('invalid Stage-B reason overflow marker');
+  const lastRetained = reasons.filter(code => code !== 'INDEX_INCOMPLETE').at(-1);
+  if (overflow && lastRetained && [...visible].some(code => !reasons.includes(code) && code < lastRetained)) {
+    throw new ContractViolation('invalid Stage-B reason overflow ranking');
+  }
 }
 
 /** Validates one 200 body (already strictly parsed). Resolves to the typed document or throws ContractViolation. */

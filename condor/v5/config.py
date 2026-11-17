@@ -11,7 +11,10 @@ from pathlib import Path
 from urllib.parse import urlparse, urlsplit
 
 from .paper import status_file_name_valid
-from .learning_projection import STAGE_B_REVISION, STAGE_B_SCOPE_SHA256, ContractViolation, LearningProjectionConfig, load_scope_membership
+from .learning_projection import (
+    STAGE_A_REVISION, STAGE_A_SCOPE_SHA256, STAGE_B_REVISION, STAGE_B_SCOPE_SHA256,
+    ContractViolation, LearningProjectionConfig, load_scope_membership,
+)
 
 MAX_STRATEGIES = 10000
 MAX_SOURCES = 10000
@@ -262,8 +265,8 @@ def _learning_projection_config(values) -> LearningProjectionConfig | None:
         raise ConfigurationError("V5_LEARNING_OWNER_URL must not include a path, query or fragment")
     scope_sha256 = given["V5_LEARNING_SCOPE_SHA256"]
     revision = given["V5_LEARNING_PROJECTION_REVISION"]
-    if revision == STAGE_B_REVISION and scope_sha256 != STAGE_B_SCOPE_SHA256:
-        raise ConfigurationError("V5_LEARNING_SCOPE_SHA256 must pin the Stage B scope artifact for the Stage B revision")
+    if (revision, scope_sha256) not in {(STAGE_A_REVISION, STAGE_A_SCOPE_SHA256), (STAGE_B_REVISION, STAGE_B_SCOPE_SHA256)}:
+        raise ConfigurationError("V5_LEARNING_PROJECTION_REVISION and V5_LEARNING_SCOPE_SHA256 must pin the same supported stage")
     try:
         membership = load_scope_membership(scope_id, scope_sha256)
     except ContractViolation as error:

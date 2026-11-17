@@ -159,14 +159,14 @@ def test_unset_configuration_is_disabled_and_full_configuration_is_exact():
     )
 
 
-@pytest.mark.parametrize("digest", [
-    "a3a34ee765c75616da6f606a66156cdbf0e8736c91052966607fa6b59936bd18",
-    "1f65d67fc990262e049e808961b1a23068f26692b9171112eb441be0157e7c16",
+@pytest.mark.parametrize("revision,digest", [
+    (REVISION, PINNED_SCOPE_SHA),
+    (lp.STAGE_B_REVISION, lp.STAGE_B_SCOPE_SHA256),
 ])
-def test_startup_accepts_only_the_canonical_pins_with_matching_scope_id(digest):
+def test_startup_accepts_only_the_canonical_pins_with_matching_scope_id(revision, digest):
     from condor.v5.config import _learning_projection_config as parse
 
-    env = {**ENV, "V5_LEARNING_SCOPE_ID": "v5-lfl-okx-spot-dca", "V5_LEARNING_SCOPE_SHA256": digest}
+    env = {**ENV, "V5_LEARNING_SCOPE_SHA256": digest, "V5_LEARNING_PROJECTION_REVISION": revision}
     assert parse(env).scope_sha256 == digest
     with pytest.raises(ConfigurationError):
         parse({**env, "V5_LEARNING_SCOPE_SHA256": "0" * 64})

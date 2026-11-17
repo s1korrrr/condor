@@ -1,5 +1,8 @@
 import { useState, type ReactNode } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { v5Api } from './api';
 import { ownerTitle, signed } from './format.mjs';
+import { STAGE_B_REVISION } from './learning-projection-schemas';
 import {
   isUnavailableStub, useManifest, useProjectionPages,
   type AssessmentRow, type CampaignRow, type CandidateRow, type Issue, type ProjectionPagesView, type Ref,
@@ -160,13 +163,13 @@ function FactoryPages() {
 }
 
 export function ResearchFactoryPanel() {
+  const { data: session } = useQuery({ queryKey: ['v5-auth'], queryFn: v5Api.auth, enabled: false });
+  const stageB = session?.authenticated === true && session.learning_projection_revision === STAGE_B_REVISION;
   const manifest = useManifest();
-  const ready = manifest.state === 'ready' && manifest.canRead('candidates');
   return <div className="min-w-0 max-w-full space-y-4 [overflow-wrap:anywhere]">
     <div className="v5-page-heading"><div><h1>Research factory</h1><p>Recorded research only. No execution authority.</p></div></div>
-    {ready ? <FactoryPages />
-      : manifest.state === 'ready' ? <p>Factory: not bound in this stage</p>
-      : <FactoryStatus state={manifest.state} envelope={manifest.envelope} error={manifest.error} />}
+    <FactoryStatus state={manifest.state} envelope={manifest.envelope} error={manifest.error} />
+    {stageB ? <FactoryPages /> : <p>Factory: not bound in this stage</p>}
   </div>;
 }
 

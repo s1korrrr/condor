@@ -285,6 +285,7 @@ async function checkRow(row: Json, context: string): Promise<void> {
   for (const source of sources) {
     if (!safeRelativePath(source.relative_path as string)) throw new ContractViolation(`${context}: unsafe source path`);
     const pointer = source.pointer as string;
+    // eslint-disable-next-line no-control-regex -- control characters are exactly what is being rejected
     if (/[\u0000-\u001f\u007f]/.test(pointer) || /~(?![01])/.test(pointer)) throw new ContractViolation(`${context}: bad JSON pointer`);
     if (cLen(source) > 512) throw new ContractViolation(`${context}: source receipt too large`);
   }

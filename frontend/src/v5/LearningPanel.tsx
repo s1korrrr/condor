@@ -1,31 +1,10 @@
 import { createContext, useContext, type ReactNode } from 'react';
-import { useQuery } from '@tanstack/react-query';
-import { DataTable } from '../features/quant-ops/kit/DataTable';
 import { TileGrid } from '../features/quant-ops/kit/grid';
-import { learningRead } from './api';
 
 export interface EvidenceRef {
   owner: string; record_kind: string; record_id: string; revision: string;
   content_sha256: string; available_at_ms: number;
 }
-export interface RoleProjection {
-  role_id: string; name: string; status: string; blockers: string[];
-  task_id: string | null; model: string; usage: string; provider_metered_usage: string | null;
-}
-export interface LessonProjection {
-  record_id: string; lesson_id: string; revision: string; claim: string; condition: string;
-  evidence_validity: string; lifecycle_state: string; available_at_ms: number;
-  support_refs: EvidenceRef[]; contradictory_refs: EvidenceRef[]; retraction_refs: EvidenceRef[];
-}
-export interface LearningProjection {
-  schema_version?: string; status: string; reason?: string; generated_at_ms?: number;
-  source_generation?: string; effect: 'NONE'; lessons?: LessonProjection[];
-  releases?: { record_id: string; release_id: string; state: string; scope_of_use: string; binding_status: string; missing_bindings: string[]; bindings?: { component: string; refs: EvidenceRef[]; absence_reason: string | null }[] }[];
-  adoptions?: { record_id: string; consumer_id: string; disposition: string; reason: string; new_release_ref: EvidenceRef; effective_decision_boundary_ms: number }[];
-  retractions?: { record_id: string; reason: string; effective_at_ms: number; affected_refs: EvidenceRef[] }[];
-}
-
-const unknown = (value: string | number | null | undefined) => value == null || value === '' ? 'Unknown' : String(value);
 const utc = (value: number | undefined) => typeof value === 'number' && Number.isSafeInteger(value) && value >= 0 && value <= 8640000000000000 ? new Date(value).toISOString().replace('T', ' ').replace('.000Z', ' UTC') : 'Unknown';
 const SyntheticClock = createContext(false);
 
@@ -61,50 +40,43 @@ export function MetricTiles({ items }: { items: { label: string; value: string |
   return <TileGrid label="Owner summary" min={170}>{items.map(item => <div key={item.label} className="v5-panel h-full"><span className="text-xs text-[var(--color-text-muted)]">{item.label}</span><p className="text-xl font-semibold break-words">{item.value}</p></div>)}</TileGrid>;
 }
 
-export function LearningPanel({ data, roles = [], error }: { data?: LearningProjection; roles?: RoleProjection[]; error?: string }) {
-  return <ProjectionClock status={data?.status} sourceGeneration={data?.source_generation}><div className="space-y-4">
-    <div className="v5-page-heading"><div><h1>Learning oversight</h1><p>Inspect claims, contradictions and release adoption. Evidence never grants execution.</p></div></div>
-    <ProjectionNotice status={data?.status} reason={data?.reason} generatedAt={data?.generated_at_ms} error={error} />
-    <MetricTiles items={[{ label: 'Roles blocked', value: roles.length ? roles.filter(role => role.status === 'BLOCKED').length : 'Unknown' }, { label: 'Lessons on this page', value: data?.lessons?.length ?? 'Unknown' }, { label: 'Applied receipts on this page', value: data?.adoptions?.filter(row => row.disposition === 'APPLIED').length ?? 'Unknown' }, { label: 'View provider calls', value: 'Not dispatched' }]} />
-    <section className="v5-panel"><h2>Fixed roles and blockers</h2><DataTable label="Role bindings" rows={roles} rowId={row => row.role_id} emptyText="No role manifest available." columns={[
-      { id: 'role', header: 'Role', value: row => row.name, rowHeader: true },
-      { id: 'status', header: 'State', value: row => row.status },
-      { id: 'blockers', header: 'Blockers', value: row => row.blockers.join('; '), wrap: true },
-      { id: 'task', header: 'Owner task', value: row => row.task_id ?? 'Binding missing' },
-      { id: 'usage', header: 'Usage', value: row => row.usage },
-      { id: 'metered', header: 'Provider metered', value: row => unknown(row.provider_metered_usage) },
-    ]} /></section>
-    <section className="v5-panel"><h2>Lessons and contradictions</h2><DataTable label="Lesson evidence" rows={data?.lessons ?? []} rowId={row => row.record_id} emptyText="No lessons reported. This is not evidence of no contradictions." columns={[
-      { id: 'claim', header: 'Claim and scope condition', value: row => `${row.claim} — ${row.condition}`, rowHeader: true, wrap: true, size: 300 },
-      { id: 'state', header: 'Validity / lifecycle', value: row => `${row.evidence_validity} / ${row.lifecycle_state}` },
-      { id: 'support', header: 'Support', value: row => row.support_refs.map(ref => ref.record_id).join(' '), cell: row => <EvidenceList refs={row.support_refs} />, wrap: true, size: 260 },
-      { id: 'contradictions', header: 'Contradictions', value: row => row.contradictory_refs.map(ref => ref.record_id).join(' '), cell: row => <EvidenceList refs={row.contradictory_refs} />, wrap: true, size: 260 },
-      { id: 'time', header: 'Available UTC', value: row => utc(row.available_at_ms), cell: row => <UtcTime value={row.available_at_ms} /> },
-    ]} /></section>
-    <section className="v5-panel"><h2>Knowledge releases</h2><DataTable label="Release consumer bindings" rows={data?.releases ?? []} rowId={row => row.record_id} columns={[
-      { id: 'release', header: 'Release', value: row => row.release_id, rowHeader: true },
-      { id: 'state', header: 'Publication / use', value: row => `${row.state} / ${row.scope_of_use}` },
-      { id: 'bindings', header: 'Consumer bindings', value: row => row.binding_status ?? 'Unknown' },
-      { id: 'missing', header: 'Missing bindings', value: row => row.missing_bindings?.length === 0 ? 'None; owner validation still required' : row.missing_bindings?.join(', ') ?? 'Unknown', wrap: true },
-      { id: 'components', header: 'Complete consumer manifest', value: row => row.bindings?.map(binding => binding.component).join(' ') ?? 'Unknown', cell: row => row.bindings?.length ? <details><summary>Inspect {row.bindings.length} consumer bindings</summary><dl>{row.bindings.map(binding => <div key={binding.component} className="mb-2"><dt>{binding.component.replaceAll('_', ' ')}</dt><dd>{binding.absence_reason ?? <EvidenceList refs={binding.refs} />}</dd></div>)}</dl></details> : 'Unknown', wrap: true, size: 340 },
-    ]} /></section>
-    <section className="v5-panel"><h2>Applied releases and retractions</h2><DataTable label="Release adoption receipts" rows={data?.adoptions ?? []} rowId={row => row.record_id} emptyText="No adoption receipt. Publication does not mean applied." columns={[
-      { id: 'consumer', header: 'Consumer', value: row => row.consumer_id, rowHeader: true },
-      { id: 'release', header: 'Release', value: row => row.new_release_ref.record_id },
-      { id: 'disposition', header: 'Adoption', value: row => row.disposition },
-      { id: 'reason', header: 'Reason', value: row => row.reason, wrap: true },
-      { id: 'boundary', header: 'Decision boundary UTC', value: row => utc(row.effective_decision_boundary_ms), cell: row => <UtcTime value={row.effective_decision_boundary_ms} /> },
-    ]} /><DataTable label="Retractions" rows={data?.retractions ?? []} rowId={row => row.record_id} emptyText="No retraction reported by this snapshot." columns={[
-      { id: 'reason', header: 'Retraction reason', value: row => row.reason, rowHeader: true, wrap: true },
-      { id: 'affected', header: 'Affected evidence', value: row => row.affected_refs.map(ref => ref.record_id).join(' '), cell: row => <EvidenceList refs={row.affected_refs} />, wrap: true },
-      { id: 'effective', header: 'Effective UTC', value: row => utc(row.effective_at_ms), cell: row => <UtcTime value={row.effective_at_ms} /> },
-    ]} /></section>
-  </div></ProjectionClock>;
+import { isUnavailableStub, useProjectionPages } from './learning-projection';
+import type { LessonRow, ProjectionEnvelope, ProjectionPagesView, Ref, UnavailableRowStub } from './learning-projection';
+import { CopyableHash, IssueList, ProjectionStatusBanner, RefList, SourceRefList, UtcTime as OwnerUtcTime } from './projection-ui';
+
+export function ScopedRefs({ refs }: { refs: Ref[] }) {
+  const scoped = refs.filter(ref => ref.resolution !== 'OUT_OF_SCOPE');
+  const opaque = refs.filter(ref => ref.resolution === 'OUT_OF_SCOPE');
+  return <div className="min-w-0"><RefList refs={scoped} empty="No in-scope references reported" />{opaque.map((ref, index) => <p key={`${ref.record_id}:${index}`} className="break-all">Unresolved reference: <code className="select-text">{ref.record_id}</code></p>)}</div>;
+}
+
+export function RecordedWindow({ row }: { row: LessonRow | UnavailableRowStub }) {
+  const scope = row.row_scope.recorded_scope;
+  return <p>Recorded scope: {scope?.venue ?? 'Unknown'} · {scope?.capital_model ?? 'Unknown'} · window {scope?.window ? <><OwnerUtcTime value={scope.window.start} /> to <OwnerUtcTime value={scope.window.end_exclusive} /> (exclusive)</> : 'Unknown'}</p>;
+}
+
+export function LearningPanel({ view, data }: { view?: ProjectionPagesView<'lessons'>; data?: ProjectionEnvelope<LessonRow | UnavailableRowStub> }) {
+  const envelope = view ? (view.state === 'ready' ? view.envelope : null) : data ?? null;
+  const rows = envelope && envelope.status !== 'UNAVAILABLE' ? envelope.items : [];
+  return <div className="space-y-4 min-w-0">
+    <div className="v5-page-heading"><div><h1>Learning</h1><p>Historical recorded lessons; not a research verdict.</p><p>Recall: not evaluated</p></div></div>
+    <ProjectionStatusBanner state={view?.state ?? (envelope ? 'ready' : 'unavailable')} envelope={envelope} error={view?.error} onFirst={view?.first} />
+    {rows.map(row => <article key={row.record_id} className="v5-panel min-w-0 break-words">
+      <h2>{isUnavailableStub(row) ? 'Recorded lesson unavailable' : row.title}</h2>
+      <p className="break-all">Record: <code className="select-text">{row.record_id}</code></p>
+      <p>Recorded: <OwnerUtcTime value={row.recorded_at_ms} /> · Available: <OwnerUtcTime value={row.available_at_ms} /></p>
+      <RecordedWindow row={row} /><IssueList issues={row.issues} />
+      {!isUnavailableStub(row) && <><p>{row.statement}</p><p>Domain: {row.domain} · Confidence: {row.confidence} · Evidence: {row.evidence_state}</p>
+        <p>Reopening condition: {row.reopening_condition}</p><p>Contradiction state: {row.contradiction_state}</p>
+        <h3>Evidence references</h3><ScopedRefs refs={[...row.outcome_refs, ...row.contradictory_refs]} />
+        <h3>Supersession</h3>{row.supersedes ? <ScopedRefs refs={[row.supersedes]} /> : <p>Not recorded</p>}</>}
+      <h3>Source receipts</h3><SourceRefList sources={row.sources} /><p>Row hash: <CopyableHash value={row.row_sha256} label="row hash" /></p>
+    </article>)}
+    {view && <nav aria-label="Lesson pages" className="flex flex-wrap gap-3"><button type="button" onClick={view.first} disabled={!view.hasPrevious && !view.snapshotChanged}>First</button><button type="button" onClick={view.previous} disabled={!view.hasPrevious}>Previous</button><button type="button" onClick={view.next} disabled={!view.hasNext}>Next</button></nav>}
+  </div>;
 }
 
 export function LearningPage() {
-  const manifest = useQuery({ queryKey: ['v5-learning'], queryFn: () => learningRead<LearningProjection>('manifest'), retry: false });
-  const roles = useQuery({ queryKey: ['v5-learning-roles'], queryFn: () => learningRead<{ roles: RoleProjection[] }>('roles'), retry: false });
-  if (manifest.isPending || roles.isPending) return <p role="status">Loading learning evidence…</p>;
-  return <LearningPanel data={manifest.data} roles={roles.data?.roles} error={manifest.error?.message ?? roles.error?.message} />;
+  const view = useProjectionPages('lessons', { limit: 25 });
+  return <LearningPanel view={view} />;
 }

@@ -1,0 +1,7 @@
+{
+  "schema": "research_knowledge.v5_projection_error.v1",
+  "owner": "research_os",
+  "code": "SNAPSHOT_CHANGED",
+  "retryable": false,
+  "snapshot_id": "7853c8fe2e59de742216785718f21552523efdef59d742457f31e13325facea1"
+}

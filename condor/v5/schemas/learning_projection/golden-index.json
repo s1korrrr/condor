@@ -1,0 +1,147 @@
+{
+  "contract_id": "v5-lfl-stage-a-2026-11-18-r2",
+  "examples": [
+    {
+      "path": "examples/manifest.json",
+      "schema": "manifest.schema.json",
+      "status": 200
+    },
+    {
+      "path": "examples/lessons.json",
+      "schema": "lessons.schema.json",
+      "status": 200
+    },
+    {
+      "path": "examples/records-nodes.json",
+      "schema": "records.schema.json",
+      "status": 200
+    },
+    {
+      "path": "examples/records-edges.json",
+      "schema": "records.schema.json",
+      "status": 200
+    },
+    {
+      "path": "examples/jobs.json",
+      "schema": "jobs.schema.json",
+      "status": 200
+    },
+    {
+      "path": "examples/jobs-running.json",
+      "schema": "jobs.schema.json",
+      "status": 200
+    },
+    {
+      "path": "examples/records-age-89s.json",
+      "schema": "records.schema.json",
+      "status": 200
+    },
+    {
+      "path": "examples/errors/INVALID_QUERY.json",
+      "schema": "error.schema.json",
+      "status": 400
+    },
+    {
+      "path": "examples/errors/INVALID_CURSOR.json",
+      "schema": "error.schema.json",
+      "status": 400
+    },
+    {
+      "path": "examples/errors/ROOT_NOT_IN_SCOPE.json",
+      "schema": "error.schema.json",
+      "status": 404
+    },
+    {
+      "path": "examples/errors/DATASET_NOT_ENABLED.json",
+      "schema": "error.schema.json",
+      "status": 404
+    },
+    {
+      "path": "examples/errors/ROUTE_NOT_FOUND.json",
+      "schema": "error.schema.json",
+      "status": 404
+    },
+    {
+      "path": "examples/errors/METHOD_NOT_ALLOWED.json",
+      "schema": "error.schema.json",
+      "status": 405
+    },
+    {
+      "path": "examples/errors/REQUEST_BODY_NOT_ALLOWED.json",
+      "schema": "error.schema.json",
+      "status": 413
+    },
+    {
+      "path": "examples/errors/TARGET_TOO_LONG.json",
+      "schema": "error.schema.json",
+      "status": 414
+    },
+    {
+      "path": "examples/errors/SNAPSHOT_CHANGED.json",
+      "schema": "error.schema.json",
+      "status": 409
+    },
+    {
+      "path": "examples/errors/PROJECTION_BUSY.json",
+      "schema": "error.schema.json",
+      "status": 503
+    },
+    {
+      "path": "examples/errors/PROJECTION_DEADLINE.json",
+      "schema": "error.schema.json",
+      "status": 503
+    },
+    {
+      "path": "examples/errors/WARMING.json",
+      "schema": "error.schema.json",
+      "status": 503
+    },
+    {
+      "path": "examples/errors/VERIFICATION_UNAVAILABLE.json",
+      "schema": "error.schema.json",
+      "status": 503
+    },
+    {
+      "path": "examples/errors/PUBLICATION_UNAVAILABLE.json",
+      "schema": "error.schema.json",
+      "status": 503
+    },
+    {
+      "path": "examples/errors/UPSTREAM_UNAVAILABLE.json",
+      "schema": "error.schema.json",
+      "status": 503
+    },
+    {
+      "path": "examples/errors/UPSTREAM_INVALID.json",
+      "schema": "error.schema.json",
+      "status": 502
+    },
+    {
+      "path": "examples/errors/INVALID_OWNER_PROJECTION.json",
+      "schema": "error.schema.json",
+      "status": 502
+    },
+    {
+      "path": "examples/errors/AUTHENTICATION_REQUIRED.json",
+      "schema": "auth-error.schema.json",
+      "status": 401
+    }
+  ],
+  "disabled_datasets": [
+    {
+      "path": "examples/candidates-disabled.json",
+      "body_schema": "error.schema.json",
+      "status": 404
+    },
+    {
+      "path": "examples/campaigns-disabled.json",
+      "body_schema": "error.schema.json",
+      "status": 404
+    },
+    {
+      "path": "examples/assessments-disabled.json",
+      "body_schema": "error.schema.json",
+      "status": 404
+    }
+  ]
+}

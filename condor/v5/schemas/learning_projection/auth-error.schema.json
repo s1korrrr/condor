@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rsibot:v5-lfl:stage-a:r2:auth-error",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "detail"
+  ],
+  "properties": {
+    "detail": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code"
+      ],
+      "properties": {
+        "code": {
+          "const": "authentication_required"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,125 @@
+{
+  "schema": "research_knowledge.v5_read_projection.v1",
+  "owner": "research_os",
+  "authority": "READ_ONLY",
+  "effect": "NONE",
+  "dataset": "assessments",
+  "scope": {
+    "scope_id": "v5-okx-spot-dca",
+    "program_id": "okx_spot_dca",
+    "family_lane_pairs": [
+      {
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT"
+      }
+    ],
+    "scope_sha256": "ac251f1a1cb75eb8890c1b8598046ef40ac79d7775a6284835851318b25abd66"
+  },
+  "projection_revision": "a24cf24b124c983d89b57779d5c1f9cbab7d2176c5c7dc3ef91896a1d5e08601",
+  "snapshot_id": "30815f5eec2d39e41f84da1e0c7957c8ed20ede8783118f14509518cb788df0c",
+  "publication_sha256": "dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e",
+  "database_sha256": "a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482",
+  "source_revision": "fixture-source-r1",
+  "source_snapshot": "fixture-source-s1",
+  "event_signature": "fixture-events-e1",
+  "status": "BOUND",
+  "reason_codes": [],
+  "generated_at_ms": 1794916620000,
+  "verified_at_ms": 1794916800000,
+  "served_at_ms": 1794916801000,
+  "coverage": {
+    "state": "COMPLETE",
+    "total_items": 1,
+    "returned_items": 1,
+    "omitted_items": 0,
+    "unresolved_membership_items": 0,
+    "excluded_proposed_edges": 0,
+    "pending_events": 0
+  },
+  "page": {
+    "limit": 25,
+    "next_cursor": null,
+    "has_more": false
+  },
+  "items": [
+    {
+      "record_id": "assessment:fixture-supported",
+      "native_kind": "assessment",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "ASSERTED_PARENT",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": null,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "fixtures/stage-b/assessment-cases.json",
+          "pointer": "",
+          "sha256": "893d1aef72616ce2d89ffc809cfbe981e1f629797320d212ff4e990de009fa45",
+          "bytes": 261
+        }
+      ],
+      "row_status": "COMPLETE",
+      "issues": [],
+      "assessment_id": "fixture-supported",
+      "idea_revision_id": "idea:ok-rsi-cd01-accumulate-distribute-20260903:revision:cd2887da2b4e98e7d786512627bcc975",
+      "evaluation_id": "fixture-evaluation-supported",
+      "run_ref": {
+        "owner": "research_os",
+        "kind": "run",
+        "record_id": "run:fixture-completed-supported",
+        "revision": null,
+        "source_index": 0,
+        "resolution": "RESOLVED"
+      },
+      "verdict": "SUPPORTED",
+      "validity": "VALID",
+      "attribution": "ISOLATED",
+      "supersedes": null,
+      "admission": "ADMITTED_COMPARISON",
+      "comparison": {
+        "baseline_id": "run:bnb-modules-marsep-r2-20261023-context-trend-stress-run01",
+        "metric": "final_nav",
+        "unit": "USDC",
+        "comparable_group": "bnb-modules-marsep-r2-20261023",
+        "delta": "-0.169870056",
+        "conditions": {
+          "baseline_id": "run:bnb-modules-marsep-r2-20261023-context-trend-stress-run01",
+          "metric": "final_nav",
+          "unit": "USDC",
+          "window": {
+            "end_exclusive": "2026-10-01T00:00:00Z",
+            "start": "2026-03-01T00:00:00Z"
+          },
+          "venue": "BINANCE_SPOT_PROXY",
+          "instrument": "BNB-USDC",
+          "capital_model": "SPOT_CASH_INVENTORY_1X_RESEARCH_SIMULATION",
+          "costs_identity": "{\"candidate\":{\"execution_model\":{\"adverse_displacement_per_side\":\"0.0007\",\"fee_per_side\":\"0.0008\",\"latency_bars\":1,\"minimum_notional\":\"1\",\"order_ttl_bars\":5,\"participation_previous_bar_volume\":\"0.01\",\"price_tick\":\"0.01\",\"quantity_step\":\"0.001\"},\"identities\":{\"code\":\"058248ffc784a28661269dea70065421b4a8e839790bd6a3c05a39439ed1073e\",\"config\":\"cb0755603271636cdc8763b26672e6e45de3af1e1136a6d5e5aa0bf7ee49506c\",\"data\":\"d7d08186996e8fa9c5b6e28441472c5dfb6338e9869fc3991f256f63feab9a96\"},\"prepared\":{\"bytes\":276893,\"path\":\"/home/rsi/dev/rsibot/.workspace/runs/bnb-modules-marsep-r2-20261023-final/preparations/context-breadth.json\",\"sha256\":\"84f6ff4d3fc54b82e51588f2dc7288509e46d2f8ee04d318a4bd616334397ade\"}},\"reference\":{\"execution\":{\"adverse_displacement_per_side\":\"0.0007\",\"fee_per_side\":\"0.0008\",\"latency_bars\":1,\"minimum_notional\":\"1\",\"order_ttl_bars\":5,\"participation_previous_bar_volume\":\"0.01\",\"price_tick\":\"0.01\",\"quantity_step\":\"0.001\"},\"final_nav\":\"516.212318840000000000000000\",\"id\":\"run:bnb-modules-marsep-r2-20261023-context-trend-stress-run01\",\"identities\":{\"code\":\"058248ffc784a28661269dea70065421b4a8e839790bd6a3c05a39439ed1073e\",\"config\":\"32195d5854475575d40805e42a734cb87606cced0a6347933f1364747005dd91\",\"data\":\"d7d08186996e8fa9c5b6e28441472c5dfb6338e9869fc3991f256f63feab9a96\"},\"result\":{\"bytes\":278455,\"path\":\"/home/rsi/dev/rsibot/.workspace/runs/bnb-modules-marsep-r2-20261023-final/runs/context-trend-stress/result.json\",\"sha256\":\"3db20c8d6abd689365eea13df04c851a8e4333620c1028f9ebbba4cb293a11c8\"}}}",
+          "execution_identity": "{\"candidate\":{\"execution_model\":{\"adverse_displacement_per_side\":\"0.0007\",\"fee_per_side\":\"0.0008\",\"latency_bars\":1,\"minimum_notional\":\"1\",\"order_ttl_bars\":5,\"participation_previous_bar_volume\":\"0.01\",\"price_tick\":\"0.01\",\"quantity_step\":\"0.001\"},\"identities\":{\"code\":\"058248ffc784a28661269dea70065421b4a8e839790bd6a3c05a39439ed1073e\",\"config\":\"cb0755603271636cdc8763b26672e6e45de3af1e1136a6d5e5aa0bf7ee49506c\",\"data\":\"d7d08186996e8fa9c5b6e28441472c5dfb6338e9869fc3991f256f63feab9a96\"},\"prepared\":{\"bytes\":276893,\"path\":\"/home/rsi/dev/rsibot/.workspace/runs/bnb-modules-marsep-r2-20261023-final/preparations/context-breadth.json\",\"sha256\":\"84f6ff4d3fc54b82e51588f2dc7288509e46d2f8ee04d318a4bd616334397ade\"}},\"reference\":{\"execution\":{\"adverse_displacement_per_side\":\"0.0007\",\"fee_per_side\":\"0.0008\",\"latency_bars\":1,\"minimum_notional\":\"1\",\"order_ttl_bars\":5,\"participation_previous_bar_volume\":\"0.01\",\"price_tick\":\"0.01\",\"quantity_step\":\"0.001\"},\"final_nav\":\"516.212318840000000000000000\",\"id\":\"run:bnb-modules-marsep-r2-20261023-context-trend-stress-run01\",\"identities\":{\"code\":\"058248ffc784a28661269dea70065421b4a8e839790bd6a3c05a39439ed1073e\",\"config\":\"32195d5854475575d40805e42a734cb87606cced0a6347933f1364747005dd91\",\"data\":\"d7d08186996e8fa9c5b6e28441472c5dfb6338e9869fc3991f256f63feab9a96\"},\"result\":{\"bytes\":278455,\"path\":\"/home/rsi/dev/rsibot/.workspace/runs/bnb-modules-marsep-r2-20261023-final/runs/context-trend-stress/result.json\",\"sha256\":\"3db20c8d6abd689365eea13df04c851a8e4333620c1028f9ebbba4cb293a11c8\"}}}",
+          "validation": "Verified completed owner results; frozen matrix comparator; 214 paired days; exploratory only."
+        },
+        "comparison_group": "bnb-modules-marsep-r2-20261023 · 37542685"
+      },
+      "row_sha256": "19ef39a68960cf28c5726afe878036a5518c856bfa6ce56cd829d2c454fd8b6c"
+    }
+  ],
+  "issues": [],
+  "envelope_sha256": "b3edccf948a292a9c7bc180e4788bdafeba5c3c8a6a7014950d3bbbabc540283"
+}

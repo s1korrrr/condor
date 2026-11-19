@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:rsibot:v5-lfl:stage-a:r2:query-records",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "scope_id",
+    "record_type"
+  ],
+  "properties": {
+    "scope_id": {
+      "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+    },
+    "limit": {
+      "type": "string",
+      "pattern": "^([1-9]|[1-4][0-9]|50)$"
+    },
+    "cursor": {
+      "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Cursor"
+    },
+    "record_type": {
+      "enum": [
+        "node",
+        "edge"
+      ]
+    },
+    "root_id": {
+      "$ref": "urn:rsibot:v5-lfl:stage-a:r2:common#/$defs/Id"
+    }
+  }
+}

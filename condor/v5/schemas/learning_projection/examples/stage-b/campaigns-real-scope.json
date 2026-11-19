@@ -1,0 +1,1866 @@
+{
+  "schema": "research_knowledge.v5_read_projection.v1",
+  "owner": "research_os",
+  "authority": "READ_ONLY",
+  "effect": "NONE",
+  "dataset": "campaigns",
+  "scope": {
+    "scope_id": "v5-okx-spot-dca",
+    "program_id": "okx_spot_dca",
+    "family_lane_pairs": [
+      {
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT"
+      },
+      {
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT"
+      }
+    ],
+    "scope_sha256": "ac251f1a1cb75eb8890c1b8598046ef40ac79d7775a6284835851318b25abd66"
+  },
+  "projection_revision": "a24cf24b124c983d89b57779d5c1f9cbab7d2176c5c7dc3ef91896a1d5e08601",
+  "snapshot_id": "30815f5eec2d39e41f84da1e0c7957c8ed20ede8783118f14509518cb788df0c",
+  "publication_sha256": "dc62a34ab8e9b33e6c77cf3dcbf4013c852d859ada552e9606b34b5ea7a8dc3e",
+  "database_sha256": "a0400d6260d29422392ea7f754e43b76098b12b1bd6b7bfd410f7adfcb100482",
+  "source_revision": "fixture-source-r1",
+  "source_snapshot": "fixture-source-s1",
+  "event_signature": "fixture-events-e1",
+  "status": "PARTIAL",
+  "reason_codes": [
+    "PREREGISTRATION_SEAL_MISSING"
+  ],
+  "generated_at_ms": 1794916620000,
+  "verified_at_ms": 1794916800000,
+  "served_at_ms": 1794916801000,
+  "coverage": {
+    "state": "PARTIAL",
+    "total_items": 22,
+    "returned_items": 22,
+    "omitted_items": 0,
+    "unresolved_membership_items": 0,
+    "excluded_proposed_edges": 0,
+    "pending_events": 0
+  },
+  "page": {
+    "limit": 25,
+    "next_cursor": null,
+    "has_more": false
+  },
+  "items": [
+    {
+      "record_id": "okx-context-dca-admission-20260915-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789511067611,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-context-dca-admission-20260915-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "deb3527c4a4060948541766403a8bd48e62a5485189e9f37d7ddad574431dd1d",
+          "bytes": 1159
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-context-dca-admission-20260915-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "92b9452a09424500f0ec8aef40b2d1ed83be1800eebf1a4847db2cbf0ccd4b00",
+          "bytes": 37036
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-context-dca-admission-20260915-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-context-dca-admission-20260915-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-context-dca-admission-20260915-four-variant",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-context-dca-admission-20260915:revision:e74a4c2cc4ecdf1541eb7b58db56a149",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-context-dca-admission-20260915-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-15T22:24:27.611319+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Four-variant restrict-only existing-context DCA overlay on ok_rsi / okx_spot_dca, sealed BNB-USDC cached 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive. Sequence: frozen YAML baseline (episode_enabled false); static half buy budget; vol-only ATR throttle; context overlay (hostile/cascade withhold, recovery confirmation, stale/missing admit no new risk). Overlay outputs only allow_new_episode, allow_additional_scale_in, buy_budget_multiplier in [0,1], context_id, decision_reason. No RSI/trailing/exit/max-exposure change. No episode_enabled. No HMM/Hurst/VIX/Kelly. Entrypoint ok_rsi_context_dca_admission_replay.py. Cache-only research-only. idea_refs to idea:okx-context-dca-admission-20260913:revision:d8a9a00ff6483c733251ce44bbfe618f. Same-wrapper B0 control; r11 not admitted.",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "59a1ed312e002080b93ad2475ac9fb5a93f7acd40585a79eb190466a718cd7ec"
+    },
+    {
+      "record_id": "okx-ok-rsi-full-window-20260909-r3-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1788999598274,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260909-r3-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "c873d3bddbea79d53d69685d0872824ad8b5c731f06cf801d724348b905d8b3e",
+          "bytes": 600
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260909-r3-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "be7796d9be508db6f0b00d1ccf3b65f83e93f8ed10a70522a4da35050717f979",
+          "bytes": 635493
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-ok-rsi-full-window-20260909-r3-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-ok-rsi-full-window-20260909-r3-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-full-window-owner-baseline-20260909",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:0d4b5fa41a85f01abd656eede67d15a0",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-ok-rsi-full-window-20260909-r3-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-10T00:19:58.274202+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Seal one frozen non-episode owner-replay baseline of current ok_rsi on the required May-August cached corpus so later candidates have a valid same-window owner comparison; research-only; not a C0 episode rerun and not an August P01-P05 identity",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "5badbe6b9ad3d8b3968da9f0732b942f9ffcec00a7bdfb785bbb3582c1e09472"
+    },
+    {
+      "record_id": "okx-ok-rsi-full-window-20260910-r10-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789063226916,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260910-r10-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "104bf2d0d12871d36348333a7322d34cebf5bb544eee09953ee99a70a3d281e4",
+          "bytes": 601
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260910-r10-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "734643057b5f347f65be542d8e346e1b8dc62debcba84b31d05a3dcd8e8f60fd",
+          "bytes": 957974
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-ok-rsi-full-window-20260910-r10-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-ok-rsi-full-window-20260910-r10-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-full-window-owner-baseline-20260910-r10",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:40416439cec795adaea0262b0b98ff2b",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-ok-rsi-full-window-20260910-r10-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-10T18:00:26.916390+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Seal one frozen non-episode owner-replay baseline of current ok_rsi on the required May-August cached corpus so later candidates have a valid same-window owner comparison; research-only; not a C0 episode rerun and not an August P01-P05 identity",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "415a8b571f0f8f1600bf7144be8e4cb847eff22e2030f2a01c9454a5dc642156"
+    },
+    {
+      "record_id": "okx-ok-rsi-full-window-20260910-r11-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789077963321,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260910-r11-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "014d4762825273e0c23bb90d4c2f2045755456d218a9d0bd711054cd29ca7b24",
+          "bytes": 601
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260910-r11-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "e39aedd652ff5f38c96b97b2d0b4e39871155485b07b0456ee323a365031109d",
+          "bytes": 963074
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-ok-rsi-full-window-20260910-r11-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-ok-rsi-full-window-20260910-r11-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-full-window-owner-baseline-20260910-r11",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:ec3b734f4c291386ef4ece834a014832",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-ok-rsi-full-window-20260910-r11-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-10T22:06:03.321084+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Seal one frozen non-episode owner-replay baseline of current ok_rsi on the required May-August cached corpus so later candidates have a valid same-window owner comparison; research-only; not a C0 episode rerun and not an August P01-P05 identity",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "21bc75ae64d5b1cb3a21ac90d139143d6d1942e43ae6493e7c37197603bffd1e"
+    },
+    {
+      "record_id": "okx-ok-rsi-full-window-20260910-r5-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789007998032,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260910-r5-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "d99aa4cd5f22cc13faaafdac2cb7cd86040f9b89906f996a91c5f9f9d3efdc71",
+          "bytes": 600
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260910-r5-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "1db9f0a0ab3710abc42d49b190cde658e22c058d2eb9626ac8c4f386bb7f8e08",
+          "bytes": 637556
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-ok-rsi-full-window-20260910-r5-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-ok-rsi-full-window-20260910-r5-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-full-window-owner-baseline-20260910-r5",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:06f8979a7fd0bc77f5f7d055bf926cc1",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-ok-rsi-full-window-20260910-r5-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-10T02:39:58.032656+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Seal one frozen non-episode owner-replay baseline of current ok_rsi on the required May-August cached corpus so later candidates have a valid same-window owner comparison; research-only; not a C0 episode rerun and not an August P01-P05 identity",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "2abfc00f982bb0bcb0c174e79949a8859181cc69c8251bd54d17939d7bd33022"
+    },
+    {
+      "record_id": "okx-ok-rsi-full-window-20260910-r6-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789017155129,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260910-r6-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "8570da0d37007694bd390b42c2cd0d2acdb0828fd62f5190dd241026cc32b5ac",
+          "bytes": 600
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260910-r6-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "2adb33d139d632190aba275909b938217a958f26b85ee89116709374de3ef09f",
+          "bytes": 638829
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-ok-rsi-full-window-20260910-r6-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-ok-rsi-full-window-20260910-r6-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-full-window-owner-baseline-20260910-r6",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:627a40b723f5886a6c6e011fe357058a",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-ok-rsi-full-window-20260910-r6-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-10T05:12:35.129541+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Seal one frozen non-episode owner-replay baseline of current ok_rsi on the required May-August cached corpus so later candidates have a valid same-window owner comparison; research-only; not a C0 episode rerun and not an August P01-P05 identity",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "55605e951aca2d337b4aa1db82635d2e30ebd345cd6eb77df5265a37e17f0e44"
+    },
+    {
+      "record_id": "okx-ok-rsi-full-window-20260910-r7-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789026879984,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260910-r7-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "56e559fad91171a6e522e94e65c8fae58b5dcab1f5904c0004b4e133a36d6325",
+          "bytes": 600
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260910-r7-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "8123543d09303a7a68f382c28fa7646dac1124a5b68c3d3a14436860d23d3068",
+          "bytes": 643557
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-ok-rsi-full-window-20260910-r7-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-ok-rsi-full-window-20260910-r7-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-full-window-owner-baseline-20260910-r7",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:0270bd4091a8fc16db8601934050cf5c",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-ok-rsi-full-window-20260910-r7-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-10T07:54:39.984217+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Seal one frozen non-episode owner-replay baseline of current ok_rsi on the required May-August cached corpus so later candidates have a valid same-window owner comparison; research-only; not a C0 episode rerun and not an August P01-P05 identity",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "407b005ce3c8f78646d9fdd2930f1944db41dca80ed03cdee014eab4543f0758"
+    },
+    {
+      "record_id": "okx-ok-rsi-full-window-20260910-r8-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789037526433,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260910-r8-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "0947a818a58000ba69044828b90a231ade01a77370c818933f4a1b71389db787",
+          "bytes": 600
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260910-r8-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "e5444e42226f4dbc3fe72fb5805f7baadde0eec2a779493702f803d66c672864",
+          "bytes": 648014
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-ok-rsi-full-window-20260910-r8-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-ok-rsi-full-window-20260910-r8-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-full-window-owner-baseline-20260910-r8",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:8923252af7ed23ab04c678f6b445bfe4",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-ok-rsi-full-window-20260910-r8-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-10T10:52:06.433631+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Seal one frozen non-episode owner-replay baseline of current ok_rsi on the required May-August cached corpus so later candidates have a valid same-window owner comparison; research-only; not a C0 episode rerun and not an August P01-P05 identity",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "62eefd7af2acf84bff1bfc0370305e4266ae4492b5d2872114399f6b7e1a7b31"
+    },
+    {
+      "record_id": "okx-ok-rsi-full-window-20260910-r9-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_owner_replay_baseline",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789050915026,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260910-r9-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "7e1b28293e85f0be477acc66338b4b2a13bdac4a176398fcc1d016353028805c",
+          "bytes": 600
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-ok-rsi-full-window-20260910-r9-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "edabd1b51832a900458b1c80261757565a11bf587e0e552b7871f445268a0b24",
+          "bytes": 951496
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-ok-rsi-full-window-20260910-r9-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-ok-rsi-full-window-20260910-r9-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-full-window-owner-baseline-20260910-r9",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-full-window-owner-baseline-20260909:revision:457d6fa7169c35d4e2730b0f5d792f82",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-ok-rsi-full-window-20260910-r9-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-10T14:35:15.026310+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Seal one frozen non-episode owner-replay baseline of current ok_rsi on the required May-August cached corpus so later candidates have a valid same-window owner comparison; research-only; not a C0 episode rerun and not an August P01-P05 identity",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "8fd607a4d15e7cbb58af7e306b033ed8a5aa48df996263719c6c12a7df94448d"
+    },
+    {
+      "record_id": "okx-rsi-bullish-div-entry-20260915-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "okx_spot_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789505732546,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-rsi-bullish-div-entry-20260915-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "c695d3f1b1efbeba834ca56c9043acda9ac1a6648c93e6049eeb44878e4c2890",
+          "bytes": 979
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-rsi-bullish-div-entry-20260915-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "857bdab1b50833a099252817f261125012e5d78aa14e6a1e410a6585d89f3ff6",
+          "bytes": 647843
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-rsi-bullish-div-entry-20260915-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-rsi-bullish-div-entry-20260915-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-rsi-bullish-div-entry-20260915-four-way",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-rsi-bullish-div-entry-20260915:revision:8e40bbe3fcbecac151309d6eb92806db",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-rsi-bullish-div-entry-20260915-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-15T20:55:32.546954+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Four-way okx_spot_dca initial-entry comparison on cached UTC 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive. Policy 1: frozen ok_rsi, episode_enabled false, buy_confirmation_mode none. Policy 2: first-dip stabilisation. Policy 3: second-leg close retest plus recovery, no RSI rule. Policy 4: same plus R2>=R1+eps_R. Capital, exits, trailing, later DCA unchanged. Count every first eligible setup including V-recoveries. Score after-cost portfolio with idle cash and MTM. OKX SPOT_UNLEVERAGED; tape BINANCE_SPOT_PROXY. SOL/XRP 1m BLOCKING_GAP stay UNAVAILABLE. Candidate overlay only; live YAML stays none.",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "c563bcc700772bb4a5b413b2e9333338ac8adb9493d478830eaccdc58705f86e"
+    },
+    {
+      "record_id": "okx-rsi-vol-shrink-sizing-20260916-r2-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789546839939,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-rsi-vol-shrink-sizing-20260916-r2-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "47a1cd29c71ffa9cce969edbaf922f129a20f078584d768803b30cb121ebf392",
+          "bytes": 1103
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-rsi-vol-shrink-sizing-20260916-r2-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "cf69f67a1b5ae5c26f6db5fb57506fd525180a36a8a2bb4acf70d202e2936fc0",
+          "bytes": 49087
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-rsi-vol-shrink-sizing-20260916-r2-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-rsi-vol-shrink-sizing-20260916-r2-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-rsi-vol-shrink-sizing-20260916-r2-three-arm",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:ac587ad43c94e017ce21166ccc0a02f1",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-rsi-vol-shrink-sizing-20260916-r2-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-16T08:20:39.939893+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Successor of okx-rsi-vol-shrink-sizing-20260916 after DESIGN_AUDIT HELD. Repair vol_multipliers covering window timestamp.ge(START-60) and lt(END-60) so keys equal r11 decisions START through END-60. Rails from BNB YAML usd_per_entry 25; no max_controller_drawdown_quote. Three-arm shrink-only vol sizing on okx_spot_dca BNB-USDC, cached 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive. Arm 1 owner. Arm 2 wrap after _effective_buy_entry_usd, 1440-bar variance vs warmup median 1.4278464713012902e-07, clip [0.5, 1.0]. Arm 3 constant 0.5. Cite hold 9447242d, t12 97d1128b, HELD okx-rsi-vol-shrink-sizing-20260916-1. No 20260908 or r11 owner_comparison. Do not hijack bullish-div or Rosenthal. No Pomorski idea_id. No Markowitz.",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "c54ae89fed3c9cf80fa754b9895d480bd537f6c91533a29d8bad08b0811ef82e"
+    },
+    {
+      "record_id": "okx-rsi-vol-shrink-sizing-20260916-r2-trial-2",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789549143832,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-rsi-vol-shrink-sizing-20260916-r2-trial-2/campaign.json",
+          "pointer": "",
+          "sha256": "9b542ad7f1cbb370902179351e715cb7fb004ba1b2fa83655edd97b109145415",
+          "bytes": 1103
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-rsi-vol-shrink-sizing-20260916-r2-trial-2/preregistered.json",
+          "pointer": "",
+          "sha256": "dd3753021135c614b50d111d19682d850afa9d4b0ef7702a2c11eb499edc5b37",
+          "bytes": 56238
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-rsi-vol-shrink-sizing-20260916-r2-trial-2",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-rsi-vol-shrink-sizing-20260916-r2-trial-2",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-rsi-vol-shrink-sizing-20260916-r2-t2-import",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:d3c43baac58d964c9a82e24d49b017c5",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-rsi-vol-shrink-sizing-20260916-r2-trial-2",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-16T08:59:03.832475+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Successor of okx-rsi-vol-shrink-sizing-20260916 after DESIGN_AUDIT HELD. Repair vol_multipliers covering window timestamp.ge(START-60) and lt(END-60) so keys equal r11 decisions START through END-60. Rails from BNB YAML usd_per_entry 25; no max_controller_drawdown_quote. Three-arm shrink-only vol sizing on okx_spot_dca BNB-USDC, cached 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive. Arm 1 owner. Arm 2 wrap after _effective_buy_entry_usd, 1440-bar variance vs warmup median 1.4278464713012902e-07, clip [0.5, 1.0]. Arm 3 constant 0.5. Cite hold 9447242d, t12 97d1128b, HELD okx-rsi-vol-shrink-sizing-20260916-1. No 20260908 or r11 owner_comparison. Do not hijack bullish-div or Rosenthal. No Pomorski idea_id. No Markowitz.",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "b84eff9413d99b38ffc53e9ae9cfe9a3f744db92f96ea684fb6e83583c3bfe87"
+    },
+    {
+      "record_id": "okx-rsi-vol-shrink-sizing-20260916-r3-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789552236245,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-rsi-vol-shrink-sizing-20260916-r3-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "d01f7a2d712d7c53bf1f6d81577deaede548e69af163efa0a6b3416f5bd3f8f9",
+          "bytes": 1137
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-rsi-vol-shrink-sizing-20260916-r3-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "021d0c312ae984952c3ec8d55fd4b3223934fb3f7a99cc2da2bf305fde60a3d6",
+          "bytes": 66999
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-rsi-vol-shrink-sizing-20260916-r3-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-rsi-vol-shrink-sizing-20260916-r3-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-rsi-vol-shrink-sizing-20260916-r3-t1-connectors",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:0f9163d1e23471e72ef9dda8d63a069b",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-rsi-vol-shrink-sizing-20260916-r3-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-16T09:50:36.245623+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Successor of okx-rsi-vol-shrink-sizing-20260916-r2 after trial 2 FAILED IMPLEMENTATION VALID. Repair inert OrderExecutor construction so snapshot get_order_price does not read missing connectors. Keep file-path scripts.research bootstrap. Covering window timestamp.ge(START-60) & lt(END-60). YAML usd_per_entry 25. Three-arm shrink-only vol sizing on okx_spot_dca BNB-USDC, cached 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive. Arm 1 owner. Arm 2 wrap after _effective_buy_entry_usd, 1440-bar variance vs warmup median 1.4278464713012902e-07, clip [0.5, 1.0]. Arm 3 constant 0.5. Cite FAILED r2-1 and r2-2. Parent d3c43baac58d964c9a82e24d49b017c5. No 20260908 or r11 owner_comparison. Do not hijack bullish-div or Rosenthal. No Pomorski idea_id. No Markowitz.",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "cca2b6e18873d241b16342c0530dd275fdf16a355fcbe79adb24a32a82fe1762"
+    },
+    {
+      "record_id": "okx-rsi-vol-shrink-sizing-20260916-r3-trial-2",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789557084483,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-rsi-vol-shrink-sizing-20260916-r3-trial-2/campaign.json",
+          "pointer": "",
+          "sha256": "d91c3bd716d4435da6409616b49740912c129922a70bc93fa44718f66d7e1940",
+          "bytes": 1137
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-rsi-vol-shrink-sizing-20260916-r3-trial-2/preregistered.json",
+          "pointer": "",
+          "sha256": "32ec133408dfca64959768eb98473f94985616db44a70d1c92adc9636a93fe1e",
+          "bytes": 78282
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-rsi-vol-shrink-sizing-20260916-r3-trial-2",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-rsi-vol-shrink-sizing-20260916-r3-trial-2",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-rsi-vol-shrink-sizing-20260916-r3-t2-admitted",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:b666af7cad5b670c63a8dfb305353da2",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-rsi-vol-shrink-sizing-20260916-r3-trial-2",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-16T11:11:24.483241+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Successor of okx-rsi-vol-shrink-sizing-20260916-r2 after trial 2 FAILED IMPLEMENTATION VALID. Repair inert OrderExecutor construction so snapshot get_order_price does not read missing connectors. Keep file-path scripts.research bootstrap. Covering window timestamp.ge(START-60) & lt(END-60). YAML usd_per_entry 25. Three-arm shrink-only vol sizing on okx_spot_dca BNB-USDC, cached 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive. Arm 1 owner. Arm 2 wrap after _effective_buy_entry_usd, 1440-bar variance vs warmup median 1.4278464713012902e-07, clip [0.5, 1.0]. Arm 3 constant 0.5. Cite FAILED r2-1 and r2-2. Parent d3c43baac58d964c9a82e24d49b017c5. No 20260908 or r11 owner_comparison. Do not hijack bullish-div or Rosenthal. No Pomorski idea_id. No Markowitz.",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "c08b97f03904720cb944042591b9cf65240d94bec778ad2cd153074aed5ba91e"
+    },
+    {
+      "record_id": "okx-rsi-vol-shrink-sizing-20260916-r4-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_challenger_20260903",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789561263910,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-rsi-vol-shrink-sizing-20260916-r4-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "5de4b765f71b4704c92dc479b948570fafbb5627174eec4f18932eb674ad7e52",
+          "bytes": 1343
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-rsi-vol-shrink-sizing-20260916-r4-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "a7e4098a3a8bd6e19775f16184b30b44588b8d6935402562dbbb415f8cf31928",
+          "bytes": 90037
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-rsi-vol-shrink-sizing-20260916-r4-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-rsi-vol-shrink-sizing-20260916-r4-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-rsi-vol-shrink-sizing-20260916-r4-t1-native-metrics",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:ok-rsi-challenger-07-vol-regime-gate-20260903:revision:778ac2c734986ef757b898301a643ac9",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-rsi-vol-shrink-sizing-20260916-r4-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-16T12:21:03.910193+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Successor of okx-rsi-vol-shrink-sizing-20260916-r3 after trial 2 FAILED IMPLEMENTATION VALID. Declared result_path must be a native ok_rsi.owner_artifact.v1 that inspect_owner/classify_native accept without KeyError: include metrics, starting_base, and status in the same shape as r11 baseline.json. Same-wrapper arm 1 is the control identity for those fields. Keep r11 receipts, covering window, YAML 25, import bootstrap, connectors wrap. No fourth admitted schema. New output dir ok_rsi_vol_shrink_sizing_20260916_r4. Cite FAILED r3-1 and r3-2. Parent b666af7cad5b670c63a8dfb305353da2. Three-arm shrink-only vol sizing on okx_spot_dca BNB-USDC, cached 2026-05-01T00:00:00Z inclusive to 2026-09-01T00:00:00Z exclusive. Arm 1 owner. Arm 2 wrap after _effective_buy_entry_usd, 1440-bar variance vs warmup median 1.4278464713012902e-07, clip [0.5, 1.0]. Arm 3 constant 0.5. No 20260908 or r11 owner_comparison. Do not hijack bullish-div or Rosenthal. No Pomorski idea_id. No Markowitz.",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "7adeee535c15fd65bc00b0c05b930ec3ed6570475b68705cd1e7ec5aac94a54b"
+    },
+    {
+      "record_id": "okx-trend-dca-admission-20260910-r2-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789073357012,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-trend-dca-admission-20260910-r2-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "40c87c987905678ef16cc02c5e65a1c37f8efd3740bde56055e37546bb0176dc",
+          "bytes": 751
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-trend-dca-admission-20260910-r2-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "4cc3f2b3026302d08f2bb752a03430d139294c73079bea422b541ec28e55cd33",
+          "bytes": 340285
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-trend-dca-admission-20260910-r2-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-trend-dca-admission-20260910-r2-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-trend-aware-dca-g-overlay-20260910-r2",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:5b658e75fd4d876c63e2613ab6d56d75",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-trend-dca-admission-20260910-r2-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-10T20:49:17.012827+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Repair sealed load_g_overlay() sys.modules registration, then seal one B1 restrict-only g overlay owner replay vs frozen ok_rsi. Same idea okx-ok-rsi-trend-aware-dca-g-overlay-20260910. Cite decision:lesson:okx-spot-dca-sealed-importlib-sys-modules-20260910 and decision:outcome:okx-trend-dca-admission-20260910-1. Research-only. Cache-only May-August 2026. No S183. Do not admit r10 economics.",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "58210e65bfeed79fe1185867e73ad35298c3f8f516953d6ee05a02f5f8a85242"
+    },
+    {
+      "record_id": "okx-trend-dca-admission-20260910-r3-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789077807312,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-trend-dca-admission-20260910-r3-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "a50b8b97b34ddca635e9abf9bda11564ccc9d1b6d345ac281c3fcf31e0397f5a",
+          "bytes": 712
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-trend-dca-admission-20260910-r3-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "93d61cd5e2b4936782dfe6aaf111241147f26b9f69231090fb71515cd6c7258f",
+          "bytes": 345683
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-trend-dca-admission-20260910-r3-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-trend-dca-admission-20260910-r3-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-trend-aware-dca-g-overlay-20260910-r3",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:d0a56ec8a280ac64348f7579a761da56",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-trend-dca-admission-20260910-r3-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-10T22:03:27.312142+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Repair candidate identity, g observability, and activity-rail fail-closed after decision:outcome:okx-trend-dca-admission-20260910-r2-1 INCONCLUSIVE EVIDENCE_GAP. Same idea okx-ok-rsi-trend-aware-dca-g-overlay-20260910. Keep loader sys.modules fix. Research-only. Cache-only May-August 2026. Do not admit r10 economics. Do not overwrite r2 results/B1.json.",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "a7afb6d387f9999fe675cd092053e977dbae7ac9e1b37cf248e3b3338ea39bf8"
+    },
+    {
+      "record_id": "okx-trend-dca-admission-20260910-r4-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789081426788,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-trend-dca-admission-20260910-r4-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "c60473bcc98bd75397e90b9ab5d217595d622653f2da61a34bc3c6e50aeca3dd",
+          "bytes": 704
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-trend-dca-admission-20260910-r4-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "b12d5fe4c4bd9c7e468980969d55cc83d8bf9183078469581dfb262db0f6773c",
+          "bytes": 45359
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-trend-dca-admission-20260910-r4-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-trend-dca-admission-20260910-r4-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-trend-aware-dca-g-overlay-20260910-r4",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:3a3abc9a0d28501b4dcb0a1e0436fed4",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-trend-dca-admission-20260910-r4-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-10T23:03:46.788077+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Same-wrapper B0 versus B1 after decision:outcome:okx-trend-dca-admission-20260910-r3-1 INCONCLUSIVE EVIDENCE_GAP. Same idea okx-ok-rsi-trend-aware-dca-g-overlay-20260910. One owner argv runs B0 then B1. Do not use r10 as an admitted baseline. Research-only. Cache-only May-August 2026. Do not overwrite r2 results/B1.json or r3 results/r3-B1.json.",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "4bc9fd68fa47bbbacd366512faa696a7580bc66f6d16eb46d8821ee2af1b723b"
+    },
+    {
+      "record_id": "okx-trend-dca-admission-20260910-r5-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789085789259,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-trend-dca-admission-20260910-r5-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "c328daacbb38d86520131820a852ae92d69d00547973af1e1175dab8adcbd8f1",
+          "bytes": 773
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-trend-dca-admission-20260910-r5-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "f68676907d7f7ffaa040956497a20e3816254e139c3686837dffab7ce8f9b925",
+          "bytes": 48992
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-trend-dca-admission-20260910-r5-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-trend-dca-admission-20260910-r5-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-trend-aware-dca-g-overlay-20260910-r5",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:aebfbdc0ac812e95fe7f390dd6fdcdea",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-trend-dca-admission-20260910-r5-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-11T00:16:29.259093+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "B0 then B2 vol-stress-only then B1 after decision:outcome:okx-trend-dca-admission-20260910-r4-1 INCONCLUSIVE EVIDENCE_GAP. Same idea okx-ok-rsi-trend-aware-dca-g-overlay-20260910. One owner argv. Hash-link control sidecars. Do not freeze-repeat B0-vs-B1 without B2. Do not use r10 as an admitted baseline. Research-only. Cache-only May-August 2026. Do not overwrite r2 B1.json, r3-B1.json, r4-B0.json, or r4-B1.json.",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "b1a96d8a75d81772c423c9481357ff15534515b1f5f9eaabe5132e05438a1adb"
+    },
+    {
+      "record_id": "okx-trend-dca-admission-20260910-r6-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789090733986,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-trend-dca-admission-20260910-r6-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "ef5056ac533712f805414944465b44d554ccb807b9d1c047fc1aabd91b773429",
+          "bytes": 888
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-trend-dca-admission-20260910-r6-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "6de53d070d311297528fb5215c3fab78f34b545420c9ba6935199b7d3f946abc",
+          "bytes": 55436
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-trend-dca-admission-20260910-r6-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-trend-dca-admission-20260910-r6-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-trend-aware-dca-g-overlay-20260910-r6",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:ba2cc851e789d58457dfb72b723c90c0",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-trend-dca-admission-20260910-r6-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-11T01:38:53.986589+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "B2 vol-only admission set then B1_on_B2_events matched control after decision:outcome:okx-trend-dca-admission-20260910-r5-1 INCONCLUSIVE EVIDENCE_GAP. Same idea okx-ok-rsi-trend-aware-dca-g-overlay-20260910. One owner argv. Hash-link B2 sidecar. Skip-min remains zero-size rows on the same B2 event list. Do not freeze-repeat unpaired B0-B2-B1. Do not use r10 as an admitted baseline. Research-only. Cache-only May-August 2026. Do not overwrite r2 B1.json, r3-B1.json, r4-B0.json, r4-B1.json, r5-B0.json, r5-B2.json, or r5-B1.json.",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "3a35c02bc2c2f92873b903e1b0a207d6191200f2f16bf81009bc0a8151f94f9a"
+    },
+    {
+      "record_id": "okx-trend-dca-admission-20260910-r8-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789236390524,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-trend-dca-admission-20260910-r8-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "f1918853f55f55ac2fb42fc5e77b37ac42778b7f0badffe055818c5cea26a531",
+          "bytes": 823
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-trend-dca-admission-20260910-r8-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "fe560ff73d8bea4380a05a6c4b91abb8c1a58212e96f9a2b117fede992020844",
+          "bytes": 59122
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-trend-dca-admission-20260910-r8-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-trend-dca-admission-20260910-r8-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-trend-aware-dca-g-overlay-20260910-r8",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:27dac04a136a06417e6bd653709a301f",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-trend-dca-admission-20260910-r8-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-12T18:06:30.524831+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "New idea revision: 1h EWMAC when the 1d forecast is not ready, after decision:outcome:okx-trend-dca-admission-20260910-r7-1 HELD DATA and decision:outcome:okx-trend-dca-admission-20260910-r6-1 INCONCLUSIVE EVIDENCE_GAP. Not t7 equal-weight skip-missing-pair. Same-trade matched control plus min-nonzero rail 0.5. Clip formula stays g=clip((f+20)/40,0,1). Research-only. Cache-only May-August 2026. r10 lineage only, not admitted. Do not overwrite r2-r7 result files.",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "be082ff247024c69e43edf0f874718cdcbf5468d0b4d50306ff79ab5f8832487"
+    },
+    {
+      "record_id": "okx-trend-dca-admission-20260910-trial-1",
+      "native_kind": "paper_campaign",
+      "native_revision": null,
+      "row_scope": {
+        "membership_basis": "EXPERIMENT_PARENT",
+        "family_id": "ok_rsi_trend_aware_dca",
+        "lane": "SPOT",
+        "program_id": null,
+        "recorded_scope": null
+      },
+      "recorded_at_ms": 1789069859446,
+      "available_at_ms": null,
+      "sources": [
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-trend-dca-admission-20260910-trial-1/campaign.json",
+          "pointer": "",
+          "sha256": "52d9c6af0bc69a6a09151577221eba93c5a1d327e9c0f8dce945491e80e69f4a",
+          "bytes": 588
+        },
+        {
+          "root": "STORE",
+          "relative_path": "campaigns/okx-trend-dca-admission-20260910-trial-1/preregistered.json",
+          "pointer": "",
+          "sha256": "2033cc89d551508022d3925582cf4a5897733334f3b60fb87ba9604f257d43af",
+          "bytes": 334812
+        }
+      ],
+      "row_status": "PARTIAL",
+      "issues": [
+        {
+          "code": "PREREGISTRATION_SEAL_MISSING",
+          "record_id": "okx-trend-dca-admission-20260910-trial-1",
+          "detail": "Seal absent from pinned store snapshot; historical execution is not disproved."
+        }
+      ],
+      "campaign_id": "okx-trend-dca-admission-20260910-trial-1",
+      "native_schema_id": "research_knowledge.paper_campaign.v1",
+      "campaign_basis": "PREREGISTERED_PAPER_CAMPAIGN",
+      "program_id": null,
+      "experiment_ref": {
+        "owner": "research_os",
+        "kind": "experiment",
+        "record_id": "experiment:okx-ok-rsi-trend-aware-dca-g-overlay-20260910",
+        "revision": null,
+        "source_index": 1,
+        "resolution": "RESOLVED"
+      },
+      "candidate_refs": [
+        {
+          "owner": "research_os",
+          "kind": "idea_revision",
+          "record_id": "idea:okx-ok-rsi-trend-aware-dca-g-overlay-20260910:revision:e58216c132991415b901ced8ceecdfdd",
+          "revision": null,
+          "source_index": 1,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "attempt_refs": [
+        {
+          "owner": "research_os",
+          "kind": "run",
+          "record_id": "run:paper-okx-trend-dca-admission-20260910-trial-1",
+          "revision": null,
+          "source_index": null,
+          "resolution": "RESOLVED"
+        }
+      ],
+      "reference_total": 3,
+      "dispatch_permission": "NONE",
+      "authority": "research-only",
+      "created_at_utc": "2026-09-10T19:50:59.446481+00:00",
+      "model_calls": "EXTERNAL_AGENT_FILE_EXCHANGE",
+      "promotion": "HOLD_FOR_EVIDENCE",
+      "query": "Register and bound a restrict-only continuous trend-aware DCA purchase overlay vs frozen ok_rsi trend confirmation, plus a daily hummingbot-reporting accounting identity; research-only; no S183 transplant; no economic admission of r10",
+      "schema": "research_knowledge.paper_campaign.v1",
+      "workspace": "/Users/s1kor/dev/trading/rsibot",
+      "stage": "COLLECTED",
+      "preregistration_seal": "MISSING",
+      "row_sha256": "2a060f1183099d4b871fa68f732d64beaf73ad87c76f4ecf22b23e9d370b13a7"
+    }
+  ],
+  "issues": [],
+  "envelope_sha256": "df95a6497259e4d38609915b82924834a75516f5f2392d2ea803e4bb00f1db0b"
+}

@@ -5,6 +5,7 @@ import type {
   V5Workspace,
   V5TaskReport,
 } from "./contracts";
+import { isProjectionReadError, readProjection } from "./learning-projection";
 
 export class V5ApiError extends Error {
   status: number;
@@ -58,7 +59,7 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
 }
 
 export const v5Api = {
-  auth: () => request<{ authenticated: boolean }>("/auth"),
+  auth: () => request<{ authenticated: boolean; learning_projection_revision?: string }>("/auth"),
   profile: () => request<V5DashboardProfile>("/dashboard/profile"),
   login: (token: string) =>
     request<{ authenticated: boolean }>("/auth/login", {
@@ -98,7 +99,20 @@ export const v5Api = {
   settings: () => request<V5Settings>("/settings"),
 };
 
+/**
+ * Legacy reads of the fixture-era learning routes (`roles`, `research`). `manifest` now returns the validated
+ * Stage-A projection manifest and throws `V5ApiError` on a typed failure. New code uses `readProjection`,
+ * `useProjectionPages` and `useManifest` from `./learning-projection`.
+ */
 export async function learningRead<T>(path: 'manifest' | 'roles' | `research?cursor=${number}&limit=25`): Promise<T> {
+  if (path === 'manifest') {
+    try {
+      return await readProjection('manifest') as T;
+    } catch (error) {
+      if (isProjectionReadError(error)) throw new V5ApiError(`Learning projection ${error.error.code}`, error.error.status, error.error.code);
+      throw error;
+    }
+  }
   const data = await request<unknown>(`/learning/${path}`);
   if (!data || typeof data !== 'object' || (data as { effect?: unknown }).effect !== 'NONE') {
     throw new V5ApiError('Invalid non-authorizing projection.', 502, 'INVALID_LEARNING_PROJECTION');

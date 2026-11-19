@@ -7,7 +7,7 @@ S6 owns this Condor change. Authority is repository-process-only for the paper d
 - [x] Measure the baseline and identify the network and render costs. Warm desktop navigation from Overview showed six dashes, then the first number at 5.34 s. In a separate steady-state desktop minute, 64 API calls and 81 long tasks were observed, 80 over 200 ms, with a 946 ms maximum. Native status requests started five times. Captured desktop and phone baseline screenshots in both themes.
 - [x] Reuse the Overview Money row on first paint, reveal coherent sections as they arrive, and pace a single Bots snapshot cycle. Use the shared loader and hook for validation reuse and scheduling. Keep the current six tile values and original snapshot swap once all sections arrive.
 - [x] Prove first paint, poll serialization, validated payload reuse and completed-snapshot continuity. The integration typecheck passed and all 209 tests passed across 12 frontend files. Each check used the Mac heavy gate with the load5 guard.
-- [x] Compare equivalent production builds in the T3 browser with identical read-only fixtures. Capture the desktop and phone views in dark and light themes in Nest scratch.
+- [x] Compare equivalent production builds in the T3 browser with identical read-only fixtures. Capture the desktop and phone views in dark and light themes in worktree scratch.
 - [x] Verify the diff and prepare `feat/andrzej_v5_polish_bots_speed` for the requested branch push. Leave the worktree for S6.
 
 ## Confirmed causes
@@ -27,4 +27,14 @@ S6 owns this Condor change. Authority is repository-process-only for the paper d
 - On a warm 1280×800 dark viewport, the first number changed from 6,368 ms to 13 ms. The 390×844 light first frame rendered all six fixture values at 11 ms. All six completed tile values were identical across builds.
 - In the 60 seconds after snapshot completion, API requests fell from 58 to 39, owner read requests fell from 45 to 24 and long tasks fell from 89 to 0. The baseline maximum was 656 ms. The two candidate starts in the minute were 25.855 s apart. Resource Timing showed no overlaps and a 20.008 s gap after each of four observed completed cycles.
 - The phone tiles used two columns with no page overflow. The desktop executor filter reduced 450 rows to 130 and keyboard resize changed the first column from 180 px to 196 px. Chart hover showed a recorded candle with OHLC, volume and final state.
-- The fixture method, timings, commands, counts and screenshot artifacts are retained in Nest scratch under `s6-p1-bots-speed.noindex`. The live dashboard was observed through the browser for the initial baseline. Candidate runtime evidence comes from fixtures.
+- The fixture method, timings, commands, counts and screenshot artifacts are retained under the parent worktree’s `.tmp/s6-p1-bots-speed/`. The live dashboard was observed through the browser for the initial baseline. Candidate runtime evidence comes from fixtures.
+
+## R1 review repairs at `7da2f6ca362e96a07f0b71f86362e030f88c606e`
+
+S6 owns the review. This round is confined to the existing Condor branch and paper frontend. The reviewed-build pin and server app are excluded. Revert the R1 commit to roll back this round.
+
+- [x] Reproduce the Today source leak, degraded journal clearance, incorrect partial executor caption, and duplicate schema passes with regressions against the reviewed head.
+- [x] Repair the tile switch and section caption, qualify journal clearance in the shared hook, and admit immutable reads at their decoding boundary.
+- [x] Run integration typecheck and the original 12 focused files serially through the S6 Mac gate (213 passing tests).
+- [x] Re-run the browser fixture at 1280×800 and 390×844 in both themes. Desktop dark first-number time was 16 ms on the reviewed build and 11 ms on R1, with zero long tasks and 39 API requests in each steady minute. Screenshots and raw measurements are under the parent worktree’s `.tmp/s6-p1-bots-speed/r1/`.
+- [x] Inspect the R1 diff and deliver it with a normal push on the existing branch.

@@ -174,7 +174,14 @@ export async function paperObservationPages(path: string, fetchPage: (path: stri
 const validatedSections = new WeakSet<object>();
 
 function retainValidatedSection(read: import("./contracts").PaperRead) {
-  if (validatedSections.has(read) || paperSectionError(read)) return read;
+  paperSectionAdmissionError(read);
+  return read;
+}
+
+export function paperSectionAdmissionError(read: import("./contracts").PaperRead): string | null {
+  if (validatedSections.has(read)) return null;
+  const error = paperSectionError(read);
+  if (error) return error;
   // These are decoded JSON sections. Freeze the admitted payload so its validation
   // can be reused across clock ticks, tables and projections without hiding edits.
   const pending: unknown[] = [read];
@@ -187,7 +194,7 @@ function retainValidatedSection(read: import("./contracts").PaperRead) {
     Object.freeze(value);
   }
   validatedSections.add(read);
-  return read;
+  return null;
 }
 
 export function paperSectionError(read: Partial<import("./contracts").PaperRead> | undefined): string | null {

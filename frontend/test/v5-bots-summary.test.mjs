@@ -17,8 +17,9 @@ const now = fixture.wallet.generated_at_ms;
 const controller = (id, extra = {}) => ({ id, current: true, operator: { paused: false, emergency: false }, native: { protected_exits: 'preserved' }, entryHold: false, holds: [], ...extra });
 const day = Math.floor(now / 86_400_000) * 86_400_000;
 const slots = Math.floor((now - day) / 300_000) + 1;
-const money = { range: '7d', now_ms: now, daily: [{ day, samples: slots, valid: slots, equity_valid: slots, gaps: 0, first_at_ms: day, last_at_ms: now, equity_first_at_ms: day, equity_last_at_ms: now, equity_start: '200000', equity_end: '199988', equity_change: '-12.000000000000000000000000000001' }] };
+const money = { range: '7d', now_ms: now, rows: [{bot:'v5', unit:'USDC', at_ms:now, equity:'199988'}], daily: [{ day, samples: slots, valid: slots, equity_valid: slots, gaps: 0, first_at_ms: day, last_at_ms: now, equity_first_at_ms: day, equity_last_at_ms: now, equity_start: '200000', equity_end: '199988', equity_change: '-12.000000000000000000000000000001' }] };
 const tiles = (changes = {}) => paperMoneyTiles({ walletRead: fixture.wallet, accountingRead: fixture.accounting, snapshot: fixture.status, complete: true, now, money, ...changes });
+const sampledToday = (changes = {}) => tiles({complete:false, ...changes})[2];
 
 test('native risk rail limits are formatted with their exact owner strings in titles', () => {
   const risk = structuredClone(fixture.risk);
@@ -37,13 +38,14 @@ test('native risk rail limits are formatted with their exact owner strings in ti
 
 test('money tiles format values while retaining exact source and arithmetic results', () => {
   const result = tiles({walletRead:{...fixture.wallet,data:{...fixture.wallet.data,equity_quote:'199087.84807014005820',initial_funding_quote:'200000',external_cash_flows_quote:'0'}}});
-  assert.deepEqual(result.slice(0,3).map(tile => tile.value), ['199,087.85 USDC','−912.15 USDC','−12.00 USDC']);
-  assert.deepEqual(result.slice(0,3).map(tile => tile.exact), ['199087.84807014005820','-912.15192985994180','-12.000000000000000000000000000001']);
+  assert.deepEqual(result.slice(0,3).map(tile => tile.value), ['199,087.85 USDC','−912.15 USDC','—']);
+  assert.deepEqual(result.slice(0,3).map(tile => tile.exact), ['199087.84807014005820','-912.15192985994180',undefined]);
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values(fixture),accountingRead:fixture.accounting,money,now,reportAt:now,heartbeat:'Fresh',bot:fixture.status.bot_id}));
-  const expectedTitles = ['≈ 199980.077146231622 (rounded)', '≈ −19.922853768378 (rounded)', '≈ −12 (rounded)', '≈ 13.093702869214 (rounded)', '≈ −33.016556637591 (rounded)', '≈ 4.314779042378 (rounded)'];
+  const expectedTitles = ['≈ 199980.077146231622 (rounded)', '≈ −19.922853768378 (rounded)', undefined, '≈ 13.093702869214 (rounded)', '≈ −33.016556637591 (rounded)', '≈ 4.314779042378 (rounded)'];
   assert.equal(tiles().length, expectedTitles.length);
   for (const [index, tile] of tiles().entries()) {
-    assert.ok(html.includes(`title="${expectedTitles[index]}"`), expectedTitles[index]);
+    if (expectedTitles[index]) assert.ok(html.includes(`title="${expectedTitles[index]}"`), expectedTitles[index]);
+    else assert.match(html, /<dt>Today<\/dt><dd>—<\/dd>/);
     assert.ok(html.includes(tile.value));
   }
 });
@@ -63,7 +65,7 @@ test('money tiles follow snapshot dimming at 25, 45 and 125 seconds', () => {
     const clock = now + seconds * 1000;
     const view = paperDimmedSnapshot(fixture.status.generated_at_ms,clock);
     const result = tiles({now:clock,valuesAt:view.valuesAt});
-    assert.equal(result.every(tile => tile.value !== '—'), visible, `${seconds}s`);
+    assert.equal(result.filter(tile => tile.label !== 'Today').every(tile => tile.value !== '—'), visible, `${seconds}s`);
     assert.equal(view.dimmed, dimmed);
     const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values(fixture),accountingRead:fixture.accounting,money,now:clock,valuesAt:view.valuesAt,asOf:view.snapshotAt,reportAt:now,heartbeat:'Fresh',bot:fixture.status.bot_id}));
     assert.equal(html.includes('class="paper-dimmed"'),dimmed);
@@ -71,47 +73,47 @@ test('money tiles follow snapshot dimming at 25, 45 and 125 seconds', () => {
 });
 
 test('Today reports missing samples but refuses unqualified rows', () => {
-  assert.match(tiles()[2].note, /As of/);
+  assert.match(sampledToday().note, /As of/);
   const gaps = {...money,daily:[{...money.daily[0],valid:slots-4,equity_valid:slots-4,gaps:4}]};
-  assert.equal(tiles({money:gaps})[2].value,'−12.00 USDC');
-  assert.match(tiles({money:gaps})[2].note,new RegExp(`4 of ${slots} samples missing`));
-  assert.equal(tiles({money:{...gaps,daily:[{...gaps.daily[0],valid:1}]}})[2].value,'—');
-  assert.equal(tiles({money:{...gaps,daily:[{...gaps.daily[0],equity_valid:1}]}})[2].value,'—');
+  assert.equal(sampledToday({money:gaps}).value,'−12.00 USDC');
+  assert.match(sampledToday({money:gaps}).note,new RegExp(`4 of ${slots} samples missing`));
+  assert.equal(sampledToday({money:{...gaps,daily:[{...gaps.daily[0],valid:1}]}}).value,'—');
+  assert.equal(sampledToday({money:{...gaps,daily:[{...gaps.daily[0],equity_valid:1}]}}).value,'—');
 });
 
 test('Today withholds a day missing its 00:00 UTC slot', () => {
   const row = {...money.daily[0], equity_first_at_ms:day+300_000};
-  const result = tiles({money:{...money,daily:[row]}})[2];
+  const result = sampledToday({money:{...money,daily:[row]}});
   assert.equal(result.value,'—');
   assert.equal(result.note,"Today's 00:00 UTC sample is missing, so the change cannot cover the whole day");
 });
 
 test('Today counts flagged gaps against the elapsed UTC grid', () => {
   const row = {...money.daily[0], valid:slots-4, equity_valid:slots-4, gaps:4};
-  const result = tiles({money:{...money,daily:[row]}})[2];
+  const result = sampledToday({money:{...money,daily:[row]}});
   assert.equal(result.value,'−12.00 USDC');
   assert.match(result.note,new RegExp(`4 of ${slots} samples missing`));
 });
 
 test('Today counts missing slots that have no gap row', () => {
   const row = {...money.daily[0], samples:slots-3, valid:slots-3, equity_valid:slots-3, gaps:0};
-  const result = tiles({money:{...money,daily:[row]}})[2];
+  const result = sampledToday({money:{...money,daily:[row]}});
   assert.equal(result.value,'−12.00 USDC');
   assert.match(result.note,new RegExp(`3 of ${slots} samples missing`));
 });
 
 test('Today withholds a last sample older than six minutes', () => {
   const row = {...money.daily[0], equity_last_at_ms:now-360_001};
-  assert.equal(tiles({money:{...money,daily:[row]}})[2].value,'—');
+  assert.equal(sampledToday({money:{...money,daily:[row]}}).value,'—');
 });
 
 test('Today withholds an impossible valid sample count', () => {
   const row = {...money.daily[0], samples:slots+1, valid:slots+1, equity_valid:slots+1};
-  assert.equal(tiles({money:{...money,daily:[row]}})[2].value,'—');
+  assert.equal(sampledToday({money:{...money,daily:[row]}}).value,'—');
 });
 
 test('Today with complete grid coverage has no missing-samples suffix', () => {
-  const result = tiles()[2];
+  const result = sampledToday();
   assert.equal(result.value,'−12.00 USDC');
   assert.doesNotMatch(result.note,/samples missing/);
 });
@@ -119,15 +121,14 @@ test('Today with complete grid coverage has no missing-samples suffix', () => {
 test('Today requires both published equity endpoints', () => {
   for (const field of ['equity_start','equity_end']) {
     const row = {...money.daily[0], [field]:null};
-    assert.equal(tiles({money:{...money,daily:[row]}})[2].value,'—');
+    assert.equal(sampledToday({money:{...money,daily:[row]}}).value,'—');
   }
 });
 
 test('Today counts a realized-only slot as missing equity', () => {
   const clock = day + 600_000;
   const row = {...money.daily[0], samples:3, valid:3, equity_valid:2, first_at_ms:day, last_at_ms:clock, equity_first_at_ms:day, equity_last_at_ms:clock};
-  const at = read => ({...read, generated_at_ms:clock});
-  const result = tiles({now:clock, walletRead:at(fixture.wallet), accountingRead:at(fixture.accounting), snapshot:at(fixture.status), money:{...money,now_ms:clock,daily:[row]}})[2];
+  const result = sampledToday({now:clock, money:{...money,now_ms:clock,rows:[{...money.rows[0],at_ms:clock}],daily:[row]}});
   assert.equal(result.value,'−12.00 USDC');
   assert.match(result.note,/1 of 3 samples missing/);
 });
@@ -240,7 +241,7 @@ test('six tiles use exact owner strings and only zero-flow equity minus funding'
   assert.equal(result[0].exact, '199999.999999999999999999999999999999');
   assert.equal(result[1].exact, '-0.000000000000000000000000000001');
   assert.equal(result[1].value, '0.00 USDC');
-  assert.equal(result[2].value, '−12.00 USDC');
+  assert.equal(result[2].value, '—');
   assert.deepEqual(result.slice(3).map(tile => tile.value), ['realized_pnl_quote', 'unrealized_pnl_quote', 'fees_paid_quote'].map(key => usdc(fixture.accounting.data.program[key])));
   assert.deepEqual(result.slice(3).map(tile => tile.exact), ['realized_pnl_quote', 'unrealized_pnl_quote', 'fees_paid_quote'].map(key => fixture.accounting.data.program[key]));
   for (const flows of ['0.000000000000000000000000000001', null, 0, 'bad']) {
@@ -262,7 +263,7 @@ test('closed-trade losses below half a cent round to zero while retaining the ex
 });
 
 test('incomplete, stale, future, incoherent and failed owner reads withhold money', () => {
-  assert.ok(tiles({ complete: false }).every(tile => tile.value === '—'));
+  assert.ok(tiles({ complete: false, money: undefined }).every(tile => tile.value === '—'));
   assert.ok(tiles({ now: now + 400_000 }).every(tile => tile.value === '—'));
   for (const change of [{ completeness: 'partial' }, { state: 'degraded' }, { next_cursor: 'more' }, { generated_at_ms: now + 1_000 }]) {
     assert.equal(tiles({ walletRead: { ...fixture.wallet, ...change } })[0].value, '—');
@@ -275,35 +276,28 @@ test('incomplete, stale, future, incoherent and failed owner reads withhold mone
   assert.equal(tiles({ money: undefined })[2].value, '—');
 });
 
-test('all six tiles expire strictly beyond 30000 ms, including a freshly recorded Today row', () => {
-  assert.ok(tiles({ now: now + 30_000 }).every(tile => tile.value !== '—'));
+test('published snapshot money tiles expire strictly beyond 30000 ms', () => {
+  assert.equal(tiles({ now: now + 30_000 }).filter(tile => tile.value !== '—').length, 5);
   assert.ok(tiles({ now: now + 30_001 }).every(tile => tile.value === '—'));
   const freshMoney = { ...money, now_ms: now + 30_001, daily: [{ ...money.daily[0], equity_last_at_ms: now + 30_001 }] };
   assert.equal(tiles({ now: now + 30_001, money: freshMoney })[2].value, '—');
 });
 
-test('Today uses current wallet and accounting, not the aggregate degraded status', () => {
-  assert.equal(fixture.status.state, 'degraded');
-  assert.equal(fixture.wallet.state, 'available');
-  assert.equal(fixture.accounting.state, 'available');
-  assert.equal(tiles()[2].value, '−12.00 USDC');
-  assert.equal(tiles()[2].exact, money.daily[0].equity_change);
-  for (const section of ['wallet', 'accounting']) {
-    const readKey = section === 'wallet' ? 'walletRead' : 'accountingRead';
-    assert.equal(tiles({ [readKey]: { ...fixture[section], state: 'degraded' } })[2].value, '—');
-    assert.equal(tiles({ [readKey]: { ...fixture[section], snapshot_id: 'other' } })[2].value, '—');
-    assert.equal(tiles({ [readKey]: { ...fixture[section], completeness: 'partial' } })[2].value, '—');
-  }
+test('Today keeps its exact Money amount before owner data is available', () => {
+  const tile = sampledToday({walletRead:undefined, accountingRead:undefined, snapshot:undefined});
+  assert.equal(tile.value, '−12.00 USDC');
+  assert.equal(tile.exact, money.daily[0].equity_change);
+  assert.match(tile.note, /^Money sample · As of /);
 });
 
 test('Today requires a qualified current UTC-day Money row', () => {
-  assert.equal(tiles({ money: { ...money, daily: [money.daily[0], { ...money.daily[0], day: day - 86_400_000, equity_change: '999' }] } })[2].value, '−12.00 USDC');
+  assert.equal(sampledToday({ money: { ...money, daily: [money.daily[0], { ...money.daily[0], day: day - 86_400_000, equity_change: '999' }] } }).value, '−12.00 USDC');
   for (const change of [{ day: day - 86_400_000 }, { gaps: -1 }, { equity_change: null }, { equity_last_at_ms: now + 1 }, { equity_last_at_ms: now - 400_000 }]) {
-    assert.equal(tiles({ money: { ...money, daily: [{ ...money.daily[0], ...change }] } })[2].value, '—');
+    assert.equal(sampledToday({ money: { ...money, daily: [{ ...money.daily[0], ...change }] } }).value, '—');
   }
-  assert.equal(tiles({ money: { ...money, now_ms: now - 91_000 } })[2].value, '—');
-  assert.equal(tiles({ money: { ...money, now_ms: now + 1 } })[2].value, '—');
-  assert.equal(tiles({ money: { ...money, daily: [null] } })[2].value, '—');
+  assert.equal(sampledToday({ money: { ...money, now_ms: now - 91_000 } }).value, '—');
+  assert.equal(sampledToday({ money: { ...money, now_ms: now + 1 } }).value, '—');
+  assert.equal(sampledToday({ money: { ...money, daily: [null] } }).value, '—');
 });
 
 test('Bots uses the Money view reader and shared 7d cache key and withholds failed cached reads', async () => {
@@ -311,7 +305,7 @@ test('Bots uses the Money view reader and shared 7d cache key and withholds fail
   let failed = false;
   const { load } = frontendModules({ ...overrides,
     '@/v5/usePaperClock': { usePaperClock: () => now },
-    '@/v5/usePaperSnapshot': { usePaperSnapshot: () => ({ complete: true, data: Object.values(fixture), journalReads: [], refetch() {} }) },
+    '@/v5/usePaperSnapshot': { usePaperSnapshot: () => ({ complete: false, reads: [], journalReads: [], refetch() {} }) },
     '@tanstack/react-query': { ...ReactQuery, useQuery: options => { queries.push(options); return { data: money, isError: failed }; } },
   });
   const { V5PaperBots } = load('pages/tabs/ActiveBotsTab.tsx');

@@ -2,7 +2,7 @@ import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
 import { useRef, useState } from "react";
 import type { PaperRead } from "./contracts";
 import { paperSafetyBeyondDisplayed, paperSafetyReads } from "./paper-safety";
-import { paperSnapshotsAgree } from "./policy";
+import { paperSectionError, paperSnapshotsAgree } from "./policy";
 import { paperJournalReads } from './paper-journal';
 
 const safetyByQuery = new WeakMap<object, {reads: PaperRead[]; completed: unknown}>();
@@ -13,6 +13,9 @@ const noReads: PaperRead[] = [];
 
 function journalCompletion(data: unknown, total: number): PaperRead | undefined {
   if (!Array.isArray(data) || data.length !== total || !paperSnapshotsAgree(data)) return undefined;
+  // A coherent read can include degraded placeholders or a deliberately bounded history page.
+  // Only valid owner responses in usable states can supersede retained journal evidence.
+  if (data.some(read => !['available', 'not_applicable'].includes(read.state) || paperSectionError(read))) return undefined;
   return data.find(read => read.section === 'status');
 }
 
@@ -22,7 +25,9 @@ function readJournal(query: object, scope: object, data: unknown, total: number,
   const status = progress.find(read => read.section === 'status');
   const received = status && journalProgressByQuery.get(query) !== status ? status : undefined;
   if (!completed && !received) return previous;
-  const retained = paperJournalReads(previous, received ? [received] : noReads, completed ? journalCompletion(data, total) : undefined);
+  const committedStatus = completed && Array.isArray(data) ? data.find(read => read.section === 'status') as PaperRead | undefined : undefined;
+  const observations = [committedStatus, received].filter((read): read is PaperRead => read !== undefined);
+  const retained = paperJournalReads(previous, observations, committedStatus ? journalCompletion(data, total) : undefined);
   journalCompletedByQuery.set(query, data);
   if (received) journalProgressByQuery.set(query, received);
   journalByScope.set(scope, retained);

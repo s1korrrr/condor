@@ -31,7 +31,7 @@ import { utcExact } from "@/v5/shown.mjs";
 import { paperAge } from "@/v5/snapshot-presentation";
 import { ownerTitleText, coin, usdc } from '@/v5/format.mjs';
 import { latest, SAMPLE_MS } from "@/v5/money-model.mjs";
-import { paperAmount, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
+import { paperAmount, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionAdmissionError, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
 import { phoneRecordTime } from "@/v5/phone-records";
 import { PaperTerminalHistory } from "@/v5/PaperTerminalHistory";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
@@ -691,18 +691,21 @@ export function paperMoneyTiles({ walletRead, accountingRead, snapshot, complete
     net = `${difference < 0n ? "-" : ""}${places ? `${digits.slice(0, -places)}.${digits.slice(-places)}` : digits}`;
   }
   const day = Math.floor(now / 86_400_000) * 86_400_000;
-  const today = Array.isArray(money?.daily) ? money.daily.find(row => row?.day === day) : undefined;
-  const moneyCurrent = (complete ? current(walletRead) && current(accountingRead) : sample !== null) && money?.range === "7d" && typeof money.now_ms === "number" && money.now_ms <= now && !paperSnapshotPresentation(money.now_ms, valuesAt, false).stale;
+  const today = !complete && Array.isArray(money?.daily) ? money.daily.find(row => row?.day === day) : undefined;
+  const moneyCurrent = sample !== null && money?.range === "7d" && typeof money.now_ms === "number" && money.now_ms <= now && !paperSnapshotPresentation(money.now_ms, valuesAt, false).stale;
   const firstSlot = typeof today?.equity_first_at_ms === "number" && today.equity_first_at_ms >= day && today.equity_first_at_ms - day < SAMPLE_MS;
   const elapsedSlots = typeof today?.equity_last_at_ms === "number" && Number.isFinite(today.equity_last_at_ms) ? Math.floor((today.equity_last_at_ms - day) / SAMPLE_MS) + 1 : 0;
   const todayComplete = moneyCurrent && today?.day === day && Number.isInteger(today.samples) && today.samples >= 2 && Number.isInteger(today.gaps) && today.gaps >= 0 && today.gaps <= today.samples && Number.isInteger(today.valid) && Number.isInteger(today.equity_valid) && today.equity_valid >= 2 && today.equity_valid <= today.valid && today.equity_valid <= elapsedSlots && firstSlot && typeof today.equity_first_at_ms === "number" && typeof today.equity_last_at_ms === "number" && today.equity_first_at_ms < today.equity_last_at_ms && today.equity_last_at_ms <= now && now - today.equity_last_at_ms <= 360_000 && paperMoneyDecimal(today.equity_start) && paperMoneyDecimal(today.equity_end);
   const showToday = todayComplete && (SHOW_TODAY_WITH_MISSING_SAMPLES || elapsedSlots === today.equity_valid);
+  const todayWhy = complete ? "UTC-day change is not published in the owner snapshot"
+    : typeof today?.equity_first_at_ms === "number" && today.equity_first_at_ms >= day + SAMPLE_MS
+      ? "Today's 00:00 UTC sample is missing, so the change cannot cover the whole day" : "No complete current UTC-day Money row recorded";
   const walletWhy = complete ? `Complete current owner wallet required${walletRead?.reason ? `: ${paperWords(walletRead.reason)}` : ""}` : "Wallet value is unavailable in the Money sample";
   const accountingWhy = complete ? "Complete current owner lifetime accounting required" : "Value is unavailable in the Money sample";
   return [
     tile("Wallet equity", wallet.equity_quote, walletAt, walletWhy),
     tile("Since start", net, walletAt, !current(walletRead) && !sample ? walletWhy : !zeroFlows ? "Owner external cash flows are not exactly zero" : "Owner equity or initial funding not published"),
-    tile("Today", showToday ? today.equity_change : null, today?.equity_last_at_ms, typeof today?.equity_first_at_ms === "number" && today.equity_first_at_ms >= day + SAMPLE_MS ? "Today's 00:00 UTC sample is missing, so the change cannot cover the whole day" : "No complete current UTC-day Money row recorded", showToday && elapsedSlots > today.equity_valid ? ` · ${elapsedSlots - today.equity_valid} of ${elapsedSlots} samples missing` : ""),
+    tile("Today", showToday ? today.equity_change : null, today?.equity_last_at_ms, todayWhy, showToday && elapsedSlots > today.equity_valid ? ` · ${elapsedSlots - today.equity_valid} of ${elapsedSlots} samples missing` : ""),
     tile("Profit from closed trades", complete ? accounting?.realized_pnl_quote : sample?.realized, accountingAt, accountingWhy),
     tile("Coins still held", complete ? accounting?.unrealized_pnl_quote : sample?.unrealized, accountingAt, accountingWhy),
     tile("Fees paid", complete ? accounting?.fees_paid_quote : sample?.fees, accountingAt, accountingWhy),
@@ -813,7 +816,7 @@ export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accoun
       {previousWallet && <PaperMetric label="Last complete wallet equity" value={paperAmount(previousWallet.equity, "USDC", 2)} exact={typeof previousWallet.equity === "string" ? previousWallet.equity : undefined} note={`Last complete equity, as of ${paperTime(previousWallet.asOf, now)} · now withheld by the owner: ${walletWhy}`} />}
       <PaperMetric label={previousWallet ? "Last complete available cash" : "Available cash"} value={paperAmount(walletTotals?.cash ?? previousWallet?.cash, "USDC", 2)} exact={typeof (walletTotals?.cash ?? previousWallet?.cash) === "string" ? String(walletTotals?.cash ?? previousWallet?.cash) : undefined} note={!walletTotals && previousWallet ? `As of ${paperTime(previousWallet.asOf, now)}` : undefined} />
       <PaperMetric label="Holdings value" value={inventory ? paperAmount(inventory.value, inventory.unit, 2) : "Not published"} exact={inventory?.value} note={inventory ? `${paperReadState(bySection.wallet, now) === "stale" ? "Stale valuation · " : ""}Valuation: ${inventory.basis} · As of ${paperTime(inventory.asOf, now)} · Wallet marks, excluding cash` : "Complete current wallet marks not published"} />
-      <PaperMetric label="Open executors" value={openExecutors ?? "Not published"} note={openExecutors === null ? "Incomplete or stale owner read · count not inferred" : notCurrent ? `${notCurrent} · excludes terminal receipts` : "Fresh complete owner snapshot · excludes terminal receipts"} />
+      <PaperMetric label="Open executors" value={openExecutors ?? "Not published"} note={openExecutors === null ? "Incomplete or stale owner read · count not inferred" : notCurrent ? `${notCurrent} · excludes terminal receipts` : `Owner executor section · As of ${paperTime(bySection.executors?.generated_at_ms, now)} · excludes terminal receipts`} />
 
 
 
@@ -842,7 +845,7 @@ async function readPaper(path: string, section: string, signal: AbortSignal): Pr
   }
   const value = parsePaperReadText(await response.text()) as PaperRead;
   signal.throwIfAborted();
-  if (!value || value.section !== section || paperSectionError(value)) throw new PaperSectionSchemaError(section, section === "risk" ? paperRiskHolds(value).map(({ reason }) => ({ reason })) : undefined);
+  if (!value || value.section !== section || paperSectionAdmissionError(value)) throw new PaperSectionSchemaError(section, section === "risk" ? paperRiskHolds(value).map(({ reason }) => ({ reason })) : undefined);
   return value;
 }
 

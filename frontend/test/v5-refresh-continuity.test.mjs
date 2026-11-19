@@ -18,7 +18,7 @@ const completeReads = () => sections.map(section => {
 });
 const stubs = {...Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])), '@/features/quant-ops/kit/DataTable':{DataTable:() => null}};
 
-function harness(kind, initial, money) {
+function harness(kind, initial, money, countValidation) {
   const client = new ReactQuery.QueryClient();
   let cursor = 0, spec;
   const slots = [], requests = [];
@@ -36,7 +36,13 @@ function harness(kind, initial, money) {
     const cached = client.getQueryCache().build(client, options);
     if (cached.state.data !== query.data) cached.setState({data:query.data});
     return query;
-  }}});
+  }}}, {}, (filename, source) => {
+    if (!countValidation || !filename.endsWith('/v5/policy.ts')) return source;
+    const guard = 'if (!read || validatedSections.has(read)) return null;';
+    assert.ok(source.includes(guard), 'instrument the full schema check after its cache guard');
+    return source.replace(guard, `${guard}\n  exports.countValidation(read);`);
+  });
+  if (countValidation) load('v5/policy.ts').countValidation = countValidation;
   const component = kind === 'bots' ? load('pages/tabs/ActiveBotsTab.tsx').V5PaperBots : load('v5/usePaperObservation.ts').usePaperWorkspace;
   const render = () => {
     cursor = 0;
@@ -45,7 +51,9 @@ function harness(kind, initial, money) {
   const original = global.fetch;
   global.fetch = (url, options) => new Promise(resolve => {
     if (new URL(url,'https://fixture.invalid').pathname === '/api/v5/candle-store/symbols') {resolve({ok:true,json:async () => candleSymbols});return;}
-    requests.push({url,signal:options.signal,resolve});
+    const path = new URL(url,'https://fixture.invalid').searchParams.get('path');
+    const section = path.includes('/native/status') ? 'status' : path.includes('account-balances') || path.includes('fleet/summary') ? 'wallet' : path.includes('/history') ? 'history' : path.includes('/holdings') ? 'positions' : path.includes('/accounting') ? 'accounting' : sections.find(section => path.includes(section));
+    requests.push({path,section,signal:options.signal,resolve});
   });
   function start() {
     render(); query.isFetching = true;
@@ -55,8 +63,7 @@ function harness(kind, initial, money) {
     return {controller,promise};
   }
   async function deliver(request, mutate = read => read) {
-    const path = new URL(request.url,'https://fixture.invalid').searchParams.get('path');
-    const section = path.includes('/native/status') ? 'status' : path.includes('account-balances') || path.includes('fleet/summary') ? 'wallet' : path.includes('/history') ? 'history' : path.includes('/holdings') ? 'positions' : path.includes('/accounting') ? 'accounting' : sections.find(section => path.includes(section));
+    const {path, section} = request;
     const read = section === 'fills' && new URL(path,'https://fixture.invalid').searchParams.has('cursor') ? fixture('fills-offset-200') : fixture(section);
     const value = mutate(read);
     request.resolve({ok:true,json:async () => value,text:async () => JSON.stringify(value)});
@@ -172,6 +179,108 @@ test('Bots paints the cached Money sample while owner sections are unresolved', 
   } finally {h.restore();}
 });
 
+test('Today switches from the labeled Money daily row to the owner snapshot', async () => {
+  const now = owner.read_at_ms;
+  const day = Math.floor(now / 86_400_000) * 86_400_000;
+  const money = {range:'7d', now_ms:now, rows:[{bot:'v5', unit:'USDC', at_ms:now, equity:'200777.25'}], daily:[{
+    day, samples:2, valid:2, equity_valid:2, gaps:0, equity_first_at_ms:day, equity_last_at_ms:now,
+    equity_start:'200000', equity_end:'200777.25', equity_change:'777.25',
+  }]};
+  const h = harness('bots', undefined, money);
+  const today = () => h.render().match(/<dt>Today<\/dt>[^]*?<\/div>/)?.[0];
+  try {
+    const pending = h.start();
+    assert.match(today(), /777\.25 USDC.*Money sample · As of .*Z ·/);
+    while (h.requests.length) await h.deliver(h.requests.shift());
+    h.query.data = await pending.promise;
+    h.query.isFetching = false;
+    assert.match(today(), /<dd>—<\/dd>/, 'the owner snapshot supplies no UTC-day change');
+  } finally {h.restore();}
+});
+
+test('a newer healthy status with schema-invalid risk cannot clear a retained journal hold', async () => {
+  const initial = completeReads();
+  initial[0].reason = 'OWNER_JOURNAL_EXCEEDED';
+  initial[0].data.journal_budget = {state:'exceeded', journal_evidence_held:true};
+  const h = harness('bots', initial);
+  const healthy = (read, sequence) => {
+    if (read.section === 'status') {
+      read.state = 'available';
+      read.reason = null;
+      Object.assign(read.data.operations, {state:'available', completeness:'complete', reason:null, stale_reason:null});
+    }
+    return {...read, snapshot_id:`review:${sequence}`, generated_at_ms:read.generated_at_ms + sequence, source:{...read.source, sequence:read.source.sequence + sequence}};
+  };
+  try {
+    assert.match(h.render(), /Paper journal evidence held/);
+    for (const [sequence, failRisk] of [[1,true], [2,false]]) {
+      const pending = h.start();
+      while (h.requests.length) {
+        const request = h.requests.shift();
+        if (failRisk && request.section === 'risk') {
+          request.resolve({ok:false,status:502,json:async () => ({detail:{reason:'schema_invalid',section:'risk'}})});
+          await setImmediate();
+        } else await h.deliver(request, read => healthy(read, sequence));
+      }
+      h.query.data = await pending.promise;
+      h.query.isFetching = false;
+      if (failRisk) {
+        assert.equal(h.query.data.find(read => read.section === 'risk').state, 'degraded');
+        assert.match(h.render(), /Paper journal evidence held/);
+      } else assert.doesNotMatch(h.render(), /Paper journal evidence held/);
+    }
+  } finally {h.restore();}
+});
+
+test('Bots attributes an executor count to its section when the rest of the load fails', async () => {
+  const h = harness('bots');
+  try {
+    const pending = h.start();
+    await h.deliver(h.requests.shift());
+    const take = section => h.requests.splice(h.requests.findIndex(request => request.section === section), 1)[0];
+    await h.deliver(take('wallet'));
+    await h.deliver(take('executors'));
+    take('risk').resolve({ok:false,status:502,json:async () => ({detail:'Risk read failed'})});
+    await setImmediate();
+    while (h.requests.length) {
+      h.requests.shift().resolve({ok:false,status:502,json:async () => ({detail:'Read failed'})});
+      await setImmediate();
+    }
+    await assert.rejects(pending.promise);
+    h.query.isFetching = false;
+    h.query.isError = true;
+    h.query.error = new Error('Risk read failed');
+    const html = h.render();
+    assert.match(html, /Owner snapshot unavailable/);
+    assert.match(html, /Open executors<\/dt><dd>8<\/dd><small[^>]*>Owner executor section · As of .*UTC/);
+    assert.doesNotMatch(html, /Fresh complete owner snapshot/);
+  } finally {h.restore();}
+});
+
+test('Bots validates each decoded section once and validates the assembled fills separately', async () => {
+  const validations = new Map();
+  const h = harness('bots', undefined, undefined, read => validations.set(read, (validations.get(read) ?? 0) + 1));
+  try {
+    const pending = h.start();
+    let requests = 0;
+    while (h.requests.length) {
+      requests++;
+      await h.deliver(h.requests.shift());
+    }
+    h.query.data = await pending.promise;
+    h.render();
+    assert.equal(requests, 10, 'the fixture has nine sections including two fills pages');
+    assert.equal(validations.size, requests + 1, 'ten HTTP bodies and one assembled fills section');
+    for (const [read, count] of validations) {
+      assert.equal(count, 1, read.section);
+      assert.ok(Object.isFrozen(read) && Object.isFrozen(read.data), `${read.section} is immutable after admission`);
+    }
+    const fills = h.query.data.find(read => read.section === 'fills');
+    assert.ok(validations.has(fills));
+    assert.ok(fills.data.length > 200, 'the admitted fills section contains both pages');
+  } finally {h.restore();}
+});
+
 test('Bots first load reports pending risk and rails, never absent controls or numeric limits', () => {
   const h = harness('bots');
   try {
@@ -204,11 +313,15 @@ for (const kind of ['bots','capital']) test(`${kind} ignores progress from an ab
     old.controller.abort();
     const current = h.start();
     await h.deliver(h.requests.shift());
-    await h.deliver(h.requests.shift());
+    await h.deliver(h.requests.shift(), read => {
+      assert.equal(read.section, 'wallet');
+      read.data.assets.find(asset => asset.asset === read.data.quote_asset).available = '76543.21';
+      return read;
+    });
     const currentView = h.render();
     const progress = kind === 'bots' ? currentView : currentView.progress;
     if (kind === 'bots') {
-      assert.match(currentView, /<h2>Paper fleet<\/h2>/, 'the current cycle has delivered wallet data');
+      assert.match(currentView, /Available cash<\/dt><dd[^>]*>76,543\.21 USDC<\/dd>/, 'the active attempt supplied this wallet value');
       assert.doesNotMatch(currentView,/Not connected|No owner limit or latch observation|Numeric rail limits are not published/);
     } else {
       assert.match(progress,/2\/4 sections/);

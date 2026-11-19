@@ -283,6 +283,70 @@ test('published snapshot money tiles expire strictly beyond 30000 ms', () => {
   assert.equal(tiles({ now: now + 30_001, money: freshMoney })[2].value, '—');
 });
 
+test('a newer Money gap withholds all first-paint values', () => {
+  const rows = [{...money.rows[0], at_ms:now - 300_000}, {bot:'v5', at_ms:now, gap:'owner_unavailable'}];
+  const result = tiles({complete:false, money:{...money, rows}});
+  assert.ok(result.every(tile => tile.value === '—'));
+  assert.match(result[0].note, /Money sample gap.*Owner unavailable/);
+});
+
+test('a newer Money sample replaces a stale cached owner snapshot on revisit', () => {
+  const clock = now + 125_000;
+  const rows = [{...money.rows[0], at_ms:clock, equity:'200012', initial_funding:'200000',
+    external_flows:'0', realized:'19', unrealized:'-7', fees:'3'}];
+  const sample = {...money, now_ms:clock, rows,
+    daily:[{...money.daily[0], equity_last_at_ms:clock, equity_end:'200012', equity_change:'12'}]};
+  for (const [at, valuesAt] of [[clock, clock], [now + 45_000, now + 1_000]]) {
+    const recent = {...sample, now_ms:at, rows:[{...rows[0], at_ms:at}],
+      daily:[{...sample.daily[0], equity_last_at_ms:at}]};
+    const result = tiles({now:at, valuesAt, money:recent});
+    assert.deepEqual(result.map(tile => tile.exact), ['200012','12','12','19','-7','3']);
+    assert.ok(result.every(tile => tile.note.startsWith('Money sample · As of ')));
+  }
+});
+
+test('first-paint Money samples expire strictly beyond six minutes', () => {
+  // Money records every five minutes. Six minutes allows one minute of sampling delay.
+  const at = age => ({...money, rows:[{...money.rows[0], at_ms:now - age}]});
+  assert.equal(tiles({complete:false, money:at(360_000)})[0].exact, '199988');
+  assert.equal(tiles({complete:false, money:at(360_001)})[0].value, '—');
+});
+
+function workspaceProjection(changes) {
+  const {load} = frontendModules({...overrides, react:{...React, useRef: initial => ({current:initial})}});
+  return load('pages/tabs/ActiveBotsTab.tsx').PaperWorkspace({
+    reads:Object.values(fixture), now, reportAt:now, heartbeat:'Fresh', bot:fixture.status.bot_id, ...changes,
+  }).props.children;
+}
+
+test('unavailable risk cannot label aged owner values a complete snapshot', () => {
+  const risk = {...fixture.risk, state:'degraded', data:null, completeness:'unavailable',
+    reason:'Risk owner schema invalid; this section is unavailable.'};
+  const readAt = now + 30_001;
+  const reads = Object.values(fixture).map(read => read.section === 'risk' ? risk : read);
+  const retained = packets => workspaceProjection({reads:packets, now:readAt, valuesAt:now + 1_000, asOf:now})
+    .find(child => child?.props?.className === 'paper-dimmed').props['aria-label'];
+  assert.equal(retained(Object.values(fixture)), 'Last complete owner snapshot, not current');
+  assert.equal(retained(reads), 'Retained owner values, not current');
+});
+
+test('early available cash carries wallet provenance or a dash', () => {
+  const cash = wallet => {
+    const content = workspaceProjection({reads:[wallet], complete:false})
+      .find(child => child?.props?.className === undefined && child?.type === 'div' && Array.isArray(child.props.children));
+    const fleet = content.props.children.find(child => child?.props?.name === 'Paper fleet').props.render();
+    const metrics = fleet.props.children.find(child => child?.type === 'dl').props.children;
+    return metrics.find(child => child?.props?.label === 'Available cash').props;
+  };
+  const current = cash(fixture.wallet);
+  assert.match(current.value, /USDC$/);
+  assert.match(current.note ?? '', /^Owner wallet section · As of .* UTC · 0s ago$/);
+  const noCash = {...fixture.wallet, data:{...fixture.wallet.data, assets:[]}};
+  assert.equal(cash(noCash).value, '—');
+  const future = {...fixture.wallet, generated_at_ms:now + 1};
+  assert.equal(cash(future).value, '—');
+});
+
 test('Today keeps its exact Money amount before owner data is available', () => {
   const tile = sampledToday({walletRead:undefined, accountingRead:undefined, snapshot:undefined});
   assert.equal(tile.value, '−12.00 USDC');

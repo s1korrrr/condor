@@ -61,6 +61,68 @@ test('journal evidence survives switching snapshot queries and clears with a qua
   } finally {client.clear();}
 });
 
+test('a capped executor read with a next cursor cannot clear a journal hold', async () => {
+  const fixture = section => JSON.parse(readFileSync(new URL(`../../tests/fixtures/paper-api-final3/native-replay/${section}.json`, import.meta.url)));
+  const status = fixture('status');
+  status.data.journal_budget = {state:'exceeded',journal_evidence_held:true};
+  const healthy = read => ({
+    ...read, snapshot_id:'next', source:{...read.source, sequence:read.source.sequence + 1},
+  });
+  const healed = {...healthy(status), state:'available', reason:null,
+    data:{...status.data, journal_budget:null, operations:{state:'available', completeness:'complete', reason:null, stale_reason:null}}};
+  const page = {...healthy(fixture('executors')), completeness:'partial'};
+  let pages = 0;
+  const reads = await paperCoherentRead('/status', [{section:'executors',path:'/executors',paginate:true}],
+    async (_path, section) => {
+      if (section === 'status') return healed;
+      pages += 1;
+      const data = Array.from({length:200}, (_, index) => ({...page.data[0], executor_id:`page-${pages}-${index}`}));
+      return {...page, data, next_cursor:`after-page-${pages}`};
+    });
+  assert.equal(pages, 5);
+  assert.equal(reads[1].data.length, 1_000);
+  assert.equal(reads[1].next_cursor, 'after-page-5');
+
+  const client = new ReactQuery.QueryClient();
+  const key = ['v5-paper-bots', status.bot_id];
+  const {usePaperSnapshot} = frontendModules({
+    '@tanstack/react-query':{...ReactQuery, useQueryClient:() => client, useQuery:options => client.getQueryCache().build(client, options).state},
+  }).load('v5/usePaperSnapshot.ts');
+  const observe = data => {
+    client.setQueryData(key, data);
+    let journal;
+    renderToStaticMarkup(React.createElement(function Probe() {
+      journal = usePaperSnapshot(key, true, 3, async () => data).journalReads;
+      return null;
+    }));
+    return journal;
+  };
+  try {
+    const history = fixture('history');
+    const newestHistory = {...healthy(history), next_cursor:'older-history'};
+    assert.deepEqual(observe([status, fixture('executors'), history]).map(read => read.snapshot_id), [status.snapshot_id]);
+    assert.deepEqual(observe([...reads, newestHistory]).map(read => read.snapshot_id), [status.snapshot_id]);
+    assert.deepEqual(observe([healed, {...page, next_cursor:null}, newestHistory]), [],
+      'exhausted executor paging can clear the hold even with intentionally bounded history');
+  } finally {client.clear();}
+});
+
+test('the shared snapshot hook keeps the 15-second default for Trades', () => {
+  const client = new ReactQuery.QueryClient();
+  let interval;
+  const {usePaperSnapshot} = frontendModules({
+    react:{...React, useRef:() => ({current:null}), useState:() => [null, () => {}]},
+    '@tanstack/react-query':{...ReactQuery, useQueryClient:() => client, useQuery:options => {
+      interval = options.refetchInterval({state:{fetchStatus:'idle'}});
+      return {};
+    }},
+  }).load('v5/usePaperSnapshot.ts');
+  try {
+    usePaperSnapshot(['v5-paper-trades', 'paper'], true, 0, async () => []);
+    assert.equal(interval, 15_000);
+  } finally {client.clear();}
+});
+
 test('shared snapshot hook waits for settlement and joins a pending manual refresh', async context => {
   context.mock.timers.enable({apis:['setTimeout','setInterval']});
   ReactQuery.environmentManager.setIsServer(() => false);

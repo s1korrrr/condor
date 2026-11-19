@@ -4,7 +4,7 @@ import {readFileSync} from 'node:fs';
 import {QueryClient} from '@tanstack/react-query';
 import { frontendModules } from './helpers/frontend-module.mjs';
 
-test('paper snapshot polling waits 20 seconds while idle and can be paused per observer', () => {
+test('paper snapshot polling uses the observer interval only while idle', () => {
   const options = [];
   const cache = { getQueryCache: () => ({ find: () => undefined }) };
   const { load } = frontendModules({
@@ -15,7 +15,7 @@ test('paper snapshot polling waits 20 seconds while idle and can be paused per o
     },
   });
   const { usePaperSnapshot } = load('v5/usePaperSnapshot.ts');
-  usePaperSnapshot(['default'], true, 1, async () => null);
+  usePaperSnapshot(['bots'], true, 1, async () => null, 20_000);
   usePaperSnapshot(['system'], true, 1, async () => null, false);
   const owner = fetchStatus => ({state:{fetchStatus}});
   assert.equal(options[0].refetchInterval(owner('idle')), 20_000);

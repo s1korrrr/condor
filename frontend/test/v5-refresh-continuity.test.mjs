@@ -158,7 +158,6 @@ test('Bots paints the cached Money sample while owner sections are unresolved', 
     {bot:'v5', at_ms:at - 300_000, unit:'USDC', equity:'123456.12', fees:'20.22'},
     {bot:'v5', at_ms:at, unit:'USDC', equity:'199093.60', initial_funding:'200000', external_flows:'0',
       realized:'114.14', unrealized:'-1020.54', fees:null},
-    {bot:'v5', at_ms:at + 300_000, gap:'fixture gap'},
   ]};
   const h = harness('bots', undefined, money);
   try {

@@ -38,3 +38,14 @@ S6 owns the review. This round is confined to the existing Condor branch and pap
 - [x] Run integration typecheck and the original 12 focused files serially through the S6 Mac gate (213 passing tests).
 - [x] Re-run the browser fixture at 1280×800 and 390×844 in both themes. Desktop dark first-number time was 16 ms on the reviewed build and 11 ms on R1, with zero long tasks and 39 API requests in each steady minute. Screenshots and raw measurements are under the parent worktree’s `.tmp/s6-p1-bots-speed/r1/`.
 - [x] Inspect the R1 diff and deliver it with a normal push on the existing branch.
+
+## Owner repair after R2
+
+S6 owns the repair. The SII writer starts at `1a948f56` from the existing P1 branch and works on Condor frontend observation and presentation. Authority is repository-process-only. Roll back the repair with a revert on the P1 branch.
+
+- [x] Reproduce the pagination, cached hold, unavailable risk, early cash, Money gap, age, and revisit defects at `1a948f56`.
+- [x] Repair the hook and presentation at their owning boundaries.
+- [x] Run both frontend TypeScript projects and the focused test files serially with the SII gate.
+- [x] Verify the diff and prepare the normal push on the existing branch.
+
+The eight targeted Node tests failed at their behavior assertions on the starting SHA and passed with the repair. The retained-view test also reproduced a baseline selector that counted fleet metrics as Money tiles. Its assertions now cover the six Money tiles and stale early cash independently. Bots polls at 20 seconds after settlement. Trades uses the shared 15-second default.

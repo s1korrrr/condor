@@ -13,9 +13,9 @@ const noReads: PaperRead[] = [];
 
 function journalCompletion(data: unknown, total: number): PaperRead | undefined {
   if (!Array.isArray(data) || data.length !== total || !paperSnapshotsAgree(data)) return undefined;
-  // A coherent read can include degraded placeholders or a deliberately bounded history page.
-  // Only valid owner responses in usable states can supersede retained journal evidence.
-  if (data.some(read => !['available', 'not_applicable'].includes(read.state) || paperSectionError(read))) return undefined;
+  // Bots intentionally reads only the newest terminal history page. Other sections must exhaust paging.
+  if (data.some(read => !['available', 'not_applicable'].includes(read.state) ||
+    (read.section !== 'history' && read.next_cursor) || paperSectionError(read))) return undefined;
   return data.find(read => read.section === 'status');
 }
 
@@ -41,7 +41,7 @@ function completionSnapshot(data: unknown): PaperRead | undefined {
   return status && risk && status.bot_id === risk.bot_id && paperSnapshotsAgree([status, risk]) ? risk as PaperRead : undefined;
 }
 
-export function usePaperSnapshot<Result>(queryKey: QueryKey, enabled: boolean, total: number, load: (progress: (reads: PaperRead[]) => void, signal: AbortSignal) => Promise<Result>, refetchInterval: number | false = 20_000, options?: { journalAcrossRoutes: boolean }) {
+export function usePaperSnapshot<Result>(queryKey: QueryKey, enabled: boolean, total: number, load: (progress: (reads: PaperRead[]) => void, signal: AbortSignal) => Promise<Result>, refetchInterval: number | false = 15_000, options?: { journalAcrossRoutes: boolean }) {
   const key = JSON.stringify(queryKey);
   const client = useQueryClient();
   const attempt = useRef<symbol | null>(null);

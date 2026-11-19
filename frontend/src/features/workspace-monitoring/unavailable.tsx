@@ -13,7 +13,7 @@ function WorkspaceUnavailable({ title, children }: { title: string; children?: R
   </div>;
 }
 
-type PaperReadProps = { presentation?: 'paper'; paperRead?: unknown; paperReadUrl?: string; paperHistoryReadUrl?: string; paperAccountingReadUrl?: string; system?: boolean; incidentsOnly?: boolean };
+type PaperReadProps = { presentation?: 'paper'; paperRead?: unknown; paperReadUrl?: string; paperHistoryReadUrl?: string; paperAccountingReadUrl?: string; system?: boolean };
 type OverviewProps = PaperReadProps & { accountPresentation?: { description: string; unavailable: string; valuationNote: string; registryUnavailable?: string } };
 /** Same props as the workspace Overview; the unavailable stub renders without them. */
 export const Overview: (props: OverviewProps) => ReactNode = () => <WorkspaceUnavailable title="Overview" />;
@@ -21,7 +21,7 @@ export function TradingVisuals() { return <WorkspaceUnavailable title="Trading V
 
 export function Operations(_props: PaperReadProps) { return <WorkspaceUnavailable title="Operations" />; }
 
-export function SystemOverview(_props: { paperRead?: unknown; connected?: boolean }) { return <p role="status">Service and check states are not reported. Monitoring workspace unavailable.</p>; }
+export function SystemOverview(_props: { paperRead?: unknown }) { return <p role="status">Service and check states are not reported. Monitoring workspace unavailable.</p>; }
 
 /** The backtest catalog needs the optional workspace. The viewer page itself is served by the backend at `/tradepad`. */
 export function Tradepad(_props: PaperReadProps) {

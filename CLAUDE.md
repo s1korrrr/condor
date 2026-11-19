@@ -2,6 +2,8 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+Write lasting outputs (reports, evidence, records, agent state) once, in Nest (fleet/state/reports/<owner>/); keep no copy in the repo; link to it.
+
 ## Project Overview
 
 Condor is a Telegram bot for monitoring and trading with Hummingbot via the Backend API. It provides portfolio tracking, bot monitoring, CEX/DEX trading, and configuration management through an interactive Telegram interface.

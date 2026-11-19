@@ -22,15 +22,15 @@ import { readMoney, type MoneyRead } from "@/v5/money-api";
 import type { PaperRead } from "@/v5/contracts";
 import { usePaperSnapshot } from "@/v5/usePaperSnapshot";
 import { usePaperClock } from "@/v5/usePaperClock";
+import { OwnerJournalCondition } from "@/v5/OwnerJournalCondition";
 import { parsePaperReadText } from "@/v5/paper-json";
-import { paperDimmedSnapshot, paperSnapshotPresentation } from "@/v5/snapshot-presentation";
+import { PAPER_SNAPSHOT_FRESH_MS, paperAge, paperDimmedSnapshot, paperSnapshotPresentation } from "@/v5/snapshot-presentation";
 import { paperReadFailureMessage } from "@/v5/policy";
 import { paperCompleteRead, paperNativeHolds, paperSnapshotsAgree } from "@/v5/policy";
 import { utcExact } from "@/v5/shown.mjs";
-import { paperAge } from "@/v5/snapshot-presentation";
 import { ownerTitleText, coin, usdc } from '@/v5/format.mjs';
-import { SAMPLE_MS } from "@/v5/money-model.mjs";
-import { paperAmount, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
+import { latest, SAMPLE_MS } from "@/v5/money-model.mjs";
+import { paperAmount, paperCoherentRead, paperRetainedRecords, paperControlState, paperExactAmount, paperLifetimeTotals, paperOpenExecutorCount, paperOrderCount, paperReadState, paperRiskHolds, paperExitProjection, paperRiskUsage, paperRiskControllers, paperSectionAdmissionError, paperSectionError, paperTime, paperWalletInventory, paperLastWalletToKeep, paperLastWalletToShow, paperWalletTotals, paperWords, type PaperLastWallet } from "@/v5/policy";
 import { phoneRecordTime } from "@/v5/phone-records";
 import { PaperTerminalHistory } from "@/v5/PaperTerminalHistory";
 import { DataTable, type TableColumn } from "@/features/quant-ops/kit/DataTable";
@@ -666,16 +666,32 @@ export function paperHoldSentence(controllers: { id?: string; current?: boolean;
 
 const paperMoneyDecimal = (value: unknown): value is string => typeof value === "string" && value.length <= 128 && /^-?\d+(\.\d{1,30})?$/.test(value);
 const SHOW_TODAY_WITH_MISSING_SAMPLES = true;
-type PaperMoney = Pick<MoneyRead, "range" | "now_ms" | "daily">;
+const MONEY_SAMPLE_MAX_AGE_MS = SAMPLE_MS + 60_000;
+type PaperMoney = Pick<MoneyRead, "range" | "now_ms" | "daily"> & Partial<Pick<MoneyRead, "rows">>;
 
 export function paperMoneyTiles({ walletRead, accountingRead, snapshot, complete, now, valuesAt = now, money }: { walletRead?: PaperRead; accountingRead?: PaperRead; snapshot?: PaperRead; complete: boolean; now: number; valuesAt?: number; money?: PaperMoney }) {
   const current = (read?: PaperRead) => complete && !!read && paperCompleteRead(read, valuesAt) && !!snapshot && read.bot_id === snapshot.bot_id && paperSnapshotsAgree([read, snapshot]) && typeof read.generated_at_ms === "number" && read.generated_at_ms <= now;
-  const wallet = current(walletRead) ? paperObject(walletRead?.data) : {};
-  const accounting = current(accountingRead) ? paperLifetimeTotals(accountingRead, snapshot, valuesAt) : null;
+  const ownerAt = snapshot?.generated_at_ms;
+  const staleOwner = typeof ownerAt === "number" && now - ownerAt > PAPER_SNAPSHOT_FRESH_MS;
+  const recorded = money?.range === "7d" ? latest(money.rows ?? [], "v5").newest : null;
+  const sample = recorded && !recorded.gap && recorded.unit === "USDC" && recorded.at_ms > 0 &&
+    recorded.at_ms <= now && now - recorded.at_ms <= MONEY_SAMPLE_MAX_AGE_MS && utcExact(recorded.at_ms) ? recorded : null;
+  const useMoney = !complete || (sample !== null && staleOwner && sample.at_ms > ownerAt);
+  const wallet = useMoney ? sample && {
+    equity_quote: sample.equity, initial_funding_quote: sample.initial_funding, external_cash_flows_quote: sample.external_flows,
+  } : current(walletRead) ? paperObject(walletRead?.data) : null;
+  const accounting = !useMoney && current(accountingRead) ? paperLifetimeTotals(accountingRead, snapshot, valuesAt) : null;
+  const walletAt = useMoney ? sample?.at_ms : walletRead?.generated_at_ms;
+  const accountingAt = useMoney ? sample?.at_ms : accountingRead?.generated_at_ms;
   const asOf = (at: unknown) => typeof at === "number" && at <= now && utcExact(at) ? `As of ${utcExact(at)} · ${paperAge(now - at)} ago` : "Owner time not published";
-  const tile = (label: string, value: unknown, at: unknown, why: string, detail = "") => ({ label, value: paperMoneyDecimal(value) ? usdc(value) : "—", exact: paperMoneyDecimal(value) ? value : undefined, note: paperMoneyDecimal(value) ? `${asOf(at)}${detail}` : why });
+  const tile = (label: string, value: unknown, at: unknown, why: string, detail = "", sampled = useMoney && sample !== null) => {
+    const exact = paperMoneyDecimal(value) ? value : undefined;
+    return { label, value: exact !== undefined ? usdc(exact) : "—", exact,
+      note: exact !== undefined ? `${sampled ? "Money sample · " : ""}${asOf(at)}${detail}` : why,
+      sampled };
+  };
   let net: string | null = null;
-  const zeroFlows = paperMoneyDecimal(wallet.external_cash_flows_quote) && /^-?0+(\.0+)?$/.test(wallet.external_cash_flows_quote);
+  const zeroFlows = paperMoneyDecimal(wallet?.external_cash_flows_quote) && /^-?0+(\.0+)?$/.test(wallet.external_cash_flows_quote);
   if (zeroFlows && paperMoneyDecimal(wallet.equity_quote) && paperMoneyDecimal(wallet.initial_funding_quote)) {
     const places = Math.max(wallet.equity_quote.split(".")[1]?.length ?? 0, wallet.initial_funding_quote.split(".")[1]?.length ?? 0);
     const scaled = (value: string) => BigInt(value.replace(".", "") + "0".repeat(places - (value.split(".")[1]?.length ?? 0)));
@@ -685,20 +701,35 @@ export function paperMoneyTiles({ walletRead, accountingRead, snapshot, complete
   }
   const day = Math.floor(now / 86_400_000) * 86_400_000;
   const today = Array.isArray(money?.daily) ? money.daily.find(row => row?.day === day) : undefined;
-  const moneyCurrent = current(walletRead) && current(accountingRead) && money?.range === "7d" && typeof money.now_ms === "number" && money.now_ms <= now && !paperSnapshotPresentation(money.now_ms, valuesAt, false).stale;
-  const firstSlot = typeof today?.equity_first_at_ms === "number" && today.equity_first_at_ms >= day && today.equity_first_at_ms - day < SAMPLE_MS;
-  const elapsedSlots = typeof today?.equity_last_at_ms === "number" && Number.isFinite(today.equity_last_at_ms) ? Math.floor((today.equity_last_at_ms - day) / SAMPLE_MS) + 1 : 0;
-  const todayComplete = moneyCurrent && today?.day === day && Number.isInteger(today.samples) && today.samples >= 2 && Number.isInteger(today.gaps) && today.gaps >= 0 && today.gaps <= today.samples && Number.isInteger(today.valid) && Number.isInteger(today.equity_valid) && today.equity_valid >= 2 && today.equity_valid <= today.valid && today.equity_valid <= elapsedSlots && firstSlot && typeof today.equity_first_at_ms === "number" && typeof today.equity_last_at_ms === "number" && today.equity_first_at_ms < today.equity_last_at_ms && today.equity_last_at_ms <= now && now - today.equity_last_at_ms <= 360_000 && paperMoneyDecimal(today.equity_start) && paperMoneyDecimal(today.equity_end);
-  const showToday = todayComplete && (SHOW_TODAY_WITH_MISSING_SAMPLES || elapsedSlots === today.equity_valid);
-  const walletWhy = `Complete current owner wallet required${walletRead?.reason ? `: ${paperWords(walletRead.reason)}` : ""}`;
-  const accountingWhy = "Complete current owner lifetime accounting required";
+  const moneyCurrent = money?.range === "7d" && typeof money.now_ms === "number" && money.now_ms <= now && !paperSnapshotPresentation(money.now_ms, now, false).stale;
+  const sampleHasEquity = sample !== null && paperMoneyDecimal(sample.equity);
+  const equityFirstAt = today?.equity_first_at_ms;
+  const elapsedSlots = sample ? Math.floor((sample.at_ms - day) / SAMPLE_MS) + 1 : 0;
+  const todayComplete = moneyCurrent && sampleHasEquity && today?.day === day && today.equity_last_at_ms === sample.at_ms &&
+    typeof equityFirstAt === "number" && equityFirstAt >= day && equityFirstAt - day < SAMPLE_MS && equityFirstAt < sample.at_ms &&
+    Number.isInteger(today.samples) && today.samples >= 2 && Number.isInteger(today.gaps) && today.gaps >= 0 && today.gaps <= today.samples &&
+    Number.isInteger(today.valid) && Number.isInteger(today.equity_valid) && today.equity_valid >= 2 && today.equity_valid <= today.valid && today.equity_valid <= elapsedSlots &&
+    paperMoneyDecimal(today.equity_start) && paperMoneyDecimal(today.equity_end);
+  // The dimmed group is labeled as a retained owner snapshot.
+  const retainedOwner = staleOwner && !useMoney;
+  const showToday = !retainedOwner && todayComplete && (SHOW_TODAY_WITH_MISSING_SAMPLES || elapsedSlots === today.equity_valid);
+  const gap = recorded?.gap ? `Money sample gap · ${paperWords(recorded.gap)}` : null;
+  const todayWhy = !moneyCurrent ? "No current Money read"
+    : gap ?? (!sample ? "No current Money sample recorded"
+      : !sampleHasEquity ? "Latest Money sample has no equity"
+      : typeof equityFirstAt === "number" && equityFirstAt >= day + SAMPLE_MS ? "Today's 00:00 UTC sample is missing, so the change cannot cover the whole day"
+      : retainedOwner && todayComplete ? "UTC-day change is unavailable in the retained owner snapshot"
+      : "No complete current UTC-day Money row recorded");
+  const walletWhy = useMoney ? gap ?? "Wallet value is unavailable in the Money sample"
+    : `Complete current owner wallet required${walletRead?.reason ? `: ${paperWords(walletRead.reason)}` : ""}`;
+  const accountingWhy = useMoney ? gap ?? "Value is unavailable in the Money sample" : "Complete current owner lifetime accounting required";
   return [
-    tile("Wallet equity", wallet.equity_quote, walletRead?.generated_at_ms, walletWhy),
-    tile("Since start", net, walletRead?.generated_at_ms, !current(walletRead) ? walletWhy : !zeroFlows ? "Owner external cash flows are not exactly zero" : "Owner equity or initial funding not published"),
-    tile("Today", showToday ? today.equity_change : null, today?.equity_last_at_ms, typeof today?.equity_first_at_ms === "number" && today.equity_first_at_ms >= day + SAMPLE_MS ? "Today's 00:00 UTC sample is missing, so the change cannot cover the whole day" : "No complete current UTC-day Money row recorded", showToday && elapsedSlots > today.equity_valid ? ` · ${elapsedSlots - today.equity_valid} of ${elapsedSlots} samples missing` : ""),
-    tile("Profit from closed trades", accounting?.realized_pnl_quote, accountingRead?.generated_at_ms, accountingWhy),
-    tile("Coins still held", accounting?.unrealized_pnl_quote, accountingRead?.generated_at_ms, accountingWhy),
-    tile("Fees paid", accounting?.fees_paid_quote, accountingRead?.generated_at_ms, accountingWhy),
+    tile("Wallet equity", wallet?.equity_quote, walletAt, walletWhy),
+    tile("Since start", net, walletAt, !wallet ? walletWhy : !zeroFlows ? "Owner external cash flows are not exactly zero" : "Owner equity or initial funding not published"),
+    tile("Today", showToday ? today.equity_change : null, today?.equity_last_at_ms, todayWhy, showToday && elapsedSlots > today.equity_valid ? ` · ${elapsedSlots - today.equity_valid} of ${elapsedSlots} samples missing` : "", showToday),
+    tile("Profit from closed trades", useMoney ? sample?.realized : accounting?.realized_pnl_quote, accountingAt, accountingWhy),
+    tile("Coins still held", useMoney ? sample?.unrealized : accounting?.unrealized_pnl_quote, accountingAt, accountingWhy),
+    tile("Fees paid", useMoney ? sample?.fees : accounting?.fees_paid_quote, accountingAt, accountingWhy),
   ];
 }
 
@@ -757,7 +788,8 @@ class PaperSectionBoundary extends Component<{ name: string; resetKey: string; c
 
 function PaperSectionContent({ render }: { render: () => ReactNode }) { return render(); }
 
-function PaperIsolatedSection({ name, resetKey, render }: { name: string; resetKey: string; render: () => ReactNode }) {
+function PaperIsolatedSection({ name, resetKey, render, pending }: { name: string; resetKey: string; render: () => ReactNode; pending?: string }) {
+  if (pending) return <section className="paper-section"><h2>{name}</h2><p className="paper-caption" role="status">{pending}</p></section>;
   return <PaperSectionBoundary name={name} resetKey={resetKey}><PaperSectionContent render={render} /></PaperSectionBoundary>;
 }
 
@@ -774,52 +806,66 @@ export function PaperWorkspace({ reads, safetyReads = [], accountingRead, accoun
   reads = reads.map(read => paperSectionError(read) ? { schema: "rsibot.v5-paper.read.v1", section: typeof read.section === "string" ? read.section : "unknown", state: "degraded", execution_mode: "paper", simulated: true, bot_id: null, snapshot_id: null, generated_at_ms: null, data: null, reason: paperSectionError(read), completeness: "unavailable" } : read);
   const bySection = Object.fromEntries(reads.map(read => [read.section, read]));
   const resetKey = reads.map(read => `${read.section}:${read.snapshot_id}:${read.state}`).join("|");
+  const pending = (...sections: string[]) => !complete && sections.some(section => !bySection[section])
+    ? readFailed ? "Owner section unavailable" : "Reading owner section…" : undefined;
   const wallet = paperObject(bySection.wallet?.data);
-  const walletTotals = complete ? paperWalletTotals(bySection.wallet, valuesAt) : null;
+  const walletTotals = paperWalletTotals(bySection.wallet, valuesAt);
   // When a mark is missing the owner withholds equity; show the last complete equity with its time, never a guess.
   const lastWallet = useRef<PaperLastWallet | null>(null);
   const keep = paperLastWalletToKeep(bot, walletTotals, bySection.wallet, now);
   if (keep) lastWallet.current = keep;
   const previousWallet = !walletTotals && complete ? paperLastWalletToShow(lastWallet.current, bot, bySection.wallet, now) : null;
   const walletWhy = paperWords(String(bySection.wallet?.reason ?? paperObject(bySection.wallet?.data).reason ?? "incomplete"));
-  const inventory = complete ? paperWalletInventory(bySection.wallet, now, valuesAt) : null;
-  const accounting = complete ? paperLifetimeTotals(accountingRead, reads[0], valuesAt) : null;
-  const openExecutors = complete ? paperOpenExecutorCount(bySection.executors, valuesAt) : null;
+  const cash = walletTotals?.cash ?? previousWallet?.cash;
+  const cashAt = walletTotals ? bySection.wallet?.generated_at_ms : previousWallet?.asOf;
+  const cashTime = typeof cashAt === "number" && cashAt <= now ? paperTime(cashAt, now) : "Not published";
+  const cashAmount = cashTime !== "Not published" ? paperAmount(cash, "USDC", 2) : "Not published";
+  const hasCash = cashAmount !== "Not published";
+  const inventory = paperWalletInventory(bySection.wallet, now, valuesAt);
+  const accounting = paperLifetimeTotals(accountingRead, bySection.status, valuesAt);
+  const openExecutors = paperOpenExecutorCount(bySection.executors, valuesAt);
   const decisions = paperObject(bySection.decisions?.data);
   const risk = paperObject(bySection.risk?.data);
-  const rails = complete ? paperRiskUsage(bySection.risk, now) ?? [] : [];
+  const rails = paperRiskUsage(bySection.risk, now) ?? [];
   const riskControllers = paperRiskControllers(bySection.risk, now);
   const nativeHolds = riskEvidence.flatMap((read, evidence) => paperNativeHolds(read).map(hold => ({ ...hold, evidence })));
   const safetyControllers = riskEvidence.flatMap((read, evidence) => (paperRiskControllers(read, now) ?? []).map(controller => ({...controller, current: controller.current && typeof read.generated_at_ms === "number" && read.generated_at_ms <= now, evidence})));
   const entryHoldObserved = hold || nativeHolds.length > 0 || safetyControllers.some(controller => controller.holds.length || controller.operator.paused === true || controller.operator.emergency === true || controller.entryHold === true);
+  const retentionLabel = asOf === null ? undefined : reads.some(read => read.completeness === "unavailable")
+    ? "Retained owner values, not current" : "Last complete owner snapshot, not current";
+  const moneyTiles = paperMoneyTiles({ walletRead: bySection.wallet, accountingRead, snapshot: bySection.status, complete, now, valuesAt, money });
+  const showSampleAboveRetained = asOf !== null && moneyTiles[0].sampled;
+  const moneySummary = <dl className="paper-metrics paper-money-summary" aria-label="Paper money summary">
+    {moneyTiles.map(({ label, value, exact, note }) => <PaperMetric key={label} label={label} value={value} exact={exact} note={note} />)}
+  </dl>;
   return <>
     {errors.map(error => <section className="v5-error-panel" role="alert" key={error}>{error}</section>)}
     {(entryHoldObserved || safetyControllers.length > 0) && <PaperIsolatedSection name="Entry hold" resetKey={resetKey} render={() => <aside className="paper-fleet paper-entry-controls" data-state={entryHoldObserved ? safetyControllers.some(controller => controller.operator.emergency === true) ? "stopped" : "degraded" : "unknown"} role="status"><div className="paper-section-heading"><h2>{entryHoldObserved ? "New acquisitions held" : "Entry controls"}</h2><PaperBadge state={entryHoldObserved ? safetyControllers.some(controller => controller.operator.emergency === true) ? "stopped" : "degraded" : "unknown"}>{safetyControllers.some(controller => controller.operator.emergency === true) ? "Emergency halt reported" : entryHoldObserved ? "Owner action required" : paperReadState(bySection.risk, now) === "stale" ? "Stale owner report" : "Owner report"}</PaperBadge></div>{entryHoldObserved && <p className="paper-hold-sentence"><strong>{paperHoldSentence(safetyControllers, holds, nativeHolds)}</strong>{riskEvidence.map((read, index) => <span className="paper-caption" key={index}> · As of {utcExact(read.generated_at_ms) ?? "unknown owner time"}{typeof read.generated_at_ms === "number" && read.generated_at_ms <= now ? ` · ${paperAge(now - read.generated_at_ms)} ago` : " · owner time is not current"}</span>)}</p>}<details className="paper-hold-details"><summary>Details: holds, controllers and evidence</summary><div className="paper-rails">{holds.map(item => <article key={item.reason}><h3>{item.label}</h3><p>{item.explanation}</p><p className="paper-caption">{item.action}</p><p className="paper-caption">Safety evidence received {paperTime(item.receivedAt, now)}</p></article>)}</div>{nativeHolds.map((item, index) => <article key={`native:${item.evidence}:${index}`}><h3>{item.controller_id}: {paperWords(item.reason)}{!item.controllerPublished && " (controller details not published)"}</h3><p>{item.explanation}</p><p>Owner native exits: {paperWords(item.protected_exits)}</p><p className="paper-caption">Safety evidence received {paperTime(riskEvidence[item.evidence]?.generated_at_ms, now)}</p></article>)}{safetyControllers.map(controller => <article key={`${controller.evidence}:${controller.id}`}><h3>{controller.id}</h3><PaperBadge state={controller.holds.length || controller.operator.paused === true || controller.operator.emergency === true || controller.entryHold === true ? "degraded" : "unknown"}>{controller.holds.length || controller.operator.paused === true || controller.operator.emergency === true || controller.entryHold === true ? "New entries held" : controller.current ? "Owner report" : "Current entry state unknown"}</PaperBadge><p>Reported operator pause: {controller.operator.paused === true ? "Yes" : controller.operator.paused === false ? "No" : "Not published"} · Reported emergency halt: {controller.operator.emergency === true ? "Yes" : controller.operator.emergency === false ? "No" : "Not published"} · Reported native entry hold: {controller.entryHold === true ? "Yes" : controller.entryHold === false ? "No" : "Not published"} · Owner native exits: {paperWords(controller.native.protected_exits)}{!controller.current && <> · As of {paperTime(riskEvidence[controller.evidence]?.source_at_ms ?? riskEvidence[controller.evidence]?.generated_at_ms, now)}</>}</p><p className="paper-caption">Safety evidence received {paperTime(riskEvidence[controller.evidence]?.generated_at_ms, now)}</p>{riskEvidence[controller.evidence] !== bySection.risk && controller.latch === true && riskControllers?.find(row => row.id === controller.id)?.latch === null && <p className="paper-caption">Hold retained: the newer owner read did not publish the native latch.</p>}</article>)}<p className="paper-caption">Received and retained safety evidence can differ from the displayed data snapshot. Omitted controllers remain unknown, not cleared. Only qualified newer evidence for that controller or owner hold list can supersede a received hold.</p><p className="paper-caption">Clock high-water mark: {paperTime(paperObject(risk.clock_recovery).high_water_ms, now)}. Order protection is verified per position below.</p></details></aside>} /> }
     {snapshotStamp}
-    <div className={asOf !== null ? "paper-dimmed" : undefined} style={asOf !== null ? { opacity: 0.6 } : undefined} aria-label={asOf !== null ? "Last complete owner snapshot, not current" : undefined}>
-    <dl className="paper-metrics paper-money-summary" aria-label="Paper money summary">{paperMoneyTiles({ walletRead: bySection.wallet, accountingRead, snapshot: bySection.status, complete, now, valuesAt, money }).map(tile => <PaperMetric key={tile.label} {...tile} />)}</dl>
-    {!complete ? readFailed ? <section className="paper-section" role="status"><h2>Owner snapshot unavailable</h2><p>The read failed before a complete owner snapshot arrived. Received safety evidence remains visible. No absent controls or capital totals are inferred.</p></section> : <section className="paper-section" role="status"><h2>Checking owner snapshot</h2><p>Risk controls and numeric rail limits are pending until the complete owner snapshot arrives. No absent controls or capital totals are inferred.</p><ul>{["status", "wallet", "positions", "fills", "executors", "risk", "decisions", "history", "accounting"].map(section => <li key={section}>{paperWords(section)}: {bySection[section] ? "Received · awaiting complete snapshot" : "Pending"}</li>)}</ul></section> : <>
-    <PaperIsolatedSection name="Paper fleet" resetKey={resetKey} render={() => <section className="paper-fleet"><div className="paper-section-heading"><div><span className="paper-eyebrow">SIMULATED ACCOUNT</span><h2>Paper fleet</h2></div><PaperBadge state={heartbeat === "Fresh" ? "available" : "stale"}>{heartbeat} · heartbeat</PaperBadge></div><p className="paper-caption">{bot} · Valuation: {paperWords(wallet.valuation_policy)}. Book freshness and completeness are separate from process heartbeat.</p><dl className="paper-metrics">
+    {showSampleAboveRetained && moneySummary}
+    <div className={asOf !== null ? "paper-dimmed" : undefined} style={asOf !== null ? { opacity: 0.6 } : undefined} aria-label={retentionLabel}>
+    {!showSampleAboveRetained && moneySummary}
+    {!complete && <p role="status" className="paper-caption">{readFailed ? "Owner snapshot unavailable" : "Checking owner snapshot"}</p>}
+    <PaperIsolatedSection name="Paper fleet" resetKey={resetKey} pending={pending("wallet")} render={() => <section className="paper-fleet"><div className="paper-section-heading"><div><span className="paper-eyebrow">SIMULATED ACCOUNT</span><h2>Paper fleet</h2></div><PaperBadge state={heartbeat === "Fresh" ? "available" : "stale"}>{heartbeat} · heartbeat</PaperBadge></div><p className="paper-caption">{bot} · Valuation: {paperWords(wallet.valuation_policy)}. Book freshness and completeness are separate from process heartbeat.</p><dl className="paper-metrics">
       {previousWallet && <PaperMetric label="Last complete wallet equity" value={paperAmount(previousWallet.equity, "USDC", 2)} exact={typeof previousWallet.equity === "string" ? previousWallet.equity : undefined} note={`Last complete equity, as of ${paperTime(previousWallet.asOf, now)} · now withheld by the owner: ${walletWhy}`} />}
-      <PaperMetric label={previousWallet ? "Last complete available cash" : "Available cash"} value={paperAmount(walletTotals?.cash ?? previousWallet?.cash, "USDC", 2)} exact={typeof (walletTotals?.cash ?? previousWallet?.cash) === "string" ? String(walletTotals?.cash ?? previousWallet?.cash) : undefined} note={!walletTotals && previousWallet ? `As of ${paperTime(previousWallet.asOf, now)}` : undefined} />
+      <PaperMetric label={previousWallet ? "Last complete available cash" : "Available cash"} value={complete || hasCash ? cashAmount : "—"} exact={hasCash && typeof cash === "string" ? cash : undefined} note={hasCash ? `Owner wallet section · As of ${cashTime}` : undefined} />
       <PaperMetric label="Holdings value" value={inventory ? paperAmount(inventory.value, inventory.unit, 2) : "Not published"} exact={inventory?.value} note={inventory ? `${paperReadState(bySection.wallet, now) === "stale" ? "Stale valuation · " : ""}Valuation: ${inventory.basis} · As of ${paperTime(inventory.asOf, now)} · Wallet marks, excluding cash` : "Complete current wallet marks not published"} />
-      <PaperMetric label="Open executors" value={openExecutors ?? "Not published"} note={openExecutors === null ? "Incomplete or stale owner read · count not inferred" : notCurrent ? `${notCurrent} · excludes terminal receipts` : "Fresh complete owner snapshot · excludes terminal receipts"} />
+      <PaperMetric label="Open executors" value={openExecutors ?? "Not published"} note={openExecutors === null ? "Incomplete or stale owner read · count not inferred" : notCurrent ? `${notCurrent} · excludes terminal receipts` : `Owner executor section · As of ${paperTime(bySection.executors?.generated_at_ms, now)} · excludes terminal receipts`} />
 
 
 
       <PaperMetric label="Traded volume" value={paperAmount(accounting?.volume_traded_quote, "USDC", 2)} exact={typeof accounting?.volume_traded_quote === "string" ? accounting.volume_traded_quote : undefined} note={accounting ? `Lifetime · native receipts · As of ${paperTime(accountingRead?.generated_at_ms, now)}` : "Lifetime · complete current owner accounting required"} />
       <PaperMetric label="Last report" value={paperTime(reportAt, now)} note="Native process heartbeat" />
     </dl><p className="paper-caption">{accounting ? <>Filled orders: {paperOrderCount(accounting.entry_count, "entry")} · {paperOrderCount(accounting.exit_count, "exit")}. Accounting since: {paperTime(accounting.accounting_since_ms, now)}. Counts are distinct filled orders, not actions.</> : <>Lifetime accounting: {accountingError ? "Owner read unavailable; no totals are inferred from recent fills." : paperWords(accountingRead?.reason ?? "Collecting the snapshot-bound owner aggregate; no totals are inferred from recent fills.")}</>}</p></section>} />
-    <PaperIsolatedSection name="Positions" resetKey={resetKey} render={() => <PaperRecords read={bySection.positions} positions={bySection.positions} executors={bySection.executors} kind="positions" now={now} valuesAt={valuesAt} />} />
-    <PaperIsolatedSection name="Fills" resetKey={resetKey} render={() => <PaperRecords read={bySection.fills} kind="fills" now={now} valuesAt={valuesAt} />} />
-    <PaperIsolatedSection name="Executors" resetKey={resetKey} render={() => <PaperRecords read={bySection.executors} kind="executors" now={now} valuesAt={valuesAt} />} />
-    <PaperIsolatedSection name="Terminal history" resetKey={resetKey} render={() => <PaperTerminalHistory read={bySection.history} now={now} valuesAt={valuesAt} />} />
-    <PaperIsolatedSection name="Risk rails" resetKey={resetKey} render={() => <section className="paper-section"><div className="paper-section-heading"><h2>Risk rails & entry latch</h2><PaperBadge state={paperReadState(bySection.risk, now)}>{paperWords(paperReadState(bySection.risk, now))}</PaperBadge></div><p className="paper-caption">{(riskControllers ? `Controller entry observations are shown above.${rails.length ? "" : " Numeric rail limits are not published"}` : paperWords(bySection.risk?.reason ?? "controls_not_integrated")).replace(/[.!?]+$/, "")}. Loss rails stop new acquisitions, never force a sale.</p><div className="paper-rails">{rails.length ? rails.map((rail, index) => <article className="paper-pair" key={index}><h3>{paperWords(rail.label)}</h3><p><span title={ownerTitleText(typeof rail.used_quote === "string" ? rail.used_quote : undefined)}>{paperAmount(rail.used_quote, "USDC")}</span> of <span title={ownerTitleText(typeof rail.limit_quote === "string" ? rail.limit_quote : undefined)}>{paperAmount(rail.limit_quote, "USDC")}</span></p>{typeof rail.used_percent === "number" && Number.isFinite(rail.used_percent) && rail.used_percent >= 0 && rail.used_percent <= 100 ? <progress max={100} value={rail.used_percent} aria-label={`${paperWords(rail.label)} use`} /> : <p className="paper-caption">Use not published</p>}{typeof rail.note === "string" && <p className="paper-caption" title={ownerTitleText(typeof rail.note_exact === "string" ? rail.note_exact : undefined)}>{rail.note}</p>}</article>).concat(entryHoldObserved ? [<article className="paper-pair" key="new-acquisitions"><h3>New acquisitions</h3><PaperBadge>Held by owner</PaperBadge><p className="paper-caption">The owner reports an entry hold. Review the controller evidence and owner clearing procedure above; protection is verified per position.</p></article>] : []) : ["Pair exposure", "Program exposure", "New acquisitions"].map(label => <article className="paper-pair" key={label}><h3>{label}</h3><PaperBadge>{entryHoldObserved && label === "New acquisitions" ? "Held by owner" : "Not connected"}</PaperBadge><div className="paper-empty-rail" aria-hidden="true" /><p className="paper-caption">{entryHoldObserved && label === "New acquisitions" ? "The owner reports an entry hold. Review the controller evidence and owner clearing procedure above; protection is verified per position." : "No owner limit or latch observation. No use bar is inferred."}</p></article>)}</div></section>} />
-    <PaperIsolatedSection name="Decisions and paper control" resetKey={resetKey} render={() => <section className="paper-section"><h2>Decisions & paper control</h2><div className="paper-rails"><article><h3>Exit policy</h3><p>{paperWords(paperObject(decisions.trailing).reason)}</p><p>Underwater positions remain held. Protective exits must survive entry halt.</p></article><article><h3>Acquisition plan</h3><p>{paperWords(paperObject(decisions.dca).reason)}</p><p>Comparable history: {paperWords(paperObject(bySection.history?.data).reason)}</p></article><article><h3>{paperControlState(null)}</h3><p>Read-only dashboard. A separately authenticated owner path must acknowledge paper commands before controls can appear here.</p></article></div><details className="paper-provenance"><summary>Observation provenance</summary><p>Snapshot: <span>{reads[0]?.snapshot_id ?? "Not published"}</span></p><p>Observed: {paperTime(reads[0]?.generated_at_ms, now)}</p></details></section>} />
-    </>}
+    <PaperIsolatedSection name="Positions" resetKey={resetKey} pending={pending("positions")} render={() => <PaperRecords read={bySection.positions} positions={bySection.positions} executors={bySection.executors} kind="positions" now={now} valuesAt={valuesAt} />} />
+    <PaperIsolatedSection name="Fills" resetKey={resetKey} pending={pending("fills")} render={() => <PaperRecords read={bySection.fills} kind="fills" now={now} valuesAt={valuesAt} />} />
+    <PaperIsolatedSection name="Executors" resetKey={resetKey} pending={pending("executors")} render={() => <PaperRecords read={bySection.executors} kind="executors" now={now} valuesAt={valuesAt} />} />
+    <PaperIsolatedSection name="Terminal history" resetKey={resetKey} pending={pending("history")} render={() => <PaperTerminalHistory read={bySection.history} now={now} valuesAt={valuesAt} />} />
+    <PaperIsolatedSection name="Risk rails" resetKey={resetKey} pending={pending("risk")} render={() => <section className="paper-section"><div className="paper-section-heading"><h2>Risk rails & entry latch</h2><PaperBadge state={paperReadState(bySection.risk, now)}>{paperWords(paperReadState(bySection.risk, now))}</PaperBadge></div><p className="paper-caption">{(riskControllers ? `Controller entry observations are shown above.${rails.length ? "" : " Numeric rail limits are not published"}` : paperWords(bySection.risk?.reason ?? "controls_not_integrated")).replace(/[.!?]+$/, "")}. Loss rails stop new acquisitions, never force a sale.</p><div className="paper-rails">{rails.length ? rails.map((rail, index) => <article className="paper-pair" key={index}><h3>{paperWords(rail.label)}</h3><p><span title={ownerTitleText(typeof rail.used_quote === "string" ? rail.used_quote : undefined)}>{paperAmount(rail.used_quote, "USDC")}</span> of <span title={ownerTitleText(typeof rail.limit_quote === "string" ? rail.limit_quote : undefined)}>{paperAmount(rail.limit_quote, "USDC")}</span></p>{typeof rail.used_percent === "number" && Number.isFinite(rail.used_percent) && rail.used_percent >= 0 && rail.used_percent <= 100 ? <progress max={100} value={rail.used_percent} aria-label={`${paperWords(rail.label)} use`} /> : <p className="paper-caption">Use not published</p>}{typeof rail.note === "string" && <p className="paper-caption" title={ownerTitleText(typeof rail.note_exact === "string" ? rail.note_exact : undefined)}>{rail.note}</p>}</article>).concat(entryHoldObserved ? [<article className="paper-pair" key="new-acquisitions"><h3>New acquisitions</h3><PaperBadge>Held by owner</PaperBadge><p className="paper-caption">The owner reports an entry hold. Review the controller evidence and owner clearing procedure above; protection is verified per position.</p></article>] : []) : ["Pair exposure", "Program exposure", "New acquisitions"].map(label => <article className="paper-pair" key={label}><h3>{label}</h3><PaperBadge>{entryHoldObserved && label === "New acquisitions" ? "Held by owner" : "Not connected"}</PaperBadge><div className="paper-empty-rail" aria-hidden="true" /><p className="paper-caption">{entryHoldObserved && label === "New acquisitions" ? "The owner reports an entry hold. Review the controller evidence and owner clearing procedure above; protection is verified per position." : "No owner limit or latch observation. No use bar is inferred."}</p></article>)}</div></section>} />
+    <PaperIsolatedSection name="Decisions and paper control" resetKey={resetKey} pending={pending("decisions")} render={() => <section className="paper-section"><h2>Decisions & paper control</h2><div className="paper-rails"><article><h3>Exit policy</h3><p>{paperWords(paperObject(decisions.trailing).reason)}</p><p>Underwater positions remain held. Protective exits must survive entry halt.</p></article><article><h3>Acquisition plan</h3><p>{paperWords(paperObject(decisions.dca).reason)}</p><p>Comparable history: {pending("history") ?? paperWords(paperObject(bySection.history?.data).reason)}</p></article><article><h3>{paperControlState(null)}</h3><p>Read-only dashboard. A separately authenticated owner path must acknowledge paper commands before controls can appear here.</p></article></div><details className="paper-provenance"><summary>Observation provenance</summary><p>Snapshot: <span>{reads[0]?.snapshot_id ?? "Not published"}</span></p><p>Observed: {paperTime(reads[0]?.generated_at_ms, now)}</p></details></section>} />
     </div>
-    {complete && <><PaperIsolatedSection name="Position cards" resetKey={resetKey} render={() => <PaperPositions positions={bySection.positions} executors={bySection.executors} decisions={bySection.decisions} wallet={bySection.wallet} now={now} valuesAt={valuesAt} asOf={asOf} prices={market?.prices} money={market?.money} />} />
-    <PaperIsolatedSection name="Price and trades" resetKey={resetKey} render={() => <PaperPriceChart fills={bySection.fills} positions={bySection.positions} decisions={bySection.decisions} now={now} valuesAt={valuesAt} asOf={asOf} {...market} />} /></>}
+    <PaperIsolatedSection name="Position cards" resetKey={resetKey} pending={pending("wallet", "positions", "executors", "decisions")} render={() => <PaperPositions positions={bySection.positions} executors={bySection.executors} decisions={bySection.decisions} wallet={bySection.wallet} now={now} valuesAt={valuesAt} asOf={asOf} prices={market?.prices} money={market?.money} />} />
+    <PaperIsolatedSection name="Price and trades" resetKey={resetKey} pending={pending("fills", "positions", "decisions")} render={() => <PaperPriceChart fills={bySection.fills} positions={bySection.positions} decisions={bySection.decisions} now={now} valuesAt={valuesAt} asOf={asOf} {...market} />} />
   </>;
 }
 
@@ -833,7 +879,7 @@ async function readPaper(path: string, section: string, signal: AbortSignal): Pr
   }
   const value = parsePaperReadText(await response.text()) as PaperRead;
   signal.throwIfAborted();
-  if (!value || value.section !== section || paperSectionError(value)) throw new PaperSectionSchemaError(section, section === "risk" ? paperRiskHolds(value).map(({ reason }) => ({ reason })) : undefined);
+  if (!value || value.section !== section || paperSectionAdmissionError(value)) throw new PaperSectionSchemaError(section, section === "risk" ? paperRiskHolds(value).map(({ reason }) => ({ reason })) : undefined);
   return value;
 }
 
@@ -864,7 +910,7 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
           return { ...status, section, state: "degraded" as const, reason: error.message, data: section === "risk" && error.holds ? { holds: error.holds } : null, completeness: "unavailable" };
         }
       }, undefined, progress);
-  });
+  }, 20_000, {journalAcrossRoutes:true});
   const [range, setRange] = useState("24h");
   const symbols = usePaperCandleSymbols(query.complete);
   const listed = (item: string) => query.complete && !symbols.isError && hasPaperCandlePair(symbols.data, item);
@@ -884,16 +930,22 @@ export function V5PaperBots({ bot, generatedAt, ownerState }: { bot: string; gen
   // snapshot's values stay on screen, admitted as of its own time, dimmed, with ONE stamp saying it is not current. Past the cap
   // the normal stale rules withhold it, as before.
   const { dimmed, snapshotAt, valuesAt } = paperDimmedSnapshot(complete ? reads[0]?.generated_at_ms : null, now);
-  const accounting = complete ? reads.find(read => read.section === "accounting") : undefined;
+  const accounting = reads.find(read => read.section === "accounting");
+  const journal = query.journalReads.find(read => read.bot_id === bot);
+  const snapshotStatus = reads[0];
+  const snapshot = paperSnapshotPresentation(snapshotStatus?.generated_at_ms, now, query.isFetching || query.isError);
   const clock = paperHeartbeat(generatedAt === null ? null : Math.floor(generatedAt * 1000), ownerState, now);
   const heartbeat = clock.current ? "Fresh" : ownerState === "UNAVAILABLE" ? "Unavailable" : "Stale";
   const [showTrades, setShowTrades] = useState(false);
   return <div className="v5-paper-bots">
     <header className="v5-page-heading"><div><h1>Paper bots</h1><p>{bot} · simulated wallet · live disabled</p></div><div className="v5-button-row"><button className="v5-button" aria-expanded={showTrades} onClick={() => setShowTrades(value => !value)}>{showTrades ? 'Hide trades' : 'Show trades'}</button><button className="v5-button" onClick={() => void query.refetch()}>Refresh paper data</button></div></header>
 
-    {query.progress && <p role="status">{query.progress}</p>}
+    <OwnerJournalCondition status={journal} snapshotLabel={!complete || query.isFetching || query.isError || journal !== snapshotStatus
+      ? "Received owner status · retained until a qualified newer status supersedes it."
+      : snapshot.label} />
+    {complete && query.isFetching && <p className="paper-caption" role="status">Refreshing owner snapshot…</p>}
     {query.isError && <section className="v5-error-panel" role="alert">{query.error.message}</section>}
-    <PaperWorkspace snapshotStamp={complete && <p role={dimmed ? "status" : undefined} className={dimmed ? "paper-dimmed-stamp" : undefined}>{paperSnapshotPresentation(reads[0]?.generated_at_ms, now, query.isFetching || query.isError).label} · As of {paperTime(reads[0]?.generated_at_ms, now)}{dimmed ? " · snapshot values are from that time, dimmed until a new report" : ""}</p>} asOf={dimmed ? snapshotAt : null} reads={reads} safetyReads={query.safetyReads} complete={complete} readFailed={query.isError} money={money.isError ? undefined : money.data} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} valuesAt={valuesAt} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} market={market} />
+    <PaperWorkspace snapshotStamp={complete && <p role={dimmed ? "status" : undefined} className={dimmed ? "paper-dimmed-stamp" : undefined}>{snapshot.label} · As of {paperTime(reads[0]?.generated_at_ms, now)}{dimmed ? " · snapshot values are from that time, dimmed until a new report" : ""}</p>} asOf={dimmed ? snapshotAt : null} reads={reads} safetyReads={query.safetyReads} complete={complete} readFailed={query.isError} money={money.isError ? undefined : money.data} accountingRead={accounting} accountingError={accounting?.state === "degraded"} now={now} valuesAt={valuesAt} reportAt={generatedAt === null ? null : Math.floor(generatedAt * 1000)} heartbeat={heartbeat} bot={bot} market={market} />
     {showTrades && <V5Trades bot={bot} now={now} read={readPaper} readFailed={query.isError} heartbeat={heartbeat} />}
   </div>;
 }

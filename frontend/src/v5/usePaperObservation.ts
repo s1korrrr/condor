@@ -1,5 +1,5 @@
 import type { PaperRead } from "./contracts";
-import { paperBoundedRead, paperCoherentRead, paperObservationSummary, paperReadFailureMessage, paperSectionError } from "./policy";
+import { paperBoundedRead, paperCoherentRead, paperObservationSummary, paperReadFailureMessage, paperSectionAdmissionError } from "./policy";
 import { usePaperSnapshot } from "./usePaperSnapshot";
 import { paperSnapshotPresentation } from "./snapshot-presentation";
 import { usePaperClock } from "./usePaperClock";
@@ -14,7 +14,7 @@ async function readPaperSection(path: string, section: string, bot: string | nul
   }
   const value = parsePaperReadText(await response.text()) as PaperRead;
   signal.throwIfAborted();
-  if (!value || value.section !== section || (bot && value.bot_id !== bot) || paperSectionError(value)) throw new Error(`${section} owner read failed validation. No current observation is inferred.`);
+  if (!value || value.section !== section || (bot && value.bot_id !== bot) || paperSectionAdmissionError(value)) throw new Error(`${section} owner read failed validation. No current observation is inferred.`);
   return value;
 }
 
@@ -50,7 +50,7 @@ export function usePaperObservation(bot: string | null | undefined, refetchInter
       {section:"executors",path:`${prefix}bots/${encodeURIComponent(bot!)}/executors`,paginate:true},
       {section:"risk",path:`${prefix}bots/${encodeURIComponent(bot!)}/risk`},
     ], (path,section) => readPaperSection(path,section,bot,signal), undefined, progress);
-  }, refetchInterval);
+  }, refetchInterval, {journalAcrossRoutes:true});
   const reads = query.reads;
   const summary = query.isError ? { label: "Unavailable", reason: query.error.message } : query.isPending || query.isFetching ? { label: "Checking", reason: `Reading one owner snapshot: ${reads.length}/5 sections. Process heartbeat is a separate signal.` } : paperObservationSummary(query.data ?? [], bot ?? "", now);
   const completedStatus = (query.data ?? reads).find(read => read.section === "status");

@@ -244,7 +244,11 @@ test('an incomplete first snapshot is never dimmed or admitted as complete value
     const html = current.render();
     assert.doesNotMatch(html, /class="paper-dimmed"|Last coherent owner snapshot/);
     assert.match(html, /Owner snapshot unavailable/);
-    assert.deepEqual(metrics(html).map(match => match[2]), Array(6).fill('—'));
+    const summary = html.match(/<dl class="paper-metrics paper-money-summary"[^>]*>.*?<\/dl>/s)?.[0];
+    assert.ok(summary);
+    assert.deepEqual(metrics(summary).map(match => match[2]), Array(6).fill('—'));
+    assert.equal(metric(html, 'Available cash'), '—');
+    assert.ok(metrics(html).every(match => !match[2].includes('USDC')));
   } finally {current.close();}
 });
 

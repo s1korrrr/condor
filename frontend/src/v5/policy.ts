@@ -30,7 +30,7 @@ export async function paperCoherentRead(statusPath: string, sections: { section:
     try {
       const status = await read(statusPath, "status");
       if (!status.snapshot_id) throw new Error("Owner snapshot is unavailable. No sections or totals are inferred.");
-      const reads: import("./contracts").PaperRead[] = [status];
+      const reads: import("./contracts").PaperRead[] = [retainValidatedSection(status)];
       progress([...reads]);
       let nextIndex = 0;
       let failure: { error: unknown } | undefined;
@@ -41,8 +41,8 @@ export async function paperCoherentRead(statusPath: string, sections: { section:
           const path = section.path + `${section.path.includes("?") ? "&" : "?"}snapshot_id=${encodeURIComponent(status.snapshot_id!)}`;
           try {
             const value = section.paginate ? await paperObservationPages(path, page => read(page, section.section, status), section.maxPages) : await read(path, section.section, status);
-            if (!paperSnapshotsAgree([status, value])) throw new Error("Mixed owner snapshots were refused. Refresh; totals are not combined.");
-            reads[index + 1] = value;
+            if (!paperSnapshotsAgree([status, value]) || value.bot_id !== status.bot_id) throw new Error("Mixed owner snapshots were refused. Refresh; totals are not combined.");
+            reads[index + 1] = retainValidatedSection(value);
             progress(reads.filter(Boolean));
           } catch (error) {
             if (!failure) failure = { error };
@@ -171,8 +171,34 @@ export async function paperObservationPages(path: string, fetchPage: (path: stri
   return result;
 }
 
+const validatedSections = new WeakSet<object>();
+
+function retainValidatedSection(read: import("./contracts").PaperRead) {
+  paperSectionAdmissionError(read);
+  return read;
+}
+
+export function paperSectionAdmissionError(read: import("./contracts").PaperRead): string | null {
+  if (validatedSections.has(read)) return null;
+  const error = paperSectionError(read);
+  if (error) return error;
+  // These are decoded JSON sections. Freeze the admitted payload so its validation
+  // can be reused across clock ticks, tables and projections without hiding edits.
+  const pending: unknown[] = [read];
+  const seen = new WeakSet<object>();
+  while (pending.length) {
+    const value = pending.pop();
+    if (!value || typeof value !== "object" || seen.has(value)) continue;
+    seen.add(value);
+    for (const child of Object.values(value)) pending.push(child);
+    Object.freeze(value);
+  }
+  validatedSections.add(read);
+  return null;
+}
+
 export function paperSectionError(read: Partial<import("./contracts").PaperRead> | undefined): string | null {
-  if (!read) return null;
+  if (!read || validatedSections.has(read)) return null;
   const object = (value: unknown): value is Record<string, unknown> => !!value && typeof value === "object" && !Array.isArray(value);
   const records = (value: unknown): value is Record<string, unknown>[] => Array.isArray(value) && value.every(object);
   const invalid = () => `${typeof read.section === "string" ? paperWords(read.section) : "Paper section"} owner schema invalid; this section is unavailable.`;

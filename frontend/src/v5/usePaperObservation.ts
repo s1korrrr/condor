@@ -50,7 +50,7 @@ export function usePaperObservation(bot: string | null | undefined, refetchInter
       {section:"executors",path:`${prefix}bots/${encodeURIComponent(bot!)}/executors`,paginate:true},
       {section:"risk",path:`${prefix}bots/${encodeURIComponent(bot!)}/risk`},
     ], (path,section) => readPaperSection(path,section,bot,signal), undefined, progress);
-  }, refetchInterval);
+  }, refetchInterval, {journalAcrossRoutes:true});
   const reads = query.reads;
   const summary = query.isError ? { label: "Unavailable", reason: query.error.message } : query.isPending || query.isFetching ? { label: "Checking", reason: `Reading one owner snapshot: ${reads.length}/5 sections. Process heartbeat is a separate signal.` } : paperObservationSummary(query.data ?? [], bot ?? "", now);
   const completedStatus = (query.data ?? reads).find(read => read.section === "status");

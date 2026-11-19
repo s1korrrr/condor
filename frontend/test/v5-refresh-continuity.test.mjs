@@ -18,7 +18,7 @@ const completeReads = () => sections.map(section => {
 });
 const stubs = {...Object.fromEntries(['@/components/bots/AggregatedPnlChart','@/components/bots/ControllerBrowser','@/components/bots/DeployBotDialog','@/components/bots/PnlSparkline','@/hooks/useWebSocket','@/hooks/useRates'].map(name => [name,{}])), '@/features/quant-ops/kit/DataTable':{DataTable:() => null}};
 
-function harness(kind, initial) {
+function harness(kind, initial, money) {
   const client = new ReactQuery.QueryClient();
   let cursor = 0, spec;
   const slots = [], requests = [];
@@ -29,7 +29,7 @@ function harness(kind, initial) {
     return [slots[index], next => { slots[index] = typeof next === 'function' ? next(slots[index]) : next; }];
   };
   const {load} = frontendModules({...stubs, ...paperVisualStubs, '@/v5/usePaperClock':{usePaperClock:() => owner.read_at_ms}, react:{...React,useState,useRef:initial => useState(() => ({current:initial}))[0],useEffect() {}}, '@tanstack/react-query':{...ReactQuery,useQueryClient:() => client,useQuery:options => {
-    if (options.queryKey[0] === 'v5-money') return {data:undefined,isError:false};
+    if (options.queryKey[0] === 'v5-money') return {data:money,isError:false};
     if (options.enabled === false) return {isPending:true,isFetching:false,isError:false,refetch() {}};
     if (kind === 'bots' && options.queryKey[0] !== 'v5-paper-bots') return {data:undefined,isPending:false,isFetching:false,isError:true,refetch() {}};
     spec = options;
@@ -131,7 +131,7 @@ test('Bots retains held complete snapshot, as-of and totals during refresh and f
     assert.match(mid,/New acquisitions held/);
     assert.match(mid,/Held by owner/);
     assert.match(mid,/Last coherent owner snapshot.*As of/);
-    assert.match(mid,/Refreshing: 0\/9 sections/);
+    assert.match(mid,/Refreshing owner snapshot/);
     const riskCaption = html => html.match(/Risk rails &amp; entry latch[^]*?Decisions &amp; paper control/)?.[0];
     assert.ok(riskCaption(full));
     assert.equal(riskCaption(mid),riskCaption(full));
@@ -145,13 +145,40 @@ test('Bots retains held complete snapshot, as-of and totals during refresh and f
   } finally {h.restore();}
 });
 
+test('Bots paints the cached Money sample while owner sections are unresolved', async () => {
+  const at = owner.read_at_ms - 300_000;
+  const money = {range:'7d', now_ms:owner.read_at_ms, rows:[
+    {bot:'v5', at_ms:at - 300_000, unit:'USDC', equity:'123456.12', fees:'20.22'},
+    {bot:'v5', at_ms:at, unit:'USDC', equity:'199093.60', initial_funding:'200000', external_flows:'0',
+      realized:'114.14', unrealized:'-1020.54', fees:null},
+    {bot:'v5', at_ms:at + 300_000, gap:'fixture gap'},
+  ]};
+  const h = harness('bots', undefined, money);
+  try {
+    const html = h.render();
+    assert.match(html, /Wallet equity[^]*?199,093\.60 USDC/);
+    assert.match(html, /Money sample.*As of.*UTC/);
+    assert.match(html, /Fees paid<\/dt><dd>—<\/dd>/, 'no borrowing from an older row for a missing value');
+    assert.doesNotMatch(html, /123,456\.12|20\.22 USDC/);
+    const pending = h.start();
+    await h.deliver(h.requests.shift());
+    while (h.requests.length && !h.render().includes('<h2>Holdings</h2>')) await h.deliver(h.requests.shift());
+    assert.match(h.render(), /<h2>Holdings<\/h2>/, 'holdings render while other sections are pending');
+    assert.match(h.render(), /199,093\.60 USDC/, 'the tiles keep the sampled source until snapshot commit');
+    while (h.requests.length) await h.deliver(h.requests.shift());
+    h.query.data = await pending.promise;
+    h.query.isFetching = false;
+    assert.doesNotMatch(h.render(), /199,093\.60 USDC|Money sample.*As of/);
+  } finally {h.restore();}
+});
+
 test('Bots first load reports pending risk and rails, never absent controls or numeric limits', () => {
   const h = harness('bots');
   try {
     h.query.isFetching = true;
     const html = h.render();
-    assert.match(html,/Checking: 0\/9 sections/);
-    assert.match(html,/Risk.*[Pp]ending/);
+    assert.doesNotMatch(html,/Checking:|<li>.*Pending/);
+    assert.match(html,/Risk rails<\/h2><p[^>]*>Reading owner section/);
     assert.doesNotMatch(html,/Not connected|No owner limit or latch observation|Numeric rail limits are not published|Risk controls not yet connected/);
   } finally {h.restore();}
 });
@@ -180,9 +207,13 @@ for (const kind of ['bots','capital']) test(`${kind} ignores progress from an ab
     await h.deliver(h.requests.shift());
     const currentView = h.render();
     const progress = kind === 'bots' ? currentView : currentView.progress;
-    assert.match(progress,/2\/[49] sections/);
-    if (kind === 'bots') assert.doesNotMatch(currentView,/Not connected|No owner limit or latch observation|Numeric rail limits are not published/);
-    else assert.equal(currentView.complete,false);
+    if (kind === 'bots') {
+      assert.match(currentView, /<h2>Paper fleet<\/h2>/, 'the current cycle has delivered wallet data');
+      assert.doesNotMatch(currentView,/Not connected|No owner limit or latch observation|Numeric rail limits are not published/);
+    } else {
+      assert.match(progress,/2\/4 sections/);
+      assert.equal(currentView.complete,false);
+    }
     await h.deliver(oldRequest);
     const after = h.render();
     assert.equal(kind === 'bots' ? after : after.progress,progress);

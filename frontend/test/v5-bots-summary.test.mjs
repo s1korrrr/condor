@@ -311,7 +311,7 @@ test('Bots uses the Money view reader and shared 7d cache key and withholds fail
   let failed = false;
   const { load } = frontendModules({ ...overrides,
     '@/v5/usePaperClock': { usePaperClock: () => now },
-    '@/v5/usePaperSnapshot': { usePaperSnapshot: () => ({ complete: true, data: Object.values(fixture), refetch() {} }) },
+    '@/v5/usePaperSnapshot': { usePaperSnapshot: () => ({ complete: true, data: Object.values(fixture), journalReads: [], refetch() {} }) },
     '@tanstack/react-query': { ...ReactQuery, useQuery: options => { queries.push(options); return { data: money, isError: failed }; } },
   });
   const { V5PaperBots } = load('pages/tabs/ActiveBotsTab.tsx');

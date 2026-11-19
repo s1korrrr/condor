@@ -469,24 +469,34 @@ test('executor details format owner amounts and preserve exact titles', () => {
   window.close();
 });
 
-test('phone System puts all six touch tabs and their selected state in the shared row', () => {
-  const tabs = ['checks', 'data-feeds', 'engine-inputs', 'readiness', 'settings', 'operations'];
+test('phone System keeps all five touch tabs, selected state and paused/readiness/settings routes', () => {
+  const { V5System } = frontendModules({
+    react: { ...React, lazy: () => () => React.createElement('p', null, 'Owner service history and checks') },
+    '@tanstack/react-query': { useQuery: () => ({ data: { readiness: { paper_owner: { bot_name: 'paper' } } } }) },
+    './usePaperObservation': { usePaperWorkspace: () => ({ data: null, pending: false, error: null }) },
+    './V5Pages': { PaperReadinessPage: () => React.createElement('p', null, 'Readiness'), SettingsPage: () => React.createElement('p', null, 'Settings') },
+    './V5Market': { V5SystemMarket: ({ tab }) => React.createElement('p', null, tab) },
+  }).load('v5/V5System.tsx');
+  const tabs = ['checks', 'data-feeds', 'engine-inputs', 'readiness', 'settings'];
+  const window = new Window();
   for (const tab of tabs) {
-    const document = shell(`/system/${tab}`);
-    const nav = document.querySelector('[aria-label="System pages"]');
-    assert.equal(nav.nextElementSibling, document.querySelector('main'));
+    window.document.body.innerHTML = renderToStaticMarkup(React.createElement(MemoryRouter, null, React.createElement(V5System, { initialTab: tab })));
+    const system = window.document.querySelector('.v5-system');
+    assert.ok(system);
+    assert.equal(system.querySelector('h1').textContent, 'System');
+    const nav = system.querySelector('[aria-label="System tabs"]');
     assert.deepEqual([...nav.querySelectorAll('a')].map(link => link.getAttribute('href')), tabs.map(item => `/system/${item}`));
     assert.equal(nav.querySelectorAll('[aria-current="page"]').length, 1);
     assert.equal(nav.querySelector('[aria-current="page"]').getAttribute('href'), `/system/${tab}`);
-  }
-  for (const [alias, selected] of [['/system','checks'], ['/operations','checks'], ['/v5/readiness','readiness'], ['/settings','settings']]) {
-    assert.equal(shell(alias).querySelector('[aria-label="System pages"] [aria-current="page"]').getAttribute('href'), `/system/${selected}`);
+    assert.equal(system.querySelector('button').textContent, 'Pause');
+    assert.match(system.textContent, /Updates every 15 s/);
   }
   assert.match(css, /\.v5-system\s*\{[^}]*min-width:\s*0;[^}]*overflow-wrap:\s*anywhere/);
   assert.match(css, /\.v5-system :is\([^}]*font-size:\s*12px !important/);
   assert.match(css, /body:has\(\.condor-native \.v5-system\) \.q-heat-tip :is\([^}]*font-size:\s*12px !important/);
   assert.match(css, /\.v5-shell-subnav\s*\{[^}]*flex-wrap:\s*nowrap;[^}]*overflow-x:\s*auto/);
   assert.match(css, /:is\(a, button,[^}]*min-width:\s*44px; min-height:\s*44px/s);
+  window.close();
 });
 
 test('phone System data feeds retain lane health and precision without hover-only facts', () => {

@@ -82,7 +82,8 @@ export function hourlyReturns(read: CandleRead | null | undefined): { from: numb
   return result;
 }
 
-export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot: string | null | undefined, last: number | null, quote: string, now: number): { text: string; exact?: string; title?: string; reason: string | null; warning?: 'bag-mismatch'; asOf: number | null } {
+export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot: string | null | undefined, last: number | null, quote: string, now: number, pending?: boolean): { text: string; exact?: string; title?: string; reason: string | null; state?: 'loading'; warning?: 'bag-mismatch'; asOf: number | null } {
+  if (bot && pending) return { text: 'V5 holds —', reason: 'Loading holdings…', state: 'loading', asOf: null };
   const unavailable = (reason: string) => ({ text: 'V5 holds —', reason, asOf: null });
   if (!bot || !reads || reads.length !== 3 || !['status', 'positions', 'decisions'].every(section => reads.some(read => read.section === section)) ||
       reads.some(read => read.bot_id !== bot || paperSectionError(read) || read.section !== 'status' && !paperCompleteRead(read, now)) || !paperSnapshotsAgree(reads)) return unavailable('The latest paper reports do not give a complete view of holdings.');

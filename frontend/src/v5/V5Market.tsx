@@ -91,7 +91,7 @@ export function V5Market() {
   const tiles = MARKET_COINS.map(coin => coinTile(coin, reads[coin]?.spot, reads[coin]?.perpetual));
   const current = Object.fromEntries(MARKET_COINS.map(coin => [coin, candleCurrent(reads[coin]?.spot, reads[coin]?.receivedAt ?? 0, now)]));
   const changes = Object.fromEntries(MARKET_COINS.map(coin => [coin, current[coin] ? windowChange(reads[coin]?.spot) : null]));
-  const holdings = Object.fromEntries(MARKET_COINS.map((coin, index) => [coin, marketHolding(coin, paper.isSuccess ? paper.data : undefined, bot, current[coin] ? tiles[index]?.last ?? null : null, REFERENCE.quote, now)]));
+  const holdings = Object.fromEntries(MARKET_COINS.map((coin, index) => [coin, marketHolding(coin, paper.isSuccess ? paper.data : undefined, bot, current[coin] ? tiles[index]?.last ?? null : null, REFERENCE.quote, now, paper.isPending)]));
   const age = (coin: string, minuteT: number) => reads[coin]?.spot ? ageSeconds(minuteT, reads[coin].spot!, reads[coin].receivedAt, now) : null;
   const returns: Record<string, ReturnType<typeof indexedReturns>> = Object.fromEntries(MARKET_COINS.map(coin => [coin, indexedReturns(reads[coin]?.spot)]));
   const width = breadth(tiles.map(tile => tile && ({ ...tile, changePct: changes[tile.coin] == null ? null : Number(changes[tile.coin]), change1hPct: current[tile.coin] ? tile.change1hPct : null })));
@@ -108,6 +108,7 @@ export function V5Market() {
   const refresh = workspace.data?.source_refresh;
   const feedCurrent = workspace.isSuccess && refresh?.feed_freshness === "FRESH" && refresh.feed_fresh_until_ms != null && now <= refresh.feed_fresh_until_ms;
   const failed = MARKET_COINS.filter(coin => reads[coin]?.error);
+  const candleFailureReason = coins.isError ? coins.error.message : failed.map(coin => `${coin}: ${reads[coin].error}`).join("; ");
   const measured = width.measured > 0;
   const candlesUnavailable = coins.isError || failed.length === MARKET_COINS.length;
   const candlesReady = !coins.isPending && !candlesUnavailable;
@@ -125,10 +126,10 @@ export function V5Market() {
       </div>
     </header>
     {coins.isPending ? <ReadNotice kind="loading" title={`Loading ${range} prices…`} />
-      : candlesUnavailable ? <ReadNotice kind="unavailable" title="Prices unavailable" reason="The candle store did not return prices. Try reading them again." onRetry={retryCandles} />
+      : candlesUnavailable ? <ReadNotice kind="unavailable" title="Prices unavailable" reason={`The candle store did not return prices. Try reading them again.${candleFailureReason ? ` ${candleFailureReason}` : ""}`} onRetry={retryCandles} />
       : !measured ? <ReadNotice kind="empty" title={marketSentence(changes, range)} reason="A change needs a price at the start of the period and a recent price at the end." onRetry={retryCandles} />
       : <p className="v5m-summary" title={ownerTitleText(marketAverageTitle(changes))}>{marketSentence(changes, range)}</p>}
-    {failed.length > 0 && !candlesUnavailable && <ReadNotice kind="unavailable" title="Some prices could not be loaded" reason={`The candle store did not return prices for ${failed.join(", ")}.`} onRetry={retryCandles} />}
+    {failed.length > 0 && !candlesUnavailable && <ReadNotice kind="unavailable" title="Some prices could not be loaded" reason={`The candle store did not return prices for ${failed.join(", ")}. ${candleFailureReason}`} onRetry={retryCandles} />}
 
     <TileGrid label="Coins" min={200}>{tiles.map((tile, index) => tile ? <article key={tile.coin} className={`v5m-card v5m-coin is-clickable${selected === tile.coin ? " is-selected" : ""}`} role="button" tabIndex={0} aria-pressed={selected === tile.coin} aria-label={`${tile.coin}: open statistics, candles and venue detail`} onClick={() => select(tile.coin)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(tile.coin); } }}>
       <div className="v5m-coin-top"><span className="v5m-sym"><i style={{ background: COIN_COLOR[tile.coin] }} />{tile.coin}</span><span className="v5m-change" title={changes[tile.coin] == null ? undefined : `result ${ownerTitleText(changes[tile.coin])}%; first close ${ownerTitleText(reads[tile.coin]?.spot?.buckets[0]?.[4])}; last close ${ownerTitleText(reads[tile.coin]?.spot?.buckets.at(-1)?.[4])}`}>{range} {changes[tile.coin] == null ? "—" : pct(changes[tile.coin])}</span></div>
@@ -137,7 +138,11 @@ export function V5Market() {
       <SparkChart points={tile.spark} color={COIN_COLOR[tile.coin]} height={44} format={price} unit={REFERENCE.quote} ariaLabel={`${tile.coin} recorded prices, ${range}, breaks where minutes are missing`} />
       <HoldingLine holding={holdings[tile.coin]} error={paper.isError ? paper.error.message : null} now={now} />
       <dl className="v5m-kv"><dt>Perpetual premium</dt><dd title={ownerTitleText(!reads[tile.coin]?.perpetualError && tile.premiumBps != null && tile.premiumTime != null && age(tile.coin, tile.premiumTime) != null && age(tile.coin, tile.premiumTime)! <= STALE_AFTER_S ? `result ${ownerTitleText(tile.premiumBps)} bp; ${tile.premiumInputs}` : undefined)}>{reads[tile.coin]?.perpetualError ? "— perpetual read failed" : tile.premiumBps == null || tile.premiumTime == null ? "— no paired closes" : (() => { const seconds = age(tile.coin, tile.premiumTime); return seconds == null || seconds > STALE_AFTER_S ? "— paired close not current" : `${signed(tile.premiumBps, 1)} bp · ${minuteText(tile.premiumTime + 60)} · ${ageText(seconds)}`; })()}</dd></dl>
-    </article> : <article key={MARKET_COINS[index]} className="v5m-card v5m-coin is-empty"><span className="v5m-sym">{MARKET_COINS[index]}</span><strong className="v5m-price">—</strong><p>{coins.isPending ? "Loading price…" : candlesUnavailable || reads[MARKET_COINS[index]]?.error ? "Price unavailable." : `No recorded prices in the selected ${range}.`}</p><HoldingLine holding={holdings[MARKET_COINS[index]]} error={paper.isError ? paper.error.message : null} now={now} /></article>)}</TileGrid>
+    </article> : <article key={MARKET_COINS[index]} className="v5m-card v5m-coin is-empty"><span className="v5m-sym">{MARKET_COINS[index]}</span><strong className="v5m-price">—</strong>
+      <p>{coins.isPending ? "Loading price…" : candlesUnavailable || reads[MARKET_COINS[index]]?.error ? "Price unavailable." : `No recorded prices in the selected ${range}.`}</p>
+      {reads[MARKET_COINS[index]]?.error && <small className="v5m-asof">{reads[MARKET_COINS[index]].error}</small>}
+      <HoldingLine holding={holdings[MARKET_COINS[index]]} error={paper.isError ? paper.error.message : null} now={now} />
+    </article>)}</TileGrid>
     {selected ? <V5MarketDetail key={selected} coin={selected} color={COIN_COLOR[selected]} onClose={() => setSelected(null)} tileRead={range === "24h" && coins.isSuccess && reads[selected]?.spot ? reads[selected] as unknown as DetailRead : null} /> : tiles.some(Boolean) && <p className="v5m-hint v5m-tip">Choose a coin for its prices, coverage and price gaps across venues.</p>}
 
     {candlesReady && <>
@@ -192,7 +197,7 @@ export function V5Market() {
 function HoldingLine({ holding, error, now }: { holding: ReturnType<typeof marketHolding>; error: string | null; now: number }) {
   return <><p className="v5m-holding" title={holding.title}>{holding.text}</p>
     {holding.warning === 'bag-mismatch' && <span className="v5m-chip is-warn" data-warning={holding.warning}><i />Strategy and position amounts differ</span>}
-    <small className="v5m-asof">{error ?? holding.reason}{holding.asOf != null && <> · Paper {utcMin(holding.asOf)} · {ageText((now - holding.asOf) / 1000)}</>}</small></>;
+    <small className="v5m-asof" data-read-state={holding.state}>{error ?? holding.reason}{holding.asOf != null && <> · Paper {utcMin(holding.asOf)} · {ageText((now - holding.asOf) / 1000)}</>}</small></>;
 }
 
 function HourStrip({ reads }: { reads: Record<string, CoinRead> }) {

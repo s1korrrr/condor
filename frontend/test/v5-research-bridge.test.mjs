@@ -64,6 +64,8 @@ test('Research V5 renders 503 with a reason and Retry, and offers only wired vie
     const { Research } = load('pages/Research.tsx');
     const html = renderToStaticMarkup(React.createElement(Research, {v5Paper: true}));
     assert.match(html, /<strong>Unavailable<\/strong>/);
+    assert.match(html, /Research connection unavailable/);
+    assert.doesNotMatch(html, /lab-overview-columns/);
     assert.ok(html.includes(reason));
     assert.match(html, /data-read-state="unavailable"[^]*Retry records/);
     assert.doesNotMatch(html, /Loading research records|Next evidence checks|>Ideas<\/button>|>Archive<\/button>/);

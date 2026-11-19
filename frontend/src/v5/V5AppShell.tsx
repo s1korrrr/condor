@@ -7,7 +7,6 @@ import { paperWorkspaceLabel } from "./policy";
 import { useTheme } from "@/hooks/useTheme";
 import { useAuth } from "@/lib/auth";
 import { usePaperClock } from "./usePaperClock";
-import { SYSTEM_ALIASES, SYSTEM_TABS } from "./system-routes";
 import "./phone.css";
 
 /**
@@ -20,20 +19,19 @@ const nav: NavGroup[] = [
   { to: "/", label: "Overview", icon: Wallet, pages: [["/", "Overview"], ["/capital", "Capital"]] },
   { to: "/bots", label: "Bots", icon: Bot, pages: [["/bots", "V5"], ["/helm", "Helm"]] },
   { to: "/market", label: "Market", icon: ScanSearch, pages: [["/market", "Market"], ["/market/stocks", "OKX stocks"]] },
-  { to: "/system/checks", label: "System", icon: Activity, pages: SYSTEM_TABS.map(([tab, label]) => [`/system/${tab}`, label]) },
+  { to: "/system/checks", label: "System", icon: Activity, pages: [["/system", "System"]] },
   { to: "/research", label: "Research", icon: Network, pages: [["/research", "Research"], ["/backtests", "Tradepad"], ["/learning", "Learning"], ["/research-factory", "Research factory"], ["/decision-lineage", "Decision history"], ["/agents", "Agents"], ["/sessions", "Sessions"]] },
 ];
 
 /** The group a path belongs to: its own page, or a sub-page (e.g. /agents/x under Research). */
 function groupOf(pathname: string): NavGroup | null {
-  pathname = SYSTEM_ALIASES.get(pathname) ?? pathname;
+  if (["/operations", "/v5/readiness", "/settings"].includes(pathname)) return nav.find(group => group.label === "System") ?? null;
   return nav.find(group => group.pages.some(([to]) => to === "/" ? pathname === "/" : pathname === to || pathname.startsWith(`${to}/`))) ?? null;
 }
 
 export function V5AppShell({ children }: { children: React.ReactNode }) {
   const { pathname } = useLocation();
   const navRef = useRef<HTMLElement>(null);
-  const subNavRef = useRef<HTMLElement>(null);
   const [navOpen, setNavOpen] = useState(false);
   const query = useQueryClient();
   const { theme, toggleTheme } = useTheme();
@@ -41,18 +39,15 @@ export function V5AppShell({ children }: { children: React.ReactNode }) {
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, refetchInterval: 15_000 });
   const paperLabel = paperWorkspaceLabel(profile.data);
   const group = groupOf(pathname);
-  const subPath = SYSTEM_ALIASES.get(pathname) ?? pathname;
   const safety = <><ShieldCheck className="h-3.5 w-3.5 text-[var(--color-primary)]" />{pathname === "/market/stocks" ? "OKX stocks · public market observations · execution disabled" : paperLabel ?? "V5 profile · separate Razer service · execution disabled · baseline and account owners unbound"}<NavLink to="/system/readiness" className="underline">Readiness and open gates</NavLink></>;
   // The one most specific sub-page that matches (exact, else the longest prefix): /market/stocks marks only OKX stocks,
   // /market/BTC marks Market, /agents/x marks Agents; "/" matches only exactly.
-  const subActive = group?.pages.map(([to]) => to).filter(to => subPath === to || (to !== "/" && subPath.startsWith(`${to}/`))).sort((x, y) => y.length - x.length)[0] ?? null;
+  const subActive = group?.pages.map(([to]) => to).filter(to => pathname === to || (to !== "/" && pathname.startsWith(`${to}/`))).sort((x, y) => y.length - x.length)[0] ?? null;
   const heading = group?.pages.find(([to]) => to === pathname)?.[1] ?? (group?.label === "System" ? "System" : pathname.startsWith("/agents/") ? "Agent workspace" : pathname.startsWith("/sessions/") ? "Session record" : pathname === "/market/stocks" ? "Stocks" : "RSI V5");
   useEffect(() => {
     setNavOpen(false);
-    for (const nav of [navRef.current, subNavRef.current]) {
-      const active = nav?.querySelector<HTMLElement>('[aria-current="page"]');
-      if (active?.offsetParent) active.scrollIntoView({ block: "nearest", inline: "nearest" });
-    }
+    const el = navRef.current?.querySelector<HTMLElement>('[aria-current="page"]');
+    if (el?.offsetParent) el.scrollIntoView({ block: "nearest", inline: "nearest" });
   }, [pathname]);
   return <div className="condor-shell condor-native flex h-dvh flex-col">
     <header className="condor-topbar v5-shell-header">
@@ -69,7 +64,7 @@ export function V5AppShell({ children }: { children: React.ReactNode }) {
     </header>
     <div id="v5-shell-status-slot" />
     <div role="status" className="v5-shell-safety flex flex-wrap items-center gap-2 border-b border-[var(--color-border)] px-4 py-2 text-xs text-[var(--color-text-muted)]">{safety}</div>
-    {group && group.pages.length > 1 && <nav ref={subNavRef} aria-label={`${group.label} pages`} className="v5-shell-subnav flex flex-wrap gap-1 border-b border-[var(--color-border)] px-4 py-1.5 text-sm">{group.pages.map(([to, label]) => { const isActive = to === subActive; return <Link key={to} to={to} aria-current={isActive ? "page" : undefined} className={`rounded-md px-2.5 py-1 ${isActive ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)]" : "text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"}`}>{label}</Link>; })}</nav>}
+    {group && group.pages.length > 1 && <nav aria-label={`${group.label} pages`} className="v5-shell-subnav flex flex-wrap gap-1 border-b border-[var(--color-border)] px-4 py-1.5 text-sm">{group.pages.map(([to, label]) => { const isActive = to === subActive; return <Link key={to} to={to} aria-current={isActive ? "page" : undefined} className={`rounded-md px-2.5 py-1 ${isActive ? "bg-[var(--color-primary)]/15 text-[var(--color-primary)]" : "text-[var(--color-text-muted)] hover:bg-[var(--color-surface-hover)] hover:text-[var(--color-text)]"}`}>{label}</Link>; })}</nav>}
     <main className="v5-shell-main relative flex-1 overflow-auto p-3 sm:p-6"><div className="mx-auto w-full max-w-[1600px]">
       {group?.label === "System" && <nav aria-label="System tools" className="v5-phone-tools hidden"><Link to="/system/settings">Settings</Link><button onClick={toggleTheme}>Theme: {theme}</button><button onClick={() => { void query.invalidateQueries({ queryKey: ["v5-workspace"] }); void query.invalidateQueries({ queryKey: ["v5-sessions"] }); }}>Refresh workspace</button><button onClick={logout}>Sign out</button></nav>}
       {children}</div></main>

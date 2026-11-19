@@ -98,6 +98,16 @@ test('holds uses complete same-bot snapshots and exact 30-place totals; gap uses
   assert.equal(marketHolding('BTC', reads, reads[0].bot_id, 90.8, 'USDT', now + 120001).text, 'V5 holds —');
 });
 
+test('holds distinguishes a pending first read from a completed incomplete report', () => {
+  const reads = paper(), now = reads[0].generated_at_ms, bot = reads[0].bot_id;
+  reads[1].completeness = 'partial';
+  assert.equal(marketHolding('BTC', reads, bot, 90.8, 'USDT', now, false).reason, 'The latest paper reports do not give a complete view of holdings.');
+  const pending = marketHolding('BTC', undefined, bot, 90.8, 'USDT', now, true);
+  assert.equal(pending.reason, 'Loading holdings…');
+  assert.equal(pending.state, 'loading');
+  assert.notEqual(marketHolding('BTC', undefined, null, 90.8, 'USDT', now, true).state, 'loading');
+});
+
 test('holds never equates quote currencies, infers missing breakeven, or hides stale prices', () => {
   const reads = paper('USDC'), now = reads[0].generated_at_ms;
   const mismatch = marketHolding('BTC', reads, reads[0].bot_id, 90.8, 'USDT', now);
@@ -176,13 +186,13 @@ test('Market reads refuse foreign bots, malformed sections and non-JSON failures
   } finally { globalThis.fetch = original; }
 });
 
-function renderMarket({ expired = false, failed = false, pending = false, allLanesFailed = false, bagMismatch = false, range = '24h', summaryData = { tiles: [] }, crossData = [] } = {}) {
+function renderMarket({ expired = false, failed = false, pending = false, paperPending = false, coinErrors = {}, allLanesFailed = false, bagMismatch = false, range = '24h', summaryData = { tiles: [] }, crossData = [] } = {}) {
   const spot = dense(180), reads = paper(), now = (spot.now + (expired ? 181 : 0)) * 1000;
   for (const read of reads) read.generated_at_ms = now;
   if (bagMismatch) reads[2].data.controllers[0].custom_info.bag.held_amount = '1';
   const coinReads = Object.fromEntries(coins.map(coin => [coin, {
-    spot: allLanesFailed ? null : spot, perpetual: null,
-    error: allLanesFailed ? 'Spot lane unavailable' : null,
+    spot: allLanesFailed || coinErrors[coin] ? null : spot, perpetual: null,
+    error: allLanesFailed ? 'Spot lane unavailable' : coinErrors[coin] ?? null,
     perpetualError: allLanesFailed ? 'Perpetual lane unavailable' : null,
     receivedAt: spot.now * 1000,
   }]));
@@ -195,8 +205,8 @@ function renderMarket({ expired = false, failed = false, pending = false, allLan
       const key = options.queryKey.join('/');
       const data = key === 'v5-profile' ? { readiness: { paper_owner: { bot_name: reads[0].bot_id } } } : key === 'v5-workspace' ? {} : key.includes('/coins/') ? coinReads : key.includes('/paper/') ? reads : key.endsWith('/summary') ? summaryData : crossData;
       const isError = failed && (key.includes('/coins/') || key.includes('/paper/'));
-      const isPending = pending && key.includes('/coins/');
-      return { data, isSuccess: !isError && !isPending, isPending, isError, error: isError ? new Error('Read failed') : null, dataUpdatedAt: spot.now * 1000 };
+      const isPending = (pending && key.includes('/coins/')) || (paperPending && key.includes('/paper/'));
+      return { data: isPending ? undefined : data, isSuccess: !isError && !isPending, isPending, isError, error: isError ? new Error(key.includes('/coins/') ? 'Candle owner returned HTTP 503' : 'Read failed') : null, dataUpdatedAt: spot.now * 1000 };
     } },
     './api': { v5Api: {} },
     './usePaperClock': { usePaperClock: () => now },
@@ -234,6 +244,22 @@ test('Market loading copy differs from a completed read without usable prices', 
   assert.match(empty, /data-read-state="empty"[^]*No price changes available for the last 24 hours/);
   assert.match(empty, /No prices to compare/);
   assert.doesNotMatch(empty, /Loading 24h prices|of 0 up/);
+});
+
+test('all five Market cards show holdings loading while the first paper read is pending', () => {
+  const { html } = renderMarket({ paperPending: true, coinErrors: { BTC: 'Spot read timed out' } });
+  assert.equal(html.match(/data-read-state="loading">Loading holdings…/g)?.length, 5);
+  assert.doesNotMatch(html, /The latest paper reports do not give a complete view of holdings/);
+});
+
+test('Market preserves the candle owner reason for a whole-read failure', () => {
+  assert.match(renderMarket({ failed: true }).html, /<strong>Prices unavailable<\/strong><p[^>]*>[^<]*Candle owner returned HTTP 503<\/p>/);
+});
+
+test('Market preserves the candle owner reason in the partial notice and failed coin card', () => {
+  const { html } = renderMarket({ coinErrors: { BTC: 'Spot read timed out' } });
+  assert.match(html, /<strong>Some prices could not be loaded<\/strong><p[^>]*>[^<]*BTC: Spot read timed out/);
+  assert.match(html, /<article[^>]*is-empty[^>]*>[^]*?>BTC<\/span>[^]*?Price unavailable\.<\/p><small[^>]*>Spot read timed out<\/small>/);
 });
 
 for (const [state, options, candleNotice] of [

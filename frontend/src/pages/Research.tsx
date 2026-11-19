@@ -11,7 +11,7 @@ import {
   catalogCount,
   researchReadState,
 } from "@/features/research/model";
-import { readResearch } from "@/features/research/read";
+import { readResearch, ResearchHttpError } from "@/features/research/read";
 import {
   LAB_VIEWS,
   labTimestamp,
@@ -267,7 +267,7 @@ function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) 
         >
           {available
             ? `Index ${displayedFreshnessState}${freshness.state === "CURRENT" && verifiedEventScan ? " · verified as of scan" : ""}`
-            : `Research connection ${overviewState}`}
+            : `Research connection ${overviewState === "error" && overview.error instanceof ResearchHttpError && overview.error.status === 503 ? "unavailable" : overviewState}`}
         </span>
         {available && <span>Last index sync · {labTimestamp(freshness.last_sync)}</span>}
         {available && v5Paper && <span>{researchOwnerFreshness(data, now)}</span>}
@@ -321,7 +321,7 @@ function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) 
                 <ResearchConclusions server={server} now={now} revision={revision} kind="assessment" onSelect={select} />
                 <ResearchConclusions server={server} now={now} revision={revision} kind="run" onSelect={select} />
               </div>}
-              <div className="lab-overview-columns">{!v5Paper && <LabQueue server={server} now={now} preview onSelect={select} />}{available && <LabLimitations data={data} />}</div>
+              {(!v5Paper || available) && <div className="lab-overview-columns">{!v5Paper && <LabQueue server={server} now={now} preview onSelect={select} />}{available && <LabLimitations data={data} />}</div>}
               {available && <details className="quant-panel"><summary>Catalog coverage</summary><LabCounts data={data} onView={v5Paper ? undefined : navigate} /></details>}
             </>
           ) : networkVisible ? (!available ? null : (

@@ -1,21 +1,14 @@
-import { createContext, lazy, Suspense, useContext, useState, type ComponentProps, type ComponentType } from 'react';
+import { createContext, lazy, Suspense, useContext, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { useParams } from 'react-router-dom';
-import { ReadNotice } from '@/components/ReadNotice';
+import { Link, Navigate, useParams } from 'react-router-dom';
 import { v5Api } from './api';
 import { usePaperWorkspace } from './usePaperObservation';
 import { PaperReadinessPage, SettingsPage } from './V5Pages';
 import { V5SystemMarket } from './V5Market';
-import { V5NotFound } from './V5NotFound';
-import { SYSTEM_TABS } from './system-routes';
 
-type WorkspaceMonitoring = typeof import('@workspace-monitoring');
-type OverviewProps = ComponentProps<WorkspaceMonitoring['SystemOverview']> & { connected?: boolean };
-type OperationsProps = ComponentProps<WorkspaceMonitoring['Operations']> & { incidentsOnly?: boolean };
-
-// Older workspace components accept the base props and ignore these optional presentation flags.
-const Overview = lazy<ComponentType<OverviewProps>>(() => import('@workspace-monitoring').then(module => ({ default: module.SystemOverview })));
-const Operations = lazy<ComponentType<OperationsProps>>(() => import('@workspace-monitoring').then(module => ({ default: module.Operations })));
+const Overview = lazy(() => import('@workspace-monitoring').then(module => ({ default: module.SystemOverview })));
+const Operations = lazy(() => import('@workspace-monitoring').then(module => ({ default: module.Operations })));
+const tabs = [['checks', 'Checks'], ['data-feeds', 'Data feeds'], ['engine-inputs', 'Engine inputs'], ['readiness', 'Readiness'], ['settings', 'Settings']] as const;
 const PauseContext = createContext<{pausedAt: number | null; setPausedAt: (value: number | null) => void} | null>(null);
 
 export function SystemPauseProvider({ children }: { children: React.ReactNode }) {
@@ -30,14 +23,14 @@ export function V5System({ initialTab = 'checks' }: { initialTab?: string } = {}
   const {pausedAt, setPausedAt} = pause;
   const paused = pausedAt !== null;
   const profile = useQuery({ queryKey: ['v5-profile'], queryFn: v5Api.profile });
-  const bot = profile.data?.readiness.paper_owner?.bot_name;
-  const read = usePaperWorkspace('operations', bot, paused ? false : 15_000);
-  const serviceRead = bot ? read : {...read, refresh: () => void profile.refetch()};
-  if (!SYSTEM_TABS.some(([id]) => id === tab)) return <V5NotFound />;
+  const read = usePaperWorkspace('operations', profile.data?.readiness.paper_owner?.bot_name, paused ? false : 15_000);
+  const operationsRead = profile.data?.readiness.paper_owner?.bot_name ? read : {...read, pending: false, error: 'Paper owner is not bound.'};
+  if (!tabs.some(([id]) => id === tab)) return <Navigate to="/system/checks" replace />;
   return <section className="v5-system"><h1 className="text-2xl font-semibold">System</h1>
+    <Suspense fallback={<p role="status">Reading service history…</p>}><Overview paperRead={operationsRead} /></Suspense>
     <div className="flex flex-wrap items-center gap-3"><span>{paused ? `Paused at ${new Date(pausedAt).toISOString().slice(11, 19)} UTC` : 'Updates every 15 s'}</span><button type="button" className="v5-button" onClick={() => setPausedAt(paused ? null : Date.now())}>{paused ? 'Resume' : 'Pause'}</button></div>
-    <Suspense fallback={<ReadNotice kind="loading" title="Loading service history…" />}><Overview paperRead={serviceRead} connected={Boolean(bot)} /></Suspense>
-    {(tab === 'checks' || tab === 'operations') && bot && read.data != null && <Suspense fallback={<ReadNotice kind="loading" title="Loading service details…" />}><Operations presentation="paper" paperRead={read} system incidentsOnly={tab === 'operations'} /></Suspense>}
+    <nav aria-label="System tabs" className="v5-shell-subnav flex flex-wrap gap-1 py-3">{tabs.map(([id, label]) => <Link key={id} to={`/system/${id}`} aria-current={tab === id ? 'page' : undefined} className={`rounded-md px-2.5 py-1 ${tab === id ? 'bg-[var(--color-primary)]/15 text-[var(--color-primary)]' : 'text-[var(--color-text-muted)]'}`}>{label}</Link>)}</nav>
+    {tab === 'checks' && <Suspense fallback={<p role="status">Loading checks…</p>}><Operations presentation="paper" paperRead={operationsRead} system /></Suspense>}
     {(tab === 'data-feeds' || tab === 'engine-inputs') && <V5SystemMarket tab={tab} paused={paused} />}
     {tab === 'readiness' && <PaperReadinessPage paused={paused} />}
     {tab === 'settings' && <SettingsPage paused={paused} />}

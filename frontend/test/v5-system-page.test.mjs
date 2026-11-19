@@ -110,38 +110,34 @@ test('engine inputs retain owner decimal strings and explain unqualified values'
 test('System tabs route correctly and pause changes only the page interval', async () => {
   const intervals = [];
   const mocks = {
-    '@tanstack/react-query': {useQuery: () => ({data:{readiness:{paper_owner:{bot_name:'paper'}}}}), useQueryClient: () => ({})},
-    './usePaperObservation': {usePaperWorkspace: (_page, _bot, interval) => {intervals.push(interval); return {data:{fixture:true},error:null,pending:false,refresh(){}};}},
-    '@/hooks/useTheme': {useTheme: () => ({theme:'dark', toggleTheme(){}})},
-    '@/lib/auth': {useAuth: () => ({logout(){}})},
+    '@tanstack/react-query': {useQuery: () => ({data:{readiness:{paper_owner:{bot_name:'paper'}}}})},
+    './usePaperObservation': {usePaperWorkspace: (_page, _bot, interval) => {intervals.push(interval); return {data:null,error:null,pending:false,refresh(){}};}},
     './V5Pages': {PaperReadinessPage: () => React.createElement('p',null,'READINESS CONTENT'), SettingsPage: () => React.createElement('p',null,'SETTINGS CONTENT')},
     './V5Market': {V5SystemMarket: ({tab}) => React.createElement('p',null,`${tab} CONTENT`)},
-    '@workspace-monitoring': {SystemOverview: () => React.createElement('p',null,'SUMMARY'), Operations: ({incidentsOnly}) => React.createElement('p',null,incidentsOnly ? 'OPERATIONS CONTENT' : 'CHECKS CONTENT')},
+    '@workspace-monitoring': {SystemOverview: () => React.createElement('p',null,'SUMMARY'), Operations: () => React.createElement('p',null,'CHECKS CONTENT')},
   };
   const {load} = frontendModules(mocks);
   const {V5System, SystemPauseProvider} = load('v5/V5System.tsx');
-  const {V5AppShell} = load('v5/V5AppShell.tsx');
-  const systemRoute = props => React.createElement(V5AppShell, null, React.createElement(V5System, props));
-  for (const [tab,content] of [['checks','CHECKS CONTENT'],['data-feeds','data-feeds CONTENT'],['engine-inputs','engine-inputs CONTENT'],['readiness','READINESS CONTENT'],['settings','SETTINGS CONTENT'],['operations','OPERATIONS CONTENT']]) {
+  for (const [tab,content] of [['checks','CHECKS CONTENT'],['data-feeds','data-feeds CONTENT'],['engine-inputs','engine-inputs CONTENT'],['readiness','READINESS CONTENT'],['settings','SETTINGS CONTENT']]) {
     const node = document.createElement('div'); document.body.append(node);
     const root = createRoot(node);
-    await React.act(async () => {root.render(React.createElement(Router.MemoryRouter,{initialEntries:[`/system/${tab}`]},React.createElement(Router.Routes,null,React.createElement(Router.Route,{path:'/system/:tab',element:systemRoute()}))));});
+    await React.act(async () => {root.render(React.createElement(Router.MemoryRouter,{initialEntries:[`/system/${tab}`]},React.createElement(Router.Routes,null,React.createElement(Router.Route,{path:'/system/:tab',element:React.createElement(V5System)}))));});
     assert.match(node.textContent, new RegExp(content));
-    assert.equal(node.querySelector('[aria-label="System pages"] [aria-current="page"]').getAttribute('href'), `/system/${tab}`);
+    assert.equal(node.querySelector('[aria-current="page"]').getAttribute('href'), `/system/${tab}`);
     assert.match(node.textContent, /Updates every 15 s/);
-    await React.act(async () => node.querySelector('.v5-system button').click());
+    await React.act(async () => node.querySelector('button').click());
     assert.equal(intervals.at(-1), false);
     assert.match(node.textContent, /Paused at \d\d:\d\d:\d\d UTC/);
-    await React.act(async () => node.querySelector('.v5-system button').click());
+    await React.act(async () => node.querySelector('button').click());
     assert.equal(intervals.at(-1), 15_000);
     await React.act(async () => root.unmount()); node.remove();
   }
   const node = document.createElement('div'); document.body.append(node);
   const root = createRoot(node);
   await React.act(async () => {root.render(React.createElement(SystemPauseProvider,null,React.createElement(Router.MemoryRouter,{initialEntries:['/operations']},React.createElement(Router.Routes,null,
-    React.createElement(Router.Route,{path:'/operations',element:systemRoute({initialTab:'checks'})}),
-    React.createElement(Router.Route,{path:'/system/:tab',element:systemRoute()})))));});
-  await React.act(async () => node.querySelector('.v5-system button').click());
+    React.createElement(Router.Route,{path:'/operations',element:React.createElement(V5System,{initialTab:'checks'})}),
+    React.createElement(Router.Route,{path:'/system/:tab',element:React.createElement(V5System)})))));});
+  await React.act(async () => node.querySelector('button').click());
   await React.act(async () => node.querySelector('a[href="/system/data-feeds"]').dispatchEvent(new browser.MouseEvent('click',{bubbles:true,cancelable:true,button:0})));
   assert.match(node.textContent, /Paused at \d\d:\d\d:\d\d UTC/);
   assert.match(node.textContent, /data-feeds CONTENT/);

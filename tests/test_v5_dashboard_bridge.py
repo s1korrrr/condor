@@ -269,6 +269,7 @@ def test_full_dashboard_deep_links_serve_only_known_ui_paths(tmp_path):
         settings=make_settings(tmp_path), upstream=NoNetworkUpstream(), static_dir=dist
     )
     with TestClient(app) as client:
+        html = {"Accept": "text/html,application/xhtml+xml"}
         logo = client.get("/condor_old.jpeg")
         assert logo.status_code == 200 and logo.content == b"test-logo"
         assert logo.headers["content-type"] == "image/jpeg"
@@ -278,9 +279,17 @@ def test_full_dashboard_deep_links_serve_only_known_ui_paths(tmp_path):
             "/bots",
             "/helm",
             "/operations",
+            "/system/checks",
+            "/system",
+            "/system/data-feeds",
+            "/system/engine-inputs",
+            "/system/readiness",
+            "/system/settings",
+            "/system/operations",
             "/research",
             "/backtests",
             "/agents",
+            "/agents/decisions",
             "/agents/market_analyst",
             "/sessions",
             "/sessions/" + "a" * 32,
@@ -288,8 +297,8 @@ def test_full_dashboard_deep_links_serve_only_known_ui_paths(tmp_path):
             "/market/evidence",
             "/v5/readiness",
         ):
-            response = client.get(path)
-            assert response.status_code == 200
+            response = client.get(path, headers=html)
+            assert response.status_code == 200, path
             assert "full V5 dashboard" in response.text
         for path in (
             "/api/v1/servers",
@@ -305,11 +314,10 @@ def test_full_dashboard_deep_links_serve_only_known_ui_paths(tmp_path):
         assert client.get("/market/BTC").status_code == 200 and "full V5 dashboard" in client.get("/market/BTC").text
         # A browser asking for an unknown page gets the app with 404 (it shows "Page not found"), never raw JSON;
         # API and asset paths, and non-HTML clients, keep the JSON 404.
-        html = {"Accept": "text/html,application/xhtml+xml"}
-        for path in ("/nope", "/market/DOGE", "/agents/unknown", "/sessions/wrong"):
+        for path in ("/nope", "/system/unknown", "/market/DOGE", "/agents/unknown", "/sessions/wrong"):
             response = client.get(path, headers=html)
             assert response.status_code == 404 and "full V5 dashboard" in response.text, path
-        for path in ("/api/unknown", "/api/v1/servers", "/assets/missing.js"):
+        for path in ("/api/v5/unknown", "/api/unknown", "/api/v1/servers", "/assets/missing.js"):
             response = client.get(path, headers=html)
             assert response.status_code == 404 and "full V5 dashboard" not in response.text, path
             assert response.headers["content-type"].startswith("application/json"), path

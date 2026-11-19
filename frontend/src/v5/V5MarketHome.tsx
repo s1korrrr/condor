@@ -1,4 +1,5 @@
-import { NavLink, useLocation, useParams } from "react-router-dom";
+import { Link, useLocation, useParams } from "react-router-dom";
+import { ReadNotice } from "@/components/ReadNotice";
 import { MARKET_COINS } from "./market-model.mjs";
 import { V5NotFound } from "./V5NotFound";
 import { useQuery } from "@tanstack/react-query";
@@ -16,11 +17,9 @@ export function V5MarketHome() {
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, retry: false });
   const candleConfigured = profile.data?.candle_store?.configured === true;
   if (coin && !MARKET_COINS.includes(coin)) return <V5NotFound />;
-  if (location.pathname === "/market/stocks") return <section>
-    <nav aria-label="Market views" className="v5m-seg mb-4">{[["/market", "Market"], ["/market/stocks", "OKX stocks"]].map(([to, label]) => <NavLink key={to} end to={to} className={({ isActive }) => `rounded-md px-3 py-1.5 text-sm ${isActive ? "bg-[var(--color-surface-hover)] text-[var(--color-text)]" : "text-[var(--color-text-muted)]"}`}>{label}</NavLink>)}</nav>
-    <V5Stocks configured={candleConfigured} profilePending={profile.isPending} profileError={profile.error} />
-  </section>;
-  if (profile.isPending) return <p role="status">Loading market…</p>;
-  if (!candleConfigured) return <section className="v5-panel"><h1>Market</h1><p>The candle store is not configured for this deployment, so no prices, coverage or market moves can be shown. No values are inferred.</p><p>Venue health and engine inputs are in <NavLink to="/system/data-feeds">System</NavLink>.</p></section>;
-  return <><V5Market /><p className="mt-4 text-sm text-[var(--color-text-muted)]"><NavLink to="/market/stocks" className="underline">OKX stocks capture</NavLink> · separate instruments, kept on their own page.</p></>;
+  if (location.pathname === "/market/stocks") return <V5Stocks configured={candleConfigured} profilePending={profile.isPending} profileError={profile.error} />;
+  if (profile.isPending) return <ReadNotice kind="loading" title="Loading market…" />;
+  if (profile.isError) return <ReadNotice kind="error" title="Market settings could not be loaded" reason={profile.error.message} onRetry={() => void profile.refetch()} />;
+  if (!candleConfigured) return <section className="v5-panel"><h1>Market</h1><ReadNotice kind="unavailable" title="Not connected" reason="This dashboard has no candle store connection, so prices and market changes are unavailable." onRetry={() => void profile.refetch()} /><p>See <Link to="/system/data-feeds">System data feeds</Link> for connection details.</p></section>;
+  return <V5Market />;
 }

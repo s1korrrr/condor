@@ -178,7 +178,7 @@ export function LabCounts({
   onView,
 }: {
   data: RecordData;
-  onView(view: string): void;
+  onView?(view: string): void;
 }) {
   const counts = object(data.counts),
     freshness = object(data.freshness);
@@ -196,7 +196,7 @@ export function LabCounts({
         ["unresolved", "Evidence gaps", "gaps"],
       ].map(([key, label, view]) => (
         <div key={key}>
-          {view ? (
+          {view && onView ? (
             <button className="quant-record-link" onClick={() => onView(view)}>
               {label}
             </button>

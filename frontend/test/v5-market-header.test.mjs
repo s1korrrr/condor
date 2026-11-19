@@ -38,11 +38,11 @@ test('sentence uses the selected range, all down, all up, mixed and unchanged', 
 });
 
 test('sentence names every missing coin and averages only published changes exactly', () => {
-  assert.equal(marketSentence(changes(['0.10', '0.20']), '24h'), 'All 2 published coins are up over 24 hours, on average +0.15%. ETH is strongest at +0.20%. BNB, SOL, XRP: — change not published; excluded from the average.');
+  assert.equal(marketSentence(changes(['0.10', '0.20']), '24h'), 'All 2 published coins are up over 24 hours, on average +0.15%. ETH is strongest at +0.20%. The average excludes BNB, SOL, XRP because their changes are unavailable.');
   assert.match(marketSentence(changes(['-1.00', '-1.01']), '24h'), /on average −1.01%/);
   assert.match(marketSentence(changes(['1.00', '1.01']), '24h'), /on average \+1.01%/);
   assert.match(marketSentence(changes(['1.00']), '24h'), /^BTC is up over 24 hours/);
-  assert.match(marketSentence(changes([]), '24h'), /No current changes published over 24 hours/);
+  assert.match(marketSentence(changes([]), '24h'), /No price changes available for the last 24 hours/);
 });
 
 test('sentence uses the shared percent format for grouped exact decimals and tiny values', () => {
@@ -98,17 +98,30 @@ test('holds uses complete same-bot snapshots and exact 30-place totals; gap uses
   assert.equal(marketHolding('BTC', reads, reads[0].bot_id, 90.8, 'USDT', now + 120001).text, 'V5 holds —');
 });
 
+test('holds distinguishes a pending first read from a completed incomplete report', () => {
+  const reads = paper(), now = reads[0].generated_at_ms, bot = reads[0].bot_id;
+  reads[1].completeness = 'partial';
+  assert.equal(marketHolding('BTC', reads, bot, 90.8, 'USDT', now, false).reason, 'The latest paper reports do not give a complete view of holdings.');
+  const pending = marketHolding('BTC', undefined, bot, 90.8, 'USDT', now, true);
+  assert.equal(pending.reason, 'Loading holdings…');
+  assert.equal(pending.state, 'loading');
+  assert.notEqual(marketHolding('BTC', undefined, null, 90.8, 'USDT', now, true).state, 'loading');
+});
+
 test('holds never equates quote currencies, infers missing breakeven, or hides stale prices', () => {
   const reads = paper('USDC'), now = reads[0].generated_at_ms;
   const mismatch = marketHolding('BTC', reads, reads[0].bot_id, 90.8, 'USDT', now);
   assert.match(mismatch.text, / · — to breakeven$/);
   assert.match(mismatch.reason, /USDT.*USDC/);
   const same = paper();
-  assert.match(marketHolding('BTC', same, same[0].bot_id, null, 'USDT', now).reason, /current close/);
+  assert.match(marketHolding('BTC', same, same[0].bot_id, null, 'USDT', now).reason, /recent price/);
   same[2].data.controllers[0].custom_info.bag.breakeven_price = '0';
   assert.match(marketHolding('BTC', same, same[0].bot_id, 90, 'USDT', now).reason, /breakeven/);
   same[2].data.controllers[0].custom_info.bag.held_amount = '1';
-  assert.match(marketHolding('BTC', same, same[0].bot_id, 90, 'USDT', now).reason, /bag amount/);
+  const disagreement = marketHolding('BTC', same, same[0].bot_id, 90, 'USDT', now);
+  assert.match(disagreement.text, /V5 holds 0\.0162 · — to breakeven/);
+  assert.equal(disagreement.warning, 'bag-mismatch');
+  assert.equal(disagreement.reason, null);
 });
 
 test('hourly strip uses UTC hour boundaries with the preceding close, not a neighbouring minute', () => {
@@ -173,10 +186,16 @@ test('Market reads refuse foreign bots, malformed sections and non-JSON failures
   } finally { globalThis.fetch = original; }
 });
 
-function renderMarket({ expired = false, failed = false, range = '24h', summaryData = { tiles: [] } } = {}) {
+function renderMarket({ expired = false, failed = false, pending = false, paperPending = false, coinErrors = {}, allLanesFailed = false, bagMismatch = false, range = '24h', summaryData = { tiles: [] }, crossData = [] } = {}) {
   const spot = dense(180), reads = paper(), now = (spot.now + (expired ? 181 : 0)) * 1000;
   for (const read of reads) read.generated_at_ms = now;
-  const coinReads = Object.fromEntries(coins.map(coin => [coin, { spot, perpetual: null, error: null, perpetualError: null, receivedAt: spot.now * 1000 }]));
+  if (bagMismatch) reads[2].data.controllers[0].custom_info.bag.held_amount = '1';
+  const coinReads = Object.fromEntries(coins.map(coin => [coin, {
+    spot: allLanesFailed || coinErrors[coin] ? null : spot, perpetual: null,
+    error: allLanesFailed ? 'Spot lane unavailable' : coinErrors[coin] ?? null,
+    perpetualError: allLanesFailed ? 'Perpetual lane unavailable' : null,
+    receivedAt: spot.now * 1000,
+  }]));
   const queries = [];
   const { load } = frontendModules({
     react: { ...React, useState: initial => React.useState(initial === '24h' ? range : initial) },
@@ -184,9 +203,10 @@ function renderMarket({ expired = false, failed = false, range = '24h', summaryD
     '@tanstack/react-query': { useQuery: options => {
       queries.push(options);
       const key = options.queryKey.join('/');
-      const data = key === 'v5-profile' ? { readiness: { paper_owner: { bot_name: reads[0].bot_id } } } : key === 'v5-workspace' ? {} : key.includes('/coins/') ? coinReads : key.includes('/paper/') ? reads : key.endsWith('/summary') ? summaryData : [];
+      const data = key === 'v5-profile' ? { readiness: { paper_owner: { bot_name: reads[0].bot_id } } } : key === 'v5-workspace' ? {} : key.includes('/coins/') ? coinReads : key.includes('/paper/') ? reads : key.endsWith('/summary') ? summaryData : crossData;
       const isError = failed && (key.includes('/coins/') || key.includes('/paper/'));
-      return { data, isSuccess: !isError, isPending: false, isError, error: isError ? new Error('Read failed') : null, dataUpdatedAt: spot.now * 1000 };
+      const isPending = (pending && key.includes('/coins/')) || (paperPending && key.includes('/paper/'));
+      return { data: isPending ? undefined : data, isSuccess: !isError && !isPending, isPending, isError, error: isError ? new Error(key.includes('/coins/') ? 'Candle owner returned HTTP 503' : 'Read failed') : null, dataUpdatedAt: spot.now * 1000 };
     } },
     './api': { v5Api: {} },
     './usePaperClock': { usePaperClock: () => now },
@@ -216,15 +236,62 @@ test('Market renders a small header, selected range, two chips, holds and hourly
   assert.doesNotMatch(html, /<h2>V5 market features<\/h2>|<h2>Venues and data health<\/h2>/);
 });
 
+test('Market loading copy differs from a completed read without usable prices', () => {
+  const loading = renderMarket({ pending: true }).html;
+  assert.match(loading, /data-read-state="loading"[^]*Loading 24h prices/);
+  assert.doesNotMatch(loading, /No price changes|No candles to plot|of 0 up/);
+  const empty = renderMarket({ expired: true }).html;
+  assert.match(empty, /data-read-state="empty"[^]*No price changes available for the last 24 hours/);
+  assert.match(empty, /No prices to compare/);
+  assert.doesNotMatch(empty, /Loading 24h prices|of 0 up/);
+});
+
+test('all five Market cards show holdings loading while the first paper read is pending', () => {
+  const { html } = renderMarket({ paperPending: true, coinErrors: { BTC: 'Spot read timed out' } });
+  assert.equal(html.match(/data-read-state="loading">Loading holdings…/g)?.length, 5);
+  assert.doesNotMatch(html, /The latest paper reports do not give a complete view of holdings/);
+});
+
+test('Market preserves the candle owner reason for a whole-read failure', () => {
+  assert.match(renderMarket({ failed: true }).html, /<strong>Prices unavailable<\/strong><p[^>]*>[^<]*Candle owner returned HTTP 503<\/p>/);
+});
+
+test('Market preserves the candle owner reason in the partial notice and failed coin card', () => {
+  const { html } = renderMarket({ coinErrors: { BTC: 'Spot read timed out' } });
+  assert.match(html, /<strong>Some prices could not be loaded<\/strong><p[^>]*>[^<]*BTC: Spot read timed out/);
+  assert.match(html, /<article[^>]*is-empty[^>]*>[^]*?>BTC<\/span>[^]*?Price unavailable\.<\/p><small[^>]*>Spot read timed out<\/small>/);
+});
+
+for (const [state, options, candleNotice] of [
+  ['pending', { pending: true }, /Loading 24h prices/],
+  ['rejected', { failed: true }, /Prices unavailable/],
+  ['all lanes failed', { allLanesFailed: true }, /Prices unavailable/],
+]) {
+  test(`Market keeps a fresh cross-venue row when candles are ${state}`, () => {
+    const crossData = [{ coin: 'BTC', error: null, table: [{ venue: 'okx', pair: 'BTC-USDT', mean_bps: 12.3, n: 8 }] }];
+    const { html } = renderMarket({ ...options, crossData });
+    assert.match(html, candleNotice);
+    assert.match(html, /Same coin, different venue/);
+    assert.match(html, /<th[^>]*>BTC<\/th>[^]*<td>okx<\/td>[^]*>\+12\.3<\/td>/);
+    assert.doesNotMatch(html, /Hour-by-hour returns|Perpetual premium, 24h/);
+  });
+}
+
+test('Market renders a typed warning chip for disagreement between reported holding amounts', () => {
+  const { html } = renderMarket({ bagMismatch: true });
+  assert.match(html, /V5 holds 0\.0162 · — to breakeven/);
+  assert.match(html, /class="v5m-chip is-warn" data-warning="bag-mismatch"[^]*Strategy and position amounts differ/);
+});
+
 test('Market never displays retained failed or expired prices and holdings as current', () => {
   for (const scenario of [{ failed: true }, { expired: true }]) {
     const { html } = renderMarket(scenario);
     assert.doesNotMatch(html, /279\.00 USDT|All five coins are up/);
-    assert.match(html, /No current changes published/);
     if (scenario.failed) {
       assert.doesNotMatch(html, /V5 holds 0\.0162/);
-      assert.match(html, /Earlier prices are not shown/);
-    } else assert.match(html, /close not current/);
+      assert.match(html, /Prices unavailable/);
+      assert.match(html, />Retry<\/button>/);
+    } else assert.match(html, /recent price at the end of the period is needed/);
   }
 });
 

@@ -20,7 +20,6 @@
 .v5m-hour-strip th:first-child { position: sticky; left: 0; background: var(--color-surface); }
 .v5m-hour { border-radius: 3px; text-align: center; }
 .v5m-hour.is-gap { background: var(--color-surface-hover); color: var(--color-text-muted); }
-.v5m-status { margin: 0; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: 8px; background: var(--color-surface); font-size: 0.875rem; }
 .v5m-card { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: 10px; padding: 14px; min-width: 0; }
 .v5m-card h3 { margin: 0; font-size: 0.8125rem; font-weight: 600; }
 .v5m-hint { margin: 2px 0 10px; color: var(--color-text-muted); font-size: 12px; }

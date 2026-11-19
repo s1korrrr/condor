@@ -34,11 +34,45 @@ test('owner deadline expires with the clock and is not renewed by a repeat', () 
   assert.match(researchOwnerFreshness({ fresh_until: data.fresh_until }, Date.parse(data.generated_at)), /freshness unknown.*not published/);
 });
 
-test('Research V5 reports upstream and malformed responses as not connected', async () => {
+test('Research V5 keeps HTTP error status and rejects malformed owner responses', async () => {
   const unavailable = readV5Research(async () => new Response(JSON.stringify({ detail: 'Not connected: upstream unreachable' }), { status: 503 }));
-  await assert.rejects(unavailable('overview', 'rsibot-v5', {}, new AbortController().signal), /Not connected: upstream unreachable/);
+  await assert.rejects(unavailable('overview', 'rsibot-v5', {}, new AbortController().signal), {status: 503, message: 'Not connected: upstream unreachable'});
   const malformed = readV5Research(async () => new Response('not json'));
-  await assert.rejects(malformed('network', 'rsibot-v5', {}, new AbortController().signal), /Not connected:/);
+  await assert.rejects(malformed('network', 'rsibot-v5', {}, new AbortController().signal), /could not read/);
+});
+
+test('Research V5 renders 503 with a reason and Retry, and offers only wired views', async () => {
+  for (const [detail, reason] of [
+    ['Not connected: Research upstream unreachable or timed out', 'Research OS did not respond in time'],
+    ['Not connected: V5_RESEARCH_URL is unset', 'no Research OS connection configured'],
+  ]) {
+    const requested = [];
+    let error;
+    const { load } = frontendModules({
+      '@tanstack/react-query': {useQueryClient: () => ({}), useQuery: ({queryKey}) => {
+        requested.push(queryKey[0]);
+        return {isError: queryKey[0] === 'research-overview', error, dataUpdatedAt: 0};
+      }},
+      'react-router-dom': {useSearchParams: () => [new URLSearchParams(), () => {}]},
+      '@/hooks/useServer': {useServer: () => ({server: 'rsibot-v5'})},
+      '@/lib/auth-token': {authFetch: () => { throw new Error('Unexpected network request'); }},
+    });
+    const { readV5Research } = load('features/research/v5-read.ts');
+    const read = readV5Research(async () => new Response(JSON.stringify({detail}), {status: 503}));
+    try { await read('overview', 'rsibot-v5', {}, new AbortController().signal); }
+    catch (cause) { error = cause; }
+    const { Research } = load('pages/Research.tsx');
+    const html = renderToStaticMarkup(React.createElement(Research, {v5Paper: true}));
+    assert.match(html, /<strong>Unavailable<\/strong>/);
+    assert.match(html, /Research connection unavailable/);
+    assert.doesNotMatch(html, /lab-overview-columns/);
+    assert.ok(html.includes(reason));
+    assert.match(html, /data-read-state="unavailable"[^]*Retry records/);
+    assert.doesNotMatch(html, /Loading research records|Next evidence checks|>Ideas<\/button>|>Archive<\/button>/);
+    assert.match(html, />Overview<\/button>/);
+    assert.match(html, />Graph<\/button>/);
+    assert.deepEqual(requested, ['research-overview', 'research-network']);
+  }
 });
 
 test('Research statistics and limitations have labelled render bounds', () => {

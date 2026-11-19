@@ -1500,6 +1500,12 @@ def create_app(
         "/helm",
         "/money",
         "/operations",
+        "/system",
+        "/system/checks",
+        "/system/data-feeds",
+        "/system/engine-inputs",
+        "/system/readiness",
+        "/system/settings",
         "/research",
         "/learning",
         "/research-factory",
@@ -1511,6 +1517,7 @@ def create_app(
         "/market/stocks",
         "/v5/readiness",
         "/agents",
+        "/agents/decisions",
         "/sessions",
     ):
         app.add_api_route(

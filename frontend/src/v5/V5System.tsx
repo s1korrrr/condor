@@ -1,4 +1,4 @@
-import { createContext, lazy, Suspense, useContext, useState } from 'react';
+import { createContext, lazy, Suspense, useContext, useState, type ComponentProps, type ComponentType } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { useParams } from 'react-router-dom';
 import { ReadNotice } from '@/components/ReadNotice';
@@ -9,8 +9,13 @@ import { V5SystemMarket } from './V5Market';
 import { V5NotFound } from './V5NotFound';
 import { SYSTEM_TABS } from './system-routes';
 
-const Overview = lazy(() => import('@workspace-monitoring').then(module => ({ default: module.SystemOverview })));
-const Operations = lazy(() => import('@workspace-monitoring').then(module => ({ default: module.Operations })));
+type WorkspaceMonitoring = typeof import('@workspace-monitoring');
+type OverviewProps = ComponentProps<WorkspaceMonitoring['SystemOverview']> & { connected?: boolean };
+type OperationsProps = ComponentProps<WorkspaceMonitoring['Operations']> & { incidentsOnly?: boolean };
+
+// Older workspace components accept the base props and ignore these optional presentation flags.
+const Overview = lazy<ComponentType<OverviewProps>>(() => import('@workspace-monitoring').then(module => ({ default: module.SystemOverview })));
+const Operations = lazy<ComponentType<OperationsProps>>(() => import('@workspace-monitoring').then(module => ({ default: module.Operations })));
 const PauseContext = createContext<{pausedAt: number | null; setPausedAt: (value: number | null) => void} | null>(null);
 
 export function SystemPauseProvider({ children }: { children: React.ReactNode }) {

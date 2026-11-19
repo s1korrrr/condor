@@ -70,7 +70,8 @@ export function V5Market() {
   const [range, setRange] = useState<(typeof RANGES)[number]>("24h");
   const summary = useQuery({ queryKey: ["v5-market", "summary"], queryFn: () => readCandleStore<Summary>("summary"), retry: false, refetchInterval: REFRESH_MS });
   const coins = useQuery({ queryKey: ["v5-market", "coins", range], queryFn: () => readCoins(range), retry: false, refetchInterval: REFRESH_MS });
-  const cross = useQuery({ queryKey: ["v5-market", "cross"], queryFn: readCross, retry: false, refetchInterval: REFRESH_MS, enabled: coins.isSuccess });
+  // Start cross-venue reads after the candle batch settles to limit concurrent owner reads.
+  const cross = useQuery({ queryKey: ["v5-market", "cross"], queryFn: readCross, retry: false, refetchInterval: REFRESH_MS, enabled: coins.isSuccess || coins.isError });
   const workspace = useQuery({ queryKey: ["v5-workspace"], queryFn: v5Api.workspace, refetchInterval: 30_000 });
   const profile = useQuery({ queryKey: ["v5-profile"], queryFn: v5Api.profile, retry: false });
   const bot = profile.isSuccess ? profile.data.readiness.paper_owner?.bot_name : null;
@@ -109,7 +110,9 @@ export function V5Market() {
   const failed = MARKET_COINS.filter(coin => reads[coin]?.error);
   const measured = width.measured > 0;
   const candlesUnavailable = coins.isError || failed.length === MARKET_COINS.length;
+  const candlesReady = !coins.isPending && !candlesUnavailable;
   const retryCandles = () => void coins.refetch();
+  const crossFailure = cross.isError ? failure(cross.error) : cross.data?.find(read => read.error)?.error;
   const crossVenues = [...new Set((cross.data ?? []).flatMap(read => (read.table ?? []).map(row => row.venue)))].sort();
 
   return <div className="v5m">
@@ -137,7 +140,7 @@ export function V5Market() {
     </article> : <article key={MARKET_COINS[index]} className="v5m-card v5m-coin is-empty"><span className="v5m-sym">{MARKET_COINS[index]}</span><strong className="v5m-price">—</strong><p>{coins.isPending ? "Loading price…" : candlesUnavailable || reads[MARKET_COINS[index]]?.error ? "Price unavailable." : `No recorded prices in the selected ${range}.`}</p><HoldingLine holding={holdings[MARKET_COINS[index]]} error={paper.isError ? paper.error.message : null} now={now} /></article>)}</TileGrid>
     {selected ? <V5MarketDetail key={selected} coin={selected} color={COIN_COLOR[selected]} onClose={() => setSelected(null)} tileRead={range === "24h" && coins.isSuccess && reads[selected]?.spot ? reads[selected] as unknown as DetailRead : null} /> : tiles.some(Boolean) && <p className="v5m-hint v5m-tip">Choose a coin for its prices, coverage and price gaps across venues.</p>}
 
-    {!coins.isPending && !candlesUnavailable && <>
+    {candlesReady && <>
     <Section title="Hour-by-hour returns" note={`${range} · ${venueName(REFERENCE.venue)} spot · ${REFERENCE.quote} · UTC`}>
       <p className="v5m-hint">Each hour needs the price just before it starts and a price for all 60 minutes. Grey means a price is missing.</p>
       <HourStrip reads={reads} />
@@ -159,14 +162,16 @@ export function V5Market() {
       </div>
     </Section>
 
-    <Section title="Spot versus perpetual" note={`${venueName(REFERENCE.venue)} perpetual over spot, same quote · 100 bp = 1%`}>
+    </>}
+
+    <Section title={candlesReady ? "Spot versus perpetual" : "Cross-venue prices"} note={candlesReady ? `${venueName(REFERENCE.venue)} perpetual over spot, same quote · 100 bp = 1%` : "100 bp = 1%"}>
       <div className="v5m-row">
-        <Card title={`Perpetual premium, ${range}`} hint="Every fifth minute where both legs closed · above 0: the perpetual trades above spot · hover for values">
+        {candlesReady && <Card title={`Perpetual premium, ${range}`} hint="Every fifth minute where both legs closed · above 0: the perpetual trades above spot · hover for values">
           <TimeSeriesChart series={premium.filter(item => !hidden.has(item.id))} height={240} zeroLine includeZero signed ariaLabel="Perpetual premium over spot by coin" leftFormat={value => `${signed(value, 1)} bp`} leftTickFormat={value => `${axis(value, 1, true)} bp`} emptyText="No minute where both spot and perpetual closed." />
           <Legend series={premium} hidden={hidden} onToggle={toggleSeries} />
-        </Card>
+        </Card>}
         <Card title="Same coin, different venue" hint="Average gap of each venue's spot close from the median of venues over the last hour, basis points (owner-computed; hover for minutes compared)">
-          {cross.isPending ? <p role="status" className="v5m-hint">Reading cross-venue prices…</p> : !cross.data || crossVenues.length === 0 ? <p className="v5m-hint">Cross-venue statistics unavailable{cross.data?.some(read => read.error) ? `: ${cross.data.find(read => read.error)!.error}` : ""}.</p> :
+          {cross.isPending ? <p role="status" className="v5m-hint">{cross.isFetching ? "Reading cross-venue prices…" : "Waiting to read cross-venue prices…"}</p> : cross.isError || !cross.data || crossVenues.length === 0 ? <p className="v5m-hint">Cross-venue statistics unavailable{crossFailure ? `: ${crossFailure}` : ""}.</p> :
             <table className="v5m-heat"><thead><tr><th>Venue</th>{cross.data.map(read => <th key={read.coin} title={ownerTitleText(read.error ?? undefined)}>{read.coin}{read.error ? " (read failed)" : ""}</th>)}</tr></thead><tbody>{crossVenues.map(venue => <tr key={venue}><td>{venueName(venue)}</td>{cross.data!.map(read => {
               const row = read.table?.find(item => item.venue === venue);
               if (!row || row.mean_bps == null || !row.n) return <td key={read.coin} className="is-none" title={ownerTitleText(read.error ? "read failed" : row ? "no minute compared" : "no row from the owner for this venue")}>—</td>;
@@ -177,7 +182,6 @@ export function V5Market() {
         </Card>
       </div>
     </Section>
-    </>}
 
     <p className="v5m-hint">Venue and data health and V5 engine inputs are in <Link to="/system/data-feeds">System</Link>.</p>
 
@@ -186,7 +190,9 @@ export function V5Market() {
 }
 
 function HoldingLine({ holding, error, now }: { holding: ReturnType<typeof marketHolding>; error: string | null; now: number }) {
-  return <><p className="v5m-holding" title={holding.title}>{holding.text}</p><small className="v5m-asof">{error ?? holding.reason}{holding.asOf != null && <> · Paper {utcMin(holding.asOf)} · {ageText((now - holding.asOf) / 1000)}</>}</small></>;
+  return <><p className="v5m-holding" title={holding.title}>{holding.text}</p>
+    {holding.warning === 'bag-mismatch' && <span className="v5m-chip is-warn" data-warning={holding.warning}><i />Strategy and position amounts differ</span>}
+    <small className="v5m-asof">{error ?? holding.reason}{holding.asOf != null && <> · Paper {utcMin(holding.asOf)} · {ageText((now - holding.asOf) / 1000)}</>}</small></>;
 }
 
 function HourStrip({ reads }: { reads: Record<string, CoinRead> }) {

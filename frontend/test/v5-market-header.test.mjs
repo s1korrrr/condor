@@ -110,7 +110,8 @@ test('holds never equates quote currencies, infers missing breakeven, or hides s
   same[2].data.controllers[0].custom_info.bag.held_amount = '1';
   const disagreement = marketHolding('BTC', same, same[0].bot_id, 90, 'USDT', now);
   assert.match(disagreement.text, /V5 holds 0\.0162 · — to breakeven/);
-  assert.match(disagreement.reason, /strategy and position reports list different amounts/);
+  assert.equal(disagreement.warning, 'bag-mismatch');
+  assert.equal(disagreement.reason, null);
 });
 
 test('hourly strip uses UTC hour boundaries with the preceding close, not a neighbouring minute', () => {
@@ -175,10 +176,16 @@ test('Market reads refuse foreign bots, malformed sections and non-JSON failures
   } finally { globalThis.fetch = original; }
 });
 
-function renderMarket({ expired = false, failed = false, pending = false, range = '24h', summaryData = { tiles: [] } } = {}) {
+function renderMarket({ expired = false, failed = false, pending = false, allLanesFailed = false, bagMismatch = false, range = '24h', summaryData = { tiles: [] }, crossData = [] } = {}) {
   const spot = dense(180), reads = paper(), now = (spot.now + (expired ? 181 : 0)) * 1000;
   for (const read of reads) read.generated_at_ms = now;
-  const coinReads = Object.fromEntries(coins.map(coin => [coin, { spot, perpetual: null, error: null, perpetualError: null, receivedAt: spot.now * 1000 }]));
+  if (bagMismatch) reads[2].data.controllers[0].custom_info.bag.held_amount = '1';
+  const coinReads = Object.fromEntries(coins.map(coin => [coin, {
+    spot: allLanesFailed ? null : spot, perpetual: null,
+    error: allLanesFailed ? 'Spot lane unavailable' : null,
+    perpetualError: allLanesFailed ? 'Perpetual lane unavailable' : null,
+    receivedAt: spot.now * 1000,
+  }]));
   const queries = [];
   const { load } = frontendModules({
     react: { ...React, useState: initial => React.useState(initial === '24h' ? range : initial) },
@@ -186,7 +193,7 @@ function renderMarket({ expired = false, failed = false, pending = false, range 
     '@tanstack/react-query': { useQuery: options => {
       queries.push(options);
       const key = options.queryKey.join('/');
-      const data = key === 'v5-profile' ? { readiness: { paper_owner: { bot_name: reads[0].bot_id } } } : key === 'v5-workspace' ? {} : key.includes('/coins/') ? coinReads : key.includes('/paper/') ? reads : key.endsWith('/summary') ? summaryData : [];
+      const data = key === 'v5-profile' ? { readiness: { paper_owner: { bot_name: reads[0].bot_id } } } : key === 'v5-workspace' ? {} : key.includes('/coins/') ? coinReads : key.includes('/paper/') ? reads : key.endsWith('/summary') ? summaryData : crossData;
       const isError = failed && (key.includes('/coins/') || key.includes('/paper/'));
       const isPending = pending && key.includes('/coins/');
       return { data, isSuccess: !isError && !isPending, isPending, isError, error: isError ? new Error('Read failed') : null, dataUpdatedAt: spot.now * 1000 };
@@ -227,6 +234,27 @@ test('Market loading copy differs from a completed read without usable prices', 
   assert.match(empty, /data-read-state="empty"[^]*No price changes available for the last 24 hours/);
   assert.match(empty, /No prices to compare/);
   assert.doesNotMatch(empty, /Loading 24h prices|of 0 up/);
+});
+
+for (const [state, options, candleNotice] of [
+  ['pending', { pending: true }, /Loading 24h prices/],
+  ['rejected', { failed: true }, /Prices unavailable/],
+  ['all lanes failed', { allLanesFailed: true }, /Prices unavailable/],
+]) {
+  test(`Market keeps a fresh cross-venue row when candles are ${state}`, () => {
+    const crossData = [{ coin: 'BTC', error: null, table: [{ venue: 'okx', pair: 'BTC-USDT', mean_bps: 12.3, n: 8 }] }];
+    const { html } = renderMarket({ ...options, crossData });
+    assert.match(html, candleNotice);
+    assert.match(html, /Same coin, different venue/);
+    assert.match(html, /<th[^>]*>BTC<\/th>[^]*<td>okx<\/td>[^]*>\+12\.3<\/td>/);
+    assert.doesNotMatch(html, /Hour-by-hour returns|Perpetual premium, 24h/);
+  });
+}
+
+test('Market renders a typed warning chip for disagreement between reported holding amounts', () => {
+  const { html } = renderMarket({ bagMismatch: true });
+  assert.match(html, /V5 holds 0\.0162 · — to breakeven/);
+  assert.match(html, /class="v5m-chip is-warn" data-warning="bag-mismatch"[^]*Strategy and position amounts differ/);
 });
 
 test('Market never displays retained failed or expired prices and holdings as current', () => {

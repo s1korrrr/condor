@@ -158,7 +158,7 @@ export function LabReadNotice({
     const reason = unconfigured ? "This dashboard has no Research OS connection configured."
       : error.message === "Not connected: Research upstream unreachable or timed out" ? "Research OS did not respond in time or could not be reached."
       : error.message.replace(/^Not connected:\s*/, "");
-    return <ReadNotice kind="unavailable" title={unconfigured ? "Not connected (503)" : "Unavailable (503)"} reason={reason} onRetry={onRetry} retryLabel="Retry records" />;
+    return <ReadNotice kind="unavailable" title="Unavailable" reason={reason} onRetry={onRetry} retryLabel="Retry records" />;
   }
   return <ReadNotice kind="error" title={error instanceof ResearchHttpError ? `Research read failed (${error.status})` : "Research read failed"} reason={error?.message ?? "Research records could not be loaded."} onRetry={onRetry} retryLabel="Retry records" />;
 }

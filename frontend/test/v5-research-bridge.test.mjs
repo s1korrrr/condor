@@ -42,9 +42,9 @@ test('Research V5 keeps HTTP error status and rejects malformed owner responses'
 });
 
 test('Research V5 renders 503 with a reason and Retry, and offers only wired views', async () => {
-  for (const [detail, title, reason] of [
-    ['Not connected: Research upstream unreachable or timed out', 'Unavailable (503)', 'Research OS did not respond in time'],
-    ['Not connected: V5_RESEARCH_URL is unset', 'Not connected (503)', 'no Research OS connection configured'],
+  for (const [detail, reason] of [
+    ['Not connected: Research upstream unreachable or timed out', 'Research OS did not respond in time'],
+    ['Not connected: V5_RESEARCH_URL is unset', 'no Research OS connection configured'],
   ]) {
     const requested = [];
     let error;
@@ -63,7 +63,7 @@ test('Research V5 renders 503 with a reason and Retry, and offers only wired vie
     catch (cause) { error = cause; }
     const { Research } = load('pages/Research.tsx');
     const html = renderToStaticMarkup(React.createElement(Research, {v5Paper: true}));
-    assert.ok(html.includes(title));
+    assert.match(html, /<strong>Unavailable<\/strong>/);
     assert.ok(html.includes(reason));
     assert.match(html, /data-read-state="unavailable"[^]*Retry records/);
     assert.doesNotMatch(html, /Loading research records|Next evidence checks|>Ideas<\/button>|>Archive<\/button>/);

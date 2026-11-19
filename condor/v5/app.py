@@ -1473,6 +1473,13 @@ def create_app(
         "/helm",
         "/money",
         "/operations",
+        "/system",
+        "/system/checks",
+        "/system/data-feeds",
+        "/system/engine-inputs",
+        "/system/readiness",
+        "/system/settings",
+        "/system/operations",
         "/research",
         "/learning",
         "/research-factory",
@@ -1484,6 +1491,7 @@ def create_app(
         "/market/stocks",
         "/v5/readiness",
         "/agents",
+        "/agents/decisions",
         "/sessions",
     ):
         app.add_api_route(
@@ -1557,6 +1565,7 @@ def create_app(
         page = (
             exc.status_code == 404
             and request.method == "GET"
+            and request.url.path != "/api"
             and not request.url.path.startswith(("/api/", "/assets/"))
             and "text/html" in request.headers.get("accept", "")
             and html_path.is_file()

@@ -1,23 +1,17 @@
 import { readResearch } from './read';
 
 export function readV5Research(fetcher: (path: string, init: RequestInit) => Promise<Response>) {
-  const read = readResearch(async (path, init) => {
+  return readResearch(async (path, init) => {
     const response = await fetcher(path, init);
     if (!response.ok) return response;
-    const data: unknown = await response.json();
+    const data: unknown = await response.json().catch(() => {
+      throw new Error('Research OS returned a response the dashboard could not read.');
+    });
     const server = new URLSearchParams(path.split('?', 2)[1]).get('server');
     const record = data && typeof data === 'object' && !Array.isArray(data) ? data as Record<string, unknown> : {};
     const generated_at = typeof record.generated_at === 'string' ? record.generated_at : undefined;
     return new Response(JSON.stringify({ data, source: { owner: 'research_os', server, generated_at, read_only: true } }), { status: 200, headers: { 'Content-Type': 'application/json' } });
   }, 15_000, true);
-  return async (...args: Parameters<typeof read>) => {
-    try {
-      return await read(...args);
-    } catch (error) {
-      const reason = error instanceof Error ? error.message : 'Research read failed';
-      throw new Error(reason.startsWith('Not connected:') ? reason : `Not connected: ${reason}`);
-    }
-  };
 }
 
 export function researchFreshnessDecision(data: Record<string, unknown>, now: number): string {

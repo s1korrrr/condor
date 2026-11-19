@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useSearchParams } from "react-router-dom";
 import { RefreshCw } from "lucide-react";
+import { ReadNotice } from "@/components/ReadNotice";
 import { useServer } from "@/hooks/useServer";
 import { authFetch } from "@/lib/auth-token";
 import {
@@ -86,6 +87,8 @@ function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) 
   const ownerRead = v5Paper ? readV5 : read;
   const [params, setParams] = useSearchParams(),
     state = readLabState(params);
+  const views = v5Paper ? LAB_VIEWS.filter(view => view.id === "overview" || view.id === "graph") : LAB_VIEWS;
+  const viewConnected = views.some(view => view.id === state.view);
   const pendingParams = useRef(params);
   useEffect(() => {
     pendingParams.current = params;
@@ -108,7 +111,7 @@ function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) 
     queryKey: ["research-overview", server],
     queryFn: ({ signal }) => ownerRead("overview", server, {}, signal),
     refetchInterval: 30000,
-    retry: 1,
+    retry: v5Paper ? false : 1,
   });
   const overviewState = researchReadState(
     overview.data,
@@ -140,7 +143,7 @@ function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) 
       loadConsistentLabNetwork(ownerRead, server, revision, signal),
     staleTime: Infinity,
     gcTime: 5 * 60 * 1000,
-    retry: 1,
+    retry: v5Paper ? false : 1,
   });
   useEffect(() => {
     const result = networkQuery.data;
@@ -233,8 +236,8 @@ function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) 
       }
       error={overview.error ?? networkQuery.error}
       onRetry={() => {
-        void overview.refetch();
-        void networkQuery.refetch();
+        if (available && revision) void networkQuery.refetch();
+        else void overview.refetch();
       }}
     />
   );
@@ -246,7 +249,7 @@ function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) 
         <div>
           <h1>Research</h1>
           <p>Ideas, experiments and evidence from Research OS.</p>
-          {v5Paper && <p>Read-only overview and network only; other Research views are not connected in V5.</p>}
+          {v5Paper && <p>V5 connects to Overview and Graph only. The other Research OS views have no V5 connection.</p>}
         </div>
         <button onClick={refresh} disabled={overview.isFetching}>
           <RefreshCw
@@ -281,7 +284,7 @@ function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) 
         </span>}
       </div>
       <nav className="lab-nav" aria-label="Research Lab views">
-        {LAB_VIEWS.map((view) => (
+        {views.map((view) => (
           <button
             key={view.id}
             aria-current={state.view === view.id ? "page" : undefined}
@@ -292,32 +295,34 @@ function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) 
         ))}
       </nav>
       <div
-        className={`lab-workspace-body ${state.selected && state.view !== "archive" ? "lab-with-inspector" : ""}`}
+        className={`lab-workspace-body ${!v5Paper && state.selected && state.view !== "archive" ? "lab-with-inspector" : ""}`}
       >
         <main className="lab-main" aria-label={`${viewLabel} research view`}>
           {/* Only index-bound panels (revision-bound conclusions, catalog coverage, network)
               wait for a current overview. Panels with their own reads keep their own state. */}
-          {state.view !== "archive" && !available && (
+          {viewConnected && state.view !== "archive" && !available && (
             <section className="quant-panel" aria-label="Research index overview">
               <header className="quant-panel-heading">
                 <div>
                   <h2>Index overview</h2>
-                  <p className="quant-muted">Conclusions, catalog coverage and the network are bound to the current index revision and wait for it. Other panels load and report their own state.</p>
+                  <p className="quant-muted">The overview and graph need a current Research OS index.</p>
                 </div>
               </header>
               <LabReadNotice state={overviewState} error={overview.error} onRetry={() => void overview.refetch()} />
             </section>
           )}
-          {state.view === "archive" ? (
+          {!viewConnected ? (
+            <ReadNotice kind="unavailable" title="Not connected" reason={`${viewLabel} has no V5 connection. Choose Overview or Graph.`} />
+          ) : state.view === "archive" ? (
             <ResearchArchive key={server} server={server} />
           ) : state.view === "overview" ? (
             <>
-              {available && <div className="lab-overview-columns">
+              {available && !v5Paper && <div className="lab-overview-columns">
                 <ResearchConclusions server={server} now={now} revision={revision} kind="assessment" onSelect={select} />
                 <ResearchConclusions server={server} now={now} revision={revision} kind="run" onSelect={select} />
               </div>}
-              <div className="lab-overview-columns"><LabQueue server={server} now={now} preview onSelect={select} />{available && <LabLimitations data={data} />}</div>
-              {available && <details className="quant-panel"><summary>Catalog coverage</summary><LabCounts data={data} onView={navigate} /></details>}
+              <div className="lab-overview-columns">{!v5Paper && <LabQueue server={server} now={now} preview onSelect={select} />}{available && <LabLimitations data={data} />}</div>
+              {available && <details className="quant-panel"><summary>Catalog coverage</summary><LabCounts data={data} onView={v5Paper ? undefined : navigate} /></details>}
             </>
           ) : networkVisible ? (!available ? null : (
             <>
@@ -339,7 +344,7 @@ function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) 
                 {graph}
               </section>
               {state.view === "graph" && network && (
-                <LabCharts data={network} expanded onFilter={(key, value) => change({ view: "ideas", q: "", family: "", lane: "", [key]: value }, { resetPage: true, clearSelection: true })} />
+                <LabCharts data={network} expanded={!v5Paper} onFilter={(key, value) => change({ view: "ideas", q: "", family: "", lane: "", [key]: value }, { resetPage: true, clearSelection: true })} />
               )}
             </>
           )) : (
@@ -358,7 +363,7 @@ function ResearchLab({ server, v5Paper }: { server: string; v5Paper: boolean }) 
             />
           )}
         </main>
-        {state.selected && state.view !== "archive" && (
+        {!v5Paper && state.selected && state.view !== "archive" && (
           <ResearchInspector
             key={`${server}:${state.selected}`}
             server={server}

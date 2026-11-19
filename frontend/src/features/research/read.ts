@@ -2,6 +2,15 @@ import { researchPath, parseResearchEnvelope } from './model.ts';
 
 type Fetcher = (path: string, init: RequestInit) => Promise<Response>;
 
+export class ResearchHttpError extends Error {
+  readonly status: number;
+
+  constructor(status: number, reason: string) {
+    super(reason);
+    this.status = status;
+  }
+}
+
 export function readResearch(fetcher: Fetcher, timeoutMs = 15_000, allowTimeless = false) {
   return async (endpoint: string, server: string, params: Record<string, string>, signal: AbortSignal) => {
     const deadline = AbortSignal.timeout(endpoint === 'network' ? Math.max(timeoutMs, 60_000) : timeoutMs);
@@ -12,7 +21,7 @@ export function readResearch(fetcher: Fetcher, timeoutMs = 15_000, allowTimeless
       });
       if (!response.ok) {
         const body = await response.json().catch(() => ({}));
-        throw new Error(typeof body.detail === 'string' ? body.detail : `Research request failed (${response.status})`);
+        throw new ResearchHttpError(response.status, typeof body?.detail === 'string' ? body.detail : 'The source could not return research records.');
       }
       return parseResearchEnvelope(await response.json(), server, allowTimeless);
     } catch (error) {

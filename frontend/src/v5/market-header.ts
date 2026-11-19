@@ -57,7 +57,7 @@ export function marketSentence(changes: Record<string, string | null>, range: st
   });
   const missing = MARKET_COINS.filter(coin => !measured.some(row => row.coin === coin));
   const period = ranges[range];
-  if (!measured.length) return `No current changes published over ${period}. ${missing.join(', ')}: —.`;
+  if (!measured.length) return `No price changes available for the last ${period}.`;
   const up = measured.filter(row => row.value > 0n).length, down = measured.filter(row => row.value < 0n).length;
   const subject = measured.length === 1 ? measured[0].coin : missing.length ? `All ${measured.length} published coins` : 'All five coins';
   const verb = measured.length === 1 ? 'is' : 'are';
@@ -66,7 +66,7 @@ export function marketSentence(changes: Record<string, string | null>, range: st
   const weakest = [...measured].sort((left, right) => left.value < right.value ? -1 : left.value > right.value ? 1 : 0)[0];
   const strongest = [...measured].sort((left, right) => left.value > right.value ? -1 : left.value < right.value ? 1 : 0)[0];
   const extreme = down ? `${weakest.coin} is weakest at ${pct(weakest.text)}.` : up ? `${strongest.coin} is strongest at ${pct(strongest.text)}.` : '';
-  return `${direction} over ${period}, on average ${pct(mean)}.${extreme ? ` ${extreme}` : ''}${missing.length ? ` ${missing.join(', ')}: — change not published; excluded from the average.` : ''}`;
+  return `${direction} over ${period}, on average ${pct(mean)}.${extreme ? ` ${extreme}` : ''}${missing.length ? ` The average excludes ${missing.join(', ')} because their changes are unavailable.` : ''}`;
 }
 
 export function hourlyReturns(read: CandleRead | null | undefined): { from: number; to: number; change: string | null; inputs?: string }[] {
@@ -85,19 +85,19 @@ export function hourlyReturns(read: CandleRead | null | undefined): { from: numb
 export function marketHolding(coin: string, reads: PaperRead[] | undefined, bot: string | null | undefined, last: number | null, quote: string, now: number): { text: string; exact?: string; title?: string; reason: string | null; asOf: number | null } {
   const unavailable = (reason: string) => ({ text: 'V5 holds —', reason, asOf: null });
   if (!bot || !reads || reads.length !== 3 || !['status', 'positions', 'decisions'].every(section => reads.some(read => read.section === section)) ||
-      reads.some(read => read.bot_id !== bot || paperSectionError(read) || read.section !== 'status' && !paperCompleteRead(read, now)) || !paperSnapshotsAgree(reads)) return unavailable('Complete current V5 paper snapshot required.');
+      reads.some(read => read.bot_id !== bot || paperSectionError(read) || read.section !== 'status' && !paperCompleteRead(read, now)) || !paperSnapshotsAgree(reads)) return unavailable('The latest paper reports do not give a complete view of holdings.');
   const positions = reads.find(read => read.section === 'positions')!, decisions = reads.find(read => read.section === 'decisions')!;
   const controllers = (decisions.data as { controllers?: { pair?: string }[] } | null)?.controllers;
   const pairs = [...new Set((controllers ?? []).map(row => row.pair).filter((pair): pair is string => typeof pair === 'string' && pair.startsWith(`${coin}-`)))];
-  if (pairs.length !== 1) return unavailable('One owner-published V5 pair required.');
+  if (pairs.length !== 1) return unavailable('V5 needs to report one trading pair for this coin.');
   const pair = pairs[0], holdings = paperPairHoldings(pair, positions, now), bag = paperPairBag(pair, decisions, positions, now);
-  if (!holdings || (positions.data as Record<string, unknown>[]).filter(row => row.trading_pair === pair).some(row => decimal(row.quantity) == null)) return unavailable('Complete exact V5 position quantities required.');
+  if (!holdings || (positions.data as Record<string, unknown>[]).filter(row => row.trading_pair === pair).some(row => decimal(row.quantity) == null)) return unavailable('V5 has not reported exact amounts for all positions.');
   let reason: string | null = null, gap: string | null = null;
-  if (!bag?.heldAmount || decimal(bag.heldAmount) == null) reason = 'Owner bag amount is not published as an exact decimal.';
-  else if (decimal(bag.heldAmount) !== decimal(holdings.total)) reason = 'Owner bag amount does not match the published positions.';
-  else if (pair.split('-')[1] !== quote) reason = `${quote} close cannot be compared with ${pair.split('-')[1]} breakeven.`;
-  else if (last == null) reason = 'A current close is required.';
-  else if (decimal(bag.breakevenPrice) == null || decimal(bag.breakevenPrice)! <= 0n) reason = 'Owner breakeven is not published.';
+  if (!bag?.heldAmount || decimal(bag.heldAmount) == null) reason = 'Breakeven comparison needs an exact amount from the strategy.';
+  else if (decimal(bag.heldAmount) !== decimal(holdings.total)) reason = 'Breakeven comparison unavailable because the strategy and position reports list different amounts.';
+  else if (pair.split('-')[1] !== quote) reason = `The market price is in ${quote}. Breakeven is in ${pair.split('-')[1]}.`;
+  else if (last == null) reason = 'Breakeven comparison needs a recent price.';
+  else if (decimal(bag.breakevenPrice) == null || decimal(bag.breakevenPrice)! <= 0n) reason = 'V5 has not reported a usable breakeven price.';
   else gap = change(last, bag.breakevenPrice!, 1);
   if (!gap && !reason) reason = 'A complete price comparison is unavailable.';
   const comparison = gap && last != null ? decimalPercentChange(last, bag?.breakevenPrice, 1) : null;

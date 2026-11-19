@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
+import { ReadNotice } from "@/components/ReadNotice";
 import { SparkChart, TimeSeriesChart } from "@/features/quant-ops/kit/charts";
 import { TileGrid } from "@/features/quant-ops/kit/grid";
 import type { ChartSeries } from "@/features/quant-ops/kit/series";
@@ -106,6 +107,9 @@ export function V5Market() {
   const refresh = workspace.data?.source_refresh;
   const feedCurrent = workspace.isSuccess && refresh?.feed_freshness === "FRESH" && refresh.feed_fresh_until_ms != null && now <= refresh.feed_fresh_until_ms;
   const failed = MARKET_COINS.filter(coin => reads[coin]?.error);
+  const measured = width.measured > 0;
+  const candlesUnavailable = coins.isError || failed.length === MARKET_COINS.length;
+  const retryCandles = () => void coins.refetch();
   const crossVenues = [...new Set((cross.data ?? []).flatMap(read => (read.table ?? []).map(row => row.venue)))].sort();
 
   return <div className="v5m">
@@ -114,38 +118,42 @@ export function V5Market() {
       <div role="group" aria-label="Market range" className="v5m-seg">{RANGES.map(item => <button key={item} type="button" aria-pressed={range === item} onClick={() => setRange(item)}>{item}</button>)}</div>
       <div className="v5m-chips">
         <span className={`v5m-chip ${summary.isError ? "is-warn" : summary.isPending || !health.lanes || statusAge == null ? "is-unknown" : !storeCurrent ? "is-warn" : health.ownerHealth === "red" ? "is-bad" : health.ownerHealth === "amber" ? "is-warn" : health.ownerHealth === "unknown" ? "is-unknown" : ""}`}><i />Candle store <b>{summary.isError ? "unavailable" : summary.isPending ? "reading" : !health.lanes || statusAge == null ? "— data incomplete" : !storeCurrent ? "— not current" : `${health.lanesUnknown ? "— · lane availability incomplete" : `${health.lanesAvailable}/${health.lanes} lanes available`} · owner health ${health.ownerHealth}`}</b></span>
-        <span className={`v5m-chip ${feedCurrent ? "" : workspace.isError || refresh ? "is-warn" : "is-unknown"}`}><i />V5 feed <b>{feedCurrent ? "current" : workspace.isError ? "unavailable" : refresh ? "not current" : "no data"}</b></span>
+        <span className={`v5m-chip ${feedCurrent ? "" : workspace.isError || refresh ? "is-warn" : "is-unknown"}`}><i />V5 feed <b>{workspace.isPending ? "loading" : feedCurrent ? "current" : workspace.isError ? "unavailable" : refresh ? "not current" : "no status reported"}</b></span>
       </div>
     </header>
-    <p className="v5m-summary" title={ownerTitleText(marketAverageTitle(changes))}>{marketSentence(changes, range)}</p>
-
-    {coins.isPending && <p role="status" className="v5m-status">Reading {range} of candles for {MARKET_COINS.join(", ")}…</p>}
-    {coins.isError && <p role="alert" className="v5m-status">Candle refresh failed: {coins.error.message}. Earlier prices are not shown.</p>}
-    {failed.length > 0 && <p role="alert" className="v5m-status">No candles for {failed.map(coin => `${coin} (${reads[coin].error})`).join(", ")}. Those tiles are left out.</p>}
+    {coins.isPending ? <ReadNotice kind="loading" title={`Loading ${range} prices…`} />
+      : candlesUnavailable ? <ReadNotice kind="unavailable" title="Prices unavailable" reason="The candle store did not return prices. Try reading them again." onRetry={retryCandles} />
+      : !measured ? <ReadNotice kind="empty" title={marketSentence(changes, range)} reason="A change needs a price at the start of the period and a recent price at the end." onRetry={retryCandles} />
+      : <p className="v5m-summary" title={ownerTitleText(marketAverageTitle(changes))}>{marketSentence(changes, range)}</p>}
+    {failed.length > 0 && !candlesUnavailable && <ReadNotice kind="unavailable" title="Some prices could not be loaded" reason={`The candle store did not return prices for ${failed.join(", ")}.`} onRetry={retryCandles} />}
 
     <TileGrid label="Coins" min={200}>{tiles.map((tile, index) => tile ? <article key={tile.coin} className={`v5m-card v5m-coin is-clickable${selected === tile.coin ? " is-selected" : ""}`} role="button" tabIndex={0} aria-pressed={selected === tile.coin} aria-label={`${tile.coin}: open statistics, candles and venue detail`} onClick={() => select(tile.coin)} onKeyDown={event => { if (event.key === "Enter" || event.key === " ") { event.preventDefault(); select(tile.coin); } }}>
       <div className="v5m-coin-top"><span className="v5m-sym"><i style={{ background: COIN_COLOR[tile.coin] }} />{tile.coin}</span><span className="v5m-change" title={changes[tile.coin] == null ? undefined : `result ${ownerTitleText(changes[tile.coin])}%; first close ${ownerTitleText(reads[tile.coin]?.spot?.buckets[0]?.[4])}; last close ${ownerTitleText(reads[tile.coin]?.spot?.buckets.at(-1)?.[4])}`}>{range} {changes[tile.coin] == null ? "—" : pct(changes[tile.coin])}</span></div>
       <strong className="v5m-price" title={ownerTitleText(current[tile.coin] ? String(tile.last) : undefined)}>{current[tile.coin] ? `${price(tile.last)} ${REFERENCE.quote}` : "—"}</strong><small className={`v5m-asof${current[tile.coin] ? "" : " is-old"}`}>{current[tile.coin] ? "Close" : "— close not current"} · {minuteText(tile.lastTime + 60)} · {ageText(age(tile.coin, tile.lastTime))}</small>
-      {changes[tile.coin] == null && <small className="v5m-asof">— {range} change: current boundary closes required.</small>}
+      {changes[tile.coin] == null && <small className="v5m-asof">{range} change unavailable. {current[tile.coin] ? "A price at the start or end of the period is missing or unusable." : "A recent price at the end of the period is needed."}</small>}
       <SparkChart points={tile.spark} color={COIN_COLOR[tile.coin]} height={44} format={price} unit={REFERENCE.quote} ariaLabel={`${tile.coin} recorded prices, ${range}, breaks where minutes are missing`} />
       <HoldingLine holding={holdings[tile.coin]} error={paper.isError ? paper.error.message : null} now={now} />
       <dl className="v5m-kv"><dt>Perpetual premium</dt><dd title={ownerTitleText(!reads[tile.coin]?.perpetualError && tile.premiumBps != null && tile.premiumTime != null && age(tile.coin, tile.premiumTime) != null && age(tile.coin, tile.premiumTime)! <= STALE_AFTER_S ? `result ${ownerTitleText(tile.premiumBps)} bp; ${tile.premiumInputs}` : undefined)}>{reads[tile.coin]?.perpetualError ? "— perpetual read failed" : tile.premiumBps == null || tile.premiumTime == null ? "— no paired closes" : (() => { const seconds = age(tile.coin, tile.premiumTime); return seconds == null || seconds > STALE_AFTER_S ? "— paired close not current" : `${signed(tile.premiumBps, 1)} bp · ${minuteText(tile.premiumTime + 60)} · ${ageText(seconds)}`; })()}</dd></dl>
-    </article> : <article key={MARKET_COINS[index]} className="v5m-card v5m-coin is-empty"><span className="v5m-sym">{MARKET_COINS[index]}</span><strong className="v5m-price">—</strong><p>{coins.isPending ? "Loading…" : reads[MARKET_COINS[index]]?.error ? `Candle read failed: ${reads[MARKET_COINS[index]].error}` : `No closed minute in ${range}.`}</p><HoldingLine holding={holdings[MARKET_COINS[index]]} error={paper.isError ? paper.error.message : null} now={now} /></article>)}</TileGrid>
-    {selected ? <V5MarketDetail key={selected} coin={selected} color={COIN_COLOR[selected]} onClose={() => setSelected(null)} tileRead={range === "24h" && coins.isSuccess && reads[selected]?.spot ? reads[selected] as unknown as DetailRead : null} /> : <p className="v5m-hint v5m-tip">Click a coin for its candles, minutes held and venue-by-venue price gaps.</p>}
+    </article> : <article key={MARKET_COINS[index]} className="v5m-card v5m-coin is-empty"><span className="v5m-sym">{MARKET_COINS[index]}</span><strong className="v5m-price">—</strong><p>{coins.isPending ? "Loading price…" : candlesUnavailable || reads[MARKET_COINS[index]]?.error ? "Price unavailable." : `No recorded prices in the selected ${range}.`}</p><HoldingLine holding={holdings[MARKET_COINS[index]]} error={paper.isError ? paper.error.message : null} now={now} /></article>)}</TileGrid>
+    {selected ? <V5MarketDetail key={selected} coin={selected} color={COIN_COLOR[selected]} onClose={() => setSelected(null)} tileRead={range === "24h" && coins.isSuccess && reads[selected]?.spot ? reads[selected] as unknown as DetailRead : null} /> : tiles.some(Boolean) && <p className="v5m-hint v5m-tip">Choose a coin for its prices, coverage and price gaps across venues.</p>}
 
+    {!coins.isPending && !candlesUnavailable && <>
     <Section title="Hour-by-hour returns" note={`${range} · ${venueName(REFERENCE.venue)} spot · ${REFERENCE.quote} · UTC`}>
-      <p className="v5m-hint">Each hour needs its preceding close and all 60 final minutes. Incomplete hours and gaps stay grey; no prices are carried forward.</p>
+      <p className="v5m-hint">Each hour needs the price just before it starts and a price for all 60 minutes. Grey means a price is missing.</p>
       <HourStrip reads={reads} />
     </Section>
 
     <Section title="Moves" note={`${venueName(REFERENCE.venue)} spot, 1-minute candles sampled every 5 minutes`}>
       <div className="v5m-row v5m-row--wide">
-        <Card title={`Return over ${range}`} hint="Each coin starts at 0% at the window's first minute (a coin without that minute is left out) · lines break where minutes are missing · hover for values">
+        <Card title={`Return over ${range}`} hint="Each line starts at 0%. Coins need a starting price to appear. Gaps show missing prices. Hover for values.">
           <TimeSeriesChart series={returnSeries.filter(item => !hidden.has(item.id))} height={260} zeroLine includeZero signed ariaLabel={`Return of each coin over ${range}`} leftFormat={value => pct(value)} leftTickFormat={value => `${axis(value, 2, true)}%`} emptyText="No candles to plot yet." />
           <Legend series={returnSeries} hidden={hidden} onToggle={toggleSeries} />
         </Card>
         <Card title="Breadth" hint="How many of the five coins are up" className="v5m-breadth">
-          <div className="v5m-big"><div><strong>{width.measured ? width.up : "—"}<small> of {width.measured} up</small></strong><span>over {range}</span></div><div><strong>{width.measured1h ? width.up1h : "—"}<small> of {width.measured1h} up</small></strong><span>over the last hour</span></div></div>
+          <div className="v5m-big">{[
+            { count: width.measured, up: width.up, label: `over ${range}` },
+            { count: width.measured1h, up: width.up1h, label: "over the last hour" },
+          ].map(({ count, up, label }) => <div key={label}><strong>{count ? <>{up}<small> of {count} up</small></> : <small>No prices to compare</small>}</strong><span>{label}</span></div>)}</div>
           <ReturnBars tiles={MARKET_COINS.flatMap(coin => changes[coin] == null ? [] : [{ coin, changePct: changes[coin]! }])} range={range} selected={selected} onSelect={select} />
         </Card>
       </div>
@@ -165,10 +173,11 @@ export function V5Market() {
               const bps = row.mean_bps, strength = Math.min(Math.abs(bps) / 12, 1) * 0.45;
               return <td key={read.coin} className={`is-clickable${selected === read.coin ? " is-selected" : ""}`} onClick={() => select(read.coin)} title={ownerTitleText(`${venueName(venue)} ${row.pair}: mean ${ownerTitleText(bps)} bp over ${row.n} minutes · p95 |gap| ${row.p95_abs_bps == null ? "—" : ownerTitleText(row.p95_abs_bps)} bp · click for ${read.coin} detail`)} style={{ background: Math.abs(bps) < 0.5 ? undefined : `color-mix(in srgb, ${bps < 0 ? "var(--color-red)" : "var(--color-green)"} ${Math.round(strength * 100)}%, transparent)` }}>{signed(bps, 1)}</td>;
             })}</tr>)}</tbody></table>}
-          <p className="v5m-hint">Green: above the median of venues, red: below. Quotes can differ (USDT, USD, USDC), so part of a gap can be the quote currency, not the venue.</p>
+          <p className="v5m-hint">Green is above the median price across venues. Red is below. Different quote currencies can explain part of the gap.</p>
         </Card>
       </div>
     </Section>
+    </>}
 
     <p className="v5m-hint">Venue and data health and V5 engine inputs are in <Link to="/system/data-feeds">System</Link>.</p>
 

@@ -673,7 +673,7 @@ export function paperMoneyTiles({ walletRead, accountingRead, snapshot, complete
   const current = (read?: PaperRead) => complete && !!read && paperCompleteRead(read, valuesAt) && !!snapshot && read.bot_id === snapshot.bot_id && paperSnapshotsAgree([read, snapshot]) && typeof read.generated_at_ms === "number" && read.generated_at_ms <= now;
   const ownerAt = snapshot?.generated_at_ms;
   const staleOwner = typeof ownerAt === "number" && now - ownerAt > PAPER_SNAPSHOT_FRESH_MS;
-  const recorded = (!complete || staleOwner) && money?.range === "7d" ? latest(money.rows ?? [], "v5").newest : null;
+  const recorded = money?.range === "7d" ? latest(money.rows ?? [], "v5").newest : null;
   const sample = recorded && !recorded.gap && recorded.unit === "USDC" && recorded.at_ms > 0 &&
     recorded.at_ms <= now && now - recorded.at_ms <= MONEY_SAMPLE_MAX_AGE_MS && utcExact(recorded.at_ms) ? recorded : null;
   const useMoney = !complete || (sample !== null && staleOwner && sample.at_ms > ownerAt);
@@ -684,11 +684,11 @@ export function paperMoneyTiles({ walletRead, accountingRead, snapshot, complete
   const walletAt = useMoney ? sample?.at_ms : walletRead?.generated_at_ms;
   const accountingAt = useMoney ? sample?.at_ms : accountingRead?.generated_at_ms;
   const asOf = (at: unknown) => typeof at === "number" && at <= now && utcExact(at) ? `As of ${utcExact(at)} · ${paperAge(now - at)} ago` : "Owner time not published";
-  const tile = (label: string, value: unknown, at: unknown, why: string, detail = "") => {
+  const tile = (label: string, value: unknown, at: unknown, why: string, detail = "", sampled = useMoney && sample !== null) => {
     const exact = paperMoneyDecimal(value) ? value : undefined;
     return { label, value: exact !== undefined ? usdc(exact) : "—", exact,
-      note: exact !== undefined ? `${useMoney ? "Money sample · " : ""}${asOf(at)}${detail}` : why,
-      sampled: useMoney && sample !== null };
+      note: exact !== undefined ? `${sampled ? "Money sample · " : ""}${asOf(at)}${detail}` : why,
+      sampled };
   };
   let net: string | null = null;
   const zeroFlows = paperMoneyDecimal(wallet?.external_cash_flows_quote) && /^-?0+(\.0+)?$/.test(wallet.external_cash_flows_quote);
@@ -700,23 +700,33 @@ export function paperMoneyTiles({ walletRead, accountingRead, snapshot, complete
     net = `${difference < 0n ? "-" : ""}${places ? `${digits.slice(0, -places)}.${digits.slice(-places)}` : digits}`;
   }
   const day = Math.floor(now / 86_400_000) * 86_400_000;
-  const today = useMoney && Array.isArray(money?.daily) ? money.daily.find(row => row?.day === day) : undefined;
-  const moneyCurrent = sample !== null && typeof money?.now_ms === "number" && money.now_ms <= now && !paperSnapshotPresentation(money.now_ms, now, false).stale;
-  const firstSlot = typeof today?.equity_first_at_ms === "number" && today.equity_first_at_ms >= day && today.equity_first_at_ms - day < SAMPLE_MS;
-  const elapsedSlots = typeof today?.equity_last_at_ms === "number" && Number.isFinite(today.equity_last_at_ms) ? Math.floor((today.equity_last_at_ms - day) / SAMPLE_MS) + 1 : 0;
-  const todayComplete = moneyCurrent && today?.day === day && Number.isInteger(today.samples) && today.samples >= 2 && Number.isInteger(today.gaps) && today.gaps >= 0 && today.gaps <= today.samples && Number.isInteger(today.valid) && Number.isInteger(today.equity_valid) && today.equity_valid >= 2 && today.equity_valid <= today.valid && today.equity_valid <= elapsedSlots && firstSlot && typeof today.equity_first_at_ms === "number" && typeof today.equity_last_at_ms === "number" && today.equity_first_at_ms < today.equity_last_at_ms && today.equity_last_at_ms <= now && now - today.equity_last_at_ms <= MONEY_SAMPLE_MAX_AGE_MS && paperMoneyDecimal(today.equity_start) && paperMoneyDecimal(today.equity_end);
-  const showToday = todayComplete && (SHOW_TODAY_WITH_MISSING_SAMPLES || elapsedSlots === today.equity_valid);
-  const gap = useMoney && recorded?.gap ? `Money sample gap · ${paperWords(recorded.gap)}` : null;
-  const todayWhy = !useMoney ? "UTC-day change is not published in the owner snapshot"
-    : gap ?? (typeof today?.equity_first_at_ms === "number" && today.equity_first_at_ms >= day + SAMPLE_MS
-      ? "Today's 00:00 UTC sample is missing, so the change cannot cover the whole day" : "No complete current UTC-day Money row recorded");
+  const today = Array.isArray(money?.daily) ? money.daily.find(row => row?.day === day) : undefined;
+  const moneyCurrent = money?.range === "7d" && typeof money.now_ms === "number" && money.now_ms <= now && !paperSnapshotPresentation(money.now_ms, now, false).stale;
+  const sampleHasEquity = sample !== null && paperMoneyDecimal(sample.equity);
+  const equityFirstAt = today?.equity_first_at_ms;
+  const elapsedSlots = sample ? Math.floor((sample.at_ms - day) / SAMPLE_MS) + 1 : 0;
+  const todayComplete = moneyCurrent && sampleHasEquity && today?.day === day && today.equity_last_at_ms === sample.at_ms &&
+    typeof equityFirstAt === "number" && equityFirstAt >= day && equityFirstAt - day < SAMPLE_MS && equityFirstAt < sample.at_ms &&
+    Number.isInteger(today.samples) && today.samples >= 2 && Number.isInteger(today.gaps) && today.gaps >= 0 && today.gaps <= today.samples &&
+    Number.isInteger(today.valid) && Number.isInteger(today.equity_valid) && today.equity_valid >= 2 && today.equity_valid <= today.valid && today.equity_valid <= elapsedSlots &&
+    paperMoneyDecimal(today.equity_start) && paperMoneyDecimal(today.equity_end);
+  // The dimmed group is labeled as a retained owner snapshot.
+  const retainedOwner = staleOwner && !useMoney;
+  const showToday = !retainedOwner && todayComplete && (SHOW_TODAY_WITH_MISSING_SAMPLES || elapsedSlots === today.equity_valid);
+  const gap = recorded?.gap ? `Money sample gap · ${paperWords(recorded.gap)}` : null;
+  const todayWhy = !moneyCurrent ? "No current Money read"
+    : gap ?? (!sample ? "No current Money sample recorded"
+      : !sampleHasEquity ? "Latest Money sample has no equity"
+      : typeof equityFirstAt === "number" && equityFirstAt >= day + SAMPLE_MS ? "Today's 00:00 UTC sample is missing, so the change cannot cover the whole day"
+      : retainedOwner && todayComplete ? "UTC-day change is unavailable in the retained owner snapshot"
+      : "No complete current UTC-day Money row recorded");
   const walletWhy = useMoney ? gap ?? "Wallet value is unavailable in the Money sample"
     : `Complete current owner wallet required${walletRead?.reason ? `: ${paperWords(walletRead.reason)}` : ""}`;
   const accountingWhy = useMoney ? gap ?? "Value is unavailable in the Money sample" : "Complete current owner lifetime accounting required";
   return [
     tile("Wallet equity", wallet?.equity_quote, walletAt, walletWhy),
     tile("Since start", net, walletAt, !wallet ? walletWhy : !zeroFlows ? "Owner external cash flows are not exactly zero" : "Owner equity or initial funding not published"),
-    tile("Today", showToday ? today.equity_change : null, today?.equity_last_at_ms, todayWhy, showToday && elapsedSlots > today.equity_valid ? ` · ${elapsedSlots - today.equity_valid} of ${elapsedSlots} samples missing` : ""),
+    tile("Today", showToday ? today.equity_change : null, today?.equity_last_at_ms, todayWhy, showToday && elapsedSlots > today.equity_valid ? ` · ${elapsedSlots - today.equity_valid} of ${elapsedSlots} samples missing` : "", showToday),
     tile("Profit from closed trades", useMoney ? sample?.realized : accounting?.realized_pnl_quote, accountingAt, accountingWhy),
     tile("Coins still held", useMoney ? sample?.unrealized : accounting?.unrealized_pnl_quote, accountingAt, accountingWhy),
     tile("Fees paid", useMoney ? sample?.fees : accounting?.fees_paid_quote, accountingAt, accountingWhy),

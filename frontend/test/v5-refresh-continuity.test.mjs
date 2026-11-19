@@ -178,7 +178,7 @@ test('Bots paints the cached Money sample while owner sections are unresolved', 
   } finally {h.restore();}
 });
 
-test('Today switches from the labeled Money daily row to the owner snapshot', async () => {
+test('Today keeps its Money value and provenance after the owner snapshot completes', async () => {
   const now = owner.read_at_ms;
   const day = Math.floor(now / 86_400_000) * 86_400_000;
   const money = {range:'7d', now_ms:now, rows:[{bot:'v5', unit:'USDC', at_ms:now, equity:'200777.25'}], daily:[{
@@ -193,7 +193,7 @@ test('Today switches from the labeled Money daily row to the owner snapshot', as
     while (h.requests.length) await h.deliver(h.requests.shift());
     h.query.data = await pending.promise;
     h.query.isFetching = false;
-    assert.match(today(), /<dd>—<\/dd>/, 'the owner snapshot supplies no UTC-day change');
+    assert.match(today(), /777\.25 USDC.*Money sample · As of .*Z ·/);
   } finally {h.restore();}
 });
 

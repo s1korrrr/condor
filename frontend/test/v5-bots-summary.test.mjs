@@ -38,14 +38,13 @@ test('native risk rail limits are formatted with their exact owner strings in ti
 
 test('money tiles format values while retaining exact source and arithmetic results', () => {
   const result = tiles({walletRead:{...fixture.wallet,data:{...fixture.wallet.data,equity_quote:'199087.84807014005820',initial_funding_quote:'200000',external_cash_flows_quote:'0'}}});
-  assert.deepEqual(result.slice(0,3).map(tile => tile.value), ['199,087.85 USDC','−912.15 USDC','—']);
-  assert.deepEqual(result.slice(0,3).map(tile => tile.exact), ['199087.84807014005820','-912.15192985994180',undefined]);
+  assert.deepEqual(result.slice(0,3).map(tile => tile.value), ['199,087.85 USDC','−912.15 USDC','−12.00 USDC']);
+  assert.deepEqual(result.slice(0,3).map(tile => tile.exact), ['199087.84807014005820','-912.15192985994180',money.daily[0].equity_change]);
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values(fixture),accountingRead:fixture.accounting,money,now,reportAt:now,heartbeat:'Fresh',bot:fixture.status.bot_id}));
-  const expectedTitles = ['≈ 199980.077146231622 (rounded)', '≈ −19.922853768378 (rounded)', undefined, '≈ 13.093702869214 (rounded)', '≈ −33.016556637591 (rounded)', '≈ 4.314779042378 (rounded)'];
+  const expectedTitles = ['≈ 199980.077146231622 (rounded)', '≈ −19.922853768378 (rounded)', '≈ −12 (rounded)', '≈ 13.093702869214 (rounded)', '≈ −33.016556637591 (rounded)', '≈ 4.314779042378 (rounded)'];
   assert.equal(tiles().length, expectedTitles.length);
   for (const [index, tile] of tiles().entries()) {
-    if (expectedTitles[index]) assert.ok(html.includes(`title="${expectedTitles[index]}"`), expectedTitles[index]);
-    else assert.match(html, /<dt>Today<\/dt><dd>—<\/dd>/);
+    assert.ok(html.includes(`title="${expectedTitles[index]}"`), expectedTitles[index]);
     assert.ok(html.includes(tile.value));
   }
 });
@@ -67,6 +66,7 @@ test('money tiles follow snapshot dimming at 25, 45 and 125 seconds', () => {
     const result = tiles({now:clock,valuesAt:view.valuesAt});
     assert.equal(result.filter(tile => tile.label !== 'Today').every(tile => tile.value !== '—'), visible, `${seconds}s`);
     assert.equal(view.dimmed, dimmed);
+    if (dimmed) assert.equal(tiles({now:clock, valuesAt:view.valuesAt, money:{...money, now_ms:clock}})[2].value, '—');
     const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads:Object.values(fixture),accountingRead:fixture.accounting,money,now:clock,valuesAt:view.valuesAt,asOf:view.snapshotAt,reportAt:now,heartbeat:'Fresh',bot:fixture.status.bot_id}));
     assert.equal(html.includes('class="paper-dimmed"'),dimmed);
   }
@@ -232,7 +232,7 @@ test('entry controls never certify the general selling state or exit coverage', 
   assert.doesNotMatch(sentence, /Selling|exit coverage|selling works/i);
 });
 
-test('six tiles use exact owner strings and only zero-flow equity minus funding', () => {
+test('six tiles retain exact source strings and calculate Since start only with zero flows', () => {
   const walletRead = structuredClone(fixture.wallet);
   Object.assign(walletRead.data, { equity_quote: '199999.999999999999999999999999999999', initial_funding_quote: '200000', external_cash_flows_quote: '-0.000' });
   const result = tiles({ walletRead });
@@ -241,7 +241,9 @@ test('six tiles use exact owner strings and only zero-flow equity minus funding'
   assert.equal(result[0].exact, '199999.999999999999999999999999999999');
   assert.equal(result[1].exact, '-0.000000000000000000000000000001');
   assert.equal(result[1].value, '0.00 USDC');
-  assert.equal(result[2].value, '—');
+  assert.equal(result[2].value, '−12.00 USDC');
+  assert.equal(result[2].exact, money.daily[0].equity_change);
+  assert.match(result[2].note, /^Money sample · As of /);
   assert.deepEqual(result.slice(3).map(tile => tile.value), ['realized_pnl_quote', 'unrealized_pnl_quote', 'fees_paid_quote'].map(key => usdc(fixture.accounting.data.program[key])));
   assert.deepEqual(result.slice(3).map(tile => tile.exact), ['realized_pnl_quote', 'unrealized_pnl_quote', 'fees_paid_quote'].map(key => fixture.accounting.data.program[key]));
   for (const flows of ['0.000000000000000000000000000001', null, 0, 'bad']) {
@@ -277,7 +279,7 @@ test('incomplete, stale, future, incoherent and failed owner reads withhold mone
 });
 
 test('published snapshot money tiles expire strictly beyond 30000 ms', () => {
-  assert.equal(tiles({ now: now + 30_000 }).filter(tile => tile.value !== '—').length, 5);
+  assert.equal(tiles({ now: now + 30_000 }).filter(tile => tile.value !== '—').length, 6);
   assert.ok(tiles({ now: now + 30_001 }).every(tile => tile.value === '—'));
   const freshMoney = { ...money, now_ms: now + 30_001, daily: [{ ...money.daily[0], equity_last_at_ms: now + 30_001 }] };
   assert.equal(tiles({ now: now + 30_001, money: freshMoney })[2].value, '—');

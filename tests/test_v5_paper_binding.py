@@ -694,7 +694,7 @@ class ReviewUpstream(NoNetworkUpstream):
         }
 
 
-def client_for(tmp_path, upstream, *, payload=None, configured=True, clock_s=NOW):
+def client_for(tmp_path, upstream, *, payload=None, configured=True, clock_s=NOW, clock_ms=None):
     tmp_path.mkdir(parents=True, exist_ok=True)
     settings = make_settings(tmp_path)
     if configured:
@@ -704,7 +704,7 @@ def client_for(tmp_path, upstream, *, payload=None, configured=True, clock_s=NOW
         settings=settings,
         upstream=upstream,
         static_dir=tmp_path / "dist",
-        clock=lambda: int(clock_s * 1000),
+        clock=clock_ms if clock_ms is not None else lambda: int(clock_s * 1000),
     )
     client = TestClient(app)
     assert (

@@ -53,6 +53,7 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
   const originalError = console.error;
   const requests = [];
   const unexpectedReads = [];
+  let failIdentityRead = false;
   globalThis.fetch = async (input, init = {}) => {
     assert.equal(init.method ?? 'GET','GET','render tests must not invoke actions');
     const url = new URL(String(input),'https://fixture.invalid');
@@ -62,6 +63,9 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
       const native = url.searchParams.get('path');
       const section = native.includes('native/status') ? 'status' : native.includes('account-balances') || native.includes('fleet/summary') ? 'wallet' : native.includes('holdings') ? 'positions' : native.includes('performance/history') ? 'history' : native.includes('operations/workspace') ? 'operations' : native.split('?')[0].split('/').at(-1);
       assert.ok(sections[section],`unmapped owner read: ${native}`);
+      if (section === 'status' && failIdentityRead) {
+        return new Response(JSON.stringify({detail:{code:'paper_read_schema_invalid'}}),{status:502});
+      }
       body = sections[section];
     } else if (url.pathname === '/api/v5/auth') body = {authenticated:true};
     else if (url.pathname === '/api/v5/dashboard/profile') body = profile;
@@ -128,12 +132,32 @@ test('real V5 routes settle with shared providers and an advancing paper clock',
           assert.match(text,/paper owner reads: available/,'probe must start fresh at 30,000 ms');
           assert.doesNotMatch(text,/stale; not current/);
           assert.ok(!(text.includes('paper owner reads: available') && text.includes('stale; not current')),'Settings must not call owner reads available while identity marks the same snapshot stale');
+
+          const identityPanel = [...container.querySelectorAll('section.v5-panel')].find(section => section.querySelector('h2')?.textContent === 'Paper owner identity');
+          assert.ok(identityPanel);
+          failIdentityRead = true;
+          await React.act(async () => {await client.refetchQueries({queryKey:['v5-paper-observation-health',bot]});});
+          await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
+          assert.match(identityPanel.querySelector('[role="alert"]')?.textContent ?? '',/Identity owner read unavailable/);
+          failIdentityRead = false;
+
+          const retryStart = requests.length;
+          const refresh = [...container.querySelectorAll('button')].find(button => button.textContent === 'Refresh settings');
+          assert.ok(refresh);
+          await React.act(async () => {refresh.click();});
+          await React.act(async () => {await new Promise(resolve => setTimeout(resolve,0));});
+          const refreshed = requests.slice(retryStart);
+          assert.ok(refreshed.includes('/api/v5/settings'));
+          assert.equal(refreshed.filter(request => request.includes('native%2Fstatus')).length,1,'Refresh settings retries the shared identity read');
+          assert.equal(identityPanel.querySelector('[role="alert"]'),null);
+          assert.ok(identityPanel.textContent.includes(sections.status.snapshot_id));
         }
         await React.act(async () => {window.dispatchEvent(new browser.Event('focus'));});
         assert.deepEqual(failures,[],'clock publication must settle');
         assert.deepEqual(warnings,[],'clock publication must not trigger React warnings');
         assert.deepEqual(unexpectedReads,[],'every requested owner response must have a fixture');
       } finally {
+        failIdentityRead = false;
         await React.act(async () => mount.unmount());
         container.remove();
         client.clear();

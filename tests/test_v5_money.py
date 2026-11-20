@@ -207,7 +207,8 @@ def test_sampler_judges_helm_against_the_time_it_reads_the_file(tmp_path):
     class SlowUpstream(PaperUpstream):
         async def observation(self, path):
             clock["ms"] += 10_000
-            return await super().observation(path)
+            payload = await super().observation(path)
+            return dict(payload, read_at_ms=clock["ms"])
 
     helm_dir = tmp_path / "helm"
     helm_dir.mkdir()
@@ -223,5 +224,7 @@ def test_sampler_judges_helm_against_the_time_it_reads_the_file(tmp_path):
             body = client.get("/api/v5/money").json()
             if any(row["bot"] == "helm" for row in body["rows"]):
                 break
+        v5 = next(row for row in body["rows"] if row["bot"] == "v5")
+        assert v5.get("equity") == "199318.98", v5
         helm = next(row for row in body["rows"] if row["bot"] == "helm")
         assert helm.get("gap") != "HELM_STATUS_CLOCK_SKEW", helm

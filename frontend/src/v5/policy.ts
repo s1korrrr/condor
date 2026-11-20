@@ -1,6 +1,6 @@
 import { PAPER_SNAPSHOT_FRESH_MS, paperAge, paperTimestampIssue } from './snapshot-presentation.ts';
 import { paperOpaqueClockNumber } from './paper-json.ts';
-import { decimalPercentRatio, fixed, usdc } from './format.mjs';
+import { decimalPercentRatio, fixed, quantity, usdc } from './format.mjs';
 import { receiptAmountFields, receiptDecimalParts } from './trades-model.mjs';
 
 export interface ReportPermissionInput {
@@ -304,6 +304,10 @@ export function paperAmount(value: unknown, unit: string, places = 4): string {
   if (typeof value !== "string" || !/^-?\d+(\.\d+)?$/.test(value) || value.length > 128) return "Not published";
   const shown = fixed(value, places);
   return `${/^0(?:\.0+)?$/.test(shown) ? "0" : shown} ${unit}`;
+}
+
+export function paperQuantity(value: unknown, unit: string): string {
+  return typeof value === "string" && /^-?\d+(\.\d+)?$/.test(value) && value.length <= 128 ? quantity(value, unit) : "Not published";
 }
 
 export function paperExactAmount(value: unknown, unit: string): string {

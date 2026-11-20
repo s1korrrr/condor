@@ -189,11 +189,35 @@ export function price(value) {
  * `asset` is appended when given ("0.016246 BTC").
  */
 export function coin(value, asset) {
+  return amount(value, asset, false);
+}
+
+/**
+ * Coin quantity held, bought or sold (the Bots page): `coin()`, except that a non-zero value is never shown as "0".
+ * Below 0.001 it keeps three significant digits, up to 8 decimals (0.00000049; 0.00000123), the most the dashboard
+ * shows. Under 0.00000001 it reads "< 0.00000001" ("> −0.00000001" when negative): plain digits, never exponent
+ * text, and the exact value stays in the hover title. Zero is "0".
+ */
+export function quantity(value, asset) {
+  return amount(value, asset, true);
+}
+
+const SMALLEST_PLACES = 8;
+
+function amount(value, asset, keepSmall) {
   const parts = parse(value);
   if (!parts) return DASH;
   let digits;
   if (parts.int !== '0') digits = Math.max(0, 6 - parts.int.length);
-  else digits = 6;
+  else if (!keepSmall) digits = 6;
+  else {
+    const leading = /^0*/.exec(parts.frac)[0].length;
+    if (leading >= SMALLEST_PLACES && /[1-9]/.test(parts.frac)) {
+      const bound = `${parts.neg ? `> ${MINUS}` : '< '}0.${'0'.repeat(SMALLEST_PLACES - 1)}1`;
+      return asset ? `${bound} ${asset}` : bound;
+    }
+    digits = Math.min(SMALLEST_PLACES, Math.max(6, leading + 3));
+  }
   const rounded = round(parts, digits);
   const frac = rounded.frac.replace(/0+$/, '');
   const text = `${rounded.neg ? MINUS : ''}${group(rounded.int)}${frac ? `.${frac}` : ''}`;
@@ -235,6 +259,7 @@ export function ownerDisplay(value, kind, { unit, digits = 2 } = {}) {
   if (!parse(value)) return { text: DASH, exact: null, tone: 'none' };
   const text = kind === 'usdc' ? usdc(value, unit)
     : kind === 'coin' ? coin(value, unit)
+    : kind === 'quantity' ? quantity(value, unit)
     : kind === 'price' ? price(value)
     : kind === 'pct' ? pct(value, digits)
     : kind === 'bps' ? `${signed(value, digits)} ${unit ?? 'bps'}`

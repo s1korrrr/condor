@@ -47,7 +47,7 @@ test('non-terminating percentage rounding carries into the whole number', () => 
 import { test } from 'node:test';
 import { readFileSync } from 'node:fs';
 import * as format from '../src/v5/format.mjs';
-import { age, coin, count, fixed, pct, pnl, price, signed, usdc, utc, utcMin, when } from '../src/v5/format.mjs';
+import { age, coin, count, fixed, pct, pnl, price, quantity, signed, usdc, utc, utcMin, when } from '../src/v5/format.mjs';
 
 const M = '−';
 const base = Date.UTC(2026, 10, 14, 11, 34, 22);
@@ -244,6 +244,62 @@ test('coin: 6 significant digits at most, trailing zeros removed, no 18 decimals
   assert.equal(coin('-0.5', 'BTC'), `${M}0.5 BTC`);
   assert.equal(coin(0), '0');
   assert.equal(coin(1.5), '1.5');
+});
+
+test('quantity: coin() digits, but a non-zero amount is never shown as 0, never in exponent form', () => {
+  // Trailing zeros removed, 6 significant digits from 1 up, 6 decimals below 1 (the same as coin()).
+  assert.equal(quantity('0.016245819000000000', 'BTC'), '0.016246 BTC');
+  assert.equal(quantity('0.016200000000000000', 'BTC'), '0.0162 BTC');
+  assert.equal(quantity('1390.563200000000000000', 'XRP'), '1,390.56 XRP');
+  assert.equal(quantity('100.000000', 'SOL'), '100 SOL');
+  assert.equal(quantity('2.50000'), '2.5');
+  // Large values keep every integer digit.
+  assert.equal(quantity('1234567.891', 'XRP'), '1,234,568 XRP');
+  assert.equal(quantity('98765432100.5', 'DOGE'), '98,765,432,101 DOGE');
+  // Tiny values keep three significant digits within 8 decimals, in plain digits.
+  assert.equal(quantity('0.00000001', 'BTC'), '0.00000001 BTC');
+  assert.equal(quantity('0.00000049', 'BTC'), '0.00000049 BTC');
+  assert.equal(quantity('0.0000012345678', 'BTC'), '0.00000123 BTC');
+  assert.equal(quantity('0.0000016', 'BNB'), '0.0000016 BNB');
+  assert.equal(quantity('0.00123456'), '0.001235');
+  // Under 0.00000001 it is bounded, never 0 and never more than 8 decimals.
+  assert.equal(quantity('0.000000007317', 'BTC'), '< 0.00000001 BTC');
+  assert.equal(quantity('0.000000000000000001', 'BNB'), '< 0.00000001 BNB');
+  assert.equal(quantity('0.00000000000000000049', 'BTC'), '< 0.00000001 BTC');
+  assert.equal(quantity(4.9e-19, 'BTC'), '< 0.00000001 BTC');
+  assert.equal(quantity('4.9e-7'), '0.00000049');
+  // Rounding up to a whole number stays a whole number.
+  assert.equal(quantity('0.9999996'), '1');
+  // Negative uses the true minus, and a non-zero negative is never "-0".
+  assert.equal(quantity('-0.5', 'BTC'), `${M}0.5 BTC`);
+  assert.equal(quantity('-0.00000001', 'BTC'), `${M}0.00000001 BTC`);
+  assert.equal(quantity('-0.000000000001', 'BTC'), `> ${M}0.00000001 BTC`);
+  assert.equal(quantity('-1390.5632', 'XRP'), `${M}1,390.56 XRP`);
+  // Zero is 0 in any spelling; unknown is a dash, never 0.
+  assert.equal(quantity('0.000000000000000000', 'BTC'), '0 BTC');
+  assert.equal(quantity(0), '0');
+  assert.equal(quantity(null), '—');
+  assert.equal(quantity('not a number', 'BTC'), '—');
+  // coin() is unchanged: dust below 6 decimals stays "0" there.
+  assert.equal(coin('0.00000049'), '0');
+});
+
+test('quantity owner display carries the exact owner decimal for the hover title', () => {
+  assert.deepEqual(format.ownerDisplay('0.016245819000000000', 'quantity', { unit: 'BTC' }), { text: '0.016246 BTC', exact: '0.016245819000000000', tone: 'up' });
+  assert.deepEqual(format.ownerDisplay('0.00000001', 'quantity', { unit: 'BTC' }), { text: '0.00000001 BTC', exact: '0.00000001', tone: 'up' });
+  assert.deepEqual(format.ownerDisplay('0.000000007317', 'quantity', { unit: 'BTC' }), { text: '< 0.00000001 BTC', exact: '0.000000007317', tone: 'up' });
+  assert.equal(format.ownerDisplay('0.016245819', 'quantity', { unit: 'BTC' }).exact, '0.016245819');
+  assert.equal(format.ownerDisplay('34.41737209677040000000000001', 'quantity', { unit: 'SOL' }).exact, '≈ 34.41737209677 (rounded)');
+  assert.deepEqual(format.ownerDisplay(null, 'quantity', { unit: 'BTC' }), { text: '—', exact: null, tone: 'none' });
+});
+
+test('quantity hover title is exact up to 12 fractional places and approximate above, down to "≈ 0 (rounded)"', () => {
+  assert.equal(format.ownerTitleText('0.016245819000000000'), '0.016245819000000000');
+  assert.equal(format.ownerTitleText('0.000000007317'), '0.000000007317');
+  assert.equal(format.ownerTitleText('0.0000000000005'), '≈ 0.000000000001 (rounded)');
+  assert.equal(format.ownerTitleText('0.00000000000049'), '≈ 0 (rounded)');
+  assert.equal(format.ownerDisplay('-0.00000000000049', 'quantity', { unit: 'BTC' }).exact, '≈ 0 (rounded)');
+  assert.equal(quantity('-0.00000000000049', 'BTC'), `> ${M}0.00000001 BTC`);
 });
 
 test('pct: signed with a true minus and a single percent sign; count: integers with separators', () => {

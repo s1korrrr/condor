@@ -3,7 +3,7 @@ import { flexRender, getCoreRowModel, getFilteredRowModel, getSortedRowModel, so
 import { numericFilterMatch, searchMatch } from './table-filter';
 import { cleanFloat } from '../decimal-display';
 import { Rows } from './Rows';
-import { ownerTitleText } from '@/v5/format.mjs';
+import { compareDecimal, ownerTitleText } from '@/v5/format.mjs';
 import './kit.css';
 
 /**
@@ -20,6 +20,7 @@ export type TableColumn<T> = {
   value: (row: T) => string | number | null | undefined;
   /** Rendered cell; defaults to the raw value. */
   cell?: (row: T) => ReactNode;
+  searchText?: (row: T) => string;
   /** `number` right-aligns, sorts numerically and accepts comparison filters. */
   kind?: 'text' | 'number';
   ownerValue?: boolean;
@@ -113,6 +114,9 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, phoneNe
     ...(selectable ? [{ id: SELECT_COLUMN, header: '', size: 36, minSize: 36, enableSorting: false, enableResizing: false, enableColumnFilter: false } satisfies ColumnDef<T>] : []),
     ...columns.map((column): ColumnDef<T> => {
       const compare: SortingFn<T> = column.kind === 'number' ? (a, b, id) => {
+        // Decimal strings (exact owner values) compare as digits; a float would tie 0.016245819000000001 and ...02.
+        const exact = compareDecimal(a.getValue(id), b.getValue(id));
+        if (exact !== null) return exact;
         const x = numeric(a.getValue(id)), y = numeric(b.getValue(id));
         return x !== null && y !== null ? x - y : x !== null ? 1 : y !== null ? -1 : 0;
       } : sortingFns.alphanumeric;
@@ -143,7 +147,7 @@ export function DataTable<T>({ rows, columns, rowId, label, initialSort, phoneNe
   ], [columns, selectable, sorting]);
   // Search runs before the table so it can match displayed text as well as raw values.
   const searched = useMemo(() => effectiveSearch.trim() ? rows.filter(row => searchMatch(columns.flatMap(column => {
-    const shown = column.cell?.(row);
+    const shown = column.searchText?.(row) ?? column.cell?.(row);
     return [column.value(row), typeof shown === 'string' || typeof shown === 'number' ? shown : null];
   }), effectiveSearch)) : rows, [rows, columns, effectiveSearch]);
   const table = useReactTable({

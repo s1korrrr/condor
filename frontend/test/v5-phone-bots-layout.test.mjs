@@ -141,7 +141,7 @@ for (const dimmed of [false, true]) test(`phone position cards retain all owner 
   const cards = [...window.document.querySelectorAll('.paper-positions .paper-pair')];
   assert.deepEqual(cards.map(card => card.querySelector('h3').textContent), ['BNB', 'BTC', 'ETH', 'SOL', 'XRP']);
   const card = cards[0];
-  for (const text of [/199,132\.37 USDC/, /profit or loss/, /sample as of .*UTC/, /Price: 700\.00 USDC · .*UTC/, /Needs \+6\.9% to break even/, /Breakeven: 748\.17 USDC/, /1\.23457 BNB/, /\+ 0 BNB dust/, /protection unknown for 1 lot/, /Buy decision: Held · Candle gap/]) assert.match(card.textContent, text);
+  for (const text of [/199,132\.37 USDC/, /profit or loss/, /sample as of .*UTC/, /Price: 700\.00 USDC · .*UTC/, /Needs \+6\.9% to break even/, /Breakeven: 748\.17 USDC/, /1\.23457 BNB/, /\+ < 0\.00000001 BNB dust/, /protection unknown for 1 lot/, /Buy decision: Held · Candle gap/]) assert.match(card.textContent, text);
   assert.ok(card.querySelector('[title="≈ 1.234567890123 (rounded)"]'));
   assert.ok(card.querySelector('[title="≈ 0 (rounded)"]'));
   const fields = [...card.querySelectorAll(':scope > div > dl > dt')].map(field => field.textContent);

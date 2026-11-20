@@ -1,7 +1,7 @@
 import type { PaperRead } from "./contracts";
 import { latest } from "./money-model.mjs";
 import { paperCompleteRead, paperCompleteRecords, paperDecimalSum, paperExitProjection, paperPairBag, paperPairHoldings, paperPairObservation, paperTime, paperWords } from "./policy";
-import { ownerTitleText, coin as formatCoin, decimalPercentChange, price as formatPrice, usdc } from './format.mjs';
+import { ownerTitleText, quantity, decimalPercentChange, price as formatPrice, usdc } from './format.mjs';
 import { activeLots, breakEvenDistanceDetail, exactSignedSum, moneySampleState } from "./bots-position-model.mjs";
 import { PAIRS, latestFinalCandle, type Candles } from "./paper-candles";
 import type { MoneyRead } from "./money-api";
@@ -43,7 +43,7 @@ export function PaperPositions({ positions, executors, decisions, wallet, now, v
       <p>{distance ? <span title={distance.title}>{distance.text}</span> : "— · current price or breakeven unavailable"}</p><p className="paper-caption">Breakeven: {bag?.breakevenPrice ? <span title={ownerTitleText(bag.breakevenPrice)}>{formatPrice(bag.breakevenPrice)} USDC</span> : "— · not published"}</p>
       {distance && progress && <progress max={100} value={Math.min(100, Math.max(0, Number(progress)))} aria-label={`${coin} price relative to breakeven`} />}
       {decision && <p>Buy decision: {paperWords(decision.status)} · {paperWords(decision.reason)} · {paperTime(decision.event_at_ms, now)}</p>}
-      <dl className="paper-detail"><dt>Holding</dt><dd>{holding !== null ? <span title={ownerTitleText(holding)}>{formatCoin(holding, coin)}</span> : "— · position read unavailable"}{dust && <div>+ <span title={ownerTitleText(dust.quantity)}>{formatCoin(dust.quantity, coin)}</span> dust</div>}</dd><dt>Worth now</dt><dd>{typeof worth === "string" ? <span title={ownerTitleText(worth)}>{usdc(worth)}</span> : "— · current owner mark unavailable"}</dd><dt>Lots</dt><dd>{lots ? lots.length : "— · position read unavailable"}</dd><dt>Sell orders placed</dt><dd>{sellOrders}</dd></dl>
+      <dl className="paper-detail"><dt>Holding</dt><dd>{holding !== null ? <span title={ownerTitleText(holding)}>{quantity(holding, coin)}</span> : "— · position read unavailable"}{dust && <div>+ <span title={ownerTitleText(dust.quantity)}>{quantity(dust.quantity, coin)}</span> dust</div>}</dd><dt>Worth now</dt><dd>{typeof worth === "string" ? <span title={ownerTitleText(worth)}>{usdc(worth)}</span> : "— · current owner mark unavailable"}</dd><dt>Lots</dt><dd>{lots ? lots.length : "— · position read unavailable"}</dd><dt>Sell orders placed</dt><dd>{sellOrders}</dd></dl>
       <details><summary>Details</summary><dl className="paper-detail"><dt>Bag reason</dt><dd>{bag?.reason ? paperWords(bag.reason) : "— · not published"}</dd><dt>Trailing armed</dt><dd>{bag?.trailArmed == null ? "— · not published" : bag.trailArmed ? "Yes" : "No"}</dd><dt>Trailing peak</dt><dd>{bag?.trailPeak ? <span title={ownerTitleText(bag.trailPeak)}>{formatPrice(bag.trailPeak)} USDC</span> : "— · not published"}</dd><dt>Release</dt><dd>{bag?.release ? paperWords(bag.release) : "— · not published"}</dd></dl></details>
       </div>
     </article>;

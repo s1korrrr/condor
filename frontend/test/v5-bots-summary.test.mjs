@@ -49,13 +49,42 @@ test('money tiles format values while retaining exact source and arithmetic resu
   }
 });
 
-test('rounded-zero record amounts keep the exact owner value in the title', () => {
+test('tiny record quantities are never shown as 0 and keep the exact owner value in the title', () => {
   const fills = structuredClone(fixture.fills);
   fills.data[0].quantity = '0.00000001';
   fills.next_cursor = null;
   const reads = Object.values(fixture).map(read => read.section === 'fills' ? fills : read);
   const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads,accountingRead:fixture.accounting,money,now,reportAt:now,heartbeat:'Fresh',bot:fixture.status.bot_id}));
-  assert.match(html, /title="0\.00000001">0 [^<]+<\/span>/);
+  assert.match(html, /title="0\.00000001">0\.00000001 [^<]+<\/span>/);
+  assert.doesNotMatch(html, /title="0\.00000001">0 [^<]+<\/span>/);
+});
+
+test('Bots quantities show trimmed coin amounts with the exact 18-decimal owner value on hover', () => {
+  const asset = row => String(row.trading_pair).split('-')[0];
+  const quantityFor = { 'BTC-USDC': '0.016245819000000000', 'ETH-USDC': '0.016200000000000000', 'SOL-USDC': '1390.563200000000000000' };
+  const fills = structuredClone(fixture.fills);
+  fills.next_cursor = null;
+  fills.data = fills.data.slice(0, 3).map((row, index) => ({ ...row, trading_pair: Object.keys(quantityFor)[index], quantity: Object.values(quantityFor)[index] }));
+  const reads = Object.values(fixture).map(read => read.section === 'fills' ? fills : read);
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads,accountingRead:fixture.accounting,money,now,reportAt:now,heartbeat:'Fresh',bot:fixture.status.bot_id}));
+  assert.equal(fills.data.map(asset).join(), 'BTC,ETH,SOL');
+  assert.match(html, /<span title="0\.016245819000000000">0\.016246 BTC<\/span>/);
+  assert.match(html, /<span title="0\.016200000000000000">0\.0162 ETH<\/span>/);
+  assert.match(html, /<span title="1390\.563200000000000000">1,390\.56 SOL<\/span>/);
+  assert.doesNotMatch(html, />[^<]*0\.016245819000000000/);
+  assert.doesNotMatch(html, />[^<]*0\.0162000/);
+});
+
+test('Bots position cards show the held coin amount trimmed, with the exact owner value on hover', () => {
+  const positions = structuredClone(fixture.positions);
+  const row = positions.data.find(item => item.trading_pair === 'BTC-USDC' && item.state !== 'terminal_dust');
+  assert.ok(row, 'fixture has an active BTC lot');
+  for (const other of positions.data) if (other.trading_pair === 'BTC-USDC' && other !== row) other.state = 'terminal_dust', other.quantity = '0';
+  row.quantity = '0.016245819000000000';
+  const reads = Object.values(fixture).map(read => read.section === 'positions' ? positions : read);
+  const html = renderToStaticMarkup(React.createElement(PaperWorkspace,{reads,accountingRead:fixture.accounting,money,now,reportAt:now,heartbeat:'Fresh',bot:fixture.status.bot_id}));
+  assert.match(html, /<dt>Holding<\/dt><dd><span title="0\.016245819[0]*">0\.016246 BTC<\/span>/);
+  assert.doesNotMatch(html, />[^<]*0\.016245819000000000/);
 });
 
 test('money tiles follow snapshot dimming at 25, 45 and 125 seconds', () => {
